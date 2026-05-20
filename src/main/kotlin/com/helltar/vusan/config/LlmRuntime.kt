@@ -1,0 +1,26 @@
+package com.helltar.vusan.config
+
+import ai.koog.prompt.executor.clients.LLMClient
+import ai.koog.prompt.executor.clients.openai.OpenAIChatParams
+import ai.koog.prompt.executor.clients.openai.OpenAILLMClient
+import ai.koog.prompt.llm.LLMProvider
+import ai.koog.prompt.llm.LLModel
+import ai.koog.prompt.params.LLMParams
+
+data class LlmRuntime(
+    val koogProvider: LLMProvider,
+    val client: LLMClient,
+    val model: LLModel,
+    val chatParams: LLMParams
+)
+
+fun resolveLlmRuntime(config: LlmProviderConfig): LlmRuntime =
+    when (config) {
+        is LlmProviderConfig.OpenAi ->
+            LlmRuntime(
+                koogProvider = LLMProvider.OpenAI,
+                client = OpenAILLMClient(config.apiKey),
+                model = OpenAiModelResolver.resolve(config.model),
+                chatParams = OpenAIChatParams(promptCacheKey = "vusan")
+            )
+    }
