@@ -57,9 +57,11 @@ fun resolveLlmRuntime(config: LlmProviderConfig): LlmRuntime =
                         provider = LLMProvider.OpenAI,
                         id = config.model,
                         capabilities = listOf(
+                            LLMCapability.Completion,
                             LLMCapability.Temperature,
                             LLMCapability.Schema.JSON.Standard,
-                            LLMCapability.Tools
+                            LLMCapability.Tools,
+                            LLMCapability.OpenAIEndpoint.Completions
                         )
                     ),
                 chatParams = LLMParams()
