@@ -35,11 +35,12 @@ fun resolveLlmRuntime(config: LlmProviderConfig): LlmRuntime =
                     LLModel(
                         provider = LLMProvider.Ollama,
                         id = config.model,
-                        capabilities = listOf(
-                            LLMCapability.Temperature,
-                            LLMCapability.Schema.JSON.Standard,
-                            LLMCapability.Tools
-                        )
+                        capabilities =
+                            listOf(
+                                LLMCapability.Temperature,
+                                LLMCapability.Schema.JSON.Standard,
+                                LLMCapability.Tools
+                            )
                     ),
                 chatParams = LLMParams()
             )
@@ -56,13 +57,14 @@ fun resolveLlmRuntime(config: LlmProviderConfig): LlmRuntime =
                     LLModel(
                         provider = LLMProvider.OpenAI,
                         id = config.model,
-                        capabilities = listOf(
-                            LLMCapability.Completion,
-                            LLMCapability.Temperature,
-                            LLMCapability.Schema.JSON.Standard,
-                            LLMCapability.Tools,
-                            LLMCapability.OpenAIEndpoint.Completions
-                        )
+                        capabilities =
+                            listOf(
+                                LLMCapability.Completion,
+                                LLMCapability.Temperature,
+                                LLMCapability.Schema.JSON.Standard,
+                                LLMCapability.Tools,
+                                LLMCapability.OpenAIEndpoint.Completions
+                            )
                     ),
                 chatParams = LLMParams()
             )
