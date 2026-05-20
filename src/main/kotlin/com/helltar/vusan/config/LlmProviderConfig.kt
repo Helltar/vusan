@@ -8,4 +8,11 @@ sealed interface LlmProviderConfig {
             require(model.isNotBlank()) { "OPENAI_MODEL must not be blank" }
         }
     }
+
+    data class Ollama(val baseUrl: String, val model: String) : LlmProviderConfig {
+        init {
+            require(baseUrl.isNotBlank()) { "OLLAMA_BASE_URL must not be blank" }
+            require(model.isNotBlank()) { "OLLAMA_MODEL must not be blank" }
+        }
+    }
 }
