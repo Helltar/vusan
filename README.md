@@ -2,13 +2,13 @@
   <img src="https://helltar.com/projects/vusan/avatar.svg" width="160" alt="Vusan avatar">
 </p>
 
-# Vusan
+<h1 align="center">Vusan</h1>
+
+[![build](https://github.com/Helltar/vusan/actions/workflows/build.yml/badge.svg)](https://github.com/Helltar/vusan/actions/workflows/build.yml)
 
 Vusan is a Telegram AI agent for private chats and groups. It chats like a
 regular participant and uses tools when the conversation needs them (web
 search, polls, voice messages, vision, and more).
-
-[![build](https://github.com/Helltar/vusan/actions/workflows/build.yml/badge.svg)](https://github.com/Helltar/vusan/actions/workflows/build.yml)
 
 ## Features
 
