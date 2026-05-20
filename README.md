@@ -25,7 +25,7 @@ The bot exposes the following tools to the agent (see `src/main/kotlin/com/hellt
 - **File delivery** — sends generated content back as a Telegram document.
 - **Persistent chat history** — every turn is stored in a local SQLite database so the agent has long-term context across sessions; the agent can also wipe its own history on request.
 
-The agent itself is built on [koog-agents](https://github.com/JetBrains/koog) and talks to OpenAI as the LLM backend. Telegram I/O uses [tgbotapi](https://github.com/InsanusMokrassar/ktgbotapi).
+The agent itself is built on [koog-agents](https://github.com/JetBrains/koog) and talks to OpenAI (default), a local Ollama instance, or any OpenAI-compatible local server (`llama.cpp`, LM Studio, vLLM) as the LLM backend. Telegram I/O uses [tgbotapi](https://github.com/InsanusMokrassar/ktgbotapi).
 
 ## Quick start — Docker
 

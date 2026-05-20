@@ -15,6 +15,10 @@ data class AppConfig(
     val allowedIds: Set<Long>
 ) {
     companion object {
+        private const val DEFAULT_LLM_PROVIDER = "openai"
+        private const val DEFAULT_OPENAI_MODEL = "gpt-5.4-nano"
+        private const val DEFAULT_OLLAMA_BASE_URL = "http://localhost:11434"
+
         private val dotenv = dotenv { ignoreIfMissing = true }
         private val elevenLabsKey = readEnv("ELEVENLABS_API_KEY")
 
@@ -42,13 +46,28 @@ data class AppConfig(
 
         private fun resolveLlmProvider(): LlmProviderConfig {
             val raw = readEnv("LLM_PROVIDER") ?: DEFAULT_LLM_PROVIDER
+
             return when (val provider = raw.trim().lowercase()) {
                 "openai" ->
                     LlmProviderConfig.OpenAi(
                         apiKey = requireEnv("OPENAI_API_KEY"),
                         model = readEnv("OPENAI_MODEL") ?: DEFAULT_OPENAI_MODEL
                     )
-                else -> error("Unsupported LLM_PROVIDER=[$provider]. Supported values: openai")
+
+                "ollama" ->
+                    LlmProviderConfig.Ollama(
+                        baseUrl = readEnv("OLLAMA_BASE_URL") ?: DEFAULT_OLLAMA_BASE_URL,
+                        model = requireEnv("OLLAMA_MODEL")
+                    )
+
+                "openai-compatible" ->
+                    LlmProviderConfig.OpenAiCompatible(
+                        baseUrl = requireEnv("OPENAI_BASE_URL"),
+                        apiKey = requireEnv("OPENAI_API_KEY"),
+                        model = requireEnv("OPENAI_MODEL")
+                    )
+
+                else -> error("Unsupported LLM_PROVIDER=[$provider]. Supported values: openai, ollama, openai-compatible")
             }
         }
 
@@ -64,8 +83,5 @@ data class AppConfig(
                 ?.mapNotNull { it.trim().takeIf(String::isNotEmpty)?.toLongOrNull() }
                 ?.toSet()
                 .orEmpty()
-
-        private const val DEFAULT_LLM_PROVIDER = "openai"
-        private const val DEFAULT_OPENAI_MODEL = "gpt-5.4-nano"
     }
 }
