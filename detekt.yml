@@ -1,0 +1,51 @@
+build:
+  maxIssues: 0
+  excludeCorrectable: false
+
+# Narrow, high-signal config. The default ruleset (buildUponDefaultConfig=true
+# in build.gradle.kts) stays active; this file only tweaks what's too noisy
+# or too lenient for this codebase. See CLAUDE.md for the project's coding
+# conventions.
+
+complexity:
+  LongParameterList:
+    active: false
+  LongMethod:
+    active: false
+  CyclomaticComplexMethod:
+    active: false
+  TooManyFunctions:
+    active: false
+
+style:
+  MagicNumber:
+    active: false
+  ReturnCount:
+    active: false
+  WildcardImport:
+    active: false
+  ForbiddenComment:
+    active: false
+  MaxLineLength:
+    active: false
+  UnnecessaryAbstractClass:
+    active: false
+  MayBeConst:
+    active: false
+  LoopWithTooManyJumpStatements:
+    active: false
+
+naming:
+  FunctionNaming:
+    active: true
+    ignoreAnnotated: ['Test']
+  MatchingDeclarationName:
+    active: false
+
+exceptions:
+  TooGenericExceptionCaught:
+    active: false
+  SwallowedException:
+    active: false
+  InstanceOfCheckForException:
+    active: false
