@@ -21,30 +21,30 @@ class ChatHistoryRepository(private val maxMessagesPerUser: Int = 120) {
             .map {
                 ChatTurn(
                     role = it[ChatMessagesTable.role],
-                    content = it[ChatMessagesTable.content]
+                    content = it[ChatMessagesTable.content],
+                    toolCallId = it[ChatMessagesTable.toolCallId],
+                    toolName = it[ChatMessagesTable.toolName],
+                    toolIsError = it[ChatMessagesTable.toolIsError]
                 )
             }
             .toList()
     }
 
-    suspend fun appendTurns(userId: Long, userEntry: String, assistantEntry: String?) = dbTransaction {
-        ChatMessagesTable.insert {
-            it[ChatMessagesTable.userId] = userId
-            it[ChatMessagesTable.role] = ChatRole.USER
-            it[ChatMessagesTable.content] = userEntry
-        }
-
-        // A media-only turn has no assistant speech to record — the dispatched media is captured
-        // on the user entry instead. Skip the empty assistant row rather than persist a blank one.
-        if (!assistantEntry.isNullOrBlank()) {
+    suspend fun appendTurns(userId: Long, turns: List<ChatTurn>) = dbTransaction {
+        for (turn in turns) {
             ChatMessagesTable.insert {
                 it[ChatMessagesTable.userId] = userId
-                it[ChatMessagesTable.role] = ChatRole.ASSISTANT
-                it[ChatMessagesTable.content] = assistantEntry
+                it[role] = turn.role
+                it[content] = turn.content
+                it[toolCallId] = turn.toolCallId
+                it[toolName] = turn.toolName
+                it[toolIsError] = turn.toolIsError
             }
         }
 
-        trim(userId)
+        if (turns.isNotEmpty()) {
+            trim(userId)
+        }
     }
 
     suspend fun clear(userId: Long) = dbTransaction {

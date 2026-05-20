@@ -11,5 +11,8 @@ object ChatMessagesTable : IntIdTable("chat_messages") {
     val userId = long("user_id").index()
     val role = enumerationByName<ChatRole>("role", 16)
     val content = text("content")
+    val toolCallId = varchar("tool_call_id", 128).nullable()
+    val toolName = varchar("tool_name", 128).nullable()
+    val toolIsError = bool("tool_is_error").nullable()
     val createdAt = timestampWithTimeZone("created_at").clientDefault { OffsetDateTime.now(ZoneOffset.UTC) }
 }

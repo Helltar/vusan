@@ -8,6 +8,7 @@ import ai.koog.agents.core.dsl.extension.nodeExecuteTools
 import ai.koog.agents.core.dsl.extension.nodeLLMRequest
 import ai.koog.agents.core.dsl.extension.nodeLLMSendToolResults
 import ai.koog.agents.core.dsl.extension.onToolCalls
+import ai.koog.agents.features.eventHandler.feature.EventHandler
 import ai.koog.prompt.dsl.prompt
 import ai.koog.prompt.executor.model.PromptExecutor
 import ai.koog.prompt.llm.LLModel
@@ -18,6 +19,14 @@ import com.helltar.vusan.agent.history.ChatRole
 import com.helltar.vusan.agent.history.PromptHistory
 import com.helltar.vusan.outbox.BotOutbox
 import com.helltar.vusan.tools.ToolRegistryFactory
+
+data class ToolEvent(
+    val toolCallId: String,
+    val toolName: String,
+    val args: String,
+    val output: String,
+    val isError: Boolean
+)
 
 class AgentFactory(
     private val promptExecutor: PromptExecutor,
@@ -32,6 +41,7 @@ class AgentFactory(
         userId: Long,
         history: PromptHistory,
         outbox: BotOutbox,
+        toolEvents: MutableList<ToolEvent>,
         messageContext: MessageContext? = null
     ): AIAgent<String, String> {
         val seededPrompt =
@@ -45,6 +55,19 @@ class AgentFactory(
                     when (turn.role) {
                         ChatRole.USER -> user(turn.content)
                         ChatRole.ASSISTANT -> assistant(turn.content)
+                        ChatRole.TOOL_CALL ->
+                            toolCall(
+                                tool = checkNotNull(turn.toolName) { "TOOL_CALL row without toolName" },
+                                args = turn.content,
+                                id = checkNotNull(turn.toolCallId) { "TOOL_CALL row without toolCallId" }
+                            )
+                        ChatRole.TOOL_RESULT ->
+                            toolResult(
+                                tool = checkNotNull(turn.toolName) { "TOOL_RESULT row without toolName" },
+                                output = turn.content,
+                                id = checkNotNull(turn.toolCallId) { "TOOL_RESULT row without toolCallId" },
+                                isError = turn.toolIsError ?: false
+                            )
                     }
                 }
             }
@@ -62,7 +85,40 @@ class AgentFactory(
             strategy = vusanSingleRunStrategy,
             toolRegistry = toolRegistryFactory.buildRegistry(outbox),
             id = "vusan-user-$userId"
-        )
+        ) {
+            install(EventHandler) {
+                onToolCallCompleted { ctx ->
+                    toolEvents +=
+                        ToolEvent(
+                            toolCallId = ctx.toolCallId ?: "${ctx.toolName}-${toolEvents.size}",
+                            toolName = ctx.toolName,
+                            args = ctx.toolArgs.toString(),
+                            output = ctx.toolResult?.toString().orEmpty(),
+                            isError = false
+                        )
+                }
+                onToolCallFailed { ctx ->
+                    toolEvents +=
+                        ToolEvent(
+                            toolCallId = ctx.toolCallId ?: "${ctx.toolName}-${toolEvents.size}",
+                            toolName = ctx.toolName,
+                            args = ctx.toolArgs.toString(),
+                            output = ctx.message,
+                            isError = true
+                        )
+                }
+                onToolValidationFailed { ctx ->
+                    toolEvents +=
+                        ToolEvent(
+                            toolCallId = ctx.toolCallId ?: "${ctx.toolName}-${toolEvents.size}",
+                            toolName = ctx.toolName,
+                            args = ctx.toolArgs.toString(),
+                            output = ctx.message,
+                            isError = true
+                        )
+                }
+            }
+        }
     }
 }
 
