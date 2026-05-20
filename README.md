@@ -1,3 +1,7 @@
+<p align="center">
+  <img src="https://helltar.com/projects/vusan/avatar.svg" width="160" alt="Vusan avatar">
+</p>
+
 # Vusan
 
 Vusan is a Telegram AI agent for private chats and groups. It chats like a
