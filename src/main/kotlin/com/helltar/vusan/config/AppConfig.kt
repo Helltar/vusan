@@ -60,7 +60,14 @@ data class AppConfig(
                         model = requireEnv("OLLAMA_MODEL")
                     )
 
-                else -> error("Unsupported LLM_PROVIDER=[$provider]. Supported values: openai, ollama")
+                "openai-compatible" ->
+                    LlmProviderConfig.OpenAiCompatible(
+                        baseUrl = requireEnv("OPENAI_BASE_URL"),
+                        apiKey = requireEnv("OPENAI_API_KEY"),
+                        model = requireEnv("OPENAI_MODEL")
+                    )
+
+                else -> error("Unsupported LLM_PROVIDER=[$provider]. Supported values: openai, ollama, openai-compatible")
             }
         }
 

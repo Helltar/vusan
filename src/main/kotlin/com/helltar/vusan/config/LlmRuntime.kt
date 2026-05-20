@@ -2,6 +2,7 @@ package com.helltar.vusan.config
 
 import ai.koog.prompt.executor.clients.LLMClient
 import ai.koog.prompt.executor.clients.openai.OpenAIChatParams
+import ai.koog.prompt.executor.clients.openai.OpenAIClientSettings
 import ai.koog.prompt.executor.clients.openai.OpenAILLMClient
 import ai.koog.prompt.executor.ollama.client.OllamaClient
 import ai.koog.prompt.llm.LLMCapability
@@ -33,6 +34,27 @@ fun resolveLlmRuntime(config: LlmProviderConfig): LlmRuntime =
                 model =
                     LLModel(
                         provider = LLMProvider.Ollama,
+                        id = config.model,
+                        capabilities = listOf(
+                            LLMCapability.Temperature,
+                            LLMCapability.Schema.JSON.Standard,
+                            LLMCapability.Tools
+                        )
+                    ),
+                chatParams = LLMParams()
+            )
+
+        is LlmProviderConfig.OpenAiCompatible ->
+            LlmRuntime(
+                koogProvider = LLMProvider.OpenAI,
+                client =
+                    OpenAILLMClient(
+                        apiKey = config.apiKey,
+                        settings = OpenAIClientSettings(baseUrl = config.baseUrl)
+                    ),
+                model =
+                    LLModel(
+                        provider = LLMProvider.OpenAI,
                         id = config.model,
                         capabilities = listOf(
                             LLMCapability.Temperature,

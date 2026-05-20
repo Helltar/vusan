@@ -31,6 +31,16 @@ Run the agent against a local [Ollama](https://ollama.com) instance. Pick a mode
 | `OLLAMA_MODEL` | — (required) | Ollama model ID, e.g. `llama3.1`. The model must be pulled on the Ollama instance ahead of time (`ollama pull llama3.1`). |
 | `OLLAMA_BASE_URL` | `http://localhost:11434` | Base URL of the Ollama HTTP API. |
 
+### `openai-compatible`
+
+Point the OpenAI client at any local server that exposes an OpenAI-compatible `/v1/chat/completions` endpoint: `llama.cpp` `llama-server`, [LM Studio](https://lmstudio.ai), [vLLM](https://github.com/vllm-project/vllm), text-generation-webui, etc. The model must support tool calling for the bot's tools to work.
+
+| Variable | Default | Purpose |
+| --- | --- | --- |
+| `OPENAI_BASE_URL` | — (required) | Base URL of the local server, e.g. `http://localhost:8080` for `llama-server` or `http://localhost:1234/v1` for LM Studio. |
+| `OPENAI_API_KEY` | — (required) | Use any non-empty value if the local server ignores the header (most do — they just require it to be present). |
+| `OPENAI_MODEL` | — (required) | Model ID as advertised by the local server's `/v1/models` endpoint. |
+
 ## Optional — feature toggles
 
 If the API key for one of these is missing, the corresponding tool is unregistered at startup with a `WARN` log entry. The bot still runs; the agent just doesn't have access to that capability.
