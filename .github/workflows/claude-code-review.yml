@@ -1,5 +1,8 @@
 name: Claude Code Review
 
+env:
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
+
 on:
   pull_request:
     types: [opened, synchronize, ready_for_review, reopened]
@@ -50,7 +53,7 @@ jobs:
           prompt: '/code-review:code-review ${{ github.repository }}/pull/${{ github.event.pull_request.number }}'
           claude_args: >-
             --model claude-opus-4-7
-            --allowed-tools "Bash(./gradlew test),Bash(./gradlew detekt),Bash(./gradlew build),Bash(./gradlew check)"
+            --allowed-tools "Bash(./gradlew *)"
           # See https://github.com/anthropics/claude-code-action/blob/main/docs/usage.md
           # or https://code.claude.com/docs/en/cli-reference for available options
 
