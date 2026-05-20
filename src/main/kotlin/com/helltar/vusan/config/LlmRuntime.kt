@@ -30,15 +30,16 @@ fun resolveLlmRuntime(config: LlmProviderConfig): LlmRuntime =
             LlmRuntime(
                 koogProvider = LLMProvider.Ollama,
                 client = OllamaClient(baseUrl = config.baseUrl),
-                model = LLModel(
-                    provider = LLMProvider.Ollama,
-                    id = config.model,
-                    capabilities = listOf(
-                        LLMCapability.Temperature,
-                        LLMCapability.Schema.JSON.Standard,
-                        LLMCapability.Tools
-                    )
-                ),
+                model =
+                    LLModel(
+                        provider = LLMProvider.Ollama,
+                        id = config.model,
+                        capabilities = listOf(
+                            LLMCapability.Temperature,
+                            LLMCapability.Schema.JSON.Standard,
+                            LLMCapability.Tools
+                        )
+                    ),
                 chatParams = LLMParams()
             )
     }
