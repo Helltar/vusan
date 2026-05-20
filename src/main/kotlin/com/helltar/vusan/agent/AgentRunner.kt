@@ -1,6 +1,8 @@
 package com.helltar.vusan.agent
 
 import com.helltar.vusan.agent.history.ChatHistoryRepository
+import com.helltar.vusan.agent.history.ChatRole
+import com.helltar.vusan.agent.history.ChatTurn
 import com.helltar.vusan.agent.history.summarizeForPrompt
 import com.helltar.vusan.common.rethrowIfCancellation
 import com.helltar.vusan.i18n.Messages
@@ -24,8 +26,7 @@ data class AgentResult(
     val outputs: List<BotOutput>,
     val comment: String?,
     val commentToPrivate: Boolean = false,
-    val assistantHistoryEntry: String? = null,
-    val dispatchedMediaNote: String? = null
+    val historyTurns: List<ChatTurn> = emptyList()
 )
 
 enum class ResetOutcome { Cleared, Busy }
@@ -68,7 +69,8 @@ class AgentRunner(private val agentFactory: AgentFactory, private val history: C
                         "repliedPhoto=${request.repliedPhoto != null}"
             }
 
-            val agent = agentFactory.build(request.userId, promptHistory, outbox, request.messageContext)
+            val toolEvents = mutableListOf<ToolEvent>()
+            val agent = agentFactory.build(request.userId, promptHistory, outbox, toolEvents, request.messageContext)
 
             val answer =
                 try {
@@ -81,12 +83,15 @@ class AgentRunner(private val agentFactory: AgentFactory, private val history: C
 
             val outputs = outbox.pending
             val comment = extractFinalComment(answer, outputs)
-            val mediaNote = dispatchedMediaNote(outputs)
-            val assistantText =
-                assistantTextForHistory(outputs, comment)
-                    ?: Messages.fallbackErrorReply.takeIf { mediaNote == null }
+            val assistantText = assistantTextForHistory(outputs, comment)
+            val historyTurns =
+                buildHistoryTurns(
+                    userEntry = request.historyEntry,
+                    toolEvents = toolEvents,
+                    assistantText = assistantText
+                )
 
-            return AgentResult(outputs, comment, outbox.redirectToPrivate, assistantText, mediaNote)
+            return AgentResult(outputs, comment, outbox.redirectToPrivate, historyTurns)
         } finally {
             lock.unlock()
         }
@@ -111,6 +116,9 @@ class AgentRunner(private val agentFactory: AgentFactory, private val history: C
         userLocks.computeIfAbsent(userId) { Mutex() }
 }
 
+private const val TOOL_ARGS_MAX_CHARS = 1_000
+private const val TOOL_OUTPUT_MAX_CHARS = 4_000
+
 private fun extractFinalComment(answer: String, outputs: List<BotOutput>): String? =
     answer.trim()
         .takeIf { it.isNotEmpty() }
@@ -118,9 +126,6 @@ private fun extractFinalComment(answer: String, outputs: List<BotOutput>): Strin
             outputs.any { it is BotOutput.Voice || it is BotOutput.VideoNote || it is BotOutput.Text }
         }
 
-// The assistant turn stores only what the model actually said. Media the bot dispatched is a
-// tool-side action, not speech: it is recorded separately via `dispatchedMediaNote` and attached
-// to the user turn so the model never sees it replayed as its own message and parrots it back.
 private fun assistantTextForHistory(outputs: List<BotOutput>, comment: String?): String? {
     val parts =
         buildList {
@@ -131,27 +136,41 @@ private fun assistantTextForHistory(outputs: List<BotOutput>, comment: String?):
     return parts.takeIf { it.isNotEmpty() }?.joinToString("\n\n")
 }
 
-private fun dispatchedMediaNote(outputs: List<BotOutput>): String? =
-    outputs.filter { it !is BotOutput.Text }
-        .takeIf { it.isNotEmpty() }
-        ?.let { "<sent>${summarizeNonText(it)}</sent>" }
+// Tools whose payload is fully duplicated by the assistant text row. Skipping their
+// TOOL_CALL/TOOL_RESULT pair avoids storing (and replaying) the same content twice.
+private val TEXT_DUPLICATING_TOOLS = setOf("sendMessage")
 
-private fun summarizeNonText(items: List<BotOutput>): String =
-    if (items.size == 1)
-        describe(items.single())
-    else
-        "${items.size} items: ${items.joinToString(", ", transform = ::describe)}"
+private fun buildHistoryTurns(
+    userEntry: String,
+    toolEvents: List<ToolEvent>,
+    assistantText: String?
+): List<ChatTurn> =
+    buildList {
+        add(ChatTurn(role = ChatRole.USER, content = userEntry))
 
-private fun describe(item: BotOutput): String =
-    when (item) {
-        is BotOutput.Text -> "a text message"
-        is BotOutput.Animation -> "a GIF"
-        is BotOutput.Photo -> "a photo `${item.filename}`"
-        is BotOutput.PhotoGroup -> "a photo album with ${item.photos.size} images"
-        is BotOutput.Document -> "a file `${item.filename}`"
-        is BotOutput.Audio -> "audio `${item.title}` by `${item.performer}`"
-        is BotOutput.Voice -> "a voice message"
-        is BotOutput.VideoNote -> "a video note"
-        is BotOutput.Quiz -> "a quiz `${item.question}`"
-        is BotOutput.Poll -> "a poll `${item.question}`"
+        for (event in toolEvents) {
+            if (event.toolName in TEXT_DUPLICATING_TOOLS) continue
+
+            add(
+                ChatTurn(
+                    role = ChatRole.TOOL_CALL,
+                    content = event.args.collapseWhitespaceAndCap(TOOL_ARGS_MAX_CHARS).orEmpty(),
+                    toolCallId = event.toolCallId,
+                    toolName = event.toolName
+                )
+            )
+            add(
+                ChatTurn(
+                    role = ChatRole.TOOL_RESULT,
+                    content = event.output.collapseWhitespaceAndCap(TOOL_OUTPUT_MAX_CHARS).orEmpty(),
+                    toolCallId = event.toolCallId,
+                    toolName = event.toolName,
+                    toolIsError = event.isError
+                )
+            )
+        }
+
+        if (!assistantText.isNullOrBlank()) {
+            add(ChatTurn(role = ChatRole.ASSISTANT, content = assistantText))
+        }
     }

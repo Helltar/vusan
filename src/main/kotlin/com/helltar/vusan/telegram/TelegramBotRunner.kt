@@ -170,11 +170,8 @@ internal class TelegramBotRunner(
 
                 delivery.send(message, result)
 
-                val mediaNote = result.dispatchedMediaNote
-
-                if (result.assistantHistoryEntry != null || mediaNote != null) {
-                    val userEntry = if (mediaNote != null) "$historyInput\n\n$mediaNote" else historyInput
-                    history.appendTurns(userId, userEntry, result.assistantHistoryEntry)
+                if (result.historyTurns.isNotEmpty()) {
+                    history.appendTurns(userId, result.historyTurns)
                 }
             } catch (error: Throwable) {
                 error.rethrowIfCancellation()
