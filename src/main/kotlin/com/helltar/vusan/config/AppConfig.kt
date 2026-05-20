@@ -4,8 +4,7 @@ import io.github.cdimascio.dotenv.dotenv
 
 data class AppConfig(
     val telegramBotToken: String,
-    val openAiApiKey: String,
-    val openAiModel: String,
+    val llmProvider: LlmProviderConfig,
     val elevenLabsApiKey: String?,
     val tavilyApiKey: String?,
     val giphyApiKey: String?,
@@ -22,10 +21,9 @@ data class AppConfig(
         fun fromEnv(): AppConfig {
             return AppConfig(
                 telegramBotToken = requireEnv("TELEGRAM_BOT_TOKEN"),
-                openAiApiKey = requireEnv("OPENAI_API_KEY"),
+                llmProvider = resolveLlmProvider(),
                 allowedIds = parseIdSet(readEnv("ALLOWED_IDS")),
                 databasePath = readEnv("DB_FILE") ?: "data/db/vusan.db",
-                openAiModel = readEnv("OPENAI_MODEL") ?: "gpt-5.4-nano",
                 tavilyApiKey = readEnv("TAVILY_API_KEY"),
                 giphyApiKey = readEnv("GIPHY_API_KEY"),
                 elevenLabsApiKey = elevenLabsKey,
@@ -42,6 +40,18 @@ data class AppConfig(
             )
         }
 
+        private fun resolveLlmProvider(): LlmProviderConfig {
+            val raw = readEnv("LLM_PROVIDER") ?: DEFAULT_LLM_PROVIDER
+            return when (val provider = raw.trim().lowercase()) {
+                "openai" ->
+                    LlmProviderConfig.OpenAi(
+                        apiKey = requireEnv("OPENAI_API_KEY"),
+                        model = readEnv("OPENAI_MODEL") ?: DEFAULT_OPENAI_MODEL
+                    )
+                else -> error("Unsupported LLM_PROVIDER=[$provider]. Supported values: openai")
+            }
+        }
+
         private fun readEnv(env: String): String? =
             dotenv[env]?.takeIf { it.isNotBlank() }
 
@@ -54,5 +64,8 @@ data class AppConfig(
                 ?.mapNotNull { it.trim().takeIf(String::isNotEmpty)?.toLongOrNull() }
                 ?.toSet()
                 .orEmpty()
+
+        private const val DEFAULT_LLM_PROVIDER = "openai"
+        private const val DEFAULT_OPENAI_MODEL = "gpt-5.4-nano"
     }
 }

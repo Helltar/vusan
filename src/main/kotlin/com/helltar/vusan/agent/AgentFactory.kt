@@ -9,11 +9,11 @@ import ai.koog.agents.core.dsl.extension.nodeLLMRequest
 import ai.koog.agents.core.dsl.extension.nodeLLMSendToolResults
 import ai.koog.agents.core.dsl.extension.onToolCalls
 import ai.koog.prompt.dsl.prompt
-import ai.koog.prompt.executor.clients.openai.OpenAIChatParams
 import ai.koog.prompt.executor.model.PromptExecutor
 import ai.koog.prompt.llm.LLModel
 import ai.koog.prompt.message.Message
 import ai.koog.prompt.message.MessagePart
+import ai.koog.prompt.params.LLMParams
 import com.helltar.vusan.agent.history.ChatRole
 import com.helltar.vusan.agent.history.PromptHistory
 import com.helltar.vusan.outbox.BotOutbox
@@ -23,6 +23,7 @@ class AgentFactory(
     private val promptExecutor: PromptExecutor,
     private val toolRegistryFactory: ToolRegistryFactory,
     private val model: LLModel,
+    private val chatParams: LLMParams = LLMParams(),
     private val systemPrompt: String = SYSTEM_PROMPT,
     private val maxIterations: Int = 60
 ) {
@@ -34,7 +35,7 @@ class AgentFactory(
         messageContext: MessageContext? = null
     ): AIAgent<String, String> {
         val seededPrompt =
-            prompt(id = "vusan-user-$userId", params = OpenAIChatParams(promptCacheKey = "vusan")) {
+            prompt(id = "vusan-user-$userId", params = chatParams) {
                 system(systemPrompt)
                 messageContext?.toSystemPrompt()?.let(::system)
 

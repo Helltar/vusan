@@ -1,13 +1,11 @@
 package com.helltar.vusan
 
-import ai.koog.prompt.executor.clients.openai.OpenAILLMClient
 import ai.koog.prompt.executor.llms.MultiLLMPromptExecutor
-import ai.koog.prompt.llm.LLMProvider
 import com.helltar.vusan.agent.AgentRunner
 import com.helltar.vusan.agent.AgentFactory
 import com.helltar.vusan.agent.history.ChatHistoryRepository
 import com.helltar.vusan.config.AppConfig
-import com.helltar.vusan.config.OpenAiModelResolver
+import com.helltar.vusan.config.resolveLlmRuntime
 import com.helltar.vusan.infra.Db
 import com.helltar.vusan.infra.Http
 import com.helltar.vusan.telegram.TelegramBotRunner
@@ -19,14 +17,14 @@ private val log = KotlinLogging.logger {}
 
 fun main() = runBlocking {
     val config = AppConfig.fromEnv()
-    val model = OpenAiModelResolver.resolve(config.openAiModel)
+    val llm = resolveLlmRuntime(config.llmProvider)
 
     Db.connect(config)
 
     val http = Http.createClient()
 
     http.use { http ->
-        val llmClients = LLMProvider.OpenAI to OpenAILLMClient(config.openAiApiKey)
+        val llmClients = llm.koogProvider to llm.client
 
         MultiLLMPromptExecutor(llmClients).use { executor ->
             val history = ChatHistoryRepository()
@@ -37,14 +35,15 @@ fun main() = runBlocking {
                     config = config,
                     history = history,
                     promptExecutor = executor,
-                    model = model
+                    model = llm.model
                 )
 
             val agentFactory =
                 AgentFactory(
                     promptExecutor = executor,
                     toolRegistryFactory = toolRegistryFactory,
-                    model = model
+                    model = llm.model,
+                    chatParams = llm.chatParams
                 )
 
             val agentRunner =
@@ -61,7 +60,7 @@ fun main() = runBlocking {
                     allowedIds = config.allowedIds
                 )
 
-            log.info { "Starting Vusan, model=${model.id}" }
+            log.info { "Starting Vusan, model=${llm.model.id}" }
 
             bot.start().join()
         }
