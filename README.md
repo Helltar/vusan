@@ -21,6 +21,7 @@ Tools the agent can call (source: `src/main/kotlin/com/helltar/vusan/tools/`). I
 | Tool | What it does | Opt-in |
 |---|---|:-:|
 | Web search | Tavily search + page extraction | ✓ |
+| Voice input | STT for incoming voice/audio messages via OpenAI | ✓ |
 | Voice | TTS via ElevenLabs | ✓ |
 | GIFs | Giphy search | ✓ |
 | Vision | Describes a replied photo | |
