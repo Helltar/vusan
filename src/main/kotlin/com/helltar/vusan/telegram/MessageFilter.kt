@@ -2,6 +2,7 @@ package com.helltar.vusan.telegram
 
 import dev.inmo.tgbotapi.types.message.abstracts.CommonMessage
 import dev.inmo.tgbotapi.types.message.content.TextContent
+import dev.inmo.tgbotapi.types.message.content.TextedContent
 import dev.inmo.tgbotapi.types.message.textsources.BotCommandTextSource
 import dev.inmo.tgbotapi.types.message.textsources.MentionTextSource
 import dev.inmo.tgbotapi.types.message.textsources.TextMentionTextSource
@@ -10,7 +11,7 @@ internal fun shouldHandle(message: CommonMessage<*>, botUserId: Long, botUsernam
     if (message.isPrivateChat) return true
 
     val isReplyToBot = message.replyAuthorIdOrNull() == botUserId
-    val content = message.content as? TextContent ?: return isReplyToBot
+    val content = message.content as? TextedContent ?: return isReplyToBot
 
     return isReplyToBot ||
         hasBotMention(content, botUsername) ||
@@ -28,7 +29,7 @@ internal fun normalizeUsername(value: String?): String? =
         ?.lowercase()
         ?.takeIf { it.isNotBlank() }
 
-private fun hasBotMention(content: TextContent, botUsername: String?): Boolean {
+private fun hasBotMention(content: TextedContent, botUsername: String?): Boolean {
     val expectedUsername = normalizeUsername(botUsername) ?: return false
 
     return content.textSources.any { source ->
@@ -36,12 +37,12 @@ private fun hasBotMention(content: TextContent, botUsername: String?): Boolean {
     }
 }
 
-private fun hasBotTextMention(content: TextContent, botUserId: Long): Boolean =
+private fun hasBotTextMention(content: TextedContent, botUserId: Long): Boolean =
     content.textSources.any { source ->
         source is TextMentionTextSource && source.user.id.chatId.long == botUserId
     }
 
-private fun hasTargetedBotCommand(content: TextContent, botUsername: String?): Boolean {
+private fun hasTargetedBotCommand(content: TextedContent, botUsername: String?): Boolean {
     val expectedUsername = normalizeUsername(botUsername) ?: return false
 
     return content.textSources.any { source ->

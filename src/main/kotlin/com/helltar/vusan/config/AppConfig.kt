@@ -11,6 +11,7 @@ data class AppConfig(
     val ytDlpPath: String,
     val ytDlpCookiesFile: String?,
     val elevenLabsTts: ElevenLabsTtsConfig?,
+    val openAiStt: OpenAiSttConfig?,
     val databasePath: String,
     val allowedIds: Set<Long>
 ) {
@@ -39,8 +40,20 @@ data class AppConfig(
                             outputFormat = readEnv("ELEVENLABS_TTS_OUTPUT_FORMAT") ?: ElevenLabsTtsConfig.DEFAULT_OUTPUT_FORMAT
                         )
                     },
+                openAiStt = resolveOpenAiStt(),
                 ytDlpPath = readEnv("YT_DLP_PATH") ?: "yt-dlp",
                 ytDlpCookiesFile = readEnv("YT_DLP_COOKIES_FILE")
+            )
+        }
+
+        private fun resolveOpenAiStt(): OpenAiSttConfig? {
+            val key = readEnv("OPENAI_STT_API_KEY") ?: return null
+
+            return OpenAiSttConfig(
+                apiKey = key,
+                model = readEnv("OPENAI_STT_MODEL") ?: OpenAiSttConfig.DEFAULT_MODEL,
+                maxDurationSeconds = readEnv("OPENAI_STT_MAX_DURATION_SECONDS")?.toLongOrNull()
+                    ?: OpenAiSttConfig.DEFAULT_MAX_DURATION_SECONDS
             )
         }
 

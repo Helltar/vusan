@@ -8,7 +8,9 @@ import com.helltar.vusan.config.AppConfig
 import com.helltar.vusan.config.resolveLlmRuntime
 import com.helltar.vusan.infra.Db
 import com.helltar.vusan.infra.Http
+import com.helltar.vusan.stt.OpenAiWhisperClient
 import com.helltar.vusan.telegram.TelegramBotRunner
+import com.helltar.vusan.telegram.VoiceTranscriber
 import com.helltar.vusan.tools.ToolRegistryFactory
 import io.github.oshai.kotlinlogging.KotlinLogging
 import kotlinx.coroutines.runBlocking
@@ -52,12 +54,21 @@ fun main() = runBlocking {
                     history = history
                 )
 
+            val voiceTranscriber =
+                config.openAiStt?.let { sttConfig ->
+                    VoiceTranscriber(OpenAiWhisperClient(http, sttConfig), sttConfig)
+                } ?: run {
+                    log.warn { "OPENAI_STT_API_KEY not set — voice message transcription disabled" }
+                    null
+                }
+
             val bot =
                 TelegramBotRunner(
                     botToken = config.telegramBotToken,
                     agent = agentRunner,
                     history = history,
-                    allowedIds = config.allowedIds
+                    allowedIds = config.allowedIds,
+                    voiceTranscriber = voiceTranscriber
                 )
 
             log.info { "Starting Vusan, model=${llm.model.id}" }

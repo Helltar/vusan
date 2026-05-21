@@ -14,13 +14,17 @@ import dev.inmo.tgbotapi.extensions.api.chat.get.getChat
 import dev.inmo.tgbotapi.extensions.api.send.withTypingAction
 import dev.inmo.tgbotapi.extensions.api.telegramBot
 import dev.inmo.tgbotapi.extensions.behaviour_builder.buildBehaviourWithLongPolling
+import dev.inmo.tgbotapi.extensions.behaviour_builder.triggers_handling.onAudio
 import dev.inmo.tgbotapi.extensions.behaviour_builder.triggers_handling.onCommand
 import dev.inmo.tgbotapi.extensions.behaviour_builder.triggers_handling.onSticker
 import dev.inmo.tgbotapi.extensions.behaviour_builder.triggers_handling.onText
+import dev.inmo.tgbotapi.extensions.behaviour_builder.triggers_handling.onVoice
 import dev.inmo.tgbotapi.types.chat.ExtendedPublicChat
 import dev.inmo.tgbotapi.types.message.abstracts.CommonMessage
+import dev.inmo.tgbotapi.types.message.content.AudioContent
 import dev.inmo.tgbotapi.types.message.content.StickerContent
 import dev.inmo.tgbotapi.types.message.content.TextContent
+import dev.inmo.tgbotapi.types.message.content.VoiceContent
 import io.github.oshai.kotlinlogging.KotlinLogging
 import kotlinx.coroutines.Job
 
@@ -28,7 +32,8 @@ internal class TelegramBotRunner(
     botToken: String,
     private val agent: AgentRunner,
     private val history: ChatHistoryRepository,
-    private val allowedIds: Set<Long>
+    private val allowedIds: Set<Long>,
+    private val voiceTranscriber: VoiceTranscriber?
 ) {
 
     private companion object {
@@ -62,6 +67,8 @@ internal class TelegramBotRunner(
             onCommand("reset", markerFactory = null) { handleResetCommand(it, botProfile) }
             onText(markerFactory = null) { handleTextUpdate(it, botProfile) }
             onSticker(markerFactory = null) { handleStickerUpdate(it, botProfile) }
+            onVoice(markerFactory = null) { handleVoiceUpdate(it, botProfile) }
+            onAudio(markerFactory = null) { handleAudioUpdate(it, botProfile) }
         }
     }
 
@@ -101,6 +108,80 @@ internal class TelegramBotRunner(
             repliedPhoto = replySummary?.let { message.repliedPhotoOrNull(bot) },
             inputKind = "text"
         )
+    }
+
+    private suspend fun handleVoiceUpdate(message: CommonMessage<VoiceContent>, botProfile: BotProfile) {
+        if (!message.isAccepted(botProfile)) return
+
+        handleTranscribedAudio(
+            message = message,
+            audioInput = message.content.media.toAudioInput(),
+            caption = sanitizeUserText(message.content, botProfile.userId, botProfile.username),
+            botProfile = botProfile,
+            inputKind = "voice"
+        )
+    }
+
+    private suspend fun handleAudioUpdate(message: CommonMessage<AudioContent>, botProfile: BotProfile) {
+        if (!message.isAccepted(botProfile)) return
+
+        handleTranscribedAudio(
+            message = message,
+            audioInput = message.content.media.toAudioInput(),
+            caption = sanitizeUserText(message.content, botProfile.userId, botProfile.username),
+            botProfile = botProfile,
+            inputKind = "audio"
+        )
+    }
+
+    private suspend fun handleTranscribedAudio(
+        message: CommonMessage<*>,
+        audioInput: AudioInput,
+        caption: String,
+        botProfile: BotProfile,
+        inputKind: String
+    ) {
+        val transcriber = voiceTranscriber
+        if (transcriber == null) {
+            log.info { "$inputKind message ignored: STT not configured (chat=${message.chatIdLong} user=${message.senderIdOrNull()})" }
+            return
+        }
+
+        val transcript =
+            when (val result = transcriber.transcribe(bot, audioInput)) {
+                is VoiceTranscriptionResult.Success -> result.text
+                is VoiceTranscriptionResult.TooLong -> {
+                    sendReply(message, Messages.voiceTooLongReply(result.durationSeconds, result.maxSeconds))
+                    return
+                }
+                is VoiceTranscriptionResult.Empty -> {
+                    log.info { "$inputKind transcription empty (chat=${message.chatIdLong}): ${result.reason}" }
+                    sendReply(message, Messages.voiceEmptyReply)
+                    return
+                }
+                is VoiceTranscriptionResult.Failed -> {
+                    sendReply(message, Messages.voiceTranscriptionFailedReply)
+                    return
+                }
+            }
+
+        val prompt = buildTranscribedPrompt(caption, transcript)
+        val replySummary = message.usableReplySummary(botProfile)
+
+        handleAgentMessage(
+            message = message,
+            agentInput = replySummary?.let { formatAgentInput(prompt, it) } ?: prompt,
+            historyInput = replySummary?.let { formatHistoryInput(prompt, it) } ?: prompt,
+            repliedPhoto = replySummary?.let { message.repliedPhotoOrNull(bot) },
+            inputKind = inputKind
+        )
+    }
+
+    private fun buildTranscribedPrompt(caption: String, transcript: String): String {
+        val wrapped = wrapVoiceTranscript(transcript)
+        val trimmedCaption = caption.trim()
+
+        return if (trimmedCaption.isEmpty()) wrapped else "$trimmedCaption\n\n$wrapped"
     }
 
     private suspend fun handleStickerUpdate(message: CommonMessage<StickerContent>, botProfile: BotProfile) {

@@ -1,14 +1,14 @@
 package com.helltar.vusan.telegram
 
-import dev.inmo.tgbotapi.types.message.content.TextContent
+import dev.inmo.tgbotapi.types.message.content.TextedContent
 import dev.inmo.tgbotapi.types.message.textsources.MentionTextSource
 import dev.inmo.tgbotapi.types.message.textsources.TextMentionTextSource
 
-internal fun sanitizeUserText(content: TextContent, botUserId: Long, botUsername: String?): String {
+internal fun sanitizeUserText(content: TextedContent, botUserId: Long, botUsername: String?): String {
     val expectedUsername = normalizeUsername(botUsername)
     val sources = content.textSources
 
-    if (sources.isEmpty()) return content.text.trim()
+    if (sources.isEmpty()) return content.text.orEmpty().trim()
 
     val sanitized =
         sources.joinToString(separator = "") { source ->

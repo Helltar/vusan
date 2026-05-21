@@ -49,6 +49,7 @@ If the API key for one of these is missing, the corresponding tool is unregister
 | `TAVILY_API_KEY` | Web search, image search, page extraction |
 | `ELEVENLABS_API_KEY` | Voice / TTS |
 | `GIPHY_API_KEY` | GIF lookup |
+| `OPENAI_STT_API_KEY` | Speech-to-text for incoming Telegram voice messages (OpenAI Whisper) |
 
 ## Optional — settings and defaults
 
@@ -59,6 +60,16 @@ If the API key for one of these is missing, the corresponding tool is unregister
 | `ELEVENLABS_VOICE_ID` | `VD1if7jDVYtAKs4P0FIY` | Voice ID. Default voice: Milly Maple — Cool and Bright. |
 | `ELEVENLABS_TTS_MODEL` | `eleven_v3` | TTS model ID. |
 | `ELEVENLABS_TTS_OUTPUT_FORMAT` | `mp3_44100_128` | Audio output format. |
+
+### OpenAI Whisper STT
+
+When `OPENAI_STT_API_KEY` is set, the bot transcribes incoming voice messages (Telegram `VoiceContent`) and feeds the transcript to the agent as a normal user prompt. In a private chat any voice triggers the bot; in groups only voice messages that reply to the bot. If the key is missing, voice messages are silently ignored. Whisper currently costs about `$0.006/min` at OpenAI list price — pricing your own usage is on you.
+
+| Variable | Default | Purpose |
+| --- | --- | --- |
+| `OPENAI_STT_API_KEY` | — (disables STT when unset) | OpenAI API key for the transcription endpoint. Reuse the value of `OPENAI_API_KEY` if you already have one. |
+| `OPENAI_STT_MODEL` | `whisper-1` | OpenAI transcription model ID. |
+| `OPENAI_STT_MAX_DURATION_SECONDS` | `300` | Reject voice messages longer than this; the user gets a "too long" reply instead of an agent invocation. |
 
 ### Storage and tooling
 
