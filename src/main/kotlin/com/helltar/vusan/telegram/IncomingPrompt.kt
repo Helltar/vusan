@@ -10,9 +10,11 @@ import dev.inmo.tgbotapi.types.files.TelegramMediaFile
 import dev.inmo.tgbotapi.types.message.abstracts.CommonMessage
 import dev.inmo.tgbotapi.types.message.abstracts.ContentMessage
 import dev.inmo.tgbotapi.types.message.abstracts.Message
+import dev.inmo.tgbotapi.types.message.content.AudioContent
 import dev.inmo.tgbotapi.types.message.content.MediaContent
 import dev.inmo.tgbotapi.types.message.content.PhotoContent
 import dev.inmo.tgbotapi.types.message.content.TextedContent
+import dev.inmo.tgbotapi.types.message.content.VoiceContent
 
 private const val MAX_REPLIED_TEXT_CHARS = 4096
 private const val MAX_REPLIED_HISTORY_TEXT_CHARS = 600
@@ -20,14 +22,43 @@ private const val MAX_REPLIED_HISTORY_TEXT_CHARS = 600
 internal data class RepliedMessageSummary(
     val type: String,
     val textOrCaption: String?,
-    val metadata: List<String> = emptyList()
+    val metadata: List<String> = emptyList(),
+    val transcript: String? = null
 )
 
 internal fun isReplyToOtherUser(replyAuthorId: Long?, botUserId: Long): Boolean =
     replyAuthorId == null || replyAuthorId != botUserId
 
-internal fun CommonMessage<*>.replySummaryOrNull(): RepliedMessageSummary? =
-    replyInfo.toReplySummary()
+internal suspend fun CommonMessage<*>.replySummaryOrNull(
+    bot: TelegramBot,
+    voiceTranscriber: VoiceTranscriber?
+): RepliedMessageSummary? {
+    val base = replyInfo.toReplySummary() ?: return null
+    val transcript = transcribeRepliedAudioOrNull(bot, voiceTranscriber)
+    return if (transcript != null) base.copy(transcript = transcript) else base
+}
+
+private suspend fun CommonMessage<*>.transcribeRepliedAudioOrNull(
+    bot: TelegramBot,
+    voiceTranscriber: VoiceTranscriber?
+): String? {
+    if (voiceTranscriber == null) return null
+
+    val replyInfo = replyInfo as? ReplyInfo.Internal ?: return null
+    val content = (replyInfo.message as? ContentMessage<*>)?.content ?: return null
+
+    val audioInput =
+        when (content) {
+            is VoiceContent -> content.media.toAudioInput()
+            is AudioContent -> content.media.toAudioInput()
+            else -> return null
+        }
+
+    return when (val result = voiceTranscriber.transcribe(bot, audioInput)) {
+        is VoiceTranscriptionResult.Success -> result.text
+        else -> null
+    }
+}
 
 internal fun CommonMessage<*>.repliedPhotoOrNull(bot: TelegramBot): RepliedPhoto? {
     val replyInfo = replyInfo as? ReplyInfo.Internal ?: return null
@@ -85,8 +116,15 @@ private fun buildReplyContextPrompt(
         }
 
         repliedMessage.textOrCaption?.let {
-            appendLine("- text/caption:")
+            appendLine("<text_caption>")
             appendLine(transformText(it))
+            appendLine("</text_caption>")
+        }
+
+        repliedMessage.transcript?.let {
+            appendLine("<audio_transcript>")
+            appendLine(transformText(it))
+            appendLine("</audio_transcript>")
         }
 
         appendLine("</reply_context>")

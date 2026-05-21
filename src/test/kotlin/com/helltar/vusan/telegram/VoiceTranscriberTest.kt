@@ -6,16 +6,16 @@ import kotlin.test.assertEquals
 class VoiceTranscriberTest {
 
     @Test
-    fun `wrapVoiceTranscript wraps transcript in voice_transcript tag`() {
-        val wrapped = wrapVoiceTranscript("hello world")
+    fun `wrapAudioTranscript wraps transcript in audio_transcript tag`() {
+        val wrapped = wrapAudioTranscript("hello world")
 
-        assertEquals("<voice_transcript>\nhello world\n</voice_transcript>", wrapped)
+        assertEquals("<audio_transcript>\nhello world\n</audio_transcript>", wrapped)
     }
 
     @Test
-    fun `wrapVoiceTranscript trims surrounding whitespace inside the tag`() {
-        val wrapped = wrapVoiceTranscript("   hello   ")
+    fun `wrapAudioTranscript trims surrounding whitespace inside the tag`() {
+        val wrapped = wrapAudioTranscript("   hello   ")
 
-        assertEquals("<voice_transcript>\nhello\n</voice_transcript>", wrapped)
+        assertEquals("<audio_transcript>\nhello\n</audio_transcript>", wrapped)
     }
 }

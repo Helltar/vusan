@@ -96,5 +96,5 @@ private fun extensionFor(mimeType: String?, default: String): String =
         else -> default
     }
 
-internal fun wrapVoiceTranscript(text: String): String =
-    "<voice_transcript>\n${text.trim()}\n</voice_transcript>"
+internal fun wrapAudioTranscript(text: String): String =
+    "<audio_transcript>\n${text.trim()}\n</audio_transcript>"

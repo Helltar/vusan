@@ -178,7 +178,7 @@ internal class TelegramBotRunner(
     }
 
     private fun buildTranscribedPrompt(caption: String, transcript: String): String {
-        val wrapped = wrapVoiceTranscript(transcript)
+        val wrapped = wrapAudioTranscript(transcript)
         val trimmedCaption = caption.trim()
 
         return if (trimmedCaption.isEmpty()) wrapped else "$trimmedCaption\n\n$wrapped"
@@ -199,8 +199,10 @@ internal class TelegramBotRunner(
         )
     }
 
-    private fun CommonMessage<*>.usableReplySummary(botProfile: BotProfile): RepliedMessageSummary? =
-        if (isReplyToOtherUser(replyAuthorIdOrNull(), botProfile.userId)) replySummaryOrNull() else null
+    private suspend fun CommonMessage<*>.usableReplySummary(botProfile: BotProfile): RepliedMessageSummary? =
+        if (isReplyToOtherUser(replyAuthorIdOrNull(), botProfile.userId))
+            replySummaryOrNull(bot, voiceTranscriber)
+        else null
 
     private fun CommonMessage<*>.isAccepted(botProfile: BotProfile): Boolean {
         if (!shouldHandle(this, botProfile.userId, botProfile.username)) return false

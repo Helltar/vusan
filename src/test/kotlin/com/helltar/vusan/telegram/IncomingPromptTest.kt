@@ -39,7 +39,7 @@ class IncomingPromptTest {
         assertTrue(prompt.contains("- metadata:\n  - file_id: abc123"))
         assertTrue(prompt.contains("  - width: 1280"))
         assertTrue(prompt.contains("- visual content: call `describeRepliedPhoto`"))
-        assertFalse(prompt.contains("- text/caption:"))
+        assertFalse(prompt.contains("<text_caption>"))
     }
 
     @Test
@@ -65,7 +65,8 @@ class IncomingPromptTest {
         assertTrue(historyText.contains("- type: text"))
         assertTrue(historyText.contains("- metadata:\n  - file_id: file-1"))
         assertTrue(historyText.contains("https://example.com/article/4034"))
-        assertTrue(historyText.contains("- text/caption:"))
+        assertTrue(historyText.contains("<text_caption>"))
+        assertTrue(historyText.contains("</text_caption>"))
         assertTrue(historyText.contains("</reply_context>"))
         assertTrue(historyText.contains("<user_message>"))
         assertTrue(historyText.contains("summarize this article"))
