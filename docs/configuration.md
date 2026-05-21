@@ -7,9 +7,8 @@ All configuration is read from environment variables (or a `.env` file in the wo
 | Variable | Purpose |
 | --- | --- |
 | `TELEGRAM_BOT_TOKEN` | Bot token from [@BotFather](https://t.me/BotFather). |
-| `ALLOWED_IDS` | Comma-separated Telegram IDs the bot will respond to. Positive = user (private chat), negative = group/channel. Empty/unset = bot ignores every message. |
-
-Plus the keys for the active LLM provider (see [LLM provider](#llm-provider) below). With the default `LLM_PROVIDER=openai`, that means `OPENAI_API_KEY`.
+| `ALLOWED_IDS` | Comma-separated Telegram IDs the bot will respond to. Positive = user, negative = group. Empty/unset = bot ignores every message. |
+| LLM provider keys | Depend on `LLM_PROVIDER` — see [below](#llm-provider). Default `openai` requires `OPENAI_API_KEY`. |
 
 ## LLM provider
 
@@ -19,27 +18,27 @@ Plus the keys for the active LLM provider (see [LLM provider](#llm-provider) bel
 
 | Variable | Default | Purpose |
 | --- | --- | --- |
-| `OPENAI_API_KEY` | — (required) | OpenAI API key for the agent LLM and vision. |
+| `OPENAI_API_KEY` | required | OpenAI API key for the agent LLM and vision. |
 | `OPENAI_MODEL` | `gpt-5.4-nano` | OpenAI model ID. |
 
 ### `ollama`
 
-Run the agent against a local [Ollama](https://ollama.com) instance. Pick a model that advertises tool support (e.g. `llama3.1`, `qwen2.5`); models without `tools` capability won't be able to call any of the bot's tools.
+Run the agent against a local [Ollama](https://ollama.com) instance. Pick a model that advertises tool support (e.g. `gemma4`, `qwen3.6`); models without `tools` capability won't be able to call any of the bot's tools.
 
 | Variable | Default | Purpose |
 | --- | --- | --- |
-| `OLLAMA_MODEL` | — (required) | Ollama model ID, e.g. `llama3.1`. The model must be pulled on the Ollama instance ahead of time (`ollama pull llama3.1`). |
+| `OLLAMA_MODEL` | required | Ollama model ID, e.g. `gemma4`. Pull it ahead of time (`ollama pull gemma4`). |
 | `OLLAMA_BASE_URL` | `http://localhost:11434` | Base URL of the Ollama HTTP API. |
 
 ### `openai-compatible`
 
-Point the OpenAI client at any local server that exposes an OpenAI-compatible `/v1/chat/completions` endpoint: `llama.cpp` `llama-server`, [LM Studio](https://lmstudio.ai), [vLLM](https://github.com/vllm-project/vllm), text-generation-webui, etc. The model must support tool calling for the bot's tools to work.
+Point the OpenAI client at any local server that exposes an OpenAI-compatible `/v1/chat/completions` endpoint: [llama.cpp](https://github.com/ggml-org/llama.cpp), [LM Studio](https://lmstudio.ai), etc. The model must support tool calling.
 
 | Variable | Default | Purpose |
 | --- | --- | --- |
-| `OPENAI_BASE_URL` | — (required) | Base URL of the local server, e.g. `http://localhost:8080` for `llama-server` or `http://localhost:1234/v1` for LM Studio. |
-| `OPENAI_API_KEY` | — (required) | Use any non-empty value if the local server ignores the header (most do — they just require it to be present). |
-| `OPENAI_MODEL` | — (required) | Model ID as advertised by the local server's `/v1/models` endpoint. |
+| `OPENAI_BASE_URL` | required | e.g. `http://localhost:8080` (`llama-server`) or `http://localhost:1234/v1` (LM Studio). |
+| `OPENAI_API_KEY` | required | Any non-empty value — most local servers just check the header is present. |
+| `OPENAI_MODEL` | required | Model ID as advertised by the local server's `/v1/models`. |
 
 ## Optional — feature toggles
 
@@ -47,17 +46,24 @@ If the API key for one of these is missing, the corresponding tool is unregister
 
 | Variable | Disables when missing |
 | --- | --- |
-| `TAVILY_API_KEY` | Web search, image search, and page extraction tools. |
-| `ELEVENLABS_API_KEY` | Voice / text-to-speech tool. |
-| `GIPHY_API_KEY` | GIF lookup tool. |
+| `TAVILY_API_KEY` | Web search, image search, page extraction |
+| `ELEVENLABS_API_KEY` | Voice / TTS |
+| `GIPHY_API_KEY` | GIF lookup |
 
 ## Optional — settings and defaults
 
+### ElevenLabs
+
 | Variable | Default | Purpose |
 | --- | --- | --- |
-| `ELEVENLABS_VOICE_ID` | `VD1if7jDVYtAKs4P0FIY` | ElevenLabs voice ID. Default voice: Milly Maple - Cool and Bright. |
-| `ELEVENLABS_TTS_MODEL` | `eleven_v3` | ElevenLabs TTS model ID. |
-| `ELEVENLABS_TTS_OUTPUT_FORMAT` | `mp3_44100_128` | ElevenLabs audio output format. |
-| `DB_FILE` | `data/db/vusan.db` | Path to the SQLite database file (created on first run, parent directories auto-created). |
+| `ELEVENLABS_VOICE_ID` | `VD1if7jDVYtAKs4P0FIY` | Voice ID. Default voice: Milly Maple — Cool and Bright. |
+| `ELEVENLABS_TTS_MODEL` | `eleven_v3` | TTS model ID. |
+| `ELEVENLABS_TTS_OUTPUT_FORMAT` | `mp3_44100_128` | Audio output format. |
+
+### Storage and tooling
+
+| Variable | Default | Purpose |
+| --- | --- | --- |
+| `DB_FILE` | `data/db/vusan.db` | SQLite path (created on first run; parent dirs auto-created). |
 | `YT_DLP_PATH` | `yt-dlp` | Path to the `yt-dlp` binary. |
 | `YT_DLP_COOKIES_FILE` | — | Netscape-format `cookies.txt` for YouTube auth. See the [yt-dlp wiki](https://github.com/yt-dlp/yt-dlp/wiki/Extractors#exporting-youtube-cookies). |
