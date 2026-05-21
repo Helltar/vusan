@@ -5,6 +5,7 @@ import ai.koog.prompt.executor.clients.openai.OpenAIChatParams
 import ai.koog.prompt.executor.clients.openai.OpenAIClientSettings
 import ai.koog.prompt.executor.clients.openai.OpenAILLMClient
 import ai.koog.prompt.executor.ollama.client.OllamaClient
+import ai.koog.prompt.executor.ollama.client.OllamaParams
 import ai.koog.prompt.llm.LLMCapability
 import ai.koog.prompt.llm.LLMProvider
 import ai.koog.prompt.llm.LLModel
@@ -42,7 +43,11 @@ fun resolveLlmRuntime(config: LlmProviderConfig): LlmRuntime =
                                 LLMCapability.Tools
                             )
                     ),
-                chatParams = LLMParams()
+                // TODO: drop `OllamaParams(think = false)` once Koog releases a version with d7800fa29
+                //  ("Fix ollama message converter"). Preview3's converter throws NotImplementedError on
+                //  MessagePart.Reasoning during nodeLLMSendToolResults, so reasoning-capable models
+                //  (e.g. omnicoder) crash on the second LLM call of a tool-using turn.
+                chatParams = OllamaParams(think = false)
             )
 
         is LlmProviderConfig.OpenAiCompatible ->
