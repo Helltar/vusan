@@ -5,6 +5,8 @@
 <h1 align="center">Vusan</h1>
 
 [![build](https://github.com/Helltar/vusan/actions/workflows/build.yml/badge.svg)](https://github.com/Helltar/vusan/actions/workflows/build.yml)
+[![GHCR](https://img.shields.io/badge/ghcr-vusan-blue?logo=docker)](https://github.com/Helltar/vusan/pkgs/container/vusan)
+[![Image size](https://ghcr-badge.egpl.dev/helltar/vusan/size)](https://github.com/Helltar/vusan/pkgs/container/vusan)
 
 Vusan is a Telegram AI agent for private chats and groups. It chats like a
 regular participant and uses tools when the conversation needs them (web
@@ -27,7 +29,7 @@ Tools the agent can call (source: `src/main/kotlin/com/helltar/vusan/tools/`). I
 | File delivery | Sends as a Telegram document | |
 | Chat history | Persistent SQLite memory | |
 
-The agent itself is built on [koog-agents](https://github.com/JetBrains/koog) and talks to OpenAI (default), a local Ollama instance, or any OpenAI-compatible local server (llama.cpp, LM Studio, vLLM) as the LLM backend. Telegram I/O uses [tgbotapi](https://github.com/InsanusMokrassar/ktgbotapi).
+The agent itself is built on [Koog](https://github.com/JetBrains/koog) and talks to OpenAI (default), a local Ollama instance, or any OpenAI-compatible local server (llama.cpp, LM Studio) as the LLM backend. Telegram I/O uses [ktgbotapi](https://github.com/InsanusMokrassar/ktgbotapi).
 
 ## Quick start — Docker
 
