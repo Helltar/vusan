@@ -68,7 +68,7 @@ When `OPENAI_STT_API_KEY` is set, the bot transcribes incoming voice messages (T
 | Variable | Default | Purpose |
 | --- | --- | --- |
 | `OPENAI_STT_API_KEY` | — (disables STT when unset) | OpenAI API key for the transcription endpoint. Reuse the value of `OPENAI_API_KEY` if you already have one. |
-| `OPENAI_STT_MODEL` | `whisper-1` | OpenAI transcription model ID. |
+| `OPENAI_STT_MODEL` | `gpt-4o-transcribe` | OpenAI transcription model ID. |
 | `OPENAI_STT_MAX_DURATION_SECONDS` | `300` | Reject voice messages longer than this; the user gets a "too long" reply instead of an agent invocation. |
 
 ### Storage and tooling

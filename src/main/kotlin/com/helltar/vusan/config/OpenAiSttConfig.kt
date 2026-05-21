@@ -12,7 +12,7 @@ data class OpenAiSttConfig(
     }
 
     companion object {
-        const val DEFAULT_MODEL = "whisper-1"
+        const val DEFAULT_MODEL = "gpt-4o-transcribe"
         const val DEFAULT_MAX_DURATION_SECONDS = 300L
     }
 }
