@@ -49,7 +49,7 @@ If the API key for one of these is missing, the corresponding tool is unregister
 | `TAVILY_API_KEY` | Web search, image search, page extraction |
 | `ELEVENLABS_API_KEY` | Voice / TTS |
 | `GIPHY_API_KEY` | GIF lookup |
-| `OPENAI_STT_API_KEY` | Speech-to-text for incoming Telegram voice messages (OpenAI Whisper) |
+| `OPENAI_STT_API_KEY` | Speech-to-text for incoming Telegram voice and audio messages (OpenAI Whisper / `gpt-4o-transcribe`) |
 
 ## Optional — settings and defaults
 
@@ -61,15 +61,15 @@ If the API key for one of these is missing, the corresponding tool is unregister
 | `ELEVENLABS_TTS_MODEL` | `eleven_v3` | TTS model ID. |
 | `ELEVENLABS_TTS_OUTPUT_FORMAT` | `mp3_44100_128` | Audio output format. |
 
-### OpenAI Whisper STT
+### OpenAI STT
 
-When `OPENAI_STT_API_KEY` is set, the bot transcribes incoming voice messages (Telegram `VoiceContent`) and feeds the transcript to the agent as a normal user prompt. In a private chat any voice triggers the bot; in groups only voice messages that reply to the bot. If the key is missing, voice messages are silently ignored. Whisper currently costs about `$0.006/min` at OpenAI list price — pricing your own usage is on you.
+When `OPENAI_STT_API_KEY` is set, the bot transcribes incoming voice messages (Telegram `VoiceContent`) and audio files (`AudioContent`) and feeds the transcript to the agent as a normal user prompt wrapped in a `<voice_transcript>` tag. Voice/audio messages replied to by the user are also transcribed and included in the `<reply_context>`. In a private chat any voice or audio triggers the bot; in groups only messages that reply to the bot. If the key is missing, voice and audio messages are silently ignored.
 
 | Variable | Default | Purpose |
 | --- | --- | --- |
-| `OPENAI_STT_API_KEY` | — (disables STT when unset) | OpenAI API key for the transcription endpoint. Reuse the value of `OPENAI_API_KEY` if you already have one. |
-| `OPENAI_STT_MODEL` | `gpt-4o-transcribe` | OpenAI transcription model ID. |
-| `OPENAI_STT_MAX_DURATION_SECONDS` | `300` | Reject voice messages longer than this; the user gets a "too long" reply instead of an agent invocation. |
+| `OPENAI_STT_API_KEY` | — | OpenAI API key for the transcription endpoint. Reuse the value of `OPENAI_API_KEY` if you already have one. |
+| `OPENAI_STT_MODEL` | `gpt-4o-transcribe` | OpenAI transcription model ID. Other supported values: `gpt-4o-mini-transcribe`, `whisper-1`. |
+| `OPENAI_STT_MAX_DURATION_SECONDS` | `300` | Reject voice/audio messages longer than this; the user gets a "too long" reply instead of an agent invocation. |
 
 ### Storage and tooling
 
