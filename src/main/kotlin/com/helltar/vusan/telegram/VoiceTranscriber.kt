@@ -29,7 +29,7 @@ internal fun VoiceFile.toAudioInput(): AudioInput =
         file = this,
         durationSeconds = duration,
         mimeType = mimeType?.raw,
-        fileName = "voice-${fileUniqueId.string}.${extensionFor(mimeType?.raw, default = "oga")}"
+        fileName = "voice-${fileUniqueId.string}.${extensionFor(mimeType?.raw, default = "ogg")}"
     )
 
 internal fun AudioFile.toAudioInput(): AudioInput =
@@ -87,7 +87,7 @@ internal class VoiceTranscriber(
 
 private fun extensionFor(mimeType: String?, default: String): String =
     when (mimeType) {
-        "audio/ogg", "audio/oga" -> "oga"
+        "audio/ogg", "audio/oga" -> "ogg"
         "audio/mpeg" -> "mp3"
         "audio/mp4", "audio/x-m4a" -> "m4a"
         "audio/wav", "audio/x-wav" -> "wav"
