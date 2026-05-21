@@ -12,6 +12,8 @@ Vusan is a Telegram AI agent for private chats and groups. It chats like a
 regular participant and uses tools when the conversation needs them (web
 search, polls, voice messages, vision, and more).
 
+Try it live in the [Vusan Playground](https://t.me/+56qi5dDwsNszZWFi) Telegram group.
+
 ## Features
 
 Tools the agent can call (source: `src/main/kotlin/com/helltar/vusan/tools/`). Items marked opt-in require an API key — see [docs/configuration.md](docs/configuration.md).
