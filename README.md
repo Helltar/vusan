@@ -34,8 +34,7 @@ The agent itself is built on [koog-agents](https://github.com/JetBrains/koog) an
 ```bash
 cp .env.example .env
 # Edit .env using docs/configuration.md as the reference.
-docker build -t vusan .
-docker run -d --name vusan --env-file .env -v vusan-data:/app/data vusan
+docker run -d --name vusan --env-file .env -v vusan-data:/app/data ghcr.io/helltar/vusan:latest
 ```
 
 The `-v vusan-data:/app/data` mount keeps the SQLite database (chat history)
@@ -51,11 +50,3 @@ cp .env.example .env
 ```
 
 `./gradlew shadowJar` produces a fat JAR at `build/libs/vusan-<version>-all.jar`.
-
-## Configuration
-
-See [docs/configuration.md](docs/configuration.md) for the full reference.
-
-## Conventions
-
-See [AGENTS.md](AGENTS.md) for coding conventions and architectural rules.
