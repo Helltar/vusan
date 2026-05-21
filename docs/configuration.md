@@ -46,10 +46,10 @@ If the API key for one of these is missing, the corresponding tool is unregister
 
 | Variable | Disables when missing |
 | --- | --- |
-| `TAVILY_API_KEY` | Web search, image search, page extraction |
-| `ELEVENLABS_API_KEY` | Voice / TTS |
-| `GIPHY_API_KEY` | GIF lookup |
-| `OPENAI_STT_API_KEY` | Speech-to-text for incoming Telegram voice and audio messages (OpenAI Whisper / `gpt-4o-transcribe`) |
+| `TAVILY_API_KEY` | Web search, image search, page extraction. |
+| `ELEVENLABS_API_KEY` | Voice / TTS. |
+| `GIPHY_API_KEY` | GIF lookup. |
+| `OPENAI_STT_API_KEY` | Speech-to-text for incoming Telegram voice and audio messages. |
 
 ## Optional — settings and defaults
 
@@ -68,7 +68,7 @@ When `OPENAI_STT_API_KEY` is set, the bot transcribes incoming voice messages (T
 | Variable | Default | Purpose |
 | --- | --- | --- |
 | `OPENAI_STT_API_KEY` | — | OpenAI API key for the transcription endpoint. Reuse the value of `OPENAI_API_KEY` if you already have one. |
-| `OPENAI_STT_MODEL` | `gpt-4o-transcribe` | OpenAI transcription model ID. Other supported values: `gpt-4o-mini-transcribe`, `whisper-1`. |
+| `OPENAI_STT_MODEL` | `gpt-4o-transcribe` | OpenAI transcription model ID. |
 | `OPENAI_STT_MAX_DURATION_SECONDS` | `300` | Reject voice/audio messages longer than this; the user gets a "too long" reply instead of an agent invocation. |
 
 ### Storage and tooling
