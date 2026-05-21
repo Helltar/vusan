@@ -12,7 +12,7 @@ import kotlin.test.assertFalse
 class HttpTest {
 
     @Test
-    fun `createClient reports non-success responses without response body or query`() = runBlocking {
+    fun `createClient reports non-success responses with body preview and without query`() = runBlocking {
         val http =
             Http.createClient(
                 MockEngine {
@@ -31,8 +31,7 @@ class HttpTest {
                 }
             }
 
-        assertEquals("HTTP 400 from api.example.test", error.message)
-        assertFalse(error.message.orEmpty().contains("raw provider payload"))
+        assertEquals("""HTTP 400 from api.example.test: {"error":"raw provider payload"}""", error.message)
         assertFalse(error.message.orEmpty().contains("api_key"))
     }
 }

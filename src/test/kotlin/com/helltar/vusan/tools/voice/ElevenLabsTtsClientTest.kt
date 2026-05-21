@@ -62,7 +62,7 @@ class ElevenLabsTtsClientTest {
     }
 
     @Test
-    fun `synthesize reports sanitized error for non-success response`() = runBlocking {
+    fun `synthesize reports error with body preview for non-success response`() = runBlocking {
         val http =
             Http.createClient(
                 MockEngine {
@@ -79,8 +79,10 @@ class ElevenLabsTtsClientTest {
             client.synthesize("Hello there", config)
         }
 
-        assertEquals("HTTP 400 from api.elevenlabs.io", error.message)
-        assertFalse(error.message.orEmpty().contains("raw provider payload"))
+        assertEquals(
+            """HTTP 400 from api.elevenlabs.io: {"error":{"message":"raw provider payload"}}""",
+            error.message
+        )
         http.close()
     }
 }
