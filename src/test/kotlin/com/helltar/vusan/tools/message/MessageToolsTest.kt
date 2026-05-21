@@ -17,7 +17,7 @@ class MessageToolsTest {
 
         val result = tools.sendMessage("   Hello, world!   ")
 
-        assertTrue(result.startsWith("Message queued"))
+        assertTrue(result.startsWith("Delivered"))
         val text = assertIs<BotOutput.Text>(outbox.pending.single())
         assertEquals("Hello, world!", text.text)
     }

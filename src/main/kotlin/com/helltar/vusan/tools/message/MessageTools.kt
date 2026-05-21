@@ -25,7 +25,8 @@ class MessageTools(private val outbox: BotOutbox) : ToolSet {
 
         outbox.enqueue(BotOutput.Text(trimmed))
 
-        "Message queued (${trimmed.length} chars)."
+        "Delivered. The user has received this message. " +
+            "Only call sendMessage again if you have a distinct additional message to send for this user request."
     }
 
     @Tool
