@@ -11,6 +11,7 @@ import ai.koog.prompt.llm.LLModel
 import ai.koog.prompt.params.LLMParams
 
 data class LlmRuntime(
+    val providerLabel: String,
     val koogProvider: LLMProvider,
     val client: LLMClient,
     val model: LLModel,
@@ -21,6 +22,7 @@ fun resolveLlmRuntime(config: LlmProviderConfig): LlmRuntime =
     when (config) {
         is LlmProviderConfig.OpenAi ->
             LlmRuntime(
+                providerLabel = "OpenAI",
                 koogProvider = LLMProvider.OpenAI,
                 client = OpenAILLMClient(config.apiKey),
                 model = OpenAiModelResolver.resolve(config.model),
@@ -29,6 +31,7 @@ fun resolveLlmRuntime(config: LlmProviderConfig): LlmRuntime =
 
         is LlmProviderConfig.Ollama ->
             LlmRuntime(
+                providerLabel = "Ollama (${config.baseUrl})",
                 koogProvider = LLMProvider.Ollama,
                 client = OllamaClient(baseUrl = config.baseUrl),
                 model =
@@ -47,6 +50,7 @@ fun resolveLlmRuntime(config: LlmProviderConfig): LlmRuntime =
 
         is LlmProviderConfig.OpenAiCompatible ->
             LlmRuntime(
+                providerLabel = "OpenAI-compatible (${config.baseUrl})",
                 koogProvider = LLMProvider.OpenAI,
                 client =
                     OpenAILLMClient(

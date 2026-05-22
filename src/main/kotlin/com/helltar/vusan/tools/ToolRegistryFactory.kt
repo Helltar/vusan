@@ -42,6 +42,8 @@ class ToolRegistryFactory(
         val log = KotlinLogging.logger {}
     }
 
+    val availableToolNames: List<String> by lazy { buildRegistry(BotOutbox()).tools.map { it.name }.sorted() }
+
     private val currency = CurrencyTools(ExchangeRateClient(http))
     private val telegramChannelClient = TelegramChannelClient(http)
     private val telegramChannel = TelegramChannelTools(telegramChannelClient, KoogTelegramChannelImageDescriber(promptExecutor, model))

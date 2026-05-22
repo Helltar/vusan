@@ -1,8 +1,8 @@
 package com.helltar.vusan
 
 import ai.koog.prompt.executor.llms.MultiLLMPromptExecutor
-import com.helltar.vusan.agent.AgentRunner
 import com.helltar.vusan.agent.AgentFactory
+import com.helltar.vusan.agent.AgentRunner
 import com.helltar.vusan.agent.history.ChatHistoryRepository
 import com.helltar.vusan.config.AppConfig
 import com.helltar.vusan.config.resolveLlmRuntime
@@ -71,7 +71,9 @@ fun main() = runBlocking {
                     voiceTranscriber = voiceTranscriber
                 )
 
-            log.info { "Starting Vusan, model=${llm.model.id}" }
+            log.info { "Starting Vusan: provider=[${llm.providerLabel}] model=[${llm.model.id}]" }
+            val toolNames = toolRegistryFactory.availableToolNames
+            log.info { "Tools enabled (${toolNames.size}): [${toolNames.joinToString(", ")}]" }
 
             bot.start().join()
         }
