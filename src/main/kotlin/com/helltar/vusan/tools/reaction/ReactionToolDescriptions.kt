@@ -9,7 +9,7 @@ internal object ReactionToolDescriptions {
                 "it only attaches an emoji to the target message. " +
                 "Target resolution: by default the reaction goes on the user's own current message. " +
                 "Set `targetRepliedMessage` to `true` when the user is replying to someone and wants that earlier message reacted to " +
-                "(e.g. the user replies to Vasya's joke and writes \"react to it\"). " +
+                """(e.g. the user replies to someone's joke and writes "react to it"). """ +
                 "Pass `messageId` explicitly only when the user gives you a specific numeric id to react to (it overrides `targetRepliedMessage`). " +
                 "Use sparingly — do not stack a reaction on top of a substantive textual reply unless the user clearly asks for both. " +
                 "Allowed emoji (Telegram free reaction set): " +
