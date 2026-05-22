@@ -26,6 +26,7 @@ Tools the agent can call (source: `src/main/kotlin/com/helltar/vusan/tools/`). I
 | GIFs | Giphy search | ✓ |
 | Vision | Describes a replied photo | |
 | Polls/quizzes | Native Telegram polls | |
+| Reactions | Emoji reaction on a message instead of a text reply | |
 | YouTube audio | `yt-dlp` + `ffmpeg` | |
 | TG channels | Recent posts from `t.me/...` | |
 | Currency | Live FX rates | |
