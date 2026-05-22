@@ -21,5 +21,5 @@ internal object PollToolDescriptions {
 
     const val ALLOWS_MULTIPLE_ANSWERS =
         "Whether voters can pick more than one option. Default `false`. " +
-                "Set to `true` when the user asks for multi-choice or \"choose all that apply\" voting."
+                """Set to `true` when the user asks for multi-choice or "choose all that apply" voting."""
 }
