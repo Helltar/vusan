@@ -16,6 +16,8 @@ import java.util.Collections
 data class AgentRequest(
     val chatId: Long,
     val userId: Long,
+    val messageId: Long,
+    val replyToMessageId: Long? = null,
     val prompt: String,
     val historyEntry: String,
     val messageContext: MessageContext? = null,
@@ -57,6 +59,8 @@ class AgentRunner(private val agentFactory: AgentFactory, private val history: C
                 BotOutbox(
                     chatId = request.chatId,
                     userId = request.userId,
+                    messageId = request.messageId,
+                    replyToMessageId = request.replyToMessageId,
                     repliedPhoto = request.repliedPhoto
                 )
 
@@ -123,7 +127,7 @@ private fun extractFinalComment(answer: String, outputs: List<BotOutput>): Strin
     answer.trim()
         .takeIf { it.isNotEmpty() }
         ?.takeUnless {
-            outputs.any { it is BotOutput.Voice || it is BotOutput.VideoNote || it is BotOutput.Text }
+            outputs.any { it is BotOutput.Voice || it is BotOutput.VideoNote || it is BotOutput.Text || it is BotOutput.Reaction }
         }
 
 private fun assistantTextForHistory(outputs: List<BotOutput>, comment: String?): String? {

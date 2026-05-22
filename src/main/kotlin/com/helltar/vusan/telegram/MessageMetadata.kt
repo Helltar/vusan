@@ -51,6 +51,9 @@ internal fun CommonMessage<*>.senderUsernameOrNull(): String? =
 internal fun CommonMessage<*>.replyAuthorIdOrNull(): Long? =
     ((replyInfo as? ReplyInfo.Internal)?.message as? OptionallyFromUserMessage)?.from?.id?.chatId?.long
 
+internal fun CommonMessage<*>.replyToMessageIdOrNull(): Long? =
+    (replyInfo as? ReplyInfo.Internal)?.message?.metaInfo?.messageId?.long
+
 internal fun CommonMessage<*>.toMessageContext(chatDescription: String?): MessageContext? {
     val senderId = senderIdOrNull() ?: return null
 

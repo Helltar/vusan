@@ -15,6 +15,7 @@ import com.helltar.vusan.tools.memory.MemoryTools
 import com.helltar.vusan.tools.message.MessageTools
 import com.helltar.vusan.tools.poll.PollTools
 import com.helltar.vusan.tools.quiz.QuizTools
+import com.helltar.vusan.tools.reaction.ReactionTools
 import com.helltar.vusan.tools.tavily.TavilyClient
 import com.helltar.vusan.tools.tavily.TavilyTools
 import com.helltar.vusan.tools.tgchannel.KoogTelegramChannelImageDescriber
@@ -55,6 +56,7 @@ class ToolRegistryFactory(
     fun buildRegistry(outbox: BotOutbox): ToolRegistry =
         ToolRegistry {
             tools(MessageTools(outbox))
+            tools(ReactionTools(outbox))
             tools(currency)
             tools(telegramChannel)
             tools(YouTubeMusicTools(ytDlpClient, outbox))

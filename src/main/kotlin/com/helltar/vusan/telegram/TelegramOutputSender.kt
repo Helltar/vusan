@@ -5,6 +5,7 @@ import dev.inmo.tgbotapi.bot.TelegramBot
 import dev.inmo.tgbotapi.bot.exceptions.ReplyMessageNotFoundException
 import dev.inmo.tgbotapi.bot.exceptions.RequestException
 import dev.inmo.tgbotapi.extensions.api.send.sendTextMessage
+import dev.inmo.tgbotapi.extensions.api.send.setMessageReaction
 import dev.inmo.tgbotapi.extensions.api.send.media.sendAnimation
 import dev.inmo.tgbotapi.extensions.api.send.media.sendAudio
 import dev.inmo.tgbotapi.extensions.api.send.media.sendDocument
@@ -17,6 +18,7 @@ import dev.inmo.tgbotapi.extensions.api.send.polls.sendRegularPoll
 import dev.inmo.tgbotapi.requests.abstracts.asMultipartFile
 import dev.inmo.tgbotapi.requests.abstracts.toInputFile
 import dev.inmo.tgbotapi.types.ChatIdentifier
+import dev.inmo.tgbotapi.types.MessageId
 import dev.inmo.tgbotapi.types.ReplyParameters
 import dev.inmo.tgbotapi.types.media.TelegramMediaPhoto
 import dev.inmo.tgbotapi.types.message.MarkdownParseMode
@@ -46,6 +48,23 @@ internal object TelegramOutputSender {
             is BotOutput.VideoNote -> sendVideoNote(bot, chatId, replyParameters, item)
             is BotOutput.Quiz -> sendQuiz(bot, chatId, replyParameters, item)
             is BotOutput.Poll -> sendPoll(bot, chatId, replyParameters, item)
+            is BotOutput.Reaction -> sendReaction(bot, chatId, item)
+        }
+    }
+
+    private suspend fun sendReaction(
+        bot: TelegramBot,
+        chatId: ChatIdentifier,
+        reaction: BotOutput.Reaction
+    ) {
+        runCatching {
+            bot.setMessageReaction(
+                chatId = chatId,
+                messageId = MessageId(reaction.messageId),
+                emoji = reaction.emoji
+            )
+        }.onFailure { e ->
+            log.warn(e) { "setMessageReaction failed chat=$chatId message=${reaction.messageId} emoji=[${reaction.emoji}]" }
         }
     }
 

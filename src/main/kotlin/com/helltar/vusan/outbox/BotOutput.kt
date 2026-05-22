@@ -77,4 +77,10 @@ sealed class BotOutput {
             validateQuestionAndOptions("Poll", question, options)
         }
     }
+
+    data class Reaction(val messageId: Long, val emoji: String) : BotOutput() {
+        init {
+            require(emoji.isNotBlank()) { "Reaction emoji must not be blank" }
+        }
+    }
 }

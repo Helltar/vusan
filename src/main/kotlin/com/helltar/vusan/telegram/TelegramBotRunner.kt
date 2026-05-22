@@ -106,6 +106,7 @@ internal class TelegramBotRunner(
             agentInput = replySummary?.let { formatAgentInput(userText, it) } ?: userText,
             historyInput = replySummary?.let { formatHistoryInput(userText, it) } ?: userText,
             repliedPhoto = replySummary?.let { message.repliedPhotoOrNull(bot) },
+            replyToMessageId = message.usableReplyToMessageId(botProfile),
             inputKind = "text"
         )
     }
@@ -173,6 +174,7 @@ internal class TelegramBotRunner(
             agentInput = replySummary?.let { formatAgentInput(prompt, it) } ?: prompt,
             historyInput = replySummary?.let { formatHistoryInput(prompt, it) } ?: prompt,
             repliedPhoto = replySummary?.let { message.repliedPhotoOrNull(bot) },
+            replyToMessageId = message.usableReplyToMessageId(botProfile),
             inputKind = inputKind
         )
     }
@@ -195,6 +197,7 @@ internal class TelegramBotRunner(
             agentInput = replySummary?.let { formatAgentInput(prompt, it) } ?: prompt,
             historyInput = replySummary?.let { formatHistoryInput(prompt, it) } ?: prompt,
             repliedPhoto = null,
+            replyToMessageId = message.usableReplyToMessageId(botProfile),
             inputKind = "sticker"
         )
     }
@@ -203,6 +206,9 @@ internal class TelegramBotRunner(
         if (isReplyToOtherUser(replyAuthorIdOrNull(), botProfile.userId))
             replySummaryOrNull(bot, voiceTranscriber)
         else null
+
+    private fun CommonMessage<*>.usableReplyToMessageId(botProfile: BotProfile): Long? =
+        if (isReplyToOtherUser(replyAuthorIdOrNull(), botProfile.userId)) replyToMessageIdOrNull() else null
 
     private fun CommonMessage<*>.isAccepted(botProfile: BotProfile): Boolean {
         if (!shouldHandle(this, botProfile.userId, botProfile.username)) return false
@@ -227,6 +233,7 @@ internal class TelegramBotRunner(
         agentInput: String,
         historyInput: String,
         repliedPhoto: RepliedPhoto?,
+        replyToMessageId: Long?,
         inputKind: String
     ) {
         val chatId = message.chatIdLong
@@ -244,6 +251,8 @@ internal class TelegramBotRunner(
                         AgentRequest(
                             chatId = chatId,
                             userId = userId,
+                            messageId = message.messageIdLong,
+                            replyToMessageId = replyToMessageId,
                             prompt = agentInput,
                             historyEntry = historyInput,
                             messageContext = message.toMessageContext(loadChatDescription(message)),
