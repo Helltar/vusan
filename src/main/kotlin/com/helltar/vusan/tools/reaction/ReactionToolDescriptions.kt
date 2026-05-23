@@ -7,6 +7,7 @@ internal object ReactionToolDescriptions {
                 "Use this instead of `sendMessage` when a short emotional acknowledgement is more natural than a textual reply " +
                 "(jokes, cute photos, mild surprise, agreement, sympathy) — a reaction does not produce a message in the chat, " +
                 "it only attaches an emoji to the target message. " +
+                "Always pass the `emoji` argument — there is no default emoji and the call fails without it. " +
                 "Target resolution: by default the reaction goes on the user's own current message. " +
                 "Set `targetRepliedMessage` to `true` when the user is replying to someone and wants that earlier message reacted to " +
                 """(e.g. the user replies to someone's joke and writes "react to it"). """ +
@@ -20,7 +21,9 @@ internal object ReactionToolDescriptions {
                 "Other emoji will be rejected by Telegram."
 
     const val EMOJI =
-        "Exactly one emoji from the allowed Telegram reaction set. Pass the raw emoji character, not its name or shortcode."
+        "Required. Exactly one emoji from the allowed Telegram reaction set. " +
+                "Pass the raw emoji character, not its name or shortcode. " +
+                "Never omit this argument — the tool fails if `emoji` is missing."
 
     const val TARGET_REPLIED_MESSAGE =
         "Set to `true` when the user is replying to someone else's message and the reaction should land on that earlier replied-to message, " +

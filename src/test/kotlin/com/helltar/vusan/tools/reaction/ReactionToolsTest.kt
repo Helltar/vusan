@@ -90,7 +90,18 @@ class ReactionToolsTest {
 
         val result = tools.setReaction(emoji = "   ")
 
-        assertEquals("Tool failed: Reaction emoji must not be empty", result)
+        assertTrue("Reaction emoji must be supplied" in result)
+        assertTrue(outbox.pending.isEmpty())
+    }
+
+    @Test
+    fun `setReaction returns failure string when emoji argument is omitted entirely`() = runBlocking {
+        val outbox = BotOutbox(chatId = 42L, userId = 7L, messageId = 100L)
+        val tools = ReactionTools(outbox)
+
+        val result = tools.setReaction()
+
+        assertTrue("Reaction emoji must be supplied" in result)
         assertTrue(outbox.pending.isEmpty())
     }
 

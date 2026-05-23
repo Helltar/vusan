@@ -34,14 +34,17 @@ class ReactionTools(private val outbox: BotOutbox) : ToolSet {
     @LLMDescription(ReactionToolDescriptions.SET_REACTION)
     suspend fun setReaction(
         @LLMDescription(ReactionToolDescriptions.EMOJI)
-        emoji: String,
+        emoji: String? = null,
         @LLMDescription(ReactionToolDescriptions.TARGET_REPLIED_MESSAGE)
         targetRepliedMessage: Boolean = false,
         @LLMDescription(ReactionToolDescriptions.MESSAGE_ID)
         messageId: Long? = null
     ): String = suspendToolGuard {
-        val trimmedEmoji = emoji.trim()
-        require(trimmedEmoji.isNotEmpty()) { "Reaction emoji must not be empty" }
+        val trimmedEmoji = emoji?.trim()
+
+        require(!trimmedEmoji.isNullOrEmpty()) {
+            "Reaction emoji must be supplied — pass one emoji from the allowed list as the `emoji` argument."
+        }
 
         val normalized = normalizeReactionEmoji(trimmedEmoji)
         require(normalized in ALLOWED_REACTION_EMOJI) {
