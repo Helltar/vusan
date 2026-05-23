@@ -16,22 +16,7 @@ Try it live in the [Vusan Playground](https://t.me/+56qi5dDwsNszZWFi) Telegram g
 
 ## Features
 
-Tools the agent can call (source: `src/main/kotlin/com/helltar/vusan/tools/`). Items marked opt-in require an API key — see [docs/configuration.md](docs/configuration.md).
-
-| Tool | What it does | Opt-in |
-|---|---|:-:|
-| Web search | Tavily search + page extraction | ✓ |
-| Voice input | STT for incoming voice/audio messages via OpenAI | ✓ |
-| Voice | TTS via ElevenLabs | ✓ |
-| GIFs | Giphy search | ✓ |
-| Vision | Describes a replied photo | |
-| Polls/quizzes | Native Telegram polls | |
-| Reactions | Emoji reaction on a message instead of a text reply | |
-| YouTube audio | `yt-dlp` + `ffmpeg` | |
-| TG channels | Recent posts from `t.me/...` | |
-| Currency | Live FX rates | |
-| File delivery | Sends as a Telegram document | |
-| Chat history | Persistent SQLite memory | |
+The agent can search the web, transcribe voice/audio, speak via TTS, look up GIFs, describe replied photos, run polls/quizzes, react with emoji, fetch YouTube audio, pull recent posts from Telegram channels, quote live FX rates, deliver files, and persist chat history. See [docs/features.md](docs/features.md) for the full tool list and which ones are opt-in.
 
 The agent itself is built on [Koog](https://github.com/JetBrains/koog) and talks to OpenAI (default), a local Ollama instance, or any OpenAI-compatible local server (llama.cpp, LM Studio) as the LLM backend. Telegram I/O uses [ktgbotapi](https://github.com/InsanusMokrassar/ktgbotapi).
 
