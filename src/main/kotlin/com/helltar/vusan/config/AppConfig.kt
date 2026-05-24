@@ -4,21 +4,21 @@ import io.github.cdimascio.dotenv.dotenv
 import java.time.ZoneId
 
 data class AppConfig(
-    val telegramBotToken: String,
-    val llmProvider: LlmProviderConfig,
-    val elevenLabsApiKey: String?,
-    val tavilyApiKey: String?,
-    val giphyApiKey: String?,
-    val ytDlpPath: String,
-    val ytDlpCookiesFile: String?,
-    val elevenLabsTts: ElevenLabsTtsConfig?,
-    val openAiStt: OpenAiSttConfig?,
-    val databasePath: String,
     val allowedIds: Set<Long>,
     val botTimezone: ZoneId,
+    val databasePath: String,
+    val elevenLabsApiKey: String?,
+    val elevenLabsTts: ElevenLabsTtsConfig?,
+    val giphyApiKey: String?,
+    val llmProvider: LlmProviderConfig,
     val maxRemindersPerUser: Int,
-    val reminderPollIntervalSeconds: Long,
+    val openAiStt: OpenAiSttConfig?,
     val reminderMaxLatenessMinutes: Long,
+    val reminderPollIntervalSeconds: Long,
+    val tavilyApiKey: String?,
+    val telegramBotToken: String,
+    val ytDlpCookiesFile: String?,
+    val ytDlpPath: String
 ) {
     companion object {
         private const val DEFAULT_LLM_PROVIDER = "openai"
