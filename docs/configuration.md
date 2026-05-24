@@ -71,6 +71,18 @@ When `OPENAI_STT_API_KEY` is set, the bot transcribes incoming voice messages (T
 | `OPENAI_STT_MODEL` | `gpt-4o-transcribe` | OpenAI transcription model ID. |
 | `OPENAI_STT_MAX_DURATION_SECONDS` | `300` | Reject voice/audio messages longer than this; the user gets a "too long" reply instead of an agent invocation. |
 
+### Reminders
+
+The agent can schedule future tasks for itself — one-shot, daily, weekly, or monthly. A background scheduler polls the DB and replays the saved prompt through a normal agent turn at fire time. If the bot was offline when a reminder was due, recurring reminders skip ahead to the next slot; missed one-shots fire late with a one-line notice.
+
+The bot's clock follows the JVM default timezone. Users can override it per reminder by naming an IANA timezone or city in their request — the agent passes it through to the scheduler.
+
+| Variable | Default | Purpose |
+| --- | --- | --- |
+| `MAX_REMINDERS_PER_USER` | `10` | Cap on active reminders per user. |
+| `REMINDER_POLL_INTERVAL_SECONDS` | `30` | How often the scheduler checks for due reminders. |
+| `REMINDER_MAX_LATENESS_MINUTES` | `60` | For recurring reminders: if a fire time is older than this (bot was offline), skip it and advance to the next slot. One-shots always fire late with a notice. |
+
 ### Storage and tooling
 
 | Variable | Default | Purpose |

@@ -15,4 +15,5 @@ Tools the agent can call (source: [`src/main/kotlin/com/helltar/vusan/tools/`](.
 | TG channels | Recent posts from `t.me/...` | |
 | Currency | Live FX rates | |
 | File delivery | Sends as a Telegram document | |
+| Reminders | Scheduled tasks (one-shot, daily, weekly, monthly) with offline catch-up | |
 | Chat history | Persistent SQLite memory | |
