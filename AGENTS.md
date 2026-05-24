@@ -31,8 +31,9 @@ Defaults are [Kotlin Coding Conventions](https://kotlinlang.org/docs/coding-conv
 - Avoid `!!`. If a value is genuinely non-null at that point, prove it via smart-cast, `requireNotNull`, or `checkNotNull` with a message.
 - Reach for Java APIs only when no Kotlin equivalent exists (e.g. `java.util.Locale`, `java.net.URI`, or `Collections.synchronizedMap` wrapping a `LinkedHashMap` LRU).
 - Never suppress compiler warnings without a good reason.
-- Prefer raw strings `"""Value "$name"."""` over escaped quotes `"Value \"$name\"."` — unless raw form adds unwanted whitespace or hurts readability.
+- Prefer raw strings `"""Value "$name"."""` over escaped quotes `"Value \"$name\"."` — unless raw form adds unwanted whitespace or hurts readability. In concatenated strings, only the segments that actually contain `"` need raw form; mixing `"..." + """..."""` is fine.
 - In log messages, use `key=[value]` brackets over `key="value"` quotes for delimiting values that may contain spaces or special characters. Keeps log strings as plain `"..."` literals without escapes (`\"`) or raw-string syntax.
+- Use the `kotlin.time.Duration` overloads of `delay`, `withTimeout`, etc. — never the legacy `Long`-millis ones (`delay(5000)` warns; `delay(5.seconds)` is the form). For literals, use the `kotlin.time` extensions: `5.seconds`, `200.milliseconds`, `1.minutes`. For a `java.time.Duration`, convert via `.toKotlinDuration()` (`kotlin.time.toKotlinDuration`).
 
 ## Koog tools, DB, configuration
 
