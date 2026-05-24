@@ -40,7 +40,6 @@ class AgentFactory(
     private val promptExecutor: PromptExecutor,
     private val toolRegistryFactory: ToolRegistryFactory,
     private val model: LLModel,
-    private val botTimezone: ZoneId,
     private val chatParams: LLMParams = LLMParams(),
     private val systemPrompt: String = SYSTEM_PROMPT,
     private val maxIterations: Int = 60
@@ -57,7 +56,7 @@ class AgentFactory(
         val seededPrompt =
             prompt(id = "vusan-user-$userId", params = chatParams) {
                 system(systemPrompt)
-                system(currentTimeSystemBlock(botTimezone))
+                system(currentTimeSystemBlock())
                 messageContext?.toSystemPrompt()?.let(::system)
 
                 history.summary?.let(::assistant)
@@ -171,7 +170,8 @@ private fun Message.Assistant.assistantTextOrEmpty(): String =
 private val LOCAL_DATE_TIME = DateTimeFormatter.ofPattern("yyyy-MM-dd'T'HH:mm:ss")
 private val DAY_OF_WEEK = DateTimeFormatter.ofPattern("EEEE")
 
-private fun currentTimeSystemBlock(timezone: ZoneId): String {
+private fun currentTimeSystemBlock(): String {
+    val timezone = ZoneId.systemDefault()
     val now = ZonedDateTime.now(timezone)
     return "Current time: ${LOCAL_DATE_TIME.format(now)} ${timezone.id} (${DAY_OF_WEEK.format(now)})"
 }

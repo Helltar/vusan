@@ -25,7 +25,6 @@ private val DISPLAY_FORMAT = DateTimeFormatter.ofPattern("yyyy-MM-dd'T'HH:mm")
 class ReminderTools(
     private val repo: RemindersRepository,
     private val context: RequestContext,
-    private val defaultTimezone: ZoneId,
     private val maxRemindersPerUser: Int,
 ) : ToolSet {
 
@@ -133,7 +132,7 @@ class ReminderTools(
     }
 
     private fun parseTimezone(raw: String?): ZoneId? {
-        if (raw.isNullOrBlank()) return defaultTimezone
+        if (raw.isNullOrBlank()) return ZoneId.systemDefault()
         return runCatching { ZoneId.of(raw.trim()) }.getOrNull()
     }
 }

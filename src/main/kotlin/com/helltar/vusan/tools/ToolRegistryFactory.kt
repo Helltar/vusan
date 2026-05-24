@@ -76,7 +76,6 @@ class ToolRegistryFactory(
                 ReminderTools(
                     repo = reminders,
                     context = context,
-                    defaultTimezone = config.botTimezone,
                     maxRemindersPerUser = config.maxRemindersPerUser,
                 )
             )

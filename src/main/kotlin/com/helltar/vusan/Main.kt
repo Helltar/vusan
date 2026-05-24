@@ -50,7 +50,6 @@ fun main() = runBlocking {
                 promptExecutor = executor,
                 toolRegistryFactory = toolRegistryFactory,
                 model = llm.model,
-                botTimezone = config.botTimezone,
                 chatParams = llm.chatParams
             )
 
@@ -91,7 +90,7 @@ fun main() = runBlocking {
                 maxLateness = Duration.ofMinutes(config.reminderMaxLatenessMinutes),
             )
 
-        log.info { "Starting Vusan: provider=[${llm.providerLabel}] model=[${llm.model.id}] tz=[${config.botTimezone.id}]" }
+        log.info { "Starting Vusan: provider=[${llm.providerLabel}] model=[${llm.model.id}]" }
         val toolNames = toolRegistryFactory.availableToolNames
         log.info { "Tools enabled (${toolNames.size}): [${toolNames.joinToString(", ")}]" }
 

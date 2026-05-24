@@ -1,11 +1,9 @@
 package com.helltar.vusan.config
 
 import io.github.cdimascio.dotenv.dotenv
-import java.time.ZoneId
 
 data class AppConfig(
     val allowedIds: Set<Long>,
-    val botTimezone: ZoneId,
     val databasePath: String,
     val elevenLabsApiKey: String?,
     val elevenLabsTts: ElevenLabsTtsConfig?,
@@ -35,7 +33,6 @@ data class AppConfig(
         fun fromEnv(): AppConfig {
             return AppConfig(
                 allowedIds = parseIdSet(readEnv("ALLOWED_IDS")),
-                botTimezone = resolveBotTimezone(),
                 databasePath = readEnv("DB_FILE") ?: "data/db/vusan.db",
                 elevenLabsApiKey = elevenLabsKey,
                 giphyApiKey = readEnv("GIPHY_API_KEY"),
@@ -58,11 +55,6 @@ data class AppConfig(
                         )
                     }
             )
-        }
-
-        private fun resolveBotTimezone(): ZoneId {
-            val raw = readEnv("BOT_TIMEZONE") ?: return ZoneId.systemDefault()
-            return runCatching { ZoneId.of(raw) }.getOrElse { error("Invalid BOT_TIMEZONE=[$raw]: ${it.message}") }
         }
 
         private fun resolveOpenAiStt(): OpenAiSttConfig? {
