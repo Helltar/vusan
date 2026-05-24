@@ -1,12 +1,13 @@
 package com.helltar.vusan.tools.youtube
 
 import io.github.oshai.kotlinlogging.KotlinLogging
-import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.withContext
+import korlibs.time.seconds
+import kotlinx.coroutines.*
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
 import kotlinx.serialization.json.Json
 import java.nio.file.Files
 import java.nio.file.Path
-import java.util.concurrent.CompletableFuture
 import java.util.concurrent.TimeUnit
 
 data class YtDlpCommandResult(
@@ -32,17 +33,24 @@ class YtDlpClient(
     private data class DownloadAttempt(val result: YtDlpResult, val retryable: Boolean = false)
     private data class YtDlpSearchCandidate(val url: String)
 
-    private val runtimeDiagnostics: String by lazy {
-        val versionResult = runCommand(listOf(ytDlpPath, "--version"))
+    private val diagnosticsMutex = Mutex()
+    private var cachedDiagnostics: String? = null
 
-        val version =
-            when {
-                versionResult.timedOut -> "timeout"
-                versionResult.exitCode == 0 -> versionResult.stdout.trim().lineSequence().firstOrNull().orEmpty().ifBlank { "empty" }
-                else -> "exit-${versionResult.exitCode}:${versionResult.stdout.trim().take(120)}"
-            }
+    private suspend fun getRuntimeDiagnostics(): String = diagnosticsMutex.withLock {
+        cachedDiagnostics ?: run {
+            val versionResult = runCommand(listOf(ytDlpPath, "--version"))
 
-        "binary=[$ytDlpPath] version=[$version]"
+            val version =
+                when {
+                    versionResult.timedOut -> "timeout"
+                    versionResult.exitCode == 0 -> versionResult.stdout.trim().lineSequence().firstOrNull().orEmpty().ifBlank { "empty" }
+                    else -> "exit-${versionResult.exitCode}:${versionResult.stdout.trim().take(120)}"
+                }
+
+            val diagnostics = "binary=[$ytDlpPath] version=[$version]"
+            cachedDiagnostics = diagnostics
+            diagnostics
+        }
     }
 
     suspend fun downloadTrack(query: String, maxFileSizeMb: Int = 45): YtDlpResult = withContext(Dispatchers.IO) {
@@ -58,8 +66,10 @@ class YtDlpClient(
         }
     }
 
-    private fun runDownload(workDir: Path, query: String, maxFileSizeMb: Int): YtDlpResult {
-        log.info { "yt-dlp track download start query=[${query.take(120)}] maxFileSizeMb=$maxFileSizeMb $runtimeDiagnostics ${authDiagnostics()}" }
+    private suspend fun runDownload(workDir: Path, query: String, maxFileSizeMb: Int): YtDlpResult {
+        val diagnostics = getRuntimeDiagnostics()
+
+        log.info { "yt-dlp track download start query=[${query.take(120)}] maxFileSizeMb=$maxFileSizeMb $diagnostics ${authDiagnostics()}" }
 
         val candidates = searchCandidates(query)
 
@@ -118,7 +128,7 @@ class YtDlpClient(
         return retryableFailures.lastOrNull() ?: YtDlpResult.NotFound
     }
 
-    private fun searchCandidates(query: String): List<YtDlpSearchCandidate> {
+    private suspend fun searchCandidates(query: String): List<YtDlpSearchCandidate> {
         val command =
             buildList {
                 add(ytDlpPath)
@@ -149,7 +159,7 @@ class YtDlpClient(
         return candidates
     }
 
-    private fun downloadCandidate(workDir: Path, url: String, query: String, maxFileSizeMb: Int): DownloadAttempt {
+    private suspend fun downloadCandidate(workDir: Path, url: String, query: String, maxFileSizeMb: Int): DownloadAttempt {
         val outputTemplate = workDir.resolve("audio.%(ext)s").toString()
 
         val command =
@@ -204,7 +214,7 @@ class YtDlpClient(
         )
     }
 
-    private fun classifyDownloadError(commandResult: YtDlpCommandResult, url: String, query: String, maxFileSizeMb: Int): DownloadAttempt {
+    private suspend fun classifyDownloadError(commandResult: YtDlpCommandResult, url: String, query: String, maxFileSizeMb: Int): DownloadAttempt {
         val combined = commandResult.stderr.ifBlank { commandResult.stdout }
 
         return when {
@@ -232,24 +242,26 @@ class YtDlpClient(
         }
     }
 
-    private fun runCommand(command: List<String>): YtDlpCommandResult {
+    private suspend fun runCommand(command: List<String>): YtDlpCommandResult = withContext(Dispatchers.IO) {
         val process = ProcessBuilder(command).redirectErrorStream(true).start()
 
-        val output =
-            CompletableFuture.supplyAsync {
-                process.inputStream.bufferedReader().use { it.readText() }
+        try {
+            val outputDeferred = async { process.inputStream.bufferedReader().use { it.readText() } }
+            val finishedInTime = runInterruptible { process.waitFor(timeoutSeconds, TimeUnit.SECONDS) }
+
+            if (!finishedInTime) {
+                process.destroyForcibly()
+                val stdout = runCatching { withTimeout(1.seconds) { outputDeferred.await() } }.getOrDefault("")
+                YtDlpCommandResult(stdout = stdout, stderr = "", exitCode = -1, timedOut = true)
+            } else {
+                val stdout = runCatching { withTimeout(5.seconds) { outputDeferred.await() } }.getOrDefault("")
+                YtDlpCommandResult(stdout = stdout, stderr = "", exitCode = process.exitValue())
             }
-
-        val finishedInTime = process.waitFor(timeoutSeconds, TimeUnit.SECONDS)
-
-        if (!finishedInTime) {
-            process.destroyForcibly()
-            val stdout = runCatching { output.get(1, TimeUnit.SECONDS) }.getOrDefault("")
-            return YtDlpCommandResult(stdout = stdout, stderr = "", exitCode = -1, timedOut = true)
+        } finally {
+            if (process.isAlive) {
+                process.destroyForcibly()
+            }
         }
-
-        val stdout = runCatching { output.get(5, TimeUnit.SECONDS) }.getOrDefault("")
-        return YtDlpCommandResult(stdout = stdout, stderr = "", exitCode = process.exitValue())
     }
 
     private fun parseInfoJson(stdout: String): YtDlpInfo? {
@@ -278,7 +290,7 @@ class YtDlpClient(
         cookiesFile?.takeUnless { it.isBlank() }?.let { listOf("--cookies", it) }
             ?: emptyList()
 
-    private fun logUnavailableFormatsDiagnostics(url: String, query: String) {
+    private suspend fun logUnavailableFormatsDiagnostics(url: String, query: String) {
         val command =
             buildList {
                 add(ytDlpPath)
