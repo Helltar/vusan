@@ -1,12 +1,6 @@
 package com.helltar.vusan.outbox
 
-class BotOutbox(
-    val chatId: Long = 0L,
-    val userId: Long = 0L,
-    val messageId: Long = 0L,
-    val replyToMessageId: Long? = null,
-    val repliedPhoto: RepliedPhoto? = null
-) {
+class BotOutbox {
 
     private val items = mutableListOf<BotOutput>()
 

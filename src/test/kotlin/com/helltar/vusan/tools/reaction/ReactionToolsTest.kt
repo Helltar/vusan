@@ -2,6 +2,7 @@ package com.helltar.vusan.tools.reaction
 
 import com.helltar.vusan.outbox.BotOutbox
 import com.helltar.vusan.outbox.BotOutput
+import com.helltar.vusan.outbox.RequestContext
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFalse
@@ -10,10 +11,13 @@ import kotlinx.coroutines.runBlocking
 
 class ReactionToolsTest {
 
+    private fun ctx(messageId: Long = 100L, replyToMessageId: Long? = null) =
+        RequestContext(chatId = 42L, userId = 7L, messageId = messageId, replyToMessageId = replyToMessageId)
+
     @Test
     fun `setReaction defaults to current message id when no reply context`() = runBlocking {
-        val outbox = BotOutbox(chatId = 42L, userId = 7L, messageId = 100L, replyToMessageId = null)
-        val tools = ReactionTools(outbox)
+        val outbox = BotOutbox()
+        val tools = ReactionTools(ctx(), outbox)
 
         val result = tools.setReaction(emoji = "❤")
 
@@ -24,8 +28,8 @@ class ReactionToolsTest {
 
     @Test
     fun `setReaction defaults to user's own message even when a reply target is in scope`() = runBlocking {
-        val outbox = BotOutbox(chatId = 42L, userId = 7L, messageId = 100L, replyToMessageId = 55L)
-        val tools = ReactionTools(outbox)
+        val outbox = BotOutbox()
+        val tools = ReactionTools(ctx(replyToMessageId = 55L), outbox)
 
         tools.setReaction(emoji = "🔥")
 
@@ -34,8 +38,8 @@ class ReactionToolsTest {
 
     @Test
     fun `setReaction targets the replied-to message when targetRepliedMessage is true`() = runBlocking {
-        val outbox = BotOutbox(chatId = 42L, userId = 7L, messageId = 100L, replyToMessageId = 55L)
-        val tools = ReactionTools(outbox)
+        val outbox = BotOutbox()
+        val tools = ReactionTools(ctx(replyToMessageId = 55L), outbox)
 
         tools.setReaction(emoji = "🔥", targetRepliedMessage = true)
 
@@ -44,8 +48,8 @@ class ReactionToolsTest {
 
     @Test
     fun `setReaction fails when targetRepliedMessage is set without a reply in scope`() = runBlocking {
-        val outbox = BotOutbox(chatId = 42L, userId = 7L, messageId = 100L, replyToMessageId = null)
-        val tools = ReactionTools(outbox)
+        val outbox = BotOutbox()
+        val tools = ReactionTools(ctx(), outbox)
 
         val result = tools.setReaction(emoji = "🔥", targetRepliedMessage = true)
 
@@ -55,8 +59,8 @@ class ReactionToolsTest {
 
     @Test
     fun `setReaction lets explicit messageId override targetRepliedMessage`() = runBlocking {
-        val outbox = BotOutbox(chatId = 42L, userId = 7L, messageId = 100L, replyToMessageId = 55L)
-        val tools = ReactionTools(outbox)
+        val outbox = BotOutbox()
+        val tools = ReactionTools(ctx(replyToMessageId = 55L), outbox)
 
         tools.setReaction(emoji = "👍", targetRepliedMessage = true, messageId = 999L)
 
@@ -65,8 +69,8 @@ class ReactionToolsTest {
 
     @Test
     fun `setReaction honors explicit messageId over defaults`() = runBlocking {
-        val outbox = BotOutbox(chatId = 42L, userId = 7L, messageId = 100L, replyToMessageId = 55L)
-        val tools = ReactionTools(outbox)
+        val outbox = BotOutbox()
+        val tools = ReactionTools(ctx(replyToMessageId = 55L), outbox)
 
         tools.setReaction(emoji = "👍", messageId = 999L)
 
@@ -75,8 +79,8 @@ class ReactionToolsTest {
 
     @Test
     fun `setReaction trims surrounding whitespace`() = runBlocking {
-        val outbox = BotOutbox(chatId = 42L, userId = 7L, messageId = 100L)
-        val tools = ReactionTools(outbox)
+        val outbox = BotOutbox()
+        val tools = ReactionTools(ctx(), outbox)
 
         tools.setReaction(emoji = "  🎉  ")
 
@@ -85,8 +89,8 @@ class ReactionToolsTest {
 
     @Test
     fun `setReaction returns failure string for blank emoji`() = runBlocking {
-        val outbox = BotOutbox(chatId = 42L, userId = 7L, messageId = 100L)
-        val tools = ReactionTools(outbox)
+        val outbox = BotOutbox()
+        val tools = ReactionTools(ctx(), outbox)
 
         val result = tools.setReaction(emoji = "   ")
 
@@ -96,8 +100,8 @@ class ReactionToolsTest {
 
     @Test
     fun `setReaction returns failure string when emoji argument is omitted entirely`() = runBlocking {
-        val outbox = BotOutbox(chatId = 42L, userId = 7L, messageId = 100L)
-        val tools = ReactionTools(outbox)
+        val outbox = BotOutbox()
+        val tools = ReactionTools(ctx(), outbox)
 
         val result = tools.setReaction()
 
@@ -107,8 +111,8 @@ class ReactionToolsTest {
 
     @Test
     fun `setReaction returns failure string when no valid target available`() = runBlocking {
-        val outbox = BotOutbox(chatId = 42L, userId = 7L, messageId = 0L, replyToMessageId = null)
-        val tools = ReactionTools(outbox)
+        val outbox = BotOutbox()
+        val tools = ReactionTools(ctx(messageId = 0L), outbox)
 
         val result = tools.setReaction(emoji = "❤")
 
@@ -118,8 +122,8 @@ class ReactionToolsTest {
 
     @Test
     fun `setReaction rejects emoji outside Telegram free reaction set`() = runBlocking {
-        val outbox = BotOutbox(chatId = 42L, userId = 7L, messageId = 100L)
-        val tools = ReactionTools(outbox)
+        val outbox = BotOutbox()
+        val tools = ReactionTools(ctx(), outbox)
 
         val result = tools.setReaction(emoji = "👋")
 
@@ -129,8 +133,8 @@ class ReactionToolsTest {
 
     @Test
     fun `setReaction normalizes VS-16 to Telegram's canonical form`() = runBlocking {
-        val outbox = BotOutbox(chatId = 42L, userId = 7L, messageId = 100L)
-        val tools = ReactionTools(outbox)
+        val outbox = BotOutbox()
+        val tools = ReactionTools(ctx(), outbox)
 
         tools.setReaction(emoji = "❤️")
 
@@ -139,9 +143,9 @@ class ReactionToolsTest {
 
     @Test
     fun `enqueue skips private redirect for Reaction outputs`() = runBlocking {
-        val outbox = BotOutbox(chatId = 42L, userId = 7L, messageId = 100L)
+        val outbox = BotOutbox()
         outbox.useDirectMessages()
-        val tools = ReactionTools(outbox)
+        val tools = ReactionTools(ctx(), outbox)
 
         tools.setReaction(emoji = "👍")
 

@@ -19,63 +19,64 @@ private val log = KotlinLogging.logger {}
 
 fun main() = runBlocking {
     val config = AppConfig.fromEnv()
-    val llm = resolveLlmRuntime(config.llmProvider)
 
     Db.connect(config)
 
     val http = Http.createClient()
+    val llm = resolveLlmRuntime(config.llmProvider)
+    val executor = MultiLLMPromptExecutor(llm.koogProvider to llm.client)
 
-    http.use { http ->
-        val llmClients = llm.koogProvider to llm.client
+    try {
+        val history = ChatHistoryRepository()
 
-        MultiLLMPromptExecutor(llmClients).use { executor ->
-            val history = ChatHistoryRepository()
+        val toolRegistryFactory =
+            ToolRegistryFactory(
+                http = http,
+                config = config,
+                history = history,
+                promptExecutor = executor,
+                model = llm.model
+            )
 
-            val toolRegistryFactory =
-                ToolRegistryFactory(
-                    http = http,
-                    config = config,
-                    history = history,
-                    promptExecutor = executor,
-                    model = llm.model
-                )
+        val agentFactory =
+            AgentFactory(
+                promptExecutor = executor,
+                toolRegistryFactory = toolRegistryFactory,
+                model = llm.model,
+                chatParams = llm.chatParams
+            )
 
-            val agentFactory =
-                AgentFactory(
-                    promptExecutor = executor,
-                    toolRegistryFactory = toolRegistryFactory,
-                    model = llm.model,
-                    chatParams = llm.chatParams
-                )
+        val agentRunner =
+            AgentRunner(
+                agentFactory = agentFactory,
+                history = history
+            )
 
-            val agentRunner =
-                AgentRunner(
-                    agentFactory = agentFactory,
-                    history = history
-                )
+        val voiceTranscriber =
+            config.openAiStt?.let { sttConfig ->
+                VoiceTranscriber(OpenAiWhisperClient(http, sttConfig), sttConfig)
+            } ?: run {
+                log.warn { "OPENAI_STT_API_KEY not set — voice message transcription disabled" }
+                null
+            }
 
-            val voiceTranscriber =
-                config.openAiStt?.let { sttConfig ->
-                    VoiceTranscriber(OpenAiWhisperClient(http, sttConfig), sttConfig)
-                } ?: run {
-                    log.warn { "OPENAI_STT_API_KEY not set — voice message transcription disabled" }
-                    null
-                }
+        val bot =
+            TelegramBotRunner(
+                botToken = config.telegramBotToken,
+                agent = agentRunner,
+                history = history,
+                allowedIds = config.allowedIds,
+                voiceTranscriber = voiceTranscriber
+            )
 
-            val bot =
-                TelegramBotRunner(
-                    botToken = config.telegramBotToken,
-                    agent = agentRunner,
-                    history = history,
-                    allowedIds = config.allowedIds,
-                    voiceTranscriber = voiceTranscriber
-                )
+        log.info { "Starting Vusan: provider=[${llm.providerLabel}] model=[${llm.model.id}]" }
+        val toolNames = toolRegistryFactory.availableToolNames
+        log.info { "Tools enabled (${toolNames.size}): [${toolNames.joinToString(", ")}]" }
 
-            log.info { "Starting Vusan: provider=[${llm.providerLabel}] model=[${llm.model.id}]" }
-            val toolNames = toolRegistryFactory.availableToolNames
-            log.info { "Tools enabled (${toolNames.size}): [${toolNames.joinToString(", ")}]" }
-
-            bot.start().join()
-        }
+        bot.start().join()
+    } finally {
+        executor.close()
+        http.close()
+        Db.disconnect()
     }
 }

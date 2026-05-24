@@ -9,9 +9,10 @@ import com.helltar.vusan.i18n.Messages
 import com.helltar.vusan.outbox.BotOutbox
 import com.helltar.vusan.outbox.BotOutput
 import com.helltar.vusan.outbox.RepliedPhoto
+import com.helltar.vusan.outbox.RequestContext
 import io.github.oshai.kotlinlogging.KotlinLogging
 import kotlinx.coroutines.sync.Mutex
-import java.util.Collections
+import java.util.concurrent.ConcurrentHashMap
 
 data class AgentRequest(
     val chatId: Long,
@@ -36,16 +37,10 @@ enum class ResetOutcome { Cleared, Busy }
 class AgentRunner(private val agentFactory: AgentFactory, private val history: ChatHistoryRepository) {
 
     private companion object {
-        const val USER_LOCK_CAPACITY = 128
         val log = KotlinLogging.logger {}
     }
 
-    private val userLocks =
-        Collections.synchronizedMap(
-            object : LinkedHashMap<Long, Mutex>(16, 0.75f, true) {
-                override fun removeEldestEntry(eldest: Map.Entry<Long, Mutex>): Boolean = size > USER_LOCK_CAPACITY
-            }
-        )
+    private val userLocks = ConcurrentHashMap<Long, Mutex>()
 
     suspend fun handle(request: AgentRequest): AgentResult {
         val lock = acquireLock(request.userId)
@@ -55,8 +50,8 @@ class AgentRunner(private val agentFactory: AgentFactory, private val history: C
         }
 
         try {
-            val outbox =
-                BotOutbox(
+            val context =
+                RequestContext(
                     chatId = request.chatId,
                     userId = request.userId,
                     messageId = request.messageId,
@@ -64,6 +59,7 @@ class AgentRunner(private val agentFactory: AgentFactory, private val history: C
                     repliedPhoto = request.repliedPhoto
                 )
 
+            val outbox = BotOutbox()
             val promptHistory = summarizeForPrompt(history.load(request.userId))
 
             log.info {
@@ -74,7 +70,16 @@ class AgentRunner(private val agentFactory: AgentFactory, private val history: C
             }
 
             val toolEvents = mutableListOf<ToolEvent>()
-            val agent = agentFactory.build(request.userId, promptHistory, outbox, toolEvents, request.messageContext)
+
+            val agent =
+                agentFactory.build(
+                    userId = request.userId,
+                    history = promptHistory,
+                    context = context,
+                    outbox = outbox,
+                    toolEvents = toolEvents::add,
+                    messageContext = request.messageContext
+                )
 
             val answer =
                 try {

@@ -18,6 +18,7 @@ import ai.koog.prompt.params.LLMParams
 import com.helltar.vusan.agent.history.ChatRole
 import com.helltar.vusan.agent.history.PromptHistory
 import com.helltar.vusan.outbox.BotOutbox
+import com.helltar.vusan.outbox.RequestContext
 import com.helltar.vusan.tools.ToolRegistryFactory
 
 data class ToolEvent(
@@ -27,6 +28,10 @@ data class ToolEvent(
     val output: String,
     val isError: Boolean
 )
+
+fun interface ToolEventSink {
+    fun record(event: ToolEvent)
+}
 
 class AgentFactory(
     private val promptExecutor: PromptExecutor,
@@ -40,8 +45,9 @@ class AgentFactory(
     fun build(
         userId: Long,
         history: PromptHistory,
+        context: RequestContext,
         outbox: BotOutbox,
-        toolEvents: MutableList<ToolEvent>,
+        toolEvents: ToolEventSink,
         messageContext: MessageContext? = null
     ): AIAgent<String, String> {
         val seededPrompt =
@@ -83,39 +89,44 @@ class AgentFactory(
             promptExecutor = promptExecutor,
             agentConfig = agentConfig,
             strategy = vusanSingleRunStrategy,
-            toolRegistry = toolRegistryFactory.buildRegistry(outbox),
+            toolRegistry = toolRegistryFactory.buildRegistry(context, outbox),
             id = "vusan-user-$userId"
         ) {
             install(EventHandler) {
+                var seq = 0
+
                 onToolCallCompleted { ctx ->
-                    toolEvents +=
+                    toolEvents.record(
                         ToolEvent(
-                            toolCallId = ctx.toolCallId ?: "${ctx.toolName}-${toolEvents.size}",
+                            toolCallId = ctx.toolCallId ?: "${ctx.toolName}-${seq++}",
                             toolName = ctx.toolName,
                             args = ctx.toolArgs.toString(),
                             output = ctx.toolResult?.toString().orEmpty(),
                             isError = false
                         )
+                    )
                 }
                 onToolCallFailed { ctx ->
-                    toolEvents +=
+                    toolEvents.record(
                         ToolEvent(
-                            toolCallId = ctx.toolCallId ?: "${ctx.toolName}-${toolEvents.size}",
+                            toolCallId = ctx.toolCallId ?: "${ctx.toolName}-${seq++}",
                             toolName = ctx.toolName,
                             args = ctx.toolArgs.toString(),
                             output = ctx.message,
                             isError = true
                         )
+                    )
                 }
                 onToolValidationFailed { ctx ->
-                    toolEvents +=
+                    toolEvents.record(
                         ToolEvent(
-                            toolCallId = ctx.toolCallId ?: "${ctx.toolName}-${toolEvents.size}",
+                            toolCallId = ctx.toolCallId ?: "${ctx.toolName}-${seq++}",
                             toolName = ctx.toolName,
                             args = ctx.toolArgs.toString(),
                             output = ctx.message,
                             isError = true
                         )
+                    )
                 }
             }
         }

@@ -6,6 +6,7 @@ import ai.koog.prompt.llm.LLModel
 import com.helltar.vusan.agent.history.ChatHistoryRepository
 import com.helltar.vusan.config.AppConfig
 import com.helltar.vusan.outbox.BotOutbox
+import com.helltar.vusan.outbox.RequestContext
 import com.helltar.vusan.tools.currency.CurrencyTools
 import com.helltar.vusan.tools.currency.ExchangeRateClient
 import com.helltar.vusan.tools.files.FileTools
@@ -39,10 +40,11 @@ class ToolRegistryFactory(
 ) {
 
     private companion object {
+        val TOOL_NAME_PROBE_CONTEXT = RequestContext(chatId = 0L, userId = 0L, messageId = 0L)
         val log = KotlinLogging.logger {}
     }
 
-    val availableToolNames: List<String> by lazy { buildRegistry(BotOutbox()).tools.map { it.name }.sorted() }
+    val availableToolNames: List<String> by lazy { buildRegistry(TOOL_NAME_PROBE_CONTEXT, BotOutbox()).tools.map { it.name }.sorted() }
 
     private val currency = CurrencyTools(ExchangeRateClient(http))
     private val telegramChannelClient = TelegramChannelClient(http)
@@ -55,18 +57,18 @@ class ToolRegistryFactory(
     private val elevenLabsTtsClient = optional("ELEVENLABS_API_KEY", config.elevenLabsApiKey, "voice/TTS tool") { ElevenLabsTtsClient(http, it) }
     private val elevenLabsTts = config.elevenLabsTts
 
-    fun buildRegistry(outbox: BotOutbox): ToolRegistry =
+    fun buildRegistry(context: RequestContext, outbox: BotOutbox): ToolRegistry =
         ToolRegistry {
             tools(MessageTools(outbox))
-            tools(ReactionTools(outbox))
+            tools(ReactionTools(context, outbox))
             tools(currency)
             tools(telegramChannel)
             tools(YouTubeMusicTools(ytDlpClient, outbox))
             tools(FileTools(outbox))
             tools(QuizTools(outbox))
             tools(PollTools(outbox))
-            tools(MemoryTools(history, outbox))
-            tools(VisionTools(repliedPhotoVisionClient, outbox.repliedPhoto))
+            tools(MemoryTools(history, context))
+            tools(VisionTools(repliedPhotoVisionClient, context.repliedPhoto))
 
             tavilyClient?.let { tools(TavilyTools(it, outbox)) }
             giphyClient?.let { tools(GiphyTools(it, outbox)) }

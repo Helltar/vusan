@@ -2,7 +2,6 @@ package com.helltar.vusan.infra
 
 import com.helltar.vusan.config.AppConfig
 import com.helltar.vusan.infra.tables.ChatMessagesTable
-import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import org.jetbrains.exposed.v1.jdbc.Database
@@ -68,8 +67,6 @@ object Db {
 
             database = newDatabase
             connectionSpec = requestedSpec
-
-            Runtime.getRuntime().addShutdownHook(Thread { runBlocking { disconnect() } })
         }
     }
 

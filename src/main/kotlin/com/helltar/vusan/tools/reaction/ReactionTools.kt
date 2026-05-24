@@ -5,6 +5,7 @@ import ai.koog.agents.core.tools.annotations.Tool
 import ai.koog.agents.core.tools.reflect.ToolSet
 import com.helltar.vusan.outbox.BotOutbox
 import com.helltar.vusan.outbox.BotOutput
+import com.helltar.vusan.outbox.RequestContext
 import com.helltar.vusan.tools.common.suspendToolGuard
 
 // Free reaction emoji accepted by Telegram for bot-set reactions. Telegram's
@@ -28,7 +29,7 @@ private fun normalizeReactionEmoji(raw: String): String =
     raw.filterNot { it == VARIATION_SELECTOR_16 }
 
 @Suppress("unused")
-class ReactionTools(private val outbox: BotOutbox) : ToolSet {
+class ReactionTools(private val context: RequestContext, private val outbox: BotOutbox) : ToolSet {
 
     @Tool
     @LLMDescription(ReactionToolDescriptions.SET_REACTION)
@@ -55,10 +56,10 @@ class ReactionTools(private val outbox: BotOutbox) : ToolSet {
         val targetId =
             when {
                 messageId != null -> messageId
-                targetRepliedMessage -> requireNotNull(outbox.replyToMessageId) {
+                targetRepliedMessage -> requireNotNull(context.replyToMessageId) {
                     "No replied-to message in scope — drop `targetRepliedMessage` or react to the user's own message instead."
                 }
-                else -> outbox.messageId
+                else -> context.messageId
             }
         require(targetId > 0L) { "Reaction target message id must be positive" }
 
