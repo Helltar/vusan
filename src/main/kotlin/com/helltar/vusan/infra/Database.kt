@@ -2,11 +2,13 @@ package com.helltar.vusan.infra
 
 import com.helltar.vusan.config.AppConfig
 import com.helltar.vusan.infra.tables.ChatMessagesTable
+import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import org.jetbrains.exposed.v1.jdbc.Database
 import org.jetbrains.exposed.v1.jdbc.JdbcTransaction
 import org.jetbrains.exposed.v1.jdbc.SchemaUtils
+import org.jetbrains.exposed.v1.jdbc.transactions.TransactionManager
 import org.jetbrains.exposed.v1.jdbc.transactions.suspendTransaction
 import java.nio.file.Path
 import kotlin.io.path.createDirectories
@@ -66,6 +68,17 @@ object Db {
 
             database = newDatabase
             connectionSpec = requestedSpec
+
+            Runtime.getRuntime().addShutdownHook(Thread { runBlocking { disconnect() } })
+        }
+    }
+
+    suspend fun disconnect() {
+        connectMutex.withLock {
+            val currentDatabase = database ?: return
+            TransactionManager.closeAndUnregister(currentDatabase)
+            database = null
+            connectionSpec = null
         }
     }
 
