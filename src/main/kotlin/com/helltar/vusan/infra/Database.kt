@@ -63,7 +63,7 @@ object Db {
             )
 
             suspendTransaction(newDatabase) {
-                SchemaUtils.create(ChatMessagesTable, RemindersTable)
+                SchemaUtils.createMissingTablesAndColumns(ChatMessagesTable, RemindersTable)
             }
 
             database = newDatabase

@@ -5,6 +5,7 @@ import com.helltar.vusan.agent.AgentRunner
 import com.helltar.vusan.agent.history.ChatHistoryRepository
 import com.helltar.vusan.common.rethrowIfCancellation
 import com.helltar.vusan.i18n.Messages
+import com.helltar.vusan.telegram.ScheduledAttribution
 import com.helltar.vusan.telegram.TelegramDelivery
 import io.github.oshai.kotlinlogging.KotlinLogging
 import kotlinx.coroutines.CoroutineScope
@@ -110,7 +111,12 @@ class ReminderScheduler(
 
         val result = agentRunner.handleScheduled(request)
 
-        delivery.sendScheduled(result, chatId = reminder.chatId, userId = reminder.userId)
+        delivery.sendScheduled(
+            result = result,
+            chatId = reminder.chatId,
+            userId = reminder.userId,
+            attribution = attributionFor(reminder),
+        )
 
         if (result.historyTurns.isNotEmpty()) {
             history.appendTurns(reminder.userId, result.historyTurns)
@@ -152,4 +158,21 @@ class ReminderScheduler(
 
     private fun escapeXml(s: String): String =
         s.replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;").replace("\"", "&quot;")
+
+    private fun attributionFor(reminder: Reminder): ScheduledAttribution? {
+        if (reminder.chatIsPrivate) return null
+
+        val mention =
+            when {
+                reminder.creatorUsername != null -> "@${reminder.creatorUsername}"
+                reminder.creatorDisplayName != null ->
+                    "[${reminder.creatorDisplayName}](tg://user?id=${reminder.userId})"
+                else -> "user ${reminder.userId}"
+            }
+
+        return ScheduledAttribution(
+            creatorMessageId = reminder.creatorMessageId,
+            headerText = "⏰ Scheduled by $mention",
+        )
+    }
 }

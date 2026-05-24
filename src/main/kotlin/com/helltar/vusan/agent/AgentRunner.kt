@@ -74,7 +74,10 @@ class AgentRunner(private val agentFactory: AgentFactory, private val history: C
                 userId = request.userId,
                 messageId = request.messageId,
                 replyToMessageId = request.replyToMessageId,
-                repliedPhoto = request.repliedPhoto
+                repliedPhoto = request.repliedPhoto,
+                senderUsername = request.messageContext?.userUsername,
+                senderDisplayName = request.messageContext?.userDisplayName,
+                chatIsPrivate = request.messageContext?.chatType == "private",
             )
 
         val outbox = BotOutbox()

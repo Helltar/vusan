@@ -89,6 +89,10 @@ class ReminderTools(
                     recurrence = recurrence,
                     timezone = tz,
                     nextFireAt = fireAt,
+                    creatorMessageId = context.messageId.takeIf { it > 0L },
+                    creatorUsername = context.senderUsername,
+                    creatorDisplayName = context.senderDisplayName,
+                    chatIsPrivate = context.chatIsPrivate,
                 )
             )
 

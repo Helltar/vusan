@@ -48,17 +48,30 @@ class TelegramDelivery(private val bot: TelegramBot) {
     }
 
     /**
-     * Deliver a result produced by the reminder scheduler — no origin message to reply to,
-     * but `senderPrivateChatId` is set so a tool that called `replyInPrivateMessages` can still route to DMs.
+     * Deliver a result produced by the reminder scheduler. In group chats with [attribution],
+     * tries to anchor the reply on the creator's original message (B); if that message is gone,
+     * falls back to a prepended "scheduled by …" header (A). In private chats [attribution] is null
+     * and the content is sent as a plain message — the user there is already the creator.
      */
-    suspend fun sendScheduled(result: AgentResult, chatId: Long, userId: Long) {
-        val target = DeliveryTarget(chatId = chatId)
-        dispatch(
-            result = result,
-            originTarget = target,
-            currentChatTarget = target,
-            senderPrivateChatId = userId
-        )
+    suspend fun sendScheduled(
+        result: AgentResult,
+        chatId: Long,
+        userId: Long,
+        attribution: ScheduledAttribution? = null,
+    ) {
+        val plainTarget = DeliveryTarget(chatId = chatId)
+
+        if (attribution?.creatorMessageId == null) {
+            attribution?.let { sendNotice(chatId, it.headerText) }
+            dispatch(result, plainTarget, plainTarget, senderPrivateChatId = userId)
+            return
+        }
+
+        val anchorTarget = DeliveryTarget(chatId, replyToMessageId = attribution.creatorMessageId)
+        val replyUnavailable = dispatch(result, anchorTarget, plainTarget, senderPrivateChatId = userId)
+        if (replyUnavailable) {
+            sendNotice(chatId, attribution.headerText)
+        }
     }
 
     /** Send a plain-text notice from the bot itself (no reply anchor, no markdown fallback retry chain). */
@@ -75,7 +88,7 @@ class TelegramDelivery(private val bot: TelegramBot) {
         originTarget: DeliveryTarget,
         currentChatTarget: DeliveryTarget,
         senderPrivateChatId: Long?
-    ) {
+    ): Boolean {
         val comment = result.comment?.takeIf { it.isNotBlank() }
         var replyUnavailable = false
         var privateBlockedNoticed = false
@@ -94,7 +107,7 @@ class TelegramDelivery(private val bot: TelegramBot) {
 
         if (result.outputs.isEmpty()) {
             comment?.let { deliverCommentText(text = it, origin = originTarget) }
-            return
+            return replyUnavailable
         }
 
         val captionIndex = singleCaptionIndex(result.outputs)
@@ -119,6 +132,8 @@ class TelegramDelivery(private val bot: TelegramBot) {
         if (captionIndex < 0 && comment != null) {
             deliverCommentText(comment, originTarget.takeUnless { replyUnavailable } ?: originTarget.withoutReply())
         }
+
+        return replyUnavailable
     }
 
     private fun singleCaptionIndex(outputs: List<BotOutput>): Int {

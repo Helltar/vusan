@@ -18,6 +18,11 @@ object RemindersTable : LongIdTable("reminders") {
     val createdAt = timestampWithTimeZone("created_at").clientDefault { OffsetDateTime.now(ZoneOffset.UTC) }
     val enabled = bool("enabled").default(true)
 
+    val creatorMessageId = long("creator_message_id").nullable()
+    val creatorUsername = varchar("creator_username", 64).nullable()
+    val creatorDisplayName = varchar("creator_display_name", 200).nullable()
+    val chatIsPrivate = bool("chat_is_private").default(true)
+
     init {
         index(false, userId, enabled)
         index(false, enabled, nextFireAt)

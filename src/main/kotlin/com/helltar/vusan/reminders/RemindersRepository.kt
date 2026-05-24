@@ -23,6 +23,10 @@ class RemindersRepository {
                 it[recurrence] = reminder.recurrence
                 it[timezone] = reminder.timezone.id
                 it[nextFireAt] = reminder.nextFireAt.atOffset(ZoneOffset.UTC)
+                it[creatorMessageId] = reminder.creatorMessageId
+                it[creatorUsername] = reminder.creatorUsername
+                it[creatorDisplayName] = reminder.creatorDisplayName
+                it[chatIsPrivate] = reminder.chatIsPrivate
             }.value
     }
 
@@ -88,6 +92,10 @@ class RemindersRepository {
             title = this[RemindersTable.title],
             recurrence = this[RemindersTable.recurrence],
             timezone = tz,
+            creatorMessageId = this[RemindersTable.creatorMessageId],
+            creatorUsername = this[RemindersTable.creatorUsername],
+            creatorDisplayName = this[RemindersTable.creatorDisplayName],
+            chatIsPrivate = this[RemindersTable.chatIsPrivate],
             nextFireAt = this[RemindersTable.nextFireAt].toInstant(),
             createdAt = this[RemindersTable.createdAt].toInstant(),
             enabled = this[RemindersTable.enabled],
