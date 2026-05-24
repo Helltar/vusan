@@ -1,6 +1,7 @@
 package com.helltar.vusan.config
 
 import io.github.cdimascio.dotenv.dotenv
+import java.time.ZoneId
 
 data class AppConfig(
     val telegramBotToken: String,
@@ -13,25 +14,41 @@ data class AppConfig(
     val elevenLabsTts: ElevenLabsTtsConfig?,
     val openAiStt: OpenAiSttConfig?,
     val databasePath: String,
-    val allowedIds: Set<Long>
+    val allowedIds: Set<Long>,
+    val botTimezone: ZoneId,
+    val maxRemindersPerUser: Int,
+    val reminderPollIntervalSeconds: Long,
+    val reminderMaxLatenessMinutes: Long,
 ) {
     companion object {
         private const val DEFAULT_LLM_PROVIDER = "openai"
         private const val DEFAULT_OPENAI_MODEL = "gpt-5.4-nano"
         private const val DEFAULT_OLLAMA_BASE_URL = "http://localhost:11434"
 
+        private const val DEFAULT_MAX_REMINDERS_PER_USER = 10
+        private const val DEFAULT_REMINDER_POLL_INTERVAL_SECONDS = 30L
+        private const val DEFAULT_REMINDER_MAX_LATENESS_MINUTES = 60L
+
         private val dotenv = dotenv { ignoreIfMissing = true }
         private val elevenLabsKey = readEnv("ELEVENLABS_API_KEY")
 
         fun fromEnv(): AppConfig {
             return AppConfig(
-                telegramBotToken = requireEnv("TELEGRAM_BOT_TOKEN"),
-                llmProvider = resolveLlmProvider(),
                 allowedIds = parseIdSet(readEnv("ALLOWED_IDS")),
+                botTimezone = resolveBotTimezone(),
                 databasePath = readEnv("DB_FILE") ?: "data/db/vusan.db",
-                tavilyApiKey = readEnv("TAVILY_API_KEY"),
-                giphyApiKey = readEnv("GIPHY_API_KEY"),
                 elevenLabsApiKey = elevenLabsKey,
+                giphyApiKey = readEnv("GIPHY_API_KEY"),
+                llmProvider = resolveLlmProvider(),
+                maxRemindersPerUser = readEnv("MAX_REMINDERS_PER_USER")?.toIntOrNull() ?: DEFAULT_MAX_REMINDERS_PER_USER,
+                openAiStt = resolveOpenAiStt(),
+                reminderMaxLatenessMinutes = readEnv("REMINDER_MAX_LATENESS_MINUTES")?.toLongOrNull() ?: DEFAULT_REMINDER_MAX_LATENESS_MINUTES,
+                reminderPollIntervalSeconds = readEnv("REMINDER_POLL_INTERVAL_SECONDS")?.toLongOrNull() ?: DEFAULT_REMINDER_POLL_INTERVAL_SECONDS,
+                tavilyApiKey = readEnv("TAVILY_API_KEY"),
+                telegramBotToken = requireEnv("TELEGRAM_BOT_TOKEN"),
+                ytDlpCookiesFile = readEnv("YT_DLP_COOKIES_FILE"),
+                ytDlpPath = readEnv("YT_DLP_PATH") ?: "yt-dlp",
+
                 elevenLabsTts =
                     elevenLabsKey?.let {
                         ElevenLabsTtsConfig(
@@ -39,11 +56,13 @@ data class AppConfig(
                             voiceId = readEnv("ELEVENLABS_VOICE_ID") ?: ElevenLabsTtsConfig.DEFAULT_VOICE_ID,
                             outputFormat = readEnv("ELEVENLABS_TTS_OUTPUT_FORMAT") ?: ElevenLabsTtsConfig.DEFAULT_OUTPUT_FORMAT
                         )
-                    },
-                openAiStt = resolveOpenAiStt(),
-                ytDlpPath = readEnv("YT_DLP_PATH") ?: "yt-dlp",
-                ytDlpCookiesFile = readEnv("YT_DLP_COOKIES_FILE")
+                    }
             )
+        }
+
+        private fun resolveBotTimezone(): ZoneId {
+            val raw = readEnv("BOT_TIMEZONE") ?: return ZoneId.systemDefault()
+            return runCatching { ZoneId.of(raw) }.getOrElse { error("Invalid BOT_TIMEZONE=[$raw]: ${it.message}") }
         }
 
         private fun resolveOpenAiStt(): OpenAiSttConfig? {
@@ -52,8 +71,7 @@ data class AppConfig(
             return OpenAiSttConfig(
                 apiKey = key,
                 model = readEnv("OPENAI_STT_MODEL") ?: OpenAiSttConfig.DEFAULT_MODEL,
-                maxDurationSeconds = readEnv("OPENAI_STT_MAX_DURATION_SECONDS")?.toLongOrNull()
-                    ?: OpenAiSttConfig.DEFAULT_MAX_DURATION_SECONDS
+                maxDurationSeconds = readEnv("OPENAI_STT_MAX_DURATION_SECONDS")?.toLongOrNull() ?: OpenAiSttConfig.DEFAULT_MAX_DURATION_SECONDS
             )
         }
 

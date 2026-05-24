@@ -12,7 +12,6 @@ import dev.inmo.tgbotapi.bot.TelegramBot
 import dev.inmo.tgbotapi.extensions.api.bot.getMe
 import dev.inmo.tgbotapi.extensions.api.chat.get.getChat
 import dev.inmo.tgbotapi.extensions.api.send.withTypingAction
-import dev.inmo.tgbotapi.extensions.api.telegramBot
 import dev.inmo.tgbotapi.extensions.behaviour_builder.buildBehaviourWithLongPolling
 import dev.inmo.tgbotapi.extensions.behaviour_builder.triggers_handling.onAudio
 import dev.inmo.tgbotapi.extensions.behaviour_builder.triggers_handling.onCommand
@@ -29,7 +28,8 @@ import io.github.oshai.kotlinlogging.KotlinLogging
 import kotlinx.coroutines.Job
 
 internal class TelegramBotRunner(
-    botToken: String,
+    private val bot: TelegramBot,
+    private val delivery: TelegramDelivery,
     private val agent: AgentRunner,
     private val history: ChatHistoryRepository,
     private val allowedIds: Set<Long>,
@@ -45,9 +45,6 @@ internal class TelegramBotRunner(
         val userId: Long,
         val username: String?
     )
-
-    private val bot = telegramBot(botToken)
-    private val delivery = TelegramDelivery(bot)
 
     init {
         KSLog.default = KSLog { _, _, message: Any, _ -> log.debug { message } }

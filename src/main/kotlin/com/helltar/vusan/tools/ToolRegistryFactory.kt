@@ -7,6 +7,7 @@ import com.helltar.vusan.agent.history.ChatHistoryRepository
 import com.helltar.vusan.config.AppConfig
 import com.helltar.vusan.outbox.BotOutbox
 import com.helltar.vusan.outbox.RequestContext
+import com.helltar.vusan.reminders.RemindersRepository
 import com.helltar.vusan.tools.currency.CurrencyTools
 import com.helltar.vusan.tools.currency.ExchangeRateClient
 import com.helltar.vusan.tools.files.FileTools
@@ -17,6 +18,7 @@ import com.helltar.vusan.tools.message.MessageTools
 import com.helltar.vusan.tools.poll.PollTools
 import com.helltar.vusan.tools.quiz.QuizTools
 import com.helltar.vusan.tools.reaction.ReactionTools
+import com.helltar.vusan.tools.reminders.ReminderTools
 import com.helltar.vusan.tools.tavily.TavilyClient
 import com.helltar.vusan.tools.tavily.TavilyTools
 import com.helltar.vusan.tools.tgchannel.KoogTelegramChannelImageDescriber
@@ -33,8 +35,9 @@ import io.ktor.client.*
 
 class ToolRegistryFactory(
     http: HttpClient,
-    config: AppConfig,
+    private val config: AppConfig,
     private val history: ChatHistoryRepository,
+    private val reminders: RemindersRepository,
     promptExecutor: PromptExecutor,
     model: LLModel
 ) {
@@ -69,6 +72,14 @@ class ToolRegistryFactory(
             tools(PollTools(outbox))
             tools(MemoryTools(history, context))
             tools(VisionTools(repliedPhotoVisionClient, context.repliedPhoto))
+            tools(
+                ReminderTools(
+                    repo = reminders,
+                    context = context,
+                    defaultTimezone = config.botTimezone,
+                    maxRemindersPerUser = config.maxRemindersPerUser,
+                )
+            )
 
             tavilyClient?.let { tools(TavilyTools(it, outbox)) }
             giphyClient?.let { tools(GiphyTools(it, outbox)) }

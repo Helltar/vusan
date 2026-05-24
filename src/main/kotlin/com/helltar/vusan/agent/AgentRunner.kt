@@ -12,6 +12,7 @@ import com.helltar.vusan.outbox.RepliedPhoto
 import com.helltar.vusan.outbox.RequestContext
 import io.github.oshai.kotlinlogging.KotlinLogging
 import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
 import java.util.concurrent.ConcurrentHashMap
 
 data class AgentRequest(
@@ -50,60 +51,74 @@ class AgentRunner(private val agentFactory: AgentFactory, private val history: C
         }
 
         try {
-            val context =
-                RequestContext(
-                    chatId = request.chatId,
-                    userId = request.userId,
-                    messageId = request.messageId,
-                    replyToMessageId = request.replyToMessageId,
-                    repliedPhoto = request.repliedPhoto
-                )
-
-            val outbox = BotOutbox()
-            val promptHistory = summarizeForPrompt(history.load(request.userId))
-
-            log.info {
-                "prompt history loaded: user=${request.userId} chat=${request.chatId} " +
-                        "turns=${promptHistory.turns.size} summaryChars=${promptHistory.summary?.length ?: 0} " +
-                        "promptChars=${request.prompt.length} historyChars=${request.historyEntry.length} " +
-                        "repliedPhoto=${request.repliedPhoto != null}"
-            }
-
-            val toolEvents = mutableListOf<ToolEvent>()
-
-            val agent =
-                agentFactory.build(
-                    userId = request.userId,
-                    history = promptHistory,
-                    context = context,
-                    outbox = outbox,
-                    toolEvents = toolEvents::add,
-                    messageContext = request.messageContext
-                )
-
-            val answer =
-                try {
-                    agent.run(request.prompt)
-                } catch (e: Throwable) {
-                    e.rethrowIfCancellation()
-                    log.error(e) { "agent.run failed for chat=${request.chatId} user=${request.userId}" }
-                    return AgentResult(outputs = emptyList(), comment = Messages.fallbackErrorReply)
-                }
-
-            val outputs = outbox.pending
-            val comment = extractFinalComment(answer, outputs)
-            val assistantText = assistantTextForHistory(outputs, comment)
-            val historyTurns =
-                buildHistoryTurns(
-                    userEntry = request.historyEntry,
-                    toolEvents = toolEvents,
-                    assistantText = assistantText
-                )
-
-            return AgentResult(outputs, comment, outbox.redirectToPrivate, historyTurns)
+            return runAgent(request)
         } finally {
             lock.unlock()
         }
+    }
+
+    /**
+     * Same as [handle] but waits for the per-user lock instead of bailing with "busy".
+     * Used by the reminder scheduler — a scheduled fire must not be dropped just because
+     * the user happens to be in the middle of a manual turn.
+     */
+    suspend fun handleScheduled(request: AgentRequest): AgentResult {
+        val lock = acquireLock(request.userId)
+        return lock.withLock { runAgent(request) }
+    }
+
+    private suspend fun runAgent(request: AgentRequest): AgentResult {
+        val context =
+            RequestContext(
+                chatId = request.chatId,
+                userId = request.userId,
+                messageId = request.messageId,
+                replyToMessageId = request.replyToMessageId,
+                repliedPhoto = request.repliedPhoto
+            )
+
+        val outbox = BotOutbox()
+        val promptHistory = summarizeForPrompt(history.load(request.userId))
+
+        log.info {
+            "prompt history loaded: user=${request.userId} chat=${request.chatId} " +
+                    "turns=${promptHistory.turns.size} summaryChars=${promptHistory.summary?.length ?: 0} " +
+                    "promptChars=${request.prompt.length} historyChars=${request.historyEntry.length} " +
+                    "repliedPhoto=${request.repliedPhoto != null}"
+        }
+
+        val toolEvents = mutableListOf<ToolEvent>()
+
+        val agent =
+            agentFactory.build(
+                userId = request.userId,
+                history = promptHistory,
+                context = context,
+                outbox = outbox,
+                toolEvents = toolEvents::add,
+                messageContext = request.messageContext
+            )
+
+        val answer =
+            try {
+                agent.run(request.prompt)
+            } catch (e: Throwable) {
+                e.rethrowIfCancellation()
+                log.error(e) { "agent.run failed for chat=${request.chatId} user=${request.userId}" }
+                return AgentResult(outputs = emptyList(), comment = Messages.fallbackErrorReply)
+            }
+
+        val outputs = outbox.pending
+        val comment = extractFinalComment(answer, outputs)
+        val assistantText = assistantTextForHistory(outputs, comment)
+        val historyTurns =
+            buildHistoryTurns(
+                userEntry = request.historyEntry,
+                toolEvents = toolEvents,
+                assistantText = assistantText
+            )
+
+        return AgentResult(outputs, comment, outbox.redirectToPrivate, historyTurns)
     }
 
     suspend fun reset(userId: Long): ResetOutcome {

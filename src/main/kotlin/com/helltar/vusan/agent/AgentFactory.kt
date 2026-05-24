@@ -20,6 +20,9 @@ import com.helltar.vusan.agent.history.PromptHistory
 import com.helltar.vusan.outbox.BotOutbox
 import com.helltar.vusan.outbox.RequestContext
 import com.helltar.vusan.tools.ToolRegistryFactory
+import java.time.ZoneId
+import java.time.ZonedDateTime
+import java.time.format.DateTimeFormatter
 
 data class ToolEvent(
     val toolCallId: String,
@@ -37,6 +40,7 @@ class AgentFactory(
     private val promptExecutor: PromptExecutor,
     private val toolRegistryFactory: ToolRegistryFactory,
     private val model: LLModel,
+    private val botTimezone: ZoneId,
     private val chatParams: LLMParams = LLMParams(),
     private val systemPrompt: String = SYSTEM_PROMPT,
     private val maxIterations: Int = 60
@@ -53,6 +57,7 @@ class AgentFactory(
         val seededPrompt =
             prompt(id = "vusan-user-$userId", params = chatParams) {
                 system(systemPrompt)
+                system(currentTimeSystemBlock(botTimezone))
                 messageContext?.toSystemPrompt()?.let(::system)
 
                 history.summary?.let(::assistant)
@@ -162,3 +167,11 @@ private val vusanSingleRunStrategy: AIAgentGraphStrategy<String, String> =
 
 private fun Message.Assistant.assistantTextOrEmpty(): String =
     parts.filterIsInstance<MessagePart.Text>().joinToString("\n") { it.text }
+
+private val LOCAL_DATE_TIME = DateTimeFormatter.ofPattern("yyyy-MM-dd'T'HH:mm:ss")
+private val DAY_OF_WEEK = DateTimeFormatter.ofPattern("EEEE")
+
+private fun currentTimeSystemBlock(timezone: ZoneId): String {
+    val now = ZonedDateTime.now(timezone)
+    return "Current time: ${LOCAL_DATE_TIME.format(now)} ${timezone.id} (${DAY_OF_WEEK.format(now)})"
+}

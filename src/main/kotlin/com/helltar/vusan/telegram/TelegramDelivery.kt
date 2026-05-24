@@ -21,7 +21,7 @@ internal fun Long.toChatIdentifier(): IdChatIdentifier =
 internal fun replyParameters(chatId: Long, replyToMessageId: Long?): ReplyParameters? =
     replyToMessageId?.let { ReplyParameters(chatId.toChatIdentifier(), MessageId(it)) }
 
-internal class TelegramDelivery(private val bot: TelegramBot) {
+class TelegramDelivery(private val bot: TelegramBot) {
 
     private companion object {
         val log = KotlinLogging.logger {}
@@ -45,6 +45,29 @@ internal class TelegramDelivery(private val bot: TelegramBot) {
             currentChatTarget = DeliveryTarget(message.chatIdLong),
             senderPrivateChatId = message.senderIdOrNull()
         )
+    }
+
+    /**
+     * Deliver a result produced by the reminder scheduler — no origin message to reply to,
+     * but `senderPrivateChatId` is set so a tool that called `replyInPrivateMessages` can still route to DMs.
+     */
+    suspend fun sendScheduled(result: AgentResult, chatId: Long, userId: Long) {
+        val target = DeliveryTarget(chatId = chatId)
+        dispatch(
+            result = result,
+            originTarget = target,
+            currentChatTarget = target,
+            senderPrivateChatId = userId
+        )
+    }
+
+    /** Send a plain-text notice from the bot itself (no reply anchor, no markdown fallback retry chain). */
+    suspend fun sendNotice(chatId: Long, text: String) {
+        runCatching { TelegramOutputSender.sendText(bot, chatId.toChatIdentifier(), text, replyParameters = null) }
+            .onFailure {
+                it.rethrowIfCancellation()
+                log.warn(it) { "failed to send notice to chat=$chatId" }
+            }
     }
 
     private suspend fun dispatch(
