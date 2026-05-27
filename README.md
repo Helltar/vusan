@@ -8,13 +8,13 @@
 [![GHCR](https://img.shields.io/badge/ghcr-vusan-blue?logo=docker)](https://github.com/Helltar/vusan/pkgs/container/vusan)
 [![Image size](https://ghcr-badge.egpl.dev/helltar/vusan/size)](https://github.com/Helltar/vusan/pkgs/container/vusan)
 
-Vusan is a Telegram AI agent for private chats and groups. It chats like a regular participant and uses tools when the conversation needs them — web search, voice in/out, vision, polls, GIFs, and more. See [docs/features.md](docs/features.md) for the full tool list.
+Vusan is a Telegram AI agent for private chats and groups. See [docs/features.md](docs/features.md) for the full feature list.
 
 Try it live in the [Vusan Playground](https://t.me/+56qi5dDwsNszZWFi) Telegram group.
 
 ## Stack
 
-Built on [Koog](https://github.com/JetBrains/koog) for the agent loop and [ktgbotapi](https://github.com/InsanusMokrassar/ktgbotapi) for Telegram I/O. LLM backend is OpenAI by default; a local Ollama instance or any OpenAI-compatible server (llama.cpp, LM Studio) also works — see [docs/configuration.md](docs/configuration.md).
+Built with [Koog](https://github.com/JetBrains/koog) as the agent framework and [ktgbotapi](https://github.com/InsanusMokrassar/ktgbotapi) for Telegram I/O. LLM backend is OpenAI by default; a local Ollama instance or any OpenAI-compatible server (llama.cpp, LM Studio) also works — see [docs/configuration.md](docs/configuration.md).
 
 ## Quick start
 
@@ -27,10 +27,8 @@ cp .env.example .env
 ### Docker
 
 ```bash
-docker run -d --name vusan --env-file .env -v vusan-data:/app/data ghcr.io/helltar/vusan:latest
+docker compose up -d
 ```
-
-The `-v vusan-data:/app/data` mount keeps the SQLite database (chat history) across container restarts.
 
 ### Local JVM
 
