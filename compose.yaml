@@ -1,0 +1,16 @@
+services:
+  vusan:
+    image: ghcr.io/helltar/vusan:latest
+    container_name: vusan-container
+    restart: unless-stopped
+    env_file: .env
+    volumes:
+      - vusan_data:/app/data
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+volumes:
+  vusan_data:
