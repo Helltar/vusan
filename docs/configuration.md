@@ -1,92 +1,70 @@
 # Configuration
 
-All configuration is read from environment variables (or a `.env` file in the working directory). This page is the source of truth for required vs optional behavior; [`.env.example`](../.env.example) is a copyable template with example values.
+All configuration is read from environment variables (or a `.env` file in the working directory). [`.env.example`](../.env.example) is a copy-paste template; this page documents what every variable does.
 
 ## Required
 
 | Variable | Purpose |
 | --- | --- |
 | `TELEGRAM_BOT_TOKEN` | Bot token from [@BotFather](https://t.me/BotFather). |
-| `ALLOWED_IDS` | Comma-separated Telegram IDs the bot will respond to. Positive = user, negative = group. Empty/unset = bot ignores every message. |
-| LLM provider keys | Depend on `LLM_PROVIDER` — see [below](#llm-provider). Default `openai` requires `OPENAI_API_KEY`. |
+| `ALLOWED_IDS` | Comma-separated Telegram IDs the bot responds to. Positive = user, negative = group. Empty/unset = bot ignores every message. |
+| `OPENAI_API_KEY` | LLM API key — required unless you switch `LLM_PROVIDER`. See below. |
 
 ## LLM provider
 
-`LLM_PROVIDER` selects the LLM backend. Default `openai`. Each provider has its own set of required/optional variables.
+`LLM_PROVIDER` selects the backend. Default `openai`.
 
-### `openai` (default)
-
-| Variable | Default | Purpose |
+| Provider | Required | Optional (default) |
 | --- | --- | --- |
-| `OPENAI_API_KEY` | required | OpenAI API key for the agent LLM and vision. |
-| `OPENAI_MODEL` | `gpt-5.4-nano` | OpenAI model ID. |
+| `openai` | `OPENAI_API_KEY` | `OPENAI_MODEL` (`gpt-5.4-nano`) |
+| `ollama` | `OLLAMA_MODEL` — pick one with tool support, e.g. `gemma4` | `OLLAMA_BASE_URL` (`http://localhost:11434`) |
+| `openai-compatible` | `OPENAI_BASE_URL`, `OPENAI_API_KEY` (any non-empty), `OPENAI_MODEL` | — |
 
-### `ollama`
+`openai-compatible` points at any local server exposing an OpenAI-compatible `/v1/chat/completions` — [llama.cpp](https://github.com/ggml-org/llama.cpp) (`http://localhost:8080`), [LM Studio](https://lmstudio.ai) (`http://localhost:1234/v1`), etc. The chosen model must support tool calling.
 
-Run the agent against a local [Ollama](https://ollama.com) instance. Pick a model that advertises tool support (e.g. `gemma4`, `qwen3.6`); models without `tools` capability won't be able to call any of the bot's tools.
+## Optional features
 
-| Variable | Default | Purpose |
-| --- | --- | --- |
-| `OLLAMA_MODEL` | required | Ollama model ID, e.g. `gemma4`. Pull it ahead of time (`ollama pull gemma4`). |
-| `OLLAMA_BASE_URL` | `http://localhost:11434` | Base URL of the Ollama HTTP API. |
+Each feature is gated by an API key. Missing key → the corresponding tool is unregistered at startup with a `WARN` log; the bot keeps running without it.
 
-### `openai-compatible`
+### Web search · `TAVILY_API_KEY`
 
-Point the OpenAI client at any local server that exposes an OpenAI-compatible `/v1/chat/completions` endpoint: [llama.cpp](https://github.com/ggml-org/llama.cpp), [LM Studio](https://lmstudio.ai), etc. The model must support tool calling.
+Enables web search, image search, and page extraction (Tavily).
 
-| Variable | Default | Purpose |
-| --- | --- | --- |
-| `OPENAI_BASE_URL` | required | e.g. `http://localhost:8080` (`llama-server`) or `http://localhost:1234/v1` (LM Studio). |
-| `OPENAI_API_KEY` | required | Any non-empty value — most local servers just check the header is present. |
-| `OPENAI_MODEL` | required | Model ID as advertised by the local server's `/v1/models`. |
+### GIFs · `GIPHY_API_KEY`
 
-## Optional — feature toggles
+Enables GIF lookup (Giphy).
 
-If the API key for one of these is missing, the corresponding tool is unregistered at startup with a `WARN` log entry. The bot still runs; the agent just doesn't have access to that capability.
+### Voice output — TTS · `ELEVENLABS_API_KEY`
 
-| Variable | Disables when missing |
+| Variable | Default |
 | --- | --- |
-| `TAVILY_API_KEY` | Web search, image search, page extraction. |
-| `ELEVENLABS_API_KEY` | Voice / TTS. |
-| `GIPHY_API_KEY` | GIF lookup. |
-| `OPENAI_STT_API_KEY` | Speech-to-text for incoming Telegram voice and audio messages. |
+| `ELEVENLABS_VOICE_ID` | `VD1if7jDVYtAKs4P0FIY` (Milly Maple — Cool and Bright) |
+| `ELEVENLABS_TTS_MODEL` | `eleven_v3` |
+| `ELEVENLABS_TTS_OUTPUT_FORMAT` | `mp3_44100_128` |
 
-## Optional — settings and defaults
+### Voice input — STT · `OPENAI_STT_API_KEY`
 
-### ElevenLabs
+Transcribes incoming voice/audio messages and replies to them. Reuse `OPENAI_API_KEY` if you already have one.
 
-| Variable | Default | Purpose |
-| --- | --- | --- |
-| `ELEVENLABS_VOICE_ID` | `VD1if7jDVYtAKs4P0FIY` | Voice ID. Default voice: Milly Maple — Cool and Bright. |
-| `ELEVENLABS_TTS_MODEL` | `eleven_v3` | TTS model ID. |
-| `ELEVENLABS_TTS_OUTPUT_FORMAT` | `mp3_44100_128` | Audio output format. |
+| Variable | Default |
+| --- | --- |
+| `OPENAI_STT_MODEL` | `gpt-4o-transcribe` |
+| `OPENAI_STT_MAX_DURATION_SECONDS` | `300` — longer messages get a "too long" reply. |
 
-### OpenAI STT
+## Reminders
 
-When `OPENAI_STT_API_KEY` is set, the bot transcribes incoming voice messages (Telegram `VoiceContent`) and audio files (`AudioContent`) and feeds the transcript to the agent as a normal user prompt wrapped in a `<voice_transcript>` tag. Voice/audio messages replied to by the user are also transcribed and included in the `<reply_context>`. In a private chat any voice or audio triggers the bot; in groups only messages that reply to the bot. If the key is missing, voice and audio messages are silently ignored.
+Built in. The agent can schedule one-shot, daily, weekly, or monthly tasks. Clock follows the JVM default timezone — override per reminder by naming a city or IANA zone in the request. Missed recurring reminders skip ahead; missed one-shots fire late with a notice.
 
-| Variable | Default | Purpose |
-| --- | --- | --- |
-| `OPENAI_STT_API_KEY` | — | OpenAI API key for the transcription endpoint. Reuse the value of `OPENAI_API_KEY` if you already have one. |
-| `OPENAI_STT_MODEL` | `gpt-4o-transcribe` | OpenAI transcription model ID. |
-| `OPENAI_STT_MAX_DURATION_SECONDS` | `300` | Reject voice/audio messages longer than this; the user gets a "too long" reply instead of an agent invocation. |
+| Variable | Default |
+| --- | --- |
+| `MAX_REMINDERS_PER_USER` | `10` |
+| `REMINDER_POLL_INTERVAL_SECONDS` | `30` |
+| `REMINDER_MAX_LATENESS_MINUTES` | `60` — for recurring; skip a fire if it's older than this. |
 
-### Reminders
-
-The agent can schedule future tasks for itself — one-shot, daily, weekly, or monthly. A background scheduler polls the DB and replays the saved prompt through a normal agent turn at fire time. If the bot was offline when a reminder was due, recurring reminders skip ahead to the next slot; missed one-shots fire late with a one-line notice.
-
-The bot's clock follows the JVM default timezone. Users can override it per reminder by naming an IANA timezone or city in their request — the agent passes it through to the scheduler.
+## Storage and tooling
 
 | Variable | Default | Purpose |
 | --- | --- | --- |
-| `MAX_REMINDERS_PER_USER` | `10` | Cap on active reminders per user. |
-| `REMINDER_POLL_INTERVAL_SECONDS` | `30` | How often the scheduler checks for due reminders. |
-| `REMINDER_MAX_LATENESS_MINUTES` | `60` | For recurring reminders: if a fire time is older than this (bot was offline), skip it and advance to the next slot. One-shots always fire late with a notice. |
-
-### Storage and tooling
-
-| Variable | Default | Purpose |
-| --- | --- | --- |
-| `DB_FILE` | `data/db/vusan.db` | SQLite path (created on first run; parent dirs auto-created). |
+| `DB_FILE` | `data/db/vusan.db` | SQLite path. Parent dirs auto-created on first run. |
 | `YT_DLP_PATH` | `yt-dlp` | Path to the `yt-dlp` binary. |
 | `YT_DLP_COOKIES_FILE` | — | Netscape-format `cookies.txt` for YouTube auth. See the [yt-dlp wiki](https://github.com/yt-dlp/yt-dlp/wiki/Extractors#exporting-youtube-cookies). |

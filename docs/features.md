@@ -2,18 +2,18 @@
 
 Tools the agent can call (source: [`src/main/kotlin/com/helltar/vusan/tools/`](../src/main/kotlin/com/helltar/vusan/tools/)). Items marked opt-in require an API key — see [configuration.md](configuration.md).
 
-| Tool | What it does | Opt-in |
+| Tool | Description | Opt-in |
 |---|---|:-:|
-| Web search | Tavily search + page extraction | ✓ |
-| Voice input | STT for incoming voice/audio messages via OpenAI | ✓ |
-| Voice | TTS via ElevenLabs | ✓ |
-| GIFs | Giphy search | ✓ |
-| Vision | Describes a replied photo | |
-| Polls/quizzes | Native Telegram polls | |
-| Reactions | Emoji reaction on a message instead of a text reply | |
-| YouTube audio | `yt-dlp` + `ffmpeg` | |
-| TG channels | Recent posts from `t.me/...` | |
-| Currency | Live FX rates | |
-| File delivery | Sends as a Telegram document | |
-| Reminders | Scheduled tasks (one-shot, daily, weekly, monthly) with offline catch-up | |
-| Chat history | Persistent SQLite memory | |
+| Web search | Searches the web and extracts page content (Tavily) | ✓ |
+| Voice input | Transcribes incoming voice and audio messages (OpenAI) | ✓ |
+| Voice output | Replies with a voice message (ElevenLabs) | ✓ |
+| GIFs | Searches and sends GIFs (Giphy) | ✓ |
+| Vision | Describes a photo the user replies to | |
+| Polls and quizzes | Creates a native Telegram poll or quiz | |
+| Reactions | Sends an emoji reaction instead of a text reply | |
+| YouTube audio | Extracts audio from a YouTube link (`yt-dlp` + `ffmpeg`) | |
+| Telegram channels | Reads recent posts from a `t.me/...` link | |
+| Currency | Looks up live exchange rates | |
+| File delivery | Sends a generated file as a Telegram document | |
+| Scheduled tasks | Schedules one-shot, daily, weekly, or monthly tasks with offline catch-up | |
+| Memory | Per-chat conversation memory (persistent SQLite) | |
