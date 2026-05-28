@@ -41,7 +41,7 @@ class AgentFactory(
     private val toolRegistryFactory: ToolRegistryFactory,
     private val model: LLModel,
     private val chatParams: LLMParams = LLMParams(),
-    private val systemPrompt: String = SYSTEM_PROMPT,
+    private val persona: String? = null,
     private val maxIterations: Int = 60
 ) {
 
@@ -55,7 +55,7 @@ class AgentFactory(
     ): AIAgent<String, String> {
         val seededPrompt =
             prompt(id = "vusan-user-$userId", params = chatParams) {
-                system(systemPrompt)
+                system(systemPromptFor(persona ?: DEFAULT_PERSONA))
                 system(currentTimeSystemBlock())
                 messageContext?.toSystemPrompt()?.let(::system)
 

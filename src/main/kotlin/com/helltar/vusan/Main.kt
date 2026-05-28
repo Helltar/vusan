@@ -50,7 +50,8 @@ fun main() = runBlocking {
                 promptExecutor = executor,
                 toolRegistryFactory = toolRegistryFactory,
                 model = llm.model,
-                chatParams = llm.chatParams
+                chatParams = llm.chatParams,
+                persona = config.systemPrompt
             )
 
         val agentRunner =

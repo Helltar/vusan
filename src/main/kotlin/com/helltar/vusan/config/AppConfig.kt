@@ -1,6 +1,9 @@
 package com.helltar.vusan.config
 
 import io.github.cdimascio.dotenv.dotenv
+import kotlin.io.path.Path
+import kotlin.io.path.isReadable
+import kotlin.io.path.readText
 
 data class AppConfig(
     val allowedIds: Set<Long>,
@@ -11,6 +14,7 @@ data class AppConfig(
     val llmProvider: LlmProviderConfig,
     val maxTasksPerUser: Int,
     val openAiStt: OpenAiSttConfig?,
+    val systemPrompt: String?,
     val taskMaxLatenessMinutes: Long,
     val taskPollIntervalSeconds: Long,
     val tavilyApiKey: String?,
@@ -39,6 +43,7 @@ data class AppConfig(
                 llmProvider = resolveLlmProvider(),
                 maxTasksPerUser = readEnv("MAX_TASKS_PER_USER")?.toIntOrNull() ?: DEFAULT_MAX_TASKS_PER_USER,
                 openAiStt = resolveOpenAiStt(),
+                systemPrompt = resolveSystemPrompt(),
                 taskMaxLatenessMinutes = readEnv("TASK_MAX_LATENESS_MINUTES")?.toLongOrNull() ?: DEFAULT_TASK_MAX_LATENESS_MINUTES,
                 taskPollIntervalSeconds = readEnv("TASK_POLL_INTERVAL_SECONDS")?.toLongOrNull() ?: DEFAULT_TASK_POLL_INTERVAL_SECONDS,
                 tavilyApiKey = readEnv("TAVILY_API_KEY"),
@@ -55,6 +60,17 @@ data class AppConfig(
                         )
                     }
             )
+        }
+
+        // Persona override for the system prompt: inline SYSTEM_PROMPT wins, else SYSTEM_PROMPT_FILE
+        // (handy for multi-line text). null falls back to the built-in persona. A configured-but-
+        // unreadable file fails fast rather than silently reverting to the default.
+        private fun resolveSystemPrompt(): String? {
+            readEnv("SYSTEM_PROMPT")?.let { return it }
+            val path = readEnv("SYSTEM_PROMPT_FILE") ?: return null
+            val file = Path(path)
+            require(file.isReadable()) { "SYSTEM_PROMPT_FILE=[$path] does not exist or is not readable" }
+            return file.readText().trim().ifBlank { null }
         }
 
         private fun resolveOpenAiStt(): OpenAiSttConfig? {

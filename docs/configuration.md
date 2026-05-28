@@ -22,6 +22,17 @@ All configuration is read from environment variables (or a `.env` file in the wo
 
 `openai-compatible` points at any local server exposing an OpenAI-compatible `/v1/chat/completions` — [llama.cpp](https://github.com/ggml-org/llama.cpp) (`http://localhost:8080`), [LM Studio](https://lmstudio.ai) (`http://localhost:1234/v1`), etc. The chosen model must support tool calling.
 
+## Persona
+
+The bot ships with a built-in persona (the "Vusan" identity). To run your own character without touching code, override just the persona — describe identity, tone, and language. The operational contract (output/tool rules) is always appended by the bot and is not configurable, so a custom persona can't accidentally break message delivery.
+
+| Variable | Purpose |
+| --- | --- |
+| `SYSTEM_PROMPT` | Inline persona text. Takes precedence when set. |
+| `SYSTEM_PROMPT_FILE` | Path to a file holding the persona — convenient for multi-line text. Read only when `SYSTEM_PROMPT` is unset; a set-but-unreadable path fails startup. |
+
+Unset both to use the default persona.
+
 ## Optional features
 
 Each feature is gated by an API key. Missing key → the corresponding tool is unregistered at startup with a `WARN` log; the bot keeps running without it.
