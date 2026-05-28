@@ -17,16 +17,18 @@ internal object TaskToolDescriptions {
             "Examples: `send fresh tech news`, `send 3 capybara photos and tell me a joke about them`. " +
             "Don't write `remind me to ...` — write what should actually happen."
 
-    const val SCHEDULE_WHEN_LOCAL =
-        "First fire time as ISO local datetime WITHOUT timezone offset, e.g. `2026-05-25T09:00`. " +
-            """Resolve relative phrases ("in 15 minutes", "tomorrow at 9", "next Thursday at 18:00") """ +
-            "against the `Current time` shown in your system context. " +
-            "For weekly recurrence pick the correct upcoming weekday; for monthly pick the correct day-of-month."
-
-    const val SCHEDULE_REPEAT =
-        "Recurrence: `ONCE` (default), `DAILY`, `WEEKLY` (same weekday each week), " +
-            "or `MONTHLY` (same day-of-month each month). " +
-            "Anything more complex (workdays only, every N hours) is not supported — use `ONCE` and re-schedule from the next fire."
+    const val SCHEDULE_SPEC =
+        "When the task fires. Pick ONE form and translate the user's phrasing into it:\n" +
+            "- `once <ISO local datetime>` — a single fire, e.g. `once 2026-05-30T09:00`. " +
+            """Resolve relative phrases ("in 15 minutes", "tomorrow at 9") against the `Current time` in your system context.""" + "\n" +
+            "- `every <interval>` — a fixed repeating interval, e.g. `every 90m`, `every 2h`, `every 1h30m` (minimum 5 minutes). " +
+            "Use this for plain intervals not tied to a wall-clock time; first fire is one interval from now.\n" +
+            "- `cron <UNIX 5-field expr>` — `minute hour day-of-month month day-of-week`, for anything tied to clock times or specific days. " +
+            "day-of-week: `0`/`7`=Sunday, `1`=Monday … `6`=Saturday. Examples: " +
+            "`cron 0 9 * * *` (daily 09:00), `cron 0 18 * * 1-5` (weekdays 18:00), " +
+            "`cron 0 9 * * 1,3,5` (Mon/Wed/Fri 09:00), `cron 0 0 1,15 * *` (1st & 15th at midnight), " +
+            "`cron 0 9 * * 4` (every Thursday 09:00). " +
+            "Cron times are evaluated in the task's timezone."
 
     const val SCHEDULE_TIMEZONE =
         "IANA timezone name like `Europe/Kyiv` or `America/New_York`. " +

@@ -75,27 +75,18 @@ class TaskScheduler(
 
     private suspend fun handleMissed(task: ScheduledTask, now: Instant) {
         val scheduledLabel = formatFire(task.nextFireAt, task.timezone)
+
         log.warn {
             "task id=${task.id} missed (scheduledFor=$scheduledLabel, late by ${(now.toEpochMilli() - task.nextFireAt.toEpochMilli()) / 1000}s); user offline window"
         }
 
         delivery.sendNotice(task.chatId, Messages.taskMissedNotice(task.id, task.title, scheduledLabel))
 
-        when (task.recurrence) {
-            Recurrence.ONCE -> repo.disable(task.id)
-            else -> {
-                val nextFire = task.recurrence.catchUpAfter(task.nextFireAt, task.timezone, now)
-                if (nextFire == null) {
-                    repo.disable(task.id)
-                } else {
-                    repo.reschedule(task.id, nextFire)
-                }
-            }
-        }
+        rescheduleAfterFire(task, now)
     }
 
     private suspend fun fire(task: ScheduledTask) {
-        log.info { "firing task id=${task.id} user=${task.userId} chat=${task.chatId} recurrence=${task.recurrence}" }
+        log.info { "firing task id=${task.id} user=${task.userId} chat=${task.chatId} recurrence=[${task.recurrence.display}]" }
 
         val request =
             AgentRequest(
@@ -125,18 +116,18 @@ class TaskScheduler(
 
     private suspend fun rescheduleAfterFire(task: ScheduledTask, now: Instant) {
         val nextFire = task.recurrence.catchUpAfter(task.nextFireAt, task.timezone, now)
-        if (nextFire == null) {
+
+        if (nextFire == null)
             repo.disable(task.id)
-        } else {
+        else
             repo.reschedule(task.id, nextFire)
-        }
     }
 
     private fun wrapPrompt(task: ScheduledTask): String =
         buildString {
             append("<scheduled_task")
             task.title?.let { append(" title=\"").append(escapeXml(it)).append('"') }
-            append(" recurrence=\"").append(task.recurrence.name).append('"')
+            append(" recurrence=\"").append(task.recurrence.display).append('"')
             append(">\n")
             append("This is a scheduled task you set up earlier. Execute it now without asking for confirmation.\n")
             append("Task: ").append(task.prompt).append('\n')
@@ -147,7 +138,7 @@ class TaskScheduler(
         buildString {
             append("<scheduled_task")
             task.title?.let { append(" title=\"").append(escapeXml(it)).append('"') }
-            append(" recurrence=\"").append(task.recurrence.name).append('"')
+            append(" recurrence=\"").append(task.recurrence.display).append('"')
             append(">").append(task.prompt).append("</scheduled_task>")
         }
 
@@ -165,8 +156,7 @@ class TaskScheduler(
         val mention =
             when {
                 task.creatorUsername != null -> "@${task.creatorUsername}"
-                task.creatorDisplayName != null ->
-                    "[${task.creatorDisplayName}](tg://user?id=${task.userId})"
+                task.creatorDisplayName != null -> "[${task.creatorDisplayName}](tg://user?id=${task.userId})"
                 else -> "user ${task.userId}"
             }
 

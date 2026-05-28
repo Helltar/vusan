@@ -64,7 +64,7 @@ Transcribes incoming voice/audio messages and replies to them. Reuse `OPENAI_API
 
 ## Scheduled tasks
 
-Built in. The agent can schedule one-shot, daily, weekly, or monthly tasks. Clock follows the JVM default timezone — override per task by naming a city or IANA zone in the request. Missed recurring tasks skip ahead; missed one-shots fire late with a notice.
+Built in. The agent schedules tasks with one of three forms: `once <datetime>`, `every <interval>` (fixed interval, minimum 5 minutes), or `cron <UNIX expr>` (clock-time / specific-day patterns like weekdays at 18:00 or the 1st and 15th). Cron patterns are evaluated in the task's timezone — the JVM default unless the request names a city or IANA zone; fixed intervals are timezone-independent. Missed recurring tasks skip ahead; missed one-shots fire late with a notice.
 
 | Variable | Default |
 | --- | --- |

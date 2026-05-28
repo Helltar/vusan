@@ -1,6 +1,5 @@
 package com.helltar.vusan.infra.tables
 
-import com.helltar.vusan.tasks.Recurrence
 import org.jetbrains.exposed.v1.core.dao.id.LongIdTable
 import org.jetbrains.exposed.v1.datetime.timestampWithTimeZone
 import java.time.OffsetDateTime
@@ -12,7 +11,7 @@ object ScheduledTasksTable : LongIdTable("scheduled_tasks") {
     val chatId = long("chat_id")
     val prompt = text("prompt")
     val title = varchar("title", 200).nullable()
-    val recurrence = enumerationByName<Recurrence>("recurrence", 16)
+    val recurrence = varchar("recurrence", 100)
     val timezone = varchar("timezone", 64)
     val nextFireAt = timestampWithTimeZone("next_fire_at")
     val createdAt = timestampWithTimeZone("created_at").clientDefault { OffsetDateTime.now(ZoneOffset.UTC) }

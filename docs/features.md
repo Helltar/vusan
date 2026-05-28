@@ -15,5 +15,5 @@ Tools the agent can call (source: [`src/main/kotlin/com/helltar/vusan/tools/`](.
 | Telegram channels | Reads recent posts from a `t.me/...` link | |
 | Currency | Looks up live exchange rates | |
 | File delivery | Sends a generated file as a Telegram document | |
-| Scheduled tasks | Schedules one-shot, daily, weekly, or monthly tasks with offline catch-up | |
+| Scheduled tasks | Schedules tasks via `once`/`every <interval>`/`cron` (weekdays, specific days, multiple times — min 5 min interval) with offline catch-up | |
 | Memory | Per-chat conversation memory (persistent SQLite) | |

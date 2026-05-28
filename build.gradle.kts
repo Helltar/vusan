@@ -28,6 +28,7 @@ dependencies {
     implementation(libs.ktor.client.content.negotiation)
     implementation(libs.ktor.serialization.kotlinx.json)
     implementation(libs.jsoup)
+    implementation(libs.cron.utils)
 
     implementation(libs.kotlin.logging.jvm)
     runtimeOnly(libs.logback.classic)

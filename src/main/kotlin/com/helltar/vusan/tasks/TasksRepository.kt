@@ -20,7 +20,7 @@ class TasksRepository {
                 it[chatId] = task.chatId
                 it[prompt] = task.prompt
                 it[title] = task.title
-                it[recurrence] = task.recurrence
+                it[recurrence] = task.recurrence.serialize()
                 it[timezone] = task.timezone.id
                 it[nextFireAt] = task.nextFireAt.atOffset(ZoneOffset.UTC)
                 it[creatorMessageId] = task.creatorMessageId
@@ -90,7 +90,7 @@ class TasksRepository {
             chatId = this[ScheduledTasksTable.chatId],
             prompt = this[ScheduledTasksTable.prompt],
             title = this[ScheduledTasksTable.title],
-            recurrence = this[ScheduledTasksTable.recurrence],
+            recurrence = Recurrence.parse(this[ScheduledTasksTable.recurrence]) ?: Recurrence.Once,
             timezone = tz,
             creatorMessageId = this[ScheduledTasksTable.creatorMessageId],
             creatorUsername = this[ScheduledTasksTable.creatorUsername],
