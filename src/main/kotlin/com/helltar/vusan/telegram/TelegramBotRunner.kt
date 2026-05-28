@@ -96,16 +96,7 @@ internal class TelegramBotRunner(
             sanitizeUserText(message.content, botProfile.userId, botProfile.username)
                 .ifBlank { MENTION_ONLY_PROMPT }
 
-        val replySummary = message.usableReplySummary(botProfile)
-
-        handleAgentMessage(
-            message = message,
-            agentInput = replySummary?.let { formatAgentInput(userText, it) } ?: userText,
-            historyInput = replySummary?.let { formatHistoryInput(userText, it) } ?: userText,
-            repliedPhoto = replySummary?.let { message.repliedPhotoOrNull(bot) },
-            replyToMessageId = message.usableReplyToMessageId(botProfile),
-            inputKind = "text"
-        )
+        dispatchToAgent(message, userText, botProfile, inputKind = "text")
     }
 
     private suspend fun handleVoiceUpdate(message: CommonMessage<VoiceContent>, botProfile: BotProfile) {
@@ -164,16 +155,8 @@ internal class TelegramBotRunner(
             }
 
         val prompt = buildTranscribedPrompt(caption, transcript)
-        val replySummary = message.usableReplySummary(botProfile)
 
-        handleAgentMessage(
-            message = message,
-            agentInput = replySummary?.let { formatAgentInput(prompt, it) } ?: prompt,
-            historyInput = replySummary?.let { formatHistoryInput(prompt, it) } ?: prompt,
-            repliedPhoto = replySummary?.let { message.repliedPhotoOrNull(bot) },
-            replyToMessageId = message.usableReplyToMessageId(botProfile),
-            inputKind = inputKind
-        )
+        dispatchToAgent(message, prompt, botProfile, inputKind = inputKind)
     }
 
     private fun buildTranscribedPrompt(caption: String, transcript: String): String {
@@ -187,16 +170,8 @@ internal class TelegramBotRunner(
         if (!message.isAccepted(botProfile)) return
 
         val prompt = describeIncomingSticker(message.content.media)
-        val replySummary = message.usableReplySummary(botProfile)
 
-        handleAgentMessage(
-            message = message,
-            agentInput = replySummary?.let { formatAgentInput(prompt, it) } ?: prompt,
-            historyInput = replySummary?.let { formatHistoryInput(prompt, it) } ?: prompt,
-            repliedPhoto = null,
-            replyToMessageId = message.usableReplyToMessageId(botProfile),
-            inputKind = "sticker"
-        )
+        dispatchToAgent(message, prompt, botProfile, inputKind = "sticker", loadRepliedPhoto = false)
     }
 
     private suspend fun CommonMessage<*>.usableReplySummary(botProfile: BotProfile): RepliedMessageSummary? =
@@ -223,6 +198,25 @@ internal class TelegramBotRunner(
         if (chatIdLong in allowedIds) return true
         val userId = senderIdOrNull() ?: return false
         return userId in allowedIds
+    }
+
+    private suspend fun dispatchToAgent(
+        message: CommonMessage<*>,
+        prompt: String,
+        botProfile: BotProfile,
+        inputKind: String,
+        loadRepliedPhoto: Boolean = true
+    ) {
+        val replySummary = message.usableReplySummary(botProfile)
+
+        handleAgentMessage(
+            message = message,
+            agentInput = replySummary?.let { formatAgentInput(prompt, it) } ?: prompt,
+            historyInput = replySummary?.let { formatHistoryInput(prompt, it) } ?: prompt,
+            repliedPhoto = if (loadRepliedPhoto) replySummary?.let { message.repliedPhotoOrNull(bot) } else null,
+            replyToMessageId = message.usableReplyToMessageId(botProfile),
+            inputKind = inputKind
+        )
     }
 
     private suspend fun handleAgentMessage(

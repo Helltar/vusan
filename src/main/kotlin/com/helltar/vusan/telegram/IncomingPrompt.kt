@@ -35,7 +35,7 @@ internal suspend fun CommonMessage<*>.replySummaryOrNull(
 ): RepliedMessageSummary? {
     val base = replyInfo.toReplySummary() ?: return null
     val transcript = transcribeRepliedAudioOrNull(bot, voiceTranscriber)
-    return if (transcript != null) base.copy(transcript = transcript) else base
+    return transcript?.let { base.copy(transcript = it) } ?: base
 }
 
 private suspend fun CommonMessage<*>.transcribeRepliedAudioOrNull(

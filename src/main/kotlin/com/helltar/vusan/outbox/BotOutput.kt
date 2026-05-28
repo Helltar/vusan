@@ -61,8 +61,8 @@ sealed class BotOutput {
             validateQuestionAndOptions("Quiz", question, options)
             require(correctOptionIndex in options.indices) { "Correct option index must point to one of the provided options" }
 
-            if (explanation != null) {
-                require(explanation.length <= MAX_EXPLANATION_LENGTH) { "Quiz explanation must be at most $MAX_EXPLANATION_LENGTH characters" }
+            explanation?.let {
+                require(it.length <= MAX_EXPLANATION_LENGTH) { "Quiz explanation must be at most $MAX_EXPLANATION_LENGTH characters" }
             }
         }
     }

@@ -131,25 +131,27 @@ internal object TelegramOutputSender {
     ) {
         val file = { photo.bytes.asMultipartFile(photo.filename) }
 
-        runCatching {
-            sendWithMarkdownFallback { parseMode ->
-                bot.sendPhoto(
-                    chatId = chatId,
-                    fileId = file(),
-                    text = caption,
-                    parseMode = caption?.let { parseMode },
-                    replyParameters = replyParameters
-                )
+        sendMediaWithDocumentFallback(
+            bot = bot,
+            chatId = chatId,
+            replyParameters = replyParameters,
+            mediaLabel = "sendPhoto",
+            bytes = photo.bytes,
+            filename = photo.filename,
+            caption = caption,
+            onTextFallback = { caption?.let { sendText(bot, chatId, it, replyParameters) } },
+            send = {
+                sendWithMarkdownFallback { parseMode ->
+                    bot.sendPhoto(
+                        chatId = chatId,
+                        fileId = file(),
+                        text = caption,
+                        parseMode = caption?.let { parseMode },
+                        replyParameters = replyParameters
+                    )
+                }
             }
-        }.recoverCatching { e ->
-            rethrowIfReplyNotFound(e, replyParameters)
-            log.warn(e) { "sendPhoto failed for chat=$chatId, retrying as document" }
-            sendDocumentWithMarkdownFallback(bot, chatId, photo.bytes, photo.filename, caption, replyParameters)
-        }.onFailure { e ->
-            rethrowIfReplyNotFound(e, replyParameters)
-            log.warn(e) { "sendDocument fallback failed for chat=$chatId, falling back to text" }
-            caption?.let { sendText(bot, chatId, it, replyParameters) }
-        }
+        )
     }
 
     private suspend fun sendPhotoGroup(
@@ -245,22 +247,24 @@ internal object TelegramOutputSender {
     ) {
         val file = { videoNote.bytes.asMultipartFile("video-note.mp4") }
 
-        runCatching {
-            bot.sendVideoNote(
-                chatId = chatId,
-                videoNote = file(),
-                duration = videoNote.durationSeconds?.toLong(),
-                size = videoNote.size,
-                replyParameters = replyParameters
-            )
-        }.recoverCatching { e ->
-            rethrowIfReplyNotFound(e, replyParameters)
-            log.warn(e) { "sendVideoNote failed for chat=$chatId, retrying as document" }
-            sendDocumentWithMarkdownFallback(bot, chatId, videoNote.bytes, "video-note.mp4", caption = null, replyParameters)
-        }.onFailure { e ->
-            rethrowIfReplyNotFound(e, replyParameters)
-            log.warn(e) { "sendVideoNote document fallback failed for chat=$chatId" }
-        }
+        sendMediaWithDocumentFallback(
+            bot = bot,
+            chatId = chatId,
+            replyParameters = replyParameters,
+            mediaLabel = "sendVideoNote",
+            bytes = videoNote.bytes,
+            filename = "video-note.mp4",
+            caption = null,
+            send = {
+                bot.sendVideoNote(
+                    chatId = chatId,
+                    videoNote = file(),
+                    duration = videoNote.durationSeconds?.toLong(),
+                    size = videoNote.size,
+                    replyParameters = replyParameters
+                )
+            }
+        )
     }
 
     private suspend fun sendQuiz(
@@ -336,6 +340,30 @@ internal object TelegramOutputSender {
                 } else throw e
             }
             .getOrThrow()
+    }
+
+    private suspend fun sendMediaWithDocumentFallback(
+        bot: TelegramBot,
+        chatId: ChatIdentifier,
+        replyParameters: ReplyParameters?,
+        mediaLabel: String,
+        bytes: ByteArray,
+        filename: String,
+        caption: String?,
+        send: suspend () -> Unit,
+        onTextFallback: suspend () -> Unit = {}
+    ) {
+        runCatching { send() }
+            .recoverCatching { e ->
+                rethrowIfReplyNotFound(e, replyParameters)
+                log.warn(e) { "$mediaLabel failed for chat=$chatId, retrying as document" }
+                sendDocumentWithMarkdownFallback(bot, chatId, bytes, filename, caption, replyParameters)
+            }
+            .onFailure { e ->
+                rethrowIfReplyNotFound(e, replyParameters)
+                log.warn(e) { "$mediaLabel document fallback failed for chat=$chatId, falling back to text" }
+                onTextFallback()
+            }
     }
 
     private suspend fun sendOrFallback(
