@@ -51,15 +51,15 @@ Transcribes incoming voice/audio messages and replies to them. Reuse `OPENAI_API
 | `OPENAI_STT_MODEL` | `gpt-4o-transcribe` |
 | `OPENAI_STT_MAX_DURATION_SECONDS` | `300` — longer messages get a "too long" reply. |
 
-## Reminders
+## Scheduled tasks
 
-Built in. The agent can schedule one-shot, daily, weekly, or monthly tasks. Clock follows the JVM default timezone — override per reminder by naming a city or IANA zone in the request. Missed recurring reminders skip ahead; missed one-shots fire late with a notice.
+Built in. The agent can schedule one-shot, daily, weekly, or monthly tasks. Clock follows the JVM default timezone — override per task by naming a city or IANA zone in the request. Missed recurring tasks skip ahead; missed one-shots fire late with a notice.
 
 | Variable | Default |
 | --- | --- |
-| `MAX_REMINDERS_PER_USER` | `10` |
-| `REMINDER_POLL_INTERVAL_SECONDS` | `30` |
-| `REMINDER_MAX_LATENESS_MINUTES` | `60` — for recurring; skip a fire if it's older than this. |
+| `MAX_TASKS_PER_USER` | `10` |
+| `TASK_POLL_INTERVAL_SECONDS` | `30` |
+| `TASK_MAX_LATENESS_MINUTES` | `60` — for recurring; skip a fire if it's older than this. |
 
 ## Storage and tooling
 

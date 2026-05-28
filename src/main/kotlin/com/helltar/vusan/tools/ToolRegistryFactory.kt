@@ -7,7 +7,7 @@ import com.helltar.vusan.agent.history.ChatHistoryRepository
 import com.helltar.vusan.config.AppConfig
 import com.helltar.vusan.outbox.BotOutbox
 import com.helltar.vusan.outbox.RequestContext
-import com.helltar.vusan.reminders.RemindersRepository
+import com.helltar.vusan.tasks.TasksRepository
 import com.helltar.vusan.tools.currency.CurrencyTools
 import com.helltar.vusan.tools.currency.ExchangeRateClient
 import com.helltar.vusan.tools.files.FileTools
@@ -18,7 +18,7 @@ import com.helltar.vusan.tools.message.MessageTools
 import com.helltar.vusan.tools.poll.PollTools
 import com.helltar.vusan.tools.quiz.QuizTools
 import com.helltar.vusan.tools.reaction.ReactionTools
-import com.helltar.vusan.tools.reminders.ReminderTools
+import com.helltar.vusan.tools.tasks.TaskTools
 import com.helltar.vusan.tools.tavily.TavilyClient
 import com.helltar.vusan.tools.tavily.TavilyTools
 import com.helltar.vusan.tools.tgchannel.KoogTelegramChannelImageDescriber
@@ -37,7 +37,7 @@ class ToolRegistryFactory(
     http: HttpClient,
     private val config: AppConfig,
     private val history: ChatHistoryRepository,
-    private val reminders: RemindersRepository,
+    private val tasks: TasksRepository,
     promptExecutor: PromptExecutor,
     model: LLModel
 ) {
@@ -73,10 +73,10 @@ class ToolRegistryFactory(
             tools(MemoryTools(history, context))
             tools(VisionTools(repliedPhotoVisionClient, context.repliedPhoto))
             tools(
-                ReminderTools(
-                    repo = reminders,
+                TaskTools(
+                    repo = tasks,
                     context = context,
-                    maxRemindersPerUser = config.maxRemindersPerUser,
+                    maxTasksPerUser = config.maxTasksPerUser,
                 )
             )
 

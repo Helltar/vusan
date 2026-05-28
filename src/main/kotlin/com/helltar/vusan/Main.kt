@@ -8,8 +8,8 @@ import com.helltar.vusan.config.AppConfig
 import com.helltar.vusan.config.resolveLlmRuntime
 import com.helltar.vusan.infra.Db
 import com.helltar.vusan.infra.Http
-import com.helltar.vusan.reminders.ReminderScheduler
-import com.helltar.vusan.reminders.RemindersRepository
+import com.helltar.vusan.tasks.TaskScheduler
+import com.helltar.vusan.tasks.TasksRepository
 import com.helltar.vusan.stt.OpenAiWhisperClient
 import com.helltar.vusan.telegram.TelegramBotRunner
 import com.helltar.vusan.telegram.TelegramDelivery
@@ -33,14 +33,14 @@ fun main() = runBlocking {
 
     try {
         val history = ChatHistoryRepository()
-        val reminders = RemindersRepository()
+        val tasks = TasksRepository()
 
         val toolRegistryFactory =
             ToolRegistryFactory(
                 http = http,
                 config = config,
                 history = history,
-                reminders = reminders,
+                tasks = tasks,
                 promptExecutor = executor,
                 model = llm.model
             )
@@ -81,13 +81,13 @@ fun main() = runBlocking {
             )
 
         val scheduler =
-            ReminderScheduler(
-                repo = reminders,
+            TaskScheduler(
+                repo = tasks,
                 agentRunner = agentRunner,
                 delivery = delivery,
                 history = history,
-                pollInterval = Duration.ofSeconds(config.reminderPollIntervalSeconds),
-                maxLateness = Duration.ofMinutes(config.reminderMaxLatenessMinutes),
+                pollInterval = Duration.ofSeconds(config.taskPollIntervalSeconds),
+                maxLateness = Duration.ofMinutes(config.taskMaxLatenessMinutes),
             )
 
         log.info { "Starting Vusan: provider=[${llm.providerLabel}] model=[${llm.model.id}]" }

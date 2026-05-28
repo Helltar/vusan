@@ -1,13 +1,13 @@
-package com.helltar.vusan.tools.reminders
+package com.helltar.vusan.tools.tasks
 
 import ai.koog.agents.core.tools.annotations.LLMDescription
 import ai.koog.agents.core.tools.annotations.Tool
 import ai.koog.agents.core.tools.reflect.ToolSet
 import com.helltar.vusan.outbox.RequestContext
-import com.helltar.vusan.reminders.NewReminder
-import com.helltar.vusan.reminders.Recurrence
-import com.helltar.vusan.reminders.Reminder
-import com.helltar.vusan.reminders.RemindersRepository
+import com.helltar.vusan.tasks.NewScheduledTask
+import com.helltar.vusan.tasks.Recurrence
+import com.helltar.vusan.tasks.ScheduledTask
+import com.helltar.vusan.tasks.TasksRepository
 import com.helltar.vusan.tools.common.suspendToolGuard
 import java.time.Instant
 import java.time.LocalDateTime
@@ -22,37 +22,37 @@ private val LOCAL_DATE_TIME = DateTimeFormatter.ofPattern("yyyy-MM-dd'T'HH:mm[:s
 private val DISPLAY_FORMAT = DateTimeFormatter.ofPattern("yyyy-MM-dd'T'HH:mm")
 
 @Suppress("unused")
-class ReminderTools(
-    private val repo: RemindersRepository,
+class TaskTools(
+    private val repo: TasksRepository,
     private val context: RequestContext,
-    private val maxRemindersPerUser: Int,
+    private val maxTasksPerUser: Int,
 ) : ToolSet {
 
     @Tool
-    @LLMDescription(ReminderToolDescriptions.SCHEDULE_REMINDER)
-    suspend fun scheduleReminder(
-        @LLMDescription(ReminderToolDescriptions.SCHEDULE_PROMPT)
+    @LLMDescription(TaskToolDescriptions.SCHEDULE_TASK)
+    suspend fun scheduleTask(
+        @LLMDescription(TaskToolDescriptions.SCHEDULE_PROMPT)
         prompt: String,
-        @LLMDescription(ReminderToolDescriptions.SCHEDULE_WHEN_LOCAL)
+        @LLMDescription(TaskToolDescriptions.SCHEDULE_WHEN_LOCAL)
         whenLocal: String,
-        @LLMDescription(ReminderToolDescriptions.SCHEDULE_REPEAT)
+        @LLMDescription(TaskToolDescriptions.SCHEDULE_REPEAT)
         repeat: String = "ONCE",
-        @LLMDescription(ReminderToolDescriptions.SCHEDULE_TIMEZONE)
+        @LLMDescription(TaskToolDescriptions.SCHEDULE_TIMEZONE)
         timezone: String? = null,
-        @LLMDescription(ReminderToolDescriptions.SCHEDULE_TITLE)
+        @LLMDescription(TaskToolDescriptions.SCHEDULE_TITLE)
         title: String? = null,
     ): String = suspendToolGuard {
         val userId = context.userId
-        check(userId != 0L) { "User ID is unavailable for reminder tools" }
-        check(context.chatId != 0L) { "Chat ID is unavailable for reminder tools" }
+        check(userId != 0L) { "User ID is unavailable for task tools" }
+        check(context.chatId != 0L) { "Chat ID is unavailable for task tools" }
 
         val trimmedPrompt = prompt.trim()
-        require(trimmedPrompt.isNotEmpty()) { "Reminder prompt must not be empty" }
-        require(trimmedPrompt.length <= MAX_PROMPT_CHARS) { "Reminder prompt must be at most $MAX_PROMPT_CHARS characters" }
+        require(trimmedPrompt.isNotEmpty()) { "Task prompt must not be empty" }
+        require(trimmedPrompt.length <= MAX_PROMPT_CHARS) { "Task prompt must be at most $MAX_PROMPT_CHARS characters" }
 
         val trimmedTitle = title?.trim()?.takeIf { it.isNotEmpty() }
         require(trimmedTitle == null || trimmedTitle.length <= MAX_TITLE_CHARS) {
-            "Reminder title must be at most $MAX_TITLE_CHARS characters"
+            "Task title must be at most $MAX_TITLE_CHARS characters"
         }
 
         val recurrence = Recurrence.parse(repeat)
@@ -73,14 +73,14 @@ class ReminderTools(
         }
 
         val activeCount = repo.countActiveByUser(userId)
-        if (activeCount >= maxRemindersPerUser) {
-            return@suspendToolGuard "You already have $activeCount active reminders (limit $maxRemindersPerUser). " +
-                "Cancel one with `cancelReminder` before scheduling a new one."
+        if (activeCount >= maxTasksPerUser) {
+            return@suspendToolGuard "You already have $activeCount active tasks (limit $maxTasksPerUser). " +
+                "Cancel one with `cancelTask` before scheduling a new one."
         }
 
         val id =
             repo.create(
-                NewReminder(
+                NewScheduledTask(
                     userId = userId,
                     chatId = context.chatId,
                     prompt = trimmedPrompt,
@@ -95,40 +95,40 @@ class ReminderTools(
                 )
             )
 
-        "Scheduled reminder id=$id, fires=${formatFire(fireAt, tz)} (${recurrence.name})."
+        "Scheduled task id=$id, fires=${formatFire(fireAt, tz)} (${recurrence.name})."
     }
 
     @Tool
-    @LLMDescription(ReminderToolDescriptions.LIST_REMINDERS)
-    suspend fun listReminders(): String = suspendToolGuard {
+    @LLMDescription(TaskToolDescriptions.LIST_TASKS)
+    suspend fun listTasks(): String = suspendToolGuard {
         val userId = context.userId
-        check(userId != 0L) { "User ID is unavailable for reminder tools" }
+        check(userId != 0L) { "User ID is unavailable for task tools" }
 
-        val reminders = repo.listActiveByUser(userId)
-        if (reminders.isEmpty()) return@suspendToolGuard "No active reminders."
+        val tasks = repo.listActiveByUser(userId)
+        if (tasks.isEmpty()) return@suspendToolGuard "No active scheduled tasks."
 
         buildString {
-            appendLine("Active reminders (${reminders.size}):")
-            reminders.forEach { append(formatReminderLine(it)).append('\n') }
+            appendLine("Active scheduled tasks (${tasks.size}):")
+            tasks.forEach { append(formatTaskLine(it)).append('\n') }
         }.trimEnd()
     }
 
     @Tool
-    @LLMDescription(ReminderToolDescriptions.CANCEL_REMINDER)
-    suspend fun cancelReminder(
-        @LLMDescription(ReminderToolDescriptions.CANCEL_ID)
+    @LLMDescription(TaskToolDescriptions.CANCEL_TASK)
+    suspend fun cancelTask(
+        @LLMDescription(TaskToolDescriptions.CANCEL_ID)
         id: Long,
     ): String = suspendToolGuard {
         val userId = context.userId
-        check(userId != 0L) { "User ID is unavailable for reminder tools" }
+        check(userId != 0L) { "User ID is unavailable for task tools" }
 
         val existing = repo.findForUser(userId, id)
-            ?: return@suspendToolGuard "No reminder id=$id found for the current user."
+            ?: return@suspendToolGuard "No scheduled task id=$id found for the current user."
 
-        if (!existing.enabled) return@suspendToolGuard "Reminder id=$id is already cancelled."
+        if (!existing.enabled) return@suspendToolGuard "Task id=$id is already cancelled."
 
         repo.delete(id)
-        "Cancelled reminder id=$id (${formatFire(existing.nextFireAt, existing.timezone)}, ${existing.recurrence.name})."
+        "Cancelled task id=$id (${formatFire(existing.nextFireAt, existing.timezone)}, ${existing.recurrence.name})."
     }
 
     private fun parseTimezone(raw: String?): ZoneId? {
@@ -137,13 +137,13 @@ class ReminderTools(
     }
 }
 
-private fun formatReminderLine(r: Reminder): String =
+private fun formatTaskLine(task: ScheduledTask): String =
     buildString {
-        append("- id=").append(r.id)
-        append(", fires=").append(formatFire(r.nextFireAt, r.timezone))
-        append(", repeat=").append(r.recurrence.name)
-        r.title?.let { append(", title=\"").append(it).append('"') }
-        append(", prompt=\"").append(r.prompt).append('"')
+        append("- id=").append(task.id)
+        append(", fires=").append(formatFire(task.nextFireAt, task.timezone))
+        append(", repeat=").append(task.recurrence.name)
+        task.title?.let { append(", title=\"").append(it).append('"') }
+        append(", prompt=\"").append(task.prompt).append('"')
     }
 
 private fun formatFire(instant: Instant, tz: ZoneId): String {

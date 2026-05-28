@@ -1,4 +1,4 @@
-package com.helltar.vusan.reminders
+package com.helltar.vusan.tasks
 
 import java.time.Instant
 import java.time.ZoneId
@@ -9,11 +9,6 @@ enum class Recurrence {
     WEEKLY,
     MONTHLY;
 
-    /**
-     * Next fire time after [current] in the user's [timezone], preserving the
-     * local time-of-day across DST transitions and month-length differences.
-     * Returns null for [ONCE] (no further fires).
-     */
     fun advance(current: Instant, timezone: ZoneId): Instant? {
         val local = current.atZone(timezone)
         return when (this) {
@@ -24,10 +19,6 @@ enum class Recurrence {
         }
     }
 
-    /**
-     * Advance [current] until the result is strictly after [now]. For [ONCE]
-     * returns null (the reminder simply fired late or was missed).
-     */
     fun catchUpAfter(current: Instant, timezone: ZoneId, now: Instant): Instant? {
         if (this == ONCE) return null
         var next = advance(current, timezone) ?: return null

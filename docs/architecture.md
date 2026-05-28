@@ -18,9 +18,9 @@ Telegram ──► telegram/ ──► agent/ ──► tools/ ──► externa
 |----------------|----------------|
 | `telegram/`    | Telegram I/O. Receives updates (text/voice/audio/sticker), filters by allowlist, normalizes input, and delivers agent results back — including markdown/document/text fallbacks and reply anchoring. |
 | `agent/`       | Agent orchestration on top of Koog. `AgentRunner` serializes per-user turns; `AgentFactory` builds the `AIAgent` (system prompt + history + tools). `agent/history/` summarizes and persists chat turns. |
-| `tools/`       | Agent-callable tools, one subpackage per capability (search, voice, vision, reminders, …). `ToolRegistryFactory` owns the clients and builds a per-request registry. See [features.md](features.md). |
+| `tools/`       | Agent-callable tools, one subpackage per capability (search, voice, vision, scheduled tasks, …). `ToolRegistryFactory` owns the clients and builds a per-request registry. See [features.md](features.md). |
 | `outbox/`      | The output model. `BotOutput` is the sealed set of things the bot can send (text, photo, voice, poll, reaction, …); `BotOutbox` is the per-request queue tools write into. |
-| `reminders/`   | Scheduled-task subsystem: storage, recurrence math, and the background `ReminderScheduler`. |
+| `tasks/`       | Scheduled-task subsystem: storage, recurrence math, and the background `TaskScheduler`. |
 | `infra/`       | Cross-cutting infrastructure: the SQLite/Exposed `Db` singleton and the Ktor `Http` client. |
 | `config/`      | `.env` parsing (`AppConfig`) and LLM provider/model resolution (`LlmRuntime`). |
 | `stt/`         | OpenAI Whisper speech-to-text client (optional, opt-in). |
@@ -42,13 +42,13 @@ A normal user message travels:
 
 ## Background and side flows
 
-- **Reminder scheduler** — `ReminderScheduler.launchIn` polls the reminder store every `REMINDER_POLL_INTERVAL_SECONDS`. Due reminders run through `AgentRunner.handleScheduled` (waits for the user lock instead of bailing) and are delivered with `TelegramDelivery.sendScheduled`. Reminders overdue beyond `REMINDER_MAX_LATENESS_MINUTES` (e.g. after downtime) get a "missed" notice and are advanced/disabled rather than fired. Recurrence math lives in `reminders/Recurrence.kt`.
+- **Task scheduler** — `TaskScheduler.launchIn` polls the task store every `TASK_POLL_INTERVAL_SECONDS`. Due tasks run through `AgentRunner.handleScheduled` (waits for the user lock instead of bailing) and are delivered with `TelegramDelivery.sendScheduled`. Tasks overdue beyond `TASK_MAX_LATENESS_MINUTES` (e.g. after downtime) get a "missed" notice and are advanced/disabled rather than fired. Recurrence math lives in `tasks/Recurrence.kt`.
 - **History summarization** — `agent/history/ChatHistory.summarizeForPrompt` keeps recent turns verbatim and condenses older ones so the prompt stays within budget while keeping tool-call/result pairs anchored.
 - **LLM provider resolution** — `config/LlmRuntime.resolveLlmRuntime` turns `AppConfig.llmProvider` into a Koog client/model/params triple, supporting OpenAI (with prompt caching), Ollama, and any OpenAI-compatible server.
 
 ## Startup
 
-`Main.kt` wires everything in order: load `AppConfig` → connect `Db` → create the `Http` client and LLM runtime → build repositories, `ToolRegistryFactory`, `AgentFactory`, `AgentRunner` → optionally enable voice transcription → start `TelegramBotRunner` and launch `ReminderScheduler`, then block on the bot job until shutdown (closing the executor, HTTP client, and DB in `finally`).
+`Main.kt` wires everything in order: load `AppConfig` → connect `Db` → create the `Http` client and LLM runtime → build repositories, `ToolRegistryFactory`, `AgentFactory`, `AgentRunner` → optionally enable voice transcription → start `TelegramBotRunner` and launch `TaskScheduler`, then block on the bot job until shutdown (closing the executor, HTTP client, and DB in `finally`).
 
 ## Conventions
 

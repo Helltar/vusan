@@ -7,11 +7,7 @@ import com.helltar.vusan.outbox.BotOutput
 import dev.inmo.tgbotapi.bot.TelegramBot
 import dev.inmo.tgbotapi.bot.exceptions.ReplyMessageNotFoundException
 import dev.inmo.tgbotapi.bot.exceptions.RequestException
-import dev.inmo.tgbotapi.types.ChatId
-import dev.inmo.tgbotapi.types.IdChatIdentifier
-import dev.inmo.tgbotapi.types.MessageId
-import dev.inmo.tgbotapi.types.RawChatId
-import dev.inmo.tgbotapi.types.ReplyParameters
+import dev.inmo.tgbotapi.types.*
 import dev.inmo.tgbotapi.types.message.abstracts.CommonMessage
 import io.github.oshai.kotlinlogging.KotlinLogging
 
@@ -47,12 +43,6 @@ class TelegramDelivery(private val bot: TelegramBot) {
         )
     }
 
-    /**
-     * Deliver a result produced by the reminder scheduler. In group chats with [attribution],
-     * tries to anchor the reply on the creator's original message (B); if that message is gone,
-     * falls back to a prepended "scheduled by …" header (A). In private chats [attribution] is null
-     * and the content is sent as a plain message — the user there is already the creator.
-     */
     suspend fun sendScheduled(
         result: AgentResult,
         chatId: Long,

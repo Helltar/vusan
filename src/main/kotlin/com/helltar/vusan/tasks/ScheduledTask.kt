@@ -1,9 +1,9 @@
-package com.helltar.vusan.reminders
+package com.helltar.vusan.tasks
 
 import java.time.Instant
 import java.time.ZoneId
 
-data class Reminder(
+data class ScheduledTask(
     val id: Long,
     val userId: Long,
     val chatId: Long,
@@ -20,7 +20,7 @@ data class Reminder(
     val chatIsPrivate: Boolean,
 )
 
-data class NewReminder(
+data class NewScheduledTask(
     val userId: Long,
     val chatId: Long,
     val prompt: String,

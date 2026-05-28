@@ -1,12 +1,12 @@
 package com.helltar.vusan.infra.tables
 
-import com.helltar.vusan.reminders.Recurrence
+import com.helltar.vusan.tasks.Recurrence
 import org.jetbrains.exposed.v1.core.dao.id.LongIdTable
 import org.jetbrains.exposed.v1.datetime.timestampWithTimeZone
 import java.time.OffsetDateTime
 import java.time.ZoneOffset
 
-object RemindersTable : LongIdTable("reminders") {
+object ScheduledTasksTable : LongIdTable("scheduled_tasks") {
 
     val userId = long("user_id")
     val chatId = long("chat_id")

@@ -21,8 +21,8 @@ internal object Messages {
     fun voiceTooLongReply(durationSeconds: Long, maxSeconds: Long): String =
         "That voice message is ${durationSeconds}s long — I can only transcribe up to ${maxSeconds}s. Send a shorter one or type it out ⏱️"
 
-    fun reminderMissedNotice(id: Long, title: String?, scheduledFor: String): String {
+    fun taskMissedNotice(id: Long, title: String?, scheduledFor: String): String {
         val label = title?.let { """ "$it"""" } ?: ""
-        return "⏰ Skipped reminder #$id$label scheduled for $scheduledFor — I was offline."
+        return "⏰ Skipped task #$id$label scheduled for $scheduledFor — I was offline."
     }
 }

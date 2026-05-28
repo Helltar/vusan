@@ -57,11 +57,6 @@ class AgentRunner(private val agentFactory: AgentFactory, private val history: C
         }
     }
 
-    /**
-     * Same as [handle] but waits for the per-user lock instead of bailing with "busy".
-     * Used by the reminder scheduler — a scheduled fire must not be dropped just because
-     * the user happens to be in the middle of a manual turn.
-     */
     suspend fun handleScheduled(request: AgentRequest): AgentResult {
         val lock = acquireLock(request.userId)
         return lock.withLock { runAgent(request) }

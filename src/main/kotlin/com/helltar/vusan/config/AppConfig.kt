@@ -9,10 +9,10 @@ data class AppConfig(
     val elevenLabsTts: ElevenLabsTtsConfig?,
     val giphyApiKey: String?,
     val llmProvider: LlmProviderConfig,
-    val maxRemindersPerUser: Int,
+    val maxTasksPerUser: Int,
     val openAiStt: OpenAiSttConfig?,
-    val reminderMaxLatenessMinutes: Long,
-    val reminderPollIntervalSeconds: Long,
+    val taskMaxLatenessMinutes: Long,
+    val taskPollIntervalSeconds: Long,
     val tavilyApiKey: String?,
     val telegramBotToken: String,
     val ytDlpCookiesFile: String?,
@@ -23,9 +23,9 @@ data class AppConfig(
         private const val DEFAULT_OPENAI_MODEL = "gpt-5.4-nano"
         private const val DEFAULT_OLLAMA_BASE_URL = "http://localhost:11434"
 
-        private const val DEFAULT_MAX_REMINDERS_PER_USER = 10
-        private const val DEFAULT_REMINDER_POLL_INTERVAL_SECONDS = 30L
-        private const val DEFAULT_REMINDER_MAX_LATENESS_MINUTES = 60L
+        private const val DEFAULT_MAX_TASKS_PER_USER = 10
+        private const val DEFAULT_TASK_POLL_INTERVAL_SECONDS = 30L
+        private const val DEFAULT_TASK_MAX_LATENESS_MINUTES = 60L
 
         private val dotenv = dotenv { ignoreIfMissing = true }
         private val elevenLabsKey = readEnv("ELEVENLABS_API_KEY")
@@ -37,10 +37,10 @@ data class AppConfig(
                 elevenLabsApiKey = elevenLabsKey,
                 giphyApiKey = readEnv("GIPHY_API_KEY"),
                 llmProvider = resolveLlmProvider(),
-                maxRemindersPerUser = readEnv("MAX_REMINDERS_PER_USER")?.toIntOrNull() ?: DEFAULT_MAX_REMINDERS_PER_USER,
+                maxTasksPerUser = readEnv("MAX_TASKS_PER_USER")?.toIntOrNull() ?: DEFAULT_MAX_TASKS_PER_USER,
                 openAiStt = resolveOpenAiStt(),
-                reminderMaxLatenessMinutes = readEnv("REMINDER_MAX_LATENESS_MINUTES")?.toLongOrNull() ?: DEFAULT_REMINDER_MAX_LATENESS_MINUTES,
-                reminderPollIntervalSeconds = readEnv("REMINDER_POLL_INTERVAL_SECONDS")?.toLongOrNull() ?: DEFAULT_REMINDER_POLL_INTERVAL_SECONDS,
+                taskMaxLatenessMinutes = readEnv("TASK_MAX_LATENESS_MINUTES")?.toLongOrNull() ?: DEFAULT_TASK_MAX_LATENESS_MINUTES,
+                taskPollIntervalSeconds = readEnv("TASK_POLL_INTERVAL_SECONDS")?.toLongOrNull() ?: DEFAULT_TASK_POLL_INTERVAL_SECONDS,
                 tavilyApiKey = readEnv("TAVILY_API_KEY"),
                 telegramBotToken = requireEnv("TELEGRAM_BOT_TOKEN"),
                 ytDlpCookiesFile = readEnv("YT_DLP_COOKIES_FILE"),

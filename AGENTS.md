@@ -8,7 +8,7 @@ Vusan is a Telegram AI agent (private chats and groups) built on the [Koog](http
 
 Read these to understand the system, and keep them in sync with the code in the same change that alters the behavior they describe:
 
-- **[`docs/architecture.md`](docs/architecture.md)** — the orientation map: layers, the request lifecycle, and background flows. Update it when you change how a request flows, add/move/remove a package or layer, or change a core orchestrator (`AgentRunner`, `AgentFactory`, `ToolRegistryFactory`, `TelegramDelivery`, `ReminderScheduler`).
+- **[`docs/architecture.md`](docs/architecture.md)** — the orientation map: layers, the request lifecycle, and background flows. Update it when you change how a request flows, add/move/remove a package or layer, or change a core orchestrator (`AgentRunner`, `AgentFactory`, `ToolRegistryFactory`, `TelegramDelivery`, `TaskScheduler`).
 - **[`docs/configuration.md`](docs/configuration.md)** + **[`.env.example`](.env.example)** — every environment variable. Update both whenever you add, rename, or remove a config option.
 - **[`docs/features.md`](docs/features.md)** — the user-facing tool list. Update it whenever you add or remove an agent tool.
 

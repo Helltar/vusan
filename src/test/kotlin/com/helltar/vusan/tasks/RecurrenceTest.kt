@@ -1,4 +1,4 @@
-package com.helltar.vusan.reminders
+package com.helltar.vusan.tasks
 
 import java.time.LocalDateTime
 import java.time.ZoneId
@@ -51,7 +51,7 @@ class RecurrenceTest {
 
     @Test
     fun `catchUpAfter skips past fires until result is strictly after now`() {
-        // Daily reminder originally at May 20 09:00; bot back online May 24 12:00.
+        // Daily task originally at May 20 09:00; bot back online May 24 12:00.
         // Should advance to May 25 09:00, skipping 21, 22, 23, 24.
         val original = instant(2026, 5, 20, 9, 0)
         val now = instant(2026, 5, 24, 12, 0)
