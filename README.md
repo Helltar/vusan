@@ -7,7 +7,7 @@
 ![Status: Alpha](https://img.shields.io/badge/status-alpha-orange)
 [![build](https://github.com/Helltar/vusan/actions/workflows/build.yml/badge.svg)](https://github.com/Helltar/vusan/actions/workflows/build.yml)
 [![GHCR](https://img.shields.io/badge/ghcr-vusan-blue?logo=docker)](https://github.com/Helltar/vusan/pkgs/container/vusan)
-[![Image size](https://ghcr-badge.egpl.dev/helltar/vusan/size)](https://github.com/Helltar/vusan/pkgs/container/vusan)
+[![Image size](https://keeweb-ghcr.onrender.com/helltar/vusan/size)](https://github.com/Helltar/vusan/pkgs/container/vusan)
 
 Vusan is a Telegram AI agent for private chats and groups. See [docs/features.md](docs/features.md) for the full feature list.
 
