@@ -19,6 +19,8 @@ _Note: This project is currently in active alpha development. Since the architec
 
 Built with [Koog](https://github.com/JetBrains/koog) as the agent framework and [ktgbotapi](https://github.com/InsanusMokrassar/ktgbotapi) for Telegram I/O. LLM backend is OpenAI by default; a local Ollama instance or any OpenAI-compatible server (llama.cpp, LM Studio) also works — see [docs/configuration.md](docs/configuration.md).
 
+For a tour of the layers and how a message flows through them, see [docs/architecture.md](docs/architecture.md).
+
 ## Quick start
 
 Copy the env template and fill it in using [docs/configuration.md](docs/configuration.md) as the reference:
