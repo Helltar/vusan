@@ -2,7 +2,6 @@ package com.helltar.vusan.telegram
 
 import com.helltar.vusan.agent.AgentRequest
 import com.helltar.vusan.agent.AgentRunner
-import com.helltar.vusan.agent.ResetOutcome
 import com.helltar.vusan.agent.history.ChatHistoryRepository
 import com.helltar.vusan.common.rethrowIfCancellation
 import com.helltar.vusan.i18n.Messages
@@ -61,7 +60,6 @@ internal class TelegramBotRunner(
 
         return bot.buildBehaviourWithLongPolling {
             onCommand("start", markerFactory = null) { handleStartCommand(it, botProfile) }
-            onCommand("reset", markerFactory = null) { handleResetCommand(it, botProfile) }
             onText(markerFactory = null) { handleTextUpdate(it, botProfile) }
             onSticker(markerFactory = null) { handleStickerUpdate(it, botProfile) }
             onVoice(markerFactory = null) { handleVoiceUpdate(it, botProfile) }
@@ -72,20 +70,6 @@ internal class TelegramBotRunner(
     private suspend fun handleStartCommand(message: CommonMessage<TextContent>, botProfile: BotProfile) {
         if (message.isAccepted(botProfile))
             sendReply(message, Messages.startReply)
-    }
-
-    private suspend fun handleResetCommand(message: CommonMessage<TextContent>, botProfile: BotProfile) {
-        if (!message.isAccepted(botProfile)) return
-
-        val userId = message.senderIdOrNull() ?: return
-
-        val reply =
-            when (agent.reset(userId)) {
-                ResetOutcome.Cleared -> Messages.resetReply
-                ResetOutcome.Busy -> Messages.resetBusyReply
-            }
-
-        sendReply(message, reply)
     }
 
     private suspend fun handleTextUpdate(message: CommonMessage<TextContent>, botProfile: BotProfile) {

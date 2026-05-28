@@ -4,10 +4,6 @@ internal object Messages {
 
     val startReply = """Hey! Just tell me what you need 👋"""
 
-    val resetReply = """Chat history wiped — fresh start ✨"""
-
-    val resetBusyReply = """Hold on, I'm still working on your previous request — hit /reset again once I'm done 😊"""
-
     val busyReply = """Hold on, I'm still working on your previous request 😊"""
 
     val fallbackErrorReply = """Something went sideways on my end — give it a minute and try again 🙏"""

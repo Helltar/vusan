@@ -33,8 +33,6 @@ data class AgentResult(
     val historyTurns: List<ChatTurn> = emptyList()
 )
 
-enum class ResetOutcome { Cleared, Busy }
-
 class AgentRunner(private val agentFactory: AgentFactory, private val history: ChatHistoryRepository) {
 
     private companion object {
@@ -117,21 +115,6 @@ class AgentRunner(private val agentFactory: AgentFactory, private val history: C
             )
 
         return AgentResult(outputs, comment, outbox.redirectToPrivate, historyTurns)
-    }
-
-    suspend fun reset(userId: Long): ResetOutcome {
-        val lock = acquireLock(userId)
-
-        if (!lock.tryLock()) {
-            return ResetOutcome.Busy
-        }
-
-        try {
-            history.clear(userId)
-            return ResetOutcome.Cleared
-        } finally {
-            lock.unlock()
-        }
     }
 
     private fun acquireLock(userId: Long): Mutex =
