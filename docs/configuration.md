@@ -79,7 +79,7 @@ The `sandbox` container itself reads these (all optional, set on that service â€
 | Variable | Default | Purpose |
 | --- | --- | --- |
 | `SANDBOX_POOL_SIZE` | `2` | Warm Pyodide workers kept ready. |
-| `SANDBOX_TIMEOUT_MS` | `30000` | Hard wall-clock limit per run; a stuck script is killed. Higher gives animations more render time but ties up a worker longer. |
+| `SANDBOX_TIMEOUT_SECONDS` | `30` | Hard wall-clock limit per run; a stuck script is killed. Higher gives animations more render time but ties up a worker longer. |
 | `PORT` | `8080` | Port the service listens on. |
 
 ## Scheduled tasks

@@ -7,6 +7,10 @@ const WORK_DIR = "/work";
 const FONT_DIR = "/fonts";
 const MAX_FILES = 8;
 const MAX_FILE_BYTES = 10 * 1024 * 1024;
+// Per-stream cap so a script printing in a tight loop cannot grow the captured
+// output without bound and OOM the worker before the run-time limit fires. Far
+// larger than what the bot ultimately shows; the Kotlin side truncates again.
+const MAX_OUTPUT_CHARS = 256 * 1024;
 
 interface RunResult {
   ok: boolean;
@@ -49,23 +53,43 @@ self.onmessage = async (event: MessageEvent<{ code: string }>) => {
   const pyodide = await ready;
   const { code } = event.data;
 
-  let stdout = "";
-  let stderr = "";
-  pyodide.setStdout({ batched: (s: string) => (stdout += s + "\n") });
-  pyodide.setStderr({ batched: (s: string) => (stderr += s + "\n") });
+  const out = makeSink();
+  const err = makeSink();
+  pyodide.setStdout({ batched: (s: string) => out.write(s) });
+  pyodide.setStderr({ batched: (s: string) => err.write(s) });
 
   let ok = true;
   let error = "";
   try {
     await pyodide.runPythonAsync(code);
-  } catch (err) {
+  } catch (e) {
     ok = false;
-    error = err instanceof Error ? err.message : String(err);
+    error = e instanceof Error ? e.message : String(e);
   }
 
-  const result: RunResult = { ok, error, stdout, stderr, files: collectFiles(pyodide) };
+  const result: RunResult = { ok, error, stdout: out.value, stderr: err.value, files: collectFiles(pyodide) };
   self.postMessage(result);
 };
+
+// A capped text accumulator: stops growing once MAX_OUTPUT_CHARS is reached so
+// runaway output cannot exhaust worker memory.
+function makeSink() {
+  let text = "";
+  let capped = false;
+  return {
+    write(s: string): void {
+      if (capped) return;
+      text += s + "\n";
+      if (text.length > MAX_OUTPUT_CHARS) {
+        text = text.slice(0, MAX_OUTPUT_CHARS) + "\n...[output truncated]";
+        capped = true;
+      }
+    },
+    get value(): string {
+      return text;
+    },
+  };
+}
 
 // Copy the image's fallback fonts into the Pyodide filesystem so matplotlib can
 // register them. Silently does nothing when the font dir is absent (local dev).

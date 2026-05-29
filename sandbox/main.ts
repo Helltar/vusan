@@ -8,10 +8,10 @@
 
 const PORT = Number(Deno.env.get("PORT") ?? 8080);
 const POOL_SIZE = Number(Deno.env.get("SANDBOX_POOL_SIZE") ?? 2);
-const TIMEOUT_MS = Number(Deno.env.get("SANDBOX_TIMEOUT_MS") ?? 30_000);
+const TIMEOUT_SECONDS = Number(Deno.env.get("SANDBOX_TIMEOUT_SECONDS") ?? 30);
 const MAX_CODE_CHARS = 100_000;
-const ACQUIRE_TIMEOUT_MS = 30_000;
-const RESPAWN_BACKOFF_MS = 1_000;
+const ACQUIRE_TIMEOUT_SECONDS = 30;
+const RESPAWN_BACKOFF_SECONDS = 1;
 
 interface RunResult {
   ok: boolean;
@@ -38,7 +38,7 @@ function spawn(): void {
     e.preventDefault(); // keep a worker crash from propagating to the service
     console.error("worker crashed during warm-up:", e.message);
     worker.terminate();
-    setTimeout(spawn, RESPAWN_BACKOFF_MS); // avoid a tight loop if warm-up keeps failing
+    setTimeout(spawn, RESPAWN_BACKOFF_SECONDS * 1000); // avoid a tight loop if warm-up keeps failing
   };
 }
 
@@ -50,7 +50,7 @@ function acquire(): Promise<Worker> {
       const i = waiters.indexOf(onReady);
       if (i >= 0) waiters.splice(i, 1);
       reject(new Error("no sandbox worker available"));
-    }, ACQUIRE_TIMEOUT_MS);
+    }, ACQUIRE_TIMEOUT_SECONDS * 1000);
     const onReady = (w: Worker) => {
       clearTimeout(timer);
       resolve(w);
@@ -60,20 +60,27 @@ function acquire(): Promise<Worker> {
 }
 
 function runOnce(worker: Worker, code: string): Promise<RunResult> {
-  return new Promise((resolve) => {
+  return new Promise<RunResult>((resolve) => {
     const timer = setTimeout(() => {
       resolve({ ok: false, timedOut: true, error: "execution timed out", stdout: "", stderr: "", files: [] });
-    }, TIMEOUT_MS);
+    }, TIMEOUT_SECONDS * 1000);
     worker.onmessage = (e: MessageEvent<RunResult>) => {
       clearTimeout(timer);
       resolve(e.data);
+    };
+    // A mid-run crash (e.g. the worker OOMs) would otherwise leave the request
+    // hanging until the timeout fires — resolve right away instead.
+    worker.onerror = (e) => {
+      e.preventDefault();
+      clearTimeout(timer);
+      resolve({ ok: false, error: `worker crashed: ${e.message}`, stdout: "", stderr: "", files: [] });
     };
     worker.postMessage({ code });
   }).finally(() => {
     // Single-use: discard the worker and refill the pool in the background.
     worker.terminate();
     spawn();
-  }) as Promise<RunResult>;
+  });
 }
 
 async function handleRun(req: Request): Promise<Response> {

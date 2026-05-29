@@ -31,7 +31,12 @@ services:
     security_opt:
       - no-new-privileges:true
     pids_limit: 256
-    mem_limit: 1g
+    # Several heavy Pyodide/WASM workers can be alive at once (warm pool + the
+    # in-flight run + a respawning replacement), so give some headroom over 1g.
+    mem_limit: 2g
+    # Cap CPU so a busy-loop (bounded only by the run timeout) cannot peg every
+    # host core for the full SANDBOX_TIMEOUT_SECONDS window.
+    cpus: "2.0"
     tmpfs:
       - /tmp
     logging:
