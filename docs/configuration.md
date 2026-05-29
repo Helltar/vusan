@@ -35,7 +35,7 @@ Unset both to use the default persona.
 
 ## Optional features
 
-Each feature is gated by an API key. Missing key → the corresponding tool is unregistered at startup with a `WARN` log; the bot keeps running without it.
+Each feature is gated by an env variable (an API key, or a service URL). Missing → the corresponding tool is unregistered at startup with a `WARN` log; the bot keeps running without it.
 
 ### Web search · `TAVILY_API_KEY`
 
@@ -61,6 +61,26 @@ Transcribes incoming voice/audio messages and replies to them. Reuse `OPENAI_API
 | --- | --- |
 | `OPENAI_STT_MODEL` | `gpt-4o-transcribe` |
 | `OPENAI_STT_MAX_DURATION_SECONDS` | `300` — longer messages get a "too long" reply. |
+
+### Code sandbox · `SANDBOX_URL`
+
+Enables the `runCode` tool — the agent runs Python in an isolated sandbox to compute exact answers, parse or transform data, and render charts (`numpy`, `pandas`, `matplotlib`, `sympy`). Unlike the other features this is not an API key but the URL of the bundled **sandbox service**, which executes untrusted code on an internal-only network with no secrets, no internet, and no host mounts.
+
+Run it with the compose profile, then point the bot at it:
+
+```bash
+docker compose --profile sandbox up -d
+```
+
+`SANDBOX_URL=http://sandbox:8080` matches the compose service. Unset → the tool is not registered.
+
+The `sandbox` container itself reads these (all optional, set on that service — not the bot):
+
+| Variable | Default | Purpose |
+| --- | --- | --- |
+| `SANDBOX_POOL_SIZE` | `2` | Warm Pyodide workers kept ready. |
+| `SANDBOX_TIMEOUT_MS` | `30000` | Hard wall-clock limit per run; a stuck script is killed. Higher gives animations more render time but ties up a worker longer. |
+| `PORT` | `8080` | Port the service listens on. |
 
 ## Scheduled tasks
 

@@ -35,6 +35,12 @@ cp .env.example .env
 docker compose up -d
 ```
 
+To also enable the code sandbox (Python `runCode` tool), bring up its container and set `SANDBOX_URL` — see [code sandbox](docs/configuration.md#code-sandbox--sandbox_url):
+
+```bash
+docker compose --profile sandbox up -d
+```
+
 ### Local JVM
 
 Prerequisites: JDK 21, plus `ffmpeg` and `yt-dlp` on `PATH`.
