@@ -104,23 +104,54 @@ internal object TelegramOutputSender {
         replyParameters: ReplyParameters?,
         animation: BotOutput.Animation,
         caption: String?
-    ) = sendOrFallback(
-        chatId = chatId,
-        replyParameters = replyParameters,
-        failureMessage = "sendAnimation failed, falling back to text",
-        send = {
-            sendWithMarkdownFallback { parseMode ->
-                bot.sendAnimation(
-                    chatId = chatId,
-                    animation = animation.url.toInputFile(),
-                    text = caption,
-                    parseMode = caption?.let { parseMode },
-                    replyParameters = replyParameters
-                )
-            }
-        },
-        onFallback = { caption?.let { sendText(bot, chatId, it, replyParameters) } }
-    )
+    ) {
+        // Generated GIF (bytes): fall back to document so the animation still arrives.
+        val bytes = animation.bytes
+        if (bytes != null) {
+            sendMediaWithDocumentFallback(
+                bot = bot,
+                chatId = chatId,
+                replyParameters = replyParameters,
+                mediaLabel = "sendAnimation",
+                bytes = bytes,
+                filename = animation.filename,
+                caption = caption,
+                onTextFallback = { caption?.let { sendText(bot, chatId, it, replyParameters) } },
+                send = {
+                    sendWithMarkdownFallback { parseMode ->
+                        bot.sendAnimation(
+                            chatId = chatId,
+                            animation = bytes.asMultipartFile(animation.filename),
+                            text = caption,
+                            parseMode = caption?.let { parseMode },
+                            replyParameters = replyParameters
+                        )
+                    }
+                }
+            )
+            return
+        }
+
+        // URL-based animation (e.g. Giphy).
+        val url = requireNotNull(animation.url)
+        sendOrFallback(
+            chatId = chatId,
+            replyParameters = replyParameters,
+            failureMessage = "sendAnimation failed, falling back to text",
+            send = {
+                sendWithMarkdownFallback { parseMode ->
+                    bot.sendAnimation(
+                        chatId = chatId,
+                        animation = url.toInputFile(),
+                        text = caption,
+                        parseMode = caption?.let { parseMode },
+                        replyParameters = replyParameters
+                    )
+                }
+            },
+            onFallback = { caption?.let { sendText(bot, chatId, it, replyParameters) } }
+        )
+    }
 
     private suspend fun sendPhoto(
         bot: TelegramBot,
