@@ -3,12 +3,12 @@ package com.helltar.vusan.tools.sandbox
 import ai.koog.agents.core.tools.annotations.LLMDescription
 import ai.koog.agents.core.tools.annotations.Tool
 import ai.koog.agents.core.tools.reflect.ToolSet
-import com.helltar.vusan.outbox.BotOutput
 import com.helltar.vusan.outbox.BotOutbox
+import com.helltar.vusan.outbox.BotOutput
 import com.helltar.vusan.tools.common.limitTo
 import com.helltar.vusan.tools.common.sanitizeFilename
 import com.helltar.vusan.tools.common.suspendToolGuard
-import java.util.Base64
+import java.util.*
 
 private const val MAX_OUTPUT_CHARS = 4_000
 private const val MAX_ERROR_CHARS = 500
@@ -39,10 +39,12 @@ class SandboxTools(private val client: SandboxClient, private val outbox: BotOut
         val documents = otherFiles.mapNotNull { it.toDocument() }
 
         animations.forEach { outbox.enqueue(it) }
+
         when {
             photos.size == 1 -> outbox.enqueue(photos.single())
             photos.size >= 2 -> outbox.enqueue(BotOutput.PhotoGroup(photos.take(MAX_PHOTOS)))
         }
+
         documents.forEach { outbox.enqueue(it) }
 
         buildString {
@@ -63,6 +65,7 @@ class SandboxTools(private val client: SandboxClient, private val outbox: BotOut
             }
 
             val sent = animations.map { it.filename } + photos.map { it.filename } + documents.map { it.filename }
+
             if (sent.isNotEmpty()) {
                 appendLine("Delivered ${sent.size} file(s) to the chat: ${sent.joinToString(", ")}. Comment on the result for the user; do not paste the file contents.")
             }

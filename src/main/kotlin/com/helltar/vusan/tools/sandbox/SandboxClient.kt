@@ -10,7 +10,14 @@ import kotlin.time.Duration.Companion.seconds
 
 class SandboxClient(private val http: HttpClient, baseUrl: String, runTimeout: Duration) {
 
-    private val runUrl = "${baseUrl.trimEnd('/')}/run"
+    private companion object {
+        // Mirrors the sandbox service's ACQUIRE_TIMEOUT_SECONDS — the longest it
+        // waits for a free worker before giving up with a 503.
+        val ACQUIRE_BUDGET = 30.seconds
+        val NETWORK_SLACK = 15.seconds
+    }
+
+    private val runUrl = baseUrl.trimEnd('/') + "/run"
 
     // Before the service returns even a graceful "timed out" response it may wait
     // for a free worker (ACQUIRE_BUDGET) and then run for up to runTimeout. Our
@@ -22,17 +29,13 @@ class SandboxClient(private val http: HttpClient, baseUrl: String, runTimeout: D
     suspend fun run(code: String): RunResponse {
         require(code.isNotBlank()) { "Code must not be blank" }
 
-        return http.post(runUrl) {
-            contentType(ContentType.Application.Json)
-            setBody(RunRequest(code))
-            timeout { requestTimeoutMillis = requestTimeout.inWholeMilliseconds }
-        }.body()
-    }
+        val response =
+            http.post(runUrl) {
+                contentType(ContentType.Application.Json)
+                setBody(RunRequest(code))
+                timeout { requestTimeoutMillis = requestTimeout.inWholeMilliseconds }
+            }
 
-    private companion object {
-        // Mirrors the sandbox service's ACQUIRE_TIMEOUT_SECONDS — the longest it
-        // waits for a free worker before giving up with a 503.
-        val ACQUIRE_BUDGET = 30.seconds
-        val NETWORK_SLACK = 15.seconds
+        return response.body()
     }
 }

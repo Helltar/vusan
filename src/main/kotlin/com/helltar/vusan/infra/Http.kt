@@ -11,7 +11,7 @@ import kotlinx.serialization.json.Json
 
 object Http {
 
-    val json =
+    private val json =
         Json {
             ignoreUnknownKeys = true
             explicitNulls = false
@@ -56,19 +56,22 @@ object Http {
 
 private const val ERROR_BODY_PREVIEW_LIMIT = 1_000
 
-private class HttpStatusException(status: Int, host: String, body: String?) :
-    IllegalStateException(buildMessage(status, host, body)) {
+private class HttpStatusException(status: Int, host: String, body: String?) : IllegalStateException(buildMessage(status, host, body)) {
 
     companion object {
         private fun buildMessage(status: Int, host: String, body: String?): String {
             val base = "HTTP $status from $host"
             val preview = body?.trim().orEmpty()
-            if (preview.isEmpty()) return base
-            val capped = if (preview.length > ERROR_BODY_PREVIEW_LIMIT) {
-                preview.take(ERROR_BODY_PREVIEW_LIMIT) + "…"
-            } else {
-                preview
-            }
+
+            if (preview.isEmpty())
+                return base
+
+            val capped =
+                if (preview.length > ERROR_BODY_PREVIEW_LIMIT)
+                    preview.take(ERROR_BODY_PREVIEW_LIMIT) + "…"
+                else
+                    preview
+
             return "$base: $capped"
         }
     }
