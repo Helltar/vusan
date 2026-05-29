@@ -4,6 +4,9 @@ services:
     container_name: vusan-container
     restart: unless-stopped
     env_file: .env
+    networks:
+      - default      # outbound internet (Telegram, LLM, web tools)
+      - sandbox-net  # reach the sandbox service
     volumes:
       - vusan_data:/app/data
     logging:
@@ -11,6 +14,35 @@ services:
       options:
         max-size: "10m"
         max-file: "3"
+
+  # Opt-in code sandbox. Enable with: docker compose --profile sandbox up -d
+  # (and set SANDBOX_URL=http://sandbox:8080 in .env). Runs untrusted Python on
+  # an internal-only network with no secrets, no internet, and no host mounts.
+  sandbox:
+    image: ghcr.io/helltar/vusan-sandbox:latest
+    container_name: vusan-sandbox
+    profiles: ["sandbox"]
+    restart: unless-stopped
+    networks:
+      - sandbox-net
+    read_only: true
+    cap_drop:
+      - ALL
+    security_opt:
+      - no-new-privileges:true
+    pids_limit: 256
+    mem_limit: 1g
+    tmpfs:
+      - /tmp
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+networks:
+  sandbox-net:
+    internal: true  # no route to the internet; egress for untrusted code is impossible
 
 volumes:
   vusan_data:

@@ -1,0 +1,45 @@
+# Local development: builds both images from source instead of pulling from
+# GHCR, and wires the sandbox so the runCode tool is active. Usage:
+#   docker compose -f compose.local.yaml up --build
+# Requires a filled-in .env (TELEGRAM_BOT_TOKEN, LLM provider keys, …).
+services:
+  vusan:
+    build: .
+    container_name: vusan-container
+    restart: unless-stopped
+    env_file: .env
+    environment:
+      SANDBOX_URL: http://sandbox:8080
+    networks:
+      - default
+      - sandbox-net
+    volumes:
+      - vusan_data:/app/data
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+  sandbox:
+    build: ./sandbox
+    container_name: vusan-sandbox
+    restart: unless-stopped
+    networks:
+      - sandbox-net
+    read_only: true
+    cap_drop:
+      - ALL
+    security_opt:
+      - no-new-privileges:true
+    pids_limit: 256
+    mem_limit: 1g
+    tmpfs:
+      - /tmp
+
+networks:
+  sandbox-net:
+    internal: true
+
+volumes:
+  vusan_data:
