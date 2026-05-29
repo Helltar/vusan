@@ -77,7 +77,6 @@ function runOnce(worker: Worker, code: string): Promise<RunResult> {
     };
     worker.postMessage({ code });
   }).finally(() => {
-    // Single-use: discard the worker and refill the pool in the background.
     worker.terminate();
     spawn();
   });

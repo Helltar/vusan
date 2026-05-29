@@ -23,7 +23,7 @@ services:
 
   sandbox:
     build: ./sandbox
-    container_name: vusan-sandbox
+    container_name: vusan-sandbox-container
     restart: unless-stopped
     networks:
       - sandbox-net

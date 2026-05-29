@@ -46,7 +46,6 @@ plt.plot([0, 1]); plt.savefig(io.BytesIO()); plt.close("all")
   return pyodide;
 })();
 
-// Tell the pool manager this worker is warm and may receive its one job.
 ready.then(() => self.postMessage({ type: "ready" }));
 
 self.onmessage = async (event: MessageEvent<{ code: string }>) => {
@@ -71,8 +70,6 @@ self.onmessage = async (event: MessageEvent<{ code: string }>) => {
   self.postMessage(result);
 };
 
-// A capped text accumulator: stops growing once MAX_OUTPUT_CHARS is reached so
-// runaway output cannot exhaust worker memory.
 function makeSink() {
   let text = "";
   let capped = false;
