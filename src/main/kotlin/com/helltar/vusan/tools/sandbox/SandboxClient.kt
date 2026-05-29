@@ -5,11 +5,19 @@ import io.ktor.client.call.*
 import io.ktor.client.plugins.*
 import io.ktor.client.request.*
 import io.ktor.http.*
+import kotlin.time.Duration
 import kotlin.time.Duration.Companion.seconds
 
-class SandboxClient(private val http: HttpClient, baseUrl: String) {
+class SandboxClient(private val http: HttpClient, baseUrl: String, runTimeout: Duration) {
 
     private val runUrl = "${baseUrl.trimEnd('/')}/run"
+
+    // Before the service returns even a graceful "timed out" response it may wait
+    // for a free worker (ACQUIRE_BUDGET) and then run for up to runTimeout. Our
+    // HTTP timeout has to outlast that whole budget, plus some network slack, or
+    // ktor would abort while the sandbox is still legitimately working. Derived
+    // from runTimeout so raising SANDBOX_TIMEOUT_SECONDS keeps the two in sync.
+    private val requestTimeout = ACQUIRE_BUDGET + runTimeout + NETWORK_SLACK
 
     suspend fun run(code: String): RunResponse {
         require(code.isNotBlank()) { "Code must not be blank" }
@@ -17,14 +25,14 @@ class SandboxClient(private val http: HttpClient, baseUrl: String) {
         return http.post(runUrl) {
             contentType(ContentType.Application.Json)
             setBody(RunRequest(code))
-            // The service may wait for a free worker and then run up to its own
-            // limit, so allow more than the shared client's default request timeout.
-            timeout { requestTimeoutMillis = REQUEST_TIMEOUT.inWholeMilliseconds }
+            timeout { requestTimeoutMillis = requestTimeout.inWholeMilliseconds }
         }.body()
     }
 
     private companion object {
-        // Must exceed the service's worst case: acquire wait (30s) + run cap (30s).
-        val REQUEST_TIMEOUT = 75.seconds
+        // Mirrors the sandbox service's ACQUIRE_TIMEOUT_SECONDS — the longest it
+        // waits for a free worker before giving up with a 503.
+        val ACQUIRE_BUDGET = 30.seconds
+        val NETWORK_SLACK = 15.seconds
     }
 }

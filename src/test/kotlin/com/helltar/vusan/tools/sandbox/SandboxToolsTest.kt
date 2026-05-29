@@ -12,6 +12,7 @@ import kotlin.test.assertContains
 import kotlin.test.assertEquals
 import kotlin.test.assertIs
 import kotlin.test.assertTrue
+import kotlin.time.Duration.Companion.seconds
 
 class SandboxToolsTest {
 
@@ -28,7 +29,7 @@ class SandboxToolsTest {
                     )
                 }
             )
-        return SandboxTools(SandboxClient(http, "http://sandbox:8080"), outbox)
+        return SandboxTools(SandboxClient(http, "http://sandbox:8080", 30.seconds), outbox)
     }
 
     @Test

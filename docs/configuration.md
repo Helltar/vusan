@@ -70,13 +70,13 @@ docker compose --profile sandbox up -d
 
 `SANDBOX_URL=http://sandbox:8080` matches the compose service. Unset → the tool is skipped.
 
-The `sandbox` container reads these (all optional, set on that service — not the bot):
+Tuning (all optional):
 
 | Variable | Default | Purpose |
 | --- | --- | --- |
-| `SANDBOX_POOL_SIZE` | `2` | Warm Pyodide workers kept ready. |
-| `SANDBOX_TIMEOUT_SECONDS` | `30` | Hard per-run limit; a stuck script is killed. Higher = more render time for animations but a worker stays busy longer. |
-| `PORT` | `8080` | Port the service listens on. |
+| `SANDBOX_POOL_SIZE` | `2` | Warm Pyodide workers kept ready. Service only. |
+| `SANDBOX_TIMEOUT_SECONDS` | `30` | Hard per-run limit; a stuck script is killed. Higher = more render time for animations but a worker stays busy longer. Read by **both** the service and the bot (which sizes its HTTP timeout from it), so set it once in `.env` — the compose file passes it through to the service. |
+| `PORT` | `8080` | Port the service listens on. Service only. |
 
 ## Scheduled tasks
 

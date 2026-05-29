@@ -23,6 +23,10 @@ services:
     container_name: vusan-sandbox
     profiles: ["sandbox"]
     restart: unless-stopped
+    # Single-sourced from .env so the bot (env_file) and the service agree on the
+    # run limit; the bot sizes its HTTP timeout from the same value.
+    environment:
+      SANDBOX_TIMEOUT_SECONDS: ${SANDBOX_TIMEOUT_SECONDS:-30}
     networks:
       - sandbox-net
     read_only: true

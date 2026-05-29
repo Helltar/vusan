@@ -34,6 +34,7 @@ import com.helltar.vusan.tools.youtube.YouTubeMusicTools
 import com.helltar.vusan.tools.youtube.YtDlpClient
 import io.github.oshai.kotlinlogging.KotlinLogging
 import io.ktor.client.*
+import kotlin.time.Duration.Companion.seconds
 
 class ToolRegistryFactory(
     http: HttpClient,
@@ -61,7 +62,7 @@ class ToolRegistryFactory(
     private val giphyClient = optional("GIPHY_API_KEY", config.giphyApiKey, "Giphy GIF tool") { GiphyClient(http, it) }
     private val elevenLabsTtsClient = optional("ELEVENLABS_API_KEY", config.elevenLabsApiKey, "voice/TTS tool") { ElevenLabsTtsClient(http, it) }
     private val elevenLabsTts = config.elevenLabsTts
-    private val sandboxClient = optional("SANDBOX_URL", config.sandboxUrl, "code sandbox tool") { SandboxClient(http, it) }
+    private val sandboxClient = optional("SANDBOX_URL", config.sandboxUrl, "code sandbox tool") { SandboxClient(http, it, config.sandboxTimeoutSeconds.seconds) }
 
     fun buildRegistry(context: RequestContext, outbox: BotOutbox): ToolRegistry =
         ToolRegistry {
