@@ -41,7 +41,7 @@ To run the bot alone — without the code sandbox — comment out `SANDBOX_URL` 
 docker compose up -d vusan
 ```
 
-See [code sandbox](docs/configuration.md#code-sandbox--sandbox_url) for details.
+See [code sandbox](docs/configuration.md#code-sandbox) for details.
 
 ### Local JVM
 
