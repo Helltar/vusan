@@ -1,10 +1,13 @@
 package com.helltar.vusan.tools.sandbox
 
+import com.helltar.vusan.common.rethrowIfCancellation
 import io.ktor.client.*
 import io.ktor.client.call.*
 import io.ktor.client.plugins.*
 import io.ktor.client.request.*
 import io.ktor.http.*
+import java.net.ConnectException
+import java.nio.channels.UnresolvedAddressException
 import kotlin.time.Duration
 import kotlin.time.Duration.Companion.seconds
 
@@ -15,6 +18,13 @@ class SandboxClient(private val http: HttpClient, baseUrl: String, runTimeout: D
         // waits for a free worker before giving up with a 503.
         val ACQUIRE_BUDGET = 30.seconds
         val NETWORK_SLACK = 15.seconds
+
+        // Returned when the sandbox service can't be reached at all (container not
+        // running, wrong URL) — distinct from a Python error, which comes back in
+        // RunResponse.error. Framed so the model stops instead of rewriting code.
+        const val UNREACHABLE_MESSAGE =
+            "The code sandbox is not reachable right now, so the code did not run. " +
+                    "Tell the user code execution is temporarily unavailable; do not retry."
     }
 
     private val runUrl = baseUrl.trimEnd('/') + "/run"
@@ -29,13 +39,19 @@ class SandboxClient(private val http: HttpClient, baseUrl: String, runTimeout: D
     suspend fun run(code: String): RunResponse {
         require(code.isNotBlank()) { "Code must not be blank" }
 
-        val response =
+        return runCatching {
             http.post(runUrl) {
                 contentType(ContentType.Application.Json)
                 setBody(RunRequest(code))
                 timeout { requestTimeoutMillis = requestTimeout.inWholeMilliseconds }
-            }
+            }.body<RunResponse>()
+        }.getOrElse { e ->
+            e.rethrowIfCancellation()
 
-        return response.body()
+            when (e) {
+                is ConnectException, is UnresolvedAddressException -> throw IllegalStateException(UNREACHABLE_MESSAGE, e)
+                else -> throw e
+            }
+        }
     }
 }
