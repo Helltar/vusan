@@ -1,0 +1,11 @@
+{
+  "nodeModulesDir": "auto",
+  "tasks": {
+    "warmup": "deno run --allow-net --allow-read --allow-write --allow-env warmup.ts",
+    "start": "deno run --allow-net --allow-read --allow-env main.ts"
+  },
+  "imports": {
+    "pyodide": "npm:pyodide@0.28.3",
+    "@std/encoding/base64": "jsr:@std/encoding@1/base64"
+  }
+}
