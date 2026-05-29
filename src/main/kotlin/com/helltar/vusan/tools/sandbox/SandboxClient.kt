@@ -43,7 +43,13 @@ class SandboxClient(private val http: HttpClient, baseUrl: String, runTimeout: D
             http.post(runUrl) {
                 contentType(ContentType.Application.Json)
                 setBody(RunRequest(code))
-                timeout { requestTimeoutMillis = requestTimeout.inWholeMilliseconds }
+                timeout {
+                    // Both must use the derived budget: the sandbox sends no bytes
+                    // while it computes, so the inherited 20s socket timeout would
+                    // otherwise abort a long run before any response arrives.
+                    requestTimeoutMillis = requestTimeout.inWholeMilliseconds
+                    socketTimeoutMillis = requestTimeout.inWholeMilliseconds
+                }
             }.body<RunResponse>()
         }.getOrElse { e ->
             e.rethrowIfCancellation()
