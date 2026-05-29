@@ -7,5 +7,7 @@
 build/
 data/
 deploy/
+node_modules/
 
+deno.lock
 .env

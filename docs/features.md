@@ -1,6 +1,6 @@
 # Features
 
-Tools the agent can call (source: [`src/main/kotlin/com/helltar/vusan/tools/`](../src/main/kotlin/com/helltar/vusan/tools/)). Items marked opt-in require an API key — see [configuration.md](configuration.md).
+Tools the agent can call (source: [`src/main/kotlin/com/helltar/vusan/tools/`](../src/main/kotlin/com/helltar/vusan/tools/)). Items marked opt-in require an API key or an extra service — see [configuration.md](configuration.md).
 
 | Tool | Description | Opt-in |
 |---|---|:-:|
@@ -17,3 +17,4 @@ Tools the agent can call (source: [`src/main/kotlin/com/helltar/vusan/tools/`](.
 | File delivery | Sends a generated file as a Telegram document | |
 | Scheduled tasks | Schedules tasks via `once`/`every <interval>`/`cron` (weekdays, specific days, multiple times — min 5 min interval) with offline catch-up | |
 | Memory | Per-chat conversation memory (persistent SQLite) | |
+| Code sandbox | Runs Python to compute exact answers, transform data, and render charts — isolated, no network (`numpy`/`pandas`/`matplotlib`/`sympy`) | ✓ |

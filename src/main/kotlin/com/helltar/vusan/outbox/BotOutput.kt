@@ -24,8 +24,13 @@ sealed class BotOutput {
         override val acceptsCaption: Boolean get() = true
     }
 
-    class Animation(val url: String) : BotOutput() {
+    class Animation(
+        val url: String? = null,
+        val bytes: ByteArray? = null,
+        val filename: String = "animation.gif"
+    ) : BotOutput() {
         override val acceptsCaption: Boolean get() = true
+        init { require((url != null) != (bytes != null)) { "Animation needs exactly one of url or bytes" } }
     }
 
     class Voice(

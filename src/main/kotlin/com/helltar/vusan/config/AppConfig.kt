@@ -14,6 +14,8 @@ data class AppConfig(
     val llmProvider: LlmProviderConfig,
     val maxTasksPerUser: Int,
     val openAiStt: OpenAiSttConfig?,
+    val sandboxTimeoutSeconds: Long,
+    val sandboxUrl: String?,
     val systemPrompt: String?,
     val taskMaxLatenessMinutes: Long,
     val taskPollIntervalSeconds: Long,
@@ -30,6 +32,7 @@ data class AppConfig(
         private const val DEFAULT_MAX_TASKS_PER_USER = 10
         private const val DEFAULT_TASK_POLL_INTERVAL_SECONDS = 30L
         private const val DEFAULT_TASK_MAX_LATENESS_MINUTES = 60L
+        private const val DEFAULT_SANDBOX_TIMEOUT_SECONDS = 30L
 
         private val dotenv = dotenv { ignoreIfMissing = true }
         private val elevenLabsKey = readEnv("ELEVENLABS_API_KEY")
@@ -43,6 +46,8 @@ data class AppConfig(
                 llmProvider = resolveLlmProvider(),
                 maxTasksPerUser = readEnv("MAX_TASKS_PER_USER")?.toIntOrNull() ?: DEFAULT_MAX_TASKS_PER_USER,
                 openAiStt = resolveOpenAiStt(),
+                sandboxTimeoutSeconds = readEnv("SANDBOX_TIMEOUT_SECONDS")?.toLongOrNull() ?: DEFAULT_SANDBOX_TIMEOUT_SECONDS,
+                sandboxUrl = readEnv("SANDBOX_URL"),
                 systemPrompt = resolveSystemPrompt(),
                 taskMaxLatenessMinutes = readEnv("TASK_MAX_LATENESS_MINUTES")?.toLongOrNull() ?: DEFAULT_TASK_MAX_LATENESS_MINUTES,
                 taskPollIntervalSeconds = readEnv("TASK_POLL_INTERVAL_SECONDS")?.toLongOrNull() ?: DEFAULT_TASK_POLL_INTERVAL_SECONDS,

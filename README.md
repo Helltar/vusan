@@ -35,6 +35,14 @@ cp .env.example .env
 docker compose up -d
 ```
 
+To run the bot alone — without the code sandbox — comment out `SANDBOX_URL` in `.env` and start just that service:
+
+```bash
+docker compose up -d vusan
+```
+
+See [code sandbox](docs/configuration.md#code-sandbox--sandbox_url) for details.
+
 ### Local JVM
 
 Prerequisites: JDK 21, plus `ffmpeg` and `yt-dlp` on `PATH`.
