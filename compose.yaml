@@ -15,13 +15,13 @@ services:
         max-size: "10m"
         max-file: "3"
 
-  # Opt-in code sandbox. Enable with: docker compose --profile sandbox up -d
-  # (and set SANDBOX_URL=http://sandbox:8080 in .env). Runs untrusted Python on
-  # an internal-only network with no secrets, no internet, and no host mounts.
+  # Code sandbox for the runCode tool. Comes up with `docker compose up -d`;
+  # skip it with `docker compose up -d vusan`. The bot only uses it when
+  # SANDBOX_URL is set. Runs untrusted Python on an internal-only network with
+  # no secrets, no internet, and no host mounts.
   sandbox:
     image: ghcr.io/helltar/vusan-sandbox:latest
-    container_name: vusan-sandbox
-    profiles: ["sandbox"]
+    container_name: vusan-sandbox-container
     restart: unless-stopped
     # Single-sourced from .env so the bot (env_file) and the service agree on the
     # run limit; the bot sizes its HTTP timeout from the same value.

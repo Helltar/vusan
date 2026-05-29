@@ -62,13 +62,9 @@ Each feature is gated by one env variable (an API key or service URL). If it's m
 
 `runCode` lets the agent run Python in an isolated sandbox to compute exact answers, transform data, and render charts (`numpy`, `pandas`, `matplotlib`, `sympy`). Unlike the other features, `SANDBOX_URL` is not an API key but the URL of the bundled **sandbox service** — it executes untrusted code on an internal-only network with no secrets, no internet, and no host mounts.
 
-Start the service, then point the bot at it:
+`docker compose up -d` starts the sandbox alongside the bot. `.env.example` ships with `SANDBOX_URL=http://sandbox:8080` (the compose service), so the `runCode` tool is active out of the box. Comment that line out to disable the tool — e.g. when running `docker compose up -d vusan` without the sandbox container.
 
-```bash
-docker compose --profile sandbox up -d
-```
-
-`SANDBOX_URL=http://sandbox:8080` matches the compose service. Unset → the tool is skipped.
+For a local JVM run there is no sandbox container, so point `SANDBOX_URL` at one yourself or leave it commented.
 
 Tuning (all optional):
 

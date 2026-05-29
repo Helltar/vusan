@@ -31,15 +31,19 @@ cp .env.example .env
 
 ### Docker
 
+Brings up the bot and the code sandbox; the Python `runCode` tool works out of the box, since `.env.example` ships with `SANDBOX_URL` set:
+
 ```bash
 docker compose up -d
 ```
 
-To also enable the code sandbox (Python `runCode` tool), bring up its container and set `SANDBOX_URL` — see [code sandbox](docs/configuration.md#code-sandbox--sandbox_url):
+To run the bot alone, comment out `SANDBOX_URL` in `.env` and start just that service:
 
 ```bash
-docker compose --profile sandbox up -d
+docker compose up -d vusan
 ```
+
+See [code sandbox](docs/configuration.md#code-sandbox--sandbox_url) for details.
 
 ### Local JVM
 
