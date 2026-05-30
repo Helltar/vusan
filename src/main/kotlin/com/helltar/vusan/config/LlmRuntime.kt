@@ -70,6 +70,6 @@ fun resolveLlmRuntime(config: LlmProviderConfig): LlmRuntime =
                                 LLMCapability.OpenAIEndpoint.Completions
                             )
                     ),
-                chatParams = LLMParams()
+                chatParams = OpenAIChatParams(parallelToolCalls = false)
             )
     }

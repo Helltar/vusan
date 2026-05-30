@@ -3,11 +3,12 @@ package com.helltar.vusan.agent
 import ai.koog.agents.core.agent.AIAgent
 import ai.koog.agents.core.agent.config.AIAgentConfig
 import ai.koog.agents.core.agent.entity.AIAgentGraphStrategy
+import ai.koog.agents.core.dsl.builder.node
 import ai.koog.agents.core.dsl.builder.strategy
-import ai.koog.agents.core.dsl.extension.nodeExecuteTools
-import ai.koog.agents.core.dsl.extension.nodeLLMRequest
-import ai.koog.agents.core.dsl.extension.nodeLLMSendToolResults
-import ai.koog.agents.core.dsl.extension.onToolCalls
+import ai.koog.agents.core.dsl.extension.*
+import ai.koog.agents.core.environment.ReceivedToolResult
+import ai.koog.agents.core.environment.ToolResultKind
+import ai.koog.agents.core.tools.ToolRegistry
 import ai.koog.agents.features.eventHandler.feature.EventHandler
 import ai.koog.prompt.dsl.prompt
 import ai.koog.prompt.executor.model.PromptExecutor
@@ -15,6 +16,7 @@ import ai.koog.prompt.llm.LLModel
 import ai.koog.prompt.message.Message
 import ai.koog.prompt.message.MessagePart
 import ai.koog.prompt.params.LLMParams
+import ai.koog.serialization.JSONObject
 import com.helltar.vusan.agent.history.ChatRole
 import com.helltar.vusan.agent.history.PromptHistory
 import com.helltar.vusan.outbox.BotOutbox
@@ -71,6 +73,7 @@ class AgentFactory(
                                 args = turn.content,
                                 id = checkNotNull(turn.toolCallId) { "TOOL_CALL row without toolCallId" }
                             )
+
                         ChatRole.TOOL_RESULT ->
                             toolResult(
                                 tool = checkNotNull(turn.toolName) { "TOOL_RESULT row without toolName" },
@@ -145,27 +148,70 @@ class AgentFactory(
 private val vusanSingleRunStrategy: AIAgentGraphStrategy<String, String> =
     strategy<String, String>("single_run") {
         val nodeCallLLM by nodeLLMRequest()
-        val nodeExecuteTool by nodeExecuteTools()
+
+        val nodeExecuteTool by node<ToolCalls, ReceivedToolResults>("executeValidToolCalls") { toolCalls ->
+            ReceivedToolResults(
+                toolCalls.toolCalls.map { call ->
+                    val missing = call.missingRequiredArgs(llm.toolRegistry)
+
+                    if (missing.isEmpty())
+                        environment.executeTool(call)
+                    else
+                        garbledToolCallResult(call, missing)
+                }
+            )
+        }
+
         val nodeSendToolResult by nodeLLMSendToolResults()
 
         edge(nodeStart forwardTo nodeCallLLM)
         edge(nodeCallLLM forwardTo nodeExecuteTool onToolCalls { true })
         edge(
             nodeCallLLM forwardTo nodeFinish
-                onCondition { msg -> msg.parts.none { it is MessagePart.Tool.Call } }
-                transformed { msg -> msg.assistantTextOrEmpty() }
+                    onCondition { msg -> msg.parts.none { it is MessagePart.Tool.Call } }
+                    transformed { msg -> msg.assistantTextOrEmpty() }
         )
         edge(nodeExecuteTool forwardTo nodeSendToolResult)
         edge(nodeSendToolResult forwardTo nodeExecuteTool onToolCalls { true })
         edge(
             nodeSendToolResult forwardTo nodeFinish
-                onCondition { msg -> msg.parts.none { it is MessagePart.Tool.Call } }
-                transformed { msg -> msg.assistantTextOrEmpty() }
+                    onCondition { msg -> msg.parts.none { it is MessagePart.Tool.Call } }
+                    transformed { msg -> msg.assistantTextOrEmpty() }
         )
     }
 
 private fun Message.Assistant.assistantTextOrEmpty(): String =
     parts.filterIsInstance<MessagePart.Text>().joinToString("\n") { it.text }
+
+// Flaky OpenAI-compatible models garble parallel tool calls: sibling calls in the same batch arrive
+// with empty `{}` args. Required args declared by the tool that the call omitted entirely.
+private fun MessagePart.Tool.Call.missingRequiredArgs(registry: ToolRegistry): List<String> {
+    val required = registry.getToolOrNull(tool)?.descriptor?.requiredParameters.orEmpty()
+    if (required.isEmpty()) return emptyList()
+    val provided = runCatching { argsJson.keys }.getOrDefault(emptySet())
+    return required.map { it.name }.filterNot { it in provided }
+}
+
+// Synthesize a ValidationError result for a garbled call instead of handing it to the executor,
+// which would throw a reflection exception that Koog logs as an ERROR with a full stack trace. This
+// still satisfies the tool_call id (keeping the follow-up LLM request well-formed) and tells the
+// model to reissue a complete call.
+private fun garbledToolCallResult(call: MessagePart.Tool.Call, missing: List<String>): ReceivedToolResult {
+    val names = missing.joinToString(", ")
+
+    return ReceivedToolResult(
+        id = call.id,
+        tool = call.tool,
+        toolArgs = JSONObject(emptyMap()),
+        toolDescription = null,
+        output = "Tool `${call.tool}` was called without required argument(s): $names. " +
+                "Reissue it as a single, complete call with all required arguments.",
+        resultKind = ToolResultKind.ValidationError(
+            IllegalArgumentException("Missing required argument(s): $names")
+        ),
+        result = null
+    )
+}
 
 private val LOCAL_DATE_TIME = DateTimeFormatter.ofPattern("yyyy-MM-dd'T'HH:mm:ss")
 private val DAY_OF_WEEK = DateTimeFormatter.ofPattern("EEEE")
