@@ -3,7 +3,7 @@ package com.helltar.vusan.tools.tgchannel
 import ai.koog.agents.core.tools.annotations.LLMDescription
 import ai.koog.agents.core.tools.annotations.Tool
 import ai.koog.agents.core.tools.reflect.ToolSet
-import com.helltar.vusan.tools.common.limitTo
+import com.helltar.vusan.common.limitTo
 import com.helltar.vusan.tools.common.suspendToolGuard
 
 private const val MAX_POST_TEXT_CHARS = 800

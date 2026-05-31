@@ -1,6 +1,7 @@
 package com.helltar.vusan.telegram
 
 import com.helltar.vusan.common.rethrowIfCancellation
+import com.helltar.vusan.common.xmlBlock
 import com.helltar.vusan.config.OpenAiSttConfig
 import com.helltar.vusan.stt.OpenAiWhisperClient
 import dev.inmo.tgbotapi.bot.TelegramBot
@@ -96,5 +97,4 @@ private fun extensionFor(mimeType: String?, default: String): String =
         else -> default
     }
 
-internal fun wrapAudioTranscript(text: String): String =
-    "<audio_transcript>\n${text.trim()}\n</audio_transcript>"
+internal fun wrapAudioTranscript(text: String): String = xmlBlock("audio_transcript", text)

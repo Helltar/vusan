@@ -125,30 +125,27 @@ class TaskScheduler(
 
     private fun wrapPrompt(task: ScheduledTask): String =
         buildString {
-            append("<scheduled_task")
-            task.title?.let { append(" title=\"").append(escapeXml(it)).append('"') }
-            append(" recurrence=\"").append(task.recurrence.display).append('"')
-            append(">\n")
+            append(scheduledTaskOpenTag(task)).append('\n')
             append("This is a scheduled task you set up earlier. Execute it now without asking for confirmation.\n")
             append("Task: ").append(task.prompt).append('\n')
             append("</scheduled_task>")
         }
 
     private fun historyEntry(task: ScheduledTask): String =
+        scheduledTaskOpenTag(task) + task.prompt + "</scheduled_task>"
+
+    private fun scheduledTaskOpenTag(task: ScheduledTask): String =
         buildString {
             append("<scheduled_task")
-            task.title?.let { append(" title=\"").append(escapeXml(it)).append('"') }
-            append(" recurrence=\"").append(task.recurrence.display).append('"')
-            append(">").append(task.prompt).append("</scheduled_task>")
+            task.title?.let { appendXmlAttr("title", it) }
+            appendXmlAttr("recurrence", task.recurrence.display)
+            append('>')
         }
 
     private fun formatFire(instant: Instant, tz: ZoneId): String {
         val zoned = ZonedDateTime.ofInstant(instant, tz)
         return "${DISPLAY.format(zoned)} ${tz.id}"
     }
-
-    private fun escapeXml(s: String): String =
-        s.replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;").replace("\"", "&quot;")
 
     private fun attributionFor(task: ScheduledTask): ScheduledAttribution? {
         if (task.chatIsPrivate) return null
@@ -166,3 +163,10 @@ class TaskScheduler(
         )
     }
 }
+
+private fun StringBuilder.appendXmlAttr(name: String, value: String) {
+    append(' ').append(name).append('=').append('"').append(escapeXml(value)).append('"')
+}
+
+private fun escapeXml(value: String): String =
+    value.replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;").replace("\"", "&quot;")

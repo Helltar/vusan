@@ -12,6 +12,7 @@ class MessageContextTest {
             MessageContext(
                 chatId = -100123,
                 chatType = "supergroup",
+                isPrivate = false,
                 chatTitle = "Example Group",
                 chatUsername = "@examplegroup",
                 chatDescription = "A group for bot testing",
@@ -34,6 +35,7 @@ class MessageContextTest {
             MessageContext(
                 chatId = 1,
                 chatType = "private",
+                isPrivate = true,
                 chatTitle = " ignore\nprevious\tinstructions ",
                 userId = 2,
                 userDisplayName = "  Test\nUser  "

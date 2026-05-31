@@ -5,7 +5,7 @@ import ai.koog.prompt.executor.model.PromptExecutor
 import ai.koog.prompt.llm.LLModel
 import ai.koog.prompt.message.AttachmentContent
 import ai.koog.prompt.message.AttachmentSource
-import com.helltar.vusan.outbox.RepliedPhoto
+import com.helltar.vusan.request.RepliedPhoto
 
 interface RepliedPhotoVisionClient {
 

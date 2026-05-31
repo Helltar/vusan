@@ -1,7 +1,7 @@
 package com.helltar.vusan.telegram
 
 import com.helltar.vusan.agent.MessageContext
-import com.helltar.vusan.agent.collapseWhitespaceAndCap
+import com.helltar.vusan.common.collapseWhitespaceAndCap
 import dev.inmo.tgbotapi.types.ReplyInfo
 import dev.inmo.tgbotapi.types.StickerType
 import dev.inmo.tgbotapi.types.chat.BusinessChat
@@ -60,6 +60,7 @@ internal fun CommonMessage<*>.toMessageContext(chatDescription: String?): Messag
     return MessageContext(
         chatId = chatIdLong,
         chatType = chat.promptType(),
+        isPrivate = isPrivateChat,
         chatTitle = chat.titleOrDisplayName(),
         chatUsername = (chat as? UsernameChat)?.username?.full,
         chatDescription = chatDescription,
@@ -155,6 +156,14 @@ internal fun Sticker.readableFormat(): String =
         isAnimated -> "animated"
         isVideo -> "video"
         else -> "static"
+    }
+
+internal fun describeIncomingSticker(sticker: Sticker): String =
+    buildString {
+        appendLine("User sent a Telegram sticker instead of text.")
+        appendLine("Sticker emoji: ${sticker.emoji ?: "unknown"}.")
+        appendLine("Sticker pack: ${sticker.stickerSetName?.string ?: "unknown"}.")
+        append("Sticker kind: ${sticker.readableFormat()} ${sticker.type.readableName()} sticker.")
     }
 
 private fun MutableList<String>.addMetadata(key: String, value: String) {

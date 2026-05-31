@@ -1,6 +1,6 @@
 package com.helltar.vusan.tools.vision
 
-import com.helltar.vusan.outbox.RepliedPhoto
+import com.helltar.vusan.request.RepliedPhoto
 import kotlinx.coroutines.runBlocking
 import kotlin.test.Test
 import kotlin.test.assertContentEquals

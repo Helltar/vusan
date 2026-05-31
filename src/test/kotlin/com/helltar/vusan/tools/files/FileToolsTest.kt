@@ -17,7 +17,7 @@ class FileToolsTest {
         val content = "# Article\n\nHello world."
         tools.sendFile(content = content, filename = "article.md")
 
-        val doc = assertIs<BotOutput.Document>(outbox.pending.single())
+        val doc = assertIs<BotOutput.Document>(outbox.pending.single().output)
         assertEquals("article.md", doc.filename)
         assertEquals(content, doc.bytes.toString(Charsets.UTF_8))
     }
@@ -29,7 +29,7 @@ class FileToolsTest {
 
         tools.sendFile(content = "x", filename = "../../etc/pa<ss>wd:bad?.txt")
 
-        val doc = assertIs<BotOutput.Document>(outbox.pending.single())
+        val doc = assertIs<BotOutput.Document>(outbox.pending.single().output)
         assertEquals("pa_ss_wd_bad_.txt", doc.filename)
     }
 
@@ -40,7 +40,7 @@ class FileToolsTest {
 
         tools.sendFile(content = "x", filename = "...")
 
-        val doc = assertIs<BotOutput.Document>(outbox.pending.single())
+        val doc = assertIs<BotOutput.Document>(outbox.pending.single().output)
         assertEquals("file.txt", doc.filename)
     }
 }

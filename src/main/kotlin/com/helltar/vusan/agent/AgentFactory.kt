@@ -20,7 +20,7 @@ import ai.koog.serialization.JSONObject
 import com.helltar.vusan.agent.history.ChatRole
 import com.helltar.vusan.agent.history.PromptHistory
 import com.helltar.vusan.outbox.BotOutbox
-import com.helltar.vusan.outbox.RequestContext
+import com.helltar.vusan.request.RequestContext
 import com.helltar.vusan.tools.ToolRegistryFactory
 import java.time.ZoneId
 import java.time.ZonedDateTime

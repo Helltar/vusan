@@ -3,7 +3,7 @@ package com.helltar.vusan.tools.tasks
 import ai.koog.agents.core.tools.annotations.LLMDescription
 import ai.koog.agents.core.tools.annotations.Tool
 import ai.koog.agents.core.tools.reflect.ToolSet
-import com.helltar.vusan.outbox.RequestContext
+import com.helltar.vusan.request.RequestContext
 import com.helltar.vusan.tasks.*
 import com.helltar.vusan.tools.common.suspendToolGuard
 import java.time.Instant

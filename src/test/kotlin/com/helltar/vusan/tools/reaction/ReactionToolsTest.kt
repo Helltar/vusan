@@ -2,7 +2,7 @@ package com.helltar.vusan.tools.reaction
 
 import com.helltar.vusan.outbox.BotOutbox
 import com.helltar.vusan.outbox.BotOutput
-import com.helltar.vusan.outbox.RequestContext
+import com.helltar.vusan.request.RequestContext
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFalse
@@ -21,7 +21,7 @@ class ReactionToolsTest {
 
         val result = tools.setReaction(emoji = "❤")
 
-        assertEquals(BotOutput.Reaction(messageId = 100L, emoji = "❤"), outbox.pending.single())
+        assertEquals(BotOutput.Reaction(messageId = 100L, emoji = "❤"), outbox.pending.single().output)
         assertTrue("❤" in result)
         assertTrue("100" in result)
     }
@@ -33,7 +33,7 @@ class ReactionToolsTest {
 
         tools.setReaction(emoji = "🔥")
 
-        assertEquals(BotOutput.Reaction(messageId = 100L, emoji = "🔥"), outbox.pending.single())
+        assertEquals(BotOutput.Reaction(messageId = 100L, emoji = "🔥"), outbox.pending.single().output)
     }
 
     @Test
@@ -43,7 +43,7 @@ class ReactionToolsTest {
 
         tools.setReaction(emoji = "🔥", targetRepliedMessage = true)
 
-        assertEquals(BotOutput.Reaction(messageId = 55L, emoji = "🔥"), outbox.pending.single())
+        assertEquals(BotOutput.Reaction(messageId = 55L, emoji = "🔥"), outbox.pending.single().output)
     }
 
     @Test
@@ -64,7 +64,7 @@ class ReactionToolsTest {
 
         tools.setReaction(emoji = "👍", targetRepliedMessage = true, messageId = 999L)
 
-        assertEquals(BotOutput.Reaction(messageId = 999L, emoji = "👍"), outbox.pending.single())
+        assertEquals(BotOutput.Reaction(messageId = 999L, emoji = "👍"), outbox.pending.single().output)
     }
 
     @Test
@@ -74,7 +74,7 @@ class ReactionToolsTest {
 
         tools.setReaction(emoji = "👍", messageId = 999L)
 
-        assertEquals(BotOutput.Reaction(messageId = 999L, emoji = "👍"), outbox.pending.single())
+        assertEquals(BotOutput.Reaction(messageId = 999L, emoji = "👍"), outbox.pending.single().output)
     }
 
     @Test
@@ -84,7 +84,7 @@ class ReactionToolsTest {
 
         tools.setReaction(emoji = "  🎉  ")
 
-        assertEquals("🎉", (outbox.pending.single() as BotOutput.Reaction).emoji)
+        assertEquals("🎉", (outbox.pending.single().output as BotOutput.Reaction).emoji)
     }
 
     @Test
@@ -138,7 +138,7 @@ class ReactionToolsTest {
 
         tools.setReaction(emoji = "❤️")
 
-        assertEquals("❤", (outbox.pending.single() as BotOutput.Reaction).emoji)
+        assertEquals("❤", (outbox.pending.single().output as BotOutput.Reaction).emoji)
     }
 
     @Test

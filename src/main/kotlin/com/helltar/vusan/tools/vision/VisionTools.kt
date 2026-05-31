@@ -3,7 +3,7 @@ package com.helltar.vusan.tools.vision
 import ai.koog.agents.core.tools.annotations.LLMDescription
 import ai.koog.agents.core.tools.annotations.Tool
 import ai.koog.agents.core.tools.reflect.ToolSet
-import com.helltar.vusan.outbox.RepliedPhoto
+import com.helltar.vusan.request.RepliedPhoto
 import com.helltar.vusan.tools.common.suspendToolGuard
 
 private const val MAX_IMAGE_BYTES = 8 * 1024 * 1024

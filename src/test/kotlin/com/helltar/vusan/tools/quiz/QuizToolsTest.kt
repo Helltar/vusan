@@ -31,7 +31,7 @@ class QuizToolsTest {
                 explanation = "Because a piano has keys, not door keys.",
                 isAnonymous = false
             ),
-            outbox.pending.single()
+            outbox.pending.single().output
         )
     }
 

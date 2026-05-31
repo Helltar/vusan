@@ -30,7 +30,7 @@ class PollToolsTest {
                 isAnonymous = false,
                 allowsMultipleAnswers = true
             ),
-            outbox.pending.single()
+            outbox.pending.single().output
         )
     }
 
@@ -44,7 +44,7 @@ class PollToolsTest {
             options = listOf("Tea", "Coffee")
         )
 
-        val poll = outbox.pending.single() as BotOutput.Poll
+        val poll = outbox.pending.single().output as BotOutput.Poll
 
         assertEquals(true, poll.isAnonymous)
         assertEquals(false, poll.allowsMultipleAnswers)

@@ -1,11 +1,11 @@
 package com.helltar.vusan.telegram
 
-import com.helltar.vusan.agent.collapseWhitespaceAndCap
-import com.helltar.vusan.outbox.RepliedPhoto
+import com.helltar.vusan.common.collapseWhitespaceAndCap
+import com.helltar.vusan.common.xmlBlock
+import com.helltar.vusan.request.RepliedPhoto
 import dev.inmo.tgbotapi.bot.TelegramBot
 import dev.inmo.tgbotapi.extensions.api.files.downloadFile
 import dev.inmo.tgbotapi.types.ReplyInfo
-import dev.inmo.tgbotapi.types.files.Sticker
 import dev.inmo.tgbotapi.types.files.TelegramMediaFile
 import dev.inmo.tgbotapi.types.message.abstracts.CommonMessage
 import dev.inmo.tgbotapi.types.message.abstracts.ContentMessage
@@ -76,18 +76,6 @@ internal fun CommonMessage<*>.repliedPhotoOrNull(bot: TelegramBot): RepliedPhoto
     )
 }
 
-internal fun describeIncomingSticker(sticker: Sticker): String {
-    val emoji = sticker.emoji
-    val packName = sticker.stickerSetName?.string ?: "unknown"
-
-    return buildString {
-        appendLine("User sent a Telegram sticker instead of text.")
-        appendLine("Sticker emoji: ${emoji ?: "unknown"}.")
-        appendLine("Sticker pack: $packName.")
-        append("Sticker kind: ${sticker.readableFormat()} ${sticker.type.readableName()} sticker.")
-    }
-}
-
 internal fun formatAgentInput(currentMessageText: String, repliedMessage: RepliedMessageSummary): String =
     buildReplyContextPrompt(currentMessageText, repliedMessage, includePhotoHint = true) { it }
 
@@ -115,17 +103,8 @@ private fun buildReplyContextPrompt(
             appendLine("- visual content: call `describeRepliedPhoto` if the user's request depends on what is visible or on OCR.")
         }
 
-        repliedMessage.textOrCaption?.let {
-            appendLine("<text_caption>")
-            appendLine(transformText(it))
-            appendLine("</text_caption>")
-        }
-
-        repliedMessage.transcript?.let {
-            appendLine("<audio_transcript>")
-            appendLine(transformText(it))
-            appendLine("</audio_transcript>")
-        }
+        repliedMessage.textOrCaption?.let { appendLine(xmlBlock("text_caption", transformText(it))) }
+        repliedMessage.transcript?.let { appendLine(xmlBlock("audio_transcript", transformText(it))) }
 
         appendLine("</reply_context>")
         appendLine()

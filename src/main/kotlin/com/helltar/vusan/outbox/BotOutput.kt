@@ -2,9 +2,6 @@ package com.helltar.vusan.outbox
 
 sealed class BotOutput {
 
-    var toPrivate: Boolean = false
-        internal set
-
     open val acceptsCaption: Boolean
         get() = false
 

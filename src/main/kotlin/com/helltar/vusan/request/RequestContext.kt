@@ -1,4 +1,4 @@
-package com.helltar.vusan.outbox
+package com.helltar.vusan.request
 
 data class RequestContext(
     val chatId: Long,

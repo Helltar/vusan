@@ -6,7 +6,7 @@ import ai.koog.prompt.llm.LLModel
 import com.helltar.vusan.agent.history.ChatHistoryRepository
 import com.helltar.vusan.config.AppConfig
 import com.helltar.vusan.outbox.BotOutbox
-import com.helltar.vusan.outbox.RequestContext
+import com.helltar.vusan.request.RequestContext
 import com.helltar.vusan.tasks.TasksRepository
 import com.helltar.vusan.tools.currency.CurrencyTools
 import com.helltar.vusan.tools.currency.ExchangeRateClient
