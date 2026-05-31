@@ -1,8 +1,11 @@
 package com.helltar.vusan.agent
 
+import com.helltar.vusan.common.collapseWhitespaceAndCap
+
 data class MessageContext(
     val chatId: Long,
     val chatType: String,
+    val isPrivate: Boolean,
     val chatTitle: String? = null,
     val chatUsername: String? = null,
     val chatDescription: String? = null,
@@ -29,12 +32,6 @@ data class MessageContext(
 
         return lines.joinToString("\n")
     }
-}
-
-internal fun String.collapseWhitespaceAndCap(maxLength: Int): String? {
-    val normalized = trim().replace(Regex("\\s+"), " ")
-    if (normalized.isBlank()) return null
-    return if (normalized.length <= maxLength) normalized else normalized.take(maxLength - 1).trimEnd() + "..."
 }
 
 private fun String.asMetadataValue(maxLength: Int = 160): String? = collapseWhitespaceAndCap(maxLength)

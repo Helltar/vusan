@@ -4,12 +4,14 @@ import com.helltar.vusan.agent.history.ChatHistoryRepository
 import com.helltar.vusan.agent.history.ChatRole
 import com.helltar.vusan.agent.history.ChatTurn
 import com.helltar.vusan.agent.history.summarizeForPrompt
+import com.helltar.vusan.common.collapseWhitespaceAndCap
 import com.helltar.vusan.common.rethrowIfCancellation
 import com.helltar.vusan.i18n.Messages
 import com.helltar.vusan.outbox.BotOutbox
 import com.helltar.vusan.outbox.BotOutput
-import com.helltar.vusan.outbox.RepliedPhoto
-import com.helltar.vusan.outbox.RequestContext
+import com.helltar.vusan.outbox.OutboxItem
+import com.helltar.vusan.request.RepliedPhoto
+import com.helltar.vusan.request.RequestContext
 import io.github.oshai.kotlinlogging.KotlinLogging
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
@@ -27,7 +29,7 @@ data class AgentRequest(
 )
 
 data class AgentResult(
-    val outputs: List<BotOutput>,
+    val outputs: List<OutboxItem>,
     val comment: String?,
     val commentToPrivate: Boolean = false,
     val historyTurns: List<ChatTurn> = emptyList()
@@ -70,7 +72,7 @@ class AgentRunner(private val agentFactory: AgentFactory, private val history: C
                 repliedPhoto = request.repliedPhoto,
                 senderUsername = request.messageContext?.userUsername,
                 senderDisplayName = request.messageContext?.userDisplayName,
-                chatIsPrivate = request.messageContext?.chatType == "private",
+                chatIsPrivate = request.messageContext?.isPrivate ?: false,
             )
 
         val outbox = BotOutbox()
@@ -124,17 +126,17 @@ class AgentRunner(private val agentFactory: AgentFactory, private val history: C
 private const val TOOL_ARGS_MAX_CHARS = 1_000
 private const val TOOL_OUTPUT_MAX_CHARS = 4_000
 
-private fun extractFinalComment(answer: String, outputs: List<BotOutput>): String? =
+private fun extractFinalComment(answer: String, outputs: List<OutboxItem>): String? =
     answer.trim()
         .takeIf { it.isNotEmpty() }
         ?.takeUnless {
-            outputs.any { it is BotOutput.Voice || it is BotOutput.VideoNote || it is BotOutput.Text || it is BotOutput.Reaction }
+            outputs.any { it.output is BotOutput.Voice || it.output is BotOutput.VideoNote || it.output is BotOutput.Text || it.output is BotOutput.Reaction }
         }
 
-private fun assistantTextForHistory(outputs: List<BotOutput>, comment: String?): String? {
+private fun assistantTextForHistory(outputs: List<OutboxItem>, comment: String?): String? {
     val parts =
         buildList {
-            addAll(outputs.filterIsInstance<BotOutput.Text>().map { it.text })
+            addAll(outputs.mapNotNull { it.output as? BotOutput.Text }.map { it.text })
             comment?.let(::add)
         }
 

@@ -1,6 +1,6 @@
 package com.helltar.vusan.agent.history
 
-import com.helltar.vusan.agent.collapseWhitespaceAndCap
+import com.helltar.vusan.common.collapseWhitespaceAndCap
 
 private const val PROMPT_RECENT_TURNS = 12
 private const val MAX_SUMMARY_CHARS = 2_000

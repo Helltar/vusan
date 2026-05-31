@@ -19,7 +19,8 @@ Telegram ──► telegram/ ──► agent/ ──► tools/ ──► externa
 | `telegram/`    | Telegram I/O. Receives updates (text/voice/audio/sticker), filters by allowlist, normalizes input, and delivers agent results back — including markdown/document/text fallbacks and reply anchoring. |
 | `agent/`       | Agent orchestration on top of Koog. `AgentRunner` serializes per-user turns; `AgentFactory` builds the `AIAgent` (system prompt + history + tools). `agent/history/` summarizes and persists chat turns. |
 | `tools/`       | Agent-callable tools, one subpackage per capability (search, voice, vision, scheduled tasks, …). `ToolRegistryFactory` owns the clients and builds a per-request registry. See [features.md](features.md). |
-| `outbox/`      | The output model. `BotOutput` is the sealed set of things the bot can send (text, photo, voice, poll, reaction, …); `BotOutbox` is the per-request queue tools write into. |
+| `outbox/`      | The output model. `BotOutput` is the (immutable) sealed set of things the bot can send (text, photo, voice, poll, reaction, …); `BotOutbox` is the per-request queue tools write into, holding each `BotOutput` as an `OutboxItem` that captures its private-routing decision. |
+| `request/`     | The request-scoped input model shared across layers: `RequestContext` (chat/user/message ids and sender info that tools see) and `RepliedPhoto` (a replied-to photo tools can lazily download). |
 | `tasks/`       | Scheduled-task subsystem: storage, recurrence math, and the background `TaskScheduler`. |
 | `infra/`       | Cross-cutting infrastructure: the SQLite/Exposed `Db` singleton and the Ktor `Http` client. |
 | `config/`      | `.env` parsing (`AppConfig`) and LLM provider/model resolution (`LlmRuntime`). |

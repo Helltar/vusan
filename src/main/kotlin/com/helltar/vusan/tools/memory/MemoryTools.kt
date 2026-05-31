@@ -4,7 +4,7 @@ import ai.koog.agents.core.tools.annotations.LLMDescription
 import ai.koog.agents.core.tools.annotations.Tool
 import ai.koog.agents.core.tools.reflect.ToolSet
 import com.helltar.vusan.agent.history.ChatHistoryRepository
-import com.helltar.vusan.outbox.RequestContext
+import com.helltar.vusan.request.RequestContext
 import com.helltar.vusan.tools.common.suspendToolGuard
 
 @Suppress("unused")

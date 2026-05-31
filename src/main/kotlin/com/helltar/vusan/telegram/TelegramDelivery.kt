@@ -4,6 +4,7 @@ import com.helltar.vusan.agent.AgentResult
 import com.helltar.vusan.common.rethrowIfCancellation
 import com.helltar.vusan.i18n.Messages
 import com.helltar.vusan.outbox.BotOutput
+import com.helltar.vusan.outbox.OutboxItem
 import dev.inmo.tgbotapi.bot.TelegramBot
 import dev.inmo.tgbotapi.bot.exceptions.ReplyMessageNotFoundException
 import dev.inmo.tgbotapi.bot.exceptions.RequestException
@@ -109,7 +110,7 @@ class TelegramDelivery(private val bot: TelegramBot) {
             val target = privateTarget ?: if (replyUnavailable) currentChatTarget else originTarget
             val deliveryTarget = if (routedToPrivate || replyUnavailable) target.withoutReply() else target
 
-            when (deliverItem(item, deliveryTarget, caption, routedToPrivate, currentChatTarget)) {
+            when (deliverItem(item.output, deliveryTarget, caption, routedToPrivate, currentChatTarget)) {
                 ItemDeliveryOutcome.Ok -> Unit
                 ItemDeliveryOutcome.ReplyMissing -> replyUnavailable = true
                 ItemDeliveryOutcome.PrivateBlocked -> if (!privateBlockedNoticed) {
@@ -126,9 +127,9 @@ class TelegramDelivery(private val bot: TelegramBot) {
         return replyUnavailable
     }
 
-    private fun singleCaptionIndex(outputs: List<BotOutput>): Int {
-        if (outputs.any { it is BotOutput.Text }) return -1
-        val captionables = outputs.withIndex().filter { it.value.acceptsCaption }
+    private fun singleCaptionIndex(outputs: List<OutboxItem>): Int {
+        if (outputs.any { it.output is BotOutput.Text }) return -1
+        val captionables = outputs.withIndex().filter { it.value.output.acceptsCaption }
         return if (captionables.size == 1) captionables.single().index else -1
     }
 

@@ -4,7 +4,7 @@ import kotlin.test.Test
 import kotlin.test.assertFalse
 import kotlin.test.assertTrue
 
-class IncomingPromptTest {
+class ReplyContextTest {
 
     @Test
     fun `formatAgentInput includes replied text before current user message`() {

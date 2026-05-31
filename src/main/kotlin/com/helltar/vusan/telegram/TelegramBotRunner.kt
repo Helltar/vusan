@@ -5,7 +5,7 @@ import com.helltar.vusan.agent.AgentRunner
 import com.helltar.vusan.agent.history.ChatHistoryRepository
 import com.helltar.vusan.common.rethrowIfCancellation
 import com.helltar.vusan.i18n.Messages
-import com.helltar.vusan.outbox.RepliedPhoto
+import com.helltar.vusan.request.RepliedPhoto
 import dev.inmo.kslog.common.KSLog
 import dev.inmo.tgbotapi.bot.TelegramBot
 import dev.inmo.tgbotapi.extensions.api.bot.getMe

@@ -41,7 +41,7 @@ class SandboxToolsTest {
             tools(outbox, """{"ok":true,"stdout":"chart done\n","files":[{"name":"chart.png","base64":"$base64"}]}""")
                 .runCode("print('chart done')")
 
-        val photo = assertIs<BotOutput.Photo>(outbox.pending.single())
+        val photo = assertIs<BotOutput.Photo>(outbox.pending.single().output)
         assertEquals("chart.png", photo.filename)
         assertContentEquals(pngBytes, photo.bytes)
 
@@ -59,7 +59,7 @@ class SandboxToolsTest {
             """{"ok":true,"files":[{"name":"a.png","base64":"$b64"},{"name":"b.png","base64":"$b64"}]}"""
         ).runCode("...")
 
-        val group = assertIs<BotOutput.PhotoGroup>(outbox.pending.single())
+        val group = assertIs<BotOutput.PhotoGroup>(outbox.pending.single().output)
         assertEquals(2, group.photos.size)
     }
 
@@ -70,7 +70,7 @@ class SandboxToolsTest {
         val b64 = java.util.Base64.getEncoder().encodeToString(bytes)
         tools(outbox, """{"ok":true,"files":[{"name":"lorenz.gif","base64":"$b64"}]}""").runCode("...")
 
-        val animation = assertIs<BotOutput.Animation>(outbox.pending.single())
+        val animation = assertIs<BotOutput.Animation>(outbox.pending.single().output)
         assertEquals("lorenz.gif", animation.filename)
         assertContentEquals(bytes, animation.bytes)
     }
@@ -81,7 +81,7 @@ class SandboxToolsTest {
         val b64 = java.util.Base64.getEncoder().encodeToString("a,b\n1,2".toByteArray())
         tools(outbox, """{"ok":true,"files":[{"name":"data.csv","base64":"$b64"}]}""").runCode("...")
 
-        val doc = assertIs<BotOutput.Document>(outbox.pending.single())
+        val doc = assertIs<BotOutput.Document>(outbox.pending.single().output)
         assertEquals("data.csv", doc.filename)
     }
 

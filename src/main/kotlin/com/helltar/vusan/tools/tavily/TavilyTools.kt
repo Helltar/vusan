@@ -5,7 +5,7 @@ import ai.koog.agents.core.tools.annotations.Tool
 import ai.koog.agents.core.tools.reflect.ToolSet
 import com.helltar.vusan.outbox.BotOutput
 import com.helltar.vusan.outbox.BotOutbox
-import com.helltar.vusan.tools.common.limitTo
+import com.helltar.vusan.common.limitTo
 import com.helltar.vusan.tools.common.suspendToolGuard
 
 private const val MAX_SNIPPET_CHARS = 300

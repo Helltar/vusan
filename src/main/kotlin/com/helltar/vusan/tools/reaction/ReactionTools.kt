@@ -5,7 +5,7 @@ import ai.koog.agents.core.tools.annotations.Tool
 import ai.koog.agents.core.tools.reflect.ToolSet
 import com.helltar.vusan.outbox.BotOutbox
 import com.helltar.vusan.outbox.BotOutput
-import com.helltar.vusan.outbox.RequestContext
+import com.helltar.vusan.request.RequestContext
 import com.helltar.vusan.tools.common.suspendToolGuard
 
 // Free reaction emoji accepted by Telegram for bot-set reactions. Telegram's

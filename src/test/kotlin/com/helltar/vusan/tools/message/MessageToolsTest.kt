@@ -18,7 +18,7 @@ class MessageToolsTest {
         val result = tools.sendMessage("   Hello, world!   ")
 
         assertTrue(result.startsWith("Delivered"))
-        val text = assertIs<BotOutput.Text>(outbox.pending.single())
+        val text = assertIs<BotOutput.Text>(outbox.pending.single().output)
         assertEquals("Hello, world!", text.text)
     }
 
@@ -33,7 +33,7 @@ class MessageToolsTest {
 
         assertEquals(
             listOf("first", "second", "third"),
-            outbox.pending.map { assertIs<BotOutput.Text>(it).text }
+            outbox.pending.map { assertIs<BotOutput.Text>(it.output).text }
         )
     }
 
@@ -56,8 +56,9 @@ class MessageToolsTest {
         tools.replyInPrivateMessages()
         tools.sendMessage("secret")
 
-        val text = assertIs<BotOutput.Text>(outbox.pending.single())
-        assertTrue(text.toPrivate)
+        val item = outbox.pending.single()
+        assertIs<BotOutput.Text>(item.output)
+        assertTrue(item.toPrivate)
         assertTrue(outbox.redirectToPrivate)
     }
 }
