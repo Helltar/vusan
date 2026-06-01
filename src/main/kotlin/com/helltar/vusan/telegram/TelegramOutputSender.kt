@@ -10,6 +10,7 @@ import dev.inmo.tgbotapi.extensions.api.send.media.sendAnimation
 import dev.inmo.tgbotapi.extensions.api.send.media.sendAudio
 import dev.inmo.tgbotapi.extensions.api.send.media.sendDocument
 import dev.inmo.tgbotapi.extensions.api.send.media.sendPhoto
+import dev.inmo.tgbotapi.extensions.api.send.media.sendVideo
 import dev.inmo.tgbotapi.extensions.api.send.media.sendVideoNote
 import dev.inmo.tgbotapi.extensions.api.send.media.sendVisualMediaGroup
 import dev.inmo.tgbotapi.extensions.api.send.media.sendVoice
@@ -45,6 +46,7 @@ internal object TelegramOutputSender {
             is BotOutput.Document -> sendDocument(bot, chatId, replyParameters, item, caption)
             is BotOutput.Audio -> sendAudio(bot, chatId, replyParameters, item, caption)
             is BotOutput.Voice -> sendVoice(bot, chatId, replyParameters, item, caption)
+            is BotOutput.Video -> sendVideo(bot, chatId, replyParameters, item, caption)
             is BotOutput.VideoNote -> sendVideoNote(bot, chatId, replyParameters, item)
             is BotOutput.Quiz -> sendQuiz(bot, chatId, replyParameters, item)
             is BotOutput.Poll -> sendPoll(bot, chatId, replyParameters, item)
@@ -270,6 +272,43 @@ internal object TelegramOutputSender {
         )
     }
 
+    private suspend fun sendVideo(
+        bot: TelegramBot,
+        chatId: ChatIdentifier,
+        replyParameters: ReplyParameters?,
+        video: BotOutput.Video,
+        caption: String?
+    ) {
+        val fullCaption = buildVideoCaption(video, caption)
+        val file = { video.bytes.asMultipartFile(video.filename) }
+
+        sendMediaWithDocumentFallback(
+            bot = bot,
+            chatId = chatId,
+            replyParameters = replyParameters,
+            mediaLabel = "sendVideo",
+            bytes = video.bytes,
+            filename = video.filename,
+            caption = fullCaption,
+            onTextFallback = { fullCaption?.let { sendText(bot, chatId, it, replyParameters) } },
+            send = {
+                sendWithMarkdownFallback { parseMode ->
+                    bot.sendVideo(
+                        chatId = chatId,
+                        video = file(),
+                        text = fullCaption,
+                        parseMode = fullCaption?.let { parseMode },
+                        duration = video.durationSeconds?.toLong(),
+                        width = video.width,
+                        height = video.height,
+                        supportsStreaming = true,
+                        replyParameters = replyParameters
+                    )
+                }
+            }
+        )
+    }
+
     private suspend fun sendVideoNote(
         bot: TelegramBot,
         chatId: ChatIdentifier,
@@ -418,7 +457,11 @@ internal object TelegramOutputSender {
 
 private fun buildAudioCaption(audio: BotOutput.Audio, caption: String?): String? {
     val link = audio.trackUrl?.let { "[${trackLinkLabel(it)}]($it)" }
+    return listOfNotNull(caption, link).joinToString("\n").ifBlank { null }
+}
 
+private fun buildVideoCaption(video: BotOutput.Video, caption: String?): String? {
+    val link = video.sourceUrl?.let { "[${trackLinkLabel(it)}]($it)" }
     return listOfNotNull(caption, link).joinToString("\n").ifBlank { null }
 }
 

@@ -11,6 +11,8 @@ internal data class YtDlpInfo(
     val uploader: String? = null,
     val channel: String? = null,
     val duration: Double? = null,
+    val width: Int? = null,
+    val height: Int? = null,
     @SerialName("webpage_url") val webpageUrl: String? = null,
     @SerialName("filesize_approx") val filesizeApprox: Long? = null
 )
@@ -35,10 +37,20 @@ class YtDlpTrack(
     val sourceUrl: String?
 )
 
-sealed class YtDlpResult {
-    class Track(val value: YtDlpTrack) : YtDlpResult()
-    object NotFound : YtDlpResult()
-    class TooLarge(val sizeBytes: Long) : YtDlpResult()
-    object AuthRequired : YtDlpResult()
-    class Failure(val reason: String) : YtDlpResult()
+class YtDlpVideo(
+    val bytes: ByteArray,
+    val title: String,
+    val uploader: String?,
+    val durationSeconds: Int?,
+    val width: Int?,
+    val height: Int?,
+    val sourceUrl: String?
+)
+
+sealed class YtDlpResult<out T> {
+    class Success<T>(val value: T) : YtDlpResult<T>()
+    object NotFound : YtDlpResult<Nothing>()
+    class TooLarge(val sizeBytes: Long) : YtDlpResult<Nothing>()
+    object AuthRequired : YtDlpResult<Nothing>()
+    class Failure(val reason: String) : YtDlpResult<Nothing>()
 }

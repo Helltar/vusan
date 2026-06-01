@@ -41,6 +41,17 @@ sealed class BotOutput {
         val size: Int? = null
     ) : BotOutput()
 
+    class Video(
+        val bytes: ByteArray,
+        val filename: String,
+        val durationSeconds: Int? = null,
+        val width: Int? = null,
+        val height: Int? = null,
+        val sourceUrl: String? = null
+    ) : BotOutput() {
+        override val acceptsCaption: Boolean get() = true
+    }
+
     class Audio(
         val bytes: ByteArray,
         val filename: String,

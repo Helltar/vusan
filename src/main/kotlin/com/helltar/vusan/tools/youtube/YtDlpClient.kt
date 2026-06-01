@@ -26,11 +26,13 @@ class YtDlpClient(
     private companion object {
         const val SEARCH_RESULT_LIMIT = 5
         const val FORMAT_UNAVAILABLE_MARKER = "Requested format is not available"
+        const val VIDEO_MAX_FILE_SIZE_MB = 50
+        val VIDEO_HEIGHT_CAPS = listOf(720, 480, 360)
         val json = Json { ignoreUnknownKeys = true }
         val log = KotlinLogging.logger {}
     }
 
-    private data class DownloadAttempt(val result: YtDlpResult, val retryable: Boolean = false)
+    private data class DownloadAttempt<out T>(val result: YtDlpResult<T>, val retryable: Boolean = false)
     private data class YtDlpSearchCandidate(val url: String)
 
     private val diagnosticsMutex = Mutex()
@@ -53,27 +55,59 @@ class YtDlpClient(
         }
     }
 
-    suspend fun downloadTrack(query: String, maxFileSizeMb: Int = 45): YtDlpResult = withContext(Dispatchers.IO) {
+    suspend fun downloadTrack(query: String, maxFileSizeMb: Int = 45): YtDlpResult<YtDlpTrack> = withContext(Dispatchers.IO) {
         require(query.isNotBlank()) { "Query must not be blank" }
         require(maxFileSizeMb in 1..50) { "maxFileSizeMb must be between 1 and 50" }
 
-        val workDir = Files.createTempDirectory("ytdlp-")
+        val workDir = Files.createTempDirectory("ytdlp-audio-")
 
         try {
-            runDownload(workDir, query, maxFileSizeMb)
+            runAudioDownload(workDir, query, maxFileSizeMb)
         } finally {
             workDir.toFile().deleteRecursively()
         }
     }
 
-    private suspend fun runDownload(workDir: Path, query: String, maxFileSizeMb: Int): YtDlpResult {
+    suspend fun downloadVideo(query: String, maxFileSizeMb: Int = VIDEO_MAX_FILE_SIZE_MB): YtDlpResult<YtDlpVideo> = withContext(Dispatchers.IO) {
+        require(query.isNotBlank()) { "Query must not be blank" }
+        require(maxFileSizeMb in 1..50) { "maxFileSizeMb must be between 1 and 50" }
+
+        val workDir = Files.createTempDirectory("ytdlp-video-")
+
+        try {
+            runVideoDownload(workDir, query, maxFileSizeMb)
+        } finally {
+            workDir.toFile().deleteRecursively()
+        }
+    }
+
+    private suspend fun runAudioDownload(workDir: Path, query: String, maxFileSizeMb: Int): YtDlpResult<YtDlpTrack> =
+        downloadFromCandidates(
+            kind = "audio",
+            workDir = workDir,
+            query = query,
+            maxFileSizeMb = maxFileSizeMb,
+            resolveCandidates = { searchCandidates(query) },
+            describeSuccess = { "title=[${it.title}] performer=[${it.performer}]" },
+            downloadCandidate = { attemptDir, url -> downloadAudioCandidate(attemptDir, url, query, maxFileSizeMb) }
+        )
+
+    private suspend fun <T> downloadFromCandidates(
+        kind: String,
+        workDir: Path,
+        query: String,
+        maxFileSizeMb: Int,
+        resolveCandidates: suspend () -> List<YtDlpSearchCandidate>,
+        describeSuccess: (T) -> String,
+        downloadCandidate: suspend (attemptDir: Path, url: String) -> DownloadAttempt<T>
+    ): YtDlpResult<T> {
         val diagnostics = getRuntimeDiagnostics()
 
-        log.info { "yt-dlp track download start query=[${query.take(120)}] maxFileSizeMb=$maxFileSizeMb $diagnostics ${authDiagnostics()}" }
+        log.info { "yt-dlp $kind download start query=[${query.take(120)}] maxFileSizeMb=$maxFileSizeMb $diagnostics ${authDiagnostics()}" }
 
-        val candidates = searchCandidates(query)
+        val candidates = resolveCandidates()
 
-        log.info { "yt-dlp search returned ${candidates.size} candidate(s) for query=[${query.take(120)}]" }
+        log.info { "yt-dlp $kind resolved ${candidates.size} candidate(s) for query=[${query.take(120)}]" }
 
         if (candidates.isEmpty()) {
             log.warn { "yt-dlp found no YouTube candidates for query=[${query.take(120)}]" }
@@ -83,15 +117,15 @@ class YtDlpClient(
         val retryableFailures = mutableListOf<YtDlpResult.Failure>()
 
         candidates.forEachIndexed { index, candidate ->
-            val label = "candidate ${index + 1}/${candidates.size}"
+            val label = "$kind candidate ${index + 1}/${candidates.size}"
             log.info { "yt-dlp trying $label url=[${candidate.url}] query=[${query.take(120)}]" }
 
             val attemptDir = Files.createDirectory(workDir.resolve("candidate-$index"))
-            val attempt = downloadCandidate(attemptDir, candidate.url, query, maxFileSizeMb)
+            val attempt = downloadCandidate(attemptDir, candidate.url)
 
             when (val result = attempt.result) {
-                is YtDlpResult.Track -> {
-                    log.info { "yt-dlp $label succeeded title=[${result.value.title}] performer=[${result.value.performer}]" }
+                is YtDlpResult.Success -> {
+                    log.info { "yt-dlp $label succeeded ${describeSuccess(result.value)}" }
                     return result
                 }
 
@@ -128,6 +162,42 @@ class YtDlpClient(
         return retryableFailures.lastOrNull() ?: YtDlpResult.NotFound
     }
 
+    private suspend fun <T> runMediaDownload(
+        command: List<String>,
+        outputFile: Path,
+        url: String,
+        query: String,
+        maxFileSizeMb: Int,
+        buildPayload: (bytes: ByteArray, info: YtDlpInfo) -> T
+    ): DownloadAttempt<T> {
+        val commandResult = runCommand(command)
+
+        if (commandResult.timedOut) {
+            log.warn { "yt-dlp download timed out after ${timeoutSeconds}s url=[$url] query=[${query.take(120)}]" }
+            return DownloadAttempt(YtDlpResult.Failure("yt-dlp timed out after ${timeoutSeconds}s"))
+        }
+
+        if (commandResult.exitCode != 0) {
+            return classifyDownloadError(commandResult, url, query, maxFileSizeMb)
+        }
+
+        val info = parseInfoJson(commandResult.stdout)
+            ?: return DownloadAttempt(YtDlpResult.Failure("yt-dlp produced no metadata"))
+
+        if (!Files.exists(outputFile)) {
+            return DownloadAttempt(YtDlpResult.Failure("yt-dlp finished but no output file at $outputFile"))
+        }
+
+        val bytes = withContext(Dispatchers.IO) { Files.readAllBytes(outputFile) }
+
+        if (bytes.size > maxFileSizeMb * 1024 * 1024) {
+            log.warn { "yt-dlp download exceeds Telegram limit url=[$url] bytes=${bytes.size} maxFileSizeMb=$maxFileSizeMb" }
+            return DownloadAttempt(YtDlpResult.TooLarge(sizeBytes = bytes.size.toLong()))
+        }
+
+        return DownloadAttempt(YtDlpResult.Success(buildPayload(bytes, info)))
+    }
+
     private suspend fun searchCandidates(query: String): List<YtDlpSearchCandidate> {
         val command =
             buildList {
@@ -159,9 +229,7 @@ class YtDlpClient(
         return candidates
     }
 
-    private suspend fun downloadCandidate(workDir: Path, url: String, query: String, maxFileSizeMb: Int): DownloadAttempt {
-        val outputTemplate = workDir.resolve("audio.%(ext)s").toString()
-
+    private suspend fun downloadAudioCandidate(workDir: Path, url: String, query: String, maxFileSizeMb: Int): DownloadAttempt<YtDlpTrack> {
         val command =
             buildList {
                 add(ytDlpPath)
@@ -172,49 +240,92 @@ class YtDlpClient(
                 addAll(listOf("--max-filesize", "${maxFileSizeMb}M"))
                 add("--print-json")
                 addAll(authArgs())
-                addAll(listOf("-o", outputTemplate))
+                addAll(listOf("-o", workDir.resolve("audio.%(ext)s").toString()))
                 add(url)
             }
 
-        val commandResult = runCommand(command)
-
-        if (commandResult.timedOut) {
-            log.warn { "yt-dlp download timed out after ${timeoutSeconds}s url=[$url] query=[${query.take(120)}]" }
-            return DownloadAttempt(YtDlpResult.Failure("yt-dlp timed out after ${timeoutSeconds}s"))
-        }
-
-        if (commandResult.exitCode != 0) {
-            return classifyDownloadError(commandResult, url, query, maxFileSizeMb)
-        }
-
-        val info = parseInfoJson(commandResult.stdout) ?: return DownloadAttempt(YtDlpResult.Failure("yt-dlp produced no metadata"))
-        val audioFile = workDir.resolve("audio.m4a")
-
-        if (!Files.exists(audioFile)) {
-            return DownloadAttempt(YtDlpResult.Failure("yt-dlp finished but no audio file at $audioFile"))
-        }
-
-        val bytes = Files.readAllBytes(audioFile)
-
-        if (bytes.size > maxFileSizeMb * 1024 * 1024) {
-            log.warn { "yt-dlp downloaded file exceeds Telegram limit url=[$url] bytes=${bytes.size} maxFileSizeMb=$maxFileSizeMb" }
-            return DownloadAttempt(YtDlpResult.TooLarge(sizeBytes = bytes.size.toLong()))
-        }
-
-        return DownloadAttempt(
-            YtDlpResult.Track(
-                YtDlpTrack(
-                    bytes = bytes,
-                    title = info.track ?: info.title ?: "Unknown",
-                    performer = info.artist ?: info.uploader ?: info.channel ?: "Unknown",
-                    durationSeconds = info.duration?.toInt(),
-                    sourceUrl = info.webpageUrl
-                )
+        return runMediaDownload(command, workDir.resolve("audio.m4a"), url, query, maxFileSizeMb) { bytes, info ->
+            YtDlpTrack(
+                bytes = bytes,
+                title = info.track ?: info.title ?: "Unknown",
+                performer = info.artist ?: info.uploader ?: info.channel ?: "Unknown",
+                durationSeconds = info.duration?.toInt(),
+                sourceUrl = info.webpageUrl
             )
-        )
+        }
     }
 
-    private suspend fun classifyDownloadError(commandResult: YtDlpCommandResult, url: String, query: String, maxFileSizeMb: Int): DownloadAttempt {
+    private suspend fun runVideoDownload(workDir: Path, query: String, maxFileSizeMb: Int): YtDlpResult<YtDlpVideo> =
+        downloadFromCandidates(
+            kind = "video",
+            workDir = workDir,
+            query = query,
+            maxFileSizeMb = maxFileSizeMb,
+            resolveCandidates = { videoCandidates(query) },
+            describeSuccess = { "title=[${it.title}] height=${it.height}" },
+            downloadCandidate = { attemptDir, url -> downloadVideoCandidate(attemptDir, url, query, maxFileSizeMb) }
+        )
+
+    private suspend fun downloadVideoCandidate(workDir: Path, url: String, query: String, maxFileSizeMb: Int): DownloadAttempt<YtDlpVideo> {
+        var lastTooLarge: YtDlpResult.TooLarge? = null
+
+        VIDEO_HEIGHT_CAPS.forEach { cap ->
+            val capDir = Files.createDirectory(workDir.resolve("h$cap"))
+            val attempt = downloadVideoAtHeight(capDir, url, query, maxFileSizeMb, cap)
+            val result = attempt.result
+
+            if (result is YtDlpResult.TooLarge) {
+                lastTooLarge = result
+                log.info { "yt-dlp video too large at height<=$cap url=[$url] sizeBytes=${result.sizeBytes}, stepping resolution down" }
+            } else {
+                // Success, or a non-size error (auth/extract/format) that a lower resolution would not fix.
+                return attempt
+            }
+        }
+
+        return DownloadAttempt(lastTooLarge ?: YtDlpResult.TooLarge(sizeBytes = maxFileSizeMb.toLong() * 1024 * 1024))
+    }
+
+    private suspend fun downloadVideoAtHeight(workDir: Path, url: String, query: String, maxFileSizeMb: Int, heightCap: Int): DownloadAttempt<YtDlpVideo> {
+        val command =
+            buildList {
+                add(ytDlpPath)
+                add("--ignore-config")
+                addAll(listOf("--format", "bv*[height<=$heightCap]+ba/b[height<=$heightCap]/b"))
+                addAll(listOf("--format-sort", "res:$heightCap,vcodec:h264,ext:mp4:m4a"))
+                addAll(listOf("--merge-output-format", "mp4", "--remux-video", "mp4"))
+                addAll(listOf("--no-playlist", "--no-warnings"))
+                addAll(listOf("--max-filesize", "${maxFileSizeMb}M"))
+                add("--print-json")
+                addAll(authArgs())
+                addAll(listOf("-o", workDir.resolve("video.%(ext)s").toString()))
+                add(url)
+            }
+
+        return runMediaDownload(command, workDir.resolve("video.mp4"), url, query, maxFileSizeMb) { bytes, info ->
+            YtDlpVideo(
+                bytes = bytes,
+                title = info.title ?: "Unknown",
+                uploader = info.uploader ?: info.channel,
+                durationSeconds = info.duration?.toInt(),
+                width = info.width,
+                height = info.height,
+                sourceUrl = info.webpageUrl
+            )
+        }
+    }
+
+    private suspend fun videoCandidates(query: String): List<YtDlpSearchCandidate> {
+        val trimmed = query.trim()
+
+        if (trimmed.startsWith("http://") || trimmed.startsWith("https://")) {
+            return listOf(YtDlpSearchCandidate(trimmed))
+        }
+
+        return searchCandidates(query)
+    }
+
+    private suspend fun classifyDownloadError(commandResult: YtDlpCommandResult, url: String, query: String, maxFileSizeMb: Int): DownloadAttempt<Nothing> {
         val combined = commandResult.stderr.ifBlank { commandResult.stdout }
 
         return when {

@@ -31,6 +31,7 @@ import com.helltar.vusan.tools.vision.VisionTools
 import com.helltar.vusan.tools.voice.ElevenLabsTtsClient
 import com.helltar.vusan.tools.voice.VoiceTools
 import com.helltar.vusan.tools.youtube.YouTubeMusicTools
+import com.helltar.vusan.tools.youtube.YouTubeVideoTools
 import com.helltar.vusan.tools.youtube.YtDlpClient
 import io.github.oshai.kotlinlogging.KotlinLogging
 import io.ktor.client.*
@@ -71,6 +72,7 @@ class ToolRegistryFactory(
             tools(currency)
             tools(telegramChannel)
             tools(YouTubeMusicTools(ytDlpClient, outbox))
+            tools(YouTubeVideoTools(ytDlpClient, outbox))
             tools(FileTools(outbox))
             tools(QuizTools(outbox))
             tools(PollTools(outbox))

@@ -3,9 +3,10 @@ package com.helltar.vusan.tools.youtube
 internal object YouTubeMusicToolDescriptions {
 
     const val PLAY_FULL_TRACK =
-        "Find a full song on YouTube and send it as an audio file to the chat. " +
-                "Use when the user asks to play, download, or send a complete track — for example " +
+        "Find a song on YouTube and send it to the chat as an audio file — audio only, no picture. " +
+                "Use when the user wants to listen to music: to play, download, or send a track — for example " +
                 """"play Imagine Dragons Believer", "play the full song", "send me the audio of ...". """ +
+                "If the user wants to watch the clip (anything visual), use the YouTube video tool instead. " +
                 "After calling this tool, write a short natural comment for the user; the audio will be sent automatically."
 
     const val PLAY_FULL_TRACK_QUERY =

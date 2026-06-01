@@ -28,7 +28,7 @@ class YouTubeMusicTools(private val client: YtDlpClient, private val outbox: Bot
             is YtDlpResult.AuthRequired -> "YouTube is asking yt-dlp to sign in. Configure `YT_DLP_COOKIES_FILE` in the bot environment."
             is YtDlpResult.Failure -> "Failed to fetch track: ${result.reason}"
 
-            is YtDlpResult.Track -> {
+            is YtDlpResult.Success -> {
                 val track = result.value
                 val filename = "${track.performer} - ${track.title}".sanitizeFilename().ifBlank { "track" } + ".m4a"
 
