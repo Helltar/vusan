@@ -6,11 +6,11 @@ internal object VoiceToolDescriptions {
 
     const val SPEAK_WITH_VOICE =
         "Speaks the given text aloud and sends it as a Telegram voice message via the ElevenLabs `eleven_v3` TTS model. " +
-                "Use when the user asks to speak, say, voice, or pronounce something out loud (`say it out loud`, `send a voice message`, `read this aloud`). " +
+                """Use when the user asks to speak, say, voice, or pronounce something out loud ("say it out loud", "send a voice message", "read this aloud"). """ +
 
                 "By default, send plain prose with NO audio tags — the default voice already sounds natural and unwanted tags make it theatrical. " +
                 "Add `eleven_v3` audio tags in square brackets only when the user explicitly directs the delivery: " +
-                "asks for a manner (`say it quietly`, `like a pirate`, `sarcastically`), scripts the line themselves " +
+                """asks for a manner ("say it quietly", "like a pirate", "sarcastically"), scripts the line themselves """ +
                 """(`start quietly with "hi", then loudly "how are you?"`), or asks for a clearly performative read (poem, dialogue, dramatic scene). """ +
 
                 "When tags are warranted, the set is open-ended — invent whatever bracketed cue fits (emotion, volume, non-verbal reactions, " +

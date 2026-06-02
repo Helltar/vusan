@@ -18,7 +18,7 @@ internal object TavilyToolDescriptions {
 
     const val WEB_SEARCH_TIME_RANGE =
         "Time window for results. Allowed values: `day`, `week`, `month`, `year`. " +
-                "Use when the user asks about something time-sensitive (`recent`, `today`, `this week`, `latest`). Leave empty for no time filter."
+                """Use when the user asks about something time-sensitive ("recent", "today", "this week", "latest"). Leave empty for no time filter."""
 
     const val SEARCH_IMAGES =
         "Search the web for images and send them to the chat. " +
