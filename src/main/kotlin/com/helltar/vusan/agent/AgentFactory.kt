@@ -58,7 +58,6 @@ class AgentFactory(
         val seededPrompt =
             prompt(id = "vusan-user-$userId", params = chatParams) {
                 system(systemPromptFor(persona ?: DEFAULT_PERSONA))
-                system(currentTimeSystemBlock())
                 messageContext?.toSystemPrompt()?.let(::system)
 
                 history.summary?.let(::assistant)
@@ -83,6 +82,8 @@ class AgentFactory(
                             )
                     }
                 }
+
+                system(currentTimeSystemBlock())
             }
 
         val agentConfig =
