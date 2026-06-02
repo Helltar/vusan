@@ -11,7 +11,7 @@ private const val MAX_FILENAME_CHARS = 120
 internal fun String.collapseWhitespaceAndCap(maxLength: Int): String? {
     val normalized = trim().replace(Regex("\\s+"), " ")
     if (normalized.isBlank()) return null
-    return if (normalized.length <= maxLength) normalized else normalized.take(maxLength - 1).trimEnd() + ELLIPSIS
+    return if (normalized.length <= maxLength) normalized else normalized.takeWholeChars(maxLength - 1).trimEnd() + ELLIPSIS
 }
 
 /** Truncates to [maxChars] (appending an ellipsis when truncated) while preserving inner whitespace. */
@@ -19,8 +19,8 @@ fun String.limitTo(maxChars: Int): String =
     when {
         maxChars <= 0 -> ""
         length <= maxChars -> this
-        maxChars <= ELLIPSIS.length -> take(maxChars)
-        else -> take(maxChars - ELLIPSIS.length).trimEnd() + ELLIPSIS
+        maxChars <= ELLIPSIS.length -> takeWholeChars(maxChars)
+        else -> takeWholeChars(maxChars - ELLIPSIS.length).trimEnd() + ELLIPSIS
     }
 
 /** Wraps [content] in an XML-style `<tag>…</tag>` block, trimming surrounding whitespace. */
@@ -32,4 +32,17 @@ fun String.sanitizeFilename(): String =
         .substringAfterLast('\\')
         .replace(Regex("""[<>:"|?*\p{Cntrl}]"""), "_")
         .trim('_', '.', ' ')
-        .take(MAX_FILENAME_CHARS)
+        .takeWholeChars(MAX_FILENAME_CHARS)
+
+/**
+ * Like [take], but never cuts through the middle of a UTF-16 surrogate pair. Slicing an emoji
+ * (or any astral-plane character) in half leaves a dangling surrogate; the resulting string is
+ * malformed UTF-16 and throws [java.nio.charset.MalformedInputException] when later encoded to
+ * UTF-8 — e.g. when the prompt is serialized into an HTTP request body. Dropping the trailing
+ * high surrogate keeps every truncation result valid.
+ */
+private fun String.takeWholeChars(n: Int): String {
+    val end = n.coerceIn(0, length)
+    val safeEnd = if (end in 1 until length && this[end - 1].isHighSurrogate()) end - 1 else end
+    return substring(0, safeEnd)
+}
