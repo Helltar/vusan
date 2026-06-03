@@ -185,7 +185,7 @@ internal class TelegramBotRunner(
         log.warn {
             buildString {
                 append("denied (not in allowlist): chat=$chatIdLong user=${senderIdOrNull()} type=${content.contentTypeName()}")
-                senderUsernameOrNull()?.let { append(" username=[@$it]") }
+                senderUsernameOrNull()?.let { append(" username=[$it]") }
                 senderDisplayNameOrNull()?.let { append(" name=[$it]") }
                 textSnippetOrNull()?.collapseWhitespaceAndCap(LOG_PROMPT_MAX_CHARS)?.let { append(" text=[$it]") }
             }
@@ -237,7 +237,7 @@ internal class TelegramBotRunner(
         log.info {
             buildString {
                 append("incoming $inputKind: chat=$chatId user=$userId msg=${message.messageIdLong}")
-                message.senderUsernameOrNull()?.let { append(" username=[@$it]") }
+                message.senderUsernameOrNull()?.let { append(" username=[$it]") }
                 message.senderDisplayNameOrNull()?.let { append(" name=[$it]") }
                 replyToMessageId?.let { append(" replyTo=$it") }
                 if (repliedPhoto != null) append(" repliedPhoto=true")
