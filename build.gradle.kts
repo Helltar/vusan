@@ -21,7 +21,7 @@ dependencies {
 
     runtimeOnly(libs.sqlite.jdbc)
     implementation(libs.exposed.jdbc)
-    implementation(libs.exposed.kotlin.datetime)
+    implementation(libs.exposed.java.time)
 
     implementation(libs.ktor.client.core)
     implementation(libs.ktor.client.cio)

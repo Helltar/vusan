@@ -1,12 +1,11 @@
 package com.helltar.vusan.infra.tables
 
 import com.helltar.vusan.agent.history.ChatRole
-import org.jetbrains.exposed.v1.core.dao.id.IntIdTable
-import org.jetbrains.exposed.v1.datetime.timestampWithTimeZone
-import java.time.OffsetDateTime
-import java.time.ZoneOffset
+import org.jetbrains.exposed.v1.core.dao.id.LongIdTable
+import org.jetbrains.exposed.v1.javatime.timestamp
+import java.time.Instant
 
-object ChatMessagesTable : IntIdTable("chat_messages") {
+object ChatMessagesTable : LongIdTable("chat_messages") {
 
     val userId = long("user_id").index()
     val role = enumerationByName<ChatRole>("role", 16)
@@ -14,5 +13,5 @@ object ChatMessagesTable : IntIdTable("chat_messages") {
     val toolCallId = varchar("tool_call_id", 128).nullable()
     val toolName = varchar("tool_name", 128).nullable()
     val toolIsError = bool("tool_is_error").nullable()
-    val createdAt = timestampWithTimeZone("created_at").clientDefault { OffsetDateTime.now(ZoneOffset.UTC) }
+    val createdAt = timestamp("created_at").clientDefault { Instant.now() }
 }
