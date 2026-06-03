@@ -12,6 +12,7 @@ import com.helltar.vusan.outbox.BotOutput
 import com.helltar.vusan.outbox.OutboxItem
 import com.helltar.vusan.request.RepliedPhoto
 import com.helltar.vusan.request.RequestContext
+import com.helltar.vusan.tools.message.MessageTools
 import io.github.oshai.kotlinlogging.KotlinLogging
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
@@ -145,7 +146,9 @@ private fun assistantTextForHistory(outputs: List<OutboxItem>, comment: String?)
 
 // Tools whose payload is fully duplicated by the assistant text row. Skipping their
 // TOOL_CALL/TOOL_RESULT pair avoids storing (and replaying) the same content twice.
-private val TEXT_DUPLICATING_TOOLS = setOf("sendMessage")
+// Koog registers each tool under its function name (no tool here sets @Tool(customName)),
+// so a function reference stays in sync with the registered name across renames.
+private val TEXT_DUPLICATING_TOOLS = setOf(MessageTools::sendMessage.name)
 
 private fun buildHistoryTurns(
     userEntry: String,
