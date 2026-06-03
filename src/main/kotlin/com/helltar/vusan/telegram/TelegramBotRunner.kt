@@ -3,6 +3,7 @@ package com.helltar.vusan.telegram
 import com.helltar.vusan.agent.AgentRequest
 import com.helltar.vusan.agent.AgentRunner
 import com.helltar.vusan.agent.history.ChatHistoryRepository
+import com.helltar.vusan.common.collapseWhitespaceAndCap
 import com.helltar.vusan.common.rethrowIfCancellation
 import com.helltar.vusan.i18n.Messages
 import com.helltar.vusan.request.RepliedPhoto
@@ -12,11 +13,7 @@ import dev.inmo.tgbotapi.extensions.api.bot.getMe
 import dev.inmo.tgbotapi.extensions.api.chat.get.getChat
 import dev.inmo.tgbotapi.extensions.api.send.withTypingAction
 import dev.inmo.tgbotapi.extensions.behaviour_builder.buildBehaviourWithLongPolling
-import dev.inmo.tgbotapi.extensions.behaviour_builder.triggers_handling.onAudio
-import dev.inmo.tgbotapi.extensions.behaviour_builder.triggers_handling.onCommand
-import dev.inmo.tgbotapi.extensions.behaviour_builder.triggers_handling.onSticker
-import dev.inmo.tgbotapi.extensions.behaviour_builder.triggers_handling.onText
-import dev.inmo.tgbotapi.extensions.behaviour_builder.triggers_handling.onVoice
+import dev.inmo.tgbotapi.extensions.behaviour_builder.triggers_handling.*
 import dev.inmo.tgbotapi.types.chat.ExtendedPublicChat
 import dev.inmo.tgbotapi.types.message.abstracts.CommonMessage
 import dev.inmo.tgbotapi.types.message.content.AudioContent
@@ -37,6 +34,7 @@ internal class TelegramBotRunner(
 
     private companion object {
         const val MENTION_ONLY_PROMPT = "User mentioned the bot with no text. Respond naturally and briefly."
+        const val LOG_PROMPT_MAX_CHARS = 300
         val log = KotlinLogging.logger {}
     }
 
@@ -170,11 +168,22 @@ internal class TelegramBotRunner(
         if (!shouldHandle(this, botProfile.userId, botProfile.username)) return false
 
         if (!isAllowed()) {
-            log.warn { "denied: chat=$chatIdLong user=${senderIdOrNull()} not in allowlist" }
+            logDenied()
             return false
         }
 
         return true
+    }
+
+    private fun CommonMessage<*>.logDenied() {
+        log.warn {
+            buildString {
+                append("denied (not in allowlist): chat=$chatIdLong user=${senderIdOrNull()} type=${content.contentTypeName()}")
+                senderUsernameOrNull()?.let { append(" username=[@$it]") }
+                senderDisplayNameOrNull()?.let { append(" name=[$it]") }
+                textSnippetOrNull()?.collapseWhitespaceAndCap(LOG_PROMPT_MAX_CHARS)?.let { append(" text=[$it]") }
+            }
+        }
     }
 
     private fun CommonMessage<*>.isAllowed(): Boolean {
@@ -218,6 +227,17 @@ internal class TelegramBotRunner(
                 log.warn { "skipping $inputKind message without sender user (chat=$chatId)" }
                 return
             }
+
+        log.info {
+            buildString {
+                append("incoming $inputKind: chat=$chatId user=$userId msg=${message.messageIdLong}")
+                message.senderUsernameOrNull()?.let { append(" username=[@$it]") }
+                message.senderDisplayNameOrNull()?.let { append(" name=[$it]") }
+                replyToMessageId?.let { append(" replyTo=$it") }
+                if (repliedPhoto != null) append(" repliedPhoto=true")
+                append(" text=[${agentInput.collapseWhitespaceAndCap(LOG_PROMPT_MAX_CHARS).orEmpty()}]")
+            }
+        }
 
         bot.withTypingAction(chatId.toChatIdentifier()) {
             try {

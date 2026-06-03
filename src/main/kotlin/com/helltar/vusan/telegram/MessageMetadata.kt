@@ -24,6 +24,7 @@ import dev.inmo.tgbotapi.types.files.Sticker
 import dev.inmo.tgbotapi.types.files.TelegramMediaFile
 import dev.inmo.tgbotapi.types.message.abstracts.CommonMessage
 import dev.inmo.tgbotapi.types.message.abstracts.OptionallyFromUserMessage
+import dev.inmo.tgbotapi.types.message.content.TextedContent
 
 private const val MAX_METADATA_VALUE_CHARS = 500
 
@@ -47,6 +48,9 @@ internal fun CommonMessage<*>.senderDisplayNameOrNull(): String? =
 
 internal fun CommonMessage<*>.senderUsernameOrNull(): String? =
     (this as? OptionallyFromUserMessage)?.from?.username?.full
+
+internal fun CommonMessage<*>.textSnippetOrNull(): String? =
+    (content as? TextedContent)?.text
 
 internal fun CommonMessage<*>.replyAuthorIdOrNull(): Long? =
     ((replyInfo as? ReplyInfo.Internal)?.message as? OptionallyFromUserMessage)?.from?.id?.chatId?.long
