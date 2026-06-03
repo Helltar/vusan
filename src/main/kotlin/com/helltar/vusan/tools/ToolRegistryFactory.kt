@@ -82,7 +82,7 @@ class ToolRegistryFactory(
                 TaskTools(
                     repo = tasks,
                     context = context,
-                    maxTasksPerUser = config.maxTasksPerUser,
+                    maxTasksPerUser = config.maxTasksPerUser
                 )
             )
 

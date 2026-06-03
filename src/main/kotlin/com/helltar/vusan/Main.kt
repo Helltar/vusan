@@ -88,7 +88,7 @@ fun main() = runBlocking {
                 delivery = delivery,
                 history = history,
                 pollInterval = Duration.ofSeconds(config.taskPollIntervalSeconds),
-                maxLateness = Duration.ofMinutes(config.taskMaxLatenessMinutes),
+                maxLateness = Duration.ofMinutes(config.taskMaxLatenessMinutes)
             )
 
         log.info { "Starting Vusan: provider=[${llm.providerLabel}] model=[${llm.model.id}]" }
