@@ -6,6 +6,7 @@ import com.helltar.vusan.agent.history.ChatTurn
 import com.helltar.vusan.agent.history.summarizeForPrompt
 import com.helltar.vusan.common.collapseWhitespaceAndCap
 import com.helltar.vusan.common.rethrowIfCancellation
+import com.helltar.vusan.i18n.Language
 import com.helltar.vusan.i18n.Messages
 import com.helltar.vusan.outbox.BotOutbox
 import com.helltar.vusan.outbox.BotOutput
@@ -26,7 +27,8 @@ data class AgentRequest(
     val prompt: String,
     val historyEntry: String,
     val messageContext: MessageContext? = null,
-    val repliedPhoto: RepliedPhoto? = null
+    val repliedPhoto: RepliedPhoto? = null,
+    val language: Language = Language.DEFAULT
 )
 
 data class AgentResult(
@@ -48,7 +50,7 @@ class AgentRunner(private val agentFactory: AgentFactory, private val history: C
         val lock = acquireLock(request.userId)
 
         if (!lock.tryLock()) {
-            return AgentResult(outputs = emptyList(), comment = Messages.busyReply)
+            return AgentResult(outputs = emptyList(), comment = Messages.of(request.language).busyReply)
         }
 
         try {
@@ -74,6 +76,7 @@ class AgentRunner(private val agentFactory: AgentFactory, private val history: C
                 senderUsername = request.messageContext?.userUsername,
                 senderDisplayName = request.messageContext?.userDisplayName,
                 chatIsPrivate = request.messageContext?.isPrivate ?: false,
+                language = request.language
             )
 
         val outbox = BotOutbox()
@@ -104,7 +107,7 @@ class AgentRunner(private val agentFactory: AgentFactory, private val history: C
             } catch (e: Throwable) {
                 e.rethrowIfCancellation()
                 log.error(e) { "agent.run failed for chat=${request.chatId} user=${request.userId}" }
-                return AgentResult(outputs = emptyList(), comment = Messages.fallbackErrorReply)
+                return AgentResult(outputs = emptyList(), comment = Messages.of(request.language).fallbackErrorReply)
             }
 
         val outputs = outbox.pending

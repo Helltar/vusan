@@ -20,7 +20,7 @@ private val DISPLAY_FORMAT = DateTimeFormatter.ofPattern("yyyy-MM-dd'T'HH:mm")
 class TaskTools(
     private val repo: TasksRepository,
     private val context: RequestContext,
-    private val maxTasksPerUser: Int,
+    private val maxTasksPerUser: Int
 ) : ToolSet {
 
     @Tool
@@ -33,7 +33,7 @@ class TaskTools(
         @LLMDescription(TaskToolDescriptions.SCHEDULE_TIMEZONE)
         timezone: String? = null,
         @LLMDescription(TaskToolDescriptions.SCHEDULE_TITLE)
-        title: String? = null,
+        title: String? = null
     ): String = suspendToolGuard {
         val userId = context.userId
 
@@ -80,6 +80,7 @@ class TaskTools(
                     creatorUsername = context.senderUsername,
                     creatorDisplayName = context.senderDisplayName,
                     chatIsPrivate = context.chatIsPrivate,
+                    language = context.language
                 )
             )
 
@@ -108,7 +109,7 @@ class TaskTools(
     @LLMDescription(TaskToolDescriptions.CANCEL_TASK)
     suspend fun cancelTask(
         @LLMDescription(TaskToolDescriptions.CANCEL_ID)
-        id: Long,
+        id: Long
     ): String = suspendToolGuard {
         val userId = context.userId
 

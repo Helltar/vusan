@@ -1,5 +1,6 @@
 package com.helltar.vusan.tasks
 
+import com.helltar.vusan.i18n.Language
 import com.helltar.vusan.infra.Db.dbTransaction
 import com.helltar.vusan.infra.tables.ScheduledTasksTable
 import org.jetbrains.exposed.v1.core.*
@@ -22,11 +23,12 @@ class TasksRepository {
                 it[title] = task.title
                 it[recurrence] = task.recurrence.serialize()
                 it[timezone] = task.timezone.id
-                it[nextFireAt] = task.nextFireAt.atOffset(ZoneOffset.UTC)
+                it[nextFireAt] = task.nextFireAt
                 it[creatorMessageId] = task.creatorMessageId
                 it[creatorUsername] = task.creatorUsername
                 it[creatorDisplayName] = task.creatorDisplayName
                 it[chatIsPrivate] = task.chatIsPrivate
+                it[language] = task.language.name
             }.value
     }
 
@@ -49,7 +51,7 @@ class TasksRepository {
     suspend fun findDue(now: Instant): List<ScheduledTask> = dbTransaction {
         ScheduledTasksTable
             .selectAll()
-            .where { (ScheduledTasksTable.enabled eq true) and (ScheduledTasksTable.nextFireAt lessEq now.atOffset(ZoneOffset.UTC)) }
+            .where { (ScheduledTasksTable.enabled eq true) and (ScheduledTasksTable.nextFireAt lessEq now) }
             .orderBy(ScheduledTasksTable.nextFireAt to SortOrder.ASC)
             .map { it.toScheduledTask() }
     }
@@ -65,7 +67,7 @@ class TasksRepository {
     suspend fun reschedule(id: Long, nextFireAt: Instant) = dbTransaction {
         ScheduledTasksTable
             .update({ ScheduledTasksTable.id eq id }) {
-                it[ScheduledTasksTable.nextFireAt] = nextFireAt.atOffset(ZoneOffset.UTC)
+                it[ScheduledTasksTable.nextFireAt] = nextFireAt
             }
     }
 
@@ -96,9 +98,10 @@ class TasksRepository {
             creatorUsername = this[ScheduledTasksTable.creatorUsername],
             creatorDisplayName = this[ScheduledTasksTable.creatorDisplayName],
             chatIsPrivate = this[ScheduledTasksTable.chatIsPrivate],
-            nextFireAt = this[ScheduledTasksTable.nextFireAt].toInstant(),
-            createdAt = this[ScheduledTasksTable.createdAt].toInstant(),
-            enabled = this[ScheduledTasksTable.enabled],
+            language = this[ScheduledTasksTable.language]?.let { runCatching { Language.valueOf(it) }.getOrNull() } ?: Language.DEFAULT,
+            nextFireAt = this[ScheduledTasksTable.nextFireAt],
+            createdAt = this[ScheduledTasksTable.createdAt],
+            enabled = this[ScheduledTasksTable.enabled]
         )
     }
 }

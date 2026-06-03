@@ -5,6 +5,7 @@ import com.helltar.vusan.agent.AgentRunner
 import com.helltar.vusan.agent.history.ChatHistoryRepository
 import com.helltar.vusan.common.collapseWhitespaceAndCap
 import com.helltar.vusan.common.rethrowIfCancellation
+import com.helltar.vusan.i18n.Language
 import com.helltar.vusan.i18n.Messages
 import com.helltar.vusan.request.RepliedPhoto
 import dev.inmo.kslog.common.KSLog
@@ -65,9 +66,12 @@ internal class TelegramBotRunner(
         }
     }
 
+    private val CommonMessage<*>.language: Language
+        get() = Language.fromCode(senderLanguageCodeOrNull())
+
     private suspend fun handleStartCommand(message: CommonMessage<TextContent>, botProfile: BotProfile) {
         if (message.isAccepted(botProfile))
-            sendReply(message, Messages.startReply)
+            sendReply(message, Messages.of(message.language).startReply)
     }
 
     private suspend fun handleTextUpdate(message: CommonMessage<TextContent>, botProfile: BotProfile) {
@@ -118,20 +122,22 @@ internal class TelegramBotRunner(
             return
         }
 
+        val messages = Messages.of(message.language)
+
         val transcript =
             when (val result = transcriber.transcribe(bot, audioInput)) {
                 is VoiceTranscriptionResult.Success -> result.text
                 is VoiceTranscriptionResult.TooLong -> {
-                    sendReply(message, Messages.voiceTooLongReply(result.durationSeconds, result.maxSeconds))
+                    sendReply(message, messages.voiceTooLongReply(result.durationSeconds, result.maxSeconds))
                     return
                 }
                 is VoiceTranscriptionResult.Empty -> {
                     log.info { "$inputKind transcription empty (chat=${message.chatIdLong}): ${result.reason}" }
-                    sendReply(message, Messages.voiceEmptyReply)
+                    sendReply(message, messages.voiceEmptyReply)
                     return
                 }
                 is VoiceTranscriptionResult.Failed -> {
-                    sendReply(message, Messages.voiceTranscriptionFailedReply)
+                    sendReply(message, messages.voiceTranscriptionFailedReply)
                     return
                 }
             }
@@ -251,7 +257,8 @@ internal class TelegramBotRunner(
                             prompt = agentInput,
                             historyEntry = historyInput,
                             messageContext = message.toMessageContext(loadChatDescription(message)),
-                            repliedPhoto = repliedPhoto
+                            repliedPhoto = repliedPhoto,
+                            language = message.language
                         )
                     )
 
@@ -265,7 +272,7 @@ internal class TelegramBotRunner(
 
                 log.error(error) { "telegram $inputKind handling failed for chat=$chatId user=$userId" }
 
-                runCatching { sendReply(message, Messages.fallbackErrorReply) }
+                runCatching { sendReply(message, Messages.of(message.language).fallbackErrorReply) }
                     .onFailure { replyError ->
                         replyError.rethrowIfCancellation()
                         log.warn(replyError) { "failed to send fallback error reply for chat=$chatId user=$userId" }

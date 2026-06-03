@@ -40,7 +40,8 @@ class TelegramDelivery(private val bot: TelegramBot) {
             result = result,
             originTarget = DeliveryTarget(chatId = message.chatIdLong, replyToMessageId = message.messageIdLong),
             currentChatTarget = DeliveryTarget(message.chatIdLong),
-            senderPrivateChatId = message.senderIdOrNull()
+            senderPrivateChatId = message.senderIdOrNull(),
+            messages = Messages.forCode(message.senderLanguageCodeOrNull())
         )
     }
 
@@ -48,18 +49,19 @@ class TelegramDelivery(private val bot: TelegramBot) {
         result: AgentResult,
         chatId: Long,
         userId: Long,
-        attribution: ScheduledAttribution? = null,
+        messages: Messages,
+        attribution: ScheduledAttribution? = null
     ) {
         val plainTarget = DeliveryTarget(chatId = chatId)
 
         if (attribution?.creatorMessageId == null) {
             attribution?.let { sendNotice(chatId, it.headerText) }
-            dispatch(result, plainTarget, plainTarget, senderPrivateChatId = userId)
+            dispatch(result, plainTarget, plainTarget, senderPrivateChatId = userId, messages = messages)
             return
         }
 
         val anchorTarget = DeliveryTarget(chatId, replyToMessageId = attribution.creatorMessageId)
-        val replyUnavailable = dispatch(result, anchorTarget, plainTarget, senderPrivateChatId = userId)
+        val replyUnavailable = dispatch(result, anchorTarget, plainTarget, senderPrivateChatId = userId, messages = messages)
         if (replyUnavailable) {
             sendNotice(chatId, attribution.headerText)
         }
@@ -78,7 +80,8 @@ class TelegramDelivery(private val bot: TelegramBot) {
         result: AgentResult,
         originTarget: DeliveryTarget,
         currentChatTarget: DeliveryTarget,
-        senderPrivateChatId: Long?
+        senderPrivateChatId: Long?,
+        messages: Messages
     ): Boolean {
         val comment = result.comment?.takeIf { it.isNotBlank() }
         var replyUnavailable = false
@@ -90,7 +93,8 @@ class TelegramDelivery(private val bot: TelegramBot) {
                     text = text,
                     toPrivate = result.commentToPrivate,
                     originTarget = origin,
-                    senderPrivateChatId = senderPrivateChatId
+                    senderPrivateChatId = senderPrivateChatId,
+                    messages = messages
                 )
 
             if (deliveredWithoutReply) replyUnavailable = true
@@ -115,7 +119,7 @@ class TelegramDelivery(private val bot: TelegramBot) {
                 ItemDeliveryOutcome.ReplyMissing -> replyUnavailable = true
                 ItemDeliveryOutcome.PrivateBlocked -> if (!privateBlockedNoticed) {
                     privateBlockedNoticed = true
-                    notifyPrivateChatBlocked(originTarget)
+                    notifyPrivateChatBlocked(originTarget, messages)
                 }
             }
         }
@@ -168,7 +172,8 @@ class TelegramDelivery(private val bot: TelegramBot) {
         text: String,
         toPrivate: Boolean,
         originTarget: DeliveryTarget,
-        senderPrivateChatId: Long?
+        senderPrivateChatId: Long?,
+        messages: Messages
     ): Boolean {
         val privateTarget = senderPrivateChatId?.takeIf { toPrivate }?.let(::DeliveryTarget)
         val routedToPrivate = privateTarget != null
@@ -186,7 +191,7 @@ class TelegramDelivery(private val bot: TelegramBot) {
             }
 
             if (routedToPrivate && isPrivateChatBlocked(e)) {
-                notifyPrivateChatBlocked(originTarget)
+                notifyPrivateChatBlocked(originTarget, messages)
             } else {
                 log.warn(e) { "failed to send text to chat=${deliveryTarget.chatId}" }
             }
@@ -195,8 +200,8 @@ class TelegramDelivery(private val bot: TelegramBot) {
         }
     }
 
-    private suspend fun notifyPrivateChatBlocked(originTarget: DeliveryTarget) {
-        runCatching { sendText(originTarget, Messages.privateBlockedNotice) }
+    private suspend fun notifyPrivateChatBlocked(originTarget: DeliveryTarget, messages: Messages) {
+        runCatching { sendText(originTarget, messages.privateBlockedNotice) }
             .onFailure { it.rethrowIfCancellation() }
     }
 

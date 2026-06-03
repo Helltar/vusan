@@ -1,5 +1,6 @@
 package com.helltar.vusan.tasks
 
+import com.helltar.vusan.i18n.Language
 import java.time.Instant
 import java.time.ZoneId
 
@@ -18,6 +19,7 @@ data class ScheduledTask(
     val creatorUsername: String?,
     val creatorDisplayName: String?,
     val chatIsPrivate: Boolean,
+    val language: Language
 )
 
 data class NewScheduledTask(
@@ -32,4 +34,5 @@ data class NewScheduledTask(
     val creatorUsername: String?,
     val creatorDisplayName: String?,
     val chatIsPrivate: Boolean,
+    val language: Language
 )

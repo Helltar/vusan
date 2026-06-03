@@ -25,7 +25,7 @@ class TaskScheduler(
     private val delivery: TelegramDelivery,
     private val history: ChatHistoryRepository,
     private val pollInterval: Duration,
-    private val maxLateness: Duration,
+    private val maxLateness: Duration
 ) {
 
     private companion object {
@@ -80,7 +80,7 @@ class TaskScheduler(
             "task id=${task.id} missed (scheduledFor=$scheduledLabel, late by ${(now.toEpochMilli() - task.nextFireAt.toEpochMilli()) / 1000}s); user offline window"
         }
 
-        delivery.sendNotice(task.chatId, Messages.taskMissedNotice(task.id, task.title, scheduledLabel))
+        delivery.sendNotice(task.chatId, Messages.of(task.language).taskMissedNotice(task.id, task.title, scheduledLabel))
 
         rescheduleAfterFire(task, now)
     }
@@ -98,6 +98,7 @@ class TaskScheduler(
                 historyEntry = historyEntry(task),
                 messageContext = null,
                 repliedPhoto = null,
+                language = task.language
             )
 
         val result = agentRunner.handleScheduled(request)
@@ -106,7 +107,8 @@ class TaskScheduler(
             result = result,
             chatId = task.chatId,
             userId = task.userId,
-            attribution = attributionFor(task),
+            messages = Messages.of(task.language),
+            attribution = attributionFor(task)
         )
 
         if (result.historyTurns.isNotEmpty()) {
@@ -159,7 +161,7 @@ class TaskScheduler(
 
         return ScheduledAttribution(
             creatorMessageId = task.creatorMessageId,
-            headerText = "⏰ Scheduled by $mention",
+            headerText = "⏰ Scheduled by $mention"
         )
     }
 }

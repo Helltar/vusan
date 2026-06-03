@@ -4,6 +4,7 @@ import com.helltar.vusan.agent.MessageContext
 import com.helltar.vusan.common.collapseWhitespaceAndCap
 import dev.inmo.tgbotapi.types.ReplyInfo
 import dev.inmo.tgbotapi.types.StickerType
+import dev.inmo.tgbotapi.types.abstracts.WithOptionalLanguageCode
 import dev.inmo.tgbotapi.types.chat.BusinessChat
 import dev.inmo.tgbotapi.types.chat.ChannelChat
 import dev.inmo.tgbotapi.types.chat.ChannelDirectMessagesChat
@@ -48,6 +49,9 @@ internal fun CommonMessage<*>.senderDisplayNameOrNull(): String? =
 
 internal fun CommonMessage<*>.senderUsernameOrNull(): String? =
     (this as? OptionallyFromUserMessage)?.from?.username?.full
+
+internal fun CommonMessage<*>.senderLanguageCodeOrNull(): String? =
+    ((this as? OptionallyFromUserMessage)?.from as? WithOptionalLanguageCode)?.languageCode
 
 internal fun CommonMessage<*>.textSnippetOrNull(): String? =
     (content as? TextedContent)?.text
