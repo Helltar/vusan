@@ -4,6 +4,7 @@ import com.helltar.vusan.agent.history.ChatHistoryRepository
 import com.helltar.vusan.agent.history.ChatRole
 import com.helltar.vusan.agent.history.ChatTurn
 import com.helltar.vusan.agent.history.summarizeForPrompt
+import com.helltar.vusan.agent.history.toolCallArgsForHistory
 import com.helltar.vusan.common.collapseWhitespaceAndCap
 import com.helltar.vusan.common.rethrowIfCancellation
 import com.helltar.vusan.i18n.Language
@@ -127,7 +128,6 @@ class AgentRunner(private val agentFactory: AgentFactory, private val history: C
         userLocks.computeIfAbsent(userId) { Mutex() }
 }
 
-private const val TOOL_ARGS_MAX_CHARS = 1_000
 private const val TOOL_OUTPUT_MAX_CHARS = 4_000
 
 private fun extractFinalComment(answer: String, outputs: List<OutboxItem>): String? =
@@ -167,7 +167,7 @@ private fun buildHistoryTurns(
             add(
                 ChatTurn(
                     role = ChatRole.TOOL_CALL,
-                    content = event.args.collapseWhitespaceAndCap(TOOL_ARGS_MAX_CHARS).orEmpty(),
+                    content = toolCallArgsForHistory(event.args),
                     toolCallId = event.toolCallId,
                     toolName = event.toolName
                 )

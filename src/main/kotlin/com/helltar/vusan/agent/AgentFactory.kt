@@ -19,6 +19,7 @@ import ai.koog.prompt.params.LLMParams
 import ai.koog.serialization.JSONObject
 import com.helltar.vusan.agent.history.ChatRole
 import com.helltar.vusan.agent.history.PromptHistory
+import com.helltar.vusan.agent.history.toolCallArgsForHistory
 import com.helltar.vusan.outbox.BotOutbox
 import com.helltar.vusan.request.RequestContext
 import com.helltar.vusan.tools.ToolRegistryFactory
@@ -69,7 +70,7 @@ class AgentFactory(
                         ChatRole.TOOL_CALL ->
                             toolCall(
                                 tool = checkNotNull(turn.toolName) { "TOOL_CALL row without toolName" },
-                                args = turn.content,
+                                args = toolCallArgsForHistory(turn.content),
                                 id = checkNotNull(turn.toolCallId) { "TOOL_CALL row without toolCallId" }
                             )
 
