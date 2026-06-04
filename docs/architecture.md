@@ -57,7 +57,7 @@ A normal user message travels:
 - **History summarization** — `agent/history/ChatHistory.summarizeForPrompt` keeps recent turns verbatim and condenses older ones so the prompt stays within
   budget while keeping tool-call/result pairs anchored.
 - **LLM provider resolution** — `config/LlmRuntime.resolveLlmRuntime` turns `AppConfig.llmProvider` into a Koog client/model/params triple, supporting OpenAI (
-  with prompt caching), Ollama, and any OpenAI-compatible server.
+  with prompt caching) and any OpenAI-compatible server (llama.cpp, Ollama, …).
 
 ## Startup
 

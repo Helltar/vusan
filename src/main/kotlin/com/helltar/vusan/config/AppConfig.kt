@@ -26,8 +26,7 @@ data class AppConfig(
 ) {
     companion object {
         private const val DEFAULT_LLM_PROVIDER = "openai"
-        private const val DEFAULT_OPENAI_MODEL = "gpt-5.4-nano"
-        private const val DEFAULT_OLLAMA_BASE_URL = "http://localhost:11434"
+        private const val DEFAULT_LLM_MODEL = "gpt-5.4-nano"
 
         private const val DEFAULT_MAX_TASKS_PER_USER = 10
         private const val DEFAULT_TASK_POLL_INTERVAL_SECONDS = 30L
@@ -94,24 +93,18 @@ data class AppConfig(
             return when (val provider = raw.trim().lowercase()) {
                 "openai" ->
                     LlmProviderConfig.OpenAi(
-                        apiKey = requireEnv("OPENAI_API_KEY"),
-                        model = readEnv("OPENAI_MODEL") ?: DEFAULT_OPENAI_MODEL
-                    )
-
-                "ollama" ->
-                    LlmProviderConfig.Ollama(
-                        baseUrl = readEnv("OLLAMA_BASE_URL") ?: DEFAULT_OLLAMA_BASE_URL,
-                        model = requireEnv("OLLAMA_MODEL")
+                        apiKey = requireEnv("LLM_API_KEY"),
+                        model = readEnv("LLM_MODEL") ?: DEFAULT_LLM_MODEL
                     )
 
                 "openai-compatible" ->
                     LlmProviderConfig.OpenAiCompatible(
-                        baseUrl = requireEnv("OPENAI_BASE_URL"),
-                        apiKey = requireEnv("OPENAI_API_KEY"),
-                        model = requireEnv("OPENAI_MODEL")
+                        baseUrl = requireEnv("LLM_BASE_URL"),
+                        apiKey = requireEnv("LLM_API_KEY"),
+                        model = requireEnv("LLM_MODEL")
                     )
 
-                else -> error("Unsupported LLM_PROVIDER=[$provider]. Supported values: openai, ollama, openai-compatible")
+                else -> error("Unsupported LLM_PROVIDER=[$provider]. Supported values: openai, openai-compatible")
             }
         }
 

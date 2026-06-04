@@ -1,77 +1,117 @@
 # Configuration
 
-Config comes from environment variables (or a `.env` file in the working directory). [`.env.example`](../.env.example) is a copy-paste template; this page says
-what each variable does.
+Vusan reads configuration from environment variables. For Docker, put them in a `.env` file in the repo root; [`.env.example`](../.env.example) is the
+copy-paste starting point. Blank values are treated as missing.
 
-## Required
+## Minimum setup
 
-| Variable             | Purpose                                                                                                                |
-|----------------------|------------------------------------------------------------------------------------------------------------------------|
-| `TELEGRAM_BOT_TOKEN` | Bot token from [@BotFather](https://t.me/BotFather).                                                                   |
-| `ALLOWED_IDS`        | Comma-separated Telegram IDs the bot responds to. Positive = user, negative = group. Empty/unset = ignores everything. |
-| `OPENAI_API_KEY`     | LLM API key. Required unless you switch `LLM_PROVIDER` (see below).                                                    |
+Fill in these values for the default OpenAI setup:
+
+```dotenv
+ALLOWED_IDS=123456789,-1001234567890
+TELEGRAM_BOT_TOKEN=1234567890:qwerty
+LLM_API_KEY=sk-proj-qwerty
+```
+
+| Variable             | Description                                          |
+|----------------------|------------------------------------------------------|
+| `ALLOWED_IDS`        | Telegram user/group IDs the bot answers.             |
+| `TELEGRAM_BOT_TOKEN` | Bot token from [@BotFather](https://t.me/BotFather). |
+| `LLM_API_KEY`        | API key for the LLM provider (OpenAI by default).    |
+
+`ALLOWED_IDS` is comma-separated. Positive IDs are users; negative IDs are groups. Empty/unset means the bot answers nobody.
 
 ## LLM provider
 
-`LLM_PROVIDER` selects the backend (default `openai`). The chosen model must support tool calling.
+`LLM_PROVIDER` selects the backend. Default: `openai`. The chosen model must support tool calling.
 
-| Provider            | Required                                                            | Optional (default)                           |
-|---------------------|---------------------------------------------------------------------|----------------------------------------------|
-| `openai`            | `OPENAI_API_KEY`                                                    | `OPENAI_MODEL` (`gpt-5.4-nano`)              |
-| `ollama`            | `OLLAMA_MODEL` (e.g. `gemma4`)                                      | `OLLAMA_BASE_URL` (`http://localhost:11434`) |
-| `openai-compatible` | `OPENAI_BASE_URL`, `OPENAI_API_KEY` (any non-empty), `OPENAI_MODEL` | —                                            |
+Provider options:
 
-`openai-compatible` targets any server exposing OpenAI's `/v1/chat/completions` — e.g. [llama.cpp](https://github.com/ggml-org/llama.cpp) (
-`http://localhost:8080`) or [LM Studio](https://lmstudio.ai) (`http://localhost:1234/v1`).
+- `openai` — set `LLM_API_KEY`; optionally set `LLM_MODEL` (default `gpt-5.4-nano`).
+- `openai-compatible` — set `LLM_PROVIDER=openai-compatible`, `LLM_BASE_URL`, `LLM_API_KEY`, and `LLM_MODEL`.
+
+`openai-compatible` targets any OpenAI-compatible chat completions API, including remote APIs and local servers.
+
+DeepSeek example:
+
+```dotenv
+LLM_PROVIDER=openai-compatible
+LLM_BASE_URL=https://api.deepseek.com
+LLM_API_KEY=sk-qwerty
+LLM_MODEL=deepseek-v4-pro
+```
+
+llama.cpp example (local server needs no real key, but the value must be non-empty):
+
+```dotenv
+LLM_PROVIDER=openai-compatible
+LLM_BASE_URL=http://localhost:8080
+LLM_API_KEY=sk-no-key-required
+LLM_MODEL=unsloth/Qwen3.6-27B-GGUF:Q4_K_M
+```
+
+Ollama example (Ollama serves an OpenAI-compatible API; the key value is ignored):
+
+```dotenv
+LLM_PROVIDER=openai-compatible
+LLM_BASE_URL=http://localhost:11434
+LLM_API_KEY=ollama
+LLM_MODEL=gemma4
+```
 
 ## Persona
 
-The bot ships with a built-in persona ("Vusan"). Override it to run your own character — describe identity, tone, and language; the operational rules (
-output/tool contract) are always appended by the bot and can't be broken by a custom persona. Unset both to use the default.
+The bot ships with a built-in persona ("Vusan"). Override it with either inline text or a file. The operational rules for output and tools are always appended
+by the bot and cannot be removed by a custom persona.
 
-| Variable             | Purpose                                                                                                                               |
-|----------------------|---------------------------------------------------------------------------------------------------------------------------------------|
-| `SYSTEM_PROMPT`      | Inline persona text. Takes precedence when set.                                                                                       |
-| `SYSTEM_PROMPT_FILE` | Path to a persona file (handy for multi-line text). Read only when `SYSTEM_PROMPT` is unset; a set-but-unreadable path fails startup. |
+Unset both variables to use the built-in persona.
 
-## Optional features
+| Variable             | Description                                                                                     |
+|----------------------|-------------------------------------------------------------------------------------------------|
+| `SYSTEM_PROMPT`      | Inline persona text. Takes precedence when set.                                                 |
+| `SYSTEM_PROMPT_FILE` | Path to a persona file. Used only when `SYSTEM_PROMPT` is unset; unreadable files fail startup. |
 
-Each feature is gated by one env variable (an API key or service URL). If it's missing, that tool is skipped at startup with a `WARN` log and the bot runs
-without it.
+`SYSTEM_PROMPT_FILE` suits a long, multi-line persona — a file keeps line breaks and formatting readable, where `SYSTEM_PROMPT` is meant for short inline text.
 
-| Feature                                            | Gate                 | Notes                                  |
-|----------------------------------------------------|----------------------|----------------------------------------|
-| Web search, image search, page extraction (Tavily) | `TAVILY_API_KEY`     | —                                      |
-| GIF lookup (Giphy)                                 | `GIPHY_API_KEY`      | —                                      |
-| Voice output — TTS (ElevenLabs)                    | `ELEVENLABS_API_KEY` | tuning below                           |
-| Voice input — STT                                  | `OPENAI_STT_API_KEY` | reuse `OPENAI_API_KEY` if you have one |
-| Code sandbox — `runCode` tool                      | `SANDBOX_URL`        | see [Code sandbox](#code-sandbox)      |
+## Optional tools
+
+Each optional tool is enabled by one env variable. If it is missing, that tool is skipped at startup with a `WARN` log and the bot keeps running.
+
+| Tool                                      | Enable with          | Notes                                  |
+|-------------------------------------------|----------------------|----------------------------------------|
+| Web search, image search, page extraction | `TAVILY_API_KEY`     | Tavily                                 |
+| GIF lookup                                | `GIPHY_API_KEY`      | Giphy                                  |
+| Voice output                              | `ELEVENLABS_API_KEY` | ElevenLabs TTS                         |
+| Voice input                               | `OPENAI_STT_API_KEY` | Reuse your OpenAI key                  |
+| Code execution                            | `SANDBOX_URL`        | See [Code sandbox](#code-sandbox)      |
 
 ### TTS tuning
 
-| Variable                       | Default                                                |
-|--------------------------------|--------------------------------------------------------|
-| `ELEVENLABS_VOICE_ID`          | `VD1if7jDVYtAKs4P0FIY` (Milly Maple — Cool and Bright) |
-| `ELEVENLABS_TTS_MODEL`         | `eleven_v3`                                            |
-| `ELEVENLABS_TTS_OUTPUT_FORMAT` | `mp3_44100_128`                                        |
+| Variable                       | Default                | Description                        |
+|--------------------------------|------------------------|------------------------------------|
+| `ELEVENLABS_VOICE_ID`          | `VD1if7jDVYtAKs4P0FIY` | Voice used for generated speech.   |
+| `ELEVENLABS_TTS_MODEL`         | `eleven_v3`            | ElevenLabs TTS model.              |
+| `ELEVENLABS_TTS_OUTPUT_FORMAT` | `mp3_44100_128`        | Audio format for generated speech. |
 
 ### STT tuning
 
-| Variable                          | Default                                        |
-|-----------------------------------|------------------------------------------------|
-| `OPENAI_STT_MODEL`                | `gpt-4o-transcribe`                            |
-| `OPENAI_STT_MAX_DURATION_SECONDS` | `300` — longer messages get a "too long" reply |
+| Variable                          | Default             | Description                                        |
+|-----------------------------------|---------------------|----------------------------------------------------|
+| `OPENAI_STT_MODEL`                | `gpt-4o-transcribe` | Speech-to-text model.                              |
+| `OPENAI_STT_MAX_DURATION_SECONDS` | `300`               | Max voice length to transcribe; longer is refused. |
 
-### Code sandbox
+## Code sandbox
 
 `runCode` lets the agent run Python in an isolated sandbox to compute exact answers, transform data, and render charts (`numpy`, `pandas`, `matplotlib`,
-`sympy`). Unlike the other features, `SANDBOX_URL` is not an API key but the URL of the bundled **sandbox service** — it executes untrusted code on an
-internal-only network with no secrets, no internet, and no host mounts.
+`sympy`). The sandbox executes untrusted code on an internal-only network with no secrets, no internet, and no host mounts.
 
-`docker compose up -d` starts the sandbox alongside the bot. `.env.example` ships with `SANDBOX_URL=http://vusan-sandbox:8080` (the compose service), so the `runCode`
-tool is active out of the box.
+Docker starts it by default:
 
-To disable it, comment out `SANDBOX_URL` in `.env` and start only the bot:
+```dotenv
+SANDBOX_URL=http://vusan-sandbox:8080
+```
+
+To disable `runCode`, comment out `SANDBOX_URL` in `.env` and start only the bot:
 
 ```bash
 docker compose up -d vusan
@@ -83,35 +123,41 @@ If the sandbox is already running, stop it separately:
 docker compose stop vusan-sandbox
 ```
 
-For a local JVM run there is no sandbox container, so point `SANDBOX_URL` at one yourself or leave it commented.
+For a local JVM run, there is no sandbox container unless you start one yourself. Point `SANDBOX_URL` at that service, or leave it commented.
 
-Tuning (all optional):
+### Sandbox tuning
 
-| Variable                  | Default | Purpose                                                                                                                                                                                                                                                                               |
-|---------------------------|---------|---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
-| `SANDBOX_POOL_SIZE`       | `2`     | Warm Pyodide workers kept ready. Service only.                                                                                                                                                                                                                                        |
-| `SANDBOX_TIMEOUT_SECONDS` | `30`    | Hard per-run limit; a stuck script is killed. Higher = more render time for animations but a worker stays busy longer. Read by **both** the service and the bot (which sizes its HTTP timeout from it), so set it once in `.env` — the compose file passes it through to the service. |
-| `PORT`                    | `8080`  | Port the service listens on. Service only.                                                                                                                                                                                                                                            |
+These are sandbox-service environment variables. `SANDBOX_TIMEOUT_SECONDS` is also read by the bot and is wired through the default `compose.yaml`.
+
+| Variable                  | Default | Description                                                                         |
+|---------------------------|---------|-------------------------------------------------------------------------------------|
+| `SANDBOX_POOL_SIZE`       | `2`     | Warm Pyodide workers kept ready. Service only.                                      |
+| `SANDBOX_TIMEOUT_SECONDS` | `30`    | Hard per-run limit. Read by both the service and the bot, so set it once in `.env`. |
+| `PORT`                    | `8080`  | Port the sandbox service listens on. Service only.                                  |
 
 ## Scheduled tasks
 
-Built in. The agent schedules tasks in one of three forms:
+Scheduled tasks are built in. No env variable is required to enable them.
+
+The agent can schedule tasks in three forms:
 
 - `once <datetime>` — fires once; if missed, fires late with a notice.
-- `every <interval>` — fixed interval (min 5 minutes), timezone-independent; missed fires skip ahead.
-- `cron <UNIX expr>` — clock-time / specific-day patterns (e.g. weekdays at 18:00), evaluated in the task's timezone (JVM default unless the request names a
-  city or IANA zone); missed fires skip ahead.
+- `every <interval>` — fixed interval, minimum 5 minutes, timezone-independent; missed fires skip ahead.
+- `cron <UNIX expr>` — clock-time patterns, evaluated in the task's timezone; missed fires skip ahead.
 
-| Variable                     | Default                                            |
-|------------------------------|----------------------------------------------------|
-| `MAX_TASKS_PER_USER`         | `10`                                               |
-| `TASK_POLL_INTERVAL_SECONDS` | `30`                                               |
-| `TASK_MAX_LATENESS_MINUTES`  | `60` — recurring only; skip a fire older than this |
+| Variable                     | Default | Description                                  |
+|------------------------------|---------|----------------------------------------------|
+| `MAX_TASKS_PER_USER`         | `10`    | Maximum stored tasks per user.               |
+| `TASK_POLL_INTERVAL_SECONDS` | `30`    | How often the scheduler checks due tasks.    |
+| `TASK_MAX_LATENESS_MINUTES`  | `60`    | Recurring tasks older than this are skipped. |
 
-## Storage and tooling
+## Storage and binaries
 
-| Variable              | Default            | Purpose                                                                                                                                            |
-|-----------------------|--------------------|----------------------------------------------------------------------------------------------------------------------------------------------------|
-| `DB_FILE`             | `data/db/vusan.db` | SQLite path. Parent dirs auto-created on first run.                                                                                                |
-| `YT_DLP_PATH`         | `yt-dlp`           | Path to the `yt-dlp` binary.                                                                                                                       |
-| `YT_DLP_COOKIES_FILE` | —                  | Netscape-format `cookies.txt` for YouTube auth. See the [yt-dlp wiki](https://github.com/yt-dlp/yt-dlp/wiki/Extractors#exporting-youtube-cookies). |
+| Variable              | Default            | Description                                        |
+|-----------------------|--------------------|----------------------------------------------------|
+| `DB_FILE`             | `data/db/vusan.db` | SQLite path. Parent dirs are created on first run. |
+| `YT_DLP_PATH`         | `yt-dlp`           | Path to the `yt-dlp` binary.                       |
+| `YT_DLP_COOKIES_FILE` | —                  | Optional YouTube cookies file.                     |
+
+`YT_DLP_COOKIES_FILE` must point to a Netscape-format `cookies.txt`; see
+the [yt-dlp wiki](https://github.com/yt-dlp/yt-dlp/wiki/Extractors#exporting-youtube-cookies).
