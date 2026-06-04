@@ -1,5 +1,7 @@
+.agents/
 .antigravitycli/
 .claude/
+.codex/
 .gradle/
 .idea/
 .kotlin/
