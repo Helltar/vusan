@@ -1,3 +1,9 @@
+x-logging: &default-logging
+  driver: json-file
+  options:
+    max-size: "10m"
+    max-file: "3"
+
 services:
   vusan:
     image: ghcr.io/helltar/vusan:latest
@@ -5,53 +11,35 @@ services:
     restart: unless-stopped
     env_file: .env
     networks:
-      - default      # outbound internet (Telegram, LLM, web tools)
-      - sandbox-net  # reach the sandbox service
+      - default
+      - vusan-sandbox-net
     volumes:
-      - vusan_data:/app/data
-    logging:
-      driver: json-file
-      options:
-        max-size: "10m"
-        max-file: "3"
+      - vusan-data:/app/data
+    logging: *default-logging
 
-  # Code sandbox for the runCode tool. Comes up with `docker compose up -d`;
-  # skip it with `docker compose up -d vusan`. The bot only uses it when
-  # SANDBOX_URL is set. Runs untrusted Python on an internal-only network with
-  # no secrets, no internet, and no host mounts.
-  sandbox:
+  vusan-sandbox:
     image: ghcr.io/helltar/vusan-sandbox:latest
     container_name: vusan-sandbox-container
     restart: unless-stopped
-    # Single-sourced from .env so the bot (env_file) and the service agree on the
-    # run limit; the bot sizes its HTTP timeout from the same value.
     environment:
-      SANDBOX_TIMEOUT_SECONDS: ${SANDBOX_TIMEOUT_SECONDS:-30}
+      SANDBOX_TIMEOUT_SECONDS: "${SANDBOX_TIMEOUT_SECONDS:-30}"
     networks:
-      - sandbox-net
+      - vusan-sandbox-net
     read_only: true
     cap_drop:
       - ALL
     security_opt:
       - no-new-privileges:true
     pids_limit: 256
-    # Several heavy Pyodide/WASM workers can be alive at once (warm pool + the
-    # in-flight run + a respawning replacement), so give some headroom over 1g.
-    mem_limit: 2g
-    # Cap CPU so a busy-loop (bounded only by the run timeout) cannot peg every
-    # host core for the full SANDBOX_TIMEOUT_SECONDS window.
-    cpus: "2.0"
+    mem_limit: "2g"
+    cpus: 2.0
     tmpfs:
       - /tmp
-    logging:
-      driver: json-file
-      options:
-        max-size: "10m"
-        max-file: "3"
+    logging: *default-logging
 
 networks:
-  sandbox-net:
-    internal: true  # no route to the internet; egress for untrusted code is impossible
+  vusan-sandbox-net:
+    internal: true
 
 volumes:
-  vusan_data:
+  vusan-data:

@@ -22,6 +22,13 @@ For a tour of the layers and how a message flows through them, see [architecture
 
 ## Quick start
 
+Clone the repo and enter the project directory:
+
+```bash
+git clone https://github.com/Helltar/vusan.git
+cd vusan
+```
+
 Copy the env template and fill it in using [configuration.md](docs/configuration.md) as the reference:
 
 ```bash
@@ -30,17 +37,17 @@ cp .env.example .env
 
 ### Docker
 
+Use the published images:
+
 ```bash
 docker compose up -d
 ```
 
-To run the bot alone — without the code sandbox — comment out `SANDBOX_URL` in `.env` and start just that service:
+Or build from source:
 
 ```bash
-docker compose up -d vusan
+docker compose -f compose.yaml -f compose.local.yaml up --build -d
 ```
-
-See [code sandbox](docs/configuration.md#code-sandbox) for details.
 
 ### Local JVM
 
