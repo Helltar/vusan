@@ -35,9 +35,10 @@ data class AppConfig(
         private const val DEFAULT_TASK_POLL_INTERVAL_SECONDS = 30L
 
         private val dotenv = dotenv { ignoreIfMissing = true }
-        private val elevenLabsKey = readEnv("ELEVENLABS_API_KEY")
 
         fun fromEnv(): AppConfig {
+            val elevenLabsKey = readEnv("ELEVENLABS_API_KEY")
+
             return AppConfig(
                 allowedIds = parseIdSet(readEnv("ALLOWED_IDS")),
                 databasePath = readEnv("DB_FILE") ?: "data/db/vusan.db",
