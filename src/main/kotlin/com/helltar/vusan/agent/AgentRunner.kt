@@ -88,6 +88,7 @@ class AgentRunner(private val agentFactory: AgentFactory, private val history: C
         }
 
         val toolEvents = mutableListOf<ToolEvent>()
+        val tokenUsages = mutableListOf<TokenUsage>()
 
         val agent =
             agentFactory.build(
@@ -96,6 +97,7 @@ class AgentRunner(private val agentFactory: AgentFactory, private val history: C
                 context = context,
                 outbox = outbox,
                 toolEvents = toolEvents::add,
+                tokenUsage = tokenUsages::add,
                 messageContext = request.messageContext
             )
 
@@ -107,6 +109,10 @@ class AgentRunner(private val agentFactory: AgentFactory, private val history: C
                 log.error(e) { "agent.run failed for chat=${request.chatId} user=${request.userId}" }
                 return AgentResult(outputs = emptyList(), comment = Messages.of(request.language).fallbackErrorReply)
             }
+
+        log.info {
+            "token usage: chat=${request.chatId} user=${request.userId} ${tokenUsageLogSummary(tokenUsages)}"
+        }
 
         val outputs = outbox.pending
         val comment = extractFinalComment(answer, outputs)
@@ -140,6 +146,18 @@ class AgentRunner(private val agentFactory: AgentFactory, private val history: C
 
 private const val TOOL_OUTPUT_MAX_CHARS = 4_000
 private const val LOG_REPLY_MAX_CHARS = 300
+
+private fun tokenUsageLogSummary(usages: List<TokenUsage>): String {
+    fun List<Int?>.sumOrNa(): String =
+        filterNotNull().let { if (it.isEmpty()) "n/a" else it.sum().toString() }
+
+    val promptTokens = usages.lastOrNull()?.inputTokens
+
+    return "calls=${usages.size} promptTokens=${promptTokens ?: "n/a"} " +
+            "billedInput=${usages.map { it.inputTokens }.sumOrNa()} " +
+            "billedOutput=${usages.map { it.outputTokens }.sumOrNa()} " +
+            "runTotal=${usages.map { it.totalTokens }.sumOrNa()}"
+}
 
 private fun outputsLogSummary(outputs: List<OutboxItem>): String =
     outputs.joinToString(", ") { item ->

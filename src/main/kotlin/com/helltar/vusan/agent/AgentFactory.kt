@@ -39,6 +39,16 @@ fun interface ToolEventSink {
     fun record(event: ToolEvent)
 }
 
+data class TokenUsage(
+    val inputTokens: Int?,
+    val outputTokens: Int?,
+    val totalTokens: Int?
+)
+
+fun interface TokenUsageSink {
+    fun record(usage: TokenUsage)
+}
+
 class AgentFactory(
     private val promptExecutor: PromptExecutor,
     private val toolRegistryFactory: ToolRegistryFactory,
@@ -54,6 +64,7 @@ class AgentFactory(
         context: RequestContext,
         outbox: BotOutbox,
         toolEvents: ToolEventSink,
+        tokenUsage: TokenUsageSink,
         messageContext: MessageContext? = null
     ): AIAgent<String, String> {
         val seededPrompt =
@@ -103,6 +114,12 @@ class AgentFactory(
         ) {
             install(EventHandler) {
                 var seq = 0
+
+                onLLMCallCompleted { ctx ->
+                    ctx.response?.metaInfo?.let { meta ->
+                        tokenUsage.record(TokenUsage(meta.inputTokensCount, meta.outputTokensCount, meta.totalTokensCount))
+                    }
+                }
 
                 onToolCallCompleted { ctx ->
                     toolEvents.record(
