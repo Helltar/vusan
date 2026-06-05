@@ -23,6 +23,15 @@ fun String.limitTo(maxChars: Int): String =
         else -> takeWholeChars(maxChars - ELLIPSIS.length).trimEnd() + ELLIPSIS
     }
 
+/**
+ * True when the string carries no renderable content: only whitespace plus invisible format/control
+ * characters (zero-width spaces, joiners, BOM, etc.). Kotlin's [isBlank] treats those zero-width chars
+ * as non-blank, so a model reply consisting solely of them slips through and Telegram rejects it with
+ * `text must be non-empty` — leaving the bot silent. Use this to detect such replies up front.
+ */
+internal fun String.isEffectivelyBlank(): Boolean =
+    all { it.isWhitespace() || it.category == CharCategory.FORMAT || it.category == CharCategory.CONTROL }
+
 /** Wraps [content] in an XML-style `<tag>…</tag>` block, trimming surrounding whitespace. */
 internal fun xmlBlock(tag: String, content: String): String = "<$tag>\n${content.trim()}\n</$tag>"
 

@@ -4,6 +4,7 @@ import io.github.cdimascio.dotenv.dotenv
 import kotlin.io.path.Path
 import kotlin.io.path.isReadable
 import kotlin.io.path.readText
+import kotlin.time.Duration.Companion.seconds
 
 data class AppConfig(
     val allowedIds: Set<Long>,
@@ -27,6 +28,7 @@ data class AppConfig(
     companion object {
         private const val DEFAULT_LLM_PROVIDER = "openai"
         private const val DEFAULT_LLM_MODEL = "gpt-5.4-nano"
+        private const val DEFAULT_LLM_REQUEST_TIMEOUT_SECONDS = 120L
 
         private const val DEFAULT_MAX_TASKS_PER_USER = 10
         private const val DEFAULT_TASK_POLL_INTERVAL_SECONDS = 30L
@@ -89,19 +91,23 @@ data class AppConfig(
 
         private fun resolveLlmProvider(): LlmProviderConfig {
             val raw = readEnv("LLM_PROVIDER") ?: DEFAULT_LLM_PROVIDER
+            val requestTimeout =
+                (readEnv("LLM_REQUEST_TIMEOUT_SECONDS")?.toLongOrNull() ?: DEFAULT_LLM_REQUEST_TIMEOUT_SECONDS).seconds
 
             return when (val provider = raw.trim().lowercase()) {
                 "openai" ->
                     LlmProviderConfig.OpenAi(
                         apiKey = requireEnv("LLM_API_KEY"),
-                        model = readEnv("LLM_MODEL") ?: DEFAULT_LLM_MODEL
+                        model = readEnv("LLM_MODEL") ?: DEFAULT_LLM_MODEL,
+                        requestTimeout = requestTimeout
                     )
 
                 "openai-compatible" ->
                     LlmProviderConfig.OpenAiCompatible(
                         baseUrl = requireEnv("LLM_BASE_URL"),
                         apiKey = requireEnv("LLM_API_KEY"),
-                        model = requireEnv("LLM_MODEL")
+                        model = requireEnv("LLM_MODEL"),
+                        requestTimeout = requestTimeout
                     )
 
                 else -> error("Unsupported LLM_PROVIDER=[$provider]. Supported values: openai, openai-compatible")

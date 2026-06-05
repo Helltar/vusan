@@ -44,4 +44,25 @@ class StringsTest {
         val name = emoji.repeat(200) + ".png"
         assertTrue(name.sanitizeFilename().isValidUtf16())
     }
+
+    // Zero-width characters: U+200B zero-width space, U+200D zero-width joiner, U+FEFF BOM.
+    // Kotlin's isBlank treats them as non-blank, but Telegram rejects a message made only of
+    // these with "text must be non-empty".
+    private val zeroWidth = "\u200B\u200D\uFEFF"
+
+    @Test
+    fun `isEffectivelyBlank treats whitespace and zero-width characters as blank`() {
+        assertTrue("".isEffectivelyBlank())
+        assertTrue("   \n\t".isEffectivelyBlank())
+        assertTrue(zeroWidth.isEffectivelyBlank())
+        assertTrue(" $zeroWidth ".isEffectivelyBlank())
+        assertFalse("${zeroWidth}content".isBlank())
+    }
+
+    @Test
+    fun `isEffectivelyBlank keeps real content`() {
+        assertFalse("hi".isEffectivelyBlank())
+        assertFalse(emoji.isEffectivelyBlank())
+        assertFalse(" ${zeroWidth}ok$zeroWidth ".isEffectivelyBlank())
+    }
 }

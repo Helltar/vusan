@@ -6,6 +6,7 @@ import com.helltar.vusan.agent.history.ChatTurn
 import com.helltar.vusan.agent.history.summarizeForPrompt
 import com.helltar.vusan.agent.history.toolCallArgsForHistory
 import com.helltar.vusan.common.collapseWhitespaceAndCap
+import com.helltar.vusan.common.isEffectivelyBlank
 import com.helltar.vusan.common.rethrowIfCancellation
 import com.helltar.vusan.i18n.Language
 import com.helltar.vusan.i18n.Messages
@@ -113,6 +114,12 @@ class AgentRunner(private val agentFactory: AgentFactory, private val history: C
 
         val outputs = outbox.pending
         val comment = extractFinalComment(answer, outputs)
+
+        if (outputs.isEmpty() && comment.isNullOrBlank()) {
+            log.warn { "agent produced no output for chat=${request.chatId} user=${request.userId}" }
+            return AgentResult(outputs = emptyList(), comment = Messages.of(request.language).fallbackErrorReply)
+        }
+
         val assistantText = assistantTextForHistory(outputs, comment)
         val historyTurns =
             buildHistoryTurns(
@@ -132,7 +139,7 @@ private const val TOOL_OUTPUT_MAX_CHARS = 4_000
 
 private fun extractFinalComment(answer: String, outputs: List<OutboxItem>): String? =
     answer.trim()
-        .takeIf { it.isNotEmpty() }
+        .takeUnless { it.isEffectivelyBlank() }
         ?.takeUnless {
             outputs.any { it.output is BotOutput.Voice || it.output is BotOutput.VideoNote || it.output is BotOutput.Text || it.output is BotOutput.Reaction }
         }

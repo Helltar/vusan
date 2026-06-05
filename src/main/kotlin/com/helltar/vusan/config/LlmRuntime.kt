@@ -1,5 +1,6 @@
 package com.helltar.vusan.config
 
+import ai.koog.prompt.executor.clients.ConnectionTimeoutConfig
 import ai.koog.prompt.executor.clients.LLMClient
 import ai.koog.prompt.executor.clients.openai.OpenAIChatParams
 import ai.koog.prompt.executor.clients.openai.OpenAIClientSettings
@@ -17,13 +18,21 @@ data class LlmRuntime(
     val chatParams: LLMParams
 )
 
-fun resolveLlmRuntime(config: LlmProviderConfig): LlmRuntime =
-    when (config) {
+fun resolveLlmRuntime(config: LlmProviderConfig): LlmRuntime {
+    // Both request and socket timeouts default to 900 s in the koog client; cap them so a stalled LLM
+    // call fails fast and the agent can deliver an error reply instead of leaving the bot silent.
+    val timeoutConfig =
+        ConnectionTimeoutConfig(
+            requestTimeoutMillis = config.requestTimeout.inWholeMilliseconds,
+            socketTimeoutMillis = config.requestTimeout.inWholeMilliseconds
+        )
+
+    return when (config) {
         is LlmProviderConfig.OpenAi ->
             LlmRuntime(
                 providerLabel = "OpenAI",
                 koogProvider = LLMProvider.OpenAI,
-                client = OpenAILLMClient(config.apiKey),
+                client = OpenAILLMClient(apiKey = config.apiKey, settings = OpenAIClientSettings(timeoutConfig = timeoutConfig)),
                 model = OpenAiModelResolver.resolve(config.model),
                 chatParams = OpenAIChatParams(promptCacheKey = "vusan")
             )
@@ -35,7 +44,7 @@ fun resolveLlmRuntime(config: LlmProviderConfig): LlmRuntime =
                 client =
                     OpenAILLMClient(
                         apiKey = config.apiKey,
-                        settings = OpenAIClientSettings(baseUrl = config.baseUrl)
+                        settings = OpenAIClientSettings(baseUrl = config.baseUrl, timeoutConfig = timeoutConfig)
                     ),
                 model =
                     LLModel(
@@ -53,3 +62,4 @@ fun resolveLlmRuntime(config: LlmProviderConfig): LlmRuntime =
                 chatParams = OpenAIChatParams(parallelToolCalls = false)
             )
     }
+}

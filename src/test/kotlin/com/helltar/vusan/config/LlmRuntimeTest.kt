@@ -4,6 +4,7 @@ import ai.koog.prompt.executor.clients.openai.OpenAIChatParams
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertIs
+import kotlin.time.Duration.Companion.seconds
 
 class LlmRuntimeTest {
 
@@ -16,7 +17,8 @@ class LlmRuntimeTest {
                 LlmProviderConfig.OpenAiCompatible(
                     baseUrl = "https://example.test/v1",
                     apiKey = "key",
-                    model = "deepseek-chat"
+                    model = "deepseek-chat",
+                    requestTimeout = 120.seconds
                 )
             )
 

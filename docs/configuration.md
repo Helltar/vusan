@@ -32,6 +32,8 @@ Provider options:
 
 `openai-compatible` targets any OpenAI-compatible chat completions API, including remote APIs and local servers.
 
+`LLM_REQUEST_TIMEOUT_SECONDS` (default `120`) caps how long a single LLM HTTP call may hang. The koog client otherwise waits 15 minutes, during which the bot stays silent; the shorter cap lets a stalled call fail fast so the agent can deliver an error reply. Raise it for slow local servers or heavy reasoning models.
+
 DeepSeek example:
 
 ```dotenv
