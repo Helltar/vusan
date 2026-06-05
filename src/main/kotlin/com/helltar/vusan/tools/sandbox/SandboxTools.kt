@@ -36,6 +36,7 @@ class SandboxTools(private val client: SandboxClient, private val outbox: BotOut
         val animations = result.files.filter { it.name.isGifName() }.mapNotNull { it.toAnimation() }
         val (imageFiles, otherFiles) = result.files.filterNot { it.name.isGifName() }.partition { it.name.isImageName() }
         val photos = imageFiles.mapNotNull { it.toPhoto() }
+        val imageDocuments = imageFiles.mapNotNull { it.toDocument() }
         val documents = otherFiles.mapNotNull { it.toDocument() }
 
         animations.forEach { outbox.enqueue(it) }
@@ -45,6 +46,9 @@ class SandboxTools(private val client: SandboxClient, private val outbox: BotOut
             photos.size >= 2 -> outbox.enqueue(BotOutput.PhotoGroup(photos.take(MAX_PHOTOS)))
         }
 
+        // Telegram recompresses inline photos to JPEG, softening chart text. Send each image again as
+        // an uncompressed document so a pixel-perfect copy is available alongside the inline preview.
+        imageDocuments.forEach { outbox.enqueue(it) }
         documents.forEach { outbox.enqueue(it) }
 
         buildString {

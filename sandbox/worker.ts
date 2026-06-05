@@ -38,6 +38,9 @@ for _p in glob.glob("${FONT_DIR}/*"):
         pass
 _noto = sorted({f.name for f in fm.fontManager.ttflist if "Noto" in f.name})
 matplotlib.rcParams["font.family"] = ["DejaVu Sans"] + _noto
+# Default 100 DPI renders soft, fuzzy text once Telegram recompresses the photo; render at 2x so
+# labels stay crisp. Scripts that set their own dpi/figsize still override this.
+matplotlib.rcParams["figure.dpi"] = 200
 import matplotlib.pyplot as plt
 plt.plot([0, 1]); plt.savefig(io.BytesIO()); plt.close("all")
 `);

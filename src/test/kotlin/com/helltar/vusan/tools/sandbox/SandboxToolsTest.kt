@@ -33,7 +33,7 @@ class SandboxToolsTest {
     }
 
     @Test
-    fun `chart png is sent as a photo and stdout is returned`() = runBlocking {
+    fun `chart png is sent as both an inline photo and an uncompressed document`() = runBlocking {
         val outbox = BotOutbox()
         val pngBytes = byteArrayOf(1, 2, 3)
         val base64 = java.util.Base64.getEncoder().encodeToString(pngBytes)
@@ -41,17 +41,22 @@ class SandboxToolsTest {
             tools(outbox, """{"ok":true,"stdout":"chart done\n","files":[{"name":"chart.png","base64":"$base64"}]}""")
                 .runCode("print('chart done')")
 
-        val photo = assertIs<BotOutput.Photo>(outbox.pending.single().output)
+        val photo = assertIs<BotOutput.Photo>(outbox.pending[0].output)
         assertEquals("chart.png", photo.filename)
         assertContentEquals(pngBytes, photo.bytes)
 
+        val document = assertIs<BotOutput.Document>(outbox.pending[1].output)
+        assertEquals("chart.png", document.filename)
+        assertContentEquals(pngBytes, document.bytes)
+
         assertContains(result, "<stdout>")
         assertContains(result, "chart done")
+        // The crisp document copy is not double-counted in the user-facing summary.
         assertContains(result, "Delivered 1 file(s) to the chat: chart.png")
     }
 
     @Test
-    fun `multiple images are sent as a photo group`() = runBlocking {
+    fun `multiple images are sent as a photo group plus per-image documents`() = runBlocking {
         val outbox = BotOutbox()
         val b64 = java.util.Base64.getEncoder().encodeToString(byteArrayOf(9))
         tools(
@@ -59,8 +64,11 @@ class SandboxToolsTest {
             """{"ok":true,"files":[{"name":"a.png","base64":"$b64"},{"name":"b.png","base64":"$b64"}]}"""
         ).runCode("...")
 
-        val group = assertIs<BotOutput.PhotoGroup>(outbox.pending.single().output)
+        val group = assertIs<BotOutput.PhotoGroup>(outbox.pending.first { it.output is BotOutput.PhotoGroup }.output)
         assertEquals(2, group.photos.size)
+
+        val documents = outbox.pending.mapNotNull { it.output as? BotOutput.Document }
+        assertEquals(listOf("a.png", "b.png"), documents.map { it.filename })
     }
 
     @Test
