@@ -149,7 +149,7 @@ The agent can schedule tasks in three forms:
 
 | Variable                     | Default | Description                                  |
 |------------------------------|---------|----------------------------------------------|
-| `MAX_TASKS_PER_USER`         | `10`    | Maximum stored tasks per user.               |
+| `MAX_TASKS_PER_USER`         | `5`     | Maximum stored tasks per user.               |
 | `TASK_POLL_INTERVAL_SECONDS` | `30`    | How often the scheduler checks due tasks.    |
 | `TASK_MAX_LATENESS_MINUTES`  | `60`    | Recurring tasks older than this are skipped. |
 

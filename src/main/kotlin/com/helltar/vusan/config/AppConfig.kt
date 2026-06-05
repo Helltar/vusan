@@ -26,14 +26,13 @@ data class AppConfig(
     val ytDlpPath: String
 ) {
     companion object {
-        private const val DEFAULT_LLM_PROVIDER = "openai"
         private const val DEFAULT_LLM_MODEL = "gpt-5.4-nano"
+        private const val DEFAULT_LLM_PROVIDER = "openai"
         private const val DEFAULT_LLM_REQUEST_TIMEOUT_SECONDS = 120L
-
-        private const val DEFAULT_MAX_TASKS_PER_USER = 10
-        private const val DEFAULT_TASK_POLL_INTERVAL_SECONDS = 30L
-        private const val DEFAULT_TASK_MAX_LATENESS_MINUTES = 60L
+        private const val DEFAULT_MAX_TASKS_PER_USER = 5
         private const val DEFAULT_SANDBOX_TIMEOUT_SECONDS = 30L
+        private const val DEFAULT_TASK_MAX_LATENESS_MINUTES = 60L
+        private const val DEFAULT_TASK_POLL_INTERVAL_SECONDS = 30L
 
         private val dotenv = dotenv { ignoreIfMissing = true }
         private val elevenLabsKey = readEnv("ELEVENLABS_API_KEY")
@@ -68,9 +67,6 @@ data class AppConfig(
             )
         }
 
-        // Persona override for the system prompt: inline SYSTEM_PROMPT wins, else SYSTEM_PROMPT_FILE
-        // (handy for multi-line text). null falls back to the built-in persona. A configured-but-
-        // unreadable file fails fast rather than silently reverting to the default.
         private fun resolveSystemPrompt(): String? {
             readEnv("SYSTEM_PROMPT")?.let { return it }
             val path = readEnv("SYSTEM_PROMPT_FILE") ?: return null
@@ -91,8 +87,7 @@ data class AppConfig(
 
         private fun resolveLlmProvider(): LlmProviderConfig {
             val raw = readEnv("LLM_PROVIDER") ?: DEFAULT_LLM_PROVIDER
-            val requestTimeout =
-                (readEnv("LLM_REQUEST_TIMEOUT_SECONDS")?.toLongOrNull() ?: DEFAULT_LLM_REQUEST_TIMEOUT_SECONDS).seconds
+            val requestTimeout = (readEnv("LLM_REQUEST_TIMEOUT_SECONDS")?.toLongOrNull() ?: DEFAULT_LLM_REQUEST_TIMEOUT_SECONDS).seconds
 
             return when (val provider = raw.trim().lowercase()) {
                 "openai" ->
