@@ -78,6 +78,7 @@ class AgentFactory(
                     when (turn.role) {
                         ChatRole.USER -> user(turn.content)
                         ChatRole.ASSISTANT -> assistant(turn.content)
+
                         ChatRole.TOOL_CALL ->
                             toolCall(
                                 tool = checkNotNull(turn.toolName) { "TOOL_CALL row without toolName" },
@@ -132,6 +133,7 @@ class AgentFactory(
                         )
                     )
                 }
+
                 onToolCallFailed { ctx ->
                     toolEvents.record(
                         ToolEvent(
@@ -143,6 +145,7 @@ class AgentFactory(
                         )
                     )
                 }
+
                 onToolValidationFailed { ctx ->
                     toolEvents.record(
                         ToolEvent(
@@ -185,13 +188,17 @@ private val vusanSingleRunStrategy: AIAgentGraphStrategy<String, String> =
 
         edge(nodeStart forwardTo nodeCallLLM)
         edge(nodeCallLLM forwardTo nodeExecuteTool onToolCalls { true })
+
         edge(
             nodeCallLLM forwardTo nodeFinish
                     onCondition { msg -> msg.parts.none { it is MessagePart.Tool.Call } }
                     transformed { msg -> msg.assistantTextOrEmpty() }
         )
+
         edge(nodeExecuteTool forwardTo nodeSendToolResult)
         edge(nodeSendToolResult forwardTo nodeExecuteTool onToolCalls { true })
+
+        @Suppress("DuplicatedCode")
         edge(
             nodeSendToolResult forwardTo nodeFinish
                     onCondition { msg -> msg.parts.none { it is MessagePart.Tool.Call } }
@@ -225,9 +232,7 @@ private fun garbledToolCallResult(call: MessagePart.Tool.Call, missing: List<Str
         toolDescription = null,
         output = "Tool `${call.tool}` was called without required argument(s): $names. " +
                 "Reissue it as a single, complete call with all required arguments.",
-        resultKind = ToolResultKind.ValidationError(
-            IllegalArgumentException("Missing required argument(s): $names")
-        ),
+        resultKind = ToolResultKind.ValidationError(IllegalArgumentException("Missing required argument(s): $names")),
         result = null
     )
 }
