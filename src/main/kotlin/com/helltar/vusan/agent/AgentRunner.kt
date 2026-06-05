@@ -1,10 +1,6 @@
 package com.helltar.vusan.agent
 
-import com.helltar.vusan.agent.history.ChatHistoryRepository
-import com.helltar.vusan.agent.history.ChatRole
-import com.helltar.vusan.agent.history.ChatTurn
-import com.helltar.vusan.agent.history.summarizeForPrompt
-import com.helltar.vusan.agent.history.toolCallArgsForHistory
+import com.helltar.vusan.agent.history.*
 import com.helltar.vusan.common.collapseWhitespaceAndCap
 import com.helltar.vusan.common.isEffectivelyBlank
 import com.helltar.vusan.common.rethrowIfCancellation
@@ -121,12 +117,19 @@ class AgentRunner(private val agentFactory: AgentFactory, private val history: C
         }
 
         val assistantText = assistantTextForHistory(outputs, comment)
+
         val historyTurns =
             buildHistoryTurns(
                 userEntry = request.historyEntry,
                 toolEvents = toolEvents,
                 assistantText = assistantText
             )
+
+        log.info {
+            "agent reply: chat=${request.chatId} user=${request.userId} " +
+                    "outputs=[${outputsLogSummary(outputs)}] " +
+                    "text=[${assistantText?.collapseWhitespaceAndCap(LOG_REPLY_MAX_CHARS).orEmpty()}]"
+        }
 
         return AgentResult(outputs, comment, outbox.redirectToPrivate, historyTurns)
     }
@@ -136,6 +139,16 @@ class AgentRunner(private val agentFactory: AgentFactory, private val history: C
 }
 
 private const val TOOL_OUTPUT_MAX_CHARS = 4_000
+private const val LOG_REPLY_MAX_CHARS = 300
+
+private fun outputsLogSummary(outputs: List<OutboxItem>): String =
+    outputs.joinToString(", ") { item ->
+        when (val output = item.output) {
+            is BotOutput.Reaction -> "reaction ${output.emoji}"
+            is BotOutput.PhotoGroup -> "photoGroup(${output.photos.size})"
+            else -> output::class.simpleName ?: "?"
+        }
+    }
 
 private fun extractFinalComment(answer: String, outputs: List<OutboxItem>): String? =
     answer.trim()
