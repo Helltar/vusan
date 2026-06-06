@@ -1,7 +1,6 @@
 package com.helltar.vusan.tools.youtube
 
 import io.github.oshai.kotlinlogging.KotlinLogging
-import korlibs.time.seconds
 import kotlinx.coroutines.*
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
@@ -9,6 +8,7 @@ import kotlinx.serialization.json.Json
 import java.nio.file.Files
 import java.nio.file.Path
 import java.util.concurrent.TimeUnit
+import kotlin.time.Duration.Companion.seconds
 
 data class YtDlpCommandResult(
     val stdout: String,
