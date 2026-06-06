@@ -2,6 +2,7 @@ package com.helltar.vusan.infra
 
 import com.helltar.vusan.config.AppConfig
 import com.helltar.vusan.infra.tables.ChatMessagesTable
+import com.helltar.vusan.infra.tables.MemoryTable
 import com.helltar.vusan.infra.tables.ScheduledTasksTable
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
@@ -63,7 +64,7 @@ object Db {
             )
 
             suspendTransaction(newDatabase) {
-                SchemaUtils.create(ChatMessagesTable, ScheduledTasksTable)
+                SchemaUtils.create(ChatMessagesTable, ScheduledTasksTable, MemoryTable)
             }
 
             database = newDatabase

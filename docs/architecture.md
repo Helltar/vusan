@@ -10,23 +10,24 @@ them, and the background flows that run alongside. Code lives under
 Telegram ──► telegram/ ──► agent/ ──► tools/ ──► external services
                 │            │           │
                 │            │           └─ writes outputs into ─► outbox/
-                │            └─ reads/stores history via ─► agent/history/ ─► infra/
+                │            ├─ reads/stores history via ─► agent/history/ ─► infra/
+                │            └─ reads/stores memory via ──► agent/memory/ ──► infra/
                 └─ delivers outbox back to Telegram
 ```
 
-| Package     | Responsibility                                                                                                                                                                                                                                                                 |
-|-------------|--------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
-| `telegram/` | Telegram I/O. Receives updates (text/voice/audio/sticker), filters by allowlist, normalizes input, and delivers agent results back — including markdown/document/text fallbacks and reply anchoring.                                                                           |
-| `agent/`    | Agent orchestration on top of Koog. `AgentRunner` serializes per-user turns; `AgentFactory` builds the `AIAgent` (system prompt + history + tools). `agent/history/` summarizes and persists chat turns.                                                                       |
-| `tools/`    | Agent-callable tools, one subpackage per capability (search, voice, vision, scheduled tasks, …). `ToolRegistryFactory` owns the clients and builds a per-request registry. See [features.md](features.md).                                                                     |
-| `outbox/`   | The output model. `BotOutput` is the (immutable) sealed set of things the bot can send (text, photo, voice, poll, reaction, …); `BotOutbox` is the per-request queue tools write into, holding each `BotOutput` as an `OutboxItem` that captures its private-routing decision. |
-| `request/`  | The request-scoped input model shared across layers: `RequestContext` (chat/user/message ids and sender info that tools see) and `RepliedPhoto` (a replied-to photo tools can lazily download).                                                                                |
-| `tasks/`    | Scheduled-task subsystem: storage, recurrence math, and the background `TaskScheduler`.                                                                                                                                                                                        |
-| `infra/`    | Cross-cutting infrastructure: the SQLite/Exposed `Db` singleton and the Ktor `Http` client.                                                                                                                                                                                    |
-| `config/`   | `.env` parsing (`AppConfig`) and LLM provider/model resolution (`LlmRuntime`).                                                                                                                                                                                                 |
-| `stt/`      | OpenAI Whisper speech-to-text client (optional, opt-in).                                                                                                                                                                                                                       |
-| `i18n/`     | User-facing message strings, one `Messages` implementation per `Language`. `Language.fromCode` picks the language from the sender's Telegram language code (default English); add a language by adding an enum entry and a `Messages` impl.                                    |
-| `common/`   | Tiny shared utilities (e.g. cancellation rethrow).                                                                                                                                                                                                                             |
+| Package     | Responsibility                                                                                                                                                                                                                                                                                                                                        |
+|-------------|-------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
+| `telegram/` | Telegram I/O. Receives updates (text/voice/audio/sticker), filters by allowlist, normalizes input, and delivers agent results back — including markdown/document/text fallbacks and reply anchoring.                                                                                                                                                  |
+| `agent/`    | Agent orchestration on top of Koog. `AgentRunner` serializes per-user turns; `AgentFactory` builds the `AIAgent` (system prompt + history + memory + tools). `agent/history/` summarizes and persists chat turns; `agent/memory/` stores durable user/group memory that survives a history clear and is injected as `<user_memory>`/`<group_memory>`. |
+| `tools/`    | Agent-callable tools, one subpackage per capability (search, voice, vision, scheduled tasks, …). `ToolRegistryFactory` owns the clients and builds a per-request registry. See [features.md](features.md).                                                                                                                                            |
+| `outbox/`   | The output model. `BotOutput` is the (immutable) sealed set of things the bot can send (text, photo, voice, poll, reaction, …); `BotOutbox` is the per-request queue tools write into, holding each `BotOutput` as an `OutboxItem` that captures its private-routing decision.                                                                        |
+| `request/`  | The request-scoped input model shared across layers: `RequestContext` (chat/user/message ids and sender info that tools see) and `RepliedPhoto` (a replied-to photo tools can lazily download).                                                                                                                                                       |
+| `tasks/`    | Scheduled-task subsystem: storage, recurrence math, and the background `TaskScheduler`.                                                                                                                                                                                                                                                               |
+| `infra/`    | Cross-cutting infrastructure: the SQLite/Exposed `Db` singleton and the Ktor `Http` client.                                                                                                                                                                                                                                                           |
+| `config/`   | `.env` parsing (`AppConfig`) and LLM provider/model resolution (`LlmRuntime`).                                                                                                                                                                                                                                                                        |
+| `stt/`      | OpenAI Whisper speech-to-text client (optional, opt-in).                                                                                                                                                                                                                                                                                              |
+| `i18n/`     | User-facing message strings, one `Messages` implementation per `Language`. `Language.fromCode` picks the language from the sender's Telegram language code (default English); add a language by adding an enum entry and a `Messages` impl.                                                                                                           |
+| `common/`   | Tiny shared utilities (e.g. cancellation rethrow).                                                                                                                                                                                                                                                                                                    |
 
 ## Request lifecycle
 
@@ -41,8 +42,10 @@ A normal user message travels:
    photo are gathered. `TelegramBotRunner.dispatchToAgent` assembles the agent input and history input.
 4. **Run** — `AgentRunner.handle` takes the per-user lock (or returns "busy"), then `AgentFactory.build` constructs a
    Koog `AIAgent` with the system prompt,
-   current time, message context, summarized history (`agent/history/ChatHistory`), and the per-request tool registry (
-   `ToolRegistryFactory.buildRegistry`).
+   current time, message context, summarized history (`agent/history/ChatHistory`), durable memory
+   (`agent/memory/MemoryRepository` — the sender's user memory always, plus the group's memory in non-private chats),
+   and
+   the per-request tool registry (`ToolRegistryFactory.buildRegistry`).
 5. **Act** — during the agent loop, tools run and push results into the request's `BotOutbox`. Tool calls/results are
    recorded for history. The custom
    `single_run` strategy (`AgentFactory`) validates each tool call against its declared required parameters first: a

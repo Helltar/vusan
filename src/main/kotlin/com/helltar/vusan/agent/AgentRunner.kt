@@ -1,6 +1,8 @@
 package com.helltar.vusan.agent
 
 import com.helltar.vusan.agent.history.*
+import com.helltar.vusan.agent.memory.MemoryRepository
+import com.helltar.vusan.agent.memory.MemoryScope
 import com.helltar.vusan.common.collapseWhitespaceAndCap
 import com.helltar.vusan.common.isEffectivelyBlank
 import com.helltar.vusan.common.rethrowIfCancellation
@@ -36,7 +38,11 @@ data class AgentResult(
     val historyTurns: List<ChatTurn> = emptyList()
 )
 
-class AgentRunner(private val agentFactory: AgentFactory, private val history: ChatHistoryRepository) {
+class AgentRunner(
+    private val agentFactory: AgentFactory,
+    private val history: ChatHistoryRepository,
+    private val memory: MemoryRepository
+) {
 
     private companion object {
         val log = KotlinLogging.logger {}
@@ -80,9 +86,13 @@ class AgentRunner(private val agentFactory: AgentFactory, private val history: C
         val outbox = BotOutbox()
         val promptHistory = summarizeForPrompt(history.load(request.userId))
 
+        val userMemory = memory.load(MemoryScope.USER, request.userId)
+        val chatMemory = if (context.chatIsPrivate) emptyList() else memory.load(MemoryScope.CHAT, request.chatId)
+
         log.info {
             "prompt history loaded: user=${request.userId} chat=${request.chatId} " +
                     "turns=${promptHistory.turns.size} summaryChars=${promptHistory.summary?.length ?: 0} " +
+                    "userMemory=${userMemory.size} chatMemory=${chatMemory.size} " +
                     "promptChars=${request.prompt.length} historyChars=${request.historyEntry.length} " +
                     "repliedPhoto=${request.repliedPhoto != null}"
         }
@@ -98,7 +108,9 @@ class AgentRunner(private val agentFactory: AgentFactory, private val history: C
                 outbox = outbox,
                 toolEvents = toolEvents::add,
                 tokenUsage = tokenUsages::add,
-                messageContext = request.messageContext
+                messageContext = request.messageContext,
+                userMemory = userMemory,
+                chatMemory = chatMemory
             )
 
         val answer =

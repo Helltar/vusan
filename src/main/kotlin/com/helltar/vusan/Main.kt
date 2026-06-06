@@ -4,6 +4,7 @@ import ai.koog.prompt.executor.llms.MultiLLMPromptExecutor
 import com.helltar.vusan.agent.AgentFactory
 import com.helltar.vusan.agent.AgentRunner
 import com.helltar.vusan.agent.history.ChatHistoryRepository
+import com.helltar.vusan.agent.memory.MemoryRepository
 import com.helltar.vusan.config.AppConfig
 import com.helltar.vusan.config.resolveLlmRuntime
 import com.helltar.vusan.infra.Db
@@ -39,11 +40,12 @@ suspend fun main() = coroutineScope {
         executor = MultiLLMPromptExecutor(llm.koogProvider to llm.client)
 
         val history = ChatHistoryRepository()
+        val memory = MemoryRepository(config.maxMemoryPerScope)
         val tasks = TasksRepository()
 
-        val toolRegistryFactory = ToolRegistryFactory(http, config, history, tasks, executor, llm.model)
+        val toolRegistryFactory = ToolRegistryFactory(http, config, history, memory, tasks, executor, llm.model)
         val agentFactory = AgentFactory(executor, toolRegistryFactory, llm.model, llm.chatParams, config.systemPrompt)
-        val agentRunner = AgentRunner(agentFactory, history)
+        val agentRunner = AgentRunner(agentFactory, history, memory)
 
         val voiceTranscriber =
             config.openAiStt?.let { sttConfig ->

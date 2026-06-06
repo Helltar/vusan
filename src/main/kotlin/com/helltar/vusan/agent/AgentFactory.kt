@@ -20,6 +20,8 @@ import ai.koog.serialization.JSONObject
 import com.helltar.vusan.agent.history.ChatRole
 import com.helltar.vusan.agent.history.PromptHistory
 import com.helltar.vusan.agent.history.toolCallArgsForHistory
+import com.helltar.vusan.agent.memory.MemoryEntry
+import com.helltar.vusan.common.xmlBlock
 import com.helltar.vusan.outbox.BotOutbox
 import com.helltar.vusan.request.RequestContext
 import com.helltar.vusan.tools.ToolRegistryFactory
@@ -57,12 +59,17 @@ class AgentFactory(
         outbox: BotOutbox,
         toolEvents: (ToolEvent) -> Unit,
         tokenUsage: (TokenUsage) -> Unit,
-        messageContext: MessageContext? = null
+        messageContext: MessageContext? = null,
+        userMemory: List<MemoryEntry> = emptyList(),
+        chatMemory: List<MemoryEntry> = emptyList()
     ): AIAgent<String, String> {
         val seededPrompt =
             prompt(id = "vusan-user-$userId", params = chatParams) {
                 system(systemPromptFor(persona ?: DEFAULT_PERSONA))
                 messageContext?.toSystemPrompt()?.let(::system)
+
+                if (userMemory.isNotEmpty()) system(xmlBlock("user_memory", renderMemory(userMemory)))
+                if (chatMemory.isNotEmpty()) system(xmlBlock("group_memory", renderMemory(chatMemory)))
 
                 history.summary?.let(::assistant)
 
@@ -228,6 +235,10 @@ private fun garbledToolCallResult(call: MessagePart.Tool.Call, missing: List<Str
         result = null
     )
 }
+
+// Renders memory as `#id content` lines so the model can reference an id when calling `forgetMemory`.
+private fun renderMemory(entries: List<MemoryEntry>): String =
+    entries.joinToString("\n") { "#${it.id} ${it.content}" }
 
 private val LOCAL_DATE_TIME = DateTimeFormatter.ofPattern("yyyy-MM-dd'T'HH:mm:ss")
 private val DAY_OF_WEEK = DateTimeFormatter.ofPattern("EEEE")

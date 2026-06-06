@@ -13,6 +13,7 @@ data class AppConfig(
     val elevenLabsTts: ElevenLabsTtsConfig?,
     val giphyApiKey: String?,
     val llmProvider: LlmProviderConfig,
+    val maxMemoryPerScope: Int,
     val maxTasksPerUser: Int,
     val openAiStt: OpenAiSttConfig?,
     val sandboxTimeoutSeconds: Long,
@@ -29,6 +30,7 @@ data class AppConfig(
         private const val DEFAULT_LLM_MODEL = "gpt-5.4-nano"
         private const val DEFAULT_LLM_PROVIDER = "openai"
         private const val DEFAULT_LLM_REQUEST_TIMEOUT_SECONDS = 120L
+        private const val DEFAULT_MAX_MEMORY_PER_SCOPE = 10
         private const val DEFAULT_MAX_TASKS_PER_USER = 5
         private const val DEFAULT_SANDBOX_TIMEOUT_SECONDS = 30L
         private const val DEFAULT_TASK_MAX_LATENESS_MINUTES = 60L
@@ -53,6 +55,7 @@ data class AppConfig(
                 ytDlpCookiesFile = readEnv("YT_DLP_COOKIES_FILE"),
                 ytDlpPath = readEnv("YT_DLP_PATH") ?: "yt-dlp",
 
+                maxMemoryPerScope = readEnv("MAX_MEMORY_PER_SCOPE")?.toIntOrNull() ?: DEFAULT_MAX_MEMORY_PER_SCOPE,
                 maxTasksPerUser = readEnv("MAX_TASKS_PER_USER")?.toIntOrNull() ?: DEFAULT_MAX_TASKS_PER_USER,
 
                 sandboxTimeoutSeconds =

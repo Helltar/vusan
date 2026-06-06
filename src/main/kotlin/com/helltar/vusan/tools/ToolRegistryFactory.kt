@@ -4,6 +4,7 @@ import ai.koog.agents.core.tools.ToolRegistry
 import ai.koog.prompt.executor.model.PromptExecutor
 import ai.koog.prompt.llm.LLModel
 import com.helltar.vusan.agent.history.ChatHistoryRepository
+import com.helltar.vusan.agent.memory.MemoryRepository
 import com.helltar.vusan.config.AppConfig
 import com.helltar.vusan.outbox.BotOutbox
 import com.helltar.vusan.request.RequestContext
@@ -13,6 +14,7 @@ import com.helltar.vusan.tools.currency.ExchangeRateClient
 import com.helltar.vusan.tools.files.FileTools
 import com.helltar.vusan.tools.giphy.GiphyClient
 import com.helltar.vusan.tools.giphy.GiphyTools
+import com.helltar.vusan.tools.history.HistoryTools
 import com.helltar.vusan.tools.memory.MemoryTools
 import com.helltar.vusan.tools.message.MessageTools
 import com.helltar.vusan.tools.poll.PollTools
@@ -41,6 +43,7 @@ class ToolRegistryFactory(
     http: HttpClient,
     private val config: AppConfig,
     private val history: ChatHistoryRepository,
+    private val memory: MemoryRepository,
     private val tasks: TasksRepository,
     promptExecutor: PromptExecutor,
     model: LLModel
@@ -95,7 +98,8 @@ class ToolRegistryFactory(
             tools(FileTools(outbox))
             tools(QuizTools(outbox))
             tools(PollTools(outbox))
-            tools(MemoryTools(history, context))
+            tools(HistoryTools(history, context))
+            tools(MemoryTools(memory, context))
             tools(VisionTools(repliedPhotoVisionClient, context.repliedPhoto))
             tools(
                 TaskTools(

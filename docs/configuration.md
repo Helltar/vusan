@@ -1,6 +1,7 @@
 # Configuration
 
-Vusan reads configuration from environment variables. For Docker, put them in a `.env` file in the repo root; [`.env.example`](../.env.example) is the
+Vusan reads configuration from environment variables. For Docker, put them in a `.env` file in the repo root; [
+`.env.example`](../.env.example) is the
 copy-paste starting point. Blank values are treated as missing.
 
 ## Minimum setup
@@ -19,7 +20,8 @@ LLM_API_KEY=sk-proj-qwerty
 | `TELEGRAM_BOT_TOKEN` | Bot token from [@BotFather](https://t.me/BotFather). |
 | `LLM_API_KEY`        | API key for the LLM provider (OpenAI by default).    |
 
-`ALLOWED_IDS` is comma-separated. Positive IDs are users; negative IDs are groups. Empty/unset means the bot answers nobody.
+`ALLOWED_IDS` is comma-separated. Positive IDs are users; negative IDs are groups. Empty/unset means the bot answers
+nobody.
 
 ## LLM provider
 
@@ -32,7 +34,9 @@ Provider options:
 
 `openai-compatible` targets any OpenAI-compatible chat completions API, including remote APIs and local servers.
 
-`LLM_REQUEST_TIMEOUT_SECONDS` (default `120`) caps how long a single LLM HTTP call may hang. The koog client otherwise waits 15 minutes, during which the bot stays silent; the shorter cap lets a stalled call fail fast so the agent can deliver an error reply. Raise it for slow local servers or heavy reasoning models.
+`LLM_REQUEST_TIMEOUT_SECONDS` (default `120`) caps how long a single LLM HTTP call may hang. The koog client otherwise
+waits 15 minutes, during which the bot stays silent; the shorter cap lets a stalled call fail fast so the agent can
+deliver an error reply. Raise it for slow local servers or heavy reasoning models.
 
 DeepSeek example:
 
@@ -63,7 +67,8 @@ LLM_MODEL=gemma4
 
 ## Persona
 
-The bot ships with a built-in persona ("Vusan"). Override it with either inline text or a file. The operational rules for output and tools are always appended
+The bot ships with a built-in persona ("Vusan"). Override it with either inline text or a file. The operational rules
+for output and tools are always appended
 by the bot and cannot be removed by a custom persona.
 
 Unset both variables to use the built-in persona.
@@ -73,19 +78,21 @@ Unset both variables to use the built-in persona.
 | `SYSTEM_PROMPT`      | Inline persona text. Takes precedence when set.                                                 |
 | `SYSTEM_PROMPT_FILE` | Path to a persona file. Used only when `SYSTEM_PROMPT` is unset; unreadable files fail startup. |
 
-`SYSTEM_PROMPT_FILE` suits a long, multi-line persona — a file keeps line breaks and formatting readable, where `SYSTEM_PROMPT` is meant for short inline text.
+`SYSTEM_PROMPT_FILE` suits a long, multi-line persona — a file keeps line breaks and formatting readable, where
+`SYSTEM_PROMPT` is meant for short inline text.
 
 ## Optional tools
 
-Each optional tool is enabled by one env variable. If it is missing, that tool is skipped at startup with a `WARN` log and the bot keeps running.
+Each optional tool is enabled by one env variable. If it is missing, that tool is skipped at startup with a `WARN` log
+and the bot keeps running.
 
-| Tool                                      | Enable with          | Notes                                  |
-|-------------------------------------------|----------------------|----------------------------------------|
-| Web search, image search, page extraction | `TAVILY_API_KEY`     | Tavily                                 |
-| GIF lookup                                | `GIPHY_API_KEY`      | Giphy                                  |
-| Voice output                              | `ELEVENLABS_API_KEY` | ElevenLabs TTS                         |
-| Voice input                               | `OPENAI_STT_API_KEY` | Reuse your OpenAI key                  |
-| Code execution                            | `SANDBOX_URL`        | See [Code sandbox](#code-sandbox)      |
+| Tool                                      | Enable with          | Notes                             |
+|-------------------------------------------|----------------------|-----------------------------------|
+| Web search, image search, page extraction | `TAVILY_API_KEY`     | Tavily                            |
+| GIF lookup                                | `GIPHY_API_KEY`      | Giphy                             |
+| Voice output                              | `ELEVENLABS_API_KEY` | ElevenLabs TTS                    |
+| Voice input                               | `OPENAI_STT_API_KEY` | Reuse your OpenAI key             |
+| Code execution                            | `SANDBOX_URL`        | See [Code sandbox](#code-sandbox) |
 
 ### TTS tuning
 
@@ -104,8 +111,10 @@ Each optional tool is enabled by one env variable. If it is missing, that tool i
 
 ## Code sandbox
 
-`runCode` lets the agent run Python in an isolated sandbox to compute exact answers, transform data, and render charts (`numpy`, `pandas`, `matplotlib`,
-`sympy`). The sandbox executes untrusted code on an internal-only network with no secrets, no internet, and no host mounts.
+`runCode` lets the agent run Python in an isolated sandbox to compute exact answers, transform data, and render charts (
+`numpy`, `pandas`, `matplotlib`,
+`sympy`). The sandbox executes untrusted code on an internal-only network with no secrets, no internet, and no host
+mounts.
 
 Docker starts it by default:
 
@@ -125,17 +134,29 @@ If the sandbox is already running, stop it separately:
 docker compose stop vusan-sandbox
 ```
 
-For a local JVM run, there is no sandbox container unless you start one yourself. Point `SANDBOX_URL` at that service, or leave it commented.
+For a local JVM run, there is no sandbox container unless you start one yourself. Point `SANDBOX_URL` at that service,
+or leave it commented.
 
 ### Sandbox tuning
 
-These are sandbox-service environment variables. `SANDBOX_TIMEOUT_SECONDS` is also read by the bot and is wired through the default `compose.yaml`.
+These are sandbox-service environment variables. `SANDBOX_TIMEOUT_SECONDS` is also read by the bot and is wired through
+the default `compose.yaml`.
 
 | Variable                  | Default | Description                                                                         |
 |---------------------------|---------|-------------------------------------------------------------------------------------|
 | `SANDBOX_POOL_SIZE`       | `2`     | Warm Pyodide workers kept ready. Service only.                                      |
 | `SANDBOX_TIMEOUT_SECONDS` | `30`    | Hard per-run limit. Read by both the service and the bot, so set it once in `.env`. |
 | `PORT`                    | `8080`  | Port the sandbox service listens on. Service only.                                  |
+
+## Memory
+
+The agent keeps a per-user conversation history plus a durable **memory** that survives the user
+clearing the chat: personal memory (keyed by user, follows them across DMs and groups) and shared
+group memory (keyed by chat). Built in; no env variable is required to enable it.
+
+| Variable               | Default | Description                                                               |
+|------------------------|---------|---------------------------------------------------------------------------|
+| `MAX_MEMORY_PER_SCOPE` | `10`    | Max durable memory entries per user and per chat; the oldest are evicted. |
 
 ## Scheduled tasks
 
