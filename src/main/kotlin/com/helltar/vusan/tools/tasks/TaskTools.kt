@@ -43,11 +43,16 @@ class TaskTools(
         val trimmedPrompt = prompt.trim()
 
         require(trimmedPrompt.isNotEmpty()) { "Task prompt must not be empty" }
-        require(trimmedPrompt.length <= MAX_PROMPT_CHARS) { "Task prompt must be at most $MAX_PROMPT_CHARS characters" }
+
+        require(trimmedPrompt.length <= MAX_PROMPT_CHARS) {
+            "Task prompt must be at most $MAX_PROMPT_CHARS characters"
+        }
 
         val trimmedTitle = title?.trim()?.takeIf { it.isNotEmpty() }
 
-        require(trimmedTitle == null || trimmedTitle.length <= MAX_TITLE_CHARS) { "Task title must be at most $MAX_TITLE_CHARS characters" }
+        require(trimmedTitle == null || trimmedTitle.length <= MAX_TITLE_CHARS) {
+            "Task title must be at most $MAX_TITLE_CHARS characters"
+        }
 
         val tz =
             parseTimezone(timezone)

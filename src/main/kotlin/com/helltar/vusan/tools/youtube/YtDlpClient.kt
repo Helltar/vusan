@@ -45,7 +45,12 @@ class YtDlpClient(
             val version =
                 when {
                     versionResult.timedOut -> "timeout"
-                    versionResult.exitCode == 0 -> versionResult.stdout.trim().lineSequence().firstOrNull().orEmpty().ifBlank { "empty" }
+
+                    versionResult.exitCode == 0 -> {
+                        versionResult.stdout.trim().lineSequence().firstOrNull().orEmpty()
+                            .ifBlank { "empty" }
+                    }
+
                     else -> "exit-${versionResult.exitCode}:${versionResult.stdout.trim().take(120)}"
                 }
 
@@ -55,31 +60,33 @@ class YtDlpClient(
         }
     }
 
-    suspend fun downloadTrack(query: String, maxFileSizeMb: Int = 45): YtDlpResult<YtDlpTrack> = withContext(Dispatchers.IO) {
-        require(query.isNotBlank()) { "Query must not be blank" }
-        require(maxFileSizeMb in 1..50) { "maxFileSizeMb must be between 1 and 50" }
+    suspend fun downloadTrack(query: String, maxFileSizeMb: Int = 45): YtDlpResult<YtDlpTrack> =
+        withContext(Dispatchers.IO) {
+            require(query.isNotBlank()) { "Query must not be blank" }
+            require(maxFileSizeMb in 1..50) { "maxFileSizeMb must be between 1 and 50" }
 
-        val workDir = Files.createTempDirectory("ytdlp-audio-")
+            val workDir = Files.createTempDirectory("ytdlp-audio-")
 
-        try {
-            runAudioDownload(workDir, query, maxFileSizeMb)
-        } finally {
-            workDir.toFile().deleteRecursively()
+            try {
+                runAudioDownload(workDir, query, maxFileSizeMb)
+            } finally {
+                workDir.toFile().deleteRecursively()
+            }
         }
-    }
 
-    suspend fun downloadVideo(query: String, maxFileSizeMb: Int = VIDEO_MAX_FILE_SIZE_MB): YtDlpResult<YtDlpVideo> = withContext(Dispatchers.IO) {
-        require(query.isNotBlank()) { "Query must not be blank" }
-        require(maxFileSizeMb in 1..50) { "maxFileSizeMb must be between 1 and 50" }
+    suspend fun downloadVideo(query: String, maxFileSizeMb: Int = VIDEO_MAX_FILE_SIZE_MB): YtDlpResult<YtDlpVideo> =
+        withContext(Dispatchers.IO) {
+            require(query.isNotBlank()) { "Query must not be blank" }
+            require(maxFileSizeMb in 1..50) { "maxFileSizeMb must be between 1 and 50" }
 
-        val workDir = Files.createTempDirectory("ytdlp-video-")
+            val workDir = Files.createTempDirectory("ytdlp-video-")
 
-        try {
-            runVideoDownload(workDir, query, maxFileSizeMb)
-        } finally {
-            workDir.toFile().deleteRecursively()
+            try {
+                runVideoDownload(workDir, query, maxFileSizeMb)
+            } finally {
+                workDir.toFile().deleteRecursively()
+            }
         }
-    }
 
     private suspend fun runAudioDownload(workDir: Path, query: String, maxFileSizeMb: Int): YtDlpResult<YtDlpTrack> =
         downloadFromCandidates(
@@ -103,7 +110,10 @@ class YtDlpClient(
     ): YtDlpResult<T> {
         val diagnostics = getRuntimeDiagnostics()
 
-        log.info { "yt-dlp $kind download start query=[${query.take(120)}] maxFileSizeMb=$maxFileSizeMb $diagnostics ${authDiagnostics()}" }
+        log.info {
+            "yt-dlp $kind download start query=[${query.take(120)}] " +
+                    "maxFileSizeMb=$maxFileSizeMb $diagnostics ${authDiagnostics()}"
+        }
 
         val candidates = resolveCandidates()
 
@@ -144,7 +154,13 @@ class YtDlpClient(
                 }
 
                 is YtDlpResult.Failure -> {
-                    log.warn { "yt-dlp $label failed retryable=${attempt.retryable} url=[${candidate.url}]: ${result.reason.take(300)}" }
+                    log.warn {
+                        "yt-dlp $label failed retryable=${attempt.retryable} url=[${candidate.url}]: ${
+                            result.reason.take(
+                                300
+                            )
+                        }"
+                    }
                     if (!attempt.retryable) return result
                     retryableFailures += result
                 }
@@ -156,7 +172,10 @@ class YtDlpClient(
                     retryableFailures.all { it.reason.contains(FORMAT_UNAVAILABLE_MARKER, ignoreCase = true) }
 
         if (allFormatUnavailable) {
-            return YtDlpResult.Failure("yt-dlp found no available formats for any of ${candidates.size} YouTube candidates on this server. Check the server yt-dlp version and YouTube cookies.")
+            return YtDlpResult.Failure(
+                "yt-dlp found no available formats for any of ${candidates.size} " +
+                        "YouTube candidates on this server. Check the server yt-dlp version and YouTube cookies."
+            )
         }
 
         return retryableFailures.lastOrNull() ?: YtDlpResult.NotFound
@@ -191,7 +210,10 @@ class YtDlpClient(
         val bytes = withContext(Dispatchers.IO) { Files.readAllBytes(outputFile) }
 
         if (bytes.size > maxFileSizeMb * 1024 * 1024) {
-            log.warn { "yt-dlp download exceeds Telegram limit url=[$url] bytes=${bytes.size} maxFileSizeMb=$maxFileSizeMb" }
+            log.warn {
+                "yt-dlp download exceeds Telegram limit url=[$url] bytes=${bytes.size} maxFileSizeMb=$maxFileSizeMb"
+            }
+
             return DownloadAttempt(YtDlpResult.TooLarge(sizeBytes = bytes.size.toLong()))
         }
 
@@ -204,7 +226,14 @@ class YtDlpClient(
                 add(ytDlpPath)
                 add("--ignore-config")
                 add("--no-warnings")
-                addAll(listOf("--dump-single-json", "--flat-playlist", "--playlist-end", SEARCH_RESULT_LIMIT.toString()))
+                addAll(
+                    listOf(
+                        "--dump-single-json",
+                        "--flat-playlist",
+                        "--playlist-end",
+                        SEARCH_RESULT_LIMIT.toString()
+                    )
+                )
                 addAll(authArgs())
                 add("ytsearch$SEARCH_RESULT_LIMIT:$query")
             }
@@ -212,13 +241,21 @@ class YtDlpClient(
         val result = runCommand(command)
 
         if (result.timedOut) {
-            log.warn { "yt-dlp search timed out after ${timeoutSeconds}s for query=[${query.take(120)}] ${authDiagnostics()}" }
+            log.warn {
+                "yt-dlp search timed out after ${timeoutSeconds}s for query=[${query.take(120)}] ${authDiagnostics()}"
+            }
+
             return emptyList()
         }
 
         if (result.exitCode != 0) {
             val combined = result.stderr.ifBlank { result.stdout }
-            log.warn { "yt-dlp search exit ${result.exitCode} for query=[${query.take(120)}] ${authDiagnostics()}: ${combined.take(500)}" }
+
+            log.warn {
+                "yt-dlp search exit ${result.exitCode} for query=[${query.take(120)}] " +
+                        "${authDiagnostics()}: ${combined.take(500)}"
+            }
+
             return emptyList()
         }
 
@@ -229,7 +266,12 @@ class YtDlpClient(
         return candidates
     }
 
-    private suspend fun downloadAudioCandidate(workDir: Path, url: String, query: String, maxFileSizeMb: Int): DownloadAttempt<YtDlpTrack> {
+    private suspend fun downloadAudioCandidate(
+        workDir: Path,
+        url: String,
+        query: String,
+        maxFileSizeMb: Int
+    ): DownloadAttempt<YtDlpTrack> {
         val command =
             buildList {
                 add(ytDlpPath)
@@ -266,7 +308,12 @@ class YtDlpClient(
             downloadCandidate = { attemptDir, url -> downloadVideoCandidate(attemptDir, url, query, maxFileSizeMb) }
         )
 
-    private suspend fun downloadVideoCandidate(workDir: Path, url: String, query: String, maxFileSizeMb: Int): DownloadAttempt<YtDlpVideo> {
+    private suspend fun downloadVideoCandidate(
+        workDir: Path,
+        url: String,
+        query: String,
+        maxFileSizeMb: Int
+    ): DownloadAttempt<YtDlpVideo> {
         var lastTooLarge: YtDlpResult.TooLarge? = null
 
         VIDEO_HEIGHT_CAPS.forEach { cap ->
@@ -276,7 +323,11 @@ class YtDlpClient(
 
             if (result is YtDlpResult.TooLarge) {
                 lastTooLarge = result
-                log.info { "yt-dlp video too large at height<=$cap url=[$url] sizeBytes=${result.sizeBytes}, stepping resolution down" }
+
+                log.info {
+                    "yt-dlp video too large at height<=$cap url=[$url] sizeBytes=${result.sizeBytes}, " +
+                            "stepping resolution down"
+                }
             } else {
                 // Success, or a non-size error (auth/extract/format) that a lower resolution would not fix.
                 return attempt
@@ -286,7 +337,13 @@ class YtDlpClient(
         return DownloadAttempt(lastTooLarge ?: YtDlpResult.TooLarge(sizeBytes = maxFileSizeMb.toLong() * 1024 * 1024))
     }
 
-    private suspend fun downloadVideoAtHeight(workDir: Path, url: String, query: String, maxFileSizeMb: Int, heightCap: Int): DownloadAttempt<YtDlpVideo> {
+    private suspend fun downloadVideoAtHeight(
+        workDir: Path,
+        url: String,
+        query: String,
+        maxFileSizeMb: Int,
+        heightCap: Int
+    ): DownloadAttempt<YtDlpVideo> {
         val command =
             buildList {
                 add(ytDlpPath)
@@ -325,7 +382,12 @@ class YtDlpClient(
         return searchCandidates(query)
     }
 
-    private suspend fun classifyDownloadError(commandResult: YtDlpCommandResult, url: String, query: String, maxFileSizeMb: Int): DownloadAttempt<Nothing> {
+    private suspend fun classifyDownloadError(
+        commandResult: YtDlpCommandResult,
+        url: String,
+        query: String,
+        maxFileSizeMb: Int
+    ): DownloadAttempt<Nothing> {
         val combined = commandResult.stderr.ifBlank { commandResult.stdout }
 
         return when {
@@ -335,20 +397,37 @@ class YtDlpClient(
             }
 
             combined.containsAny("Sign in to confirm you", "confirm your age", "cookies-from-browser") -> {
-                log.warn { "yt-dlp download requires auth url=[$url] query=[${query.take(120)}] ${authDiagnostics()}: ${combined.take(500)}" }
+                log.warn {
+                    "yt-dlp download requires auth url=[$url] query=[${query.take(120)}] " +
+                            "${authDiagnostics()}: ${combined.take(500)}"
+                }
+
                 DownloadAttempt(YtDlpResult.AuthRequired)
             }
 
             combined.containsAny("No video results", "Unable to extract") -> {
-                log.warn { "yt-dlp download could not extract candidate url=[$url] query=[${query.take(120)}]: ${combined.take(500)}" }
+                log.warn {
+                    "yt-dlp download could not extract candidate url=[$url] " +
+                            "query=[${query.take(120)}]: ${combined.take(500)}"
+                }
+
                 DownloadAttempt(YtDlpResult.NotFound, retryable = true)
             }
 
             else -> {
                 val retryable = combined.contains(FORMAT_UNAVAILABLE_MARKER, ignoreCase = true)
-                log.warn { "yt-dlp download exit ${commandResult.exitCode} retryable=$retryable query=[${query.take(120)}] url=[$url]: ${combined.take(500)}" }
+
+                log.warn {
+                    "yt-dlp download exit ${commandResult.exitCode} retryable=$retryable " +
+                            "query=[${query.take(120)}] url=[$url]: ${combined.take(500)}"
+                }
+
                 if (retryable) logUnavailableFormatsDiagnostics(url, query)
-                DownloadAttempt(YtDlpResult.Failure("yt-dlp exit ${commandResult.exitCode}: ${combined.take(200)}"), retryable = retryable)
+
+                DownloadAttempt(
+                    YtDlpResult.Failure("yt-dlp exit ${commandResult.exitCode}: ${combined.take(200)}"),
+                    retryable = retryable
+                )
             }
         }
     }
@@ -381,8 +460,13 @@ class YtDlpClient(
     }
 
     private fun parseSearchCandidates(stdout: String): List<YtDlpSearchCandidate> {
-        val firstLine = stdout.lineSequence().firstOrNull { it.trimStart().startsWith("{") } ?: return emptyList()
-        val search = runCatching { json.decodeFromString<YtDlpSearchResult>(firstLine) }.getOrNull() ?: return emptyList()
+        val firstLine =
+            stdout.lineSequence().firstOrNull { it.trimStart().startsWith("{") }
+                ?: return emptyList()
+
+        val search =
+            runCatching { json.decodeFromString<YtDlpSearchResult>(firstLine) }.getOrNull()
+                ?: return emptyList()
 
         return search.entries.orEmpty().mapNotNull { entry ->
             val directUrl = entry.url?.takeIf { it.startsWith("http://") || it.startsWith("https://") }
@@ -419,8 +503,10 @@ class YtDlpClient(
 
         when {
             result.timedOut -> log.warn { "yt-dlp list-formats timed out url=[$url] query=[${query.take(120)}]" }
+
             result.exitCode != 0 -> log.warn {
-                "yt-dlp list-formats exit ${result.exitCode} url=[$url] query=[${query.take(120)}]: ${output.take(2000)}"
+                "yt-dlp list-formats exit ${result.exitCode} url=[$url] " +
+                        "query=[${query.take(120)}]: ${output.take(2000)}"
             }
 
             else -> log.warn {
@@ -439,7 +525,12 @@ class YtDlpClient(
             val path = Path.of(file)
             val exists = Files.exists(path)
             val readable = Files.isReadable(path)
-            val sizeBytes = if (exists) runCatching { Files.size(path).toString() }.getOrDefault("unknown") else "missing"
+
+            val sizeBytes =
+                if (exists)
+                    runCatching { Files.size(path).toString() }.getOrDefault("unknown")
+                else
+                    "missing"
 
             "auth=cookies-file path=[$file] exists=$exists readable=$readable sizeBytes=$sizeBytes"
         }.getOrElse { error ->

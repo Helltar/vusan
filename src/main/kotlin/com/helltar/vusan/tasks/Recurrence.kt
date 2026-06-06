@@ -126,7 +126,10 @@ private val SCHEDULE_LOCAL_DATE_TIME = DateTimeFormatter.ofPattern("yyyy-MM-dd'T
 private fun parseOnce(rest: String, now: Instant, timezone: ZoneId): ScheduleParse {
     val local =
         runCatching { LocalDateTime.parse(rest, SCHEDULE_LOCAL_DATE_TIME) }.getOrNull()
-            ?: return ScheduleParse.Err("Cannot parse once datetime=`$rest`. Use ISO local datetime like `2026-05-30T09:00`.")
+            ?: return ScheduleParse.Err(
+                "Cannot parse once datetime=`$rest`. " +
+                        "Use ISO local datetime like `2026-05-30T09:00`."
+            )
 
     val fireAt = local.atZone(timezone).toInstant()
 

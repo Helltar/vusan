@@ -12,7 +12,10 @@ private const val MAX_LINKS_PER_POST = 6
 private const val MAX_IMAGES_TO_DESCRIBE = 4
 
 @Suppress("unused")
-class TelegramChannelTools(private val client: TelegramChannelClient, private val imageDescriber: TelegramChannelImageDescriber? = null) : ToolSet {
+class TelegramChannelTools(
+    private val client: TelegramChannelClient,
+    private val imageDescriber: TelegramChannelImageDescriber? = null
+) : ToolSet {
 
     @Tool
     @LLMDescription(TelegramChannelToolDescriptions.READ_TELEGRAM_CHANNEL_POSTS)

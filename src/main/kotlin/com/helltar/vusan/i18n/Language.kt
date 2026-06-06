@@ -1,11 +1,11 @@
 package com.helltar.vusan.i18n
 
 enum class Language(val codes: Set<String>) {
+
     ENGLISH(setOf("en")),
     UKRAINIAN(setOf("uk"));
 
     companion object {
-
         val DEFAULT = ENGLISH
 
         fun fromCode(code: String?): Language {

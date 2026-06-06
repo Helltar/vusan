@@ -38,15 +38,12 @@ internal fun AudioFile.toAudioInput(): AudioInput =
         file = this,
         durationSeconds = duration,
         mimeType = mimeType?.raw,
-        fileName = fileName
-            ?.takeIf { it.isNotBlank() }
-            ?: "audio-${fileUniqueId.string}.${extensionFor(mimeType?.raw, default = "mp3")}"
+        fileName =
+            fileName?.takeIf { it.isNotBlank() }
+                ?: "audio-${fileUniqueId.string}.${extensionFor(mimeType?.raw, default = "mp3")}"
     )
 
-internal class VoiceTranscriber(
-    private val whisper: OpenAiWhisperClient,
-    private val config: OpenAiSttConfig
-) {
+internal class VoiceTranscriber(private val whisper: OpenAiWhisperClient, private val config: OpenAiSttConfig) {
 
     private companion object {
         val log = KotlinLogging.logger {}
@@ -54,6 +51,7 @@ internal class VoiceTranscriber(
 
     suspend fun transcribe(bot: TelegramBot, input: AudioInput): VoiceTranscriptionResult {
         val duration = input.durationSeconds
+
         if (duration != null && duration > config.maxDurationSeconds) {
             return VoiceTranscriptionResult.TooLong(duration, config.maxDurationSeconds)
         }
@@ -62,11 +60,16 @@ internal class VoiceTranscriber(
             runCatching { bot.downloadFile(input.file) }
                 .getOrElse { e ->
                     e.rethrowIfCancellation()
-                    log.warn(e) { "audio download failed: fileId=[${input.file.fileId.fileId}] size=[${input.file.fileSize?.bytes}]" }
+
+                    log.warn(e) {
+                        "audio download failed: fileId=[${input.file.fileId.fileId}] size=[${input.file.fileSize?.bytes}]"
+                    }
+
                     return VoiceTranscriptionResult.Failed(e)
                 }
 
-        if (bytes.isEmpty()) return VoiceTranscriptionResult.Empty("downloaded audio file was empty")
+        if (bytes.isEmpty())
+            return VoiceTranscriptionResult.Empty("downloaded audio file was empty")
 
         val transcript =
             runCatching { whisper.transcribe(bytes, input.fileName, input.mimeType) }
@@ -80,7 +83,9 @@ internal class VoiceTranscriber(
                 }
 
         val trimmed = transcript.trim()
-        if (trimmed.isEmpty()) return VoiceTranscriptionResult.Empty("provider returned empty transcript")
+
+        if (trimmed.isEmpty())
+            return VoiceTranscriptionResult.Empty("provider returned empty transcript")
 
         return VoiceTranscriptionResult.Success(trimmed)
     }
@@ -97,4 +102,5 @@ private fun extensionFor(mimeType: String?, default: String): String =
         else -> default
     }
 
-internal fun wrapAudioTranscript(text: String): String = xmlBlock("audio_transcript", text)
+internal fun wrapAudioTranscript(text: String): String =
+    xmlBlock("audio_transcript", text)

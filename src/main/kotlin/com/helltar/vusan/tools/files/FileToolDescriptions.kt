@@ -4,8 +4,7 @@ internal object FileToolDescriptions {
 
     const val SEND_FILE =
         "Sends arbitrary text content to the user as a downloadable file (Telegram document). " +
-                "Use when the user asks to save, download, export, or receive text as a file, " +
-                "for example an article as markdown, notes as txt, or code as a file. " +
+                "Use when the user asks to save, download, export, or receive text as a file, for example an article as markdown, notes as txt, or code as a file. " +
                 "You are responsible for formatting `content` exactly how the file should look. " +
                 "After calling this tool, write a short natural comment for the user; the file will be sent automatically."
 

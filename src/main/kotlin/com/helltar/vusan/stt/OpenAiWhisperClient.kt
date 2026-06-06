@@ -16,7 +16,9 @@ class OpenAiWhisperClient(private val http: HttpClient, private val config: Open
         require(audio.isNotEmpty()) { "Audio bytes must not be empty" }
         require(fileName.isNotBlank()) { "File name must not be blank" }
 
-        val contentType = mimeType?.let { runCatching { ContentType.parse(it) }.getOrNull() } ?: ContentType.Application.OctetStream
+        val contentType =
+            mimeType?.let { runCatching { ContentType.parse(it) }.getOrNull() }
+                ?: ContentType.Application.OctetStream
 
         val response: WhisperTranscriptionResponse =
             http.submitFormWithBinaryData(

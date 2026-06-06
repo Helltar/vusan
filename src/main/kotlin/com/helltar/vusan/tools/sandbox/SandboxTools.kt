@@ -3,10 +3,10 @@ package com.helltar.vusan.tools.sandbox
 import ai.koog.agents.core.tools.annotations.LLMDescription
 import ai.koog.agents.core.tools.annotations.Tool
 import ai.koog.agents.core.tools.reflect.ToolSet
-import com.helltar.vusan.outbox.BotOutbox
-import com.helltar.vusan.outbox.BotOutput
 import com.helltar.vusan.common.limitTo
 import com.helltar.vusan.common.sanitizeFilename
+import com.helltar.vusan.outbox.BotOutbox
+import com.helltar.vusan.outbox.BotOutput
 import com.helltar.vusan.tools.common.suspendToolGuard
 import java.util.*
 
@@ -30,11 +30,15 @@ class SandboxTools(private val client: SandboxClient, private val outbox: BotOut
         val result = client.run(code)
 
         if (result.timedOut) {
-            return@suspendToolGuard "The code timed out before finishing. Simplify it or avoid long-running loops, then try again if it would help."
+            return@suspendToolGuard "The code timed out before finishing. " +
+                    "Simplify it or avoid long-running loops, then try again if it would help."
         }
 
         val animations = result.files.filter { it.name.isGifName() }.mapNotNull { it.toAnimation() }
-        val (imageFiles, otherFiles) = result.files.filterNot { it.name.isGifName() }.partition { it.name.isImageName() }
+
+        val (imageFiles, otherFiles) =
+            result.files.filterNot { it.name.isGifName() }.partition { it.name.isImageName() }
+
         val photos = imageFiles.mapNotNull { it.toPhoto() }
         val imageDocuments = imageFiles.mapNotNull { it.toDocument() }
         val documents = otherFiles.mapNotNull { it.toDocument() }
@@ -71,19 +75,28 @@ class SandboxTools(private val client: SandboxClient, private val outbox: BotOut
             val sent = animations.map { it.filename } + photos.map { it.filename } + documents.map { it.filename }
 
             if (sent.isNotEmpty()) {
-                appendLine("Delivered ${sent.size} file(s) to the chat: ${sent.joinToString(", ")}. Comment on the result for the user; do not paste the file contents.")
+                appendLine(
+                    "Delivered ${sent.size} file(s) to the chat: ${sent.joinToString(", ")}. " +
+                            "Comment on the result for the user; do not paste the file contents."
+                )
             }
         }.trim().ifBlank { "The code ran successfully but produced no output. Use print(...) to return values." }
     }
 
     private fun SandboxFile.toAnimation(): BotOutput.Animation? =
-        decodedBytes()?.let { BotOutput.Animation(bytes = it, filename = name.sanitizeFilename().ifBlank { "animation.gif" }) }
+        decodedBytes()?.let {
+            BotOutput.Animation(bytes = it, filename = name.sanitizeFilename().ifBlank { "animation.gif" })
+        }
 
     private fun SandboxFile.toPhoto(): BotOutput.Photo? =
-        decodedBytes()?.let { BotOutput.Photo(bytes = it, filename = name.sanitizeFilename().ifBlank { "chart.png" }) }
+        decodedBytes()?.let {
+            BotOutput.Photo(bytes = it, filename = name.sanitizeFilename().ifBlank { "chart.png" })
+        }
 
     private fun SandboxFile.toDocument(): BotOutput.Document? =
-        decodedBytes()?.let { BotOutput.Document(bytes = it, filename = name.sanitizeFilename().ifBlank { "output" }) }
+        decodedBytes()?.let {
+            BotOutput.Document(bytes = it, filename = name.sanitizeFilename().ifBlank { "output" })
+        }
 
     private fun SandboxFile.decodedBytes(): ByteArray? =
         runCatching { Base64.getDecoder().decode(base64) }.getOrNull()?.takeIf { it.isNotEmpty() }

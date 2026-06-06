@@ -11,7 +11,8 @@ internal object TelegramChannelToolDescriptions {
         "Public Telegram channel username or link, for example `@helltar_com` or `https://t.me/helltar_com`."
 
     const val MAX_POSTS =
-        "How many recent posts to read, from 1 to 20. Prefer 10 to 12 for summaries."
+        "How many recent posts to read, from 1 to 20. " +
+                "Prefer 10 to 12 for summaries."
 
     const val DESCRIBE_IMAGES =
         "Whether to run vision on photos from the posts. " +

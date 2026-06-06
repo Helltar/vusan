@@ -12,7 +12,10 @@ interface RepliedPhotoVisionClient {
     suspend fun describe(photo: RepliedPhoto, bytes: ByteArray, focus: String): String
 }
 
-class KoogRepliedPhotoVisionClient(private val promptExecutor: PromptExecutor, private val model: LLModel) : RepliedPhotoVisionClient {
+class KoogRepliedPhotoVisionClient(
+    private val promptExecutor: PromptExecutor,
+    private val model: LLModel
+) : RepliedPhotoVisionClient {
 
     override suspend fun describe(photo: RepliedPhoto, bytes: ByteArray, focus: String): String {
         val description =

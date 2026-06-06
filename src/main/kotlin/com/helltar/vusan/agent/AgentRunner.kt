@@ -148,6 +148,7 @@ private const val TOOL_OUTPUT_MAX_CHARS = 4_000
 private const val LOG_REPLY_MAX_CHARS = 300
 
 private fun tokenUsageLogSummary(usages: List<TokenUsage>): String {
+
     fun List<Int?>.sumOrNa(): String =
         filterNotNull().let { if (it.isEmpty()) "n/a" else it.sum().toString() }
 
@@ -172,7 +173,12 @@ private fun extractFinalComment(answer: String, outputs: List<OutboxItem>): Stri
     answer.trim()
         .takeUnless { it.isEffectivelyBlank() }
         ?.takeUnless {
-            outputs.any { it.output is BotOutput.Voice || it.output is BotOutput.VideoNote || it.output is BotOutput.Text || it.output is BotOutput.Reaction }
+            outputs.any {
+                it.output is BotOutput.Voice ||
+                        it.output is BotOutput.VideoNote ||
+                        it.output is BotOutput.Text ||
+                        it.output is BotOutput.Reaction
+            }
         }
 
 private fun assistantTextForHistory(outputs: List<OutboxItem>, comment: String?): String? {
@@ -191,11 +197,7 @@ private fun assistantTextForHistory(outputs: List<OutboxItem>, comment: String?)
 // so a function reference stays in sync with the registered name across renames.
 private val TEXT_DUPLICATING_TOOLS = setOf(MessageTools::sendMessage.name)
 
-private fun buildHistoryTurns(
-    userEntry: String,
-    toolEvents: List<ToolEvent>,
-    assistantText: String?
-): List<ChatTurn> =
+private fun buildHistoryTurns(userEntry: String, toolEvents: List<ToolEvent>, assistantText: String?): List<ChatTurn> =
     buildList {
         add(ChatTurn(role = ChatRole.USER, content = userEntry))
 
@@ -210,6 +212,7 @@ private fun buildHistoryTurns(
                     toolName = event.toolName
                 )
             )
+
             add(
                 ChatTurn(
                     role = ChatRole.TOOL_RESULT,

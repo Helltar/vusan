@@ -13,7 +13,9 @@ sealed class BotOutput {
 
     class PhotoGroup(val photos: List<Photo>) : BotOutput() {
         init {
-            require(photos.size in 2..10) { "PhotoGroup requires 2..10 photos, got ${photos.size}" }
+            require(photos.size in 2..10) {
+                "PhotoGroup requires 2..10 photos, got ${photos.size}"
+            }
         }
     }
 
@@ -27,7 +29,12 @@ sealed class BotOutput {
         val filename: String = "animation.gif"
     ) : BotOutput() {
         override val acceptsCaption: Boolean get() = true
-        init { require((url != null) != (bytes != null)) { "Animation needs exactly one of url or bytes" } }
+
+        init {
+            require((url != null) != (bytes != null)) {
+                "Animation needs exactly one of url or bytes"
+            }
+        }
     }
 
     class Voice(
@@ -72,10 +79,15 @@ sealed class BotOutput {
     ) : BotOutput() {
         init {
             validateQuestionAndOptions("Quiz", question, options)
-            require(correctOptionIndex in options.indices) { "Correct option index must point to one of the provided options" }
+
+            require(correctOptionIndex in options.indices) {
+                "Correct option index must point to one of the provided options"
+            }
 
             explanation?.let {
-                require(it.length <= MAX_EXPLANATION_LENGTH) { "Quiz explanation must be at most $MAX_EXPLANATION_LENGTH characters" }
+                require(it.length <= MAX_EXPLANATION_LENGTH) {
+                    "Quiz explanation must be at most $MAX_EXPLANATION_LENGTH characters"
+                }
             }
         }
     }

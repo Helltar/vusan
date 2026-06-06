@@ -51,19 +51,38 @@ class ToolRegistryFactory(
         val log = KotlinLogging.logger {}
     }
 
-    val availableToolNames: List<String> by lazy { buildRegistry(TOOL_NAME_PROBE_CONTEXT, BotOutbox()).tools.map { it.name }.sorted() }
+    val availableToolNames: List<String> by lazy {
+        buildRegistry(TOOL_NAME_PROBE_CONTEXT, BotOutbox()).tools.map { it.name }.sorted()
+    }
 
     private val currency = CurrencyTools(ExchangeRateClient(http))
-    private val telegramChannelClient = TelegramChannelClient(http)
-    private val telegramChannel = TelegramChannelTools(telegramChannelClient, KoogTelegramChannelImageDescriber(promptExecutor, model))
-    private val ytDlpClient = YtDlpClient(config.ytDlpPath, config.ytDlpCookiesFile)
-    private val repliedPhotoVisionClient = KoogRepliedPhotoVisionClient(promptExecutor, model)
-
-    private val tavilyClient = optional("TAVILY_API_KEY", config.tavilyApiKey, "Tavily web search tool") { TavilyClient(http, it) }
-    private val giphyClient = optional("GIPHY_API_KEY", config.giphyApiKey, "Giphy GIF tool") { GiphyClient(http, it) }
-    private val elevenLabsTtsClient = optional("ELEVENLABS_API_KEY", config.elevenLabsApiKey, "voice/TTS tool") { ElevenLabsTtsClient(http, it) }
     private val elevenLabsTts = config.elevenLabsTts
-    private val sandboxClient = optional("SANDBOX_URL", config.sandboxUrl, "code sandbox tool") { SandboxClient(http, it, config.sandboxTimeoutSeconds.seconds) }
+    private val repliedPhotoVisionClient = KoogRepliedPhotoVisionClient(promptExecutor, model)
+    private val telegramChannelClient = TelegramChannelClient(http)
+    private val ytDlpClient = YtDlpClient(config.ytDlpPath, config.ytDlpCookiesFile)
+
+    private val telegramChannel =
+        TelegramChannelTools(telegramChannelClient, KoogTelegramChannelImageDescriber(promptExecutor, model))
+
+    private val tavilyClient =
+        optional("TAVILY_API_KEY", config.tavilyApiKey, "Tavily web search tool") {
+            TavilyClient(http, it)
+        }
+
+    private val giphyClient =
+        optional("GIPHY_API_KEY", config.giphyApiKey, "Giphy GIF tool") {
+            GiphyClient(http, it)
+        }
+
+    private val elevenLabsTtsClient =
+        optional("ELEVENLABS_API_KEY", config.elevenLabsApiKey, "voice/TTS tool") {
+            ElevenLabsTtsClient(http, it)
+        }
+
+    private val sandboxClient =
+        optional("SANDBOX_URL", config.sandboxUrl, "code sandbox tool") {
+            SandboxClient(http, it, config.sandboxTimeoutSeconds.seconds)
+        }
 
     fun buildRegistry(context: RequestContext, outbox: BotOutbox): ToolRegistry =
         ToolRegistry {

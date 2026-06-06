@@ -104,7 +104,12 @@ class TavilyTools(private val client: TavilyClient, private val outbox: BotOutbo
 
                 if (bytes.size > MAX_PHOTO_BYTES) {
                     oversize++
-                    log.warn { "searchImages: image exceeds $MAX_PHOTO_BYTES bytes (got ${bytes.size}) query=[$query] url=[${image.url}]" }
+
+                    log.warn {
+                        "searchImages: image exceeds $MAX_PHOTO_BYTES bytes " +
+                                "(got ${bytes.size}) query=[$query] url=[${image.url}]"
+                    }
+
                     return@mapIndexedNotNull null
                 }
 

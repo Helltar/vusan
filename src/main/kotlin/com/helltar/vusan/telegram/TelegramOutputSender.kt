@@ -4,18 +4,11 @@ import com.helltar.vusan.outbox.BotOutput
 import dev.inmo.tgbotapi.bot.TelegramBot
 import dev.inmo.tgbotapi.bot.exceptions.ReplyMessageNotFoundException
 import dev.inmo.tgbotapi.bot.exceptions.RequestException
-import dev.inmo.tgbotapi.extensions.api.send.sendTextMessage
-import dev.inmo.tgbotapi.extensions.api.send.setMessageReaction
-import dev.inmo.tgbotapi.extensions.api.send.media.sendAnimation
-import dev.inmo.tgbotapi.extensions.api.send.media.sendAudio
-import dev.inmo.tgbotapi.extensions.api.send.media.sendDocument
-import dev.inmo.tgbotapi.extensions.api.send.media.sendPhoto
-import dev.inmo.tgbotapi.extensions.api.send.media.sendVideo
-import dev.inmo.tgbotapi.extensions.api.send.media.sendVideoNote
-import dev.inmo.tgbotapi.extensions.api.send.media.sendVisualMediaGroup
-import dev.inmo.tgbotapi.extensions.api.send.media.sendVoice
+import dev.inmo.tgbotapi.extensions.api.send.media.*
 import dev.inmo.tgbotapi.extensions.api.send.polls.sendQuizPoll
 import dev.inmo.tgbotapi.extensions.api.send.polls.sendRegularPoll
+import dev.inmo.tgbotapi.extensions.api.send.sendTextMessage
+import dev.inmo.tgbotapi.extensions.api.send.setMessageReaction
 import dev.inmo.tgbotapi.requests.abstracts.asMultipartFile
 import dev.inmo.tgbotapi.requests.abstracts.toInputFile
 import dev.inmo.tgbotapi.types.ChatIdentifier
@@ -66,7 +59,9 @@ internal object TelegramOutputSender {
                 emoji = reaction.emoji
             )
         }.onFailure { e ->
-            log.warn(e) { "setMessageReaction failed chat=$chatId message=${reaction.messageId} emoji=[${reaction.emoji}]" }
+            log.warn(e) {
+                "setMessageReaction failed chat=$chatId message=${reaction.messageId} emoji=[${reaction.emoji}]"
+            }
         }
     }
 
@@ -96,7 +91,16 @@ internal object TelegramOutputSender {
         chatId = chatId,
         replyParameters = replyParameters,
         failureMessage = "sendDocument failed, falling back to text",
-        send = { sendDocumentWithMarkdownFallback(bot, chatId, document.bytes, document.filename, caption, replyParameters) },
+        send = {
+            sendDocumentWithMarkdownFallback(
+                bot,
+                chatId,
+                document.bytes,
+                document.filename,
+                caption,
+                replyParameters
+            )
+        },
         onFallback = { caption?.let { sendText(bot, chatId, it, replyParameters) } }
     )
 
@@ -109,6 +113,7 @@ internal object TelegramOutputSender {
     ) {
         // Generated GIF (bytes): fall back to document so the animation still arrives.
         val bytes = animation.bytes
+
         if (bytes != null) {
             sendMediaWithDocumentFallback(
                 bot = bot,
@@ -131,11 +136,13 @@ internal object TelegramOutputSender {
                     }
                 }
             )
+
             return
         }
 
         // URL-based animation (e.g. Giphy).
         val url = requireNotNull(animation.url)
+
         sendOrFallback(
             chatId = chatId,
             replyParameters = replyParameters,

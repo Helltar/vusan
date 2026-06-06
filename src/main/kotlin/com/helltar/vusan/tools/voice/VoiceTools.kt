@@ -11,7 +11,11 @@ import com.helltar.vusan.tools.common.suspendToolGuard
 import io.github.oshai.kotlinlogging.KotlinLogging
 
 @Suppress("unused")
-class VoiceTools(private val client: ElevenLabsTtsClient, private val config: ElevenLabsTtsConfig, private val outbox: BotOutbox) : ToolSet {
+class VoiceTools(
+    private val client: ElevenLabsTtsClient,
+    private val config: ElevenLabsTtsConfig,
+    private val outbox: BotOutbox
+) : ToolSet {
 
     companion object {
         const val VOICE_TOOLS_MAX_CHARS = 500
@@ -30,7 +34,8 @@ class VoiceTools(private val client: ElevenLabsTtsClient, private val config: El
             return@suspendToolGuard "Voice text is empty — nothing to speak."
 
         if (trimmed.length > VOICE_TOOLS_MAX_CHARS)
-            return@suspendToolGuard "Voice text is ${trimmed.length} characters, which exceeds the $VOICE_TOOLS_MAX_CHARS-character limit. Shorten it and try again."
+            return@suspendToolGuard "Voice text is ${trimmed.length} characters, " +
+                    "which exceeds the $VOICE_TOOLS_MAX_CHARS-character limit. Shorten it and try again."
 
         val bytes =
             runCatching { client.synthesize(trimmed, config) }
@@ -47,6 +52,7 @@ class VoiceTools(private val client: ElevenLabsTtsClient, private val config: El
 
         outbox.enqueue(BotOutput.Voice(bytes))
 
-        "Voice message queued (${trimmed.length} chars, ${bytes.size} bytes). Do not add a separate user-facing confirmation."
+        "Voice message queued (${trimmed.length} chars, ${bytes.size} bytes). " +
+                "Do not add a separate user-facing confirmation."
     }
 }

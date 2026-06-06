@@ -24,7 +24,6 @@ private data class DbConnectionSpec(val url: String, val absolutePath: Path) {
 }
 
 object Db {
-
     private val connectMutex = Mutex()
     private var database: Database? = null
     private var connectionSpec: DbConnectionSpec? = null
@@ -39,7 +38,8 @@ object Db {
                 val currentSpec = checkNotNull(connectionSpec)
 
                 check(currentSpec == requestedSpec) {
-                    "Database is already connected to ${currentSpec.absolutePath}, refusing reconnect to ${requestedSpec.absolutePath}"
+                    "Database is already connected to ${currentSpec.absolutePath}, " +
+                            "refusing reconnect to ${requestedSpec.absolutePath}"
                 }
 
                 return

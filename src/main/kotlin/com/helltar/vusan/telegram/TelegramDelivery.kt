@@ -61,7 +61,10 @@ class TelegramDelivery(private val bot: TelegramBot) {
         }
 
         val anchorTarget = DeliveryTarget(chatId, replyToMessageId = attribution.creatorMessageId)
-        val replyUnavailable = dispatch(result, anchorTarget, plainTarget, senderPrivateChatId = userId, messages = messages)
+
+        val replyUnavailable =
+            dispatch(result, anchorTarget, plainTarget, senderPrivateChatId = userId, messages = messages)
+
         if (replyUnavailable) {
             sendNotice(chatId, attribution.headerText)
         }
@@ -154,8 +157,12 @@ class TelegramDelivery(private val bot: TelegramBot) {
                 runCatching { sendOutgoing(currentChatTarget, item, caption) }
                     .onFailure { retryError ->
                         retryError.rethrowIfCancellation()
-                        log.warn(retryError) { "failed to send outgoing item to chat=${currentChatTarget.chatId} without reply" }
+
+                        log.warn(retryError) {
+                            "failed to send outgoing item to chat=${currentChatTarget.chatId} without reply"
+                        }
                     }
+
                 return ItemDeliveryOutcome.ReplyMissing
             }
 
@@ -164,6 +171,7 @@ class TelegramDelivery(private val bot: TelegramBot) {
             }
 
             log.warn(e) { "failed to send outgoing item to chat=${deliveryTarget.chatId}" }
+
             return ItemDeliveryOutcome.Ok
         }
     }
@@ -206,11 +214,24 @@ class TelegramDelivery(private val bot: TelegramBot) {
     }
 
     private suspend fun sendText(target: DeliveryTarget, text: String) {
-        TelegramOutputSender.sendText(bot, target.chatId.toChatIdentifier(), text, replyParameters(target.chatId, target.replyToMessageId))
+        TelegramOutputSender
+            .sendText(
+                bot,
+                target.chatId.toChatIdentifier(),
+                text,
+                replyParameters(target.chatId, target.replyToMessageId)
+            )
     }
 
     private suspend fun sendOutgoing(target: DeliveryTarget, item: BotOutput, caption: String?) {
-        TelegramOutputSender.send(bot, item, target.chatId.toChatIdentifier(), replyParameters(target.chatId, target.replyToMessageId), caption)
+        TelegramOutputSender
+            .send(
+                bot,
+                item,
+                target.chatId.toChatIdentifier(),
+                replyParameters(target.chatId, target.replyToMessageId),
+                caption
+            )
     }
 
     private fun isPrivateChatBlocked(error: Throwable): Boolean =

@@ -41,6 +41,7 @@ fun toolCallArgsForHistory(rawArgs: String): String {
         JsonObject(
             obj.mapValues { (_, value) ->
                 val text = (value as? JsonPrimitive)?.takeIf { it.isString }?.content
+
                 if (text != null && text.length > TOOL_CALL_ARG_VALUE_MAX_CHARS)
                     JsonPrimitive(text.take(TOOL_CALL_ARG_VALUE_MAX_CHARS) + TRUNCATION_MARKER)
                 else

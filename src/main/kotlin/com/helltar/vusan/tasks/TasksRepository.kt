@@ -98,10 +98,12 @@ class TasksRepository {
             creatorUsername = this[ScheduledTasksTable.creatorUsername],
             creatorDisplayName = this[ScheduledTasksTable.creatorDisplayName],
             chatIsPrivate = this[ScheduledTasksTable.chatIsPrivate],
-            language = this[ScheduledTasksTable.language]?.let { runCatching { Language.valueOf(it) }.getOrNull() } ?: Language.DEFAULT,
             nextFireAt = this[ScheduledTasksTable.nextFireAt],
             createdAt = this[ScheduledTasksTable.createdAt],
-            enabled = this[ScheduledTasksTable.enabled]
+            enabled = this[ScheduledTasksTable.enabled],
+            language =
+                this[ScheduledTasksTable.language]?.let { runCatching { Language.valueOf(it) }.getOrNull() }
+                    ?: Language.DEFAULT
         )
     }
 }

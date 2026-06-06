@@ -10,8 +10,14 @@ private const val MAX_FILENAME_CHARS = 120
  */
 internal fun String.collapseWhitespaceAndCap(maxLength: Int): String? {
     val normalized = trim().replace(Regex("\\s+"), " ")
-    if (normalized.isBlank()) return null
-    return if (normalized.length <= maxLength) normalized else normalized.takeWholeChars(maxLength - 1).trimEnd() + ELLIPSIS
+
+    if (normalized.isBlank())
+        return null
+
+    return if (normalized.length <= maxLength)
+        normalized
+    else
+        normalized.takeWholeChars(maxLength - 1).trimEnd() + ELLIPSIS
 }
 
 /** Truncates to [maxChars] (appending an ellipsis when truncated) while preserving inner whitespace. */
@@ -33,7 +39,8 @@ internal fun String.isEffectivelyBlank(): Boolean =
     all { it.isWhitespace() || it.category == CharCategory.FORMAT || it.category == CharCategory.CONTROL }
 
 /** Wraps [content] in an XML-style `<tag>…</tag>` block, trimming surrounding whitespace. */
-internal fun xmlBlock(tag: String, content: String): String = "<$tag>\n${content.trim()}\n</$tag>"
+internal fun xmlBlock(tag: String, content: String): String =
+    "<$tag>\n${content.trim()}\n</$tag>"
 
 fun String.sanitizeFilename(): String =
     trim()
@@ -52,6 +59,12 @@ fun String.sanitizeFilename(): String =
  */
 private fun String.takeWholeChars(n: Int): String {
     val end = n.coerceIn(0, length)
-    val safeEnd = if (end in 1 until length && this[end - 1].isHighSurrogate()) end - 1 else end
+
+    val safeEnd =
+        if (end in 1 until length && this[end - 1].isHighSurrogate())
+            end - 1
+        else
+            end
+
     return substring(0, safeEnd)
 }

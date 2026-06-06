@@ -15,9 +15,13 @@ internal data class TelegramChannelReference(val username: String) {
             require(value.isNotBlank()) { "Telegram channel must not be blank" }
 
             val username =
-                if (value.startsWith("http://", ignoreCase = true) || value.startsWith("https://", ignoreCase = true)) {
+                if (value.startsWith("http://", ignoreCase = true) ||
+                    value.startsWith("https://", ignoreCase = true)
+                ) {
                     parseUrl(value)
-                } else if (value.startsWith("t.me/", ignoreCase = true) || value.startsWith("telegram.me/", ignoreCase = true)) {
+                } else if (value.startsWith("t.me/", ignoreCase = true) ||
+                    value.startsWith("telegram.me/", ignoreCase = true)
+                ) {
                     parseUrl("https://$value")
                 } else {
                     value.substringBefore('/').removePrefix("@")

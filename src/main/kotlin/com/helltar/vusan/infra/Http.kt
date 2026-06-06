@@ -33,13 +33,21 @@ object Http {
         HttpResponseValidator {
             validateResponse { response ->
                 if (response.status.value !in 200..299) {
-                    throw HttpStatusException(response.status.value, response.call.request.url.host, response.bodyAsTextSafe())
+                    throw HttpStatusException(
+                        response.status.value,
+                        response.call.request.url.host,
+                        response.bodyAsTextSafe()
+                    )
                 }
             }
 
             handleResponseExceptionWithRequest { cause, request ->
                 if (cause is ResponseException) {
-                    throw HttpStatusException(cause.response.status.value, request.url.host, cause.response.bodyAsTextSafe())
+                    throw HttpStatusException(
+                        cause.response.status.value,
+                        request.url.host,
+                        cause.response.bodyAsTextSafe()
+                    )
                 }
             }
         }
@@ -56,7 +64,8 @@ object Http {
 
 private const val ERROR_BODY_PREVIEW_LIMIT = 1_000
 
-private class HttpStatusException(status: Int, host: String, body: String?) : IllegalStateException(buildMessage(status, host, body)) {
+private class HttpStatusException(status: Int, host: String, body: String?) :
+    IllegalStateException(buildMessage(status, host, body)) {
 
     companion object {
         private fun buildMessage(status: Int, host: String, body: String?): String {

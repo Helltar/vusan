@@ -35,7 +35,9 @@ class TaskScheduler(
 
     fun launchIn(scope: CoroutineScope): Job =
         scope.launch {
-            log.info { "TaskScheduler started: pollInterval=${pollInterval.seconds}s maxLateness=${maxLateness.toMinutes()}m" }
+            log.info {
+                "TaskScheduler started: pollInterval=${pollInterval.seconds}s maxLateness=${maxLateness.toMinutes()}m"
+            }
 
             while (true) {
                 runCatching { tick(Instant.now()) }
@@ -77,16 +79,23 @@ class TaskScheduler(
         val scheduledLabel = formatFire(task.nextFireAt, task.timezone)
 
         log.warn {
-            "task id=${task.id} missed (scheduledFor=$scheduledLabel, late by ${(now.toEpochMilli() - task.nextFireAt.toEpochMilli()) / 1000}s); user offline window"
+            "task id=${task.id} missed (scheduledFor=$scheduledLabel, " +
+                    "late by ${(now.toEpochMilli() - task.nextFireAt.toEpochMilli()) / 1000}s); user offline window"
         }
 
-        delivery.sendNotice(task.chatId, Messages.of(task.language).taskMissedNotice(task.id, task.title, scheduledLabel))
+        delivery
+            .sendNotice(
+                task.chatId,
+                Messages.of(task.language).taskMissedNotice(task.id, task.title, scheduledLabel)
+            )
 
         rescheduleAfterFire(task, now)
     }
 
     private suspend fun fire(task: ScheduledTask) {
-        log.info { "firing task id=${task.id} user=${task.userId} chat=${task.chatId} recurrence=[${task.recurrence.display}]" }
+        log.info {
+            "firing task id=${task.id} user=${task.userId} chat=${task.chatId} recurrence=[${task.recurrence.display}]"
+        }
 
         val request =
             AgentRequest(

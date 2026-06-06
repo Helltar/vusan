@@ -32,7 +32,7 @@ fun resolveLlmRuntime(config: LlmProviderConfig): LlmRuntime {
             LlmRuntime(
                 providerLabel = "OpenAI",
                 koogProvider = LLMProvider.OpenAI,
-                client = OpenAILLMClient(apiKey = config.apiKey, settings = OpenAIClientSettings(timeoutConfig = timeoutConfig)),
+                client = OpenAILLMClient(config.apiKey, settings = OpenAIClientSettings(timeoutConfig = timeoutConfig)),
                 model = OpenAiModelResolver.resolve(config.model),
                 chatParams = OpenAIChatParams(promptCacheKey = "vusan")
             )

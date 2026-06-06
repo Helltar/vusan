@@ -34,4 +34,5 @@ data class MessageContext(
     }
 }
 
-private fun String.asMetadataValue(maxLength: Int = 160): String? = collapseWhitespaceAndCap(maxLength)
+private fun String.asMetadataValue(maxLength: Int = 160): String? =
+    collapseWhitespaceAndCap(maxLength)

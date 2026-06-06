@@ -54,7 +54,10 @@ internal class TelegramBotRunner(
         log.info { "Bot started as ${botProfile.username ?: botProfile.userId}, allowed ids=${allowedIds.sorted()}" }
 
         if (allowedIds.isEmpty()) {
-            log.warn { "ALLOWED_IDS is empty — bot will ignore every message. Set ALLOWED_IDS to user/chat ids that may use the bot." }
+            log.warn {
+                "ALLOWED_IDS is empty — bot will ignore every message. " +
+                        "Set ALLOWED_IDS to user/chat ids that may use the bot."
+            }
         }
 
         return bot.buildBehaviourWithLongPolling {
@@ -117,8 +120,13 @@ internal class TelegramBotRunner(
         inputKind: String
     ) {
         val transcriber = voiceTranscriber
+
         if (transcriber == null) {
-            log.info { "$inputKind message ignored: STT not configured (chat=${message.chatIdLong} user=${message.senderIdOrNull()})" }
+            log.info {
+                "$inputKind message ignored: STT not configured " +
+                        "(chat=${message.chatIdLong} user=${message.senderIdOrNull()})"
+            }
+
             return
         }
 
@@ -127,15 +135,18 @@ internal class TelegramBotRunner(
         val transcript =
             when (val result = transcriber.transcribe(bot, audioInput)) {
                 is VoiceTranscriptionResult.Success -> result.text
+
                 is VoiceTranscriptionResult.TooLong -> {
                     sendReply(message, messages.voiceTooLongReply(result.durationSeconds, result.maxSeconds))
                     return
                 }
+
                 is VoiceTranscriptionResult.Empty -> {
                     log.info { "$inputKind transcription empty (chat=${message.chatIdLong}): ${result.reason}" }
                     sendReply(message, messages.voiceEmptyReply)
                     return
                 }
+
                 is VoiceTranscriptionResult.Failed -> {
                     sendReply(message, messages.voiceTranscriptionFailedReply)
                     return
@@ -150,28 +161,30 @@ internal class TelegramBotRunner(
     private fun buildTranscribedPrompt(caption: String, transcript: String): String {
         val wrapped = wrapAudioTranscript(transcript)
         val trimmedCaption = caption.trim()
-
         return if (trimmedCaption.isEmpty()) wrapped else "$trimmedCaption\n\n$wrapped"
     }
 
     private suspend fun handleStickerUpdate(message: CommonMessage<StickerContent>, botProfile: BotProfile) {
         if (!message.isAccepted(botProfile)) return
-
         val prompt = describeIncomingSticker(message.content.media)
-
         dispatchToAgent(message, prompt, botProfile, inputKind = "sticker", loadRepliedPhoto = false)
     }
 
     private suspend fun CommonMessage<*>.usableReplySummary(botProfile: BotProfile): RepliedMessageSummary? =
         if (isReplyToOtherUser(replyAuthorIdOrNull(), botProfile.userId))
             replySummaryOrNull(bot, voiceTranscriber)
-        else null
+        else
+            null
 
     private fun CommonMessage<*>.usableReplyToMessageId(botProfile: BotProfile): Long? =
-        if (isReplyToOtherUser(replyAuthorIdOrNull(), botProfile.userId)) replyToMessageIdOrNull() else null
+        if (isReplyToOtherUser(replyAuthorIdOrNull(), botProfile.userId))
+            replyToMessageIdOrNull()
+        else
+            null
 
     private fun CommonMessage<*>.isAccepted(botProfile: BotProfile): Boolean {
-        if (!shouldHandle(this, botProfile.userId, botProfile.username)) return false
+        if (!shouldHandle(this, botProfile.userId, botProfile.username))
+            return false
 
         if (!isAllowed()) {
             logDenied()

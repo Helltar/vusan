@@ -8,7 +8,11 @@ sealed interface LlmProviderConfig {
     // reply, instead of waiting out the provider client's 15-minute default while the bot stays silent.
     val requestTimeout: Duration
 
-    data class OpenAi(val apiKey: String, val model: String, override val requestTimeout: Duration) : LlmProviderConfig {
+    data class OpenAi(
+        val apiKey: String,
+        val model: String,
+        override val requestTimeout: Duration
+    ) : LlmProviderConfig {
         init {
             require(apiKey.isNotBlank()) { "LLM_API_KEY must not be blank" }
             require(model.isNotBlank()) { "LLM_MODEL must not be blank" }

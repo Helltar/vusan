@@ -45,24 +45,36 @@ data class AppConfig(
                 elevenLabsApiKey = elevenLabsKey,
                 giphyApiKey = readEnv("GIPHY_API_KEY"),
                 llmProvider = resolveLlmProvider(),
-                maxTasksPerUser = readEnv("MAX_TASKS_PER_USER")?.toIntOrNull() ?: DEFAULT_MAX_TASKS_PER_USER,
                 openAiStt = resolveOpenAiStt(),
-                sandboxTimeoutSeconds = readEnv("SANDBOX_TIMEOUT_SECONDS")?.toLongOrNull() ?: DEFAULT_SANDBOX_TIMEOUT_SECONDS,
                 sandboxUrl = readEnv("SANDBOX_URL"),
                 systemPrompt = resolveSystemPrompt(),
-                taskMaxLatenessMinutes = readEnv("TASK_MAX_LATENESS_MINUTES")?.toLongOrNull() ?: DEFAULT_TASK_MAX_LATENESS_MINUTES,
-                taskPollIntervalSeconds = readEnv("TASK_POLL_INTERVAL_SECONDS")?.toLongOrNull() ?: DEFAULT_TASK_POLL_INTERVAL_SECONDS,
                 tavilyApiKey = readEnv("TAVILY_API_KEY"),
                 telegramBotToken = requireEnv("TELEGRAM_BOT_TOKEN"),
                 ytDlpCookiesFile = readEnv("YT_DLP_COOKIES_FILE"),
                 ytDlpPath = readEnv("YT_DLP_PATH") ?: "yt-dlp",
+
+                maxTasksPerUser = readEnv("MAX_TASKS_PER_USER")?.toIntOrNull() ?: DEFAULT_MAX_TASKS_PER_USER,
+
+                sandboxTimeoutSeconds =
+                    readEnv("SANDBOX_TIMEOUT_SECONDS")?.toLongOrNull()
+                        ?: DEFAULT_SANDBOX_TIMEOUT_SECONDS,
+
+                taskMaxLatenessMinutes =
+                    readEnv("TASK_MAX_LATENESS_MINUTES")?.toLongOrNull()
+                        ?: DEFAULT_TASK_MAX_LATENESS_MINUTES,
+
+                taskPollIntervalSeconds =
+                    readEnv("TASK_POLL_INTERVAL_SECONDS")?.toLongOrNull()
+                        ?: DEFAULT_TASK_POLL_INTERVAL_SECONDS,
 
                 elevenLabsTts =
                     elevenLabsKey?.let {
                         ElevenLabsTtsConfig(
                             model = readEnv("ELEVENLABS_TTS_MODEL") ?: ElevenLabsTtsConfig.DEFAULT_MODEL,
                             voiceId = readEnv("ELEVENLABS_VOICE_ID") ?: ElevenLabsTtsConfig.DEFAULT_VOICE_ID,
-                            outputFormat = readEnv("ELEVENLABS_TTS_OUTPUT_FORMAT") ?: ElevenLabsTtsConfig.DEFAULT_OUTPUT_FORMAT
+                            outputFormat =
+                                readEnv("ELEVENLABS_TTS_OUTPUT_FORMAT")
+                                    ?: ElevenLabsTtsConfig.DEFAULT_OUTPUT_FORMAT
                         )
                     }
             )
@@ -82,13 +94,18 @@ data class AppConfig(
             return OpenAiSttConfig(
                 apiKey = key,
                 model = readEnv("OPENAI_STT_MODEL") ?: OpenAiSttConfig.DEFAULT_MODEL,
-                maxDurationSeconds = readEnv("OPENAI_STT_MAX_DURATION_SECONDS")?.toLongOrNull() ?: OpenAiSttConfig.DEFAULT_MAX_DURATION_SECONDS
+                maxDurationSeconds =
+                    readEnv("OPENAI_STT_MAX_DURATION_SECONDS")?.toLongOrNull()
+                        ?: OpenAiSttConfig.DEFAULT_MAX_DURATION_SECONDS
             )
         }
 
         private fun resolveLlmProvider(): LlmProviderConfig {
             val raw = readEnv("LLM_PROVIDER") ?: DEFAULT_LLM_PROVIDER
-            val requestTimeout = (readEnv("LLM_REQUEST_TIMEOUT_SECONDS")?.toLongOrNull() ?: DEFAULT_LLM_REQUEST_TIMEOUT_SECONDS).seconds
+
+            val requestTimeout =
+                (readEnv("LLM_REQUEST_TIMEOUT_SECONDS")?.toLongOrNull()
+                    ?: DEFAULT_LLM_REQUEST_TIMEOUT_SECONDS).seconds
 
             return when (val provider = raw.trim().lowercase()) {
                 "openai" ->
