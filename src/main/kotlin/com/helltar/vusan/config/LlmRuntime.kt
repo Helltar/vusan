@@ -5,10 +5,13 @@ import ai.koog.prompt.executor.clients.LLMClient
 import ai.koog.prompt.executor.clients.openai.OpenAIChatParams
 import ai.koog.prompt.executor.clients.openai.OpenAIClientSettings
 import ai.koog.prompt.executor.clients.openai.OpenAILLMClient
+import ai.koog.prompt.executor.clients.openai.OpenAIModels
 import ai.koog.prompt.llm.LLMCapability
 import ai.koog.prompt.llm.LLMProvider
 import ai.koog.prompt.llm.LLModel
 import ai.koog.prompt.params.LLMParams
+import kotlin.reflect.full.memberProperties
+import kotlin.reflect.jvm.javaField
 
 data class LlmRuntime(
     val providerLabel: String,
@@ -33,7 +36,7 @@ fun resolveLlmRuntime(config: LlmProviderConfig): LlmRuntime {
                 providerLabel = "OpenAI",
                 koogProvider = LLMProvider.OpenAI,
                 client = OpenAILLMClient(config.apiKey, settings = OpenAIClientSettings(timeoutConfig = timeoutConfig)),
-                model = OpenAiModelResolver.resolve(config.model),
+                model = resolveOpenAiModel(config.model),
                 chatParams = OpenAIChatParams(promptCacheKey = "vusan")
             )
 
@@ -63,3 +66,22 @@ fun resolveLlmRuntime(config: LlmProviderConfig): LlmRuntime {
             )
     }
 }
+
+private val openAiModelsByKey: Map<String, LLModel> by lazy {
+    OpenAIModels.Chat::class.memberProperties
+        .asSequence()
+        .filter { it.returnType.classifier == LLModel::class }
+        .mapNotNull { it.javaField?.get(OpenAIModels.Chat) as? LLModel }
+        .associateBy { it.id.lowercase() }
+}
+
+internal fun resolveOpenAiModel(rawValue: String): LLModel =
+    requireNotNull(openAiModelsByKey[normalizeModelKey(rawValue)]) {
+        "Unsupported OpenAI model '$rawValue'. Supported values: ${openAiModelsByKey.keys.sorted().joinToString()}"
+    }
+
+private fun normalizeModelKey(value: String): String =
+    value
+        .trim()
+        .lowercase()
+        .replace('_', '-')

@@ -8,16 +8,12 @@ import ai.koog.prompt.message.AttachmentSource
 
 private const val MAX_TELEGRAM_CHANNEL_IMAGE_BYTES = 8 * 1024 * 1024
 
-interface TelegramChannelImageDescriber {
-    suspend fun describe(image: TelegramChannelImage, post: TelegramChannelPost, focus: String): String
-}
-
-class KoogTelegramChannelImageDescriber(
+class TelegramChannelImageDescriber(
     private val promptExecutor: PromptExecutor,
     private val model: LLModel
-) : TelegramChannelImageDescriber {
+) {
 
-    override suspend fun describe(image: TelegramChannelImage, post: TelegramChannelPost, focus: String): String {
+    suspend fun describe(image: TelegramChannelImage, post: TelegramChannelPost, focus: String): String {
         if (image.bytes.size > MAX_TELEGRAM_CHANNEL_IMAGE_BYTES) {
             return "Image is too large for vision (${image.bytes.size} bytes, limit $MAX_TELEGRAM_CHANNEL_IMAGE_BYTES)."
         }

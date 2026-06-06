@@ -18,6 +18,11 @@ internal fun Long.toChatIdentifier(): IdChatIdentifier =
 internal fun replyParameters(chatId: Long, replyToMessageId: Long?): ReplyParameters? =
     replyToMessageId?.let { ReplyParameters(chatId.toChatIdentifier(), MessageId(it)) }
 
+data class ScheduledAttribution(
+    val creatorMessageId: Long?,
+    val headerText: String
+)
+
 class TelegramDelivery(private val bot: TelegramBot) {
 
     private companion object {

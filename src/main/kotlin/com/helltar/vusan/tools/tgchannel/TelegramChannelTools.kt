@@ -14,7 +14,7 @@ private const val MAX_IMAGES_TO_DESCRIBE = 4
 @Suppress("unused")
 class TelegramChannelTools(
     private val client: TelegramChannelClient,
-    private val imageDescriber: TelegramChannelImageDescriber? = null
+    private val imageDescriber: TelegramChannelImageDescriber
 ) : ToolSet {
 
     @Tool
@@ -75,7 +75,6 @@ class TelegramChannelTools(
     }
 
     private suspend fun describePostImages(page: TelegramChannelPage, focus: String): Map<String, List<String>> {
-        val describer = imageDescriber ?: return emptyMap()
         val result = linkedMapOf<String, MutableList<String>>()
         var remaining = MAX_IMAGES_TO_DESCRIBE
 
@@ -88,7 +87,7 @@ class TelegramChannelTools(
                 val description =
                     runCatching {
                         val image = client.downloadImage(imageUrl)
-                        describer.describe(image, post, focus)
+                        imageDescriber.describe(image, post, focus)
                     }.getOrElse { t -> "Could not inspect image: ${t.message ?: t::class.simpleName}" }
 
                 result.getOrPut(post.id) { mutableListOf() } += description

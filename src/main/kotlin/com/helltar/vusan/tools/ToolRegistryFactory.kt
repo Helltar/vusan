@@ -23,10 +23,10 @@ import com.helltar.vusan.tools.sandbox.SandboxTools
 import com.helltar.vusan.tools.tasks.TaskTools
 import com.helltar.vusan.tools.tavily.TavilyClient
 import com.helltar.vusan.tools.tavily.TavilyTools
-import com.helltar.vusan.tools.tgchannel.KoogTelegramChannelImageDescriber
 import com.helltar.vusan.tools.tgchannel.TelegramChannelClient
+import com.helltar.vusan.tools.tgchannel.TelegramChannelImageDescriber
 import com.helltar.vusan.tools.tgchannel.TelegramChannelTools
-import com.helltar.vusan.tools.vision.KoogRepliedPhotoVisionClient
+import com.helltar.vusan.tools.vision.RepliedPhotoVisionClient
 import com.helltar.vusan.tools.vision.VisionTools
 import com.helltar.vusan.tools.voice.ElevenLabsTtsClient
 import com.helltar.vusan.tools.voice.VoiceTools
@@ -57,12 +57,12 @@ class ToolRegistryFactory(
 
     private val currency = CurrencyTools(ExchangeRateClient(http))
     private val elevenLabsTts = config.elevenLabsTts
-    private val repliedPhotoVisionClient = KoogRepliedPhotoVisionClient(promptExecutor, model)
+    private val repliedPhotoVisionClient = RepliedPhotoVisionClient(promptExecutor, model)
     private val telegramChannelClient = TelegramChannelClient(http)
     private val ytDlpClient = YtDlpClient(config.ytDlpPath, config.ytDlpCookiesFile)
 
     private val telegramChannel =
-        TelegramChannelTools(telegramChannelClient, KoogTelegramChannelImageDescriber(promptExecutor, model))
+        TelegramChannelTools(telegramChannelClient, TelegramChannelImageDescriber(promptExecutor, model))
 
     private val tavilyClient =
         optional("TAVILY_API_KEY", config.tavilyApiKey, "Tavily web search tool") {

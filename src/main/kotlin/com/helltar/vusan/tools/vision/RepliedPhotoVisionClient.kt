@@ -7,17 +7,12 @@ import ai.koog.prompt.message.AttachmentContent
 import ai.koog.prompt.message.AttachmentSource
 import com.helltar.vusan.request.RepliedPhoto
 
-interface RepliedPhotoVisionClient {
-
-    suspend fun describe(photo: RepliedPhoto, bytes: ByteArray, focus: String): String
-}
-
-class KoogRepliedPhotoVisionClient(
+class RepliedPhotoVisionClient(
     private val promptExecutor: PromptExecutor,
     private val model: LLModel
-) : RepliedPhotoVisionClient {
+) {
 
-    override suspend fun describe(photo: RepliedPhoto, bytes: ByteArray, focus: String): String {
+    suspend fun describe(photo: RepliedPhoto, bytes: ByteArray, focus: String): String {
         val description =
             promptExecutor.execute(buildPrompt(photo, bytes, focus), model)
                 .textContent()

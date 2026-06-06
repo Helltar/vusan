@@ -1,23 +1,32 @@
 package com.helltar.vusan.tools.vision
 
+import ai.koog.agents.core.tools.ToolDescriptor
+import ai.koog.prompt.Prompt
+import ai.koog.prompt.dsl.ModerationResult
+import ai.koog.prompt.executor.model.PromptExecutor
+import ai.koog.prompt.llm.LLMProvider
+import ai.koog.prompt.llm.LLModel
+import ai.koog.prompt.message.Message
+import ai.koog.prompt.message.ResponseMetaInfo
+import ai.koog.prompt.streaming.StreamFrame
 import com.helltar.vusan.request.RepliedPhoto
+import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.runBlocking
 import kotlin.test.Test
-import kotlin.test.assertContentEquals
 import kotlin.test.assertEquals
-import kotlin.test.assertNull
+import kotlin.test.assertTrue
 
 class VisionToolsTest {
 
     @Test
     fun `describeRepliedPhoto returns no-photo message when no reply photo is available`() = runBlocking {
-        val client = FakeRepliedPhotoVisionClient()
-        val tools = VisionTools(client, replyPhoto = null)
+        val executor = FakePromptExecutor()
+        val tools = VisionTools(visionClient(executor), replyPhoto = null)
 
         val result = tools.describeRepliedPhoto("text")
 
         assertEquals("No replied photo is available in this turn.", result)
-        assertNull(client.receivedPhoto)
+        assertEquals(0, executor.callCount)
     }
 
     @Test
@@ -27,30 +36,33 @@ class VisionToolsTest {
             loaded = true
             byteArrayOf(1)
         }
-        val client = FakeRepliedPhotoVisionClient()
-        val tools = VisionTools(client, photo)
+        val executor = FakePromptExecutor()
+        val tools = VisionTools(visionClient(executor), photo)
 
         val result = tools.describeRepliedPhoto("objects")
 
         assertEquals("The replied photo is too large for vision (9437184 bytes, limit 8388608).", result)
         assertEquals(false, loaded)
-        assertNull(client.receivedPhoto)
+        assertEquals(0, executor.callCount)
     }
 
     @Test
-    fun `describeRepliedPhoto sends loaded bytes and focus to vision client`() = runBlocking {
-        val bytes = byteArrayOf(1, 2, 3)
-        val photo = repliedPhoto { bytes }
-        val client = FakeRepliedPhotoVisionClient(response = "A cat on a chair.")
-        val tools = VisionTools(client, photo)
+    fun `describeRepliedPhoto runs the vision prompt with the focus and returns its text`() = runBlocking {
+        val photo = repliedPhoto { byteArrayOf(1, 2, 3) }
+        val executor = FakePromptExecutor(response = "A cat on a chair.")
+        val tools = VisionTools(visionClient(executor), photo)
 
         val result = tools.describeRepliedPhoto("visible text")
 
         assertEquals("A cat on a chair.", result)
-        assertEquals(photo, client.receivedPhoto)
-        assertContentEquals(bytes, client.receivedBytes)
-        assertEquals("visible text", client.receivedFocus)
+        assertEquals(1, executor.callCount)
+
+        val promptText = executor.receivedPrompt?.messages.orEmpty().joinToString("\n") { it.textContent() }
+        assertTrue("visible text" in promptText, "expected the user focus to be forwarded into the vision prompt")
     }
+
+    private fun visionClient(executor: PromptExecutor): RepliedPhotoVisionClient =
+        RepliedPhotoVisionClient(executor, LLModel(provider = LLMProvider.OpenAI, id = "test", capabilities = emptyList()))
 
     private fun repliedPhoto(
         fileSizeBytes: ULong? = null,
@@ -66,16 +78,26 @@ class VisionToolsTest {
             loadBytes = loadBytes
         )
 
-    private class FakeRepliedPhotoVisionClient(private val response: String = "description") : RepliedPhotoVisionClient {
-        var receivedPhoto: RepliedPhoto? = null
-        var receivedBytes: ByteArray? = null
-        var receivedFocus: String? = null
+    private class FakePromptExecutor(private val response: String = "description") : PromptExecutor() {
 
-        override suspend fun describe(photo: RepliedPhoto, bytes: ByteArray, focus: String): String {
-            receivedPhoto = photo
-            receivedBytes = bytes
-            receivedFocus = focus
-            return response
+        var callCount = 0
+            private set
+
+        var receivedPrompt: Prompt? = null
+            private set
+
+        override suspend fun execute(prompt: Prompt, model: LLModel, tools: List<ToolDescriptor>): Message.Assistant {
+            callCount++
+            receivedPrompt = prompt
+            return Message.Assistant(content = response, metaInfo = ResponseMetaInfo.Empty)
         }
+
+        override fun executeStreaming(prompt: Prompt, model: LLModel, tools: List<ToolDescriptor>): Flow<StreamFrame> =
+            error("executeStreaming not used in test")
+
+        override suspend fun moderate(prompt: Prompt, model: LLModel): ModerationResult =
+            error("moderate not used in test")
+
+        override fun close() = Unit
     }
 }

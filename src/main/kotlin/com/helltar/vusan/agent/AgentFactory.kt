@@ -35,19 +35,11 @@ data class ToolEvent(
     val isError: Boolean
 )
 
-fun interface ToolEventSink {
-    fun record(event: ToolEvent)
-}
-
 data class TokenUsage(
     val inputTokens: Int?,
     val outputTokens: Int?,
     val totalTokens: Int?
 )
-
-fun interface TokenUsageSink {
-    fun record(usage: TokenUsage)
-}
 
 class AgentFactory(
     private val promptExecutor: PromptExecutor,
@@ -63,8 +55,8 @@ class AgentFactory(
         history: PromptHistory,
         context: RequestContext,
         outbox: BotOutbox,
-        toolEvents: ToolEventSink,
-        tokenUsage: TokenUsageSink,
+        toolEvents: (ToolEvent) -> Unit,
+        tokenUsage: (TokenUsage) -> Unit,
         messageContext: MessageContext? = null
     ): AIAgent<String, String> {
         val seededPrompt =
@@ -118,12 +110,12 @@ class AgentFactory(
 
                 onLLMCallCompleted { ctx ->
                     ctx.response?.metaInfo?.let { meta ->
-                        tokenUsage.record(TokenUsage(meta.inputTokensCount, meta.outputTokensCount, meta.totalTokensCount))
+                        tokenUsage(TokenUsage(meta.inputTokensCount, meta.outputTokensCount, meta.totalTokensCount))
                     }
                 }
 
                 onToolCallCompleted { ctx ->
-                    toolEvents.record(
+                    toolEvents(
                         ToolEvent(
                             toolCallId = ctx.toolCallId ?: "${ctx.toolName}-${seq++}",
                             toolName = ctx.toolName,
@@ -135,7 +127,7 @@ class AgentFactory(
                 }
 
                 onToolCallFailed { ctx ->
-                    toolEvents.record(
+                    toolEvents(
                         ToolEvent(
                             toolCallId = ctx.toolCallId ?: "${ctx.toolName}-${seq++}",
                             toolName = ctx.toolName,
@@ -147,7 +139,7 @@ class AgentFactory(
                 }
 
                 onToolValidationFailed { ctx ->
-                    toolEvents.record(
+                    toolEvents(
                         ToolEvent(
                             toolCallId = ctx.toolCallId ?: "${ctx.toolName}-${seq++}",
                             toolName = ctx.toolName,
