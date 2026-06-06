@@ -98,7 +98,7 @@ class TavilyTools(private val client: TavilyClient, private val outbox: BotOutbo
                     runCatching { client.downloadImage(image.url) }
                         .onFailure { error ->
                             error.rethrowIfCancellation()
-                            log.warn(error) { "searchImages: image download failed query=[$query] url=[${image.url}]" }
+                            log.warn(error) { "searchImages: image download error query=[$query] url=[${image.url}]" }
                         }
                         .getOrNull() ?: return@mapIndexedNotNull null
 
@@ -119,7 +119,7 @@ class TavilyTools(private val client: TavilyClient, private val outbox: BotOutbo
         if (downloaded.isEmpty()) {
             log.warn {
                 "searchImages: none of ${response.images.size} candidate(s) usable " +
-                        "(oversize=$oversize, others failed to download) query=[$query]"
+                        "(oversize=$oversize, rest not images or failed to download) query=[$query]"
             }
 
             return@suspendToolGuard """Found image URLs for "$query" but failed to download any."""

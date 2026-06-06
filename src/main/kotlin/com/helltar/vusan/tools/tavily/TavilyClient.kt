@@ -1,5 +1,6 @@
 package com.helltar.vusan.tools.tavily
 
+import io.github.oshai.kotlinlogging.KotlinLogging
 import io.ktor.client.*
 import io.ktor.client.call.*
 import io.ktor.client.request.*
@@ -11,6 +12,10 @@ import kotlin.math.max
 import kotlin.math.min
 
 class TavilyClient(private val http: HttpClient, private val apiKey: String) {
+
+    private companion object {
+        val log = KotlinLogging.logger {}
+    }
 
     suspend fun search(
         query: String,
@@ -48,14 +53,20 @@ class TavilyClient(private val http: HttpClient, private val apiKey: String) {
         }.body()
     }
 
-    suspend fun downloadImage(url: String): ByteArray {
+    suspend fun downloadImage(url: String): ByteArray? {
         val response: HttpResponse = http.get(url)
         val bytes = response.bodyAsBytes()
 
-        check(looksLikeImage(bytes)) { "Not an image at $url (contentType=${response.contentType()})" }
+        if (!looksLikeImage(bytes)) {
+            log.info { "downloadImage: response is not an image, skipping contentType=[${response.contentType()}] url=[$url]" }
+            return null
+        }
 
         imageDimensions(bytes)?.let { (w, h) ->
-            check(isTelegramPhotoCompatible(w, h)) { "Image at $url has incompatible dimensions ${w}x${h}" }
+            if (!isTelegramPhotoCompatible(w, h)) {
+                log.info { "downloadImage: incompatible dimensions ${w}x$h, skipping url=[$url]" }
+                return null
+            }
         }
 
         return bytes
