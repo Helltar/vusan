@@ -12,12 +12,11 @@ import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
-import java.time.Duration
 import java.time.Instant
 import java.time.ZoneId
 import java.time.ZonedDateTime
 import java.time.format.DateTimeFormatter
-import kotlin.time.toKotlinDuration
+import kotlin.time.Duration
 
 class TaskScheduler(
     private val repo: TasksRepository,
@@ -36,7 +35,8 @@ class TaskScheduler(
     fun launchIn(scope: CoroutineScope): Job =
         scope.launch {
             log.info {
-                "TaskScheduler started: pollInterval=${pollInterval.seconds}s maxLateness=${maxLateness.toMinutes()}m"
+                "TaskScheduler started: pollInterval=${pollInterval.inWholeSeconds}s " +
+                        "maxLateness=${maxLateness.inWholeMinutes}m"
             }
 
             while (true) {
@@ -46,7 +46,7 @@ class TaskScheduler(
                         log.error(it) { "task scheduler tick failed" }
                     }
 
-                delay(pollInterval.toKotlinDuration())
+                delay(pollInterval)
             }
         }
 
@@ -66,7 +66,7 @@ class TaskScheduler(
     private suspend fun processOne(task: ScheduledTask, now: Instant) {
         val latenessMillis = now.toEpochMilli() - task.nextFireAt.toEpochMilli()
 
-        if (latenessMillis > maxLateness.toMillis()) {
+        if (latenessMillis > maxLateness.inWholeMilliseconds) {
             handleMissed(task, now)
             return
         }
