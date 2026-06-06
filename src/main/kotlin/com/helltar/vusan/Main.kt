@@ -8,57 +8,42 @@ import com.helltar.vusan.config.AppConfig
 import com.helltar.vusan.config.resolveLlmRuntime
 import com.helltar.vusan.infra.Db
 import com.helltar.vusan.infra.Http
+import com.helltar.vusan.stt.OpenAiWhisperClient
 import com.helltar.vusan.tasks.TaskScheduler
 import com.helltar.vusan.tasks.TasksRepository
-import com.helltar.vusan.stt.OpenAiWhisperClient
 import com.helltar.vusan.telegram.TelegramBotRunner
 import com.helltar.vusan.telegram.TelegramDelivery
 import com.helltar.vusan.telegram.VoiceTranscriber
 import com.helltar.vusan.tools.ToolRegistryFactory
 import dev.inmo.tgbotapi.extensions.api.telegramBot
 import io.github.oshai.kotlinlogging.KotlinLogging
-import kotlinx.coroutines.runBlocking
-import java.time.Duration
+import io.ktor.client.*
+import kotlinx.coroutines.cancelAndJoin
+import kotlinx.coroutines.coroutineScope
+import kotlin.time.Duration.Companion.minutes
+import kotlin.time.Duration.Companion.seconds
 
 private val log = KotlinLogging.logger {}
 
-fun main() = runBlocking {
+suspend fun main() = coroutineScope {
     val config = AppConfig.fromEnv()
 
-    Db.connect(config)
-
-    val http = Http.createClient()
-    val llm = resolveLlmRuntime(config.llmProvider)
-    val executor = MultiLLMPromptExecutor(llm.koogProvider to llm.client)
+    var http: HttpClient? = null
+    var executor: MultiLLMPromptExecutor? = null
 
     try {
+        Db.connect(config)
+
+        http = Http.createClient()
+        val llm = resolveLlmRuntime(config.llmProvider)
+        executor = MultiLLMPromptExecutor(llm.koogProvider to llm.client)
+
         val history = ChatHistoryRepository()
         val tasks = TasksRepository()
 
-        val toolRegistryFactory =
-            ToolRegistryFactory(
-                http = http,
-                config = config,
-                history = history,
-                tasks = tasks,
-                promptExecutor = executor,
-                model = llm.model
-            )
-
-        val agentFactory =
-            AgentFactory(
-                promptExecutor = executor,
-                toolRegistryFactory = toolRegistryFactory,
-                model = llm.model,
-                chatParams = llm.chatParams,
-                persona = config.systemPrompt
-            )
-
-        val agentRunner =
-            AgentRunner(
-                agentFactory = agentFactory,
-                history = history
-            )
+        val toolRegistryFactory = ToolRegistryFactory(http, config, history, tasks, executor, llm.model)
+        val agentFactory = AgentFactory(executor, toolRegistryFactory, llm.model, llm.chatParams, config.systemPrompt)
+        val agentRunner = AgentRunner(agentFactory, history)
 
         val voiceTranscriber =
             config.openAiStt?.let { sttConfig ->
@@ -68,28 +53,13 @@ fun main() = runBlocking {
                 null
             }
 
-        val telegramBot = telegramBot(config.telegramBotToken)
-        val delivery = TelegramDelivery(telegramBot)
+        val bot = telegramBot(config.telegramBotToken)
+        val delivery = TelegramDelivery(bot)
+        val botRunner = TelegramBotRunner(bot, delivery, agentRunner, history, config.allowedIds, voiceTranscriber)
 
-        val botRunner =
-            TelegramBotRunner(
-                bot = telegramBot,
-                delivery = delivery,
-                agent = agentRunner,
-                history = history,
-                allowedIds = config.allowedIds,
-                voiceTranscriber = voiceTranscriber
-            )
-
-        val scheduler =
-            TaskScheduler(
-                repo = tasks,
-                agentRunner = agentRunner,
-                delivery = delivery,
-                history = history,
-                pollInterval = Duration.ofSeconds(config.taskPollIntervalSeconds),
-                maxLateness = Duration.ofMinutes(config.taskMaxLatenessMinutes)
-            )
+        val pollInterval = config.taskPollIntervalSeconds.seconds
+        val maxLateness = config.taskMaxLatenessMinutes.minutes
+        val scheduler = TaskScheduler(tasks, agentRunner, delivery, history, pollInterval, maxLateness)
 
         log.info { "Starting Vusan: provider=[${llm.providerLabel}] model=[${llm.model.id}]" }
         val toolNames = toolRegistryFactory.availableToolNames
@@ -101,11 +71,11 @@ fun main() = runBlocking {
         try {
             botJob.join()
         } finally {
-            schedulerJob.cancel()
+            schedulerJob.cancelAndJoin()
         }
     } finally {
-        executor.close()
-        http.close()
+        executor?.close()
+        http?.close()
         Db.disconnect()
     }
 }
