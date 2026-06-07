@@ -35,7 +35,7 @@ internal class TelegramBotRunner(
 
         const val MEDIA_ONLY_PROMPT =
             "User sent a file or image with no caption. " +
-                    "If useful, describe it with `describeImage` or process it with `runCode`."
+                    "If useful, describe it with `describeImage` or process it with `codeExecution`."
 
         const val LOG_PROMPT_MAX_CHARS = 300
 

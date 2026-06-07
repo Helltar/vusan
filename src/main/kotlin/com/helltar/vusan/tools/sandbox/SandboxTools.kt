@@ -30,9 +30,9 @@ class SandboxTools(
 ) : ToolSet {
 
     @Tool
-    @LLMDescription(SandboxToolDescriptions.RUN_CODE)
-    suspend fun runCode(
-        @LLMDescription(SandboxToolDescriptions.RUN_CODE_SOURCE)
+    @LLMDescription(SandboxToolDescriptions.CODE_EXECUTION)
+    suspend fun codeExecution(
+        @LLMDescription(SandboxToolDescriptions.CODE_EXECUTION_SOURCE)
         code: String
     ): String = suspendToolGuard {
         val input = loadInputFile()

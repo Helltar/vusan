@@ -23,7 +23,7 @@ class SandboxClient(private val http: HttpClient, baseUrl: String, runTimeout: D
         // running, wrong URL) — distinct from a Python error, which comes back in
         // RunResponse.error. Framed so the model stops instead of rewriting code.
         const val UNREACHABLE_MESSAGE =
-            "The code sandbox is not reachable right now, so the code did not run. " +
+            "Code execution is not reachable right now, so the code did not run. " +
                     "Tell the user code execution is temporarily unavailable; do not retry."
     }
 

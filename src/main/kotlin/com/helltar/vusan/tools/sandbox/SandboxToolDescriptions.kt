@@ -2,8 +2,8 @@ package com.helltar.vusan.tools.sandbox
 
 internal object SandboxToolDescriptions {
 
-    const val RUN_CODE =
-        "Runs Python 3 code in an isolated sandbox to compute an exact answer or produce a chart or file, then returns its output. " +
+    const val CODE_EXECUTION =
+        "Executes Python 3 code in an isolated sandbox to compute an exact answer or produce a chart or file, then returns its output. " +
                 "Use this whenever the answer depends on real computation rather than recall: arithmetic over given numbers, date and time-zone math, probability and statistics, parsing or transforming data the user provided (JSON, CSV, logs), encoding and decoding (base64, hashing, UUID), or generating a visualization. " +
                 "Prefer this over answering from memory for anything numeric, date-based, or data-shaped — do not guess a result you could compute. " +
                 "When the user attaches a file (CSV, JSON, text, image, etc.), it is placed in the working directory; an `<attached_file>` note gives its exact name. Read it directly from your script (for example `pandas.read_csv(\"data.csv\")`) instead of asking the user to paste the contents. " +
@@ -12,7 +12,7 @@ internal object SandboxToolDescriptions {
                 "Available libraries: `numpy`, `pandas`, `matplotlib`, `sympy`, `scipy`, `Pillow` (PIL). " +
                 "Do not use it for general knowledge, conversation, or anything unrelated to computation."
 
-    const val RUN_CODE_SOURCE =
+    const val CODE_EXECUTION_SOURCE =
         "A complete, self-contained Python 3 script. " +
                 "It runs once with no state from previous calls, so include every import and definition. " +
                 "Print results to stdout with `print(...)`. " +

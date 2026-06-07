@@ -40,7 +40,7 @@ class SandboxToolsTest {
         val base64 = java.util.Base64.getEncoder().encodeToString(pngBytes)
         val result =
             tools(outbox, """{"ok":true,"stdout":"chart done\n","files":[{"name":"chart.png","base64":"$base64"}]}""")
-                .runCode("print('chart done')")
+                .codeExecution("print('chart done')")
 
         val photo = assertIs<BotOutput.Photo>(outbox.pending[0].output)
         assertEquals("chart.png", photo.filename)
@@ -64,7 +64,7 @@ class SandboxToolsTest {
         tools(
             outbox,
             """{"ok":true,"files":[{"name":"a.png","base64":"$b64"},{"name":"b.png","base64":"$b64"}]}"""
-        ).runCode("...")
+        ).codeExecution("...")
 
         val group = assertIs<BotOutput.PhotoGroup>(outbox.pending.first { it.output is BotOutput.PhotoGroup }.output)
         assertEquals(2, group.photos.size)
@@ -79,7 +79,7 @@ class SandboxToolsTest {
         val outbox = BotOutbox()
         val bytes = byteArrayOf(7, 7, 7)
         val b64 = java.util.Base64.getEncoder().encodeToString(bytes)
-        tools(outbox, """{"ok":true,"files":[{"name":"lorenz.gif","base64":"$b64"}]}""").runCode("...")
+        tools(outbox, """{"ok":true,"files":[{"name":"lorenz.gif","base64":"$b64"}]}""").codeExecution("...")
 
         val animation = assertIs<BotOutput.Animation>(outbox.pending.single().output)
         assertEquals("lorenz.gif", animation.filename)
@@ -90,7 +90,7 @@ class SandboxToolsTest {
     fun `non-image file is sent as a document`() = runBlocking {
         val outbox = BotOutbox()
         val b64 = java.util.Base64.getEncoder().encodeToString("a,b\n1,2".toByteArray())
-        tools(outbox, """{"ok":true,"files":[{"name":"data.csv","base64":"$b64"}]}""").runCode("...")
+        tools(outbox, """{"ok":true,"files":[{"name":"data.csv","base64":"$b64"}]}""").codeExecution("...")
 
         val doc = assertIs<BotOutput.Document>(outbox.pending.single().output)
         assertEquals("data.csv", doc.filename)
@@ -101,7 +101,7 @@ class SandboxToolsTest {
         val outbox = BotOutbox()
         val error = "Traceback (most recent call last):\\n  File \\\"<exec>\\\", line 1\\nZeroDivisionError: division by zero\\n"
         val result =
-            tools(outbox, """{"ok":false,"error":"$error"}""").runCode("print(1/0)")
+            tools(outbox, """{"ok":false,"error":"$error"}""").codeExecution("print(1/0)")
 
         assertContains(result, "raised an error: ZeroDivisionError: division by zero")
         assertTrue(outbox.pending.isEmpty())
@@ -111,7 +111,7 @@ class SandboxToolsTest {
     fun `timeout returns a hint and enqueues nothing`() = runBlocking {
         val outbox = BotOutbox()
         val result =
-            tools(outbox, """{"ok":false,"timedOut":true,"error":"execution timed out"}""").runCode("while True: pass")
+            tools(outbox, """{"ok":false,"timedOut":true,"error":"execution timed out"}""").codeExecution("while True: pass")
 
         assertContains(result, "timed out")
         assertTrue(outbox.pending.isEmpty())
@@ -120,7 +120,7 @@ class SandboxToolsTest {
     @Test
     fun `successful run with no output nudges to print`() = runBlocking {
         val outbox = BotOutbox()
-        val result = tools(outbox, """{"ok":true}""").runCode("x = 1")
+        val result = tools(outbox, """{"ok":true}""").codeExecution("x = 1")
 
         assertContains(result, "no output")
         assertTrue(outbox.pending.isEmpty())

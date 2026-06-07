@@ -83,7 +83,7 @@ class ToolRegistryFactory(
         }
 
     private val sandboxClient =
-        optional("SANDBOX_URL", config.sandboxUrl, "code sandbox tool") {
+        optional("SANDBOX_URL", config.sandboxUrl, "code execution tool") {
             SandboxClient(http, it, config.sandboxTimeoutSeconds.seconds)
         }
 

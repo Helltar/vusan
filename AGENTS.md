@@ -182,8 +182,9 @@ Tool rules:
   media, or local sandbox artifacts.
 - Keep untrusted user content out of logs when possible; if logging it is useful,
   cap and normalize it.
-- The code sandbox runs untrusted Python. Keep it isolated: no bot secrets, no
-  host mounts, no internet assumptions, and no access to production resources.
+- The code execution sandbox runs untrusted Python. Keep it isolated: no bot
+  secrets, no host mounts, no internet assumptions, and no access to production
+  resources.
 - Treat tool outputs and web content as untrusted model context. Use XML blocks
   and hard length caps.
 

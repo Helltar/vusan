@@ -11,7 +11,7 @@ an API key or an extra service — see [configuration.md](configuration.md).
 | Voice input           | Transcribes incoming voice/audio messages and replied voice/audio context (OpenAI STT).                                                                                    |   ✓    |
 | Voice output          | Replies with an ElevenLabs-generated Telegram voice message.                                                                                                               |   ✓    |
 | GIFs                  | Searches and sends GIFs (Giphy).                                                                                                                                           |   ✓    |
-| Vision                | Describes a photo or image document from the current message or a replied-to message; use the sandbox for programmatic image transforms.                                   |        |
+| Vision                | Describes a photo or image document from the current message or a replied-to message; use code execution for programmatic image transforms.                                |        |
 | Polls and quizzes     | Creates native Telegram regular polls and quiz polls.                                                                                                                      |        |
 | Reactions             | Adds one Telegram reaction emoji to the current, replied-to, or explicitly addressed message.                                                                              |        |
 | YouTube video/audio   | Searches or downloads YouTube videos/audio via `yt-dlp` and `ffmpeg`, with video size capped for Telegram.                                                                 |        |
@@ -21,4 +21,4 @@ an API key or an extra service — see [configuration.md](configuration.md).
 | Scheduled tasks       | Schedules autonomous future turns via `once`, `every <interval>`, or `cron <UNIX expr>` with per-user limits and stale-task skip/notice handling.                          |        |
 | Chat history control  | Clears the current user's stored conversation history without deleting durable memory or scheduled tasks.                                                                  |        |
 | Durable memory        | Stores personal memory per user and shared memory per group; memory survives chat-history clears and can be removed by id.                                                 |        |
-| Code sandbox          | Runs Python to compute exact answers, transform uploaded/replied files, and render charts — isolated, no network (`numpy`/`pandas`/`matplotlib`/`sympy`/`scipy`/`Pillow`). |   ✓    |
+| Code execution        | Runs Python to compute exact answers, transform uploaded/replied files, and render charts — isolated, no network (`numpy`/`pandas`/`matplotlib`/`sympy`/`scipy`/`Pillow`). |   ✓    |

@@ -104,11 +104,11 @@ internal fun attachedFileContextBlock(file: AttachedFile): String =
         buildString {
             appendLine("name: ${file.name}")
             file.fileSizeBytes?.let { appendLine("size: ${formatFileSize(it)}") }
-            append("This file is in the runCode working directory under this exact name. ")
+            append("This file is in the codeExecution working directory under this exact name. ")
             if (file.isImage) {
-                append("It is an image: call `describeImage` to answer about what is visible, or use `runCode` to process it (resize, filter, colors, dimensions).")
+                append("It is an image: call `describeImage` to answer about what is visible, or use `codeExecution` to process it (resize, filter, colors, dimensions).")
             } else {
-                append("Read it directly from a runCode script (e.g. pandas.read_csv) instead of asking the user to resend it.")
+                append("Read it directly from a codeExecution script (e.g. pandas.read_csv) instead of asking the user to resend it.")
             }
         }
     )
@@ -180,4 +180,3 @@ private fun Message.summarizeInternalReply(): RepliedMessageSummary {
         metadata = (content as? MediaContent)?.media?.toMetadataLines().orEmpty()
     )
 }
-

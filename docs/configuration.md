@@ -84,13 +84,13 @@ Unset both variables to use the built-in persona.
 Each optional tool is enabled by one env variable. If it is missing, that tool is skipped at startup with a `WARN` log
 and the bot keeps running.
 
-| Tool                                      | Enable with          | Notes                             |
-|-------------------------------------------|----------------------|-----------------------------------|
-| Web search, image search, page extraction | `TAVILY_API_KEY`     | Tavily                            |
-| GIF lookup                                | `GIPHY_API_KEY`      | Giphy                             |
-| Voice output                              | `ELEVENLABS_API_KEY` | ElevenLabs TTS                    |
-| Voice input                               | `OPENAI_STT_API_KEY` | Reuse your OpenAI key             |
-| Code execution                            | `SANDBOX_URL`        | See [Code sandbox](#code-sandbox) |
+| Tool                                      | Enable with          | Notes                                 |
+|-------------------------------------------|----------------------|---------------------------------------|
+| Web search, image search, page extraction | `TAVILY_API_KEY`     | Tavily                                |
+| GIF lookup                                | `GIPHY_API_KEY`      | Giphy                                 |
+| Voice output                              | `ELEVENLABS_API_KEY` | ElevenLabs TTS                        |
+| Voice input                               | `OPENAI_STT_API_KEY` | Reuse your OpenAI key                 |
+| Code execution                            | `SANDBOX_URL`        | See [Code execution](#code-execution) |
 
 ### TTS tuning
 
@@ -107,9 +107,10 @@ and the bot keeps running.
 | `OPENAI_STT_MODEL`                | `gpt-4o-transcribe` | Speech-to-text model.                              |
 | `OPENAI_STT_MAX_DURATION_SECONDS` | `300`               | Max voice length to transcribe; longer is refused. |
 
-## Code sandbox
+## Code execution
 
-`runCode` lets the agent run Python in an isolated sandbox to compute exact answers, transform data, and render charts
+The `codeExecution` tool lets the agent run Python in an isolated sandbox to compute exact answers, transform data, and
+render charts
 (`numpy`, `pandas`, `matplotlib`, `sympy`, `scipy`, `Pillow`). A file the user uploads (or one they reply to) is placed
 in the working directory so the script can read it by name. The sandbox executes untrusted code on an internal-only
 network with no secrets, no internet, and no host mounts.
@@ -120,7 +121,7 @@ Docker starts it by default:
 SANDBOX_URL=http://vusan-sandbox:8080
 ```
 
-To disable `runCode`, comment out `SANDBOX_URL` in `.env` and start only the bot:
+To disable code execution, comment out `SANDBOX_URL` in `.env` and start only the bot:
 
 ```bash
 docker compose up -d vusan
