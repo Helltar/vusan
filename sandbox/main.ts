@@ -8,10 +8,15 @@
 
 const PORT = Number(Deno.env.get("PORT") ?? 8080);
 const POOL_SIZE = Number(Deno.env.get("SANDBOX_POOL_SIZE") ?? 2);
-const TIMEOUT_SECONDS = Number(Deno.env.get("SANDBOX_TIMEOUT_SECONDS") ?? 30);
+const TIMEOUT_SECONDS = Number(Deno.env.get("SANDBOX_TIMEOUT_SECONDS") ?? 120);
 const MAX_CODE_CHARS = 100_000;
 const ACQUIRE_TIMEOUT_SECONDS = 30;
 const RESPAWN_BACKOFF_SECONDS = 1;
+
+interface InputFile {
+  name: string;
+  base64: string;
+}
 
 interface RunResult {
   ok: boolean;
@@ -20,6 +25,15 @@ interface RunResult {
   stdout: string;
   stderr: string;
   files: Array<{ name: string; base64: string }>;
+  skipped?: Array<{ name: string; bytes: number; reason: string }>;
+  elapsedMs?: number;
+}
+
+function parseInputFiles(raw: unknown): InputFile[] {
+  if (!Array.isArray(raw)) return [];
+  return raw.flatMap((f) =>
+    f && typeof f.name === "string" && typeof f.base64 === "string" ? [{ name: f.name, base64: f.base64 }] : []
+  );
 }
 
 const warm: Worker[] = [];
@@ -59,10 +73,18 @@ function acquire(): Promise<Worker> {
   });
 }
 
-function runOnce(worker: Worker, code: string): Promise<RunResult> {
+function runOnce(worker: Worker, code: string, files: InputFile[]): Promise<RunResult> {
   return new Promise<RunResult>((resolve) => {
     const timer = setTimeout(() => {
-      resolve({ ok: false, timedOut: true, error: "execution timed out", stdout: "", stderr: "", files: [] });
+      resolve({
+        ok: false,
+        timedOut: true,
+        error: "execution timed out",
+        stdout: "",
+        stderr: "",
+        files: [],
+        elapsedMs: TIMEOUT_SECONDS * 1000,
+      });
     }, TIMEOUT_SECONDS * 1000);
     worker.onmessage = (e: MessageEvent<RunResult>) => {
       clearTimeout(timer);
@@ -75,7 +97,7 @@ function runOnce(worker: Worker, code: string): Promise<RunResult> {
       clearTimeout(timer);
       resolve({ ok: false, error: `worker crashed: ${e.message}`, stdout: "", stderr: "", files: [] });
     };
-    worker.postMessage({ code });
+    worker.postMessage({ code, files });
   }).finally(() => {
     worker.terminate();
     spawn();
@@ -95,7 +117,7 @@ async function handleRun(req: Request): Promise<Response> {
   const worker = await acquire().catch(() => null);
   if (!worker) return Response.json({ error: "sandbox busy" }, { status: 503 });
 
-  const result = await runOnce(worker, code);
+  const result = await runOnce(worker, code, parseInputFiles(body?.files));
   return Response.json(result);
 }
 

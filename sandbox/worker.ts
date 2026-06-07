@@ -1,7 +1,12 @@
 /// <reference lib="deno.worker" />
 import { loadPyodide, type PyodideInterface } from "pyodide";
-import { encodeBase64 } from "@std/encoding/base64";
+import { decodeBase64, encodeBase64 } from "@std/encoding/base64";
 import { PACKAGES } from "./packages.ts";
+
+interface InputFile {
+  name: string;
+  base64: string;
+}
 
 const WORK_DIR = "/work";
 const FONT_DIR = "/fonts";
@@ -12,12 +17,20 @@ const MAX_FILE_BYTES = 10 * 1024 * 1024;
 // larger than what the bot ultimately shows; the Kotlin side truncates again.
 const MAX_OUTPUT_CHARS = 256 * 1024;
 
+interface SkippedFile {
+  name: string;
+  bytes: number;
+  reason: "too_large" | "too_many";
+}
+
 interface RunResult {
   ok: boolean;
   error: string;
   stdout: string;
   stderr: string;
   files: Array<{ name: string; base64: string }>;
+  skipped: SkippedFile[];
+  elapsedMs: number;
 }
 
 const ready: Promise<PyodideInterface> = (async () => {
@@ -28,9 +41,17 @@ const ready: Promise<PyodideInterface> = (async () => {
   // symbols render instead of tofu, and a throwaway render so the matplotlib
   // font cache is built during warm-up (hidden by the pool), not on first use.
   await pyodide.runPythonAsync(`
-import io, glob, matplotlib
+import io, glob, os, shutil, matplotlib
 matplotlib.use("Agg")
 import matplotlib.font_manager as fm
+# Expose matplotlib's bundled DejaVu (Latin + Cyrillic) at a stable path so Pillow can draw real text:
+# PIL's load_default() has no Cyrillic and renders boxes. Path: ${FONT_DIR}/DejaVuSans.ttf (+ -Bold).
+os.makedirs("${FONT_DIR}", exist_ok=True)
+_mpl_ttf = os.path.join(os.path.dirname(matplotlib.__file__), "mpl-data", "fonts", "ttf")
+for _fn in ("DejaVuSans.ttf", "DejaVuSans-Bold.ttf"):
+    _src = os.path.join(_mpl_ttf, _fn)
+    if os.path.exists(_src):
+        shutil.copy(_src, "${FONT_DIR}/" + _fn)
 for _p in glob.glob("${FONT_DIR}/*"):
     try:
         fm.fontManager.addfont(_p)
@@ -51,9 +72,13 @@ plt.plot([0, 1]); plt.savefig(io.BytesIO()); plt.close("all")
 
 ready.then(() => self.postMessage({ type: "ready" }));
 
-self.onmessage = async (event: MessageEvent<{ code: string }>) => {
+self.onmessage = async (event: MessageEvent<{ code: string; files?: InputFile[] }>) => {
   const pyodide = await ready;
-  const { code } = event.data;
+  const { code, files: inputFiles } = event.data;
+
+  // Names of files written before the run; excluded from the output so the user's own upload
+  // is not echoed back as a "result".
+  const inputNames = writeInputFiles(pyodide, inputFiles ?? []);
 
   const out = makeSink();
   const err = makeSink();
@@ -62,16 +87,34 @@ self.onmessage = async (event: MessageEvent<{ code: string }>) => {
 
   let ok = true;
   let error = "";
+  const startedAt = performance.now();
   try {
     await pyodide.runPythonAsync(code);
   } catch (e) {
     ok = false;
     error = e instanceof Error ? e.message : String(e);
   }
+  const elapsedMs = Math.round(performance.now() - startedAt);
 
-  const result: RunResult = { ok, error, stdout: out.value, stderr: err.value, files: collectFiles(pyodide) };
+  const { files, skipped } = collectFiles(pyodide, inputNames);
+  const result: RunResult = { ok, error, stdout: out.value, stderr: err.value, files, skipped, elapsedMs };
   self.postMessage(result);
 };
+
+// Write caller-supplied files into the working directory so the script can read them by name.
+// Basenames only (no path traversal) and the same per-file size cap as outputs.
+function writeInputFiles(pyodide: PyodideInterface, files: InputFile[]): Set<string> {
+  const written = new Set<string>();
+  for (const file of files) {
+    const name = file.name.split("/").pop()?.split("\\").pop() ?? "";
+    if (name === "" || name === "." || name === "..") continue;
+    const bytes = decodeBase64(file.base64);
+    if (bytes.length === 0 || bytes.length > MAX_FILE_BYTES) continue;
+    pyodide.FS.writeFile(`${WORK_DIR}/${name}`, bytes);
+    written.add(name);
+  }
+  return written;
+}
 
 function makeSink() {
   let text = "";
@@ -108,20 +151,35 @@ function injectFonts(pyodide: PyodideInterface): void {
   }
 }
 
-function collectFiles(pyodide: PyodideInterface): RunResult["files"] {
+function collectFiles(
+  pyodide: PyodideInterface,
+  inputNames: Set<string>,
+): { files: RunResult["files"]; skipped: SkippedFile[] } {
   const files: RunResult["files"] = [];
+  const skipped: SkippedFile[] = [];
+
   for (const name of pyodide.FS.readdir(WORK_DIR)) {
     if (name === "." || name === "..") continue;
-    if (files.length >= MAX_FILES) break;
+    if (inputNames.has(name)) continue;
 
     const path = `${WORK_DIR}/${name}`;
     const stat = pyodide.FS.stat(path);
     if (!pyodide.FS.isFile(stat.mode)) continue;
 
-    const bytes: Uint8Array = pyodide.FS.readFile(path);
-    if (bytes.length === 0 || bytes.length > MAX_FILE_BYTES) continue;
+    // Size from stat, so an oversized file is reported without ever reading it into memory.
+    const size: number = stat.size;
+    if (size === 0) continue;
+    if (size > MAX_FILE_BYTES) {
+      skipped.push({ name, bytes: size, reason: "too_large" });
+      continue;
+    }
+    if (files.length >= MAX_FILES) {
+      skipped.push({ name, bytes: size, reason: "too_many" });
+      continue;
+    }
 
-    files.push({ name, base64: encodeBase64(bytes) });
+    files.push({ name, base64: encodeBase64(pyodide.FS.readFile(path)) });
   }
-  return files;
+
+  return { files, skipped };
 }
