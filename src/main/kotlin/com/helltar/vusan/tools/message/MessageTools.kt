@@ -5,6 +5,7 @@ import ai.koog.agents.core.tools.annotations.Tool
 import ai.koog.agents.core.tools.reflect.ToolSet
 import com.helltar.vusan.outbox.BotOutbox
 import com.helltar.vusan.outbox.BotOutput
+import com.helltar.vusan.tools.requireToolText
 import com.helltar.vusan.tools.suspendToolGuard
 
 private const val MAX_MESSAGE_CHARS = 4000
@@ -18,10 +19,7 @@ class MessageTools(private val outbox: BotOutbox) : ToolSet {
         @LLMDescription(MessageToolDescriptions.TEXT)
         text: String
     ): String = suspendToolGuard {
-        val trimmed = text.trim()
-
-        require(trimmed.isNotEmpty()) { "Message text must not be empty" }
-        require(trimmed.length <= MAX_MESSAGE_CHARS) { "Message text must be at most $MAX_MESSAGE_CHARS characters" }
+        val trimmed = text.requireToolText("Message text", MAX_MESSAGE_CHARS)
 
         outbox.enqueue(BotOutput.Text(trimmed))
 

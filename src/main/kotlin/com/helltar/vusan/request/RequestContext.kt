@@ -13,3 +13,13 @@ data class RequestContext(
     val chatIsPrivate: Boolean = true,
     val language: Language = Language.DEFAULT
 )
+
+fun RequestContext.requireUserId(): Long {
+    check(userId != 0L) { "User ID is unavailable" }
+    return userId
+}
+
+fun RequestContext.requireChatId(): Long {
+    check(chatId != 0L) { "Chat ID is unavailable" }
+    return chatId
+}

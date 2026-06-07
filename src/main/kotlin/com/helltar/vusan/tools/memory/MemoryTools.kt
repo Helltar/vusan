@@ -7,6 +7,8 @@ import com.helltar.vusan.agent.memory.MemoryRepository
 import com.helltar.vusan.agent.memory.MemoryScope
 import com.helltar.vusan.common.collapseWhitespaceAndCap
 import com.helltar.vusan.request.RequestContext
+import com.helltar.vusan.request.requireChatId
+import com.helltar.vusan.request.requireUserId
 import com.helltar.vusan.tools.suspendToolGuard
 
 private const val MAX_MEMORY_CHARS = 500
@@ -20,9 +22,7 @@ class MemoryTools(private val memory: MemoryRepository, private val context: Req
         @LLMDescription(MemoryToolDescriptions.REMEMBER_ABOUT_ME_DETAIL)
         detail: String
     ): String = suspendToolGuard {
-        val userId = context.userId
-
-        check(userId != 0L) { "User ID is unavailable for memory tools" }
+        val userId = context.requireUserId()
 
         detail.collapseWhitespaceAndCap(MAX_MEMORY_CHARS)?.let { clean ->
             val id = memory.add(MemoryScope.USER, userId, clean)
@@ -40,9 +40,7 @@ class MemoryTools(private val memory: MemoryRepository, private val context: Req
         if (context.chatIsPrivate)
             return@suspendToolGuard "No shared group memory in a private chat — use rememberAboutMe for personal details."
 
-        val chatId = context.chatId
-
-        check(chatId != 0L) { "Chat ID is unavailable for memory tools" }
+        val chatId = context.requireChatId()
 
         detail.collapseWhitespaceAndCap(MAX_MEMORY_CHARS)?.let { clean ->
             val id = memory.add(MemoryScope.CHAT, chatId, clean)
@@ -66,8 +64,7 @@ class MemoryTools(private val memory: MemoryRepository, private val context: Req
     @Tool
     @LLMDescription(MemoryToolDescriptions.FORGET_EVERYTHING_ABOUT_ME)
     suspend fun forgetEverythingAboutMe(): String = suspendToolGuard {
-        val userId = context.userId
-        check(userId != 0L) { "User ID is unavailable for memory tools" }
+        val userId = context.requireUserId()
         val removed = memory.clearScope(MemoryScope.USER, userId)
         "Cleared your personal memory ($removed item(s) removed). Chat history and group memory are untouched."
     }

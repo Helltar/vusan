@@ -14,9 +14,6 @@ class ElevenLabsTtsClient(private val http: HttpClient, private val apiKey: Stri
 
     suspend fun synthesize(text: String, config: ElevenLabsTtsConfig): ByteArray {
         require(text.isNotBlank()) { "Text must not be blank" }
-        require(config.model.isNotBlank()) { "ElevenLabs TTS model must not be blank" }
-        require(config.voiceId.isNotBlank()) { "ElevenLabs TTS voice ID must not be blank" }
-        require(config.outputFormat.isNotBlank()) { "ElevenLabs TTS output format must not be blank" }
 
         val response: HttpResponse =
             http.post("https://api.elevenlabs.io/v1/text-to-speech/${config.voiceId}") {

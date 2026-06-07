@@ -25,8 +25,6 @@ class SandboxTools(private val client: SandboxClient, private val outbox: BotOut
         @LLMDescription(SandboxToolDescriptions.RUN_CODE_SOURCE)
         code: String
     ): String = suspendToolGuard {
-        require(code.isNotBlank()) { "Code must not be blank" }
-
         val result = client.run(code)
 
         if (result.timedOut) {

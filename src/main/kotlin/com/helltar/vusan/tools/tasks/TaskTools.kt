@@ -4,7 +4,10 @@ import ai.koog.agents.core.tools.annotations.LLMDescription
 import ai.koog.agents.core.tools.annotations.Tool
 import ai.koog.agents.core.tools.reflect.ToolSet
 import com.helltar.vusan.request.RequestContext
+import com.helltar.vusan.request.requireChatId
+import com.helltar.vusan.request.requireUserId
 import com.helltar.vusan.tasks.*
+import com.helltar.vusan.tools.requireToolText
 import com.helltar.vusan.tools.suspendToolGuard
 import java.time.Instant
 import java.time.ZoneId
@@ -35,18 +38,10 @@ class TaskTools(
         @LLMDescription(TaskToolDescriptions.SCHEDULE_TITLE)
         title: String? = null
     ): String = suspendToolGuard {
-        val userId = context.userId
+        val userId = context.requireUserId()
+        val chatId = context.requireChatId()
 
-        check(userId != 0L) { "User ID is unavailable for task tools" }
-        check(context.chatId != 0L) { "Chat ID is unavailable for task tools" }
-
-        val trimmedPrompt = prompt.trim()
-
-        require(trimmedPrompt.isNotEmpty()) { "Task prompt must not be empty" }
-
-        require(trimmedPrompt.length <= MAX_PROMPT_CHARS) {
-            "Task prompt must be at most $MAX_PROMPT_CHARS characters"
-        }
+        val trimmedPrompt = prompt.requireToolText("Task prompt", MAX_PROMPT_CHARS)
 
         val trimmedTitle = title?.trim()?.takeIf { it.isNotEmpty() }
 
@@ -75,7 +70,7 @@ class TaskTools(
             repo.create(
                 NewScheduledTask(
                     userId = userId,
-                    chatId = context.chatId,
+                    chatId = chatId,
                     prompt = trimmedPrompt,
                     title = trimmedTitle,
                     recurrence = plan.recurrence,
@@ -95,9 +90,7 @@ class TaskTools(
     @Tool
     @LLMDescription(TaskToolDescriptions.LIST_TASKS)
     suspend fun listTasks(): String = suspendToolGuard {
-        val userId = context.userId
-
-        check(userId != 0L) { "User ID is unavailable for task tools" }
+        val userId = context.requireUserId()
 
         val tasks = repo.listActiveByUser(userId)
 
@@ -116,9 +109,7 @@ class TaskTools(
         @LLMDescription(TaskToolDescriptions.CANCEL_ID)
         id: Long
     ): String = suspendToolGuard {
-        val userId = context.userId
-
-        check(userId != 0L) { "User ID is unavailable for task tools" }
+        val userId = context.requireUserId()
 
         val existing =
             repo.findForUser(userId, id)
