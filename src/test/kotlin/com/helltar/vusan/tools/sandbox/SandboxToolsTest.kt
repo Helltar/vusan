@@ -17,7 +17,17 @@ import kotlin.time.Duration.Companion.seconds
 
 class SandboxToolsTest {
 
-    private fun tools(outbox: BotOutbox, responseJson: String): SandboxTools {
+    private companion object {
+        val MP4_BYTES = byteArrayOf(0, 0, 0, 1)
+    }
+
+    // ffmpeg is not assumed on the test machine, so the encoder is faked: it pretends to encode
+    // (returning a fixed marker) or to fail (returning null) without touching a real binary.
+    private fun tools(
+        outbox: BotOutbox,
+        responseJson: String,
+        encoder: SandboxVideoEncoder = SandboxVideoEncoder { MP4_BYTES }
+    ): SandboxTools {
         val http =
             Http.createClient(
                 MockEngine { request ->
@@ -30,7 +40,7 @@ class SandboxToolsTest {
                     )
                 }
             )
-        return SandboxTools(SandboxClient(http, "http://sandbox:8080", 30.seconds), outbox)
+        return SandboxTools(SandboxClient(http, "http://sandbox:8080", 30.seconds), outbox, videoEncoder = encoder)
     }
 
     @Test
@@ -75,15 +85,30 @@ class SandboxToolsTest {
     }
 
     @Test
-    fun `gif is sent as an animation, not a photo`() = runBlocking {
+    fun `apng is encoded to a looping mp4 animation`() = runBlocking {
         val outbox = BotOutbox()
-        val bytes = byteArrayOf(7, 7, 7)
-        val b64 = java.util.Base64.getEncoder().encodeToString(bytes)
-        tools(outbox, """{"ok":true,"files":[{"name":"lorenz.gif","base64":"$b64"}]}""").codeExecution("...")
+        val b64 = java.util.Base64.getEncoder().encodeToString(byteArrayOf(7, 7, 7))
+        tools(outbox, """{"ok":true,"files":[{"name":"lorenz.apng","base64":"$b64"}]}""").codeExecution("...")
 
         val animation = assertIs<BotOutput.Animation>(outbox.pending.single().output)
-        assertEquals("lorenz.gif", animation.filename)
-        assertContentEquals(bytes, animation.bytes)
+        assertEquals("lorenz.mp4", animation.filename)
+        assertContentEquals(MP4_BYTES, animation.bytes)
+    }
+
+    @Test
+    fun `animation falls back to a document when ffmpeg encoding fails`() = runBlocking {
+        val outbox = BotOutbox()
+        val apng = byteArrayOf(7, 7, 7)
+        val b64 = java.util.Base64.getEncoder().encodeToString(apng)
+        tools(
+            outbox,
+            """{"ok":true,"files":[{"name":"lorenz.apng","base64":"$b64"}]}""",
+            encoder = SandboxVideoEncoder { null }
+        ).codeExecution("...")
+
+        val doc = assertIs<BotOutput.Document>(outbox.pending.single().output)
+        assertEquals("lorenz.apng", doc.filename)
+        assertContentEquals(apng, doc.bytes)
     }
 
     @Test

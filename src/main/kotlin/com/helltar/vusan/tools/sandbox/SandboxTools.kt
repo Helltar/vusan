@@ -21,12 +21,14 @@ private const val MAX_INPUT_FILE_BYTES = 10 * 1024 * 1024
 private const val SLOW_RUN_MS = 1_000
 
 private val IMAGE_EXTENSIONS = setOf("png", "jpg", "jpeg", "webp", "bmp")
+private val ANIMATION_EXTENSIONS = setOf("apng", "gif")
 
 @Suppress("unused")
 class SandboxTools(
     private val client: SandboxClient,
     private val outbox: BotOutbox,
-    private val attachedFile: AttachedFile? = null
+    private val attachedFile: AttachedFile? = null,
+    private val videoEncoder: SandboxVideoEncoder = FfmpegVideoEncoder()
 ) : ToolSet {
 
     @Tool
@@ -43,11 +45,10 @@ class SandboxTools(
                     "Simplify it or avoid long-running loops, then try again if it would help."
         }
 
-        val animations = result.files.filter { it.name.isGifName() }.mapNotNull { it.toAnimation() }
+        val (animationFiles, nonAnimationFiles) = result.files.partition { it.name.isAnimationName() }
+        val (imageFiles, otherFiles) = nonAnimationFiles.partition { it.name.isImageName() }
 
-        val (imageFiles, otherFiles) =
-            result.files.filterNot { it.name.isGifName() }.partition { it.name.isImageName() }
-
+        val (animations, animationFallbacks) = encodeAnimations(animationFiles)
         val photos = imageFiles.mapNotNull { it.toPhoto() }
         val imageDocuments = imageFiles.mapNotNull { it.toDocument() }
         val documents = otherFiles.mapNotNull { it.toDocument() }
@@ -61,7 +62,8 @@ class SandboxTools(
 
         // Telegram recompresses inline photos to JPEG, softening chart text. Send each image again as
         // an uncompressed document so a pixel-perfect copy is available alongside the inline preview.
-        enqueueDocuments(imageDocuments + documents)
+        // Animations that ffmpeg could not encode ride along as their original APNG/GIF document.
+        enqueueDocuments(imageDocuments + documents + animationFallbacks)
 
         val body =
             buildString {
@@ -88,7 +90,9 @@ class SandboxTools(
                     appendLine("</stderr>")
                 }
 
-                val sent = animations.map { it.filename } + photos.map { it.filename } + documents.map { it.filename }
+                val sent =
+                    animations.map { it.filename } + animationFallbacks.map { it.filename } +
+                            photos.map { it.filename } + documents.map { it.filename }
 
                 if (sent.isNotEmpty()) {
                     appendLine(
@@ -142,10 +146,32 @@ class SandboxTools(
         }
     }
 
-    private fun SandboxFile.toAnimation(): BotOutput.Animation? =
-        decodedBytes()?.let {
-            BotOutput.Animation(bytes = it, filename = name.sanitizeFilename().ifBlank { "animation.gif" })
+    // Encode each animation (APNG/GIF) into a looping MP4; if ffmpeg is unavailable or fails,
+    // keep the original bytes as a document so the animation still reaches the chat.
+    private suspend fun encodeAnimations(
+        files: List<SandboxFile>
+    ): Pair<List<BotOutput.Animation>, List<BotOutput.Document>> {
+        val animations = mutableListOf<BotOutput.Animation>()
+        val fallbacks = mutableListOf<BotOutput.Document>()
+
+        files.forEach { file ->
+            val source = file.decodedBytes() ?: return@forEach
+
+            videoEncoder.encodeToMp4(source)
+                ?.let { animations += BotOutput.Animation(bytes = it, filename = file.mp4Filename()) }
+                ?: run {
+                    fallbacks += BotOutput.Document(
+                        bytes = source,
+                        filename = file.name.sanitizeFilename().ifBlank { "animation" }
+                    )
+                }
         }
+
+        return animations to fallbacks
+    }
+
+    private fun SandboxFile.mp4Filename(): String =
+        "${name.substringBeforeLast('.', name).sanitizeFilename().ifBlank { "animation" }}.mp4"
 
     private fun SandboxFile.toPhoto(): BotOutput.Photo? =
         decodedBytes()?.let {
@@ -191,8 +217,8 @@ private fun formatBytes(bytes: Long): String =
 private fun String.isImageName(): Boolean =
     substringAfterLast('.', "").lowercase() in IMAGE_EXTENSIONS
 
-private fun String.isGifName(): Boolean =
-    substringAfterLast('.', "").equals("gif", ignoreCase = true)
+private fun String.isAnimationName(): Boolean =
+    substringAfterLast('.', "").lowercase() in ANIMATION_EXTENSIONS
 
 private fun String.lastMeaningfulLine(): String =
     trim().lineSequence().map { it.trim() }.lastOrNull { it.isNotEmpty() } ?: "unknown error"

@@ -16,7 +16,9 @@ internal object SandboxToolDescriptions {
         "A complete, self-contained Python 3 script. " +
                 "It runs once with no state from previous calls, so include every import and definition. " +
                 "Print results to stdout with `print(...)`. " +
-                "Save a chart to a file such as `chart.png`, or an animation to a `.gif` (e.g. matplotlib `FuncAnimation` saved with the Pillow writer — keep it cheap to render: a few dozen frames at a small figure size and modest dpi, or it may hit the time limit), and write any other output files into the current directory; they are delivered to the user automatically. " +
+                "Save a chart to a file such as `chart.png`. " +
+                "Save an animation or simulation to a `.apng` file (e.g. matplotlib `FuncAnimation` saved with `PillowWriter` to `simulation.apng`) — it is delivered to the chat as a looping video, so prefer `.apng` over `.gif` to keep full color. Keep it cheap to render: a few dozen frames at a small figure size and modest dpi, or it may hit the time limit. " +
+                "Write any other output files into the current directory; they are delivered to the user automatically. " +
                 "When drawing text on an image with Pillow, load a Unicode font with `ImageFont.truetype(\"/fonts/DejaVuSans.ttf\", size)` (use `/fonts/DejaVuSans-Bold.ttf` for bold) — it covers Latin and Cyrillic. Never use `ImageFont.load_default()` or OS font paths; they lack Cyrillic and render boxes. " +
                 "There is no network access."
 }
