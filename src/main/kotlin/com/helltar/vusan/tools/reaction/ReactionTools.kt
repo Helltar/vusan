@@ -48,24 +48,29 @@ class ReactionTools(private val context: RequestContext, private val outbox: Bot
         }
 
         val normalized = normalizeReactionEmoji(trimmedEmoji)
+
         require(normalized in ALLOWED_REACTION_EMOJI) {
             "Emoji `$trimmedEmoji` is not in Telegram's free reaction set and will be rejected. " +
-                "Pick one from the allowed list in the tool description, or skip the reaction."
+                    "Pick one from the allowed list in the tool description, or skip the reaction."
         }
 
         val targetId =
             when {
                 messageId != null -> messageId
+
                 targetRepliedMessage -> requireNotNull(context.replyToMessageId) {
-                    "No replied-to message in scope — drop `targetRepliedMessage` or react to the user's own message instead."
+                    "No replied-to message in scope — drop `targetRepliedMessage` or " +
+                            "react to the user's own message instead."
                 }
+
                 else -> context.messageId
             }
+
         require(targetId > 0L) { "Reaction target message id must be positive" }
 
         outbox.enqueue(BotOutput.Reaction(messageId = targetId, emoji = normalized))
 
         "Reaction $normalized queued for message $targetId. " +
-            "Do not also call sendMessage unless the user asked for an additional textual reply."
+                "Do not also call sendMessage unless the user asked for an additional textual reply."
     }
 }

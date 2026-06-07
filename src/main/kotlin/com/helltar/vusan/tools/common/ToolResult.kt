@@ -10,6 +10,12 @@ suspend fun suspendToolGuard(block: suspend () -> String): String =
         block()
     } catch (t: Throwable) {
         t.rethrowIfCancellation()
-        log.warn(t) { "tool failed" }
+
+        if (t is IllegalArgumentException) {
+            log.warn { "tool rejected input: ${t.message}" }
+        } else {
+            log.warn(t) { "tool failed" }
+        }
+
         "Tool failed: ${t.message ?: t::class.simpleName}"
     }
