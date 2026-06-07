@@ -107,7 +107,6 @@ class TaskScheduler(
                 historyEntry = historyEntry(task),
                 messageContext = null,
                 chatIsPrivate = task.chatIsPrivate,
-                repliedPhoto = null,
                 language = task.language
             )
 

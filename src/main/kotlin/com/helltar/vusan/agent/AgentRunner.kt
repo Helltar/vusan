@@ -11,7 +11,7 @@ import com.helltar.vusan.i18n.Messages
 import com.helltar.vusan.outbox.BotOutbox
 import com.helltar.vusan.outbox.BotOutput
 import com.helltar.vusan.outbox.OutboxItem
-import com.helltar.vusan.request.RepliedPhoto
+import com.helltar.vusan.request.AttachedFile
 import com.helltar.vusan.request.RequestContext
 import com.helltar.vusan.tools.message.MessageTools
 import io.github.oshai.kotlinlogging.KotlinLogging
@@ -27,7 +27,7 @@ data class AgentRequest(
     val historyEntry: String,
     val messageContext: MessageContext? = null,
     val chatIsPrivate: Boolean = false,
-    val repliedPhoto: RepliedPhoto? = null,
+    val attachedFile: AttachedFile? = null,
     val language: Language = Language.DEFAULT
 )
 
@@ -85,10 +85,10 @@ class AgentRunner(
                 userId = request.userId,
                 messageId = request.messageId,
                 replyToMessageId = request.replyToMessageId,
-                repliedPhoto = request.repliedPhoto,
                 senderUsername = request.messageContext?.userUsername,
                 senderDisplayName = request.messageContext?.userDisplayName,
                 chatIsPrivate = request.messageContext?.isPrivate ?: request.chatIsPrivate,
+                attachedFile = request.attachedFile,
                 language = request.language
             )
 
@@ -103,7 +103,7 @@ class AgentRunner(
                     "turns=${promptHistory.turns.size} summaryChars=${promptHistory.summary?.length ?: 0} " +
                     "userMemory=${userMemory.size} chatMemory=${chatMemory.size} " +
                     "promptChars=${request.prompt.length} historyChars=${request.historyEntry.length} " +
-                    "repliedPhoto=${request.repliedPhoto != null}"
+                    "attachedFile=${request.attachedFile != null}"
         }
 
         val toolEvents = mutableListOf<ToolEvent>()

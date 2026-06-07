@@ -7,7 +7,7 @@ import com.helltar.vusan.common.collapseWhitespaceAndCap
 import com.helltar.vusan.common.rethrowIfCancellation
 import com.helltar.vusan.i18n.Language
 import com.helltar.vusan.i18n.Messages
-import com.helltar.vusan.request.RepliedPhoto
+import com.helltar.vusan.request.AttachedFile
 import dev.inmo.kslog.common.KSLog
 import dev.inmo.tgbotapi.bot.TelegramBot
 import dev.inmo.tgbotapi.extensions.api.bot.getMe
@@ -17,10 +17,7 @@ import dev.inmo.tgbotapi.extensions.behaviour_builder.buildBehaviourWithLongPoll
 import dev.inmo.tgbotapi.extensions.behaviour_builder.triggers_handling.*
 import dev.inmo.tgbotapi.types.chat.ExtendedPublicChat
 import dev.inmo.tgbotapi.types.message.abstracts.CommonMessage
-import dev.inmo.tgbotapi.types.message.content.AudioContent
-import dev.inmo.tgbotapi.types.message.content.StickerContent
-import dev.inmo.tgbotapi.types.message.content.TextContent
-import dev.inmo.tgbotapi.types.message.content.VoiceContent
+import dev.inmo.tgbotapi.types.message.content.*
 import io.github.oshai.kotlinlogging.KotlinLogging
 import kotlinx.coroutines.Job
 
@@ -35,7 +32,13 @@ internal class TelegramBotRunner(
 
     private companion object {
         const val MENTION_ONLY_PROMPT = "User mentioned the bot with no text. Respond naturally and briefly."
+
+        const val MEDIA_ONLY_PROMPT =
+            "User sent a file or image with no caption. " +
+                    "If useful, describe it with `describeImage` or process it with `runCode`."
+
         const val LOG_PROMPT_MAX_CHARS = 300
+
         val log = KotlinLogging.logger {}
     }
 
@@ -66,6 +69,8 @@ internal class TelegramBotRunner(
             onSticker(markerFactory = null) { handleStickerUpdate(it, botProfile) }
             onVoice(markerFactory = null) { handleVoiceUpdate(it, botProfile) }
             onAudio(markerFactory = null) { handleAudioUpdate(it, botProfile) }
+            onDocument(markerFactory = null) { handleDocumentUpdate(it, botProfile) }
+            onPhoto(markerFactory = null) { handlePhotoUpdate(it, botProfile) }
         }
     }
 
@@ -167,7 +172,31 @@ internal class TelegramBotRunner(
     private suspend fun handleStickerUpdate(message: CommonMessage<StickerContent>, botProfile: BotProfile) {
         if (!message.isAccepted(botProfile)) return
         val prompt = describeIncomingSticker(message.content.media)
-        dispatchToAgent(message, prompt, botProfile, inputKind = "sticker", loadRepliedPhoto = false)
+        dispatchToAgent(message, prompt, botProfile, inputKind = "sticker", loadRepliedAttachment = false)
+    }
+
+    private suspend fun handleDocumentUpdate(message: CommonMessage<DocumentContent>, botProfile: BotProfile) =
+        handleMediaUpdate(message, botProfile, inputKind = "document")
+
+    private suspend fun handlePhotoUpdate(message: CommonMessage<PhotoContent>, botProfile: BotProfile) =
+        handleMediaUpdate(message, botProfile, inputKind = "photo")
+
+    private suspend fun handleMediaUpdate(message: CommonMessage<*>, botProfile: BotProfile, inputKind: String) {
+        if (!message.isAccepted(botProfile)) return
+
+        val caption =
+            (message.content as? TextedContent)
+                ?.let { sanitizeUserText(it, botProfile.userId, botProfile.username) }
+                .orEmpty()
+                .ifBlank { MEDIA_ONLY_PROMPT }
+
+        dispatchToAgent(
+            message,
+            caption,
+            botProfile,
+            inputKind = inputKind,
+            attachedFile = message.content.toAttachedFileOrNull(bot)
+        )
     }
 
     private suspend fun CommonMessage<*>.usableReplySummary(botProfile: BotProfile): RepliedMessageSummary? =
@@ -217,15 +246,22 @@ internal class TelegramBotRunner(
         prompt: String,
         botProfile: BotProfile,
         inputKind: String,
-        loadRepliedPhoto: Boolean = true
+        loadRepliedAttachment: Boolean = true,
+        attachedFile: AttachedFile? = null
     ) {
         val replySummary = message.usableReplySummary(botProfile)
+        val effectiveAttachedFile =
+            attachedFile
+                ?: if (loadRepliedAttachment) replySummary?.let { message.repliedAttachedFileOrNull(bot) } else null
+
+        val baseAgentInput = replySummary?.let { formatAgentInput(prompt, it) } ?: prompt
 
         handleAgentMessage(
             message = message,
-            agentInput = replySummary?.let { formatAgentInput(prompt, it) } ?: prompt,
+            agentInput =
+                effectiveAttachedFile?.let { "${attachedFileContextBlock(it)}\n\n$baseAgentInput" } ?: baseAgentInput,
             historyInput = replySummary?.let { formatHistoryInput(prompt, it) } ?: prompt,
-            repliedPhoto = if (loadRepliedPhoto) replySummary?.let { message.repliedPhotoOrNull(bot) } else null,
+            attachedFile = effectiveAttachedFile,
             replyToMessageId = message.usableReplyToMessageId(botProfile),
             inputKind = inputKind
         )
@@ -235,7 +271,7 @@ internal class TelegramBotRunner(
         message: CommonMessage<*>,
         agentInput: String,
         historyInput: String,
-        repliedPhoto: RepliedPhoto?,
+        attachedFile: AttachedFile?,
         replyToMessageId: Long?,
         inputKind: String
     ) {
@@ -253,7 +289,7 @@ internal class TelegramBotRunner(
                 message.senderUsernameOrNull()?.let { append(" username=[$it]") }
                 message.senderDisplayNameOrNull()?.let { append(" name=[$it]") }
                 replyToMessageId?.let { append(" replyTo=$it") }
-                if (repliedPhoto != null) append(" repliedPhoto=true")
+                attachedFile?.let { append(" attachedFile=[${it.name}]") }
                 append(" text=[${agentInput.collapseWhitespaceAndCap(LOG_PROMPT_MAX_CHARS).orEmpty()}]")
             }
         }
@@ -270,7 +306,7 @@ internal class TelegramBotRunner(
                             prompt = agentInput,
                             historyEntry = historyInput,
                             messageContext = message.toMessageContext(loadChatDescription(message)),
-                            repliedPhoto = repliedPhoto,
+                            attachedFile = attachedFile,
                             language = message.language
                         )
                     )

@@ -9,7 +9,7 @@ import ai.koog.prompt.llm.LLModel
 import ai.koog.prompt.message.Message
 import ai.koog.prompt.message.ResponseMetaInfo
 import ai.koog.prompt.streaming.StreamFrame
-import com.helltar.vusan.request.RepliedPhoto
+import com.helltar.vusan.request.AttachedFile
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.runBlocking
 import kotlin.test.Test
@@ -19,40 +19,57 @@ import kotlin.test.assertTrue
 class VisionToolsTest {
 
     @Test
-    fun `describeRepliedPhoto returns no-photo message when no reply photo is available`() = runBlocking {
+    fun `describeImage returns no-image message when no image is attached`() = runBlocking {
         val executor = FakePromptExecutor()
-        val tools = VisionTools(visionClient(executor), replyPhoto = null)
+        val tools = VisionTools(visionClient(executor), attachedFile = null)
 
-        val result = tools.describeRepliedPhoto("text")
+        val result = tools.describeImage("text")
 
-        assertEquals("No replied photo is available in this turn.", result)
+        assertEquals("No image is attached in this turn.", result)
         assertEquals(0, executor.callCount)
     }
 
     @Test
-    fun `describeRepliedPhoto returns oversize message before loading bytes when metadata is too large`() = runBlocking {
+    fun `describeImage refuses a non-image attachment without calling vision`() = runBlocking {
         var loaded = false
-        val photo = repliedPhoto(fileSizeBytes = (9 * 1024 * 1024).toULong()) {
+        val file = attachedFile(isImage = false, name = "data.csv") {
             loaded = true
             byteArrayOf(1)
         }
         val executor = FakePromptExecutor()
-        val tools = VisionTools(visionClient(executor), photo)
+        val tools = VisionTools(visionClient(executor), file)
 
-        val result = tools.describeRepliedPhoto("objects")
+        val result = tools.describeImage("")
 
-        assertEquals("The replied photo is too large for vision (9437184 bytes, limit 8388608).", result)
+        assertEquals("The attached file `data.csv` is not an image, so it can't be described visually.", result)
         assertEquals(false, loaded)
         assertEquals(0, executor.callCount)
     }
 
     @Test
-    fun `describeRepliedPhoto runs the vision prompt with the focus and returns its text`() = runBlocking {
-        val photo = repliedPhoto { byteArrayOf(1, 2, 3) }
-        val executor = FakePromptExecutor(response = "A cat on a chair.")
-        val tools = VisionTools(visionClient(executor), photo)
+    fun `describeImage returns oversize message before loading bytes when metadata is too large`() = runBlocking {
+        var loaded = false
+        val file = attachedFile(fileSizeBytes = (9 * 1024 * 1024).toLong()) {
+            loaded = true
+            byteArrayOf(1)
+        }
+        val executor = FakePromptExecutor()
+        val tools = VisionTools(visionClient(executor), file)
 
-        val result = tools.describeRepliedPhoto("visible text")
+        val result = tools.describeImage("objects")
+
+        assertEquals("The image is too large for vision (9437184 bytes, limit 8388608).", result)
+        assertEquals(false, loaded)
+        assertEquals(0, executor.callCount)
+    }
+
+    @Test
+    fun `describeImage runs the vision prompt with the focus and returns its text`() = runBlocking {
+        val file = attachedFile { byteArrayOf(1, 2, 3) }
+        val executor = FakePromptExecutor(response = "A cat on a chair.")
+        val tools = VisionTools(visionClient(executor), file)
+
+        val result = tools.describeImage("visible text")
 
         assertEquals("A cat on a chair.", result)
         assertEquals(1, executor.callCount)
@@ -61,19 +78,20 @@ class VisionToolsTest {
         assertTrue("visible text" in promptText, "expected the user focus to be forwarded into the vision prompt")
     }
 
-    private fun visionClient(executor: PromptExecutor): RepliedPhotoVisionClient =
-        RepliedPhotoVisionClient(executor, LLModel(provider = LLMProvider.OpenAI, id = "test", capabilities = emptyList()))
+    private fun visionClient(executor: PromptExecutor): ImageVisionClient =
+        ImageVisionClient(executor, LLModel(provider = LLMProvider.OpenAI, id = "test", capabilities = emptyList()))
 
-    private fun repliedPhoto(
-        fileSizeBytes: ULong? = null,
+    private fun attachedFile(
+        fileSizeBytes: Long? = null,
+        isImage: Boolean = true,
+        name: String = "photo.jpg",
         loadBytes: suspend () -> ByteArray
-    ): RepliedPhoto =
-        RepliedPhoto(
-            fileId = "file-1",
-            fileUniqueId = "unique-1",
-            width = 100,
-            height = 100,
+    ): AttachedFile =
+        AttachedFile(
+            name = name,
             fileSizeBytes = fileSizeBytes,
+            mimeType = "image/jpeg",
+            isImage = isImage,
             caption = "caption",
             loadBytes = loadBytes
         )

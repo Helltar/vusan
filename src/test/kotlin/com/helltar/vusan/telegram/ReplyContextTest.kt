@@ -38,7 +38,6 @@ class ReplyContextTest {
         assertTrue(prompt.contains("- type: photo"))
         assertTrue(prompt.contains("- metadata:\n  - file_id: abc123"))
         assertTrue(prompt.contains("  - width: 1280"))
-        assertTrue(prompt.contains("- visual content: call `describeRepliedPhoto`"))
         assertFalse(prompt.contains("<text_caption>"))
     }
 

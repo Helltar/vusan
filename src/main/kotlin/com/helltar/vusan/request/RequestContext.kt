@@ -7,10 +7,10 @@ data class RequestContext(
     val userId: Long,
     val messageId: Long,
     val replyToMessageId: Long? = null,
-    val repliedPhoto: RepliedPhoto? = null,
     val senderUsername: String? = null,
     val senderDisplayName: String? = null,
     val chatIsPrivate: Boolean = true,
+    val attachedFile: AttachedFile? = null,
     val language: Language = Language.DEFAULT
 )
 

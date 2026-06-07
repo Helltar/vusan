@@ -4,20 +4,30 @@ import ai.koog.agents.core.tools.annotations.LLMDescription
 import ai.koog.agents.core.tools.annotations.Tool
 import ai.koog.agents.core.tools.reflect.ToolSet
 import com.helltar.vusan.common.limitTo
+import com.helltar.vusan.common.rethrowIfCancellation
 import com.helltar.vusan.common.sanitizeFilename
 import com.helltar.vusan.outbox.BotOutbox
 import com.helltar.vusan.outbox.BotOutput
+import com.helltar.vusan.request.AttachedFile
 import com.helltar.vusan.tools.suspendToolGuard
 import java.util.*
 
 private const val MAX_OUTPUT_CHARS = 4_000
 private const val MAX_ERROR_CHARS = 500
 private const val MAX_PHOTOS = 10
+private const val MAX_INPUT_FILE_BYTES = 10 * 1024 * 1024
+
+// Only surface run time when it's meaningful — below this it's noise the model would parrot.
+private const val SLOW_RUN_MS = 1_000
 
 private val IMAGE_EXTENSIONS = setOf("png", "jpg", "jpeg", "webp", "bmp")
 
 @Suppress("unused")
-class SandboxTools(private val client: SandboxClient, private val outbox: BotOutbox) : ToolSet {
+class SandboxTools(
+    private val client: SandboxClient,
+    private val outbox: BotOutbox,
+    private val attachedFile: AttachedFile? = null
+) : ToolSet {
 
     @Tool
     @LLMDescription(SandboxToolDescriptions.RUN_CODE)
@@ -25,7 +35,8 @@ class SandboxTools(private val client: SandboxClient, private val outbox: BotOut
         @LLMDescription(SandboxToolDescriptions.RUN_CODE_SOURCE)
         code: String
     ): String = suspendToolGuard {
-        val result = client.run(code)
+        val input = loadInputFile()
+        val result = client.run(code, input?.file?.let(::listOf).orEmpty())
 
         if (result.timedOut) {
             return@suspendToolGuard "The code timed out before finishing. " +
@@ -53,33 +64,77 @@ class SandboxTools(private val client: SandboxClient, private val outbox: BotOut
         imageDocuments.forEach { outbox.enqueue(it) }
         documents.forEach { outbox.enqueue(it) }
 
-        buildString {
-            if (!result.ok) {
-                appendLine("The code raised an error: ${result.error.lastMeaningfulLine().limitTo(MAX_ERROR_CHARS)}")
-            }
+        val body =
+            buildString {
+                input?.note?.let { appendLine(it) }
+                skippedFilesNote(result.skipped)?.let { appendLine(it) }
 
-            result.stdout.trim().takeIf { it.isNotEmpty() }?.let {
-                appendLine("<stdout>")
-                appendLine(it.limitTo(MAX_OUTPUT_CHARS))
-                appendLine("</stdout>")
-            }
+                if (!result.ok) {
+                    appendLine(
+                        "The code raised an error: ${
+                            result.error.lastMeaningfulLine().limitTo(MAX_ERROR_CHARS)
+                        }"
+                    )
+                }
 
-            result.stderr.trim().takeIf { it.isNotEmpty() }?.let {
-                appendLine("<stderr>")
-                appendLine(it.limitTo(MAX_OUTPUT_CHARS))
-                appendLine("</stderr>")
-            }
+                result.stdout.trim().takeIf { it.isNotEmpty() }?.let {
+                    appendLine("<stdout>")
+                    appendLine(it.limitTo(MAX_OUTPUT_CHARS))
+                    appendLine("</stdout>")
+                }
 
-            val sent = animations.map { it.filename } + photos.map { it.filename } + documents.map { it.filename }
+                result.stderr.trim().takeIf { it.isNotEmpty() }?.let {
+                    appendLine("<stderr>")
+                    appendLine(it.limitTo(MAX_OUTPUT_CHARS))
+                    appendLine("</stderr>")
+                }
 
-            if (sent.isNotEmpty()) {
-                appendLine(
-                    "Delivered ${sent.size} file(s) to the chat: ${sent.joinToString(", ")}. " +
-                            "Comment on the result for the user; do not paste the file contents."
-                )
-            }
-        }.trim().ifBlank { "The code ran successfully but produced no output. Use print(...) to return values." }
+                val sent = animations.map { it.filename } + photos.map { it.filename } + documents.map { it.filename }
+
+                if (sent.isNotEmpty()) {
+                    appendLine(
+                        "Delivered ${sent.size} file(s) to the chat: ${sent.joinToString(", ")}. " +
+                                "Comment on the result for the user; do not paste the file contents."
+                    )
+                }
+            }.trim().ifBlank { "The code ran successfully but produced no output. Use print(...) to return values." }
+
+        result.elapsedMs.takeIf { it >= SLOW_RUN_MS }
+            ?.let { "$body\n\nComputed in ${"%.1f".format(Locale.ROOT, it / 1000.0)}s." }
+            ?: body
     }
+
+    private suspend fun loadInputFile(): InputFileResult? {
+        val file = attachedFile ?: return null
+
+        if (file.fileSizeBytes != null && file.fileSizeBytes > MAX_INPUT_FILE_BYTES) {
+            return InputFileResult(
+                null,
+                "The attached file `${file.name}` is too large for the sandbox (limit 10 MB), so it was not loaded."
+            )
+        }
+
+        val bytes =
+            runCatching { file.loadBytes() }
+                .getOrElse {
+                    it.rethrowIfCancellation()
+                    return InputFileResult(
+                        null,
+                        "The attached file `${file.name}` could not be downloaded, so it was not loaded."
+                    )
+                }
+
+        if (bytes.size > MAX_INPUT_FILE_BYTES) {
+            return InputFileResult(
+                null,
+                "The attached file `${file.name}` is too large for the sandbox (limit 10 MB), so it was not loaded."
+            )
+        }
+
+        return InputFileResult(SandboxFile(name = file.name, base64 = Base64.getEncoder().encodeToString(bytes)), null)
+    }
+
+    private class InputFileResult(val file: SandboxFile?, val note: String?)
 
     private fun SandboxFile.toAnimation(): BotOutput.Animation? =
         decodedBytes()?.let {
@@ -99,6 +154,29 @@ class SandboxTools(private val client: SandboxClient, private val outbox: BotOut
     private fun SandboxFile.decodedBytes(): ByteArray? =
         runCatching { Base64.getDecoder().decode(base64) }.getOrNull()?.takeIf { it.isNotEmpty() }
 }
+
+// Files the sandbox produced but could not return (over the per-file size cap or the per-run file count).
+// Surfaced to the model so it can tell the user instead of silently claiming success.
+private fun skippedFilesNote(skipped: List<SkippedFile>): String? {
+    if (skipped.isEmpty()) return null
+
+    return buildString {
+        appendLine("Some files were produced but NOT delivered to the chat:")
+        skipped.forEach { appendLine("- `${it.name}` (${formatBytes(it.bytes)}): ${skipReason(it.reason)}") }
+        append("Tell the user; if a file was meant to be sent, regenerate it smaller (lower resolution/quality).")
+    }
+}
+
+private fun skipReason(reason: String): String =
+    when (reason) {
+        "too_large" -> "too large to send"
+        "too_many" -> "skipped — too many output files in one run"
+        else -> reason
+    }
+
+private fun formatBytes(bytes: Long): String =
+    if (bytes >= 1024 * 1024) "%.1f MB".format(Locale.ROOT, bytes / (1024.0 * 1024))
+    else "%.0f KB".format(Locale.ROOT, bytes / 1024.0)
 
 private fun String.isImageName(): Boolean =
     substringAfterLast('.', "").lowercase() in IMAGE_EXTENSIONS

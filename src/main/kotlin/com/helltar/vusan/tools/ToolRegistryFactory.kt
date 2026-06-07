@@ -28,7 +28,7 @@ import com.helltar.vusan.tools.tavily.TavilyTools
 import com.helltar.vusan.tools.tgchannel.TelegramChannelClient
 import com.helltar.vusan.tools.tgchannel.TelegramChannelImageDescriber
 import com.helltar.vusan.tools.tgchannel.TelegramChannelTools
-import com.helltar.vusan.tools.vision.RepliedPhotoVisionClient
+import com.helltar.vusan.tools.vision.ImageVisionClient
 import com.helltar.vusan.tools.vision.VisionTools
 import com.helltar.vusan.tools.voice.ElevenLabsTtsClient
 import com.helltar.vusan.tools.voice.VoiceTools
@@ -60,7 +60,7 @@ class ToolRegistryFactory(
 
     private val currency = CurrencyTools(ExchangeRateClient(http))
     private val elevenLabsTts = config.elevenLabsTts
-    private val repliedPhotoVisionClient = RepliedPhotoVisionClient(promptExecutor, model)
+    private val imageVisionClient = ImageVisionClient(promptExecutor, model)
     private val telegramChannelClient = TelegramChannelClient(http)
     private val ytDlpClient = YtDlpClient(config.ytDlpPath, config.ytDlpCookiesFile)
 
@@ -100,7 +100,7 @@ class ToolRegistryFactory(
             tools(PollTools(outbox))
             tools(HistoryTools(history, context))
             tools(MemoryTools(memory, context))
-            tools(VisionTools(repliedPhotoVisionClient, context.repliedPhoto))
+            tools(VisionTools(imageVisionClient, context.attachedFile))
             tools(
                 TaskTools(
                     repo = tasks,
@@ -111,7 +111,7 @@ class ToolRegistryFactory(
 
             tavilyClient?.let { tools(TavilyTools(it, outbox)) }
             giphyClient?.let { tools(GiphyTools(it, outbox)) }
-            sandboxClient?.let { tools(SandboxTools(it, outbox)) }
+            sandboxClient?.let { tools(SandboxTools(it, outbox, context.attachedFile)) }
 
             if (elevenLabsTtsClient != null && elevenLabsTts != null) {
                 tools(VoiceTools(elevenLabsTtsClient, elevenLabsTts, outbox))

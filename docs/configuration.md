@@ -113,8 +113,10 @@ and the bot keeps running.
 
 `runCode` lets the agent run Python in an isolated sandbox to compute exact answers, transform data, and render charts (
 `numpy`, `pandas`, `matplotlib`,
-`sympy`). The sandbox executes untrusted code on an internal-only network with no secrets, no internet, and no host
-mounts.
+`sympy`, `scipy`, `Pillow`). A file the user uploads (or one they reply to) is placed in the working directory so the
+script can read it by name. The sandbox executes untrusted code on an internal-only network with no secrets, no
+internet,
+and no host mounts.
 
 Docker starts it by default:
 
@@ -145,7 +147,7 @@ the default `compose.yaml`.
 | Variable                  | Default | Description                                                                         |
 |---------------------------|---------|-------------------------------------------------------------------------------------|
 | `SANDBOX_POOL_SIZE`       | `2`     | Warm Pyodide workers kept ready. Service only.                                      |
-| `SANDBOX_TIMEOUT_SECONDS` | `30`    | Hard per-run limit. Read by both the service and the bot, so set it once in `.env`. |
+| `SANDBOX_TIMEOUT_SECONDS` | `120`   | Hard per-run limit. Read by both the service and the bot, so set it once in `.env`. |
 | `PORT`                    | `8080`  | Port the sandbox service listens on. Service only.                                  |
 
 ## Memory

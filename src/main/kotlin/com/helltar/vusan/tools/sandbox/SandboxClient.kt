@@ -36,13 +36,13 @@ class SandboxClient(private val http: HttpClient, baseUrl: String, runTimeout: D
     // from runTimeout so raising SANDBOX_TIMEOUT_SECONDS keeps the two in sync.
     private val requestTimeout = ACQUIRE_BUDGET + runTimeout + NETWORK_SLACK
 
-    suspend fun run(code: String): RunResponse {
+    suspend fun run(code: String, files: List<SandboxFile> = emptyList()): RunResponse {
         require(code.isNotBlank()) { "Code must not be blank" }
 
         return runCatching {
             http.post(runUrl) {
                 contentType(ContentType.Application.Json)
-                setBody(RunRequest(code))
+                setBody(RunRequest(code, files))
                 timeout {
                     // Both must use the derived budget: the sandbox sends no bytes
                     // while it computes, so the inherited 20s socket timeout would

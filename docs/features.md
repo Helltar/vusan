@@ -5,19 +5,19 @@ Tools the agent can call (source: [
 an API
 key or an extra service — see [configuration.md](configuration.md).
 
-| Tool                | Description                                                                                                                                  | Opt-in |
-|---------------------|----------------------------------------------------------------------------------------------------------------------------------------------|:------:|
-| Web search          | Searches the web and extracts page content (Tavily)                                                                                          |   ✓    |
-| Voice input         | Transcribes incoming voice and audio messages (OpenAI)                                                                                       |   ✓    |
-| Voice output        | Replies with a voice message (ElevenLabs)                                                                                                    |   ✓    |
-| GIFs                | Searches and sends GIFs (Giphy)                                                                                                              |   ✓    |
-| Vision              | Describes a photo the user replies to                                                                                                        |        |
-| Polls and quizzes   | Creates a native Telegram poll or quiz                                                                                                       |        |
-| Reactions           | Sends an emoji reaction instead of a text reply                                                                                              |        |
-| YouTube video/audio | Searches/downloads a YouTube video/audio (`yt-dlp` + `ffmpeg`)                                                                               |        |
-| Telegram channels   | Reads recent posts from a `t.me/...` link                                                                                                    |        |
-| Currency            | Looks up live exchange rates                                                                                                                 |        |
-| File delivery       | Sends a generated file as a Telegram document                                                                                                |        |
-| Scheduled tasks     | Schedules tasks via `once`/`every <interval>`/`cron` (weekdays, specific days, multiple times — min 5 min interval) with offline catch-up    |        |
-| Memory              | Per-user conversation history plus durable memory: personal memory (per user) and shared group memory (per chat), kept across history clears |        |
-| Code sandbox        | Runs Python to compute exact answers, transform data, and render charts — isolated, no network (`numpy`/`pandas`/`matplotlib`/`sympy`)       |   ✓    |
+| Tool                | Description                                                                                                                                                                                | Opt-in |
+|---------------------|--------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|:------:|
+| Web search          | Searches the web and extracts page content (Tavily)                                                                                                                                        |   ✓    |
+| Voice input         | Transcribes incoming voice and audio messages (OpenAI)                                                                                                                                     |   ✓    |
+| Voice output        | Replies with a voice message (ElevenLabs)                                                                                                                                                  |   ✓    |
+| GIFs                | Searches and sends GIFs (Giphy)                                                                                                                                                            |   ✓    |
+| Vision              | Describes an image the user sends or replies to (photo or image file)                                                                                                                      |        |
+| Polls and quizzes   | Creates a native Telegram poll or quiz                                                                                                                                                     |        |
+| Reactions           | Sends an emoji reaction instead of a text reply                                                                                                                                            |        |
+| YouTube video/audio | Searches/downloads a YouTube video/audio (`yt-dlp` + `ffmpeg`)                                                                                                                             |        |
+| Telegram channels   | Reads recent posts from a `t.me/...` link                                                                                                                                                  |        |
+| Currency            | Looks up live exchange rates                                                                                                                                                               |        |
+| File delivery       | Sends a generated file as a Telegram document                                                                                                                                              |        |
+| Scheduled tasks     | Schedules tasks via `once`/`every <interval>`/`cron` (weekdays, specific days, multiple times — min 5 min interval) with offline catch-up                                                  |        |
+| Memory              | Per-user conversation history plus durable memory: personal memory (per user) and shared group memory (per chat), kept across history clears                                               |        |
+| Code sandbox        | Runs Python to compute exact answers, transform data (including files the user uploads), and render charts — isolated, no network (`numpy`/`pandas`/`matplotlib`/`sympy`/`scipy`/`Pillow`) |   ✓    |
