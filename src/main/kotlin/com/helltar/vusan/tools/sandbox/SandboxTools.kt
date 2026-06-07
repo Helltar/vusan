@@ -7,7 +7,7 @@ import com.helltar.vusan.common.limitTo
 import com.helltar.vusan.common.sanitizeFilename
 import com.helltar.vusan.outbox.BotOutbox
 import com.helltar.vusan.outbox.BotOutput
-import com.helltar.vusan.tools.common.suspendToolGuard
+import com.helltar.vusan.tools.suspendToolGuard
 import java.util.*
 
 private const val MAX_OUTPUT_CHARS = 4_000

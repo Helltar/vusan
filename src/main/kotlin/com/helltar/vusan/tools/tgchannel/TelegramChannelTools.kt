@@ -5,7 +5,7 @@ import ai.koog.agents.core.tools.annotations.Tool
 import ai.koog.agents.core.tools.reflect.ToolSet
 import com.helltar.vusan.common.limitTo
 import com.helltar.vusan.common.rethrowIfCancellation
-import com.helltar.vusan.tools.common.suspendToolGuard
+import com.helltar.vusan.tools.suspendToolGuard
 
 private const val MAX_POST_TEXT_CHARS = 800
 private const val MAX_IMAGE_DESCRIPTION_CHARS = 600

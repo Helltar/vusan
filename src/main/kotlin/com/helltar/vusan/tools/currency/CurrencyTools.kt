@@ -3,7 +3,7 @@ package com.helltar.vusan.tools.currency
 import ai.koog.agents.core.tools.annotations.LLMDescription
 import ai.koog.agents.core.tools.annotations.Tool
 import ai.koog.agents.core.tools.reflect.ToolSet
-import com.helltar.vusan.tools.common.suspendToolGuard
+import com.helltar.vusan.tools.suspendToolGuard
 
 @Suppress("unused")
 class CurrencyTools(private val client: ExchangeRateClient) : ToolSet {

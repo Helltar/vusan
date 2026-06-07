@@ -5,7 +5,7 @@ import ai.koog.agents.core.tools.annotations.Tool
 import ai.koog.agents.core.tools.reflect.ToolSet
 import com.helltar.vusan.request.RequestContext
 import com.helltar.vusan.tasks.*
-import com.helltar.vusan.tools.common.suspendToolGuard
+import com.helltar.vusan.tools.suspendToolGuard
 import java.time.Instant
 import java.time.ZoneId
 import java.time.ZonedDateTime

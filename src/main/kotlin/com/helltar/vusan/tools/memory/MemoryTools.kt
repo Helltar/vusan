@@ -7,7 +7,7 @@ import com.helltar.vusan.agent.memory.MemoryRepository
 import com.helltar.vusan.agent.memory.MemoryScope
 import com.helltar.vusan.common.collapseWhitespaceAndCap
 import com.helltar.vusan.request.RequestContext
-import com.helltar.vusan.tools.common.suspendToolGuard
+import com.helltar.vusan.tools.suspendToolGuard
 
 private const val MAX_MEMORY_CHARS = 500
 

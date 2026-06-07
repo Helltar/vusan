@@ -1,4 +1,4 @@
-package com.helltar.vusan.tools.common
+package com.helltar.vusan.tools
 
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.runBlocking

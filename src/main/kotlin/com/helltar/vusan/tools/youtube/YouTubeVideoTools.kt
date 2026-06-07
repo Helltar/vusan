@@ -6,7 +6,7 @@ import ai.koog.agents.core.tools.reflect.ToolSet
 import com.helltar.vusan.common.sanitizeFilename
 import com.helltar.vusan.outbox.BotOutbox
 import com.helltar.vusan.outbox.BotOutput
-import com.helltar.vusan.tools.common.suspendToolGuard
+import com.helltar.vusan.tools.suspendToolGuard
 
 @Suppress("unused")
 class YouTubeVideoTools(private val client: YtDlpClient, private val outbox: BotOutbox) : ToolSet {
