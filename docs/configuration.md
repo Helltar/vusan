@@ -1,8 +1,7 @@
 # Configuration
 
-Vusan reads configuration from environment variables. For Docker, put them in a `.env` file in the repo root; [
-`.env.example`](../.env.example) is the
-copy-paste starting point. Blank values are treated as missing.
+Vusan reads configuration from environment variables. For Docker, put them in a `.env` file in the repo root;
+[`.env.example`](../.env.example) is the copy-paste starting point. Blank values are treated as missing.
 
 ## Minimum setup
 
@@ -20,8 +19,8 @@ LLM_API_KEY=sk-proj-qwerty
 | `TELEGRAM_BOT_TOKEN` | Bot token from [@BotFather](https://t.me/BotFather). |
 | `LLM_API_KEY`        | API key for the LLM provider (OpenAI by default).    |
 
-`ALLOWED_IDS` is comma-separated. Positive IDs are users; negative IDs are groups. Empty/unset means the bot answers
-nobody.
+`ALLOWED_IDS` accepts commas, whitespace, or semicolons as separators. Positive IDs are users; negative IDs are groups.
+Empty/unset means the bot answers nobody.
 
 ## LLM provider
 
@@ -34,7 +33,7 @@ Provider options:
 
 `openai-compatible` targets any OpenAI-compatible chat completions API, including remote APIs and local servers.
 
-`LLM_REQUEST_TIMEOUT_SECONDS` (default `120`) caps how long a single LLM HTTP call may hang. The koog client otherwise
+`LLM_REQUEST_TIMEOUT_SECONDS` (default `120`) caps how long a single LLM HTTP call may hang. The Koog client otherwise
 waits 15 minutes, during which the bot stays silent; the shorter cap lets a stalled call fail fast so the agent can
 deliver an error reply. Raise it for slow local servers or heavy reasoning models.
 
@@ -68,8 +67,7 @@ LLM_MODEL=gemma4
 ## Persona
 
 The bot ships with a built-in persona ("Vusan"). Override it with either inline text or a file. The operational rules
-for output and tools are always appended
-by the bot and cannot be removed by a custom persona.
+for output and tools are always appended by the bot and cannot be removed by a custom persona.
 
 Unset both variables to use the built-in persona.
 
@@ -111,12 +109,10 @@ and the bot keeps running.
 
 ## Code sandbox
 
-`runCode` lets the agent run Python in an isolated sandbox to compute exact answers, transform data, and render charts (
-`numpy`, `pandas`, `matplotlib`,
-`sympy`, `scipy`, `Pillow`). A file the user uploads (or one they reply to) is placed in the working directory so the
-script can read it by name. The sandbox executes untrusted code on an internal-only network with no secrets, no
-internet,
-and no host mounts.
+`runCode` lets the agent run Python in an isolated sandbox to compute exact answers, transform data, and render charts
+(`numpy`, `pandas`, `matplotlib`, `sympy`, `scipy`, `Pillow`). A file the user uploads (or one they reply to) is placed
+in the working directory so the script can read it by name. The sandbox executes untrusted code on an internal-only
+network with no secrets, no internet, and no host mounts.
 
 Docker starts it by default:
 
@@ -141,8 +137,8 @@ or leave it commented.
 
 ### Sandbox tuning
 
-These are sandbox-service environment variables. `SANDBOX_TIMEOUT_SECONDS` is also read by the bot and is wired through
-the default `compose.yaml`.
+These are sandbox-service environment variables. `SANDBOX_TIMEOUT_SECONDS` is also read by the bot. The default
+`compose.yaml` wires `SANDBOX_POOL_SIZE` and `SANDBOX_TIMEOUT_SECONDS` from `.env` into the sandbox service.
 
 | Variable                  | Default | Description                                                                         |
 |---------------------------|---------|-------------------------------------------------------------------------------------|
@@ -166,9 +162,10 @@ Scheduled tasks are built in. No env variable is required to enable them.
 
 The agent can schedule tasks in three forms:
 
-- `once <datetime>` — fires once; if missed, fires late with a notice.
-- `every <interval>` — fixed interval, minimum 5 minutes, timezone-independent; missed fires skip ahead.
-- `cron <UNIX expr>` — clock-time patterns, evaluated in the task's timezone; missed fires skip ahead.
+- `once <datetime>` — fires once. If it is overdue by more than `TASK_MAX_LATENESS_MINUTES`, the bot sends a missed
+  notice and disables it instead of firing stale work.
+- `every <interval>` — fixed interval, minimum 5 minutes, timezone-independent. Missed fires skip ahead.
+- `cron <UNIX expr>` — clock-time patterns, evaluated in the task's timezone. Missed fires skip ahead.
 
 | Variable                     | Default | Description                                  |
 |------------------------------|---------|----------------------------------------------|

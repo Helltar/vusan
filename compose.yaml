@@ -22,6 +22,7 @@ services:
     container_name: vusan-sandbox-container
     restart: unless-stopped
     environment:
+      SANDBOX_POOL_SIZE: "${SANDBOX_POOL_SIZE:-2}"
       SANDBOX_TIMEOUT_SECONDS: "${SANDBOX_TIMEOUT_SECONDS:-120}"
     networks:
       - vusan-sandbox-net

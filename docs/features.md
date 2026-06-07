@@ -1,23 +1,24 @@
 # Features
 
-Tools the agent can call (source: [
-`src/main/kotlin/com/helltar/vusan/tools/`](../src/main/kotlin/com/helltar/vusan/tools/)). Items marked opt-in require
-an API
-key or an extra service — see [configuration.md](configuration.md).
+User-visible capabilities, mostly implemented as agent-callable tools under
+[`src/main/kotlin/com/helltar/vusan/tools/`](../src/main/kotlin/com/helltar/vusan/tools/). Items marked opt-in require
+an API key or an extra service — see [configuration.md](configuration.md).
 
-| Tool                | Description                                                                                                                                                                                | Opt-in |
-|---------------------|--------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|:------:|
-| Web search          | Searches the web and extracts page content (Tavily)                                                                                                                                        |   ✓    |
-| Voice input         | Transcribes incoming voice and audio messages (OpenAI)                                                                                                                                     |   ✓    |
-| Voice output        | Replies with a voice message (ElevenLabs)                                                                                                                                                  |   ✓    |
-| GIFs                | Searches and sends GIFs (Giphy)                                                                                                                                                            |   ✓    |
-| Vision              | Describes an image the user sends or replies to (photo or image file)                                                                                                                      |        |
-| Polls and quizzes   | Creates a native Telegram poll or quiz                                                                                                                                                     |        |
-| Reactions           | Sends an emoji reaction instead of a text reply                                                                                                                                            |        |
-| YouTube video/audio | Searches/downloads a YouTube video/audio (`yt-dlp` + `ffmpeg`)                                                                                                                             |        |
-| Telegram channels   | Reads recent posts from a `t.me/...` link                                                                                                                                                  |        |
-| Currency            | Looks up live exchange rates                                                                                                                                                               |        |
-| File delivery       | Sends a generated file as a Telegram document                                                                                                                                              |        |
-| Scheduled tasks     | Schedules tasks via `once`/`every <interval>`/`cron` (weekdays, specific days, multiple times — min 5 min interval) with offline catch-up                                                  |        |
-| Memory              | Per-user conversation history plus durable memory: personal memory (per user) and shared group memory (per chat), kept across history clears                                               |        |
-| Code sandbox        | Runs Python to compute exact answers, transform data (including files the user uploads), and render charts — isolated, no network (`numpy`/`pandas`/`matplotlib`/`sympy`/`scipy`/`Pillow`) |   ✓    |
+| Capability            | Description                                                                                                                                                                | Opt-in |
+|-----------------------|----------------------------------------------------------------------------------------------------------------------------------------------------------------------------|:------:|
+| Telegram replies      | Sends text, media, documents, polls, and captions back to the current chat; can switch subsequent outputs to the user's private chat when explicitly asked.                |        |
+| Web/image/page lookup | Searches the web, searches and sends images, and extracts page text (Tavily).                                                                                              |   ✓    |
+| Voice input           | Transcribes incoming voice/audio messages and replied voice/audio context (OpenAI STT).                                                                                    |   ✓    |
+| Voice output          | Replies with an ElevenLabs-generated Telegram voice message.                                                                                                               |   ✓    |
+| GIFs                  | Searches and sends GIFs (Giphy).                                                                                                                                           |   ✓    |
+| Vision                | Describes a photo or image document from the current message or a replied-to message; use the sandbox for programmatic image transforms.                                   |        |
+| Polls and quizzes     | Creates native Telegram regular polls and quiz polls.                                                                                                                      |        |
+| Reactions             | Adds one Telegram reaction emoji to the current, replied-to, or explicitly addressed message.                                                                              |        |
+| YouTube video/audio   | Searches or downloads YouTube videos/audio via `yt-dlp` and `ffmpeg`, with video size capped for Telegram.                                                                 |        |
+| Telegram channels     | Reads recent public channel posts from `@username` or `t.me/...`; can optionally run vision over post images.                                                              |        |
+| Currency              | Looks up live ISO-4217 exchange rates.                                                                                                                                     |        |
+| File delivery         | Sends generated text content as a Telegram document.                                                                                                                       |        |
+| Scheduled tasks       | Schedules autonomous future turns via `once`, `every <interval>`, or `cron <UNIX expr>` with per-user limits and stale-task skip/notice handling.                          |        |
+| Chat history control  | Clears the current user's stored conversation history without deleting durable memory or scheduled tasks.                                                                  |        |
+| Durable memory        | Stores personal memory per user and shared memory per group; memory survives chat-history clears and can be removed by id.                                                 |        |
+| Code sandbox          | Runs Python to compute exact answers, transform uploaded/replied files, and render charts — isolated, no network (`numpy`/`pandas`/`matplotlib`/`sympy`/`scipy`/`Pillow`). |   ✓    |

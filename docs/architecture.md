@@ -17,11 +17,11 @@ Telegram ──► telegram/ ──► agent/ ──► tools/ ──► externa
 
 | Package     | Responsibility                                                                                                                                                                                                                                                                                                                                        |
 |-------------|-------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
-| `telegram/` | Telegram I/O. Receives updates (text/voice/audio/sticker/document), filters by allowlist, normalizes input, and delivers agent results back — including markdown/document/text fallbacks and reply anchoring.                                                                                                                                         |
+| `telegram/` | Telegram I/O. Receives updates (text/voice/audio/sticker/photo/document), filters by allowlist, normalizes input, and delivers agent results back — including markdown, reply-anchor, media/document, media-group, and private-message fallbacks.                                                                                                     |
 | `agent/`    | Agent orchestration on top of Koog. `AgentRunner` serializes per-user turns; `AgentFactory` builds the `AIAgent` (system prompt + history + memory + tools). `agent/history/` summarizes and persists chat turns; `agent/memory/` stores durable user/group memory that survives a history clear and is injected as `<user_memory>`/`<group_memory>`. |
-| `tools/`    | Agent-callable tools, one subpackage per capability (search, voice, vision, scheduled tasks, …). `ToolRegistryFactory` owns the clients and builds a per-request registry. See [features.md](features.md).                                                                                                                                            |
-| `outbox/`   | The output model. `BotOutput` is the (immutable) sealed set of things the bot can send (text, photo, voice, poll, reaction, …); `BotOutbox` is the per-request queue tools write into, holding each `BotOutput` as an `OutboxItem` that captures its private-routing decision.                                                                        |
-| `request/`  | The request-scoped input model shared across layers: `RequestContext` (chat/user/message ids and sender info that tools see) and `AttachedFile` (an image or file — photo or document, sent or replied-to — that both vision (`describeImage`) and the code sandbox (`runCode`) can lazily download).                                                 |
+| `tools/`    | Agent-callable tools, one subpackage per capability (search, voice, vision, scheduled tasks, …). `ToolRegistryFactory` owns clients and builds a per-request registry from required tools plus optional tools whose env/config is present. See [features.md](features.md).                                                                            |
+| `outbox/`   | The output model. `BotOutput` is the immutable sealed set of things the bot can send (text, photo, voice, audio, video, document, poll, reaction, …); `BotOutbox` is the per-request queue tools write into, holding each `BotOutput` as an `OutboxItem` that captures its private-routing decision.                                                  |
+| `request/`  | The request-scoped input model shared across layers: `RequestContext` (chat/user/message ids and sender info tools see) and `AttachedFile` (photo or document, from the current message or a replied-to message, that vision (`describeImage`) and the code sandbox (`runCode`) can lazily download).                                                 |
 | `tasks/`    | Scheduled-task subsystem: storage, recurrence math, and the background `TaskScheduler`.                                                                                                                                                                                                                                                               |
 | `infra/`    | Cross-cutting infrastructure: the SQLite/Exposed `Db` singleton and the Ktor `Http` client.                                                                                                                                                                                                                                                           |
 | `config/`   | `.env` parsing (`AppConfig`) and LLM provider/model resolution (`LlmRuntime`).                                                                                                                                                                                                                                                                        |
@@ -39,8 +39,9 @@ A normal user message travels:
    or targeted commands);
    `TelegramBotRunner` then checks the allowlist (`ALLOWED_IDS`) and rejects unknown chats/users.
 3. **Normalize** — text is sanitized (`MessageSanitizer`); voice/audio is transcribed (`VoiceTranscriber` → `stt/`);
-   replied-message context and any replied
-   photo are gathered. `TelegramBotRunner.dispatchToAgent` assembles the agent input and history input.
+   stickers become a metadata prompt; replied-message context is wrapped in `<reply_context>`/`<user_message>`;
+   current or replied photo/image-document input becomes `AttachedFile`. `TelegramBotRunner.dispatchToAgent`
+   assembles the agent input and the shorter history input.
 4. **Run** — `AgentRunner.handle` takes the per-user lock (or returns "busy"), then `AgentFactory.build` constructs a
    Koog `AIAgent` with the system prompt,
    current time, message context, summarized history (`agent/history/ChatHistory`), durable memory
@@ -56,8 +57,8 @@ A normal user message travels:
    stays clean and the follow-up request stays well-formed.
 6. **Collect** — `AgentRunner` returns an `AgentResult` (outputs + optional comment + history turns to persist).
 7. **Deliver** — `TelegramDelivery.send` routes each `BotOutput` to the chat (or the user's private chat when a tool
-   requested it), anchoring replies to the
-   original message and falling back when Telegram rejects markdown, a reply target is gone, or the media type fails.
+   requested it), anchoring replies to the original message and falling back when Telegram rejects markdown, a reply
+   target is gone, a private DM is blocked, or a media send fails.
    Sandbox image previews opt out of photo-to-document fallback because their uncompressed document copy is already
    queued. `TelegramOutputSender` performs the low-level API calls.
 8. **Persist** — produced history turns are appended via `ChatHistoryRepository`.
@@ -65,11 +66,10 @@ A normal user message travels:
 ## Background and side flows
 
 - **Task scheduler** — `TaskScheduler.launchIn` polls the task store every `TASK_POLL_INTERVAL_SECONDS`. Due tasks run
-  through `AgentRunner.handleScheduled` (
-  waits for the user lock instead of bailing) and are delivered with `TelegramDelivery.sendScheduled`. Tasks overdue
-  beyond `TASK_MAX_LATENESS_MINUTES` (e.g.
-  after downtime) get a "missed" notice and are advanced/disabled rather than fired. Recurrence math lives in
-  `tasks/Recurrence.kt`.
+  through `AgentRunner.handleScheduled` (waits for the user lock instead of bailing), are delivered with
+  `TelegramDelivery.sendScheduled`, and then append produced history turns. Tasks overdue beyond
+  `TASK_MAX_LATENESS_MINUTES` (e.g. after downtime) get a "missed" notice and are advanced/disabled rather than fired.
+  Recurrence math lives in `tasks/Recurrence.kt`.
 - **History summarization** — `agent/history/ChatHistory.summarizeForPrompt` keeps recent turns verbatim and condenses
   older ones so the prompt stays within
   budget while keeping tool-call/result pairs anchored.

@@ -4,7 +4,7 @@ build:
 
 # Narrow, high-signal config. The default ruleset (buildUponDefaultConfig=true
 # in build.gradle.kts) stays active; this file only tweaks what's too noisy
-# or too lenient for this codebase. See CLAUDE.md for the project's coding
+# or too lenient for this codebase. See AGENTS.md for the project's coding
 # conventions.
 
 complexity:
