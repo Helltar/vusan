@@ -139,8 +139,8 @@ class AgentRunner(
         val comment = extractFinalComment(answer, outputs)
 
         if (outputs.isEmpty() && comment.isNullOrBlank()) {
-            log.warn { "agent produced no output for chat=${request.chatId} user=${request.userId}" }
-            return AgentResult(outputs = emptyList(), comment = Messages.of(request.language).fallbackErrorReply)
+            log.info { "agent produced no output for chat=${request.chatId} user=${request.userId}; staying silent" }
+            return AgentResult(outputs = emptyList(), comment = null)
         }
 
         val assistantText = assistantTextForHistory(outputs, comment)
