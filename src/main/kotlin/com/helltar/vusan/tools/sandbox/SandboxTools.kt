@@ -149,7 +149,11 @@ class SandboxTools(
 
     private fun SandboxFile.toPhoto(): BotOutput.Photo? =
         decodedBytes()?.let {
-            BotOutput.Photo(bytes = it, filename = name.sanitizeFilename().ifBlank { "chart.png" })
+            BotOutput.Photo(
+                bytes = it,
+                filename = name.sanitizeFilename().ifBlank { "chart.png" },
+                fallbackToDocument = false
+            )
         }
 
     private fun SandboxFile.toDocument(): BotOutput.Document? =

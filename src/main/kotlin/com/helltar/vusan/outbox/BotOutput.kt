@@ -7,7 +7,7 @@ sealed class BotOutput {
 
     data class Text(val text: String) : BotOutput()
 
-    class Photo(val bytes: ByteArray, val filename: String) : BotOutput() {
+    class Photo(val bytes: ByteArray, val filename: String, val fallbackToDocument: Boolean = true) : BotOutput() {
         override val acceptsCaption: Boolean get() = true
     }
 

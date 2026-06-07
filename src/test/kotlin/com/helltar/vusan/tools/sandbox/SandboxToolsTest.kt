@@ -10,6 +10,7 @@ import kotlin.test.Test
 import kotlin.test.assertContentEquals
 import kotlin.test.assertContains
 import kotlin.test.assertEquals
+import kotlin.test.assertFalse
 import kotlin.test.assertIs
 import kotlin.test.assertTrue
 import kotlin.time.Duration.Companion.seconds
@@ -43,6 +44,7 @@ class SandboxToolsTest {
 
         val photo = assertIs<BotOutput.Photo>(outbox.pending[0].output)
         assertEquals("chart.png", photo.filename)
+        assertFalse(photo.fallbackToDocument)
         assertContentEquals(pngBytes, photo.bytes)
 
         val document = assertIs<BotOutput.Document>(outbox.pending[1].output)

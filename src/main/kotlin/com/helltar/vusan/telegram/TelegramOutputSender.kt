@@ -175,16 +175,8 @@ internal object TelegramOutputSender {
     ) {
         val file = { photo.bytes.asMultipartFile(photo.filename) }
 
-        sendMediaWithDocumentFallback(
-            bot = bot,
-            chatId = chatId,
-            replyParameters = replyParameters,
-            mediaLabel = "sendPhoto",
-            bytes = photo.bytes,
-            filename = photo.filename,
-            caption = caption,
-            onTextFallback = { caption?.let { sendText(bot, chatId, it, replyParameters) } },
-            send = {
+        val send =
+            suspend {
                 sendWithMarkdownFallback { parseMode ->
                     bot.sendPhoto(
                         chatId = chatId,
@@ -195,6 +187,29 @@ internal object TelegramOutputSender {
                     )
                 }
             }
+
+        if (!photo.fallbackToDocument) {
+            sendOrFallback(
+                chatId = chatId,
+                replyParameters = replyParameters,
+                failureMessage = "sendPhoto failed, document copy should be delivered separately",
+                send = send,
+                onFallback = { caption?.let { sendText(bot, chatId, it, replyParameters) } }
+            )
+
+            return
+        }
+
+        sendMediaWithDocumentFallback(
+            bot = bot,
+            chatId = chatId,
+            replyParameters = replyParameters,
+            mediaLabel = "sendPhoto",
+            bytes = photo.bytes,
+            filename = photo.filename,
+            caption = caption,
+            onTextFallback = { caption?.let { sendText(bot, chatId, it, replyParameters) } },
+            send = send
         )
     }
 
