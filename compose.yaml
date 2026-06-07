@@ -22,7 +22,7 @@ services:
     container_name: vusan-sandbox-container
     restart: unless-stopped
     environment:
-      SANDBOX_TIMEOUT_SECONDS: "${SANDBOX_TIMEOUT_SECONDS:-30}"
+      SANDBOX_TIMEOUT_SECONDS: "${SANDBOX_TIMEOUT_SECONDS:-120}"
     networks:
       - vusan-sandbox-net
     read_only: true

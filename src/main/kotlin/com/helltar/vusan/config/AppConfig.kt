@@ -32,7 +32,7 @@ data class AppConfig(
         private const val DEFAULT_LLM_REQUEST_TIMEOUT_SECONDS = 120L
         private const val DEFAULT_MAX_MEMORY_PER_SCOPE = 10
         private const val DEFAULT_MAX_TASKS_PER_USER = 5
-        private const val DEFAULT_SANDBOX_TIMEOUT_SECONDS = 30L
+        private const val DEFAULT_SANDBOX_TIMEOUT_SECONDS = 120L
         private const val DEFAULT_TASK_MAX_LATENESS_MINUTES = 60L
         private const val DEFAULT_TASK_POLL_INTERVAL_SECONDS = 30L
 
