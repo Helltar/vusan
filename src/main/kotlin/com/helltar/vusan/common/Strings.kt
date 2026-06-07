@@ -14,10 +14,7 @@ internal fun String.collapseWhitespaceAndCap(maxLength: Int): String? {
     if (normalized.isBlank())
         return null
 
-    return if (normalized.length <= maxLength)
-        normalized
-    else
-        normalized.takeWholeChars(maxLength - 1).trimEnd() + ELLIPSIS
+    return normalized.limitTo(maxLength)
 }
 
 /** Truncates to [maxChars] (appending an ellipsis when truncated) while preserving inner whitespace. */

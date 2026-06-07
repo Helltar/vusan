@@ -45,6 +45,29 @@ class ChatHistoryTest {
         assertTrue(recent.none { it.role == ChatRole.TOOL_RESULT && it == recent.first() })
     }
 
+    @Test
+    fun `recent slice never starts on an orphan tool turn when no user anchor survives`() {
+        // No USER turn in the window (a tool-heavy request overflowed the cap and lost its anchor):
+        // the slice must not start on an orphan tool turn — they fold into the summary instead.
+        val history =
+            buildList {
+                repeat(20) { i ->
+                    add(ChatTurn(ChatRole.TOOL_CALL, "{}", toolCallId = "t$i", toolName = "search"))
+                    add(ChatTurn(ChatRole.TOOL_RESULT, "result-$i", toolCallId = "t$i", toolName = "search"))
+                }
+                add(ChatTurn(ChatRole.ASSISTANT, "final answer"))
+            }
+
+        val result = summarizeForPrompt(history)
+
+        val first = result.turns.firstOrNull()
+        assertTrue(
+            first == null || (first.role != ChatRole.TOOL_CALL && first.role != ChatRole.TOOL_RESULT),
+            "recent slice must not start on an orphan tool turn, was ${first?.role}"
+        )
+        assertTrue(result.turns.none { it.role == ChatRole.TOOL_CALL || it.role == ChatRole.TOOL_RESULT })
+    }
+
     // 16 turns where index (16 - PROMPT_RECENT_TURNS) lands on a TOOL_RESULT, so the slice has to
     // walk back past its TOOL_CALL to the preceding USER turn ("boundary-user").
     private fun historyWithToolPairAtNaiveSliceBoundary(): List<ChatTurn> =

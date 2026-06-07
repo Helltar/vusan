@@ -16,6 +16,13 @@ class ToolGuardTest {
     }
 
     @Test
+    fun `returns failure string for validation failures`() = runBlocking {
+        val result = suspendToolGuard { require(false) { "bad emoji" }; "" }
+
+        assertEquals("Tool failed: bad emoji", result)
+    }
+
+    @Test
     fun `rethrows cancellation`() {
         assertFailsWith<CancellationException> {
             runBlocking {

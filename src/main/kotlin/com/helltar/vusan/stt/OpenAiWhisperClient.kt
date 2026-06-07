@@ -1,5 +1,6 @@
 package com.helltar.vusan.stt
 
+import com.helltar.vusan.common.sanitizeFilename
 import com.helltar.vusan.config.OpenAiSttConfig
 import io.ktor.client.*
 import io.ktor.client.call.*
@@ -20,6 +21,8 @@ class OpenAiWhisperClient(private val http: HttpClient, private val config: Open
             mimeType?.let { runCatching { ContentType.parse(it) }.getOrNull() }
                 ?: ContentType.Application.OctetStream
 
+        val safeFileName = fileName.sanitizeFilename().ifBlank { "audio" }
+
         val response: WhisperTranscriptionResponse =
             http.submitFormWithBinaryData(
                 url = "https://api.openai.com/v1/audio/transcriptions",
@@ -31,7 +34,7 @@ class OpenAiWhisperClient(private val http: HttpClient, private val config: Open
                         value = audio,
                         headers = Headers.build {
                             append(HttpHeaders.ContentType, contentType.toString())
-                            append(HttpHeaders.ContentDisposition, """filename="$fileName"""")
+                            append(HttpHeaders.ContentDisposition, """filename="$safeFileName"""")
                         }
                     )
                 }

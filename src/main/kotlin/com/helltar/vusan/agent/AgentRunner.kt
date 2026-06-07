@@ -17,7 +17,6 @@ import com.helltar.vusan.tools.message.MessageTools
 import io.github.oshai.kotlinlogging.KotlinLogging
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
-import java.util.concurrent.ConcurrentHashMap
 
 data class AgentRequest(
     val chatId: Long,
@@ -27,6 +26,7 @@ data class AgentRequest(
     val prompt: String,
     val historyEntry: String,
     val messageContext: MessageContext? = null,
+    val chatIsPrivate: Boolean = false,
     val repliedPhoto: RepliedPhoto? = null,
     val language: Language = Language.DEFAULT
 )
@@ -48,25 +48,34 @@ class AgentRunner(
         val log = KotlinLogging.logger {}
     }
 
-    private val userLocks = ConcurrentHashMap<Long, Mutex>()
+    private val userLocks = HashMap<Long, UserLock>()
 
     suspend fun handle(request: AgentRequest): AgentResult {
-        val lock = acquireLock(request.userId)
-
-        if (!lock.tryLock()) {
-            return AgentResult(outputs = emptyList(), comment = Messages.of(request.language).busyReply)
-        }
+        val lock = retainLock(request.userId)
 
         try {
-            return runAgent(request)
+            if (!lock.tryLock()) {
+                return AgentResult(outputs = emptyList(), comment = Messages.of(request.language).busyReply)
+            }
+
+            try {
+                return runAgent(request)
+            } finally {
+                lock.unlock()
+            }
         } finally {
-            lock.unlock()
+            releaseLock(request.userId)
         }
     }
 
     suspend fun handleScheduled(request: AgentRequest): AgentResult {
-        val lock = acquireLock(request.userId)
-        return lock.withLock { runAgent(request) }
+        val lock = retainLock(request.userId)
+
+        try {
+            return lock.withLock { runAgent(request) }
+        } finally {
+            releaseLock(request.userId)
+        }
     }
 
     private suspend fun runAgent(request: AgentRequest): AgentResult {
@@ -79,7 +88,7 @@ class AgentRunner(
                 repliedPhoto = request.repliedPhoto,
                 senderUsername = request.messageContext?.userUsername,
                 senderDisplayName = request.messageContext?.userDisplayName,
-                chatIsPrivate = request.messageContext?.isPrivate ?: false,
+                chatIsPrivate = request.messageContext?.isPrivate ?: request.chatIsPrivate,
                 language = request.language
             )
 
@@ -152,8 +161,19 @@ class AgentRunner(
         return AgentResult(outputs, comment, outbox.redirectToPrivate, historyTurns)
     }
 
-    private fun acquireLock(userId: Long): Mutex =
-        userLocks.computeIfAbsent(userId) { Mutex() }
+    private fun retainLock(userId: Long): Mutex =
+        synchronized(userLocks) {
+            userLocks.getOrPut(userId) { UserLock() }.also { it.refCount++ }.mutex
+        }
+
+    private fun releaseLock(userId: Long) {
+        synchronized(userLocks) {
+            val entry = userLocks[userId] ?: return
+            if (--entry.refCount <= 0) userLocks.remove(userId)
+        }
+    }
+
+    private class UserLock(val mutex: Mutex = Mutex(), var refCount: Int = 0)
 }
 
 private const val TOOL_OUTPUT_MAX_CHARS = 4_000

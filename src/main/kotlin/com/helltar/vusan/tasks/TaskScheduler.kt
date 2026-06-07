@@ -106,22 +106,31 @@ class TaskScheduler(
                 prompt = wrapPrompt(task),
                 historyEntry = historyEntry(task),
                 messageContext = null,
+                chatIsPrivate = task.chatIsPrivate,
                 repliedPhoto = null,
                 language = task.language
             )
 
         val result = agentRunner.handleScheduled(request)
 
-        delivery.sendScheduled(
-            result = result,
-            chatId = task.chatId,
-            userId = task.userId,
-            messages = Messages.of(task.language),
-            attribution = attributionFor(task)
-        )
+        runCatching {
+            delivery.sendScheduled(
+                result = result,
+                chatId = task.chatId,
+                userId = task.userId,
+                messages = Messages.of(task.language),
+                attribution = attributionFor(task)
+            )
 
-        if (result.historyTurns.isNotEmpty()) {
-            history.appendTurns(task.userId, result.historyTurns)
+            if (result.historyTurns.isNotEmpty()) {
+                history.appendTurns(task.userId, result.historyTurns)
+            }
+        }.onFailure {
+            it.rethrowIfCancellation()
+
+            log.error(it) {
+                "task id=${task.id} fired but delivery/persistence failed; not retrying to avoid duplicates"
+            }
         }
     }
 

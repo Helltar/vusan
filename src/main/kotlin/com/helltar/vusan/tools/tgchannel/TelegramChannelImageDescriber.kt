@@ -5,6 +5,7 @@ import ai.koog.prompt.executor.model.PromptExecutor
 import ai.koog.prompt.llm.LLModel
 import ai.koog.prompt.message.AttachmentContent
 import ai.koog.prompt.message.AttachmentSource
+import com.helltar.vusan.common.limitTo
 
 private const val MAX_TELEGRAM_CHANNEL_IMAGE_BYTES = 8 * 1024 * 1024
 
@@ -50,7 +51,7 @@ class TelegramChannelImageDescriber(
                         post.datetime?.let { appendLine("- datetime: $it") }
                         post.text.takeIf { it.isNotBlank() }?.let {
                             appendLine("- post_text:")
-                            appendLine(it.take(1_000))
+                            appendLine(it.limitTo(1_000))
                         }
                         appendLine()
                         appendLine("Image metadata:")

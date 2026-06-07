@@ -1,5 +1,6 @@
 package com.helltar.vusan.telegram
 
+import com.helltar.vusan.common.rethrowIfCancellation
 import com.helltar.vusan.outbox.BotOutput
 import dev.inmo.tgbotapi.bot.TelegramBot
 import dev.inmo.tgbotapi.bot.exceptions.ReplyMessageNotFoundException
@@ -59,6 +60,7 @@ internal object TelegramOutputSender {
                 emoji = reaction.emoji
             )
         }.onFailure { e ->
+            e.rethrowIfCancellation()
             log.warn(e) {
                 "setMessageReaction failed chat=$chatId message=${reaction.messageId} emoji=[${reaction.emoji}]"
             }
@@ -210,7 +212,10 @@ internal object TelegramOutputSender {
         onFallback = {
             group.photos.forEach { photo ->
                 runCatching { sendPhoto(bot, chatId, replyParameters, photo, caption = null) }
-                    .onFailure { ie -> log.warn(ie) { "Fallback sendPhoto failed for chat=$chatId" } }
+                    .onFailure { ie ->
+                        ie.rethrowIfCancellation()
+                        log.warn(ie) { "Fallback sendPhoto failed for chat=$chatId" }
+                    }
             }
         }
     )
@@ -432,11 +437,13 @@ internal object TelegramOutputSender {
     ) {
         runCatching { send() }
             .recoverCatching { e ->
+                e.rethrowIfCancellation()
                 rethrowIfReplyNotFound(e, replyParameters)
                 log.warn(e) { "$mediaLabel failed for chat=$chatId, retrying as document" }
                 sendDocumentWithMarkdownFallback(bot, chatId, bytes, filename, caption, replyParameters)
             }
             .onFailure { e ->
+                e.rethrowIfCancellation()
                 rethrowIfReplyNotFound(e, replyParameters)
                 log.warn(e) { "$mediaLabel document fallback failed for chat=$chatId, falling back to text" }
                 onTextFallback()
@@ -451,6 +458,7 @@ internal object TelegramOutputSender {
         onFallback: suspend () -> Unit = {}
     ) {
         runCatching { send() }.onFailure { e ->
+            e.rethrowIfCancellation()
             rethrowIfReplyNotFound(e, replyParameters)
             log.warn(e) { "$failureMessage chat=$chatId" }
             onFallback()

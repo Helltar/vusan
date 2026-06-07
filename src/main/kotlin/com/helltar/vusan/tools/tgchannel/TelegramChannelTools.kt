@@ -4,6 +4,7 @@ import ai.koog.agents.core.tools.annotations.LLMDescription
 import ai.koog.agents.core.tools.annotations.Tool
 import ai.koog.agents.core.tools.reflect.ToolSet
 import com.helltar.vusan.common.limitTo
+import com.helltar.vusan.common.rethrowIfCancellation
 import com.helltar.vusan.tools.common.suspendToolGuard
 
 private const val MAX_POST_TEXT_CHARS = 800
@@ -88,7 +89,10 @@ class TelegramChannelTools(
                     runCatching {
                         val image = client.downloadImage(imageUrl)
                         imageDescriber.describe(image, post, focus)
-                    }.getOrElse { t -> "Could not inspect image: ${t.message ?: t::class.simpleName}" }
+                    }.getOrElse { t ->
+                        t.rethrowIfCancellation()
+                        "Could not inspect image: ${t.message ?: t::class.simpleName}"
+                    }
 
                 result.getOrPut(post.id) { mutableListOf() } += description
                 remaining--

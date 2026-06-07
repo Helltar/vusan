@@ -8,6 +8,7 @@ import kotlinx.serialization.json.Json
 import java.nio.file.Files
 import java.nio.file.Path
 import java.util.concurrent.TimeUnit
+import kotlin.time.Duration
 import kotlin.time.Duration.Companion.seconds
 
 data class YtDlpCommandResult(
@@ -441,10 +442,10 @@ class YtDlpClient(
 
             if (!finishedInTime) {
                 process.destroyForcibly()
-                val stdout = runCatching { withTimeout(1.seconds) { outputDeferred.await() } }.getOrDefault("")
+                val stdout = outputDeferred.awaitWithin(1.seconds)
                 YtDlpCommandResult(stdout = stdout, stderr = "", exitCode = -1, timedOut = true)
             } else {
-                val stdout = runCatching { withTimeout(5.seconds) { outputDeferred.await() } }.getOrDefault("")
+                val stdout = outputDeferred.awaitWithin(5.seconds)
                 YtDlpCommandResult(stdout = stdout, stderr = "", exitCode = process.exitValue())
             }
         } finally {
@@ -453,6 +454,17 @@ class YtDlpClient(
             }
         }
     }
+
+    private suspend fun Deferred<String>.awaitWithin(timeout: Duration): String =
+        try {
+            withTimeout(timeout) { await() }
+        } catch (e: TimeoutCancellationException) {
+            ""
+        } catch (e: CancellationException) {
+            throw e
+        } catch (e: Exception) {
+            ""
+        }
 
     private fun parseInfoJson(stdout: String): YtDlpInfo? {
         val firstLine = stdout.lineSequence().firstOrNull { it.trimStart().startsWith("{") } ?: return null

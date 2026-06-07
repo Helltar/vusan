@@ -19,16 +19,7 @@ fun summarizeForPrompt(history: List<ChatTurn>): PromptHistory {
         return PromptHistory(summary = null, turns = history)
     }
 
-    // Tool messages must remain anchored to the assistant turn that owns them. If the
-    // last-N slice starts on an orphan TOOL_CALL/TOOL_RESULT (its pair fell into the older
-    // segment), the provider rejects the prompt — extend the slice backwards to the nearest
-    // USER boundary so each exchange is whole.
-    val sliceStart =
-        (history.size - PROMPT_RECENT_TURNS).coerceAtLeast(0).let { initial ->
-            var idx = initial
-            while (idx > 0 && history[idx].role != ChatRole.USER) idx--
-            idx
-        }
+    val sliceStart = history.recentSliceStart()
 
     val olderTurns = history.subList(0, sliceStart)
     val recentTurns = history.subList(sliceStart, history.size)
@@ -37,6 +28,22 @@ fun summarizeForPrompt(history: List<ChatTurn>): PromptHistory {
         summary = buildSummary(olderTurns),
         turns = recentTurns
     )
+}
+
+// Anchor the slice to a USER turn — a leading orphan TOOL_CALL/TOOL_RESULT (owner trimmed away) is
+// rejected by the provider. Search back, then forward; if the window has no USER, fold all to summary.
+private fun List<ChatTurn>.recentSliceStart(): Int {
+    val initial = (size - PROMPT_RECENT_TURNS).coerceAtLeast(0)
+
+    for (idx in initial downTo 0) {
+        if (this[idx].role == ChatRole.USER) return idx
+    }
+
+    for (idx in initial + 1 until size) {
+        if (this[idx].role == ChatRole.USER) return idx
+    }
+
+    return size
 }
 
 private fun buildSummary(turns: List<ChatTurn>): String? {

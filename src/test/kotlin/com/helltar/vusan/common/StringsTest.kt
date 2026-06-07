@@ -34,6 +34,15 @@ class StringsTest {
     }
 
     @Test
+    fun `collapseWhitespaceAndCap never exceeds the requested length`() {
+        val text = "word ".repeat(50).trim()
+        for (cap in 4..text.length + 2) {
+            val result = text.collapseWhitespaceAndCap(cap)
+            assertTrue((result?.length ?: 0) <= cap, "collapseWhitespaceAndCap($cap) returned ${result?.length} chars")
+        }
+    }
+
+    @Test
     fun `limitTo leaves short strings untouched`() {
         assertEquals("hello", "hello".limitTo(10))
         assertEquals(emoji, emoji.limitTo(2))
@@ -43,6 +52,18 @@ class StringsTest {
     fun `sanitizeFilename caps without splitting a surrogate`() {
         val name = emoji.repeat(200) + ".png"
         assertTrue(name.sanitizeFilename().isValidUtf16())
+    }
+
+    @Test
+    fun `sanitizeFilename strips path separators and header-breaking characters`() {
+        assertEquals("evil.mp3", "../../evil.mp3".sanitizeFilename())
+        assertEquals("evil.mp3", """..\..\evil.mp3""".sanitizeFilename())
+
+        // Quotes, CR and LF could break out of a quoted Content-Disposition filename.
+        val cleaned = "a\"b\r\nc.mp3".sanitizeFilename()
+        assertFalse('"' in cleaned, "quote survived sanitization: $cleaned")
+        assertFalse('\r' in cleaned, "CR survived sanitization: $cleaned")
+        assertFalse('\n' in cleaned, "LF survived sanitization: $cleaned")
     }
 
     // Zero-width characters: U+200B zero-width space, U+200D zero-width joiner, U+FEFF BOM.

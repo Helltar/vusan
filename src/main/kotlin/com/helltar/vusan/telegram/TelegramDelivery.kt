@@ -26,6 +26,7 @@ data class ScheduledAttribution(
 class TelegramDelivery(private val bot: TelegramBot) {
 
     private companion object {
+        const val MAX_CAPTION_CHARS = 1000
         val log = KotlinLogging.logger {}
     }
 
@@ -113,7 +114,8 @@ class TelegramDelivery(private val bot: TelegramBot) {
             return replyUnavailable
         }
 
-        val captionIndex = singleCaptionIndex(result.outputs)
+        val captionIndex =
+            comment?.takeIf { it.length <= MAX_CAPTION_CHARS }?.let { singleCaptionIndex(result.outputs) } ?: -1
 
         result.outputs.forEachIndexed { index, item ->
             val caption = comment?.takeIf { index == captionIndex }
