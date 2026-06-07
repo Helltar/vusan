@@ -14,7 +14,7 @@ import java.util.*
 
 private const val MAX_OUTPUT_CHARS = 4_000
 private const val MAX_ERROR_CHARS = 500
-private const val MAX_PHOTOS = 10
+private const val MAX_MEDIA_GROUP = 10
 private const val MAX_INPUT_FILE_BYTES = 10 * 1024 * 1024
 
 // Only surface run time when it's meaningful — below this it's noise the model would parrot.
@@ -56,13 +56,12 @@ class SandboxTools(
 
         when {
             photos.size == 1 -> outbox.enqueue(photos.single())
-            photos.size >= 2 -> outbox.enqueue(BotOutput.PhotoGroup(photos.take(MAX_PHOTOS)))
+            photos.size >= 2 -> outbox.enqueue(BotOutput.PhotoGroup(photos.take(MAX_MEDIA_GROUP)))
         }
 
         // Telegram recompresses inline photos to JPEG, softening chart text. Send each image again as
         // an uncompressed document so a pixel-perfect copy is available alongside the inline preview.
-        imageDocuments.forEach { outbox.enqueue(it) }
-        documents.forEach { outbox.enqueue(it) }
+        enqueueDocuments(imageDocuments + documents)
 
         val body =
             buildString {
@@ -135,6 +134,13 @@ class SandboxTools(
     }
 
     private class InputFileResult(val file: SandboxFile?, val note: String?)
+
+    // Deliver documents as an album (one message) instead of one message per file; a lone document goes on its own.
+    private fun enqueueDocuments(documents: List<BotOutput.Document>) {
+        documents.chunked(MAX_MEDIA_GROUP).forEach { chunk ->
+            if (chunk.size == 1) outbox.enqueue(chunk.single()) else outbox.enqueue(BotOutput.DocumentGroup(chunk))
+        }
+    }
 
     private fun SandboxFile.toAnimation(): BotOutput.Animation? =
         decodedBytes()?.let {

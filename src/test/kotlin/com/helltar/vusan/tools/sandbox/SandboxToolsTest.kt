@@ -56,7 +56,7 @@ class SandboxToolsTest {
     }
 
     @Test
-    fun `multiple images are sent as a photo group plus per-image documents`() = runBlocking {
+    fun `multiple images are sent as a photo group plus a document group`() = runBlocking {
         val outbox = BotOutbox()
         val b64 = java.util.Base64.getEncoder().encodeToString(byteArrayOf(9))
         tools(
@@ -67,8 +67,9 @@ class SandboxToolsTest {
         val group = assertIs<BotOutput.PhotoGroup>(outbox.pending.first { it.output is BotOutput.PhotoGroup }.output)
         assertEquals(2, group.photos.size)
 
-        val documents = outbox.pending.mapNotNull { it.output as? BotOutput.Document }
-        assertEquals(listOf("a.png", "b.png"), documents.map { it.filename })
+        val documentGroup =
+            assertIs<BotOutput.DocumentGroup>(outbox.pending.first { it.output is BotOutput.DocumentGroup }.output)
+        assertEquals(listOf("a.png", "b.png"), documentGroup.documents.map { it.filename })
     }
 
     @Test

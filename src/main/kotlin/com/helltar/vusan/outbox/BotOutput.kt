@@ -23,6 +23,14 @@ sealed class BotOutput {
         override val acceptsCaption: Boolean get() = true
     }
 
+    class DocumentGroup(val documents: List<Document>) : BotOutput() {
+        init {
+            require(documents.size in 2..10) {
+                "DocumentGroup requires 2..10 documents, got ${documents.size}"
+            }
+        }
+    }
+
     class Animation(
         val url: String? = null,
         val bytes: ByteArray? = null,

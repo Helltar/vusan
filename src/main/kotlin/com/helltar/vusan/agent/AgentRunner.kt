@@ -197,6 +197,7 @@ private fun outputsLogSummary(outputs: List<OutboxItem>): String =
         when (val output = item.output) {
             is BotOutput.Reaction -> "reaction ${output.emoji}"
             is BotOutput.PhotoGroup -> "photoGroup(${output.photos.size})"
+            is BotOutput.DocumentGroup -> "documentGroup(${output.documents.size})"
             else -> output::class.simpleName ?: "?"
         }
     }

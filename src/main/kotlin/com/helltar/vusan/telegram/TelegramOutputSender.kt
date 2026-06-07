@@ -15,6 +15,7 @@ import dev.inmo.tgbotapi.requests.abstracts.toInputFile
 import dev.inmo.tgbotapi.types.ChatIdentifier
 import dev.inmo.tgbotapi.types.MessageId
 import dev.inmo.tgbotapi.types.ReplyParameters
+import dev.inmo.tgbotapi.types.media.TelegramMediaDocument
 import dev.inmo.tgbotapi.types.media.TelegramMediaPhoto
 import dev.inmo.tgbotapi.types.message.MarkdownParseMode
 import dev.inmo.tgbotapi.types.message.ParseMode
@@ -38,6 +39,7 @@ internal object TelegramOutputSender {
             is BotOutput.Photo -> sendPhoto(bot, chatId, replyParameters, item, caption)
             is BotOutput.PhotoGroup -> sendPhotoGroup(bot, chatId, replyParameters, item)
             is BotOutput.Document -> sendDocument(bot, chatId, replyParameters, item, caption)
+            is BotOutput.DocumentGroup -> sendDocumentGroup(bot, chatId, replyParameters, item)
             is BotOutput.Audio -> sendAudio(bot, chatId, replyParameters, item, caption)
             is BotOutput.Voice -> sendVoice(bot, chatId, replyParameters, item, caption)
             is BotOutput.Video -> sendVideo(bot, chatId, replyParameters, item, caption)
@@ -215,6 +217,30 @@ internal object TelegramOutputSender {
                     .onFailure { ie ->
                         ie.rethrowIfCancellation()
                         log.warn(ie) { "Fallback sendPhoto failed for chat=$chatId" }
+                    }
+            }
+        }
+    )
+
+    private suspend fun sendDocumentGroup(
+        bot: TelegramBot,
+        chatId: ChatIdentifier,
+        replyParameters: ReplyParameters?,
+        group: BotOutput.DocumentGroup
+    ) = sendOrFallback(
+        chatId = chatId,
+        replyParameters = replyParameters,
+        failureMessage = "sendDocumentGroup failed, falling back to individual documents",
+        send = {
+            val media = group.documents.map { TelegramMediaDocument(file = it.bytes.asMultipartFile(it.filename)) }
+            bot.sendDocumentsGroup(chatId = chatId, media = media, replyParameters = replyParameters)
+        },
+        onFallback = {
+            group.documents.forEach { document ->
+                runCatching { sendDocument(bot, chatId, replyParameters, document, caption = null) }
+                    .onFailure { ie ->
+                        ie.rethrowIfCancellation()
+                        log.warn(ie) { "Fallback sendDocument failed for chat=$chatId" }
                     }
             }
         }
