@@ -21,10 +21,12 @@ import com.helltar.vusan.agent.history.ChatRole
 import com.helltar.vusan.agent.history.PromptHistory
 import com.helltar.vusan.agent.history.toolCallArgsForHistory
 import com.helltar.vusan.agent.memory.MemoryEntry
+import com.helltar.vusan.common.collapseWhitespaceAndCap
 import com.helltar.vusan.common.xmlBlock
 import com.helltar.vusan.outbox.BotOutbox
 import com.helltar.vusan.request.RequestContext
 import com.helltar.vusan.tools.ToolRegistryFactory
+import io.github.oshai.kotlinlogging.KotlinLogging
 import java.time.ZoneId
 import java.time.ZonedDateTime
 import java.time.format.DateTimeFormatter
@@ -51,6 +53,11 @@ class AgentFactory(
     private val persona: String? = null,
     private val maxIterations: Int = 60
 ) {
+
+    private companion object {
+        const val TOOL_LOG_ARGS_MAX_CHARS = 300
+        val log = KotlinLogging.logger {}
+    }
 
     fun build(
         userId: Long,
@@ -115,6 +122,25 @@ class AgentFactory(
             install(EventHandler) {
                 var seq = 0
 
+                // Koog dispatches a tool event here but emits no INFO line of its own, so log every call
+                // ourselves (name + capped args) — uniform across all tools, not just those that self-log.
+                fun record(toolCallId: String?, toolName: String, args: String, output: String, isError: Boolean) {
+                    log.info {
+                        "tool call: name=[$toolName] error=$isError " +
+                                "args=[${args.collapseWhitespaceAndCap(TOOL_LOG_ARGS_MAX_CHARS).orEmpty()}]"
+                    }
+
+                    toolEvents(
+                        ToolEvent(
+                            toolCallId = toolCallId ?: "$toolName-${seq++}",
+                            toolName = toolName,
+                            args = args,
+                            output = output,
+                            isError = isError
+                        )
+                    )
+                }
+
                 onLLMCallCompleted { ctx ->
                     ctx.response?.metaInfo?.let { meta ->
                         tokenUsage(TokenUsage(meta.inputTokensCount, meta.outputTokensCount, meta.totalTokensCount))
@@ -122,39 +148,15 @@ class AgentFactory(
                 }
 
                 onToolCallCompleted { ctx ->
-                    toolEvents(
-                        ToolEvent(
-                            toolCallId = ctx.toolCallId ?: "${ctx.toolName}-${seq++}",
-                            toolName = ctx.toolName,
-                            args = ctx.toolArgs.toString(),
-                            output = ctx.toolResult?.toString().orEmpty(),
-                            isError = false
-                        )
-                    )
+                    record(ctx.toolCallId, ctx.toolName, ctx.toolArgs.toString(), ctx.toolResult?.toString().orEmpty(), false)
                 }
 
                 onToolCallFailed { ctx ->
-                    toolEvents(
-                        ToolEvent(
-                            toolCallId = ctx.toolCallId ?: "${ctx.toolName}-${seq++}",
-                            toolName = ctx.toolName,
-                            args = ctx.toolArgs.toString(),
-                            output = ctx.message,
-                            isError = true
-                        )
-                    )
+                    record(ctx.toolCallId, ctx.toolName, ctx.toolArgs.toString(), ctx.message, true)
                 }
 
                 onToolValidationFailed { ctx ->
-                    toolEvents(
-                        ToolEvent(
-                            toolCallId = ctx.toolCallId ?: "${ctx.toolName}-${seq++}",
-                            toolName = ctx.toolName,
-                            args = ctx.toolArgs.toString(),
-                            output = ctx.message,
-                            isError = true
-                        )
-                    )
+                    record(ctx.toolCallId, ctx.toolName, ctx.toolArgs.toString(), ctx.message, true)
                 }
             }
         }
