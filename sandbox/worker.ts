@@ -151,6 +151,11 @@ function injectFonts(pyodide: PyodideInterface): void {
   }
 }
 
+// Walk the working directory depth-first so files written into subdirectories — e.g. extracted
+// from an archive — are returned, not just top-level ones. Names are relative to WORK_DIR; the
+// bot reduces them to basenames for delivery but keeps the extension for image/animation routing.
+// Inputs are always written flat at the top level, so a relative path can only match an input
+// when it is itself top-level, which is exactly when the user's own upload should be excluded.
 function collectFiles(
   pyodide: PyodideInterface,
   inputNames: Set<string>,
@@ -158,28 +163,37 @@ function collectFiles(
   const files: RunResult["files"] = [];
   const skipped: SkippedFile[] = [];
 
-  for (const name of pyodide.FS.readdir(WORK_DIR)) {
-    if (name === "." || name === "..") continue;
-    if (inputNames.has(name)) continue;
+  const walk = (dir: string, prefix: string): void => {
+    for (const name of pyodide.FS.readdir(dir)) {
+      if (name === "." || name === ".." || name === "__pycache__") continue;
 
-    const path = `${WORK_DIR}/${name}`;
-    const stat = pyodide.FS.stat(path);
-    if (!pyodide.FS.isFile(stat.mode)) continue;
+      const rel = prefix ? `${prefix}/${name}` : name;
+      const path = `${dir}/${name}`;
+      const stat = pyodide.FS.stat(path);
 
-    // Size from stat, so an oversized file is reported without ever reading it into memory.
-    const size: number = stat.size;
-    if (size === 0) continue;
-    if (size > MAX_FILE_BYTES) {
-      skipped.push({ name, bytes: size, reason: "too_large" });
-      continue;
+      if (pyodide.FS.isDir(stat.mode)) {
+        walk(path, rel);
+        continue;
+      }
+      if (!pyodide.FS.isFile(stat.mode)) continue;
+      if (inputNames.has(rel)) continue;
+
+      // Size from stat, so an oversized file is reported without ever reading it into memory.
+      const size: number = stat.size;
+      if (size === 0) continue;
+      if (size > MAX_FILE_BYTES) {
+        skipped.push({ name: rel, bytes: size, reason: "too_large" });
+        continue;
+      }
+      if (files.length >= MAX_FILES) {
+        skipped.push({ name: rel, bytes: size, reason: "too_many" });
+        continue;
+      }
+
+      files.push({ name: rel, base64: encodeBase64(pyodide.FS.readFile(path)) });
     }
-    if (files.length >= MAX_FILES) {
-      skipped.push({ name, bytes: size, reason: "too_many" });
-      continue;
-    }
+  };
 
-    files.push({ name, base64: encodeBase64(pyodide.FS.readFile(path)) });
-  }
-
+  walk(WORK_DIR, "");
   return { files, skipped };
 }
