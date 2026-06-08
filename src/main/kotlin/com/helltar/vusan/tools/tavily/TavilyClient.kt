@@ -22,7 +22,8 @@ class TavilyClient(private val http: HttpClient, private val apiKey: String) {
         maxResults: Int = 5,
         includeImages: Boolean = false,
         topic: String? = null,
-        timeRange: String? = null
+        timeRange: String? = null,
+        excludeDomains: List<String> = emptyList()
     ): SearchResponse {
         require(query.isNotBlank()) { "Query must not be blank" }
         require(maxResults in 1..10) { "maxResults must be between 1 and 10" }
@@ -37,7 +38,8 @@ class TavilyClient(private val http: HttpClient, private val apiKey: String) {
                     includeImages = includeImages,
                     includeImageDescriptions = includeImages,
                     topic = topic,
-                    timeRange = timeRange
+                    timeRange = timeRange,
+                    excludeDomains = excludeDomains
                 )
             )
         }.body()

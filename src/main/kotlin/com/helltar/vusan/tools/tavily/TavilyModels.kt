@@ -11,7 +11,8 @@ data class SearchRequest(
     val topic: String? = null,
     @SerialName("time_range") val timeRange: String? = null,
     @SerialName("include_images") val includeImages: Boolean = false,
-    @SerialName("include_image_descriptions") val includeImageDescriptions: Boolean = false
+    @SerialName("include_image_descriptions") val includeImageDescriptions: Boolean = false,
+    @SerialName("exclude_domains") val excludeDomains: List<String> = emptyList()
 )
 
 @Serializable

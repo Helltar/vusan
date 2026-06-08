@@ -9,6 +9,7 @@ import com.helltar.vusan.outbox.BotOutbox
 import com.helltar.vusan.outbox.BotOutput
 import com.helltar.vusan.tools.suspendToolGuard
 import io.github.oshai.kotlinlogging.KotlinLogging
+import io.ktor.http.*
 
 @Suppress("unused")
 class TavilyTools(private val client: TavilyClient, private val outbox: BotOutbox) : ToolSet {
@@ -22,6 +23,13 @@ class TavilyTools(private val client: TavilyClient, private val outbox: BotOutbo
         const val MAX_IMAGE_DESCRIPTION_CHARS = 200
         val allowedTopics = setOf("general", "news", "finance")
         val allowedTimeRanges = setOf("day", "week", "month", "year")
+
+        // Instagram surfaces its images only through crawler/SEO endpoints
+        // (lookaside.instagram.com, lookaside.fbsbx.com) that serve HTML, not the
+        // actual file, so every download attempt fails. Exclude these sources from
+        // image search so the provider returns directly downloadable candidates.
+        val imageExcludedDomains = listOf("instagram.com", "lookaside.instagram.com", "lookaside.fbsbx.com")
+
         val log = KotlinLogging.logger {}
     }
 
@@ -83,7 +91,14 @@ class TavilyTools(private val client: TavilyClient, private val outbox: BotOutbo
         maxResults: Int = 5
     ): String = suspendToolGuard {
         val capped = maxResults.coerceIn(1, MAX_IMAGE_RESULTS)
-        val response = client.search(query = query, maxResults = capped, includeImages = true)
+
+        val response =
+            client.search(
+                query = query,
+                maxResults = capped,
+                includeImages = true,
+                excludeDomains = imageExcludedDomains
+            )
 
         if (response.images.isEmpty()) {
             log.warn { "searchImages: provider returned no image candidates query=[$query]" }
@@ -92,8 +107,12 @@ class TavilyTools(private val client: TavilyClient, private val outbox: BotOutbo
 
         var oversize = 0
 
+        // `exclude_domains` filters Tavily's source pages, not the image CDN host, so a lookaside
+        // URL can still arrive from another source page. Drop them here before they consume a slot.
+        val candidates = response.images.filterNot { isExcludedImageHost(it.url) }
+
         val downloaded =
-            response.images.take(capped).mapIndexedNotNull { index, image ->
+            candidates.take(capped).mapIndexedNotNull { index, image ->
                 val bytes =
                     runCatching { client.downloadImage(image.url) }
                         .onFailure { error ->
@@ -185,6 +204,11 @@ class TavilyTools(private val client: TavilyClient, private val outbox: BotOutbo
                 append("[content truncated at $MAX_EXTRACT_CHARS chars]")
             }
         }
+    }
+
+    private fun isExcludedImageHost(url: String): Boolean {
+        val host = runCatching { Url(url).host }.getOrNull()?.lowercase()?.takeIf { it.isNotBlank() } ?: return false
+        return imageExcludedDomains.any { host == it || host.endsWith(".$it") }
     }
 
     private fun imageFilename(query: String, index: Int, url: String): String {
