@@ -115,7 +115,7 @@ class AgentFactory(
         return AIAgent(
             promptExecutor = promptExecutor,
             agentConfig = agentConfig,
-            strategy = vusanSingleRunStrategy,
+            strategy = vusanSingleRunStrategy(outbox),
             toolRegistry = toolRegistryFactory.buildRegistry(context, outbox),
             id = "vusan-user-$userId"
         ) {
@@ -168,8 +168,24 @@ class AgentFactory(
 // which requires at least one non-empty `MessagePart.Text`; the model often emits an empty
 // Assistant with `finishReason=stop` after replying through the `sendMessage` tool, leaving no
 // matching edge and triggering AIAgentStuckInTheNodeException.
-private val vusanSingleRunStrategy: AIAgentGraphStrategy<String, String> =
+//
+// Recovery: a model can also end its turn having delivered nothing at all — no `sendMessage`, no
+// media, no reaction, and empty assistant text — which would leave the user with total silence
+// despite a full turn of research. Flaky OpenAI-compatible providers do this routinely, returning
+// an empty completion after a batch of tool results. When that happens we nudge the model once to
+// actually deliver, then let the normal edges finish. Built per run so the strategy can read the
+// live `outbox` to tell whether anything was delivered.
+@Suppress("DuplicatedCode")
+private fun vusanSingleRunStrategy(outbox: BotOutbox): AIAgentGraphStrategy<String, String> =
     strategy<String, String>("single_run") {
+        var nudged = false
+
+        // The model ended its turn without putting anything in front of the user: it delivered
+        // nothing (no tool call to execute, no caption text) and the outbox is still empty. Nudge at
+        // most once to avoid looping on a stubbornly empty model.
+        fun undelivered(msg: Message.Assistant): Boolean =
+            !nudged && msg.deliveredNothing() && outbox.pending.isEmpty()
+
         val nodeCallLLM by nodeLLMRequest()
 
         val nodeExecuteTool by node<ToolCalls, ReceivedToolResults>("executeValidToolCalls") { toolCalls ->
@@ -187,8 +203,18 @@ private val vusanSingleRunStrategy: AIAgentGraphStrategy<String, String> =
 
         val nodeSendToolResult by nodeLLMSendToolResults()
 
+        val nodeNudgeDeliver by node<Message.Assistant, Message.Assistant>("nudgeDeliver") {
+            nudged = true
+
+            llm.writeSession {
+                appendPrompt { user(DELIVER_NUDGE) }
+                requestLLM()
+            }
+        }
+
         edge(nodeStart forwardTo nodeCallLLM)
         edge(nodeCallLLM forwardTo nodeExecuteTool onToolCalls { true })
+        edge(nodeCallLLM forwardTo nodeNudgeDeliver onCondition { undelivered(it) })
 
         edge(
             nodeCallLLM forwardTo nodeFinish
@@ -198,17 +224,35 @@ private val vusanSingleRunStrategy: AIAgentGraphStrategy<String, String> =
 
         edge(nodeExecuteTool forwardTo nodeSendToolResult)
         edge(nodeSendToolResult forwardTo nodeExecuteTool onToolCalls { true })
+        edge(nodeSendToolResult forwardTo nodeNudgeDeliver onCondition { undelivered(it) })
 
-        @Suppress("DuplicatedCode")
         edge(
             nodeSendToolResult forwardTo nodeFinish
                     onCondition { msg -> msg.parts.none { it is MessagePart.Tool.Call } }
                     transformed { msg -> msg.assistantTextOrEmpty() }
         )
+
+        edge(nodeNudgeDeliver forwardTo nodeExecuteTool onToolCalls { true })
+
+        edge(
+            nodeNudgeDeliver forwardTo nodeFinish
+                    onCondition { msg -> msg.parts.none { it is MessagePart.Tool.Call } }
+                    transformed { msg -> msg.assistantTextOrEmpty() }
+        )
     }
+
+private const val DELIVER_NUDGE =
+    "Your turn ended without sending anything to the user — no message, media, or reaction was delivered. " +
+            "Deliver your answer now by calling `sendMessage` (or the appropriate media or reaction tool). " +
+            "Do not reply with empty text."
 
 private fun Message.Assistant.assistantTextOrEmpty(): String =
     parts.filterIsInstance<MessagePart.Text>().joinToString("\n") { it.text }
+
+// True when the assistant ended its turn with nothing for the user: no tool call left to execute
+// (so nothing more is coming this turn) and no plain text to fall back on as a caption.
+internal fun Message.Assistant.deliveredNothing(): Boolean =
+    parts.none { it is MessagePart.Tool.Call } && assistantTextOrEmpty().isBlank()
 
 // Flaky OpenAI-compatible models garble parallel tool calls: sibling calls in the same batch arrive
 // with empty `{}` args. Required args declared by the tool that the call omitted entirely.

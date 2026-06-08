@@ -54,7 +54,10 @@ A normal user message travels:
    garbled call missing them (flaky models
    emit empty-arg siblings when they try to call tools in parallel) is short-circuited into a `ValidationError` result
    instead of being executed, so the run
-   stays clean and the follow-up request stays well-formed.
+   stays clean and the follow-up request stays well-formed. If the model ends its turn having delivered nothing — no
+   `sendMessage`, media, or reaction, and empty assistant text (flaky providers return an empty completion after a batch
+   of tool results) — the strategy nudges it once to actually deliver before finishing, so a full turn of research does
+   not collapse into silence.
 6. **Collect** — `AgentRunner` returns an `AgentResult` (outputs + optional comment + history turns to persist).
 7. **Deliver** — `TelegramDelivery.send` routes each `BotOutput` to the chat (or the user's private chat when a tool
    requested it), anchoring replies to the original message and falling back when Telegram rejects markdown, a reply
