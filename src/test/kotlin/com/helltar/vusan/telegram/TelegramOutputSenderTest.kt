@@ -2,6 +2,7 @@ package com.helltar.vusan.telegram
 
 import com.helltar.vusan.outbox.BotOutput
 import dev.inmo.tgbotapi.bot.TelegramBot
+import dev.inmo.tgbotapi.bot.exceptions.CommonRequestException
 import dev.inmo.tgbotapi.bot.exceptions.InvalidPhotoDimensionsException
 import dev.inmo.tgbotapi.requests.abstracts.Request
 import dev.inmo.tgbotapi.types.Response
@@ -22,7 +23,8 @@ class TelegramOutputSenderTest {
             item = BotOutput.Photo(byteArrayOf(1, 2, 3), "chart.bmp"),
             chatId = 1L.toChatIdentifier(),
             replyParameters = null,
-            caption = null
+            caption = null,
+            markdownFileNotice = "notice"
         )
 
         assertEquals(listOf("sendPhoto", "sendDocument"), bot.methods)
@@ -41,13 +43,32 @@ class TelegramOutputSenderTest {
             ),
             chatId = 1L.toChatIdentifier(),
             replyParameters = null,
-            caption = null
+            caption = null,
+            markdownFileNotice = "notice"
         )
 
         assertEquals(listOf("sendPhoto"), bot.methods)
     }
 
-    private class RecordingBot(private val failPhoto: Boolean) : TelegramBot {
+    @Test
+    fun `text reply with rejected markdown is sent as a markdown document`() = runBlocking {
+        val bot = RecordingBot(failMarkdownText = true)
+
+        TelegramOutputSender.sendReplyText(
+            bot = bot,
+            chatId = 1L.toChatIdentifier(),
+            text = "**broken_markdown",
+            replyParameters = null,
+            markdownFileNotice = "notice"
+        )
+
+        assertEquals(listOf("sendMessage", "sendDocument"), bot.methods)
+    }
+
+    private class RecordingBot(
+        private val failPhoto: Boolean = false,
+        private val failMarkdownText: Boolean = false
+    ) : TelegramBot {
         val methods = mutableListOf<String>()
 
         override suspend fun <T : Any> execute(request: Request<T>): T {
@@ -58,6 +79,15 @@ class TelegramOutputSenderTest {
                 throw InvalidPhotoDimensionsException(
                     response = Response(description = "PHOTO_INVALID_DIMENSIONS"),
                     plainAnswer = """{"description":"PHOTO_INVALID_DIMENSIONS"}""",
+                    message = null,
+                    cause = null
+                )
+            }
+
+            if (failMarkdownText && method == "sendMessage") {
+                throw CommonRequestException(
+                    response = Response(description = "Bad Request: can't parse entities"),
+                    plainAnswer = """{"description":"Bad Request: can't parse entities"}""",
                     message = null,
                     cause = null
                 )

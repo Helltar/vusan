@@ -24,6 +24,8 @@ import io.github.oshai.kotlinlogging.KotlinLogging
 
 internal object TelegramOutputSender {
 
+    private const val MARKDOWN_FALLBACK_FILENAME = "message.md"
+
     private val log = KotlinLogging.logger {}
 
     suspend fun send(
@@ -31,10 +33,11 @@ internal object TelegramOutputSender {
         item: BotOutput,
         chatId: ChatIdentifier,
         replyParameters: ReplyParameters?,
-        caption: String?
+        caption: String?,
+        markdownFileNotice: String
     ) {
         when (item) {
-            is BotOutput.Text -> sendText(bot, chatId, item.text, replyParameters)
+            is BotOutput.Text -> sendReplyText(bot, chatId, item.text, replyParameters, markdownFileNotice)
             is BotOutput.Animation -> sendAnimation(bot, chatId, replyParameters, item, caption)
             is BotOutput.Photo -> sendPhoto(bot, chatId, replyParameters, item, caption)
             is BotOutput.PhotoGroup -> sendPhotoGroup(bot, chatId, replyParameters, item)
@@ -83,6 +86,47 @@ internal object TelegramOutputSender {
                 replyParameters = replyParameters
             )
         }
+    }
+
+    // Agent reply text often carries malformed Markdown. When Telegram rejects it, deliver the raw text as a
+    // `.md` document (with a short note explaining why) instead of re-sending it unformatted, so the user still
+    // gets the intended structure. A bot-authored notice goes through plain [sendText] instead.
+    suspend fun sendReplyText(
+        bot: TelegramBot,
+        chatId: ChatIdentifier,
+        text: String,
+        replyParameters: ReplyParameters?,
+        markdownFileNotice: String
+    ) {
+        runCatching {
+            bot.sendTextMessage(chatId = chatId, text = text, parseMode = MarkdownParseMode, replyParameters = replyParameters)
+        }.recoverCatching { e ->
+            if (e is RequestException && e.isMarkdownError()) {
+                log.warn { "Telegram rejected Markdown, sending the reply as a $MARKDOWN_FALLBACK_FILENAME file" }
+                sendMarkdownAsDocument(bot, chatId, text, markdownFileNotice, replyParameters)
+            } else throw e
+        }.getOrThrow()
+    }
+
+    private suspend fun sendMarkdownAsDocument(
+        bot: TelegramBot,
+        chatId: ChatIdentifier,
+        text: String,
+        notice: String,
+        replyParameters: ReplyParameters?
+    ) {
+        runCatching {
+            bot.sendDocument(
+                chatId = chatId,
+                document = text.encodeToByteArray().asMultipartFile(MARKDOWN_FALLBACK_FILENAME),
+                text = notice,
+                replyParameters = replyParameters
+            )
+        }.recoverCatching { e ->
+            e.rethrowIfCancellation()
+            log.warn(e) { "Markdown document fallback failed for chat=$chatId, sending plain text" }
+            bot.sendTextMessage(chatId = chatId, text = text, parseMode = null, replyParameters = replyParameters)
+        }.getOrThrow()
     }
 
     private suspend fun sendDocument(

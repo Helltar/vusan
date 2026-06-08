@@ -124,7 +124,7 @@ class TelegramDelivery(private val bot: TelegramBot) {
             val target = privateTarget ?: if (replyUnavailable) currentChatTarget else originTarget
             val deliveryTarget = if (routedToPrivate || replyUnavailable) target.withoutReply() else target
 
-            when (deliverItem(item.output, deliveryTarget, caption, routedToPrivate, currentChatTarget)) {
+            when (deliverItem(item.output, deliveryTarget, caption, routedToPrivate, currentChatTarget, messages)) {
                 ItemDeliveryOutcome.Ok -> Unit
                 ItemDeliveryOutcome.ReplyMissing -> replyUnavailable = true
                 ItemDeliveryOutcome.PrivateBlocked -> if (!privateBlockedNoticed) {
@@ -152,16 +152,17 @@ class TelegramDelivery(private val bot: TelegramBot) {
         deliveryTarget: DeliveryTarget,
         caption: String?,
         routedToPrivate: Boolean,
-        currentChatTarget: DeliveryTarget
+        currentChatTarget: DeliveryTarget,
+        messages: Messages
     ): ItemDeliveryOutcome {
         try {
-            sendOutgoing(deliveryTarget, item, caption)
+            sendOutgoing(deliveryTarget, item, caption, messages)
             return ItemDeliveryOutcome.Ok
         } catch (e: Throwable) {
             e.rethrowIfCancellation()
 
             if (!routedToPrivate && deliveryTarget.replyToMessageId != null && e is ReplyMessageNotFoundException) {
-                runCatching { sendOutgoing(currentChatTarget, item, caption) }
+                runCatching { sendOutgoing(currentChatTarget, item, caption, messages) }
                     .onFailure { retryError ->
                         retryError.rethrowIfCancellation()
 
@@ -195,13 +196,13 @@ class TelegramDelivery(private val bot: TelegramBot) {
         val deliveryTarget = privateTarget ?: originTarget
 
         try {
-            sendText(deliveryTarget, text)
+            sendReplyText(deliveryTarget, text, messages)
             return false
         } catch (e: Throwable) {
             e.rethrowIfCancellation()
 
             if (!routedToPrivate && deliveryTarget.replyToMessageId != null && e is ReplyMessageNotFoundException) {
-                sendText(deliveryTarget.withoutReply(), text)
+                sendReplyText(deliveryTarget.withoutReply(), text, messages)
                 return true
             }
 
@@ -230,14 +231,26 @@ class TelegramDelivery(private val bot: TelegramBot) {
             )
     }
 
-    private suspend fun sendOutgoing(target: DeliveryTarget, item: BotOutput, caption: String?) {
+    private suspend fun sendReplyText(target: DeliveryTarget, text: String, messages: Messages) {
+        TelegramOutputSender
+            .sendReplyText(
+                bot,
+                target.chatId.toChatIdentifier(),
+                text,
+                replyParameters(target.chatId, target.replyToMessageId),
+                messages.markdownAsFileNotice
+            )
+    }
+
+    private suspend fun sendOutgoing(target: DeliveryTarget, item: BotOutput, caption: String?, messages: Messages) {
         TelegramOutputSender
             .send(
                 bot,
                 item,
                 target.chatId.toChatIdentifier(),
                 replyParameters(target.chatId, target.replyToMessageId),
-                caption
+                caption,
+                messages.markdownAsFileNotice
             )
     }
 

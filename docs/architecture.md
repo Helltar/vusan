@@ -58,7 +58,9 @@ A normal user message travels:
 6. **Collect** — `AgentRunner` returns an `AgentResult` (outputs + optional comment + history turns to persist).
 7. **Deliver** — `TelegramDelivery.send` routes each `BotOutput` to the chat (or the user's private chat when a tool
    requested it), anchoring replies to the original message and falling back when Telegram rejects markdown, a reply
-   target is gone, a private DM is blocked, or a media send fails.
+   target is gone, a private DM is blocked, or a media send fails. When Telegram rejects the markdown of a reply text,
+   it is re-sent as a `.md` document (with a short localized note) so the formatting is preserved; media captions and
+   bot notices still fall back to plain text.
    Sandbox image previews opt out of photo-to-document fallback because their uncompressed document copy is already
    queued. `TelegramOutputSender` performs the low-level API calls.
 8. **Persist** — produced history turns are appended via `ChatHistoryRepository`.

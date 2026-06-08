@@ -6,6 +6,7 @@ interface Messages {
     val busyReply: String
     val fallbackErrorReply: String
     val overloadedReply: String
+    val markdownAsFileNotice: String
     val privateBlockedNotice: String
     val voiceEmptyReply: String
     val voiceTranscriptionFailedReply: String
@@ -35,6 +36,9 @@ internal object EnglishMessages : Messages {
 
     override val overloadedReply = "I'm a bit overloaded right now — give me a moment and try again 🙏"
 
+    override val markdownAsFileNotice =
+        "Telegram couldn't display the formatting, so here's the full reply as a Markdown file 📄"
+
     override val privateBlockedNotice =
         "I tried to DM you, but I can't — please open my chat and press /start first, then ask again 😊"
 
@@ -61,6 +65,9 @@ internal object UkrainianMessages : Messages {
     override val fallbackErrorReply = "Ох, не вдалося — щось пішло не так під час обробки. Спробуєш ще раз? 🥲"
 
     override val overloadedReply = "Зараз я трохи перевантажена — дай хвилинку й спробуй ще раз 🙏"
+
+    override val markdownAsFileNotice =
+        "Телеграм не зміг показати форматування, тож ось повна відповідь файлом Markdown 📄"
 
     override val privateBlockedNotice =
         "Хотіла написати тобі в особисті, але не виходить — відкрий мій чат, натисни /start, а потім спитай ще раз 😊"
