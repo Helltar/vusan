@@ -2,13 +2,21 @@ package com.helltar.vusan.config
 
 import kotlin.time.Duration
 
+enum class HostedLlmProvider {
+    OPENAI,
+    ANTHROPIC,
+    GOOGLE,
+    DEEPSEEK
+}
+
 sealed interface LlmProviderConfig {
 
     // Caps how long a single LLM HTTP call may hang before it fails and the agent surfaces an error
     // reply, instead of waiting out the provider client's 15-minute default while the bot stays silent.
     val requestTimeout: Duration
 
-    data class OpenAi(
+    data class Hosted(
+        val provider: HostedLlmProvider,
         val apiKey: String,
         val model: String,
         override val requestTimeout: Duration

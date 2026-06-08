@@ -1,7 +1,9 @@
 package com.helltar.vusan.config
 
+import ai.koog.prompt.executor.clients.anthropic.AnthropicModels
 import ai.koog.prompt.executor.clients.openai.OpenAIChatParams
 import ai.koog.prompt.executor.clients.openai.OpenAIModels
+import ai.koog.prompt.llm.LLMProvider
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFailsWith
@@ -22,6 +24,36 @@ class LlmRuntimeTest {
         assertFailsWith<IllegalArgumentException> {
             resolveOpenAiModel("gpt-unknown")
         }
+    }
+
+    @Test
+    fun `resolveModel matches a native provider catalog case-insensitively`() {
+        val model = resolveModel(AnthropicModels, "Anthropic", "CLAUDE-SONNET-4-5")
+        assertEquals("claude-sonnet-4-5", model.id)
+        assertEquals(LLMProvider.Anthropic, model.provider)
+    }
+
+    @Test
+    fun `resolveModel rejects unknown native model names`() {
+        assertFailsWith<IllegalArgumentException> {
+            resolveModel(AnthropicModels, "Anthropic", "claude-unknown")
+        }
+    }
+
+    @Test
+    fun `hosted anthropic provider uses the native client and provider`() {
+        val runtime =
+            resolveLlmRuntime(
+                LlmProviderConfig.Hosted(
+                    provider = HostedLlmProvider.ANTHROPIC,
+                    apiKey = "key",
+                    model = "claude-sonnet-4-5",
+                    requestTimeout = 120.seconds
+                )
+            )
+
+        assertEquals(LLMProvider.Anthropic, runtime.koogProvider)
+        assertEquals("claude-sonnet-4-5", runtime.model.id)
     }
 
     @Test

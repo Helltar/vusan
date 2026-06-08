@@ -16,6 +16,8 @@ repositories {
 dependencies {
     implementation(kotlin("reflect"))
     implementation(libs.koog.agents)
+    implementation(libs.koog.google.client)
+    implementation(libs.koog.deepseek.client)
     implementation(libs.tgbotapi)
     implementation(libs.dotenv.kotlin)
 

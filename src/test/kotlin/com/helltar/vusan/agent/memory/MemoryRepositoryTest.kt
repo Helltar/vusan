@@ -1,6 +1,7 @@
 package com.helltar.vusan.agent.memory
 
 import com.helltar.vusan.config.AppConfig
+import com.helltar.vusan.config.HostedLlmProvider
 import com.helltar.vusan.config.LlmProviderConfig
 import com.helltar.vusan.infra.Db
 import kotlinx.coroutines.runBlocking
@@ -126,7 +127,12 @@ class MemoryRepositoryTest {
             elevenLabsApiKey = null,
             elevenLabsTts = null,
             giphyApiKey = null,
-            llmProvider = LlmProviderConfig.OpenAi(apiKey = "test", model = "test", requestTimeout = 60.seconds),
+            llmProvider = LlmProviderConfig.Hosted(
+                provider = HostedLlmProvider.OPENAI,
+                apiKey = "test",
+                model = "test",
+                requestTimeout = 60.seconds
+            ),
             maxMemoryPerScope = 10,
             maxTasksPerUser = 5,
             openAiStt = null,

@@ -27,7 +27,7 @@ data class AppConfig(
     val ytDlpPath: String
 ) {
     companion object {
-        private const val DEFAULT_LLM_MODEL = "gpt-5.4-nano"
+        private const val DEFAULT_LLM_MODEL = "gpt-5.4-mini"
         private const val DEFAULT_LLM_PROVIDER = "openai"
         private const val DEFAULT_LLM_REQUEST_TIMEOUT_SECONDS = 120L
         private const val DEFAULT_MAX_MEMORY_PER_SCOPE = 10
@@ -112,9 +112,34 @@ data class AppConfig(
 
             return when (val provider = raw.trim().lowercase()) {
                 "openai" ->
-                    LlmProviderConfig.OpenAi(
+                    LlmProviderConfig.Hosted(
+                        provider = HostedLlmProvider.OPENAI,
                         apiKey = requireEnv("LLM_API_KEY"),
                         model = readEnv("LLM_MODEL") ?: DEFAULT_LLM_MODEL,
+                        requestTimeout = requestTimeout
+                    )
+
+                "anthropic" ->
+                    LlmProviderConfig.Hosted(
+                        provider = HostedLlmProvider.ANTHROPIC,
+                        apiKey = requireEnv("LLM_API_KEY"),
+                        model = requireEnv("LLM_MODEL"),
+                        requestTimeout = requestTimeout
+                    )
+
+                "google" ->
+                    LlmProviderConfig.Hosted(
+                        provider = HostedLlmProvider.GOOGLE,
+                        apiKey = requireEnv("LLM_API_KEY"),
+                        model = requireEnv("LLM_MODEL"),
+                        requestTimeout = requestTimeout
+                    )
+
+                "deepseek" ->
+                    LlmProviderConfig.Hosted(
+                        provider = HostedLlmProvider.DEEPSEEK,
+                        apiKey = requireEnv("LLM_API_KEY"),
+                        model = requireEnv("LLM_MODEL"),
                         requestTimeout = requestTimeout
                     )
 
@@ -126,7 +151,10 @@ data class AppConfig(
                         requestTimeout = requestTimeout
                     )
 
-                else -> error("Unsupported LLM_PROVIDER=[$provider]. Supported values: openai, openai-compatible")
+                else -> error(
+                    "Unsupported LLM_PROVIDER=[$provider]. " +
+                            "Supported values: openai, anthropic, google, deepseek, openai-compatible"
+                )
             }
         }
 

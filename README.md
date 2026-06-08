@@ -16,7 +16,7 @@ _Note: This project is currently in active alpha development. Since the architec
 
 ## Stack
 
-Built on [Koog](https://github.com/JetBrains/koog) for agent orchestration. OpenAI is the default LLM backend, and any OpenAI-compatible server (llama.cpp, Ollama, DeepSeek, …) can be used instead.
+Built on [Koog](https://github.com/JetBrains/koog) for agent orchestration. OpenAI is the default LLM backend, with native clients for Anthropic (Claude), Google (Gemini), and DeepSeek, plus an OpenAI-compatible mode for any other server (llama.cpp, Ollama). See [configuration.md](docs/configuration.md#llm-provider).
 
 For a tour of the layers and how a message flows through them, see [architecture.md](docs/architecture.md).
 

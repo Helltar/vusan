@@ -74,8 +74,9 @@ A normal user message travels:
   older ones so the prompt stays within
   budget while keeping tool-call/result pairs anchored.
 - **LLM provider resolution** — `config/LlmRuntime.resolveLlmRuntime` turns `AppConfig.llmProvider` into a Koog
-  client/model/params triple, supporting OpenAI (
-  with prompt caching) and any OpenAI-compatible server (llama.cpp, Ollama, …).
+  client/model/params triple. Native clients cover OpenAI (with prompt caching), Anthropic, Google, and DeepSeek —
+  models are matched against each client's predefined catalog. `openai-compatible` keeps a hand-declared model for
+  any other server (llama.cpp, Ollama, …).
 
 ## Startup
 

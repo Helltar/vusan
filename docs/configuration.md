@@ -28,20 +28,41 @@ Empty/unset means the bot answers nobody.
 
 Provider options:
 
-- `openai` — set `LLM_API_KEY`; optionally set `LLM_MODEL` (default `gpt-5.4-nano`).
+- `openai` — set `LLM_API_KEY`; optionally set `LLM_MODEL` (default `gpt-5.4-mini`).
+- `anthropic` — set `LLM_API_KEY` and `LLM_MODEL` (e.g. `claude-sonnet-4-6`). Native Claude client.
+- `google` — set `LLM_API_KEY` and `LLM_MODEL` (e.g. `gemini-2.5-flash`). Native Gemini client.
+- `deepseek` — set `LLM_API_KEY` and `LLM_MODEL` (e.g. `deepseek-v4-pro`). Native DeepSeek client.
 - `openai-compatible` — set `LLM_PROVIDER=openai-compatible`, `LLM_BASE_URL`, `LLM_API_KEY`, and `LLM_MODEL`.
 
-`openai-compatible` targets any OpenAI-compatible chat completions API, including remote APIs and local servers.
+The native providers (`openai`, `anthropic`, `google`, `deepseek`) talk to each vendor's own API through its
+dedicated Koog client, so `LLM_MODEL` must be a model id the client knows. An unrecognized id fails at startup
+with the list of supported values. `openai-compatible` instead targets any OpenAI-compatible chat completions API
+(remote or local) and accepts any model string the server understands.
 
 `LLM_REQUEST_TIMEOUT_SECONDS` (default `120`) caps how long a single LLM HTTP call may hang. The Koog client otherwise
 waits 15 minutes, during which the bot stays silent; the shorter cap lets a stalled call fail fast so the agent can
 deliver an error reply. Raise it for slow local servers or heavy reasoning models.
 
-DeepSeek example:
+Anthropic example:
 
 ```dotenv
-LLM_PROVIDER=openai-compatible
-LLM_BASE_URL=https://api.deepseek.com
+LLM_PROVIDER=anthropic
+LLM_API_KEY=sk-ant-qwerty
+LLM_MODEL=claude-sonnet-4-6
+```
+
+Google:
+
+```dotenv
+LLM_PROVIDER=google
+LLM_API_KEY=qwerty
+LLM_MODEL=gemini-2.5-flash
+```
+
+DeepSeek:
+
+```dotenv
+LLM_PROVIDER=deepseek
 LLM_API_KEY=sk-qwerty
 LLM_MODEL=deepseek-v4-pro
 ```
