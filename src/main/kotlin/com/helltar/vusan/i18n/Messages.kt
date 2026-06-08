@@ -5,6 +5,7 @@ interface Messages {
     val startReply: String
     val busyReply: String
     val fallbackErrorReply: String
+    val overloadedReply: String
     val privateBlockedNotice: String
     val voiceEmptyReply: String
     val voiceTranscriptionFailedReply: String
@@ -30,7 +31,9 @@ internal object EnglishMessages : Messages {
 
     override val busyReply = "Hold on, I'm still working on your previous request 😊"
 
-    override val fallbackErrorReply = "Something broke on my end and I couldn't handle that request 🥲"
+    override val fallbackErrorReply = "Oof, that didn't go through — something went wrong while I was handling it. Mind trying again? 🥲"
+
+    override val overloadedReply = "I'm a bit overloaded right now — give me a moment and try again 🙏"
 
     override val privateBlockedNotice =
         "I tried to DM you, but I can't — please open my chat and press /start first, then ask again 😊"
@@ -55,7 +58,9 @@ internal object UkrainianMessages : Messages {
 
     override val busyReply = "Зачекай, я ще працюю над твоїм попереднім запитом 😊"
 
-    override val fallbackErrorReply = "Щось зламалось з мого боку — не змогла обробити цей запит 🥲"
+    override val fallbackErrorReply = "Ох, не вдалося — щось пішло не так під час обробки. Спробуєш ще раз? 🥲"
+
+    override val overloadedReply = "Зараз я трохи перевантажена — дай хвилинку й спробуй ще раз 🙏"
 
     override val privateBlockedNotice =
         "Хотіла написати тобі в особисті, але не виходить — відкрий мій чат, натисни /start, а потім спитай ще раз 😊"

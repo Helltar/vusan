@@ -7,6 +7,12 @@
         </encoder>
     </appender>
 
+    <!-- A failing LLM call (e.g. a transient 429/503 Gemini quota dump) is re-logged at ERROR with the
+         full provider error body at every layer it bubbles through: node, subgraph, then the agent itself.
+         AgentRunner logs one concise line at the boundary, so silence Koog's duplicate dumps from the agent
+         package. Tool-level diagnostics live under ai.koog.agents.core.environment and are left intact. -->
+    <logger name="ai.koog.agents.core.agent" level="OFF"/>
+
     <root level="INFO">
         <appender-ref ref="STDOUT"/>
     </root>

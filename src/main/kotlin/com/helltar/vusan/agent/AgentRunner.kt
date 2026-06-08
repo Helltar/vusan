@@ -1,5 +1,6 @@
 package com.helltar.vusan.agent
 
+import ai.koog.prompt.executor.clients.LLMClientException
 import com.helltar.vusan.agent.history.*
 import com.helltar.vusan.agent.memory.MemoryRepository
 import com.helltar.vusan.agent.memory.MemoryScope
@@ -127,8 +128,7 @@ class AgentRunner(
                 agent.run(request.prompt)
             } catch (e: Throwable) {
                 e.rethrowIfCancellation()
-                log.error(e) { "agent.run failed for chat=${request.chatId} user=${request.userId}" }
-                return AgentResult(outputs = emptyList(), comment = Messages.of(request.language).fallbackErrorReply)
+                return AgentResult(outputs = emptyList(), comment = replyForAgentFailure(request, e))
             }
 
         log.info {
@@ -161,6 +161,27 @@ class AgentRunner(
         return AgentResult(outputs, comment, outbox.redirectToPrivate, historyTurns)
     }
 
+    // Pick the user-facing reply and log accordingly. LLM provider errors arrive as a large JSON body, so
+    // they get a single capped WARN line; a transient overload (429/503) gets a friendly "try again" reply,
+    // any other provider error and genuine unexpected failures get the generic fallback (the latter with a
+    // full stack trace, since it points at a real bug).
+    private fun replyForAgentFailure(request: AgentRequest, e: Throwable): String {
+        val messages = Messages.of(request.language)
+        val providerError = generateSequence(e) { it.cause }.filterIsInstance<LLMClientException>().firstOrNull()
+
+        if (providerError == null) {
+            log.error(e) { "agent.run failed for chat=${request.chatId} user=${request.userId}" }
+            return messages.fallbackErrorReply
+        }
+
+        log.warn {
+            "agent.run provider error for chat=${request.chatId} user=${request.userId}: " +
+                    providerError.message?.collapseWhitespaceAndCap(PROVIDER_ERROR_LOG_MAX_CHARS).orEmpty()
+        }
+
+        return if (providerError.isTransientOverload()) messages.overloadedReply else messages.fallbackErrorReply
+    }
+
     private fun retainLock(userId: Long): Mutex =
         synchronized(userLocks) {
             userLocks.getOrPut(userId) { UserLock() }.also { it.refCount++ }.mutex
@@ -178,6 +199,14 @@ class AgentRunner(
 
 private const val TOOL_OUTPUT_MAX_CHARS = 4_000
 private const val LOG_REPLY_MAX_CHARS = 300
+private const val PROVIDER_ERROR_LOG_MAX_CHARS = 300
+
+// The provider's HTTP status is embedded in the client exception message ("Status code: 429").
+// 429 (rate limit / quota) and 503 (service overloaded) are transient — the provider asks us to back off.
+private val TRANSIENT_STATUS_REGEX = Regex("""Status code:\s*(429|503)""")
+
+private fun LLMClientException.isTransientOverload(): Boolean =
+    message?.let { TRANSIENT_STATUS_REGEX.containsMatchIn(it) } == true
 
 private fun tokenUsageLogSummary(usages: List<TokenUsage>): String {
 
