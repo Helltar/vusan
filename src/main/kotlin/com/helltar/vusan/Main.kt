@@ -37,7 +37,7 @@ suspend fun main() = coroutineScope {
 
         http = Http.createClient()
         val llm = resolveLlmRuntime(config.llmProvider)
-        executor = MultiLLMPromptExecutor(llm.koogProvider to llm.client)
+        executor = MultiLLMPromptExecutor(llm.model.provider to llm.client)
 
         val history = ChatHistoryRepository()
         val memory = MemoryRepository(config.maxMemoryPerScope)

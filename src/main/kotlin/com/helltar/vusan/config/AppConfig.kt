@@ -110,52 +110,35 @@ data class AppConfig(
                 (readEnv("LLM_REQUEST_TIMEOUT_SECONDS")?.toLongOrNull()
                     ?: DEFAULT_LLM_REQUEST_TIMEOUT_SECONDS).seconds
 
-            return when (val provider = raw.trim().lowercase()) {
-                "openai" ->
-                    LlmProviderConfig.Hosted(
-                        provider = HostedLlmProvider.OPENAI,
-                        apiKey = requireEnv("LLM_API_KEY"),
-                        model = readEnv("LLM_MODEL") ?: DEFAULT_LLM_MODEL,
-                        requestTimeout = requestTimeout
-                    )
+            val provider = raw.trim().lowercase()
 
-                "anthropic" ->
-                    LlmProviderConfig.Hosted(
-                        provider = HostedLlmProvider.ANTHROPIC,
-                        apiKey = requireEnv("LLM_API_KEY"),
-                        model = requireEnv("LLM_MODEL"),
-                        requestTimeout = requestTimeout
-                    )
-
-                "google" ->
-                    LlmProviderConfig.Hosted(
-                        provider = HostedLlmProvider.GOOGLE,
-                        apiKey = requireEnv("LLM_API_KEY"),
-                        model = requireEnv("LLM_MODEL"),
-                        requestTimeout = requestTimeout
-                    )
-
-                "deepseek" ->
-                    LlmProviderConfig.Hosted(
-                        provider = HostedLlmProvider.DEEPSEEK,
-                        apiKey = requireEnv("LLM_API_KEY"),
-                        model = requireEnv("LLM_MODEL"),
-                        requestTimeout = requestTimeout
-                    )
-
-                "openai-compatible" ->
-                    LlmProviderConfig.OpenAiCompatible(
-                        baseUrl = requireEnv("LLM_BASE_URL"),
-                        apiKey = requireEnv("LLM_API_KEY"),
-                        model = requireEnv("LLM_MODEL"),
-                        requestTimeout = requestTimeout
-                    )
-
-                else -> error(
-                    "Unsupported LLM_PROVIDER=[$provider]. " +
-                            "Supported values: openai, anthropic, google, deepseek, openai-compatible"
+            if (provider == "openai-compatible") {
+                return LlmProviderConfig.OpenAiCompatible(
+                    baseUrl = requireEnv("LLM_BASE_URL"),
+                    apiKey = requireEnv("LLM_API_KEY"),
+                    model = requireEnv("LLM_MODEL"),
+                    requestTimeout = requestTimeout
                 )
             }
+
+            val hosted =
+                runCatching { HostedLlmProvider.valueOf(provider.uppercase()) }.getOrNull()
+                    ?: error(
+                        "Unsupported LLM_PROVIDER=[$provider]. " +
+                                "Supported values: openai, anthropic, google, deepseek, openai-compatible"
+                    )
+
+            return LlmProviderConfig.Hosted(
+                provider = hosted,
+                apiKey = requireEnv("LLM_API_KEY"),
+                // only OpenAI ships a default model; native catalogs differ too much to guess one.
+                model =
+                    if (hosted == HostedLlmProvider.OPENAI)
+                        readEnv("LLM_MODEL") ?: DEFAULT_LLM_MODEL
+                    else
+                        requireEnv("LLM_MODEL"),
+                requestTimeout = requestTimeout
+            )
         }
 
         private fun readEnv(env: String): String? =

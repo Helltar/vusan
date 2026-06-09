@@ -28,14 +28,13 @@ import kotlin.reflect.jvm.javaField
 
 data class LlmRuntime(
     val providerLabel: String,
-    val koogProvider: LLMProvider,
     val client: LLMClient,
     val model: LLModel,
     val chatParams: LLMParams
 )
 
 fun resolveLlmRuntime(config: LlmProviderConfig): LlmRuntime {
-    // Both request and socket timeouts default to 900 s in the koog client; cap them so a stalled LLM
+    // both request and socket timeouts default to 900 s in the koog client; cap them so a stalled LLM
     // call fails fast and the agent can deliver an error reply instead of leaving the bot silent.
     val timeoutConfig =
         ConnectionTimeoutConfig(
@@ -49,7 +48,6 @@ fun resolveLlmRuntime(config: LlmProviderConfig): LlmRuntime {
         is LlmProviderConfig.OpenAiCompatible ->
             LlmRuntime(
                 providerLabel = "OpenAI-compatible (${config.baseUrl})",
-                koogProvider = LLMProvider.OpenAI,
                 client = OpenAILLMClient(config.apiKey, OpenAIClientSettings(config.baseUrl, timeoutConfig)),
                 model =
                     LLModel(
@@ -74,7 +72,6 @@ private fun resolveHostedRuntime(config: LlmProviderConfig.Hosted, timeoutConfig
         HostedLlmProvider.OPENAI ->
             LlmRuntime(
                 providerLabel = "OpenAI",
-                koogProvider = LLMProvider.OpenAI,
                 client = OpenAILLMClient(config.apiKey, OpenAIClientSettings(timeoutConfig = timeoutConfig)),
                 model = resolveOpenAiModel(config.model),
                 chatParams = OpenAIChatParams(promptCacheKey = "vusan")
@@ -83,7 +80,6 @@ private fun resolveHostedRuntime(config: LlmProviderConfig.Hosted, timeoutConfig
         HostedLlmProvider.ANTHROPIC ->
             LlmRuntime(
                 providerLabel = "Anthropic",
-                koogProvider = LLMProvider.Anthropic,
                 client = AnthropicLLMClient(config.apiKey, AnthropicClientSettings(timeoutConfig = timeoutConfig)),
                 model = resolveModel(AnthropicModels, "Anthropic", config.model),
                 chatParams = AnthropicParams()
@@ -92,7 +88,6 @@ private fun resolveHostedRuntime(config: LlmProviderConfig.Hosted, timeoutConfig
         HostedLlmProvider.GOOGLE ->
             LlmRuntime(
                 providerLabel = "Google",
-                koogProvider = LLMProvider.Google,
                 client = GoogleLLMClient(config.apiKey, GoogleClientSettings(timeoutConfig = timeoutConfig)),
                 model = resolveModel(GoogleModels, "Google", config.model),
                 chatParams = GoogleParams()
@@ -101,7 +96,6 @@ private fun resolveHostedRuntime(config: LlmProviderConfig.Hosted, timeoutConfig
         HostedLlmProvider.DEEPSEEK ->
             LlmRuntime(
                 providerLabel = "DeepSeek",
-                koogProvider = LLMProvider.DeepSeek,
                 client = DeepSeekLLMClient(config.apiKey, DeepSeekClientSettings(timeoutConfig = timeoutConfig)),
                 model = resolveModel(DeepSeekModels, "DeepSeek", config.model),
                 chatParams = DeepSeekParams()

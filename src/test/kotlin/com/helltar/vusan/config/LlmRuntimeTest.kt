@@ -52,13 +52,13 @@ class LlmRuntimeTest {
                 )
             )
 
-        assertEquals(LLMProvider.Anthropic, runtime.koogProvider)
+        assertEquals(LLMProvider.Anthropic, runtime.model.provider)
         assertEquals("claude-sonnet-4-5", runtime.model.id)
     }
 
     @Test
     fun `openai-compatible provider disables parallel tool calls`() {
-        // Third-party models (e.g. DeepSeek) garble parallel tool calls; the runtime must force
+        // third-party models (e.g. DeepSeek) garble parallel tool calls; the runtime must force
         // one tool call per turn so the provider never serializes a corrupt parallel batch.
         val runtime =
             resolveLlmRuntime(
