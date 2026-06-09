@@ -24,8 +24,6 @@ RUN deno cache main.ts worker.ts warmup.ts && \
 
 USER deno:deno
 
-ENV PORT=8080
 EXPOSE 8080
 
-# --allow-net stays unscoped because the listen port comes from PORT at runtime
-ENTRYPOINT ["deno", "run", "--allow-net", "--allow-read=/app,/deno-dir,/fonts", "--allow-env", "main.ts"]
+ENTRYPOINT ["deno", "run", "--allow-net=0.0.0.0:8080", "--allow-read=/app,/deno-dir,/fonts", "--allow-env", "main.ts"]

@@ -142,14 +142,16 @@ or leave it commented.
 
 ### Sandbox tuning
 
-These are sandbox-service environment variables. `SANDBOX_TIMEOUT_SECONDS` is also read by the bot. The default
-`compose.yaml` wires `SANDBOX_POOL_SIZE` and `SANDBOX_TIMEOUT_SECONDS` from `.env` into the sandbox service.
+Both variables live in the bot's `.env`; the default `compose.yaml` passes them into the sandbox container.
 
-| Variable                  | Default | Description                                                                         |
-|---------------------------|---------|-------------------------------------------------------------------------------------|
-| `SANDBOX_POOL_SIZE`       | `2`     | Warm Pyodide workers kept ready. Service only.                                      |
-| `SANDBOX_TIMEOUT_SECONDS` | `120`   | Hard per-run limit. Read by both the service and the bot, so set it once in `.env`. |
-| `PORT`                    | `8080`  | Port the sandbox service listens on. Service only.                                  |
+| Variable                  | Default | Used by       | Description                      |
+|---------------------------|---------|---------------|----------------------------------|
+| `SANDBOX_POOL_SIZE`       | `2`     | service       | Warm Pyodide workers kept ready. |
+| `SANDBOX_TIMEOUT_SECONDS` | `120`   | bot + service | Hard per-run limit.              |
+
+`SANDBOX_TIMEOUT_SECONDS` is shared on purpose: the service enforces it as the run limit, and the bot uses
+the same value to budget how long to wait for a response (worker queue + run + network slack). Setting it
+once in `.env` keeps both sides in sync.
 
 ## Memory
 

@@ -13,7 +13,9 @@ function envNumber(name: string, fallback: number): number {
   return Number.isFinite(value) && value > 0 ? value : fallback;
 }
 
-const PORT = envNumber("PORT", 8080);
+// fixed on purpose: inside the container nothing conflicts, and a different
+// outside port is a compose `ports:` mapping, not a service concern
+const PORT = 8080;
 const POOL_SIZE = envNumber("SANDBOX_POOL_SIZE", 2);
 const TIMEOUT_SECONDS = envNumber("SANDBOX_TIMEOUT_SECONDS", 120);
 const MAX_CODE_CHARS = 100_000;
