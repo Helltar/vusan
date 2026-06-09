@@ -27,8 +27,6 @@ data class AppConfig(
     val ytDlpPath: String
 ) {
     companion object {
-        private const val DEFAULT_LLM_MODEL = "gpt-5.4-mini"
-        private const val DEFAULT_LLM_PROVIDER = "openai"
         private const val DEFAULT_LLM_REQUEST_TIMEOUT_SECONDS = 120L
         private const val DEFAULT_MAX_MEMORY_PER_SCOPE = 10
         private const val DEFAULT_MAX_TASKS_PER_USER = 5
@@ -104,7 +102,7 @@ data class AppConfig(
         }
 
         private fun resolveLlmProvider(): LlmProviderConfig {
-            val raw = readEnv("LLM_PROVIDER") ?: DEFAULT_LLM_PROVIDER
+            val raw = requireEnv("LLM_PROVIDER")
 
             val requestTimeout =
                 (readEnv("LLM_REQUEST_TIMEOUT_SECONDS")?.toLongOrNull()
@@ -131,12 +129,7 @@ data class AppConfig(
             return LlmProviderConfig.Hosted(
                 provider = hosted,
                 apiKey = requireEnv("LLM_API_KEY"),
-                // only OpenAI ships a default model; native catalogs differ too much to guess one.
-                model =
-                    if (hosted == HostedLlmProvider.OPENAI)
-                        readEnv("LLM_MODEL") ?: DEFAULT_LLM_MODEL
-                    else
-                        requireEnv("LLM_MODEL"),
+                model = requireEnv("LLM_MODEL"),
                 requestTimeout = requestTimeout
             )
         }

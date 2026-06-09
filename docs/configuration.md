@@ -5,11 +5,13 @@ Vusan reads configuration from environment variables. For Docker, put them in a 
 
 ## Minimum setup
 
-Fill in these values for the default OpenAI setup:
+Fill in these values (the OpenAI setup shown is the `.env.example` starting point):
 
 ```dotenv
 ALLOWED_IDS=123456789,-1001234567890
 TELEGRAM_BOT_TOKEN=1234567890:qwerty
+LLM_PROVIDER=openai
+LLM_MODEL=gpt-5.4-mini
 LLM_API_KEY=sk-proj-qwerty
 ```
 
@@ -17,22 +19,25 @@ LLM_API_KEY=sk-proj-qwerty
 |----------------------|------------------------------------------------------|
 | `ALLOWED_IDS`        | Telegram user/group IDs the bot answers.             |
 | `TELEGRAM_BOT_TOKEN` | Bot token from [@BotFather](https://t.me/BotFather). |
-| `LLM_API_KEY`        | API key for the LLM provider (OpenAI by default).    |
+| `LLM_PROVIDER`       | LLM backend; see [LLM provider](#llm-provider).      |
+| `LLM_MODEL`          | Model id for the chosen provider.                    |
+| `LLM_API_KEY`        | API key for the chosen provider.                     |
 
 `ALLOWED_IDS` accepts commas, whitespace, or semicolons as separators. Positive IDs are users; negative IDs are groups.
 Empty/unset means the bot answers nobody.
 
 ## LLM provider
 
-`LLM_PROVIDER` selects the backend. Default: `openai`. The chosen model must support tool calling.
+`LLM_PROVIDER` selects the backend; `LLM_PROVIDER`, `LLM_MODEL`, and `LLM_API_KEY` are always
+required. The chosen model must support tool calling.
 
 Provider options:
 
-- `openai` — set `LLM_API_KEY`; optionally set `LLM_MODEL` (default `gpt-5.4-mini`).
-- `anthropic` — set `LLM_API_KEY` and `LLM_MODEL` (e.g. `claude-sonnet-4-6`). Native Claude client.
-- `google` — set `LLM_API_KEY` and `LLM_MODEL` (e.g. `gemini-2.5-flash`). Native Gemini client.
-- `deepseek` — set `LLM_API_KEY` and `LLM_MODEL` (e.g. `deepseek-v4-pro`). Native DeepSeek client.
-- `openai-compatible` — set `LLM_PROVIDER=openai-compatible`, `LLM_BASE_URL`, `LLM_API_KEY`, and `LLM_MODEL`.
+- `openai` — e.g. `LLM_MODEL=gpt-5.4-mini`.
+- `anthropic` — e.g. `LLM_MODEL=claude-sonnet-4-6`. Native Claude client.
+- `google` — e.g. `LLM_MODEL=gemini-2.5-flash`. Native Gemini client.
+- `deepseek` — e.g. `LLM_MODEL=deepseek-v4-pro`. Native DeepSeek client.
+- `openai-compatible` — any OpenAI-compatible server; additionally requires `LLM_BASE_URL`.
 
 The native providers (`openai`, `anthropic`, `google`, `deepseek`) talk to each vendor's own API through its
 dedicated Koog client, so `LLM_MODEL` must be a model id the client knows. An unrecognized id fails at startup

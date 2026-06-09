@@ -34,8 +34,8 @@ See [features.md](docs/features.md) for the full list.
 
 Built on [Koog](https://github.com/JetBrains/koog) — JetBrains' Kotlin agent framework — with
 [ktgbotapi](https://github.com/InsanusMokrassar/ktgbotapi) for Telegram and Exposed/SQLite for
-storage. Works with OpenAI (default), Anthropic, Google, DeepSeek, or any OpenAI-compatible
-server — see [configuration.md](docs/configuration.md#llm-provider).
+storage. Works with OpenAI, Anthropic, Google, DeepSeek, or any OpenAI-compatible server — see
+[configuration.md](docs/configuration.md#llm-provider).
 
 For a tour of the layers and how a message flows through them, see
 [architecture.md](docs/architecture.md).
@@ -55,12 +55,14 @@ Copy the env template:
 cp .env.example .env
 ```
 
-Only three values are required to start (see
+Only a few values are required to start (see
 [minimum setup](docs/configuration.md#minimum-setup)); everything else is optional:
 
 ```dotenv
 ALLOWED_IDS=123456789,-1001234567890
 TELEGRAM_BOT_TOKEN=1234567890:qwerty
+LLM_PROVIDER=openai
+LLM_MODEL=gpt-5.4-mini
 LLM_API_KEY=sk-proj-qwerty
 ```
 
