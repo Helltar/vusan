@@ -17,7 +17,7 @@ private const val MAX_ERROR_CHARS = 500
 private const val MAX_MEDIA_GROUP = 10
 private const val MAX_INPUT_FILE_BYTES = 10 * 1024 * 1024
 
-// Only surface run time when it's meaningful — below this it's noise the model would parrot.
+// only surface run time when it's meaningful — below this it's noise the model would parrot.
 private const val SLOW_RUN_MS = 1_000
 
 private val IMAGE_EXTENSIONS = setOf("png", "jpg", "jpeg", "webp", "bmp")
@@ -49,7 +49,8 @@ class SandboxTools(
         val (imageFiles, otherFiles) = nonAnimationFiles.partition { it.name.isImageName() }
 
         val (animations, animationFallbacks) = encodeAnimations(animationFiles)
-        val photos = imageFiles.mapNotNull { it.toPhoto() }
+        // inline previews fit a single Telegram album; anything beyond still arrives as a document copy.
+        val photos = imageFiles.mapNotNull { it.toPhoto() }.take(MAX_MEDIA_GROUP)
         val imageDocuments = imageFiles.mapNotNull { it.toDocument() }
         val documents = otherFiles.mapNotNull { it.toDocument() }
 
@@ -57,10 +58,10 @@ class SandboxTools(
 
         when {
             photos.size == 1 -> outbox.enqueue(photos.single())
-            photos.size >= 2 -> outbox.enqueue(BotOutput.PhotoGroup(photos.take(MAX_MEDIA_GROUP)))
+            photos.size >= 2 -> outbox.enqueue(BotOutput.PhotoGroup(photos))
         }
 
-        // Telegram recompresses inline photos to JPEG, softening chart text. Send each image again as
+        // telegram recompresses inline photos to JPEG, softening chart text. Send each image again as
         // an uncompressed document so a pixel-perfect copy is available alongside the inline preview.
         // Animations that ffmpeg could not encode ride along as their original APNG/GIF document.
         enqueueDocuments(imageDocuments + documents + animationFallbacks)
@@ -90,9 +91,11 @@ class SandboxTools(
                     appendLine("</stderr>")
                 }
 
+                // image documents mirror the photo previews one-to-one (same filenames), so listing
+                // them covers every delivered image — including ones beyond the inline album cap.
                 val sent =
                     animations.map { it.filename } + animationFallbacks.map { it.filename } +
-                            photos.map { it.filename } + documents.map { it.filename }
+                            imageDocuments.map { it.filename } + documents.map { it.filename }
 
                 if (sent.isNotEmpty()) {
                     appendLine(
@@ -139,14 +142,14 @@ class SandboxTools(
 
     private class InputFileResult(val file: SandboxFile?, val note: String?)
 
-    // Deliver documents as an album (one message) instead of one message per file; a lone document goes on its own.
+    // deliver documents as an album (one message) instead of one message per file; a lone document goes on its own.
     private fun enqueueDocuments(documents: List<BotOutput.Document>) {
         documents.chunked(MAX_MEDIA_GROUP).forEach { chunk ->
             if (chunk.size == 1) outbox.enqueue(chunk.single()) else outbox.enqueue(BotOutput.DocumentGroup(chunk))
         }
     }
 
-    // Encode each animation (APNG/GIF) into a looping MP4; if ffmpeg is unavailable or fails,
+    // encode each animation (APNG/GIF) into a looping MP4; if ffmpeg is unavailable or fails,
     // keep the original bytes as a document so the animation still reaches the chat.
     private suspend fun encodeAnimations(
         files: List<SandboxFile>
@@ -191,7 +194,7 @@ class SandboxTools(
         runCatching { Base64.getDecoder().decode(base64) }.getOrNull()?.takeIf { it.isNotEmpty() }
 }
 
-// Files the sandbox produced but could not return (over the per-file size cap or the per-run file count).
+// files the sandbox produced but could not return (over the per-file size cap or the per-run file count).
 // Surfaced to the model so it can tell the user instead of silently claiming success.
 private fun skippedFilesNote(skipped: List<SkippedFile>): String? {
     if (skipped.isEmpty()) return null
