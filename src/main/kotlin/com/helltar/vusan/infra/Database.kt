@@ -4,8 +4,10 @@ import com.helltar.vusan.config.AppConfig
 import com.helltar.vusan.infra.tables.ChatMessagesTable
 import com.helltar.vusan.infra.tables.MemoryTable
 import com.helltar.vusan.infra.tables.ScheduledTasksTable
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
+import kotlinx.coroutines.withContext
 import org.jetbrains.exposed.v1.jdbc.Database
 import org.jetbrains.exposed.v1.jdbc.JdbcTransaction
 import org.jetbrains.exposed.v1.jdbc.SchemaUtils
@@ -81,8 +83,11 @@ object Db {
         }
     }
 
+    // exposed's JDBC suspendTransaction runs the blocking driver calls on the caller's dispatcher;
+    // hop to Dispatchers.IO so a contended SQLite write (busy_timeout up to 5s) never stalls the
+    // long-polling or agent coroutines.
     suspend fun <T> dbTransaction(block: suspend JdbcTransaction.() -> T): T {
         val currentDatabase = checkNotNull(database) { "Database is not connected" }
-        return suspendTransaction(currentDatabase) { block() }
+        return withContext(Dispatchers.IO) { suspendTransaction(currentDatabase) { block() } }
     }
 }
