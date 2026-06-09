@@ -9,6 +9,7 @@ import com.helltar.vusan.i18n.Language
 import com.helltar.vusan.i18n.Messages
 import com.helltar.vusan.request.AttachedFile
 import dev.inmo.kslog.common.KSLog
+import dev.inmo.kslog.common.LogLevel
 import dev.inmo.tgbotapi.bot.TelegramBot
 import dev.inmo.tgbotapi.extensions.api.bot.getMe
 import dev.inmo.tgbotapi.extensions.api.chat.get.getChat
@@ -48,7 +49,15 @@ internal class TelegramBotRunner(
     )
 
     init {
-        KSLog.default = KSLog { _, _, message: Any, _ -> log.debug { message } }
+        // ktgbotapi reports long-polling and handler failures through KSLog; keep the level and the
+        // throwable so those errors surface in the app log instead of vanishing as bare debug lines.
+        KSLog.default = KSLog { level: LogLevel, _, message: Any, throwable: Throwable? ->
+            when (level) {
+                LogLevel.ERROR, LogLevel.ASSERT -> log.error(throwable) { message.toString() }
+                LogLevel.WARNING -> log.warn(throwable) { message.toString() }
+                else -> log.debug(throwable) { message.toString() }
+            }
+        }
     }
 
     suspend fun start(): Job {
