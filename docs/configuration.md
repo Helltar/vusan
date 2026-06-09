@@ -98,7 +98,7 @@ Unset both variables to use the built-in persona.
 | `SYSTEM_PROMPT_FILE` | Path to a persona file. Used only when `SYSTEM_PROMPT` is unset; unreadable files fail startup. |
 
 `SYSTEM_PROMPT_FILE` suits a long, multi-line persona — a file keeps line breaks and formatting readable, where
-`SYSTEM_PROMPT` is meant for short inline text.
+`SYSTEM_PROMPT` is meant for short inline text. A file whose content is blank falls back to the built-in persona.
 
 ## Optional tools
 
