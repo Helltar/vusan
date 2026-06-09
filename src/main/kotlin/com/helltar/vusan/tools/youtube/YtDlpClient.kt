@@ -11,9 +11,9 @@ import java.util.concurrent.TimeUnit
 import kotlin.time.Duration
 import kotlin.time.Duration.Companion.seconds
 
+// stderr is merged into stdout (`redirectErrorStream(true)`), so one stream carries everything.
 data class YtDlpCommandResult(
     val stdout: String,
-    val stderr: String,
     val exitCode: Int,
     val timedOut: Boolean = false
 )
@@ -250,11 +250,9 @@ class YtDlpClient(
         }
 
         if (result.exitCode != 0) {
-            val combined = result.stderr.ifBlank { result.stdout }
-
             log.warn {
                 "yt-dlp search exit ${result.exitCode} for query=[${query.take(120)}] " +
-                        "${authDiagnostics()}: ${combined.take(500)}"
+                        "${authDiagnostics()}: ${result.stdout.take(500)}"
             }
 
             return emptyList()
@@ -330,7 +328,7 @@ class YtDlpClient(
                             "stepping resolution down"
                 }
             } else {
-                // Success, or a non-size error (auth/extract/format) that a lower resolution would not fix.
+                // success, or a non-size error (auth/extract/format) that a lower resolution would not fix.
                 return attempt
             }
         }
@@ -389,44 +387,44 @@ class YtDlpClient(
         query: String,
         maxFileSizeMb: Int
     ): DownloadAttempt<Nothing> {
-        val combined = commandResult.stderr.ifBlank { commandResult.stdout }
+        val output = commandResult.stdout
 
         return when {
-            combined.containsAny("File is larger than max-filesize") -> {
+            output.containsAny("File is larger than max-filesize") -> {
                 log.warn { "yt-dlp download rejected by max-filesize url=[$url] maxFileSizeMb=$maxFileSizeMb" }
                 DownloadAttempt(YtDlpResult.TooLarge(sizeBytes = maxFileSizeMb.toLong() * 1024 * 1024))
             }
 
-            combined.containsAny("Sign in to confirm you", "confirm your age", "cookies-from-browser") -> {
+            output.containsAny("Sign in to confirm you", "confirm your age", "cookies-from-browser") -> {
                 log.warn {
                     "yt-dlp download requires auth url=[$url] query=[${query.take(120)}] " +
-                            "${authDiagnostics()}: ${combined.take(500)}"
+                            "${authDiagnostics()}: ${output.take(500)}"
                 }
 
                 DownloadAttempt(YtDlpResult.AuthRequired)
             }
 
-            combined.containsAny("No video results", "Unable to extract") -> {
+            output.containsAny("No video results", "Unable to extract") -> {
                 log.warn {
                     "yt-dlp download could not extract candidate url=[$url] " +
-                            "query=[${query.take(120)}]: ${combined.take(500)}"
+                            "query=[${query.take(120)}]: ${output.take(500)}"
                 }
 
                 DownloadAttempt(YtDlpResult.NotFound, retryable = true)
             }
 
             else -> {
-                val retryable = combined.contains(FORMAT_UNAVAILABLE_MARKER, ignoreCase = true)
+                val retryable = output.contains(FORMAT_UNAVAILABLE_MARKER, ignoreCase = true)
 
                 log.warn {
                     "yt-dlp download exit ${commandResult.exitCode} retryable=$retryable " +
-                            "query=[${query.take(120)}] url=[$url]: ${combined.take(500)}"
+                            "query=[${query.take(120)}] url=[$url]: ${output.take(500)}"
                 }
 
                 if (retryable) logUnavailableFormatsDiagnostics(url, query)
 
                 DownloadAttempt(
-                    YtDlpResult.Failure("yt-dlp exit ${commandResult.exitCode}: ${combined.take(200)}"),
+                    YtDlpResult.Failure("yt-dlp exit ${commandResult.exitCode}: ${output.take(200)}"),
                     retryable = retryable
                 )
             }
@@ -443,10 +441,10 @@ class YtDlpClient(
             if (!finishedInTime) {
                 process.destroyForcibly()
                 val stdout = outputDeferred.awaitWithin(1.seconds)
-                YtDlpCommandResult(stdout = stdout, stderr = "", exitCode = -1, timedOut = true)
+                YtDlpCommandResult(stdout = stdout, exitCode = -1, timedOut = true)
             } else {
                 val stdout = outputDeferred.awaitWithin(5.seconds)
-                YtDlpCommandResult(stdout = stdout, stderr = "", exitCode = process.exitValue())
+                YtDlpCommandResult(stdout = stdout, exitCode = process.exitValue())
             }
         } finally {
             if (process.isAlive) {
@@ -511,7 +509,7 @@ class YtDlpClient(
         log.info { "yt-dlp list-formats start url=[$url] query=[${query.take(120)}] ${authDiagnostics()}" }
 
         val result = runCommand(command)
-        val output = result.stderr.ifBlank { result.stdout }.trim()
+        val output = result.stdout.trim()
 
         when {
             result.timedOut -> log.warn { "yt-dlp list-formats timed out url=[$url] query=[${query.take(120)}]" }
