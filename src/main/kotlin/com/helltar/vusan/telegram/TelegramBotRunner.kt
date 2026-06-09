@@ -5,6 +5,7 @@ import com.helltar.vusan.agent.AgentRunner
 import com.helltar.vusan.agent.history.ChatHistoryRepository
 import com.helltar.vusan.common.collapseWhitespaceAndCap
 import com.helltar.vusan.common.rethrowIfCancellation
+import com.helltar.vusan.common.xmlBlock
 import com.helltar.vusan.i18n.Language
 import com.helltar.vusan.i18n.Messages
 import com.helltar.vusan.request.AttachedFile
@@ -76,10 +77,11 @@ internal class TelegramBotRunner(
             onCommand("start", markerFactory = null) { handleStartCommand(it, botProfile) }
             onText(markerFactory = null) { handleTextUpdate(it, botProfile) }
             onSticker(markerFactory = null) { handleStickerUpdate(it, botProfile) }
-            onVoice(markerFactory = null) { handleVoiceUpdate(it, botProfile) }
-            onAudio(markerFactory = null) { handleAudioUpdate(it, botProfile) }
-            onDocument(markerFactory = null) { handleDocumentUpdate(it, botProfile) }
-            onPhoto(markerFactory = null) { handlePhotoUpdate(it, botProfile) }
+            onVoice(markerFactory = null) { handleTranscribableUpdate(it, it.content.media.toAudioInput(), botProfile, "voice") }
+            onAudio(markerFactory = null) { handleTranscribableUpdate(it, it.content.media.toAudioInput(), botProfile, "audio") }
+            onDocument(markerFactory = null) { handleMediaUpdate(it, botProfile, inputKind = "document") }
+            onPhoto(markerFactory = null) { handleMediaUpdate(it, botProfile, inputKind = "photo") }
+            onVisualGalleryMessages(markerFactory = null) { handleGalleryUpdate(it, botProfile) }
         }
     }
 
@@ -102,27 +104,20 @@ internal class TelegramBotRunner(
         dispatchToAgent(message, userText, botProfile, inputKind = "text")
     }
 
-    private suspend fun handleVoiceUpdate(message: CommonMessage<VoiceContent>, botProfile: BotProfile) {
+    private suspend fun handleTranscribableUpdate(
+        message: CommonMessage<out TextedContent>,
+        audioInput: AudioInput,
+        botProfile: BotProfile,
+        inputKind: String
+    ) {
         if (!message.isAccepted(botProfile)) return
 
         handleTranscribedAudio(
             message = message,
-            audioInput = message.content.media.toAudioInput(),
+            audioInput = audioInput,
             caption = sanitizeUserText(message.content, botProfile.userId, botProfile.username),
             botProfile = botProfile,
-            inputKind = "voice"
-        )
-    }
-
-    private suspend fun handleAudioUpdate(message: CommonMessage<AudioContent>, botProfile: BotProfile) {
-        if (!message.isAccepted(botProfile)) return
-
-        handleTranscribedAudio(
-            message = message,
-            audioInput = message.content.media.toAudioInput(),
-            caption = sanitizeUserText(message.content, botProfile.userId, botProfile.username),
-            botProfile = botProfile,
-            inputKind = "audio"
+            inputKind = inputKind
         )
     }
 
@@ -184,12 +179,6 @@ internal class TelegramBotRunner(
         dispatchToAgent(message, prompt, botProfile, inputKind = "sticker", loadRepliedAttachment = false)
     }
 
-    private suspend fun handleDocumentUpdate(message: CommonMessage<DocumentContent>, botProfile: BotProfile) =
-        handleMediaUpdate(message, botProfile, inputKind = "document")
-
-    private suspend fun handlePhotoUpdate(message: CommonMessage<PhotoContent>, botProfile: BotProfile) =
-        handleMediaUpdate(message, botProfile, inputKind = "photo")
-
     private suspend fun handleMediaUpdate(message: CommonMessage<*>, botProfile: BotProfile, inputKind: String) {
         if (!message.isAccepted(botProfile)) return
 
@@ -208,17 +197,40 @@ internal class TelegramBotRunner(
         )
     }
 
-    private suspend fun CommonMessage<*>.usableReplySummary(botProfile: BotProfile): RepliedMessageSummary? =
-        if (isReplyToOtherUser(replyAuthorIdOrNull(), botProfile.userId))
-            replySummaryOrNull(bot, voiceTranscriber)
-        else
-            null
+    // albums (media groups) arrive as a single message with `MediaGroupContent`, not as separate
+    // photo/document updates. Only the first photo is loadable as the attached file; the model is
+    // told about the rest so it does not claim to have inspected every item.
+    private suspend fun handleGalleryUpdate(
+        message: CommonMessage<MediaGroupContent<VisualMediaGroupPartContent>>,
+        botProfile: BotProfile
+    ) {
+        if (!message.isAccepted(botProfile)) return
 
-    private fun CommonMessage<*>.usableReplyToMessageId(botProfile: BotProfile): Long? =
-        if (isReplyToOtherUser(replyAuthorIdOrNull(), botProfile.userId))
-            replyToMessageIdOrNull()
-        else
-            null
+        val parts = message.content.group.map { it.content }
+        val photos = parts.filterIsInstance<PhotoContent>()
+
+        val caption =
+            message.content.captionedContentOrNull()
+                ?.let { sanitizeUserText(it, botProfile.userId, botProfile.username) }
+                .orEmpty()
+                .ifBlank { MEDIA_ONLY_PROMPT }
+
+        val albumContext =
+            xmlBlock(
+                "album",
+                "User sent an album of ${parts.size} media item(s), ${photos.size} of them photo(s). " +
+                        "Only the first photo is available as the attached file; " +
+                        "mention this if the request depends on the other items."
+            )
+
+        dispatchToAgent(
+            message,
+            "$albumContext\n\n$caption",
+            botProfile,
+            inputKind = "gallery",
+            attachedFile = photos.firstOrNull()?.toAttachedFileOrNull(bot)
+        )
+    }
 
     private fun CommonMessage<*>.isAccepted(botProfile: BotProfile): Boolean {
         if (!shouldHandle(this, botProfile.userId, botProfile.username))
@@ -258,7 +270,9 @@ internal class TelegramBotRunner(
         loadRepliedAttachment: Boolean = true,
         attachedFile: AttachedFile? = null
     ) {
-        val replySummary = message.usableReplySummary(botProfile)
+        val replyToOtherUser = isReplyToOtherUser(message.replyAuthorIdOrNull(), botProfile.userId)
+        val replySummary = if (replyToOtherUser) message.replySummaryOrNull(bot, voiceTranscriber) else null
+
         val effectiveAttachedFile =
             attachedFile
                 ?: if (loadRepliedAttachment) replySummary?.let { message.repliedAttachedFileOrNull(bot) } else null
@@ -271,7 +285,7 @@ internal class TelegramBotRunner(
                 effectiveAttachedFile?.let { "${attachedFileContextBlock(it)}\n\n$baseAgentInput" } ?: baseAgentInput,
             historyInput = replySummary?.let { formatHistoryInput(prompt, it) } ?: prompt,
             attachedFile = effectiveAttachedFile,
-            replyToMessageId = message.usableReplyToMessageId(botProfile),
+            replyToMessageId = if (replyToOtherUser) message.replyToMessageIdOrNull() else null,
             inputKind = inputKind
         )
     }

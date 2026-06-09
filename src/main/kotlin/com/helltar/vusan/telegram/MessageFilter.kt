@@ -1,6 +1,8 @@
 package com.helltar.vusan.telegram
 
 import dev.inmo.tgbotapi.types.message.abstracts.CommonMessage
+import dev.inmo.tgbotapi.types.message.content.MediaGroupContent
+import dev.inmo.tgbotapi.types.message.content.MessageContent
 import dev.inmo.tgbotapi.types.message.content.TextContent
 import dev.inmo.tgbotapi.types.message.content.TextedContent
 import dev.inmo.tgbotapi.types.message.textsources.BotCommandTextSource
@@ -11,13 +13,22 @@ internal fun shouldHandle(message: CommonMessage<*>, botUserId: Long, botUsernam
     if (message.isPrivateChat) return true
 
     val isReplyToBot = message.replyAuthorIdOrNull() == botUserId
-    val content = message.content as? TextedContent ?: return isReplyToBot
+    val content = message.content.captionedContentOrNull() ?: return isReplyToBot
 
     return isReplyToBot ||
         hasBotMention(content, botUsername) ||
         hasBotTextMention(content, botUserId) ||
         hasTargetedBotCommand(content, botUsername)
 }
+
+// an album (media group) carries its caption on whichever part the sender attached it to — not
+// necessarily the first, which is all `MediaGroupContent.text` exposes — so scan the parts.
+internal fun MessageContent.captionedContentOrNull(): TextedContent? =
+    when (this) {
+        is MediaGroupContent<*> -> group.map { it.content }.firstOrNull { !it.text.isNullOrBlank() }
+        is TextedContent -> this
+        else -> null
+    }
 
 internal fun isBotCommand(content: TextContent): Boolean =
     content.textSources.firstOrNull() is BotCommandTextSource

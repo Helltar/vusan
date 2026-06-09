@@ -17,7 +17,7 @@ Telegram ──► telegram/ ──► agent/ ──► tools/ ──► externa
 
 | Package     | Responsibility                                                                                                                                                                                                                                                                                                                                        |
 |-------------|-------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
-| `telegram/` | Telegram I/O. Receives updates (text/voice/audio/sticker/photo/document), filters by allowlist, normalizes input, and delivers agent results back — including markdown, reply-anchor, media/document, media-group, and private-message fallbacks.                                                                                                     |
+| `telegram/` | Telegram I/O. Receives updates (text/voice/audio/sticker/photo/document/album), filters by allowlist, normalizes input, and delivers agent results back — including markdown, reply-anchor, media/document, media-group, and private-message fallbacks.                                                                                               |
 | `agent/`    | Agent orchestration on top of Koog. `AgentRunner` serializes per-user turns; `AgentFactory` builds the `AIAgent` (system prompt + history + memory + tools). `agent/history/` summarizes and persists chat turns; `agent/memory/` stores durable user/group memory that survives a history clear and is injected as `<user_memory>`/`<group_memory>`. |
 | `tools/`    | Agent-callable tools, one subpackage per capability (search, voice, vision, scheduled tasks, …). `ToolRegistryFactory` owns clients and builds a per-request registry from required tools plus optional tools whose env/config is present. See [features.md](features.md).                                                                            |
 | `outbox/`   | The output model. `BotOutput` is the immutable sealed set of things the bot can send (text, photo, voice, audio, video, document, poll, reaction, …); `BotOutbox` is the per-request queue tools write into, holding each `BotOutput` as an `OutboxItem` that captures its private-routing decision.                                                  |
@@ -34,7 +34,9 @@ Telegram ──► telegram/ ──► agent/ ──► tools/ ──► externa
 A normal user message travels:
 
 1. **Receive** — `TelegramBotRunner` handles the long-polling update (`onText`/`onVoice`/`onAudio`/`onSticker`/
-   `onDocument`).
+   `onDocument`/`onPhoto`/`onVisualGalleryMessages`). Albums (media groups) arrive as one message; the caption may sit
+   on any album part, only the first photo becomes the `AttachedFile`, and the agent is told how many items it cannot
+   see.
 2. **Filter** — `MessageFilter.shouldHandle` drops messages the bot shouldn't answer (in groups: only replies, mentions,
    or targeted commands);
    `TelegramBotRunner` then checks the allowlist (`ALLOWED_IDS`) and rejects unknown chats/users.
