@@ -19,6 +19,7 @@ internal object SandboxToolDescriptions {
                 "Save a chart to a file such as `chart.png`. " +
                 "Save an animation or simulation to a `.apng` file (e.g. matplotlib `FuncAnimation` saved with `PillowWriter` to `simulation.apng`) — it is delivered to the chat as a looping video, so prefer `.apng` over `.gif` to keep full color. Keep it cheap to render: a few dozen frames at a small figure size and modest dpi, or it may hit the time limit. " +
                 "Write any other output files into the working directory; every file there is delivered to the user automatically, including files inside subfolders (for example images extracted from a `.zip`). Save the real file bytes — never write a placeholder that points at another path. " +
+                "When transforming an attached file, save the result under a new filename — a file that keeps an input file's name counts as the user's own upload and is not delivered. " +
                 "When drawing text on an image with Pillow, load a Unicode font with `ImageFont.truetype(\"/fonts/DejaVuSans.ttf\", size)` (use `/fonts/DejaVuSans-Bold.ttf` for bold) — it covers Latin and Cyrillic. Never use `ImageFont.load_default()` or OS font paths; they lack Cyrillic and render boxes. " +
                 "There is no network access."
 }
