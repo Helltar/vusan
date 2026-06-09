@@ -11,13 +11,9 @@ import com.helltar.vusan.tools.requireToolText
 import com.helltar.vusan.tools.suspendToolGuard
 import java.time.Instant
 import java.time.ZoneId
-import java.time.ZonedDateTime
-import java.time.format.DateTimeFormatter
 
 private const val MAX_PROMPT_CHARS = 1000
 private const val MAX_TITLE_CHARS = 120
-
-private val DISPLAY_FORMAT = DateTimeFormatter.ofPattern("yyyy-MM-dd'T'HH:mm")
 
 @Suppress("unused")
 class TaskTools(
@@ -137,8 +133,3 @@ private fun formatTaskLine(task: ScheduledTask): String =
         task.title?.let { append(", title=\"").append(it).append('"') }
         append(", prompt=\"").append(task.prompt).append('"')
     }
-
-private fun formatFire(instant: Instant, tz: ZoneId): String {
-    val zoned = ZonedDateTime.ofInstant(instant, tz)
-    return "${DISPLAY_FORMAT.format(zoned)} ${tz.id}"
-}

@@ -74,7 +74,8 @@ A normal user message travels:
   through `AgentRunner.handleScheduled` (waits for the user lock instead of bailing), are delivered with
   `TelegramDelivery.sendScheduled`, and then append produced history turns. Tasks overdue beyond
   `TASK_MAX_LATENESS_MINUTES` (e.g. after downtime) get a "missed" notice and are advanced/disabled rather than fired.
-  Recurrence math lives in `tasks/Recurrence.kt`.
+  A task whose run fails is still advanced/disabled (logged, no retry) so a persistent error cannot re-fire it on every
+  poll tick. Recurrence math lives in `tasks/Recurrence.kt`.
 - **History summarization** — `agent/history/ChatHistory.summarizeForPrompt` keeps recent turns verbatim and condenses
   older ones so the prompt stays within
   budget while keeping tool-call/result pairs anchored.

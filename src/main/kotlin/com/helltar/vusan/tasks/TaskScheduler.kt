@@ -13,9 +13,6 @@ import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import java.time.Instant
-import java.time.ZoneId
-import java.time.ZonedDateTime
-import java.time.format.DateTimeFormatter
 import kotlin.time.Duration
 
 class TaskScheduler(
@@ -28,7 +25,6 @@ class TaskScheduler(
 ) {
 
     private companion object {
-        val DISPLAY: DateTimeFormatter = DateTimeFormatter.ofPattern("yyyy-MM-dd'T'HH:mm")
         val log = KotlinLogging.logger {}
     }
 
@@ -71,7 +67,14 @@ class TaskScheduler(
             return
         }
 
-        fire(task)
+        // reschedule even when the run itself fails: a task left due would be retried on every
+        // poll tick, re-running the full agent indefinitely on a persistent error.
+        runCatching { fire(task) }
+            .onFailure {
+                it.rethrowIfCancellation()
+                log.error(it) { "task id=${task.id} run failed; rescheduling without retry" }
+            }
+
         rescheduleAfterFire(task, now)
     }
 
@@ -160,11 +163,6 @@ class TaskScheduler(
             appendXmlAttr("recurrence", task.recurrence.display)
             append('>')
         }
-
-    private fun formatFire(instant: Instant, tz: ZoneId): String {
-        val zoned = ZonedDateTime.ofInstant(instant, tz)
-        return "${DISPLAY.format(zoned)} ${tz.id}"
-    }
 
     private fun attributionFor(task: ScheduledTask): ScheduledAttribution? {
         if (task.chatIsPrivate) return null
