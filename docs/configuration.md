@@ -33,10 +33,10 @@ required. The chosen model must support tool calling.
 
 Provider options:
 
-- `openai` — e.g. `LLM_MODEL=gpt-5.4-mini`.
-- `anthropic` — e.g. `LLM_MODEL=claude-sonnet-4-6`.
-- `google` — e.g. `LLM_MODEL=gemini-2.5-flash`.
-- `deepseek` — e.g. `LLM_MODEL=deepseek-v4-pro`.
+- `openai` — e.g. `gpt-5.4-mini`.
+- `anthropic` — e.g. `claude-sonnet-4-6`.
+- `google` — e.g. `gemini-2.5-flash`.
+- `deepseek` — e.g. `deepseek-v4-pro`.
 - `openai-compatible` — any OpenAI-compatible server; additionally requires `LLM_BASE_URL`.
 
 The native providers (`openai`, `anthropic`, `google`, `deepseek`) talk to each vendor's own API through its
