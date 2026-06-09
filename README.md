@@ -18,12 +18,12 @@ Try it live in the [Vusan Playground](https://t.me/+56qi5dDwsNszZWFi) Telegram g
 
 ## Highlights
 
-- **Voice in and out** — transcribes voice messages (OpenAI STT) and replies with generated
-  speech (ElevenLabs).
-- **Vision** — understands photos and image documents, including replied-to ones.
 - **Code execution** — runs Python in an isolated sandbox: exact math, file transforms, charts,
   and animations.
-- **Scheduled tasks** — autonomous future turns: once, at a fixed interval, or on a cron
+- **Vision** — understands photos and image documents.
+- **Voice in and out** — transcribes voice messages (OpenAI STT) and replies with generated
+  speech (ElevenLabs).
+- **Scheduled tasks** — the bot acts on its own later: once, on an interval, or on a cron
   schedule.
 - **Durable memory** — per-user and per-group memory that survives chat-history clears.
 - **And more** — web search, GIFs, YouTube video/audio, currency rates, native polls and quizzes,
