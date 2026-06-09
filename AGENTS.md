@@ -96,10 +96,12 @@ Update docs in the same change as behavior:
 - Avoid `!!`; prove non-null via smart cast, `requireNotNull`, or `checkNotNull`.
 - Use Java APIs only when Kotlin has no reasonable equivalent.
 - Do not suppress compiler warnings without a specific reason.
-- Start KDoc summaries with an uppercase letter. Start ordinary `//` comments
-  with a lowercase letter, like commit subjects. Keep code identifiers and
-  acronyms (`RunResponse`, `WAL`, `URL`) as written; later sentences inside a
-  comment are capitalized normally.
+- Comment sparingly: code should explain itself through naming and structure.
+  Comment only non-obvious constraints, invariants, or surprising behavior,
+  and say why, not what the code does. Never leave commented-out code.
+- KDoc is normal prose: sentences start with an uppercase letter. Ordinary
+  `//` comments are entirely lowercase, including sentences after a period.
+  Keep code identifiers and acronyms (`RunResponse`, `WAL`, `URL`) as written.
 - Prefer raw strings for text containing quotes when readable.
 - In logs, delimit values as `key=[value]`, not `key="value"`.
 - Use `kotlin.time.Duration` overloads (`delay(5.seconds)`,
@@ -205,9 +207,15 @@ Tool rules:
 
 ## Commit Instructions
 
-- Follow existing commit style: lowercase subject, concise phrase.
-- Use a scope when it clarifies the affected area, e.g.
-  `sandbox: avoid duplicate image documents`.
+- Subject format: `scope: imperative lowercase phrase`, no trailing period,
+  at most ~65 characters, e.g. `sandbox: avoid duplicate image documents`.
+- Scope is the affected package or area (`telegram`, `agent`, `sandbox`,
+  `infra`, `config`, `tasks`, `docs`, `style`). Omit it only for genuinely
+  repo-wide changes.
+- Describe what the commit does, not what you did: `handle photo albums`,
+  not `handled` / `handling`.
+- Subject alone is usually enough. Add a body only when the why is not
+  obvious from the diff; wrap it at 72 characters.
 - Do not mix unrelated work in one commit.
 
 ## External References
