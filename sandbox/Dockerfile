@@ -1,11 +1,9 @@
-FROM alpine:3.22@sha256:310c62b5e7ca5b08167e4384c68db0fd2905dd9c7493756d356e893909057601 AS base
+# the official image pins the exact Deno version; alpine variant keeps apk for the font step below
+FROM denoland/deno:alpine-2.8.2@sha256:e2a641dfee05544402cf0b149a41458bd373a8f47bff6544834177ded55d662d AS base
 WORKDIR /app
 
+# the image ships a non-root `deno` user (uid/gid 1000) used below
 ENV DENO_DIR=/deno-dir
-
-RUN apk add --no-cache deno && \
-    addgroup -S -g 1000 sandbox && \
-    adduser -S -D -u 1000 -G sandbox -h /home/sandbox -s /sbin/nologin sandbox
 
 # matplotlib glyph-fallback fonts. CJK is large, so pull it from the package and
 # keep only the Sans Regular face; emoji (monochrome) and symbols are vendored.
@@ -22,9 +20,9 @@ COPY deno.json packages.ts warmup.ts worker.ts main.ts ./
 # the image; at runtime the service runs offline (no --allow-write).
 RUN deno cache main.ts worker.ts warmup.ts && \
     deno task warmup && \
-    chown -R sandbox:sandbox /app /deno-dir
+    chown -R deno:deno /app /deno-dir
 
-USER sandbox:sandbox
+USER deno:deno
 
 ENV PORT=8080
 EXPOSE 8080
