@@ -54,7 +54,7 @@ object Db {
                 url = requestedSpec.url,
                 setupConnection = { connection ->
                     connection.createStatement().use { stmt ->
-                        // WAL lets readers and writers proceed concurrently and is sticky once set
+                        // database WAL mode lets readers and writers proceed concurrently and is sticky once set
                         // (stored in the DB file header). busy_timeout makes writers wait instead of
                         // failing fast on contention. synchronous=NORMAL trims redundant fsyncs in WAL
                         // mode without losing durability for committed transactions.

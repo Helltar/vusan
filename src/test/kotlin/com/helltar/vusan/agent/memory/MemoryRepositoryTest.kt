@@ -37,7 +37,7 @@ class MemoryRepositoryTest {
 
         repo.add(MemoryScope.USER, ownerId = 100L, content = "alice detail")
         repo.add(MemoryScope.USER, ownerId = 200L, content = "bob detail")
-        // Same numeric owner as the user above, but a different scope — must not bleed across.
+        // same numeric owner as the user above, but a different scope — must not bleed across.
         repo.add(MemoryScope.CHAT, ownerId = 100L, content = "group detail")
 
         assertEquals(listOf("alice detail"), repo.load(MemoryScope.USER, 100L).map { it.content })
@@ -80,7 +80,7 @@ class MemoryRepositoryTest {
         val repo = MemoryRepository()
         val id = repo.add(MemoryScope.USER, ownerId = 100L, content = "alice detail")
 
-        // A different user (200) cannot delete user 100's memory, even with its id.
+        // a different user (200) cannot delete user 100's memory, even with its id.
         assertFalse(repo.forget(id, userId = 200L, chatId = -1L))
         assertEquals(listOf("alice detail"), repo.load(MemoryScope.USER, 100L).map { it.content })
     }
@@ -90,7 +90,7 @@ class MemoryRepositoryTest {
         val repo = MemoryRepository()
         val id = repo.add(MemoryScope.CHAT, ownerId = -500L, content = "group detail")
 
-        // Member's own userId differs, but the chatId matches the entry's owner chat.
+        // member's own userId differs, but the chatId matches the entry's owner chat.
         assertTrue(repo.forget(id, userId = 100L, chatId = -500L))
         assertTrue(repo.load(MemoryScope.CHAT, -500L).isEmpty())
     }

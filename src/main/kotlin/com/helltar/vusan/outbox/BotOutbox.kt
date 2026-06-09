@@ -14,7 +14,7 @@ class BotOutbox {
         get() = items.toList()
 
     fun enqueue(item: BotOutput) {
-        // Reactions always target a specific message in the current chat —
+        // reactions always target a specific message in the current chat —
         // they must never be routed to the sender's DMs by `useDirectMessages`.
         val toPrivate = redirectToPrivate && item !is BotOutput.Reaction
         items += OutboxItem(item, toPrivate)

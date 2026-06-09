@@ -161,7 +161,7 @@ class AgentRunner(
         return AgentResult(outputs, comment, outbox.redirectToPrivate, historyTurns)
     }
 
-    // Pick the user-facing reply and log accordingly. LLM provider errors arrive as a large JSON body, so
+    // pick the user-facing reply and log accordingly. LLM provider errors arrive as a large JSON body, so
     // they get a single capped WARN line; a transient overload (429/503) gets a friendly "try again" reply,
     // any other provider error and genuine unexpected failures get the generic fallback (the latter with a
     // full stack trace, since it points at a real bug).
@@ -201,7 +201,7 @@ private const val TOOL_OUTPUT_MAX_CHARS = 4_000
 private const val LOG_REPLY_MAX_CHARS = 300
 private const val PROVIDER_ERROR_LOG_MAX_CHARS = 300
 
-// The provider's HTTP status is embedded in the client exception message ("Status code: 429").
+// the provider's HTTP status is embedded in the client exception message ("Status code: 429").
 // 429 (rate limit / quota) and 503 (service overloaded) are transient — the provider asks us to back off.
 private val TRANSIENT_STATUS_REGEX = Regex("""Status code:\s*(429|503)""")
 
@@ -253,9 +253,9 @@ private fun assistantTextForHistory(outputs: List<OutboxItem>, comment: String?)
     return parts.takeIf { it.isNotEmpty() }?.joinToString("\n\n")
 }
 
-// Tools whose payload is fully duplicated by the assistant text row. Skipping their
-// TOOL_CALL/TOOL_RESULT pair avoids storing (and replaying) the same content twice.
-// Koog registers each tool under its function name (no tool here sets @Tool(customName)),
+// tools whose payload is fully duplicated by the assistant text row. Skipping their
+// matching TOOL_CALL/TOOL_RESULT pair avoids storing (and replaying) the same content twice.
+// the Koog runtime registers each tool under its function name (no tool here sets @Tool(customName)),
 // so a function reference stays in sync with the registered name across renames.
 private val TEXT_DUPLICATING_TOOLS = setOf(MessageTools::sendMessage.name)
 

@@ -30,7 +30,7 @@ fun summarizeForPrompt(history: List<ChatTurn>): PromptHistory {
     )
 }
 
-// Anchor the slice to a USER turn — a leading orphan TOOL_CALL/TOOL_RESULT (owner trimmed away) is
+// anchor the slice to a USER turn — a leading orphan TOOL_CALL/TOOL_RESULT (owner trimmed away) is
 // rejected by the provider. Search back, then forward; if the window has no USER, fold all to summary.
 private fun List<ChatTurn>.recentSliceStart(): Int {
     val initial = (size - PROMPT_RECENT_TURNS).coerceAtLeast(0)

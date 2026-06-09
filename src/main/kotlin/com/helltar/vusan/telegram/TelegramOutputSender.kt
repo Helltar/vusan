@@ -188,7 +188,7 @@ internal object TelegramOutputSender {
             return
         }
 
-        // URL-based animation (e.g. Giphy).
+        // remote URL-based animation (e.g. Giphy).
         val url = requireNotNull(animation.url)
 
         sendOrFallback(
@@ -564,7 +564,7 @@ internal object TelegramOutputSender {
     }
 }
 
-/** appends a markdown source link (e.g. `[YouTube](url)`) to the caption; `null` when both are empty. */
+/** Appends a markdown source link (e.g. `[YouTube](url)`) to the caption; `null` when both are empty. */
 private fun captionWithSourceLink(caption: String?, sourceUrl: String?): String? {
     val link = sourceUrl?.let { "[${trackLinkLabel(it)}]($it)" }
     return listOfNotNull(caption, link).joinToString("\n").ifBlank { null }

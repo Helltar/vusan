@@ -7,7 +7,7 @@ import kotlin.test.assertTrue
 
 class StringsTest {
 
-    // U+1F600 GRINNING FACE — a single astral-plane character encoded as a UTF-16 surrogate pair.
+    // grinning face U+1F600 — a single astral-plane character encoded as a UTF-16 surrogate pair.
     private val emoji = "😀"
 
     private fun String.isValidUtf16(): Boolean =
@@ -59,15 +59,15 @@ class StringsTest {
         assertEquals("evil.mp3", "../../evil.mp3".sanitizeFilename())
         assertEquals("evil.mp3", """..\..\evil.mp3""".sanitizeFilename())
 
-        // Quotes, CR and LF could break out of a quoted Content-Disposition filename.
+        // quotes, CR and LF could break out of a quoted Content-Disposition filename.
         val cleaned = "a\"b\r\nc.mp3".sanitizeFilename()
         assertFalse('"' in cleaned, "quote survived sanitization: $cleaned")
         assertFalse('\r' in cleaned, "CR survived sanitization: $cleaned")
         assertFalse('\n' in cleaned, "LF survived sanitization: $cleaned")
     }
 
-    // Zero-width characters: U+200B zero-width space, U+200D zero-width joiner, U+FEFF BOM.
-    // Kotlin's isBlank treats them as non-blank, but Telegram rejects a message made only of
+    // zero-width characters: U+200B zero-width space, U+200D zero-width joiner, U+FEFF BOM.
+    // the Kotlin isBlank check treats them as non-blank, but Telegram rejects a message made only of
     // these with "text must be non-empty".
     private val zeroWidth = "\u200B\u200D\uFEFF"
 

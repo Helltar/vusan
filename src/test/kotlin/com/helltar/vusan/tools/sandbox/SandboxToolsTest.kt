@@ -63,7 +63,7 @@ class SandboxToolsTest {
 
         assertContains(result, "<stdout>")
         assertContains(result, "chart done")
-        // The crisp document copy is not double-counted in the user-facing summary.
+        // the crisp document copy is not double-counted in the user-facing summary.
         assertContains(result, "Delivered 1 file(s) to the chat: chart.png")
     }
 

@@ -63,7 +63,7 @@ class SandboxTools(
 
         // telegram recompresses inline photos to JPEG, softening chart text. Send each image again as
         // an uncompressed document so a pixel-perfect copy is available alongside the inline preview.
-        // Animations that ffmpeg could not encode ride along as their original APNG/GIF document.
+        // animations that ffmpeg could not encode ride along as their original APNG/GIF document.
         enqueueDocuments(imageDocuments + documents + animationFallbacks)
 
         val body =
@@ -195,7 +195,7 @@ class SandboxTools(
 }
 
 // files the sandbox produced but could not return (over the per-file size cap or the per-run file count).
-// Surfaced to the model so it can tell the user instead of silently claiming success.
+// surfaced to the model so it can tell the user instead of silently claiming success.
 private fun skippedFilesNote(skipped: List<SkippedFile>): String? {
     if (skipped.isEmpty()) return null
 

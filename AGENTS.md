@@ -96,6 +96,10 @@ Update docs in the same change as behavior:
 - Avoid `!!`; prove non-null via smart cast, `requireNotNull`, or `checkNotNull`.
 - Use Java APIs only when Kotlin has no reasonable equivalent.
 - Do not suppress compiler warnings without a specific reason.
+- Start KDoc summaries with an uppercase letter. Start ordinary `//` comments
+  with a lowercase letter, like commit subjects. Keep code identifiers and
+  acronyms (`RunResponse`, `WAL`, `URL`) as written; later sentences inside a
+  comment are capitalized normally.
 - Prefer raw strings for text containing quotes when readable.
 - In logs, delimit values as `key=[value]`, not `key="value"`.
 - Use `kotlin.time.Duration` overloads (`delay(5.seconds)`,

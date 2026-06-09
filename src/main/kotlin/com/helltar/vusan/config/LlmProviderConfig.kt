@@ -11,7 +11,7 @@ enum class HostedLlmProvider {
 
 sealed interface LlmProviderConfig {
 
-    // Caps how long a single LLM HTTP call may hang before it fails and the agent surfaces an error
+    // caps how long a single LLM HTTP call may hang before it fails and the agent surfaces an error
     // reply, instead of waiting out the provider client's 15-minute default while the bot stays silent.
     val requestTimeout: Duration
 

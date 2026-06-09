@@ -13,7 +13,7 @@ object MemoryTable : LongIdTable("memories") {
     val createdAt = timestamp("created_at").clientDefault { Instant.now() }
 
     init {
-        // Every lookup filters by (scope, ownerId): user memory by userId, chat memory by chatId.
+        // every lookup filters by (scope, ownerId): user memory by userId, chat memory by chatId.
         index(false, scope, ownerId)
     }
 }

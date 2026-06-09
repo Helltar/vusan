@@ -24,7 +24,7 @@ class TavilyTools(private val client: TavilyClient, private val outbox: BotOutbo
         val allowedTopics = setOf("general", "news", "finance")
         val allowedTimeRanges = setOf("day", "week", "month", "year")
 
-        // Instagram surfaces its images only through crawler/SEO endpoints
+        // the Instagram source pages expose images only through crawler/SEO endpoints
         // (lookaside.instagram.com, lookaside.fbsbx.com) that serve HTML, not the
         // actual file, so every download attempt fails. Exclude these sources from
         // image search so the provider returns directly downloadable candidates.
@@ -108,7 +108,7 @@ class TavilyTools(private val client: TavilyClient, private val outbox: BotOutbo
         var oversize = 0
 
         // `exclude_domains` filters Tavily's source pages, not the image CDN host, so a lookaside
-        // URL can still arrive from another source page. Drop them here before they consume a slot.
+        // image URL can still arrive from another source page. Drop them here before they consume a slot.
         val candidates = response.images.filterNot { isExcludedImageHost(it.url) }
 
         val downloaded =

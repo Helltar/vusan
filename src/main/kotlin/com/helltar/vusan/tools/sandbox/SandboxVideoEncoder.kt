@@ -68,7 +68,7 @@ class FfmpegVideoEncoder(
                 }
 
         try {
-            // Read concurrently so the merged stdout/stderr pipe cannot fill and deadlock the
+            // read concurrently so the merged stdout/stderr pipe cannot fill and deadlock the
             // process; swallow read errors so a destroyed stream never fails this coroutine.
             val outputDeferred =
                 async {

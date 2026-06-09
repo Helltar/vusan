@@ -38,7 +38,7 @@ class ChatHistoryTest {
 
         val recent = summarizeForPrompt(history).turns
 
-        // The naive last-12 slice would start mid-exchange on a TOOL_RESULT; the slice must extend
+        // the naive last-12 slice would start mid-exchange on a TOOL_RESULT; the slice must extend
         // back to the owning USER turn so each tool-call/result pair stays anchored.
         assertEquals(ChatRole.USER, recent.first().role)
         assertEquals("boundary-user", recent.first().content)
@@ -47,7 +47,7 @@ class ChatHistoryTest {
 
     @Test
     fun `recent slice never starts on an orphan tool turn when no user anchor survives`() {
-        // No USER turn in the window (a tool-heavy request overflowed the cap and lost its anchor):
+        // no USER turn in the window (a tool-heavy request overflowed the cap and lost its anchor):
         // the slice must not start on an orphan tool turn — they fold into the summary instead.
         val history =
             buildList {

@@ -167,10 +167,10 @@ class AgentFactory(
 // mirrors Koog's built-in singleRunStrategy, but routes any assistant message without tool calls
 // to nodeFinish — including empty responses. The default strategy uses `onTextMessage { true }`,
 // which requires at least one non-empty `MessagePart.Text`; the model often emits an empty
-// Assistant with `finishReason=stop` after replying through the `sendMessage` tool, leaving no
+// assistant with `finishReason=stop` after replying through the `sendMessage` tool, leaving no
 // matching edge and triggering AIAgentStuckInTheNodeException.
 //
-// Recovery: a model can also end its turn having delivered nothing at all — no `sendMessage`, no
+// recovery: a model can also end its turn having delivered nothing at all — no `sendMessage`, no
 // media, no reaction, and empty assistant text — which would leave the user with total silence
 // despite a full turn of research. Flaky OpenAI-compatible providers do this routinely, returning
 // an empty completion after a batch of tool results. When that happens we nudge the model once to
