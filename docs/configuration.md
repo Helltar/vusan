@@ -50,14 +50,6 @@ with the list of supported values. `openai-compatible` instead targets any OpenA
 waits 15 minutes, during which the bot stays silent; the shorter cap lets a stalled call fail fast so the agent can
 deliver an error reply. Raise it for slow local servers or heavy reasoning models.
 
-Anthropic example (`google` and `deepseek` work the same way):
-
-```dotenv
-LLM_PROVIDER=anthropic
-LLM_API_KEY=sk-ant-qwerty
-LLM_MODEL=claude-sonnet-4-6
-```
-
 llama.cpp example (local server needs no real key, but the value must be non-empty):
 
 ```dotenv
