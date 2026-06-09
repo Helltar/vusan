@@ -253,7 +253,7 @@ private fun assistantTextForHistory(outputs: List<OutboxItem>, comment: String?)
     return parts.takeIf { it.isNotEmpty() }?.joinToString("\n\n")
 }
 
-// tools whose payload is fully duplicated by the assistant text row. Skipping their
+// tools whose payload is fully duplicated by the assistant text row. skipping their
 // matching TOOL_CALL/TOOL_RESULT pair avoids storing (and replaying) the same content twice.
 // the Koog runtime registers each tool under its function name (no tool here sets @Tool(customName)),
 // so a function reference stays in sync with the registered name across renames.

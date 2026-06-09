@@ -198,7 +198,7 @@ internal class TelegramBotRunner(
     }
 
     // albums (media groups) arrive as a single message with `MediaGroupContent`, not as separate
-    // photo/document updates. Only the first photo is loadable as the attached file; the model is
+    // photo/document updates. only the first photo is loadable as the attached file; the model is
     // told about the rest so it does not claim to have inspected every item.
     private suspend fun handleGalleryUpdate(
         message: CommonMessage<MediaGroupContent<VisualMediaGroupPartContent>>,

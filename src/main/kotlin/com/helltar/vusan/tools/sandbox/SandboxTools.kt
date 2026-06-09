@@ -61,7 +61,7 @@ class SandboxTools(
             photos.size >= 2 -> outbox.enqueue(BotOutput.PhotoGroup(photos))
         }
 
-        // telegram recompresses inline photos to JPEG, softening chart text. Send each image again as
+        // telegram recompresses inline photos to JPEG, softening chart text. send each image again as
         // an uncompressed document so a pixel-perfect copy is available alongside the inline preview.
         // animations that ffmpeg could not encode ride along as their original APNG/GIF document.
         enqueueDocuments(imageDocuments + documents + animationFallbacks)

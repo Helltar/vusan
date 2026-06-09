@@ -88,9 +88,9 @@ internal object TelegramOutputSender {
         }
     }
 
-    // agent reply text often carries malformed Markdown. When Telegram rejects it, deliver the raw text as a
+    // agent reply text often carries malformed Markdown. when Telegram rejects it, deliver the raw text as a
     // `.md` document (with a short note explaining why) instead of re-sending it unformatted, so the user still
-    // gets the intended structure. A bot-authored notice goes through plain [sendText] instead.
+    // gets the intended structure. a bot-authored notice goes through plain [sendText] instead.
     suspend fun sendReplyText(
         bot: TelegramBot,
         chatId: ChatIdentifier,

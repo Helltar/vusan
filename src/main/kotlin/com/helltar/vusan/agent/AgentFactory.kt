@@ -165,23 +165,23 @@ class AgentFactory(
 }
 
 // mirrors Koog's built-in singleRunStrategy, but routes any assistant message without tool calls
-// to nodeFinish — including empty responses. The default strategy uses `onTextMessage { true }`,
+// to nodeFinish — including empty responses. the default strategy uses `onTextMessage { true }`,
 // which requires at least one non-empty `MessagePart.Text`; the model often emits an empty
 // assistant with `finishReason=stop` after replying through the `sendMessage` tool, leaving no
 // matching edge and triggering AIAgentStuckInTheNodeException.
 //
 // recovery: a model can also end its turn having delivered nothing at all — no `sendMessage`, no
 // media, no reaction, and empty assistant text — which would leave the user with total silence
-// despite a full turn of research. Flaky OpenAI-compatible providers do this routinely, returning
-// an empty completion after a batch of tool results. When that happens we nudge the model once to
-// actually deliver, then let the normal edges finish. Built per run so the strategy can read the
+// despite a full turn of research. flaky OpenAI-compatible providers do this routinely, returning
+// an empty completion after a batch of tool results. when that happens we nudge the model once to
+// actually deliver, then let the normal edges finish. built per run so the strategy can read the
 // live `outbox` to tell whether anything was delivered.
 private fun vusanSingleRunStrategy(outbox: BotOutbox): AIAgentGraphStrategy<String, String> =
     strategy<String, String>("single_run") {
         var nudged = false
 
         // the model ended its turn without putting anything in front of the user: it delivered
-        // nothing (no tool call to execute, no caption text) and the outbox is still empty. Nudge at
+        // nothing (no tool call to execute, no caption text) and the outbox is still empty. nudge at
         // most once to avoid looping on a stubbornly empty model.
         fun undelivered(msg: Message.Assistant): Boolean =
             !nudged && msg.deliveredNothing() && outbox.pending.isEmpty()
@@ -245,7 +245,7 @@ internal fun Message.Assistant.deliveredNothing(): Boolean =
     parts.none { it is MessagePart.Tool.Call } && textContent().isBlank()
 
 // flaky OpenAI-compatible models garble parallel tool calls: sibling calls in the same batch arrive
-// with empty `{}` args. Required args declared by the tool that the call omitted entirely.
+// with empty `{}` args. required args declared by the tool that the call omitted entirely.
 private fun MessagePart.Tool.Call.missingRequiredArgs(registry: ToolRegistry): List<String> {
     val required = registry.getToolOrNull(tool)?.descriptor?.requiredParameters.orEmpty()
     if (required.isEmpty()) return emptyList()
@@ -254,7 +254,7 @@ private fun MessagePart.Tool.Call.missingRequiredArgs(registry: ToolRegistry): L
 }
 
 // synthesize a ValidationError result for a garbled call instead of handing it to the executor,
-// which would throw a reflection exception that Koog logs as an ERROR with a full stack trace. This
+// which would throw a reflection exception that Koog logs as an ERROR with a full stack trace. this
 // still satisfies the tool_call id (keeping the follow-up LLM request well-formed) and tells the
 // model to reissue a complete call.
 private fun garbledToolCallResult(call: MessagePart.Tool.Call, missing: List<String>): ReceivedToolResult {

@@ -21,7 +21,7 @@ class SandboxClient(private val http: HttpClient, baseUrl: String, runTimeout: D
 
         // returned when the sandbox service can't be reached at all (container not
         // running, wrong URL) — distinct from a Python error, which comes back in
-        // the RunResponse.error field. Framed so the model stops instead of rewriting code.
+        // the RunResponse.error field. framed so the model stops instead of rewriting code.
         const val UNREACHABLE_MESSAGE =
             "Code execution is not reachable right now, so the code did not run. " +
                     "Tell the user code execution is temporarily unavailable; do not retry."
@@ -30,9 +30,9 @@ class SandboxClient(private val http: HttpClient, baseUrl: String, runTimeout: D
     private val runUrl = baseUrl.trimEnd('/') + "/run"
 
     // before the service returns even a graceful "timed out" response it may wait
-    // for a free worker (ACQUIRE_BUDGET) and then run for up to runTimeout. This derived
+    // for a free worker (ACQUIRE_BUDGET) and then run for up to runTimeout. this derived
     // timeout has to outlast that whole budget, plus some network slack, or
-    // ktor would abort while the sandbox is still legitimately working. Derived
+    // ktor would abort while the sandbox is still legitimately working. derived
     // from runTimeout so raising SANDBOX_TIMEOUT_SECONDS keeps the two in sync.
     private val requestTimeout = ACQUIRE_BUDGET + runTimeout + NETWORK_SLACK
 
