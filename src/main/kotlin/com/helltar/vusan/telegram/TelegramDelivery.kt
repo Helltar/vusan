@@ -76,7 +76,7 @@ class TelegramDelivery(private val bot: TelegramBot) {
         }
     }
 
-    /** Send a plain-text notice from the bot itself (no reply anchor, no markdown fallback retry chain). */
+    /** send a plain-text notice from the bot itself (no reply anchor, no markdown fallback retry chain). */
     suspend fun sendNotice(chatId: Long, text: String) {
         runCatching { TelegramOutputSender.sendText(bot, chatId.toChatIdentifier(), text, replyParameters = null) }
             .onFailure {
@@ -135,7 +135,7 @@ class TelegramDelivery(private val bot: TelegramBot) {
         }
 
         if (captionIndex < 0 && comment != null) {
-            deliverCommentText(comment, originTarget.takeUnless { replyUnavailable } ?: originTarget.withoutReply())
+            deliverCommentText(comment, if (replyUnavailable) originTarget.withoutReply() else originTarget)
         }
 
         return replyUnavailable

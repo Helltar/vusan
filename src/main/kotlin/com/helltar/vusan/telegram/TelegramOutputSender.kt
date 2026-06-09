@@ -88,7 +88,7 @@ internal object TelegramOutputSender {
         }
     }
 
-    // Agent reply text often carries malformed Markdown. When Telegram rejects it, deliver the raw text as a
+    // agent reply text often carries malformed Markdown. When Telegram rejects it, deliver the raw text as a
     // `.md` document (with a short note explaining why) instead of re-sending it unformatted, so the user still
     // gets the intended structure. A bot-authored notice goes through plain [sendText] instead.
     suspend fun sendReplyText(
@@ -149,7 +149,7 @@ internal object TelegramOutputSender {
                 replyParameters
             )
         },
-        onFallback = { caption?.let { sendText(bot, chatId, it, replyParameters) } }
+        onFallback = captionTextFallback(bot, chatId, caption, replyParameters)
     )
 
     private suspend fun sendAnimation(
@@ -159,7 +159,7 @@ internal object TelegramOutputSender {
         animation: BotOutput.Animation,
         caption: String?
     ) {
-        // Generated GIF (bytes): fall back to document so the animation still arrives.
+        // generated GIF (bytes): fall back to document so the animation still arrives.
         val bytes = animation.bytes
 
         if (bytes != null) {
@@ -171,7 +171,7 @@ internal object TelegramOutputSender {
                 bytes = bytes,
                 filename = animation.filename,
                 caption = caption,
-                onTextFallback = { caption?.let { sendText(bot, chatId, it, replyParameters) } },
+                onTextFallback = captionTextFallback(bot, chatId, caption, replyParameters),
                 send = {
                     sendWithMarkdownFallback { parseMode ->
                         bot.sendAnimation(
@@ -206,7 +206,7 @@ internal object TelegramOutputSender {
                     )
                 }
             },
-            onFallback = { caption?.let { sendText(bot, chatId, it, replyParameters) } }
+            onFallback = captionTextFallback(bot, chatId, caption, replyParameters)
         )
     }
 
@@ -238,7 +238,7 @@ internal object TelegramOutputSender {
                 replyParameters = replyParameters,
                 failureMessage = "sendPhoto failed, document copy should be delivered separately",
                 send = send,
-                onFallback = { caption?.let { sendText(bot, chatId, it, replyParameters) } }
+                onFallback = captionTextFallback(bot, chatId, caption, replyParameters)
             )
 
             return
@@ -252,7 +252,7 @@ internal object TelegramOutputSender {
             bytes = photo.bytes,
             filename = photo.filename,
             caption = caption,
-            onTextFallback = { caption?.let { sendText(bot, chatId, it, replyParameters) } },
+            onTextFallback = captionTextFallback(bot, chatId, caption, replyParameters),
             send = send
         )
     }
@@ -312,7 +312,7 @@ internal object TelegramOutputSender {
         audio: BotOutput.Audio,
         caption: String?
     ) {
-        val fullCaption = buildAudioCaption(audio, caption)
+        val fullCaption = captionWithSourceLink(caption, audio.trackUrl)
         val audioFile = { audio.bytes.asMultipartFile(audio.filename) }
 
         sendOrFallback(
@@ -365,7 +365,7 @@ internal object TelegramOutputSender {
                     )
                 }
             },
-            onFallback = { caption?.let { sendText(bot, chatId, it, replyParameters) } }
+            onFallback = captionTextFallback(bot, chatId, caption, replyParameters)
         )
     }
 
@@ -376,7 +376,7 @@ internal object TelegramOutputSender {
         video: BotOutput.Video,
         caption: String?
     ) {
-        val fullCaption = buildVideoCaption(video, caption)
+        val fullCaption = captionWithSourceLink(caption, video.sourceUrl)
         val file = { video.bytes.asMultipartFile(video.filename) }
 
         sendMediaWithDocumentFallback(
@@ -387,7 +387,7 @@ internal object TelegramOutputSender {
             bytes = video.bytes,
             filename = video.filename,
             caption = fullCaption,
-            onTextFallback = { fullCaption?.let { sendText(bot, chatId, it, replyParameters) } },
+            onTextFallback = captionTextFallback(bot, chatId, fullCaption, replyParameters),
             send = {
                 sendWithMarkdownFallback { parseMode ->
                     bot.sendVideo(
@@ -550,18 +550,23 @@ internal object TelegramOutputSender {
         }
     }
 
+    // deliver the caption as a plain message when the media itself could not be sent at all.
+    private fun captionTextFallback(
+        bot: TelegramBot,
+        chatId: ChatIdentifier,
+        caption: String?,
+        replyParameters: ReplyParameters?
+    ): suspend () -> Unit =
+        { caption?.let { sendText(bot, chatId, it, replyParameters) } }
+
     private fun rethrowIfReplyNotFound(error: Throwable, replyParameters: ReplyParameters?) {
         if (replyParameters != null && error is ReplyMessageNotFoundException) throw error
     }
 }
 
-private fun buildAudioCaption(audio: BotOutput.Audio, caption: String?): String? {
-    val link = audio.trackUrl?.let { "[${trackLinkLabel(it)}]($it)" }
-    return listOfNotNull(caption, link).joinToString("\n").ifBlank { null }
-}
-
-private fun buildVideoCaption(video: BotOutput.Video, caption: String?): String? {
-    val link = video.sourceUrl?.let { "[${trackLinkLabel(it)}]($it)" }
+/** appends a markdown source link (e.g. `[YouTube](url)`) to the caption; `null` when both are empty. */
+private fun captionWithSourceLink(caption: String?, sourceUrl: String?): String? {
+    val link = sourceUrl?.let { "[${trackLinkLabel(it)}]($it)" }
     return listOfNotNull(caption, link).joinToString("\n").ifBlank { null }
 }
 

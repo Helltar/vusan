@@ -27,7 +27,7 @@ internal data class RepliedMessageSummary(
 )
 
 internal fun isReplyToOtherUser(replyAuthorId: Long?, botUserId: Long): Boolean =
-    replyAuthorId == null || replyAuthorId != botUserId
+    replyAuthorId != botUserId
 
 internal suspend fun CommonMessage<*>.replySummaryOrNull(
     bot: TelegramBot,
