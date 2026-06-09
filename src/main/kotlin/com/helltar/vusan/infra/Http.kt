@@ -30,17 +30,9 @@ object Http {
     private fun HttpClientConfig<*>.configure() {
         expectSuccess = true
 
+        // expectSuccess already turns every non-2xx into a ResponseException; remap it here into a
+        // single host + capped-body message that never echoes the request URL (which may carry keys).
         HttpResponseValidator {
-            validateResponse { response ->
-                if (response.status.value !in 200..299) {
-                    throw HttpStatusException(
-                        response.status.value,
-                        response.call.request.url.host,
-                        response.bodyAsTextSafe()
-                    )
-                }
-            }
-
             handleResponseExceptionWithRequest { cause, request ->
                 if (cause is ResponseException) {
                     throw HttpStatusException(
