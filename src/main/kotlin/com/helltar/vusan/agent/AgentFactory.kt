@@ -3,6 +3,7 @@ package com.helltar.vusan.agent
 import ai.koog.agents.core.agent.AIAgent
 import ai.koog.agents.core.agent.config.AIAgentConfig
 import ai.koog.agents.core.agent.entity.AIAgentGraphStrategy
+import ai.koog.agents.core.agent.entity.AIAgentNodeBase
 import ai.koog.agents.core.dsl.builder.node
 import ai.koog.agents.core.dsl.builder.strategy
 import ai.koog.agents.core.dsl.extension.*
@@ -122,7 +123,7 @@ class AgentFactory(
             install(EventHandler) {
                 var seq = 0
 
-                // Koog dispatches a tool event here but emits no INFO line of its own, so log every call
+                // koog dispatches a tool event here but emits no INFO line of its own, so log every call
                 // ourselves (name + capped args) — uniform across all tools, not just those that self-log.
                 fun record(toolCallId: String?, toolName: String, args: String, output: String, isError: Boolean) {
                     log.info {
@@ -163,7 +164,7 @@ class AgentFactory(
     }
 }
 
-// Mirrors Koog's built-in singleRunStrategy, but routes any assistant message without tool calls
+// mirrors Koog's built-in singleRunStrategy, but routes any assistant message without tool calls
 // to nodeFinish — including empty responses. The default strategy uses `onTextMessage { true }`,
 // which requires at least one non-empty `MessagePart.Text`; the model often emits an empty
 // Assistant with `finishReason=stop` after replying through the `sendMessage` tool, leaving no
@@ -175,12 +176,11 @@ class AgentFactory(
 // an empty completion after a batch of tool results. When that happens we nudge the model once to
 // actually deliver, then let the normal edges finish. Built per run so the strategy can read the
 // live `outbox` to tell whether anything was delivered.
-@Suppress("DuplicatedCode")
 private fun vusanSingleRunStrategy(outbox: BotOutbox): AIAgentGraphStrategy<String, String> =
     strategy<String, String>("single_run") {
         var nudged = false
 
-        // The model ended its turn without putting anything in front of the user: it delivered
+        // the model ended its turn without putting anything in front of the user: it delivered
         // nothing (no tool call to execute, no caption text) and the outbox is still empty. Nudge at
         // most once to avoid looping on a stubbornly empty model.
         fun undelivered(msg: Message.Assistant): Boolean =
@@ -212,33 +212,26 @@ private fun vusanSingleRunStrategy(outbox: BotOutbox): AIAgentGraphStrategy<Stri
             }
         }
 
+        fun <I> finishWhenNoToolCalls(node: AIAgentNodeBase<I, Message.Assistant>) {
+            edge(
+                node forwardTo nodeFinish
+                        onCondition { msg -> msg.parts.none { it is MessagePart.Tool.Call } }
+                        transformed { msg -> msg.textContent() }
+            )
+        }
+
         edge(nodeStart forwardTo nodeCallLLM)
         edge(nodeCallLLM forwardTo nodeExecuteTool onToolCalls { true })
         edge(nodeCallLLM forwardTo nodeNudgeDeliver onCondition { undelivered(it) })
-
-        edge(
-            nodeCallLLM forwardTo nodeFinish
-                    onCondition { msg -> msg.parts.none { it is MessagePart.Tool.Call } }
-                    transformed { msg -> msg.assistantTextOrEmpty() }
-        )
+        finishWhenNoToolCalls(nodeCallLLM)
 
         edge(nodeExecuteTool forwardTo nodeSendToolResult)
         edge(nodeSendToolResult forwardTo nodeExecuteTool onToolCalls { true })
         edge(nodeSendToolResult forwardTo nodeNudgeDeliver onCondition { undelivered(it) })
-
-        edge(
-            nodeSendToolResult forwardTo nodeFinish
-                    onCondition { msg -> msg.parts.none { it is MessagePart.Tool.Call } }
-                    transformed { msg -> msg.assistantTextOrEmpty() }
-        )
+        finishWhenNoToolCalls(nodeSendToolResult)
 
         edge(nodeNudgeDeliver forwardTo nodeExecuteTool onToolCalls { true })
-
-        edge(
-            nodeNudgeDeliver forwardTo nodeFinish
-                    onCondition { msg -> msg.parts.none { it is MessagePart.Tool.Call } }
-                    transformed { msg -> msg.assistantTextOrEmpty() }
-        )
+        finishWhenNoToolCalls(nodeNudgeDeliver)
     }
 
 private const val DELIVER_NUDGE =
@@ -246,15 +239,12 @@ private const val DELIVER_NUDGE =
             "Deliver your answer now by calling `sendMessage` (or the appropriate media or reaction tool). " +
             "Do not reply with empty text."
 
-private fun Message.Assistant.assistantTextOrEmpty(): String =
-    parts.filterIsInstance<MessagePart.Text>().joinToString("\n") { it.text }
-
-// True when the assistant ended its turn with nothing for the user: no tool call left to execute
+// true when the assistant ended its turn with nothing for the user: no tool call left to execute
 // (so nothing more is coming this turn) and no plain text to fall back on as a caption.
 internal fun Message.Assistant.deliveredNothing(): Boolean =
-    parts.none { it is MessagePart.Tool.Call } && assistantTextOrEmpty().isBlank()
+    parts.none { it is MessagePart.Tool.Call } && textContent().isBlank()
 
-// Flaky OpenAI-compatible models garble parallel tool calls: sibling calls in the same batch arrive
+// flaky OpenAI-compatible models garble parallel tool calls: sibling calls in the same batch arrive
 // with empty `{}` args. Required args declared by the tool that the call omitted entirely.
 private fun MessagePart.Tool.Call.missingRequiredArgs(registry: ToolRegistry): List<String> {
     val required = registry.getToolOrNull(tool)?.descriptor?.requiredParameters.orEmpty()
@@ -263,7 +253,7 @@ private fun MessagePart.Tool.Call.missingRequiredArgs(registry: ToolRegistry): L
     return required.map { it.name }.filterNot { it in provided }
 }
 
-// Synthesize a ValidationError result for a garbled call instead of handing it to the executor,
+// synthesize a ValidationError result for a garbled call instead of handing it to the executor,
 // which would throw a reflection exception that Koog logs as an ERROR with a full stack trace. This
 // still satisfies the tool_call id (keeping the follow-up LLM request well-formed) and tells the
 // model to reissue a complete call.
@@ -282,7 +272,7 @@ private fun garbledToolCallResult(call: MessagePart.Tool.Call, missing: List<Str
     )
 }
 
-// Renders memory as `#id content` lines so the model can reference an id when calling `forgetMemory`.
+// renders memory as `#id content` lines so the model can reference an id when calling `forgetMemory`.
 private fun renderMemory(entries: List<MemoryEntry>): String =
     entries.joinToString("\n") { "#${it.id} ${it.content}" }
 
