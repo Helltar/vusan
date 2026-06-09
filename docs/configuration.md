@@ -31,13 +31,15 @@ Empty/unset means the bot answers nobody.
 `LLM_PROVIDER` selects the backend; `LLM_PROVIDER`, `LLM_MODEL`, and `LLM_API_KEY` are always
 required. The chosen model must support tool calling.
 
-Provider options:
+| `LLM_PROVIDER`      | Example `LLM_MODEL`                 |
+|---------------------|-------------------------------------|
+| `openai`            | `gpt-5.4-mini`                      |
+| `anthropic`         | `claude-sonnet-4-6`                 |
+| `google`            | `gemini-2.5-flash`                  |
+| `deepseek`          | `deepseek-v4-pro`                   |
+| `openai-compatible` | any model id the server understands |
 
-- `openai` — e.g. `gpt-5.4-mini`.
-- `anthropic` — e.g. `claude-sonnet-4-6`.
-- `google` — e.g. `gemini-2.5-flash`.
-- `deepseek` — e.g. `deepseek-v4-pro`.
-- `openai-compatible` — any OpenAI-compatible server; additionally requires `LLM_BASE_URL`.
+`openai-compatible` additionally requires `LLM_BASE_URL`.
 
 The native providers (`openai`, `anthropic`, `google`, `deepseek`) talk to each vendor's own API through its
 dedicated Koog client, so `LLM_MODEL` must be a model id the client knows. An unrecognized id fails at startup
