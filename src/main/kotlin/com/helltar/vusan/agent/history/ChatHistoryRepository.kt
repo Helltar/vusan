@@ -6,8 +6,8 @@ import org.jetbrains.exposed.v1.core.SortOrder
 import org.jetbrains.exposed.v1.core.and
 import org.jetbrains.exposed.v1.core.eq
 import org.jetbrains.exposed.v1.core.less
+import org.jetbrains.exposed.v1.jdbc.batchInsert
 import org.jetbrains.exposed.v1.jdbc.deleteWhere
-import org.jetbrains.exposed.v1.jdbc.insert
 import org.jetbrains.exposed.v1.jdbc.select
 import org.jetbrains.exposed.v1.jdbc.selectAll
 
@@ -31,15 +31,13 @@ class ChatHistoryRepository(private val maxMessagesPerUser: Int = 120) {
     }
 
     suspend fun appendTurns(userId: Long, turns: List<ChatTurn>) = dbTransaction {
-        for (turn in turns) {
-            ChatMessagesTable.insert {
-                it[ChatMessagesTable.userId] = userId
-                it[role] = turn.role
-                it[content] = turn.content
-                it[toolCallId] = turn.toolCallId
-                it[toolName] = turn.toolName
-                it[toolIsError] = turn.toolIsError
-            }
+        ChatMessagesTable.batchInsert(turns) { turn ->
+            this[ChatMessagesTable.userId] = userId
+            this[ChatMessagesTable.role] = turn.role
+            this[ChatMessagesTable.content] = turn.content
+            this[ChatMessagesTable.toolCallId] = turn.toolCallId
+            this[ChatMessagesTable.toolName] = turn.toolName
+            this[ChatMessagesTable.toolIsError] = turn.toolIsError
         }
 
         if (turns.isNotEmpty()) {
