@@ -105,7 +105,7 @@ internal class TelegramBotRunner(
     }
 
     private suspend fun handleTranscribableUpdate(
-        message: CommonMessage<out TextedContent>,
+        message: CommonMessage<TextedContent>,
         audioInput: AudioInput,
         botProfile: BotProfile,
         inputKind: String
