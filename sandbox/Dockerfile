@@ -29,4 +29,5 @@ USER sandbox:sandbox
 ENV PORT=8080
 EXPOSE 8080
 
-ENTRYPOINT ["deno", "run", "--allow-net", "--allow-read", "--allow-env", "main.ts"]
+# --allow-net stays unscoped because the listen port comes from PORT at runtime
+ENTRYPOINT ["deno", "run", "--allow-net", "--allow-read=/app,/deno-dir,/fonts", "--allow-env", "main.ts"]

@@ -108,7 +108,12 @@ function writeInputFiles(pyodide: PyodideInterface, files: InputFile[]): Set<str
   for (const file of files) {
     const name = file.name.split("/").pop()?.split("\\").pop() ?? "";
     if (name === "" || name === "." || name === "..") continue;
-    const bytes = decodeBase64(file.base64);
+    let bytes: Uint8Array;
+    try {
+      bytes = decodeBase64(file.base64);
+    } catch {
+      continue; // invalid base64; skip the file rather than crash the whole run
+    }
     if (bytes.length === 0 || bytes.length > MAX_FILE_BYTES) continue;
     pyodide.FS.writeFile(`${WORK_DIR}/${name}`, bytes);
     written.add(name);
@@ -122,7 +127,9 @@ function makeSink() {
   return {
     write(s: string): void {
       if (capped) return;
-      text += s + "\n";
+      // cut an oversized single chunk before concatenating, so one print() of a
+      // giant string cannot spike memory far past the cap
+      text += s.slice(0, MAX_OUTPUT_CHARS + 1 - text.length) + "\n";
       if (text.length > MAX_OUTPUT_CHARS) {
         text = text.slice(0, MAX_OUTPUT_CHARS) + "\n...[output truncated]";
         capped = true;

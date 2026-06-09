@@ -6,10 +6,18 @@
 // (internal compose network), no secrets in its env, and no host mounts. This
 // service only enforces time/output limits and single-use isolation.
 
-const PORT = Number(Deno.env.get("PORT") ?? 8080);
-const POOL_SIZE = Number(Deno.env.get("SANDBOX_POOL_SIZE") ?? 2);
-const TIMEOUT_SECONDS = Number(Deno.env.get("SANDBOX_TIMEOUT_SECONDS") ?? 120);
+// a garbled value would otherwise turn into NaN, which means zero workers
+// (permanent 503) or a setTimeout that fires immediately (every run "times out")
+function envNumber(name: string, fallback: number): number {
+  const value = Number(Deno.env.get(name));
+  return Number.isFinite(value) && value > 0 ? value : fallback;
+}
+
+const PORT = envNumber("PORT", 8080);
+const POOL_SIZE = envNumber("SANDBOX_POOL_SIZE", 2);
+const TIMEOUT_SECONDS = envNumber("SANDBOX_TIMEOUT_SECONDS", 120);
 const MAX_CODE_CHARS = 100_000;
+const MAX_INPUT_FILES = 16;
 const ACQUIRE_TIMEOUT_SECONDS = 30;
 const RESPAWN_BACKOFF_SECONDS = 1;
 
@@ -31,7 +39,7 @@ interface RunResult {
 
 function parseInputFiles(raw: unknown): InputFile[] {
   if (!Array.isArray(raw)) return [];
-  return raw.flatMap((f) =>
+  return raw.slice(0, MAX_INPUT_FILES).flatMap((f) =>
     f && typeof f.name === "string" && typeof f.base64 === "string" ? [{ name: f.name, base64: f.base64 }] : []
   );
 }
@@ -48,9 +56,14 @@ function spawn(): void {
     if (waiter) waiter(worker);
     else warm.push(worker);
   };
+  // fires during warm-up or while the worker sits idle in the pool
   worker.onerror = (e) => {
     e.preventDefault(); // keep a worker crash from propagating to the service
-    console.error("worker crashed during warm-up:", e.message);
+    console.error("worker crashed:", e.message);
+    // a crashed idle worker must leave the pool, or acquire() would hand out a
+    // terminated worker whose postMessage is a silent no-op (request hangs until timeout)
+    const i = warm.indexOf(worker);
+    if (i >= 0) warm.splice(i, 1);
     worker.terminate();
     setTimeout(spawn, RESPAWN_BACKOFF_SECONDS * 1000); // avoid a tight loop if warm-up keeps failing
   };
