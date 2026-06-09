@@ -34,9 +34,9 @@ required. The chosen model must support tool calling.
 Provider options:
 
 - `openai` — e.g. `LLM_MODEL=gpt-5.4-mini`.
-- `anthropic` — e.g. `LLM_MODEL=claude-sonnet-4-6`. Native Claude client.
-- `google` — e.g. `LLM_MODEL=gemini-2.5-flash`. Native Gemini client.
-- `deepseek` — e.g. `LLM_MODEL=deepseek-v4-pro`. Native DeepSeek client.
+- `anthropic` — e.g. `LLM_MODEL=claude-sonnet-4-6`.
+- `google` — e.g. `LLM_MODEL=gemini-2.5-flash`.
+- `deepseek` — e.g. `LLM_MODEL=deepseek-v4-pro`.
 - `openai-compatible` — any OpenAI-compatible server; additionally requires `LLM_BASE_URL`.
 
 The native providers (`openai`, `anthropic`, `google`, `deepseek`) talk to each vendor's own API through its
@@ -48,28 +48,12 @@ with the list of supported values. `openai-compatible` instead targets any OpenA
 waits 15 minutes, during which the bot stays silent; the shorter cap lets a stalled call fail fast so the agent can
 deliver an error reply. Raise it for slow local servers or heavy reasoning models.
 
-Anthropic example:
+Anthropic example (`google` and `deepseek` work the same way):
 
 ```dotenv
 LLM_PROVIDER=anthropic
 LLM_API_KEY=sk-ant-qwerty
 LLM_MODEL=claude-sonnet-4-6
-```
-
-Google:
-
-```dotenv
-LLM_PROVIDER=google
-LLM_API_KEY=qwerty
-LLM_MODEL=gemini-2.5-flash
-```
-
-DeepSeek:
-
-```dotenv
-LLM_PROVIDER=deepseek
-LLM_API_KEY=sk-qwerty
-LLM_MODEL=deepseek-v4-pro
 ```
 
 llama.cpp example (local server needs no real key, but the value must be non-empty):
