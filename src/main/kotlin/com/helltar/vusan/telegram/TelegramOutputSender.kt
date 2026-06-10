@@ -1,6 +1,8 @@
 package com.helltar.vusan.telegram
 
 import com.helltar.vusan.common.rethrowIfCancellation
+import com.helltar.vusan.infra.metrics.Metrics
+import com.helltar.vusan.infra.metrics.SenderFallback
 import com.helltar.vusan.outbox.BotOutput
 import dev.inmo.tgbotapi.bot.TelegramBot
 import dev.inmo.tgbotapi.bot.exceptions.ReplyMessageNotFoundException
@@ -103,6 +105,7 @@ internal object TelegramOutputSender {
         }.recoverCatching { e ->
             if (e is RequestException && e.isMarkdownError()) {
                 log.warn { "Telegram rejected Markdown, sending the reply as a $MARKDOWN_FALLBACK_FILENAME file" }
+                Metrics.recordSenderFallback(SenderFallback.MARKDOWN_DOCUMENT)
                 sendMarkdownAsDocument(bot, chatId, text, markdownFileNotice, replyParameters)
             } else throw e
         }.getOrThrow()
@@ -271,6 +274,7 @@ internal object TelegramOutputSender {
             bot.sendVisualMediaGroup(chatId = chatId, media = media, replyParameters = replyParameters)
         },
         onFallback = {
+            Metrics.recordSenderFallback(SenderFallback.MEDIA_GROUP_SPLIT)
             group.photos.forEach { photo ->
                 runCatching { sendPhoto(bot, chatId, replyParameters, photo, caption = null) }
                     .onFailure { ie ->
@@ -295,6 +299,7 @@ internal object TelegramOutputSender {
             bot.sendDocumentsGroup(chatId = chatId, media = media, replyParameters = replyParameters)
         },
         onFallback = {
+            Metrics.recordSenderFallback(SenderFallback.MEDIA_GROUP_SPLIT)
             group.documents.forEach { document ->
                 runCatching { sendDocument(bot, chatId, replyParameters, document, caption = null) }
                     .onFailure { ie ->
@@ -503,6 +508,7 @@ internal object TelegramOutputSender {
             .recoverCatching { e ->
                 if (e is RequestException && e.isMarkdownError()) {
                     log.warn { "Telegram rejected Markdown, retrying as plain text" }
+                    Metrics.recordSenderFallback(SenderFallback.MARKDOWN_PLAIN)
                     send(null)
                 } else throw e
             }
@@ -525,12 +531,14 @@ internal object TelegramOutputSender {
                 e.rethrowIfCancellation()
                 rethrowIfReplyNotFound(e, replyParameters)
                 log.warn(e) { "$mediaLabel failed for chat=$chatId, retrying as document" }
+                Metrics.recordSenderFallback(SenderFallback.MEDIA_DOCUMENT)
                 sendDocumentWithMarkdownFallback(bot, chatId, bytes, filename, caption, replyParameters)
             }
             .onFailure { e ->
                 e.rethrowIfCancellation()
                 rethrowIfReplyNotFound(e, replyParameters)
                 log.warn(e) { "$mediaLabel document fallback failed for chat=$chatId, falling back to text" }
+                Metrics.recordSenderFallback(SenderFallback.CAPTION_TEXT)
                 onTextFallback()
             }
     }

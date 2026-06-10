@@ -178,6 +178,33 @@ The agent can schedule tasks in three forms:
 | `MAX_TASKS_PER_USER`        | `5`     | Maximum stored tasks per user.               |
 | `TASK_MAX_LATENESS_MINUTES` | `60`    | Recurring tasks older than this are skipped. |
 
+## Metrics
+
+Prometheus metrics are opt-in: set `METRICS_PORT` and the bot serves the exposition at
+`http://<host>:<port>/metrics`. Unset (the default) disables the endpoint, the audience
+(`peers`) tracking, and the gauge refresher entirely.
+
+| Variable       | Default | Description                                              |
+|----------------|---------|----------------------------------------------------------|
+| `METRICS_PORT` | —       | Port for the Prometheus `/metrics` endpoint; unset = off. |
+
+The endpoint has no authentication, so don't expose it publicly. A Prometheus running in Docker
+joins the bot's compose network and scrapes `vusan:9090` directly; for a Prometheus on the host,
+publish the port loopback-only in [`compose.yaml`](../compose.yaml) (`127.0.0.1:9090:9090`,
+commented there) and scrape:
+
+```yaml
+scrape_configs:
+  - job_name: vusan
+    scrape_interval: 15s
+    static_configs:
+      - targets: ["127.0.0.1:9090"]
+```
+
+A ready-to-import Grafana dashboard lives at
+[`docs/grafana-dashboard-vusan.json`](grafana-dashboard-vusan.json); see
+[architecture.md](architecture.md#background-and-side-flows) for what is instrumented.
+
 ## Storage and binaries
 
 | Variable              | Default            | Description                                        |

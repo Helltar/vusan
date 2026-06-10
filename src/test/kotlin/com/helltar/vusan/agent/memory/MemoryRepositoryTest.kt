@@ -135,6 +135,7 @@ class MemoryRepositoryTest {
             ),
             maxMemoryPerScope = 10,
             maxTasksPerUser = 5,
+            metricsPort = null,
             openAiStt = null,
             sandboxTimeoutSeconds = 30L,
             sandboxUrl = null,

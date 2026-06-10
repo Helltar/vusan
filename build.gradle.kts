@@ -29,6 +29,9 @@ dependencies {
     implementation(libs.ktor.client.cio)
     implementation(libs.ktor.client.content.negotiation)
     implementation(libs.ktor.serialization.kotlinx.json)
+    implementation(libs.ktor.server.core)
+    implementation(libs.ktor.server.cio)
+    implementation(libs.micrometer.registry.prometheus)
     implementation(libs.jsoup)
     implementation(libs.cron.utils)
 
@@ -37,6 +40,7 @@ dependencies {
 
     testImplementation(kotlin("test"))
     testImplementation(libs.ktor.client.mock)
+    testImplementation(libs.ktor.server.test.host)
 }
 
 application {

@@ -8,6 +8,9 @@ import com.helltar.vusan.common.rethrowIfCancellation
 import com.helltar.vusan.common.xmlBlock
 import com.helltar.vusan.i18n.Language
 import com.helltar.vusan.i18n.Messages
+import com.helltar.vusan.infra.metrics.Metrics
+import com.helltar.vusan.infra.metrics.PeersRepository
+import com.helltar.vusan.infra.metrics.SttResult
 import com.helltar.vusan.request.AttachedFile
 import dev.inmo.kslog.common.KSLog
 import dev.inmo.kslog.common.LogLevel
@@ -29,7 +32,8 @@ internal class TelegramBotRunner(
     private val agent: AgentRunner,
     private val history: ChatHistoryRepository,
     private val allowedIds: Set<Long>,
-    private val voiceTranscriber: VoiceTranscriber?
+    private val voiceTranscriber: VoiceTranscriber?,
+    private val peers: PeersRepository?
 ) {
 
     private companion object {
@@ -143,20 +147,26 @@ internal class TelegramBotRunner(
 
         val transcript =
             when (val result = transcriber.transcribe(bot, audioInput)) {
-                is VoiceTranscriptionResult.Success -> result.text
+                is VoiceTranscriptionResult.Success -> {
+                    Metrics.recordSttTranscription(SttResult.OK)
+                    result.text
+                }
 
                 is VoiceTranscriptionResult.TooLong -> {
+                    Metrics.recordSttTranscription(SttResult.TOO_LONG)
                     sendReply(message, messages.voiceTooLongReply(result.durationSeconds, result.maxSeconds))
                     return
                 }
 
                 is VoiceTranscriptionResult.Empty -> {
+                    Metrics.recordSttTranscription(SttResult.EMPTY)
                     log.info { "$inputKind transcription empty (chat=${message.chatIdLong}): ${result.reason}" }
                     sendReply(message, messages.voiceEmptyReply)
                     return
                 }
 
                 is VoiceTranscriptionResult.Failed -> {
+                    Metrics.recordSttTranscription(SttResult.FAILED)
                     sendReply(message, messages.voiceTranscriptionFailedReply)
                     return
                 }
@@ -315,6 +325,16 @@ internal class TelegramBotRunner(
                 attachedFile?.let { append(" attachedFile=[${it.name}]") }
                 append(" text=[${agentInput.collapseWhitespaceAndCap(LOG_PROMPT_MAX_CHARS).orEmpty()}]")
             }
+        }
+
+        Metrics.recordInbound(inputKind, message.isPrivateChat)
+
+        peers?.let { repo ->
+            runCatching { repo.touch(chatId, message.isPrivateChat, userId) }
+                .onFailure {
+                    it.rethrowIfCancellation()
+                    log.warn(it) { "failed to record peer activity for chat=$chatId user=$userId" }
+                }
         }
 
         bot.withTypingAction(chatId.toChatIdentifier()) {

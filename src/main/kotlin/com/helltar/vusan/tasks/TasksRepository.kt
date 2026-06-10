@@ -48,6 +48,13 @@ class TasksRepository {
             .map { it.toScheduledTask() }
     }
 
+    suspend fun countEnabled(): Long = dbTransaction {
+        ScheduledTasksTable
+            .selectAll()
+            .where { ScheduledTasksTable.enabled eq true }
+            .count()
+    }
+
     suspend fun findDue(now: Instant): List<ScheduledTask> = dbTransaction {
         ScheduledTasksTable
             .selectAll()

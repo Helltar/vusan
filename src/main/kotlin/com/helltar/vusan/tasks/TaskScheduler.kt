@@ -5,6 +5,8 @@ import com.helltar.vusan.agent.AgentRunner
 import com.helltar.vusan.agent.history.ChatHistoryRepository
 import com.helltar.vusan.common.rethrowIfCancellation
 import com.helltar.vusan.i18n.Messages
+import com.helltar.vusan.infra.metrics.Metrics
+import com.helltar.vusan.infra.metrics.TaskFireResult
 import com.helltar.vusan.telegram.ScheduledAttribution
 import com.helltar.vusan.telegram.TelegramDelivery
 import io.github.oshai.kotlinlogging.KotlinLogging
@@ -14,6 +16,7 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import java.time.Instant
 import kotlin.time.Duration
+import kotlin.time.Duration.Companion.milliseconds
 import kotlin.time.Duration.Companion.seconds
 
 class TaskScheduler(
@@ -67,15 +70,20 @@ class TaskScheduler(
         val latenessMillis = now.toEpochMilli() - task.nextFireAt.toEpochMilli()
 
         if (latenessMillis > maxLateness.inWholeMilliseconds) {
+            Metrics.recordTaskFired(TaskFireResult.MISSED)
             handleMissed(task, now)
             return
         }
 
+        Metrics.recordTaskLateness(latenessMillis.milliseconds)
+
         // reschedule even when the run itself fails: a task left due would be retried on every
         // poll tick, re-running the full agent indefinitely on a persistent error.
         runCatching { fire(task) }
+            .onSuccess { Metrics.recordTaskFired(TaskFireResult.OK) }
             .onFailure {
                 it.rethrowIfCancellation()
+                Metrics.recordTaskFired(TaskFireResult.ERROR)
                 log.error(it) { "task id=${task.id} run failed; rescheduling without retry" }
             }
 

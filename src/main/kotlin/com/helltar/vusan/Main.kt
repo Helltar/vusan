@@ -9,6 +9,9 @@ import com.helltar.vusan.config.AppConfig
 import com.helltar.vusan.config.resolveLlmRuntime
 import com.helltar.vusan.infra.Db
 import com.helltar.vusan.infra.Http
+import com.helltar.vusan.infra.metrics.Metrics
+import com.helltar.vusan.infra.metrics.MetricsServer
+import com.helltar.vusan.infra.metrics.PeersRepository
 import com.helltar.vusan.stt.OpenAiWhisperClient
 import com.helltar.vusan.tasks.TaskScheduler
 import com.helltar.vusan.tasks.TasksRepository
@@ -42,6 +45,15 @@ suspend fun main() = coroutineScope {
         val memory = MemoryRepository(config.maxMemoryPerScope)
         val tasks = TasksRepository()
 
+        val peers =
+            config.metricsPort?.let { port ->
+                MetricsServer.start(port)
+                PeersRepository()
+            } ?: run {
+                log.info { "METRICS_PORT not set — Prometheus metrics disabled" }
+                null
+            }
+
         val toolRegistryFactory = ToolRegistryFactory(http, config, history, memory, tasks, executor, llm.model)
         val agentFactory = AgentFactory(executor, toolRegistryFactory, llm.model, llm.chatParams, config.systemPrompt)
         val agentRunner = AgentRunner(agentFactory, history, memory)
@@ -56,7 +68,7 @@ suspend fun main() = coroutineScope {
 
         val bot = telegramBot(config.telegramBotToken)
         val delivery = TelegramDelivery(bot)
-        val botRunner = TelegramBotRunner(bot, delivery, agentRunner, history, config.allowedIds, voiceTranscriber)
+        val botRunner = TelegramBotRunner(bot, delivery, agentRunner, history, config.allowedIds, voiceTranscriber, peers)
 
         val maxLateness = config.taskMaxLatenessMinutes.minutes
         val scheduler = TaskScheduler(tasks, agentRunner, delivery, history, maxLateness)
@@ -67,13 +79,16 @@ suspend fun main() = coroutineScope {
 
         val botJob = botRunner.start()
         val schedulerJob = scheduler.launchIn(this)
+        val gaugesJob = peers?.let { Metrics.launchGaugeRefresh(this, it, tasks) }
 
         try {
             botJob.join()
         } finally {
+            gaugesJob?.cancelAndJoin()
             schedulerJob.cancelAndJoin()
         }
     } finally {
+        MetricsServer.stop()
         executor?.close()
         http?.close()
         Db.disconnect()
