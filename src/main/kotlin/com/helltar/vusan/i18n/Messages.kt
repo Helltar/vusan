@@ -15,6 +15,8 @@ interface Messages {
 
     fun taskMissedNotice(id: Long, title: String?, scheduledFor: String): String
 
+    fun taskScheduledByNotice(mention: String): String
+
     companion object {
         fun of(language: Language): Messages =
             when (language) {
@@ -54,6 +56,8 @@ internal object EnglishMessages : Messages {
         val label = title?.let { " «$it»" } ?: ""
         return "⏰ Skipped task #$id$label scheduled for $scheduledFor — I was offline."
     }
+
+    override fun taskScheduledByNotice(mention: String) = "⏰ Scheduled by $mention"
 }
 
 internal object UkrainianMessages : Messages {
@@ -84,4 +88,6 @@ internal object UkrainianMessages : Messages {
         val label = title?.let { " «$it»" } ?: ""
         return "⏰ Пропустила завдання #$id$label, заплановане на $scheduledFor — я була офлайн."
     }
+
+    override fun taskScheduledByNotice(mention: String) = "⏰ Заплановано: $mention"
 }

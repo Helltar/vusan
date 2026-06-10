@@ -189,7 +189,7 @@ class TaskScheduler(
 
         return ScheduledAttribution(
             creatorMessageId = task.creatorMessageId,
-            headerText = "⏰ Scheduled by $mention"
+            headerText = Messages.of(task.language).taskScheduledByNotice(mention)
         )
     }
 }
