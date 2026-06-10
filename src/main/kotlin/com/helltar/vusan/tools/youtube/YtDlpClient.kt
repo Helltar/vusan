@@ -126,6 +126,7 @@ class YtDlpClient(
         }
 
         val retryableFailures = mutableListOf<YtDlpResult.Failure>()
+        var lastTooLarge: YtDlpResult.TooLarge? = null
 
         candidates.forEachIndexed { index, candidate ->
             val label = "$kind candidate ${index + 1}/${candidates.size}"
@@ -146,8 +147,11 @@ class YtDlpClient(
                 }
 
                 is YtDlpResult.TooLarge -> {
-                    log.warn { "yt-dlp $label is too large url=[${candidate.url}] sizeBytes=${result.sizeBytes}" }
-                    return result
+                    log.warn {
+                        "yt-dlp $label is too large url=[${candidate.url}] sizeBytes=${result.sizeBytes}, " +
+                                "trying next candidate"
+                    }
+                    lastTooLarge = result
                 }
 
                 is YtDlpResult.NotFound -> {
@@ -179,7 +183,7 @@ class YtDlpClient(
             )
         }
 
-        return retryableFailures.lastOrNull() ?: YtDlpResult.NotFound
+        return lastTooLarge ?: retryableFailures.lastOrNull() ?: YtDlpResult.NotFound
     }
 
     private suspend fun <T> runMediaDownload(
@@ -205,6 +209,12 @@ class YtDlpClient(
             ?: return DownloadAttempt(YtDlpResult.Failure("yt-dlp produced no metadata"))
 
         if (!Files.exists(outputFile)) {
+            // with --max-filesize yt-dlp skips the oversized download and still exits 0
+            if (commandResult.stdout.containsAny("File is larger than max-filesize")) {
+                log.warn { "yt-dlp download rejected by max-filesize url=[$url] maxFileSizeMb=$maxFileSizeMb" }
+                return DownloadAttempt(YtDlpResult.TooLarge(sizeBytes = maxFileSizeMb.toLong() * 1024 * 1024))
+            }
+
             return DownloadAttempt(YtDlpResult.Failure("yt-dlp finished but no output file at $outputFile"))
         }
 
