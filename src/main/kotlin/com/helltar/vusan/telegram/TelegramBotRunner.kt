@@ -15,6 +15,7 @@ import com.helltar.vusan.request.AttachedFile
 import dev.inmo.kslog.common.KSLog
 import dev.inmo.kslog.common.LogLevel
 import dev.inmo.tgbotapi.bot.TelegramBot
+import dev.inmo.tgbotapi.bot.exceptions.CommonBotException
 import dev.inmo.tgbotapi.extensions.api.bot.getMe
 import dev.inmo.tgbotapi.extensions.api.chat.get.getChat
 import dev.inmo.tgbotapi.extensions.api.send.withTypingAction
@@ -24,6 +25,8 @@ import dev.inmo.tgbotapi.types.chat.ExtendedPublicChat
 import dev.inmo.tgbotapi.types.message.abstracts.CommonMessage
 import dev.inmo.tgbotapi.types.message.content.*
 import io.github.oshai.kotlinlogging.KotlinLogging
+import io.ktor.client.network.sockets.ConnectTimeoutException
+import io.ktor.client.plugins.HttpRequestTimeoutException
 import kotlinx.coroutines.Job
 
 internal class TelegramBotRunner(
@@ -56,14 +59,23 @@ internal class TelegramBotRunner(
     init {
         // ktgbotapi reports long-polling and handler failures through KSLog; keep the level and the
         // throwable so those errors surface in the app log instead of vanishing as bare debug lines.
+        // getUpdates timeouts are routine long-polling noise: longPollingFlow skips them
+        // (autoSkipTimeoutExceptions), but DefaultKtorRequestsExecutor has already logged them
+        // at ERROR by then, so they are demoted to debug here.
         KSLog.default = KSLog { level: LogLevel, _, message: Any, throwable: Throwable? ->
-            when (level) {
-                LogLevel.ERROR, LogLevel.ASSERT -> log.error(throwable) { message.toString() }
-                LogLevel.WARNING -> log.warn(throwable) { message.toString() }
+            when {
+                throwable.isPollingTimeoutNoise() -> log.debug(throwable) { message.toString() }
+                level == LogLevel.ERROR || level == LogLevel.ASSERT -> log.error(throwable) { message.toString() }
+                level == LogLevel.WARNING -> log.warn(throwable) { message.toString() }
                 else -> log.debug(throwable) { message.toString() }
             }
         }
     }
+
+    // mirrors the autoSkipTimeoutExceptions check in ktgbotapi's longPollingFlow
+    private fun Throwable?.isPollingTimeoutNoise(): Boolean =
+        this is HttpRequestTimeoutException || this is ConnectTimeoutException ||
+                (this is CommonBotException && (cause is HttpRequestTimeoutException || cause is ConnectTimeoutException))
 
     suspend fun start(): Job {
         val botProfile = bot.profile()
