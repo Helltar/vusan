@@ -64,10 +64,7 @@ data class AppConfig(
                     elevenLabsKey?.let {
                         ElevenLabsTtsConfig(
                             model = readEnv("ELEVENLABS_TTS_MODEL") ?: ElevenLabsTtsConfig.DEFAULT_MODEL,
-                            voiceId = readEnv("ELEVENLABS_VOICE_ID") ?: ElevenLabsTtsConfig.DEFAULT_VOICE_ID,
-                            outputFormat =
-                                readEnv("ELEVENLABS_TTS_OUTPUT_FORMAT")
-                                    ?: ElevenLabsTtsConfig.DEFAULT_OUTPUT_FORMAT
+                            voiceId = readEnv("ELEVENLABS_VOICE_ID") ?: ElevenLabsTtsConfig.DEFAULT_VOICE_ID
                         )
                     }
             )

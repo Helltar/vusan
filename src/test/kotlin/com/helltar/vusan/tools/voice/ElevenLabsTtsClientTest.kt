@@ -22,8 +22,7 @@ class ElevenLabsTtsClientTest {
 
     private val config = ElevenLabsTtsConfig(
         model = "eleven_v3",
-        voiceId = "voice-test",
-        outputFormat = "mp3_44100_128"
+        voiceId = "voice-test"
     )
 
     @Test
@@ -36,7 +35,7 @@ class ElevenLabsTtsClientTest {
                     assertEquals("https", request.url.protocol.name)
                     assertEquals("api.elevenlabs.io", request.url.host)
                     assertEquals("/v1/text-to-speech/${config.voiceId}", request.url.encodedPath)
-                    assertEquals(config.outputFormat, request.url.parameters["output_format"])
+                    assertFalse(request.url.parameters.contains("output_format"))
                     assertEquals("sk-test", request.headers["xi-api-key"])
 
                     val body = assertIs<TextContent>(request.body)

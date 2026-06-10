@@ -98,11 +98,10 @@ and the bot keeps running.
 
 ### TTS tuning
 
-| Variable                       | Default                | Description                        |
-|--------------------------------|------------------------|------------------------------------|
-| `ELEVENLABS_VOICE_ID`          | `VD1if7jDVYtAKs4P0FIY` | Voice used for generated speech.   |
-| `ELEVENLABS_TTS_MODEL`         | `eleven_v3`            | ElevenLabs TTS model.              |
-| `ELEVENLABS_TTS_OUTPUT_FORMAT` | `mp3_44100_128`        | Audio format for generated speech. |
+| Variable               | Default                | Description                      |
+|------------------------|------------------------|----------------------------------|
+| `ELEVENLABS_VOICE_ID`  | `VD1if7jDVYtAKs4P0FIY` | Voice used for generated speech. |
+| `ELEVENLABS_TTS_MODEL` | `eleven_v3`            | ElevenLabs TTS model.            |
 
 ### STT tuning
 

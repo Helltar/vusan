@@ -44,7 +44,7 @@ class VoiceTools(
 
                     log.warn(e) {
                         "ElevenLabs TTS synthesize failed: model=${config.model} voiceId=${config.voiceId} " +
-                                "outputFormat=${config.outputFormat} textChars=${trimmed.length}"
+                                "textChars=${trimmed.length}"
                     }
 
                     return@suspendToolGuard "Voice synthesis failed: ${e.message ?: e::class.simpleName}"
