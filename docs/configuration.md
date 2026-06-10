@@ -174,11 +174,10 @@ The agent can schedule tasks in three forms:
 - `every <interval>` — fixed interval, minimum 5 minutes, timezone-independent. Missed fires skip ahead.
 - `cron <UNIX expr>` — clock-time patterns, evaluated in the task's timezone. Missed fires skip ahead.
 
-| Variable                     | Default | Description                                  |
-|------------------------------|---------|----------------------------------------------|
-| `MAX_TASKS_PER_USER`         | `5`     | Maximum stored tasks per user.               |
-| `TASK_POLL_INTERVAL_SECONDS` | `30`    | How often the scheduler checks due tasks.    |
-| `TASK_MAX_LATENESS_MINUTES`  | `60`    | Recurring tasks older than this are skipped. |
+| Variable                    | Default | Description                                  |
+|-----------------------------|---------|----------------------------------------------|
+| `MAX_TASKS_PER_USER`        | `5`     | Maximum stored tasks per user.               |
+| `TASK_MAX_LATENESS_MINUTES` | `60`    | Recurring tasks older than this are skipped. |
 
 ## Storage and binaries
 

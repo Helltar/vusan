@@ -140,7 +140,6 @@ class MemoryRepositoryTest {
             sandboxUrl = null,
             systemPrompt = null,
             taskMaxLatenessMinutes = 60L,
-            taskPollIntervalSeconds = 30L,
             tavilyApiKey = null,
             telegramBotToken = "test",
             ytDlpCookiesFile = null

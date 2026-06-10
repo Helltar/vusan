@@ -92,8 +92,8 @@ A normal user message travels:
 
 ## Background and side flows
 
-- **Task scheduler** — `TaskScheduler.launchIn` polls the task store every
-  `TASK_POLL_INTERVAL_SECONDS`. Due tasks run through `AgentRunner.handleScheduled` (waits for the
+- **Task scheduler** — `TaskScheduler.launchIn` polls the task store every 30 seconds. Due tasks
+  run through `AgentRunner.handleScheduled` (waits for the
   user lock instead of bailing), are delivered with `TelegramDelivery.sendScheduled`, and then
   append produced history turns. Tasks overdue beyond `TASK_MAX_LATENESS_MINUTES` (e.g. after
   downtime) get a "missed" notice and are advanced/disabled rather than fired. A task whose run

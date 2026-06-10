@@ -20,7 +20,6 @@ data class AppConfig(
     val sandboxUrl: String?,
     val systemPrompt: String?,
     val taskMaxLatenessMinutes: Long,
-    val taskPollIntervalSeconds: Long,
     val tavilyApiKey: String?,
     val telegramBotToken: String,
     val ytDlpCookiesFile: String?
@@ -31,7 +30,6 @@ data class AppConfig(
         private const val DEFAULT_MAX_TASKS_PER_USER = 5
         private const val DEFAULT_SANDBOX_TIMEOUT_SECONDS = 120L
         private const val DEFAULT_TASK_MAX_LATENESS_MINUTES = 60L
-        private const val DEFAULT_TASK_POLL_INTERVAL_SECONDS = 30L
 
         private val dotenv = dotenv { ignoreIfMissing = true }
 
@@ -61,10 +59,6 @@ data class AppConfig(
                 taskMaxLatenessMinutes =
                     readEnv("TASK_MAX_LATENESS_MINUTES")?.toLongOrNull()
                         ?: DEFAULT_TASK_MAX_LATENESS_MINUTES,
-
-                taskPollIntervalSeconds =
-                    readEnv("TASK_POLL_INTERVAL_SECONDS")?.toLongOrNull()
-                        ?: DEFAULT_TASK_POLL_INTERVAL_SECONDS,
 
                 elevenLabsTts =
                     elevenLabsKey?.let {

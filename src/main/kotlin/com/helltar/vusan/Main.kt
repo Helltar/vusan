@@ -22,7 +22,6 @@ import io.ktor.client.*
 import kotlinx.coroutines.cancelAndJoin
 import kotlinx.coroutines.coroutineScope
 import kotlin.time.Duration.Companion.minutes
-import kotlin.time.Duration.Companion.seconds
 
 private val log = KotlinLogging.logger {}
 
@@ -59,9 +58,8 @@ suspend fun main() = coroutineScope {
         val delivery = TelegramDelivery(bot)
         val botRunner = TelegramBotRunner(bot, delivery, agentRunner, history, config.allowedIds, voiceTranscriber)
 
-        val pollInterval = config.taskPollIntervalSeconds.seconds
         val maxLateness = config.taskMaxLatenessMinutes.minutes
-        val scheduler = TaskScheduler(tasks, agentRunner, delivery, history, pollInterval, maxLateness)
+        val scheduler = TaskScheduler(tasks, agentRunner, delivery, history, maxLateness)
 
         log.info { "Starting Vusan: provider=[${llm.providerLabel}] model=[${llm.model.id}]" }
         val toolNames = toolRegistryFactory.availableToolNames

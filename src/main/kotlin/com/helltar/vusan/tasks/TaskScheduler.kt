@@ -14,24 +14,28 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import java.time.Instant
 import kotlin.time.Duration
+import kotlin.time.Duration.Companion.seconds
 
 class TaskScheduler(
     private val repo: TasksRepository,
     private val agentRunner: AgentRunner,
     private val delivery: TelegramDelivery,
     private val history: ChatHistoryRepository,
-    private val pollInterval: Duration,
     private val maxLateness: Duration
 ) {
 
     private companion object {
         val log = KotlinLogging.logger {}
+
+        // implementation detail, not policy: a 30s tick is cheap (one SQLite query per tick)
+        // and fine-grained enough for the 5-minute minimum task interval
+        val POLL_INTERVAL = 30.seconds
     }
 
     fun launchIn(scope: CoroutineScope): Job =
         scope.launch {
             log.info {
-                "TaskScheduler started: pollInterval=${pollInterval.inWholeSeconds}s " +
+                "TaskScheduler started: pollInterval=${POLL_INTERVAL.inWholeSeconds}s " +
                         "maxLateness=${maxLateness.inWholeMinutes}m"
             }
 
@@ -42,7 +46,7 @@ class TaskScheduler(
                         log.error(it) { "task scheduler tick failed" }
                     }
 
-                delay(pollInterval)
+                delay(POLL_INTERVAL)
             }
         }
 
