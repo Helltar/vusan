@@ -5,7 +5,6 @@ import com.helltar.vusan.infra.metrics.Metrics
 import com.helltar.vusan.infra.metrics.SenderFallback
 import com.helltar.vusan.outbox.BotOutput
 import dev.inmo.tgbotapi.bot.TelegramBot
-import dev.inmo.tgbotapi.bot.exceptions.ReplyMessageNotFoundException
 import dev.inmo.tgbotapi.bot.exceptions.RequestException
 import dev.inmo.tgbotapi.extensions.api.send.media.*
 import dev.inmo.tgbotapi.extensions.api.send.polls.sendQuizPoll
@@ -568,7 +567,7 @@ internal object TelegramOutputSender {
         { caption?.let { sendText(bot, chatId, it, replyParameters) } }
 
     private fun rethrowIfReplyNotFound(error: Throwable, replyParameters: ReplyParameters?) {
-        if (replyParameters != null && error is ReplyMessageNotFoundException) throw error
+        if (replyParameters != null && error.isReplyMessageNotFound()) throw error
     }
 }
 

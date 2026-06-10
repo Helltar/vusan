@@ -8,7 +8,6 @@ import com.helltar.vusan.infra.metrics.Metrics
 import com.helltar.vusan.outbox.BotOutput
 import com.helltar.vusan.outbox.OutboxItem
 import dev.inmo.tgbotapi.bot.TelegramBot
-import dev.inmo.tgbotapi.bot.exceptions.ReplyMessageNotFoundException
 import dev.inmo.tgbotapi.bot.exceptions.RequestException
 import dev.inmo.tgbotapi.types.*
 import dev.inmo.tgbotapi.types.message.abstracts.CommonMessage
@@ -164,7 +163,7 @@ class TelegramDelivery(private val bot: TelegramBot) {
         } catch (e: Throwable) {
             e.rethrowIfCancellation()
 
-            if (!routedToPrivate && deliveryTarget.replyToMessageId != null && e is ReplyMessageNotFoundException) {
+            if (!routedToPrivate && deliveryTarget.replyToMessageId != null && e.isReplyMessageNotFound()) {
                 runCatching { sendOutgoing(currentChatTarget, item, caption, messages) }
                     .onFailure { retryError ->
                         retryError.rethrowIfCancellation()
@@ -210,7 +209,7 @@ class TelegramDelivery(private val bot: TelegramBot) {
         } catch (e: Throwable) {
             e.rethrowIfCancellation()
 
-            if (!routedToPrivate && deliveryTarget.replyToMessageId != null && e is ReplyMessageNotFoundException) {
+            if (!routedToPrivate && deliveryTarget.replyToMessageId != null && e.isReplyMessageNotFound()) {
                 sendReplyText(deliveryTarget.withoutReply(), text, messages)
                 Metrics.recordDelivery(DeliveryOutcome.REPLY_MISSING)
                 return true
