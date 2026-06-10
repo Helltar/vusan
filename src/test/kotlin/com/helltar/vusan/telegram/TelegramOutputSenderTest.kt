@@ -51,6 +51,22 @@ class TelegramOutputSenderTest {
     }
 
     @Test
+    fun `caption with rejected markdown is resent captionless plus a markdown document`() = runBlocking {
+        val bot = RecordingBot(failMarkdownCaptionOnce = true)
+
+        TelegramOutputSender.send(
+            bot = bot,
+            item = BotOutput.Photo(byteArrayOf(1, 2, 3), "chart.png"),
+            chatId = 1L.toChatIdentifier(),
+            replyParameters = null,
+            caption = "**broken_markdown",
+            markdownFileNotice = "notice"
+        )
+
+        assertEquals(listOf("sendPhoto", "sendPhoto", "sendDocument"), bot.methods)
+    }
+
+    @Test
     fun `text reply with rejected markdown is sent as a markdown document`() = runBlocking {
         val bot = RecordingBot(failMarkdownText = true)
 
@@ -67,13 +83,25 @@ class TelegramOutputSenderTest {
 
     private class RecordingBot(
         private val failPhoto: Boolean = false,
-        private val failMarkdownText: Boolean = false
+        private val failMarkdownText: Boolean = false,
+        private var failMarkdownCaptionOnce: Boolean = false
     ) : TelegramBot {
         val methods = mutableListOf<String>()
 
         override suspend fun <T : Any> execute(request: Request<T>): T {
             val method = request.method()
             methods += method
+
+            // the first sendPhoto carries the markdown caption; the captionless retry succeeds.
+            if (failMarkdownCaptionOnce && method == "sendPhoto") {
+                failMarkdownCaptionOnce = false
+                throw CommonRequestException(
+                    response = Response(description = "Bad Request: can't parse entities"),
+                    plainAnswer = """{"description":"Bad Request: can't parse entities"}""",
+                    message = null,
+                    cause = null
+                )
+            }
 
             if (failPhoto && method == "sendPhoto") {
                 throw InvalidPhotoDimensionsException(

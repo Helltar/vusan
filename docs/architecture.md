@@ -85,8 +85,9 @@ A normal user message travels:
    private chat when a tool requested it), anchoring replies to the original message and falling
    back when Telegram rejects markdown, a reply target is gone, a private DM is blocked, or a
    media send fails. Rejected markdown on a reply text is re-sent as a `.md` document (with a
-   short localized note) so the formatting is preserved; media captions and bot notices fall back
-   to plain text. Sandbox image previews opt out of photo-to-document fallback because their
+   short localized note) so the formatting is preserved; a rejected media caption resends the
+   media captionless and delivers the caption the same `.md` way, while bot notices fall back to
+   plain text. Sandbox image previews opt out of photo-to-document fallback because their
    uncompressed document copy is already queued. `TelegramOutputSender` performs the low-level
    API calls.
 8. **Persist** — produced history turns are appended via `ChatHistoryRepository`.
