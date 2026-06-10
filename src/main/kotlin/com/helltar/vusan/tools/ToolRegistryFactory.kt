@@ -62,7 +62,7 @@ class ToolRegistryFactory(
     private val elevenLabsTts = config.elevenLabsTts
     private val imageVisionClient = ImageVisionClient(promptExecutor, model)
     private val telegramChannelClient = TelegramChannelClient(http)
-    private val ytDlpClient = YtDlpClient(config.ytDlpPath, config.ytDlpCookiesFile)
+    private val ytDlpClient = YtDlpClient(config.ytDlpCookiesFile)
 
     private val telegramChannel =
         TelegramChannelTools(telegramChannelClient, TelegramChannelImageDescriber(promptExecutor, model))

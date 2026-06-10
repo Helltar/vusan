@@ -143,7 +143,6 @@ class MemoryRepositoryTest {
             taskPollIntervalSeconds = 30L,
             tavilyApiKey = null,
             telegramBotToken = "test",
-            ytDlpCookiesFile = null,
-            ytDlpPath = "yt-dlp"
+            ytDlpCookiesFile = null
         )
 }

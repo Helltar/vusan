@@ -23,8 +23,7 @@ data class AppConfig(
     val taskPollIntervalSeconds: Long,
     val tavilyApiKey: String?,
     val telegramBotToken: String,
-    val ytDlpCookiesFile: String?,
-    val ytDlpPath: String
+    val ytDlpCookiesFile: String?
 ) {
     companion object {
         private const val DEFAULT_LLM_REQUEST_TIMEOUT_SECONDS = 120L
@@ -51,7 +50,6 @@ data class AppConfig(
                 tavilyApiKey = readEnv("TAVILY_API_KEY"),
                 telegramBotToken = requireEnv("TELEGRAM_BOT_TOKEN"),
                 ytDlpCookiesFile = readEnv("YT_DLP_COOKIES_FILE"),
-                ytDlpPath = readEnv("YT_DLP_PATH") ?: "yt-dlp",
 
                 maxMemoryPerScope = readEnv("MAX_MEMORY_PER_SCOPE")?.toIntOrNull() ?: DEFAULT_MAX_MEMORY_PER_SCOPE,
                 maxTasksPerUser = readEnv("MAX_TASKS_PER_USER")?.toIntOrNull() ?: DEFAULT_MAX_TASKS_PER_USER,

@@ -19,12 +19,12 @@ data class YtDlpCommandResult(
 )
 
 class YtDlpClient(
-    private val ytDlpPath: String = "yt-dlp",
     private val cookiesFile: String? = null,
     private val timeoutSeconds: Long = 180
 ) {
 
     private companion object {
+        const val YT_DLP_BINARY = "yt-dlp"
         const val SEARCH_RESULT_LIMIT = 5
         const val FORMAT_UNAVAILABLE_MARKER = "Requested format is not available"
         const val VIDEO_MAX_FILE_SIZE_MB = 50
@@ -41,7 +41,7 @@ class YtDlpClient(
 
     private suspend fun getRuntimeDiagnostics(): String = diagnosticsMutex.withLock {
         cachedDiagnostics ?: run {
-            val versionResult = runCommand(listOf(ytDlpPath, "--version"))
+            val versionResult = runCommand(listOf(YT_DLP_BINARY, "--version"))
 
             val version =
                 when {
@@ -55,7 +55,7 @@ class YtDlpClient(
                     else -> "exit-${versionResult.exitCode}:${versionResult.stdout.trim().take(120)}"
                 }
 
-            val diagnostics = "binary=[$ytDlpPath] version=[$version]"
+            val diagnostics = "binary=[$YT_DLP_BINARY] version=[$version]"
             cachedDiagnostics = diagnostics
             diagnostics
         }
@@ -224,7 +224,7 @@ class YtDlpClient(
     private suspend fun searchCandidates(query: String): List<YtDlpSearchCandidate> {
         val command =
             buildList {
-                add(ytDlpPath)
+                add(YT_DLP_BINARY)
                 add("--ignore-config")
                 add("--no-warnings")
                 addAll(
@@ -273,7 +273,7 @@ class YtDlpClient(
     ): DownloadAttempt<YtDlpTrack> {
         val command =
             buildList {
-                add(ytDlpPath)
+                add(YT_DLP_BINARY)
                 add("--ignore-config")
                 addAll(listOf("-x", "--audio-format", "m4a"))
                 addAll(listOf("--format", "bestaudio/best"))
@@ -345,7 +345,7 @@ class YtDlpClient(
     ): DownloadAttempt<YtDlpVideo> {
         val command =
             buildList {
-                add(ytDlpPath)
+                add(YT_DLP_BINARY)
                 add("--ignore-config")
                 addAll(listOf("--format", "bv*[height<=$heightCap]+ba/b[height<=$heightCap]/b"))
                 addAll(listOf("--format-sort", "res:$heightCap,vcodec:h264,ext:mp4:m4a"))
@@ -498,7 +498,7 @@ class YtDlpClient(
     private suspend fun logUnavailableFormatsDiagnostics(url: String, query: String) {
         val command =
             buildList {
-                add(ytDlpPath)
+                add(YT_DLP_BINARY)
                 add("--ignore-config")
                 add("--no-warnings")
                 add("--list-formats")

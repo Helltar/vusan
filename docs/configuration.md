@@ -185,7 +185,6 @@ The agent can schedule tasks in three forms:
 | Variable              | Default            | Description                                        |
 |-----------------------|--------------------|----------------------------------------------------|
 | `DB_FILE`             | `data/db/vusan.db` | SQLite path. Parent dirs are created on first run. |
-| `YT_DLP_PATH`         | `yt-dlp`           | Path to the `yt-dlp` binary.                       |
 | `YT_DLP_COOKIES_FILE` | —                  | Optional YouTube cookies file.                     |
 
 `YT_DLP_COOKIES_FILE` must point to a Netscape-format `cookies.txt`; see
