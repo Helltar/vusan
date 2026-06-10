@@ -50,12 +50,21 @@ with the list of supported values. `openai-compatible` instead targets any OpenA
 waits 15 minutes, during which the bot stays silent; the shorter cap lets a stalled call fail fast so the agent can
 deliver an error reply. Raise it for slow local servers or heavy reasoning models.
 
+Grok example:
+
+```dotenv
+LLM_PROVIDER=openai-compatible
+LLM_API_KEY=xai-qwerty
+LLM_BASE_URL=https://api.x.ai
+LLM_MODEL=grok-4.3
+```
+
 llama.cpp example (local server needs no real key, but the value must be non-empty):
 
 ```dotenv
 LLM_PROVIDER=openai-compatible
-LLM_BASE_URL=http://localhost:8080
 LLM_API_KEY=sk-no-key-required
+LLM_BASE_URL=http://localhost:8080
 LLM_MODEL=unsloth/Qwen3.6-27B-GGUF:Q4_K_M
 ```
 
@@ -63,8 +72,8 @@ Ollama example (Ollama serves an OpenAI-compatible API; the key value is ignored
 
 ```dotenv
 LLM_PROVIDER=openai-compatible
-LLM_BASE_URL=http://localhost:11434
 LLM_API_KEY=ollama
+LLM_BASE_URL=http://localhost:11434
 LLM_MODEL=gemma4
 ```
 
