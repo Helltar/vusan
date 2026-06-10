@@ -181,7 +181,8 @@ class TaskScheduler(
 
         val mention =
             when {
-                task.creatorUsername != null -> "@${task.creatorUsername}"
+                // creatorUsername already carries the leading "@" (ktgbotapi Username.full)
+                task.creatorUsername != null -> task.creatorUsername
                 task.creatorDisplayName != null -> "[${task.creatorDisplayName}](tg://user?id=${task.userId})"
                 else -> "user ${task.userId}"
             }
