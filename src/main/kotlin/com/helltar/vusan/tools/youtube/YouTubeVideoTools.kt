@@ -39,6 +39,7 @@ class YouTubeVideoTools(private val client: YtDlpClient, private val outbox: Bot
                         durationSeconds = video.durationSeconds,
                         width = video.width,
                         height = video.height,
+                        thumbnail = video.thumbnailBytes,
                         sourceUrl = video.sourceUrl
                     )
                 )

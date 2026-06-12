@@ -62,6 +62,7 @@ sealed class BotOutput {
         val durationSeconds: Int? = null,
         val width: Int? = null,
         val height: Int? = null,
+        val thumbnail: ByteArray? = null,
         val sourceUrl: String? = null
     ) : BotOutput() {
         override val acceptsCaption: Boolean get() = true

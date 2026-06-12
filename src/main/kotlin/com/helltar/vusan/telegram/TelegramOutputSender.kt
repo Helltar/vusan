@@ -404,6 +404,7 @@ internal object TelegramOutputSender {
                     bot.sendVideo(
                         chatId = chatId,
                         video = file(),
+                        thumb = video.thumbnail?.asMultipartFile("thumbnail.jpg"),
                         text = text,
                         parseMode = parseMode,
                         duration = video.durationSeconds?.toLong(),

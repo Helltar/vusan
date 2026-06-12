@@ -44,6 +44,7 @@ class YtDlpVideo(
     val durationSeconds: Int?,
     val width: Int?,
     val height: Int?,
+    val thumbnailBytes: ByteArray?,
     val sourceUrl: String?
 )
 

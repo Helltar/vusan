@@ -5,9 +5,14 @@ import kotlinx.coroutines.*
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import kotlinx.serialization.json.Json
+import java.awt.RenderingHints
+import java.awt.image.BufferedImage
+import java.io.ByteArrayOutputStream
 import java.nio.file.Files
 import java.nio.file.Path
 import java.util.concurrent.TimeUnit
+import javax.imageio.ImageIO
+import kotlin.math.roundToInt
 import kotlin.time.Duration
 import kotlin.time.Duration.Companion.seconds
 
@@ -360,6 +365,7 @@ class YtDlpClient(
                 addAll(listOf("--format", "bv*[height<=$heightCap]+ba/b[height<=$heightCap]/b"))
                 addAll(listOf("--format-sort", "res:$heightCap,vcodec:h264,ext:mp4:m4a"))
                 addAll(listOf("--merge-output-format", "mp4", "--remux-video", "mp4"))
+                addAll(listOf("--write-thumbnail", "--convert-thumbnails", "jpg"))
                 addAll(listOf("--no-playlist", "--no-warnings"))
                 addAll(listOf("--max-filesize", "${maxFileSizeMb}M"))
                 add("--print-json")
@@ -376,10 +382,17 @@ class YtDlpClient(
                 durationSeconds = info.duration?.toInt(),
                 width = info.width,
                 height = info.height,
+                thumbnailBytes = loadThumbnail(workDir.resolve("video.jpg"), url),
                 sourceUrl = info.webpageUrl
             )
         }
     }
+
+    // telegram falls back to a black placeholder when a bot upload has no preview, so a missing thumbnail is not fatal
+    private fun loadThumbnail(path: Path, url: String): ByteArray? =
+        runCatching { Files.readAllBytes(path).asTelegramVideoThumbnail() }
+            .getOrNull()
+            .also { if (it == null) log.info { "yt-dlp video thumbnail unavailable at $path url=[$url]" } }
 
     private suspend fun videoCandidates(query: String): List<YtDlpSearchCandidate> {
         val trimmed = query.trim()
@@ -560,3 +573,33 @@ class YtDlpClient(
 
 private fun String.containsAny(vararg needles: String): Boolean =
     needles.any { contains(it, ignoreCase = true) }
+
+private const val THUMBNAIL_MAX_SIDE = 320
+private const val THUMBNAIL_MAX_BYTES = 200 * 1024
+
+/**
+ * Converts image bytes into a Telegram-compliant video thumbnail: JPEG, at most
+ * [THUMBNAIL_MAX_SIDE] px per side, under [THUMBNAIL_MAX_BYTES]. Returns null for
+ * undecodable input.
+ */
+internal fun ByteArray.asTelegramVideoThumbnail(): ByteArray? {
+    val source = runCatching { ImageIO.read(inputStream()) }.getOrNull() ?: return null
+    val scale = (THUMBNAIL_MAX_SIDE.toDouble() / maxOf(source.width, source.height)).coerceAtMost(1.0)
+    val width = (source.width * scale).roundToInt().coerceAtLeast(1)
+    val height = (source.height * scale).roundToInt().coerceAtLeast(1)
+
+    // redraw onto an alpha-free canvas so the jpeg writer accepts any source color model
+    val canvas = BufferedImage(width, height, BufferedImage.TYPE_INT_RGB)
+
+    canvas.createGraphics().apply {
+        setRenderingHint(RenderingHints.KEY_INTERPOLATION, RenderingHints.VALUE_INTERPOLATION_BILINEAR)
+        drawImage(source, 0, 0, width, height, null)
+        dispose()
+    }
+
+    val output = ByteArrayOutputStream()
+
+    if (!ImageIO.write(canvas, "jpg", output)) return null
+
+    return output.toByteArray().takeIf { it.size <= THUMBNAIL_MAX_BYTES }
+}

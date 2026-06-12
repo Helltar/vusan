@@ -22,7 +22,7 @@ Items marked *(opt-in)* require an API key or an extra service — see
 - **Web/image/page lookup** *(opt-in)* — searches the web, searches and sends images, and
   extracts page text (Tavily).
 - **YouTube video/audio** — searches or downloads YouTube videos/audio via `yt-dlp` and `ffmpeg`,
-  with video size capped for Telegram.
+  with video size capped for Telegram; videos carry the YouTube thumbnail as the preview.
 - **Telegram channels** — reads recent public channel posts from `@username` or `t.me/...`;
   can optionally run vision over post images.
 - **GIFs** *(opt-in)* — searches and sends GIFs (Giphy).
