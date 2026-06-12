@@ -35,9 +35,8 @@ Telegram ──► telegram/ ──► agent/ ──► tools/ ──► externa
   (`codeExecution`) can lazily download).
 - **`tasks/`** — scheduled-task subsystem: storage, recurrence math, and the background
   `TaskScheduler`.
-- **`infra/`** — cross-cutting infrastructure: the SQLite/Exposed `Db` singleton, the Ktor
-  `Http` client, and Prometheus metrics (`infra/metrics/` — the `Metrics` registry, the
-  `MetricsServer` endpoint, and the `PeersRepository` audience stats).
+- **`infra/`** — cross-cutting infrastructure: the SQLite/Exposed `Db` singleton and the Ktor
+  `Http` client.
 - **`config/`** — `.env` parsing (`AppConfig`) and LLM provider/model resolution (`LlmRuntime`).
 - **`stt/`** — OpenAI speech-to-text client (`OpenAiWhisperClient`, default model
   `gpt-4o-transcribe`); used for voice transcription, opt-in via `OPENAI_STT_API_KEY`.
@@ -104,20 +103,6 @@ A normal user message travels:
 - **History summarization** — `agent/history/ChatHistory.summarizeForPrompt` keeps recent turns
   verbatim and condenses older ones so the prompt stays within budget while keeping
   tool-call/result pairs anchored.
-- **Observability** — `infra/metrics/Metrics` is the singleton Prometheus registry (mirroring
-  `Db`/`Http`) and the only place metric names and tags are defined; call sites record through its
-  typed API. `MetricsServer` serves the exposition on `/metrics`, opt-in via `METRICS_PORT`
-  (unset = disabled — see [configuration.md](configuration.md#metrics)). Counters and timers
-  cover inbound messages, agent
-  runs (outcome/duration), LLM calls and token usage, tool calls, delivery outcomes and sender
-  fallbacks, scheduler fires/lateness, and STT results; tags are deliberately low-cardinality
-  (never `chat_id`/`user_id`). Audience gauges (known/active chats and users) come from the
-  `peers` table: `TelegramBotRunner` upserts a chat+user row per agent-bound message, and a
-  60-second refresher coroutine (`Metrics.launchGaugeRefresh`) reads `PeersRepository.stats()`
-  into the gauges — gauges never query the DB per scrape. `peers` rows are never trimmed or
-  cleared, so the counts survive restarts and history wipes. With metrics disabled, the peers
-  upserts and the refresher are skipped too (in-memory counter recording still happens but is
-  never served).
 - **LLM provider resolution** — `config/LlmRuntime.resolveLlmRuntime` turns
   `AppConfig.llmProvider` into a Koog client/model/params triple. Native clients cover OpenAI
   (with prompt caching), Anthropic, Google, and DeepSeek — models are matched against each
@@ -128,10 +113,8 @@ A normal user message travels:
 
 `Main.kt` wires everything in order: load `AppConfig` → connect `Db` → create the `Http` client
 and LLM runtime → build repositories, `ToolRegistryFactory`, `AgentFactory`, `AgentRunner` →
-optionally enable voice transcription and metrics (`METRICS_PORT` starts the metrics server and
-enables peers tracking) → start `TelegramBotRunner`, the `TaskScheduler`, and (when metrics are
-on) the gauge refresher, then block on the bot job until shutdown (stopping the metrics server
-and closing the executor, HTTP client, and DB in `finally`).
+optionally enable voice transcription → start `TelegramBotRunner` and launch `TaskScheduler`,
+then block on the bot job until shutdown (closing the executor, HTTP client, and DB in `finally`).
 
 ## Where to look when…
 
@@ -152,7 +135,6 @@ A symptom-to-source map for finding the right file fast. Paths are under
 | An env var has no effect                                                         | `config/AppConfig.kt` (parsing) — and check it is documented in [`configuration.md`](configuration.md) + [`.env.example`](../.env.example)              |
 | Model / provider / request-timeout selection                                     | `config/LlmRuntime.kt` (provider → client/model/params)                                                                                                 |
 | Garbled or empty tool-call crashes from a flaky model                            | `agent/AgentFactory.kt` — `vusanSingleRunStrategy` and `missingRequiredArgs` short-circuit them                                                         |
-| A metric is missing from `/metrics` or a counter never moves                     | `infra/metrics/Metrics.kt` (names/tags/gauge refresher) and the recording call site; the endpoint itself is `infra/metrics/MetricsServer.kt`            |
 
 ## Adding a tool
 

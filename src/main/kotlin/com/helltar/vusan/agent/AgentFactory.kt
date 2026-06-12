@@ -24,7 +24,6 @@ import com.helltar.vusan.agent.history.toolCallArgsForHistory
 import com.helltar.vusan.agent.memory.MemoryEntry
 import com.helltar.vusan.common.collapseWhitespaceAndCap
 import com.helltar.vusan.common.xmlBlock
-import com.helltar.vusan.infra.metrics.Metrics
 import com.helltar.vusan.outbox.BotOutbox
 import com.helltar.vusan.request.RequestContext
 import com.helltar.vusan.tools.ToolRegistryFactory
@@ -132,8 +131,6 @@ class AgentFactory(
                                 "args=[${args.collapseWhitespaceAndCap(TOOL_LOG_ARGS_MAX_CHARS).orEmpty()}]"
                     }
 
-                    Metrics.recordToolCall(toolName, isError)
-
                     toolEvents(
                         ToolEvent(
                             toolCallId = toolCallId ?: "$toolName-${seq++}",
@@ -146,11 +143,8 @@ class AgentFactory(
                 }
 
                 onLLMCallCompleted { ctx ->
-                    val meta = ctx.response?.metaInfo
-                    Metrics.recordLlmCall(meta?.inputTokensCount, meta?.outputTokensCount, meta?.totalTokensCount)
-
-                    meta?.let {
-                        tokenUsage(TokenUsage(it.inputTokensCount, it.outputTokensCount, it.totalTokensCount))
+                    ctx.response?.metaInfo?.let { meta ->
+                        tokenUsage(TokenUsage(meta.inputTokensCount, meta.outputTokensCount, meta.totalTokensCount))
                     }
                 }
 

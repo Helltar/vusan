@@ -9,9 +9,6 @@ import com.helltar.vusan.common.isEffectivelyBlank
 import com.helltar.vusan.common.rethrowIfCancellation
 import com.helltar.vusan.i18n.Language
 import com.helltar.vusan.i18n.Messages
-import com.helltar.vusan.infra.metrics.Metrics
-import com.helltar.vusan.infra.metrics.RunOutcome
-import com.helltar.vusan.infra.metrics.RunTrigger
 import com.helltar.vusan.outbox.BotOutbox
 import com.helltar.vusan.outbox.BotOutput
 import com.helltar.vusan.outbox.OutboxItem
@@ -19,11 +16,8 @@ import com.helltar.vusan.request.AttachedFile
 import com.helltar.vusan.request.RequestContext
 import com.helltar.vusan.tools.message.MessageTools
 import io.github.oshai.kotlinlogging.KotlinLogging
-import kotlinx.coroutines.currentCoroutineContext
-import kotlinx.coroutines.isActive
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
-import kotlin.time.TimeSource
 
 data class AgentRequest(
     val chatId: Long,
@@ -62,12 +56,11 @@ class AgentRunner(
 
         try {
             if (!lock.tryLock()) {
-                Metrics.recordAgentRun(RunTrigger.MESSAGE, RunOutcome.BUSY)
                 return AgentResult(outputs = emptyList(), comment = Messages.of(request.language).busyReply)
             }
 
             try {
-                return runAgent(request, RunTrigger.MESSAGE)
+                return runAgent(request)
             } finally {
                 lock.unlock()
             }
@@ -80,121 +73,105 @@ class AgentRunner(
         val lock = retainLock(request.userId)
 
         try {
-            return lock.withLock { runAgent(request, RunTrigger.SCHEDULED) }
+            return lock.withLock { runAgent(request) }
         } finally {
             releaseLock(request.userId)
         }
     }
 
-    private suspend fun runAgent(request: AgentRequest, trigger: RunTrigger): AgentResult {
-        val start = TimeSource.Monotonic.markNow()
-        var outcome = RunOutcome.UNEXPECTED_ERROR
-        Metrics.agentRunsInflight.incrementAndGet()
+    private suspend fun runAgent(request: AgentRequest): AgentResult {
+        val context =
+            RequestContext(
+                chatId = request.chatId,
+                userId = request.userId,
+                messageId = request.messageId,
+                replyToMessageId = request.replyToMessageId,
+                senderUsername = request.messageContext?.userUsername,
+                senderDisplayName = request.messageContext?.userDisplayName,
+                chatIsPrivate = request.messageContext?.isPrivate ?: request.chatIsPrivate,
+                attachedFile = request.attachedFile,
+                language = request.language
+            )
 
-        try {
-            val context =
-                RequestContext(
-                    chatId = request.chatId,
-                    userId = request.userId,
-                    messageId = request.messageId,
-                    replyToMessageId = request.replyToMessageId,
-                    senderUsername = request.messageContext?.userUsername,
-                    senderDisplayName = request.messageContext?.userDisplayName,
-                    chatIsPrivate = request.messageContext?.isPrivate ?: request.chatIsPrivate,
-                    attachedFile = request.attachedFile,
-                    language = request.language
-                )
+        val outbox = BotOutbox()
+        val promptHistory = summarizeForPrompt(history.load(request.userId))
 
-            val outbox = BotOutbox()
-            val promptHistory = summarizeForPrompt(history.load(request.userId))
+        val userMemory = memory.load(MemoryScope.USER, request.userId)
+        val chatMemory = if (context.chatIsPrivate) emptyList() else memory.load(MemoryScope.CHAT, request.chatId)
 
-            val userMemory = memory.load(MemoryScope.USER, request.userId)
-            val chatMemory = if (context.chatIsPrivate) emptyList() else memory.load(MemoryScope.CHAT, request.chatId)
-
-            log.info {
-                "prompt history loaded: user=${request.userId} chat=${request.chatId} " +
-                        "turns=${promptHistory.turns.size} summaryChars=${promptHistory.summary?.length ?: 0} " +
-                        "userMemory=${userMemory.size} chatMemory=${chatMemory.size} " +
-                        "promptChars=${request.prompt.length} historyChars=${request.historyEntry.length} " +
-                        "attachedFile=${request.attachedFile != null}"
-            }
-
-            val toolEvents = mutableListOf<ToolEvent>()
-            val tokenUsages = mutableListOf<TokenUsage>()
-
-            val agent =
-                agentFactory.build(
-                    userId = request.userId,
-                    history = promptHistory,
-                    context = context,
-                    outbox = outbox,
-                    toolEvents = toolEvents::add,
-                    tokenUsage = tokenUsages::add,
-                    messageContext = request.messageContext,
-                    userMemory = userMemory,
-                    chatMemory = chatMemory
-                )
-
-            val answer =
-                try {
-                    agent.run(request.prompt)
-                } catch (e: Throwable) {
-                    e.rethrowIfCancellation()
-                    outcome = classifyFailure(request, e)
-                    return AgentResult(outputs = emptyList(), comment = replyForFailure(outcome, request.language))
-                }
-
-            log.info {
-                "token usage: chat=${request.chatId} user=${request.userId} ${tokenUsageLogSummary(tokenUsages)}"
-            }
-
-            val outputs = outbox.pending
-            val comment = extractFinalComment(answer, outputs)
-
-            if (outputs.isEmpty() && comment.isNullOrBlank()) {
-                log.info { "agent produced no output for chat=${request.chatId} user=${request.userId}; staying silent" }
-                outcome = RunOutcome.SILENT
-                return AgentResult(outputs = emptyList(), comment = null)
-            }
-
-            val assistantText = assistantTextForHistory(outputs, comment)
-
-            val historyTurns =
-                buildHistoryTurns(
-                    userEntry = request.historyEntry,
-                    toolEvents = toolEvents,
-                    assistantText = assistantText
-                )
-
-            log.info {
-                "agent reply: chat=${request.chatId} user=${request.userId} " +
-                        "outputs=[${outputsLogSummary(outputs)}] " +
-                        "text=[${assistantText?.collapseWhitespaceAndCap(LOG_REPLY_MAX_CHARS).orEmpty()}]"
-            }
-
-            outcome = RunOutcome.OK
-            return AgentResult(outputs, comment, outbox.redirectToPrivate, historyTurns)
-        } finally {
-            Metrics.agentRunsInflight.decrementAndGet()
-
-            // a run aborted by cancellation (shutdown) is not a result; skip the sample.
-            if (currentCoroutineContext().isActive) {
-                Metrics.recordAgentRun(trigger, outcome, start.elapsedNow())
-            }
+        log.info {
+            "prompt history loaded: user=${request.userId} chat=${request.chatId} " +
+                    "turns=${promptHistory.turns.size} summaryChars=${promptHistory.summary?.length ?: 0} " +
+                    "userMemory=${userMemory.size} chatMemory=${chatMemory.size} " +
+                    "promptChars=${request.prompt.length} historyChars=${request.historyEntry.length} " +
+                    "attachedFile=${request.attachedFile != null}"
         }
+
+        val toolEvents = mutableListOf<ToolEvent>()
+        val tokenUsages = mutableListOf<TokenUsage>()
+
+        val agent =
+            agentFactory.build(
+                userId = request.userId,
+                history = promptHistory,
+                context = context,
+                outbox = outbox,
+                toolEvents = toolEvents::add,
+                tokenUsage = tokenUsages::add,
+                messageContext = request.messageContext,
+                userMemory = userMemory,
+                chatMemory = chatMemory
+            )
+
+        val answer =
+            try {
+                agent.run(request.prompt)
+            } catch (e: Throwable) {
+                e.rethrowIfCancellation()
+                return AgentResult(outputs = emptyList(), comment = replyForAgentFailure(request, e))
+            }
+
+        log.info {
+            "token usage: chat=${request.chatId} user=${request.userId} ${tokenUsageLogSummary(tokenUsages)}"
+        }
+
+        val outputs = outbox.pending
+        val comment = extractFinalComment(answer, outputs)
+
+        if (outputs.isEmpty() && comment.isNullOrBlank()) {
+            log.info { "agent produced no output for chat=${request.chatId} user=${request.userId}; staying silent" }
+            return AgentResult(outputs = emptyList(), comment = null)
+        }
+
+        val assistantText = assistantTextForHistory(outputs, comment)
+
+        val historyTurns =
+            buildHistoryTurns(
+                userEntry = request.historyEntry,
+                toolEvents = toolEvents,
+                assistantText = assistantText
+            )
+
+        log.info {
+            "agent reply: chat=${request.chatId} user=${request.userId} " +
+                    "outputs=[${outputsLogSummary(outputs)}] " +
+                    "text=[${assistantText?.collapseWhitespaceAndCap(LOG_REPLY_MAX_CHARS).orEmpty()}]"
+        }
+
+        return AgentResult(outputs, comment, outbox.redirectToPrivate, historyTurns)
     }
 
-    // classify the failure once and log accordingly; the outcome drives both the run metric and the
-    // user-facing reply. LLM provider errors arrive as a large JSON body, so they get a single capped
-    // WARN line; a transient overload (429/503) gets a friendly "try again" reply, any other provider
-    // error and genuine unexpected failures get the generic fallback (the latter with a full stack
-    // trace, since it points at a real bug).
-    private fun classifyFailure(request: AgentRequest, e: Throwable): RunOutcome {
+    // pick the user-facing reply and log accordingly. LLM provider errors arrive as a large JSON body, so
+    // they get a single capped WARN line; a transient overload (429/503) gets a friendly "try again" reply,
+    // any other provider error and genuine unexpected failures get the generic fallback (the latter with a
+    // full stack trace, since it points at a real bug).
+    private fun replyForAgentFailure(request: AgentRequest, e: Throwable): String {
+        val messages = Messages.of(request.language)
         val providerError = generateSequence(e) { it.cause }.filterIsInstance<LLMClientException>().firstOrNull()
 
         if (providerError == null) {
             log.error(e) { "agent.run failed for chat=${request.chatId} user=${request.userId}" }
-            return RunOutcome.UNEXPECTED_ERROR
+            return messages.fallbackErrorReply
         }
 
         log.warn {
@@ -202,12 +179,7 @@ class AgentRunner(
                     providerError.message?.collapseWhitespaceAndCap(PROVIDER_ERROR_LOG_MAX_CHARS).orEmpty()
         }
 
-        return if (providerError.isTransientOverload()) RunOutcome.OVERLOADED else RunOutcome.PROVIDER_ERROR
-    }
-
-    private fun replyForFailure(outcome: RunOutcome, language: Language): String {
-        val messages = Messages.of(language)
-        return if (outcome == RunOutcome.OVERLOADED) messages.overloadedReply else messages.fallbackErrorReply
+        return if (providerError.isTransientOverload()) messages.overloadedReply else messages.fallbackErrorReply
     }
 
     private fun retainLock(userId: Long): Mutex =

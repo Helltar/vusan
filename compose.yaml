@@ -10,10 +10,6 @@ services:
     container_name: vusan-container
     restart: unless-stopped
     env_file: .env
-    # to scrape prometheus /metrics from the host, set METRICS_PORT=9090 in .env and
-    # publish it loopback-only (the endpoint has no auth):
-    # ports:
-    #   - "127.0.0.1:9090:9090"
     networks:
       - default
       - vusan-sandbox-net

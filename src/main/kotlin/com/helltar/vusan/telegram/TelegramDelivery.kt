@@ -3,8 +3,6 @@ package com.helltar.vusan.telegram
 import com.helltar.vusan.agent.AgentResult
 import com.helltar.vusan.common.rethrowIfCancellation
 import com.helltar.vusan.i18n.Messages
-import com.helltar.vusan.infra.metrics.DeliveryOutcome
-import com.helltar.vusan.infra.metrics.Metrics
 import com.helltar.vusan.outbox.BotOutput
 import com.helltar.vusan.outbox.OutboxItem
 import dev.inmo.tgbotapi.bot.TelegramBot
@@ -158,7 +156,6 @@ class TelegramDelivery(private val bot: TelegramBot) {
     ): ItemDeliveryOutcome {
         try {
             sendOutgoing(deliveryTarget, item, caption, messages)
-            Metrics.recordDelivery(DeliveryOutcome.OK)
             return ItemDeliveryOutcome.Ok
         } catch (e: Throwable) {
             e.rethrowIfCancellation()
@@ -173,20 +170,15 @@ class TelegramDelivery(private val bot: TelegramBot) {
                         }
                     }
 
-                Metrics.recordDelivery(DeliveryOutcome.REPLY_MISSING)
                 return ItemDeliveryOutcome.ReplyMissing
             }
 
             if (routedToPrivate && isPrivateChatBlocked(e)) {
-                Metrics.recordDelivery(DeliveryOutcome.PRIVATE_BLOCKED)
                 return ItemDeliveryOutcome.PrivateBlocked
             }
 
             log.warn(e) { "failed to send outgoing item to chat=${deliveryTarget.chatId}" }
 
-            // the metric distinguishes the swallowed failure; the returned outcome intentionally stays Ok
-            // so the remaining items are still delivered.
-            Metrics.recordDelivery(DeliveryOutcome.FAILED)
             return ItemDeliveryOutcome.Ok
         }
     }
@@ -204,22 +196,18 @@ class TelegramDelivery(private val bot: TelegramBot) {
 
         try {
             sendReplyText(deliveryTarget, text, messages)
-            Metrics.recordDelivery(DeliveryOutcome.OK)
             return false
         } catch (e: Throwable) {
             e.rethrowIfCancellation()
 
             if (!routedToPrivate && deliveryTarget.replyToMessageId != null && e.isReplyMessageNotFound()) {
                 sendReplyText(deliveryTarget.withoutReply(), text, messages)
-                Metrics.recordDelivery(DeliveryOutcome.REPLY_MISSING)
                 return true
             }
 
             if (routedToPrivate && isPrivateChatBlocked(e)) {
-                Metrics.recordDelivery(DeliveryOutcome.PRIVATE_BLOCKED)
                 notifyPrivateChatBlocked(originTarget, messages)
             } else {
-                Metrics.recordDelivery(DeliveryOutcome.FAILED)
                 log.warn(e) { "failed to send text to chat=${deliveryTarget.chatId}" }
             }
 

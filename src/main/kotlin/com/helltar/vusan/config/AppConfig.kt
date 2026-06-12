@@ -15,7 +15,6 @@ data class AppConfig(
     val llmProvider: LlmProviderConfig,
     val maxMemoryPerScope: Int,
     val maxTasksPerUser: Int,
-    val metricsPort: Int?,
     val openAiStt: OpenAiSttConfig?,
     val sandboxTimeoutSeconds: Long,
     val sandboxUrl: String?,
@@ -31,7 +30,6 @@ data class AppConfig(
         private const val DEFAULT_MAX_TASKS_PER_USER = 5
         private const val DEFAULT_SANDBOX_TIMEOUT_SECONDS = 120L
         private const val DEFAULT_TASK_MAX_LATENESS_MINUTES = 60L
-        private const val MAX_PORT = 65_535
 
         private val dotenv = dotenv { ignoreIfMissing = true }
 
@@ -44,7 +42,6 @@ data class AppConfig(
                 elevenLabsApiKey = elevenLabsKey,
                 giphyApiKey = readEnv("GIPHY_API_KEY"),
                 llmProvider = resolveLlmProvider(),
-                metricsPort = resolveMetricsPort(),
                 openAiStt = resolveOpenAiStt(),
                 sandboxUrl = readEnv("SANDBOX_URL"),
                 systemPrompt = resolveSystemPrompt(),
@@ -79,13 +76,6 @@ data class AppConfig(
             val file = Path(path)
             require(file.isReadable()) { "SYSTEM_PROMPT_FILE=[$path] does not exist or is not readable" }
             return file.readText().trim().ifBlank { null }
-        }
-
-        private fun resolveMetricsPort(): Int? {
-            val raw = readEnv("METRICS_PORT") ?: return null
-            val port = raw.toIntOrNull()
-            require(port != null && port in 1..MAX_PORT) { "METRICS_PORT=[$raw] is not a valid port" }
-            return port
         }
 
         private fun resolveOpenAiStt(): OpenAiSttConfig? {
