@@ -4,13 +4,16 @@ import com.helltar.vusan.outbox.BotOutput
 import dev.inmo.tgbotapi.bot.TelegramBot
 import dev.inmo.tgbotapi.bot.exceptions.CommonRequestException
 import dev.inmo.tgbotapi.bot.exceptions.InvalidPhotoDimensionsException
+import dev.inmo.tgbotapi.requests.abstracts.MultipartRequest
 import dev.inmo.tgbotapi.requests.abstracts.Request
 import dev.inmo.tgbotapi.types.Response
 import dev.inmo.tgbotapi.types.message.abstracts.ContentMessage
 import kotlinx.coroutines.runBlocking
+import kotlinx.serialization.json.jsonPrimitive
 import java.lang.reflect.Proxy
 import kotlin.test.Test
 import kotlin.test.assertEquals
+import kotlin.test.assertIs
 
 class TelegramOutputSenderTest {
 
@@ -81,16 +84,44 @@ class TelegramOutputSenderTest {
         assertEquals(listOf("sendMessage", "sendDocument"), bot.methods)
     }
 
+    @Test
+    fun `video thumbnail is sent as both thumbnail and message cover`() = runBlocking {
+        val bot = RecordingBot()
+
+        TelegramOutputSender.send(
+            bot = bot,
+            item = BotOutput.Video(
+                bytes = byteArrayOf(1, 2, 3),
+                filename = "video.mp4",
+                thumbnail = byteArrayOf(4, 5, 6)
+            ),
+            chatId = 1L.toChatIdentifier(),
+            replyParameters = null,
+            caption = null,
+            markdownFileNotice = "notice"
+        )
+
+        val request = assertIs<MultipartRequest<*>>(bot.requests.single())
+        val thumbnailFile = request.mediaMap.values.single { it.filename == "thumbnail.jpg" }
+        val coverFile = request.mediaMap.values.single { it.filename == "cover.jpg" }
+
+        assertEquals(listOf("cover.jpg", "thumbnail.jpg", "video.mp4"), request.mediaMap.values.map { it.filename }.sorted())
+        assertEquals(thumbnailFile.fileId, request.paramsJson["thumbnail"]?.jsonPrimitive?.content)
+        assertEquals("attach://${coverFile.fileId}", request.paramsJson["cover"]?.jsonPrimitive?.content)
+    }
+
     private class RecordingBot(
         private val failPhoto: Boolean = false,
         private val failMarkdownText: Boolean = false,
         private var failMarkdownCaptionOnce: Boolean = false
     ) : TelegramBot {
         val methods = mutableListOf<String>()
+        val requests = mutableListOf<Request<*>>()
 
         override suspend fun <T : Any> execute(request: Request<T>): T {
             val method = request.method()
             methods += method
+            requests += request
 
             // the first sendPhoto carries the markdown caption; the captionless retry succeeds.
             if (failMarkdownCaptionOnce && method == "sendPhoto") {

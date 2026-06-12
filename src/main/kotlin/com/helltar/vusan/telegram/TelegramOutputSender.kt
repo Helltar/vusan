@@ -24,6 +24,8 @@ import io.github.oshai.kotlinlogging.KotlinLogging
 internal object TelegramOutputSender {
 
     private const val MARKDOWN_FALLBACK_FILENAME = "message.md"
+    private const val VIDEO_THUMBNAIL_FILENAME = "thumbnail.jpg"
+    private const val VIDEO_COVER_FILENAME = "cover.jpg"
 
     private val log = KotlinLogging.logger {}
 
@@ -388,6 +390,7 @@ internal object TelegramOutputSender {
     ) {
         val fullCaption = captionWithSourceLink(caption, video.sourceUrl)
         val file = { video.bytes.asMultipartFile(video.filename) }
+        val thumbnail = video.thumbnail
 
         sendMediaWithDocumentFallback(
             bot = bot,
@@ -404,7 +407,8 @@ internal object TelegramOutputSender {
                     bot.sendVideo(
                         chatId = chatId,
                         video = file(),
-                        thumb = video.thumbnail?.asMultipartFile("thumbnail.jpg"),
+                        thumb = thumbnail?.asMultipartFile(VIDEO_THUMBNAIL_FILENAME),
+                        cover = thumbnail?.asMultipartFile(VIDEO_COVER_FILENAME),
                         text = text,
                         parseMode = parseMode,
                         duration = video.durationSeconds?.toLong(),
