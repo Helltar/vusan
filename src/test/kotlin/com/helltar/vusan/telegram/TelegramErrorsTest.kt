@@ -23,6 +23,19 @@ class TelegramErrorsTest {
     }
 
     @Test
+    fun `detects markdownv2 reserved character errors from telegram`() {
+        val error =
+            CommonRequestException(
+                response = Response(description = "Bad Request: can't parse entities: Character '.' is reserved and must be escaped with the preceding '\\'"),
+                plainAnswer = "",
+                message = null,
+                cause = null
+            )
+
+        assertTrue(error.isMarkdownError())
+    }
+
+    @Test
     fun `does not treat unrelated telegram errors as markdown issues`() {
         val error =
             CommonRequestException(
@@ -33,6 +46,35 @@ class TelegramErrorsTest {
             )
 
         assertFalse(error.isMarkdownError())
+    }
+
+    @Test
+    fun `detects forbidden and chat-not-found delivery rejections`() {
+        val descriptions =
+            listOf(
+                "Forbidden: bot was blocked by the user",
+                "Forbidden: bot can't initiate conversation with a user",
+                "Forbidden: user is deactivated",
+                "Bad Request: chat not found"
+            )
+
+        descriptions.forEach { description ->
+            val error = CommonRequestException(Response(description = description), "", null, null)
+            assertTrue(error.isForbidden(), "expected isForbidden for [$description]")
+        }
+    }
+
+    @Test
+    fun `does not treat unrelated telegram errors as forbidden`() {
+        val error =
+            CommonRequestException(
+                response = Response(description = "Bad Request: message is too long"),
+                plainAnswer = "",
+                message = null,
+                cause = null
+            )
+
+        assertFalse(error.isForbidden())
     }
 
     @Test

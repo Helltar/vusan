@@ -3,32 +3,17 @@ package com.helltar.vusan.telegram
 import dev.inmo.tgbotapi.bot.exceptions.ReplyMessageNotFoundException
 import dev.inmo.tgbotapi.bot.exceptions.RequestException
 
-private val markdownErrorPatterns =
-    listOf(
-        "can't parse entities",
-        "can't find end of",
-        "wrong markdown",
-        "entity beginning",
-        "entity end"
-    )
+// telegram prefixes every parse-mode failure with "Bad Request: can't parse entities: ...",
+// regardless of the specific Markdown/MarkdownV2 wording (unclosed entity, reserved character, ...).
+internal fun RequestException.isMarkdownError(): Boolean =
+    response.description?.contains("can't parse entities", ignoreCase = true) == true
 
-private val forbiddenPatterns =
-    listOf(
-        "forbidden",
-        "bot can't initiate conversation",
-        "bot was blocked",
-        "user is deactivated",
-        "chat not found"
-    )
-
-internal fun RequestException.isMarkdownError(): Boolean {
-    val description = response.description?.lowercase() ?: return false
-    return markdownErrorPatterns.any { it in description } || ("character" in description && "is reserved" in description)
-}
-
+// a private delivery rejected by the recipient comes back as a 403 "Forbidden: ..." (bot blocked,
+// can't initiate conversation, user deactivated) or as "Bad Request: chat not found" when the user
+// never interacted with the bot.
 internal fun RequestException.isForbidden(): Boolean {
     val description = response.description?.lowercase() ?: return false
-    return forbiddenPatterns.any { it in description }
+    return "forbidden" in description || "chat not found" in description
 }
 
 // ktgbotapi classifies only the older telegram wordings ("reply message not found",
