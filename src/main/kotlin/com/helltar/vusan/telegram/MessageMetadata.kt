@@ -23,46 +23,46 @@ import dev.inmo.tgbotapi.types.files.PlayableMediaFile
 import dev.inmo.tgbotapi.types.files.SizedMediaFile
 import dev.inmo.tgbotapi.types.files.Sticker
 import dev.inmo.tgbotapi.types.files.TelegramMediaFile
-import dev.inmo.tgbotapi.types.message.abstracts.CommonMessage
+import dev.inmo.tgbotapi.types.message.abstracts.ChatContentMessage
 import dev.inmo.tgbotapi.types.message.abstracts.OptionallyFromUserMessage
 import dev.inmo.tgbotapi.types.message.content.TextedContent
 
 private const val MAX_METADATA_VALUE_CHARS = 500
 
-internal val CommonMessage<*>.chatIdLong: Long
+internal val ChatContentMessage<*>.chatIdLong: Long
     get() = chat.id.chatId.long
 
-internal val CommonMessage<*>.messageIdLong: Long
+internal val ChatContentMessage<*>.messageIdLong: Long
     get() = messageId.long
 
-internal val CommonMessage<*>.canLoadChatDescription: Boolean
+internal val ChatContentMessage<*>.canLoadChatDescription: Boolean
     get() = chat is PublicChat
 
-internal val CommonMessage<*>.isPrivateChat: Boolean
+internal val ChatContentMessage<*>.isPrivateChat: Boolean
     get() = chat is PrivateChat
 
-internal fun CommonMessage<*>.senderIdOrNull(): Long? =
+internal fun ChatContentMessage<*>.senderIdOrNull(): Long? =
     (this as? OptionallyFromUserMessage)?.from?.id?.chatId?.long
 
-internal fun CommonMessage<*>.senderDisplayNameOrNull(): String? =
+internal fun ChatContentMessage<*>.senderDisplayNameOrNull(): String? =
     (this as? OptionallyFromUserMessage)?.from?.let { displayName(it.firstName, it.lastName) }
 
-internal fun CommonMessage<*>.senderUsernameOrNull(): String? =
+internal fun ChatContentMessage<*>.senderUsernameOrNull(): String? =
     (this as? OptionallyFromUserMessage)?.from?.username?.full
 
-internal fun CommonMessage<*>.senderLanguageCodeOrNull(): String? =
+internal fun ChatContentMessage<*>.senderLanguageCodeOrNull(): String? =
     ((this as? OptionallyFromUserMessage)?.from as? WithOptionalLanguageCode)?.languageCode
 
-internal fun CommonMessage<*>.textSnippetOrNull(): String? =
+internal fun ChatContentMessage<*>.textSnippetOrNull(): String? =
     (content as? TextedContent)?.text
 
-internal fun CommonMessage<*>.replyAuthorIdOrNull(): Long? =
+internal fun ChatContentMessage<*>.replyAuthorIdOrNull(): Long? =
     ((replyInfo as? ReplyInfo.Internal)?.message as? OptionallyFromUserMessage)?.from?.id?.chatId?.long
 
-internal fun CommonMessage<*>.replyToMessageIdOrNull(): Long? =
+internal fun ChatContentMessage<*>.replyToMessageIdOrNull(): Long? =
     (replyInfo as? ReplyInfo.Internal)?.message?.metaInfo?.messageId?.long
 
-internal fun CommonMessage<*>.toMessageContext(chatDescription: String?): MessageContext? {
+internal fun ChatContentMessage<*>.toMessageContext(chatDescription: String?): MessageContext? {
     val senderId = senderIdOrNull() ?: return null
 
     return MessageContext(

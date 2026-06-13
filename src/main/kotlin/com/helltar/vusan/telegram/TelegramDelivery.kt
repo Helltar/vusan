@@ -8,7 +8,7 @@ import com.helltar.vusan.outbox.OutboxItem
 import dev.inmo.tgbotapi.bot.TelegramBot
 import dev.inmo.tgbotapi.bot.exceptions.RequestException
 import dev.inmo.tgbotapi.types.*
-import dev.inmo.tgbotapi.types.message.abstracts.CommonMessage
+import dev.inmo.tgbotapi.types.message.abstracts.ChatContentMessage
 import io.github.oshai.kotlinlogging.KotlinLogging
 
 internal fun Long.toChatIdentifier(): IdChatIdentifier =
@@ -40,7 +40,7 @@ class TelegramDelivery(private val bot: TelegramBot) {
 
     private enum class ItemDeliveryOutcome { Ok, ReplyMissing, PrivateBlocked }
 
-    suspend fun send(message: CommonMessage<*>, result: AgentResult) {
+    suspend fun send(message: ChatContentMessage<*>, result: AgentResult) {
         dispatch(
             result = result,
             originTarget = DeliveryTarget(chatId = message.chatIdLong, replyToMessageId = message.messageIdLong),

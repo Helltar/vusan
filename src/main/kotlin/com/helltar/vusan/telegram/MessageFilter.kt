@@ -1,6 +1,6 @@
 package com.helltar.vusan.telegram
 
-import dev.inmo.tgbotapi.types.message.abstracts.CommonMessage
+import dev.inmo.tgbotapi.types.message.abstracts.ChatContentMessage
 import dev.inmo.tgbotapi.types.message.content.MediaGroupContent
 import dev.inmo.tgbotapi.types.message.content.MessageContent
 import dev.inmo.tgbotapi.types.message.content.TextContent
@@ -9,7 +9,7 @@ import dev.inmo.tgbotapi.types.message.textsources.BotCommandTextSource
 import dev.inmo.tgbotapi.types.message.textsources.MentionTextSource
 import dev.inmo.tgbotapi.types.message.textsources.TextMentionTextSource
 
-internal fun shouldHandle(message: CommonMessage<*>, botUserId: Long, botUsername: String?): Boolean {
+internal fun shouldHandle(message: ChatContentMessage<*>, botUserId: Long, botUsername: String?): Boolean {
     if (message.isPrivateChat) return true
 
     val isReplyToBot = message.replyAuthorIdOrNull() == botUserId

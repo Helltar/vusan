@@ -7,7 +7,7 @@ import dev.inmo.tgbotapi.bot.exceptions.InvalidPhotoDimensionsException
 import dev.inmo.tgbotapi.requests.abstracts.MultipartRequest
 import dev.inmo.tgbotapi.requests.abstracts.Request
 import dev.inmo.tgbotapi.types.Response
-import dev.inmo.tgbotapi.types.message.abstracts.ContentMessage
+import dev.inmo.tgbotapi.types.message.abstracts.PrivateContentMessage
 import kotlinx.coroutines.runBlocking
 import kotlinx.serialization.json.jsonPrimitive
 import java.lang.reflect.Proxy
@@ -160,10 +160,10 @@ class TelegramOutputSenderTest {
     }
 }
 
-private fun dummyContentMessage(): ContentMessage<*> =
+private fun dummyContentMessage(): PrivateContentMessage<*> =
     Proxy.newProxyInstance(
-        ContentMessage::class.java.classLoader,
-        arrayOf(ContentMessage::class.java)
+        PrivateContentMessage::class.java.classLoader,
+        arrayOf(PrivateContentMessage::class.java)
     ) { proxy, method, args ->
         when (method.name) {
             "getHasProtectedContent" -> false
@@ -172,4 +172,4 @@ private fun dummyContentMessage(): ContentMessage<*> =
             "equals" -> proxy === args?.firstOrNull()
             else -> error("Unexpected dummy message access: ${method.name}")
         }
-    } as ContentMessage<*>
+    } as PrivateContentMessage<*>

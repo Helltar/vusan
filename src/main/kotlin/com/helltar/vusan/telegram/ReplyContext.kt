@@ -10,7 +10,7 @@ import dev.inmo.tgbotapi.types.ReplyInfo
 import dev.inmo.tgbotapi.types.files.DocumentFile
 import dev.inmo.tgbotapi.types.files.PhotoSize
 import dev.inmo.tgbotapi.types.files.TelegramMediaFile
-import dev.inmo.tgbotapi.types.message.abstracts.CommonMessage
+import dev.inmo.tgbotapi.types.message.abstracts.ChatContentMessage
 import dev.inmo.tgbotapi.types.message.abstracts.ContentMessage
 import dev.inmo.tgbotapi.types.message.abstracts.Message
 import dev.inmo.tgbotapi.types.message.content.*
@@ -29,7 +29,7 @@ internal data class RepliedMessageSummary(
 internal fun isReplyToOtherUser(replyAuthorId: Long?, botUserId: Long): Boolean =
     replyAuthorId != botUserId
 
-internal suspend fun CommonMessage<*>.replySummaryOrNull(
+internal suspend fun ChatContentMessage<*>.replySummaryOrNull(
     bot: TelegramBot,
     voiceTranscriber: VoiceTranscriber?
 ): RepliedMessageSummary? {
@@ -38,7 +38,7 @@ internal suspend fun CommonMessage<*>.replySummaryOrNull(
     return transcript?.let { base.copy(transcript = it) } ?: base
 }
 
-private suspend fun CommonMessage<*>.transcribeRepliedAudioOrNull(
+private suspend fun ChatContentMessage<*>.transcribeRepliedAudioOrNull(
     bot: TelegramBot,
     voiceTranscriber: VoiceTranscriber?
 ): String? {
@@ -60,7 +60,7 @@ private suspend fun CommonMessage<*>.transcribeRepliedAudioOrNull(
     }
 }
 
-internal fun CommonMessage<*>.repliedAttachedFileOrNull(bot: TelegramBot): AttachedFile? {
+internal fun ChatContentMessage<*>.repliedAttachedFileOrNull(bot: TelegramBot): AttachedFile? {
     val replyInfo = replyInfo as? ReplyInfo.Internal ?: return null
     return (replyInfo.message as? ContentMessage<*>)?.content?.toAttachedFileOrNull(bot)
 }

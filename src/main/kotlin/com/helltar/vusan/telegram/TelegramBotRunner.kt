@@ -19,7 +19,7 @@ import dev.inmo.tgbotapi.extensions.api.send.withTypingAction
 import dev.inmo.tgbotapi.extensions.behaviour_builder.buildBehaviourWithLongPolling
 import dev.inmo.tgbotapi.extensions.behaviour_builder.triggers_handling.*
 import dev.inmo.tgbotapi.types.chat.ExtendedPublicChat
-import dev.inmo.tgbotapi.types.message.abstracts.CommonMessage
+import dev.inmo.tgbotapi.types.message.abstracts.ChatContentMessage
 import dev.inmo.tgbotapi.types.message.content.*
 import io.github.oshai.kotlinlogging.KotlinLogging
 import io.ktor.client.network.sockets.ConnectTimeoutException
@@ -97,15 +97,15 @@ internal class TelegramBotRunner(
         }
     }
 
-    private val CommonMessage<*>.language: Language
+    private val ChatContentMessage<*>.language: Language
         get() = Language.fromCode(senderLanguageCodeOrNull())
 
-    private suspend fun handleStartCommand(message: CommonMessage<TextContent>, botProfile: BotProfile) {
+    private suspend fun handleStartCommand(message: ChatContentMessage<TextContent>, botProfile: BotProfile) {
         if (message.isAccepted(botProfile))
             sendReply(message, Messages.of(message.language).startReply)
     }
 
-    private suspend fun handleTextUpdate(message: CommonMessage<TextContent>, botProfile: BotProfile) {
+    private suspend fun handleTextUpdate(message: ChatContentMessage<TextContent>, botProfile: BotProfile) {
         if (isBotCommand(message.content)) return
         if (!message.isAccepted(botProfile)) return
 
@@ -117,7 +117,7 @@ internal class TelegramBotRunner(
     }
 
     private suspend fun handleTranscribableUpdate(
-        message: CommonMessage<TextedContent>,
+        message: ChatContentMessage<TextedContent>,
         audioInput: AudioInput,
         botProfile: BotProfile,
         inputKind: String
@@ -134,7 +134,7 @@ internal class TelegramBotRunner(
     }
 
     private suspend fun handleTranscribedAudio(
-        message: CommonMessage<*>,
+        message: ChatContentMessage<*>,
         audioInput: AudioInput,
         caption: String,
         botProfile: BotProfile,
@@ -185,13 +185,13 @@ internal class TelegramBotRunner(
         return if (trimmedCaption.isEmpty()) wrapped else "$trimmedCaption\n\n$wrapped"
     }
 
-    private suspend fun handleStickerUpdate(message: CommonMessage<StickerContent>, botProfile: BotProfile) {
+    private suspend fun handleStickerUpdate(message: ChatContentMessage<StickerContent>, botProfile: BotProfile) {
         if (!message.isAccepted(botProfile)) return
         val prompt = describeIncomingSticker(message.content.media)
         dispatchToAgent(message, prompt, botProfile, inputKind = "sticker", loadRepliedAttachment = false)
     }
 
-    private suspend fun handleMediaUpdate(message: CommonMessage<*>, botProfile: BotProfile, inputKind: String) {
+    private suspend fun handleMediaUpdate(message: ChatContentMessage<*>, botProfile: BotProfile, inputKind: String) {
         if (!message.isAccepted(botProfile)) return
 
         val caption =
@@ -213,7 +213,7 @@ internal class TelegramBotRunner(
     // photo/document updates. only the first photo is loadable as the attached file; the model is
     // told about the rest so it does not claim to have inspected every item.
     private suspend fun handleGalleryUpdate(
-        message: CommonMessage<MediaGroupContent<VisualMediaGroupPartContent>>,
+        message: ChatContentMessage<MediaGroupContent<VisualMediaGroupPartContent>>,
         botProfile: BotProfile
     ) {
         if (!message.isAccepted(botProfile)) return
@@ -244,7 +244,7 @@ internal class TelegramBotRunner(
         )
     }
 
-    private fun CommonMessage<*>.isAccepted(botProfile: BotProfile): Boolean {
+    private fun ChatContentMessage<*>.isAccepted(botProfile: BotProfile): Boolean {
         if (!shouldHandle(this, botProfile.userId, botProfile.username))
             return false
 
@@ -256,7 +256,7 @@ internal class TelegramBotRunner(
         return true
     }
 
-    private fun CommonMessage<*>.logDenied() {
+    private fun ChatContentMessage<*>.logDenied() {
         log.warn {
             buildString {
                 append("denied (not in allowlist): chat=$chatIdLong user=${senderIdOrNull()} type=${content.contentTypeName()}")
@@ -267,7 +267,7 @@ internal class TelegramBotRunner(
         }
     }
 
-    private fun CommonMessage<*>.isAllowed(): Boolean {
+    private fun ChatContentMessage<*>.isAllowed(): Boolean {
         if (allowedIds.isEmpty()) return false
         if (chatIdLong in allowedIds) return true
         val userId = senderIdOrNull() ?: return false
@@ -275,7 +275,7 @@ internal class TelegramBotRunner(
     }
 
     private suspend fun dispatchToAgent(
-        message: CommonMessage<*>,
+        message: ChatContentMessage<*>,
         prompt: String,
         botProfile: BotProfile,
         inputKind: String,
@@ -303,7 +303,7 @@ internal class TelegramBotRunner(
     }
 
     private suspend fun handleAgentMessage(
-        message: CommonMessage<*>,
+        message: ChatContentMessage<*>,
         agentInput: String,
         historyInput: String,
         attachedFile: AttachedFile?,
@@ -365,7 +365,7 @@ internal class TelegramBotRunner(
         }
     }
 
-    private suspend fun sendReply(message: CommonMessage<*>, text: String) {
+    private suspend fun sendReply(message: ChatContentMessage<*>, text: String) {
         TelegramOutputSender.sendText(
             bot = bot,
             chatId = message.chatIdLong.toChatIdentifier(),
@@ -374,7 +374,7 @@ internal class TelegramBotRunner(
         )
     }
 
-    private suspend fun loadChatDescription(message: CommonMessage<*>): String? {
+    private suspend fun loadChatDescription(message: ChatContentMessage<*>): String? {
         if (!message.canLoadChatDescription) return null
 
         return runCatching { bot.getChat(message.chatIdLong.toChatIdentifier()) as? ExtendedPublicChat }
