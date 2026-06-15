@@ -15,6 +15,8 @@ import com.helltar.vusan.tools.files.FileTools
 import com.helltar.vusan.tools.giphy.GiphyClient
 import com.helltar.vusan.tools.giphy.GiphyTools
 import com.helltar.vusan.tools.history.HistoryTools
+import com.helltar.vusan.tools.imagegen.ImageGenTools
+import com.helltar.vusan.tools.imagegen.OpenAiImageClient
 import com.helltar.vusan.tools.memory.MemoryTools
 import com.helltar.vusan.tools.message.MessageTools
 import com.helltar.vusan.tools.poll.PollTools
@@ -60,6 +62,7 @@ class ToolRegistryFactory(
 
     private val currency = CurrencyTools(ExchangeRateClient(http))
     private val elevenLabsTts = config.elevenLabsTts
+    private val openAiImage = config.openAiImage
     private val imageVisionClient = ImageVisionClient(promptExecutor, model)
     private val telegramChannelClient = TelegramChannelClient(http)
     private val ytDlpClient = YtDlpClient(config.ytDlpCookiesFile)
@@ -80,6 +83,11 @@ class ToolRegistryFactory(
     private val elevenLabsTtsClient =
         optional("ELEVENLABS_API_KEY", config.elevenLabsApiKey, "voice/TTS tool") {
             ElevenLabsTtsClient(http, it)
+        }
+
+    private val openAiImageClient =
+        optional("OPENAI_IMAGE_API_KEY", config.openAiImageApiKey, "image generation tool") {
+            OpenAiImageClient(http, it)
         }
 
     private val sandboxClient =
@@ -115,6 +123,10 @@ class ToolRegistryFactory(
 
             if (elevenLabsTtsClient != null && elevenLabsTts != null) {
                 tools(VoiceTools(elevenLabsTtsClient, elevenLabsTts, outbox))
+            }
+
+            if (openAiImageClient != null && openAiImage != null) {
+                tools(ImageGenTools(openAiImageClient, openAiImage, outbox))
             }
         }
 

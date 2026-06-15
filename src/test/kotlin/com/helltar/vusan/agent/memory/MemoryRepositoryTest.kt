@@ -135,6 +135,8 @@ class MemoryRepositoryTest {
             ),
             maxMemoryPerScope = 10,
             maxTasksPerUser = 5,
+            openAiImageApiKey = null,
+            openAiImage = null,
             openAiStt = null,
             sandboxTimeoutSeconds = 30L,
             sandboxUrl = null,

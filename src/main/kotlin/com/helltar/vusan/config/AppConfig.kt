@@ -15,6 +15,8 @@ data class AppConfig(
     val llmProvider: LlmProviderConfig,
     val maxMemoryPerScope: Int,
     val maxTasksPerUser: Int,
+    val openAiImageApiKey: String?,
+    val openAiImage: OpenAiImageConfig?,
     val openAiStt: OpenAiSttConfig?,
     val sandboxTimeoutSeconds: Long,
     val sandboxUrl: String?,
@@ -35,6 +37,7 @@ data class AppConfig(
 
         fun fromEnv(): AppConfig {
             val elevenLabsKey = readEnv("ELEVENLABS_API_KEY")
+            val openAiImageKey = readEnv("OPENAI_IMAGE_API_KEY")
 
             return AppConfig(
                 allowedIds = parseIdSet(readEnv("ALLOWED_IDS")),
@@ -42,6 +45,7 @@ data class AppConfig(
                 elevenLabsApiKey = elevenLabsKey,
                 giphyApiKey = readEnv("GIPHY_API_KEY"),
                 llmProvider = resolveLlmProvider(),
+                openAiImageApiKey = openAiImageKey,
                 openAiStt = resolveOpenAiStt(),
                 sandboxUrl = readEnv("SANDBOX_URL"),
                 systemPrompt = resolveSystemPrompt(),
@@ -65,6 +69,14 @@ data class AppConfig(
                         ElevenLabsTtsConfig(
                             model = readEnv("ELEVENLABS_TTS_MODEL") ?: ElevenLabsTtsConfig.DEFAULT_MODEL,
                             voiceId = readEnv("ELEVENLABS_VOICE_ID") ?: ElevenLabsTtsConfig.DEFAULT_VOICE_ID
+                        )
+                    },
+
+                openAiImage =
+                    openAiImageKey?.let {
+                        OpenAiImageConfig(
+                            model = readEnv("OPENAI_IMAGE_MODEL") ?: OpenAiImageConfig.DEFAULT_MODEL,
+                            quality = readEnv("OPENAI_IMAGE_QUALITY") ?: OpenAiImageConfig.DEFAULT_QUALITY
                         )
                     }
             )

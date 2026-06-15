@@ -103,6 +103,7 @@ and the bot keeps running.
 | GIF lookup                                | `GIPHY_API_KEY`      | Giphy                                 |
 | Voice output                              | `ELEVENLABS_API_KEY` | ElevenLabs TTS                        |
 | Voice input                               | `OPENAI_STT_API_KEY` | Reuse your OpenAI key                 |
+| Image generation                          | `OPENAI_IMAGE_API_KEY` | Reuse your OpenAI key               |
 | Code execution                            | `SANDBOX_URL`        | See [Code execution](#code-execution) |
 
 ### TTS tuning
@@ -118,6 +119,17 @@ and the bot keeps running.
 |-----------------------------------|---------------------|----------------------------------------------------|
 | `OPENAI_STT_MODEL`                | `gpt-4o-transcribe` | Speech-to-text model.                              |
 | `OPENAI_STT_MAX_DURATION_SECONDS` | `300`               | Max voice length to transcribe; longer is refused. |
+
+### Image generation tuning
+
+`OPENAI_IMAGE_API_KEY` enables the `generateImage` tool (OpenAI `/v1/images/generations`). It can
+reuse your OpenAI key. The agent picks the aspect ratio per request; the model and quality are
+operator-controlled so generation cost stays predictable.
+
+| Variable               | Default         | Description                                            |
+|------------------------|-----------------|--------------------------------------------------------|
+| `OPENAI_IMAGE_MODEL`   | `gpt-image-1.5` | Image model.                                           |
+| `OPENAI_IMAGE_QUALITY` | `medium`        | Rendering quality: `low`, `medium`, `high`, or `auto`. |
 
 ## Code execution
 
