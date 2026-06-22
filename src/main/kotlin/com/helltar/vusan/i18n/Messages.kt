@@ -34,7 +34,7 @@ internal object EnglishMessages : Messages {
 
     override val busyReply = "Hold on, I'm still working on your previous request 😊"
 
-    override val fallbackErrorReply = "Oof, that didn't go through — something went wrong while I was handling it. Mind trying again? 🥲"
+    override val fallbackErrorReply = "Something went wrong — try again? 🥲"
 
     override val overloadedReply = "I'm a bit overloaded right now — give me a moment and try again 🙏"
 
@@ -66,7 +66,7 @@ internal object UkrainianMessages : Messages {
 
     override val busyReply = "Зачекай, я ще працюю над твоїм попереднім запитом 😊"
 
-    override val fallbackErrorReply = "Ох, не вдалося — щось пішло не так під час обробки. Спробуєш ще раз? 🥲"
+    override val fallbackErrorReply = "Щось пішло не так — спробуй ще раз? 🥲"
 
     override val overloadedReply = "Зараз я трохи перевантажена — дай хвилинку й спробуй ще раз 🙏"
 
