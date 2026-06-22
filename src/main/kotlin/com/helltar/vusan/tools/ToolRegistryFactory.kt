@@ -126,7 +126,7 @@ class ToolRegistryFactory(
             }
 
             if (openAiImageClient != null && openAiImage != null) {
-                tools(ImageGenTools(openAiImageClient, openAiImage, outbox))
+                tools(ImageGenTools(openAiImageClient, openAiImage, outbox, context.attachedFile))
             }
         }
 

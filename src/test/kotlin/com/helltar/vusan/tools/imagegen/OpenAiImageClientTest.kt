@@ -3,6 +3,7 @@ package com.helltar.vusan.tools.imagegen
 import com.helltar.vusan.config.OpenAiImageConfig
 import com.helltar.vusan.infra.Http
 import io.ktor.client.engine.mock.*
+import io.ktor.client.request.forms.*
 import io.ktor.http.*
 import io.ktor.http.content.*
 import kotlinx.coroutines.runBlocking
@@ -16,6 +17,7 @@ import kotlin.test.assertEquals
 import kotlin.test.assertFailsWith
 import kotlin.test.assertFalse
 import kotlin.test.assertIs
+import kotlin.test.assertTrue
 
 class OpenAiImageClientTest {
 
@@ -57,6 +59,47 @@ class OpenAiImageClientTest {
 
         assertContentEquals(imageBytes, bytes)
         http.close()
+    }
+
+    @Test
+    fun `edit posts a multipart request to the edits endpoint and decodes base64 image`() = runBlocking {
+        val imageBytes = byteArrayOf(1, 2, 3, 4)
+        val encoded = Base64.getEncoder().encodeToString(imageBytes)
+        val http =
+            Http.createClient(
+                MockEngine { request ->
+                    assertEquals(HttpMethod.Post, request.method)
+                    assertEquals("https", request.url.protocol.name)
+                    assertEquals("api.openai.com", request.url.host)
+                    assertEquals("/v1/images/edits", request.url.encodedPath)
+                    assertEquals("Bearer sk-test", request.headers[HttpHeaders.Authorization])
+
+                    val body = request.body
+                    assertTrue(body is MultiPartFormDataContent, "expected multipart body, got ${body::class.simpleName}")
+
+                    respond(
+                        content = """{"data":[{"b64_json":"$encoded"}]}""",
+                        status = HttpStatusCode.OK,
+                        headers = headersOf(HttpHeaders.ContentType, ContentType.Application.Json.toString())
+                    )
+                }
+            )
+        val client = OpenAiImageClient(http, "sk-test")
+
+        val bytes = client.edit("add a hat", byteArrayOf(5, 6, 7), "photo.jpg", "image/jpeg", "auto", config)
+
+        assertContentEquals(imageBytes, bytes)
+        http.close()
+    }
+
+    @Test
+    fun `edit rejects empty image bytes without calling the network`() = runBlocking {
+        val client = OpenAiImageClient(Http.createClient(MockEngine { error("unused") }), "sk-test")
+
+        assertFailsWith<IllegalArgumentException> {
+            client.edit("add a hat", ByteArray(0), "photo.jpg", "image/jpeg", "auto", config)
+        }
+        Unit
     }
 
     @Test

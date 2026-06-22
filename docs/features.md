@@ -12,8 +12,10 @@ Items marked *(opt-in)* require an API key or an extra service — see
   under the working directory, including in subfolders, is delivered automatically.
 - **Vision** — describes a photo or image document from the current message, a replied-to
   message, or the first photo of an album; use code execution for programmatic image transforms.
-- **Image generation** *(opt-in)* — generates an original image from a text prompt (OpenAI
-  `gpt-image-1.5`) and sends it as a photo; the agent chooses square/portrait/landscape orientation.
+- **Image generation & editing** *(opt-in)* — generates an original image from a text prompt, or
+  edits the attached/replied image (PNG/JPEG/WebP) per an instruction (OpenAI `gpt-image-1.5`), and
+  sends the result as a photo; the agent chooses square/portrait/landscape orientation, while editing
+  defaults to keeping the original framing.
 - **Voice output** *(opt-in)* — replies with an ElevenLabs-generated Telegram voice message.
 - **Voice input** *(opt-in)* — transcribes incoming voice/audio messages and replied voice/audio
   context (OpenAI STT).
