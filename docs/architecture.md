@@ -87,8 +87,10 @@ A normal user message travels:
    short localized note) so the formatting is preserved; a rejected media caption resends the
    media captionless and delivers the caption the same `.md` way, while bot notices fall back to
    plain text. Sandbox image previews opt out of photo-to-document fallback because their
-   uncompressed document copy is already queued. `TelegramOutputSender` performs the low-level
-   API calls.
+   uncompressed document copy is already queued. Consecutive sends in a multi-output reply are
+   paced (`INTER_MESSAGE_DELAY`) so a batch stays under Telegram's per-chat rate limit; the count
+   of standalone text messages is itself capped upstream in `BotOutbox` (`MAX_TEXT_MESSAGES`) so a
+   looping model cannot flood the chat. `TelegramOutputSender` performs the low-level API calls.
 8. **Persist** — produced history turns are appended via `ChatHistoryRepository`.
 
 ## Background and side flows
@@ -127,6 +129,7 @@ A symptom-to-source map for finding the right file fast. Paths are under
 | Reply says "still working on your previous request"                              | `agent/AgentRunner.kt` — the per-user `Mutex` rejects a second concurrent turn                                                                          |
 | Reply lands in the wrong chat, loses its reply anchor, or DM redirect misbehaves | `telegram/TelegramDelivery.kt` (routing/anchor/private-redirect *policy*)                                                                               |
 | Markdown rejected, or media won't send / falls back to a document or text        | `telegram/TelegramOutputSender.kt` (send + fallback *mechanism*) and `telegram/TelegramErrors.kt` (which provider errors trigger a fallback)            |
+| Bot floods a chat or stalls on Telegram 429 over a long multi-message reply       | `outbox/BotOutbox.kt` (`MAX_TEXT_MESSAGES` cap) + `telegram/TelegramDelivery.kt` (`INTER_MESSAGE_DELAY` pacing)                                          |
 | A specific tool misbehaves                                                       | `tools/<feature>/<Feature>Tools.kt` for the tool surface, plus its `<Feature>Client.kt` for the external call                                           |
 | Wrong language in a canned reply (busy/error/voice/start)                        | `i18n/Language.kt` (language selection) + `i18n/Messages.kt` (the strings)                                                                              |
 | Bot forgets context or the history recap looks wrong                             | `agent/history/ChatHistory.kt` (summarize/slice) + `agent/history/ChatHistoryRepository.kt` (storage)                                                   |

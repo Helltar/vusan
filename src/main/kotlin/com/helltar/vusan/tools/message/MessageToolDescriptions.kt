@@ -6,6 +6,7 @@ internal object MessageToolDescriptions {
         "Sends a Telegram text message to the user. " +
                 "Use this for any substantive text content the user must see: web search summaries, news digests, riddle questions, facts, answers, explanations, lists. " +
                 "Call it once per distinct message; calls are sent in order alongside any other queued media. " +
+                "Keep a reply to a few messages; never split one answer into many tiny separate messages. " +
                 "Do NOT paste raw tool payloads here; write in the user's language, concise, natural. " +
                 "Markdown is allowed but keep it light."
 

@@ -38,6 +38,24 @@ class MessageToolsTest {
     }
 
     @Test
+    fun `sendMessage caps separate messages per turn`() = runBlocking {
+        val outbox = BotOutbox()
+        val tools = MessageTools(outbox)
+
+        repeat(BotOutbox.MAX_TEXT_MESSAGES) { i ->
+            assertTrue(tools.sendMessage("message $i").startsWith("Delivered"))
+        }
+
+        val overflow = tools.sendMessage("one too many")
+
+        assertTrue(overflow.startsWith("Message limit reached"))
+        assertEquals(
+            BotOutbox.MAX_TEXT_MESSAGES,
+            outbox.pending.count { it.output is BotOutput.Text }
+        )
+    }
+
+    @Test
     fun `sendMessage rejects blank text`() = runBlocking {
         val outbox = BotOutbox()
         val tools = MessageTools(outbox)

@@ -10,6 +10,8 @@ import dev.inmo.tgbotapi.bot.exceptions.RequestException
 import dev.inmo.tgbotapi.types.*
 import dev.inmo.tgbotapi.types.message.abstracts.ChatContentMessage
 import io.github.oshai.kotlinlogging.KotlinLogging
+import kotlinx.coroutines.delay
+import kotlin.time.Duration.Companion.milliseconds
 
 internal fun Long.toChatIdentifier(): IdChatIdentifier =
     ChatId(RawChatId(this))
@@ -26,6 +28,12 @@ class TelegramDelivery(private val bot: TelegramBot) {
 
     private companion object {
         const val MAX_CAPTION_CHARS = 1000
+
+        // pace consecutive sends in a multi-output reply so a batch does not trip Telegram's per-chat
+        // rate limit. the reactive limiter in ktgbotapi still retries any send that 429s anyway; this
+        // just keeps a normal batch from getting there.
+        val INTER_MESSAGE_DELAY = 700.milliseconds
+
         val log = KotlinLogging.logger {}
     }
 
@@ -117,6 +125,8 @@ class TelegramDelivery(private val bot: TelegramBot) {
             comment?.takeIf { it.length <= MAX_CAPTION_CHARS }?.let { singleCaptionIndex(result.outputs) } ?: -1
 
         result.outputs.forEachIndexed { index, item ->
+            if (index > 0) delay(INTER_MESSAGE_DELAY)
+
             val caption = comment?.takeIf { index == captionIndex }
             val privateTarget = senderPrivateChatId?.takeIf { item.toPrivate }?.let(::DeliveryTarget)
             val routedToPrivate = privateTarget != null
@@ -134,6 +144,9 @@ class TelegramDelivery(private val bot: TelegramBot) {
         }
 
         if (captionIndex < 0 && comment != null) {
+            // a trailing comment always follows at least one item send above (the empty-outputs case
+            // returned earlier), so pace it the same as the loop.
+            delay(INTER_MESSAGE_DELAY)
             deliverCommentText(comment, if (replyUnavailable) originTarget.withoutReply() else originTarget)
         }
 

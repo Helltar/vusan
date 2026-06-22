@@ -4,7 +4,6 @@ import ai.koog.agents.core.tools.annotations.LLMDescription
 import ai.koog.agents.core.tools.annotations.Tool
 import ai.koog.agents.core.tools.reflect.ToolSet
 import com.helltar.vusan.outbox.BotOutbox
-import com.helltar.vusan.outbox.BotOutput
 import com.helltar.vusan.tools.requireToolText
 import com.helltar.vusan.tools.suspendToolGuard
 
@@ -21,10 +20,13 @@ class MessageTools(private val outbox: BotOutbox) : ToolSet {
     ): String = suspendToolGuard {
         val trimmed = text.requireToolText("Message text", MAX_MESSAGE_CHARS)
 
-        outbox.enqueue(BotOutput.Text(trimmed))
-
-        "Delivered. The user has received this message. " +
-            "Only call sendMessage again if you have a distinct additional message to send for this user request."
+        if (outbox.enqueueText(trimmed)) {
+            "Delivered. The user has received this message. " +
+                "Only call sendMessage again if you have a distinct additional message to send for this user request."
+        } else {
+            "Message limit reached: ${BotOutbox.MAX_TEXT_MESSAGES} separate messages are already queued for this reply. " +
+                "Do not call sendMessage again; finish your turn now."
+        }
     }
 
     @Tool
