@@ -9,7 +9,7 @@ class BotOutbox {
         // upper bound on standalone text messages per turn. a flaky model asked to "send N separate
         // messages" can loop and emit far more, flooding the chat past Telegram's per-chat rate limit
         // (the run then stalls on 429 retries). capping the outbox bounds that blast radius.
-        const val MAX_TEXT_MESSAGES = 10
+        const val MAX_TEXT_MESSAGES = 5
     }
 
     private val items = mutableListOf<OutboxItem>()
