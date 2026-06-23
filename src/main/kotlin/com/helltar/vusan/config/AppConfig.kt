@@ -1,6 +1,7 @@
 package com.helltar.vusan.config
 
 import io.github.cdimascio.dotenv.dotenv
+import io.github.oshai.kotlinlogging.KotlinLogging
 import kotlin.io.path.Path
 import kotlin.io.path.isReadable
 import kotlin.io.path.readText
@@ -34,6 +35,8 @@ data class AppConfig(
         private const val DEFAULT_TASK_MAX_LATENESS_MINUTES = 60L
 
         private val dotenv = dotenv { ignoreIfMissing = true }
+
+        private val log = KotlinLogging.logger {}
 
         fun fromEnv(): AppConfig {
             val elevenLabsKey = readEnv("ELEVENLABS_API_KEY")
@@ -83,11 +86,31 @@ data class AppConfig(
         }
 
         private fun resolveSystemPrompt(): String? {
-            readEnv("SYSTEM_PROMPT")?.let { return it }
-            val path = readEnv("SYSTEM_PROMPT_FILE") ?: return null
+            readEnv("SYSTEM_PROMPT")?.let {
+                log.info { "Persona: SYSTEM_PROMPT env override (${it.length} chars)" }
+                return it
+            }
+
+            val path =
+                readEnv("SYSTEM_PROMPT_FILE")
+                    ?: run {
+                        log.info { "Persona: built-in default (no SYSTEM_PROMPT / SYSTEM_PROMPT_FILE set)" }
+                        return null
+                    }
+
             val file = Path(path)
+
             require(file.isReadable()) { "SYSTEM_PROMPT_FILE=[$path] does not exist or is not readable" }
-            return file.readText().trim().ifBlank { null }
+
+            val text = file.readText().trim().ifBlank { null }
+
+            if (text == null) {
+                log.warn { "Persona: SYSTEM_PROMPT_FILE=[$path] is blank — falling back to built-in default" }
+            } else {
+                log.info { "Persona: SYSTEM_PROMPT_FILE=[$path] (${text.length} chars)" }
+            }
+
+            return text
         }
 
         private fun resolveOpenAiStt(): OpenAiSttConfig? {
