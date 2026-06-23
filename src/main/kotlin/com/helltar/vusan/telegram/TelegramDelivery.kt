@@ -6,7 +6,6 @@ import com.helltar.vusan.i18n.Messages
 import com.helltar.vusan.outbox.BotOutput
 import com.helltar.vusan.outbox.OutboxItem
 import dev.inmo.tgbotapi.bot.TelegramBot
-import dev.inmo.tgbotapi.bot.exceptions.RequestException
 import dev.inmo.tgbotapi.types.*
 import dev.inmo.tgbotapi.types.message.abstracts.ChatContentMessage
 import io.github.oshai.kotlinlogging.KotlinLogging
@@ -267,5 +266,5 @@ class TelegramDelivery(private val bot: TelegramBot) {
     }
 
     private fun isPrivateChatBlocked(error: Throwable): Boolean =
-        (error as? RequestException)?.isForbidden() == true
+        error.isForbidden()
 }

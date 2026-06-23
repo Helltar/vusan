@@ -2,7 +2,7 @@ package com.helltar.vusan.telegram
 
 import com.helltar.vusan.outbox.BotOutput
 import dev.inmo.tgbotapi.bot.TelegramBot
-import dev.inmo.tgbotapi.bot.exceptions.CommonRequestException
+import dev.inmo.tgbotapi.bot.exceptions.ApiException
 import dev.inmo.tgbotapi.bot.exceptions.InvalidPhotoDimensionsException
 import dev.inmo.tgbotapi.requests.abstracts.MultipartRequest
 import dev.inmo.tgbotapi.requests.abstracts.Request
@@ -126,11 +126,10 @@ class TelegramOutputSenderTest {
             // the first sendPhoto carries the html caption; the captionless retry succeeds.
             if (failHtmlCaptionOnce && method == "sendPhoto") {
                 failHtmlCaptionOnce = false
-                throw CommonRequestException(
-                    response = Response(description = "Bad Request: can't parse entities"),
-                    plainAnswer = """{"description":"Bad Request: can't parse entities"}""",
-                    message = null,
-                    cause = null
+                throw ApiException(
+                    httpResponseCode = 400,
+                    plainResponse = """{"description":"Bad Request: can't parse entities"}""",
+                    response = Response(description = "Bad Request: can't parse entities")
                 )
             }
 
@@ -144,11 +143,10 @@ class TelegramOutputSenderTest {
             }
 
             if (failHtmlText && method == "sendMessage") {
-                throw CommonRequestException(
-                    response = Response(description = "Bad Request: can't parse entities"),
-                    plainAnswer = """{"description":"Bad Request: can't parse entities"}""",
-                    message = null,
-                    cause = null
+                throw ApiException(
+                    httpResponseCode = 400,
+                    plainResponse = """{"description":"Bad Request: can't parse entities"}""",
+                    response = Response(description = "Bad Request: can't parse entities")
                 )
             }
 

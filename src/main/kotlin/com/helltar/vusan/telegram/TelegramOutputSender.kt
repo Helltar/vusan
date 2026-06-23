@@ -3,7 +3,6 @@ package com.helltar.vusan.telegram
 import com.helltar.vusan.common.rethrowIfCancellation
 import com.helltar.vusan.outbox.BotOutput
 import dev.inmo.tgbotapi.bot.TelegramBot
-import dev.inmo.tgbotapi.bot.exceptions.RequestException
 import dev.inmo.tgbotapi.extensions.api.send.media.*
 import dev.inmo.tgbotapi.extensions.api.send.polls.sendQuizPoll
 import dev.inmo.tgbotapi.extensions.api.send.polls.sendRegularPoll
@@ -108,7 +107,7 @@ internal object TelegramOutputSender {
                 replyParameters = replyParameters
             )
         }.recoverCatching { e ->
-            if (e is RequestException && e.isEntityParseError()) {
+            if (e.isEntityParseError()) {
                 log.warn { "Telegram rejected HTML, sending the reply as a $FALLBACK_DOCUMENT_FILENAME file" }
                 sendTextAsDocument(bot, chatId, text, formattingFileNotice, replyParameters)
             } else throw e
@@ -526,7 +525,7 @@ internal object TelegramOutputSender {
     private suspend fun sendWithHtmlFallback(send: suspend (parseMode: ParseMode?) -> Unit) {
         runCatching { send(HTMLParseMode) }
             .recoverCatching { e ->
-                if (e is RequestException && e.isEntityParseError()) {
+                if (e.isEntityParseError()) {
                     log.warn { "Telegram rejected HTML, retrying as plain text" }
                     send(null)
                 } else throw e
@@ -552,7 +551,7 @@ internal object TelegramOutputSender {
 
         runCatching { send(caption, HTMLParseMode) }
             .recoverCatching { e ->
-                if (e is RequestException && e.isEntityParseError()) {
+                if (e.isEntityParseError()) {
                     log.warn { "Telegram rejected caption HTML, sending the caption as a $FALLBACK_DOCUMENT_FILENAME file" }
                     send(null, null)
                     sendTextAsDocument(bot, chatId, caption, formattingFileNotice, replyParameters)

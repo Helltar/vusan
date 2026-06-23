@@ -1,5 +1,6 @@
 package com.helltar.vusan.telegram
 
+import dev.inmo.tgbotapi.bot.exceptions.ApiException
 import dev.inmo.tgbotapi.bot.exceptions.CommonRequestException
 import dev.inmo.tgbotapi.bot.exceptions.ReplyMessageNotFoundException
 import dev.inmo.tgbotapi.types.Response
@@ -18,6 +19,14 @@ class TelegramErrorsTest {
                 message = null,
                 cause = null
             )
+
+        assertTrue(error.isEntityParseError())
+    }
+
+    @Test
+    fun `detects html parse errors wrapped as api exceptions`() {
+        val response = Response(description = "Bad Request: can't parse entities: Can't find end tag corresponding to start tag \"pre\"")
+        val error = ApiException(httpResponseCode = 400, plainResponse = "", response = response)
 
         assertTrue(error.isEntityParseError())
     }
