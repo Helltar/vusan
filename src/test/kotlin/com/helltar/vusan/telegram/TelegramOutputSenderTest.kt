@@ -27,7 +27,7 @@ class TelegramOutputSenderTest {
             chatId = 1L.toChatIdentifier(),
             replyParameters = null,
             caption = null,
-            markdownFileNotice = "notice"
+            formattingFileNotice = "notice"
         )
 
         assertEquals(listOf("sendPhoto", "sendDocument"), bot.methods)
@@ -47,38 +47,38 @@ class TelegramOutputSenderTest {
             chatId = 1L.toChatIdentifier(),
             replyParameters = null,
             caption = null,
-            markdownFileNotice = "notice"
+            formattingFileNotice = "notice"
         )
 
         assertEquals(listOf("sendPhoto"), bot.methods)
     }
 
     @Test
-    fun `caption with rejected markdown is resent captionless plus a markdown document`() = runBlocking {
-        val bot = RecordingBot(failMarkdownCaptionOnce = true)
+    fun `caption with rejected formatting is resent captionless plus a document`() = runBlocking {
+        val bot = RecordingBot(failHtmlCaptionOnce = true)
 
         TelegramOutputSender.send(
             bot = bot,
             item = BotOutput.Photo(byteArrayOf(1, 2, 3), "chart.png"),
             chatId = 1L.toChatIdentifier(),
             replyParameters = null,
-            caption = "**broken_markdown",
-            markdownFileNotice = "notice"
+            caption = "<b>broken",
+            formattingFileNotice = "notice"
         )
 
         assertEquals(listOf("sendPhoto", "sendPhoto", "sendDocument"), bot.methods)
     }
 
     @Test
-    fun `text reply with rejected markdown is sent as a markdown document`() = runBlocking {
-        val bot = RecordingBot(failMarkdownText = true)
+    fun `text reply with rejected formatting is sent as a document`() = runBlocking {
+        val bot = RecordingBot(failHtmlText = true)
 
         TelegramOutputSender.sendReplyText(
             bot = bot,
             chatId = 1L.toChatIdentifier(),
-            text = "**broken_markdown",
+            text = "<b>broken",
             replyParameters = null,
-            markdownFileNotice = "notice"
+            formattingFileNotice = "notice"
         )
 
         assertEquals(listOf("sendMessage", "sendDocument"), bot.methods)
@@ -98,7 +98,7 @@ class TelegramOutputSenderTest {
             chatId = 1L.toChatIdentifier(),
             replyParameters = null,
             caption = null,
-            markdownFileNotice = "notice"
+            formattingFileNotice = "notice"
         )
 
         val request = assertIs<MultipartRequest<*>>(bot.requests.single())
@@ -112,8 +112,8 @@ class TelegramOutputSenderTest {
 
     private class RecordingBot(
         private val failPhoto: Boolean = false,
-        private val failMarkdownText: Boolean = false,
-        private var failMarkdownCaptionOnce: Boolean = false
+        private val failHtmlText: Boolean = false,
+        private var failHtmlCaptionOnce: Boolean = false
     ) : TelegramBot {
         val methods = mutableListOf<String>()
         val requests = mutableListOf<Request<*>>()
@@ -123,9 +123,9 @@ class TelegramOutputSenderTest {
             methods += method
             requests += request
 
-            // the first sendPhoto carries the markdown caption; the captionless retry succeeds.
-            if (failMarkdownCaptionOnce && method == "sendPhoto") {
-                failMarkdownCaptionOnce = false
+            // the first sendPhoto carries the html caption; the captionless retry succeeds.
+            if (failHtmlCaptionOnce && method == "sendPhoto") {
+                failHtmlCaptionOnce = false
                 throw CommonRequestException(
                     response = Response(description = "Bad Request: can't parse entities"),
                     plainAnswer = """{"description":"Bad Request: can't parse entities"}""",
@@ -143,7 +143,7 @@ class TelegramOutputSenderTest {
                 )
             }
 
-            if (failMarkdownText && method == "sendMessage") {
+            if (failHtmlText && method == "sendMessage") {
                 throw CommonRequestException(
                     response = Response(description = "Bad Request: can't parse entities"),
                     plainAnswer = """{"description":"Bad Request: can't parse entities"}""",

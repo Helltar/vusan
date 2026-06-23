@@ -83,7 +83,7 @@ class TelegramDelivery(private val bot: TelegramBot) {
         }
     }
 
-    /** Send a plain-text notice from the bot itself (no reply anchor, no markdown fallback retry chain). */
+    /** Send a plain-text notice from the bot itself (no reply anchor, no formatting fallback retry chain). */
     suspend fun sendNotice(chatId: Long, text: String) {
         runCatching { TelegramOutputSender.sendText(bot, chatId.toChatIdentifier(), text, replyParameters = null) }
             .onFailure {
@@ -250,7 +250,7 @@ class TelegramDelivery(private val bot: TelegramBot) {
                 target.chatId.toChatIdentifier(),
                 text,
                 replyParameters(target.chatId, target.replyToMessageId),
-                messages.markdownAsFileNotice
+                messages.formattingAsFileNotice
             )
     }
 
@@ -262,7 +262,7 @@ class TelegramDelivery(private val bot: TelegramBot) {
                 target.chatId.toChatIdentifier(),
                 replyParameters(target.chatId, target.replyToMessageId),
                 caption,
-                messages.markdownAsFileNotice
+                messages.formattingAsFileNotice
             )
     }
 

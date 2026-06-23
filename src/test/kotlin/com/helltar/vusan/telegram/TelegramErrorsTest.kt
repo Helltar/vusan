@@ -10,7 +10,7 @@ import kotlin.test.assertTrue
 class TelegramErrorsTest {
 
     @Test
-    fun `detects markdown parse errors from telegram`() {
+    fun `detects html parse errors from telegram`() {
         val error =
             CommonRequestException(
                 response = Response(description = "Bad Request: can't parse entities: Can't find end of the entity starting at byte offset 12"),
@@ -19,24 +19,24 @@ class TelegramErrorsTest {
                 cause = null
             )
 
-        assertTrue(error.isMarkdownError())
+        assertTrue(error.isEntityParseError())
     }
 
     @Test
-    fun `detects markdownv2 reserved character errors from telegram`() {
+    fun `detects unsupported html tag errors from telegram`() {
         val error =
             CommonRequestException(
-                response = Response(description = "Bad Request: can't parse entities: Character '.' is reserved and must be escaped with the preceding '\\'"),
+                response = Response(description = "Bad Request: can't parse entities: Unsupported start tag \"user_message\" at byte offset 12"),
                 plainAnswer = "",
                 message = null,
                 cause = null
             )
 
-        assertTrue(error.isMarkdownError())
+        assertTrue(error.isEntityParseError())
     }
 
     @Test
-    fun `does not treat unrelated telegram errors as markdown issues`() {
+    fun `does not treat unrelated telegram errors as formatting issues`() {
         val error =
             CommonRequestException(
                 response = Response(description = "Bad Request: reply message not found"),
@@ -45,7 +45,7 @@ class TelegramErrorsTest {
                 cause = null
             )
 
-        assertFalse(error.isMarkdownError())
+        assertFalse(error.isEntityParseError())
     }
 
     @Test

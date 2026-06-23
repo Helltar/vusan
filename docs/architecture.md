@@ -17,7 +17,7 @@ Telegram ──► telegram/ ──► agent/ ──► tools/ ──► externa
 
 - **`telegram/`** — Telegram I/O. Receives updates (text, voice, audio, sticker, photo, document,
   album), filters by allowlist, normalizes input, and delivers agent results back — including
-  markdown, reply-anchor, media/document, media-group, and private-message fallbacks.
+  HTML-formatting, reply-anchor, media/document, media-group, and private-message fallbacks.
 - **`agent/`** — agent orchestration on top of Koog. `AgentRunner` serializes per-user turns;
   `AgentFactory` builds the `AIAgent` (system prompt + history + memory + tools). `agent/history/`
   summarizes and persists chat turns; `agent/memory/` stores durable user/group memory that
@@ -82,11 +82,13 @@ A normal user message travels:
    turns to persist).
 7. **Deliver** — `TelegramDelivery.send` routes each `BotOutput` to the chat (or the user's
    private chat when a tool requested it), anchoring replies to the original message and falling
-   back when Telegram rejects markdown, a reply target is gone, a private DM is blocked, or a
-   media send fails. Rejected markdown on a reply text is re-sent as a `.md` document (with a
-   short localized note) so the formatting is preserved; a rejected media caption resends the
-   media captionless and delivers the caption the same `.md` way, while bot notices fall back to
-   plain text. Sandbox image previews opt out of photo-to-document fallback because their
+   back when Telegram rejects formatting, a reply target is gone, a private DM is blocked, or a
+   media send fails. Outgoing text and captions are sent with Telegram's `HTML` parse mode; the
+   agent is instructed (in `agent/SystemPrompt.kt`) to format with the supported HTML tags and to
+   escape `<`/`>`/`&`. Rejected formatting on a reply text is re-sent as a `message.md` document
+   (with a short localized note) carrying the reply so the formatting still arrives; a rejected
+   media caption resends the media captionless and delivers the caption the same way, while bot
+   notices fall back to plain text. Sandbox image previews opt out of photo-to-document fallback because their
    uncompressed document copy is already queued. Consecutive sends in a multi-output reply are
    paced (`INTER_MESSAGE_DELAY`) so a batch stays under Telegram's per-chat rate limit; the count
    of standalone text messages is itself capped upstream in `BotOutbox` (`MAX_TEXT_MESSAGES`) so a
@@ -128,7 +130,7 @@ A symptom-to-source map for finding the right file fast. Paths are under
 | Bot ignores a message entirely                                                   | `telegram/MessageFilter.kt` (`shouldHandle` — group reply/mention rules), then `TelegramBotRunner.isAccepted`/`isAllowed` (the `ALLOWED_IDS` allowlist) |
 | Reply says "still working on your previous request"                              | `agent/AgentRunner.kt` — the per-user `Mutex` rejects a second concurrent turn                                                                          |
 | Reply lands in the wrong chat, loses its reply anchor, or DM redirect misbehaves | `telegram/TelegramDelivery.kt` (routing/anchor/private-redirect *policy*)                                                                               |
-| Markdown rejected, or media won't send / falls back to a document or text        | `telegram/TelegramOutputSender.kt` (send + fallback *mechanism*) and `telegram/TelegramErrors.kt` (which provider errors trigger a fallback)            |
+| Formatting renders wrong, message rejected, or media falls back to document/text  | `agent/SystemPrompt.kt` (allowed HTML tags the agent emits), `telegram/TelegramOutputSender.kt` (HTML parse mode + fallback *mechanism*), `telegram/TelegramErrors.kt` (which provider errors trigger a fallback) |
 | Bot floods a chat or stalls on Telegram 429 over a long multi-message reply       | `outbox/BotOutbox.kt` (`MAX_TEXT_MESSAGES` cap) + `telegram/TelegramDelivery.kt` (`INTER_MESSAGE_DELAY` pacing)                                          |
 | A specific tool misbehaves                                                       | `tools/<feature>/<Feature>Tools.kt` for the tool surface, plus its `<Feature>Client.kt` for the external call                                           |
 | Wrong language in a canned reply (busy/error/voice/start)                        | `i18n/Language.kt` (language selection) + `i18n/Messages.kt` (the strings)                                                                              |

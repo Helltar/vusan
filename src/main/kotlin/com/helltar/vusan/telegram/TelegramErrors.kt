@@ -4,8 +4,8 @@ import dev.inmo.tgbotapi.bot.exceptions.ReplyMessageNotFoundException
 import dev.inmo.tgbotapi.bot.exceptions.RequestException
 
 // telegram prefixes every parse-mode failure with "Bad Request: can't parse entities: ...",
-// regardless of the specific Markdown/MarkdownV2 wording (unclosed entity, reserved character, ...).
-internal fun RequestException.isMarkdownError(): Boolean =
+// regardless of the specific HTML wording (unsupported tag, unclosed tag, unescaped `<`/`&`, ...).
+internal fun RequestException.isEntityParseError(): Boolean =
     response.description?.contains("can't parse entities", ignoreCase = true) == true
 
 // a private delivery rejected by the recipient comes back as a 403 "Forbidden: ..." (bot blocked,
