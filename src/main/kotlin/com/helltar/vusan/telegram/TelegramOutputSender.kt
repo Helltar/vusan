@@ -24,7 +24,7 @@ import io.github.oshai.kotlinlogging.KotlinLogging
 
 internal object TelegramOutputSender {
 
-    private const val FALLBACK_DOCUMENT_FILENAME = "message.md"
+    private const val FALLBACK_DOCUMENT_FILENAME = "message.html"
     private const val VIDEO_THUMBNAIL_FILENAME = "thumbnail.jpg"
     private const val VIDEO_COVER_FILENAME = "cover.jpg"
 
@@ -125,7 +125,7 @@ internal object TelegramOutputSender {
         runCatching {
             bot.sendDocument(
                 chatId = chatId,
-                document = text.encodeToByteArray().asMultipartFile(FALLBACK_DOCUMENT_FILENAME),
+                document = htmlReplyDocument(text).encodeToByteArray().asMultipartFile(FALLBACK_DOCUMENT_FILENAME),
                 text = notice,
                 replyParameters = replyParameters
             )

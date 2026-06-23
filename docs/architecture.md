@@ -85,10 +85,11 @@ A normal user message travels:
    back when Telegram rejects formatting, a reply target is gone, a private DM is blocked, or a
    media send fails. Outgoing text and captions are sent with Telegram's `HTML` parse mode; the
    agent is instructed (in `agent/SystemPrompt.kt`) to format with the supported HTML tags and to
-   escape `<`/`>`/`&`. Rejected formatting on a reply text is re-sent as a `message.md` document
-   (with a short localized note) carrying the reply so the formatting still arrives; a rejected
-   media caption resends the media captionless and delivers the caption the same way, while bot
-   notices fall back to plain text. Sandbox image previews opt out of photo-to-document fallback because their
+   escape `<`/`>`/`&`. Rejected formatting on a reply text is re-sent as a `message.html` document
+   (`telegram/HtmlReplyDocument.kt` — a standalone, responsive, light/dark page with a no-script
+   CSP) carrying the reply so the formatting still arrives; a rejected media caption resends the
+   media captionless and delivers the caption the same way, while bot notices fall back to plain
+   text. Sandbox image previews opt out of photo-to-document fallback because their
    uncompressed document copy is already queued. Consecutive sends in a multi-output reply are
    paced (`INTER_MESSAGE_DELAY`) so a batch stays under Telegram's per-chat rate limit; the count
    of standalone text messages is itself capped upstream in `BotOutbox` (`MAX_TEXT_MESSAGES`) so a
