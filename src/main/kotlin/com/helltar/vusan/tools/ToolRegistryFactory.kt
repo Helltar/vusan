@@ -86,7 +86,7 @@ class ToolRegistryFactory(
         }
 
     private val openAiImageClient =
-        optional("OPENAI_IMAGE_API_KEY", config.openAiImageApiKey, "image generation tool") {
+        optional("OPENAI_IMAGE_API_KEY", config.openAiImageApiKey, "image generation/editing tools") {
             OpenAiImageClient(http, it)
         }
 
