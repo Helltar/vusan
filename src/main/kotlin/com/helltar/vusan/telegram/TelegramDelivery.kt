@@ -6,7 +6,15 @@ import com.helltar.vusan.i18n.Messages
 import com.helltar.vusan.outbox.BotOutput
 import com.helltar.vusan.outbox.OutboxItem
 import dev.inmo.tgbotapi.bot.TelegramBot
+import dev.inmo.tgbotapi.extensions.api.send.sendBotAction
 import dev.inmo.tgbotapi.types.*
+import dev.inmo.tgbotapi.types.actions.BotAction
+import dev.inmo.tgbotapi.types.actions.RecordVideoNoteAction
+import dev.inmo.tgbotapi.types.actions.RecordVoiceAction
+import dev.inmo.tgbotapi.types.actions.TypingAction
+import dev.inmo.tgbotapi.types.actions.UploadDocumentAction
+import dev.inmo.tgbotapi.types.actions.UploadPhotoAction
+import dev.inmo.tgbotapi.types.actions.UploadVideoAction
 import dev.inmo.tgbotapi.types.message.abstracts.ChatContentMessage
 import io.github.oshai.kotlinlogging.KotlinLogging
 import kotlinx.coroutines.delay
@@ -17,6 +25,18 @@ internal fun Long.toChatIdentifier(): IdChatIdentifier =
 
 internal fun replyParameters(chatId: Long, replyToMessageId: Long?): ReplyParameters? =
     replyToMessageId?.let { ReplyParameters(chatId.toChatIdentifier(), MessageId(it)) }
+
+// the chat action shown just before an item is delivered, so the user sees "sending photo",
+// "recording audio", etc. matching what is about to arrive. reactions are instant and get none.
+internal fun botActionFor(output: BotOutput): BotAction? = when (output) {
+    is BotOutput.Photo, is BotOutput.PhotoGroup -> UploadPhotoAction
+    is BotOutput.Document, is BotOutput.DocumentGroup, is BotOutput.Audio -> UploadDocumentAction
+    is BotOutput.Video, is BotOutput.Animation -> UploadVideoAction
+    is BotOutput.VideoNote -> RecordVideoNoteAction
+    is BotOutput.Voice -> RecordVoiceAction
+    is BotOutput.Text, is BotOutput.Quiz, is BotOutput.Poll -> TypingAction
+    is BotOutput.Reaction -> null
+}
 
 data class ScheduledAttribution(
     val creatorMessageId: Long?,
@@ -132,6 +152,8 @@ class TelegramDelivery(private val bot: TelegramBot) {
             val target = privateTarget ?: if (replyUnavailable) currentChatTarget else originTarget
             val deliveryTarget = if (routedToPrivate || replyUnavailable) target.withoutReply() else target
 
+            indicateAction(deliveryTarget.chatId, botActionFor(item.output))
+
             when (deliverItem(item.output, deliveryTarget, caption, routedToPrivate, currentChatTarget, messages)) {
                 ItemDeliveryOutcome.Ok -> Unit
                 ItemDeliveryOutcome.ReplyMissing -> replyUnavailable = true
@@ -207,6 +229,7 @@ class TelegramDelivery(private val bot: TelegramBot) {
         val deliveryTarget = privateTarget ?: originTarget
 
         try {
+            indicateAction(deliveryTarget.chatId, TypingAction)
             sendReplyText(deliveryTarget, text, messages)
             return false
         } catch (e: Throwable) {
@@ -225,6 +248,13 @@ class TelegramDelivery(private val bot: TelegramBot) {
 
             return false
         }
+    }
+
+    // best-effort: the indicator is cosmetic, so a failed action must never abort the delivery it precedes.
+    private suspend fun indicateAction(chatId: Long, action: BotAction?) {
+        action ?: return
+        runCatching { bot.sendBotAction(chatId.toChatIdentifier(), action) }
+            .onFailure { it.rethrowIfCancellation() }
     }
 
     private suspend fun notifyPrivateChatBlocked(originTarget: DeliveryTarget, messages: Messages) {

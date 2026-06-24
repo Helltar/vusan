@@ -329,9 +329,11 @@ internal class TelegramBotRunner(
             }
         }
 
-        bot.withTypingAction(chatId.toChatIdentifier()) {
-            try {
-                val result =
+        try {
+            // typing covers only the agent run; delivery shows its own content-aware action per item
+            // (upload_photo, record_voice, ...), which a typing refresher here would otherwise override.
+            val result =
+                bot.withTypingAction(chatId.toChatIdentifier()) {
                     agent.handle(
                         AgentRequest(
                             chatId = chatId,
@@ -345,23 +347,23 @@ internal class TelegramBotRunner(
                             language = message.language
                         )
                     )
-
-                delivery.send(message, result)
-
-                if (result.historyTurns.isNotEmpty()) {
-                    history.appendTurns(userId, result.historyTurns)
                 }
-            } catch (error: Throwable) {
-                error.rethrowIfCancellation()
 
-                log.error(error) { "telegram $inputKind handling failed for chat=$chatId user=$userId" }
+            delivery.send(message, result)
 
-                runCatching { sendReply(message, Messages.of(message.language).fallbackErrorReply) }
-                    .onFailure { replyError ->
-                        replyError.rethrowIfCancellation()
-                        log.warn(replyError) { "failed to send fallback error reply for chat=$chatId user=$userId" }
-                    }
+            if (result.historyTurns.isNotEmpty()) {
+                history.appendTurns(userId, result.historyTurns)
             }
+        } catch (error: Throwable) {
+            error.rethrowIfCancellation()
+
+            log.error(error) { "telegram $inputKind handling failed for chat=$chatId user=$userId" }
+
+            runCatching { sendReply(message, Messages.of(message.language).fallbackErrorReply) }
+                .onFailure { replyError ->
+                    replyError.rethrowIfCancellation()
+                    log.warn(replyError) { "failed to send fallback error reply for chat=$chatId user=$userId" }
+                }
         }
     }
 

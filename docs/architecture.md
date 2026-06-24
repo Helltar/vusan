@@ -83,7 +83,9 @@ A normal user message travels:
 7. **Deliver** — `TelegramDelivery.send` routes each `BotOutput` to the chat (or the user's
    private chat when a tool requested it), anchoring replies to the original message and falling
    back when Telegram rejects formatting, a reply target is gone, a private DM is blocked, or a
-   media send fails. Outgoing text and captions are sent with Telegram's `HTML` parse mode; the
+   media send fails. The agent run shows a `typing` chat action (`TelegramBotRunner`); during
+   delivery each item is preceded by a content-aware action (`botActionFor`: `upload_photo`,
+   `record_voice`, `upload_document`, …) so the indicator matches what is about to arrive. Outgoing text and captions are sent with Telegram's `HTML` parse mode; the
    agent is instructed (in `agent/SystemPrompt.kt`) to format with the supported HTML tags and to
    escape `<`/`>`/`&`. Rejected formatting on a reply text is re-sent as a `message.html` document
    (`telegram/HtmlReplyDocument.kt` — a standalone, responsive, light/dark page with a no-script
