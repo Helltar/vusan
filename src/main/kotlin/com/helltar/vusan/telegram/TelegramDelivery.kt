@@ -1,6 +1,7 @@
 package com.helltar.vusan.telegram
 
 import com.helltar.vusan.agent.AgentResult
+import com.helltar.vusan.agent.ToolActivity
 import com.helltar.vusan.common.rethrowIfCancellation
 import com.helltar.vusan.i18n.Messages
 import com.helltar.vusan.outbox.BotOutput
@@ -36,6 +37,17 @@ internal fun botActionFor(output: BotOutput): BotAction? = when (output) {
     is BotOutput.Voice -> RecordVoiceAction
     is BotOutput.Text, is BotOutput.Quiz, is BotOutput.Poll -> TypingAction
     is BotOutput.Reaction -> null
+}
+
+// the chat action shown while a tool runs, so a slow media-producing call (image generation,
+// video download, speech synthesis) hints at what is coming. the activity itself is resolved in the
+// agent layer (`toolActivityFor`); here it is only translated to a concrete Telegram action.
+internal fun chatActionFor(activity: ToolActivity): BotAction = when (activity) {
+    ToolActivity.PHOTO -> UploadPhotoAction
+    ToolActivity.VIDEO -> UploadVideoAction
+    ToolActivity.VOICE -> RecordVoiceAction
+    ToolActivity.DOCUMENT -> UploadDocumentAction
+    ToolActivity.TEXT -> TypingAction
 }
 
 data class ScheduledAttribution(

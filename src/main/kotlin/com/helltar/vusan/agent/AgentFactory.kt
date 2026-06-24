@@ -67,6 +67,7 @@ class AgentFactory(
         outbox: BotOutbox,
         toolEvents: (ToolEvent) -> Unit,
         tokenUsage: (TokenUsage) -> Unit,
+        onToolStarting: (activity: ToolActivity) -> Unit = {},
         messageContext: MessageContext? = null,
         userMemory: List<MemoryEntry> = emptyList(),
         chatMemory: List<MemoryEntry> = emptyList()
@@ -146,6 +147,10 @@ class AgentFactory(
                     ctx.response?.metaInfo?.let { meta ->
                         tokenUsage(TokenUsage(meta.inputTokensCount, meta.outputTokensCount, meta.totalTokensCount))
                     }
+                }
+
+                onToolCallStarting { ctx ->
+                    onToolStarting(toolActivityFor(ctx.toolName))
                 }
 
                 onToolCallCompleted { ctx ->

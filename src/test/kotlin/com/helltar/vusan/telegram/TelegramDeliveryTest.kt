@@ -1,5 +1,6 @@
 package com.helltar.vusan.telegram
 
+import com.helltar.vusan.agent.ToolActivity
 import com.helltar.vusan.outbox.BotOutput
 import dev.inmo.tgbotapi.types.actions.RecordVideoNoteAction
 import dev.inmo.tgbotapi.types.actions.RecordVoiceAction
@@ -37,5 +38,14 @@ class TelegramDeliveryTest {
     @Test
     fun `reactions get no chat action`() {
         assertNull(botActionFor(BotOutput.Reaction(messageId = 1, emoji = "👍")))
+    }
+
+    @Test
+    fun `translates each tool activity to its chat action`() {
+        assertEquals(UploadPhotoAction, chatActionFor(ToolActivity.PHOTO))
+        assertEquals(UploadVideoAction, chatActionFor(ToolActivity.VIDEO))
+        assertEquals(RecordVoiceAction, chatActionFor(ToolActivity.VOICE))
+        assertEquals(UploadDocumentAction, chatActionFor(ToolActivity.DOCUMENT))
+        assertEquals(TypingAction, chatActionFor(ToolActivity.TEXT))
     }
 }

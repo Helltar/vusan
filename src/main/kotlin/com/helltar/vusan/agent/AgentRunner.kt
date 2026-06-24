@@ -51,7 +51,7 @@ class AgentRunner(
 
     private val userLocks = HashMap<Long, UserLock>()
 
-    suspend fun handle(request: AgentRequest): AgentResult {
+    suspend fun handle(request: AgentRequest, onToolStarting: (activity: ToolActivity) -> Unit = {}): AgentResult {
         val lock = retainLock(request.userId)
 
         try {
@@ -60,7 +60,7 @@ class AgentRunner(
             }
 
             try {
-                return runAgent(request)
+                return runAgent(request, onToolStarting)
             } finally {
                 lock.unlock()
             }
@@ -79,7 +79,7 @@ class AgentRunner(
         }
     }
 
-    private suspend fun runAgent(request: AgentRequest): AgentResult {
+    private suspend fun runAgent(request: AgentRequest, onToolStarting: (activity: ToolActivity) -> Unit = {}): AgentResult {
         val context =
             RequestContext(
                 chatId = request.chatId,
@@ -118,6 +118,7 @@ class AgentRunner(
                 outbox = outbox,
                 toolEvents = toolEvents::add,
                 tokenUsage = tokenUsages::add,
+                onToolStarting = onToolStarting,
                 messageContext = request.messageContext,
                 userMemory = userMemory,
                 chatMemory = chatMemory

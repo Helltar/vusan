@@ -15,16 +15,21 @@ import dev.inmo.tgbotapi.bot.TelegramBot
 import dev.inmo.tgbotapi.bot.exceptions.CommonBotException
 import dev.inmo.tgbotapi.extensions.api.bot.getMe
 import dev.inmo.tgbotapi.extensions.api.chat.get.getChat
-import dev.inmo.tgbotapi.extensions.api.send.withTypingAction
+import dev.inmo.tgbotapi.extensions.api.send.sendBotAction
 import dev.inmo.tgbotapi.extensions.behaviour_builder.buildBehaviourWithLongPolling
 import dev.inmo.tgbotapi.extensions.behaviour_builder.triggers_handling.*
+import dev.inmo.tgbotapi.types.actions.BotAction
+import dev.inmo.tgbotapi.types.actions.TypingAction
 import dev.inmo.tgbotapi.types.chat.ExtendedPublicChat
 import dev.inmo.tgbotapi.types.message.abstracts.ChatContentMessage
 import dev.inmo.tgbotapi.types.message.content.*
 import io.github.oshai.kotlinlogging.KotlinLogging
-import io.ktor.client.network.sockets.ConnectTimeoutException
-import io.ktor.client.plugins.HttpRequestTimeoutException
-import kotlinx.coroutines.Job
+import io.ktor.client.network.sockets.*
+import io.ktor.client.plugins.*
+import kotlinx.coroutines.*
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.collectLatest
+import kotlin.time.Duration.Companion.seconds
 
 internal class TelegramBotRunner(
     private val bot: TelegramBot,
@@ -43,6 +48,9 @@ internal class TelegramBotRunner(
                     "If useful, describe it with `describeImage` or process it with `codeExecution`."
 
         const val LOG_PROMPT_MAX_CHARS = 300
+
+        // Telegram clears a chat action after ~5s, so re-assert it just under that.
+        val ACTION_REFRESH = 4.seconds
 
         val log = KotlinLogging.logger {}
     }
@@ -74,9 +82,9 @@ internal class TelegramBotRunner(
                 (this is CommonBotException && (cause is HttpRequestTimeoutException || cause is ConnectTimeoutException))
 
     suspend fun start(): Job {
-        val botProfile = bot.profile()
+        val profile = bot.profile()
 
-        log.info { "Bot started as ${botProfile.username ?: botProfile.userId}, allowed ids=${allowedIds.sorted()}" }
+        log.info { "Bot started as ${profile.username ?: profile.userId}, allowed ids=${allowedIds.sorted()}" }
 
         if (allowedIds.isEmpty()) {
             log.warn {
@@ -86,14 +94,14 @@ internal class TelegramBotRunner(
         }
 
         return bot.buildBehaviourWithLongPolling {
-            onCommand("start", markerFactory = null) { handleStartCommand(it, botProfile) }
-            onText(markerFactory = null) { handleTextUpdate(it, botProfile) }
-            onSticker(markerFactory = null) { handleStickerUpdate(it, botProfile) }
-            onVoice(markerFactory = null) { handleTranscribableUpdate(it, it.content.media.toAudioInput(), botProfile, "voice") }
-            onAudio(markerFactory = null) { handleTranscribableUpdate(it, it.content.media.toAudioInput(), botProfile, "audio") }
-            onDocument(markerFactory = null) { handleMediaUpdate(it, botProfile, inputKind = "document") }
-            onPhoto(markerFactory = null) { handleMediaUpdate(it, botProfile, inputKind = "photo") }
-            onVisualGalleryMessages(markerFactory = null) { handleGalleryUpdate(it, botProfile) }
+            onCommand("start", markerFactory = null) { handleStartCommand(it, profile) }
+            onText(markerFactory = null) { handleTextUpdate(it, profile) }
+            onSticker(markerFactory = null) { handleStickerUpdate(it, profile) }
+            onVoice(markerFactory = null) { handleTranscribableUpdate(it, it.content.media.toAudioInput(), profile, "voice") }
+            onAudio(markerFactory = null) { handleTranscribableUpdate(it, it.content.media.toAudioInput(), profile, "audio") }
+            onDocument(markerFactory = null) { handleMediaUpdate(it, profile, inputKind = "document") }
+            onPhoto(markerFactory = null) { handleMediaUpdate(it, profile, inputKind = "photo") }
+            onVisualGalleryMessages(markerFactory = null) { handleGalleryUpdate(it, profile) }
         }
     }
 
@@ -330,10 +338,11 @@ internal class TelegramBotRunner(
         }
 
         try {
-            // typing covers only the agent run; delivery shows its own content-aware action per item
-            // (upload_photo, record_voice, ...), which a typing refresher here would otherwise override.
+            // a live indicator runs through the whole agent turn: it starts as typing and switches to the
+            // action of the currently executing tool (upload_photo while an image generates, etc.). delivery
+            // then shows its own per-item action. a plain withTypingAction would force typing the whole time.
             val result =
-                bot.withTypingAction(chatId.toChatIdentifier()) {
+                withLiveChatAction(chatId) { setAction ->
                     agent.handle(
                         AgentRequest(
                             chatId = chatId,
@@ -345,7 +354,8 @@ internal class TelegramBotRunner(
                             messageContext = message.toMessageContext(loadChatDescription(message)),
                             attachedFile = attachedFile,
                             language = message.language
-                        )
+                        ),
+                        onToolStarting = { activity -> setAction(chatActionFor(activity)) }
                     )
                 }
 
@@ -366,6 +376,32 @@ internal class TelegramBotRunner(
                 }
         }
     }
+
+    // keep a chat action alive for the whole [block], re-asserting it every [ACTION_REFRESH] (Telegram
+    // clears an action after a few seconds). [block] receives a setter to switch the action mid-run;
+    // [collectLatest] cancels the in-flight refresh loop and re-sends immediately when it changes.
+    private suspend fun <T> withLiveChatAction(chatId: Long, block: suspend ((BotAction) -> Unit) -> T): T =
+        coroutineScope {
+            val action = MutableStateFlow<BotAction>(TypingAction)
+
+            val ticker =
+                launch {
+                    action.collectLatest { current ->
+                        while (isActive) {
+                            runCatching { bot.sendBotAction(chatId.toChatIdentifier(), current) }
+                                .onFailure { it.rethrowIfCancellation() }
+
+                            delay(ACTION_REFRESH)
+                        }
+                    }
+                }
+
+            try {
+                block { action.value = it }
+            } finally {
+                ticker.cancel()
+            }
+        }
 
     private suspend fun sendReply(message: ChatContentMessage<*>, text: String) {
         TelegramOutputSender.sendText(

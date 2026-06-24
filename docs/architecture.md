@@ -83,9 +83,12 @@ A normal user message travels:
 7. **Deliver** — `TelegramDelivery.send` routes each `BotOutput` to the chat (or the user's
    private chat when a tool requested it), anchoring replies to the original message and falling
    back when Telegram rejects formatting, a reply target is gone, a private DM is blocked, or a
-   media send fails. The agent run shows a `typing` chat action (`TelegramBotRunner`); during
-   delivery each item is preceded by a content-aware action (`botActionFor`: `upload_photo`,
-   `record_voice`, `upload_document`, …) so the indicator matches what is about to arrive. Outgoing text and captions are sent with Telegram's `HTML` parse mode; the
+   media send fails. A live chat action runs through the whole turn (`TelegramBotRunner.withLiveChatAction`):
+   it starts as `typing` and switches to the currently executing tool's action, e.g. `upload_photo` while an
+   image generates. Koog's `onToolCallStarting` resolves the running tool to a neutral `ToolActivity`
+   (`agent/ToolActivity.kt`, keyed by `@Tool` method references); the Telegram layer translates that to a chat
+   action (`chatActionFor`). During delivery each item is then preceded by the action matching its content
+   (`botActionFor`) so the indicator tracks what is happening. Outgoing text and captions are sent with Telegram's `HTML` parse mode; the
    agent is instructed (in `agent/SystemPrompt.kt`) to format with the supported HTML tags and to
    escape `<`/`>`/`&`. Rejected formatting on a reply text is re-sent as a `message.html` document
    (`telegram/HtmlReplyDocument.kt` — a standalone, responsive, light/dark page with a no-script
