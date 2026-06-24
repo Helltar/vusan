@@ -65,14 +65,18 @@ matplotlib.rcParams["figure.dpi"] = 200
 import matplotlib.pyplot as plt
 plt.plot([0, 1]); plt.savefig(io.BytesIO()); plt.close("all")
 
-# Pillow here is built without raqm, so a single font draws no emoji glyphs and a
-# string mixing text with emoji shows boxes. draw_text splits each line into text
-# and emoji runs, drawing the emoji with the monochrome ${FONT_DIR}/NotoEmoji.ttf
-# (no color emoji: this FreeType lacks CBDT). Exposed in the user namespace so a
-# script can call it directly instead of re-deriving the fallback every time.
+# Pillow here is built without raqm, so any single font draws no emoji glyphs and
+# a string mixing text with emoji shows boxes. The model writes ordinary
+# ImageDraw.text(...) calls and cannot be relied on to use a custom helper, so we
+# patch ImageDraw.text itself: a single line containing emoji is split into text
+# and emoji runs, the emoji drawn with the monochrome ${FONT_DIR}/NotoEmoji.ttf
+# (no color emoji: this FreeType lacks CBDT). Anything else falls straight through
+# to the original, and the fallback path degrades to the original on any error so
+# a script can never crash because of the patch.
 import functools
-from PIL import ImageFont as _ImageFont
+from PIL import ImageDraw as _ImageDraw, ImageFont as _ImageFont
 _EMOJI_BLOCKS = ((0x1F000, 0x1FAFF), (0x2600, 0x26FF), (0x2700, 0x27BF), (0x1F1E6, 0x1F1FF))
+_orig_text = _ImageDraw.ImageDraw.text
 
 @functools.lru_cache(maxsize=None)
 def _emoji_font(size):
@@ -84,27 +88,37 @@ def _is_emoji(text, i):
     cp = ord(text[i])
     return any(a <= cp <= b for a, b in _EMOJI_BLOCKS)
 
-def draw_text(draw, xy, text, font, fill="black"):
-    """Draw a single line of text on a Pillow image with emoji fallback and return
-    the end x. Latin/Cyrillic uses font; emoji use the monochrome Noto emoji face
-    sized to match. Variation selectors are dropped. Pass an x to advance manually
-    for multi-line layout."""
-    x, y = xy
-    emoji = _emoji_font(font.size)
+def _emoji_runs(text):
     runs = []
     for i, ch in enumerate(text):
-        if ord(ch) in (0xFE0F, 0xFE0E):
+        if ord(ch) in (0xFE0F, 0xFE0E):  # variation selectors have no glyph
             continue
         em = _is_emoji(text, i)
         if runs and runs[-1][0] == em:
             runs[-1][1] += ch
         else:
             runs.append([em, ch])
-    for em, run in runs:
-        f = emoji if em else font
-        draw.text((x, y), run, font=f, fill=fill)
-        x += draw.textlength(run, font=f)
-    return x
+    return runs
+
+def _text_with_emoji(self, xy, text, fill=None, font=None, anchor=None, **kw):
+    if (not isinstance(font, _ImageFont.FreeTypeFont) or not isinstance(text, str)
+            or "\\n" in text or not any(_is_emoji(text, i) for i in range(len(text)))):
+        return _orig_text(self, xy, text, fill=fill, font=font, anchor=anchor, **kw)
+    try:
+        emoji = _emoji_font(font.size)
+        runs = [(emoji if em else font, s) for em, s in _emoji_runs(text)]
+        total = sum(self.textlength(s, font=f) for f, s in runs)
+        x, y = xy
+        ax = (anchor or "la")[0]
+        x -= total / 2 if ax == "m" else total if ax == "r" else 0
+        run_anchor = "l" + (anchor or "la")[1]  # keep the caller's vertical anchor
+        for f, s in runs:
+            _orig_text(self, (x, y), s, fill=fill, font=f, anchor=run_anchor, **kw)
+            x += self.textlength(s, font=f)
+    except Exception:
+        return _orig_text(self, xy, text, fill=fill, font=font, anchor=anchor, **kw)
+
+_ImageDraw.ImageDraw.text = _text_with_emoji
 `);
   pyodide.FS.mkdir(WORK_DIR);
   pyodide.FS.chdir(WORK_DIR);

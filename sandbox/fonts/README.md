@@ -5,7 +5,7 @@ symbols (e.g. Telegram display names) render instead of showing tofu boxes. They
 are injected into the Pyodide filesystem at worker warm-up (see `worker.ts`).
 
 - `NotoEmoji.ttf` — monochrome emoji, used both by matplotlib's font fallback
-  and by the Pillow `draw_text` helper in `worker.ts`. The black-and-white
+  and by the patched Pillow `ImageDraw.text` in `worker.ts`. The black-and-white
   variant: neither the Agg backend nor this Pyodide FreeType build (no CBDT)
   can render the color Noto Color Emoji.
 - `NotoSansSymbols2-Regular.ttf` — Braille and miscellaneous symbols.
