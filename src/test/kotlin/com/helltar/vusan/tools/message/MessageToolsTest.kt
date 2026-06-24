@@ -23,7 +23,7 @@ class MessageToolsTest {
     }
 
     @Test
-    fun `sendMessage preserves order across multiple calls`() = runBlocking {
+    fun `sendMessage coalesces consecutive small messages into one bubble`() = runBlocking {
         val outbox = BotOutbox()
         val tools = MessageTools(outbox)
 
@@ -31,22 +31,22 @@ class MessageToolsTest {
         tools.sendMessage("second")
         tools.sendMessage("third")
 
-        assertEquals(
-            listOf("first", "second", "third"),
-            outbox.pending.map { assertIs<BotOutput.Text>(it.output).text }
-        )
+        val text = assertIs<BotOutput.Text>(outbox.pending.single().output)
+        assertEquals("first\n\nsecond\n\nthird", text.text)
     }
 
     @Test
-    fun `sendMessage caps separate messages per turn`() = runBlocking {
+    fun `sendMessage caps full-size bubbles per turn`() = runBlocking {
         val outbox = BotOutbox()
         val tools = MessageTools(outbox)
 
-        repeat(BotOutbox.MAX_TEXT_MESSAGES) { i ->
-            assertTrue(tools.sendMessage("message $i").startsWith("Delivered"))
+        // full-size messages cannot coalesce, so each one occupies its own bubble up to the cap.
+        val fullSize = "a".repeat(BotOutbox.MAX_TEXT_MESSAGE_CHARS)
+        repeat(BotOutbox.MAX_TEXT_MESSAGES) {
+            assertTrue(tools.sendMessage(fullSize).startsWith("Delivered"))
         }
 
-        val overflow = tools.sendMessage("one too many")
+        val overflow = tools.sendMessage(fullSize)
 
         assertTrue(overflow.startsWith("Message limit reached"))
         assertEquals(

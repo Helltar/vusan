@@ -6,10 +6,17 @@ data class OutboxItem(val output: BotOutput, val toPrivate: Boolean)
 class BotOutbox {
 
     companion object {
-        // upper bound on standalone text messages per turn. a flaky model asked to "send N separate
-        // messages" can loop and emit far more, flooding the chat past Telegram's per-chat rate limit
-        // (the run then stalls on 429 retries). capping the outbox bounds that blast radius.
+        // upper bound on standalone text bubbles per turn. consecutive sendMessage calls are coalesced
+        // into the trailing bubble (see [enqueueText]), so a model that splits one answer into many small
+        // messages produces few real sends. this cap still bounds a runaway loop that keeps emitting
+        // full-size bubbles, whose blast radius would otherwise flood the chat past Telegram's rate limit.
         const val MAX_TEXT_MESSAGES = 5
+
+        // keep a coalesced bubble within Telegram's 4096-char text limit, with headroom for HTML the model
+        // may add. a message that would overflow the trailing bubble starts a new one instead of merging.
+        const val MAX_TEXT_MESSAGE_CHARS = 4000
+
+        private const val TEXT_SEPARATOR = "\n\n"
     }
 
     private val items = mutableListOf<OutboxItem>()
@@ -27,11 +34,27 @@ class BotOutbox {
         items += OutboxItem(item, toPrivate)
     }
 
-    // enqueues a standalone text message, returning false once [MAX_TEXT_MESSAGES] are already queued so
+    // enqueues a standalone text message, coalescing it into the trailing text bubble while the result
+    // fits [MAX_TEXT_MESSAGE_CHARS] so splitting one answer into many small messages stays cheap. a message
+    // that cannot merge starts a new bubble; returns false once [MAX_TEXT_MESSAGES] bubbles are queued so
     // the caller can tell the model to stop instead of flooding the chat.
     fun enqueueText(text: String): Boolean {
-        if (items.count { it.output is BotOutput.Text } >= MAX_TEXT_MESSAGES) return false
+        val last = items.lastOrNull()
+
+        if (last != null && last.output is BotOutput.Text && last.toPrivate == redirectToPrivate) {
+            val merged = last.output.text + TEXT_SEPARATOR + text
+
+            if (merged.length <= MAX_TEXT_MESSAGE_CHARS) {
+                items[items.lastIndex] = last.copy(output = BotOutput.Text(merged))
+                return true
+            }
+        }
+
+        if (items.count { it.output is BotOutput.Text } >= MAX_TEXT_MESSAGES)
+            return false
+
         enqueue(BotOutput.Text(text))
+
         return true
     }
 

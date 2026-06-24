@@ -91,8 +91,10 @@ A normal user message travels:
    media captionless and delivers the caption the same way, while bot notices fall back to plain
    text. Sandbox image previews opt out of photo-to-document fallback because their
    uncompressed document copy is already queued. Consecutive sends in a multi-output reply are
-   paced (`INTER_MESSAGE_DELAY`) so a batch stays under Telegram's per-chat rate limit; the count
-   of standalone text messages is itself capped upstream in `BotOutbox` (`MAX_TEXT_MESSAGES`) so a
+   paced (`INTER_MESSAGE_DELAY`) so a batch stays under Telegram's per-chat rate limit. Upstream,
+   `BotOutbox` coalesces consecutive `sendMessage` text into the trailing bubble while it fits
+   (`MAX_TEXT_MESSAGE_CHARS`), so a model that splits one answer into many small messages produces
+   few real sends; the number of resulting bubbles is still capped (`MAX_TEXT_MESSAGES`) so a
    looping model cannot flood the chat. `TelegramOutputSender` performs the low-level API calls.
 8. **Persist** — produced history turns are appended via `ChatHistoryRepository`.
 
@@ -132,7 +134,7 @@ A symptom-to-source map for finding the right file fast. Paths are under
 | Reply says "still working on your previous request"                              | `agent/AgentRunner.kt` — the per-user `Mutex` rejects a second concurrent turn                                                                          |
 | Reply lands in the wrong chat, loses its reply anchor, or DM redirect misbehaves | `telegram/TelegramDelivery.kt` (routing/anchor/private-redirect *policy*)                                                                               |
 | Formatting renders wrong, message rejected, or media falls back to document/text  | `agent/SystemPrompt.kt` (allowed HTML tags the agent emits), `telegram/TelegramOutputSender.kt` (HTML parse mode + fallback *mechanism*), `telegram/TelegramErrors.kt` (which provider errors trigger a fallback) |
-| Bot floods a chat or stalls on Telegram 429 over a long multi-message reply       | `outbox/BotOutbox.kt` (`MAX_TEXT_MESSAGES` cap) + `telegram/TelegramDelivery.kt` (`INTER_MESSAGE_DELAY` pacing)                                          |
+| Bot floods a chat or stalls on Telegram 429 over a long multi-message reply       | `outbox/BotOutbox.kt` (text coalescing + `MAX_TEXT_MESSAGES` cap) + `telegram/TelegramDelivery.kt` (`INTER_MESSAGE_DELAY` pacing)                        |
 | A specific tool misbehaves                                                       | `tools/<feature>/<Feature>Tools.kt` for the tool surface, plus its `<Feature>Client.kt` for the external call                                           |
 | Wrong language in a canned reply (busy/error/voice/start)                        | `i18n/Language.kt` (language selection) + `i18n/Messages.kt` (the strings)                                                                              |
 | Bot forgets context or the history recap looks wrong                             | `agent/history/ChatHistory.kt` (summarize/slice) + `agent/history/ChatHistoryRepository.kt` (storage)                                                   |
