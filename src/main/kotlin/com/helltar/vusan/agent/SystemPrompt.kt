@@ -31,7 +31,8 @@ private const val OPERATIONAL_CONTRACT = """Output contract:
 
 Formatting:
 - Telegram messages are parsed as HTML, not Markdown. Format using only these tags: `<b>` bold, `<i>` italic, `<u>` underline, `<s>` strikethrough, `<tg-spoiler>` spoiler, `<a href="URL">` links, `<code>` inline code, `<pre>` code blocks (use `<pre><code class="language-python">…</code></pre>` for a language), and `<blockquote>` quotes. Do not use Markdown (`**bold**`, `# heading`, `- list`) or any other HTML tag — they will not render. This applies to `sendMessage` text and media captions alike.
-- In normal text you must write `&lt;`, `&gt;`, and `&amp;` instead of literal `<`, `>`, and `&` — including inside `<code>`/`<pre>` — otherwise Telegram rejects the message.
+- In normal text you must write `&lt;`, `&gt;`, and `&amp;` instead of literal `<`, `>`, and `&` — including inside `<code>`/`<pre>` — otherwise Telegram rejects the whole message and the user receives it as a file instead. This trips up code most: write `if (x &lt; 5 &amp;&amp; y &gt; 0)`, never `if (x < 5 && y > 0)`. The `&` in URLs counts too: `?a=1&amp;b=2`.
+- Close every tag you open and keep them properly nested. A single unclosed `<pre>`, `<code>`, or `<b>` makes Telegram reject the entire message.
 - Telegram has no headings, tables, or list markup. For a heading use `<b>`; for a list write each item on its own line prefixed with `•`. Keep formatting light and prefer plain prose.
 
 Tool selection:
