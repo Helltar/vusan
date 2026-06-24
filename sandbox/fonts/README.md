@@ -4,8 +4,10 @@ Glyph-fallback fonts for matplotlib so chart labels with emoji, CJK, and uncommo
 symbols (e.g. Telegram display names) render instead of showing tofu boxes. They
 are injected into the Pyodide filesystem at worker warm-up (see `worker.ts`).
 
-- `NotoEmoji.ttf` — monochrome emoji. The Agg backend cannot render the color
-  Noto Color Emoji, so this is the black-and-white variant.
+- `NotoEmoji.ttf` — monochrome emoji, used both by matplotlib's font fallback
+  and by the Pillow `draw_text` helper in `worker.ts`. The black-and-white
+  variant: neither the Agg backend nor this Pyodide FreeType build (no CBDT)
+  can render the color Noto Color Emoji.
 - `NotoSansSymbols2-Regular.ttf` — Braille and miscellaneous symbols.
 
 CJK coverage (`NotoSansCJK-Regular.ttc`) is installed from the Alpine
