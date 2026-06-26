@@ -30,6 +30,7 @@ class YtDlpClient(
 
     private companion object {
         const val YT_DLP_BINARY = "yt-dlp"
+        const val USER_AGENT = "Mozilla/5.0 (X11; Linux x86_64; rv:127.0) Gecko/20100101 Firefox/127.0"
         const val SEARCH_RESULT_LIMIT = 5
         const val FORMAT_UNAVAILABLE_MARKER = "Requested format is not available"
         const val VIDEO_MAX_FILE_SIZE_MB = 50
@@ -251,6 +252,7 @@ class YtDlpClient(
                     )
                 )
                 addAll(authArgs())
+                addAll(youtubeArgs())
                 add("ytsearch$SEARCH_RESULT_LIMIT:$query")
             }
 
@@ -291,11 +293,21 @@ class YtDlpClient(
                 add(YT_DLP_BINARY)
                 add("--ignore-config")
                 addAll(listOf("-x", "--audio-format", "m4a"))
-                addAll(listOf("--format", "bestaudio/best"))
+                // datacenter IPs 403 on DASH googlevideo audio, and the tv-downgraded HLS
+                // manifest has no audio-only rendition, so fall back to a low-res muxed HLS
+                // (capped and sorted toward 360p) and extract its audio to bound the download.
+                addAll(
+                    listOf(
+                        "--format",
+                        "ba[protocol^=m3u8]/b[protocol^=m3u8][height<=480]/b[protocol^=m3u8]/bestaudio/best"
+                    )
+                )
+                addAll(listOf("--format-sort", "proto:m3u8,res:360,acodec:m4a"))
                 addAll(listOf("--no-playlist", "--no-warnings"))
                 addAll(listOf("--max-filesize", "${maxFileSizeMb}M"))
                 add("--print-json")
                 addAll(authArgs())
+                addAll(youtubeArgs())
                 addAll(listOf("-o", workDir.resolve("audio.%(ext)s").toString()))
                 add(url)
             }
@@ -362,14 +374,17 @@ class YtDlpClient(
             buildList {
                 add(YT_DLP_BINARY)
                 add("--ignore-config")
-                addAll(listOf("--format", "bv*[height<=$heightCap]+ba/b[height<=$heightCap]/b"))
-                addAll(listOf("--format-sort", "res:$heightCap,vcodec:h264,ext:mp4:m4a"))
+                // prefer HLS (proto:m3u8): from datacenter IPs the tv-downgraded player's DASH
+                // googlevideo streams 403 on download, while its HLS streams still work.
+                addAll(listOf("--format", "b[height<=$heightCap]/bv*[height<=$heightCap]+ba/b"))
+                addAll(listOf("--format-sort", "proto:m3u8,res:$heightCap,vcodec:h264"))
                 addAll(listOf("--merge-output-format", "mp4", "--remux-video", "mp4"))
                 addAll(listOf("--write-thumbnail", "--convert-thumbnails", "jpg"))
                 addAll(listOf("--no-playlist", "--no-warnings"))
                 addAll(listOf("--max-filesize", "${maxFileSizeMb}M"))
                 add("--print-json")
                 addAll(authArgs())
+                addAll(youtubeArgs())
                 addAll(listOf("-o", workDir.resolve("video.%(ext)s").toString()))
                 add(url)
             }
@@ -479,11 +494,11 @@ class YtDlpClient(
     private suspend fun Deferred<String>.awaitWithin(timeout: Duration): String =
         try {
             withTimeout(timeout) { await() }
-        } catch (e: TimeoutCancellationException) {
+        } catch (_: TimeoutCancellationException) {
             ""
         } catch (e: CancellationException) {
             throw e
-        } catch (e: Exception) {
+        } catch (_: Exception) {
             ""
         }
 
@@ -518,6 +533,9 @@ class YtDlpClient(
         cookiesFile?.takeUnless { it.isBlank() }?.let { listOf("--cookies", it) }
             ?: emptyList()
 
+    private fun youtubeArgs(): List<String> =
+        listOf("--remote-components", "ejs:github", "--user-agent", USER_AGENT)
+
     private suspend fun logUnavailableFormatsDiagnostics(url: String, query: String) {
         val command =
             buildList {
@@ -526,6 +544,7 @@ class YtDlpClient(
                 add("--no-warnings")
                 add("--list-formats")
                 addAll(authArgs())
+                addAll(youtubeArgs())
                 add(url)
             }
 
