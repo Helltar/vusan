@@ -6,8 +6,9 @@ Items marked *(opt-in)* require an API key or an extra service — see
 [configuration.md](configuration.md).
 
 - **Code execution** *(opt-in)* — runs Python in an isolated sandbox (no network;
-  `numpy`/`pandas`/`matplotlib`/`sympy`/`scipy`/`Pillow`) to compute exact answers, transform
-  uploaded/replied files (including extracting archives), render charts, and produce
+  `numpy`/`pandas`/`matplotlib`/`sympy`/`scipy`/`Pillow`, plus `python-docx`/`fpdf2`/`pypdf` for
+  documents) to compute exact answers, transform uploaded/replied files (including extracting
+  archives), render charts, create and edit Word `.docx` and PDF documents, and produce
   animations/simulations (saved as `.apng`) delivered as a looping MP4 video. Any file written
   under the working directory, including in subfolders, is delivered automatically.
 - **Vision** — describes a photo or image document from the current message, a replied-to

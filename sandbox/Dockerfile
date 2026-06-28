@@ -1,3 +1,11 @@
+# Pure-Python document libraries (python-docx, fpdf2, pypdf, defusedxml) that the
+# Pyodide distribution does not ship. Downloaded here and unpacked onto sys.path
+# at runtime in worker.ts, so the offline sandbox can create and edit docx/pdf.
+FROM python:3.13-alpine AS wheels
+WORKDIR /wheels-src
+COPY extra-wheels.txt .
+RUN pip download --no-deps --dest /wheels -r extra-wheels.txt
+
 # the official image pins the exact Deno version; alpine variant keeps apk for the font step below
 FROM denoland/deno:alpine-2.8.2@sha256:e2a641dfee05544402cf0b149a41458bd373a8f47bff6544834177ded55d662d AS base
 WORKDIR /app
@@ -12,6 +20,9 @@ RUN mkdir -p /fonts && \
     cp /usr/share/fonts/noto/NotoSansCJK-Regular.ttc /fonts/ && \
     apk del .cjk
 COPY fonts/*.ttf /fonts/
+
+# the document-library wheels live under /app so the runtime read allowlist covers them
+COPY --from=wheels /wheels /app/wheels
 
 COPY deno.json packages.ts warmup.ts worker.ts main.ts ./
 

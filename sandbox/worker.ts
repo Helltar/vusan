@@ -10,6 +10,13 @@ interface InputFile {
 
 const WORK_DIR = "/work";
 const FONT_DIR = "/fonts";
+// pure-Python document-library wheels baked into the image (see extra-wheels.txt);
+// unpacked onto sys.path at init so python-docx/fpdf/pypdf import offline.
+// WHEEL_DIR is the host path; the wheels are copied to a top-level dir in the
+// Pyodide filesystem and extracted from there onto sys.path.
+const WHEEL_DIR = "/app/wheels";
+const WHEEL_FS_DIR = "/wheels";
+const WHEEL_SITE = "/wheels-site";
 const MAX_FILES = 8;
 const MAX_FILE_BYTES = 10 * 1024 * 1024;
 // Per-stream cap so a script printing in a tight loop cannot grow the captured
@@ -37,6 +44,7 @@ const ready: Promise<PyodideInterface> = (async () => {
   const pyodide = await loadPyodide();
   await pyodide.loadPackage(PACKAGES);
   injectFonts(pyodide);
+  await unpackWheels(pyodide);
   // Headless backend, register the fallback fonts so labels with emoji / CJK /
   // symbols render instead of tofu, and a throwaway render so the matplotlib
   // font cache is built during warm-up (hidden by the pool), not on first use.
@@ -194,6 +202,36 @@ function makeSink() {
       return text;
     },
   };
+}
+
+// Unpack the baked document-library wheels onto sys.path. The wheels are pure
+// Python, so extracting each zip into one site directory is enough; their
+// compiled/in-distribution deps are already loaded via loadPackage(PACKAGES).
+// Silently does nothing when the wheel dir is absent (local dev without a build).
+async function unpackWheels(pyodide: PyodideInterface): Promise<void> {
+  let names: string[];
+  try {
+    names = [...Deno.readDirSync(WHEEL_DIR)]
+      .filter((e) => e.isFile && e.name.endsWith(".whl"))
+      .map((e) => e.name);
+  } catch {
+    return;
+  }
+  if (names.length === 0) return;
+
+  pyodide.FS.mkdir(WHEEL_FS_DIR);
+  for (const name of names) {
+    pyodide.FS.writeFile(`${WHEEL_FS_DIR}/${name}`, Deno.readFileSync(`${WHEEL_DIR}/${name}`));
+  }
+
+  await pyodide.runPythonAsync(`
+import sys, os, zipfile
+os.makedirs("${WHEEL_SITE}", exist_ok=True)
+for _whl in os.listdir("${WHEEL_FS_DIR}"):
+    if _whl.endswith(".whl"):
+        zipfile.ZipFile("${WHEEL_FS_DIR}/" + _whl).extractall("${WHEEL_SITE}")
+sys.path.insert(0, "${WHEEL_SITE}")
+`);
 }
 
 // Copy the image's fallback fonts into the Pyodide filesystem so matplotlib can
