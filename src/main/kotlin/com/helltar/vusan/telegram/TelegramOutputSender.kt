@@ -6,6 +6,7 @@ import dev.inmo.tgbotapi.bot.TelegramBot
 import dev.inmo.tgbotapi.extensions.api.send.media.*
 import dev.inmo.tgbotapi.extensions.api.send.polls.sendQuizPoll
 import dev.inmo.tgbotapi.extensions.api.send.polls.sendRegularPoll
+import dev.inmo.tgbotapi.extensions.api.send.sendRichMessage
 import dev.inmo.tgbotapi.extensions.api.send.sendTextMessage
 import dev.inmo.tgbotapi.extensions.api.send.setMessageReaction
 import dev.inmo.tgbotapi.requests.abstracts.asMultipartFile
@@ -18,12 +19,14 @@ import dev.inmo.tgbotapi.types.media.TelegramMediaPhoto
 import dev.inmo.tgbotapi.types.message.HTMLParseMode
 import dev.inmo.tgbotapi.types.message.ParseMode
 import dev.inmo.tgbotapi.types.polls.InputPollOption
+import dev.inmo.tgbotapi.types.rich.InputRichMessageMarkdown
 import dev.inmo.tgbotapi.utils.extensions.toHtml
 import io.github.oshai.kotlinlogging.KotlinLogging
 
 internal object TelegramOutputSender {
 
     private const val FALLBACK_DOCUMENT_FILENAME = "message.html"
+    private const val MARKDOWN_DOCUMENT_FILENAME = "message.md"
     private const val VIDEO_THUMBNAIL_FILENAME = "thumbnail.jpg"
     private const val VIDEO_COVER_FILENAME = "cover.jpg"
 
@@ -39,6 +42,7 @@ internal object TelegramOutputSender {
     ) {
         when (item) {
             is BotOutput.Text -> sendReplyText(bot, chatId, item.text, replyParameters, formattingFileNotice)
+            is BotOutput.RichMessage -> sendRichMessage(bot, chatId, item.markdown, replyParameters)
             is BotOutput.Animation -> sendAnimation(bot, chatId, replyParameters, item, caption, formattingFileNotice)
             is BotOutput.Photo -> sendPhoto(bot, chatId, replyParameters, item, caption, formattingFileNotice)
             is BotOutput.PhotoGroup -> sendPhotoGroup(bot, chatId, replyParameters, item, formattingFileNotice)
@@ -111,6 +115,48 @@ internal object TelegramOutputSender {
                 log.warn { "Telegram rejected HTML, sending the reply as a $FALLBACK_DOCUMENT_FILENAME file" }
                 sendTextAsDocument(bot, chatId, text, formattingFileNotice, replyParameters)
             } else throw e
+        }.getOrThrow()
+    }
+
+    // opt-in rich messages carry github-flavored markdown. if Telegram rejects the send, deliver the same
+    // source as a .md document — clients render markdown inline and a document is not bound by the 4096-char
+    // text limit. reply-not-found propagates so the caller can retry without the anchor.
+    private suspend fun sendRichMessage(
+        bot: TelegramBot,
+        chatId: ChatIdentifier,
+        markdown: String,
+        replyParameters: ReplyParameters?
+    ) {
+        runCatching {
+            bot.sendRichMessage(
+                chatId = chatId,
+                richMessage = InputRichMessageMarkdown(markdown),
+                replyParameters = replyParameters
+            )
+        }.recoverCatching { e ->
+            e.rethrowIfCancellation()
+            rethrowIfReplyNotFound(e, replyParameters)
+            log.warn(e) { "sendRichMessage failed for chat=$chatId, resending as a $MARKDOWN_DOCUMENT_FILENAME file" }
+            sendMarkdownDocument(bot, chatId, markdown, replyParameters)
+        }.getOrThrow()
+    }
+
+    private suspend fun sendMarkdownDocument(
+        bot: TelegramBot,
+        chatId: ChatIdentifier,
+        markdown: String,
+        replyParameters: ReplyParameters?
+    ) {
+        runCatching {
+            bot.sendDocument(
+                chatId = chatId,
+                document = markdown.encodeToByteArray().asMultipartFile(MARKDOWN_DOCUMENT_FILENAME),
+                replyParameters = replyParameters
+            )
+        }.recoverCatching { e ->
+            e.rethrowIfCancellation()
+            log.warn(e) { "Markdown document fallback failed for chat=$chatId, sending plain text" }
+            bot.sendTextMessage(chatId = chatId, text = markdown, parseMode = null, replyParameters = replyParameters)
         }.getOrThrow()
     }
 

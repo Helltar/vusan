@@ -56,6 +56,43 @@ class MessageToolsTest {
     }
 
     @Test
+    fun `sendRichMessage enqueues a trimmed rich message`() = runBlocking {
+        val outbox = BotOutbox()
+        val tools = MessageTools(outbox)
+
+        val result = tools.sendRichMessage("  # Title\n\n- one\n- two  ")
+
+        assertTrue(result.startsWith("Delivered"))
+        val rich = assertIs<BotOutput.RichMessage>(outbox.pending.single().output)
+        assertEquals("# Title\n\n- one\n- two", rich.markdown)
+    }
+
+    @Test
+    fun `sendRichMessage shares the bubble budget with plain text`() = runBlocking {
+        val outbox = BotOutbox()
+        val tools = MessageTools(outbox)
+
+        val fullSize = "a".repeat(BotOutbox.MAX_TEXT_MESSAGE_CHARS)
+        repeat(BotOutbox.MAX_TEXT_MESSAGES) {
+            assertTrue(tools.sendMessage(fullSize).startsWith("Delivered"))
+        }
+
+        assertTrue(tools.sendRichMessage("# late").startsWith("Message limit reached"))
+        assertTrue(outbox.pending.none { it.output is BotOutput.RichMessage })
+    }
+
+    @Test
+    fun `sendRichMessage rejects blank markdown`() = runBlocking {
+        val outbox = BotOutbox()
+        val tools = MessageTools(outbox)
+
+        val result = tools.sendRichMessage("   ")
+
+        assertEquals("Tool failed: Rich message must not be empty", result)
+        assertTrue(outbox.pending.isEmpty())
+    }
+
+    @Test
     fun `sendMessage rejects blank text`() = runBlocking {
         val outbox = BotOutbox()
         val tools = MessageTools(outbox)

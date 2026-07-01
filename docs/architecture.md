@@ -17,7 +17,8 @@ Telegram ──► telegram/ ──► agent/ ──► tools/ ──► externa
 
 - **`telegram/`** — Telegram I/O. Receives updates (text, voice, audio, sticker, photo, document,
   album), filters by allowlist, normalizes input, and delivers agent results back — including
-  HTML-formatting, reply-anchor, media/document, media-group, and private-message fallbacks.
+  HTML-formatting, opt-in rich-message, reply-anchor, media/document, media-group, and
+  private-message fallbacks.
 - **`agent/`** — agent orchestration on top of Koog. `AgentRunner` serializes per-user turns;
   `AgentFactory` builds the `AIAgent` (system prompt + history + memory + tools). `agent/history/`
   summarizes and persists chat turns; `agent/memory/` stores durable user/group memory that
@@ -26,7 +27,7 @@ Telegram ──► telegram/ ──► agent/ ──► tools/ ──► externa
   scheduled tasks, …). `ToolRegistryFactory` owns clients and builds a per-request registry from
   required tools plus optional tools whose env/config is present. See [features.md](features.md).
 - **`outbox/`** — the output model. `BotOutput` is the immutable sealed set of things the bot can
-  send (text, photo, voice, audio, video, document, poll, reaction, …); `BotOutbox` is the
+  send (text, rich message, photo, voice, audio, video, document, poll, reaction, …); `BotOutbox` is the
   per-request queue tools write into, holding each `BotOutput` as an `OutboxItem` that captures
   its private-routing decision.
 - **`request/`** — the request-scoped input model shared across layers: `RequestContext`
@@ -70,14 +71,14 @@ A normal user message travels:
 5. **Act** — during the agent loop, tools run and push results into the request's `BotOutbox`;
    tool calls/results are recorded for history. The custom `single_run` strategy (`AgentFactory`)
    guards against flaky models in two ways:
-   - a tool call missing its declared required parameters (flaky models emit empty-arg siblings
-     when they try to call tools in parallel) is short-circuited into a `ValidationError` result
-     instead of being executed, so the run stays clean and the follow-up request stays
-     well-formed;
-   - a turn that ends having delivered nothing — no `sendMessage`, media, or reaction, and empty
-     assistant text (flaky providers return an empty completion after a batch of tool results) —
-     gets one nudge to actually deliver before finishing, so a full turn of research does not
-     collapse into silence.
+    - a tool call missing its declared required parameters (flaky models emit empty-arg siblings
+      when they try to call tools in parallel) is short-circuited into a `ValidationError` result
+      instead of being executed, so the run stays clean and the follow-up request stays
+      well-formed;
+    - a turn that ends having delivered nothing — no `sendMessage`, media, or reaction, and empty
+      assistant text (flaky providers return an empty completion after a batch of tool results) —
+      gets one nudge to actually deliver before finishing, so a full turn of research does not
+      collapse into silence.
 6. **Collect** — `AgentRunner` returns an `AgentResult` (outputs + optional comment + history
    turns to persist).
 7. **Deliver** — `TelegramDelivery.send` routes each `BotOutput` to the chat (or the user's
@@ -88,13 +89,17 @@ A normal user message travels:
    image generates. Koog's `onToolCallStarting` resolves the running tool to a neutral `ToolActivity`
    (`agent/ToolActivity.kt`, keyed by `@Tool` method references); the Telegram layer translates that to a chat
    action (`chatActionFor`). During delivery each item is then preceded by the action matching its content
-   (`botActionFor`) so the indicator tracks what is happening. Outgoing text and captions are sent with Telegram's `HTML` parse mode; the
-   agent is instructed (in `agent/SystemPrompt.kt`) to format with the supported HTML tags and to
-   escape `<`/`>`/`&`. Rejected formatting on a reply text is re-sent as a `message.html` document
-   (`telegram/HtmlReplyDocument.kt` — a standalone, responsive, light/dark page with a no-script
-   CSP) carrying the reply so the formatting still arrives; a rejected media caption resends the
-   media captionless and delivers the caption the same way, while bot notices fall back to plain
-   text. Sandbox image previews opt out of photo-to-document fallback because their
+   (`botActionFor`) so the indicator tracks what is happening. Outgoing text and captions are sent with
+   Telegram's `HTML` parse mode; the agent is instructed (in `agent/SystemPrompt.kt`) to format with the
+   supported HTML tags and to escape `<`/`>`/`&`. Rejected formatting on a reply text is re-sent as a
+   `message.html` document (`telegram/HtmlReplyDocument.kt` — a standalone, responsive, light/dark page
+   with a no-script CSP) carrying the reply so the formatting still arrives; a rejected media caption
+   resends the media captionless and delivers the caption the same way, while bot notices fall back to
+   plain text. For large, genuinely structured replies the agent can opt into a Bot API 10.1 rich
+   message via the `sendRichMessage` tool (`BotOutput.RichMessage`, github-flavored markdown); it is
+   delivered with `sendRichMessage` and, if Telegram rejects it, resent as a `message.md` document.
+   Rich messages are kept opt-in because some third-party clients (e.g. Telegram X) render them as
+   unsupported. Sandbox image previews opt out of photo-to-document fallback because their
    uncompressed document copy is already queued. Consecutive sends in a multi-output reply are
    paced (`INTER_MESSAGE_DELAY`) so a batch stays under Telegram's per-chat rate limit. Upstream,
    `BotOutbox` coalesces consecutive `sendMessage` text into the trailing bubble while it fits
@@ -133,21 +138,21 @@ then block on the bot job until shutdown (closing the executor, HTTP client, and
 A symptom-to-source map for finding the right file fast. Paths are under
 [`src/main/kotlin/com/helltar/vusan/`](../src/main/kotlin/com/helltar/vusan/).
 
-| Symptom                                                                          | Start here                                                                                                                                              |
-|----------------------------------------------------------------------------------|---------------------------------------------------------------------------------------------------------------------------------------------------------|
-| Bot ignores a message entirely                                                   | `telegram/MessageFilter.kt` (`shouldHandle` — group reply/mention rules), then `TelegramBotRunner.isAccepted`/`isAllowed` (the `ALLOWED_IDS` allowlist) |
-| Reply says "still working on your previous request"                              | `agent/AgentRunner.kt` — the per-user `Mutex` rejects a second concurrent turn                                                                          |
-| Reply lands in the wrong chat, loses its reply anchor, or DM redirect misbehaves | `telegram/TelegramDelivery.kt` (routing/anchor/private-redirect *policy*)                                                                               |
-| Formatting renders wrong, message rejected, or media falls back to document/text  | `agent/SystemPrompt.kt` (allowed HTML tags the agent emits), `telegram/TelegramOutputSender.kt` (HTML parse mode + fallback *mechanism*), `telegram/TelegramErrors.kt` (which provider errors trigger a fallback) |
-| Bot floods a chat or stalls on Telegram 429 over a long multi-message reply       | `outbox/BotOutbox.kt` (text coalescing + `MAX_TEXT_MESSAGES` cap) + `telegram/TelegramDelivery.kt` (`INTER_MESSAGE_DELAY` pacing)                        |
-| A specific tool misbehaves                                                       | `tools/<feature>/<Feature>Tools.kt` for the tool surface, plus its `<Feature>Client.kt` for the external call                                           |
-| Wrong language in a canned reply (busy/error/voice/start)                        | `i18n/Language.kt` (language selection) + `i18n/Messages.kt` (the strings)                                                                              |
-| Bot forgets context or the history recap looks wrong                             | `agent/history/ChatHistory.kt` (summarize/slice) + `agent/history/ChatHistoryRepository.kt` (storage)                                                   |
-| Voice/audio not transcribed                                                      | `telegram/VoiceTranscriber.kt` + `stt/OpenAiWhisperClient.kt` (needs `OPENAI_STT_API_KEY`)                                                              |
-| Scheduled task fires late, not at all, or reports "missed"                       | `tasks/TaskScheduler.kt` (polling/lateness) + `tasks/Recurrence.kt` (next-run math)                                                                     |
-| An env var has no effect                                                         | `config/AppConfig.kt` (parsing) — and check it is documented in [`configuration.md`](configuration.md) + [`.env.example`](../.env.example)              |
-| Model / provider / request-timeout selection                                     | `config/LlmRuntime.kt` (provider → client/model/params)                                                                                                 |
-| Garbled or empty tool-call crashes from a flaky model                            | `agent/AgentFactory.kt` — `vusanSingleRunStrategy` and `missingRequiredArgs` short-circuit them                                                         |
+| Symptom                                                                          | Start here                                                                                                                                                                                                                                                           |
+|----------------------------------------------------------------------------------|----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
+| Bot ignores a message entirely                                                   | `telegram/MessageFilter.kt` (`shouldHandle` — group reply/mention rules), then `TelegramBotRunner.isAccepted`/`isAllowed` (the `ALLOWED_IDS` allowlist)                                                                                                              |
+| Reply says "still working on your previous request"                              | `agent/AgentRunner.kt` — the per-user `Mutex` rejects a second concurrent turn                                                                                                                                                                                       |
+| Reply lands in the wrong chat, loses its reply anchor, or DM redirect misbehaves | `telegram/TelegramDelivery.kt` (routing/anchor/private-redirect *policy*)                                                                                                                                                                                            |
+| Formatting renders wrong, message rejected, or media falls back to document/text | `agent/SystemPrompt.kt` (allowed HTML tags the agent emits), `telegram/TelegramOutputSender.kt` (HTML parse mode, opt-in rich message + fallback *mechanism*), `telegram/TelegramErrors.kt` (which provider errors trigger a fallback) |
+| Bot floods a chat or stalls on Telegram 429 over a long multi-message reply      | `outbox/BotOutbox.kt` (text coalescing + `MAX_TEXT_MESSAGES` cap) + `telegram/TelegramDelivery.kt` (`INTER_MESSAGE_DELAY` pacing)                                                                                                                                    |
+| A specific tool misbehaves                                                       | `tools/<feature>/<Feature>Tools.kt` for the tool surface, plus its `<Feature>Client.kt` for the external call                                                                                                                                                        |
+| Wrong language in a canned reply (busy/error/voice/start)                        | `i18n/Language.kt` (language selection) + `i18n/Messages.kt` (the strings)                                                                                                                                                                                           |
+| Bot forgets context or the history recap looks wrong                             | `agent/history/ChatHistory.kt` (summarize/slice) + `agent/history/ChatHistoryRepository.kt` (storage)                                                                                                                                                                |
+| Voice/audio not transcribed                                                      | `telegram/VoiceTranscriber.kt` + `stt/OpenAiWhisperClient.kt` (needs `OPENAI_STT_API_KEY`)                                                                                                                                                                           |
+| Scheduled task fires late, not at all, or reports "missed"                       | `tasks/TaskScheduler.kt` (polling/lateness) + `tasks/Recurrence.kt` (next-run math)                                                                                                                                                                                  |
+| An env var has no effect                                                         | `config/AppConfig.kt` (parsing) — and check it is documented in [`configuration.md`](configuration.md) + [`.env.example`](../.env.example)                                                                                                                           |
+| Model / provider / request-timeout selection                                     | `config/LlmRuntime.kt` (provider → client/model/params)                                                                                                                                                                                                              |
+| Garbled or empty tool-call crashes from a flaky model                            | `agent/AgentFactory.kt` — `vusanSingleRunStrategy` and `missingRequiredArgs` short-circuit them                                                                                                                                                                      |
 
 ## Adding a tool
 

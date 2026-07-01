@@ -50,13 +50,27 @@ class BotOutbox {
             }
         }
 
-        if (items.count { it.output is BotOutput.Text } >= MAX_TEXT_MESSAGES)
+        if (standaloneBubbleCount() >= MAX_TEXT_MESSAGES)
             return false
 
         enqueue(BotOutput.Text(text))
 
         return true
     }
+
+    // opt-in rich messages never coalesce — each is a deliberate structured send — but they share the
+    // standalone bubble budget with plain text so a runaway turn cannot flood the chat.
+    fun enqueueRichMessage(markdown: String): Boolean {
+        if (standaloneBubbleCount() >= MAX_TEXT_MESSAGES)
+            return false
+
+        enqueue(BotOutput.RichMessage(markdown))
+
+        return true
+    }
+
+    private fun standaloneBubbleCount(): Int =
+        items.count { it.output is BotOutput.Text || it.output is BotOutput.RichMessage }
 
     fun useDirectMessages() {
         redirectToPrivate = true

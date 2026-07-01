@@ -14,6 +14,19 @@ internal object MessageToolDescriptions {
         "Full text of the message to send to the user. " +
                 "Must be non-empty."
 
+    const val SEND_RICH_MESSAGE =
+        "Sends a large, structured reply as a Telegram rich message (Bot API 10.1). " +
+                "Use this ONLY when the content is genuinely large and structured: long multi-section explanations, comparison tables, detailed step-by-step guides, or documents with headings. " +
+                "For everything else — normal answers, short replies, a little bold or a simple list — use `sendMessage`, which renders on every client. " +
+                "Some third-party clients (e.g. Telegram X) show rich messages as unsupported, so reserve this for cases where the structure is clearly worth it. " +
+                "After calling it, do not resend the same content with `sendMessage`."
+
+    const val RICH_MARKDOWN =
+        "Message body in GitHub-Flavored Markdown: " +
+                "`#` to `######` headings, `**bold**`, `*italic*`, `~~strikethrough~~`, `` `code` ``, `||spoiler||`, `[text](url)` links, " +
+                "`-` / `1.` lists, `- [ ]` / `- [x]` task items, `>` quotes, `---` divider, fenced code blocks, and `| a | b |` tables with a `| --- | --- |` separator row. " +
+                "Must be non-empty; up to 32768 characters."
+
     const val REPLY_IN_PRIVATE_MESSAGES =
         "Switches the reply target so all subsequent queued messages and media are sent to the user's private chat with the bot instead of the current chat. " +
                 "Use when the user explicitly asks for something to be sent in DMs, privately, or in personal messages, especially from a group. " +

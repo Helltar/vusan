@@ -7,6 +7,16 @@ sealed class BotOutput {
 
     data class Text(val text: String) : BotOutput()
 
+    // an opt-in Bot API 10.1 rich message for large, genuinely structured replies (long comparisons,
+    // tables, multi-section documents). [markdown] is github-flavored markdown; delivery falls back to a
+    // .md document if Telegram rejects it. some third-party clients (e.g. Telegram X) render rich messages
+    // as unsupported, so the normal HTML [Text] path stays the default for everyday replies.
+    data class RichMessage(val markdown: String) : BotOutput() {
+        init {
+            require(markdown.isNotBlank()) { "RichMessage markdown must not be blank" }
+        }
+    }
+
     class Photo(val bytes: ByteArray, val filename: String, val fallbackToDocument: Boolean = true) : BotOutput() {
         override val acceptsCaption: Boolean get() = true
     }

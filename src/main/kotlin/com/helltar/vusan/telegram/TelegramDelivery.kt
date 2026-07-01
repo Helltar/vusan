@@ -35,7 +35,7 @@ internal fun botActionFor(output: BotOutput): BotAction? = when (output) {
     is BotOutput.Video, is BotOutput.Animation -> UploadVideoAction
     is BotOutput.VideoNote -> RecordVideoNoteAction
     is BotOutput.Voice -> RecordVoiceAction
-    is BotOutput.Text, is BotOutput.Quiz, is BotOutput.Poll -> TypingAction
+    is BotOutput.Text, is BotOutput.RichMessage, is BotOutput.Quiz, is BotOutput.Poll -> TypingAction
     is BotOutput.Reaction -> null
 }
 
@@ -187,7 +187,7 @@ class TelegramDelivery(private val bot: TelegramBot) {
     }
 
     private fun singleCaptionIndex(outputs: List<OutboxItem>): Int {
-        if (outputs.any { it.output is BotOutput.Text }) return -1
+        if (outputs.any { it.output is BotOutput.Text || it.output is BotOutput.RichMessage }) return -1
         val captionables = outputs.withIndex().filter { it.value.output.acceptsCaption }
         return if (captionables.size == 1) captionables.single().index else -1
     }

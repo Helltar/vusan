@@ -110,10 +110,62 @@ class TelegramOutputSenderTest {
         assertEquals("attach://${coverFile.fileId}", request.paramsJson["cover"]?.jsonPrimitive?.content)
     }
 
+    @Test
+    fun `rich message is sent via sendRichMessage`() = runBlocking {
+        val bot = RecordingBot()
+
+        TelegramOutputSender.send(
+            bot = bot,
+            item = BotOutput.RichMessage("# Title\n\n- one\n- two"),
+            chatId = 1L.toChatIdentifier(),
+            replyParameters = null,
+            caption = null,
+            formattingFileNotice = "notice"
+        )
+
+        assertEquals(listOf("sendRichMessage"), bot.methods)
+    }
+
+    @Test
+    fun `rejected rich message is resent as a markdown document`() = runBlocking {
+        val bot = RecordingBot(failRichMessage = true)
+
+        TelegramOutputSender.send(
+            bot = bot,
+            item = BotOutput.RichMessage("# Title"),
+            chatId = 1L.toChatIdentifier(),
+            replyParameters = null,
+            caption = null,
+            formattingFileNotice = "notice"
+        )
+
+        assertEquals(listOf("sendRichMessage", "sendDocument"), bot.methods)
+        val document = assertIs<MultipartRequest<*>>(bot.requests.last())
+        assertEquals("message.md", document.mediaMap.values.single().filename)
+    }
+
+    @Test
+    fun `rich markdown document fallback drops to plain text when the document also fails`() = runBlocking {
+        val bot = RecordingBot(failRichMessage = true, failDocument = true)
+
+        TelegramOutputSender.send(
+            bot = bot,
+            item = BotOutput.RichMessage("# Title"),
+            chatId = 1L.toChatIdentifier(),
+            replyParameters = null,
+            caption = null,
+            formattingFileNotice = "notice"
+        )
+
+        assertEquals(listOf("sendRichMessage", "sendDocument", "sendMessage"), bot.methods)
+    }
+
     private class RecordingBot(
         private val failPhoto: Boolean = false,
         private val failHtmlText: Boolean = false,
-        private var failHtmlCaptionOnce: Boolean = false
+        private var failHtmlCaptionOnce: Boolean = false,
+        private val failRichMessage: Boolean = false,
+        private val failDocument: Boolean = false
     ) : TelegramBot {
         val methods = mutableListOf<String>()
         val requests = mutableListOf<Request<*>>()
@@ -130,6 +182,22 @@ class TelegramOutputSenderTest {
                     httpResponseCode = 400,
                     plainResponse = """{"description":"Bad Request: can't parse entities"}""",
                     response = Response(description = "Bad Request: can't parse entities")
+                )
+            }
+
+            if (failRichMessage && method == "sendRichMessage") {
+                throw ApiException(
+                    httpResponseCode = 400,
+                    plainResponse = """{"description":"Bad Request: can't parse entities"}""",
+                    response = Response(description = "Bad Request: can't parse entities")
+                )
+            }
+
+            if (failDocument && method == "sendDocument") {
+                throw ApiException(
+                    httpResponseCode = 400,
+                    plainResponse = """{"description":"Bad Request: file too big"}""",
+                    response = Response(description = "Bad Request: file too big")
                 )
             }
 

@@ -36,6 +36,11 @@ Items marked *(opt-in)* require an API key or an extra service — see
   addressed message.
 - **Telegram replies** — sends text, media, documents, polls, and captions back to the current
   chat; can switch subsequent outputs to the user's private chat when explicitly asked.
+- **Rich messages** *(opt-in, large structured replies)* — sends a Bot API 10.1 rich message written
+  in GitHub-flavored markdown (headings, tables, checklists, quotes, code blocks) for genuinely large,
+  structured answers; reserved for cases where the structure is worth it, since some third-party
+  clients (e.g. Telegram X) show rich messages as unsupported. Falls back to a `.md` document if
+  Telegram rejects the send.
 - **File delivery** — sends generated text content as a Telegram document.
 - **Currency** — looks up live ISO-4217 exchange rates.
 - **Chat history control** — clears the current user's stored conversation history without
