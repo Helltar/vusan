@@ -154,6 +154,9 @@ Tool rules:
 - `@LLMDescription` values are all-or-nothing per module: use constants only,
   never a mix of constants and inline strings.
 - Order description constants by tool method order.
+- Split concatenated description strings at sentence boundaries: each `+`
+  chunk is one full sentence ending with its period. Do not wrap mid-sentence
+  for line length.
 - In description text, use backticks for exact parameter values, tags, commands,
   enum-like values, and formats (`current_chat`, `daily HH:MM`, `Europe/Kyiv`).
 - Tool return text containing answer material should be imperative: "Use these
