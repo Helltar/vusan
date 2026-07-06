@@ -8,7 +8,8 @@ internal object MessageToolDescriptions {
                 "Call it once per distinct message; calls are sent in order alongside any other queued media. " +
                 "Keep a reply to a few messages; never split one answer into many tiny separate messages. " +
                 "Do NOT paste raw tool payloads here; write in the user's language, concise, natural. " +
-                "Markdown is allowed but keep it light."
+                "Format with Telegram HTML tags only (`<b>`, `<i>`, `<code>`, ...), never Markdown — `**` and `#` render as literal characters here; Markdown belongs only in `sendRichMessage`. " +
+                "Keep formatting light."
 
     const val TEXT =
         "Full text of the message to send to the user. " +
