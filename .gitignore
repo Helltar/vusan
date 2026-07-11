@@ -13,3 +13,15 @@ node_modules/
 
 deno.lock
 .env
+
+# claude code sandbox masks home dotfiles with /dev/null stubs, visible only inside its sandboxed commands
+.bash_profile
+.bashrc
+.gitconfig
+.gitmodules
+.mcp.json
+.profile
+.ripgreprc
+.vscode/
+.zprofile
+.zshrc
