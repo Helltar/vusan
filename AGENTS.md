@@ -45,8 +45,6 @@ Run Gradle itself on JDK 21. The build uses `jvmToolchain(21)`, and detekt
 - If a check cannot run, report the exact command and blocker.
 - Do not treat Gradle deprecation warnings as failures unless the task is about
   Gradle compatibility.
-- Claude Code has a Stop hook in `.claude/hooks/kotlin-warnings.sh` that blocks
-  on Kotlin compiler warnings. Keep it aligned with this file's warning policy.
 
 ## Architecture Rules
 
