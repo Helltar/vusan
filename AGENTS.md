@@ -99,9 +99,6 @@ Update docs in the same change as behavior:
 - Comment sparingly: code should explain itself through naming and structure.
   Comment only non-obvious constraints, invariants, or surprising behavior,
   and say why, not what the code does. Never leave commented-out code.
-- KDoc is normal prose: sentences start with an uppercase letter. Ordinary
-  `//` comments are entirely lowercase, including sentences after a period.
-  Keep code identifiers and acronyms (`RunResponse`, `WAL`, `URL`) as written.
 - Prefer raw strings for text containing quotes when readable.
 - In logs, delimit values as `key=[value]`, not `key="value"`.
 - Use `kotlin.time.Duration` overloads (`delay(5.seconds)`,
@@ -220,10 +217,3 @@ Tool rules:
 - Subject alone is usually enough. Add a body only when the why is not
   obvious from the diff; wrap it at 72 characters.
 - Do not mix unrelated work in one commit.
-
-## External References
-
-- Koog: <https://github.com/JetBrains/koog>
-- ktgbotapi: <https://github.com/InsanusMokrassar/ktgbotapi>
-- ktgbotapi examples: <https://github.com/InsanusMokrassar/TelegramBotAPI-examples>
-- Exposed: <https://github.com/JetBrains/Exposed>
