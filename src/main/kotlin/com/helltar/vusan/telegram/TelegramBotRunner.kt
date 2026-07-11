@@ -94,6 +94,7 @@ internal class TelegramBotRunner(
         }
 
         return bot.buildBehaviourWithLongPolling {
+            onContentMessage(markerFactory = null) { it.logIncoming() }
             onCommand("start", markerFactory = null) { handleStartCommand(it, profile) }
             onText(markerFactory = null) { handleTextUpdate(it, profile) }
             onSticker(markerFactory = null) { handleStickerUpdate(it, profile) }
@@ -262,6 +263,30 @@ internal class TelegramBotRunner(
         }
 
         return true
+    }
+
+    private fun ChatContentMessage<*>.logIncoming() {
+        log.debug {
+            buildString {
+                append("message: chat=$chatIdLong chatType=${chat.promptType()} msg=$messageIdLong")
+                append(" type=${content.contentTypeName()}")
+                chat.titleOrDisplayName()?.let { append(" chatTitle=[$it]") }
+                senderIdOrNull()?.let { append(" user=$it") }
+                senderUsernameOrNull()?.let { append(" username=[$it]") }
+                senderDisplayNameOrNull()?.let { append(" name=[$it]") }
+
+                (content as? StickerContent)?.media?.let { sticker ->
+                    append(" sticker=[${sticker.readableFormat()} ${sticker.type.readableName()}")
+                    sticker.emoji?.let { emoji -> append(" $emoji") }
+                    sticker.stickerSetName?.let { setName -> append(" set=${setName.string}") }
+                    append("]")
+                }
+
+                content.captionedContentOrNull()?.text
+                    ?.collapseWhitespaceAndCap(LOG_PROMPT_MAX_CHARS)
+                    ?.let { append(" text=[$it]") }
+            }
+        }
     }
 
     private fun ChatContentMessage<*>.logDenied() {
