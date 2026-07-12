@@ -8,6 +8,7 @@
 
 build/
 data/
+docs/telegram/
 deploy/
 node_modules/
 
