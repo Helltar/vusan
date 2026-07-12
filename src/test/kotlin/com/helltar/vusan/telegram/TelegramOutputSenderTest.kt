@@ -6,6 +6,7 @@ import dev.inmo.tgbotapi.bot.exceptions.ApiException
 import dev.inmo.tgbotapi.bot.exceptions.InvalidPhotoDimensionsException
 import dev.inmo.tgbotapi.requests.abstracts.MultipartRequest
 import dev.inmo.tgbotapi.requests.abstracts.Request
+import dev.inmo.tgbotapi.requests.send.SendTextMessage
 import dev.inmo.tgbotapi.types.Response
 import dev.inmo.tgbotapi.types.message.abstracts.PrivateContentMessage
 import kotlinx.coroutines.runBlocking
@@ -82,6 +83,40 @@ class TelegramOutputSenderTest {
         )
 
         assertEquals(listOf("sendMessage", "sendDocument"), bot.methods)
+    }
+
+    @Test
+    fun `br tags in reply text are replaced with newlines before sending`() = runBlocking {
+        val bot = RecordingBot()
+
+        TelegramOutputSender.sendReplyText(
+            bot = bot,
+            chatId = 1L.toChatIdentifier(),
+            text = "one<br>two<br/>three<br />four</br>five<BR/>six",
+            replyParameters = null,
+            formattingFileNotice = "notice"
+        )
+
+        assertEquals(listOf("sendMessage"), bot.methods)
+        assertEquals("one\ntwo\nthree\nfour\nfive\nsix", assertIs<SendTextMessage>(bot.requests.single()).text)
+    }
+
+    @Test
+    fun `br tags in captions are replaced with newlines before sending`() = runBlocking {
+        val bot = RecordingBot()
+
+        TelegramOutputSender.send(
+            bot = bot,
+            item = BotOutput.Photo(byteArrayOf(1, 2, 3), "chart.png"),
+            chatId = 1L.toChatIdentifier(),
+            replyParameters = null,
+            caption = "first line<br/>second line",
+            formattingFileNotice = "notice"
+        )
+
+        assertEquals(listOf("sendPhoto"), bot.methods)
+        val request = assertIs<MultipartRequest<*>>(bot.requests.single())
+        assertEquals("first line\nsecond line", request.paramsJson["caption"]?.jsonPrimitive?.content)
     }
 
     @Test

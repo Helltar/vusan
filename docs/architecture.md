@@ -91,7 +91,9 @@ A normal user message travels:
    action (`chatActionFor`). During delivery each item is then preceded by the action matching its content
    (`botActionFor`) so the indicator tracks what is happening. Outgoing text and captions are sent with
    Telegram's `HTML` parse mode; the agent is instructed (in `agent/SystemPrompt.kt`) to format with the
-   supported HTML tags and to escape `<`/`>`/`&`. Rejected formatting on a reply text is re-sent as a
+   supported HTML tags and to escape `<`/`>`/`&`. Because models still slip in `<br>` for line breaks,
+   `TelegramOutputSender` replaces `<br>`-style tags with real newlines in reply text and captions
+   before sending instead of letting the whole message be rejected. Rejected formatting on a reply text is re-sent as a
    `message.html` document (`telegram/HtmlReplyDocument.kt` — a standalone, responsive, light/dark page
    with a no-script CSP) carrying the reply so the formatting still arrives; a rejected media caption
    resends the media captionless and delivers the caption the same way, while bot notices fall back to

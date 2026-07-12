@@ -32,6 +32,13 @@ internal object TelegramOutputSender {
 
     private val log = KotlinLogging.logger {}
 
+    // models keep emitting `<br>` for line breaks despite the prompt, and telegram rejects the whole
+    // message over any unsupported tag. the replacement is lossless, so fix it here instead of failing
+    // the send and degrading to the document fallback.
+    private val brTagRegex = Regex("""</?br\s*/?>""", RegexOption.IGNORE_CASE)
+
+    private fun String.withBrTagsAsNewlines(): String = replace(brTagRegex, "\n")
+
     suspend fun send(
         bot: TelegramBot,
         item: BotOutput,
@@ -83,10 +90,12 @@ internal object TelegramOutputSender {
         text: String,
         replyParameters: ReplyParameters?
     ) {
+        val html = text.withBrTagsAsNewlines()
+
         sendWithHtmlFallback { parseMode ->
             bot.sendTextMessage(
                 chatId = chatId,
-                text = text,
+                text = html,
                 parseMode = parseMode,
                 replyParameters = replyParameters
             )
@@ -103,17 +112,19 @@ internal object TelegramOutputSender {
         replyParameters: ReplyParameters?,
         formattingFileNotice: String
     ) {
+        val html = text.withBrTagsAsNewlines()
+
         runCatching {
             bot.sendTextMessage(
                 chatId = chatId,
-                text = text,
+                text = html,
                 parseMode = HTMLParseMode,
                 replyParameters = replyParameters
             )
         }.recoverCatching { e ->
             if (e.isEntityParseError()) {
                 log.warn { "Telegram rejected HTML, sending the reply as a $FALLBACK_DOCUMENT_FILENAME file" }
-                sendTextAsDocument(bot, chatId, text, formattingFileNotice, replyParameters)
+                sendTextAsDocument(bot, chatId, html, formattingFileNotice, replyParameters)
             } else throw e
         }.getOrThrow()
     }
@@ -595,12 +606,14 @@ internal object TelegramOutputSender {
             return
         }
 
-        runCatching { send(caption, HTMLParseMode) }
+        val html = caption.withBrTagsAsNewlines()
+
+        runCatching { send(html, HTMLParseMode) }
             .recoverCatching { e ->
                 if (e.isEntityParseError()) {
                     log.warn { "Telegram rejected caption HTML, sending the caption as a $FALLBACK_DOCUMENT_FILENAME file" }
                     send(null, null)
-                    sendTextAsDocument(bot, chatId, caption, formattingFileNotice, replyParameters)
+                    sendTextAsDocument(bot, chatId, html, formattingFileNotice, replyParameters)
                 } else throw e
             }
             .getOrThrow()
