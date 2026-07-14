@@ -18,7 +18,8 @@ dependencies {
     implementation(libs.koog.agents)
     implementation(libs.koog.google.client)
     implementation(libs.koog.deepseek.client)
-    implementation(libs.tgbotapi)
+    implementation(libs.telegrambots.longpolling)
+    implementation(libs.telegrambots.client)
     implementation(libs.dotenv.kotlin)
 
     runtimeOnly(libs.sqlite.jdbc)

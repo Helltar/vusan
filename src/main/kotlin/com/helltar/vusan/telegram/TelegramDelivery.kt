@@ -6,48 +6,39 @@ import com.helltar.vusan.common.rethrowIfCancellation
 import com.helltar.vusan.i18n.Messages
 import com.helltar.vusan.outbox.BotOutput
 import com.helltar.vusan.outbox.OutboxItem
-import dev.inmo.tgbotapi.bot.TelegramBot
-import dev.inmo.tgbotapi.extensions.api.send.sendBotAction
-import dev.inmo.tgbotapi.types.*
-import dev.inmo.tgbotapi.types.actions.BotAction
-import dev.inmo.tgbotapi.types.actions.RecordVideoNoteAction
-import dev.inmo.tgbotapi.types.actions.RecordVoiceAction
-import dev.inmo.tgbotapi.types.actions.TypingAction
-import dev.inmo.tgbotapi.types.actions.UploadDocumentAction
-import dev.inmo.tgbotapi.types.actions.UploadPhotoAction
-import dev.inmo.tgbotapi.types.actions.UploadVideoAction
-import dev.inmo.tgbotapi.types.message.abstracts.ChatContentMessage
 import io.github.oshai.kotlinlogging.KotlinLogging
 import kotlinx.coroutines.delay
 import kotlin.time.Duration.Companion.milliseconds
+import org.telegram.telegrambots.meta.api.methods.ActionType
+import org.telegram.telegrambots.meta.api.methods.send.SendChatAction
+import org.telegram.telegrambots.meta.api.objects.ReplyParameters
+import org.telegram.telegrambots.meta.api.objects.message.Message
+import org.telegram.telegrambots.meta.generics.TelegramClient
 
-internal fun Long.toChatIdentifier(): IdChatIdentifier =
-    ChatId(RawChatId(this))
-
-internal fun replyParameters(chatId: Long, replyToMessageId: Long?): ReplyParameters? =
-    replyToMessageId?.let { ReplyParameters(chatId.toChatIdentifier(), MessageId(it)) }
+internal fun replyParameters(replyToMessageId: Long?): ReplyParameters? =
+    replyToMessageId?.let { ReplyParameters.builder().messageId(it.toInt()).build() }
 
 // the chat action shown just before an item is delivered, so the user sees "sending photo",
 // "recording audio", etc. matching what is about to arrive. reactions are instant and get none.
-internal fun botActionFor(output: BotOutput): BotAction? = when (output) {
-    is BotOutput.Photo, is BotOutput.PhotoGroup -> UploadPhotoAction
-    is BotOutput.Document, is BotOutput.DocumentGroup, is BotOutput.Audio -> UploadDocumentAction
-    is BotOutput.Video, is BotOutput.Animation -> UploadVideoAction
-    is BotOutput.VideoNote -> RecordVideoNoteAction
-    is BotOutput.Voice -> RecordVoiceAction
-    is BotOutput.Text, is BotOutput.RichMessage, is BotOutput.Quiz, is BotOutput.Poll -> TypingAction
+internal fun botActionFor(output: BotOutput): ActionType? = when (output) {
+    is BotOutput.Photo, is BotOutput.PhotoGroup -> ActionType.UPLOAD_PHOTO
+    is BotOutput.Document, is BotOutput.DocumentGroup, is BotOutput.Audio -> ActionType.UPLOAD_DOCUMENT
+    is BotOutput.Video, is BotOutput.Animation -> ActionType.UPLOAD_VIDEO
+    is BotOutput.VideoNote -> ActionType.RECORD_VIDEO_NOTE
+    is BotOutput.Voice -> ActionType.RECORD_VOICE
+    is BotOutput.Text, is BotOutput.RichMessage, is BotOutput.Quiz, is BotOutput.Poll -> ActionType.TYPING
     is BotOutput.Reaction -> null
 }
 
 // the chat action shown while a tool runs, so a slow media-producing call (image generation,
 // video download, speech synthesis) hints at what is coming. the activity itself is resolved in the
 // agent layer (`toolActivityFor`); here it is only translated to a concrete Telegram action.
-internal fun chatActionFor(activity: ToolActivity): BotAction = when (activity) {
-    ToolActivity.PHOTO -> UploadPhotoAction
-    ToolActivity.VIDEO -> UploadVideoAction
-    ToolActivity.VOICE -> RecordVoiceAction
-    ToolActivity.DOCUMENT -> UploadDocumentAction
-    ToolActivity.TEXT -> TypingAction
+internal fun chatActionFor(activity: ToolActivity): ActionType = when (activity) {
+    ToolActivity.PHOTO -> ActionType.UPLOAD_PHOTO
+    ToolActivity.VIDEO -> ActionType.UPLOAD_VIDEO
+    ToolActivity.VOICE -> ActionType.RECORD_VOICE
+    ToolActivity.DOCUMENT -> ActionType.UPLOAD_DOCUMENT
+    ToolActivity.TEXT -> ActionType.TYPING
 }
 
 data class ScheduledAttribution(
@@ -55,14 +46,13 @@ data class ScheduledAttribution(
     val headerText: String
 )
 
-class TelegramDelivery(private val bot: TelegramBot) {
+class TelegramDelivery(private val client: TelegramClient) {
 
     private companion object {
         const val MAX_CAPTION_CHARS = 1000
 
         // pace consecutive sends in a multi-output reply so a batch does not trip Telegram's per-chat
-        // rate limit. the reactive limiter in ktgbotapi still retries any send that 429s anyway; this
-        // just keeps a normal batch from getting there.
+        // rate limit. telegrambots does not retry a send that 429s, so pacing is the only guard here.
         val INTER_MESSAGE_DELAY = 700.milliseconds
 
         val log = KotlinLogging.logger {}
@@ -79,7 +69,7 @@ class TelegramDelivery(private val bot: TelegramBot) {
 
     private enum class ItemDeliveryOutcome { Ok, ReplyMissing, PrivateBlocked }
 
-    suspend fun send(message: ChatContentMessage<*>, result: AgentResult) {
+    suspend fun send(message: Message, result: AgentResult) {
         dispatch(
             result = result,
             originTarget = DeliveryTarget(chatId = message.chatIdLong, replyToMessageId = message.messageIdLong),
@@ -116,7 +106,7 @@ class TelegramDelivery(private val bot: TelegramBot) {
 
     /** Send a plain-text notice from the bot itself (no reply anchor, no formatting fallback retry chain). */
     suspend fun sendNotice(chatId: Long, text: String) {
-        runCatching { TelegramOutputSender.sendText(bot, chatId.toChatIdentifier(), text, replyParameters = null) }
+        runCatching { TelegramOutputSender.sendText(client, chatId, text, replyParameters = null) }
             .onFailure {
                 it.rethrowIfCancellation()
                 log.warn(it) { "failed to send notice to chat=$chatId" }
@@ -241,7 +231,7 @@ class TelegramDelivery(private val bot: TelegramBot) {
         val deliveryTarget = privateTarget ?: originTarget
 
         try {
-            indicateAction(deliveryTarget.chatId, TypingAction)
+            indicateAction(deliveryTarget.chatId, ActionType.TYPING)
             sendReplyText(deliveryTarget, text, messages)
             return false
         } catch (e: Throwable) {
@@ -263,10 +253,13 @@ class TelegramDelivery(private val bot: TelegramBot) {
     }
 
     // best-effort: the indicator is cosmetic, so a failed action must never abort the delivery it precedes.
-    private suspend fun indicateAction(chatId: Long, action: BotAction?) {
+    private suspend fun indicateAction(chatId: Long, action: ActionType?) {
         action ?: return
-        runCatching { bot.sendBotAction(chatId.toChatIdentifier(), action) }
-            .onFailure { it.rethrowIfCancellation() }
+        runCatching {
+            client.api {
+                execute(SendChatAction.builder().chatId(chatId).action(action.toString()).build())
+            }
+        }.onFailure { it.rethrowIfCancellation() }
     }
 
     private suspend fun notifyPrivateChatBlocked(originTarget: DeliveryTarget, messages: Messages) {
@@ -277,20 +270,20 @@ class TelegramDelivery(private val bot: TelegramBot) {
     private suspend fun sendText(target: DeliveryTarget, text: String) {
         TelegramOutputSender
             .sendText(
-                bot,
-                target.chatId.toChatIdentifier(),
+                client,
+                target.chatId,
                 text,
-                replyParameters(target.chatId, target.replyToMessageId)
+                replyParameters(target.replyToMessageId)
             )
     }
 
     private suspend fun sendReplyText(target: DeliveryTarget, text: String, messages: Messages) {
         TelegramOutputSender
             .sendReplyText(
-                bot,
-                target.chatId.toChatIdentifier(),
+                client,
+                target.chatId,
                 text,
-                replyParameters(target.chatId, target.replyToMessageId),
+                replyParameters(target.replyToMessageId),
                 messages.formattingAsFileNotice
             )
     }
@@ -298,10 +291,10 @@ class TelegramDelivery(private val bot: TelegramBot) {
     private suspend fun sendOutgoing(target: DeliveryTarget, item: BotOutput, caption: String?, messages: Messages) {
         TelegramOutputSender
             .send(
-                bot,
+                client,
                 item,
-                target.chatId.toChatIdentifier(),
-                replyParameters(target.chatId, target.replyToMessageId),
+                target.chatId,
+                replyParameters(target.replyToMessageId),
                 caption,
                 messages.formattingAsFileNotice
             )

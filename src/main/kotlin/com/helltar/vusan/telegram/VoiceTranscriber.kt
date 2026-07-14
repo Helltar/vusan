@@ -4,12 +4,10 @@ import com.helltar.vusan.common.rethrowIfCancellation
 import com.helltar.vusan.common.xmlBlock
 import com.helltar.vusan.config.OpenAiSttConfig
 import com.helltar.vusan.stt.OpenAiWhisperClient
-import dev.inmo.tgbotapi.bot.TelegramBot
-import dev.inmo.tgbotapi.extensions.api.files.downloadFile
-import dev.inmo.tgbotapi.types.files.AudioFile
-import dev.inmo.tgbotapi.types.files.TelegramMediaFile
-import dev.inmo.tgbotapi.types.files.VoiceFile
 import io.github.oshai.kotlinlogging.KotlinLogging
+import org.telegram.telegrambots.meta.api.objects.Audio
+import org.telegram.telegrambots.meta.api.objects.Voice
+import org.telegram.telegrambots.meta.generics.TelegramClient
 
 internal sealed interface VoiceTranscriptionResult {
     data class Success(val text: String) : VoiceTranscriptionResult
@@ -19,28 +17,31 @@ internal sealed interface VoiceTranscriptionResult {
 }
 
 internal data class AudioInput(
-    val file: TelegramMediaFile,
+    val fileId: String,
+    val fileSizeBytes: Long?,
     val durationSeconds: Long?,
     val mimeType: String?,
     val fileName: String
 )
 
-internal fun VoiceFile.toAudioInput(): AudioInput =
+internal fun Voice.toAudioInput(): AudioInput =
     AudioInput(
-        file = this,
-        durationSeconds = duration,
-        mimeType = mimeType?.raw,
-        fileName = "voice-${fileUniqueId.string}.${extensionFor(mimeType?.raw, default = "ogg")}"
+        fileId = fileId,
+        fileSizeBytes = fileSize,
+        durationSeconds = duration?.toLong(),
+        mimeType = mimeType,
+        fileName = "voice-$fileUniqueId.${extensionFor(mimeType, default = "ogg")}"
     )
 
-internal fun AudioFile.toAudioInput(): AudioInput =
+internal fun Audio.toAudioInput(): AudioInput =
     AudioInput(
-        file = this,
-        durationSeconds = duration,
-        mimeType = mimeType?.raw,
+        fileId = fileId,
+        fileSizeBytes = fileSize,
+        durationSeconds = duration?.toLong(),
+        mimeType = mimeType,
         fileName =
             fileName?.takeIf { it.isNotBlank() }
-                ?: "audio-${fileUniqueId.string}.${extensionFor(mimeType?.raw, default = "mp3")}"
+                ?: "audio-$fileUniqueId.${extensionFor(mimeType, default = "mp3")}"
     )
 
 internal class VoiceTranscriber(private val whisper: OpenAiWhisperClient, private val config: OpenAiSttConfig) {
@@ -49,7 +50,7 @@ internal class VoiceTranscriber(private val whisper: OpenAiWhisperClient, privat
         val log = KotlinLogging.logger {}
     }
 
-    suspend fun transcribe(bot: TelegramBot, input: AudioInput): VoiceTranscriptionResult {
+    suspend fun transcribe(client: TelegramClient, input: AudioInput): VoiceTranscriptionResult {
         val duration = input.durationSeconds
 
         if (duration != null && duration > config.maxDurationSeconds) {
@@ -57,12 +58,12 @@ internal class VoiceTranscriber(private val whisper: OpenAiWhisperClient, privat
         }
 
         val bytes =
-            runCatching { bot.downloadFile(input.file) }
+            runCatching { client.downloadFileBytes(input.fileId) }
                 .getOrElse { e ->
                     e.rethrowIfCancellation()
 
                     log.warn(e) {
-                        "audio download failed: fileId=[${input.file.fileId.fileId}] size=[${input.file.fileSize?.bytes}]"
+                        "audio download failed: fileId=[${input.fileId}] size=[${input.fileSizeBytes}]"
                     }
 
                     return VoiceTranscriptionResult.Failed(e)

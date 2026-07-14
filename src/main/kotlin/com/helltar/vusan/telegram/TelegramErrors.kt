@@ -1,7 +1,6 @@
 package com.helltar.vusan.telegram
 
-import dev.inmo.tgbotapi.bot.exceptions.BotException
-import dev.inmo.tgbotapi.bot.exceptions.ReplyMessageNotFoundException
+import org.telegram.telegrambots.meta.exceptions.TelegramApiRequestException
 
 // telegram prefixes every parse-mode failure with "Bad Request: can't parse entities: ...",
 // regardless of the specific HTML wording (unsupported tag, unclosed tag, unescaped `<`/`&`, ...).
@@ -16,11 +15,16 @@ internal fun Throwable.isForbidden(): Boolean {
     return "forbidden" in description || "chat not found" in description
 }
 
-// keep the description fallback because ktgbotapi's concrete exception type depends on its
-// classification table and whether Telegram included an error code in the response.
-internal fun Throwable.isReplyMessageNotFound(): Boolean =
-    this is ReplyMessageNotFoundException ||
-        telegramDescription?.contains("message to be replied not found") == true
+// telegram has used both wordings for a missing reply target, so match either.
+internal fun Throwable.isReplyMessageNotFound(): Boolean {
+    val description = telegramDescription?.lowercase() ?: return false
+    return "reply message not found" in description || "message to be replied not found" in description
+}
 
+// the client wraps request failures in generic TelegramApiException chains, so search the causes
+// for the api-level exception that carries telegram's error description.
 private val Throwable.telegramDescription: String?
-    get() = (this as? BotException)?.response?.description
+    get() = generateSequence(this) { error -> error.cause.takeIf { it !== error } }
+        .filterIsInstance<TelegramApiRequestException>()
+        .firstOrNull()
+        ?.apiResponse

@@ -16,8 +16,8 @@ import com.helltar.vusan.telegram.TelegramBotRunner
 import com.helltar.vusan.telegram.TelegramDelivery
 import com.helltar.vusan.telegram.VoiceTranscriber
 import com.helltar.vusan.tools.ToolRegistryFactory
-import dev.inmo.tgbotapi.extensions.api.telegramBot
 import io.github.oshai.kotlinlogging.KotlinLogging
+import org.telegram.telegrambots.client.okhttp.OkHttpTelegramClient
 import io.ktor.client.*
 import kotlinx.coroutines.cancelAndJoin
 import kotlinx.coroutines.coroutineScope
@@ -54,9 +54,10 @@ suspend fun main() = coroutineScope {
                 null
             }
 
-        val bot = telegramBot(config.telegramBotToken)
-        val delivery = TelegramDelivery(bot)
-        val botRunner = TelegramBotRunner(bot, delivery, agentRunner, history, config.allowedIds, voiceTranscriber)
+        val client = OkHttpTelegramClient(config.telegramBotToken)
+        val delivery = TelegramDelivery(client)
+        val botRunner =
+            TelegramBotRunner(client, config.telegramBotToken, delivery, agentRunner, history, config.allowedIds, voiceTranscriber)
 
         val maxLateness = config.taskMaxLatenessMinutes.minutes
         val scheduler = TaskScheduler(tasks, agentRunner, delivery, history, maxLateness)
@@ -65,7 +66,7 @@ suspend fun main() = coroutineScope {
         val toolNames = toolRegistryFactory.availableToolNames
         log.info { "Tools enabled (${toolNames.size}): [${toolNames.joinToString(", ")}]" }
 
-        val botJob = botRunner.start()
+        val botJob = botRunner.start(this)
         val schedulerJob = scheduler.launchIn(this)
 
         try {

@@ -9,30 +9,32 @@ import com.helltar.vusan.common.xmlBlock
 import com.helltar.vusan.i18n.Language
 import com.helltar.vusan.i18n.Messages
 import com.helltar.vusan.request.AttachedFile
-import dev.inmo.kslog.common.KSLog
-import dev.inmo.kslog.common.LogLevel
-import dev.inmo.tgbotapi.bot.TelegramBot
-import dev.inmo.tgbotapi.bot.exceptions.CommonBotException
-import dev.inmo.tgbotapi.extensions.api.bot.getMe
-import dev.inmo.tgbotapi.extensions.api.chat.get.getChat
-import dev.inmo.tgbotapi.extensions.api.send.sendBotAction
-import dev.inmo.tgbotapi.extensions.behaviour_builder.buildBehaviourWithLongPolling
-import dev.inmo.tgbotapi.extensions.behaviour_builder.triggers_handling.*
-import dev.inmo.tgbotapi.types.actions.BotAction
-import dev.inmo.tgbotapi.types.actions.TypingAction
-import dev.inmo.tgbotapi.types.chat.ExtendedPublicChat
-import dev.inmo.tgbotapi.types.message.abstracts.ChatContentMessage
-import dev.inmo.tgbotapi.types.message.content.*
 import io.github.oshai.kotlinlogging.KotlinLogging
-import io.ktor.client.network.sockets.*
-import io.ktor.client.plugins.*
-import kotlinx.coroutines.*
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.channels.Channel
+import kotlinx.coroutines.channels.ReceiveChannel
+import kotlinx.coroutines.coroutineScope
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.collectLatest
+import kotlinx.coroutines.isActive
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.supervisorScope
+import kotlinx.coroutines.withTimeoutOrNull
 import kotlin.time.Duration.Companion.seconds
+import org.telegram.telegrambots.longpolling.TelegramBotsLongPollingApplication
+import org.telegram.telegrambots.meta.api.methods.ActionType
+import org.telegram.telegrambots.meta.api.methods.GetMe
+import org.telegram.telegrambots.meta.api.methods.groupadministration.GetChat
+import org.telegram.telegrambots.meta.api.methods.send.SendChatAction
+import org.telegram.telegrambots.meta.api.objects.Update
+import org.telegram.telegrambots.meta.api.objects.message.Message
+import org.telegram.telegrambots.meta.generics.TelegramClient
 
 internal class TelegramBotRunner(
-    private val bot: TelegramBot,
+    private val client: TelegramClient,
+    private val botToken: String,
     private val delivery: TelegramDelivery,
     private val agent: AgentRunner,
     private val history: ChatHistoryRepository,
@@ -49,8 +51,15 @@ internal class TelegramBotRunner(
 
         const val LOG_PROMPT_MAX_CHARS = 300
 
+        // telegram caps an album at ten items, so a group with that many parts is complete.
+        const val MAX_ALBUM_PARTS = 10
+
         // Telegram clears a chat action after ~5s, so re-assert it just under that.
         val ACTION_REFRESH = 4.seconds
+
+        // album parts arrive as separate updates with a shared media_group_id and no terminator;
+        // a group is treated as complete once the update stream stays quiet this long.
+        val ALBUM_QUIET_PERIOD = 1.seconds
 
         val log = KotlinLogging.logger {}
     }
@@ -60,29 +69,9 @@ internal class TelegramBotRunner(
         val username: String?
     )
 
-    init {
-        // ktgbotapi reports long-polling and handler failures through KSLog; keep the level and the
-        // throwable so those errors surface in the app log instead of vanishing as bare debug lines.
-        // getUpdates timeouts are routine long-polling noise: longPollingFlow skips them
-        // (autoSkipTimeoutExceptions), but DefaultKtorRequestsExecutor has already logged them
-        // at ERROR by then, so they are demoted to debug here.
-        KSLog.default = KSLog { level: LogLevel, _, message: Any, throwable: Throwable? ->
-            when {
-                throwable.isPollingTimeoutNoise() -> log.debug(throwable) { message.toString() }
-                level == LogLevel.ERROR || level == LogLevel.ASSERT -> log.error(throwable) { message.toString() }
-                level == LogLevel.WARNING -> log.warn(throwable) { message.toString() }
-                else -> log.debug(throwable) { message.toString() }
-            }
-        }
-    }
-
-    // mirrors the autoSkipTimeoutExceptions check in ktgbotapi's longPollingFlow
-    private fun Throwable?.isPollingTimeoutNoise(): Boolean =
-        this is HttpRequestTimeoutException || this is ConnectTimeoutException ||
-                (this is CommonBotException && (cause is HttpRequestTimeoutException || cause is ConnectTimeoutException))
-
-    suspend fun start(): Job {
-        val profile = bot.profile()
+    suspend fun start(scope: CoroutineScope): Job {
+        val me = client.api { execute(GetMe()) }
+        val profile = BotProfile(userId = me.id, username = me.userName)
 
         log.info { "Bot started as ${profile.username ?: profile.userId}, allowed ids=${allowedIds.sorted()}" }
 
@@ -93,57 +82,148 @@ internal class TelegramBotRunner(
             }
         }
 
-        return bot.buildBehaviourWithLongPolling {
-            onContentMessage(markerFactory = null) { it.logIncoming() }
-            onCommand("start", markerFactory = null) { handleStartCommand(it, profile) }
-            onText(markerFactory = null) { handleTextUpdate(it, profile) }
-            onSticker(markerFactory = null) { handleStickerUpdate(it, profile) }
-            onVoice(markerFactory = null) { handleTranscribableUpdate(it, it.content.media.toAudioInput(), profile, "voice") }
-            onAudio(markerFactory = null) { handleTranscribableUpdate(it, it.content.media.toAudioInput(), profile, "audio") }
-            onDocument(markerFactory = null) { handleMediaUpdate(it, profile, inputKind = "document") }
-            onPhoto(markerFactory = null) { handleMediaUpdate(it, profile, inputKind = "photo") }
-            onVisualGalleryMessages(markerFactory = null) { handleGalleryUpdate(it, profile) }
+        // the long polling app runs on its own okhttp threads; updates are funneled into a channel so
+        // dispatch (and album aggregation) happens inside the coroutine world.
+        val updates = Channel<Update>(Channel.UNLIMITED)
+        val longPolling = TelegramBotsLongPollingApplication()
+        longPolling.registerBot(botToken) { batch -> batch.forEach { updates.trySend(it) } }
+
+        return scope.launch {
+            try {
+                processUpdates(updates, profile)
+            } finally {
+                runCatching { longPolling.close() }
+                    .onFailure { log.warn(it) { "failed to stop long polling cleanly" } }
+            }
         }
     }
 
-    private val ChatContentMessage<*>.language: Language
+    private suspend fun processUpdates(updates: ReceiveChannel<Update>, profile: BotProfile) = supervisorScope {
+        val pendingAlbums = linkedMapOf<String, MutableList<Message>>()
+
+        suspend fun flushAlbums() {
+            pendingAlbums.values.forEach { parts -> launchHandling(parts.first()) { handleGalleryUpdate(parts, profile) } }
+            pendingAlbums.clear()
+        }
+
+        while (isActive) {
+            val update =
+                if (pendingAlbums.isEmpty()) {
+                    updates.receiveCatching().getOrNull() ?: break
+                } else {
+                    // null on both quiet-period timeout and channel close; either way the buffered
+                    // albums are complete, and a closed channel exits on the next iteration.
+                    withTimeoutOrNull(ALBUM_QUIET_PERIOD) { updates.receiveCatching().getOrNull() }
+                        ?: run {
+                            flushAlbums()
+                            continue
+                        }
+                }
+
+            val message = update.message ?: continue
+            val albumKey = message.mediaGroupId?.let { "${message.chatIdLong}:$it" }
+
+            if (albumKey == null) {
+                launchHandling(message) { dispatch(message, profile) }
+                continue
+            }
+
+            val parts = pendingAlbums.getOrPut(albumKey, ::mutableListOf)
+            parts += message
+
+            if (parts.size >= MAX_ALBUM_PARTS) {
+                pendingAlbums.remove(albumKey)
+                launchHandling(message) { handleGalleryUpdate(parts, profile) }
+            }
+        }
+
+        flushAlbums()
+    }
+
+    // one bad update must neither kill the polling loop nor cancel sibling handlers.
+    private fun CoroutineScope.launchHandling(message: Message, block: suspend () -> Unit) {
+        launch {
+            runCatching { block() }
+                .onFailure { e ->
+                    e.rethrowIfCancellation()
+                    log.error(e) { "update handling failed for chat=${message.chatIdLong} msg=${message.messageIdLong}" }
+                }
+        }
+    }
+
+    private suspend fun dispatch(message: Message, profile: BotProfile) {
+        message.logIncoming()
+
+        when {
+            message.text != null -> dispatchText(message, profile)
+            message.sticker != null -> handleStickerUpdate(message, profile)
+            message.voice != null -> handleTranscribableUpdate(message, message.voice.toAudioInput(), profile, "voice")
+            message.audio != null -> handleTranscribableUpdate(message, message.audio.toAudioInput(), profile, "audio")
+            // gifs carry both `animation` and `document`; they were never handled as documents.
+            message.animation != null -> Unit
+            !message.photo.isNullOrEmpty() -> handleMediaUpdate(message, profile, inputKind = "photo")
+            message.document != null -> handleMediaUpdate(message, profile, inputKind = "document")
+            else -> Unit
+        }
+    }
+
+    private suspend fun dispatchText(message: Message, profile: BotProfile) {
+        val content = message.messageTextOrNull() ?: return
+        val command = content.leadingBotCommandOrNull()
+
+        when {
+            command == null -> handleTextUpdate(message, content, profile)
+            command.isStart(profile) -> handleStartCommand(message, profile)
+            else -> Unit
+        }
+    }
+
+    private fun BotCommand.isStart(profile: BotProfile): Boolean =
+        command == "start" &&
+                (targetUsername == null || normalizeUsername(targetUsername) == normalizeUsername(profile.username))
+
+    private val Message.language: Language
         get() = Language.fromCode(senderLanguageCodeOrNull())
 
-    private suspend fun handleStartCommand(message: ChatContentMessage<TextContent>, botProfile: BotProfile) {
+    private suspend fun handleStartCommand(message: Message, botProfile: BotProfile) {
         if (message.isAccepted(botProfile))
             sendReply(message, Messages.of(message.language).startReply)
     }
 
-    private suspend fun handleTextUpdate(message: ChatContentMessage<TextContent>, botProfile: BotProfile) {
-        if (isBotCommand(message.content)) return
+    private suspend fun handleTextUpdate(message: Message, content: MessageText, botProfile: BotProfile) {
         if (!message.isAccepted(botProfile)) return
 
         val userText =
-            sanitizeUserText(message.content, botProfile.userId, botProfile.username)
+            sanitizeUserText(content, botProfile.userId, botProfile.username)
                 .ifBlank { MENTION_ONLY_PROMPT }
 
         dispatchToAgent(message, userText, botProfile, inputKind = "text")
     }
 
     private suspend fun handleTranscribableUpdate(
-        message: ChatContentMessage<TextedContent>,
+        message: Message,
         audioInput: AudioInput,
         botProfile: BotProfile,
         inputKind: String
     ) {
         if (!message.isAccepted(botProfile)) return
 
+        val caption =
+            message.messageTextOrNull()
+                ?.let { sanitizeUserText(it, botProfile.userId, botProfile.username) }
+                .orEmpty()
+
         handleTranscribedAudio(
             message = message,
             audioInput = audioInput,
-            caption = sanitizeUserText(message.content, botProfile.userId, botProfile.username),
+            caption = caption,
             botProfile = botProfile,
             inputKind = inputKind
         )
     }
 
     private suspend fun handleTranscribedAudio(
-        message: ChatContentMessage<*>,
+        message: Message,
         audioInput: AudioInput,
         caption: String,
         botProfile: BotProfile,
@@ -163,7 +243,7 @@ internal class TelegramBotRunner(
         val messages = Messages.of(message.language)
 
         val transcript =
-            when (val result = transcriber.transcribe(bot, audioInput)) {
+            when (val result = transcriber.transcribe(client, audioInput)) {
                 is VoiceTranscriptionResult.Success -> result.text
 
                 is VoiceTranscriptionResult.TooLong -> {
@@ -194,17 +274,17 @@ internal class TelegramBotRunner(
         return if (trimmedCaption.isEmpty()) wrapped else "$trimmedCaption\n\n$wrapped"
     }
 
-    private suspend fun handleStickerUpdate(message: ChatContentMessage<StickerContent>, botProfile: BotProfile) {
+    private suspend fun handleStickerUpdate(message: Message, botProfile: BotProfile) {
         if (!message.isAccepted(botProfile)) return
-        val prompt = describeIncomingSticker(message.content.media)
+        val prompt = describeIncomingSticker(message.sticker)
         dispatchToAgent(message, prompt, botProfile, inputKind = "sticker", loadRepliedAttachment = false)
     }
 
-    private suspend fun handleMediaUpdate(message: ChatContentMessage<*>, botProfile: BotProfile, inputKind: String) {
+    private suspend fun handleMediaUpdate(message: Message, botProfile: BotProfile, inputKind: String) {
         if (!message.isAccepted(botProfile)) return
 
         val caption =
-            (message.content as? TextedContent)
+            message.messageTextOrNull()
                 ?.let { sanitizeUserText(it, botProfile.userId, botProfile.username) }
                 .orEmpty()
                 .ifBlank { MEDIA_ONLY_PROMPT }
@@ -214,24 +294,22 @@ internal class TelegramBotRunner(
             caption,
             botProfile,
             inputKind = inputKind,
-            attachedFile = message.content.toAttachedFileOrNull(bot)
+            attachedFile = message.toAttachedFileOrNull(client)
         )
     }
 
-    // albums (media groups) arrive as a single message with `MediaGroupContent`, not as separate
-    // photo/document updates. only the first photo is loadable as the attached file; the model is
-    // told about the rest so it does not claim to have inspected every item.
-    private suspend fun handleGalleryUpdate(
-        message: ChatContentMessage<MediaGroupContent<VisualMediaGroupPartContent>>,
-        botProfile: BotProfile
-    ) {
-        if (!message.isAccepted(botProfile)) return
+    // only the first photo is loadable as the attached file; the model is told about the rest so it
+    // does not claim to have inspected every item.
+    private suspend fun handleGalleryUpdate(parts: List<Message>, botProfile: BotProfile) {
+        val anchor = parts.first()
+        val captionedPart = parts.captionedPartOrNull()
 
-        val parts = message.content.group.map { it.content }
-        val photos = parts.filterIsInstance<PhotoContent>()
+        if (!anchor.isAccepted(botProfile, captionSource = captionedPart ?: anchor)) return
+
+        val photos = parts.filter { !it.photo.isNullOrEmpty() }
 
         val caption =
-            message.content.captionedContentOrNull()
+            captionedPart?.messageTextOrNull()
                 ?.let { sanitizeUserText(it, botProfile.userId, botProfile.username) }
                 .orEmpty()
                 .ifBlank { MEDIA_ONLY_PROMPT }
@@ -245,16 +323,16 @@ internal class TelegramBotRunner(
             )
 
         dispatchToAgent(
-            message,
+            anchor,
             "$albumContext\n\n$caption",
             botProfile,
             inputKind = "gallery",
-            attachedFile = photos.firstOrNull()?.toAttachedFileOrNull(bot)
+            attachedFile = photos.firstOrNull()?.toAttachedFileOrNull(client)
         )
     }
 
-    private fun ChatContentMessage<*>.isAccepted(botProfile: BotProfile): Boolean {
-        if (!shouldHandle(this, botProfile.userId, botProfile.username))
+    private fun Message.isAccepted(botProfile: BotProfile, captionSource: Message = this): Boolean {
+        if (!shouldHandle(this, botProfile.userId, botProfile.username, captionSource))
             return false
 
         if (!isAllowed()) {
@@ -265,34 +343,34 @@ internal class TelegramBotRunner(
         return true
     }
 
-    private fun ChatContentMessage<*>.logIncoming() {
+    private fun Message.logIncoming() {
         log.debug {
             buildString {
-                append("message: chat=$chatIdLong chatType=${chat.promptType()} msg=$messageIdLong")
-                append(" type=${content.contentTypeName()}")
+                append("message: chat=$chatIdLong chatType=${promptChatType()} msg=$messageIdLong")
+                append(" type=${contentTypeName()}")
                 chat.titleOrDisplayName()?.let { append(" chatTitle=[$it]") }
                 senderIdOrNull()?.let { append(" user=$it") }
                 senderUsernameOrNull()?.let { append(" username=[$it]") }
                 senderDisplayNameOrNull()?.let { append(" name=[$it]") }
 
-                (content as? StickerContent)?.media?.let { sticker ->
-                    append(" sticker=[${sticker.readableFormat()} ${sticker.type.readableName()}")
+                sticker?.let { sticker ->
+                    append(" sticker=[${sticker.readableFormat()} ${sticker.type ?: "regular"}")
                     sticker.emoji?.let { emoji -> append(" $emoji") }
-                    sticker.stickerSetName?.let { setName -> append(" set=${setName.string}") }
+                    sticker.setName?.let { setName -> append(" set=$setName") }
                     append("]")
                 }
 
-                content.captionedContentOrNull()?.text
+                textSnippetOrNull()
                     ?.collapseWhitespaceAndCap(LOG_PROMPT_MAX_CHARS)
                     ?.let { append(" text=[$it]") }
             }
         }
     }
 
-    private fun ChatContentMessage<*>.logDenied() {
+    private fun Message.logDenied() {
         log.warn {
             buildString {
-                append("denied (not in allowlist): chat=$chatIdLong user=${senderIdOrNull()} type=${content.contentTypeName()}")
+                append("denied (not in allowlist): chat=$chatIdLong user=${senderIdOrNull()} type=${contentTypeName()}")
                 senderUsernameOrNull()?.let { append(" username=[$it]") }
                 senderDisplayNameOrNull()?.let { append(" name=[$it]") }
                 textSnippetOrNull()?.collapseWhitespaceAndCap(LOG_PROMPT_MAX_CHARS)?.let { append(" text=[$it]") }
@@ -300,7 +378,7 @@ internal class TelegramBotRunner(
         }
     }
 
-    private fun ChatContentMessage<*>.isAllowed(): Boolean {
+    private fun Message.isAllowed(): Boolean {
         if (allowedIds.isEmpty()) return false
         if (chatIdLong in allowedIds) return true
         val userId = senderIdOrNull() ?: return false
@@ -308,7 +386,7 @@ internal class TelegramBotRunner(
     }
 
     private suspend fun dispatchToAgent(
-        message: ChatContentMessage<*>,
+        message: Message,
         prompt: String,
         botProfile: BotProfile,
         inputKind: String,
@@ -316,11 +394,11 @@ internal class TelegramBotRunner(
         attachedFile: AttachedFile? = null
     ) {
         val replyToOtherUser = isReplyToOtherUser(message.replyAuthorIdOrNull(), botProfile.userId)
-        val replySummary = if (replyToOtherUser) message.replySummaryOrNull(bot, voiceTranscriber) else null
+        val replySummary = if (replyToOtherUser) message.replySummaryOrNull(client, voiceTranscriber) else null
 
         val effectiveAttachedFile =
             attachedFile
-                ?: if (loadRepliedAttachment) replySummary?.let { message.repliedAttachedFileOrNull(bot) } else null
+                ?: if (loadRepliedAttachment) replySummary?.let { message.repliedAttachedFileOrNull(client) } else null
 
         val baseAgentInput = replySummary?.let { formatAgentInput(prompt, it) } ?: prompt
 
@@ -336,7 +414,7 @@ internal class TelegramBotRunner(
     }
 
     private suspend fun handleAgentMessage(
-        message: ChatContentMessage<*>,
+        message: Message,
         agentInput: String,
         historyInput: String,
         attachedFile: AttachedFile?,
@@ -365,7 +443,7 @@ internal class TelegramBotRunner(
         try {
             // a live indicator runs through the whole agent turn: it starts as typing and switches to the
             // action of the currently executing tool (upload_photo while an image generates, etc.). delivery
-            // then shows its own per-item action. a plain withTypingAction would force typing the whole time.
+            // then shows its own per-item action. a plain typing action would force typing the whole time.
             val result =
                 withLiveChatAction(chatId) { setAction ->
                     agent.handle(
@@ -405,15 +483,15 @@ internal class TelegramBotRunner(
     // keep a chat action alive for the whole [block], re-asserting it every [ACTION_REFRESH] (Telegram
     // clears an action after a few seconds). [block] receives a setter to switch the action mid-run;
     // [collectLatest] cancels the in-flight refresh loop and re-sends immediately when it changes.
-    private suspend fun <T> withLiveChatAction(chatId: Long, block: suspend ((BotAction) -> Unit) -> T): T =
+    private suspend fun <T> withLiveChatAction(chatId: Long, block: suspend ((ActionType) -> Unit) -> T): T =
         coroutineScope {
-            val action = MutableStateFlow<BotAction>(TypingAction)
+            val action = MutableStateFlow(ActionType.TYPING)
 
             val ticker =
                 launch {
                     action.collectLatest { current ->
                         while (isActive) {
-                            runCatching { bot.sendBotAction(chatId.toChatIdentifier(), current) }
+                            runCatching { indicateChatAction(chatId, current) }
                                 .onFailure { it.rethrowIfCancellation() }
 
                             delay(ACTION_REFRESH)
@@ -428,28 +506,31 @@ internal class TelegramBotRunner(
             }
         }
 
-    private suspend fun sendReply(message: ChatContentMessage<*>, text: String) {
+    private suspend fun indicateChatAction(chatId: Long, action: ActionType) {
+        client.api {
+            execute(SendChatAction.builder().chatId(chatId).action(action.toString()).build())
+        }
+    }
+
+    private suspend fun sendReply(message: Message, text: String) {
         TelegramOutputSender.sendText(
-            bot = bot,
-            chatId = message.chatIdLong.toChatIdentifier(),
+            client = client,
+            chatId = message.chatIdLong,
             text = text,
-            replyParameters = replyParameters(message.chatIdLong, message.messageIdLong)
+            replyParameters = replyParameters(message.messageIdLong)
         )
     }
 
-    private suspend fun loadChatDescription(message: ChatContentMessage<*>): String? {
+    private suspend fun loadChatDescription(message: Message): String? {
         if (!message.canLoadChatDescription) return null
 
-        return runCatching { bot.getChat(message.chatIdLong.toChatIdentifier()) as? ExtendedPublicChat }
+        return runCatching {
+            client.api { execute(GetChat.builder().chatId(message.chatIdLong).build()) }.description
+        }
             .onFailure { error ->
                 error.rethrowIfCancellation()
                 log.debug(error) { "failed to fetch extended chat context for chat=${message.chatIdLong}" }
             }
-            .getOrNull()?.description
-    }
-
-    private suspend fun TelegramBot.profile(): BotProfile {
-        val me = getMe()
-        return BotProfile(userId = me.id.chatId.long, username = me.username?.full)
+            .getOrNull()
     }
 }

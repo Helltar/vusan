@@ -1,44 +1,35 @@
 package com.helltar.vusan.telegram
 
-import dev.inmo.tgbotapi.bot.exceptions.ApiException
-import dev.inmo.tgbotapi.bot.exceptions.CommonRequestException
-import dev.inmo.tgbotapi.bot.exceptions.ReplyMessageNotFoundException
-import dev.inmo.tgbotapi.types.Response
+import java.io.Serializable
 import kotlin.test.Test
 import kotlin.test.assertFalse
 import kotlin.test.assertTrue
+import org.telegram.telegrambots.meta.api.objects.ApiResponse
+import org.telegram.telegrambots.meta.exceptions.TelegramApiException
+import org.telegram.telegrambots.meta.exceptions.TelegramApiRequestException
 
 class TelegramErrorsTest {
 
     @Test
     fun `detects html parse errors from telegram`() {
-        val error =
-            CommonRequestException(
-                response = Response(description = "Bad Request: can't parse entities: Can't find end of the entity starting at byte offset 12"),
-                plainAnswer = "",
-                message = null,
-                cause = null
-            )
-
-        assertTrue(error.isEntityParseError())
-    }
-
-    @Test
-    fun `detects html parse errors wrapped as api exceptions`() {
-        val response = Response(description = "Bad Request: can't parse entities: Can't find end tag corresponding to start tag \"pre\"")
-        val error = ApiException(httpResponseCode = 400, plainResponse = "", response = response)
+        val error = telegramError("Bad Request: can't parse entities: Can't find end of the entity starting at byte offset 12")
 
         assertTrue(error.isEntityParseError())
     }
 
     @Test
     fun `detects unsupported html tag errors from telegram`() {
+        val error = telegramError("Bad Request: can't parse entities: Unsupported start tag \"user_message\" at byte offset 12")
+
+        assertTrue(error.isEntityParseError())
+    }
+
+    @Test
+    fun `detects api errors wrapped in generic client exceptions`() {
         val error =
-            CommonRequestException(
-                response = Response(description = "Bad Request: can't parse entities: Unsupported start tag \"user_message\" at byte offset 12"),
-                plainAnswer = "",
-                message = null,
-                cause = null
+            TelegramApiException(
+                "Unable to execute sendMessage method",
+                telegramError("Bad Request: can't parse entities: Can't find end tag corresponding to start tag \"pre\"")
             )
 
         assertTrue(error.isEntityParseError())
@@ -46,13 +37,7 @@ class TelegramErrorsTest {
 
     @Test
     fun `does not treat unrelated telegram errors as formatting issues`() {
-        val error =
-            CommonRequestException(
-                response = Response(description = "Bad Request: reply message not found"),
-                plainAnswer = "",
-                message = null,
-                cause = null
-            )
+        val error = telegramError("Bad Request: reply message not found")
 
         assertFalse(error.isEntityParseError())
     }
@@ -68,60 +53,45 @@ class TelegramErrorsTest {
             )
 
         descriptions.forEach { description ->
-            val error = CommonRequestException(Response(description = description), "", null, null)
-            assertTrue(error.isForbidden(), "expected isForbidden for [$description]")
+            assertTrue(telegramError(description).isForbidden(), "expected isForbidden for [$description]")
         }
     }
 
     @Test
     fun `does not treat unrelated telegram errors as forbidden`() {
-        val error =
-            CommonRequestException(
-                response = Response(description = "Bad Request: message is too long"),
-                plainAnswer = "",
-                message = null,
-                cause = null
-            )
+        val error = telegramError("Bad Request: message is too long")
 
         assertFalse(error.isForbidden())
     }
 
     @Test
-    fun `detects reply-not-found wording unclassified by ktgbotapi`() {
-        val error =
-            CommonRequestException(
-                response = Response(description = "Bad Request: message to be replied not found"),
-                plainAnswer = "",
-                message = null,
-                cause = null
-            )
+    fun `detects the old reply-not-found wording`() {
+        val error = telegramError("Bad Request: reply message not found")
 
         assertTrue(error.isReplyMessageNotFound())
     }
 
     @Test
-    fun `detects reply-not-found exception classified by ktgbotapi`() {
-        val error =
-            ReplyMessageNotFoundException(
-                response = Response(description = "Bad Request: reply message not found"),
-                plainAnswer = "",
-                message = null,
-                cause = null
-            )
+    fun `detects the new reply-not-found wording`() {
+        val error = telegramError("Bad Request: message to be replied not found")
 
         assertTrue(error.isReplyMessageNotFound())
     }
 
     @Test
     fun `does not treat unrelated telegram errors as missing reply`() {
-        val error =
-            CommonRequestException(
-                response = Response(description = "Bad Request: message to edit not found"),
-                plainAnswer = "",
-                message = null,
-                cause = null
-            )
+        val error = telegramError("Bad Request: message to edit not found")
 
         assertFalse(error.isReplyMessageNotFound())
     }
+
+    private fun telegramError(description: String): TelegramApiRequestException =
+        TelegramApiRequestException(
+            "Error executing request",
+            ApiResponse.builder<Serializable>()
+                .ok(false)
+                .errorCode(400)
+                .errorDescription(description)
+                .build()
+        )
 }

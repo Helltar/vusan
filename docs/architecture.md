@@ -51,10 +51,13 @@ Telegram ──► telegram/ ──► agent/ ──► tools/ ──► externa
 
 A normal user message travels:
 
-1. **Receive** — `TelegramBotRunner` handles the long-polling update (`onText`, `onVoice`,
-   `onAudio`, `onSticker`, `onDocument`, `onPhoto`, `onVisualGalleryMessages`). Albums (media
-   groups) arrive as one message: the caption may sit on any album part, only the first photo
-   becomes the `AttachedFile`, and the agent is told how many items it cannot see.
+1. **Receive** — `TelegramBotRunner` long-polls via `TelegramBotsLongPollingApplication`, funnels
+   updates into a channel, and dispatches each message by content (text/command, sticker, voice,
+   audio, photo, document). Album (media group) parts arrive as separate updates sharing a
+   `media_group_id`; the runner buffers them until the update stream goes quiet
+   (`ALBUM_QUIET_PERIOD`, or the ten-item album cap) and handles the batch as one gallery
+   message: the caption may sit on any album part, only the first photo becomes the
+   `AttachedFile`, and the agent is told how many items it cannot see.
 2. **Filter** — `MessageFilter.shouldHandle` drops messages the bot shouldn't answer (in groups:
    only replies, mentions, or targeted commands); `TelegramBotRunner` then checks the allowlist
    (`ALLOWED_IDS`) and rejects unknown chats/users.
@@ -99,7 +102,8 @@ A normal user message travels:
    resends the media captionless and delivers the caption the same way, while bot notices fall back to
    plain text. For large, genuinely structured replies the agent can opt into a Bot API 10.1 rich
    message via the `sendRichMessage` tool (`BotOutput.RichMessage`, github-flavored markdown); it is
-   delivered with `sendRichMessage` and, if Telegram rejects it, resent as a `message.md` document.
+   delivered with `sendRichMessage` (a hand-rolled method in `telegram/SendRichMessage.kt`, since
+   TelegramBots does not model it yet) and, if Telegram rejects it, resent as a `message.md` document.
    Rich messages are kept opt-in because some third-party clients (e.g. Telegram X) render them as
    unsupported. Sandbox image previews opt out of photo-to-document fallback because their
    uncompressed document copy is already queued. Consecutive sends in a multi-output reply are

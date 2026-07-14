@@ -1,19 +1,20 @@
 package com.helltar.vusan.telegram
 
-import dev.inmo.tgbotapi.types.message.abstracts.ChatContentMessage
-import dev.inmo.tgbotapi.types.message.content.MediaGroupContent
-import dev.inmo.tgbotapi.types.message.content.MessageContent
-import dev.inmo.tgbotapi.types.message.content.TextContent
-import dev.inmo.tgbotapi.types.message.content.TextedContent
-import dev.inmo.tgbotapi.types.message.textsources.BotCommandTextSource
-import dev.inmo.tgbotapi.types.message.textsources.MentionTextSource
-import dev.inmo.tgbotapi.types.message.textsources.TextMentionTextSource
+import org.telegram.telegrambots.meta.api.objects.EntityType
+import org.telegram.telegrambots.meta.api.objects.message.Message
 
-internal fun shouldHandle(message: ChatContentMessage<*>, botUserId: Long, botUsername: String?): Boolean {
+// [captionSource] is the album part carrying the caption when [message] anchors a media group;
+// for single messages it is the message itself.
+internal fun shouldHandle(
+    message: Message,
+    botUserId: Long,
+    botUsername: String?,
+    captionSource: Message = message
+): Boolean {
     if (message.isPrivateChat) return true
 
     val isReplyToBot = message.replyAuthorIdOrNull() == botUserId
-    val content = message.content.captionedContentOrNull() ?: return isReplyToBot
+    val content = captionSource.messageTextOrNull() ?: return isReplyToBot
 
     return isReplyToBot ||
         hasBotMention(content, botUsername) ||
@@ -22,16 +23,29 @@ internal fun shouldHandle(message: ChatContentMessage<*>, botUserId: Long, botUs
 }
 
 // an album (media group) carries its caption on whichever part the sender attached it to — not
-// necessarily the first, which is all `MediaGroupContent.text` exposes — so scan the parts.
-internal fun MessageContent.captionedContentOrNull(): TextedContent? =
-    when (this) {
-        is MediaGroupContent<*> -> group.map { it.content }.firstOrNull { !it.text.isNullOrBlank() }
-        is TextedContent -> this
-        else -> null
-    }
+// necessarily the first — so scan the parts.
+internal fun List<Message>.captionedPartOrNull(): Message? =
+    firstOrNull { !it.caption.isNullOrBlank() }
 
-internal fun isBotCommand(content: TextContent): Boolean =
-    content.textSources.firstOrNull() is BotCommandTextSource
+internal fun Message.messageTextOrNull(): MessageText? =
+    text?.let { MessageText(it, entities.orEmpty()) }
+        ?: caption?.let { MessageText(it, captionEntities.orEmpty()) }
+
+internal fun isBotCommand(content: MessageText): Boolean =
+    content.leadingBotCommandOrNull() != null
+
+// leading bot command of a message, e.g. `/start@VusanBot arg` -> command "start" targeting "VusanBot".
+internal data class BotCommand(val command: String, val targetUsername: String?)
+
+internal fun MessageText.leadingBotCommandOrNull(): BotCommand? {
+    val entity = entities.firstOrNull { it.type == EntityType.BOTCOMMAND && it.offset == 0 } ?: return null
+    val span = entitySpan(entity).removePrefix("/")
+
+    return BotCommand(
+        command = span.substringBefore('@').lowercase(),
+        targetUsername = span.substringAfter('@', "").ifEmpty { null }
+    )
+}
 
 internal fun normalizeUsername(value: String?): String? =
     value
@@ -40,23 +54,24 @@ internal fun normalizeUsername(value: String?): String? =
         ?.lowercase()
         ?.takeIf { it.isNotBlank() }
 
-private fun hasBotMention(content: TextedContent, botUsername: String?): Boolean {
+private fun hasBotMention(content: MessageText, botUsername: String?): Boolean {
     val expectedUsername = normalizeUsername(botUsername) ?: return false
 
-    return content.textSources.any { source ->
-        source is MentionTextSource && normalizeUsername(source.username.full) == expectedUsername
+    return content.entities.any { entity ->
+        entity.type == EntityType.MENTION && normalizeUsername(content.entitySpan(entity)) == expectedUsername
     }
 }
 
-private fun hasBotTextMention(content: TextedContent, botUserId: Long): Boolean =
-    content.textSources.any { source ->
-        source is TextMentionTextSource && source.user.id.chatId.long == botUserId
+private fun hasBotTextMention(content: MessageText, botUserId: Long): Boolean =
+    content.entities.any { entity ->
+        entity.type == EntityType.TEXTMENTION && entity.user?.id == botUserId
     }
 
-private fun hasTargetedBotCommand(content: TextedContent, botUsername: String?): Boolean {
+private fun hasTargetedBotCommand(content: MessageText, botUsername: String?): Boolean {
     val expectedUsername = normalizeUsername(botUsername) ?: return false
 
-    return content.textSources.any { source ->
-        source is BotCommandTextSource && normalizeUsername(source.username?.full) == expectedUsername
+    return content.entities.any { entity ->
+        entity.type == EntityType.BOTCOMMAND &&
+            normalizeUsername(content.entitySpan(entity).substringAfter('@', "")) == expectedUsername
     }
 }

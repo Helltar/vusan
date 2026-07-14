@@ -1,7 +1,7 @@
 # AGENTS.md
 
 Vusan is a Telegram AI agent for private chats and groups. It uses
-[Koog](https://github.com/JetBrains/koog), [ktgbotapi](https://github.com/InsanusMokrassar/ktgbotapi),
+[Koog](https://github.com/JetBrains/koog), [TelegramBots](https://github.com/rubenlagus/TelegramBots),
 and Exposed/SQLite.
 
 This is the root instruction file for coding agents. Keep it concise and
@@ -56,7 +56,7 @@ Run Gradle itself on JDK 21. The build uses `jvmToolchain(21)`, and detekt
 - `TelegramBotRunner` normalizes inbound updates and builds `RequestContext`.
   Tools consume `RequestContext`/`AttachedFile`; they should not reach back into
   Telegram message objects.
-- Tools enqueue `BotOutput` into `BotOutbox`. They should not call ktgbotapi
+- Tools enqueue `BotOutput` into `BotOutbox`. They should not call TelegramBots
   send methods directly.
 - `TelegramDelivery` owns routing policy. `TelegramOutputSender` owns Telegram
   send mechanics and fallbacks.

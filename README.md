@@ -33,7 +33,7 @@ See [features.md](docs/features.md) for the full list.
 ## Stack
 
 Built on [Koog](https://github.com/JetBrains/koog) — JetBrains' Kotlin agent framework — with
-[ktgbotapi](https://github.com/InsanusMokrassar/ktgbotapi) for Telegram and Exposed/SQLite for
+[TelegramBots](https://github.com/rubenlagus/TelegramBots) for Telegram and Exposed/SQLite for
 storage. Works with OpenAI, Anthropic, Google, DeepSeek, or any OpenAI-compatible server — see
 [configuration.md](docs/configuration.md#llm-provider).
 
