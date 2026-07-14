@@ -11,6 +11,7 @@ import com.helltar.vusan.i18n.Messages
 import com.helltar.vusan.request.AttachedFile
 import io.github.oshai.kotlinlogging.KotlinLogging
 import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.channels.ReceiveChannel
@@ -88,7 +89,9 @@ internal class TelegramBotRunner(
         val longPolling = TelegramBotsLongPollingApplication()
         longPolling.registerBot(botToken) { batch -> batch.forEach { updates.trySend(it) } }
 
-        return scope.launch {
+        // handlers inherit this dispatcher; without it they would run on the single-threaded
+        // event loop of `suspend main` instead of parallelizing across cores.
+        return scope.launch(Dispatchers.Default) {
             try {
                 processUpdates(updates, profile)
             } finally {
