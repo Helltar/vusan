@@ -173,9 +173,7 @@ class TaskScheduler(
 
         val mention =
             when {
-                // telegrambots delivers usernames without the leading "@", but rows written before
-                // the migration from ktgbotapi stored it with one — normalize either form.
-                task.creatorUsername != null -> "@${task.creatorUsername.removePrefix("@")}"
+                task.creatorUsername != null -> "@${task.creatorUsername}"
                 task.creatorDisplayName != null -> "[${task.creatorDisplayName}](tg://user?id=${task.userId})"
                 else -> "user ${task.userId}"
             }
