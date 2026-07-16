@@ -10,20 +10,13 @@ import com.helltar.vusan.i18n.Language
 import com.helltar.vusan.i18n.Messages
 import com.helltar.vusan.request.AttachedFile
 import io.github.oshai.kotlinlogging.KotlinLogging
-import kotlinx.coroutines.CoroutineScope
-import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.Job
+import kotlinx.coroutines.*
 import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.channels.ReceiveChannel
-import kotlinx.coroutines.coroutineScope
-import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.collectLatest
-import kotlinx.coroutines.isActive
-import kotlinx.coroutines.launch
-import kotlinx.coroutines.supervisorScope
-import kotlinx.coroutines.withTimeoutOrNull
-import kotlin.time.Duration.Companion.seconds
+import kotlinx.coroutines.selects.onTimeout
+import kotlinx.coroutines.selects.select
 import org.telegram.telegrambots.longpolling.TelegramBotsLongPollingApplication
 import org.telegram.telegrambots.meta.api.methods.ActionType
 import org.telegram.telegrambots.meta.api.methods.GetMe
@@ -32,6 +25,7 @@ import org.telegram.telegrambots.meta.api.methods.send.SendChatAction
 import org.telegram.telegrambots.meta.api.objects.Update
 import org.telegram.telegrambots.meta.api.objects.message.Message
 import org.telegram.telegrambots.meta.generics.TelegramClient
+import kotlin.time.Duration.Companion.seconds
 
 internal class TelegramBotRunner(
     private val client: TelegramClient,
@@ -89,7 +83,7 @@ internal class TelegramBotRunner(
         val longPolling = TelegramBotsLongPollingApplication()
         longPolling.registerBot(botToken) { batch -> batch.forEach { updates.trySend(it) } }
 
-        // handlers inherit this dispatcher; without it they would run on the single-threaded
+        // handlers inherit this dispatcher; without it, they would run on the single-threaded
         // event loop of `suspend main` instead of parallelizing across cores.
         return scope.launch(Dispatchers.Default) {
             try {
@@ -101,10 +95,12 @@ internal class TelegramBotRunner(
         }
     }
 
+    // opt-in only for select's onTimeout clause, experimental but long-stable.
+    @OptIn(ExperimentalCoroutinesApi::class)
     private suspend fun processUpdates(updates: ReceiveChannel<Update>, profile: BotProfile) = supervisorScope {
         val pendingAlbums = linkedMapOf<String, MutableList<Message>>()
 
-        suspend fun flushAlbums() {
+        fun flushAlbums() {
             pendingAlbums.values.forEach { parts -> launchHandling(parts.first()) { handleGalleryUpdate(parts, profile) } }
             pendingAlbums.clear()
         }
@@ -114,13 +110,17 @@ internal class TelegramBotRunner(
                 if (pendingAlbums.isEmpty()) {
                     updates.receiveCatching().getOrNull() ?: break
                 } else {
+                    // select resolves receive vs timeout atomically; cancelling a suspended receive
+                    // (as withTimeout would) can drop an element already taken from the channel.
                     // null on both quiet-period timeout and channel close; either way the buffered
                     // albums are complete, and a closed channel exits on the next iteration.
-                    withTimeoutOrNull(ALBUM_QUIET_PERIOD) { updates.receiveCatching().getOrNull() }
-                        ?: run {
-                            flushAlbums()
-                            continue
-                        }
+                    select {
+                        updates.onReceiveCatching { it.getOrNull() }
+                        onTimeout(ALBUM_QUIET_PERIOD) { null }
+                    } ?: run {
+                        flushAlbums()
+                        continue
+                    }
                 }
 
             val message = update.message ?: continue
@@ -162,7 +162,7 @@ internal class TelegramBotRunner(
             message.sticker != null -> handleStickerUpdate(message, profile)
             message.voice != null -> handleTranscribableUpdate(message, message.voice.toAudioInput(), profile, "voice")
             message.audio != null -> handleTranscribableUpdate(message, message.audio.toAudioInput(), profile, "audio")
-            // gifs carry both `animation` and `document`; they were never handled as documents.
+            // GIFs carry both `animation` and `document`; they were never handled as documents.
             message.animation != null -> Unit
             !message.photo.isNullOrEmpty() -> handleMediaUpdate(message, profile, inputKind = "photo")
             message.document != null -> handleMediaUpdate(message, profile, inputKind = "document")
@@ -493,7 +493,9 @@ internal class TelegramBotRunner(
             val ticker =
                 launch {
                     action.collectLatest { current ->
-                        while (isActive) {
+                        // collectLatest cancels this block's own child job on a new action, which the
+                        // outer launch's isActive would not reflect.
+                        while (currentCoroutineContext().isActive) {
                             runCatching { indicateChatAction(chatId, current) }
                                 .onFailure { it.rethrowIfCancellation() }
 
