@@ -3,6 +3,7 @@ package com.helltar.vusan.telegram
 import com.helltar.vusan.outbox.BotOutput
 import java.io.Serializable
 import java.lang.reflect.Proxy
+import java.util.concurrent.CompletableFuture
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertIs
@@ -192,7 +193,7 @@ class TelegramOutputSenderTest {
         assertEquals(listOf("sendRichMessage", "sendDocument", "sendMessage"), client.methods)
     }
 
-    // records every request the sender executes; the production code only ever calls `execute`,
+    // records every request the sender executes; the production code only ever calls `executeAsync`,
     // so a reflective proxy avoids implementing the whole TelegramClient surface.
     private class RecordingClient(
         private val failPhoto: Boolean = false,
@@ -209,18 +210,20 @@ class TelegramOutputSenderTest {
                 TelegramClient::class.java.classLoader,
                 arrayOf(TelegramClient::class.java)
             ) { _, method, args ->
-                check(method.name == "execute") { "unexpected client call: ${method.name}" }
+                check(method.name == "executeAsync") { "unexpected client call: ${method.name}" }
                 handle(args.single())
             } as TelegramClient
 
-        private fun handle(request: Any): Any {
+        // failures complete the future exceptionally, mirroring how the okhttp client reports
+        // telegram error responses.
+        private fun handle(request: Any): CompletableFuture<Any> {
             val method = request.javaClass.simpleName.replaceFirstChar { it.lowercase() }
             methods += method
             requests += request
 
-            failureDescriptionFor(method)?.let { throw telegramError(it) }
+            failureDescriptionFor(method)?.let { return CompletableFuture.failedFuture(telegramError(it)) }
 
-            return if (request is SendMediaGroup) arrayListOf<Message>() else Message()
+            return CompletableFuture.completedFuture(if (request is SendMediaGroup) arrayListOf<Message>() else Message())
         }
 
         private fun failureDescriptionFor(method: String): String? =

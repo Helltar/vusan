@@ -21,6 +21,7 @@ import org.telegram.telegrambots.meta.api.objects.ReplyParameters
 import org.telegram.telegrambots.meta.api.objects.media.InputMedia
 import org.telegram.telegrambots.meta.api.objects.media.InputMediaDocument
 import org.telegram.telegrambots.meta.api.objects.media.InputMediaPhoto
+import org.telegram.telegrambots.meta.api.objects.message.Message
 import org.telegram.telegrambots.meta.api.objects.polls.input.InputPollOption
 import org.telegram.telegrambots.meta.api.objects.reactions.ReactionTypeEmoji
 import org.telegram.telegrambots.meta.generics.TelegramClient
@@ -74,7 +75,7 @@ internal object TelegramOutputSender {
     ) {
         runCatching {
             client.api {
-                execute(
+                executeAsync(
                     SetMessageReaction.builder()
                         .chatId(chatId.toString())
                         .messageId(reaction.messageId.toInt())
@@ -136,7 +137,7 @@ internal object TelegramOutputSender {
     ) {
         runCatching {
             client.api {
-                execute(SendRichMessage(chatId.toString(), InputRichMessage(markdown), replyParameters))
+                executeAsync(SendRichMessage(chatId.toString(), InputRichMessage(markdown), replyParameters))
             }
         }.recoverCatching { e ->
             e.rethrowIfCancellation()
@@ -277,8 +278,8 @@ internal object TelegramOutputSender {
         val send =
             suspend {
                 sendWithCaptionHtmlFallback(client, chatId, caption, replyParameters, formattingFileNotice) { text, parseMode ->
-                    client.api {
-                        execute(
+                    client.api<Message> {
+                        executeAsync(
                             SendPhoto.builder()
                                 .chatId(chatId)
                                 .photo(photo.bytes.asInputFile(photo.filename))
@@ -387,8 +388,8 @@ internal object TelegramOutputSender {
             failureMessage = "sendAudio failed, falling back to text",
             send = {
                 sendWithCaptionHtmlFallback(client, chatId, fullCaption, replyParameters, formattingFileNotice) { text, parseMode ->
-                    client.api {
-                        execute(
+                    client.api<Message> {
+                        executeAsync(
                             SendAudio.builder()
                                 .chatId(chatId)
                                 .audio(audio.bytes.asInputFile(audio.filename))
@@ -424,8 +425,8 @@ internal object TelegramOutputSender {
             failureMessage = "sendVoice failed, falling back to text",
             send = {
                 sendWithCaptionHtmlFallback(client, chatId, caption, replyParameters, formattingFileNotice) { text, parseMode ->
-                    client.api {
-                        execute(
+                    client.api<Message> {
+                        executeAsync(
                             SendVoice.builder()
                                 .chatId(chatId)
                                 .voice(voice.bytes.asInputFile("voice.mp3"))
@@ -465,8 +466,8 @@ internal object TelegramOutputSender {
             onTextFallback = captionTextFallback(client, chatId, fullCaption, replyParameters),
             send = {
                 sendWithCaptionHtmlFallback(client, chatId, fullCaption, replyParameters, formattingFileNotice) { text, parseMode ->
-                    client.api {
-                        execute(
+                    client.api<Message> {
+                        executeAsync(
                             SendVideo.builder()
                                 .chatId(chatId)
                                 .video(video.bytes.asInputFile(video.filename))
@@ -504,8 +505,8 @@ internal object TelegramOutputSender {
             caption = null,
             formattingFileNotice = formattingFileNotice,
             send = {
-                client.api {
-                    execute(
+                client.api<Message> {
+                    executeAsync(
                         SendVideoNote.builder()
                             .chatId(chatId)
                             .videoNote(videoNote.bytes.asInputFile("video-note.mp4"))
@@ -529,8 +530,8 @@ internal object TelegramOutputSender {
         replyParameters = replyParameters,
         failureMessage = "sendQuiz failed",
         send = {
-            client.api {
-                execute(
+            client.api<Message> {
+                executeAsync(
                     SendPoll.builder()
                         .chatId(chatId)
                         .question(quiz.question)
@@ -556,8 +557,8 @@ internal object TelegramOutputSender {
         replyParameters = replyParameters,
         failureMessage = "sendPoll failed",
         send = {
-            client.api {
-                execute(
+            client.api<Message> {
+                executeAsync(
                     SendPoll.builder()
                         .chatId(chatId)
                         .question(poll.question)
@@ -692,7 +693,7 @@ private suspend fun sendTextMessage(
     replyParameters: ReplyParameters?
 ) {
     client.api {
-        execute(
+        executeAsync(
             SendMessage.builder()
                 .chatId(chatId)
                 .text(text)
@@ -713,7 +714,7 @@ private suspend fun sendDocumentFile(
     replyParameters: ReplyParameters?
 ) {
     client.api {
-        execute(
+        executeAsync(
             SendDocument.builder()
                 .chatId(chatId)
                 .document(bytes.asInputFile(filename))
@@ -734,7 +735,7 @@ private suspend fun sendAnimationFile(
     replyParameters: ReplyParameters?
 ) {
     client.api {
-        execute(
+        executeAsync(
             SendAnimation.builder()
                 .chatId(chatId)
                 .animation(animation)
@@ -753,7 +754,7 @@ private suspend fun sendMediaGroup(
     replyParameters: ReplyParameters?
 ) {
     client.api {
-        execute(
+        executeAsync(
             SendMediaGroup.builder()
                 .chatId(chatId)
                 .medias(media)

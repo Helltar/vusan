@@ -257,7 +257,7 @@ class TelegramDelivery(private val client: TelegramClient) {
         action ?: return
         runCatching {
             client.api {
-                execute(SendChatAction.builder().chatId(chatId).action(action.toString()).build())
+                executeAsync(SendChatAction.builder().chatId(chatId).action(action.toString()).build())
             }
         }.onFailure { it.rethrowIfCancellation() }
     }

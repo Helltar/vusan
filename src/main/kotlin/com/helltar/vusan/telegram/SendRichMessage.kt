@@ -7,7 +7,7 @@ import org.telegram.telegrambots.meta.api.objects.ReplyParameters
 
 // telegrambots 10.0.0 does not model `sendRichMessage` yet, so this is a hand-rolled method
 // covering the markdown flavor vusan sends; jackson serializes it exactly like the built-in
-// json-only methods, so it goes through the regular `TelegramClient.execute` path.
+// json-only methods, so it goes through the regular `TelegramClient.executeAsync` path.
 @JsonInclude(JsonInclude.Include.NON_NULL)
 internal class SendRichMessage(
     @get:JsonProperty("chat_id")

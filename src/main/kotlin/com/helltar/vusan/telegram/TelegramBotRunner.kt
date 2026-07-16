@@ -65,7 +65,7 @@ internal class TelegramBotRunner(
     )
 
     suspend fun start(scope: CoroutineScope): Job {
-        val me = client.api { execute(GetMe()) }
+        val me = client.api { executeAsync(GetMe()) }
         val profile = BotProfile(userId = me.id, username = me.userName)
 
         log.info { "Bot started as ${profile.username ?: profile.userId}, allowed ids=${allowedIds.sorted()}" }
@@ -513,7 +513,7 @@ internal class TelegramBotRunner(
 
     private suspend fun indicateChatAction(chatId: Long, action: ActionType) {
         client.api {
-            execute(SendChatAction.builder().chatId(chatId).action(action.toString()).build())
+            executeAsync(SendChatAction.builder().chatId(chatId).action(action.toString()).build())
         }
     }
 
@@ -530,7 +530,7 @@ internal class TelegramBotRunner(
         if (!message.canLoadChatDescription) return null
 
         return runCatching {
-            client.api { execute(GetChat.builder().chatId(message.chatIdLong).build()) }.description
+            client.api { executeAsync(GetChat.builder().chatId(message.chatIdLong).build()) }.description
         }
             .onFailure { error ->
                 error.rethrowIfCancellation()
