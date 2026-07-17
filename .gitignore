@@ -12,6 +12,7 @@ docs/telegram/
 deploy/
 node_modules/
 
+CLAUDE.local.md
 deno.lock
 .env
 
