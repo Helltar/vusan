@@ -212,6 +212,7 @@ private fun vusanSingleRunStrategy(outbox: BotOutbox): AIAgentGraphStrategy<Stri
             nudged = true
 
             llm.writeSession {
+                rewritePrompt { prompt -> prompt.withMessages { it.withoutTrailingEmptyAssistant() } }
                 appendPrompt { user(DELIVER_NUDGE) }
                 requestLLM()
             }
@@ -248,6 +249,13 @@ private const val DELIVER_NUDGE =
 // (so nothing more is coming this turn) and no plain text to fall back on as a caption.
 internal fun Message.Assistant.deliveredNothing(): Boolean =
     parts.none { it is MessagePart.Tool.Call } && textContent().isBlank()
+
+// requestLLM appends the model reply to the session prompt, so an empty reply leaves an assistant
+// message with no parts there. on the wire that becomes `{"role":"assistant"}` — no content, no
+// tool_calls — which openai rejects with 400 on the next request; drop it before re-requesting.
+// a blank-text reply stays: it still serializes to a valid string content.
+internal fun List<Message>.withoutTrailingEmptyAssistant(): List<Message> =
+    dropLastWhile { it is Message.Assistant && it.parts.isEmpty() }
 
 // flaky OpenAI-compatible models garble parallel tool calls: sibling calls in the same batch arrive
 // with empty `{}` args. required args declared by the tool that the call omitted entirely.
