@@ -24,6 +24,6 @@ deno.lock
 .mcp.json
 .profile
 .ripgreprc
-.vscode/
+.vscode
 .zprofile
 .zshrc
