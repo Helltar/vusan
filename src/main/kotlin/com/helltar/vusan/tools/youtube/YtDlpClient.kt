@@ -1,71 +1,26 @@
 package com.helltar.vusan.tools.youtube
 
 import io.github.oshai.kotlinlogging.KotlinLogging
-import kotlinx.coroutines.*
-import kotlinx.coroutines.sync.Mutex
-import kotlinx.coroutines.sync.withLock
-import kotlinx.serialization.json.Json
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
 import java.awt.RenderingHints
 import java.awt.image.BufferedImage
 import java.io.ByteArrayOutputStream
 import java.nio.file.Files
 import java.nio.file.Path
-import java.util.concurrent.TimeUnit
 import javax.imageio.ImageIO
 import kotlin.math.roundToInt
-import kotlin.time.Duration
-import kotlin.time.Duration.Companion.seconds
 
-// stderr is merged into stdout (`redirectErrorStream(true)`), so one stream carries everything.
-data class YtDlpCommandResult(
-    val stdout: String,
-    val exitCode: Int,
-    val timedOut: Boolean = false
-)
-
-class YtDlpClient(
-    private val cookiesFile: String? = null,
-    private val timeoutSeconds: Long = 180
-) {
+class YtDlpClient(private val runner: YtDlpRunner) {
 
     private companion object {
-        const val YT_DLP_BINARY = "yt-dlp"
-        const val USER_AGENT = "Mozilla/5.0 (X11; Linux x86_64; rv:127.0) Gecko/20100101 Firefox/127.0"
-        const val SEARCH_RESULT_LIMIT = 5
         const val FORMAT_UNAVAILABLE_MARKER = "Requested format is not available"
         const val VIDEO_MAX_FILE_SIZE_MB = 50
         val VIDEO_HEIGHT_CAPS = listOf(720, 480, 360)
-        val json = Json { ignoreUnknownKeys = true }
         val log = KotlinLogging.logger {}
     }
 
     private data class DownloadAttempt<out T>(val result: YtDlpResult<T>, val retryable: Boolean = false)
-    private data class YtDlpSearchCandidate(val url: String)
-
-    private val diagnosticsMutex = Mutex()
-    private var cachedDiagnostics: String? = null
-
-    private suspend fun getRuntimeDiagnostics(): String = diagnosticsMutex.withLock {
-        cachedDiagnostics ?: run {
-            val versionResult = runCommand(listOf(YT_DLP_BINARY, "--version"))
-
-            val version =
-                when {
-                    versionResult.timedOut -> "timeout"
-
-                    versionResult.exitCode == 0 -> {
-                        versionResult.stdout.trim().lineSequence().firstOrNull().orEmpty()
-                            .ifBlank { "empty" }
-                    }
-
-                    else -> "exit-${versionResult.exitCode}:${versionResult.stdout.trim().take(120)}"
-                }
-
-            val diagnostics = "binary=[$YT_DLP_BINARY] version=[$version]"
-            cachedDiagnostics = diagnostics
-            diagnostics
-        }
-    }
 
     suspend fun downloadTrack(query: String, maxFileSizeMb: Int = 45): YtDlpResult<YtDlpTrack> =
         withContext(Dispatchers.IO) {
@@ -101,7 +56,7 @@ class YtDlpClient(
             workDir = workDir,
             query = query,
             maxFileSizeMb = maxFileSizeMb,
-            resolveCandidates = { searchCandidates(query) },
+            resolveCandidates = { runner.searchCandidates(query) },
             describeSuccess = { "title=[${it.title}] performer=[${it.performer}]" },
             downloadCandidate = { attemptDir, url -> downloadAudioCandidate(attemptDir, url, query, maxFileSizeMb) }
         )
@@ -115,11 +70,11 @@ class YtDlpClient(
         describeSuccess: (T) -> String,
         downloadCandidate: suspend (attemptDir: Path, url: String) -> DownloadAttempt<T>
     ): YtDlpResult<T> {
-        val diagnostics = getRuntimeDiagnostics()
+        val diagnostics = runner.runtimeDiagnostics()
 
         log.info {
             "yt-dlp $kind download start query=[${query.take(120)}] " +
-                    "maxFileSizeMb=$maxFileSizeMb $diagnostics ${authDiagnostics()}"
+                    "maxFileSizeMb=$maxFileSizeMb $diagnostics ${runner.authDiagnostics()}"
         }
 
         val candidates = resolveCandidates()
@@ -148,7 +103,7 @@ class YtDlpClient(
                 }
 
                 is YtDlpResult.AuthRequired -> {
-                    log.warn { "yt-dlp $label requires auth url=[${candidate.url}] ${authDiagnostics()}" }
+                    log.warn { "yt-dlp $label requires auth url=[${candidate.url}] ${runner.authDiagnostics()}" }
                     return result
                 }
 
@@ -200,18 +155,21 @@ class YtDlpClient(
         maxFileSizeMb: Int,
         buildPayload: (bytes: ByteArray, info: YtDlpInfo) -> T
     ): DownloadAttempt<T> {
-        val commandResult = runCommand(command)
+        val commandResult = runner.runCommand(command)
 
         if (commandResult.timedOut) {
-            log.warn { "yt-dlp download timed out after ${timeoutSeconds}s url=[$url] query=[${query.take(120)}]" }
-            return DownloadAttempt(YtDlpResult.Failure("yt-dlp timed out after ${timeoutSeconds}s"))
+            log.warn {
+                "yt-dlp download timed out after ${runner.timeoutSeconds}s url=[$url] query=[${query.take(120)}]"
+            }
+
+            return DownloadAttempt(YtDlpResult.Failure("yt-dlp timed out after ${runner.timeoutSeconds}s"))
         }
 
         if (commandResult.exitCode != 0) {
             return classifyDownloadError(commandResult, url, query, maxFileSizeMb)
         }
 
-        val info = parseInfoJson(commandResult.stdout)
+        val info = runner.parseInfoJson(commandResult.stdout)
             ?: return DownloadAttempt(YtDlpResult.Failure("yt-dlp produced no metadata"))
 
         if (!Files.exists(outputFile)) {
@@ -235,51 +193,6 @@ class YtDlpClient(
         }
 
         return DownloadAttempt(YtDlpResult.Success(buildPayload(bytes, info)))
-    }
-
-    private suspend fun searchCandidates(query: String): List<YtDlpSearchCandidate> {
-        val command =
-            buildList {
-                add(YT_DLP_BINARY)
-                add("--ignore-config")
-                add("--no-warnings")
-                addAll(
-                    listOf(
-                        "--dump-single-json",
-                        "--flat-playlist",
-                        "--playlist-end",
-                        SEARCH_RESULT_LIMIT.toString()
-                    )
-                )
-                addAll(authArgs())
-                addAll(youtubeArgs())
-                add("ytsearch$SEARCH_RESULT_LIMIT:$query")
-            }
-
-        val result = runCommand(command)
-
-        if (result.timedOut) {
-            log.warn {
-                "yt-dlp search timed out after ${timeoutSeconds}s for query=[${query.take(120)}] ${authDiagnostics()}"
-            }
-
-            return emptyList()
-        }
-
-        if (result.exitCode != 0) {
-            log.warn {
-                "yt-dlp search exit ${result.exitCode} for query=[${query.take(120)}] " +
-                        "${authDiagnostics()}: ${result.stdout.take(500)}"
-            }
-
-            return emptyList()
-        }
-
-        val candidates = parseSearchCandidates(result.stdout)
-
-        log.info { "yt-dlp search parsed ${candidates.size} candidate URL(s) for query=[${query.take(120)}]" }
-
-        return candidates
     }
 
     private suspend fun downloadAudioCandidate(
@@ -306,9 +219,10 @@ class YtDlpClient(
                 addAll(listOf("--no-playlist", "--no-warnings"))
                 addAll(listOf("--max-filesize", "${maxFileSizeMb}M"))
                 add("--print-json")
-                addAll(authArgs())
-                addAll(youtubeArgs())
+                addAll(runner.authArgs())
+                addAll(runner.youtubeArgs())
                 addAll(listOf("-o", workDir.resolve("audio.%(ext)s").toString()))
+                add("--")
                 add(url)
             }
 
@@ -329,7 +243,7 @@ class YtDlpClient(
             workDir = workDir,
             query = query,
             maxFileSizeMb = maxFileSizeMb,
-            resolveCandidates = { videoCandidates(query) },
+            resolveCandidates = { runner.videoCandidates(query) },
             describeSuccess = { "title=[${it.title}] height=${it.height}" },
             downloadCandidate = { attemptDir, url -> downloadVideoCandidate(attemptDir, url, query, maxFileSizeMb) }
         )
@@ -383,9 +297,10 @@ class YtDlpClient(
                 addAll(listOf("--no-playlist", "--no-warnings"))
                 addAll(listOf("--max-filesize", "${maxFileSizeMb}M"))
                 add("--print-json")
-                addAll(authArgs())
-                addAll(youtubeArgs())
+                addAll(runner.authArgs())
+                addAll(runner.youtubeArgs())
                 addAll(listOf("-o", workDir.resolve("video.%(ext)s").toString()))
+                add("--")
                 add(url)
             }
 
@@ -409,16 +324,6 @@ class YtDlpClient(
             .getOrNull()
             .also { if (it == null) log.info { "yt-dlp video thumbnail unavailable at $path url=[$url]" } }
 
-    private suspend fun videoCandidates(query: String): List<YtDlpSearchCandidate> {
-        val trimmed = query.trim()
-
-        if (trimmed.startsWith("http://") || trimmed.startsWith("https://")) {
-            return listOf(YtDlpSearchCandidate(trimmed))
-        }
-
-        return searchCandidates(query)
-    }
-
     private suspend fun classifyDownloadError(
         commandResult: YtDlpCommandResult,
         url: String,
@@ -436,7 +341,7 @@ class YtDlpClient(
             output.containsAny("Sign in to confirm you", "confirm your age", "cookies-from-browser") -> {
                 log.warn {
                     "yt-dlp download requires auth url=[$url] query=[${query.take(120)}] " +
-                            "${authDiagnostics()}: ${output.take(500)}"
+                            "${runner.authDiagnostics()}: ${output.take(500)}"
                 }
 
                 DownloadAttempt(YtDlpResult.AuthRequired)
@@ -469,73 +374,6 @@ class YtDlpClient(
         }
     }
 
-    private suspend fun runCommand(command: List<String>): YtDlpCommandResult = withContext(Dispatchers.IO) {
-        val process = ProcessBuilder(command).redirectErrorStream(true).start()
-
-        try {
-            val outputDeferred = async { process.inputStream.bufferedReader().use { it.readText() } }
-            val finishedInTime = runInterruptible { process.waitFor(timeoutSeconds, TimeUnit.SECONDS) }
-
-            if (!finishedInTime) {
-                process.destroyForcibly()
-                val stdout = outputDeferred.awaitWithin(1.seconds)
-                YtDlpCommandResult(stdout = stdout, exitCode = -1, timedOut = true)
-            } else {
-                val stdout = outputDeferred.awaitWithin(5.seconds)
-                YtDlpCommandResult(stdout = stdout, exitCode = process.exitValue())
-            }
-        } finally {
-            if (process.isAlive) {
-                process.destroyForcibly()
-            }
-        }
-    }
-
-    private suspend fun Deferred<String>.awaitWithin(timeout: Duration): String =
-        try {
-            withTimeout(timeout) { await() }
-        } catch (_: TimeoutCancellationException) {
-            ""
-        } catch (e: CancellationException) {
-            throw e
-        } catch (_: Exception) {
-            ""
-        }
-
-    private fun parseInfoJson(stdout: String): YtDlpInfo? {
-        val firstLine = stdout.lineSequence().firstOrNull { it.trimStart().startsWith("{") } ?: return null
-        return runCatching { json.decodeFromString<YtDlpInfo>(firstLine) }.getOrNull()
-    }
-
-    private fun parseSearchCandidates(stdout: String): List<YtDlpSearchCandidate> {
-        val firstLine =
-            stdout.lineSequence().firstOrNull { it.trimStart().startsWith("{") }
-                ?: return emptyList()
-
-        val search =
-            runCatching { json.decodeFromString<YtDlpSearchResult>(firstLine) }.getOrNull()
-                ?: return emptyList()
-
-        return search.entries.orEmpty().mapNotNull { entry ->
-            val directUrl = entry.url?.takeIf { it.startsWith("http://") || it.startsWith("https://") }
-            val videoId = entry.id ?: entry.url?.takeUnless { it.startsWith("http://") || it.startsWith("https://") }
-
-            val url =
-                entry.webpageUrl
-                    ?: directUrl
-                    ?: videoId?.let { "https://www.youtube.com/watch?v=$it" }
-
-            url?.let { YtDlpSearchCandidate(it) }
-        }.distinctBy { it.url }
-    }
-
-    private fun authArgs(): List<String> =
-        cookiesFile?.takeUnless { it.isBlank() }?.let { listOf("--cookies", it) }
-            ?: emptyList()
-
-    private fun youtubeArgs(): List<String> =
-        listOf("--remote-components", "ejs:github", "--user-agent", USER_AGENT)
-
     private suspend fun logUnavailableFormatsDiagnostics(url: String, query: String) {
         val command =
             buildList {
@@ -543,14 +381,15 @@ class YtDlpClient(
                 add("--ignore-config")
                 add("--no-warnings")
                 add("--list-formats")
-                addAll(authArgs())
-                addAll(youtubeArgs())
+                addAll(runner.authArgs())
+                addAll(runner.youtubeArgs())
+                add("--")
                 add(url)
             }
 
-        log.info { "yt-dlp list-formats start url=[$url] query=[${query.take(120)}] ${authDiagnostics()}" }
+        log.info { "yt-dlp list-formats start url=[$url] query=[${query.take(120)}] ${runner.authDiagnostics()}" }
 
-        val result = runCommand(command)
+        val result = runner.runCommand(command)
         val output = result.stdout.trim()
 
         when {
@@ -566,32 +405,7 @@ class YtDlpClient(
             }
         }
     }
-
-    private fun authDiagnostics(): String {
-        cookiesFile?.takeUnless { it.isBlank() }?.let { return cookieFileDiagnostics(it) }
-        return "auth=none"
-    }
-
-    private fun cookieFileDiagnostics(file: String): String =
-        runCatching {
-            val path = Path.of(file)
-            val exists = Files.exists(path)
-            val readable = Files.isReadable(path)
-
-            val sizeBytes =
-                if (exists)
-                    runCatching { Files.size(path).toString() }.getOrDefault("unknown")
-                else
-                    "missing"
-
-            "auth=cookies-file path=[$file] exists=$exists readable=$readable sizeBytes=$sizeBytes"
-        }.getOrElse { error ->
-            "auth=cookies-file path=[$file] invalidPath=[${error.message}]"
-        }
 }
-
-private fun String.containsAny(vararg needles: String): Boolean =
-    needles.any { contains(it, ignoreCase = true) }
 
 private const val THUMBNAIL_MAX_SIDE = 320
 private const val THUMBNAIL_MAX_BYTES = 200 * 1024

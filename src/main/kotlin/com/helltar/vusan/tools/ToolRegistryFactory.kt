@@ -35,8 +35,11 @@ import com.helltar.vusan.tools.vision.VisionTools
 import com.helltar.vusan.tools.voice.ElevenLabsTtsClient
 import com.helltar.vusan.tools.voice.VoiceTools
 import com.helltar.vusan.tools.youtube.YouTubeMusicTools
+import com.helltar.vusan.tools.youtube.YouTubeTranscriptClient
+import com.helltar.vusan.tools.youtube.YouTubeTranscriptTools
 import com.helltar.vusan.tools.youtube.YouTubeVideoTools
 import com.helltar.vusan.tools.youtube.YtDlpClient
+import com.helltar.vusan.tools.youtube.YtDlpRunner
 import io.github.oshai.kotlinlogging.KotlinLogging
 import io.ktor.client.*
 import kotlin.time.Duration.Companion.seconds
@@ -65,7 +68,9 @@ class ToolRegistryFactory(
     private val openAiImage = config.openAiImage
     private val imageVisionClient = ImageVisionClient(promptExecutor, model)
     private val telegramChannelClient = TelegramChannelClient(http)
-    private val ytDlpClient = YtDlpClient(config.ytDlpCookiesFile)
+    private val ytDlpRunner = YtDlpRunner(config.ytDlpCookiesFile)
+    private val ytDlpClient = YtDlpClient(ytDlpRunner)
+    private val youTubeTranscript = YouTubeTranscriptTools(YouTubeTranscriptClient(ytDlpRunner))
 
     private val telegramChannel =
         TelegramChannelTools(telegramChannelClient, TelegramChannelImageDescriber(promptExecutor, model))
@@ -103,6 +108,7 @@ class ToolRegistryFactory(
             tools(telegramChannel)
             tools(YouTubeMusicTools(ytDlpClient, outbox))
             tools(YouTubeVideoTools(ytDlpClient, outbox))
+            tools(youTubeTranscript)
             tools(FileTools(outbox))
             tools(QuizTools(outbox))
             tools(PollTools(outbox))

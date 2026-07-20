@@ -28,6 +28,9 @@ Items marked *(opt-in)* require an API key or an extra service — see
   extracts page text (Tavily).
 - **YouTube video/audio** — searches or downloads YouTube videos/audio via `yt-dlp` and `ffmpeg`,
   with video size capped for Telegram; videos carry the YouTube thumbnail as the preview.
+- **YouTube transcripts** — reads a video's subtitle track without downloading the video, so the
+  agent can summarize or answer questions about its content; prefers the original language track
+  (author-provided or auto-generated) over a machine translation, and truncates long videos.
 - **Telegram channels** — reads recent public channel posts from `@username` or `t.me/...`;
   can optionally run vision over post images.
 - **GIFs** *(opt-in)* — searches and sends GIFs (Giphy).
