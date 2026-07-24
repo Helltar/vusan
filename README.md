@@ -1,5 +1,5 @@
 <p align="center">
-  <img src="https://helltar.com/projects/vusan/avatar.svg" width="160" alt="Vusan avatar">
+  <img src="https://helltar.com/projects/vusan/logo.svg" width="128" alt="Vusan">
 </p>
 
 <h1 align="center">Vusan</h1>
@@ -8,7 +8,6 @@
   <img src="https://img.shields.io/badge/status-alpha-orange" alt="Status: Alpha">
   <a href="https://github.com/Helltar/vusan/actions/workflows/build.yml"><img src="https://github.com/Helltar/vusan/actions/workflows/build.yml/badge.svg" alt="build"></a>
   <a href="https://github.com/Helltar/vusan/pkgs/container/vusan"><img src="https://img.shields.io/badge/ghcr-vusan-blue?logo=docker" alt="GHCR"></a>
-  <a href="LICENSE"><img src="https://img.shields.io/badge/license-MIT-green" alt="License: MIT"></a>
 </p>
 
 Vusan is a Telegram AI agent for private chats and groups, currently in alpha — breaking changes
