@@ -111,7 +111,11 @@ A normal user message travels:
    `BotOutbox` coalesces consecutive `sendMessage` text into the trailing bubble while it fits
    (`MAX_TEXT_MESSAGE_CHARS`), so a model that splits one answer into many small messages produces
    few real sends; the number of resulting bubbles is still capped (`MAX_TEXT_MESSAGES`) so a
-   looping model cannot flood the chat. `TelegramOutputSender` performs the low-level API calls.
+   looping model cannot flood the chat. `TelegramOutputSender` performs the low-level API calls,
+   split by altitude across three files in `telegram/`: `TelegramOutputSender.kt` maps each
+   `BotOutput` kind to a Bot API call and picks the fallback wrapping it,
+   `TelegramSendFallbacks.kt` holds the output-kind-agnostic rejection handling (plain-text retry,
+   media-to-document, text-as-document), and `TelegramRequests.kt` the raw request builders.
 8. **Persist** — produced history turns are appended via `ChatHistoryRepository`.
 
 ## Background and side flows
@@ -149,7 +153,7 @@ A symptom-to-source map for finding the right file fast. Paths are under
 | Bot ignores a message entirely                                                   | `telegram/MessageFilter.kt` (`shouldHandle` — group reply/mention rules), then `TelegramBotRunner.isAccepted`/`isAllowed` (the `ALLOWED_IDS` allowlist)                                                                                                              |
 | Reply says "still working on your previous request"                              | `agent/AgentRunner.kt` — the per-user `Mutex` rejects a second concurrent turn                                                                                                                                                                                       |
 | Reply lands in the wrong chat, loses its reply anchor, or DM redirect misbehaves | `telegram/TelegramDelivery.kt` (routing/anchor/private-redirect *policy*)                                                                                                                                                                                            |
-| Formatting renders wrong, message rejected, or media falls back to document/text | `agent/SystemPrompt.kt` (allowed HTML tags the agent emits), `telegram/TelegramOutputSender.kt` (HTML parse mode, opt-in rich message + fallback *mechanism*), `telegram/TelegramErrors.kt` (which provider errors trigger a fallback) |
+| Formatting renders wrong, message rejected, or media falls back to document/text | `agent/SystemPrompt.kt` (allowed HTML tags the agent emits), `telegram/TelegramOutputSender.kt` (which call and which fallback each output kind gets), `telegram/TelegramSendFallbacks.kt` (the fallback *mechanism* itself), `telegram/TelegramErrors.kt` (which provider errors trigger a fallback) |
 | Bot floods a chat or stalls on Telegram 429 over a long multi-message reply      | `outbox/BotOutbox.kt` (text coalescing + `MAX_TEXT_MESSAGES` cap) + `telegram/TelegramDelivery.kt` (`INTER_MESSAGE_DELAY` pacing)                                                                                                                                    |
 | A specific tool misbehaves                                                       | `tools/<feature>/<Feature>Tools.kt` for the tool surface, plus its `<Feature>Client.kt` for the external call                                                                                                                                                        |
 | Wrong language in a canned reply (busy/error/voice/start)                        | `i18n/Language.kt` (language selection) + `i18n/Messages.kt` (the strings)                                                                                                                                                                                           |

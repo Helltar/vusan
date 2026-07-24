@@ -59,7 +59,8 @@ Run Gradle itself on JDK 21. The build uses `jvmToolchain(21)`, and detekt
 - Tools enqueue `BotOutput` into `BotOutbox`. They should not call TelegramBots
   send methods directly.
 - `TelegramDelivery` owns routing policy. `TelegramOutputSender` owns Telegram
-  send mechanics and fallbacks.
+  send mechanics, over `TelegramSendFallbacks` (rejection handling) and
+  `TelegramRequests` (raw Bot API builders).
 - `BotOutbox.useDirectMessages()` affects subsequent enqueues. Reactions are
   intentionally never redirected to DMs.
 - Keep `BotOutput` immutable and enforce invariants in `init {}` blocks.
@@ -174,8 +175,11 @@ Tool rules:
 
 - `TelegramDelivery` owns route choice, reply anchoring, reply-missing retry,
   and private-blocked notices.
-- `TelegramOutputSender` owns markdown fallback, media-to-document fallback,
-  and media-group fallback.
+- `TelegramOutputSender` maps each `BotOutput` kind to its Bot API call, picks
+  the fallback wrapping it, and owns the media-group fallback.
+- `TelegramSendFallbacks` owns the kind-agnostic rejection handling: plain-text
+  retry, media-to-document, markdown document, and text/caption as a document.
+  Add a fallback here only if it does not depend on the output kind.
 - `BotOutput.Photo(fallbackToDocument = false)` is only for previews that
   already have a separate document copy queued, such as sandbox image outputs.
   Leave the default `true` for standalone photos.
