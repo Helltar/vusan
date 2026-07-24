@@ -28,8 +28,8 @@ Empty/unset means the bot answers nobody.
 
 ## LLM provider
 
-`LLM_PROVIDER` selects the backend; `LLM_PROVIDER`, `LLM_MODEL`, and `LLM_API_KEY` are always
-required. The chosen model must support tool calling.
+`LLM_PROVIDER` selects the backend; `LLM_PROVIDER`, `LLM_MODEL`, and `LLM_API_KEY` are always required. The chosen model
+must support tool calling.
 
 | `LLM_PROVIDER`      | Example `LLM_MODEL`                 |
 |---------------------|-------------------------------------|
@@ -41,10 +41,10 @@ required. The chosen model must support tool calling.
 
 `openai-compatible` additionally requires `LLM_BASE_URL`.
 
-The native providers (`openai`, `anthropic`, `google`, `deepseek`) talk to each vendor's own API through its
-dedicated Koog client, so `LLM_MODEL` must be a model id the client knows. An unrecognized id fails at startup
-with the list of supported values. `openai-compatible` instead targets any OpenAI-compatible chat completions API
-(remote or local) and accepts any model string the server understands.
+The native providers (`openai`, `anthropic`, `google`, `deepseek`) talk to each vendor's own API through its dedicated
+Koog client, so `LLM_MODEL` must be a model id the client knows. An unrecognized id fails at startup with the list of
+supported values. `openai-compatible` instead targets any OpenAI-compatible chat completions API (remote or local) and
+accepts any model string the server understands.
 
 `LLM_REQUEST_TIMEOUT_SECONDS` (default `120`) caps how long a single LLM HTTP call may hang. The Koog client otherwise
 waits 15 minutes, during which the bot stays silent; the shorter cap lets a stalled call fail fast so the agent can
@@ -98,14 +98,14 @@ Unset both variables to use the built-in persona.
 Each optional tool is enabled by one env variable. If it is missing, that tool is skipped at startup with a `WARN` log
 and the bot keeps running.
 
-| Tool                                      | Enable with          | Notes                                 |
-|-------------------------------------------|----------------------|---------------------------------------|
-| Web search, image search, page extraction | `TAVILY_API_KEY`     | Tavily                                |
-| GIF lookup                                | `GIPHY_API_KEY`      | Giphy                                 |
-| Voice output                              | `ELEVENLABS_API_KEY` | ElevenLabs TTS                        |
-| Voice input                               | `OPENAI_STT_API_KEY` | Reuse your OpenAI key                 |
-| Image generation                          | `OPENAI_IMAGE_API_KEY` | Reuse your OpenAI key               |
-| Code execution                            | `SANDBOX_URL`        | See [Code execution](#code-execution) |
+| Tool                                      | Enable with            | Notes                                 |
+|-------------------------------------------|------------------------|---------------------------------------|
+| Web search, image search, page extraction | `TAVILY_API_KEY`       | Tavily                                |
+| GIF lookup                                | `GIPHY_API_KEY`        | Giphy                                 |
+| Voice output                              | `ELEVENLABS_API_KEY`   | ElevenLabs TTS                        |
+| Voice input                               | `OPENAI_STT_API_KEY`   | Reuse your OpenAI key                 |
+| Image generation                          | `OPENAI_IMAGE_API_KEY` | Reuse your OpenAI key                 |
+| Code execution                            | `SANDBOX_URL`          | See [Code execution](#code-execution) |
 
 ### TTS tuning
 
@@ -123,9 +123,9 @@ and the bot keeps running.
 
 ### Image generation tuning
 
-`OPENAI_IMAGE_API_KEY` enables the `generateImage` tool (OpenAI `/v1/images/generations`). It can
-reuse your OpenAI key. The agent picks the aspect ratio per request; the model and quality are
-operator-controlled so generation cost stays predictable.
+`OPENAI_IMAGE_API_KEY` enables the `generateImage` tool (OpenAI `/v1/images/generations`). It can reuse your OpenAI key.
+The agent picks the aspect ratio per request; the model and quality are operator-controlled so generation cost stays
+predictable.
 
 | Variable               | Default         | Description                                            |
 |------------------------|-----------------|--------------------------------------------------------|
@@ -135,10 +135,9 @@ operator-controlled so generation cost stays predictable.
 ## Code execution
 
 The `codeExecution` tool lets the agent run Python in an isolated sandbox to compute exact answers, transform data, and
-render charts
-(`numpy`, `pandas`, `matplotlib`, `sympy`, `scipy`, `Pillow`). A file the user uploads (or one they reply to) is placed
-in the working directory so the script can read it by name. The sandbox executes untrusted code on an internal-only
-network with no secrets, no internet, and no host mounts.
+render charts (`numpy`, `pandas`, `matplotlib`, `sympy`, `scipy`, `Pillow`). A file the user uploads (or one they reply
+to) is placed in the working directory so the script can read it by name. The sandbox executes untrusted code on an
+internal-only network with no secrets, no internet, and no host mounts.
 
 Docker starts it by default:
 
@@ -170,15 +169,15 @@ Both variables live in the bot's `.env`; the default `compose.yaml` passes them 
 | `SANDBOX_POOL_SIZE`       | `2`     | service       | Warm Pyodide workers kept ready. |
 | `SANDBOX_TIMEOUT_SECONDS` | `120`   | bot + service | Hard per-run limit.              |
 
-`SANDBOX_TIMEOUT_SECONDS` is shared on purpose: the service enforces it as the run limit, and the bot uses
-the same value to budget how long to wait for a response (worker queue + run + network slack). Setting it
-once in `.env` keeps both sides in sync.
+`SANDBOX_TIMEOUT_SECONDS` is shared on purpose: the service enforces it as the run limit, and the bot uses the same
+value to budget how long to wait for a response (worker queue + run + network slack). Setting it once in `.env` keeps
+both sides in sync.
 
 ## Memory
 
-The agent keeps a per-user conversation history plus a durable **memory** that survives the user
-clearing the chat: personal memory (keyed by user, follows them across DMs and groups) and shared
-group memory (keyed by chat). Built in; no env variable is required to enable it.
+The agent keeps a per-user conversation history plus a durable **memory** that survives the user clearing the chat:
+personal memory (keyed by user, follows them across DMs and groups) and shared group memory (keyed by chat). Built in;
+no env variable is required to enable it.
 
 | Variable               | Default | Description                                                               |
 |------------------------|---------|---------------------------------------------------------------------------|
