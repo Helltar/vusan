@@ -42,8 +42,9 @@ internal object TavilyToolDescriptions {
                 "When 2 or more images are returned they are sent as a single media group."
 
     const val EXTRACT_PAGE_CONTENT =
-        "Fetch and extract the full text content of a web page by URL. " +
-                "Use when the user provides a link or wants a detailed summary of a specific article, page, or document."
+        "Fetch and extract the full text content of a web page by URL into your own context. " +
+                "Use when you need to read the page to answer, summarize, or quote it; this tool sends nothing to the user. " +
+                "Use `downloadFile` instead when the user asks to download, save, or receive the link itself, and for PDFs, archives, images, and other non-text targets whose text this tool cannot extract."
 
     const val EXTRACT_PAGE_URL =
         "The full URL of the page to extract content from, e.g. `https://example.com/article`."

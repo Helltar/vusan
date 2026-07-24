@@ -44,7 +44,11 @@ Items marked *(opt-in)* require an API key or an extra service — see
   structured answers; reserved for cases where the structure is worth it, since some third-party
   clients (e.g. Telegram X) show rich messages as unsupported. Falls back to a `.md` document if
   Telegram rejects the send.
-- **File delivery** — sends generated text content as a Telegram document.
+- **File delivery** — sends generated text content as a Telegram document, and downloads any
+  `http`/`https` URL (file or whole web page) and forwards it as a document. Redirects are followed
+  and re-checked, the file name comes from `Content-Disposition`, the URL, or the content type, and
+  downloads above Telegram's 50 MB bot upload limit are reported instead of sent. URLs resolving to
+  loopback, link-local, or private addresses are refused.
 - **Currency** — looks up live ISO-4217 exchange rates.
 - **Chat history control** — clears the current user's stored conversation history without
   deleting durable memory or scheduled tasks.

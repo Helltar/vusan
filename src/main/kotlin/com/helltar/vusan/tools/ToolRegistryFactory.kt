@@ -11,6 +11,7 @@ import com.helltar.vusan.request.RequestContext
 import com.helltar.vusan.tasks.TasksRepository
 import com.helltar.vusan.tools.currency.CurrencyTools
 import com.helltar.vusan.tools.currency.ExchangeRateClient
+import com.helltar.vusan.tools.files.FileDownloadClient
 import com.helltar.vusan.tools.files.FileTools
 import com.helltar.vusan.tools.giphy.GiphyClient
 import com.helltar.vusan.tools.giphy.GiphyTools
@@ -64,6 +65,7 @@ class ToolRegistryFactory(
     }
 
     private val currency = CurrencyTools(ExchangeRateClient(http))
+    private val fileDownloadClient = FileDownloadClient(http)
     private val elevenLabsTts = config.elevenLabsTts
     private val openAiImage = config.openAiImage
     private val imageVisionClient = ImageVisionClient(promptExecutor, model)
@@ -109,7 +111,7 @@ class ToolRegistryFactory(
             tools(YouTubeMusicTools(ytDlpClient, outbox))
             tools(YouTubeVideoTools(ytDlpClient, outbox))
             tools(youTubeTranscript)
-            tools(FileTools(outbox))
+            tools(FileTools(fileDownloadClient, outbox))
             tools(QuizTools(outbox))
             tools(PollTools(outbox))
             tools(HistoryTools(history, context))
