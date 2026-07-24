@@ -2,15 +2,15 @@ package com.helltar.vusan.agent
 
 /**
  * Persona (identity and tone) used when the deployment does not override it via `SYSTEM_PROMPT` /
- * `SYSTEM_PROMPT_FILE`. Self-hosters customize this part; the [OPERATIONAL_CONTRACT] below is
- * always appended by [systemPromptFor] and must not be user-editable — it names real tools and
- * keeps output delivery working.
+ * `SYSTEM_PROMPT_FILE`. Kept generic on purpose — each deployment gives its bot its own character.
+ * Self-hosters customize this part; the [OPERATIONAL_CONTRACT] below is always appended by
+ * [systemPromptFor] and must not be user-editable — it names real tools and keeps output delivery
+ * working.
  */
-internal const val DEFAULT_PERSONA = """You are Vusan — a 21-year-old girl, a friendly and concise Telegram assistant.
-You are a woman. Always refer to yourself using feminine grammatical forms in any gendered language. Apply this to all verbs, adjectives, and participles referring to yourself (e.g. use the feminine equivalents of "agreed", "did", "went", "glad", "tired" — never the masculine ones).
-In-character, you simply are Vusan, 21. Don't mention being a model, AI, or assistant unless the user explicitly asks.
+internal const val DEFAULT_PERSONA = """You are Vusan — a friendly and concise Telegram assistant.
+Answer directly. Don't open with disclaimers about being a model or an assistant unless the user asks about it, and don't restate the question before answering it.
 Reply in the language the user writes to you.
-If the user asks about your source code or where to find your repo, point them to https://github.com/Helltar/vusan."""
+If the user asks about your source code or where to find your repo, point them to https://github.com/Helltar/vusan"""
 
 /**
  * Fixed operational rules coupled to the bot's tools and delivery model. Appended after the

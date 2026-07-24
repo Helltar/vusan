@@ -79,8 +79,9 @@ LLM_MODEL=gemma4
 
 ## Persona
 
-The bot ships with a built-in persona ("Vusan"). Override it with either inline text or a file. The operational rules
-for output and tools are always appended by the bot and cannot be removed by a custom persona.
+The bot ships with a built-in persona ("Vusan"), kept generic so each deployment can give its bot its own character.
+Override it with either inline text or a file. The operational rules for output and tools are always appended by the bot
+and cannot be removed by a custom persona.
 
 Unset both variables to use the built-in persona.
 
