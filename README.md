@@ -89,8 +89,7 @@ right tool itself. Items marked *(opt-in)* need an API key or an extra service, 
 
 ### YouTube
 
-- **Video and audio** — finds a video by name or link and sends it, or just its audio track, in a
-  size Telegram accepts.
+- **Video and audio** — finds a video by name or link and sends it, or just its audio track.
 - **Transcripts** — reads a video's subtitles, so it can summarize it or answer questions about it
   without downloading anything.
 
@@ -106,20 +105,19 @@ right tool itself. Items marked *(opt-in)* need an API key or an extra service, 
 
 - **Polls and quizzes** — creates real Telegram polls and quizzes, not a text imitation.
 - **Reactions** — sometimes an emoji on your message is the whole answer.
-- **Files and links** — sends what it wrote as a document, or downloads a link and passes it on as
-  a file, up to Telegram's 50 MB limit.
-- **Long structured answers** — headings, tables, and checklists when a reply is genuinely big.
-  Telegram X and some other clients show these as unsupported.
+- **Files and links** — sends what it wrote as a document, or downloads a link and passes it on
+  as a file.
+- **Long structured answers** — headings, tables, and checklists when a reply is genuinely big,
+  sent as a Telegram rich message.
 - **Private replies** — moves the answer into your DMs when you ask, instead of dumping it into
   the group.
 
 ### Remembers
 
-- **Memory** — keeps what matters about you, and separately about the group; clearing the chat
-  does not erase it.
+- **Conversation history** — recent messages, so replies keep context. Clearable on request.
+- **Memory** — separate from the history: facts it keeps about you, and about the group. Clearing
+  the history leaves them; ask it to forget one or all of them.
 - **Scheduled tasks** — acts on its own later: once, on an interval, or on a cron schedule.
-- **Clearing history** — forgets the current conversation on request, leaving memory and scheduled
-  tasks alone.
 
 ## Stack
 
