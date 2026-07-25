@@ -41,6 +41,11 @@ must support tool calling.
 
 `openai-compatible` additionally requires `LLM_BASE_URL`.
 
+| Variable                      | Default | Description                                                                |
+|-------------------------------|---------|----------------------------------------------------------------------------|
+| `LLM_BASE_URL`                | —       | Base URL of the OpenAI-compatible server. Unused by the native providers.  |
+| `LLM_REQUEST_TIMEOUT_SECONDS` | `120`   | Seconds a single LLM HTTP call may hang before it is failed.               |
+
 The native providers (`openai`, `anthropic`, `google`, `deepseek`) talk to each vendor's own API through its dedicated
 Koog client, so `LLM_MODEL` must be a model id the client knows. An unrecognized id fails at startup with the list of
 supported values. `openai-compatible` instead targets any OpenAI-compatible chat completions API (remote or local) and
@@ -137,7 +142,8 @@ predictable.
 The `codeExecution` tool lets the agent run Python in an isolated sandbox to compute exact answers, transform data, and
 render charts (`numpy`, `pandas`, `matplotlib`, `sympy`, `scipy`, `Pillow`). A file the user uploads (or one they reply
 to) is placed in the working directory so the script can read it by name. The sandbox executes untrusted code on an
-internal-only network with no secrets, no internet, and no host mounts.
+internal-only network with no secrets, no internet, and no host mounts. Its own source and internals are described in
+[architecture.md](architecture.md#code-execution-service).
 
 Docker starts it by default:
 
