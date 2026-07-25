@@ -5,9 +5,11 @@ import org.telegram.telegrambots.meta.api.methods.send.SendAnimation
 import org.telegram.telegrambots.meta.api.methods.send.SendDocument
 import org.telegram.telegrambots.meta.api.methods.send.SendMediaGroup
 import org.telegram.telegrambots.meta.api.methods.send.SendMessage
+import org.telegram.telegrambots.meta.api.methods.send.SendRichMessage
 import org.telegram.telegrambots.meta.api.objects.InputFile
 import org.telegram.telegrambots.meta.api.objects.ReplyParameters
 import org.telegram.telegrambots.meta.api.objects.media.InputMedia
+import org.telegram.telegrambots.meta.api.objects.richtext.InputRichMessage
 import org.telegram.telegrambots.meta.generics.TelegramClient
 
 // the raw Bot API calls shared by the send policy in TelegramOutputSender and the rejection
@@ -97,11 +99,11 @@ internal fun richMessageRequest(
     markdown: String,
     replyParameters: ReplyParameters?
 ): SendRichMessage =
-    SendRichMessage(
-        chatId = chatId.toString(),
-        richMessage = InputRichMessage(markdown),
-        replyParameters = replyParameters
-    )
+    SendRichMessage.builder()
+        .chatId(chatId)
+        .richMessage(InputRichMessage.builder().markdown(markdown).build())
+        .replyParameters(replyParameters)
+        .build()
 
 // a fresh input stream per attempt: the previous attempt may have consumed the old one.
 internal fun ByteArray.asInputFile(filename: String): InputFile =

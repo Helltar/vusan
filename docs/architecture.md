@@ -92,9 +92,8 @@ A normal user message travels:
       standalone, responsive, light/dark page with a no-script CSP) so the formatting still arrives; a rejected caption
       resends the media captionless and delivers the caption the same way; bot notices fall back to plain text.
     - **Rich messages** — opt-in Bot API 10.1 (`BotOutput.RichMessage`, github-flavored markdown) via the
-      `sendRichMessage` tool, sent by a hand-rolled method (`telegram/SendRichMessage.kt`, since TelegramBots does not
-      model it yet) and resent as a `message.md` document if rejected. Opt-in because some third-party clients (e.g.
-      Telegram X) render rich messages as unsupported.
+      `sendRichMessage` tool, resent as a `message.md` document if rejected. Opt-in because some third-party clients
+      (e.g. Telegram X) render rich messages as unsupported.
     - **Gone targets and blocked DMs** — a reply whose target no longer exists is retried without the anchor
       (`DeliveryTarget.withoutReply`); a private chat the bot cannot write to produces a notice in the group instead.
     - **Rate limits** — consecutive sends are paced (`INTER_MESSAGE_DELAY`) to stay under Telegram's per-chat limit.
