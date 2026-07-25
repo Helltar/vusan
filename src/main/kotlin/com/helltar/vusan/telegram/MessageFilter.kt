@@ -14,7 +14,9 @@ internal fun shouldHandle(
     if (message.isPrivateChat) return true
 
     val isReplyToBot = message.replyAuthorIdOrNull() == botUserId
-    val content = captionSource.messageTextOrNull() ?: return isReplyToBot
+    val content =
+        captionSource.messageTextOrNull()
+            ?: return isReplyToBot || captionSource.richMessageMentionsBot(botUserId, botUsername)
 
     return isReplyToBot ||
         hasBotMention(content, botUsername) ||
@@ -53,6 +55,16 @@ internal fun normalizeUsername(value: String?): String? =
         ?.removePrefix("@")
         ?.lowercase()
         ?.takeIf { it.isNotBlank() }
+
+// a rich message carries no entities, so the mention is matched on the flattened markdown: a
+// `mention` node renders as `@name`, a `text_mention` as a `tg://user?id=` link.
+private fun Message.richMessageMentionsBot(botUserId: Long, botUsername: String?): Boolean {
+    val markdown = richMessage?.toRichMarkdown() ?: return false
+    val username = normalizeUsername(botUsername)
+
+    return markdown.contains("tg://user?id=$botUserId") ||
+        (username != null && Regex("@$username\\b", RegexOption.IGNORE_CASE).containsMatchIn(markdown))
+}
 
 private fun hasBotMention(content: MessageText, botUsername: String?): Boolean {
     val expectedUsername = normalizeUsername(botUsername) ?: return false

@@ -4,6 +4,7 @@ import com.helltar.vusan.agent.AgentRequest
 import com.helltar.vusan.agent.AgentRunner
 import com.helltar.vusan.agent.history.ChatHistoryRepository
 import com.helltar.vusan.common.collapseWhitespaceAndCap
+import com.helltar.vusan.common.limitTo
 import com.helltar.vusan.common.rethrowIfCancellation
 import com.helltar.vusan.common.xmlBlock
 import com.helltar.vusan.i18n.Language
@@ -45,6 +46,11 @@ internal class TelegramBotRunner(
                     "If useful, describe it with `describeImage` or process it with `codeExecution`."
 
         const val LOG_PROMPT_MAX_CHARS = 300
+
+        // a rich message may carry 32768 characters where plain text tops out at 4096, and
+        // flattening adds markup on top of that. this is the only inbound content without a
+        // telegram-side ceiling, so it gets one here.
+        const val MAX_RICH_MESSAGE_CHARS = 8_192
 
         // telegram caps an album at ten items, so a group with that many parts is complete.
         const val MAX_ALBUM_PARTS = 10
@@ -159,6 +165,7 @@ internal class TelegramBotRunner(
 
         when {
             message.text != null -> dispatchText(message, profile)
+            message.richMessage != null -> handleRichMessageUpdate(message, profile)
             message.sticker != null -> handleStickerUpdate(message, profile)
             message.voice != null -> handleTranscribableUpdate(message, message.voice.toAudioInput(), profile, "voice")
             message.audio != null -> handleTranscribableUpdate(message, message.audio.toAudioInput(), profile, "audio")
@@ -275,6 +282,16 @@ internal class TelegramBotRunner(
         val wrapped = wrapAudioTranscript(transcript)
         val trimmedCaption = caption.trim()
         return if (trimmedCaption.isEmpty()) wrapped else "$trimmedCaption\n\n$wrapped"
+    }
+
+    // a rich message has no `text`, so the agent gets its flattened markdown instead.
+    private suspend fun handleRichMessageUpdate(message: Message, botProfile: BotProfile) {
+        if (!message.isAccepted(botProfile)) return
+
+        val markdown = message.richMessage.toRichMarkdown().limitTo(MAX_RICH_MESSAGE_CHARS)
+        if (markdown.isBlank()) return
+
+        dispatchToAgent(message, xmlBlock("rich_message", markdown), botProfile, inputKind = "rich message")
     }
 
     private suspend fun handleStickerUpdate(message: Message, botProfile: BotProfile) {

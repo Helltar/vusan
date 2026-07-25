@@ -1,6 +1,7 @@
 package com.helltar.vusan.telegram
 
 import com.helltar.vusan.common.collapseWhitespaceAndCap
+import com.helltar.vusan.common.limitTo
 import com.helltar.vusan.common.sanitizeFilename
 import com.helltar.vusan.common.xmlBlock
 import com.helltar.vusan.request.AttachedFile
@@ -144,9 +145,15 @@ private fun Message.toReplySummary(): RepliedMessageSummary? =
 private fun Message.summarizeInternalReply(): RepliedMessageSummary =
     RepliedMessageSummary(
         type = contentTypeName(),
-        textOrCaption = textSnippetOrNull()?.collapseWhitespaceAndCap(MAX_REPLIED_TEXT_CHARS),
+        textOrCaption = repliedTextOrNull(),
         metadata = mediaMetadataLines()
     )
+
+// a quoted rich message keeps its layout: collapsing a tree of headings, lists and code into one
+// line leaves the model guessing at the structure it is being asked about.
+private fun Message.repliedTextOrNull(): String? =
+    richMessage?.toRichMarkdown()?.takeIf { it.isNotBlank() }?.limitTo(MAX_REPLIED_TEXT_CHARS)
+        ?: textSnippetOrNull()?.collapseWhitespaceAndCap(MAX_REPLIED_TEXT_CHARS)
 
 private fun ExternalReplyInfo.summarize(): RepliedMessageSummary =
     RepliedMessageSummary(

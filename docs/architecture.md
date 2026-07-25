@@ -50,7 +50,8 @@ Telegram ──► telegram/ ──► agent/ ──► tools/ ──► externa
 A normal user message travels:
 
 1. **Receive** — `TelegramBotRunner` long-polls via `TelegramBotsLongPollingApplication`, funnels updates into a
-   channel, and dispatches each message by content (text/command, sticker, voice, audio, photo, document). Album (media
+   channel, and dispatches each message by content (text/command, rich message, sticker, voice, audio, photo,
+   document). Album (media
    group) parts arrive as separate updates sharing a
    `media_group_id`; the runner buffers them until the update stream goes quiet (`ALBUM_QUIET_PERIOD`, or the ten-item
    album cap) and handles the batch as one gallery message: the caption may sit on any album part, only the first photo
@@ -60,7 +61,10 @@ A normal user message travels:
    only replies, mentions, or targeted commands); `TelegramBotRunner` then checks the allowlist (`ALLOWED_IDS`) and
    rejects unknown chats/users.
 3. **Normalize** — text is sanitized (`MessageSanitizer`); voice/audio is transcribed (`VoiceTranscriber` → `stt/`);
-   stickers become a metadata prompt; replied-message context is wrapped in `<reply_context>`/`<user_message>`; current
+   stickers become a metadata prompt; a rich message — which never carries `text` — is flattened back into rich
+   markdown (`telegram/RichMessageText.kt`), both as its own input and when one is quoted in a reply, capped at
+   `MAX_RICH_MESSAGE_CHARS` because Telegram allows it 32768 characters against plain text's 4096;
+   replied-message context is wrapped in `<reply_context>`/`<user_message>`; current
    or replied photo/image-document input becomes `AttachedFile`. `TelegramBotRunner.dispatchToAgent` assembles the agent
    input and the shorter history input.
 4. **Run** — `AgentRunner.handle` takes the per-user lock (or returns "busy"), then
@@ -169,6 +173,7 @@ A symptom-to-source map for finding the right file fast. Paths are under
 | Wrong language in a canned reply (busy/error/voice/start)                        | `i18n/Language.kt` (language selection) + `i18n/Messages.kt` (the strings)                                                                                                                                                                                                                            |
 | Bot forgets context or the history recap looks wrong                             | `agent/history/ChatHistory.kt` (summarize/slice) + `agent/history/ChatHistoryRepository.kt` (storage)                                                                                                                                                                                                 |
 | Voice/audio not transcribed                                                      | `telegram/VoiceTranscriber.kt` + `stt/OpenAiWhisperClient.kt` (needs `OPENAI_STT_API_KEY`)                                                                                                                                                                                                            |
+| A rich message reads as empty, `unknown`, or loses its structure                 | `telegram/RichMessageText.kt` (block tree → rich markdown), then `MessageMetadata.contentTypeName`/`textSnippetOrNull` and `ReplyContext.repliedTextOrNull`                                                                                                                                           |
 | Scheduled task fires late, not at all, or reports "missed"                       | `tasks/TaskScheduler.kt` (polling/lateness) + `tasks/Recurrence.kt` (next-run math)                                                                                                                                                                                                                   |
 | An env var has no effect                                                         | `config/AppConfig.kt` (parsing) — and check it is documented in [`configuration.md`](configuration.md) + [`.env.example`](../.env.example)                                                                                                                                                            |
 | Model / provider / request-timeout selection                                     | `config/LlmRuntime.kt` (provider → client/model/params)                                                                                                                                                                                                                                               |

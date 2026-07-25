@@ -37,7 +37,8 @@ internal fun Message.senderUsernameOrNull(): String? = from?.userName
 
 internal fun Message.senderLanguageCodeOrNull(): String? = from?.languageCode
 
-internal fun Message.textSnippetOrNull(): String? = text ?: caption
+internal fun Message.textSnippetOrNull(): String? =
+    text ?: caption ?: richMessage?.toRichMarkdown()?.takeIf { it.isNotBlank() }
 
 internal fun Message.replyAuthorIdOrNull(): Long? = replyToMessage?.from?.id
 
@@ -87,6 +88,7 @@ internal fun displayName(firstName: String?, lastName: String?): String? =
 internal fun Message.contentTypeName(): String =
     when {
         text != null -> "text"
+        richMessage != null -> "rich message"
         poll != null -> "poll"
         contact != null -> "contact"
         location != null -> "location"
