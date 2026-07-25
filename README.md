@@ -5,12 +5,12 @@
 <h1 align="center">Vusan</h1>
 
 <p align="center">
-  <img src="https://img.shields.io/badge/status-alpha-orange" alt="Status: Alpha">
+  <img src="https://img.shields.io/badge/status-beta-yellow" alt="Status: Beta">
   <a href="https://github.com/Helltar/vusan/actions/workflows/build.yml"><img src="https://github.com/Helltar/vusan/actions/workflows/build.yml/badge.svg" alt="build"></a>
   <a href="https://github.com/Helltar/vusan/pkgs/container/vusan"><img src="https://img.shields.io/badge/ghcr-vusan-blue?logo=docker" alt="GHCR"></a>
 </p>
 
-Vusan is a Telegram AI agent for private chats and groups, currently in alpha — breaking changes
+Vusan is a Telegram AI agent for private chats and groups, currently in beta — breaking changes
 may occur between updates.
 
 Try it live in the [Vusan Playground](https://t.me/+56qi5dDwsNszZWFi) Telegram group.
