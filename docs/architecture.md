@@ -24,7 +24,7 @@ Telegram ──► telegram/ ──► agent/ ──► tools/ ──► externa
   is injected as `<user_memory>`/`<group_memory>`.
 - **`tools/`** — agent-callable tools, one subpackage per capability (search, voice, vision, scheduled tasks, …).
   `ToolRegistryFactory` owns clients and builds a per-request registry from required tools plus optional tools whose
-  env/config is present. See [features.md](features.md).
+  env/config is present. See the Features section of the [README](../README.md).
 - **`outbox/`** — the output model. `BotOutput` is the immutable sealed set of things the bot can send (text, rich
   message, photo, voice, audio, video, document, poll, reaction, …); `BotOutbox` is the per-request queue tools write
   into, holding each `BotOutput` as an `OutboxItem` that captures its private-routing decision.
@@ -165,7 +165,7 @@ A new agent tool typically touches these, in order:
 3. *(optional)* **`<Feature>Client.kt`** / **`<Feature>Models.kt`** — the external I/O and its DTOs.
 4. **`tools/ToolRegistryFactory.kt`** — register it in `buildRegistry`; wrap construction in the
    `optional(...)` helper when it depends on an API key that may be unset.
-5. **Docs** — add the tool to [`features.md`](features.md); add any new env vars to
+5. **Docs** — add the tool to the Features section of the [README](../README.md); add any new env vars to
    [`configuration.md`](configuration.md) and [`.env.example`](../.env.example).
 
 ## Conventions

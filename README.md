@@ -15,30 +15,6 @@ may occur between updates.
 
 Try it live in the [Vusan Playground](https://t.me/+56qi5dDwsNszZWFi) Telegram group.
 
-## Highlights
-
-- **Code execution** — runs Python in an isolated sandbox: exact math, file transforms, charts,
-  and animations.
-- **Vision** — understands photos and image documents.
-- **Voice in and out** — transcribes voice messages and replies with generated speech.
-- **Scheduled tasks** — the bot acts on its own later: once, on an interval, or on a cron
-  schedule.
-- **Durable memory** — per-user and per-group memory that survives chat-history clears.
-- **And more** — web search, GIFs, YouTube video/audio, currency rates, native polls and quizzes,
-  reactions.
-
-See [features.md](docs/features.md) for the full list.
-
-## Stack
-
-Built on [Koog](https://github.com/JetBrains/koog) — JetBrains' Kotlin agent framework — with
-[TelegramBots](https://github.com/rubenlagus/TelegramBots) for Telegram and Exposed/SQLite for
-storage. Works with OpenAI, Anthropic, Google, DeepSeek, or any OpenAI-compatible server — see
-[configuration.md](docs/configuration.md#llm-provider).
-
-For a tour of the layers and how a message flows through them, see
-[architecture.md](docs/architecture.md).
-
 ## Quick start
 
 Clone the repo and enter the project directory:
@@ -90,4 +66,67 @@ Prerequisites: JDK 21, plus `ffmpeg` and `yt-dlp` on `PATH`.
 ./gradlew run
 ```
 
-`./gradlew shadowJar` produces a fat JAR at `build/libs/vusan-<version>-all.jar`.
+## Features
+
+There are no commands to learn beyond `/start` — you ask in plain language and the bot picks the
+right tool itself. Items marked *(opt-in)* need an API key or an extra service, see
+[configuration.md](docs/configuration.md).
+
+### Understands what you send
+
+- **Photos** — looks at images you send or reply to and answers questions about them, including
+  text on them.
+- **Voice and audio** *(opt-in)* — listens to voice messages and audio files instead of making you
+  type.
+
+### Looks things up
+
+- **Web search** *(opt-in)* — searches the web and reads the pages it finds.
+- **Image search** *(opt-in)* — finds pictures on the web and sends them.
+- **Telegram channels** — reads recent posts from any public channel, and can look at the images
+  in them.
+- **Currency** — live exchange rates.
+
+### YouTube
+
+- **Video and audio** — finds a video by name or link and sends it, or just its audio track, in a
+  size Telegram accepts.
+- **Transcripts** — reads a video's subtitles, so it can summarize it or answer questions about it
+  without downloading anything.
+
+### Creates
+
+- **Code execution** *(opt-in)* — runs Python in an isolated sandbox: exact math, data crunching,
+  charts, Word and PDF documents, animations. Files you upload go in, whatever it makes comes back.
+- **Images** *(opt-in)* — draws a picture from a description, or edits one you sent.
+- **Voice replies** *(opt-in)* — answers out loud with a generated voice message.
+- **GIFs** *(opt-in)* — finds and sends a fitting GIF.
+
+### In the chat
+
+- **Polls and quizzes** — creates real Telegram polls and quizzes, not a text imitation.
+- **Reactions** — sometimes an emoji on your message is the whole answer.
+- **Files and links** — sends what it wrote as a document, or downloads a link and passes it on as
+  a file, up to Telegram's 50 MB limit.
+- **Long structured answers** — headings, tables, and checklists when a reply is genuinely big.
+  Telegram X and some other clients show these as unsupported.
+- **Private replies** — moves the answer into your DMs when you ask, instead of dumping it into
+  the group.
+
+### Remembers
+
+- **Memory** — keeps what matters about you, and separately about the group; clearing the chat
+  does not erase it.
+- **Scheduled tasks** — acts on its own later: once, on an interval, or on a cron schedule.
+- **Clearing history** — forgets the current conversation on request, leaving memory and scheduled
+  tasks alone.
+
+## Stack
+
+Built on [Koog](https://github.com/JetBrains/koog) — JetBrains' Kotlin agent framework — with
+[TelegramBots](https://github.com/rubenlagus/TelegramBots) for Telegram and Exposed/SQLite for
+storage. Works with OpenAI, Anthropic, Google, DeepSeek, or any OpenAI-compatible server — see
+[configuration.md](docs/configuration.md#llm-provider).
+
+For a tour of the layers and how a message flows through them, see
+[architecture.md](docs/architecture.md).
