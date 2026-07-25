@@ -1,8 +1,9 @@
 # Architecture
 
 This document is the orientation map for the codebase: the layers, how a message flows through them, and the background
-flows that run alongside. Code lives under
-[`src/main/kotlin/com/helltar/vusan/`](../src/main/kotlin/com/helltar/vusan/).
+flows that run alongside. The bot is Kotlin under
+[`src/main/kotlin/com/helltar/vusan/`](../src/main/kotlin/com/helltar/vusan/); the code-execution sandbox is a separate
+Deno service under [`sandbox/`](../sandbox/), see [Code execution service](#code-execution-service).
 
 ## Layers
 
@@ -77,37 +78,33 @@ A normal user message travels:
       providers return an empty completion after a batch of tool results) — gets one nudge to actually deliver before
       finishing, so a full turn of research does not collapse into silence.
 6. **Collect** — `AgentRunner` returns an `AgentResult` (outputs + optional comment + history turns to persist).
-7. **Deliver** — `TelegramDelivery.send` routes each `BotOutput` to the chat (or the user's private chat when a tool
-   requested it), anchoring replies to the original message and falling back when Telegram rejects formatting, a reply
-   target is gone, a private DM is blocked, or a media send fails. A live chat action runs through the whole turn
-   (`TelegramBotRunner.withLiveChatAction`):
-   it starts as `typing` and switches to the currently executing tool's action, e.g. `upload_photo` while an image
-   generates. Koog's `onToolCallStarting` resolves the running tool to a neutral `ToolActivity`
-   (`agent/ToolActivity.kt`, keyed by `@Tool` method references); the Telegram layer translates that to a chat action
-   (`chatActionFor`). During delivery each item is then preceded by the action matching its content (`botActionFor`) so
-   the indicator tracks what is happening. Outgoing text and captions are sent with Telegram's `HTML` parse mode; the
-   agent is instructed (in `agent/SystemPrompt.kt`) to format with the supported HTML tags and to escape `<`/`>`/`&`.
-   Because models still slip in `<br>` for line breaks,
-   `TelegramOutputSender` replaces `<br>`-style tags with real newlines in reply text and captions before sending
-   instead of letting the whole message be rejected. Rejected formatting on a reply text is re-sent as a
-   `message.html` document (`telegram/HtmlReplyDocument.kt` — a standalone, responsive, light/dark page with a no-script
-   CSP) carrying the reply so the formatting still arrives; a rejected media caption resends the media captionless and
-   delivers the caption the same way, while bot notices fall back to plain text. For large, genuinely structured replies
-   the agent can opt into a Bot API 10.1 rich message via the `sendRichMessage` tool (`BotOutput.RichMessage`,
-   github-flavored markdown); it is delivered with `sendRichMessage` (a hand-rolled method in
-   `telegram/SendRichMessage.kt`, since TelegramBots does not model it yet) and, if Telegram rejects it, resent as a
-   `message.md` document. Rich messages are kept opt-in because some third-party clients (e.g. Telegram X) render them
-   as unsupported. Sandbox image previews opt out of photo-to-document fallback because their uncompressed document copy
-   is already queued. Consecutive sends in a multi-output reply are paced (`INTER_MESSAGE_DELAY`) so a batch stays under
-   Telegram's per-chat rate limit. Upstream,
-   `BotOutbox` coalesces consecutive `sendMessage` text into the trailing bubble while it fits
-   (`MAX_TEXT_MESSAGE_CHARS`), so a model that splits one answer into many small messages produces few real sends; the
-   number of resulting bubbles is still capped (`MAX_TEXT_MESSAGES`) so a looping model cannot flood the chat.
-   `TelegramOutputSender` performs the low-level API calls, split by altitude across three files in `telegram/`:
-   `TelegramOutputSender.kt` maps each
-   `BotOutput` kind to a Bot API call and picks the fallback wrapping it,
-   `TelegramSendFallbacks.kt` holds the output-kind-agnostic rejection handling (plain-text retry, media-to-document,
-   text-as-document), and `TelegramRequests.kt` the raw request builders.
+7. **Deliver** — `TelegramDelivery.send` routes each `BotOutput` to the chat, or to the user's private chat when a tool
+   requested it, anchoring replies to the original message.
+    - **Chat action** — a live indicator runs through the whole turn (`TelegramBotRunner.withLiveChatAction`): it starts
+      as `typing`, then follows the executing tool, e.g. `upload_photo` while an image generates. Koog's
+      `onToolCallStarting` resolves the running tool to a neutral `ToolActivity` (`agent/ToolActivity.kt`, keyed by
+      `@Tool` method references); the Telegram layer translates that to a chat action (`chatActionFor`). During delivery
+      each item is preceded by the action matching its own content (`botActionFor`).
+    - **HTML and its fallbacks** — text and captions go out with Telegram's `HTML` parse mode; `agent/SystemPrompt.kt`
+      instructs the agent to use only the supported tags and escape `<`/`>`/`&`. Models still slip in `<br>`, so
+      `TelegramOutputSender` turns `<br>`-style tags into real newlines instead of letting Telegram reject the whole
+      message. Rejected reply text is re-sent as a `message.html` document (`telegram/HtmlReplyDocument.kt` — a
+      standalone, responsive, light/dark page with a no-script CSP) so the formatting still arrives; a rejected caption
+      resends the media captionless and delivers the caption the same way; bot notices fall back to plain text.
+    - **Rich messages** — opt-in Bot API 10.1 (`BotOutput.RichMessage`, github-flavored markdown) via the
+      `sendRichMessage` tool, sent by a hand-rolled method (`telegram/SendRichMessage.kt`, since TelegramBots does not
+      model it yet) and resent as a `message.md` document if rejected. Opt-in because some third-party clients (e.g.
+      Telegram X) render rich messages as unsupported.
+    - **Gone targets and blocked DMs** — a reply whose target no longer exists is retried without the anchor
+      (`DeliveryTarget.withoutReply`); a private chat the bot cannot write to produces a notice in the group instead.
+    - **Rate limits** — consecutive sends are paced (`INTER_MESSAGE_DELAY`) to stay under Telegram's per-chat limit.
+      Upstream, `BotOutbox` coalesces consecutive `sendMessage` text into the trailing bubble while it fits
+      (`MAX_TEXT_MESSAGE_CHARS`), so a model that splits one answer into many messages produces few real sends, and caps
+      the resulting bubbles (`MAX_TEXT_MESSAGES`) so a looping model cannot flood the chat.
+    - **Sender split** — `TelegramOutputSender.kt` maps each `BotOutput` kind to a Bot API call and picks the fallback
+      wrapping it, `TelegramSendFallbacks.kt` holds the output-kind-agnostic rejection handling (plain-text retry,
+      media-to-document, text-as-document), `TelegramRequests.kt` the raw request builders. Sandbox image previews opt
+      out of photo-to-document fallback because their uncompressed document copy is already queued.
 8. **Persist** — produced history turns are appended via `ChatHistoryRepository`.
 
 ## Background and side flows
@@ -124,6 +121,30 @@ A normal user message travels:
   `AppConfig.llmProvider` into a Koog client/model/params triple. Native clients cover OpenAI (with prompt caching),
   Anthropic, Google, and DeepSeek — models are matched against each client's predefined catalog. `openai-compatible`
   keeps a hand-declared model for any other server (llama.cpp, Ollama, …).
+
+## Code execution service
+
+`codeExecution` is the only tool backed by a service living in this repo instead of a third-party API. It is Deno +
+TypeScript under [`sandbox/`](../sandbox/), has its own `Dockerfile`, contains no Kotlin, and is reached over HTTP from
+`tools/sandbox/SandboxClient.kt`.
+
+- **`main.ts`** — HTTP server on port 8080: `POST /run` (code plus input files) and `GET /health`. Keeps a pool of warm
+  Pyodide workers (`SANDBOX_POOL_SIZE`, default 2), hands one out per request, and **terminates it after the run and
+  spawns a replacement** — one run per worker, so no state leaks between executions. Oversized input is rejected before
+  a worker is taken (`MAX_CODE_CHARS`, `MAX_INPUT_FILES`); an empty pool answers `503` after
+  `ACQUIRE_TIMEOUT_SECONDS`; a crashed worker leaves the pool and is respawned after a backoff.
+- **`worker.ts`** — one Pyodide instance: loads the baked packages, unpacks the extra wheels onto `sys.path`, registers
+  the bundled fonts so matplotlib and Pillow draw real glyphs instead of tofu, warms the font cache during startup,
+  runs the code in `/work`, and returns stdout/stderr plus the files written there, capped by `MAX_FILES`,
+  `MAX_FILE_BYTES`, and `MAX_OUTPUT_CHARS`.
+- **`packages.ts`** — Pyodide packages baked into the image. **`extra-wheels.txt`** — version-pinned pure-Python wheels
+  that Pyodide does not ship, downloaded in the Dockerfile `wheels` stage so document handling works offline.
+
+Isolation is enforced by the Deno entrypoint flags, not by convention: `--allow-net` is limited to the listening socket,
+`--allow-read` to `/app`, `/deno-dir`, and `/fonts`, and there is no `--allow-write` at all. The code being run is
+model-authored and untrusted — keep it that way.
+
+`SANDBOX_TIMEOUT_SECONDS` is read by both sides: the service enforces it per run, the bot budgets its wait around it.
 
 ## Startup
 
@@ -145,6 +166,7 @@ A symptom-to-source map for finding the right file fast. Paths are under
 | Formatting renders wrong, message rejected, or media falls back to document/text | `agent/SystemPrompt.kt` (allowed HTML tags the agent emits), `telegram/TelegramOutputSender.kt` (which call and which fallback each output kind gets), `telegram/TelegramSendFallbacks.kt` (the fallback *mechanism* itself), `telegram/TelegramErrors.kt` (which provider errors trigger a fallback) |
 | Bot floods a chat or stalls on Telegram 429 over a long multi-message reply      | `outbox/BotOutbox.kt` (text coalescing + `MAX_TEXT_MESSAGES` cap) + `telegram/TelegramDelivery.kt` (`INTER_MESSAGE_DELAY` pacing)                                                                                                                                                                     |
 | A specific tool misbehaves                                                       | `tools/<feature>/<Feature>Tools.kt` for the tool surface, plus its `<Feature>Client.kt` for the external call                                                                                                                                                                                         |
+| Code execution times out, says "busy", or loses produced files                   | `tools/sandbox/SandboxClient.kt` (HTTP call + wait budget), then the service in [`sandbox/`](../sandbox/): `main.ts` (worker pool, `503` when none free) and `worker.ts` (Pyodide setup, output caps)                                                                                                 |
 | Wrong language in a canned reply (busy/error/voice/start)                        | `i18n/Language.kt` (language selection) + `i18n/Messages.kt` (the strings)                                                                                                                                                                                                                            |
 | Bot forgets context or the history recap looks wrong                             | `agent/history/ChatHistory.kt` (summarize/slice) + `agent/history/ChatHistoryRepository.kt` (storage)                                                                                                                                                                                                 |
 | Voice/audio not transcribed                                                      | `telegram/VoiceTranscriber.kt` + `stt/OpenAiWhisperClient.kt` (needs `OPENAI_STT_API_KEY`)                                                                                                                                                                                                            |
