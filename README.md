@@ -78,8 +78,8 @@ right tool itself. Items marked *(opt-in)* need an API key or an extra service, 
   text on them.
 - **Voice and audio** *(opt-in)* — listens to voice messages and audio files instead of making you
   type.
-- **Videos** — watches videos, video notes and GIFs, including on-screen text and, with voice input
-  enabled, speech.
+- **Videos** — watches videos, video notes and GIFs; when voice input is enabled, it also hears
+  speech.
 
 ### Looks things up
 
