@@ -8,6 +8,7 @@ import com.helltar.vusan.config.OpenAiImageConfig
 import com.helltar.vusan.outbox.BotOutbox
 import com.helltar.vusan.outbox.BotOutput
 import com.helltar.vusan.request.AttachedFile
+import com.helltar.vusan.request.AttachedFileKind
 import com.helltar.vusan.tools.suspendToolGuard
 import io.github.oshai.kotlinlogging.KotlinLogging
 
@@ -81,7 +82,7 @@ class ImageGenTools(
         val image = attachedFile
             ?: return@suspendToolGuard "No image is attached in this turn — ask the user to send or reply to one."
 
-        if (!image.isImage)
+        if (image.kind != AttachedFileKind.IMAGE)
             return@suspendToolGuard "The attached file `${image.name}` is not an image, so it can't be edited."
 
         val contentType = image.editContentTypeOrNull()

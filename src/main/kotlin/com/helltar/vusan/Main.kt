@@ -50,7 +50,7 @@ suspend fun main() = coroutineScope {
             config.openAiStt?.let { sttConfig ->
                 VoiceTranscriber(OpenAiWhisperClient(http, sttConfig), sttConfig)
             } ?: run {
-                log.warn { "OPENAI_STT_API_KEY not set — voice message transcription disabled" }
+                log.warn { "OPENAI_STT_API_KEY not set — voice message transcription and video sound disabled" }
                 null
             }
 

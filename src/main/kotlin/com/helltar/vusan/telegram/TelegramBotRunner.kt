@@ -42,8 +42,8 @@ internal class TelegramBotRunner(
         const val MENTION_ONLY_PROMPT = "User mentioned the bot with no text. Respond naturally and briefly."
 
         const val MEDIA_ONLY_PROMPT =
-            "User sent a file or image with no caption. " +
-                    "If useful, describe it with `describeImage` or process it with `codeExecution`."
+            "User sent a file, image or video with no caption. " +
+                    "If useful, look at it with `describeImage` or `describeVideo`, or process it with `codeExecution`."
 
         const val LOG_PROMPT_MAX_CHARS = 300
 
@@ -169,9 +169,11 @@ internal class TelegramBotRunner(
             message.sticker != null -> handleStickerUpdate(message, profile)
             message.voice != null -> handleTranscribableUpdate(message, message.voice.toAudioInput(), profile, "voice")
             message.audio != null -> handleTranscribableUpdate(message, message.audio.toAudioInput(), profile, "audio")
-            // GIFs carry both `animation` and `document`; they were never handled as documents.
-            message.animation != null -> Unit
+            // GIFs carry both `animation` and `document`, so animation has to win over document here.
+            message.animation != null -> handleMediaUpdate(message, profile, inputKind = "animation")
             !message.photo.isNullOrEmpty() -> handleMediaUpdate(message, profile, inputKind = "photo")
+            message.video != null -> handleMediaUpdate(message, profile, inputKind = "video")
+            message.videoNote != null -> handleMediaUpdate(message, profile, inputKind = "video note")
             message.document != null -> handleMediaUpdate(message, profile, inputKind = "document")
             else -> Unit
         }
@@ -318,15 +320,17 @@ internal class TelegramBotRunner(
         )
     }
 
-    // only the first photo is loadable as the attached file; the model is told about the rest so it
-    // does not claim to have inspected every item.
+    // only the first inspectable item becomes the attached file; the model is told about the rest so
+    // it does not claim to have looked at every item.
     private suspend fun handleGalleryUpdate(parts: List<Message>, botProfile: BotProfile) {
         val anchor = parts.first()
         val captionedPart = parts.captionedPartOrNull()
 
         if (!anchor.isAccepted(botProfile, captionSource = captionedPart ?: anchor)) return
 
-        val photos = parts.filter { !it.photo.isNullOrEmpty() }
+        val photoCount = parts.count { !it.photo.isNullOrEmpty() }
+        val videoCount = parts.count { it.video != null || it.animation != null }
+        val attachedFile = parts.firstNotNullOfOrNull { it.toAttachedFileOrNull(client) }
 
         val caption =
             captionedPart?.messageTextOrNull()
@@ -337,9 +341,15 @@ internal class TelegramBotRunner(
         val albumContext =
             xmlBlock(
                 "album",
-                "User sent an album of ${parts.size} media item(s), ${photos.size} of them photo(s). " +
-                        "Only the first photo is available as the attached file; " +
-                        "mention this if the request depends on the other items."
+                buildString {
+                    append("User sent an album of ${parts.size} media item(s): $photoCount photo(s), $videoCount video(s). ")
+
+                    attachedFile
+                        ?.let { append("Only `${it.name}` is available as the attached file; ") }
+                        ?: append("None of the items is available as an attached file; ")
+
+                    append("mention this if the request depends on the other items.")
+                }
             )
 
         dispatchToAgent(
@@ -347,7 +357,7 @@ internal class TelegramBotRunner(
             "$albumContext\n\n$caption",
             botProfile,
             inputKind = "gallery",
-            attachedFile = photos.firstOrNull()?.toAttachedFileOrNull(client)
+            attachedFile = attachedFile
         )
     }
 

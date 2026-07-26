@@ -5,6 +5,7 @@ import com.helltar.vusan.infra.Http
 import com.helltar.vusan.outbox.BotOutbox
 import com.helltar.vusan.outbox.BotOutput
 import com.helltar.vusan.request.AttachedFile
+import com.helltar.vusan.request.AttachedFileKind
 import io.ktor.client.engine.mock.*
 import io.ktor.http.*
 import io.ktor.http.content.*
@@ -65,14 +66,14 @@ class ImageGenToolsTest {
     private fun imageAttachment(
         name: String = "photo.jpg",
         mimeType: String? = "image/jpeg",
-        isImage: Boolean = true,
+        kind: AttachedFileKind = AttachedFileKind.IMAGE,
         fileSizeBytes: Long? = null,
         bytes: ByteArray = byteArrayOf(7, 7, 7)
     ) = AttachedFile(
         name = name,
         fileSizeBytes = fileSizeBytes,
         mimeType = mimeType,
-        isImage = isImage,
+        kind = kind,
         loadBytes = { bytes }
     )
 
@@ -152,7 +153,7 @@ class ImageGenToolsTest {
     @Test
     fun `editImage rejects a non-image attachment`() = runBlocking {
         val outbox = BotOutbox()
-        val attachment = imageAttachment(name = "notes.txt", mimeType = "text/plain", isImage = false)
+        val attachment = imageAttachment(name = "notes.txt", mimeType = "text/plain", kind = AttachedFileKind.OTHER)
         val result = editTools(outbox, attachment).editImage("add a hat")
 
         assertTrue(outbox.pending.isEmpty())

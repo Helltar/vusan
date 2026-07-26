@@ -16,7 +16,8 @@ Telegram ──► telegram/ ──► agent/ ──► tools/ ──► externa
                 └─ delivers outbox back to Telegram
 ```
 
-- **`telegram/`** — Telegram I/O. Receives updates (text, voice, audio, sticker, photo, document, album), filters by
+- **`telegram/`** — Telegram I/O. Receives updates (text, voice, audio, sticker, photo, video, video note, GIF,
+  document, album), filters by
   allowlist, normalizes input, and delivers agent results back — including HTML-formatting, opt-in rich-message,
   reply-anchor, media/document, media-group, and private-message fallbacks.
 - **`agent/`** — agent orchestration on top of Koog. `AgentRunner` serializes per-user turns;
@@ -30,15 +31,18 @@ Telegram ──► telegram/ ──► agent/ ──► tools/ ──► externa
   message, photo, voice, audio, video, document, poll, reaction, …); `BotOutbox` is the per-request queue tools write
   into, holding each `BotOutput` as an `OutboxItem` that captures its private-routing decision.
 - **`request/`** — the request-scoped input model shared across layers: `RequestContext`
-  (chat/user/message ids and sender info tools see) and `AttachedFile` (photo or document, from the current message or a
-  replied-to message, that vision (`describeImage`) and code execution (`codeExecution`) can lazily download).
+  (chat/user/message ids and sender info tools see) and `AttachedFile` (photo, video, or document, from the current
+  message or a replied-to message, that vision (`describeImage`, `describeVideo`) and code execution (`codeExecution`)
+  can lazily download). Its `kind` (`IMAGE`/`VIDEO`/`OTHER`) decides which of those tools accepts it; a video also
+  carries its duration and a loader for Telegram's own thumbnail.
 - **`tasks/`** — scheduled-task subsystem: storage, recurrence math, and the background
   `TaskScheduler`.
 - **`infra/`** — cross-cutting infrastructure: the SQLite/Exposed `Db` singleton and the Ktor
   `Http` client.
 - **`config/`** — `.env` parsing (`AppConfig`) and LLM provider/model resolution (`LlmRuntime`).
 - **`stt/`** — OpenAI speech-to-text client (`OpenAiWhisperClient`, default model
-  `gpt-4o-transcribe`); used for voice transcription, opt-in via `OPENAI_STT_API_KEY`.
+  `gpt-4o-transcribe`); used for voice transcription and for the sound of a video the vision tool watches, opt-in via
+  `OPENAI_STT_API_KEY`.
 - **`i18n/`** — user-facing message strings, one `Messages` implementation per `Language`.
   `Language.fromCode` picks the language from the sender's Telegram language code (default English); add a language by
   adding an enum entry and a `Messages` impl.
@@ -50,12 +54,12 @@ Telegram ──► telegram/ ──► agent/ ──► tools/ ──► externa
 A normal user message travels:
 
 1. **Receive** — `TelegramBotRunner` long-polls via `TelegramBotsLongPollingApplication`, funnels updates into a
-   channel, and dispatches each message by content (text/command, rich message, sticker, voice, audio, photo,
-   document). Album (media
+   channel, and dispatches each message by content (text/command, rich message, sticker, voice, audio, photo, video,
+   video note, GIF, document). Album (media
    group) parts arrive as separate updates sharing a
    `media_group_id`; the runner buffers them until the update stream goes quiet (`ALBUM_QUIET_PERIOD`, or the ten-item
-   album cap) and handles the batch as one gallery message: the caption may sit on any album part, only the first photo
-   becomes the
+   album cap) and handles the batch as one gallery message: the caption may sit on any album part, only the first
+   inspectable item becomes the
    `AttachedFile`, and the agent is told how many items it cannot see.
 2. **Filter** — `MessageFilter.shouldHandle` drops messages the bot shouldn't answer (in groups:
    only replies, mentions, or targeted commands); `TelegramBotRunner` then checks the allowlist (`ALLOWED_IDS`) and
@@ -65,7 +69,7 @@ A normal user message travels:
    markdown (`telegram/RichMessageText.kt`), both as its own input and when one is quoted in a reply, capped at
    `MAX_RICH_MESSAGE_CHARS` because Telegram allows it 32768 characters against plain text's 4096;
    replied-message context is wrapped in `<reply_context>`/`<user_message>`; current
-   or replied photo/image-document input becomes `AttachedFile`. `TelegramBotRunner.dispatchToAgent` assembles the agent
+   or replied photo, video, and document input becomes `AttachedFile`. `TelegramBotRunner.dispatchToAgent` assembles the agent
    input and the shorter history input.
 4. **Run** — `AgentRunner.handle` takes the per-user lock (or returns "busy"), then
    `AgentFactory.build` constructs a Koog `AIAgent` with the system prompt, current time, message context, summarized
@@ -172,7 +176,8 @@ A symptom-to-source map for finding the right file fast. Paths are under
 | Code execution times out, says "busy", or loses produced files                   | `tools/sandbox/SandboxClient.kt` (HTTP call + wait budget), then the service in [`sandbox/`](../sandbox/): `main.ts` (worker pool, `503` when none free) and `worker.ts` (Pyodide setup, output caps)                                                                                                 |
 | Wrong language in a canned reply (busy/error/voice/start)                        | `i18n/Language.kt` (language selection) + `i18n/Messages.kt` (the strings)                                                                                                                                                                                                                            |
 | Bot forgets context or the history recap looks wrong                             | `agent/history/ChatHistory.kt` (summarize/slice) + `agent/history/ChatHistoryRepository.kt` (storage)                                                                                                                                                                                                 |
-| Voice/audio not transcribed                                                      | `telegram/VoiceTranscriber.kt` + `stt/OpenAiWhisperClient.kt` (needs `OPENAI_STT_API_KEY`)                                                                                                                                                                                                            |
+| Voice/audio not transcribed                                                      | `telegram/VoiceTranscriber.kt` + `stt/OpenAiWhisperClient.kt` (needs `OPENAI_STT_API_KEY`); for a video's sound `tools/vision/VideoAudioTranscriber.kt`                                                                                                                                                                                                            |
+| Bot cannot see what is in a video                                                | `tools/vision/VisionTools.kt` (`describeVideo` guards and the preview-frame fallback), `tools/vision/VideoVisionClient.kt` (frames + transcript prompt), `tools/vision/VideoSampler.kt` (ffmpeg), `telegram/ReplyContext.kt` (which media becomes an `AttachedFile`)                                  |
 | A rich message reads as empty, `unknown`, or loses its structure                 | `telegram/RichMessageText.kt` (block tree → rich markdown), then `MessageMetadata.contentTypeName`/`textSnippetOrNull` and `ReplyContext.repliedTextOrNull`                                                                                                                                           |
 | Scheduled task fires late, not at all, or reports "missed"                       | `tasks/TaskScheduler.kt` (polling/lateness) + `tasks/Recurrence.kt` (next-run math)                                                                                                                                                                                                                   |
 | An env var has no effect                                                         | `config/AppConfig.kt` (parsing) — and check it is documented in [`configuration.md`](configuration.md) + [`.env.example`](../.env.example)                                                                                                                                                            |

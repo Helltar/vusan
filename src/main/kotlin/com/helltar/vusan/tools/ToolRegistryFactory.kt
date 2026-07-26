@@ -8,6 +8,7 @@ import com.helltar.vusan.agent.memory.MemoryRepository
 import com.helltar.vusan.config.AppConfig
 import com.helltar.vusan.outbox.BotOutbox
 import com.helltar.vusan.request.RequestContext
+import com.helltar.vusan.stt.OpenAiWhisperClient
 import com.helltar.vusan.tasks.TasksRepository
 import com.helltar.vusan.tools.currency.CurrencyTools
 import com.helltar.vusan.tools.currency.ExchangeRateClient
@@ -32,7 +33,9 @@ import com.helltar.vusan.tools.tgchannel.TelegramChannelClient
 import com.helltar.vusan.tools.tgchannel.TelegramChannelImageDescriber
 import com.helltar.vusan.tools.tgchannel.TelegramChannelTools
 import com.helltar.vusan.tools.vision.ImageVisionClient
+import com.helltar.vusan.tools.vision.VideoVisionClient
 import com.helltar.vusan.tools.vision.VisionTools
+import com.helltar.vusan.tools.vision.WhisperVideoAudioTranscriber
 import com.helltar.vusan.tools.voice.ElevenLabsTtsClient
 import com.helltar.vusan.tools.voice.VoiceTools
 import com.helltar.vusan.tools.youtube.YouTubeMusicTools
@@ -69,6 +72,14 @@ class ToolRegistryFactory(
     private val elevenLabsTts = config.elevenLabsTts
     private val openAiImage = config.openAiImage
     private val imageVisionClient = ImageVisionClient(promptExecutor, model)
+
+    // the key that enables voice transcription also hands a video's sound to the vision tool
+    private val videoVisionClient =
+        VideoVisionClient(
+            promptExecutor = promptExecutor,
+            model = model,
+            transcriber = config.openAiStt?.let { WhisperVideoAudioTranscriber(OpenAiWhisperClient(http, it), it) }
+        )
     private val telegramChannelClient = TelegramChannelClient(http)
     private val ytDlpRunner = YtDlpRunner(config.ytDlpCookiesFile)
     private val ytDlpClient = YtDlpClient(ytDlpRunner)
@@ -116,7 +127,7 @@ class ToolRegistryFactory(
             tools(PollTools(outbox))
             tools(HistoryTools(history, context))
             tools(MemoryTools(memory, context))
-            tools(VisionTools(imageVisionClient, context.attachedFile))
+            tools(VisionTools(imageVisionClient, videoVisionClient, context.attachedFile))
             tools(
                 TaskTools(
                     repo = tasks,

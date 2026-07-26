@@ -9,6 +9,7 @@ import com.helltar.vusan.common.sanitizeFilename
 import com.helltar.vusan.outbox.BotOutbox
 import com.helltar.vusan.outbox.BotOutput
 import com.helltar.vusan.request.AttachedFile
+import com.helltar.vusan.request.AttachedFileKind
 import com.helltar.vusan.tools.suspendToolGuard
 import java.util.*
 
@@ -112,6 +113,15 @@ class SandboxTools(
 
     private suspend fun loadInputFile(): InputFileResult? {
         val file = attachedFile ?: return null
+
+        // the sandbox is offline python without media codecs, so a video would only waste the upload
+        if (file.kind == AttachedFileKind.VIDEO) {
+            return InputFileResult(
+                null,
+                "The attached video `${file.name}` was not loaded into the sandbox; " +
+                        "call `describeVideo` to find out what is in it."
+            )
+        }
 
         if (file.fileSizeBytes != null && file.fileSizeBytes > MAX_INPUT_FILE_BYTES) {
             return InputFileResult(

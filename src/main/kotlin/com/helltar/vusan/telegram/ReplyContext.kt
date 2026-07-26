@@ -5,9 +5,13 @@ import com.helltar.vusan.common.limitTo
 import com.helltar.vusan.common.sanitizeFilename
 import com.helltar.vusan.common.xmlBlock
 import com.helltar.vusan.request.AttachedFile
+import com.helltar.vusan.request.AttachedFileKind
 import java.util.Locale
 import org.telegram.telegrambots.meta.api.objects.Document
 import org.telegram.telegrambots.meta.api.objects.ExternalReplyInfo
+import org.telegram.telegrambots.meta.api.objects.Video
+import org.telegram.telegrambots.meta.api.objects.VideoNote
+import org.telegram.telegrambots.meta.api.objects.games.Animation
 import org.telegram.telegrambots.meta.api.objects.message.Message
 import org.telegram.telegrambots.meta.api.objects.photo.PhotoSize
 import org.telegram.telegrambots.meta.generics.TelegramClient
@@ -52,33 +56,122 @@ private suspend fun Message.transcribeRepliedAudioOrNull(
 internal fun Message.repliedAttachedFileOrNull(client: TelegramClient): AttachedFile? =
     replyToMessage?.toAttachedFileOrNull(client)
 
-// gif messages carry both `animation` and `document`, and an animation is not a loadable attachment.
+// gif messages carry both `animation` and `document`, so the animation is matched first and the
+// document copy of the same file never turns into a second attachment.
 internal fun Message.toAttachedFileOrNull(client: TelegramClient): AttachedFile? =
     photo?.biggestOrNull()?.toAttachedFile(client, caption)
-        ?: document?.takeIf { animation == null }?.toAttachedFile(client, caption)
+        ?: video?.toAttachedFile(client, caption)
+        ?: animation?.toAttachedFile(client, caption)
+        ?: videoNote?.toAttachedFile(client, caption)
+        ?: document?.toAttachedFile(client, caption)
 
 private fun PhotoSize.toAttachedFile(client: TelegramClient, caption: String?): AttachedFile =
     AttachedFile(
         name = "photo.jpg",
         fileSizeBytes = fileSize?.toLong(),
         mimeType = "image/jpeg",
-        isImage = true,
+        kind = AttachedFileKind.IMAGE,
         caption = caption,
         loadBytes = { client.downloadFileBytes(fileId) }
+    )
+
+private fun Video.toAttachedFile(client: TelegramClient, caption: String?): AttachedFile =
+    videoAttachedFile(
+        client = client,
+        caption = caption,
+        fileId = fileId,
+        name = fileName.orVideoName(fileUniqueId),
+        fileSizeBytes = fileSize,
+        mimeType = mimeType,
+        durationSeconds = duration,
+        thumbnailFileId = thumbnail?.fileId
+    )
+
+private fun Animation.toAttachedFile(client: TelegramClient, caption: String?): AttachedFile =
+    videoAttachedFile(
+        client = client,
+        caption = caption,
+        fileId = fileId,
+        name = fileName.orVideoName(fileUniqueId),
+        fileSizeBytes = fileSize,
+        mimeType = mimeType,
+        durationSeconds = duration,
+        thumbnailFileId = thumbnail?.fileId
+    )
+
+private fun VideoNote.toAttachedFile(client: TelegramClient, caption: String?): AttachedFile =
+    videoAttachedFile(
+        client = client,
+        caption = caption,
+        fileId = fileId,
+        name = "video-note-$fileUniqueId.mp4",
+        fileSizeBytes = fileSize?.toLong(),
+        mimeType = null,
+        durationSeconds = duration,
+        thumbnailFileId = thumbnail?.fileId
     )
 
 private fun Document.toAttachedFile(client: TelegramClient, caption: String?): AttachedFile {
     val safeName = (fileName ?: "file").sanitizeFilename().ifBlank { "file" }
-    val mime = mimeType
+    val kind = documentKind(mimeType, safeName)
+
+    if (kind == AttachedFileKind.VIDEO) {
+        return videoAttachedFile(
+            client = client,
+            caption = caption,
+            fileId = fileId,
+            name = safeName,
+            fileSizeBytes = fileSize,
+            mimeType = mimeType,
+            durationSeconds = null,
+            thumbnailFileId = thumbnail?.fileId
+        )
+    }
 
     return AttachedFile(
         name = safeName,
         fileSizeBytes = fileSize,
-        mimeType = mime,
-        isImage = mime?.startsWith("image/") == true || safeName.substringAfterLast('.', "").lowercase() in IMAGE_EXTENSIONS,
+        mimeType = mimeType,
+        kind = kind,
         caption = caption,
         loadBytes = { client.downloadFileBytes(fileId) }
     )
+}
+
+private fun videoAttachedFile(
+    client: TelegramClient,
+    caption: String?,
+    fileId: String,
+    name: String,
+    fileSizeBytes: Long?,
+    mimeType: String?,
+    durationSeconds: Int?,
+    thumbnailFileId: String?
+): AttachedFile =
+    AttachedFile(
+        name = name,
+        fileSizeBytes = fileSizeBytes,
+        mimeType = mimeType ?: "video/mp4",
+        kind = AttachedFileKind.VIDEO,
+        caption = caption,
+        durationSeconds = durationSeconds,
+        // telegram serves bots files of at most 20 MB; the thumbnail is the one frame of an oversize
+        // video that still fits, so vision keeps a way in.
+        loadThumbnailBytes = thumbnailFileId?.let { id -> suspend { client.downloadFileBytes(id) } },
+        loadBytes = { client.downloadFileBytes(fileId) }
+    )
+
+private fun String?.orVideoName(fileUniqueId: String): String =
+    this?.sanitizeFilename()?.takeIf { it.isNotBlank() } ?: "video-$fileUniqueId.mp4"
+
+private fun documentKind(mimeType: String?, name: String): AttachedFileKind {
+    val extension = name.substringAfterLast('.', "").lowercase()
+
+    return when {
+        mimeType?.startsWith("image/") == true || extension in IMAGE_EXTENSIONS -> AttachedFileKind.IMAGE
+        mimeType?.startsWith("video/") == true || extension in VIDEO_EXTENSIONS -> AttachedFileKind.VIDEO
+        else -> AttachedFileKind.OTHER
+    }
 }
 
 internal fun attachedFileContextBlock(file: AttachedFile): String =
@@ -87,16 +180,29 @@ internal fun attachedFileContextBlock(file: AttachedFile): String =
         buildString {
             appendLine("name: ${file.name}")
             file.fileSizeBytes?.let { appendLine("size: ${formatFileSize(it)}") }
-            append("This file is in the codeExecution working directory under this exact name. ")
-            if (file.isImage) {
-                append("It is an image: call `describeImage` to answer about what is visible, or use `codeExecution` to process it (resize, filter, colors, dimensions).")
-            } else {
-                append("Read it directly from a codeExecution script (e.g. pandas.read_csv) instead of asking the user to resend it.")
+            file.durationSeconds?.let { appendLine("duration: ${it}s") }
+
+            when (file.kind) {
+                AttachedFileKind.IMAGE -> {
+                    append("This file is in the codeExecution working directory under this exact name. ")
+                    append("It is an image: call `describeImage` to answer about what is visible, or use `codeExecution` to process it (resize, filter, colors, dimensions).")
+                }
+
+                AttachedFileKind.VIDEO ->
+                    append("It is a video: call `describeVideo` to answer about what happens in it or what is said in it. It is not available to `codeExecution`.")
+
+                AttachedFileKind.OTHER -> {
+                    append("This file is in the codeExecution working directory under this exact name. ")
+                    append("Read it directly from a codeExecution script (e.g. pandas.read_csv) instead of asking the user to resend it.")
+                }
             }
         }
     )
 
 private val IMAGE_EXTENSIONS = setOf("png", "jpg", "jpeg", "webp", "gif", "bmp")
+
+private val VIDEO_EXTENSIONS =
+    setOf("mp4", "m4v", "mov", "mkv", "webm", "avi", "wmv", "flv", "mpeg", "mpg", "3gp", "ogv")
 
 private fun formatFileSize(bytes: Long): String =
     when {

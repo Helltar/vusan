@@ -108,7 +108,7 @@ and the bot keeps running.
 | Web search, image search, page extraction | `TAVILY_API_KEY`       | Tavily                                |
 | GIF lookup                                | `GIPHY_API_KEY`        | Giphy                                 |
 | Voice output                              | `ELEVENLABS_API_KEY`   | ElevenLabs TTS                        |
-| Voice input                               | `OPENAI_STT_API_KEY`   | Reuse your OpenAI key                 |
+| Voice input, sound of a video             | `OPENAI_STT_API_KEY`   | Reuse your OpenAI key                 |
 | Image generation                          | `OPENAI_IMAGE_API_KEY` | Reuse your OpenAI key                 |
 | Code execution                            | `SANDBOX_URL`          | See [Code execution](#code-execution) |
 
@@ -121,10 +121,10 @@ and the bot keeps running.
 
 ### STT tuning
 
-| Variable                          | Default             | Description                                        |
-|-----------------------------------|---------------------|----------------------------------------------------|
-| `OPENAI_STT_MODEL`                | `gpt-4o-transcribe` | Speech-to-text model.                              |
-| `OPENAI_STT_MAX_DURATION_SECONDS` | `300`               | Max voice length to transcribe; longer is refused. |
+| Variable                          | Default             | Description                                                                                        |
+|-----------------------------------|---------------------|----------------------------------------------------------------------------------------------------|
+| `OPENAI_STT_MODEL`                | `gpt-4o-transcribe` | Speech-to-text model.                                                                              |
+| `OPENAI_STT_MAX_DURATION_SECONDS` | `300`               | Max voice/video length to transcribe; a longer voice message is refused, a longer video is watched without its sound. |
 
 ### Image generation tuning
 
