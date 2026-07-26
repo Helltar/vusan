@@ -14,6 +14,11 @@ import kotlin.math.min
 class TavilyClient(private val http: HttpClient, private val apiKey: String) {
 
     private companion object {
+        // image CDNs and wikis answer a default ktor user agent with 403, so a search could return
+        // perfectly good URLs and still deliver nothing. mirrors FileDownloadClient's user agent.
+        const val USER_AGENT =
+            "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0.0.0 Safari/537.36"
+
         val log = KotlinLogging.logger {}
     }
 
@@ -56,7 +61,12 @@ class TavilyClient(private val http: HttpClient, private val apiKey: String) {
     }
 
     suspend fun downloadImage(url: String): ByteArray? {
-        val response: HttpResponse = http.get(url)
+        val response: HttpResponse =
+            http.get(url) {
+                header(HttpHeaders.UserAgent, USER_AGENT)
+                header(HttpHeaders.Accept, "image/*,*/*")
+            }
+
         val bytes = response.bodyAsBytes()
 
         if (!looksLikeImage(bytes)) {
