@@ -1,10 +1,10 @@
 package com.helltar.vusan.tools.sandbox
 
 import com.helltar.vusan.common.rethrowIfCancellation
+import com.helltar.vusan.tools.runFfmpeg
 import io.github.oshai.kotlinlogging.KotlinLogging
 import kotlinx.coroutines.*
 import java.nio.file.Files
-import java.util.concurrent.TimeUnit
 import kotlin.time.Duration
 import kotlin.time.Duration.Companion.seconds
 
@@ -33,7 +33,18 @@ class FfmpegVideoEncoder(
 
             Files.write(input, animation)
 
-            if (!runFfmpeg(input.toString(), output.toString()))
+            val command =
+                listOf(
+                    "-y",
+                    "-i", input.toString(),
+                    // h264/yuv420p with even dimensions is what Telegram and players reliably autoplay
+                    "-vf", "scale=trunc(iw/2)*2:trunc(ih/2)*2,format=yuv420p",
+                    "-movflags", "+faststart",
+                    "-an",
+                    output.toString()
+                )
+
+            if (!runFfmpeg(command, ffmpegPath, timeout))
                 return@withContext null
 
             output.takeIf { Files.exists(it) }?.let { Files.readAllBytes(it) }?.takeIf { it.isNotEmpty() }
@@ -43,59 +54,6 @@ class FfmpegVideoEncoder(
             null
         } finally {
             workDir.toFile().deleteRecursively()
-        }
-    }
-
-    private suspend fun runFfmpeg(inputPath: String, outputPath: String): Boolean = coroutineScope {
-        val command =
-            listOf(
-                ffmpegPath,
-                "-y",
-                "-i", inputPath,
-                // h264/yuv420p with even dimensions is what Telegram and players reliably autoplay
-                "-vf", "scale=trunc(iw/2)*2:trunc(ih/2)*2,format=yuv420p",
-                "-movflags", "+faststart",
-                "-an",
-                outputPath
-            )
-
-        val process =
-            runCatching { ProcessBuilder(command).redirectErrorStream(true).start() }
-                .getOrElse {
-                    it.rethrowIfCancellation()
-                    log.warn(it) { "ffmpeg could not start binary=[$ffmpegPath]" }
-                    return@coroutineScope false
-                }
-
-        try {
-            // read concurrently so the merged stdout/stderr pipe cannot fill and deadlock the
-            // process; swallow read errors so a destroyed stream never fails this coroutine.
-            val outputDeferred =
-                async {
-                    runCatching {
-                        process.inputStream.bufferedReader().use { it.readText() }
-                    }.getOrDefault("")
-                }
-
-            val finished = runInterruptible { process.waitFor(timeout.inWholeSeconds, TimeUnit.SECONDS) }
-
-            when {
-                !finished -> {
-                    process.destroyForcibly()
-                    log.warn { "ffmpeg timed out after $timeout" }
-                    false
-                }
-
-                process.exitValue() != 0 -> {
-                    val tail = withTimeoutOrNull(2.seconds) { outputDeferred.await() }.orEmpty().takeLast(500)
-                    log.warn { "ffmpeg exit ${process.exitValue()}: $tail" }
-                    false
-                }
-
-                else -> true
-            }
-        } finally {
-            if (process.isAlive) process.destroyForcibly()
         }
     }
 }
