@@ -3,9 +3,9 @@ package com.helltar.vusan.tools.searxng
 internal object SearxngToolDescriptions {
 
     const val META_SEARCH =
-        "Search the web and get back titles, links, and short snippets. " +
-                "This is the default tool for any live lookup — recent news, facts, prices, people, products, events, documentation, or anything you are not certain about. " +
-                "It queries many engines at once (Google, Bing, DuckDuckGo, Wikipedia and others), so one call is usually enough. " +
+        "Search the web and get back titles, links, and short snippets from many engines at once (Google, Bing, DuckDuckGo, Wikipedia and others). " +
+                "This is the fallback web search: prefer `webSearch` when it is offered, and use this one when `webSearch` failed, returned nothing useful, or is not offered at all. " +
+                "Reach for it directly when a lookup belongs to one area that `categories` can scope, which `webSearch` cannot do. " +
                 "Use `extractPageContent` afterwards when a result has to be read in full."
 
     const val META_SEARCH_QUERY =

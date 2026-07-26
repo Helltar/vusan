@@ -105,8 +105,8 @@ and the bot keeps running.
 
 | Tool                                      | Enable with            | Notes                                 |
 |-------------------------------------------|------------------------|---------------------------------------|
-| Web search, fallback image search          | `SEARXNG_URL`          | See [Web search](#web-search)         |
-| Web search, image search, page extraction | `TAVILY_API_KEY`       | Tavily                                |
+| Web search, image search, page extraction | `TAVILY_API_KEY`       | See [Web search](#web-search)         |
+| Fallback web and image search             | `SEARXNG_URL`          | See [Web search](#web-search)         |
 | GIF lookup                                | `GIPHY_API_KEY`        | Giphy                                 |
 | Voice output                              | `ELEVENLABS_API_KEY`   | ElevenLabs TTS                        |
 | Voice input, sound of a video             | `OPENAI_STT_API_KEY`   | Reuse your OpenAI key                 |
@@ -117,15 +117,17 @@ and the bot keeps running.
 
 Two providers cover search, and either can run without the other:
 
-| Variable         | Tools                                            | Role                                                     |
-|------------------|--------------------------------------------------|----------------------------------------------------------|
-| `SEARXNG_URL`    | `metaSearch`, `metaSearchImages`                 | Default web lookup; fallback for pictures.               |
-| `TAVILY_API_KEY` | `webSearch`, `searchImages`, `extractPageContent` | Longer page extracts; primary picture search.            |
+| Variable         | Tools                                             | Role                                          |
+|------------------|---------------------------------------------------|-----------------------------------------------|
+| `TAVILY_API_KEY` | `webSearch`, `searchImages`, `extractPageContent` | Default web and image search; page extraction. |
+| `SEARXNG_URL`    | `metaSearch`, `metaSearchImages`                  | Fallback for both, plus category scoping.     |
 
-[SearXNG](https://docs.searxng.org) is self-hosted, so it carries ordinary lookups without spending Tavily quota, and it
-answers faster because nothing has to fetch and clean the pages. Tavily earns its place on the other two: `searchImages`
-reports what is visible in each photo, which the bot repeats when a user asks what a picture shows, and
-`extractPageContent` reads a page in full.
+Tavily leads on both: its results are cleaned-up page extracts rather than snippets, and `searchImages` reports what is
+visible in each photo, which the bot repeats when a user asks what a picture shows.
+[SearXNG](https://docs.searxng.org) is self-hosted, so it costs nothing per call and keeps search working when Tavily
+fails or its quota runs out. `metaSearch` also scopes a query with `categories` (`news`, `it`, `science`, `videos`,
+`music`, `files`, `social media`, `map`), which Tavily cannot do — those categories query different engines, so they
+still answer when the general ones are rate-limited.
 
 Point `SEARXNG_URL` at the instance root, without the `/search` path:
 
