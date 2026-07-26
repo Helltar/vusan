@@ -3,8 +3,9 @@ package com.helltar.vusan.tools.tavily
 internal object TavilyToolDescriptions {
 
     const val WEB_SEARCH =
-        "Search the web for up-to-date information on any topic, event, person, or question. " +
-                "Use when the user asks about recent news, facts, or anything that requires a live web lookup."
+        "Search the web and get back longer, cleaned-up extracts of each page instead of short snippets. " +
+                "Use it for a live lookup that needs more text per result than a snippet gives, or to retry a search that came back thin. " +
+                "When `metaSearch` is also offered, prefer that one for ordinary lookups and keep this for results that need the extra text."
 
     const val WEB_SEARCH_QUERY =
         "Search query — a concise phrase or question."

@@ -3,6 +3,7 @@ package com.helltar.vusan.agent
 import com.helltar.vusan.tools.files.FileTools
 import com.helltar.vusan.tools.giphy.GiphyTools
 import com.helltar.vusan.tools.imagegen.ImageGenTools
+import com.helltar.vusan.tools.searxng.SearxngTools
 import com.helltar.vusan.tools.tavily.TavilyTools
 import com.helltar.vusan.tools.voice.VoiceTools
 import com.helltar.vusan.tools.youtube.YouTubeMusicTools
@@ -21,6 +22,7 @@ private val TOOL_ACTIVITIES: Map<String, ToolActivity> = buildMap {
     put(ImageGenTools::generateImage.name, ToolActivity.PHOTO)
     put(ImageGenTools::editImage.name, ToolActivity.PHOTO)
     put(TavilyTools::searchImages.name, ToolActivity.PHOTO)
+    put(SearxngTools::metaSearchImages.name, ToolActivity.PHOTO)
     put(GiphyTools::searchGif.name, ToolActivity.VIDEO)
     put(YouTubeVideoTools::downloadVideo.name, ToolActivity.VIDEO)
     put(VoiceTools::speakWithVoice.name, ToolActivity.VOICE)

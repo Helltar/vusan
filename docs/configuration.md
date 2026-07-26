@@ -105,12 +105,43 @@ and the bot keeps running.
 
 | Tool                                      | Enable with            | Notes                                 |
 |-------------------------------------------|------------------------|---------------------------------------|
+| Web search, fallback image search          | `SEARXNG_URL`          | See [Web search](#web-search)         |
 | Web search, image search, page extraction | `TAVILY_API_KEY`       | Tavily                                |
 | GIF lookup                                | `GIPHY_API_KEY`        | Giphy                                 |
 | Voice output                              | `ELEVENLABS_API_KEY`   | ElevenLabs TTS                        |
 | Voice input, sound of a video             | `OPENAI_STT_API_KEY`   | Reuse your OpenAI key                 |
 | Image generation                          | `OPENAI_IMAGE_API_KEY` | Reuse your OpenAI key                 |
 | Code execution                            | `SANDBOX_URL`          | See [Code execution](#code-execution) |
+
+### Web search
+
+Two providers cover search, and either can run without the other:
+
+| Variable         | Tools                                            | Role                                                     |
+|------------------|--------------------------------------------------|----------------------------------------------------------|
+| `SEARXNG_URL`    | `metaSearch`, `metaSearchImages`                 | Default web lookup; fallback for pictures.               |
+| `TAVILY_API_KEY` | `webSearch`, `searchImages`, `extractPageContent` | Longer page extracts; primary picture search.            |
+
+[SearXNG](https://docs.searxng.org) is self-hosted, so it carries ordinary lookups without spending Tavily quota, and it
+answers faster because nothing has to fetch and clean the pages. Tavily earns its place on the other two: `searchImages`
+reports what is visible in each photo, which the bot repeats when a user asks what a picture shows, and
+`extractPageContent` reads a page in full.
+
+Point `SEARXNG_URL` at the instance root, without the `/search` path:
+
+```dotenv
+SEARXNG_URL=http://searxng:8080
+```
+
+The instance must serve JSON. SearXNG ships with `formats: [html]` only and answers anything else with `403`, so add
+`json` in its `settings.yml`:
+
+```yaml
+search:
+  formats:
+    - html
+    - json
+```
 
 ### TTS tuning
 

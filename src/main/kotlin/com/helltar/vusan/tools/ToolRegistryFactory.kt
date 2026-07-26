@@ -19,6 +19,7 @@ import com.helltar.vusan.tools.giphy.GiphyTools
 import com.helltar.vusan.tools.history.HistoryTools
 import com.helltar.vusan.tools.imagegen.ImageGenTools
 import com.helltar.vusan.tools.imagegen.OpenAiImageClient
+import com.helltar.vusan.tools.images.ImageDownloadClient
 import com.helltar.vusan.tools.memory.MemoryTools
 import com.helltar.vusan.tools.message.MessageTools
 import com.helltar.vusan.tools.poll.PollTools
@@ -26,6 +27,8 @@ import com.helltar.vusan.tools.quiz.QuizTools
 import com.helltar.vusan.tools.reaction.ReactionTools
 import com.helltar.vusan.tools.sandbox.SandboxClient
 import com.helltar.vusan.tools.sandbox.SandboxTools
+import com.helltar.vusan.tools.searxng.SearxngClient
+import com.helltar.vusan.tools.searxng.SearxngTools
 import com.helltar.vusan.tools.tasks.TaskTools
 import com.helltar.vusan.tools.tavily.TavilyClient
 import com.helltar.vusan.tools.tavily.TavilyTools
@@ -69,6 +72,7 @@ class ToolRegistryFactory(
 
     private val currency = CurrencyTools(ExchangeRateClient(http))
     private val fileDownloadClient = FileDownloadClient(http)
+    private val imageDownloadClient = ImageDownloadClient(http)
     private val elevenLabsTts = config.elevenLabsTts
     private val openAiImage = config.openAiImage
     private val imageVisionClient = ImageVisionClient(promptExecutor, model)
@@ -91,6 +95,11 @@ class ToolRegistryFactory(
     private val tavilyClient =
         optional("TAVILY_API_KEY", config.tavilyApiKey, "Tavily web search tool") {
             TavilyClient(http, it)
+        }
+
+    private val searxngClient =
+        optional("SEARXNG_URL", config.searxngUrl, "SearXNG web/image search tools") {
+            SearxngClient(http, it)
         }
 
     private val giphyClient =
@@ -136,7 +145,8 @@ class ToolRegistryFactory(
                 )
             )
 
-            tavilyClient?.let { tools(TavilyTools(it, outbox)) }
+            tavilyClient?.let { tools(TavilyTools(it, imageDownloadClient, outbox)) }
+            searxngClient?.let { tools(SearxngTools(it, imageDownloadClient, outbox)) }
             giphyClient?.let { tools(GiphyTools(it, outbox)) }
             sandboxClient?.let { tools(SandboxTools(it, outbox, context.attachedFile)) }
 

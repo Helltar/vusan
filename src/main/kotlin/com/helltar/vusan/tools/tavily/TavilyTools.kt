@@ -4,23 +4,25 @@ import ai.koog.agents.core.tools.annotations.LLMDescription
 import ai.koog.agents.core.tools.annotations.Tool
 import ai.koog.agents.core.tools.reflect.ToolSet
 import com.helltar.vusan.common.limitTo
-import com.helltar.vusan.common.rethrowIfCancellation
 import com.helltar.vusan.outbox.BotOutbox
-import com.helltar.vusan.outbox.BotOutput
+import com.helltar.vusan.tools.images.FoundImage
+import com.helltar.vusan.tools.images.ImageDownloadClient
+import com.helltar.vusan.tools.images.MAX_IMAGE_RESULTS
+import com.helltar.vusan.tools.images.deliverImageResults
 import com.helltar.vusan.tools.suspendToolGuard
-import io.github.oshai.kotlinlogging.KotlinLogging
 import io.ktor.http.*
 
 @Suppress("unused")
-class TavilyTools(private val client: TavilyClient, private val outbox: BotOutbox) : ToolSet {
+class TavilyTools(
+    private val client: TavilyClient,
+    private val imageDownloader: ImageDownloadClient,
+    private val outbox: BotOutbox
+) : ToolSet {
 
     private companion object {
         const val MAX_SNIPPET_CHARS = 300
         const val MAX_SEARCH_OUTPUT_CHARS = 3_000
         const val MAX_EXTRACT_CHARS = 6_000
-        const val MAX_IMAGE_RESULTS = 10
-        const val MAX_PHOTO_BYTES = 10 * 1024 * 1024
-        const val MAX_IMAGE_DESCRIPTION_CHARS = 200
         val allowedTopics = setOf("general", "news", "finance")
         val allowedTimeRanges = setOf("day", "week", "month", "year")
 
@@ -29,8 +31,6 @@ class TavilyTools(private val client: TavilyClient, private val outbox: BotOutbo
         // actual file, so every download attempt fails. exclude these sources from
         // image search so the provider returns directly downloadable candidates.
         val imageExcludedDomains = listOf("instagram.com", "lookaside.instagram.com", "lookaside.fbsbx.com")
-
-        val log = KotlinLogging.logger {}
     }
 
     @Tool
@@ -100,77 +100,19 @@ class TavilyTools(private val client: TavilyClient, private val outbox: BotOutbo
                 excludeDomains = imageExcludedDomains
             )
 
-        if (response.images.isEmpty()) {
-            log.warn { "searchImages: provider returned no image candidates query=[$query]" }
-            return@suspendToolGuard """No images found for "$query"."""
-        }
-
-        var oversize = 0
-
         // `exclude_domains` filters Tavily's source pages, not the image CDN host, so a lookaside
         // image URL can still arrive from another source page. drop them here before they consume a slot.
-        val candidates = response.images.filterNot { isExcludedImageHost(it.url) }
+        val candidates =
+            response.images
+                .filterNot { isExcludedImageHost(it.url) }
+                .map { FoundImage(url = it.url, description = it.description) }
 
-        val downloaded =
-            candidates.take(capped).mapIndexedNotNull { index, image ->
-                val bytes =
-                    runCatching { client.downloadImage(image.url) }
-                        .onFailure { error ->
-                            error.rethrowIfCancellation()
-                            log.warn(error) { "searchImages: image download error query=[$query] url=[${image.url}]" }
-                        }
-                        .getOrNull() ?: return@mapIndexedNotNull null
-
-                if (bytes.size > MAX_PHOTO_BYTES) {
-                    oversize++
-
-                    log.warn {
-                        "searchImages: image exceeds $MAX_PHOTO_BYTES bytes " +
-                                "(got ${bytes.size}) query=[$query] url=[${image.url}]"
-                    }
-
-                    return@mapIndexedNotNull null
-                }
-
-                BotOutput.Photo(bytes = bytes, filename = imageFilename(query, index, image.url)) to image.description
-            }
-
-        if (downloaded.isEmpty()) {
-            log.warn {
-                "searchImages: none of ${response.images.size} candidate(s) usable " +
-                        "(oversize=$oversize, rest not images or failed to download) query=[$query]"
-            }
-
-            return@suspendToolGuard """Found image URLs for "$query" but failed to download any."""
-        }
-
-        val photos = downloaded.map { (photo, _) -> photo }
-        val descriptions = downloaded.map { (_, description) -> description?.trim()?.takeIf { it.isNotBlank() } }
-
-        log.info { "searchImages: queued ${photos.size} image(s) for delivery query=[$query]" }
-
-        if (photos.size == 1) {
-            outbox.enqueue(photos.single())
-        } else {
-            outbox.enqueue(BotOutput.PhotoGroup(photos))
-        }
-
-        buildString {
-            if (photos.size == 1)
-                appendLine("""Sent 1 image for "$query".""")
-            else
-                appendLine("""Sent ${photos.size} images for "$query".""")
-
-            if (descriptions.any { it != null }) {
-                appendLine("Image contents (use to answer if the user asks what is in the photo; rewrite in the user's language):")
-
-                descriptions.forEachIndexed { i, description ->
-                    append(i + 1)
-                    append(". ")
-                    appendLine(description?.limitTo(MAX_IMAGE_DESCRIPTION_CHARS) ?: "(no description)")
-                }
-            }
-        }.trim()
+        imageDownloader.deliverImageResults(
+            query = query,
+            candidates = candidates,
+            limit = capped,
+            outbox = outbox
+        )
     }
 
     @Tool
@@ -209,22 +151,5 @@ class TavilyTools(private val client: TavilyClient, private val outbox: BotOutbo
     private fun isExcludedImageHost(url: String): Boolean {
         val host = runCatching { Url(url).host }.getOrNull()?.lowercase()?.takeIf { it.isNotBlank() } ?: return false
         return imageExcludedDomains.any { host == it || host.endsWith(".$it") }
-    }
-
-    private fun imageFilename(query: String, index: Int, url: String): String {
-        val extension =
-            url.substringAfterLast('.', missingDelimiterValue = "jpg")
-                .substringBefore('?')
-                .lowercase()
-                .take(4)
-                .ifBlank { "jpg" }
-
-        val base =
-            query.replace(Regex("[^A-Za-z0-9_]+"), "_")
-                .trim('_')
-                .take(40)
-                .ifBlank { "image" }
-
-        return "${base}_${index + 1}.$extension"
     }
 }

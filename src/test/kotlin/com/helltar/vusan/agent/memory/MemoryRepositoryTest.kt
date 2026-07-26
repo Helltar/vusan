@@ -140,6 +140,7 @@ class MemoryRepositoryTest {
             openAiStt = null,
             sandboxTimeoutSeconds = 30L,
             sandboxUrl = null,
+            searxngUrl = null,
             systemPrompt = null,
             taskMaxLatenessMinutes = 60L,
             tavilyApiKey = null,
