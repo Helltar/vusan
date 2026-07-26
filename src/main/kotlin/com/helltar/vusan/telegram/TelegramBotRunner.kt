@@ -41,9 +41,25 @@ internal class TelegramBotRunner(
     private companion object {
         const val MENTION_ONLY_PROMPT = "User mentioned the bot with no text. Respond naturally and briefly."
 
+        // media without a caption is the whole message, and answering it is a conversation move rather
+        // than a report; the describe tools exist for when the answer actually depends on the content.
         const val MEDIA_ONLY_PROMPT =
-            "User sent a file, image or video with no caption. " +
-                    "If useful, look at it with `describeImage` or `describeVideo`, or process it with `codeExecution`."
+            "User sent this with no caption, so the media itself is their whole message. " +
+                    "Reply the way a person would at this point in the conversation. " +
+                    "Look at it (`describeImage`, `describeVideo`) or process it (`codeExecution`) only when your answer depends on what is inside, " +
+                    "and do not narrate what you saw unless the user asked what is in it."
+
+        // a gif is thrown into a chat the way a sticker is — as a reaction, not as a thing to review.
+        const val ANIMATION_ONLY_PROMPT =
+            "User answered with a GIF and no caption, the way one reacts with a sticker instead of typing. " +
+                    "Treat it as their reaction, match its mood, and keep the conversation going in your own voice. " +
+                    "Call `describeVideo` only if they ask what is in it; never describe or narrate it unasked."
+
+        // a round video message is the user talking, so the speech in it is the message, not the picture.
+        const val VIDEO_NOTE_ONLY_PROMPT =
+            "User sent a video note (a round video message) with no caption — it is them speaking to you. " +
+                    "Call `describeVideo` to get what they said, then answer that. " +
+                    "Do not describe how the video looks unless they ask."
 
         const val LOG_PROMPT_MAX_CHARS = 300
 
@@ -170,10 +186,15 @@ internal class TelegramBotRunner(
             message.voice != null -> handleTranscribableUpdate(message, message.voice.toAudioInput(), profile, "voice")
             message.audio != null -> handleTranscribableUpdate(message, message.audio.toAudioInput(), profile, "audio")
             // GIFs carry both `animation` and `document`, so animation has to win over document here.
-            message.animation != null -> handleMediaUpdate(message, profile, inputKind = "animation")
+            message.animation != null ->
+                handleMediaUpdate(message, profile, inputKind = "animation", noCaptionPrompt = ANIMATION_ONLY_PROMPT)
+
             !message.photo.isNullOrEmpty() -> handleMediaUpdate(message, profile, inputKind = "photo")
             message.video != null -> handleMediaUpdate(message, profile, inputKind = "video")
-            message.videoNote != null -> handleMediaUpdate(message, profile, inputKind = "video note")
+
+            message.videoNote != null ->
+                handleMediaUpdate(message, profile, inputKind = "video note", noCaptionPrompt = VIDEO_NOTE_ONLY_PROMPT)
+
             message.document != null -> handleMediaUpdate(message, profile, inputKind = "document")
             else -> Unit
         }
@@ -302,14 +323,19 @@ internal class TelegramBotRunner(
         dispatchToAgent(message, prompt, botProfile, inputKind = "sticker", loadRepliedAttachment = false)
     }
 
-    private suspend fun handleMediaUpdate(message: Message, botProfile: BotProfile, inputKind: String) {
+    private suspend fun handleMediaUpdate(
+        message: Message,
+        botProfile: BotProfile,
+        inputKind: String,
+        noCaptionPrompt: String = MEDIA_ONLY_PROMPT
+    ) {
         if (!message.isAccepted(botProfile)) return
 
         val caption =
             message.messageTextOrNull()
                 ?.let { sanitizeUserText(it, botProfile.userId, botProfile.username) }
                 .orEmpty()
-                .ifBlank { MEDIA_ONLY_PROMPT }
+                .ifBlank { noCaptionPrompt }
 
         dispatchToAgent(
             message,

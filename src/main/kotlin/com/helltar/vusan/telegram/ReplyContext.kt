@@ -189,7 +189,7 @@ internal fun attachedFileContextBlock(file: AttachedFile): String =
                 }
 
                 AttachedFileKind.VIDEO ->
-                    append("It is a video: call `describeVideo` to answer about what happens in it or what is said in it. It is not available to `codeExecution`.")
+                    append("It is a video: call `describeVideo` when your answer depends on what happens in it or what is said in it. It is not available to `codeExecution`.")
 
                 AttachedFileKind.OTHER -> {
                     append("This file is in the codeExecution working directory under this exact name. ")
