@@ -103,15 +103,16 @@ Unset both variables to use the built-in persona.
 Each optional tool is enabled by one env variable. If it is missing, that tool is skipped at startup with a `WARN` log
 and the bot keeps running.
 
-| Tool                                      | Enable with            | Notes                                 |
-|-------------------------------------------|------------------------|---------------------------------------|
-| Web search, image search, page extraction | `TAVILY_API_KEY`       | See [Web search](#web-search)         |
-| Fallback web and image search             | `SEARXNG_URL`          | See [Web search](#web-search)         |
-| GIF lookup                                | `GIPHY_API_KEY`        | Giphy                                 |
-| Voice output                              | `ELEVENLABS_API_KEY`   | ElevenLabs TTS                        |
-| Voice input, sound of a video             | `OPENAI_STT_API_KEY`   | Reuse your OpenAI key                 |
-| Image generation                          | `OPENAI_IMAGE_API_KEY` | Reuse your OpenAI key                 |
-| Code execution                            | `SANDBOX_URL`          | See [Code execution](#code-execution) |
+| Tool                                      | Enable with             | Notes                                 |
+|-------------------------------------------|-------------------------|---------------------------------------|
+| Web search, image search, page extraction | `TAVILY_API_KEY`        | See [Web search](#web-search)         |
+| Fallback web and image search             | `SEARXNG_URL`           | See [Web search](#web-search)         |
+| GIF lookup                                | `GIPHY_API_KEY`         | Giphy                                 |
+| Voice output                              | `ELEVENLABS_API_KEY`    | ElevenLabs TTS                        |
+| Voice input, sound of a video             | `OPENAI_STT_API_KEY`    | Reuse your OpenAI key                 |
+| Image generation                          | `OPENAI_IMAGE_API_KEY`  | Reuse your OpenAI key                 |
+| Vision on a chat model that cannot see    | `OPENAI_VISION_API_KEY` | See [Vision](#vision)                 |
+| Code execution                            | `SANDBOX_URL`           | See [Code execution](#code-execution) |
 
 ### Web search
 
@@ -169,6 +170,37 @@ predictable.
 |------------------------|-----------------|--------------------------------------------------------|
 | `OPENAI_IMAGE_MODEL`   | `gpt-image-1.5` | Image model.                                           |
 | `OPENAI_IMAGE_QUALITY` | `medium`        | Rendering quality: `low`, `medium`, `high`, or `auto`. |
+
+### Vision
+
+Looking at pictures — `describeImage`, the frames `describeVideo` samples out of a video, and the images inside Telegram
+channel posts — needs a model that accepts images. By default that is the chat model itself, so an `openai`,
+`anthropic`, or `google` setup needs nothing extra.
+
+A chat model that cannot see images is the case this section is about. `OPENAI_VISION_API_KEY` then runs vision on its
+own OpenAI model, the way `OPENAI_STT_API_KEY` runs speech on one, and the chat model keeps answering everything else:
+
+```dotenv
+LLM_PROVIDER=deepseek
+LLM_MODEL=deepseek-v4-pro
+LLM_API_KEY=sk-qwerty
+
+OPENAI_VISION_API_KEY=sk-proj-qwerty
+```
+
+| Variable                | Default        | Description                                                        |
+|-------------------------|----------------|--------------------------------------------------------------------|
+| `OPENAI_VISION_API_KEY` | —              | Enables a separate vision model. Can reuse your OpenAI key.        |
+| `OPENAI_VISION_MODEL`   | `gpt-5.4-mini` | OpenAI model that reads the images; must be one that accepts them. |
+
+Which chat models count as able to see comes from the Koog model catalog: DeepSeek models cannot, and `openai-compatible`
+never claims it either, because the server behind `LLM_BASE_URL` may serve anything. So with `openai-compatible`
+vision is off until this key is set, even when the model behind it does accept images.
+
+The key always wins when it is set: vision runs on that model even when the chat model could have looked at the picture
+itself. With no vision at all, `describeImage` and `describeVideo` are not registered — a startup `WARN` says so, and
+the bot answers without looking at attachments instead of failing a call per picture. Telegram channel posts still come
+back, as text only. Vision calls use the same `LLM_REQUEST_TIMEOUT_SECONDS` budget as chat calls.
 
 ## Code execution
 

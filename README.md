@@ -74,8 +74,7 @@ right tool itself. Items marked *(opt-in)* need an API key or an extra service, 
 
 ### Understands what you send
 
-- **Photos** — looks at images you send or reply to and answers questions about them, including
-  text on them.
+- **Photos** — looks at images you send or reply to and answers questions about them.
 - **Voice and audio** *(opt-in)* — listens to voice messages and audio files instead of making you
   type.
 - **Videos** — watches videos, video notes and GIFs; when voice input is enabled, it also hears

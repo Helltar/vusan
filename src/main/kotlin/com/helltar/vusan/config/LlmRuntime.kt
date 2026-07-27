@@ -25,6 +25,7 @@ import ai.koog.prompt.llm.LLModel
 import ai.koog.prompt.params.LLMParams
 import kotlin.reflect.full.memberProperties
 import kotlin.reflect.jvm.javaField
+import kotlin.time.Duration
 
 data class LlmRuntime(
     val providerLabel: String,
@@ -34,13 +35,7 @@ data class LlmRuntime(
 )
 
 fun resolveLlmRuntime(config: LlmProviderConfig): LlmRuntime {
-    // both request and socket timeouts default to 900 s in the koog client; cap them so a stalled LLM
-    // call fails fast and the agent can deliver an error reply instead of leaving the bot silent.
-    val timeoutConfig =
-        ConnectionTimeoutConfig(
-            requestTimeoutMillis = config.requestTimeout.inWholeMilliseconds,
-            socketTimeoutMillis = config.requestTimeout.inWholeMilliseconds
-        )
+    val timeoutConfig = connectionTimeouts(config.requestTimeout)
 
     return when (config) {
         is LlmProviderConfig.Hosted -> resolveHostedRuntime(config, timeoutConfig)
@@ -66,6 +61,14 @@ fun resolveLlmRuntime(config: LlmProviderConfig): LlmRuntime {
             )
     }
 }
+
+// both request and socket timeouts default to 900 s in the koog client; cap them so a stalled LLM
+// call fails fast and the agent can deliver an error reply instead of leaving the bot silent.
+internal fun connectionTimeouts(requestTimeout: Duration): ConnectionTimeoutConfig =
+    ConnectionTimeoutConfig(
+        requestTimeoutMillis = requestTimeout.inWholeMilliseconds,
+        socketTimeoutMillis = requestTimeout.inWholeMilliseconds
+    )
 
 private fun resolveHostedRuntime(config: LlmProviderConfig.Hosted, timeoutConfig: ConnectionTimeoutConfig): LlmRuntime =
     when (config.provider) {

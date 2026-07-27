@@ -1,11 +1,10 @@
 package com.helltar.vusan.tools
 
 import ai.koog.agents.core.tools.ToolRegistry
-import ai.koog.prompt.executor.model.PromptExecutor
-import ai.koog.prompt.llm.LLModel
 import com.helltar.vusan.agent.history.ChatHistoryRepository
 import com.helltar.vusan.agent.memory.MemoryRepository
 import com.helltar.vusan.config.AppConfig
+import com.helltar.vusan.config.VisionRuntime
 import com.helltar.vusan.outbox.BotOutbox
 import com.helltar.vusan.request.RequestContext
 import com.helltar.vusan.stt.OpenAiWhisperClient
@@ -41,12 +40,7 @@ import com.helltar.vusan.tools.vision.VisionTools
 import com.helltar.vusan.tools.vision.WhisperVideoAudioTranscriber
 import com.helltar.vusan.tools.voice.ElevenLabsTtsClient
 import com.helltar.vusan.tools.voice.VoiceTools
-import com.helltar.vusan.tools.youtube.YouTubeMusicTools
-import com.helltar.vusan.tools.youtube.YouTubeTranscriptClient
-import com.helltar.vusan.tools.youtube.YouTubeTranscriptTools
-import com.helltar.vusan.tools.youtube.YouTubeVideoTools
-import com.helltar.vusan.tools.youtube.YtDlpClient
-import com.helltar.vusan.tools.youtube.YtDlpRunner
+import com.helltar.vusan.tools.youtube.*
 import io.github.oshai.kotlinlogging.KotlinLogging
 import io.ktor.client.*
 import kotlin.time.Duration.Companion.seconds
@@ -57,8 +51,7 @@ class ToolRegistryFactory(
     private val history: ChatHistoryRepository,
     private val memory: MemoryRepository,
     private val tasks: TasksRepository,
-    promptExecutor: PromptExecutor,
-    model: LLModel
+    vision: VisionRuntime?
 ) {
 
     private companion object {
@@ -75,22 +68,17 @@ class ToolRegistryFactory(
     private val imageDownloadClient = ImageDownloadClient(http)
     private val elevenLabsTts = config.elevenLabsTts
     private val openAiImage = config.openAiImage
-    private val imageVisionClient = ImageVisionClient(promptExecutor, model)
-
-    // the key that enables voice transcription also hands a video's sound to the vision tool
-    private val videoVisionClient =
-        VideoVisionClient(
-            promptExecutor = promptExecutor,
-            model = model,
-            transcriber = config.openAiStt?.let { WhisperVideoAudioTranscriber(OpenAiWhisperClient(http, it), it) }
-        )
+    private val imageVisionClient = vision?.let { ImageVisionClient(it.executor, it.model) }
     private val telegramChannelClient = TelegramChannelClient(http)
     private val ytDlpRunner = YtDlpRunner(config.ytDlpCookiesFile)
     private val ytDlpClient = YtDlpClient(ytDlpRunner)
     private val youTubeTranscript = YouTubeTranscriptTools(YouTubeTranscriptClient(ytDlpRunner))
 
     private val telegramChannel =
-        TelegramChannelTools(telegramChannelClient, TelegramChannelImageDescriber(promptExecutor, model))
+        TelegramChannelTools(
+            telegramChannelClient,
+            vision?.let { TelegramChannelImageDescriber(it.executor, it.model) }
+        )
 
     private val tavilyClient =
         optional("TAVILY_API_KEY", config.tavilyApiKey, "Tavily web search tool") {
@@ -122,6 +110,17 @@ class ToolRegistryFactory(
             SandboxClient(http, it, config.sandboxTimeoutSeconds.seconds)
         }
 
+    // the key that enables voice transcription also hands a video's sound to the vision tool
+    private val videoVisionClient =
+        vision?.let {
+            VideoVisionClient(
+                promptExecutor = it.executor,
+                model = it.model,
+                transcriber =
+                    config.openAiStt?.let { stt -> WhisperVideoAudioTranscriber(OpenAiWhisperClient(http, stt), stt) }
+            )
+        }
+
     fun buildRegistry(context: RequestContext, outbox: BotOutbox): ToolRegistry =
         ToolRegistry {
             tools(MessageTools(outbox))
@@ -136,19 +135,16 @@ class ToolRegistryFactory(
             tools(PollTools(outbox))
             tools(HistoryTools(history, context))
             tools(MemoryTools(memory, context))
-            tools(VisionTools(imageVisionClient, videoVisionClient, context.attachedFile))
-            tools(
-                TaskTools(
-                    repo = tasks,
-                    context = context,
-                    maxTasksPerUser = config.maxTasksPerUser
-                )
-            )
+            tools(TaskTools(repo = tasks, context, config.maxTasksPerUser))
 
             tavilyClient?.let { tools(TavilyTools(it, imageDownloadClient, outbox)) }
             searxngClient?.let { tools(SearxngTools(it, imageDownloadClient, outbox)) }
             giphyClient?.let { tools(GiphyTools(it, outbox)) }
             sandboxClient?.let { tools(SandboxTools(it, outbox, context.attachedFile)) }
+
+            if (imageVisionClient != null && videoVisionClient != null) {
+                tools(VisionTools(imageVisionClient, videoVisionClient, context.attachedFile))
+            }
 
             if (elevenLabsTtsClient != null && elevenLabsTts != null) {
                 tools(VoiceTools(elevenLabsTtsClient, elevenLabsTts, outbox))

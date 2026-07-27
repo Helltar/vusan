@@ -15,7 +15,7 @@ private const val MAX_IMAGES_TO_DESCRIBE = 4
 @Suppress("unused")
 class TelegramChannelTools(
     private val client: TelegramChannelClient,
-    private val imageDescriber: TelegramChannelImageDescriber
+    private val imageDescriber: TelegramChannelImageDescriber?
 ) : ToolSet {
 
     @Tool
@@ -31,7 +31,13 @@ class TelegramChannelTools(
         imageFocus: String = ""
     ): String = suspendToolGuard {
         val page = client.read(channel = channel, maxPosts = maxPosts)
-        val imageDescriptions = if (describeImages) describePostImages(page, imageFocus) else emptyMap()
+
+        // no vision model configured means no describer, so the post text is all that comes back
+        val imageDescriptions =
+            imageDescriber
+                ?.takeIf { describeImages }
+                ?.let { describePostImages(page, imageFocus, it) }
+                .orEmpty()
 
         if (page.posts.isEmpty()) {
             return@suspendToolGuard "No public posts found for @${page.username} at ${page.url}. " +
@@ -75,7 +81,11 @@ class TelegramChannelTools(
         }.trim()
     }
 
-    private suspend fun describePostImages(page: TelegramChannelPage, focus: String): Map<String, List<String>> {
+    private suspend fun describePostImages(
+        page: TelegramChannelPage,
+        focus: String,
+        describer: TelegramChannelImageDescriber
+    ): Map<String, List<String>> {
         val result = linkedMapOf<String, MutableList<String>>()
         var remaining = MAX_IMAGES_TO_DESCRIBE
 
@@ -88,7 +98,7 @@ class TelegramChannelTools(
                 val description =
                     runCatching {
                         val image = client.downloadImage(imageUrl)
-                        imageDescriber.describe(image, post, focus)
+                        describer.describe(image, post, focus)
                     }.getOrElse { t ->
                         t.rethrowIfCancellation()
                         "Could not inspect image: ${t.message ?: t::class.simpleName}"

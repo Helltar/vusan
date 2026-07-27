@@ -42,6 +42,8 @@ Telegram ──► telegram/ ──► agent/ ──► tools/ ──► externa
 - **`infra/`** — cross-cutting infrastructure: the SQLite/Exposed `Db` singleton and the Ktor
   `Http` client.
 - **`config/`** — `.env` parsing (`AppConfig`) and LLM provider/model resolution (`LlmRuntime`).
+  `VisionRuntime` resolves separately which model looks at images: the `OPENAI_VISION_*` model when configured, the chat
+  model when it accepts images, and nothing at all otherwise — which leaves the vision tools unregistered.
 - **`stt/`** — OpenAI speech-to-text client (`OpenAiWhisperClient`, default model
   `gpt-4o-transcribe`); used for voice transcription and for the sound of a video the vision tool watches, opt-in via
   `OPENAI_STT_API_KEY`.
@@ -186,6 +188,7 @@ A symptom-to-source map for finding the right file fast. Paths are under
 | Scheduled task fires late, not at all, or reports "missed"                       | `tasks/TaskScheduler.kt` (polling/lateness) + `tasks/Recurrence.kt` (next-run math)                                                                                                                                                                                                                   |
 | An env var has no effect                                                         | `config/AppConfig.kt` (parsing) — and check it is documented in [`configuration.md`](configuration.md) + [`.env.example`](../.env.example)                                                                                                                                                            |
 | Model / provider / request-timeout selection                                     | `config/LlmRuntime.kt` (provider → client/model/params)                                                                                                                                                                                                                                               |
+| `describeImage`/`describeVideo` missing from the tool list                       | `config/VisionRuntime.kt` (chat model vs `OPENAI_VISION_API_KEY`), then `tools/ToolRegistryFactory.kt` (registration is skipped when there is no vision runtime)                                                                                                                                       |
 | Garbled or empty tool-call crashes from a flaky model                            | `agent/AgentFactory.kt` — `vusanSingleRunStrategy` and `missingRequiredArgs` short-circuit them                                                                                                                                                                                                       |
 
 ## Adding a tool

@@ -19,6 +19,7 @@ data class AppConfig(
     val openAiImageApiKey: String?,
     val openAiImage: OpenAiImageConfig?,
     val openAiStt: OpenAiSttConfig?,
+    val openAiVision: OpenAiVisionConfig?,
     val sandboxTimeoutSeconds: Long,
     val sandboxUrl: String?,
     val searxngUrl: String?,
@@ -51,6 +52,7 @@ data class AppConfig(
                 llmProvider = resolveLlmProvider(),
                 openAiImageApiKey = openAiImageKey,
                 openAiStt = resolveOpenAiStt(),
+                openAiVision = resolveOpenAiVision(),
                 sandboxUrl = readEnv("SANDBOX_URL"),
                 searxngUrl = readEnv("SEARXNG_URL"),
                 systemPrompt = resolveSystemPrompt(),
@@ -124,6 +126,15 @@ data class AppConfig(
                 maxDurationSeconds =
                     readEnv("OPENAI_STT_MAX_DURATION_SECONDS")?.toLongOrNull()
                         ?: OpenAiSttConfig.DEFAULT_MAX_DURATION_SECONDS
+            )
+        }
+
+        private fun resolveOpenAiVision(): OpenAiVisionConfig? {
+            val key = readEnv("OPENAI_VISION_API_KEY") ?: return null
+
+            return OpenAiVisionConfig(
+                apiKey = key,
+                model = readEnv("OPENAI_VISION_MODEL") ?: OpenAiVisionConfig.DEFAULT_MODEL
             )
         }
 

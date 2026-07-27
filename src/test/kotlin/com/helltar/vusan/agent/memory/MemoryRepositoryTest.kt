@@ -138,6 +138,7 @@ class MemoryRepositoryTest {
             openAiImageApiKey = null,
             openAiImage = null,
             openAiStt = null,
+            openAiVision = null,
             sandboxTimeoutSeconds = 30L,
             sandboxUrl = null,
             searxngUrl = null,
