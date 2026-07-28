@@ -11,11 +11,7 @@ import com.helltar.vusan.infra.Http
 import com.helltar.vusan.stt.OpenAiWhisperClient
 import com.helltar.vusan.tasks.TaskScheduler
 import com.helltar.vusan.tasks.TasksRepository
-import com.helltar.vusan.telegram.InlineChoiceHandler
-import com.helltar.vusan.telegram.TaskMenuHandler
-import com.helltar.vusan.telegram.TelegramBotRunner
-import com.helltar.vusan.telegram.TelegramDelivery
-import com.helltar.vusan.telegram.VoiceTranscriber
+import com.helltar.vusan.telegram.*
 import com.helltar.vusan.tools.ToolRegistryFactory
 import io.github.oshai.kotlinlogging.KotlinLogging
 import io.ktor.client.*
@@ -57,19 +53,19 @@ suspend fun main() = coroutineScope {
         val voiceTranscriber = createVoiceTranscriber(http, config)
         val taskMenu = TaskMenuHandler(telegramClient, tasks, config.maxTasksPerUser)
         val inlineChoices = InlineChoiceHandler(telegramClient, history::revision)
+        val scheduler = TaskScheduler(tasks, agentRunner, delivery, config.taskMaxLatenessMinutes.minutes)
+
         val botRunner =
             TelegramBotRunner(
                 telegramClient,
                 config.telegramBotToken,
                 delivery,
                 agentRunner,
-                history,
                 taskMenu,
                 inlineChoices,
                 config.allowedIds,
                 voiceTranscriber
             )
-        val scheduler = TaskScheduler(tasks, agentRunner, delivery, history, config.taskMaxLatenessMinutes.minutes)
 
         logStartup(llm, vision, toolRegistryFactory.availableToolNames)
 

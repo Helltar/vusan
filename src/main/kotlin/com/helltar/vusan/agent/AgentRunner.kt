@@ -36,8 +36,7 @@ data class AgentRequest(
 data class AgentResult(
     val outputs: List<OutboxItem>,
     val comment: String?,
-    val commentToPrivate: Boolean = false,
-    val historyTurns: List<ChatTurn> = emptyList()
+    val commentToPrivate: Boolean = false
 )
 
 class AgentRunner(
@@ -83,6 +82,19 @@ class AgentRunner(
             return lock.withLock { runAgent(request, onToolStarting) }
         } finally {
             releaseLock(request.userId)
+        }
+    }
+
+    // a turn persists its own history under this lock, so an outside clear (the `/clear` command) has to
+    // take the same lock or a turn already in flight would append itself back into the wiped history.
+    // `clearChatHistory` runs inside a turn and must keep using the repository directly.
+    suspend fun clearHistory(userId: Long) {
+        val lock = retainLock(userId)
+
+        try {
+            lock.withLock { history.clear(userId) }
+        } finally {
+            releaseLock(userId)
         }
     }
 
@@ -166,7 +178,11 @@ class AgentRunner(
                     "text=[${assistantText?.collapseWhitespaceAndCap(LOG_REPLY_MAX_CHARS).orEmpty()}]"
         }
 
-        return AgentResult(outputs, comment, outbox.redirectToPrivate, historyTurns)
+        if (historyTurns.isNotEmpty()) {
+            history.appendTurns(request.userId, historyTurns)
+        }
+
+        return AgentResult(outputs, comment, outbox.redirectToPrivate)
     }
 
     // pick the user-facing reply and log accordingly. LLM provider errors arrive as a large JSON body, so

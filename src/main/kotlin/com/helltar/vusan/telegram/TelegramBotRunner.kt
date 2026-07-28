@@ -4,7 +4,6 @@ import com.helltar.vusan.agent.AgentRequest
 import com.helltar.vusan.agent.AgentResult
 import com.helltar.vusan.agent.AgentRunner
 import com.helltar.vusan.agent.ToolActivity
-import com.helltar.vusan.agent.history.ChatHistoryRepository
 import com.helltar.vusan.common.collapseWhitespaceAndCap
 import com.helltar.vusan.common.limitTo
 import com.helltar.vusan.common.rethrowIfCancellation
@@ -37,7 +36,6 @@ internal class TelegramBotRunner(
     private val botToken: String,
     private val delivery: TelegramDelivery,
     private val agent: AgentRunner,
-    private val history: ChatHistoryRepository,
     private val taskMenu: TaskMenuHandler,
     private val inlineChoices: InlineChoiceHandler,
     private val allowedIds: Set<Long>,
@@ -295,7 +293,7 @@ internal class TelegramBotRunner(
                 return
             }
 
-        history.clear(userId)
+        agent.clearHistory(userId)
         sendReply(message, Messages.of(message.language).historyClearedReply)
     }
 
@@ -719,10 +717,6 @@ internal class TelegramBotRunner(
                 }
 
             deliver(result)
-
-            if (result.historyTurns.isNotEmpty()) {
-                history.appendTurns(request.userId, result.historyTurns)
-            }
         } catch (error: Throwable) {
             error.rethrowIfCancellation()
 

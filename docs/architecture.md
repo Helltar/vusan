@@ -21,7 +21,8 @@ Telegram ──► telegram/ ──► agent/ ──► tools/ ──► externa
   including HTML-formatting, opt-in rich-message, reply-anchor, media/document, media-group, and private-message
   fallbacks. `TaskMenuHandler` owns the deterministic `/tasks` inline-button UI; `InlineChoiceHandler` consumes
   agent-created choice buttons and turns the selection back into an agent input.
-- **`agent/`** — agent orchestration on top of Koog. `AgentRunner` serializes per-user turns;
+- **`agent/`** — agent orchestration on top of Koog. `AgentRunner` serializes per-user turns and owns every history
+  write for them, so no other layer appends or clears turns behind a running turn's back;
   `AgentFactory` builds the `AIAgent` (system prompt + history + memory + tools). `agent/history/`
   summarizes and persists chat turns; `agent/memory/` stores durable user/group memory that survives a history clear and
   is injected as `<user_memory>`/`<group_memory>`.
@@ -93,7 +94,9 @@ A normal user message travels:
     - a turn that ends having delivered nothing — no `sendMessage`, media, or reaction, and empty assistant text (flaky
       providers return an empty completion after a batch of tool results) — gets one nudge to actually deliver before
       finishing, so a full turn of research does not collapse into silence.
-6. **Collect** — `AgentRunner` returns an `AgentResult` (outputs + optional comment + history turns to persist).
+6. **Collect** — `AgentRunner` persists the produced history turns through `ChatHistoryRepository` while it still holds
+   the per-user turn lock, then returns an `AgentResult` (outputs + optional comment). Persisting inside the lock is
+   what makes a concurrent `/clear` safe: no caller can append a turn into a history that was just wiped.
 7. **Deliver** — `TelegramDelivery.send` routes each `BotOutput` to the chat, or to the user's private chat when a tool
    requested it, anchoring replies to the original message.
     - **Chat action** — a live indicator runs through the whole turn (`TelegramBotRunner.withLiveChatAction`): it starts
@@ -120,13 +123,12 @@ A normal user message travels:
       wrapping it, `TelegramSendFallbacks.kt` holds the output-kind-agnostic rejection handling (plain-text retry,
       media-to-document, text-as-document), `TelegramRequests.kt` the raw request builders. Sandbox image previews opt
       out of photo-to-document fallback because their uncompressed document copy is already queued.
-8. **Persist** — produced history turns are appended via `ChatHistoryRepository`.
 
 ## Background and side flows
 
 - **Task scheduler** — `TaskScheduler.launchIn` polls the task store every 30 seconds. Due tasks run through
-  `AgentRunner.handleScheduled` (waits for the user lock instead of bailing), are delivered with
-  `TelegramDelivery.sendScheduled`, and then append produced history turns. Tasks overdue beyond
+  `AgentRunner.handleScheduled` (waits for the user lock instead of bailing) and are delivered with
+  `TelegramDelivery.sendScheduled`. Tasks overdue beyond
   `TASK_MAX_LATENESS_MINUTES` (e.g. after downtime) get a "missed" notice and are advanced/disabled rather than fired. A
   task whose run fails is still advanced/disabled (logged, no retry) so a persistent error cannot re-fire it on every
   poll tick. Paused tasks remain stored and count toward the per-user task limit, but the due-task query skips them.
@@ -144,7 +146,9 @@ A normal user message travels:
 - **Direct history clear** — `/clear` bypasses the LLM, deletes all conversation history stored for the caller, and
   sends a localized confirmation. It deliberately leaves long-term memory and scheduled tasks unchanged, matching
   the agent-callable `clearChatHistory` tool. Both paths also advance the caller's persisted history revision, which
-  invalidates unanswered choices created before the clear.
+  invalidates unanswered choices created before the clear. The command goes through `AgentRunner.clearHistory` so it
+  waits for the caller's turn lock; a turn already running would otherwise persist itself after the wipe. The tool
+  runs inside a turn and so keeps calling the repository directly.
 - **Agent-created inline choices** — `askWithButtons` enqueues a plain-text question plus two to ten answer buttons.
   Callback data carries the intended user id, history revision, and option index; the labels remain in Telegram's
   message keyboard, while the current revision lives in `chat_history_state`, so an unanswered choice survives a bot
@@ -213,7 +217,7 @@ A symptom-to-source map for finding the right file fast. Paths are under
 | A rich message reads as empty, `unknown`, or loses its structure                 | `telegram/RichMessageText.kt` (block tree → rich markdown), then `MessageMetadata.contentTypeName`/`textSnippetOrNull` and `ReplyContext.repliedTextOrNull`                                                                                                                                           |
 | Scheduled task fires late, not at all, or reports "missed"                       | `tasks/TaskScheduler.kt` (polling/lateness) + `tasks/Recurrence.kt` (next-run math)                                                                                                                                                                                                                   |
 | `/tasks` or a plain-language task pause/resume/cancel fails                      | `telegram/TaskMenuHandler.kt` (rendering, ownership, callbacks) + `tools/tasks/TaskTools.kt` (agent path) + `tasks/TasksRepository.kt` (shared scoped state changes)                                                                                                                                   |
-| `/clear` or a plain-language history clear fails                                | `telegram/TelegramBotRunner.kt` (direct command) + `tools/history/HistoryTools.kt` (agent path) + `agent/history/ChatHistoryRepository.kt` (shared storage operation)                                                                                                                                 |
+| `/clear` reports success but history survives                                    | `agent/AgentRunner.kt` (`clearHistory` and the turn lock that also guards the append) + `tools/history/HistoryTools.kt` (agent path) + `agent/history/ChatHistoryRepository.kt` (shared storage operation)                                                                                            |
 | An agent choice button does nothing, repeats, or reaches the wrong user          | `tools/choice/InlineChoiceTools.kt` (tool contract) + `telegram/InlineChoiceHandler.kt` (callback ownership/consumption) + `TelegramBotRunner.dispatchInlineChoiceCallback` (agent follow-up)                                                                                                          |
 | An env var has no effect                                                         | `config/AppConfig.kt` (parsing) — and check it is documented in [`configuration.md`](configuration.md) + [`.env.example`](../.env.example)                                                                                                                                                            |
 | Model / provider / request-timeout selection                                     | `config/LlmRuntime.kt` (provider → client/model/params)                                                                                                                                                                                                                                               |

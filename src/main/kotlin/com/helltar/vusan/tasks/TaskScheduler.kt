@@ -2,7 +2,6 @@ package com.helltar.vusan.tasks
 
 import com.helltar.vusan.agent.AgentRequest
 import com.helltar.vusan.agent.AgentRunner
-import com.helltar.vusan.agent.history.ChatHistoryRepository
 import com.helltar.vusan.common.rethrowIfCancellation
 import com.helltar.vusan.i18n.Messages
 import com.helltar.vusan.telegram.ScheduledAttribution
@@ -20,7 +19,6 @@ class TaskScheduler(
     private val repo: TasksRepository,
     private val agentRunner: AgentRunner,
     private val delivery: TelegramDelivery,
-    private val history: ChatHistoryRepository,
     private val maxLateness: Duration
 ) {
 
@@ -127,16 +125,10 @@ class TaskScheduler(
                 messages = Messages.of(task.language),
                 attribution = attributionFor(task)
             )
-
-            if (result.historyTurns.isNotEmpty()) {
-                history.appendTurns(task.userId, result.historyTurns)
-            }
         }.onFailure {
             it.rethrowIfCancellation()
 
-            log.error(it) {
-                "task id=${task.id} fired but delivery/persistence failed; not retrying to avoid duplicates"
-            }
+            log.error(it) { "task id=${task.id} fired but delivery failed; not retrying to avoid duplicates" }
         }
     }
 
