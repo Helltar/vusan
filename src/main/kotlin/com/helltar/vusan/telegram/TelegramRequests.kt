@@ -1,14 +1,17 @@
 package com.helltar.vusan.telegram
 
 import java.io.ByteArrayInputStream
+import org.telegram.telegrambots.meta.api.methods.AnswerCallbackQuery
 import org.telegram.telegrambots.meta.api.methods.send.SendAnimation
 import org.telegram.telegrambots.meta.api.methods.send.SendDocument
 import org.telegram.telegrambots.meta.api.methods.send.SendMediaGroup
 import org.telegram.telegrambots.meta.api.methods.send.SendMessage
 import org.telegram.telegrambots.meta.api.methods.send.SendRichMessage
+import org.telegram.telegrambots.meta.api.methods.updatingmessages.EditMessageText
 import org.telegram.telegrambots.meta.api.objects.InputFile
 import org.telegram.telegrambots.meta.api.objects.ReplyParameters
 import org.telegram.telegrambots.meta.api.objects.media.InputMedia
+import org.telegram.telegrambots.meta.api.objects.replykeyboard.InlineKeyboardMarkup
 import org.telegram.telegrambots.meta.api.objects.richtext.InputRichMessage
 import org.telegram.telegrambots.meta.generics.TelegramClient
 
@@ -20,7 +23,8 @@ internal suspend fun sendTextMessage(
     chatId: Long,
     text: String,
     parseMode: String?,
-    replyParameters: ReplyParameters?
+    replyParameters: ReplyParameters?,
+    replyMarkup: InlineKeyboardMarkup? = null
 ) {
     client.api {
         executeAsync(
@@ -29,6 +33,45 @@ internal suspend fun sendTextMessage(
                 .text(text)
                 .parseMode(parseMode)
                 .replyParameters(replyParameters)
+                .replyMarkup(replyMarkup)
+                .build()
+        )
+    }
+}
+
+internal suspend fun editTextMessage(
+    client: TelegramClient,
+    chatId: Long,
+    messageId: Int,
+    text: String,
+    replyMarkup: InlineKeyboardMarkup,
+    parseMode: String? = null
+) {
+    client.api {
+        executeAsync(
+            EditMessageText.builder()
+                .chatId(chatId)
+                .messageId(messageId)
+                .text(text)
+                .parseMode(parseMode)
+                .replyMarkup(replyMarkup)
+                .build()
+        )
+    }
+}
+
+internal suspend fun answerCallbackQuery(
+    client: TelegramClient,
+    callbackQueryId: String,
+    text: String? = null,
+    showAlert: Boolean = false
+) {
+    client.api {
+        executeAsync(
+            AnswerCallbackQuery.builder()
+                .callbackQueryId(callbackQueryId)
+                .text(text)
+                .showAlert(showAlert)
                 .build()
         )
     }

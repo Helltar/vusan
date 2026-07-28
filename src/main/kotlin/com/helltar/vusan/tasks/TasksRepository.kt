@@ -32,7 +32,7 @@ class TasksRepository {
             }.value
     }
 
-    suspend fun countActiveByUser(userId: Long): Int = dbTransaction {
+    suspend fun countEnabledByUser(userId: Long): Int = dbTransaction {
         ScheduledTasksTable
             .selectAll()
             .where { (ScheduledTasksTable.userId eq userId) and (ScheduledTasksTable.enabled eq true) }
@@ -40,10 +40,10 @@ class TasksRepository {
             .toInt()
     }
 
-    suspend fun listActiveByUser(userId: Long): List<ScheduledTask> = dbTransaction {
+    suspend fun listEnabledByUser(userId: Long, chatId: Long? = null): List<ScheduledTask> = dbTransaction {
         ScheduledTasksTable
             .selectAll()
-            .where { (ScheduledTasksTable.userId eq userId) and (ScheduledTasksTable.enabled eq true) }
+            .where { enabledTaskCondition(userId, chatId = chatId) }
             .orderBy(ScheduledTasksTable.nextFireAt to SortOrder.ASC)
             .map { it.toScheduledTask() }
     }
@@ -51,7 +51,11 @@ class TasksRepository {
     suspend fun findDue(now: Instant): List<ScheduledTask> = dbTransaction {
         ScheduledTasksTable
             .selectAll()
-            .where { (ScheduledTasksTable.enabled eq true) and (ScheduledTasksTable.nextFireAt lessEq now) }
+            .where {
+                (ScheduledTasksTable.enabled eq true) and
+                        (ScheduledTasksTable.paused eq false) and
+                        (ScheduledTasksTable.nextFireAt lessEq now)
+            }
             .orderBy(ScheduledTasksTable.nextFireAt to SortOrder.ASC)
             .map { it.toScheduledTask() }
     }
@@ -62,6 +66,61 @@ class TasksRepository {
             .where { (ScheduledTasksTable.id eq id) and (ScheduledTasksTable.userId eq userId) }
             .firstOrNull()
             ?.toScheduledTask()
+    }
+
+    suspend fun findEnabledForUser(userId: Long, id: Long, chatId: Long? = null): ScheduledTask? = dbTransaction {
+        ScheduledTasksTable
+            .selectAll()
+            .where { enabledTaskCondition(userId, id, chatId) }
+            .firstOrNull()
+            ?.toScheduledTask()
+    }
+
+    suspend fun pauseForUser(userId: Long, id: Long, chatId: Long? = null): Boolean = dbTransaction {
+        ScheduledTasksTable
+            .update({ enabledTaskCondition(userId, id, chatId) }) {
+                it[paused] = true
+            } > 0
+    }
+
+    suspend fun resumeForUser(
+        userId: Long,
+        id: Long,
+        nextFireAt: Instant,
+        chatId: Long? = null
+    ): Boolean = dbTransaction {
+        ScheduledTasksTable
+            .update({ enabledTaskCondition(userId, id, chatId) }) {
+                it[ScheduledTasksTable.nextFireAt] = nextFireAt
+                it[paused] = false
+            } > 0
+    }
+
+    suspend fun editEnabledForUser(
+        userId: Long,
+        original: ScheduledTask,
+        edited: ScheduledTask,
+        chatId: Long? = null
+    ): Boolean = dbTransaction {
+        require(original.id == edited.id) { "original and edited task ids must match" }
+
+        ScheduledTasksTable
+            .update({ enabledTaskCondition(userId, original.id, chatId) }) {
+                if (original.prompt != edited.prompt)
+                    it[prompt] = edited.prompt
+
+                if (original.title != edited.title)
+                    it[title] = edited.title
+
+                if (original.recurrence != edited.recurrence)
+                    it[recurrence] = edited.recurrence.serialize()
+
+                if (original.timezone != edited.timezone)
+                    it[timezone] = edited.timezone.id
+
+                if (original.nextFireAt != edited.nextFireAt)
+                    it[nextFireAt] = edited.nextFireAt
+            } > 0
     }
 
     suspend fun reschedule(id: Long, nextFireAt: Instant) = dbTransaction {
@@ -78,8 +137,8 @@ class TasksRepository {
             }
     }
 
-    suspend fun delete(id: Long): Int = dbTransaction {
-        ScheduledTasksTable.deleteWhere { ScheduledTasksTable.id eq id }
+    suspend fun deleteEnabledForUser(userId: Long, id: Long, chatId: Long? = null): Boolean = dbTransaction {
+        ScheduledTasksTable.deleteWhere { enabledTaskCondition(userId, id, chatId) } > 0
     }
 
     private fun ResultRow.toScheduledTask(): ScheduledTask {
@@ -101,9 +160,24 @@ class TasksRepository {
             nextFireAt = this[ScheduledTasksTable.nextFireAt],
             createdAt = this[ScheduledTasksTable.createdAt],
             enabled = this[ScheduledTasksTable.enabled],
+            paused = this[ScheduledTasksTable.paused],
             language =
                 this[ScheduledTasksTable.language]?.let { runCatching { Language.valueOf(it) }.getOrNull() }
                     ?: Language.DEFAULT
         )
+    }
+
+    private fun enabledTaskCondition(
+        userId: Long,
+        id: Long? = null,
+        chatId: Long? = null
+    ): Op<Boolean> {
+        var condition =
+            (ScheduledTasksTable.userId eq userId) and
+                    (ScheduledTasksTable.enabled eq true)
+
+        id?.let { condition = condition and (ScheduledTasksTable.id eq it) }
+        chatId?.let { condition = condition and (ScheduledTasksTable.chatId eq it) }
+        return condition
     }
 }

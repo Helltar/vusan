@@ -85,6 +85,24 @@ class TelegramErrorsTest {
         assertFalse(error.isReplyMessageNotFound())
     }
 
+    @Test
+    fun `detects an unchanged edited message`() {
+        val error =
+            telegramError(
+                "Bad Request: message is not modified: specified new message content and reply markup " +
+                        "are exactly the same as the current content and reply markup"
+            )
+
+        assertTrue(error.isMessageNotModified())
+    }
+
+    @Test
+    fun `does not treat an unavailable message as unchanged`() {
+        val error = telegramError("Bad Request: message to edit not found")
+
+        assertFalse(error.isMessageNotModified())
+    }
+
     private fun telegramError(description: String): TelegramApiRequestException =
         TelegramApiRequestException(
             "Error executing request",

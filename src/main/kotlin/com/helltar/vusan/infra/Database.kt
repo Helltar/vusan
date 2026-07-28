@@ -67,6 +67,9 @@ object Db {
 
             suspendTransaction(newDatabase) {
                 SchemaUtils.create(ChatMessagesTable, ScheduledTasksTable, MemoryTable)
+                SchemaUtils
+                    .addMissingColumnsStatements(ScheduledTasksTable, withLogs = false)
+                    .forEach { exec(it) }
             }
 
             database = newDatabase

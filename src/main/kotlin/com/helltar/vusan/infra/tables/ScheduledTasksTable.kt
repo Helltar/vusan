@@ -14,6 +14,7 @@ object ScheduledTasksTable : LongIdTable("scheduled_tasks") {
     val timezone = varchar("timezone", 64)
     val nextFireAt = timestamp("next_fire_at")
     val enabled = bool("enabled").default(true)
+    val paused = bool("paused").default(false)
     val createdAt = timestamp("created_at").clientDefault { Instant.now() }
 
     val chatIsPrivate = bool("chat_is_private").default(true)
@@ -24,6 +25,6 @@ object ScheduledTasksTable : LongIdTable("scheduled_tasks") {
 
     init {
         index(false, userId, enabled)
-        index(false, enabled, nextFireAt)
+        index(false, enabled, paused, nextFireAt)
     }
 }

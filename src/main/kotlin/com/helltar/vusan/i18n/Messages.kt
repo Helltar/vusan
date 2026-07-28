@@ -10,8 +10,37 @@ interface Messages {
     val privateBlockedNotice: String
     val voiceEmptyReply: String
     val voiceTranscriptionFailedReply: String
+    val taskMenuNotOwnerAlert: String
+    val taskMenuUnavailableAlert: String
+    val taskMenuPastOnceAlert: String
+    val taskMenuErrorAlert: String
+    val taskMenuRefreshButton: String
+    val taskMenuBackButton: String
+    val taskMenuDeleteButton: String
 
     fun voiceTooLongReply(durationSeconds: Long, maxSeconds: Long): String
+
+    fun taskMenuTitle(currentChatOnly: Boolean): String
+
+    fun taskMenuCapacity(currentChatOnly: Boolean, listed: Int, total: Int, limit: Int): String
+
+    fun taskMenuEmpty(currentChatOnly: Boolean): String
+
+    fun taskMenuItem(
+        id: Long,
+        label: String,
+        nextFire: String,
+        recurrence: String,
+        paused: Boolean
+    ): String
+
+    fun taskMenuPauseButton(id: Long): String
+
+    fun taskMenuResumeButton(id: Long): String
+
+    fun taskMenuCancelButton(id: Long): String
+
+    fun taskMenuDeleteConfirmation(id: Long, label: String): String
 
     fun taskMissedNotice(id: Long, title: String?, scheduledFor: String): String
 
@@ -48,9 +77,64 @@ internal object EnglishMessages : Messages {
 
     override val voiceTranscriptionFailedReply = "I couldn't transcribe that voice message — send it as text instead 😊"
 
+    override val taskMenuNotOwnerAlert = "This task menu belongs to someone else."
+
+    override val taskMenuUnavailableAlert = "That task is no longer available."
+
+    override val taskMenuPastOnceAlert = "This one-time task is already in the past and can't be resumed."
+
+    override val taskMenuErrorAlert = "Couldn't update the task — try again."
+
+    override val taskMenuRefreshButton = "🔄 Refresh"
+
+    override val taskMenuBackButton = "↩️ Back"
+
+    override val taskMenuDeleteButton = "🗑 Delete"
+
     override fun voiceTooLongReply(durationSeconds: Long, maxSeconds: Long): String =
         "That voice message is ${durationSeconds}s long — I can only transcribe up to ${maxSeconds}s, " +
                 "send a shorter one or type it out"
+
+    override fun taskMenuTitle(currentChatOnly: Boolean): String =
+        if (currentChatOnly)
+            "<b>🗓 Your scheduled tasks in this chat</b>"
+        else
+            "<b>🗓 Your scheduled tasks</b>"
+
+    override fun taskMenuCapacity(currentChatOnly: Boolean, listed: Int, total: Int, limit: Int): String =
+        if (currentChatOnly)
+            "<i>In this chat: $listed · all tasks: $total/$limit</i>"
+        else
+            "<i>Tasks: $total/$limit</i>"
+
+    override fun taskMenuEmpty(currentChatOnly: Boolean): String =
+        if (currentChatOnly)
+            "You don't have any scheduled tasks in this chat."
+        else
+            "You don't have any scheduled tasks."
+
+    override fun taskMenuItem(
+        id: Long,
+        label: String,
+        nextFire: String,
+        recurrence: String,
+        paused: Boolean
+    ): String =
+        buildString {
+            append("<b>#$id · $label</b>\n")
+            append("🕒 $nextFire\n")
+            append("🔁 $recurrence\n")
+            append(if (paused) "⏸ Paused" else "🟢 Active")
+        }
+
+    override fun taskMenuPauseButton(id: Long) = "⏸ Pause #$id"
+
+    override fun taskMenuResumeButton(id: Long) = "▶️ Resume #$id"
+
+    override fun taskMenuCancelButton(id: Long) = "🗑 Cancel #$id"
+
+    override fun taskMenuDeleteConfirmation(id: Long, label: String): String =
+        "<b>Delete task #$id · $label?</b>\n\nThis can't be undone."
 
     override fun taskMissedNotice(id: Long, title: String?, scheduledFor: String): String {
         val label = title?.let { " «$it»" } ?: ""
@@ -80,9 +164,64 @@ internal object UkrainianMessages : Messages {
 
     override val voiceTranscriptionFailedReply = "Не вдалося розпізнати це голосове — напиши краще текстом 😊"
 
+    override val taskMenuNotOwnerAlert = "Це меню завдань належить іншому користувачу."
+
+    override val taskMenuUnavailableAlert = "Це завдання вже недоступне."
+
+    override val taskMenuPastOnceAlert = "Час цього одноразового завдання вже минув, тому його не можна відновити."
+
+    override val taskMenuErrorAlert = "Не вдалося оновити завдання — спробуй ще раз."
+
+    override val taskMenuRefreshButton = "🔄 Оновити"
+
+    override val taskMenuBackButton = "↩️ Назад"
+
+    override val taskMenuDeleteButton = "🗑 Видалити"
+
     override fun voiceTooLongReply(durationSeconds: Long, maxSeconds: Long): String =
         "Це голосове триває ${durationSeconds}с — я можу розпізнати щонайбільше ${maxSeconds}с, " +
                 "надішли коротше або напиши текстом"
+
+    override fun taskMenuTitle(currentChatOnly: Boolean): String =
+        if (currentChatOnly)
+            "<b>🗓 Твої заплановані завдання у цьому чаті</b>"
+        else
+            "<b>🗓 Твої заплановані завдання</b>"
+
+    override fun taskMenuCapacity(currentChatOnly: Boolean, listed: Int, total: Int, limit: Int): String =
+        if (currentChatOnly)
+            "<i>У цьому чаті: $listed · усі завдання: $total/$limit</i>"
+        else
+            "<i>Завдання: $total/$limit</i>"
+
+    override fun taskMenuEmpty(currentChatOnly: Boolean): String =
+        if (currentChatOnly)
+            "У тебе немає запланованих завдань у цьому чаті."
+        else
+            "У тебе немає запланованих завдань."
+
+    override fun taskMenuItem(
+        id: Long,
+        label: String,
+        nextFire: String,
+        recurrence: String,
+        paused: Boolean
+    ): String =
+        buildString {
+            append("<b>#$id · $label</b>\n")
+            append("🕒 $nextFire\n")
+            append("🔁 $recurrence\n")
+            append(if (paused) "⏸ На паузі" else "🟢 Активне")
+        }
+
+    override fun taskMenuPauseButton(id: Long) = "⏸ Пауза #$id"
+
+    override fun taskMenuResumeButton(id: Long) = "▶️ Відновити #$id"
+
+    override fun taskMenuCancelButton(id: Long) = "🗑 Скасувати #$id"
+
+    override fun taskMenuDeleteConfirmation(id: Long, label: String): String =
+        "<b>Видалити завдання #$id · $label?</b>\n\nЦю дію не можна скасувати."
 
     override fun taskMissedNotice(id: Long, title: String?, scheduledFor: String): String {
         val label = title?.let { " «$it»" } ?: ""

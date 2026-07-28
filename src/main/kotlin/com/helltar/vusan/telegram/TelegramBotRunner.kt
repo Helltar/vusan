@@ -23,6 +23,7 @@ import org.telegram.telegrambots.meta.api.methods.ActionType
 import org.telegram.telegrambots.meta.api.methods.GetMe
 import org.telegram.telegrambots.meta.api.methods.groupadministration.GetChat
 import org.telegram.telegrambots.meta.api.methods.send.SendChatAction
+import org.telegram.telegrambots.meta.api.objects.CallbackQuery
 import org.telegram.telegrambots.meta.api.objects.Update
 import org.telegram.telegrambots.meta.api.objects.message.Message
 import org.telegram.telegrambots.meta.generics.TelegramClient
@@ -34,6 +35,7 @@ internal class TelegramBotRunner(
     private val delivery: TelegramDelivery,
     private val agent: AgentRunner,
     private val history: ChatHistoryRepository,
+    private val taskMenu: TaskMenuHandler,
     private val allowedIds: Set<Long>,
     private val voiceTranscriber: VoiceTranscriber?
 ) {
@@ -145,6 +147,15 @@ internal class TelegramBotRunner(
                     }
                 }
 
+            val callback = update.callbackQuery
+
+            if (callback != null) {
+                if (taskMenu.handles(callback.data))
+                    launchCallbackHandling(callback)
+
+                continue
+            }
+
             val message = update.message ?: continue
             val albumKey = message.mediaGroupId?.let { "${message.chatIdLong}:$it" }
 
@@ -172,6 +183,19 @@ internal class TelegramBotRunner(
                 .onFailure { e ->
                     e.rethrowIfCancellation()
                     log.error(e) { "update handling failed for chat=${message.chatIdLong} msg=${message.messageIdLong}" }
+                }
+        }
+    }
+
+    private fun CoroutineScope.launchCallbackHandling(callback: CallbackQuery) {
+        launch {
+            runCatching { dispatchCallback(callback) }
+                .onFailure { error ->
+                    error.rethrowIfCancellation()
+                    log.error(error) {
+                        "callback handling failed for chat=${callback.message?.chatId} " +
+                                "msg=${callback.message?.messageId} user=${callback.from?.id}"
+                    }
                 }
         }
     }
@@ -206,13 +230,14 @@ internal class TelegramBotRunner(
 
         when {
             command == null -> handleTextUpdate(message, content, profile)
-            command.isStart(profile) -> handleStartCommand(message, profile)
+            command.matches("start", profile) -> handleStartCommand(message, profile)
+            command.matches("tasks", profile) -> handleTasksCommand(message, profile)
             else -> Unit
         }
     }
 
-    private fun BotCommand.isStart(profile: BotProfile): Boolean =
-        command == "start" &&
+    private fun BotCommand.matches(name: String, profile: BotProfile): Boolean =
+        command == name &&
                 (targetUsername == null || normalizeUsername(targetUsername) == normalizeUsername(profile.username))
 
     private val Message.language: Language
@@ -221,6 +246,52 @@ internal class TelegramBotRunner(
     private suspend fun handleStartCommand(message: Message, botProfile: BotProfile) {
         if (message.isAccepted(botProfile))
             sendReply(message, Messages.of(message.language).startReply)
+    }
+
+    private suspend fun handleTasksCommand(message: Message, botProfile: BotProfile) {
+        if (!message.isAccepted(botProfile)) return
+
+        val userId =
+            message.senderIdOrNull() ?: run {
+                log.warn { "skipping /tasks without sender user (chat=${message.chatIdLong})" }
+                return
+            }
+
+        taskMenu.sendMenu(
+            chatId = message.chatIdLong,
+            userId = userId,
+            replyToMessageId = message.messageIdLong,
+            chatIsPrivate = message.isPrivateChat,
+            messages = Messages.of(message.language)
+        )
+    }
+
+    private suspend fun dispatchCallback(callback: CallbackQuery) {
+        val messages = Messages.forCode(callback.from?.languageCode)
+        val message =
+            callback.message ?: run {
+                taskMenu.answerUnavailable(callback.id, messages)
+                return
+            }
+
+        val chatId = message.chatId
+        val userId = callback.from.id
+
+        if (!isAllowed(chatId, userId)) {
+            log.warn { "denied callback (not in allowlist): chat=$chatId user=$userId" }
+            taskMenu.answerUnavailable(callback.id, messages)
+            return
+        }
+
+        taskMenu.handleCallback(
+            callbackQueryId = callback.id,
+            callbackData = callback.data,
+            userId = userId,
+            chatId = chatId,
+            messageId = message.messageId,
+            chatIsPrivate = message.chat.isUserChat,
+            messages = messages
+        )
     }
 
     private suspend fun handleTextUpdate(message: Message, content: MessageText, botProfile: BotProfile) {
@@ -435,9 +506,13 @@ internal class TelegramBotRunner(
     }
 
     private fun Message.isAllowed(): Boolean {
-        if (allowedIds.isEmpty()) return false
-        if (chatIdLong in allowedIds) return true
         val userId = senderIdOrNull() ?: return false
+        return isAllowed(chatIdLong, userId)
+    }
+
+    private fun isAllowed(chatId: Long, userId: Long): Boolean {
+        if (allowedIds.isEmpty()) return false
+        if (chatId in allowedIds) return true
         return userId in allowedIds
     }
 

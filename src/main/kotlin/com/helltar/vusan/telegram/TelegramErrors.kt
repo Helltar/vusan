@@ -21,6 +21,9 @@ internal fun Throwable.isReplyMessageNotFound(): Boolean {
     return "reply message not found" in description || "message to be replied not found" in description
 }
 
+internal fun Throwable.isMessageNotModified(): Boolean =
+    telegramDescription?.contains("message is not modified", ignoreCase = true) == true
+
 // the client wraps request failures in generic TelegramApiException chains, so search the causes
 // for the api-level exception that carries telegram's error description.
 private val Throwable.telegramDescription: String?

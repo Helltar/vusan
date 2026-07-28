@@ -32,16 +32,62 @@ internal object TaskToolDescriptions {
                 "Otherwise omit — the bot's default is used."
 
     const val SCHEDULE_TITLE =
-        "Short human label shown in `listTasks`. " +
+        "Short human label shown in task lists. " +
                 "Omit if the prompt itself is short and self-explanatory."
 
     const val LIST_TASKS =
-        "List the user's active scheduled tasks (id, next fire time, recurrence, title/prompt). " +
-                """Call when the user asks "what do I have scheduled" or before cancelling one."""
+        "List the user's scheduled tasks (id, next fire time, recurrence, status, title/prompt). " +
+                """Call when the user asks "what do I have scheduled" or before changing one. """ +
+                "In a private chat this covers all of the user's tasks; in a group it covers only tasks from the current chat."
+
+    const val EDIT_TASK =
+        "Edit an existing scheduled task by its numeric id. " +
+                "Change only the fields the user requested and omit every other optional argument so it stays unchanged. " +
+                "If the user identifies a task by name instead of id, call `listTasks` first. " +
+                "Editing preserves whether the task is active or paused. " +
+                "In a group, only tasks from the current chat can be changed."
+
+    const val EDIT_ID = "Numeric id of the scheduled task to edit."
+
+    const val EDIT_PROMPT =
+        "Optional replacement action for the task to execute when it fires. " +
+                "Write it as a clear imperative in the user's language. " +
+                "Omit to preserve the current action."
+
+    const val EDIT_SCHEDULE =
+        "Optional replacement schedule in one of these forms: `once <ISO local datetime>`, `every <interval>`, or `cron <UNIX 5-field expr>`. " +
+                "Omit to preserve the current recurrence and next fire time."
+
+    const val EDIT_TIMEZONE =
+        "Optional replacement IANA timezone such as `Europe/Kyiv`. " +
+                "When supplied with `schedule`, it interprets that schedule in the new timezone. " +
+                "Without `schedule`, a cron task is recalculated in the new timezone while `once`/`every` keep their next instant. " +
+                "Omit to preserve the current timezone."
+
+    const val EDIT_TITLE =
+        "Optional replacement short human label. " +
+                "Omit to preserve the current title; pass `\"\"` to remove it."
+
+    const val PAUSE_TASK =
+        "Pause a scheduled task by its numeric id without deleting it. " +
+                "If the user identifies a task by name instead of id, call `listTasks` first. " +
+                "In a group, only tasks from the current chat can be changed."
+
+    const val PAUSE_ID = "Numeric id of the scheduled task to pause."
+
+    const val RESUME_TASK =
+        "Resume a paused scheduled task by its numeric id. " +
+                "If its old fire time elapsed while paused, a recurring task advances to its next future occurrence. " +
+                "An elapsed one-time task cannot be resumed. " +
+                "If the user identifies a task by name instead of id, call `listTasks` first. " +
+                "In a group, only tasks from the current chat can be changed."
+
+    const val RESUME_ID = "Numeric id of the scheduled task to resume."
 
     const val CANCEL_TASK =
         "Cancel a scheduled task by its numeric id (from `listTasks`). " +
-                "If the user names a task without giving an id, call `listTasks` first to look it up."
+                "If the user names a task without giving an id, call `listTasks` first to look it up. " +
+                "In a group, only tasks from the current chat can be changed."
 
     const val CANCEL_ID = "Numeric id of the scheduled task to cancel."
 }

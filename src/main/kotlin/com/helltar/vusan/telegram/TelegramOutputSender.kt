@@ -533,7 +533,7 @@ private fun captionWithSourceLink(caption: String?, sourceUrl: String?): String?
     return listOfNotNull(caption, link).joinToString("\n").ifBlank { null }
 }
 
-private fun String.escapeHtml(): String =
+internal fun String.escapeHtml(): String =
     replace("&", "&amp;")
         .replace("<", "&lt;")
         .replace(">", "&gt;")

@@ -17,9 +17,9 @@ Telegram ──► telegram/ ──► agent/ ──► tools/ ──► externa
 ```
 
 - **`telegram/`** — Telegram I/O. Receives updates (text, voice, audio, sticker, photo, video, video note, GIF,
-  document, album), filters by
-  allowlist, normalizes input, and delivers agent results back — including HTML-formatting, opt-in rich-message,
-  reply-anchor, media/document, media-group, and private-message fallbacks.
+  document, album, callback query), filters by allowlist, normalizes input, and delivers agent results back —
+  including HTML-formatting, opt-in rich-message, reply-anchor, media/document, media-group, and private-message
+  fallbacks. `TaskMenuHandler` owns the deterministic `/tasks` inline-button UI.
 - **`agent/`** — agent orchestration on top of Koog. `AgentRunner` serializes per-user turns;
   `AgentFactory` builds the `AIAgent` (system prompt + history + memory + tools). `agent/history/`
   summarizes and persists chat turns; `agent/memory/` stores durable user/group memory that survives a history clear and
@@ -37,8 +37,8 @@ Telegram ──► telegram/ ──► agent/ ──► tools/ ──► externa
   message or a replied-to message, that vision (`describeImage`, `describeVideo`) and code execution (`codeExecution`)
   can lazily download). Its `kind` (`IMAGE`/`VIDEO`/`OTHER`) decides which of those tools accepts it; a video also
   carries its duration and a loader for Telegram's own thumbnail.
-- **`tasks/`** — scheduled-task subsystem: storage, recurrence math, and the background
-  `TaskScheduler`.
+- **`tasks/`** — scheduled-task subsystem: storage, persisted pause state, recurrence math, and the
+  background `TaskScheduler`.
 - **`infra/`** — cross-cutting infrastructure: the SQLite/Exposed `Db` singleton and the Ktor
   `Http` client.
 - **`config/`** — `.env` parsing (`AppConfig`) and LLM provider/model resolution (`LlmRuntime`).
@@ -65,6 +65,7 @@ A normal user message travels:
    album cap) and handles the batch as one gallery message: the caption may sit on any album part, only the first
    inspectable item becomes the
    `AttachedFile`, and the agent is told how many items it cannot see.
+   Task-menu callback queries take a separate direct path to `TaskMenuHandler`; they never enter the agent loop.
 2. **Filter** — `MessageFilter.shouldHandle` drops messages the bot shouldn't answer (in groups:
    only replies, mentions, or targeted commands); `TelegramBotRunner` then checks the allowlist (`ALLOWED_IDS`) and
    rejects unknown chats/users.
@@ -125,7 +126,18 @@ A normal user message travels:
   `TelegramDelivery.sendScheduled`, and then append produced history turns. Tasks overdue beyond
   `TASK_MAX_LATENESS_MINUTES` (e.g. after downtime) get a "missed" notice and are advanced/disabled rather than fired. A
   task whose run fails is still advanced/disabled (logged, no retry) so a persistent error cannot re-fire it on every
-  poll tick. Recurrence math lives in `tasks/Recurrence.kt`.
+  poll tick. Paused tasks remain stored and count toward the per-user task limit, but the due-task query skips them.
+  Recurrence math lives in `tasks/Recurrence.kt`.
+- **Task menu** — `/tasks` bypasses the LLM and asks `TaskMenuHandler` to render the caller's enabled tasks. Private
+  chats show all of that user's tasks; groups show only their tasks created in that chat. Callback data carries the
+  menu owner, every action checks ownership and group scope, and Telegram is always sent an `answerCallbackQuery`.
+  Pause/resume edits the menu in place; cancel first renders a delete/back confirmation. Resuming an overdue recurring
+  task advances it to the next future occurrence, while an overdue one-time task stays paused. The agent-callable
+  `pauseTask` and `resumeTask` tools use the same repository operations and resume calculation, so plain-language
+  requests match the button behavior. `editTask` can independently replace the prompt, title, schedule, or timezone
+  while preserving the active/paused state; changing a cron timezone without replacing the expression recalculates
+  its next occurrence. In groups, `listTasks`, edit, pause, resume, and cancel share the menu's current-chat scope
+  instead of exposing tasks from private or unrelated chats.
 - **History summarization** — `agent/history/ChatHistory.summarizeForPrompt` keeps recent turns verbatim and condenses
   older ones so the prompt stays within budget while keeping tool-call/result pairs anchored.
 - **LLM provider resolution** — `config/LlmRuntime.resolveLlmRuntime` turns
@@ -160,9 +172,9 @@ model-authored and untrusted — keep it that way.
 ## Startup
 
 `Main.kt` wires everything in order: load `AppConfig` → connect `Db` → create the `Http` client and LLM runtime → build
-repositories, `ToolRegistryFactory`, `AgentFactory`, `AgentRunner` → optionally enable voice transcription → start
-`TelegramBotRunner` and launch `TaskScheduler`, then block on the bot job until shutdown (closing the executor, HTTP
-client, and DB in `finally`).
+repositories, `ToolRegistryFactory`, `AgentFactory`, `AgentRunner` → create `TaskMenuHandler` and optionally enable
+voice transcription → start `TelegramBotRunner` and launch `TaskScheduler`, then block on the bot job until shutdown
+(closing the executor, HTTP client, and DB in `finally`).
 
 ## Where to look when…
 
@@ -178,7 +190,7 @@ A symptom-to-source map for finding the right file fast. Paths are under
 | Bot floods a chat or stalls on Telegram 429 over a long multi-message reply      | `outbox/BotOutbox.kt` (text coalescing + `MAX_TEXT_MESSAGES` cap) + `telegram/TelegramDelivery.kt` (`INTER_MESSAGE_DELAY` pacing)                                                                                                                                                                     |
 | A specific tool misbehaves                                                       | `tools/<feature>/<Feature>Tools.kt` for the tool surface, plus its `<Feature>Client.kt` for the external call                                                                                                                                                                                         |
 | Code execution times out, says "busy", or loses produced files                   | `tools/sandbox/SandboxClient.kt` (HTTP call + wait budget), then the service in [`sandbox/`](../sandbox/): `main.ts` (worker pool, `503` when none free) and `worker.ts` (Pyodide setup, output caps)                                                                                                 |
-| Wrong language in a canned reply (busy/error/voice/start)                        | `i18n/Language.kt` (language selection) + `i18n/Messages.kt` (the strings)                                                                                                                                                                                                                            |
+| Wrong language in a canned reply (busy/error/voice/start/task menu)              | `i18n/Language.kt` (language selection) + `i18n/Messages.kt` (the strings)                                                                                                                                                                                                                            |
 | Bot forgets context or the history recap looks wrong                             | `agent/history/ChatHistory.kt` (summarize/slice) + `agent/history/ChatHistoryRepository.kt` (storage)                                                                                                                                                                                                 |
 | Voice/audio not transcribed                                                      | `telegram/VoiceTranscriber.kt` + `stt/OpenAiWhisperClient.kt` (needs `OPENAI_STT_API_KEY`); for a video's sound `tools/vision/VideoAudioTranscriber.kt`                                                                                                                                                                                                            |
 | Bot cannot see what is in a video                                                | `tools/vision/VisionTools.kt` (`describeVideo` guards and the preview-frame fallback), `tools/vision/VideoVisionClient.kt` (frames + transcript prompt), `tools/vision/VideoSampler.kt` (ffmpeg), `telegram/ReplyContext.kt` (which media becomes an `AttachedFile`)                                  |
@@ -186,6 +198,7 @@ A symptom-to-source map for finding the right file fast. Paths are under
 | Image search sends nothing, or sends irrelevant pictures                        | `tools/images/ImageSearchDelivery.kt` (candidate retries, size caps, media group) + `tools/images/ImageDownloadClient.kt` (user agent, format/dimension checks); for relevance, `SearxngTools.IMAGE_ENGINES` and `TavilyTools.imageExcludedDomains`                                                   |
 | A rich message reads as empty, `unknown`, or loses its structure                 | `telegram/RichMessageText.kt` (block tree → rich markdown), then `MessageMetadata.contentTypeName`/`textSnippetOrNull` and `ReplyContext.repliedTextOrNull`                                                                                                                                           |
 | Scheduled task fires late, not at all, or reports "missed"                       | `tasks/TaskScheduler.kt` (polling/lateness) + `tasks/Recurrence.kt` (next-run math)                                                                                                                                                                                                                   |
+| `/tasks` or a plain-language task pause/resume/cancel fails                      | `telegram/TaskMenuHandler.kt` (rendering, ownership, callbacks) + `tools/tasks/TaskTools.kt` (agent path) + `tasks/TasksRepository.kt` (shared scoped state changes)                                                                                                                                   |
 | An env var has no effect                                                         | `config/AppConfig.kt` (parsing) — and check it is documented in [`configuration.md`](configuration.md) + [`.env.example`](../.env.example)                                                                                                                                                            |
 | Model / provider / request-timeout selection                                     | `config/LlmRuntime.kt` (provider → client/model/params)                                                                                                                                                                                                                                               |
 | `describeImage`/`describeVideo` missing from the tool list                       | `config/VisionRuntime.kt` (chat model vs `OPENAI_VISION_API_KEY`), then `tools/ToolRegistryFactory.kt` (registration is skipped when there is no vision runtime)                                                                                                                                       |

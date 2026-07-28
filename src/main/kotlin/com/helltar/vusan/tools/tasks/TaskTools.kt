@@ -55,10 +55,10 @@ class TaskTools(
                 is ScheduleParse.Ok -> parsed
             }
 
-        val activeCount = repo.countActiveByUser(userId)
+        val enabledCount = repo.countEnabledByUser(userId)
 
-        if (activeCount >= maxTasksPerUser) {
-            return@suspendToolGuard "You already have $activeCount active tasks (limit $maxTasksPerUser). " +
+        if (enabledCount >= maxTasksPerUser) {
+            return@suspendToolGuard "You already have $enabledCount scheduled tasks (limit $maxTasksPerUser). " +
                     "Cancel one with `cancelTask` before scheduling a new one."
         }
 
@@ -87,16 +87,151 @@ class TaskTools(
     @LLMDescription(TaskToolDescriptions.LIST_TASKS)
     suspend fun listTasks(): String = suspendToolGuard {
         val userId = context.requireUserId()
+        val scopedChatId = scopedChatId()
 
-        val tasks = repo.listActiveByUser(userId)
+        val tasks = repo.listEnabledByUser(userId, scopedChatId)
 
         if (tasks.isEmpty())
-            return@suspendToolGuard "No active scheduled tasks."
+            return@suspendToolGuard "No scheduled tasks."
 
         buildString {
-            appendLine("Active scheduled tasks (${tasks.size}):")
+            appendLine("Scheduled tasks (${tasks.size}):")
             tasks.forEach { append(formatTaskLine(it)).append('\n') }
         }.trimEnd()
+    }
+
+    @Tool
+    @LLMDescription(TaskToolDescriptions.EDIT_TASK)
+    suspend fun editTask(
+        @LLMDescription(TaskToolDescriptions.EDIT_ID)
+        id: Long,
+        @LLMDescription(TaskToolDescriptions.EDIT_PROMPT)
+        prompt: String? = null,
+        @LLMDescription(TaskToolDescriptions.EDIT_SCHEDULE)
+        schedule: String? = null,
+        @LLMDescription(TaskToolDescriptions.EDIT_TIMEZONE)
+        timezone: String? = null,
+        @LLMDescription(TaskToolDescriptions.EDIT_TITLE)
+        title: String? = null
+    ): String = suspendToolGuard {
+        val userId = context.requireUserId()
+        val scopedChatId = scopedChatId()
+
+        if (listOf(prompt, schedule, timezone, title).all { it == null })
+            return@suspendToolGuard "No changes provided for task id=$id."
+
+        val existing =
+            repo.findEnabledForUser(userId, id, scopedChatId)
+                ?: return@suspendToolGuard taskNotFound(id, scopedChatId)
+
+        val editedPrompt =
+            prompt?.requireToolText("Task prompt", MAX_PROMPT_CHARS)
+                ?: existing.prompt
+
+        val editedTitle =
+            if (title == null) {
+                existing.title
+            } else {
+                title.trim().takeIf { it.isNotEmpty() }
+            }
+
+        require(title == null || editedTitle == null || editedTitle.length <= MAX_TITLE_CHARS) {
+            "Task title must be at most $MAX_TITLE_CHARS characters"
+        }
+
+        val editedTimezone =
+            if (timezone == null) {
+                existing.timezone
+            } else {
+                runCatching { ZoneId.of(timezone.trim()) }.getOrNull()
+                    ?: return@suspendToolGuard "Unknown timezone=`$timezone`. Use an IANA name like `Europe/Kyiv`."
+            }
+
+        val currentTime = Instant.now()
+
+        val editedSchedule =
+            if (schedule == null) {
+                val nextFireAt =
+                    if (timezone != null && existing.recurrence is Recurrence.Cron)
+                        existing.recurrence.nextAfter(currentTime, editedTimezone)
+                            ?: return@suspendToolGuard "The existing cron schedule has no upcoming fire time."
+                    else
+                        existing.nextFireAt
+
+                ScheduleParse.Ok(existing.recurrence, nextFireAt)
+            } else {
+                when (val parsed = parseSchedule(schedule, currentTime, editedTimezone)) {
+                    is ScheduleParse.Err -> return@suspendToolGuard parsed.message
+                    is ScheduleParse.Ok -> parsed
+                }
+            }
+
+        val edited =
+            existing.copy(
+                prompt = editedPrompt,
+                title = editedTitle,
+                recurrence = editedSchedule.recurrence,
+                timezone = editedTimezone,
+                nextFireAt = editedSchedule.firstFire
+            )
+
+        if (edited == existing)
+            return@suspendToolGuard "Task id=$id already has the requested values."
+
+        if (!repo.editEnabledForUser(userId, existing, edited, scopedChatId))
+            return@suspendToolGuard "Task id=$id is no longer available."
+
+        "Updated task id=$id (next=${formatFire(edited.nextFireAt, edited.timezone)}, " +
+                "repeat=${edited.recurrence.display}, status=${if (edited.paused) "paused" else "active"})."
+    }
+
+    @Tool
+    @LLMDescription(TaskToolDescriptions.PAUSE_TASK)
+    suspend fun pauseTask(
+        @LLMDescription(TaskToolDescriptions.PAUSE_ID)
+        id: Long
+    ): String = suspendToolGuard {
+        val userId = context.requireUserId()
+        val scopedChatId = scopedChatId()
+
+        val existing =
+            repo.findEnabledForUser(userId, id, scopedChatId)
+                ?: return@suspendToolGuard taskNotFound(id, scopedChatId)
+
+        if (existing.paused)
+            return@suspendToolGuard "Task id=$id is already paused."
+
+        if (!repo.pauseForUser(userId, id, scopedChatId))
+            return@suspendToolGuard "Task id=$id is no longer available."
+
+        "Paused task id=$id (next=${formatFire(existing.nextFireAt, existing.timezone)})."
+    }
+
+    @Tool
+    @LLMDescription(TaskToolDescriptions.RESUME_TASK)
+    suspend fun resumeTask(
+        @LLMDescription(TaskToolDescriptions.RESUME_ID)
+        id: Long
+    ): String = suspendToolGuard {
+        val userId = context.requireUserId()
+        val scopedChatId = scopedChatId()
+
+        val existing =
+            repo.findEnabledForUser(userId, id, scopedChatId)
+                ?: return@suspendToolGuard taskNotFound(id, scopedChatId)
+
+        if (!existing.paused)
+            return@suspendToolGuard "Task id=$id is already active."
+
+        val nextFireAt =
+            existing.nextFireAfterResume(Instant.now())
+                ?: return@suspendToolGuard "Task id=$id is a one-time task whose scheduled time has passed. " +
+                        "It cannot be resumed; schedule a new task instead."
+
+        if (!repo.resumeForUser(userId, id, nextFireAt, scopedChatId))
+            return@suspendToolGuard "Task id=$id is no longer available."
+
+        "Resumed task id=$id (next=${formatFire(nextFireAt, existing.timezone)})."
     }
 
     @Tool
@@ -106,15 +241,14 @@ class TaskTools(
         id: Long
     ): String = suspendToolGuard {
         val userId = context.requireUserId()
+        val scopedChatId = scopedChatId()
 
         val existing =
-            repo.findForUser(userId, id)
-                ?: return@suspendToolGuard "No scheduled task id=$id found for the current user."
+            repo.findEnabledForUser(userId, id, scopedChatId)
+                ?: return@suspendToolGuard taskNotFound(id, scopedChatId)
 
-        if (!existing.enabled)
-            return@suspendToolGuard "Task id=$id is already cancelled."
-
-        repo.delete(id)
+        if (!repo.deleteEnabledForUser(userId, id, scopedChatId))
+            return@suspendToolGuard "Task id=$id is no longer available."
 
         "Cancelled task id=$id (${formatFire(existing.nextFireAt, existing.timezone)}, ${existing.recurrence.display})."
     }
@@ -123,6 +257,15 @@ class TaskTools(
         if (raw.isNullOrBlank()) return ZoneId.systemDefault()
         return runCatching { ZoneId.of(raw.trim()) }.getOrNull()
     }
+
+    private fun scopedChatId(): Long? =
+        context.requireChatId().takeUnless { context.chatIsPrivate }
+
+    private fun taskNotFound(id: Long, scopedChatId: Long?): String =
+        if (scopedChatId == null)
+            "No scheduled task id=$id found for the current user."
+        else
+            "No scheduled task id=$id found for the current user in this chat."
 }
 
 private fun formatTaskLine(task: ScheduledTask): String =
@@ -130,6 +273,7 @@ private fun formatTaskLine(task: ScheduledTask): String =
         append("- id=").append(task.id)
         append(", fires=").append(formatFire(task.nextFireAt, task.timezone))
         append(", repeat=").append(task.recurrence.display)
+        append(", status=").append(if (task.paused) "paused" else "active")
         task.title?.let { append(", title=\"").append(it).append('"') }
         append(", prompt=\"").append(task.prompt).append('"')
     }

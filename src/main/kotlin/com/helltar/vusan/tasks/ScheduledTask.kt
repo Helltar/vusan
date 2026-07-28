@@ -17,6 +17,7 @@ data class ScheduledTask(
     val nextFireAt: Instant,
     val createdAt: Instant,
     val enabled: Boolean,
+    val paused: Boolean,
     val creatorMessageId: Long?,
     val creatorUsername: String?,
     val creatorDisplayName: String?,
@@ -44,3 +45,10 @@ private val FIRE_DISPLAY = DateTimeFormatter.ofPattern("yyyy-MM-dd'T'HH:mm")
 /** User-facing fire time, e.g. `2026-05-30T09:00 Europe/Kyiv`. */
 internal fun formatFire(instant: Instant, tz: ZoneId): String =
     "${FIRE_DISPLAY.format(ZonedDateTime.ofInstant(instant, tz))} ${tz.id}"
+
+/** Keeps a future slot, or advances a recurring task past every elapsed slot. */
+internal fun ScheduledTask.nextFireAfterResume(now: Instant): Instant? =
+    if (nextFireAt.isAfter(now))
+        nextFireAt
+    else
+        recurrence.catchUpAfter(nextFireAt, timezone, now)
