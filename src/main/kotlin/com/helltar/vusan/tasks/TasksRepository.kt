@@ -96,6 +96,9 @@ class TasksRepository {
     ): Boolean = dbTransaction {
         require(original.id == edited.id) { "original and edited task ids must match" }
 
+        // only the columns the caller actually changed are written. [original] is read before the edit, so
+        // writing it back wholesale would silently undo a TaskScheduler reschedule that landed in between —
+        // renaming a task would drag its fire time back to the already-fired slot.
         ScheduledTasksTable
             .update({ enabledTaskCondition(userId, original.id, chatId) }) {
                 if (original.prompt != edited.prompt)
