@@ -594,15 +594,14 @@ internal class TelegramBotRunner(
         }
     }
 
-    private fun Message.isAllowed(): Boolean {
-        val userId = senderIdOrNull() ?: return false
-        return isAllowed(chatIdLong, userId)
-    }
+    private fun Message.isAllowed(): Boolean = isAllowed(chatIdLong, senderIdOrNull())
 
-    private fun isAllowed(chatId: Long, userId: Long): Boolean {
+    // an allowlisted chat admits every message in it, including the rare ones without a sender
+    // (anonymous admins, linked-channel forwards), so the chat check must not depend on the user id.
+    private fun isAllowed(chatId: Long, userId: Long?): Boolean {
         if (allowedIds.isEmpty()) return false
         if (chatId in allowedIds) return true
-        return userId in allowedIds
+        return userId != null && userId in allowedIds
     }
 
     private suspend fun dispatchToAgent(
