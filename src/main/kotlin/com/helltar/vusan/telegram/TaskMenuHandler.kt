@@ -232,7 +232,7 @@ internal class TaskMenuHandler(
 
         val text =
             buildString {
-                append(messages.taskMenuTitle(currentChatOnly)).append('\n')
+                append(messages.taskMenuTitle(currentChatOnly)).append(ITEM_SEPARATOR)
                 append(
                     messages.taskMenuCapacity(
                         currentChatOnly = currentChatOnly,

@@ -83,8 +83,11 @@ class TaskMenuHandlerTest {
 
         val request = assertIs<SendMessage>(client.requests.single())
         assertEquals(ParseMode.HTML, request.parseMode)
-        assertContains(request.text, "<b>🗓 Your scheduled tasks in this chat</b>")
-        assertContains(request.text, "<i>In this chat: 1 · all tasks: 2/5</i>")
+        assertContains(
+            request.text,
+            "<b>🗓 Your scheduled tasks in this chat</b>\n\n" +
+                    "<i>In this chat: 1\nAcross all chats: 2 · limit: 5</i>"
+        )
         assertContains(request.text, "<b>#$visibleId · group &lt;report&gt; &amp; news</b>")
         assertFalse(request.text.contains("group <report> & news"))
         assertContains(request.text, "🕒 2026-07-28 12:00 · UTC")
@@ -97,6 +100,40 @@ class TaskMenuHandlerTest {
         assertEquals("tasks:100:pause:$visibleId", keyboard.keyboard.first()[0].callbackData)
         assertEquals("tasks:100:confirm:$visibleId", keyboard.keyboard.first()[1].callbackData)
         assertTrue(keyboard.keyboard.flatten().all { it.callbackData.toByteArray().size <= 64 })
+    }
+
+    @Test
+    fun `empty menus show task count and limit without a fraction`() = runBlocking {
+        handler.sendMenu(
+            chatId = 100L,
+            userId = 100L,
+            replyToMessageId = 55L,
+            chatIsPrivate = true,
+            messages = Messages.of(Language.ENGLISH)
+        )
+
+        val privateMenu = assertIs<SendMessage>(client.requests.single())
+        assertContains(
+            privateMenu.text,
+            "<b>🗓 Your scheduled tasks</b>\n\n<i>Tasks: 0 · limit: 5</i>\n\n"
+        )
+
+        client.requests.clear()
+
+        handler.sendMenu(
+            chatId = -200L,
+            userId = 100L,
+            replyToMessageId = 55L,
+            chatIsPrivate = false,
+            messages = Messages.of(Language.ENGLISH)
+        )
+
+        val groupMenu = assertIs<SendMessage>(client.requests.single())
+        assertContains(
+            groupMenu.text,
+            "<b>🗓 Your scheduled tasks in this chat</b>\n\n" +
+                    "<i>In this chat: 0\nAcross all chats: 0 · limit: 5</i>\n\n"
+        )
     }
 
     @Test
@@ -129,7 +166,7 @@ class TaskMenuHandlerTest {
 
         assertTrue(shown in 1 until taskCount, "expected a truncated task list, got $shown rows")
         assertContains(request.text, "${taskCount - shown} more didn't fit here")
-        assertContains(request.text, "<i>Tasks: $taskCount/100</i>")
+        assertContains(request.text, "<i>Tasks: $taskCount · limit: 100</i>")
     }
 
     @Test
@@ -149,7 +186,7 @@ class TaskMenuHandlerTest {
         assertTrue(assertNotNull(repo.findEnabledForUser(100L, id)).paused)
         val pausedEdit = assertIs<EditMessageText>(client.requests.first())
         assertEquals(ParseMode.HTML, pausedEdit.parseMode)
-        assertContains(pausedEdit.text, "<i>Tasks: 1/5</i>")
+        assertContains(pausedEdit.text, "<i>Tasks: 1 · limit: 5</i>")
         assertContains(pausedEdit.text, "⏸ Paused")
         val pausedKeyboard = assertIs<InlineKeyboardMarkup>(pausedEdit.replyMarkup)
         assertEquals("tasks:100:resume:$id", pausedKeyboard.keyboard.first()[0].callbackData)

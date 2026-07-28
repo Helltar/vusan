@@ -122,9 +122,9 @@ internal object EnglishMessages : Messages {
 
     override fun taskMenuCapacity(currentChatOnly: Boolean, listed: Int, total: Int, limit: Int): String =
         if (currentChatOnly)
-            "<i>In this chat: $listed · all tasks: $total/$limit</i>"
+            "<i>In this chat: $listed\nAcross all chats: $total · limit: $limit</i>"
         else
-            "<i>Tasks: $total/$limit</i>"
+            "<i>Tasks: $total · limit: $limit</i>"
 
     override fun taskMenuEmpty(currentChatOnly: Boolean): String =
         if (currentChatOnly)
@@ -223,9 +223,9 @@ internal object UkrainianMessages : Messages {
 
     override fun taskMenuCapacity(currentChatOnly: Boolean, listed: Int, total: Int, limit: Int): String =
         if (currentChatOnly)
-            "<i>У цьому чаті: $listed · усі завдання: $total/$limit</i>"
+            "<i>У цьому чаті: $listed\nУ всіх чатах: $total · ліміт: $limit</i>"
         else
-            "<i>Завдання: $total/$limit</i>"
+            "<i>Завдань: $total · ліміт: $limit</i>"
 
     override fun taskMenuEmpty(currentChatOnly: Boolean): String =
         if (currentChatOnly)
