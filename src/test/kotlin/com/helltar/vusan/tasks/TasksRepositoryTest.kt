@@ -52,13 +52,13 @@ class TasksRepositoryTest {
     @Test
     fun `editing a title does not overwrite a concurrent reschedule`() = runBlocking {
         val id = createTask(Instant.parse("2026-07-28T08:00:00Z"))
-        val original = assertNotNull(repo.findForUser(100L, id))
+        val original = assertNotNull(repo.findEnabledForUser(100L, id))
         val schedulerNextFire = Instant.parse("2026-07-29T08:00:00Z")
 
         repo.reschedule(id, schedulerNextFire)
         assertTrue(repo.editEnabledForUser(100L, original, original.copy(title = "renamed")))
 
-        val stored = assertNotNull(repo.findForUser(100L, id))
+        val stored = assertNotNull(repo.findEnabledForUser(100L, id))
         assertEquals("renamed", stored.title)
         assertEquals(schedulerNextFire, stored.nextFireAt)
     }

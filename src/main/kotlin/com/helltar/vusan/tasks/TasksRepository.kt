@@ -60,14 +60,6 @@ class TasksRepository {
             .map { it.toScheduledTask() }
     }
 
-    suspend fun findForUser(userId: Long, id: Long): ScheduledTask? = dbTransaction {
-        ScheduledTasksTable
-            .selectAll()
-            .where { (ScheduledTasksTable.id eq id) and (ScheduledTasksTable.userId eq userId) }
-            .firstOrNull()
-            ?.toScheduledTask()
-    }
-
     suspend fun findEnabledForUser(userId: Long, id: Long, chatId: Long? = null): ScheduledTask? = dbTransaction {
         ScheduledTasksTable
             .selectAll()
