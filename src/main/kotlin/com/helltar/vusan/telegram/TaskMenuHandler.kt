@@ -91,9 +91,7 @@ internal class TaskMenuHandler(
                 is TaskMenuAction.Back -> editMenu(chatId, messageId, userId, chatIsPrivate, messages)
 
                 is TaskMenuAction.Pause -> {
-                    val task = tasks.findEnabledForUser(userId, action.taskId, scopedChatId)
-
-                    if (task == null || !tasks.pauseForUser(userId, action.taskId, scopedChatId)) {
+                    if (!tasks.pauseForUser(userId, action.taskId, scopedChatId)) {
                         editMenu(chatId, messageId, userId, chatIsPrivate, messages)
                         return answerUnavailable(callbackQueryId, messages)
                     }
