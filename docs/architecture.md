@@ -137,6 +137,8 @@ A normal user message travels:
 - **Task menu** — `/tasks` bypasses the LLM and asks `TaskMenuHandler` to render the caller's enabled tasks. Private
   chats show all of that user's tasks; groups show only their tasks created in that chat. Callback data carries the
   menu owner, every action checks ownership and group scope, and Telegram is always sent an `answerCallbackQuery`.
+  Since `MAX_TASKS_PER_USER` is configurable, the menu renders only as many tasks as fit Telegram's message limit and
+  points at plain language for the rest; a rejected send falls back to the generic error reply rather than silence.
   Pause/resume edits the menu in place; cancel first renders a delete/back confirmation. Resuming an overdue recurring
   task advances it to the next future occurrence, while an overdue one-time task stays paused. The agent-callable
   `pauseTask` and `resumeTask` tools use the same repository operations and resume calculation, so plain-language

@@ -290,13 +290,23 @@ internal class TelegramBotRunner(
                 return
             }
 
-        taskMenu.sendMenu(
-            chatId = message.chatIdLong,
-            userId = userId,
-            replyToMessageId = message.messageIdLong,
-            chatIsPrivate = message.isPrivateChat,
-            messages = Messages.of(message.language)
-        )
+        val messages = Messages.of(message.language)
+
+        // the menu is sent straight to the bot api, so unlike an agent reply it has no delivery
+        // fallback chain — without this the user would see nothing at all when the send is rejected.
+        runCatching {
+            taskMenu.sendMenu(
+                chatId = message.chatIdLong,
+                userId = userId,
+                replyToMessageId = message.messageIdLong,
+                chatIsPrivate = message.isPrivateChat,
+                messages = messages
+            )
+        }.onFailure { error ->
+            error.rethrowIfCancellation()
+            log.error(error) { "failed to send task menu for chat=${message.chatIdLong} user=$userId" }
+            sendReply(message, messages.fallbackErrorReply)
+        }
     }
 
     private suspend fun handleClearCommand(message: Message, botProfile: BotProfile) {

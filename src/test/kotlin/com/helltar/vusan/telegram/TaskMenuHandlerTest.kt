@@ -36,6 +36,8 @@ import org.telegram.telegrambots.meta.api.objects.message.Message
 import org.telegram.telegrambots.meta.api.objects.replykeyboard.InlineKeyboardMarkup
 import org.telegram.telegrambots.meta.generics.TelegramClient
 
+private const val MAX_TELEGRAM_TEXT_CHARS = 4096
+
 class TaskMenuHandlerTest {
 
     private lateinit var tempDir: Path
@@ -95,6 +97,39 @@ class TaskMenuHandlerTest {
         assertEquals("tasks:100:pause:$visibleId", keyboard.keyboard.first()[0].callbackData)
         assertEquals("tasks:100:confirm:$visibleId", keyboard.keyboard.first()[1].callbackData)
         assertTrue(keyboard.keyboard.flatten().all { it.callbackData.toByteArray().size <= 64 })
+    }
+
+    @Test
+    fun `menu stays within telegram's message limit when the task limit is raised`() = runBlocking {
+        val roomyHandler = TaskMenuHandler(client.proxy, repo, maxTasksPerUser = 100) { currentTime }
+        val taskCount = 40
+
+        repeat(taskCount) { index ->
+            createTask(
+                userId = 100L,
+                chatId = 100L,
+                title = "long standing reminder number $index ".repeat(4),
+                recurrence = Recurrence.Cron("0 9 * * *")
+            )
+        }
+
+        roomyHandler.sendMenu(
+            chatId = 100L,
+            userId = 100L,
+            replyToMessageId = 55L,
+            chatIsPrivate = true,
+            messages = Messages.of(Language.ENGLISH)
+        )
+
+        val request = assertIs<SendMessage>(client.requests.single())
+        assertTrue(request.text.length <= MAX_TELEGRAM_TEXT_CHARS, "menu text was ${request.text.length} characters")
+
+        val keyboard = assertIs<InlineKeyboardMarkup>(request.replyMarkup)
+        val shown = keyboard.keyboard.size - 1
+
+        assertTrue(shown in 1 until taskCount, "expected a truncated task list, got $shown rows")
+        assertContains(request.text, "${taskCount - shown} more didn't fit here")
+        assertContains(request.text, "<i>Tasks: $taskCount/100</i>")
     }
 
     @Test

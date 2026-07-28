@@ -25,6 +25,12 @@ internal class TaskMenuHandler(
     private companion object {
         const val CALLBACK_PREFIX = "tasks:"
         const val MAX_TASK_LABEL_CHARS = 120
+
+        // MAX_TASKS_PER_USER is configurable, so the rendered list has to stay under Telegram's
+        // 4096-character message limit however high it is set. the slack covers the header and notice.
+        const val MAX_MENU_ITEMS_CHARS = 3600
+
+        const val ITEM_SEPARATOR = "\n\n"
     }
 
     fun handles(callbackData: String?): Boolean =
@@ -223,6 +229,9 @@ internal class TaskMenuHandler(
         val listedTasks = tasks.listEnabledByUser(userId, chatId.takeIf { currentChatOnly })
         val totalTasks = if (currentChatOnly) tasks.countEnabledByUser(userId) else listedTasks.size
 
+        val shownTasks = listedTasks.fittingInMenu(messages)
+        val hiddenTasks = listedTasks.size - shownTasks.size
+
         val text =
             buildString {
                 append(messages.taskMenuTitle(currentChatOnly)).append('\n')
@@ -233,27 +242,19 @@ internal class TaskMenuHandler(
                         total = totalTasks,
                         limit = maxTasksPerUser
                     )
-                ).append("\n\n")
+                ).append(ITEM_SEPARATOR)
 
-                if (listedTasks.isEmpty()) {
+                if (shownTasks.isEmpty())
                     append(messages.taskMenuEmpty(currentChatOnly))
-                } else {
-                    append(
-                        listedTasks.joinToString("\n\n") { task ->
-                            messages.taskMenuItem(
-                                id = task.id,
-                                label = task.menuLabel().escapeHtml(),
-                                nextFire = task.menuFireHtml(),
-                                recurrence = task.recurrence.menuHtml(),
-                                paused = task.paused
-                            )
-                        }
-                    )
-                }
+                else
+                    append(shownTasks.joinToString(ITEM_SEPARATOR) { it.text })
+
+                if (hiddenTasks > 0)
+                    append(ITEM_SEPARATOR).append(messages.taskMenuHiddenNotice(hiddenTasks))
             }
 
         val rows: List<InlineKeyboardRow> =
-            listedTasks.map { task ->
+            shownTasks.map { (task, _) ->
                 InlineKeyboardRow(
                     callbackButton(
                         if (task.paused)
@@ -299,6 +300,37 @@ internal class TaskMenuHandler(
         }.getOrThrow()
     }
 
+    // renders items while they fit the text budget, always keeping at least one so a single oversized
+    // task cannot make the menu look empty. what does not fit stays reachable through the task tools.
+    private fun List<ScheduledTask>.fittingInMenu(messages: Messages): List<MenuItem> {
+        val fitting = mutableListOf<MenuItem>()
+        var used = 0
+
+        for (task in this) {
+            val item =
+                MenuItem(
+                    task = task,
+                    text =
+                        messages.taskMenuItem(
+                            id = task.id,
+                            label = task.menuLabel().escapeHtml(),
+                            nextFire = task.menuFireHtml(),
+                            recurrence = task.recurrence.menuHtml(),
+                            paused = task.paused
+                        )
+                )
+
+            val cost = item.text.length + ITEM_SEPARATOR.length
+
+            if (fitting.isNotEmpty() && used + cost > MAX_MENU_ITEMS_CHARS) break
+
+            fitting += item
+            used += cost
+        }
+
+        return fitting
+    }
+
     private fun ScheduledTask.menuLabel(): String =
         title
             ?.collapseWhitespaceAndCap(MAX_TASK_LABEL_CHARS)
@@ -323,6 +355,11 @@ internal class TaskMenuHandler(
             .text(text)
             .callbackData(data)
             .build()
+
+    private data class MenuItem(
+        val task: ScheduledTask,
+        val text: String
+    )
 
     private data class TaskMenu(
         val text: String,

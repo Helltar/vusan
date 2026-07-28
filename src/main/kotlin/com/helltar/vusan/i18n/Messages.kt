@@ -32,6 +32,8 @@ interface Messages {
 
     fun taskMenuEmpty(currentChatOnly: Boolean): String
 
+    fun taskMenuHiddenNotice(hidden: Int): String
+
     fun taskMenuItem(
         id: Long,
         label: String,
@@ -130,6 +132,9 @@ internal object EnglishMessages : Messages {
         else
             "You don't have any scheduled tasks."
 
+    override fun taskMenuHiddenNotice(hidden: Int) =
+        "<i>$hidden more didn't fit here — just ask me about them in your own words.</i>"
+
     override fun taskMenuItem(
         id: Long,
         label: String,
@@ -227,6 +232,9 @@ internal object UkrainianMessages : Messages {
             "У тебе немає запланованих завдань у цьому чаті."
         else
             "У тебе немає запланованих завдань."
+
+    override fun taskMenuHiddenNotice(hidden: Int) =
+        "<i>Ще $hidden сюди не вмістилося — просто спитай про них своїми словами.</i>"
 
     override fun taskMenuItem(
         id: Long,
