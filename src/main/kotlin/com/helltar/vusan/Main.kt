@@ -47,7 +47,7 @@ suspend fun main() = coroutineScope {
         visionExecutor = vision?.executor?.takeIf { it !== executor }
 
         val toolRegistryFactory = ToolRegistryFactory(http, config, history, memory, tasks, vision)
-        val agentFactory = AgentFactory(executor, toolRegistryFactory, llm.model, llm.chatParams, config.systemPrompt)
+        val agentFactory = AgentFactory(executor, toolRegistryFactory, llm.model, llm.chatParams, config.personality)
         val agentRunner = AgentRunner(agentFactory, history, memory)
 
         val telegramClient = OkHttpTelegramClient(config.telegramBotToken)

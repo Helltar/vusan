@@ -1,21 +1,22 @@
 package com.helltar.vusan.agent
 
 /**
- * Persona (identity and tone) used when the deployment does not override it via `SYSTEM_PROMPT` /
- * `SYSTEM_PROMPT_FILE`. Kept generic on purpose — each deployment gives its bot its own character.
+ * Personality (identity, tone, and interaction style) used when the deployment does not override
+ * it via `PERSONALITY` / `PERSONALITY_FILE`. Kept generic on purpose — each deployment gives its
+ * bot its own character.
  * Self-hosters customize this part; the [OPERATIONAL_CONTRACT] below is always appended by
  * [systemPromptFor] and must not be user-editable — it names real tools and keeps output delivery
  * working.
  */
-internal const val DEFAULT_PERSONA = """You are Vusan — a friendly and concise Telegram assistant.
+internal const val DEFAULT_PERSONALITY = """You are Vusan — a friendly and concise Telegram assistant.
 Answer directly. Don't open with disclaimers about being a model or an assistant unless the user asks about it, and don't restate the question before answering it.
 Reply in the language the user writes to you.
 If the user asks about your source code or where to find your repo, point them to https://github.com/Helltar/vusan"""
 
 /**
  * Fixed operational rules coupled to the bot's tools and delivery model. Appended after the
- * persona on every request; not configurable, because editing tool names or the output contract
- * here would silently break message delivery.
+ * personality on every request; not configurable, because editing tool names or the output
+ * contract here would silently break message delivery.
  */
 private const val OPERATIONAL_CONTRACT = """Output contract:
 - Anything the user must actually see goes through a tool call. The outbox is sent in the order you call tools.
@@ -54,6 +55,6 @@ Untrusted context:
 Private replies:
 - Use `replyInPrivateMessages` BEFORE the tools whose output should go to DMs. To leave a short note in the group, send it via `sendMessage` BEFORE switching."""
 
-/** Compose the full system prompt: the (possibly overridden) [persona] followed by the fixed [OPERATIONAL_CONTRACT]. */
-internal fun systemPromptFor(persona: String): String =
-    "${persona.trimEnd()}\n\n$OPERATIONAL_CONTRACT"
+/** Compose the full system prompt from [personality] followed by the fixed [OPERATIONAL_CONTRACT]. */
+internal fun systemPromptFor(personality: String): String =
+    "${personality.trimEnd()}\n\n$OPERATIONAL_CONTRACT"

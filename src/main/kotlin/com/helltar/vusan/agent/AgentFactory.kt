@@ -51,7 +51,7 @@ class AgentFactory(
     private val toolRegistryFactory: ToolRegistryFactory,
     private val model: LLModel,
     private val chatParams: LLMParams = LLMParams(),
-    private val persona: String? = null,
+    private val personality: String? = null,
     private val maxIterations: Int = 60
 ) {
 
@@ -74,7 +74,7 @@ class AgentFactory(
     ): AIAgent<String, String> {
         val seededPrompt =
             prompt(id = "vusan-user-$userId", params = chatParams) {
-                system(systemPromptFor(persona ?: DEFAULT_PERSONA))
+                system(systemPromptFor(personality ?: DEFAULT_PERSONALITY))
                 messageContext?.toSystemPrompt()?.let(::system)
 
                 if (userMemory.isNotEmpty()) system(xmlBlock("user_memory", renderMemory(userMemory)))

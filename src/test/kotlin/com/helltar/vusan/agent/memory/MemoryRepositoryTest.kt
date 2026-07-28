@@ -142,7 +142,7 @@ class MemoryRepositoryTest {
             sandboxTimeoutSeconds = 30L,
             sandboxUrl = null,
             searxngUrl = null,
-            systemPrompt = null,
+            personality = null,
             taskMaxLatenessMinutes = 60L,
             tavilyApiKey = null,
             telegramBotToken = "test",

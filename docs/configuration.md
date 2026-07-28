@@ -82,21 +82,21 @@ LLM_BASE_URL=http://localhost:11434
 LLM_MODEL=gemma4
 ```
 
-## Persona
+## Personality
 
-The bot ships with a built-in persona ("Vusan"), kept generic so each deployment can give its bot its own character.
-Override it with either inline text or a file. The operational rules for output and tools are always appended by the bot
-and cannot be removed by a custom persona.
+The bot ships with a built-in personality ("Vusan"), kept generic so each deployment can define its identity, tone, and
+interaction style. Override it with either inline text or a file. The operational rules for output and tools are always
+appended separately by the bot and cannot be removed by a custom personality.
 
-Unset both variables to use the built-in persona.
+Unset both variables to use the built-in personality.
 
-| Variable             | Description                                                                                     |
-|----------------------|-------------------------------------------------------------------------------------------------|
-| `SYSTEM_PROMPT`      | Inline persona text. Takes precedence when set.                                                 |
-| `SYSTEM_PROMPT_FILE` | Path to a persona file. Used only when `SYSTEM_PROMPT` is unset; unreadable files fail startup. |
+| Variable           | Description                                                                                         |
+|--------------------|-----------------------------------------------------------------------------------------------------|
+| `PERSONALITY`      | Inline personality text. Takes precedence when set.                                                 |
+| `PERSONALITY_FILE` | Path to a personality file. Used only when `PERSONALITY` is unset; unreadable files fail startup.   |
 
-`SYSTEM_PROMPT_FILE` suits a long, multi-line persona — a file keeps line breaks and formatting readable, where
-`SYSTEM_PROMPT` is meant for short inline text. A file whose content is blank falls back to the built-in persona.
+`PERSONALITY_FILE` suits a long, multi-line personality — a file keeps line breaks and formatting readable, whereas
+`PERSONALITY` is meant for short inline text. A file whose content is blank falls back to the built-in personality.
 
 ## Optional tools
 

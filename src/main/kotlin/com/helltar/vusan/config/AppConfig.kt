@@ -20,10 +20,10 @@ data class AppConfig(
     val openAiImage: OpenAiImageConfig?,
     val openAiStt: OpenAiSttConfig?,
     val openAiVision: OpenAiVisionConfig?,
+    val personality: String?,
     val sandboxTimeoutSeconds: Long,
     val sandboxUrl: String?,
     val searxngUrl: String?,
-    val systemPrompt: String?,
     val taskMaxLatenessMinutes: Long,
     val tavilyApiKey: String?,
     val telegramBotToken: String,
@@ -53,9 +53,9 @@ data class AppConfig(
                 openAiImageApiKey = openAiImageKey,
                 openAiStt = resolveOpenAiStt(),
                 openAiVision = resolveOpenAiVision(),
+                personality = resolvePersonality(),
                 sandboxUrl = readEnv("SANDBOX_URL"),
                 searxngUrl = readEnv("SEARXNG_URL"),
-                systemPrompt = resolveSystemPrompt(),
                 tavilyApiKey = readEnv("TAVILY_API_KEY"),
                 telegramBotToken = requireEnv("TELEGRAM_BOT_TOKEN"),
                 ytDlpCookiesFile = readEnv("YT_DLP_COOKIES_FILE"),
@@ -89,29 +89,29 @@ data class AppConfig(
             )
         }
 
-        private fun resolveSystemPrompt(): String? {
-            readEnv("SYSTEM_PROMPT")?.let {
-                log.info { "Persona: SYSTEM_PROMPT env override (${it.length} chars)" }
+        private fun resolvePersonality(): String? {
+            readEnv("PERSONALITY")?.let {
+                log.info { "Personality: PERSONALITY env override (${it.length} chars)" }
                 return it
             }
 
             val path =
-                readEnv("SYSTEM_PROMPT_FILE")
+                readEnv("PERSONALITY_FILE")
                     ?: run {
-                        log.info { "Persona: built-in default (no SYSTEM_PROMPT / SYSTEM_PROMPT_FILE set)" }
+                        log.info { "Personality: built-in default (no PERSONALITY / PERSONALITY_FILE set)" }
                         return null
                     }
 
             val file = Path(path)
 
-            require(file.isReadable()) { "SYSTEM_PROMPT_FILE=[$path] does not exist or is not readable" }
+            require(file.isReadable()) { "PERSONALITY_FILE=[$path] does not exist or is not readable" }
 
             val text = file.readText().trim().ifBlank { null }
 
             if (text == null) {
-                log.warn { "Persona: SYSTEM_PROMPT_FILE=[$path] is blank — falling back to built-in default" }
+                log.warn { "Personality: PERSONALITY_FILE=[$path] is blank — falling back to built-in default" }
             } else {
-                log.info { "Persona: SYSTEM_PROMPT_FILE=[$path] (${text.length} chars)" }
+                log.info { "Personality: PERSONALITY_FILE=[$path] (${text.length} chars)" }
             }
 
             return text
