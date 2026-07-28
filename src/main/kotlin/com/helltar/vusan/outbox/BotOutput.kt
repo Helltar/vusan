@@ -7,6 +7,19 @@ sealed class BotOutput {
 
     data class Text(val text: String) : BotOutput()
 
+    data class InlineChoice(
+        val question: String,
+        val options: List<String>,
+        val ownerId: Long,
+        val historyRevision: Long
+    ) : BotOutput() {
+        init {
+            validateQuestionAndOptions("Inline choice", question, options)
+            require(ownerId > 0L) { "Inline choice owner id must be positive" }
+            require(historyRevision >= 0L) { "Inline choice history revision must not be negative" }
+        }
+    }
+
     // an opt-in Bot API 10.1 rich message for large, genuinely structured replies (long comparisons,
     // tables, multi-section documents). [markdown] is github-flavored markdown; delivery falls back to a
     // .md document if Telegram rejects it. some third-party clients (e.g. Telegram X) render rich messages

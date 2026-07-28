@@ -11,6 +11,7 @@ import com.helltar.vusan.infra.Http
 import com.helltar.vusan.stt.OpenAiWhisperClient
 import com.helltar.vusan.tasks.TaskScheduler
 import com.helltar.vusan.tasks.TasksRepository
+import com.helltar.vusan.telegram.InlineChoiceHandler
 import com.helltar.vusan.telegram.TaskMenuHandler
 import com.helltar.vusan.telegram.TelegramBotRunner
 import com.helltar.vusan.telegram.TelegramDelivery
@@ -55,6 +56,7 @@ suspend fun main() = coroutineScope {
         val delivery = TelegramDelivery(telegramClient)
         val voiceTranscriber = createVoiceTranscriber(http, config)
         val taskMenu = TaskMenuHandler(telegramClient, tasks, config.maxTasksPerUser)
+        val inlineChoices = InlineChoiceHandler(telegramClient, history::revision)
         val botRunner =
             TelegramBotRunner(
                 telegramClient,
@@ -63,6 +65,7 @@ suspend fun main() = coroutineScope {
                 agentRunner,
                 history,
                 taskMenu,
+                inlineChoices,
                 config.allowedIds,
                 voiceTranscriber
             )

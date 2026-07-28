@@ -12,6 +12,7 @@ import org.telegram.telegrambots.meta.api.objects.games.Animation
 import org.telegram.telegrambots.meta.api.objects.message.Message
 import org.telegram.telegrambots.meta.api.objects.photo.PhotoSize
 import org.telegram.telegrambots.meta.api.objects.stickers.Sticker
+import org.telegram.telegrambots.meta.api.objects.User
 import org.telegram.telegrambots.meta.api.objects.Video
 
 private const val MAX_METADATA_VALUE_CHARS = 500
@@ -45,20 +46,22 @@ internal fun Message.replyAuthorIdOrNull(): Long? = replyToMessage?.from?.id
 internal fun Message.replyToMessageIdOrNull(): Long? = replyToMessage?.messageId?.toLong()
 
 internal fun Message.toMessageContext(chatDescription: String?): MessageContext? {
-    val senderId = senderIdOrNull() ?: return null
+    val sender = from ?: return null
+    return toMessageContext(sender, chatDescription)
+}
 
-    return MessageContext(
+internal fun Message.toMessageContext(sender: User, chatDescription: String?): MessageContext =
+    MessageContext(
         chatId = chatIdLong,
         chatType = promptChatType(),
         isPrivate = isPrivateChat,
         chatTitle = chat.titleOrDisplayName(),
         chatUsername = chat.userName,
         chatDescription = chatDescription,
-        userId = senderId,
-        userDisplayName = senderDisplayNameOrNull(),
-        userUsername = senderUsernameOrNull()
+        userId = sender.id,
+        userDisplayName = displayName(sender.firstName, sender.lastName),
+        userUsername = sender.userName
     )
-}
 
 // the bot api models chat flavors as flags on `Chat` and `Message` rather than distinct types,
 // so the prompt label is assembled from those flags.

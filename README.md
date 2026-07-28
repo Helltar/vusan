@@ -105,6 +105,9 @@ greeting. Items marked *(opt-in)* need an API key or an extra service, see
 
 ### In the chat
 
+- **Inline choices** — when it needs a specific decision or confirmation, it can ask with buttons
+  and continue as soon as you tap one. Clearing the conversation also expires its unanswered
+  choices.
 - **Polls and quizzes** — creates real Telegram polls and quizzes, not a text imitation.
 - **Reactions** — sometimes an emoji on your message is the whole answer.
 - **Files and links** — sends what it wrote as a document, or downloads a link and passes it on

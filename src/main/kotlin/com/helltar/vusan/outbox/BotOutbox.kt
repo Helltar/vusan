@@ -69,8 +69,21 @@ class BotOutbox {
         return true
     }
 
+    fun enqueueInlineChoice(choice: BotOutput.InlineChoice): Boolean {
+        if (standaloneBubbleCount() >= MAX_TEXT_MESSAGES)
+            return false
+
+        enqueue(choice)
+
+        return true
+    }
+
     private fun standaloneBubbleCount(): Int =
-        items.count { it.output is BotOutput.Text || it.output is BotOutput.RichMessage }
+        items.count {
+            it.output is BotOutput.Text ||
+                    it.output is BotOutput.RichMessage ||
+                    it.output is BotOutput.InlineChoice
+        }
 
     fun useDirectMessages() {
         redirectToPrivate = true

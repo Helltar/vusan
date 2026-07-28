@@ -1,6 +1,7 @@
 package com.helltar.vusan.infra
 
 import com.helltar.vusan.config.AppConfig
+import com.helltar.vusan.infra.tables.ChatHistoryStateTable
 import com.helltar.vusan.infra.tables.ChatMessagesTable
 import com.helltar.vusan.infra.tables.MemoryTable
 import com.helltar.vusan.infra.tables.ScheduledTasksTable
@@ -66,7 +67,7 @@ object Db {
             )
 
             suspendTransaction(newDatabase) {
-                SchemaUtils.create(ChatMessagesTable, ScheduledTasksTable, MemoryTable)
+                SchemaUtils.create(ChatMessagesTable, ChatHistoryStateTable, ScheduledTasksTable, MemoryTable)
                 SchemaUtils
                     .addMissingColumnsStatements(ScheduledTasksTable, withLogs = false)
                     .forEach { exec(it) }

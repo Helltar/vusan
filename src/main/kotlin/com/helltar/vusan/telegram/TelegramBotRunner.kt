@@ -1,7 +1,9 @@
 package com.helltar.vusan.telegram
 
 import com.helltar.vusan.agent.AgentRequest
+import com.helltar.vusan.agent.AgentResult
 import com.helltar.vusan.agent.AgentRunner
+import com.helltar.vusan.agent.ToolActivity
 import com.helltar.vusan.agent.history.ChatHistoryRepository
 import com.helltar.vusan.common.collapseWhitespaceAndCap
 import com.helltar.vusan.common.limitTo
@@ -25,6 +27,7 @@ import org.telegram.telegrambots.meta.api.methods.groupadministration.GetChat
 import org.telegram.telegrambots.meta.api.methods.send.SendChatAction
 import org.telegram.telegrambots.meta.api.objects.CallbackQuery
 import org.telegram.telegrambots.meta.api.objects.Update
+import org.telegram.telegrambots.meta.api.objects.User
 import org.telegram.telegrambots.meta.api.objects.message.Message
 import org.telegram.telegrambots.meta.generics.TelegramClient
 import kotlin.time.Duration.Companion.seconds
@@ -36,6 +39,7 @@ internal class TelegramBotRunner(
     private val agent: AgentRunner,
     private val history: ChatHistoryRepository,
     private val taskMenu: TaskMenuHandler,
+    private val inlineChoices: InlineChoiceHandler,
     private val allowedIds: Set<Long>,
     private val voiceTranscriber: VoiceTranscriber?
 ) {
@@ -150,8 +154,10 @@ internal class TelegramBotRunner(
             val callback = update.callbackQuery
 
             if (callback != null) {
-                if (taskMenu.handles(callback.data))
-                    launchCallbackHandling(callback)
+                when {
+                    taskMenu.handles(callback.data) -> launchCallbackHandling(callback)
+                    inlineChoices.handles(callback.data) -> launchInlineChoiceHandling(callback)
+                }
 
                 continue
             }
@@ -194,6 +200,19 @@ internal class TelegramBotRunner(
                     error.rethrowIfCancellation()
                     log.error(error) {
                         "callback handling failed for chat=${callback.message?.chatId} " +
+                                "msg=${callback.message?.messageId} user=${callback.from?.id}"
+                    }
+                }
+        }
+    }
+
+    private fun CoroutineScope.launchInlineChoiceHandling(callback: CallbackQuery) {
+        launch {
+            runCatching { dispatchInlineChoiceCallback(callback) }
+                .onFailure { error ->
+                    error.rethrowIfCancellation()
+                    log.error(error) {
+                        "inline choice handling failed for chat=${callback.message?.chatId} " +
                                 "msg=${callback.message?.messageId} user=${callback.from?.id}"
                     }
                 }
@@ -306,6 +325,39 @@ internal class TelegramBotRunner(
             chatIsPrivate = message.chat.isUserChat,
             messages = messages
         )
+    }
+
+    private suspend fun dispatchInlineChoiceCallback(callback: CallbackQuery) {
+        val user = callback.from
+        val messages = Messages.forCode(user?.languageCode)
+        val message =
+            callback.message as? Message ?: run {
+                inlineChoices.answerUnavailable(callback.id, messages)
+                return
+            }
+
+        val chatId = message.chatId
+        val userId = user.id
+
+        if (!isAllowed(chatId, userId)) {
+            log.warn { "denied inline choice callback (not in allowlist): chat=$chatId user=$userId" }
+            inlineChoices.answerUnavailable(callback.id, messages)
+            return
+        }
+
+        val selection =
+            inlineChoices.handleCallback(
+                callbackQueryId = callback.id,
+                callbackData = callback.data,
+                userId = userId,
+                chatId = chatId,
+                messageId = message.messageId,
+                question = message.text,
+                keyboard = message.replyMarkup,
+                messages = messages
+            ) ?: return
+
+        handleInlineChoiceSelection(message, user, selection, messages)
     }
 
     private suspend fun handleTextUpdate(message: Message, content: MessageText, botProfile: BotProfile) {
@@ -574,14 +626,79 @@ internal class TelegramBotRunner(
                 return
             }
 
+        val language = message.language
+        val request =
+            AgentRequest(
+                chatId = chatId,
+                userId = userId,
+                messageId = message.messageIdLong,
+                replyToMessageId = replyToMessageId,
+                prompt = agentInput,
+                historyEntry = historyInput,
+                messageContext = message.toMessageContext(loadChatDescription(message)),
+                attachedFile = attachedFile,
+                language = language
+            )
+
+        runAgentTurn(
+            request = request,
+            inputKind = inputKind,
+            waitForTurn = false,
+            deliver = { result -> delivery.send(message, result) },
+            sendFallback = { sendReply(message, Messages.of(language).fallbackErrorReply) }
+        )
+    }
+
+    private suspend fun handleInlineChoiceSelection(
+        message: Message,
+        user: User,
+        selection: InlineChoiceSelection,
+        messages: Messages
+    ) {
+        val input = inlineChoiceAgentInput(selection)
+        val language = Language.fromCode(user.languageCode)
+        val request =
+            AgentRequest(
+                chatId = message.chatIdLong,
+                userId = user.id,
+                messageId = 0L,
+                prompt = input,
+                historyEntry = input,
+                messageContext = message.toMessageContext(user, loadChatDescription(message)),
+                language = language
+            )
+
+        runAgentTurn(
+            request = request,
+            inputKind = "inline choice",
+            waitForTurn = true,
+            deliver = { result ->
+                delivery.sendCallback(
+                    result = result,
+                    message = message,
+                    userId = user.id,
+                    messages = messages
+                )
+            },
+            sendFallback = { sendReply(message, messages.fallbackErrorReply) }
+        )
+    }
+
+    private suspend fun runAgentTurn(
+        request: AgentRequest,
+        inputKind: String,
+        waitForTurn: Boolean,
+        deliver: suspend (AgentResult) -> Unit,
+        sendFallback: suspend () -> Unit
+    ) {
         log.info {
             buildString {
-                append("incoming $inputKind: chat=$chatId user=$userId msg=${message.messageIdLong}")
-                message.senderUsernameOrNull()?.let { append(" username=[$it]") }
-                message.senderDisplayNameOrNull()?.let { append(" name=[$it]") }
-                replyToMessageId?.let { append(" replyTo=$it") }
-                attachedFile?.let { append(" attachedFile=[${it.name}]") }
-                append(" text=[${agentInput.collapseWhitespaceAndCap(LOG_PROMPT_MAX_CHARS).orEmpty()}]")
+                append("incoming $inputKind: chat=${request.chatId} user=${request.userId} msg=${request.messageId}")
+                request.messageContext?.userUsername?.let { append(" username=[$it]") }
+                request.messageContext?.userDisplayName?.let { append(" name=[$it]") }
+                request.replyToMessageId?.let { append(" replyTo=$it") }
+                request.attachedFile?.let { append(" attachedFile=[${it.name}]") }
+                append(" text=[${request.prompt.collapseWhitespaceAndCap(LOG_PROMPT_MAX_CHARS).orEmpty()}]")
             }
         }
 
@@ -590,37 +707,35 @@ internal class TelegramBotRunner(
             // action of the currently executing tool (upload_photo while an image generates, etc.). delivery
             // then shows its own per-item action. a plain typing action would force typing the whole time.
             val result =
-                withLiveChatAction(chatId) { setAction ->
-                    agent.handle(
-                        AgentRequest(
-                            chatId = chatId,
-                            userId = userId,
-                            messageId = message.messageIdLong,
-                            replyToMessageId = replyToMessageId,
-                            prompt = agentInput,
-                            historyEntry = historyInput,
-                            messageContext = message.toMessageContext(loadChatDescription(message)),
-                            attachedFile = attachedFile,
-                            language = message.language
-                        ),
-                        onToolStarting = { activity -> setAction(chatActionFor(activity)) }
-                    )
+                withLiveChatAction(request.chatId) { setAction ->
+                    val onToolStarting = { activity: ToolActivity ->
+                        setAction(chatActionFor(activity))
+                    }
+
+                    if (waitForTurn)
+                        agent.handleQueued(request, onToolStarting)
+                    else
+                        agent.handle(request, onToolStarting)
                 }
 
-            delivery.send(message, result)
+            deliver(result)
 
             if (result.historyTurns.isNotEmpty()) {
-                history.appendTurns(userId, result.historyTurns)
+                history.appendTurns(request.userId, result.historyTurns)
             }
         } catch (error: Throwable) {
             error.rethrowIfCancellation()
 
-            log.error(error) { "telegram $inputKind handling failed for chat=$chatId user=$userId" }
+            log.error(error) {
+                "telegram $inputKind handling failed for chat=${request.chatId} user=${request.userId}"
+            }
 
-            runCatching { sendReply(message, Messages.of(message.language).fallbackErrorReply) }
+            runCatching { sendFallback() }
                 .onFailure { replyError ->
                     replyError.rethrowIfCancellation()
-                    log.warn(replyError) { "failed to send fallback error reply for chat=$chatId user=$userId" }
+                    log.warn(replyError) {
+                        "failed to send fallback error reply for chat=${request.chatId} user=${request.userId}"
+                    }
                 }
         }
     }

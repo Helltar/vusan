@@ -16,10 +16,41 @@ import org.telegram.telegrambots.meta.api.methods.send.SendRichMessage
 import org.telegram.telegrambots.meta.api.methods.send.SendVideo
 import org.telegram.telegrambots.meta.api.objects.ApiResponse
 import org.telegram.telegrambots.meta.api.objects.message.Message
+import org.telegram.telegrambots.meta.api.objects.replykeyboard.InlineKeyboardMarkup
 import org.telegram.telegrambots.meta.exceptions.TelegramApiRequestException
 import org.telegram.telegrambots.meta.generics.TelegramClient
 
 class TelegramOutputSenderTest {
+
+    @Test
+    fun `inline choice is sent as plain text with owner-bound callback buttons`() = runBlocking {
+        val client = RecordingClient()
+
+        TelegramOutputSender.send(
+            client = client.proxy,
+            item = BotOutput.InlineChoice(
+                question = "Which format?",
+                options = listOf("PDF", "DOCX", "Plain text"),
+                ownerId = 42L,
+                historyRevision = 7L
+            ),
+            chatId = 1L,
+            replyParameters = null,
+            caption = null,
+            formattingFileNotice = "notice"
+        )
+
+        val request = assertIs<SendMessage>(client.requests.single())
+        assertEquals("Which format?", request.text)
+        assertEquals(null, request.parseMode)
+
+        val keyboard = assertIs<InlineKeyboardMarkup>(request.replyMarkup)
+        assertEquals(listOf(2, 1), keyboard.keyboard.map { it.size })
+        assertEquals(
+            listOf("choice:42:7:0", "choice:42:7:1", "choice:42:7:2"),
+            keyboard.keyboard.flatten().map { it.callbackData }
+        )
+    }
 
     @Test
     fun `photo falls back to document by default`() = runBlocking {

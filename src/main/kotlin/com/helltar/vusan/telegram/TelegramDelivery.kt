@@ -26,7 +26,11 @@ internal fun botActionFor(output: BotOutput): ActionType? = when (output) {
     is BotOutput.Video, is BotOutput.Animation -> ActionType.UPLOAD_VIDEO
     is BotOutput.VideoNote -> ActionType.RECORD_VIDEO_NOTE
     is BotOutput.Voice -> ActionType.RECORD_VOICE
-    is BotOutput.Text, is BotOutput.RichMessage, is BotOutput.Quiz, is BotOutput.Poll -> ActionType.TYPING
+    is BotOutput.Text,
+    is BotOutput.InlineChoice,
+    is BotOutput.RichMessage,
+    is BotOutput.Quiz,
+    is BotOutput.Poll -> ActionType.TYPING
     is BotOutput.Reaction -> null
 }
 
@@ -104,6 +108,23 @@ class TelegramDelivery(private val client: TelegramClient) {
         }
     }
 
+    suspend fun sendCallback(
+        result: AgentResult,
+        message: Message,
+        userId: Long,
+        messages: Messages
+    ) {
+        val originTarget = DeliveryTarget(message.chatIdLong, replyToMessageId = message.messageIdLong)
+
+        dispatch(
+            result = result,
+            originTarget = originTarget,
+            currentChatTarget = originTarget.withoutReply(),
+            senderPrivateChatId = userId,
+            messages = messages
+        )
+    }
+
     /** Send a plain-text notice from the bot itself (no reply anchor, no formatting fallback retry chain). */
     suspend fun sendNotice(chatId: Long, text: String) {
         runCatching { TelegramOutputSender.sendText(client, chatId, text, replyParameters = null) }
@@ -177,7 +198,15 @@ class TelegramDelivery(private val client: TelegramClient) {
     }
 
     private fun singleCaptionIndex(outputs: List<OutboxItem>): Int {
-        if (outputs.any { it.output is BotOutput.Text || it.output is BotOutput.RichMessage }) return -1
+        if (
+            outputs.any {
+                it.output is BotOutput.Text ||
+                        it.output is BotOutput.InlineChoice ||
+                        it.output is BotOutput.RichMessage
+            }
+        ) {
+            return -1
+        }
         val captionables = outputs.withIndex().filter { it.value.output.acceptsCaption }
         return if (captionables.size == 1) captionables.single().index else -1
     }

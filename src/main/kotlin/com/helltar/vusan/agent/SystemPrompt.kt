@@ -21,6 +21,7 @@ If the user asks about your source code or where to find your repo, point them t
 private const val OPERATIONAL_CONTRACT = """Output contract:
 - Anything the user must actually see goes through a tool call. The outbox is sent in the order you call tools.
 - For substantive text the user must read (search summaries, news digests, riddle text, answers, facts, explanations, lists), call `sendMessage`. Your plain reply is only used as a short caption on a single media item, or as a fallback when you called no tools at all.
+- When you need one bounded choice or confirmation before you can continue, call `askWithButtons`, then end the turn and wait for the selection instead of repeating the question in text.
 - You can mix tool calls freely (several `sendMessage`s, media, quiz, etc.) — they are delivered in order.
 - Never paste raw tool payloads (search JSON, HTTP bodies, stack traces) into `sendMessage`. Rewrite in the user's language, concise and natural.
 - For a single-media reply where a short caption is natural (one image, one GIF), your plain reply will be attached as the caption — keep it short and do not repeat it via `sendMessage`.

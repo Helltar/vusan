@@ -14,6 +14,7 @@ import com.helltar.vusan.outbox.BotOutput
 import com.helltar.vusan.outbox.OutboxItem
 import com.helltar.vusan.request.AttachedFile
 import com.helltar.vusan.request.RequestContext
+import com.helltar.vusan.tools.choice.InlineChoiceTools
 import com.helltar.vusan.tools.message.MessageTools
 import io.github.oshai.kotlinlogging.KotlinLogging
 import kotlinx.coroutines.sync.Mutex
@@ -69,11 +70,17 @@ class AgentRunner(
         }
     }
 
-    suspend fun handleScheduled(request: AgentRequest): AgentResult {
+    suspend fun handleScheduled(request: AgentRequest): AgentResult =
+        handleQueued(request)
+
+    suspend fun handleQueued(
+        request: AgentRequest,
+        onToolStarting: (activity: ToolActivity) -> Unit = {}
+    ): AgentResult {
         val lock = retainLock(request.userId)
 
         try {
-            return lock.withLock { runAgent(request) }
+            return lock.withLock { runAgent(request, onToolStarting) }
         } finally {
             releaseLock(request.userId)
         }
@@ -240,6 +247,7 @@ private fun extractFinalComment(answer: String, outputs: List<OutboxItem>): Stri
                 it.output is BotOutput.Voice ||
                         it.output is BotOutput.VideoNote ||
                         it.output is BotOutput.Text ||
+                        it.output is BotOutput.InlineChoice ||
                         it.output is BotOutput.Reaction
             }
         }
@@ -247,7 +255,15 @@ private fun extractFinalComment(answer: String, outputs: List<OutboxItem>): Stri
 private fun assistantTextForHistory(outputs: List<OutboxItem>, comment: String?): String? {
     val parts =
         buildList {
-            addAll(outputs.mapNotNull { it.output as? BotOutput.Text }.map { it.text })
+            addAll(
+                outputs.mapNotNull {
+                    when (val output = it.output) {
+                        is BotOutput.Text -> output.text
+                        is BotOutput.InlineChoice -> output.historyText()
+                        else -> null
+                    }
+                }
+            )
             comment?.let(::add)
         }
 
@@ -258,7 +274,14 @@ private fun assistantTextForHistory(outputs: List<OutboxItem>, comment: String?)
 // matching TOOL_CALL/TOOL_RESULT pair avoids storing (and replaying) the same content twice.
 // the Koog runtime registers each tool under its function name (no tool here sets @Tool(customName)),
 // so a function reference stays in sync with the registered name across renames.
-private val TEXT_DUPLICATING_TOOLS = setOf(MessageTools::sendMessage.name)
+private val TEXT_DUPLICATING_TOOLS =
+    setOf(
+        MessageTools::sendMessage.name,
+        InlineChoiceTools::askWithButtons.name
+    )
+
+private fun BotOutput.InlineChoice.historyText(): String =
+    question + "\n\n" + options.joinToString("\n") { "• $it" }
 
 private fun buildHistoryTurns(userEntry: String, toolEvents: List<ToolEvent>, assistantText: String?): List<ChatTurn> =
     buildList {

@@ -1,15 +1,18 @@
 package com.helltar.vusan.agent.history
 
 import com.helltar.vusan.infra.Db.dbTransaction
+import com.helltar.vusan.infra.tables.ChatHistoryStateTable
 import com.helltar.vusan.infra.tables.ChatMessagesTable
 import org.jetbrains.exposed.v1.core.SortOrder
 import org.jetbrains.exposed.v1.core.and
 import org.jetbrains.exposed.v1.core.eq
 import org.jetbrains.exposed.v1.core.less
+import org.jetbrains.exposed.v1.core.plus
 import org.jetbrains.exposed.v1.jdbc.batchInsert
 import org.jetbrains.exposed.v1.jdbc.deleteWhere
 import org.jetbrains.exposed.v1.jdbc.select
 import org.jetbrains.exposed.v1.jdbc.selectAll
+import org.jetbrains.exposed.v1.jdbc.upsert
 
 class ChatHistoryRepository(private val maxMessagesPerUser: Int = 120) {
 
@@ -45,9 +48,29 @@ class ChatHistoryRepository(private val maxMessagesPerUser: Int = 120) {
         }
     }
 
-    suspend fun clear(userId: Long) = dbTransaction {
-        ChatMessagesTable
-            .deleteWhere { ChatMessagesTable.userId eq userId }
+    suspend fun revision(userId: Long): Long = dbTransaction {
+        ChatHistoryStateTable
+            .select(ChatHistoryStateTable.revision)
+            .where { ChatHistoryStateTable.userId eq userId }
+            .singleOrNull()
+            ?.get(ChatHistoryStateTable.revision)
+            ?: 0L
+    }
+
+    suspend fun clear(userId: Long) {
+        dbTransaction {
+            ChatMessagesTable
+                .deleteWhere { ChatMessagesTable.userId eq userId }
+
+            ChatHistoryStateTable.upsert(
+                onUpdate = {
+                    it[ChatHistoryStateTable.revision] = ChatHistoryStateTable.revision + 1L
+                }
+            ) {
+                it[ChatHistoryStateTable.userId] = userId
+                it[ChatHistoryStateTable.revision] = 1L
+            }
+        }
     }
 
     private fun trim(userId: Long) {

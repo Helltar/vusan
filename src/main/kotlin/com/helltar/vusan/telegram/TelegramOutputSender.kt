@@ -43,6 +43,7 @@ internal object TelegramOutputSender {
     ) {
         when (item) {
             is BotOutput.Text -> sendReplyText(client, chatId, item.text, replyParameters, formattingFileNotice)
+            is BotOutput.InlineChoice -> sendInlineChoice(client, chatId, item, replyParameters)
             is BotOutput.RichMessage -> sendRichMessage(client, chatId, item.markdown, replyParameters)
             is BotOutput.Animation -> sendAnimation(client, chatId, replyParameters, item, caption, formattingFileNotice)
             is BotOutput.Photo -> sendPhoto(client, chatId, replyParameters, item, caption, formattingFileNotice)
@@ -57,6 +58,22 @@ internal object TelegramOutputSender {
             is BotOutput.Poll -> sendPoll(client, chatId, replyParameters, item)
             is BotOutput.Reaction -> sendReaction(client, chatId, item)
         }
+    }
+
+    private suspend fun sendInlineChoice(
+        client: TelegramClient,
+        chatId: Long,
+        choice: BotOutput.InlineChoice,
+        replyParameters: ReplyParameters?
+    ) {
+        sendTextMessage(
+            client = client,
+            chatId = chatId,
+            text = choice.question,
+            parseMode = null,
+            replyParameters = replyParameters,
+            replyMarkup = inlineChoiceKeyboard(choice)
+        )
     }
 
     suspend fun sendText(

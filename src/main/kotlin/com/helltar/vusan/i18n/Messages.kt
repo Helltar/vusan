@@ -11,6 +11,9 @@ interface Messages {
     val historyClearedReply: String
     val voiceEmptyReply: String
     val voiceTranscriptionFailedReply: String
+    val inlineChoiceNotOwnerAlert: String
+    val inlineChoiceUnavailableAlert: String
+    val inlineChoiceErrorAlert: String
     val taskMenuNotOwnerAlert: String
     val taskMenuUnavailableAlert: String
     val taskMenuPastOnceAlert: String
@@ -20,6 +23,8 @@ interface Messages {
     val taskMenuDeleteButton: String
 
     fun voiceTooLongReply(durationSeconds: Long, maxSeconds: Long): String
+
+    fun inlineChoiceSelected(option: String): String
 
     fun taskMenuTitle(currentChatOnly: Boolean): String
 
@@ -81,6 +86,12 @@ internal object EnglishMessages : Messages {
 
     override val voiceTranscriptionFailedReply = "I couldn't transcribe that voice message — send it as text instead 😊"
 
+    override val inlineChoiceNotOwnerAlert = "This choice was meant for someone else."
+
+    override val inlineChoiceUnavailableAlert = "This choice is no longer available."
+
+    override val inlineChoiceErrorAlert = "Couldn't apply that choice — try again."
+
     override val taskMenuNotOwnerAlert = "This task menu belongs to someone else."
 
     override val taskMenuUnavailableAlert = "That task is no longer available."
@@ -98,6 +109,8 @@ internal object EnglishMessages : Messages {
     override fun voiceTooLongReply(durationSeconds: Long, maxSeconds: Long): String =
         "That voice message is ${durationSeconds}s long — I can only transcribe up to ${maxSeconds}s, " +
                 "send a shorter one or type it out"
+
+    override fun inlineChoiceSelected(option: String) = "✅ Selected: $option"
 
     override fun taskMenuTitle(currentChatOnly: Boolean): String =
         if (currentChatOnly)
@@ -171,6 +184,12 @@ internal object UkrainianMessages : Messages {
 
     override val voiceTranscriptionFailedReply = "Не вдалося розпізнати це голосове — напиши краще текстом 😊"
 
+    override val inlineChoiceNotOwnerAlert = "Цей вибір був призначений іншому користувачу."
+
+    override val inlineChoiceUnavailableAlert = "Цей вибір уже недоступний."
+
+    override val inlineChoiceErrorAlert = "Не вдалося застосувати вибір — спробуй ще раз."
+
     override val taskMenuNotOwnerAlert = "Це меню завдань належить іншому користувачу."
 
     override val taskMenuUnavailableAlert = "Це завдання вже недоступне."
@@ -188,6 +207,8 @@ internal object UkrainianMessages : Messages {
     override fun voiceTooLongReply(durationSeconds: Long, maxSeconds: Long): String =
         "Це голосове триває ${durationSeconds}с — я можу розпізнати щонайбільше ${maxSeconds}с, " +
                 "надішли коротше або напиши текстом"
+
+    override fun inlineChoiceSelected(option: String) = "✅ Обрано: $option"
 
     override fun taskMenuTitle(currentChatOnly: Boolean): String =
         if (currentChatOnly)

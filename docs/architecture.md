@@ -19,7 +19,8 @@ Telegram ──► telegram/ ──► agent/ ──► tools/ ──► externa
 - **`telegram/`** — Telegram I/O. Receives updates (text, voice, audio, sticker, photo, video, video note, GIF,
   document, album, callback query), filters by allowlist, normalizes input, and delivers agent results back —
   including HTML-formatting, opt-in rich-message, reply-anchor, media/document, media-group, and private-message
-  fallbacks. `TaskMenuHandler` owns the deterministic `/tasks` inline-button UI.
+  fallbacks. `TaskMenuHandler` owns the deterministic `/tasks` inline-button UI; `InlineChoiceHandler` consumes
+  agent-created choice buttons and turns the selection back into an agent input.
 - **`agent/`** — agent orchestration on top of Koog. `AgentRunner` serializes per-user turns;
   `AgentFactory` builds the `AIAgent` (system prompt + history + memory + tools). `agent/history/`
   summarizes and persists chat turns; `agent/memory/` stores durable user/group memory that survives a history clear and
@@ -29,9 +30,9 @@ Telegram ──► telegram/ ──► agent/ ──► tools/ ──► externa
   env/config is present. See the Features section of the [README](../README.md). `tools/images/` is not a tool surface
   but the pipeline every image search shares: download a provider's candidates, drop what Telegram would refuse, and
   queue the survivors.
-- **`outbox/`** — the output model. `BotOutput` is the immutable sealed set of things the bot can send (text, rich
-  message, photo, voice, audio, video, document, poll, reaction, …); `BotOutbox` is the per-request queue tools write
-  into, holding each `BotOutput` as an `OutboxItem` that captures its private-routing decision.
+- **`outbox/`** — the output model. `BotOutput` is the immutable sealed set of things the bot can send (text, inline
+  choice, rich message, photo, voice, audio, video, document, poll, reaction, …); `BotOutbox` is the per-request queue
+  tools write into, holding each `BotOutput` as an `OutboxItem` that captures its private-routing decision.
 - **`request/`** — the request-scoped input model shared across layers: `RequestContext`
   (chat/user/message ids and sender info tools see) and `AttachedFile` (photo, video, or document, from the current
   message or a replied-to message, that vision (`describeImage`, `describeVideo`) and code execution (`codeExecution`)
@@ -65,7 +66,9 @@ A normal user message travels:
    album cap) and handles the batch as one gallery message: the caption may sit on any album part, only the first
    inspectable item becomes the
    `AttachedFile`, and the agent is told how many items it cannot see.
-   `/tasks`, `/clear`, and task-menu callback queries take direct paths that never enter the agent loop.
+   `/tasks`, `/clear`, and task-menu callback queries take direct paths that never enter the agent loop. An
+   agent-created inline-choice callback is different: it is validated and consumed by `InlineChoiceHandler`, then its
+   selected option enters the agent loop as the user's next turn.
 2. **Filter** — `MessageFilter.shouldHandle` drops messages the bot shouldn't answer (in groups:
    only replies, mentions, or targeted commands); `TelegramBotRunner` then checks the allowlist (`ALLOWED_IDS`) and
    rejects unknown chats/users.
@@ -140,7 +143,15 @@ A normal user message travels:
   instead of exposing tasks from private or unrelated chats.
 - **Direct history clear** — `/clear` bypasses the LLM, deletes all conversation history stored for the caller, and
   sends a localized confirmation. It deliberately leaves long-term memory and scheduled tasks unchanged, matching
-  the agent-callable `clearChatHistory` tool.
+  the agent-callable `clearChatHistory` tool. Both paths also advance the caller's persisted history revision, which
+  invalidates unanswered choices created before the clear.
+- **Agent-created inline choices** — `askWithButtons` enqueues a plain-text question plus two to ten answer buttons.
+  Callback data carries the intended user id, history revision, and option index; the labels remain in Telegram's
+  message keyboard, while the current revision lives in `chat_history_state`, so an unanswered choice survives a bot
+  restart but becomes unavailable after its conversation history is cleared. `InlineChoiceHandler` verifies ownership
+  and the revision, atomically claims the message, replaces its keyboard with the selected label, answers the callback,
+  and wraps the question/selection as `<inline_choice>` for a queued `AgentRunner` turn. The question and its options
+  are persisted as assistant history, and the follow-up answer is delivered as a reply to that choice message.
 - **History summarization** — `agent/history/ChatHistory.summarizeForPrompt` keeps recent turns verbatim and condenses
   older ones so the prompt stays within budget while keeping tool-call/result pairs anchored.
 - **LLM provider resolution** — `config/LlmRuntime.resolveLlmRuntime` turns
@@ -175,9 +186,9 @@ model-authored and untrusted — keep it that way.
 ## Startup
 
 `Main.kt` wires everything in order: load `AppConfig` → connect `Db` → create the `Http` client and LLM runtime → build
-repositories, `ToolRegistryFactory`, `AgentFactory`, `AgentRunner` → create `TaskMenuHandler` and optionally enable
-voice transcription → start `TelegramBotRunner` and launch `TaskScheduler`, then block on the bot job until shutdown
-(closing the executor, HTTP client, and DB in `finally`).
+repositories, `ToolRegistryFactory`, `AgentFactory`, `AgentRunner` → create `TaskMenuHandler` and
+`InlineChoiceHandler`, and optionally enable voice transcription → start `TelegramBotRunner` and launch
+`TaskScheduler`, then block on the bot job until shutdown (closing the executor, HTTP client, and DB in `finally`).
 
 ## Where to look when…
 
@@ -203,6 +214,7 @@ A symptom-to-source map for finding the right file fast. Paths are under
 | Scheduled task fires late, not at all, or reports "missed"                       | `tasks/TaskScheduler.kt` (polling/lateness) + `tasks/Recurrence.kt` (next-run math)                                                                                                                                                                                                                   |
 | `/tasks` or a plain-language task pause/resume/cancel fails                      | `telegram/TaskMenuHandler.kt` (rendering, ownership, callbacks) + `tools/tasks/TaskTools.kt` (agent path) + `tasks/TasksRepository.kt` (shared scoped state changes)                                                                                                                                   |
 | `/clear` or a plain-language history clear fails                                | `telegram/TelegramBotRunner.kt` (direct command) + `tools/history/HistoryTools.kt` (agent path) + `agent/history/ChatHistoryRepository.kt` (shared storage operation)                                                                                                                                 |
+| An agent choice button does nothing, repeats, or reaches the wrong user          | `tools/choice/InlineChoiceTools.kt` (tool contract) + `telegram/InlineChoiceHandler.kt` (callback ownership/consumption) + `TelegramBotRunner.dispatchInlineChoiceCallback` (agent follow-up)                                                                                                          |
 | An env var has no effect                                                         | `config/AppConfig.kt` (parsing) — and check it is documented in [`configuration.md`](configuration.md) + [`.env.example`](../.env.example)                                                                                                                                                            |
 | Model / provider / request-timeout selection                                     | `config/LlmRuntime.kt` (provider → client/model/params)                                                                                                                                                                                                                                               |
 | `describeImage`/`describeVideo` missing from the tool list                       | `config/VisionRuntime.kt` (chat model vs `OPENAI_VISION_API_KEY`), then `tools/ToolRegistryFactory.kt` (registration is skipped when there is no vision runtime)                                                                                                                                       |

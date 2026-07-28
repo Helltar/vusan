@@ -14,6 +14,17 @@ class TelegramDeliveryTest {
     @Test
     fun `maps each output kind to its matching chat action`() {
         assertEquals(ActionType.TYPING, botActionFor(BotOutput.Text("hi")))
+        assertEquals(
+            ActionType.TYPING,
+            botActionFor(
+                BotOutput.InlineChoice(
+                    question = "Choose",
+                    options = listOf("A", "B"),
+                    ownerId = 1L,
+                    historyRevision = 0L
+                )
+            )
+        )
         assertEquals(ActionType.UPLOAD_PHOTO, botActionFor(BotOutput.Photo(oneByte, "p.png")))
         assertEquals(
             ActionType.UPLOAD_PHOTO,

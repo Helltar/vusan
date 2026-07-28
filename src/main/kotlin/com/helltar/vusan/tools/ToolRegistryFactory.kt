@@ -9,6 +9,7 @@ import com.helltar.vusan.outbox.BotOutbox
 import com.helltar.vusan.request.RequestContext
 import com.helltar.vusan.stt.OpenAiWhisperClient
 import com.helltar.vusan.tasks.TasksRepository
+import com.helltar.vusan.tools.choice.InlineChoiceTools
 import com.helltar.vusan.tools.currency.CurrencyTools
 import com.helltar.vusan.tools.currency.ExchangeRateClient
 import com.helltar.vusan.tools.files.FileDownloadClient
@@ -124,6 +125,7 @@ class ToolRegistryFactory(
     fun buildRegistry(context: RequestContext, outbox: BotOutbox): ToolRegistry =
         ToolRegistry {
             tools(MessageTools(outbox))
+            tools(InlineChoiceTools(context, outbox, history::revision))
             tools(ReactionTools(context, outbox))
             tools(currency)
             tools(telegramChannel)
