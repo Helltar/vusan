@@ -155,6 +155,9 @@ internal class TelegramBotRunner(
                 when {
                     taskMenu.handles(callback.data) -> launchCallbackHandling(callback)
                     inlineChoices.handles(callback.data) -> launchInlineChoiceHandling(callback)
+                    // callback data from a scheme this build no longer knows. telegram keeps the
+                    // client's button spinning until the query is answered, so answer it anyway.
+                    else -> launchUnknownCallbackAnswer(callback)
                 }
 
                 continue
@@ -200,6 +203,18 @@ internal class TelegramBotRunner(
                         "callback handling failed for chat=${callback.message?.chatId} " +
                                 "msg=${callback.message?.messageId} user=${callback.from?.id}"
                     }
+                }
+        }
+    }
+
+    private fun CoroutineScope.launchUnknownCallbackAnswer(callback: CallbackQuery) {
+        launch {
+            log.warn { "unrecognized callback data=[${callback.data}] user=${callback.from?.id}" }
+
+            runCatching { answerCallbackQuery(client, callback.id) }
+                .onFailure { error ->
+                    error.rethrowIfCancellation()
+                    log.warn(error) { "failed to answer unrecognized callback query" }
                 }
         }
     }

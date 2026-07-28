@@ -69,7 +69,8 @@ A normal user message travels:
    `AttachedFile`, and the agent is told how many items it cannot see.
    `/tasks`, `/clear`, and task-menu callback queries take direct paths that never enter the agent loop. An
    agent-created inline-choice callback is different: it is validated and consumed by `InlineChoiceHandler`, then its
-   selected option enters the agent loop as the user's next turn.
+   selected option enters the agent loop as the user's next turn. Callback data no handler recognizes (a button from
+   an older build) is still answered, so the caller's client stops spinning.
 2. **Filter** — `MessageFilter.shouldHandle` drops messages the bot shouldn't answer (in groups:
    only replies, mentions, or targeted commands); `TelegramBotRunner` then checks the allowlist (`ALLOWED_IDS`) and
    rejects unknown chats/users.
