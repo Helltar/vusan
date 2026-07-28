@@ -72,6 +72,12 @@ Update docs in the same change as behavior:
 - [`README.md`](README.md) Features section: added/removed/renamed tools or
   changed user-visible capability. Keep it written for users — what a capability
   is for, not which library or model implements it.
+- Telegram slash commands: `TelegramBotRunner.dispatchText` is the source of
+  truth. When adding, removing, renaming, or changing a command, keep the
+  `Telegram commands` section in `agent/SystemPrompt.kt`, the BotFather
+  `/setcommands` block in [`docs/configuration.md`](docs/configuration.md), and
+  the direct-command flow in [`docs/architecture.md`](docs/architecture.md)
+  aligned.
 - `sandbox/packages.ts` / `sandbox/extra-wheels.txt` and the
   `Available libraries` line in `tools/sandbox/SandboxToolDescriptions.kt`: the
   image and that line must agree, or the model offers a library that cannot be

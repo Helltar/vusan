@@ -26,6 +26,17 @@ LLM_API_KEY=sk-proj-qwerty
 `ALLOWED_IDS` accepts commas, whitespace, or semicolons as separators. Positive IDs are users; negative IDs are groups.
 Empty/unset means the bot answers nobody.
 
+## Telegram command menu
+
+To expose the direct commands in Telegram's menu, paste this into
+BotFather's `/setcommands`:
+
+```text
+start - Show the welcome message
+tasks - Manage scheduled tasks
+clear - Clear conversation history
+```
+
 ## LLM provider
 
 `LLM_PROVIDER` selects the backend; `LLM_PROVIDER`, `LLM_MODEL`, and `LLM_API_KEY` are always required. The chosen model

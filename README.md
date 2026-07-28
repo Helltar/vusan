@@ -68,9 +68,8 @@ Prerequisites: JDK 21, plus `ffmpeg` and `yt-dlp` on `PATH`.
 
 ## Features
 
-You normally ask in plain language and the bot picks the right tool itself. `/tasks` opens the
-scheduled-task controls, `/clear` resets your conversation history, and `/start` is just the
-greeting. Items marked *(opt-in)* need an API key or an extra service, see
+You normally ask in plain language and the bot picks the right tool itself. Items marked
+*(opt-in)* need an API key or an extra service, see
 [configuration.md](docs/configuration.md).
 
 ### Understands what you send
@@ -119,13 +118,12 @@ greeting. Items marked *(opt-in)* need an API key or an extra service, see
 
 ### Remembers
 
-- **Conversation history** — recent messages, so replies keep context. Clear it by asking or with
-  `/clear`; remembered facts and scheduled tasks stay intact.
+- **Conversation history** — recent messages, so replies keep context. It can be cleared without
+  affecting remembered facts or scheduled tasks.
 - **Memory** — separate from the history: facts it keeps about you, and about the group. Clearing
   the history leaves them; ask it to forget one or all of them.
-- **Scheduled tasks** — acts on its own later: once, on an interval, or on a cron schedule. Open
-  `/tasks` to pause, resume, refresh, or cancel them with inline buttons. In plain language you can
-  also change a task's action, title, schedule, or timezone.
+- **Scheduled tasks** — acts on its own later: once, on an interval, or on a cron schedule. You can
+  pause, resume, cancel, or change a task's action, title, schedule, or timezone.
 
 ## Stack
 
