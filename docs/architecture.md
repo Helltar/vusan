@@ -65,7 +65,7 @@ A normal user message travels:
    album cap) and handles the batch as one gallery message: the caption may sit on any album part, only the first
    inspectable item becomes the
    `AttachedFile`, and the agent is told how many items it cannot see.
-   Task-menu callback queries take a separate direct path to `TaskMenuHandler`; they never enter the agent loop.
+   `/tasks`, `/clear`, and task-menu callback queries take direct paths that never enter the agent loop.
 2. **Filter** — `MessageFilter.shouldHandle` drops messages the bot shouldn't answer (in groups:
    only replies, mentions, or targeted commands); `TelegramBotRunner` then checks the allowlist (`ALLOWED_IDS`) and
    rejects unknown chats/users.
@@ -138,6 +138,9 @@ A normal user message travels:
   while preserving the active/paused state; changing a cron timezone without replacing the expression recalculates
   its next occurrence. In groups, `listTasks`, edit, pause, resume, and cancel share the menu's current-chat scope
   instead of exposing tasks from private or unrelated chats.
+- **Direct history clear** — `/clear` bypasses the LLM, deletes all conversation history stored for the caller, and
+  sends a localized confirmation. It deliberately leaves long-term memory and scheduled tasks unchanged, matching
+  the agent-callable `clearChatHistory` tool.
 - **History summarization** — `agent/history/ChatHistory.summarizeForPrompt` keeps recent turns verbatim and condenses
   older ones so the prompt stays within budget while keeping tool-call/result pairs anchored.
 - **LLM provider resolution** — `config/LlmRuntime.resolveLlmRuntime` turns
@@ -199,6 +202,7 @@ A symptom-to-source map for finding the right file fast. Paths are under
 | A rich message reads as empty, `unknown`, or loses its structure                 | `telegram/RichMessageText.kt` (block tree → rich markdown), then `MessageMetadata.contentTypeName`/`textSnippetOrNull` and `ReplyContext.repliedTextOrNull`                                                                                                                                           |
 | Scheduled task fires late, not at all, or reports "missed"                       | `tasks/TaskScheduler.kt` (polling/lateness) + `tasks/Recurrence.kt` (next-run math)                                                                                                                                                                                                                   |
 | `/tasks` or a plain-language task pause/resume/cancel fails                      | `telegram/TaskMenuHandler.kt` (rendering, ownership, callbacks) + `tools/tasks/TaskTools.kt` (agent path) + `tasks/TasksRepository.kt` (shared scoped state changes)                                                                                                                                   |
+| `/clear` or a plain-language history clear fails                                | `telegram/TelegramBotRunner.kt` (direct command) + `tools/history/HistoryTools.kt` (agent path) + `agent/history/ChatHistoryRepository.kt` (shared storage operation)                                                                                                                                 |
 | An env var has no effect                                                         | `config/AppConfig.kt` (parsing) — and check it is documented in [`configuration.md`](configuration.md) + [`.env.example`](../.env.example)                                                                                                                                                            |
 | Model / provider / request-timeout selection                                     | `config/LlmRuntime.kt` (provider → client/model/params)                                                                                                                                                                                                                                               |
 | `describeImage`/`describeVideo` missing from the tool list                       | `config/VisionRuntime.kt` (chat model vs `OPENAI_VISION_API_KEY`), then `tools/ToolRegistryFactory.kt` (registration is skipped when there is no vision runtime)                                                                                                                                       |

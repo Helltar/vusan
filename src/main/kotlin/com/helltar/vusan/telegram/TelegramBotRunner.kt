@@ -232,6 +232,7 @@ internal class TelegramBotRunner(
             command == null -> handleTextUpdate(message, content, profile)
             command.matches("start", profile) -> handleStartCommand(message, profile)
             command.matches("tasks", profile) -> handleTasksCommand(message, profile)
+            command.matches("clear", profile) -> handleClearCommand(message, profile)
             else -> Unit
         }
     }
@@ -264,6 +265,19 @@ internal class TelegramBotRunner(
             chatIsPrivate = message.isPrivateChat,
             messages = Messages.of(message.language)
         )
+    }
+
+    private suspend fun handleClearCommand(message: Message, botProfile: BotProfile) {
+        if (!message.isAccepted(botProfile)) return
+
+        val userId =
+            message.senderIdOrNull() ?: run {
+                log.warn { "skipping /clear without sender user (chat=${message.chatIdLong})" }
+                return
+            }
+
+        history.clear(userId)
+        sendReply(message, Messages.of(message.language).historyClearedReply)
     }
 
     private suspend fun dispatchCallback(callback: CallbackQuery) {
