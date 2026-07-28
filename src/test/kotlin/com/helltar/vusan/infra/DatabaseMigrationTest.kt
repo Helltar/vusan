@@ -35,6 +35,28 @@ class DatabaseMigrationTest {
         }
     }
 
+    @Test
+    fun `connect adds indices missing from an existing scheduled tasks table`() {
+        val tempDir = Files.createTempDirectory("vusan-database-index-migration-test")
+        val dbPath = tempDir.resolve("vusan.db")
+
+        try {
+            createLegacyScheduledTasksTable(dbPath.toString())
+
+            runBlocking {
+                Db.connect(testConfig(dbPath.toString()))
+                Db.disconnect()
+            }
+
+            val indexed = scheduledTaskIndexColumns(dbPath.toString())
+            assertTrue(listOf("enabled", "paused", "next_fire_at") in indexed, "indices were $indexed")
+            assertTrue(listOf("user_id", "enabled") in indexed, "indices were $indexed")
+        } finally {
+            runBlocking { Db.disconnect() }
+            tempDir.toFile().deleteRecursively()
+        }
+    }
+
     private fun createLegacyScheduledTasksTable(dbPath: String) {
         DriverManager.getConnection("jdbc:sqlite:$dbPath").use { connection ->
             connection.createStatement().use { statement ->
@@ -70,6 +92,28 @@ class DatabaseMigrationTest {
                     buildMap {
                         while (rows.next())
                             put(rows.getString("name"), rows.getString("dflt_value"))
+                    }
+                }
+            }
+        }
+
+    private fun scheduledTaskIndexColumns(dbPath: String): List<List<String>> =
+        DriverManager.getConnection("jdbc:sqlite:$dbPath").use { connection ->
+            connection.createStatement().use { statement ->
+                val indexNames =
+                    statement.executeQuery("PRAGMA index_list(scheduled_tasks)").use { rows ->
+                        buildList {
+                            while (rows.next())
+                                add(rows.getString("name"))
+                        }
+                    }
+
+                indexNames.map { name ->
+                    statement.executeQuery("PRAGMA index_info(`$name`)").use { rows ->
+                        buildList {
+                            while (rows.next())
+                                add(rows.getString("name"))
+                        }
                     }
                 }
             }
