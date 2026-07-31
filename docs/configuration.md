@@ -5,7 +5,7 @@ Vusan reads configuration from environment variables. For Docker, put them in a 
 
 ## Minimum setup
 
-Fill in these values (the OpenAI setup shown is the `.env.example` starting point):
+Fill in these values:
 
 ```dotenv
 ALLOWED_IDS=123456789,-1001234567890
@@ -32,15 +32,13 @@ To expose the direct commands in Telegram's menu, paste this into
 BotFather's `/setcommands`:
 
 ```text
-start - Show the welcome message
 tasks - Manage scheduled tasks
 clear - Clear conversation history
 ```
 
 ## LLM provider
 
-`LLM_PROVIDER` selects the backend; `LLM_PROVIDER`, `LLM_MODEL`, and `LLM_API_KEY` are always required. The chosen model
-must support tool calling.
+`LLM_PROVIDER` selects the backend, and the model you pick must support tool calling.
 
 | `LLM_PROVIDER`      | Example `LLM_MODEL`                 |
 |---------------------|-------------------------------------|
@@ -50,24 +48,23 @@ must support tool calling.
 | `deepseek`          | `deepseek-v4-pro`                   |
 | `openai-compatible` | any model id the server understands |
 
-`openai-compatible` additionally requires `LLM_BASE_URL`.
+The four native providers talk to each vendor's own API and accept only model ids they know; an unrecognized id fails at
+startup and lists the supported ones. `openai-compatible` targets any OpenAI-compatible server, remote or local, and
+takes whatever model string it serves.
 
-| Variable                      | Default       | Description                                                                       |
-|-------------------------------|---------------|-----------------------------------------------------------------------------------|
-| `LLM_BASE_URL`                | —             | Base URL of the OpenAI-compatible server. Unused by the native providers.         |
-| `LLM_OPENAI_ENDPOINT`         | `completions` | `completions` or `responses`; which API `openai-compatible` calls.                |
-| `LLM_REASONING_EFFORT`        | model default | `none`, `minimal`, `low`, `medium`, or `high` for `openai-compatible` reasoning.   |
-| `LLM_REQUEST_TIMEOUT_SECONDS` | `120`         | Seconds a single LLM HTTP call may hang before it is failed.                      |
+| Variable                      | Default       | Description                                                                  |
+|-------------------------------|---------------|------------------------------------------------------------------------------|
+| `LLM_BASE_URL`                | —             | Server address. Required by `openai-compatible`, unused by the others.       |
+| `LLM_OPENAI_ENDPOINT`         | `completions` | Which OpenAI API to call: `completions` or `responses`.                      |
+| `LLM_REASONING_EFFORT`        | model default | Reasoning depth: `none`, `minimal`, `low`, `medium`, or `high`.              |
+| `LLM_REQUEST_TIMEOUT_SECONDS` | `120`         | Seconds one LLM call may hang before it fails and the bot replies with an error. Raise it for slow local servers and heavy reasoning models. |
 
-The native providers (`openai`, `anthropic`, `google`, `deepseek`) talk to each vendor's own API through its dedicated
-Koog client, so `LLM_MODEL` must be a model id the client knows. An unrecognized id fails at startup with the list of
-supported values. `openai-compatible` instead targets any OpenAI-compatible chat completions API (remote or local) and
-accepts any model string the server understands.
+`LLM_OPENAI_ENDPOINT` and `LLM_REASONING_EFFORT` apply to `openai-compatible` only. Give `LLM_BASE_URL` no `/v1` — the
+API path is appended for you.
 
-`LLM_OPENAI_ENDPOINT` and `LLM_REASONING_EFFORT` apply to `openai-compatible` only; the native providers use their own
-API and their catalog defaults. Switch the endpoint to `responses` for OpenAI models that expect it — some newer
-reasoning models reject function tools on `/v1/chat/completions` unless reasoning is turned off entirely, and models
-after `gpt-5.5` are not in the Koog catalog yet, so they are reachable only this way:
+An OpenAI model released after the `openai` provider's model list was last updated is rejected there as unknown, but
+stays reachable through `openai-compatible` pointed at OpenAI itself. Newer reasoning models additionally refuse tools
+on the completions API, so they need `responses` — or `LLM_REASONING_EFFORT=none`, which turns reasoning off instead:
 
 ```dotenv
 LLM_PROVIDER=openai-compatible
@@ -77,34 +74,20 @@ LLM_MODEL=gpt-5.6-luna
 LLM_OPENAI_ENDPOINT=responses
 ```
 
-`LLM_BASE_URL` carries no `/v1`: the client appends `v1/chat/completions` or `v1/responses` itself.
-
-`LLM_REQUEST_TIMEOUT_SECONDS` (default `120`) caps how long a single LLM HTTP call may hang. The Koog client otherwise
-waits 15 minutes, during which the bot stays silent; the shorter cap lets a stalled call fail fast so the agent can
-deliver an error reply. Raise it for slow local servers or heavy reasoning models.
-
-Grok example:
+Other servers follow the same shape, with `LLM_PROVIDER=openai-compatible`:
 
 ```dotenv
-LLM_PROVIDER=openai-compatible
+# Grok
 LLM_API_KEY=xai-qwerty
 LLM_BASE_URL=https://api.x.ai
 LLM_MODEL=grok-4.3
-```
 
-llama.cpp example (local server needs no real key, but the value must be non-empty):
-
-```dotenv
-LLM_PROVIDER=openai-compatible
+# llama.cpp — a local server needs no real key, but the value must be non-empty
 LLM_API_KEY=sk-no-key-required
 LLM_BASE_URL=http://localhost:8080
 LLM_MODEL=unsloth/Qwen3.6-27B-GGUF:Q4_K_M
-```
 
-Ollama example (Ollama serves an OpenAI-compatible API; the key value is ignored):
-
-```dotenv
-LLM_PROVIDER=openai-compatible
+# Ollama — serves an OpenAI-compatible API; the key value is ignored
 LLM_API_KEY=ollama
 LLM_BASE_URL=http://localhost:11434
 LLM_MODEL=gemma4
@@ -113,34 +96,29 @@ LLM_MODEL=gemma4
 ## Personality
 
 The bot ships with a built-in personality ("Vusan"), kept generic so each deployment can define its identity, tone, and
-interaction style. Override it with either inline text or a file. The operational rules for output and tools are always
-appended separately by the bot and cannot be removed by a custom personality.
+interaction style. Override it with either inline text or a file, or unset both to keep the built-in one. The
+operational rules for output and tools are always appended separately and cannot be removed by a custom personality.
 
-Unset both variables to use the built-in personality.
-
-| Variable           | Description                                                                                         |
-|--------------------|-----------------------------------------------------------------------------------------------------|
-| `PERSONALITY`      | Inline personality text. Takes precedence when set.                                                 |
-| `PERSONALITY_FILE` | Path to a personality file. Used only when `PERSONALITY` is unset; unreadable files fail startup.   |
-
-`PERSONALITY_FILE` suits a long, multi-line personality — a file keeps line breaks and formatting readable, whereas
-`PERSONALITY` is meant for short inline text. A file whose content is blank falls back to the built-in personality.
+| Variable           | Description                                                                                        |
+|--------------------|----------------------------------------------------------------------------------------------------|
+| `PERSONALITY`      | Inline personality text, for something short. Takes precedence when set.                           |
+| `PERSONALITY_FILE` | Path to a file, for longer multi-line text. Unreadable fails startup; blank falls back to built-in. |
 
 ## Optional tools
 
 Each optional tool is enabled by one env variable. If it is missing, that tool is skipped at startup with a `WARN` log
 and the bot keeps running.
 
-| Tool                                      | Enable with             | Notes                                 |
-|-------------------------------------------|-------------------------|---------------------------------------|
-| Web search, image search, page extraction | `TAVILY_API_KEY`        | See [Web search](#web-search)         |
-| Fallback web and image search             | `SEARXNG_URL`           | See [Web search](#web-search)         |
-| GIF lookup                                | `GIPHY_API_KEY`         | Giphy                                 |
-| Voice output                              | `ELEVENLABS_API_KEY`    | ElevenLabs TTS                        |
-| Voice input, sound of a video             | `OPENAI_STT_API_KEY`    | Reuse your OpenAI key                 |
-| Image generation                          | `OPENAI_IMAGE_API_KEY`  | Reuse your OpenAI key                 |
-| Vision on a chat model that cannot see    | `OPENAI_VISION_API_KEY` | See [Vision](#vision)                 |
-| Code execution                            | `SANDBOX_URL`           | See [Code execution](#code-execution) |
+| Variable                | Enables                                   | Notes                                 |
+|-------------------------|-------------------------------------------|---------------------------------------|
+| `TAVILY_API_KEY`        | Web search, image search, page extraction | See [Web search](#web-search)         |
+| `SEARXNG_URL`           | Fallback web and image search             | See [Web search](#web-search)         |
+| `GIPHY_API_KEY`         | GIF lookup                                | Giphy                                 |
+| `ELEVENLABS_API_KEY`    | Voice output                              | ElevenLabs TTS                        |
+| `OPENAI_STT_API_KEY`    | Voice input, sound of a video             | Reuse your OpenAI key                 |
+| `OPENAI_IMAGE_API_KEY`  | Image generation                          | Reuse your OpenAI key                 |
+| `OPENAI_VISION_API_KEY` | Vision on a chat model that cannot see    | See [Vision](#vision)                 |
+| `SANDBOX_URL`           | Code execution                            | See [Code execution](#code-execution) |
 
 ### Web search
 
@@ -151,12 +129,11 @@ Two providers cover search, and either can run without the other:
 | `TAVILY_API_KEY` | `webSearch`, `searchImages`, `extractPageContent` | Default web and image search; page extraction. |
 | `SEARXNG_URL`    | `metaSearch`, `metaSearchImages`                  | Fallback for both, plus category scoping.     |
 
-Tavily leads on both: its results are cleaned-up page extracts rather than snippets, and `searchImages` reports what is
-visible in each photo, which the bot repeats when a user asks what a picture shows.
-[SearXNG](https://docs.searxng.org) is self-hosted, so it costs nothing per call and keeps search working when Tavily
-fails or its quota runs out. `metaSearch` also scopes a query with `categories` (`news`, `it`, `science`, `videos`,
-`music`, `files`, `social media`, `map`), which Tavily cannot do — those categories query different engines, so they
-still answer when the general ones are rate-limited.
+Tavily leads on both: its results are cleaned-up page extracts rather than snippets, and `searchImages` describes what
+is in each photo. [SearXNG](https://docs.searxng.org) is self-hosted, so it costs nothing per call and keeps search
+working when Tavily fails or runs out of quota. `metaSearch` also scopes a query with `categories` (`news`, `it`,
+`science`, `videos`, `music`, `files`, `social media`, `map`), which Tavily cannot do — those categories query different
+engines, so they still answer when the general ones are rate-limited.
 
 Point `SEARXNG_URL` at the instance root, without the `/search` path:
 
@@ -205,8 +182,8 @@ Looking at pictures — `describeImage`, the frames `describeVideo` samples out 
 channel posts — needs a model that accepts images. By default that is the chat model itself, so an `openai`,
 `anthropic`, or `google` setup needs nothing extra.
 
-A chat model that cannot see images is the case this section is about. `OPENAI_VISION_API_KEY` then runs vision on its
-own OpenAI model, the way `OPENAI_STT_API_KEY` runs speech on one, and the chat model keeps answering everything else:
+When it cannot, `OPENAI_VISION_API_KEY` runs vision on its own OpenAI model, the way `OPENAI_STT_API_KEY` runs speech on
+one, and the chat model keeps answering everything else:
 
 ```dotenv
 LLM_PROVIDER=deepseek
@@ -221,14 +198,13 @@ OPENAI_VISION_API_KEY=sk-proj-qwerty
 | `OPENAI_VISION_API_KEY` | —              | Enables a separate vision model. Can reuse your OpenAI key.        |
 | `OPENAI_VISION_MODEL`   | `gpt-5.4-mini` | OpenAI model that reads the images; must be one that accepts them. |
 
-Which chat models count as able to see comes from the Koog model catalog: DeepSeek models cannot, and `openai-compatible`
-never claims it either, because the server behind `LLM_BASE_URL` may serve anything. So with `openai-compatible`
-vision is off until this key is set, even when the model behind it does accept images.
+DeepSeek models cannot see, and `openai-compatible` never claims it either, because the server behind `LLM_BASE_URL` may
+serve anything — so with either one vision stays off until this key is set, even when the model itself does accept
+images.
 
-The key always wins when it is set: vision runs on that model even when the chat model could have looked at the picture
-itself. With no vision at all, `describeImage` and `describeVideo` are not registered — a startup `WARN` says so, and
-the bot answers without looking at attachments instead of failing a call per picture. Telegram channel posts still come
-back, as text only. Vision calls use the same `LLM_REQUEST_TIMEOUT_SECONDS` budget as chat calls.
+The key always wins when it is set, even where the chat model could have looked at the picture itself. With no vision at
+all, a startup `WARN` says so and the bot answers without looking at attachments; Telegram channel posts still come
+back, as text only. Vision calls share the `LLM_REQUEST_TIMEOUT_SECONDS` budget.
 
 ## Code execution
 
@@ -244,20 +220,9 @@ Docker starts it by default:
 SANDBOX_URL=http://vusan-sandbox:8080
 ```
 
-To disable code execution, comment out `SANDBOX_URL` in `.env` and start only the bot:
-
-```bash
-docker compose up -d vusan
-```
-
-If the sandbox is already running, stop it separately:
-
-```bash
-docker compose stop vusan-sandbox
-```
-
-For a local JVM run, there is no sandbox container unless you start one yourself. Point `SANDBOX_URL` at that service,
-or leave it commented.
+To disable code execution, comment `SANDBOX_URL` out and start only the bot with `docker compose up -d vusan`
+(`docker compose stop vusan-sandbox` if it is already running). A local JVM run has no sandbox container unless you
+start one yourself; point `SANDBOX_URL` at that service, or leave it commented.
 
 ### Sandbox tuning
 
@@ -268,9 +233,8 @@ Both variables live in the bot's `.env`; the default `compose.yaml` passes them 
 | `SANDBOX_POOL_SIZE`       | `2`     | service       | Warm Pyodide workers kept ready. |
 | `SANDBOX_TIMEOUT_SECONDS` | `120`   | bot + service | Hard per-run limit.              |
 
-`SANDBOX_TIMEOUT_SECONDS` is shared on purpose: the service enforces it as the run limit, and the bot uses the same
-value to budget how long to wait for a response (worker queue + run + network slack). Setting it once in `.env` keeps
-both sides in sync.
+`SANDBOX_TIMEOUT_SECONDS` is shared on purpose: the service enforces the run limit, the bot budgets its wait from the
+same number, and setting it once keeps the two in sync.
 
 ## Memory
 
@@ -284,26 +248,26 @@ no env variable is required to enable it.
 
 ## Scheduled tasks
 
-Scheduled tasks are built in. No env variable is required to enable them.
+Scheduled tasks are built in. The agent can schedule them in three forms:
 
-The agent can schedule tasks in three forms:
+- `once <datetime>` — fires once, then is disabled.
+- `every <interval>` — fixed interval, minimum 5 minutes, timezone-independent.
+- `cron <UNIX expr>` — clock-time patterns, evaluated in the task's timezone.
 
-- `once <datetime>` — fires once. If it is overdue by more than `TASK_MAX_LATENESS_MINUTES`, the bot sends a missed
-  notice and disables it instead of firing stale work.
-- `every <interval>` — fixed interval, minimum 5 minutes, timezone-independent. Missed fires skip ahead.
-- `cron <UNIX expr>` — clock-time patterns, evaluated in the task's timezone. Missed fires skip ahead.
+A task the bot could not fire in time — it was down, or the machine was asleep — is not run late. It gets a missed
+notice in the chat and the schedule moves on to the next fire.
 
-| Variable                    | Default | Description                                  |
-|-----------------------------|---------|----------------------------------------------|
-| `MAX_TASKS_PER_USER`        | `5`     | Maximum stored tasks per user.               |
-| `TASK_MAX_LATENESS_MINUTES` | `60`    | Recurring tasks older than this are skipped. |
+| Variable                    | Default | Description                                              |
+|-----------------------------|---------|----------------------------------------------------------|
+| `MAX_TASKS_PER_USER`        | `5`     | Maximum stored tasks per user.                           |
+| `TASK_MAX_LATENESS_MINUTES` | `60`    | How late a due task may still run before it counts as missed. |
 
 ## Storage and binaries
 
 | Variable              | Default            | Description                                        |
 |-----------------------|--------------------|----------------------------------------------------|
 | `DB_FILE`             | `data/db/vusan.db` | SQLite path. Parent dirs are created on first run. |
-| `YT_DLP_COOKIES_FILE` | —                  | Optional YouTube cookies file.                     |
+| `YT_DLP_COOKIES_FILE` | —                  | Cookies for YouTube videos that ask for a login.   |
 
 `YT_DLP_COOKIES_FILE` must point to a Netscape-format `cookies.txt`; see
 the [yt-dlp wiki](https://github.com/yt-dlp/yt-dlp/wiki/Extractors#exporting-youtube-cookies).
