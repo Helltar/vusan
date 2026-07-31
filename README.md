@@ -10,8 +10,8 @@
   <a href="https://github.com/Helltar/vusan/pkgs/container/vusan"><img src="https://img.shields.io/badge/ghcr-vusan-blue?logo=docker" alt="GHCR"></a>
 </p>
 
-Vusan is a Telegram AI agent for private chats and groups, currently in beta — breaking changes
-may occur between updates.
+Vusan is a Telegram AI agent for private chats and groups. You ask in plain language; it picks the
+tools itself — search, code, voice, images, and more.
 
 Try it live in the [Vusan Playground](https://t.me/+56qi5dDwsNszZWFi) Telegram group.
 
@@ -41,6 +41,8 @@ LLM_MODEL=gpt-5.4-mini
 LLM_API_KEY=sk-proj-qwerty
 ```
 
+With that in place, start the bot — in Docker, or on a local JVM.
+
 ### Docker
 
 Use the published images:
@@ -68,15 +70,13 @@ Prerequisites: JDK 21, plus `ffmpeg` and `yt-dlp` on `PATH`.
 
 ## Features
 
-You normally ask in plain language and the bot picks the right tool itself. Items marked
-*(opt-in)* need an API key or an extra service, see
+Items marked *(opt-in)* need an API key or an extra service, see
 [configuration.md](docs/configuration.md).
 
 ### Understands what you send
 
 - **Photos** — looks at images you send or reply to and answers questions about them.
-- **Voice and audio** *(opt-in)* — listens to voice messages and audio files instead of making you
-  type.
+- **Voice and audio** *(opt-in)* — listens to voice messages and audio files.
 - **Videos** — watches videos, video notes and GIFs; when voice input is enabled, it also hears
   speech.
 
@@ -91,13 +91,12 @@ You normally ask in plain language and the bot picks the right tool itself. Item
 ### YouTube
 
 - **Video and audio** — finds a video by name or link and sends it, or just its audio track.
-- **Transcripts** — reads a video's subtitles, so it can summarize it or answer questions about it
-  without downloading anything.
+- **Transcripts** — reads a video's subtitles, so it can summarize it or answer questions about it.
 
 ### Creates
 
 - **Code execution** *(opt-in)* — runs Python in an isolated sandbox: exact math, data crunching,
-  charts, Word and PDF documents, animations. Files you upload go in, whatever it makes comes back.
+  charts, Word and PDF documents, animations.
 - **Images** *(opt-in)* — draws a picture from a description, or edits one you sent.
 - **Voice replies** *(opt-in)* — answers out loud with a generated voice message.
 - **GIFs** *(opt-in)* — finds and sends a fitting GIF.
@@ -105,25 +104,21 @@ You normally ask in plain language and the bot picks the right tool itself. Item
 ### In the chat
 
 - **Inline choices** — when it needs a specific decision or confirmation, it can ask with buttons
-  and continue as soon as you tap one. Clearing the conversation also expires its unanswered
-  choices.
+  and continue as soon as you tap one.
 - **Polls and quizzes** — creates real Telegram polls and quizzes, not a text imitation.
 - **Reactions** — sometimes an emoji on your message is the whole answer.
 - **Files and links** — sends what it wrote as a document, or downloads a link and passes it on
   as a file.
-- **Long structured answers** — headings, tables, and checklists when a reply is genuinely big,
-  sent as a Telegram rich message.
-- **Private replies** — moves the answer into your DMs when you ask, instead of dumping it into
-  the group.
+- **Long structured answers** — headings, tables, and checklists when a reply is genuinely big.
+- **Private replies** — moves the answer into your DMs when you ask.
 
 ### Remembers
 
-- **Conversation history** — recent messages, so replies keep context. It can be cleared without
-  affecting remembered facts or scheduled tasks.
+- **Conversation history** — recent messages, so replies keep context.
 - **Memory** — separate from the history: facts it keeps about you, and about the group. Clearing
   the history leaves them; ask it to forget one or all of them.
 - **Scheduled tasks** — acts on its own later: once, on an interval, or on a cron schedule. You can
-  pause, resume, cancel, or change a task's action, title, schedule, or timezone.
+  pause, resume, cancel, or edit them.
 
 ## Stack
 
