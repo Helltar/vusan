@@ -52,15 +52,32 @@ must support tool calling.
 
 `openai-compatible` additionally requires `LLM_BASE_URL`.
 
-| Variable                      | Default | Description                                                                |
-|-------------------------------|---------|----------------------------------------------------------------------------|
-| `LLM_BASE_URL`                | —       | Base URL of the OpenAI-compatible server. Unused by the native providers.  |
-| `LLM_REQUEST_TIMEOUT_SECONDS` | `120`   | Seconds a single LLM HTTP call may hang before it is failed.               |
+| Variable                      | Default       | Description                                                                       |
+|-------------------------------|---------------|-----------------------------------------------------------------------------------|
+| `LLM_BASE_URL`                | —             | Base URL of the OpenAI-compatible server. Unused by the native providers.         |
+| `LLM_OPENAI_ENDPOINT`         | `completions` | `completions` or `responses`; which API `openai-compatible` calls.                |
+| `LLM_REASONING_EFFORT`        | model default | `none`, `minimal`, `low`, `medium`, or `high` for `openai-compatible` reasoning.   |
+| `LLM_REQUEST_TIMEOUT_SECONDS` | `120`         | Seconds a single LLM HTTP call may hang before it is failed.                      |
 
 The native providers (`openai`, `anthropic`, `google`, `deepseek`) talk to each vendor's own API through its dedicated
 Koog client, so `LLM_MODEL` must be a model id the client knows. An unrecognized id fails at startup with the list of
 supported values. `openai-compatible` instead targets any OpenAI-compatible chat completions API (remote or local) and
 accepts any model string the server understands.
+
+`LLM_OPENAI_ENDPOINT` and `LLM_REASONING_EFFORT` apply to `openai-compatible` only; the native providers use their own
+API and their catalog defaults. Switch the endpoint to `responses` for OpenAI models that expect it — some newer
+reasoning models reject function tools on `/v1/chat/completions` unless reasoning is turned off entirely, and models
+after `gpt-5.5` are not in the Koog catalog yet, so they are reachable only this way:
+
+```dotenv
+LLM_PROVIDER=openai-compatible
+LLM_API_KEY=sk-proj-qwerty
+LLM_BASE_URL=https://api.openai.com
+LLM_MODEL=gpt-5.6-luna
+LLM_OPENAI_ENDPOINT=responses
+```
+
+`LLM_BASE_URL` carries no `/v1`: the client appends `v1/chat/completions` or `v1/responses` itself.
 
 `LLM_REQUEST_TIMEOUT_SECONDS` (default `120`) caps how long a single LLM HTTP call may hang. The Koog client otherwise
 waits 15 minutes, during which the bot stays silent; the shorter cap lets a stalled call fail fast so the agent can

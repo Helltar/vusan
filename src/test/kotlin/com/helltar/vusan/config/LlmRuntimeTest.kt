@@ -3,11 +3,17 @@ package com.helltar.vusan.config
 import ai.koog.prompt.executor.clients.anthropic.AnthropicModels
 import ai.koog.prompt.executor.clients.openai.OpenAIChatParams
 import ai.koog.prompt.executor.clients.openai.OpenAIModels
+import ai.koog.prompt.executor.clients.openai.OpenAIResponsesParams
+import ai.koog.prompt.executor.clients.openai.base.models.ReasoningEffort
+import ai.koog.prompt.llm.LLMCapability
 import ai.koog.prompt.llm.LLMProvider
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFailsWith
+import kotlin.test.assertFalse
 import kotlin.test.assertIs
+import kotlin.test.assertNull
+import kotlin.test.assertTrue
 import kotlin.time.Duration.Companion.seconds
 
 class LlmRuntimeTest {
@@ -60,17 +66,61 @@ class LlmRuntimeTest {
     fun `openai-compatible provider disables parallel tool calls`() {
         // third-party models (e.g. DeepSeek) garble parallel tool calls; the runtime must force
         // one tool call per turn so the provider never serializes a corrupt parallel batch.
-        val runtime =
-            resolveLlmRuntime(
-                LlmProviderConfig.OpenAiCompatible(
-                    baseUrl = "https://example.test/v1",
-                    apiKey = "key",
-                    model = "deepseek-chat",
-                    requestTimeout = 120.seconds
-                )
-            )
+        val runtime = openAiCompatible()
 
         val params = assertIs<OpenAIChatParams>(runtime.chatParams)
         assertEquals(false, params.parallelToolCalls)
+        assertTrue(runtime.model.supports(LLMCapability.OpenAIEndpoint.Completions))
+        assertFalse(runtime.model.supports(LLMCapability.Thinking))
     }
+
+    @Test
+    fun `openai-compatible provider targets the responses endpoint on request`() {
+        // koog reads the endpoint off the params type, and refuses params whose endpoint the model
+        // does not declare — so both have to move together.
+        val runtime = openAiCompatible(endpoint = OpenAiEndpoint.RESPONSES)
+
+        val params = assertIs<OpenAIResponsesParams>(runtime.chatParams)
+        assertEquals(false, params.parallelToolCalls)
+        assertNull(params.reasoning)
+        assertTrue(runtime.model.supports(LLMCapability.OpenAIEndpoint.Responses))
+        assertFalse(runtime.model.supports(LLMCapability.OpenAIEndpoint.Completions))
+        assertTrue(runtime.model.supports(LLMCapability.Thinking))
+    }
+
+    @Test
+    fun `openai-compatible provider passes the reasoning effort to each endpoint`() {
+        val completions =
+            openAiCompatible(reasoningEffort = ReasoningEffort.NONE).let { assertIs<OpenAIChatParams>(it.chatParams) }
+
+        val responses =
+            openAiCompatible(endpoint = OpenAiEndpoint.RESPONSES, reasoningEffort = ReasoningEffort.LOW)
+                .let { assertIs<OpenAIResponsesParams>(it.chatParams) }
+
+        assertEquals(ReasoningEffort.NONE, completions.reasoningEffort)
+        assertEquals(ReasoningEffort.LOW, responses.reasoning?.effort)
+    }
+
+    @Test
+    fun `openai-compatible provider declares thinking when a reasoning effort is set`() {
+        // the client silently drops the effort for a model without the capability.
+        val runtime = openAiCompatible(reasoningEffort = ReasoningEffort.NONE)
+
+        assertTrue(runtime.model.supports(LLMCapability.Thinking))
+    }
+
+    private fun openAiCompatible(
+        endpoint: OpenAiEndpoint = OpenAiEndpoint.COMPLETIONS,
+        reasoningEffort: ReasoningEffort? = null
+    ): LlmRuntime =
+        resolveLlmRuntime(
+            LlmProviderConfig.OpenAiCompatible(
+                baseUrl = "https://example.test",
+                apiKey = "key",
+                model = "deepseek-chat",
+                endpoint = endpoint,
+                reasoningEffort = reasoningEffort,
+                requestTimeout = 120.seconds
+            )
+        )
 }

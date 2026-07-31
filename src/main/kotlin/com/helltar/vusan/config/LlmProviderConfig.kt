@@ -1,5 +1,6 @@
 package com.helltar.vusan.config
 
+import ai.koog.prompt.executor.clients.openai.base.models.ReasoningEffort
 import kotlin.time.Duration
 
 enum class HostedLlmProvider {
@@ -7,6 +8,12 @@ enum class HostedLlmProvider {
     ANTHROPIC,
     GOOGLE,
     DEEPSEEK
+}
+
+/** Which OpenAI HTTP API a request goes to: `/v1/chat/completions` or `/v1/responses`. */
+enum class OpenAiEndpoint {
+    COMPLETIONS,
+    RESPONSES
 }
 
 sealed interface LlmProviderConfig {
@@ -32,6 +39,8 @@ sealed interface LlmProviderConfig {
         val baseUrl: String,
         val apiKey: String,
         val model: String,
+        val endpoint: OpenAiEndpoint = OpenAiEndpoint.COMPLETIONS,
+        val reasoningEffort: ReasoningEffort? = null,
         override val requestTimeout: Duration
     ) : LlmProviderConfig {
         init {

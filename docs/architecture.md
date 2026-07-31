@@ -164,7 +164,9 @@ A normal user message travels:
 - **LLM provider resolution** — `config/LlmRuntime.resolveLlmRuntime` turns
   `AppConfig.llmProvider` into a Koog client/model/params triple. Native clients cover OpenAI (with prompt caching),
   Anthropic, Google, and DeepSeek — models are matched against each client's predefined catalog. `openai-compatible`
-  keeps a hand-declared model for any other server (llama.cpp, Ollama, …).
+  keeps a hand-declared model for any other server (llama.cpp, Ollama, …). Its endpoint capability and params type are
+  declared as a pair (`OpenAIChatParams` → `/v1/chat/completions`, `OpenAIResponsesParams` → `/v1/responses`), because
+  the Koog client reads the route off the params type and rejects params the model does not declare an endpoint for.
 
 ## Code execution service
 

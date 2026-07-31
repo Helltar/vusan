@@ -19,6 +19,8 @@ import ai.koog.prompt.executor.clients.openai.OpenAIChatParams
 import ai.koog.prompt.executor.clients.openai.OpenAIClientSettings
 import ai.koog.prompt.executor.clients.openai.OpenAILLMClient
 import ai.koog.prompt.executor.clients.openai.OpenAIModels
+import ai.koog.prompt.executor.clients.openai.OpenAIResponsesParams
+import ai.koog.prompt.executor.clients.openai.models.ReasoningConfig
 import ai.koog.prompt.llm.LLMCapability
 import ai.koog.prompt.llm.LLMProvider
 import ai.koog.prompt.llm.LLModel
@@ -42,25 +44,52 @@ fun resolveLlmRuntime(config: LlmProviderConfig): LlmRuntime {
 
         is LlmProviderConfig.OpenAiCompatible ->
             LlmRuntime(
-                providerLabel = "OpenAI-compatible (${config.baseUrl})",
+                providerLabel = "OpenAI-compatible (${config.baseUrl}, ${config.endpoint.name.lowercase()})",
                 client = OpenAILLMClient(config.apiKey, OpenAIClientSettings(config.baseUrl, timeoutConfig)),
-                model =
-                    LLModel(
-                        provider = LLMProvider.OpenAI,
-                        id = config.model,
-                        capabilities =
-                            listOf(
-                                LLMCapability.Completion,
-                                LLMCapability.Temperature,
-                                LLMCapability.Schema.JSON.Standard,
-                                LLMCapability.Tools,
-                                LLMCapability.OpenAIEndpoint.Completions
-                            )
-                    ),
-                chatParams = OpenAIChatParams(parallelToolCalls = false)
+                model = openAiCompatibleModel(config),
+                chatParams = openAiCompatibleParams(config)
             )
     }
 }
+
+// the koog client picks the endpoint from the params type and refuses to send params whose endpoint the
+// model does not declare, so the two are resolved together.
+private fun openAiCompatibleModel(config: LlmProviderConfig.OpenAiCompatible): LLModel =
+    LLModel(
+        provider = LLMProvider.OpenAI,
+        id = config.model,
+        capabilities =
+            buildList {
+                add(LLMCapability.Completion)
+                add(LLMCapability.Temperature)
+                add(LLMCapability.Schema.JSON.Standard)
+                add(LLMCapability.Tools)
+
+                when (config.endpoint) {
+                    OpenAiEndpoint.COMPLETIONS -> add(LLMCapability.OpenAIEndpoint.Completions)
+                    OpenAiEndpoint.RESPONSES -> add(LLMCapability.OpenAIEndpoint.Responses)
+                }
+
+                // without Thinking the client drops both the reasoning effort and the reasoning items the
+                // model returns, so a reasoning model would re-derive its thinking on every tool result.
+                if (config.endpoint == OpenAiEndpoint.RESPONSES || config.reasoningEffort != null)
+                    add(LLMCapability.Thinking)
+            }
+    )
+
+// parallel tool calls stay off on both endpoints: third-party models garble the sibling calls of a batch,
+// and the agent executes tool calls sequentially anyway.
+private fun openAiCompatibleParams(config: LlmProviderConfig.OpenAiCompatible): LLMParams =
+    when (config.endpoint) {
+        OpenAiEndpoint.COMPLETIONS ->
+            OpenAIChatParams(parallelToolCalls = false, reasoningEffort = config.reasoningEffort)
+
+        OpenAiEndpoint.RESPONSES ->
+            OpenAIResponsesParams(
+                parallelToolCalls = false,
+                reasoning = config.reasoningEffort?.let { ReasoningConfig(effort = it) }
+            )
+    }
 
 // both request and socket timeouts default to 900 s in the koog client; cap them so a stalled LLM
 // call fails fast and the agent can deliver an error reply instead of leaving the bot silent.

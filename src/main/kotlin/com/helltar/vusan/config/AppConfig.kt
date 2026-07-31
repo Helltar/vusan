@@ -1,5 +1,6 @@
 package com.helltar.vusan.config
 
+import ai.koog.prompt.executor.clients.openai.base.models.ReasoningEffort
 import io.github.cdimascio.dotenv.dotenv
 import io.github.oshai.kotlinlogging.KotlinLogging
 import kotlin.io.path.Path
@@ -152,6 +153,8 @@ data class AppConfig(
                     baseUrl = requireEnv("LLM_BASE_URL"),
                     apiKey = requireEnv("LLM_API_KEY"),
                     model = requireEnv("LLM_MODEL"),
+                    endpoint = resolveOpenAiEndpoint(),
+                    reasoningEffort = resolveReasoningEffort(),
                     requestTimeout = requestTimeout
                 )
             }
@@ -170,6 +173,26 @@ data class AppConfig(
                 requestTimeout = requestTimeout
             )
         }
+
+        private fun resolveOpenAiEndpoint(): OpenAiEndpoint {
+            val raw = readEnv("LLM_OPENAI_ENDPOINT") ?: return OpenAiEndpoint.COMPLETIONS
+
+            return enumOrNull<OpenAiEndpoint>(raw)
+                ?: error("Unsupported LLM_OPENAI_ENDPOINT=[$raw]. Supported values: ${supportedValues<OpenAiEndpoint>()}")
+        }
+
+        private fun resolveReasoningEffort(): ReasoningEffort? {
+            val raw = readEnv("LLM_REASONING_EFFORT") ?: return null
+
+            return enumOrNull<ReasoningEffort>(raw)
+                ?: error("Unsupported LLM_REASONING_EFFORT=[$raw]. Supported values: ${supportedValues<ReasoningEffort>()}")
+        }
+
+        private inline fun <reified T : Enum<T>> enumOrNull(raw: String): T? =
+            runCatching { enumValueOf<T>(raw.trim().uppercase()) }.getOrNull()
+
+        private inline fun <reified T : Enum<T>> supportedValues(): String =
+            enumValues<T>().joinToString { it.name.lowercase() }
 
         private fun readEnv(env: String): String? =
             dotenv[env]?.takeIf { it.isNotBlank() }
