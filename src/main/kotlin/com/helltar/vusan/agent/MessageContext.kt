@@ -11,7 +11,8 @@ data class MessageContext(
     val chatDescription: String? = null,
     val userId: Long,
     val userDisplayName: String? = null,
-    val userUsername: String? = null
+    val userUsername: String? = null,
+    val userLanguageCode: String? = null
 ) {
     fun toSystemPrompt(): String {
         val lines =
@@ -28,6 +29,7 @@ data class MessageContext(
                 add("- id: $userId")
                 userDisplayName?.asMetadataValue()?.let { add("- display_name: $it") }
                 userUsername?.asMetadataValue()?.let { add("- username: $it") }
+                userLanguageCode?.asMetadataValue()?.let { add("- telegram_language: $it") }
             }
 
         return lines.joinToString("\n")

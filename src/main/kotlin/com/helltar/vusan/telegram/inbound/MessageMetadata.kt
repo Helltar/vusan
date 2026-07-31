@@ -60,7 +60,8 @@ internal fun Message.toMessageContext(sender: User, chatDescription: String?): M
         chatDescription = chatDescription,
         userId = sender.id,
         userDisplayName = displayName(sender.firstName, sender.lastName),
-        userUsername = sender.userName
+        userUsername = sender.userName,
+        userLanguageCode = sender.languageCode
     )
 
 // the bot api models chat flavors as flags on `Chat` and `Message` rather than distinct types,

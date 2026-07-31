@@ -18,7 +18,8 @@ class MessageContextTest {
                 chatDescription = "A group for bot testing",
                 userId = 42,
                 userDisplayName = "Ada Lovelace",
-                userUsername = "@ada"
+                userUsername = "@ada",
+                userLanguageCode = "en"
             ).toSystemPrompt()
 
         assertTrue(prompt.contains("- id: -100123"))
@@ -27,6 +28,7 @@ class MessageContextTest {
         assertTrue(prompt.contains("- id: 42"))
         assertTrue(prompt.contains("- display_name: Ada Lovelace"))
         assertTrue(prompt.contains("- username: @ada"))
+        assertTrue(prompt.contains("- telegram_language: en"))
     }
 
     @Test
