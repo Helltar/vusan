@@ -6,6 +6,7 @@ import kotlinx.coroutines.runBlocking
 import kotlin.test.Test
 import kotlin.test.assertContains
 import kotlin.test.assertEquals
+import kotlin.test.assertFalse
 import kotlin.test.assertTrue
 
 class VisionToolsTest {
@@ -126,6 +127,26 @@ class VisionToolsTest {
         assertTrue("<audio_transcript>" !in result, "expected no transcript block without transcription")
     }
 
+    // a telegram gif carries no audio stream, so extraction there can only ever fail.
+    @Test
+    fun `describeVideo skips the audio pass for a gif`() = runBlocking {
+        val executor = FakePromptExecutor()
+        val sampler = FakeVideoSampler()
+
+        val tools =
+            visionTools(
+                executor = executor,
+                attachedFile = videoAttachment(isAnimation = true),
+                sampler = sampler,
+                transcriber = { _, _ -> error("transcription must not run for a gif") }
+            )
+
+        tools.describeVideo("")
+
+        assertFalse(sampler.audioRequested)
+        assertContains(executor.promptText, "It is a GIF")
+    }
+
     @Test
     fun `describeVideo keeps going when the audio cannot be transcribed`() = runBlocking {
         val executor = FakePromptExecutor()
@@ -243,6 +264,7 @@ class VisionToolsTest {
         fileSizeBytes: Long? = 1_024L,
         durationSeconds: Int? = 12,
         loadThumbnailBytes: (suspend () -> ByteArray)? = null,
+        isAnimation: Boolean = false,
         loadBytes: suspend () -> ByteArray = { byteArrayOf(1, 2, 3) }
     ): AttachedFile =
         AttachedFile(
@@ -253,6 +275,7 @@ class VisionToolsTest {
             caption = "caption",
             durationSeconds = durationSeconds,
             loadThumbnailBytes = loadThumbnailBytes,
+            isAnimation = isAnimation,
             loadBytes = loadBytes
         )
 
@@ -264,11 +287,17 @@ class VisionToolsTest {
         var receivedDurationSeconds: Int? = null
             private set
 
+        var audioRequested = false
+            private set
+
         override suspend fun sampleFrames(video: ByteArray, durationSeconds: Int?, maxFrames: Int): List<ByteArray> {
             receivedDurationSeconds = durationSeconds
             return frames
         }
 
-        override suspend fun extractAudio(video: ByteArray): ByteArray? = audio
+        override suspend fun extractAudio(video: ByteArray): ByteArray? {
+            audioRequested = true
+            return audio
+        }
     }
 }

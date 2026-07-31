@@ -96,7 +96,8 @@ private fun Animation.toAttachedFile(client: TelegramClient, caption: String?): 
         fileSizeBytes = fileSize,
         mimeType = mimeType,
         durationSeconds = duration,
-        thumbnailFileId = thumbnail?.fileId
+        thumbnailFileId = thumbnail?.fileId,
+        isAnimation = true
     )
 
 private fun VideoNote.toAttachedFile(client: TelegramClient, caption: String?): AttachedFile =
@@ -146,7 +147,8 @@ private fun videoAttachedFile(
     fileSizeBytes: Long?,
     mimeType: String?,
     durationSeconds: Int?,
-    thumbnailFileId: String?
+    thumbnailFileId: String?,
+    isAnimation: Boolean = false
 ): AttachedFile =
     AttachedFile(
         name = name,
@@ -158,6 +160,7 @@ private fun videoAttachedFile(
         // telegram serves bots files of at most 20 MB; the thumbnail is the one frame of an oversize
         // video that still fits, so vision keeps a way in.
         loadThumbnailBytes = thumbnailFileId?.let { id -> suspend { client.downloadFileBytes(id) } },
+        isAnimation = isAnimation,
         loadBytes = { client.downloadFileBytes(fileId) }
     )
 
@@ -188,8 +191,13 @@ internal fun attachedFileContextBlock(file: AttachedFile): String =
                     append("It is an image: call `describeImage` to answer about what is visible, or use `codeExecution` to process it (resize, filter, colors, dimensions).")
                 }
 
+                // the GIF line has to live here rather than in the no-caption prompt: a caption replaces
+                // that prompt, and the reaction still is not something to review.
                 AttachedFileKind.VIDEO ->
-                    append("It is a video: call `describeVideo` when your answer depends on what happens in it or what is said in it. It is not available to `codeExecution`.")
+                    if (file.isAnimation)
+                        append("It is a GIF: a short soundless loop, usually thrown into a chat as a reaction rather than as something to review. Call `describeVideo` only when the user asks what is in it, and never narrate it unasked. It is not available to `codeExecution`.")
+                    else
+                        append("It is a video: call `describeVideo` when your answer depends on what happens in it or what is said in it. It is not available to `codeExecution`.")
 
                 AttachedFileKind.OTHER -> {
                     append("This file is in the codeExecution working directory under this exact name. ")

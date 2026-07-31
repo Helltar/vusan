@@ -31,10 +31,12 @@ class VideoVisionClient(
                     "so it is either broken or in a format that cannot be opened."
         }
 
+        // telegram serves a GIF as a video with no audio stream at all, so extraction there can only
+        // fail — skip the ffmpeg pass instead of paying for it once per GIF.
         val transcript =
-            transcriber?.let { stt ->
-                sampler.extractAudio(bytes)?.let { stt.transcribeOrNull(it, video.durationSeconds) }
-            }
+            transcriber
+                ?.takeUnless { video.isAnimation }
+                ?.let { stt -> sampler.extractAudio(bytes)?.let { stt.transcribeOrNull(it, video.durationSeconds) } }
 
         val description = execute(video, frames, samplingNote(video.durationSeconds, frames.size), transcript, focus)
 
@@ -91,10 +93,13 @@ class VideoVisionClient(
                         appendLine("Cover the subject, what happens, scene changes, and any visible text.")
                         appendLine("Do not invent what happens between the frames.")
 
-                        if (transcript != null) {
-                            appendLine("What is said in the video is transcribed below; use it as part of the answer.")
-                        } else {
-                            appendLine("The sound of the video is not available, so do not describe it.")
+                        when {
+                            transcript != null ->
+                                appendLine("What is said in the video is transcribed below; use it as part of the answer.")
+
+                            video.isAnimation -> appendLine("It is a GIF, so it is soundless by nature.")
+
+                            else -> appendLine("The sound of the video is not available, so do not describe it.")
                         }
 
                         appendLine("Keep it concise.")

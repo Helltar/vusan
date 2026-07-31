@@ -123,6 +123,29 @@ class ReplyContextTest {
         assertEquals(AttachedFileKind.VIDEO, file.kind)
         assertEquals("video-u2.mp4", file.name)
         assertEquals(3, file.durationSeconds)
+        assertTrue(file.isAnimation)
+    }
+
+    // a caption replaces the gif-as-reaction prompt, so the attachment block is what has to carry the
+    // rule that a gif is not something to narrate back.
+    @Test
+    fun `attachedFileContextBlock marks a gif as a reaction, not a video to review`() {
+        val message =
+            message(
+                """
+                "animation": {
+                  "file_id": "anim-1", "file_unique_id": "u2", "width": 480, "height": 270,
+                  "duration": 3, "mime_type": "video/mp4", "file_size": 90000
+                },
+                "caption": "ахах"
+                """
+            )
+
+        val block = attachedFileContextBlock(assertNotNull(message.toAttachedFileOrNull(unusedClient)))
+
+        assertTrue(block.contains("It is a GIF"))
+        assertTrue(block.contains("never narrate it unasked"))
+        assertFalse(block.contains("what is said in it"))
     }
 
     @Test
