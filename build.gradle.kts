@@ -15,12 +15,13 @@ repositories {
 
 dependencies {
     implementation(kotlin("reflect"))
+
     implementation(libs.koog.agents)
     implementation(libs.koog.google.client)
     implementation(libs.koog.deepseek.client)
-    implementation(libs.telegrambots.longpolling)
+
     implementation(libs.telegrambots.client)
-    implementation(libs.dotenv.kotlin)
+    implementation(libs.telegrambots.longpolling)
 
     runtimeOnly(libs.sqlite.jdbc)
     implementation(libs.exposed.jdbc)
@@ -30,6 +31,8 @@ dependencies {
     implementation(libs.ktor.client.cio)
     implementation(libs.ktor.client.content.negotiation)
     implementation(libs.ktor.serialization.kotlinx.json)
+
+    implementation(libs.dotenv.kotlin)
     implementation(libs.jsoup)
     implementation(libs.cron.utils)
 
@@ -50,6 +53,7 @@ kotlin {
 
 tasks.test {
     useJUnitPlatform()
+
     testLogging {
         events("passed", "skipped", "failed")
     }
