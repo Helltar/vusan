@@ -1,4 +1,4 @@
-package com.helltar.vusan.telegram
+package com.helltar.vusan.telegram.delivery
 
 import kotlin.test.Test
 import kotlin.test.assertContains

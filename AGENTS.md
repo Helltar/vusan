@@ -43,6 +43,9 @@ Keep this file concise and actionable; put product docs in `README.md` or `docs/
   `telegram/` Telegram I/O, `agent/` Koog orchestration, `tools/` agent-callable
   capabilities, `outbox/` output models, `request/` per-turn context, `tasks/`
   scheduling, `infra/` DB/HTTP, `config/` runtime config.
+- Inside `telegram/`: `inbound/` turns an update into agent input, `delivery/`
+  sends everything back out, `callback/` owns the inline-button flows. The
+  runner and the raw client helpers stay at the package root.
 - `sandbox/` is a separate Deno service, not Kotlin. Keep it that way: the bot
   reaches it only over HTTP through `tools/sandbox/SandboxClient.kt`. See
   [code execution service](docs/architecture.md#code-execution-service).

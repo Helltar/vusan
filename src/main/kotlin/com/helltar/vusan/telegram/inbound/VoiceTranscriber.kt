@@ -1,9 +1,10 @@
-package com.helltar.vusan.telegram
+package com.helltar.vusan.telegram.inbound
 
 import com.helltar.vusan.common.rethrowIfCancellation
 import com.helltar.vusan.common.xmlBlock
 import com.helltar.vusan.config.OpenAiSttConfig
 import com.helltar.vusan.stt.OpenAiWhisperClient
+import com.helltar.vusan.telegram.downloadFileBytes
 import io.github.oshai.kotlinlogging.KotlinLogging
 import org.telegram.telegrambots.meta.api.objects.Audio
 import org.telegram.telegrambots.meta.api.objects.Voice

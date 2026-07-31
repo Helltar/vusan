@@ -4,8 +4,8 @@ import com.helltar.vusan.agent.AgentRequest
 import com.helltar.vusan.agent.AgentRunner
 import com.helltar.vusan.common.rethrowIfCancellation
 import com.helltar.vusan.i18n.Messages
-import com.helltar.vusan.telegram.ScheduledAttribution
-import com.helltar.vusan.telegram.TelegramDelivery
+import com.helltar.vusan.telegram.delivery.ScheduledAttribution
+import com.helltar.vusan.telegram.delivery.TelegramDelivery
 import io.github.oshai.kotlinlogging.KotlinLogging
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Job

@@ -1,4 +1,4 @@
-package com.helltar.vusan.telegram
+package com.helltar.vusan.telegram.inbound
 
 import com.helltar.vusan.common.collapseWhitespaceAndCap
 import com.helltar.vusan.common.limitTo
@@ -6,6 +6,7 @@ import com.helltar.vusan.common.sanitizeFilename
 import com.helltar.vusan.common.xmlBlock
 import com.helltar.vusan.request.AttachedFile
 import com.helltar.vusan.request.AttachedFileKind
+import com.helltar.vusan.telegram.downloadFileBytes
 import java.util.Locale
 import org.telegram.telegrambots.meta.api.objects.Document
 import org.telegram.telegrambots.meta.api.objects.ExternalReplyInfo

@@ -1,4 +1,4 @@
-package com.helltar.vusan.telegram
+package com.helltar.vusan.telegram.delivery
 
 import com.fasterxml.jackson.databind.ObjectMapper
 import kotlin.test.Test

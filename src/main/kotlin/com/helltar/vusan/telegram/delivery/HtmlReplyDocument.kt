@@ -1,4 +1,4 @@
-package com.helltar.vusan.telegram
+package com.helltar.vusan.telegram.delivery
 
 // the formatting fallback wraps the agent's reply (already Telegram-subset HTML) in a standalone,
 // responsive HTML page, so the user still sees the intended structure when Telegram rejects the

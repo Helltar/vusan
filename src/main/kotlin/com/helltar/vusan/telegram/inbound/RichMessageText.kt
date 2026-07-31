@@ -1,4 +1,4 @@
-package com.helltar.vusan.telegram
+package com.helltar.vusan.telegram.inbound
 
 import org.telegram.telegrambots.meta.api.objects.richblock.*
 import org.telegram.telegrambots.meta.api.objects.richtext.*

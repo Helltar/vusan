@@ -1,4 +1,4 @@
-package com.helltar.vusan.telegram
+package com.helltar.vusan.telegram.delivery
 
 import com.helltar.vusan.outbox.BotOutput
 import java.io.Serializable

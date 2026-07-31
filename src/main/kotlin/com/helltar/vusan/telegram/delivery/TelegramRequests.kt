@@ -1,4 +1,6 @@
-package com.helltar.vusan.telegram
+package com.helltar.vusan.telegram.delivery
+
+import com.helltar.vusan.telegram.api
 
 import java.io.ByteArrayInputStream
 import org.telegram.telegrambots.meta.api.methods.AnswerCallbackQuery

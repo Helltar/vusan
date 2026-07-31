@@ -1,4 +1,4 @@
-package com.helltar.vusan.telegram
+package com.helltar.vusan.telegram.delivery
 
 import com.helltar.vusan.agent.AgentResult
 import com.helltar.vusan.agent.ToolActivity
@@ -6,6 +6,11 @@ import com.helltar.vusan.common.rethrowIfCancellation
 import com.helltar.vusan.i18n.Messages
 import com.helltar.vusan.outbox.BotOutput
 import com.helltar.vusan.outbox.OutboxItem
+import com.helltar.vusan.telegram.api
+import com.helltar.vusan.telegram.inbound.chatIdLong
+import com.helltar.vusan.telegram.inbound.messageIdLong
+import com.helltar.vusan.telegram.inbound.senderIdOrNull
+import com.helltar.vusan.telegram.inbound.senderLanguageCodeOrNull
 import io.github.oshai.kotlinlogging.KotlinLogging
 import kotlinx.coroutines.delay
 import kotlin.time.Duration.Companion.milliseconds

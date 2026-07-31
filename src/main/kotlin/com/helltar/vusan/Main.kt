@@ -12,6 +12,10 @@ import com.helltar.vusan.stt.OpenAiWhisperClient
 import com.helltar.vusan.tasks.TaskScheduler
 import com.helltar.vusan.tasks.TasksRepository
 import com.helltar.vusan.telegram.*
+import com.helltar.vusan.telegram.callback.InlineChoiceHandler
+import com.helltar.vusan.telegram.callback.TaskMenuHandler
+import com.helltar.vusan.telegram.delivery.TelegramDelivery
+import com.helltar.vusan.telegram.inbound.VoiceTranscriber
 import com.helltar.vusan.tools.ToolRegistryFactory
 import io.github.oshai.kotlinlogging.KotlinLogging
 import io.ktor.client.*

@@ -1,4 +1,4 @@
-package com.helltar.vusan.telegram
+package com.helltar.vusan.telegram.inbound
 
 import com.fasterxml.jackson.databind.ObjectMapper
 import com.helltar.vusan.request.AttachedFileKind

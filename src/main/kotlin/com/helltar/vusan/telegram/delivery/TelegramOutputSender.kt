@@ -1,7 +1,10 @@
-package com.helltar.vusan.telegram
+package com.helltar.vusan.telegram.delivery
 
+import com.helltar.vusan.common.escapeHtml
 import com.helltar.vusan.common.rethrowIfCancellation
 import com.helltar.vusan.outbox.BotOutput
+import com.helltar.vusan.telegram.api
+import com.helltar.vusan.telegram.callback.inlineChoiceKeyboard
 import io.github.oshai.kotlinlogging.KotlinLogging
 import java.io.ByteArrayInputStream
 import org.telegram.telegrambots.meta.api.methods.ParseMode
@@ -549,12 +552,6 @@ private fun captionWithSourceLink(caption: String?, sourceUrl: String?): String?
     val link = sourceUrl?.let { """<a href="${it.escapeHtml()}">${trackLinkLabel(it)}</a>""" }
     return listOfNotNull(caption, link).joinToString("\n").ifBlank { null }
 }
-
-internal fun String.escapeHtml(): String =
-    replace("&", "&amp;")
-        .replace("<", "&lt;")
-        .replace(">", "&gt;")
-        .replace("\"", "&quot;")
 
 private fun trackLinkLabel(url: String): String {
     val host = runCatching { java.net.URI(url).host.orEmpty().lowercase() }.getOrDefault("")

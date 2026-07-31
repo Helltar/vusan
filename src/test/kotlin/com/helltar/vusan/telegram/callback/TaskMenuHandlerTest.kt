@@ -1,4 +1,4 @@
-package com.helltar.vusan.telegram
+package com.helltar.vusan.telegram.callback
 
 import com.helltar.vusan.config.AppConfig
 import com.helltar.vusan.config.HostedLlmProvider

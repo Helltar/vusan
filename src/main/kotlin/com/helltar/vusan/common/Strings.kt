@@ -65,3 +65,10 @@ private fun String.takeWholeChars(n: Int): String {
 
     return substring(0, safeEnd)
 }
+
+/** Escapes the four characters Telegram's `HTML` parse mode reads as markup. */
+fun String.escapeHtml(): String =
+    replace("&", "&amp;")
+        .replace("<", "&lt;")
+        .replace(">", "&gt;")
+        .replace("\"", "&quot;")

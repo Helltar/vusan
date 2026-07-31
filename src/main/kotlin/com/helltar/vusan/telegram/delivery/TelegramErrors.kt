@@ -1,4 +1,4 @@
-package com.helltar.vusan.telegram
+package com.helltar.vusan.telegram.delivery
 
 import org.telegram.telegrambots.meta.exceptions.TelegramApiRequestException
 

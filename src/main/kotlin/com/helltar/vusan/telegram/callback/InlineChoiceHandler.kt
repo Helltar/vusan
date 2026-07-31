@@ -1,9 +1,13 @@
-package com.helltar.vusan.telegram
+package com.helltar.vusan.telegram.callback
 
+import com.helltar.vusan.common.escapeHtml
 import com.helltar.vusan.common.rethrowIfCancellation
 import com.helltar.vusan.common.xmlBlock
 import com.helltar.vusan.i18n.Messages
 import com.helltar.vusan.outbox.BotOutput
+import com.helltar.vusan.telegram.delivery.answerCallbackQuery
+import com.helltar.vusan.telegram.delivery.editTextMessage
+import com.helltar.vusan.telegram.delivery.isMessageNotModified
 import io.github.oshai.kotlinlogging.KotlinLogging
 import java.util.LinkedHashMap
 import org.telegram.telegrambots.meta.api.objects.replykeyboard.InlineKeyboardMarkup

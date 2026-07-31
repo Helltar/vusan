@@ -1,4 +1,4 @@
-package com.helltar.vusan.telegram
+package com.helltar.vusan.telegram.callback
 
 import com.helltar.vusan.i18n.Language
 import com.helltar.vusan.i18n.Messages
