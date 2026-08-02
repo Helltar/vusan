@@ -13,7 +13,8 @@ data class HistoryPromptPlan(
     val compactablePrefix: List<ChatInteraction>,
     val estimatedTokens: Int,
     val includedInteractions: Int,
-    val exactToolInteractions: Int
+    val exactToolInteractions: Int,
+    val stats: ChatHistoryStats
 )
 
 fun planHistoryForPrompt(
@@ -76,7 +77,8 @@ fun planHistoryForPrompt(
         compactablePrefix = snapshot.interactions.take(compactableCount),
         estimatedTokens = estimatedTokens,
         includedInteractions = includedCount,
-        exactToolInteractions = exactToolInteractions
+        exactToolInteractions = exactToolInteractions,
+        stats = snapshot.stats
     )
 }
 

@@ -172,8 +172,10 @@ A normal user message travels:
   are persisted as assistant history, and the follow-up answer is delivered as a reply to that choice message.
 - **History compaction** — `agent/history/ChatHistory.planHistoryForPrompt` token-budgets complete recent interactions.
   `LlmConversationCompactor` rewrites the previous recap plus the next omitted interaction prefix into a standalone
-  semantic recap and advances a database checkpoint only after that model call succeeds. Failed compaction never
-  deletes source rows. Raw transcript retention and model-visible context are deliberately separate. The recap is
+  semantic recap and advances a database checkpoint only after that model call succeeds. It runs at most once per turn,
+  because it is an extra LLM round trip in front of the user's reply; a prefix that still does not fit stays out of the
+  prompt and gets its own recap on a later turn. Failed compaction never deletes source rows. Raw transcript retention
+  and model-visible context are deliberately separate. The recap is
   injected at user priority so mixed user/assistant history is not mislabeled as an assistant instruction. An initial
   context-overflow failure retries once with recap only, but never after a tool ran, which avoids duplicated actions.
 - **Live tool-result budget** — `ContextWindowPolicy.liveToolResultMaxChars` caps everything the tools return during
@@ -186,7 +188,8 @@ A normal user message travels:
   model for any other server (llama.cpp, Ollama, …), with a configurable context size. Its endpoint capability and params type are declared as a pair
   (`OpenAIChatParams` → `/v1/chat/completions`, `OpenAIResponsesParams` → `/v1/responses`), because the Koog client reads
   the route off the params type and rejects params the model does not declare an endpoint for. Direct OpenAI requests
-  share a stable `prompt_cache_key`; for GPT-5.6 and later, `config/OpenAiPromptCaching` also marks the first stable
+  share a stable `prompt_cache_key`, and history recaps get their own so their tool-free prefix does not dilute the
+  chat one; for GPT-5.6 and later, `config/OpenAiPromptCaching` also marks the first stable
   system/developer content block as the only explicit cache breakpoint. This keeps the system prompt and tool schemas
   reusable while excluding timestamps, history, memory, Telegram metadata, user input, and tool results from billable
   cache writes. The adapter exists because Koog 1.1.1 cannot represent OpenAI's explicit breakpoint fields itself.

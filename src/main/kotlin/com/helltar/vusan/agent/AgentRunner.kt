@@ -125,20 +125,13 @@ class AgentRunner(
         val currentTurn = currentTurnPrompt(request.prompt, request.messageContext, userMemory, chatMemory)
         val outbox = BotOutbox()
         val preparation = agentFactory.prepare(context, outbox, currentTurn)
-        val snapshot = compactHistoryForPrompt(request.userId, history.load(request.userId), preparation.tokenBudget.historyTokens)
-        val historyPlan =
-            planHistoryForPrompt(
-                snapshot = snapshot,
-                tokenBudget = preparation.tokenBudget.historyTokens,
-                maxRecentInteractions = historyConfig.maxRecentInteractions
-            )
-
+        val historyPlan = historyPlanForPrompt(request.userId, preparation.tokenBudget.historyTokens)
         val plannedInputTokens = preparation.tokenBudget.fixedPromptTokens + historyPlan.estimatedTokens
 
         log.info {
             "prompt history loaded: user=${request.userId} chat=${request.chatId} " +
-                    "storedInteractions=${snapshot.stats.storedInteractions} storedMessages=${snapshot.stats.storedMessages} " +
-                    "storedChars=${snapshot.stats.storedChars} unsummarized=${snapshot.stats.unsummarizedInteractions} " +
+                    "storedInteractions=${historyPlan.stats.storedInteractions} storedMessages=${historyPlan.stats.storedMessages} " +
+                    "storedChars=${historyPlan.stats.storedChars} unsummarized=${historyPlan.stats.unsummarizedInteractions} " +
                     "includedInteractions=${historyPlan.includedInteractions} turns=${historyPlan.history.turns.size} " +
                     "summaryChars=${historyPlan.history.summary?.length ?: 0} exactToolInteractions=${historyPlan.exactToolInteractions} " +
                     "userMemory=${userMemory.size} chatMemory=${chatMemory.size} " +
@@ -224,57 +217,53 @@ class AgentRunner(
         return AgentResult(outputs, comment, outbox.redirectToPrivate)
     }
 
-    private suspend fun compactHistoryForPrompt(
-        userId: Long,
-        initialSnapshot: ChatHistorySnapshot,
-        tokenBudget: Int
-    ): ChatHistorySnapshot {
-        var snapshot = initialSnapshot
+    // at most one recap per turn: it is an extra LLM round trip in front of the user's reply. whatever
+    // is still over budget stays out of this prompt and gets its own recap on a later turn.
+    private suspend fun historyPlanForPrompt(userId: Long, tokenBudget: Int): HistoryPromptPlan {
+        val snapshot = history.load(userId)
+        val plan = planFor(snapshot, tokenBudget)
 
-        repeat(MAX_COMPACTION_PASSES_PER_TURN) {
-            val plan =
-                planHistoryForPrompt(
-                    snapshot = snapshot,
-                    tokenBudget = tokenBudget,
-                    maxRecentInteractions = historyConfig.maxRecentInteractions
-                )
+        if (plan.compactablePrefix.isEmpty()) return plan
 
-            if (plan.compactablePrefix.isEmpty()) return snapshot
-
-            val compacted =
-                try {
-                    conversationCompactor.compact(snapshot.summary, plan.compactablePrefix)
-                } catch (e: Throwable) {
-                    e.rethrowIfCancellation()
-                    log.warn {
-                        "history recap failed for user=$userId: " +
-                                e.message?.collapseWhitespaceAndCap(PROVIDER_ERROR_LOG_MAX_CHARS).orEmpty()
-                    }
-                    return snapshot
-                } ?: return snapshot
-
-            val stored =
-                history.storeSummary(
-                    userId = userId,
-                    expectedThroughMessageId = snapshot.summarizedThroughMessageId,
-                    throughMessageId = compacted.throughMessageId,
-                    content = compacted.summary
-                )
-
-            if (!stored) {
-                log.warn { "history recap checkpoint changed before store for user=$userId; reloading" }
-            } else {
-                log.info {
-                    "history recap stored: user=$userId interactions=${compacted.interactionCount} " +
-                            "throughMessage=${compacted.throughMessageId} chars=${compacted.summary.length}"
+        val compacted =
+            try {
+                conversationCompactor.compact(snapshot.summary, plan.compactablePrefix)
+            } catch (e: Throwable) {
+                e.rethrowIfCancellation()
+                log.warn {
+                    "history recap failed for user=$userId: " +
+                            e.message?.collapseWhitespaceAndCap(PROVIDER_ERROR_LOG_MAX_CHARS).orEmpty()
                 }
-            }
+                return plan
+            } ?: return plan
 
-            snapshot = history.load(userId)
+        val stored =
+            history.storeSummary(
+                userId = userId,
+                expectedThroughMessageId = snapshot.summarizedThroughMessageId,
+                throughMessageId = compacted.throughMessageId,
+                content = compacted.summary
+            )
+
+        if (!stored) {
+            log.warn { "history recap checkpoint changed before store for user=$userId; keeping the raw history" }
+            return plan
         }
 
-        return snapshot
+        log.info {
+            "history recap stored: user=$userId interactions=${compacted.interactionCount} " +
+                    "throughMessage=${compacted.throughMessageId} chars=${compacted.summary.length}"
+        }
+
+        return planFor(history.load(userId), tokenBudget)
     }
+
+    private fun planFor(snapshot: ChatHistorySnapshot, tokenBudget: Int): HistoryPromptPlan =
+        planHistoryForPrompt(
+            snapshot = snapshot,
+            tokenBudget = tokenBudget,
+            maxRecentInteractions = historyConfig.maxRecentInteractions
+        )
 
     private suspend fun runAgentWithHistory(
         userId: Long,
@@ -361,7 +350,6 @@ class AgentRunner(
 private const val TOOL_OUTPUT_MAX_CHARS = 4_000
 private const val TOOL_EVENTS_MAX_COUNT = 8
 private const val TOOL_EVENTS_MAX_CHARS = 12_000
-private const val MAX_COMPACTION_PASSES_PER_TURN = 3
 private const val EMERGENCY_SUMMARY_MAX_CHARS = 1_500
 private const val LOG_REPLY_MAX_CHARS = 300
 private const val PROVIDER_ERROR_LOG_MAX_CHARS = 300

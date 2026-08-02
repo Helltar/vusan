@@ -53,7 +53,7 @@ suspend fun main() = coroutineScope {
         val toolRegistryFactory = ToolRegistryFactory(http, config, history, memory, tasks, vision)
         val contextWindowPolicy = ContextWindowPolicy(llm.model)
         val agentFactory = AgentFactory(executor, toolRegistryFactory, llm.model, llm.chatParams, config.personality, contextWindowPolicy = contextWindowPolicy)
-        val conversationCompactor = LlmConversationCompactor(executor, llm.model, llm.chatParams, contextWindowPolicy)
+        val conversationCompactor = LlmConversationCompactor(executor, llm.model, llm.compactionParams, contextWindowPolicy)
         val agentRunner = AgentRunner(agentFactory, history, memory, conversationCompactor, config.chatHistory)
 
         val telegramClient = OkHttpTelegramClient(config.telegramBotToken)

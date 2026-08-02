@@ -34,7 +34,10 @@ data class LlmRuntime(
     val providerLabel: String,
     val client: LLMClient,
     val model: LLModel,
-    val chatParams: LLMParams
+    val chatParams: LLMParams,
+    // a history recap is a tool-free prompt with its own stable prefix, so it gets its own cache key
+    // instead of diluting the chat prefix OpenAI keeps warm for every turn.
+    val compactionParams: LLMParams = chatParams
 )
 
 fun resolveLlmRuntime(config: LlmProviderConfig): LlmRuntime {
@@ -50,10 +53,11 @@ fun resolveLlmRuntime(config: LlmProviderConfig): LlmRuntime {
                     openAiClient(
                         apiKey = config.apiKey,
                         settings = OpenAIClientSettings(config.baseUrl, timeoutConfig),
-                        explicitPromptCaching = config.openAiPromptCacheKey != null
+                        explicitPromptCaching = config.openAiCacheKey(OPENAI_PROMPT_CACHE_KEY) != null
                     ),
                 model = openAiCompatibleModel(config),
-                chatParams = openAiCompatibleParams(config)
+                chatParams = openAiCompatibleParams(config, config.openAiCacheKey(OPENAI_PROMPT_CACHE_KEY)),
+                compactionParams = openAiCompatibleParams(config, config.openAiCacheKey(OPENAI_COMPACTION_CACHE_KEY))
             )
     }
 }
@@ -86,30 +90,27 @@ private fun openAiCompatibleModel(config: LlmProviderConfig.OpenAiCompatible): L
 
 // parallel tool calls stay off on both endpoints: third-party models garble the sibling calls of a batch,
 // and the agent executes tool calls sequentially anyway.
-private fun openAiCompatibleParams(config: LlmProviderConfig.OpenAiCompatible): LLMParams =
+private fun openAiCompatibleParams(config: LlmProviderConfig.OpenAiCompatible, promptCacheKey: String?): LLMParams =
     when (config.endpoint) {
         OpenAiEndpoint.COMPLETIONS ->
             OpenAIChatParams(
                 parallelToolCalls = false,
-                promptCacheKey = config.openAiPromptCacheKey,
+                promptCacheKey = promptCacheKey,
                 reasoningEffort = config.reasoningEffort
             )
 
         OpenAiEndpoint.RESPONSES ->
             OpenAIResponsesParams(
                 parallelToolCalls = false,
-                promptCacheKey = config.openAiPromptCacheKey,
+                promptCacheKey = promptCacheKey,
                 reasoning = config.reasoningEffort?.let { ReasoningConfig(effort = it) }
             )
     }
 
 // prompt_cache_key is an openai extension, so do not leak it to arbitrary compatible servers that may
 // reject unknown fields.
-private val LlmProviderConfig.OpenAiCompatible.openAiPromptCacheKey: String?
-    get() =
-        OPENAI_PROMPT_CACHE_KEY.takeIf {
-            baseUrl.trim().trimEnd('/').equals(OPENAI_API_BASE_URL, ignoreCase = true)
-        }
+private fun LlmProviderConfig.OpenAiCompatible.openAiCacheKey(key: String): String? =
+    key.takeIf { baseUrl.trim().trimEnd('/').equals(OPENAI_API_BASE_URL, ignoreCase = true) }
 
 // both request and socket timeouts default to 900 s in the koog client; cap them so a stalled LLM
 // call fails fast and the agent can deliver an error reply instead of leaving the bot silent.
@@ -131,7 +132,8 @@ private fun resolveHostedRuntime(config: LlmProviderConfig.Hosted, timeoutConfig
                         explicitPromptCaching = true
                     ),
                 model = resolveOpenAiModel(config.model).withContextOverride(config.contextWindowTokens),
-                chatParams = OpenAIChatParams(promptCacheKey = OPENAI_PROMPT_CACHE_KEY)
+                chatParams = OpenAIChatParams(promptCacheKey = OPENAI_PROMPT_CACHE_KEY),
+                compactionParams = OpenAIChatParams(promptCacheKey = OPENAI_COMPACTION_CACHE_KEY)
             )
 
         HostedLlmProvider.ANTHROPIC ->
@@ -206,3 +208,4 @@ private fun LLModel.withContextOverride(contextWindowTokens: Long?): LLModel =
 
 private const val OPENAI_API_BASE_URL = "https://api.openai.com"
 private const val OPENAI_PROMPT_CACHE_KEY = "vusan"
+private const val OPENAI_COMPACTION_CACHE_KEY = "vusan-recap"
