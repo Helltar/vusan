@@ -81,8 +81,8 @@ A normal user message travels:
    stickers become a metadata prompt; a rich message — which never carries `text` — is flattened back into rich
    markdown (`telegram/inbound/RichMessageText.kt`), both as its own input and when one is quoted in a reply, capped at
    `MAX_RICH_MESSAGE_CHARS` because Telegram allows it 32768 characters against plain text's 4096;
-   replied-message context is wrapped in `<reply_context>`/`<user_message>`; application-owned XML text nodes escape
-   user-controlled delimiters; current or replied photo, video, and document input becomes `AttachedFile`.
+   replied-message context is wrapped in `<reply_context>`/`<user_message>`; current or replied photo, video, and
+   document input becomes `AttachedFile`.
    `TelegramBotRunner.dispatchToAgent` assembles the agent input and the shorter history input.
 4. **Run** — `AgentRunner.handle` takes the per-user lock (or returns "busy"), loads durable memory
    (`agent/memory/MemoryRepository` — the sender's user memory always, plus the group's memory in non-private chats),
@@ -175,9 +175,9 @@ A normal user message travels:
   semantic recap and advances a database checkpoint only after that model call succeeds. It runs at most once per turn,
   because it is an extra LLM round trip in front of the user's reply; a prefix that still does not fit stays out of the
   prompt and gets its own recap on a later turn. Failed compaction never deletes source rows. Raw transcript retention
-  and model-visible context are deliberately separate. The recap is
-  injected at user priority so mixed user/assistant history is not mislabeled as an assistant instruction. An initial
-  context-overflow failure retries once with recap only, but never after a tool ran, which avoids duplicated actions.
+  and model-visible context are deliberately separate. The recap is injected at user priority so mixed user/assistant
+  history is not mislabeled as an assistant instruction. An initial context-overflow failure retries once with recap
+  only, but never after a tool ran, which avoids duplicated actions.
 - **Live tool-result budget** — `ContextWindowPolicy.liveToolResultMaxChars` caps everything the tools return during
   one run, converting the agent reserve back to characters at the same ratio `estimateHistoryTokens` reads them. It
   scales with the window on purpose: a fixed ceiling starves a large-window model, since a single full-length YouTube

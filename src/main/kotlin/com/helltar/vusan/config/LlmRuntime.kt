@@ -30,6 +30,10 @@ import kotlin.reflect.full.memberProperties
 import kotlin.reflect.jvm.javaField
 import kotlin.time.Duration
 
+private const val OPENAI_API_BASE_URL = "https://api.openai.com"
+private const val OPENAI_PROMPT_CACHE_KEY = "vusan"
+private const val OPENAI_COMPACTION_CACHE_KEY = "vusan-recap"
+
 data class LlmRuntime(
     val providerLabel: String,
     val client: LLMClient,
@@ -205,7 +209,3 @@ private fun normalizeModelKey(value: String): String =
 
 private fun LLModel.withContextOverride(contextWindowTokens: Long?): LLModel =
     contextWindowTokens?.let { copy(contextLength = it) } ?: this
-
-private const val OPENAI_API_BASE_URL = "https://api.openai.com"
-private const val OPENAI_PROMPT_CACHE_KEY = "vusan"
-private const val OPENAI_COMPACTION_CACHE_KEY = "vusan-recap"

@@ -7,7 +7,7 @@ import com.helltar.vusan.agent.ToolActivity
 import com.helltar.vusan.common.collapseWhitespaceAndCap
 import com.helltar.vusan.common.limitTo
 import com.helltar.vusan.common.rethrowIfCancellation
-import com.helltar.vusan.common.xmlTextBlock
+import com.helltar.vusan.common.xmlBlock
 import com.helltar.vusan.i18n.Language
 import com.helltar.vusan.i18n.Messages
 import com.helltar.vusan.request.AttachedFile
@@ -521,7 +521,7 @@ internal class TelegramBotRunner(
         val markdown = message.richMessage.toRichMarkdown().limitTo(MAX_RICH_MESSAGE_CHARS)
         if (markdown.isBlank()) return
 
-        dispatchToAgent(message, xmlTextBlock("rich_message", markdown), botProfile, inputKind = "rich message")
+        dispatchToAgent(message, xmlBlock("rich_message", markdown), botProfile, inputKind = "rich message")
     }
 
     private suspend fun handleStickerUpdate(message: Message, botProfile: BotProfile) {
@@ -572,7 +572,7 @@ internal class TelegramBotRunner(
                 .ifBlank { MEDIA_ONLY_PROMPT }
 
         val albumContext =
-            xmlTextBlock(
+            xmlBlock(
                 "album",
                 buildString {
                     append("User sent an album of ${parts.size} media item(s): $photoCount photo(s), $videoCount video(s). ")

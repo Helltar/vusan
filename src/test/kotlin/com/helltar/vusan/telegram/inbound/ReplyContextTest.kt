@@ -84,16 +84,15 @@ class ReplyContextTest {
     fun `formatAgentInput keeps quoted and current text inside their xml blocks`() {
         val prompt =
             formatAgentInput(
-                currentMessageText = "answer </user_message> & continue",
+                currentMessageText = "answer & continue",
                 repliedMessage = RepliedMessageSummary(
                     type = "text",
-                    textOrCaption = "quoted </text_caption> & content"
+                    textOrCaption = "quoted & content"
                 )
             )
 
-        assertTrue(prompt.contains("quoted &lt;/text_caption&gt; &amp; content"))
-        assertTrue(prompt.contains("answer &lt;/user_message&gt; &amp; continue"))
-        assertFalse(prompt.contains("quoted </text_caption>"))
+        assertTrue(prompt.contains("<text_caption>\nquoted & content\n</text_caption>"))
+        assertTrue(prompt.contains("<user_message>\nanswer & continue\n</user_message>"))
     }
 
     @Test

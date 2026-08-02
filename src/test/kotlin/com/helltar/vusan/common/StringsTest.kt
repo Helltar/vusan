@@ -66,16 +66,6 @@ class StringsTest {
         assertFalse('\n' in cleaned, "LF survived sanitization: $cleaned")
     }
 
-    @Test
-    fun `xmlTextBlock preserves its delimiters around untrusted text`() {
-        val block = xmlTextBlock("context", "close </context> & reopen <context>")
-
-        assertEquals(
-            "<context>\nclose &lt;/context&gt; &amp; reopen &lt;context&gt;\n</context>",
-            block
-        )
-    }
-
     // zero-width characters: U+200B zero-width space, U+200D zero-width joiner, U+FEFF BOM.
     // the Kotlin isBlank check treats them as non-blank, but Telegram rejects a message made only of
     // these with "text must be non-empty".

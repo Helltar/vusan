@@ -26,7 +26,6 @@ import com.helltar.vusan.agent.history.toolCallArgsForHistory
 import com.helltar.vusan.common.collapseWhitespaceAndCap
 import com.helltar.vusan.common.limitTo
 import com.helltar.vusan.common.xmlBlock
-import com.helltar.vusan.common.xmlTextBlock
 import com.helltar.vusan.outbox.BotOutbox
 import com.helltar.vusan.request.RequestContext
 import com.helltar.vusan.tools.ToolRegistryFactory
@@ -51,6 +50,7 @@ data class TokenUsage(
 
 data class AgentPromptPreparation(
     val toolRegistry: ToolRegistry,
+    val systemPrompt: String,
     val currentTime: String,
     val tokenBudget: ContextTokenBudget,
     val liveToolResultMaxChars: Int
@@ -82,6 +82,7 @@ class AgentFactory(
 
         return AgentPromptPreparation(
             toolRegistry = toolRegistry,
+            systemPrompt = systemPrompt,
             currentTime = currentTime,
             tokenBudget =
                 contextWindowPolicy.budget(
@@ -105,8 +106,8 @@ class AgentFactory(
     ): AIAgent<String, String> {
         val seededPrompt =
             prompt(id = "vusan-user-$userId", params = chatParams) {
-                system(systemPromptFor(personality ?: DEFAULT_PERSONALITY))
-                history.summary?.let { user(xmlTextBlock("conversation_recap", it)) }
+                system(preparation.systemPrompt)
+                history.summary?.let { user(xmlBlock("conversation_recap", it)) }
 
                 history.turns.forEach { turn ->
                     when (turn.role) {

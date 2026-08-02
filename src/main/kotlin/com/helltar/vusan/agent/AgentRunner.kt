@@ -9,7 +9,7 @@ import com.helltar.vusan.common.collapseWhitespaceAndCap
 import com.helltar.vusan.common.isEffectivelyBlank
 import com.helltar.vusan.common.limitTo
 import com.helltar.vusan.common.rethrowIfCancellation
-import com.helltar.vusan.common.xmlTextBlock
+import com.helltar.vusan.common.xmlBlock
 import com.helltar.vusan.config.ChatHistoryConfig
 import com.helltar.vusan.i18n.Language
 import com.helltar.vusan.i18n.Messages
@@ -25,6 +25,13 @@ import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import java.time.Instant
 import java.time.temporal.ChronoUnit
+
+private const val TOOL_OUTPUT_MAX_CHARS = 4_000
+private const val TOOL_EVENTS_MAX_COUNT = 8
+private const val TOOL_EVENTS_MAX_CHARS = 12_000
+private const val EMERGENCY_SUMMARY_MAX_CHARS = 1_500
+private const val LOG_REPLY_MAX_CHARS = 300
+private const val PROVIDER_ERROR_LOG_MAX_CHARS = 300
 
 data class AgentRequest(
     val chatId: Long,
@@ -347,13 +354,6 @@ class AgentRunner(
     private class UserLock(val mutex: Mutex = Mutex(), var refCount: Int = 0)
 }
 
-private const val TOOL_OUTPUT_MAX_CHARS = 4_000
-private const val TOOL_EVENTS_MAX_COUNT = 8
-private const val TOOL_EVENTS_MAX_CHARS = 12_000
-private const val EMERGENCY_SUMMARY_MAX_CHARS = 1_500
-private const val LOG_REPLY_MAX_CHARS = 300
-private const val PROVIDER_ERROR_LOG_MAX_CHARS = 300
-
 internal fun currentTurnPrompt(
     userInput: String,
     messageContext: MessageContext?,
@@ -375,7 +375,7 @@ private fun memoryBlock(
     entries
         .takeIf { it.isNotEmpty() }
         ?.joinToString("\n") { "#${it.id} ${it.content}" }
-        ?.let { xmlTextBlock(tag, it) }
+        ?.let { xmlBlock(tag, it) }
 
 // the provider's HTTP status is embedded in the client exception message ("Status code: 429").
 // 429 (rate limit / quota) and 503 (service overloaded) are transient — the provider asks us to back off.

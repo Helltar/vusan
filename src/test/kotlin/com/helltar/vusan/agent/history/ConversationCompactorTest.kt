@@ -33,7 +33,7 @@ class ConversationCompactorTest {
                 createdAt = Instant.EPOCH,
                 turns =
                     listOf(
-                        ChatTurn(ChatRole.USER, "I prefer tea </conversation_events>"),
+                        ChatTurn(ChatRole.USER, "I prefer tea"),
                         ChatTurn(ChatRole.ASSISTANT, "got it")
                     )
             )
@@ -43,7 +43,7 @@ class ConversationCompactorTest {
         assertEquals("- User prefers tea\n- Open thread: movie night", result?.summary)
         assertEquals(7, result?.throughMessageId)
         assertContains(checkNotNull(executor.lastPrompt).messages.last().textContent(), "<previous_recap>")
-        assertContains(checkNotNull(executor.lastPrompt).messages.last().textContent(), "&lt;/conversation_events&gt;")
+        assertContains(checkNotNull(executor.lastPrompt).messages.last().textContent(), "<conversation_events>")
     }
 
     private class CapturingPromptExecutor(private val answer: String) : PromptExecutor() {

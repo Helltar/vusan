@@ -3,6 +3,14 @@ package com.helltar.vusan.agent.history
 import com.helltar.vusan.common.limitTo
 import kotlin.math.ceil
 
+// bytes/3 deliberately overestimates typical latin text while staying useful for cyrillic, CJK,
+// emoji, JSON, and code. exact provider tokenizers differ, so ContextWindowPolicy also keeps a
+// separate safety reserve.
+internal const val ESTIMATED_BYTES_PER_TOKEN = 3
+
+private const val EXACT_TOOL_INTERACTIONS = 2
+private const val MESSAGE_OVERHEAD_TOKENS = 12
+
 data class PromptHistory(
     val summary: String?,
     val turns: List<ChatTurn>
@@ -155,11 +163,3 @@ private fun List<ChatTurn>.validForReplay(): List<ChatTurn> =
             }
         }
     }
-
-// bytes/3 deliberately overestimates typical latin text while staying useful for cyrillic, CJK,
-// emoji, JSON, and code. exact provider tokenizers differ, so ContextWindowPolicy also keeps a
-// separate safety reserve.
-internal const val ESTIMATED_BYTES_PER_TOKEN = 3
-
-private const val EXACT_TOOL_INTERACTIONS = 2
-private const val MESSAGE_OVERHEAD_TOKENS = 12

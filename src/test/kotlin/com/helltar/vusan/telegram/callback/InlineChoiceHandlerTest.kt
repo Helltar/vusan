@@ -124,19 +124,18 @@ class InlineChoiceHandlerTest {
     }
 
     @Test
-    fun `selection becomes escaped structured agent input`() {
+    fun `selection becomes structured agent input`() {
         val input =
             inlineChoiceAgentInput(
                 InlineChoiceSelection(
-                    question = "Pick <one> & continue",
-                    option = "A > B"
+                    question = "Tea or coffee?",
+                    option = "Tea"
                 )
             )
 
         assertContains(input, "<inline_choice>")
-        assertContains(input, "<question>\nPick &lt;one&gt; &amp; continue\n</question>")
-        assertContains(input, "<selected_option>\nA &gt; B\n</selected_option>")
-        assertFalse(input.contains("Pick <one>"))
+        assertContains(input, "<question>\nTea or coffee?\n</question>")
+        assertContains(input, "<selected_option>\nTea\n</selected_option>")
     }
 
     private fun choice() =

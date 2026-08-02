@@ -1,7 +1,7 @@
 package com.helltar.vusan.agent
 
 import com.helltar.vusan.common.collapseWhitespaceAndCap
-import com.helltar.vusan.common.xmlTextBlock
+import com.helltar.vusan.common.xmlBlock
 
 data class MessageContext(
     val chatId: Long,
@@ -33,7 +33,7 @@ data class MessageContext(
                 userLanguageCode?.asMetadataValue()?.let { add("- telegram_language: $it") }
             }
 
-        return xmlTextBlock("message_context", lines.joinToString("\n"))
+        return xmlBlock("message_context", lines.joinToString("\n"))
     }
 }
 

@@ -4,7 +4,7 @@ import ai.koog.agents.core.tools.annotations.LLMDescription
 import ai.koog.agents.core.tools.annotations.Tool
 import ai.koog.agents.core.tools.reflect.ToolSet
 import com.helltar.vusan.common.limitTo
-import com.helltar.vusan.common.xmlTextBlock
+import com.helltar.vusan.common.xmlBlock
 import com.helltar.vusan.tools.suspendToolGuard
 import kotlin.time.Duration.Companion.seconds
 
@@ -45,7 +45,7 @@ class YouTubeTranscriptTools(private val client: YouTubeTranscriptClient) : Tool
             }
 
             appendLine()
-            append(xmlTextBlock("transcript", transcript))
+            append(xmlBlock("transcript", transcript))
         }
     }
 }
