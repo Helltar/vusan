@@ -16,22 +16,17 @@ Keep this file concise and actionable; put product docs in `README.md` or `docs/
 - Read [`docs/architecture.md`](docs/architecture.md) before changing request
   flow, delivery, tools, storage, scheduling, or startup wiring, and use its
   [symptom map](docs/architecture.md#where-to-look-when) before broad searching.
-- Check [`docs/configuration.md`](docs/configuration.md) and [`.env.example`](.env.example)
-  before changing env vars.
-- Check the Features section of [`README.md`](README.md) before changing agent
-  tools or user-visible capabilities.
-- Project status: active development, no stable release. Prefer clean removals
+- The project is pre-1.0 and under active development. Prefer clean removals
   over compatibility shims.
 
 ## Commands and Verification
 
-- `./gradlew test` (full suite), `./gradlew detekt` (`maxIssues: 0`),
-  `./gradlew build` (compile + test + package), `./gradlew run` (local bot
-  process using `.env`).
+- `./gradlew test`, `./gradlew detekt` (`maxIssues: 0`), `./gradlew build`
+  (compile + test + package), `./gradlew run` (local bot process using `.env`).
+  While iterating, run the narrowest meaningful test:
+  `./gradlew test --tests "*AgentFactoryTest*"`.
 - Run Gradle itself on JDK 21: the build uses `jvmToolchain(21)`, and detekt
   1.23.x crashes on JDK 25+.
-- While iterating, run the narrowest meaningful test:
-  `./gradlew test --tests "*AgentFactoryTest*"`.
 - Before finishing code changes, run `./gradlew test` and `./gradlew detekt`
   unless the change is docs-only or the user says not to.
 - If a check cannot run, report the exact command and blocker. Gradle
@@ -39,16 +34,13 @@ Keep this file concise and actionable; put product docs in `README.md` or `docs/
 
 ## Architecture Rules
 
-- Preserve package boundaries from [`docs/architecture.md`](docs/architecture.md):
-  `telegram/` Telegram I/O, `agent/` Koog orchestration, `tools/` agent-callable
-  capabilities, `outbox/` output models, `request/` per-turn context, `tasks/`
-  scheduling, `infra/` DB/HTTP, `config/` runtime config.
+- Preserve the package boundaries described in
+  [`docs/architecture.md`](docs/architecture.md#layers).
 - Inside `telegram/`: `inbound/` turns an update into agent input, `delivery/`
   sends everything back out, `callback/` owns the inline-button flows. The
   runner and the raw client helpers stay at the package root.
 - `sandbox/` is a separate Deno service, not Kotlin. Keep it that way: the bot
-  reaches it only over HTTP through `tools/sandbox/SandboxClient.kt`. See
-  [code execution service](docs/architecture.md#code-execution-service).
+  reaches it only over HTTP through `tools/sandbox/SandboxClient.kt`.
 - `TelegramBotRunner` normalizes inbound updates and builds `RequestContext`.
   Tools consume `RequestContext`/`AttachedFile`; they should not reach back into
   Telegram message objects.
@@ -64,7 +56,8 @@ Keep this file concise and actionable; put product docs in `README.md` or `docs/
 
 ## Documentation Triggers
 
-Update docs in the same change as behavior:
+Update docs in the same change as the behavior, and read them before changing
+what they describe:
 
 - [`docs/architecture.md`](docs/architecture.md): lifecycle, package/layer moves,
   delivery policy, scheduler behavior, startup wiring, or core orchestrators
@@ -76,11 +69,10 @@ Update docs in the same change as behavior:
   changed user-visible capability. Keep it written for users — what a capability
   is for, not which library or model implements it.
 - Telegram slash commands: `TelegramBotRunner.dispatchText` is the source of
-  truth. When adding, removing, renaming, or changing a command, keep the
-  `Telegram commands` section in `agent/SystemPrompt.kt`, the BotFather
-  `/setcommands` block in [`docs/configuration.md`](docs/configuration.md), and
-  the direct-command flow in [`docs/architecture.md`](docs/architecture.md)
-  aligned.
+  truth. Keep the `Telegram commands` section in `agent/SystemPrompt.kt`, the
+  BotFather `/setcommands` block in [`docs/configuration.md`](docs/configuration.md),
+  and the direct-command flow in [`docs/architecture.md`](docs/architecture.md)
+  aligned with it.
 - `sandbox/packages.ts` / `sandbox/extra-wheels.txt` and the
   `Available libraries` line in `tools/sandbox/SandboxToolDescriptions.kt`: the
   image and that line must agree, or the model offers a library that cannot be
@@ -114,12 +106,11 @@ Update docs in the same change as behavior:
 
 ## Prompt and Text Handling
 
-- Shared helpers live in [`common/Strings.kt`](src/main/kotlin/com/helltar/vusan/common/Strings.kt):
-  `collapseWhitespaceAndCap(max)` for metadata, logs, and snippets where layout
-  whitespace is noise; `limitTo(max)` when inner whitespace matters;
-  `isEffectivelyBlank`; `sanitizeFilename`; `xmlBlock(tag, content)` for
-  structured text sent to the LLM (user message wrappers, reply context,
-  transcripts, tool-result blocks, media summaries, injected memory).
+- Reuse [`common/Strings.kt`](src/main/kotlin/com/helltar/vusan/common/Strings.kt)
+  instead of writing your own: `collapseWhitespaceAndCap(max)` where layout
+  whitespace is noise (metadata, logs, snippets), `limitTo(max)` where inner
+  whitespace matters, `xmlBlock(tag, content)` for structured text sent to the
+  LLM, plus `isEffectivelyBlank`, `sanitizeFilename`, and `escapeHtml`.
 - Avoid plain prompt markers such as `Reply context:` or `[Sent N images]`;
   models tend to parrot them.
 
@@ -190,7 +181,8 @@ then docs per the triggers above.
 - Test paths mirror production paths under `src/test/kotlin/...`; prefer one
   focused `*Test.kt` per production class or cohesive behavior.
 - Do not relax visibility, add `open`, or add production overloads only for
-  tests. Drive production entry points instead.
+  tests. Drive production entry points instead. A pure algorithm may be extracted
+  to a top-level `internal` function and tested directly.
 - Shared routing, prompt construction, DB behavior, and tool contracts deserve
   tests; mechanical docs-only edits usually do not.
 
