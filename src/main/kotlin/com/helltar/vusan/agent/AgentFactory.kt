@@ -90,7 +90,7 @@ class AgentFactory(
                     currentTurn = currentTurn,
                     toolRegistry = toolRegistry
                 ),
-            liveToolResultMaxChars = contextWindowPolicy.liveToolResultMaxChars()
+            liveToolResultMaxChars = contextWindowPolicy.liveToolResultMaxChars
         )
     }
 

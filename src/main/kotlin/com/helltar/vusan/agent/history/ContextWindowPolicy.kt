@@ -11,11 +11,9 @@ data class ContextTokenBudget(
     val safetyReserveTokens: Int,
     val historyTokens: Int
 ) {
-    val plannedInputTokens: Int
-        get() = fixedPromptTokens + historyTokens
-
-    val plannedContextPercent: Int
-        get() = ((plannedInputTokens.toLong() * 100L) / contextWindowTokens).toInt().coerceIn(0, 100)
+    /** Share of the window a turn occupies once its history actually costs [historyTokens]. */
+    fun contextPercentFor(historyTokens: Int): Int =
+        (((fixedPromptTokens + historyTokens).toLong() * 100L) / contextWindowTokens).toInt().coerceIn(0, 100)
 }
 
 class ContextWindowPolicy(model: LLModel) {
@@ -23,6 +21,15 @@ class ContextWindowPolicy(model: LLModel) {
         (model.contextLength ?: DEFAULT_CONTEXT_WINDOW_TOKENS)
             .coerceIn(1L, Int.MAX_VALUE.toLong())
             .toInt()
+
+    // room the agent may grow into during a run: tool results, retries, and the nudge exchange.
+    private val agentReserveTokens: Int = (contextWindowTokens / 4).coerceIn(1_024, 16_384)
+
+    // everything the tools return during one run has to fit the agent reserve, so the reserve is
+    // converted back to characters at the same ratio [estimateHistoryTokens] reads them. A fixed
+    // ceiling here would silently starve a large-window model: one full-length YouTube transcript
+    // would consume the whole run and leave later tool results with nothing.
+    val liveToolResultMaxChars: Int = agentReserveTokens * ESTIMATED_BYTES_PER_TOKEN
 
     fun budget(
         systemPrompt: String,
@@ -40,33 +47,24 @@ class ContextWindowPolicy(model: LLModel) {
                     FIXED_MESSAGE_OVERHEAD_TOKENS
 
         val responseReserve = (contextWindowTokens / 8).coerceIn(512, 8_192)
-        val agentReserve = (contextWindowTokens / 4).coerceIn(1_024, 16_384)
         val safetyReserve = (contextWindowTokens / 20).coerceAtLeast(256)
         val historyTokens =
-            (contextWindowTokens - fixedPromptTokens - responseReserve - agentReserve - safetyReserve)
+            (contextWindowTokens - fixedPromptTokens - responseReserve - agentReserveTokens - safetyReserve)
                 .coerceAtLeast(0)
 
         return ContextTokenBudget(
             contextWindowTokens = contextWindowTokens,
             fixedPromptTokens = fixedPromptTokens,
             responseReserveTokens = responseReserve,
-            agentReserveTokens = agentReserve,
+            agentReserveTokens = agentReserveTokens,
             safetyReserveTokens = safetyReserve,
             historyTokens = historyTokens
         )
     }
 
-    fun liveToolResultMaxChars(): Int =
-        (agentReserveTokens() * 3 / 2).coerceIn(MIN_LIVE_TOOL_RESULT_CHARS, MAX_LIVE_TOOL_RESULT_CHARS)
-
-    private fun agentReserveTokens(): Int =
-        (contextWindowTokens / 4).coerceIn(1_024, 16_384)
-
     companion object {
         const val DEFAULT_CONTEXT_WINDOW_TOKENS = 16_384L
         private const val TOOL_SCHEMA_OVERHEAD_TOKENS = 32
         private const val FIXED_MESSAGE_OVERHEAD_TOKENS = 64
-        private const val MIN_LIVE_TOOL_RESULT_CHARS = 3_000
-        private const val MAX_LIVE_TOOL_RESULT_CHARS = 24_000
     }
 }

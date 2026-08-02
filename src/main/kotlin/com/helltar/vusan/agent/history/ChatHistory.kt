@@ -83,10 +83,7 @@ fun planHistoryForPrompt(
 internal fun estimateHistoryTokens(text: String): Int {
     if (text.isEmpty()) return 0
 
-    // bytes/3 deliberately overestimates typical latin text while staying useful for cyrillic,
-    // CJK, emoji, JSON, and code. exact provider tokenizers differ, so the surrounding context
-    // policy also keeps a separate safety reserve.
-    return ceil(text.encodeToByteArray().size / 3.0).toInt().coerceAtLeast(1)
+    return ceil(text.encodeToByteArray().size.toDouble() / ESTIMATED_BYTES_PER_TOKEN).toInt().coerceAtLeast(1)
 }
 
 internal fun estimateHistoryTokens(turns: List<ChatTurn>): Int =
@@ -101,7 +98,7 @@ private fun String?.fitToTokenBudget(tokenBudget: Int): String? {
     val value = this?.trim()?.takeIf { it.isNotEmpty() } ?: return null
     if (estimateHistoryTokens(value) <= tokenBudget) return value
 
-    return value.limitTo(tokenBudget * 3).takeIf { it.isNotBlank() }
+    return value.limitTo(tokenBudget * ESTIMATED_BYTES_PER_TOKEN).takeIf { it.isNotBlank() }
 }
 
 private fun List<ChatTurn>.fitToTokenBudget(tokenBudget: Int): List<ChatTurn> {
@@ -111,7 +108,9 @@ private fun List<ChatTurn>.fitToTokenBudget(tokenBudget: Int): List<ChatTurn> {
     val humanTurns = withoutToolEvents()
     if (humanTurns.isEmpty()) return emptyList()
 
-    var charsPerTurn = ((tokenBudget - humanTurns.size * MESSAGE_OVERHEAD_TOKENS) * 3 / humanTurns.size).coerceAtLeast(0)
+    var charsPerTurn =
+        ((tokenBudget - humanTurns.size * MESSAGE_OVERHEAD_TOKENS) * ESTIMATED_BYTES_PER_TOKEN / humanTurns.size)
+            .coerceAtLeast(0)
 
     while (charsPerTurn > 0) {
         val fitted = humanTurns.map { it.copy(content = it.content.limitTo(charsPerTurn)) }
@@ -154,6 +153,11 @@ private fun List<ChatTurn>.validForReplay(): List<ChatTurn> =
             }
         }
     }
+
+// bytes/3 deliberately overestimates typical latin text while staying useful for cyrillic, CJK,
+// emoji, JSON, and code. exact provider tokenizers differ, so ContextWindowPolicy also keeps a
+// separate safety reserve.
+internal const val ESTIMATED_BYTES_PER_TOKEN = 3
 
 private const val EXACT_TOOL_INTERACTIONS = 2
 private const val MESSAGE_OVERHEAD_TOKENS = 12

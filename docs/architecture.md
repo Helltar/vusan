@@ -176,6 +176,10 @@ A normal user message travels:
   deletes source rows. Raw transcript retention and model-visible context are deliberately separate. The recap is
   injected at user priority so mixed user/assistant history is not mislabeled as an assistant instruction. An initial
   context-overflow failure retries once with recap only, but never after a tool ran, which avoids duplicated actions.
+- **Live tool-result budget** — `ContextWindowPolicy.liveToolResultMaxChars` caps everything the tools return during
+  one run, converting the agent reserve back to characters at the same ratio `estimateHistoryTokens` reads them. It
+  scales with the window on purpose: a fixed ceiling starves a large-window model, since a single full-length YouTube
+  transcript would consume the whole run and leave later tool results with nothing.
 - **LLM provider resolution** — `config/LlmRuntime.resolveLlmRuntime` turns
   `AppConfig.llmProvider` into a Koog client/model/params triple. Native clients cover OpenAI, Anthropic, Google, and
   DeepSeek — models are matched against each client's predefined catalog. `openai-compatible` keeps a hand-declared

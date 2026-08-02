@@ -134,10 +134,6 @@ class AgentRunner(
             )
 
         val plannedInputTokens = preparation.tokenBudget.fixedPromptTokens + historyPlan.estimatedTokens
-        val plannedContextPercent =
-            ((plannedInputTokens.toLong() * 100L) / preparation.tokenBudget.contextWindowTokens)
-                .toInt()
-                .coerceIn(0, 100)
 
         log.info {
             "prompt history loaded: user=${request.userId} chat=${request.chatId} " +
@@ -159,7 +155,8 @@ class AgentRunner(
                     "responseReserve=${preparation.tokenBudget.responseReserveTokens} " +
                     "agentReserve=${preparation.tokenBudget.agentReserveTokens} " +
                     "safetyReserve=${preparation.tokenBudget.safetyReserveTokens} " +
-                    "plannedInputTokens=$plannedInputTokens contextPercent=$plannedContextPercent"
+                    "plannedInputTokens=$plannedInputTokens " +
+                    "contextPercent=${preparation.tokenBudget.contextPercentFor(historyPlan.estimatedTokens)}"
         }
 
         val toolEvents = mutableListOf<ToolEvent>()
