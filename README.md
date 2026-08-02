@@ -70,20 +70,16 @@ Prerequisites: JDK 21, plus `ffmpeg` and `yt-dlp` on `PATH`.
 
 ## Features
 
-Items marked *(opt-in)* need an API key or an extra service, see
-[configuration.md](docs/configuration.md).
-
 ### Understands what you send
 
 - **Photos** — looks at images you send or reply to and answers questions about them.
-- **Voice and audio** *(opt-in)* — listens to voice messages and audio files.
-- **Videos** — watches videos, video notes and GIFs; when voice input is enabled, it also hears
-  speech.
+- **Voice and audio** — listens to voice messages and audio files.
+- **Videos** — watches videos, video notes and GIFs, and understands any speech in them.
 
 ### Looks things up
 
-- **Web search** *(opt-in)* — searches the web and reads the pages it finds.
-- **Image search** *(opt-in)* — finds pictures on the web and sends them.
+- **Web search** — searches the web and reads the pages it finds.
+- **Image search** — finds pictures on the web and sends them.
 - **Telegram channels** — reads recent posts from any public channel, and can look at the images
   in them.
 - **Currency** — live exchange rates.
@@ -95,11 +91,11 @@ Items marked *(opt-in)* need an API key or an extra service, see
 
 ### Creates
 
-- **Code execution** *(opt-in)* — runs Python in an isolated sandbox: exact math, data crunching,
-  charts, Word and PDF documents, animations.
-- **Images** *(opt-in)* — draws a picture from a description, or edits one you sent.
-- **Voice replies** *(opt-in)* — answers out loud with a generated voice message.
-- **GIFs** *(opt-in)* — finds and sends a fitting GIF.
+- **Code execution** — runs Python for exact math, data crunching, charts, Word and PDF documents,
+  and animations.
+- **Images** — draws a picture from a description, or edits one you sent.
+- **Voice replies** — answers out loud with a generated voice message.
+- **GIFs** — finds and sends a fitting GIF.
 
 ### In the chat
 
@@ -107,8 +103,8 @@ Items marked *(opt-in)* need an API key or an extra service, see
   and continue as soon as you tap one.
 - **Polls and quizzes** — creates real Telegram polls and quizzes, not a text imitation.
 - **Reactions** — sometimes an emoji on your message is the whole answer.
-- **Stickers** *(opt-in)* — picks up the sticker sets your chat actually uses and answers with one
-  when a wordless reaction fits better than words. Requires image understanding.
+- **Stickers** — picks up the sticker sets your chat actually uses and answers with one when a
+  wordless reaction fits better than words.
 - **Files and links** — sends what it wrote as a document, or downloads a link and passes it on
   as a file.
 - **Long structured answers** — headings, tables, and checklists when a reply is genuinely big.

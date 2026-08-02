@@ -17,14 +17,14 @@ LLM_API_KEY=sk-proj-qwerty
 
 | Variable             | Description                                          |
 |----------------------|------------------------------------------------------|
-| `ALLOWED_IDS`        | Telegram user/group IDs the bot answers.             |
+| `ALLOWED_IDS`        | Telegram user/group IDs Vusan answers.                |
 | `TELEGRAM_BOT_TOKEN` | Bot token from [@BotFather](https://t.me/BotFather). |
 | `LLM_PROVIDER`       | LLM backend; see [LLM provider](#llm-provider).      |
 | `LLM_MODEL`          | Model id for the chosen provider.                    |
 | `LLM_API_KEY`        | API key for the chosen provider.                     |
 
 `ALLOWED_IDS` accepts commas, whitespace, or semicolons as separators. Positive IDs are users; negative IDs are groups.
-Empty/unset means the bot answers nobody.
+Empty/unset means Vusan answers nobody.
 
 ## Telegram command menu
 
@@ -57,7 +57,7 @@ takes whatever model string it serves.
 | `LLM_BASE_URL`                | —             | Server address. Required by `openai-compatible`, unused by the others.       |
 | `LLM_OPENAI_ENDPOINT`         | `completions` | Which OpenAI API to call: `completions` or `responses`.                      |
 | `LLM_REASONING_EFFORT`        | model default | Reasoning depth: `none`, `minimal`, `low`, `medium`, or `high`.              |
-| `LLM_REQUEST_TIMEOUT_SECONDS` | `120`         | Seconds one LLM call may hang before it fails and the bot replies with an error. Raise it for slow local servers and heavy reasoning models. |
+| `LLM_REQUEST_TIMEOUT_SECONDS` | `120`         | Seconds one LLM call may hang before it fails and Vusan replies with an error. Raise it for slow local servers and heavy reasoning models. |
 | `LLM_CONTEXT_WINDOW_TOKENS`   | model metadata or `16384` | Context size override. Native models use catalog metadata; unknown compatible models fall back to `16384`. |
 
 `LLM_OPENAI_ENDPOINT` and `LLM_REASONING_EFFORT` apply to `openai-compatible` only. Give `LLM_BASE_URL` no `/v1` — the
@@ -100,9 +100,9 @@ into the remainder.
 
 ## Personality
 
-The bot ships with a built-in personality ("Vusan"), kept generic so each deployment can define its identity, tone, and
-interaction style. Override it with either inline text or a file, or unset both to keep the built-in one. The
-operational rules for output and tools are always appended separately and cannot be removed by a custom personality.
+The agent ships with a built-in personality named "Vusan", kept generic so each deployment can define its identity,
+tone, and interaction style. Override it with either inline text or a file, or unset both to keep the built-in one.
+The operational rules for output and tools are always appended separately and cannot be removed by a custom personality.
 
 | Variable           | Description                                                                                        |
 |--------------------|----------------------------------------------------------------------------------------------------|
@@ -112,7 +112,7 @@ operational rules for output and tools are always appended separately and cannot
 ## Optional tools
 
 Each optional tool is enabled by one env variable. If it is missing, that tool is skipped at startup with a `WARN` log
-and the bot keeps running.
+and Vusan keeps running.
 
 | Variable                | Enables                                   | Notes                                 |
 |-------------------------|-------------------------------------------|---------------------------------------|
@@ -183,12 +183,12 @@ predictable.
 
 ### Vision
 
-Looking at pictures — `describeImage`, the frames `describeVideo` samples out of a video, and the images inside Telegram
-channel posts — needs a model that accepts images. By default that is the chat model itself, so an `openai`,
-`anthropic`, or `google` setup needs nothing extra.
+Vision lets the agent inspect photos, sampled video frames, and images in Telegram channel posts. It also lets Vusan
+learn the sticker sets a chat uses and choose replies from them. These features need a model that accepts images. By
+default, that is the chat model itself, so an `openai`, `anthropic`, or `google` setup needs nothing extra.
 
-When it cannot, `OPENAI_VISION_API_KEY` runs vision on its own OpenAI model, the way `OPENAI_STT_API_KEY` runs speech on
-one, and the chat model keeps answering everything else:
+When the chat model cannot accept images, `OPENAI_VISION_API_KEY` runs vision on its own OpenAI model, the way
+`OPENAI_STT_API_KEY` runs speech on one, and the chat model keeps answering everything else:
 
 ```dotenv
 LLM_PROVIDER=deepseek
@@ -203,12 +203,15 @@ OPENAI_VISION_API_KEY=sk-proj-qwerty
 | `OPENAI_VISION_API_KEY` | —              | Enables a separate vision model. Can reuse your OpenAI key.        |
 | `OPENAI_VISION_MODEL`   | `gpt-5.4-mini` | OpenAI model that reads the images; must be one that accepts them. |
 
+Sticker replies have no setting of their own: the catalog is enabled automatically whenever vision is available and
+stays off without it.
+
 DeepSeek models cannot see, and `openai-compatible` never claims it either, because the server behind `LLM_BASE_URL` may
 serve anything — so with either one vision stays off until this key is set, even when the model itself does accept
 images.
 
 The key always wins when it is set, even where the chat model could have looked at the picture itself. With no vision at
-all, a startup `WARN` says so and the bot answers without looking at attachments; Telegram channel posts still come
+all, a startup `WARN` says so and Vusan answers without looking at attachments; Telegram channel posts still come
 back, as text only. Vision calls share the `LLM_REQUEST_TIMEOUT_SECONDS` budget.
 
 ## Code execution
@@ -231,15 +234,15 @@ start one yourself; point `SANDBOX_URL` at that service, or leave it commented.
 
 ### Sandbox tuning
 
-Both variables live in the bot's `.env`; the default `compose.yaml` passes them into the sandbox container.
+Both variables go in the repo-root `.env`; the default `compose.yaml` passes them into the sandbox container.
 
-| Variable                  | Default | Used by       | Description                      |
-|---------------------------|---------|---------------|----------------------------------|
-| `SANDBOX_POOL_SIZE`       | `2`     | service       | Warm Pyodide workers kept ready. |
-| `SANDBOX_TIMEOUT_SECONDS` | `120`   | bot + service | Hard per-run limit.              |
+| Variable                  | Default | Used by           | Description                      |
+|---------------------------|---------|-------------------|----------------------------------|
+| `SANDBOX_POOL_SIZE`       | `2`     | sandbox           | Warm Pyodide workers kept ready. |
+| `SANDBOX_TIMEOUT_SECONDS` | `120`   | Vusan + sandbox   | Hard per-run limit.              |
 
-`SANDBOX_TIMEOUT_SECONDS` is shared on purpose: the service enforces the run limit, the bot budgets its wait from the
-same number, and setting it once keeps the two in sync.
+`SANDBOX_TIMEOUT_SECONDS` is shared on purpose: the sandbox enforces the run limit, while Vusan uses the same value for
+its wait budget. Setting it once keeps the two in sync.
 
 ## Memory
 
@@ -274,18 +277,18 @@ Scheduled tasks are built in. The agent can schedule them in three forms:
 - `every <interval>` — fixed interval, minimum 5 minutes, timezone-independent.
 - `cron <UNIX expr>` — clock-time patterns, evaluated in the task's timezone.
 
-A task the bot could not fire in time — it was down, or the machine was asleep — is not run late. It gets a missed
-notice in the chat and the schedule moves on to the next fire.
+A task that could not fire in time — because Vusan was offline or the machine was asleep — is not run late. It gets a
+missed notice in the chat and the schedule moves on to the next fire.
 
-Separately from tasks a user asks for, the bot may set itself a one-time follow-up when the conversation
-gives it a reason to come back later ("ask how the exam went"). Those are counted against their own limit,
-so they can never use up the quota for what the user schedules, and they show up in `/tasks` like any other
-task, where the user can cancel them.
+Separately from tasks a user asks for, the agent may schedule its own one-time follow-up when the conversation gives it
+a reason to come back later ("ask how the exam went"). Those are counted against their own limit, so they can never use
+up the quota for what the user schedules, and they show up in `/tasks` like any other task, where the user can cancel
+them.
 
 | Variable                    | Default | Description                                              |
 |-----------------------------|---------|----------------------------------------------------------|
 | `MAX_TASKS_PER_USER`        | `5`     | Maximum stored user-requested tasks per user.            |
-| `MAX_FOLLOW_UPS_PER_USER`   | `3`     | Maximum pending follow-ups the bot may owe one user.     |
+| `MAX_FOLLOW_UPS_PER_USER`   | `3`     | Maximum pending follow-ups the agent may owe one user.   |
 | `TASK_MAX_LATENESS_MINUTES` | `60`    | How late a due task may still run before it counts as missed. |
 
 ## Storage and binaries
