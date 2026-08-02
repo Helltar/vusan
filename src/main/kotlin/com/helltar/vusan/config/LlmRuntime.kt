@@ -1,5 +1,6 @@
 package com.helltar.vusan.config
 
+import ai.koog.http.client.HttpClientFactoryResolver
 import ai.koog.prompt.executor.clients.ConnectionTimeoutConfig
 import ai.koog.prompt.executor.clients.LLMClient
 import ai.koog.prompt.executor.clients.LLModelDefinitions
@@ -45,7 +46,12 @@ fun resolveLlmRuntime(config: LlmProviderConfig): LlmRuntime {
         is LlmProviderConfig.OpenAiCompatible ->
             LlmRuntime(
                 providerLabel = "OpenAI-compatible (${config.baseUrl}, ${config.endpoint.name.lowercase()})",
-                client = OpenAILLMClient(config.apiKey, OpenAIClientSettings(config.baseUrl, timeoutConfig)),
+                client =
+                    openAiClient(
+                        apiKey = config.apiKey,
+                        settings = OpenAIClientSettings(config.baseUrl, timeoutConfig),
+                        explicitPromptCaching = config.openAiPromptCacheKey != null
+                    ),
                 model = openAiCompatibleModel(config),
                 chatParams = openAiCompatibleParams(config)
             )
@@ -82,14 +88,27 @@ private fun openAiCompatibleModel(config: LlmProviderConfig.OpenAiCompatible): L
 private fun openAiCompatibleParams(config: LlmProviderConfig.OpenAiCompatible): LLMParams =
     when (config.endpoint) {
         OpenAiEndpoint.COMPLETIONS ->
-            OpenAIChatParams(parallelToolCalls = false, reasoningEffort = config.reasoningEffort)
+            OpenAIChatParams(
+                parallelToolCalls = false,
+                promptCacheKey = config.openAiPromptCacheKey,
+                reasoningEffort = config.reasoningEffort
+            )
 
         OpenAiEndpoint.RESPONSES ->
             OpenAIResponsesParams(
                 parallelToolCalls = false,
+                promptCacheKey = config.openAiPromptCacheKey,
                 reasoning = config.reasoningEffort?.let { ReasoningConfig(effort = it) }
             )
     }
+
+// prompt_cache_key is an openai extension, so do not leak it to arbitrary compatible servers that may
+// reject unknown fields.
+private val LlmProviderConfig.OpenAiCompatible.openAiPromptCacheKey: String?
+    get() =
+        OPENAI_PROMPT_CACHE_KEY.takeIf {
+            baseUrl.trim().trimEnd('/').equals(OPENAI_API_BASE_URL, ignoreCase = true)
+        }
 
 // both request and socket timeouts default to 900 s in the koog client; cap them so a stalled LLM
 // call fails fast and the agent can deliver an error reply instead of leaving the bot silent.
@@ -104,9 +123,14 @@ private fun resolveHostedRuntime(config: LlmProviderConfig.Hosted, timeoutConfig
         HostedLlmProvider.OPENAI ->
             LlmRuntime(
                 providerLabel = "OpenAI",
-                client = OpenAILLMClient(config.apiKey, OpenAIClientSettings(timeoutConfig = timeoutConfig)),
+                client =
+                    openAiClient(
+                        apiKey = config.apiKey,
+                        settings = OpenAIClientSettings(timeoutConfig = timeoutConfig),
+                        explicitPromptCaching = true
+                    ),
                 model = resolveOpenAiModel(config.model),
-                chatParams = OpenAIChatParams(promptCacheKey = "vusan")
+                chatParams = OpenAIChatParams(promptCacheKey = OPENAI_PROMPT_CACHE_KEY)
             )
 
         HostedLlmProvider.ANTHROPIC ->
@@ -133,6 +157,20 @@ private fun resolveHostedRuntime(config: LlmProviderConfig.Hosted, timeoutConfig
                 chatParams = DeepSeekParams()
             )
     }
+
+private fun openAiClient(
+    apiKey: String,
+    settings: OpenAIClientSettings,
+    explicitPromptCaching: Boolean
+): OpenAILLMClient {
+    if (!explicitPromptCaching) return OpenAILLMClient(apiKey, settings)
+
+    return OpenAILLMClient(
+        apiKey = apiKey,
+        settings = settings,
+        httpClientFactory = OpenAiPromptCachingHttpClientFactory(HttpClientFactoryResolver.resolve())
+    )
+}
 
 private val openAiModelsByKey: Map<String, LLModel> by lazy {
     OpenAIModels.Chat::class.memberProperties
@@ -161,3 +199,6 @@ private fun normalizeModelKey(value: String): String =
         .trim()
         .lowercase()
         .replace('_', '-')
+
+private const val OPENAI_API_BASE_URL = "https://api.openai.com"
+private const val OPENAI_PROMPT_CACHE_KEY = "vusan"

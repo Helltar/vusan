@@ -168,11 +168,15 @@ A normal user message travels:
   older ones into a user-level `<conversation_recap>` so mixed user/assistant content is not mislabeled as an assistant
   instruction; tool-call/result pairs stay anchored.
 - **LLM provider resolution** — `config/LlmRuntime.resolveLlmRuntime` turns
-  `AppConfig.llmProvider` into a Koog client/model/params triple. Native clients cover OpenAI (with prompt caching),
-  Anthropic, Google, and DeepSeek — models are matched against each client's predefined catalog. `openai-compatible`
-  keeps a hand-declared model for any other server (llama.cpp, Ollama, …). Its endpoint capability and params type are
-  declared as a pair (`OpenAIChatParams` → `/v1/chat/completions`, `OpenAIResponsesParams` → `/v1/responses`), because
-  the Koog client reads the route off the params type and rejects params the model does not declare an endpoint for.
+  `AppConfig.llmProvider` into a Koog client/model/params triple. Native clients cover OpenAI, Anthropic, Google, and
+  DeepSeek — models are matched against each client's predefined catalog. `openai-compatible` keeps a hand-declared
+  model for any other server (llama.cpp, Ollama, …). Its endpoint capability and params type are declared as a pair
+  (`OpenAIChatParams` → `/v1/chat/completions`, `OpenAIResponsesParams` → `/v1/responses`), because the Koog client reads
+  the route off the params type and rejects params the model does not declare an endpoint for. Direct OpenAI requests
+  share a stable `prompt_cache_key`; for GPT-5.6 and later, `config/OpenAiPromptCaching` also marks the first stable
+  system/developer content block as the only explicit cache breakpoint. This keeps the system prompt and tool schemas
+  reusable while excluding timestamps, history, memory, Telegram metadata, user input, and tool results from billable
+  cache writes. The adapter exists because Koog 1.1.1 cannot represent OpenAI's explicit breakpoint fields itself.
 
 ## Code execution service
 
@@ -231,7 +235,7 @@ A symptom-to-source map for finding the right file fast. Paths are under
 | `/clear` reports success but history survives                                    | `agent/AgentRunner.kt` (`clearHistory` and the turn lock that also guards the append) + `tools/history/HistoryTools.kt` (agent path) + `agent/history/ChatHistoryRepository.kt` (shared storage operation)                                                                                            |
 | An agent choice button does nothing, repeats, or reaches the wrong user          | `tools/choice/InlineChoiceTools.kt` (tool contract) + `telegram/callback/InlineChoiceHandler.kt` (callback ownership/consumption) + `TelegramBotRunner.dispatchInlineChoiceCallback` (agent follow-up)                                                                                                          |
 | An env var has no effect                                                         | `config/AppConfig.kt` (parsing) — and check it is documented in [`configuration.md`](configuration.md) + [`.env.example`](../.env.example)                                                                                                                                                            |
-| Model / provider / request-timeout selection                                     | `config/LlmRuntime.kt` (provider → client/model/params)                                                                                                                                                                                                                                               |
+| Model / provider / request-timeout selection or OpenAI prompt-cache misses       | `config/LlmRuntime.kt` (provider → client/model/params) + `config/OpenAiPromptCaching.kt` (GPT-5.6+ explicit cache breakpoint)                                                                                                                                                                         |
 | `describeImage`/`describeVideo` missing from the tool list                       | `config/VisionRuntime.kt` (chat model vs `OPENAI_VISION_API_KEY`), then `tools/ToolRegistryFactory.kt` (registration is skipped when there is no vision runtime)                                                                                                                                       |
 | Garbled or empty tool-call crashes from a flaky model                            | `agent/AgentFactory.kt` — `vusanSingleRunStrategy` and `missingRequiredArgs` short-circuit them                                                                                                                                                                                                       |
 

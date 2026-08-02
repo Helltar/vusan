@@ -262,8 +262,8 @@ private fun tokenUsageLogSummary(usages: List<TokenUsage>): String {
     val promptTokens = usages.lastOrNull()?.inputTokens
 
     return "calls=${usages.size} promptTokens=${promptTokens ?: "n/a"} " +
-            "billedInput=${usages.map { it.inputTokens }.sumOrNa()} " +
-            "billedOutput=${usages.map { it.outputTokens }.sumOrNa()} " +
+            "inputTokens=${usages.map { it.inputTokens }.sumOrNa()} " +
+            "outputTokens=${usages.map { it.outputTokens }.sumOrNa()} " +
             "runTotal=${usages.map { it.totalTokens }.sumOrNa()}"
 }
 

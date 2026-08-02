@@ -102,6 +102,27 @@ class LlmRuntimeTest {
     }
 
     @Test
+    fun `official OpenAI compatible endpoint uses the prompt cache key`() {
+        val completions =
+            openAiCompatible(baseUrl = "https://API.openai.com/")
+                .let { assertIs<OpenAIChatParams>(it.chatParams) }
+
+        val responses =
+            openAiCompatible(baseUrl = "https://api.openai.com", endpoint = OpenAiEndpoint.RESPONSES)
+                .let { assertIs<OpenAIResponsesParams>(it.chatParams) }
+
+        assertEquals("vusan", completions.promptCacheKey)
+        assertEquals("vusan", responses.promptCacheKey)
+    }
+
+    @Test
+    fun `third-party OpenAI compatible endpoint omits the OpenAI cache key`() {
+        val params = openAiCompatible().let { assertIs<OpenAIChatParams>(it.chatParams) }
+
+        assertNull(params.promptCacheKey)
+    }
+
+    @Test
     fun `openai-compatible provider declares thinking when a reasoning effort is set`() {
         // the client silently drops the effort for a model without the capability.
         val runtime = openAiCompatible(reasoningEffort = ReasoningEffort.NONE)
@@ -110,12 +131,13 @@ class LlmRuntimeTest {
     }
 
     private fun openAiCompatible(
+        baseUrl: String = "https://example.test",
         endpoint: OpenAiEndpoint = OpenAiEndpoint.COMPLETIONS,
         reasoningEffort: ReasoningEffort? = null
     ): LlmRuntime =
         resolveLlmRuntime(
             LlmProviderConfig.OpenAiCompatible(
-                baseUrl = "https://example.test",
+                baseUrl = baseUrl,
                 apiKey = "key",
                 model = "deepseek-chat",
                 endpoint = endpoint,
