@@ -35,6 +35,33 @@ internal object TaskToolDescriptions {
         "Short human label shown in task lists. " +
                 "Omit if the prompt itself is short and self-explanatory."
 
+    const val SCHEDULE_FOLLOW_UP =
+        "Schedule a single message you will send this person later on your own initiative, because the conversation gave you a reason to come back to them. " +
+                """Use it when they mention something with a natural later moment — an exam tomorrow, an interview on Friday, a flight, a deadline, being ill — and checking in afterwards is what someone who was paying attention would do. """ +
+                "At that moment the `prompt` is replayed to you as a new turn, so it must carry the context you will need. " +
+                """This is not a reminder service: when the user asks to be reminded of something, that is `scheduleTask` instead. """ +
+                "Keep it rare — only where a real person would follow up, never for trivia, and never merely because the tool exists. " +
+                "You may say in passing that you will check back if that fits the conversation, but do not report it as a system action."
+
+    const val FOLLOW_UP_PROMPT =
+        "Imperative describing what to do when it fires, in the user's language, carrying the context that makes it make sense. " +
+                """Write `ask how the interview at the bank went, they were nervous about the technical part`, not `remind about interview`. """ +
+                "It runs as an ordinary turn, so tools are available to you then."
+
+    const val FOLLOW_UP_AT =
+        "When to come back, as an ISO local datetime like `2026-05-31T10:00`. " +
+                "Resolve it against `<current_time>` in your system context. " +
+                "Pick a considerate moment — the morning after the exam, not the middle of the night, and not so soon that nothing has happened yet."
+
+    const val FOLLOW_UP_TIMEZONE =
+        "IANA timezone name like `Europe/Kyiv`. " +
+                "Pass it only when you actually know where the user is. " +
+                "Otherwise omit — the bot's default is used."
+
+    const val FOLLOW_UP_TITLE =
+        "Short human label shown in the user's task list, e.g. `check in about the exam`. " +
+                "Keep it recognizable to the user, since they can see and cancel it."
+
     const val LIST_TASKS =
         "List the user's scheduled tasks (id, next fire time, recurrence, status, title/prompt). " +
                 """Call when the user asks "what do I have scheduled" or before changing one. """ +

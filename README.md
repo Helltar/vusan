@@ -119,6 +119,8 @@ Items marked *(opt-in)* need an API key or an extra service, see
   the history leaves them; ask it to forget one or all of them.
 - **Scheduled tasks** — acts on its own later: once, on an interval, or on a cron schedule. You can
   pause, resume, cancel, or edit them.
+- **Coming back to you** — when you mention something with a natural later moment — an exam tomorrow, an interview
+  on Friday — it can set itself a reminder to ask how it went.
 
 ## Stack
 

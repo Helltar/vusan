@@ -16,6 +16,7 @@ data class AppConfig(
     val elevenLabsTts: ElevenLabsTtsConfig?,
     val giphyApiKey: String?,
     val llmProvider: LlmProviderConfig,
+    val maxFollowUpsPerUser: Int,
     val maxMemoryPerScope: Int,
     val maxTasksPerUser: Int,
     val openAiImageApiKey: String?,
@@ -33,6 +34,7 @@ data class AppConfig(
 ) {
     companion object {
         private const val DEFAULT_LLM_REQUEST_TIMEOUT_SECONDS = 120L
+        private const val DEFAULT_MAX_FOLLOW_UPS_PER_USER = 3
         private const val DEFAULT_MAX_MEMORY_PER_SCOPE = 10
         private const val DEFAULT_MAX_TASKS_PER_USER = 5
         private const val DEFAULT_SANDBOX_TIMEOUT_SECONDS = 120L
@@ -73,6 +75,9 @@ data class AppConfig(
                 tavilyApiKey = readEnv("TAVILY_API_KEY"),
                 telegramBotToken = requireEnv("TELEGRAM_BOT_TOKEN"),
                 ytDlpCookiesFile = readEnv("YT_DLP_COOKIES_FILE"),
+
+                maxFollowUpsPerUser =
+                    readEnv("MAX_FOLLOW_UPS_PER_USER")?.toIntOrNull() ?: DEFAULT_MAX_FOLLOW_UPS_PER_USER,
 
                 maxMemoryPerScope = readEnv("MAX_MEMORY_PER_SCOPE")?.toIntOrNull() ?: DEFAULT_MAX_MEMORY_PER_SCOPE,
                 maxTasksPerUser = readEnv("MAX_TASKS_PER_USER")?.toIntOrNull() ?: DEFAULT_MAX_TASKS_PER_USER,

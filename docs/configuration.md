@@ -277,9 +277,15 @@ Scheduled tasks are built in. The agent can schedule them in three forms:
 A task the bot could not fire in time — it was down, or the machine was asleep — is not run late. It gets a missed
 notice in the chat and the schedule moves on to the next fire.
 
+Separately from tasks a user asks for, the bot may set itself a one-time follow-up when the conversation
+gives it a reason to come back later ("ask how the exam went"). Those are counted against their own limit,
+so they can never use up the quota for what the user schedules, and they show up in `/tasks` like any other
+task, where the user can cancel them.
+
 | Variable                    | Default | Description                                              |
 |-----------------------------|---------|----------------------------------------------------------|
-| `MAX_TASKS_PER_USER`        | `5`     | Maximum stored tasks per user.                           |
+| `MAX_TASKS_PER_USER`        | `5`     | Maximum stored user-requested tasks per user.            |
+| `MAX_FOLLOW_UPS_PER_USER`   | `3`     | Maximum pending follow-ups the bot may owe one user.     |
 | `TASK_MAX_LATENESS_MINUTES` | `60`    | How late a due task may still run before it counts as missed. |
 
 ## Storage and binaries

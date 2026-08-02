@@ -137,7 +137,7 @@ class ToolRegistryFactory(
             tools(PollTools(outbox))
             tools(HistoryTools(history, context))
             tools(MemoryTools(memory, context))
-            tools(TaskTools(repo = tasks, context, config.maxTasksPerUser))
+            tools(TaskTools(repo = tasks, context, config.maxTasksPerUser, config.maxFollowUpsPerUser))
 
             tavilyClient?.let { tools(TavilyTools(it, imageDownloadClient, outbox)) }
             searxngClient?.let { tools(SearxngTools(it, imageDownloadClient, outbox)) }

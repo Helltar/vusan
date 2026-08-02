@@ -170,9 +170,15 @@ class TaskScheduler(
                 else -> "user ${task.userId}"
             }
 
+        val messages = Messages.of(task.language)
+
         return ScheduledAttribution(
             creatorMessageId = task.creatorMessageId,
-            headerText = Messages.of(task.language).taskScheduledByNotice(mention)
+            headerText =
+                if (task.selfInitiated)
+                    messages.taskFollowUpNotice(mention)
+                else
+                    messages.taskScheduledByNotice(mention)
         )
     }
 }

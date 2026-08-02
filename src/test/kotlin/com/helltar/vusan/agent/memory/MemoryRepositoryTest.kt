@@ -133,6 +133,7 @@ class MemoryRepositoryTest {
                 model = "test",
                 requestTimeout = 60.seconds
             ),
+            maxFollowUpsPerUser = 3,
             maxMemoryPerScope = 10,
             maxTasksPerUser = 5,
             openAiImageApiKey = null,

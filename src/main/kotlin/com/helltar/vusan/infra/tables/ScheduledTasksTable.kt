@@ -17,6 +17,7 @@ object ScheduledTasksTable : LongIdTable("scheduled_tasks") {
     val paused = bool("paused").default(false)
     val createdAt = timestamp("created_at").clientDefault { Instant.now() }
 
+    val selfInitiated = bool("self_initiated").default(false)
     val chatIsPrivate = bool("chat_is_private").default(true)
     val language = varchar("language", 16).nullable()
     val creatorMessageId = long("creator_message_id").nullable()

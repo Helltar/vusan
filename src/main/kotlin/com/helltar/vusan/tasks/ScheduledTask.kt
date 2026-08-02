@@ -22,7 +22,9 @@ data class ScheduledTask(
     val creatorUsername: String?,
     val creatorDisplayName: String?,
     val chatIsPrivate: Boolean,
-    val language: Language
+    val language: Language,
+    /** The bot set this one up for itself as a follow-up, instead of the user asking for it. */
+    val selfInitiated: Boolean = false
 )
 
 data class NewScheduledTask(
@@ -37,7 +39,8 @@ data class NewScheduledTask(
     val creatorUsername: String?,
     val creatorDisplayName: String?,
     val chatIsPrivate: Boolean,
-    val language: Language
+    val language: Language,
+    val selfInitiated: Boolean = false
 )
 
 private val FIRE_DISPLAY = DateTimeFormatter.ofPattern("yyyy-MM-dd'T'HH:mm")

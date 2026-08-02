@@ -19,7 +19,8 @@ private const val MAX_TITLE_CHARS = 120
 class TaskTools(
     private val repo: TasksRepository,
     private val context: RequestContext,
-    private val maxTasksPerUser: Int
+    private val maxTasksPerUser: Int,
+    private val maxFollowUpsPerUser: Int
 ) : ToolSet {
 
     @Tool
@@ -55,7 +56,7 @@ class TaskTools(
                 is ScheduleParse.Ok -> parsed
             }
 
-        val enabledCount = repo.countEnabledByUser(userId)
+        val enabledCount = repo.countEnabledByUser(userId, selfInitiated = false)
 
         if (enabledCount >= maxTasksPerUser) {
             return@suspendToolGuard "You already have $enabledCount scheduled tasks (limit $maxTasksPerUser). " +
@@ -64,7 +65,7 @@ class TaskTools(
 
         val id =
             repo.create(
-                NewScheduledTask(
+                newTask(
                     userId = userId,
                     chatId = chatId,
                     prompt = trimmedPrompt,
@@ -72,15 +73,69 @@ class TaskTools(
                     recurrence = plan.recurrence,
                     timezone = tz,
                     nextFireAt = plan.firstFire,
-                    creatorMessageId = context.messageId.takeIf { it > 0L },
-                    creatorUsername = context.senderUsername,
-                    creatorDisplayName = context.senderDisplayName,
-                    chatIsPrivate = context.chatIsPrivate,
-                    language = context.language
+                    selfInitiated = false
                 )
             )
 
         "Scheduled task id=$id, fires=${formatFire(plan.firstFire, tz)} (${plan.recurrence.display})."
+    }
+
+    @Tool
+    @LLMDescription(TaskToolDescriptions.SCHEDULE_FOLLOW_UP)
+    suspend fun scheduleFollowUp(
+        @LLMDescription(TaskToolDescriptions.FOLLOW_UP_PROMPT)
+        prompt: String,
+        @LLMDescription(TaskToolDescriptions.FOLLOW_UP_AT)
+        at: String,
+        @LLMDescription(TaskToolDescriptions.FOLLOW_UP_TIMEZONE)
+        timezone: String? = null,
+        @LLMDescription(TaskToolDescriptions.FOLLOW_UP_TITLE)
+        title: String? = null
+    ): String = suspendToolGuard {
+        val userId = context.requireUserId()
+        val chatId = context.requireChatId()
+
+        val trimmedPrompt = prompt.requireToolText("Follow-up prompt", MAX_PROMPT_CHARS)
+        val trimmedTitle = title?.trim()?.takeIf { it.isNotEmpty() }
+
+        require(trimmedTitle == null || trimmedTitle.length <= MAX_TITLE_CHARS) {
+            "Follow-up title must be at most $MAX_TITLE_CHARS characters"
+        }
+
+        val tz =
+            parseTimezone(timezone)
+                ?: return@suspendToolGuard "Unknown timezone=`$timezone`. Use IANA names like `Europe/Kyiv` or omit."
+
+        // a follow-up is by definition a single moment, so the recurring schedule forms are not offered
+        // at all — the model only picks the datetime and the shared parser validates it.
+        val plan =
+            when (val parsed = parseSchedule("once ${at.trim()}", Instant.now(), tz)) {
+                is ScheduleParse.Err -> return@suspendToolGuard parsed.message
+                is ScheduleParse.Ok -> parsed
+            }
+
+        val pendingCount = repo.countEnabledByUser(userId, selfInitiated = true)
+
+        if (pendingCount >= maxFollowUpsPerUser) {
+            return@suspendToolGuard "You already owe this user $pendingCount follow-ups (limit $maxFollowUpsPerUser). " +
+                    "Wait for one to fire instead of promising another."
+        }
+
+        val id =
+            repo.create(
+                newTask(
+                    userId = userId,
+                    chatId = chatId,
+                    prompt = trimmedPrompt,
+                    title = trimmedTitle,
+                    recurrence = plan.recurrence,
+                    timezone = tz,
+                    nextFireAt = plan.firstFire,
+                    selfInitiated = true
+                )
+            )
+
+        "Follow-up id=$id set for ${formatFire(plan.firstFire, tz)}."
     }
 
     @Tool
@@ -253,6 +308,31 @@ class TaskTools(
         "Cancelled task id=$id (${formatFire(existing.nextFireAt, existing.timezone)}, ${existing.recurrence.display})."
     }
 
+    private fun newTask(
+        userId: Long,
+        chatId: Long,
+        prompt: String,
+        title: String?,
+        recurrence: Recurrence,
+        timezone: ZoneId,
+        nextFireAt: Instant,
+        selfInitiated: Boolean
+    ) = NewScheduledTask(
+        userId = userId,
+        chatId = chatId,
+        prompt = prompt,
+        title = title,
+        recurrence = recurrence,
+        timezone = timezone,
+        nextFireAt = nextFireAt,
+        creatorMessageId = context.messageId.takeIf { it > 0L },
+        creatorUsername = context.senderUsername,
+        creatorDisplayName = context.senderDisplayName,
+        chatIsPrivate = context.chatIsPrivate,
+        language = context.language,
+        selfInitiated = selfInitiated
+    )
+
     private fun parseTimezone(raw: String?): ZoneId? {
         if (raw.isNullOrBlank()) return ZoneId.systemDefault()
         return runCatching { ZoneId.of(raw.trim()) }.getOrNull()
@@ -274,6 +354,7 @@ private fun formatTaskLine(task: ScheduledTask): String =
         append(", fires=").append(formatFire(task.nextFireAt, task.timezone))
         append(", repeat=").append(task.recurrence.display)
         append(", status=").append(if (task.paused) "paused" else "active")
+        if (task.selfInitiated) append(", source=your own follow-up")
         task.title?.let { append(", title=\"").append(it).append('"') }
         append(", prompt=\"").append(task.prompt).append('"')
     }

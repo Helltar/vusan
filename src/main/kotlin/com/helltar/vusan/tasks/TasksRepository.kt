@@ -29,15 +29,20 @@ class TasksRepository {
                 it[creatorDisplayName] = task.creatorDisplayName
                 it[chatIsPrivate] = task.chatIsPrivate
                 it[language] = task.language.name
+                it[selfInitiated] = task.selfInitiated
             }.value
     }
 
-    suspend fun countEnabledByUser(userId: Long): Int = dbTransaction {
-        ScheduledTasksTable
-            .selectAll()
-            .where { (ScheduledTasksTable.userId eq userId) and (ScheduledTasksTable.enabled eq true) }
-            .count()
-            .toInt()
+    // user-requested tasks and the bot's own follow-ups are counted against separate limits, so the
+    // bot can never fill up the quota the user needs for their own reminders. [selfInitiated] null
+    // counts both, which is what the task menu shows as the user's overall total.
+    suspend fun countEnabledByUser(userId: Long, selfInitiated: Boolean? = null): Int = dbTransaction {
+        var condition =
+            (ScheduledTasksTable.userId eq userId) and (ScheduledTasksTable.enabled eq true)
+
+        selfInitiated?.let { condition = condition and (ScheduledTasksTable.selfInitiated eq it) }
+
+        ScheduledTasksTable.selectAll().where { condition }.count().toInt()
     }
 
     suspend fun listEnabledByUser(userId: Long, chatId: Long? = null): List<ScheduledTask> = dbTransaction {
@@ -152,6 +157,7 @@ class TasksRepository {
             creatorUsername = this[ScheduledTasksTable.creatorUsername],
             creatorDisplayName = this[ScheduledTasksTable.creatorDisplayName],
             chatIsPrivate = this[ScheduledTasksTable.chatIsPrivate],
+            selfInitiated = this[ScheduledTasksTable.selfInitiated],
             nextFireAt = this[ScheduledTasksTable.nextFireAt],
             createdAt = this[ScheduledTasksTable.createdAt],
             enabled = this[ScheduledTasksTable.enabled],

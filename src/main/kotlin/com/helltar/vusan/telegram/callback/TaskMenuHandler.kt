@@ -231,7 +231,9 @@ internal class TaskMenuHandler(
     ): TaskMenu {
         val currentChatOnly = !chatIsPrivate
         val listedTasks = tasks.listEnabledByUser(userId, chatId.takeIf { currentChatOnly })
-        val totalTasks = if (currentChatOnly) tasks.countEnabledByUser(userId) else listedTasks.size
+        // the capacity line is paired with MAX_TASKS_PER_USER, so it counts what that limit governs. the
+        // bot's own follow-ups are listed below it but have their own separate limit.
+        val totalTasks = tasks.countEnabledByUser(userId, selfInitiated = false)
 
         val shownTasks = listedTasks.fittingInMenu(messages)
         val hiddenTasks = listedTasks.size - shownTasks.size

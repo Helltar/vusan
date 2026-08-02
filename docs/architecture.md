@@ -146,6 +146,13 @@ A normal user message travels:
   task whose run fails is still advanced/disabled (logged, no retry) so a persistent error cannot re-fire it on every
   poll tick. Paused tasks remain stored and count toward the per-user task limit, but the due-task query skips them.
   Recurrence math lives in `tasks/Recurrence.kt`.
+- **Self-initiated follow-ups** — `scheduleFollowUp` lets the agent set itself a single future turn when the
+  conversation gives it a reason to come back ("ask how the exam went"). It is the same scheduler, store, and delivery
+  path as `scheduleTask`, narrowed: one-time only, its own `MAX_FOLLOW_UPS_PER_USER` limit so the bot cannot spend the
+  user's task quota, and a `self_initiated` flag on the row. In a group it fires anchored to the message that prompted
+  it, and only when that message is gone does it fall back to a "following up with" notice instead of the
+  "scheduled by" one, which would misattribute it to the user. The user sees and cancels them through `/tasks` like
+  any other task.
 - **Task menu** — `/tasks` bypasses the LLM and asks `TaskMenuHandler` to render the caller's enabled tasks. Private
   chats show all of that user's tasks; groups show only their tasks created in that chat. Callback data carries the
   menu owner, every action checks ownership and group scope, and Telegram is always sent an `answerCallbackQuery`.

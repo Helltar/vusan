@@ -54,6 +54,8 @@ interface Messages {
 
     fun taskScheduledByNotice(mention: String): String
 
+    fun taskFollowUpNotice(mention: String): String
+
     companion object {
         fun of(language: Language): Messages =
             when (language) {
@@ -164,6 +166,8 @@ internal object EnglishMessages : Messages {
     }
 
     override fun taskScheduledByNotice(mention: String) = "⏰ Scheduled by $mention"
+
+    override fun taskFollowUpNotice(mention: String) = "💬 Following up with $mention"
 }
 
 internal object UkrainianMessages : Messages {
@@ -265,4 +269,6 @@ internal object UkrainianMessages : Messages {
     }
 
     override fun taskScheduledByNotice(mention: String) = "⏰ Заплановано: $mention"
+
+    override fun taskFollowUpNotice(mention: String) = "💬 Повертаюся до розмови з $mention"
 }
