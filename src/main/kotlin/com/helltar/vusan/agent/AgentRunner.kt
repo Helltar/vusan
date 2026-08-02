@@ -7,8 +7,10 @@ import com.helltar.vusan.agent.memory.MemoryRepository
 import com.helltar.vusan.agent.memory.MemoryScope
 import com.helltar.vusan.common.collapseWhitespaceAndCap
 import com.helltar.vusan.common.isEffectivelyBlank
+import com.helltar.vusan.common.limitTo
 import com.helltar.vusan.common.rethrowIfCancellation
 import com.helltar.vusan.common.xmlTextBlock
+import com.helltar.vusan.config.ChatHistoryConfig
 import com.helltar.vusan.i18n.Language
 import com.helltar.vusan.i18n.Messages
 import com.helltar.vusan.outbox.BotOutbox
@@ -21,6 +23,8 @@ import com.helltar.vusan.tools.message.MessageTools
 import io.github.oshai.kotlinlogging.KotlinLogging
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
+import java.time.Instant
+import java.time.temporal.ChronoUnit
 
 data class AgentRequest(
     val chatId: Long,
@@ -44,7 +48,9 @@ data class AgentResult(
 class AgentRunner(
     private val agentFactory: AgentFactory,
     private val history: ChatHistoryRepository,
-    private val memory: MemoryRepository
+    private val memory: MemoryRepository,
+    private val conversationCompactor: ConversationCompactor,
+    private val historyConfig: ChatHistoryConfig = ChatHistoryConfig()
 ) {
 
     private companion object {
@@ -114,37 +120,63 @@ class AgentRunner(
                 language = request.language
             )
 
-        val outbox = BotOutbox()
-        val promptHistory = summarizeForPrompt(history.load(request.userId))
-
         val userMemory = memory.load(MemoryScope.USER, request.userId)
         val chatMemory = if (context.chatIsPrivate) emptyList() else memory.load(MemoryScope.CHAT, request.chatId)
+        val currentTurn = currentTurnPrompt(request.prompt, request.messageContext, userMemory, chatMemory)
+        val outbox = BotOutbox()
+        val preparation = agentFactory.prepare(context, outbox, currentTurn)
+        val snapshot = compactHistoryForPrompt(request.userId, history.load(request.userId), preparation.tokenBudget.historyTokens)
+        val historyPlan =
+            planHistoryForPrompt(
+                snapshot = snapshot,
+                tokenBudget = preparation.tokenBudget.historyTokens,
+                maxRecentInteractions = historyConfig.maxRecentInteractions
+            )
+
+        val plannedInputTokens = preparation.tokenBudget.fixedPromptTokens + historyPlan.estimatedTokens
+        val plannedContextPercent =
+            ((plannedInputTokens.toLong() * 100L) / preparation.tokenBudget.contextWindowTokens)
+                .toInt()
+                .coerceIn(0, 100)
 
         log.info {
             "prompt history loaded: user=${request.userId} chat=${request.chatId} " +
-                    "turns=${promptHistory.turns.size} summaryChars=${promptHistory.summary?.length ?: 0} " +
+                    "storedInteractions=${snapshot.stats.storedInteractions} storedMessages=${snapshot.stats.storedMessages} " +
+                    "storedChars=${snapshot.stats.storedChars} unsummarized=${snapshot.stats.unsummarizedInteractions} " +
+                    "includedInteractions=${historyPlan.includedInteractions} turns=${historyPlan.history.turns.size} " +
+                    "summaryChars=${historyPlan.history.summary?.length ?: 0} exactToolInteractions=${historyPlan.exactToolInteractions} " +
                     "userMemory=${userMemory.size} chatMemory=${chatMemory.size} " +
                     "promptChars=${request.prompt.length} historyChars=${request.historyEntry.length} " +
                     "attachedFile=${request.attachedFile != null}"
         }
 
+        log.info {
+            "prompt context plan: user=${request.userId} chat=${request.chatId} " +
+                    "contextTokens=${preparation.tokenBudget.contextWindowTokens} " +
+                    "fixedTokens=${preparation.tokenBudget.fixedPromptTokens} " +
+                    "historyBudget=${preparation.tokenBudget.historyTokens} " +
+                    "historyTokens=${historyPlan.estimatedTokens} " +
+                    "responseReserve=${preparation.tokenBudget.responseReserveTokens} " +
+                    "agentReserve=${preparation.tokenBudget.agentReserveTokens} " +
+                    "safetyReserve=${preparation.tokenBudget.safetyReserveTokens} " +
+                    "plannedInputTokens=$plannedInputTokens contextPercent=$plannedContextPercent"
+        }
+
         val toolEvents = mutableListOf<ToolEvent>()
         val tokenUsages = mutableListOf<TokenUsage>()
 
-        val agent =
-            agentFactory.build(
-                userId = request.userId,
-                history = promptHistory,
-                context = context,
-                outbox = outbox,
-                toolEvents = toolEvents::add,
-                tokenUsage = tokenUsages::add,
-                onToolStarting = onToolStarting
-            )
-
         val answer =
             try {
-                agent.run(currentTurnPrompt(request.prompt, request.messageContext, userMemory, chatMemory))
+                runAgentWithHistory(
+                    userId = request.userId,
+                    currentTurn = currentTurn,
+                    history = historyPlan.history,
+                    preparation = preparation,
+                    outbox = outbox,
+                    toolEvents = toolEvents,
+                    tokenUsages = tokenUsages,
+                    onToolStarting = onToolStarting
+                )
             } catch (e: Throwable) {
                 e.rethrowIfCancellation()
                 return AgentResult(outputs = emptyList(), comment = replyForAgentFailure(request, e))
@@ -178,10 +210,119 @@ class AgentRunner(
         }
 
         if (historyTurns.isNotEmpty()) {
-            history.appendTurns(request.userId, historyTurns)
+            history.appendInteraction(request.userId, historyTurns)
+        }
+
+        val pruned =
+            history.pruneCompacted(
+                userId = request.userId,
+                maxStoredInteractions = historyConfig.maxStoredInteractions,
+                rawRetentionCutoff = Instant.now().minus(historyConfig.retentionDays.toLong(), ChronoUnit.DAYS)
+            )
+
+        if (pruned > 0) {
+            log.info { "history raw retention pruned: user=${request.userId} interactions=$pruned" }
         }
 
         return AgentResult(outputs, comment, outbox.redirectToPrivate)
+    }
+
+    private suspend fun compactHistoryForPrompt(
+        userId: Long,
+        initialSnapshot: ChatHistorySnapshot,
+        tokenBudget: Int
+    ): ChatHistorySnapshot {
+        var snapshot = initialSnapshot
+
+        repeat(MAX_COMPACTION_PASSES_PER_TURN) {
+            val plan =
+                planHistoryForPrompt(
+                    snapshot = snapshot,
+                    tokenBudget = tokenBudget,
+                    maxRecentInteractions = historyConfig.maxRecentInteractions
+                )
+
+            if (plan.compactablePrefix.isEmpty()) return snapshot
+
+            val compacted =
+                try {
+                    conversationCompactor.compact(snapshot.summary, plan.compactablePrefix)
+                } catch (e: Throwable) {
+                    e.rethrowIfCancellation()
+                    log.warn {
+                        "history recap failed for user=$userId: " +
+                                e.message?.collapseWhitespaceAndCap(PROVIDER_ERROR_LOG_MAX_CHARS).orEmpty()
+                    }
+                    return snapshot
+                } ?: return snapshot
+
+            val stored =
+                history.storeSummary(
+                    userId = userId,
+                    expectedThroughMessageId = snapshot.summarizedThroughMessageId,
+                    throughMessageId = compacted.throughMessageId,
+                    content = compacted.summary
+                )
+
+            if (!stored) {
+                log.warn { "history recap checkpoint changed before store for user=$userId; reloading" }
+            } else {
+                log.info {
+                    "history recap stored: user=$userId interactions=${compacted.interactionCount} " +
+                            "throughMessage=${compacted.throughMessageId} chars=${compacted.summary.length}"
+                }
+            }
+
+            snapshot = history.load(userId)
+        }
+
+        return snapshot
+    }
+
+    private suspend fun runAgentWithHistory(
+        userId: Long,
+        currentTurn: String,
+        history: PromptHistory,
+        preparation: AgentPromptPreparation,
+        outbox: BotOutbox,
+        toolEvents: MutableList<ToolEvent>,
+        tokenUsages: MutableList<TokenUsage>,
+        onToolStarting: (activity: ToolActivity) -> Unit
+    ): String {
+        suspend fun run(promptHistory: PromptHistory): String =
+            agentFactory
+                .build(
+                    userId = userId,
+                    history = promptHistory,
+                    preparation = preparation,
+                    outbox = outbox,
+                    toolEvents = toolEvents::add,
+                    tokenUsage = tokenUsages::add,
+                    onToolStarting = onToolStarting
+                )
+                .run(currentTurn)
+
+        return try {
+            run(history)
+        } catch (e: Throwable) {
+            e.rethrowIfCancellation()
+
+            val emergencyHistory =
+                PromptHistory(
+                    summary = history.summary?.limitTo(EMERGENCY_SUMMARY_MAX_CHARS),
+                    turns = emptyList()
+                )
+            val safeToRetry =
+                e.isContextOverflow() &&
+                        history != emergencyHistory &&
+                        toolEvents.isEmpty() &&
+                        outbox.pending.isEmpty()
+
+            if (!safeToRetry) throw e
+
+            log.warn { "context limit exceeded for user=$userId; retrying once with recap only" }
+            run(emergencyHistory)
+        }
     }
 
     // pick the user-facing reply and log accordingly. LLM provider errors arrive as a large JSON body, so
@@ -221,6 +362,10 @@ class AgentRunner(
 }
 
 private const val TOOL_OUTPUT_MAX_CHARS = 4_000
+private const val TOOL_EVENTS_MAX_COUNT = 8
+private const val TOOL_EVENTS_MAX_CHARS = 12_000
+private const val MAX_COMPACTION_PASSES_PER_TURN = 3
+private const val EMERGENCY_SUMMARY_MAX_CHARS = 1_500
 private const val LOG_REPLY_MAX_CHARS = 300
 private const val PROVIDER_ERROR_LOG_MAX_CHARS = 300
 
@@ -250,18 +395,31 @@ private fun memoryBlock(
 // the provider's HTTP status is embedded in the client exception message ("Status code: 429").
 // 429 (rate limit / quota) and 503 (service overloaded) are transient — the provider asks us to back off.
 private val TRANSIENT_STATUS_REGEX = Regex("""Status code:\s*(429|503)""")
+private val CONTEXT_OVERFLOW_REGEX =
+    Regex(
+        "context[_ ]length|context window|maximum context|too many (input )?tokens|" +
+                "prompt is too long|input is too long",
+        RegexOption.IGNORE_CASE
+    )
 
 private fun LLMClientException.isTransientOverload(): Boolean =
     message?.let { TRANSIENT_STATUS_REGEX.containsMatchIn(it) } == true
+
+private fun Throwable.isContextOverflow(): Boolean =
+    generateSequence(this) { it.cause }
+        .filterIsInstance<LLMClientException>()
+        .any { error -> error.message?.let(CONTEXT_OVERFLOW_REGEX::containsMatchIn) == true }
 
 private fun tokenUsageLogSummary(usages: List<TokenUsage>): String {
 
     fun List<Int?>.sumOrNa(): String =
         filterNotNull().let { if (it.isEmpty()) "n/a" else it.sum().toString() }
 
-    val promptTokens = usages.lastOrNull()?.inputTokens
+    val inputs = usages.mapNotNull { it.inputTokens }
+    val promptTokens = inputs.lastOrNull()
 
     return "calls=${usages.size} promptTokens=${promptTokens ?: "n/a"} " +
+            "minPromptTokens=${inputs.minOrNull() ?: "n/a"} maxPromptTokens=${inputs.maxOrNull() ?: "n/a"} " +
             "inputTokens=${usages.map { it.inputTokens }.sumOrNa()} " +
             "outputTokens=${usages.map { it.outputTokens }.sumOrNa()} " +
             "runTotal=${usages.map { it.totalTokens }.sumOrNa()}"
@@ -285,12 +443,13 @@ private fun extractFinalComment(answer: String, outputs: List<OutboxItem>): Stri
                 it.output is BotOutput.Voice ||
                         it.output is BotOutput.VideoNote ||
                         it.output is BotOutput.Text ||
+                        it.output is BotOutput.RichMessage ||
                         it.output is BotOutput.InlineChoice ||
                         it.output is BotOutput.Reaction
             }
         }
 
-private fun assistantTextForHistory(outputs: List<OutboxItem>, comment: String?): String? {
+internal fun assistantTextForHistory(outputs: List<OutboxItem>, comment: String?): String? {
     val parts =
         buildList {
             addAll(
@@ -298,6 +457,7 @@ private fun assistantTextForHistory(outputs: List<OutboxItem>, comment: String?)
                     when (val output = it.output) {
                         is BotOutput.Text -> output.text
                         is BotOutput.InlineChoice -> output.historyText()
+                        is BotOutput.RichMessage -> output.markdown
                         else -> null
                     }
                 }
@@ -315,18 +475,18 @@ private fun assistantTextForHistory(outputs: List<OutboxItem>, comment: String?)
 private val TEXT_DUPLICATING_TOOLS =
     setOf(
         MessageTools::sendMessage.name,
+        MessageTools::sendRichMessage.name,
         InlineChoiceTools::askWithButtons.name
     )
 
 private fun BotOutput.InlineChoice.historyText(): String =
     question + "\n\n" + options.joinToString("\n") { "• $it" }
 
-private fun buildHistoryTurns(userEntry: String, toolEvents: List<ToolEvent>, assistantText: String?): List<ChatTurn> =
+internal fun buildHistoryTurns(userEntry: String, toolEvents: List<ToolEvent>, assistantText: String?): List<ChatTurn> =
     buildList {
         add(ChatTurn(role = ChatRole.USER, content = userEntry))
 
-        for (event in toolEvents) {
-            if (event.toolName in TEXT_DUPLICATING_TOOLS) continue
+        for (event in toolEvents.forHistory()) {
 
             add(
                 ChatTurn(
@@ -352,3 +512,25 @@ private fun buildHistoryTurns(userEntry: String, toolEvents: List<ToolEvent>, as
             add(ChatTurn(role = ChatRole.ASSISTANT, content = assistantText))
         }
     }
+
+private fun List<ToolEvent>.forHistory(): List<ToolEvent> {
+    val selected = ArrayDeque<ToolEvent>()
+    var usedChars = 0
+
+    for (event in asReversed()) {
+        if (event.toolName in TEXT_DUPLICATING_TOOLS) continue
+
+        val args = toolCallArgsForHistory(event.args)
+        val output = event.output.collapseWhitespaceAndCap(TOOL_OUTPUT_MAX_CHARS).orEmpty()
+        val cost = args.length + output.length
+
+        if (selected.isNotEmpty() && (selected.size >= TOOL_EVENTS_MAX_COUNT || usedChars + cost > TOOL_EVENTS_MAX_CHARS)) {
+            continue
+        }
+
+        selected.addFirst(event)
+        usedChars += cost
+    }
+
+    return selected.toList()
+}

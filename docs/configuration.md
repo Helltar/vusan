@@ -58,6 +58,7 @@ takes whatever model string it serves.
 | `LLM_OPENAI_ENDPOINT`         | `completions` | Which OpenAI API to call: `completions` or `responses`.                      |
 | `LLM_REASONING_EFFORT`        | model default | Reasoning depth: `none`, `minimal`, `low`, `medium`, or `high`.              |
 | `LLM_REQUEST_TIMEOUT_SECONDS` | `120`         | Seconds one LLM call may hang before it fails and the bot replies with an error. Raise it for slow local servers and heavy reasoning models. |
+| `LLM_CONTEXT_WINDOW_TOKENS`   | model metadata or `16384` | Context size override. Native models use catalog metadata; unknown compatible models fall back to `16384`. |
 
 `LLM_OPENAI_ENDPOINT` and `LLM_REASONING_EFFORT` apply to `openai-compatible` only. Give `LLM_BASE_URL` no `/v1` — the
 API path is appended for you.
@@ -92,6 +93,10 @@ LLM_API_KEY=ollama
 LLM_BASE_URL=http://localhost:11434
 LLM_MODEL=gemma4
 ```
+
+Set `LLM_CONTEXT_WINDOW_TOKENS` whenever an `openai-compatible` model has a different window. Vusan reserves part of
+that window for the response, tool results, and estimation error, then fits only complete conversation interactions
+into the remainder.
 
 ## Personality
 
@@ -245,6 +250,21 @@ no env variable is required to enable it.
 | Variable               | Default | Description                                                               |
 |------------------------|---------|---------------------------------------------------------------------------|
 | `MAX_MEMORY_PER_SCOPE` | `10`    | Max durable memory entries per user and per chat; the oldest are evicted. |
+
+## Conversation history
+
+History is global per Telegram user. Recent interactions are replayed exactly; older ones are merged by the active
+chat model into a persisted semantic recap. Raw rows remain available for a bounded time but never enter the prompt
+again after their recap checkpoint.
+
+| Variable                               | Default | Description                                                        |
+|----------------------------------------|---------|--------------------------------------------------------------------|
+| `CHAT_HISTORY_MAX_RECENT_INTERACTIONS` | `12`    | Complete unsummarized interactions kept in the model context.      |
+| `CHAT_HISTORY_MAX_STORED_INTERACTIONS` | `100`   | Complete raw interactions retained after they have been summarized. |
+| `CHAT_HISTORY_RETENTION_DAYS`          | `90`    | Days summarized raw interactions remain in SQLite.                 |
+
+Cleanup runs when that user completes a turn. `/clear` removes both the raw transcript and its recap; durable memory
+and scheduled tasks remain.
 
 ## Scheduled tasks
 

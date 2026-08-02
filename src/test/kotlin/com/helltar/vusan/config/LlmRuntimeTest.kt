@@ -130,10 +130,29 @@ class LlmRuntimeTest {
         assertTrue(runtime.model.supports(LLMCapability.Thinking))
     }
 
+    @Test
+    fun `configured context window overrides compatible and native model metadata`() {
+        val compatible = openAiCompatible(contextWindowTokens = 32_768)
+        val native =
+            resolveLlmRuntime(
+                LlmProviderConfig.Hosted(
+                    provider = HostedLlmProvider.ANTHROPIC,
+                    apiKey = "key",
+                    model = "claude-sonnet-4-5",
+                    requestTimeout = 120.seconds,
+                    contextWindowTokens = 65_536
+                )
+            )
+
+        assertEquals(32_768L, compatible.model.contextLength)
+        assertEquals(65_536L, native.model.contextLength)
+    }
+
     private fun openAiCompatible(
         baseUrl: String = "https://example.test",
         endpoint: OpenAiEndpoint = OpenAiEndpoint.COMPLETIONS,
-        reasoningEffort: ReasoningEffort? = null
+        reasoningEffort: ReasoningEffort? = null,
+        contextWindowTokens: Long? = null
     ): LlmRuntime =
         resolveLlmRuntime(
             LlmProviderConfig.OpenAiCompatible(
@@ -142,7 +161,8 @@ class LlmRuntimeTest {
                 model = "deepseek-chat",
                 endpoint = endpoint,
                 reasoningEffort = reasoningEffort,
-                requestTimeout = 120.seconds
+                requestTimeout = 120.seconds,
+                contextWindowTokens = contextWindowTokens
             )
         )
 }

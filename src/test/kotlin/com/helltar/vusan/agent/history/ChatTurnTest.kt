@@ -53,6 +53,21 @@ class ChatTurnTest {
         assertEquals(once, toolCallArgsForHistory(once))
     }
 
+    @Test
+    fun `nested and repeated values have a global serialized cap`() {
+        val raw =
+            buildJsonObject {
+                repeat(20) { index ->
+                    put("field-$index", buildJsonObject { put("nested", JsonPrimitive("x".repeat(4_000))) })
+                }
+            }.toString()
+
+        val result = toolCallArgsForHistory(raw)
+
+        assertTrue(result.length <= 4_000)
+        Json.parseToJsonElement(result).jsonObject
+    }
+
     private fun jsonArgs(vararg pairs: Pair<String, String>): String =
         buildJsonObject { pairs.forEach { (k, v) -> put(k, JsonPrimitive(v)) } }.toString()
 

@@ -4,6 +4,8 @@ import ai.koog.prompt.executor.llms.MultiLLMPromptExecutor
 import com.helltar.vusan.agent.AgentFactory
 import com.helltar.vusan.agent.AgentRunner
 import com.helltar.vusan.agent.history.ChatHistoryRepository
+import com.helltar.vusan.agent.history.ContextWindowPolicy
+import com.helltar.vusan.agent.history.LlmConversationCompactor
 import com.helltar.vusan.agent.memory.MemoryRepository
 import com.helltar.vusan.config.*
 import com.helltar.vusan.infra.Db
@@ -11,7 +13,7 @@ import com.helltar.vusan.infra.Http
 import com.helltar.vusan.stt.OpenAiWhisperClient
 import com.helltar.vusan.tasks.TaskScheduler
 import com.helltar.vusan.tasks.TasksRepository
-import com.helltar.vusan.telegram.*
+import com.helltar.vusan.telegram.TelegramBotRunner
 import com.helltar.vusan.telegram.callback.InlineChoiceHandler
 import com.helltar.vusan.telegram.callback.TaskMenuHandler
 import com.helltar.vusan.telegram.delivery.TelegramDelivery
@@ -49,8 +51,10 @@ suspend fun main() = coroutineScope {
         visionExecutor = vision?.executor?.takeIf { it !== executor }
 
         val toolRegistryFactory = ToolRegistryFactory(http, config, history, memory, tasks, vision)
-        val agentFactory = AgentFactory(executor, toolRegistryFactory, llm.model, llm.chatParams, config.personality)
-        val agentRunner = AgentRunner(agentFactory, history, memory)
+        val contextWindowPolicy = ContextWindowPolicy(llm.model)
+        val agentFactory = AgentFactory(executor, toolRegistryFactory, llm.model, llm.chatParams, config.personality, contextWindowPolicy = contextWindowPolicy)
+        val conversationCompactor = LlmConversationCompactor(executor, llm.model, llm.chatParams, contextWindowPolicy)
+        val agentRunner = AgentRunner(agentFactory, history, memory, conversationCompactor, config.chatHistory)
 
         val telegramClient = OkHttpTelegramClient(config.telegramBotToken)
         val delivery = TelegramDelivery(telegramClient)
@@ -102,6 +106,15 @@ private fun createVoiceTranscriber(http: HttpClient, config: AppConfig): VoiceTr
 
 private fun logStartup(llm: LlmRuntime, vision: VisionRuntime?, toolNames: List<String>) {
     log.info { "Starting Vusan: provider=[${llm.providerLabel}] model=[${llm.model.id}]" }
+
+    if (llm.model.contextLength == null) {
+        log.warn {
+            "Model context size unknown: using conservative fallback " +
+                    "[${ContextWindowPolicy.DEFAULT_CONTEXT_WINDOW_TOKENS}] — set LLM_CONTEXT_WINDOW_TOKENS for this model"
+        }
+    } else {
+        log.info { "Model context window: tokens=${llm.model.contextLength}" }
+    }
 
     if (vision != null) {
         log.info { "Vision: provider=[${vision.providerLabel}] model=[${vision.model.id}]" }

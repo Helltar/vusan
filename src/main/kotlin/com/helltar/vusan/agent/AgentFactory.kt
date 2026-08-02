@@ -19,9 +19,12 @@ import ai.koog.prompt.message.MessagePart
 import ai.koog.prompt.params.LLMParams
 import ai.koog.serialization.JSONObject
 import com.helltar.vusan.agent.history.ChatRole
+import com.helltar.vusan.agent.history.ContextTokenBudget
+import com.helltar.vusan.agent.history.ContextWindowPolicy
 import com.helltar.vusan.agent.history.PromptHistory
 import com.helltar.vusan.agent.history.toolCallArgsForHistory
 import com.helltar.vusan.common.collapseWhitespaceAndCap
+import com.helltar.vusan.common.limitTo
 import com.helltar.vusan.common.xmlBlock
 import com.helltar.vusan.common.xmlTextBlock
 import com.helltar.vusan.outbox.BotOutbox
@@ -46,13 +49,21 @@ data class TokenUsage(
     val totalTokens: Int?
 )
 
+data class AgentPromptPreparation(
+    val toolRegistry: ToolRegistry,
+    val currentTime: String,
+    val tokenBudget: ContextTokenBudget,
+    val liveToolResultMaxChars: Int
+)
+
 class AgentFactory(
     private val promptExecutor: PromptExecutor,
     private val toolRegistryFactory: ToolRegistryFactory,
     private val model: LLModel,
     private val chatParams: LLMParams = LLMParams(),
     private val personality: String? = null,
-    private val maxIterations: Int = 60
+    private val maxIterations: Int = 60,
+    private val contextWindowPolicy: ContextWindowPolicy = ContextWindowPolicy(model)
 ) {
 
     private companion object {
@@ -60,10 +71,33 @@ class AgentFactory(
         val log = KotlinLogging.logger {}
     }
 
+    fun prepare(
+        context: RequestContext,
+        outbox: BotOutbox,
+        currentTurn: String
+    ): AgentPromptPreparation {
+        val toolRegistry = toolRegistryFactory.buildRegistry(context, outbox)
+        val currentTime = currentTimeSystemBlock()
+        val systemPrompt = systemPromptFor(personality ?: DEFAULT_PERSONALITY)
+
+        return AgentPromptPreparation(
+            toolRegistry = toolRegistry,
+            currentTime = currentTime,
+            tokenBudget =
+                contextWindowPolicy.budget(
+                    systemPrompt = systemPrompt,
+                    currentTime = currentTime,
+                    currentTurn = currentTurn,
+                    toolRegistry = toolRegistry
+                ),
+            liveToolResultMaxChars = contextWindowPolicy.liveToolResultMaxChars()
+        )
+    }
+
     fun build(
         userId: Long,
         history: PromptHistory,
-        context: RequestContext,
+        preparation: AgentPromptPreparation,
         outbox: BotOutbox,
         toolEvents: (ToolEvent) -> Unit,
         tokenUsage: (TokenUsage) -> Unit,
@@ -96,7 +130,7 @@ class AgentFactory(
                     }
                 }
 
-                system(currentTimeSystemBlock())
+                system(preparation.currentTime)
             }
 
         val agentConfig =
@@ -109,8 +143,8 @@ class AgentFactory(
         return AIAgent(
             promptExecutor = promptExecutor,
             agentConfig = agentConfig,
-            strategy = vusanSingleRunStrategy(outbox),
-            toolRegistry = toolRegistryFactory.buildRegistry(context, outbox),
+            strategy = vusanSingleRunStrategy(outbox, preparation.liveToolResultMaxChars),
+            toolRegistry = preparation.toolRegistry,
             id = "vusan-user-$userId"
         ) {
             install(EventHandler) {
@@ -173,9 +207,13 @@ class AgentFactory(
 // an empty completion after a batch of tool results. when that happens we nudge the model once to
 // actually deliver, then let the normal edges finish. built per run so the strategy can read the
 // live `outbox` to tell whether anything was delivered.
-private fun vusanSingleRunStrategy(outbox: BotOutbox): AIAgentGraphStrategy<String, String> =
+private fun vusanSingleRunStrategy(
+    outbox: BotOutbox,
+    liveToolResultMaxChars: Int
+): AIAgentGraphStrategy<String, String> =
     strategy<String, String>("single_run") {
         var nudged = false
+        var remainingToolResultChars = liveToolResultMaxChars
 
         // the model ended its turn without putting anything in front of the user: it delivered
         // nothing (no tool call to execute, no caption text) and the outbox is still empty. nudge at
@@ -190,10 +228,15 @@ private fun vusanSingleRunStrategy(outbox: BotOutbox): AIAgentGraphStrategy<Stri
                 toolCalls.toolCalls.map { call ->
                     val missing = call.missingRequiredArgs(llm.toolRegistry)
 
-                    if (missing.isEmpty())
-                        environment.executeTool(call)
-                    else
+                    if (missing.isEmpty()) {
+                        val result = environment.executeTool(call).boundedForLiveContext(remainingToolResultChars)
+                        if (result.parts == null) {
+                            remainingToolResultChars = (remainingToolResultChars - result.output.length).coerceAtLeast(0)
+                        }
+                        result
+                    } else {
                         garbledToolCallResult(call, missing)
+                    }
                 }
             )
         }
@@ -231,6 +274,15 @@ private fun vusanSingleRunStrategy(outbox: BotOutbox): AIAgentGraphStrategy<Stri
         edge(nodeNudgeDeliver forwardTo nodeExecuteTool onToolCalls { true })
         finishWhenNoToolCalls(nodeNudgeDeliver)
     }
+
+private fun ReceivedToolResult.boundedForLiveContext(maxChars: Int): ReceivedToolResult {
+    if (parts != null || output.length <= maxChars) return this
+
+    val marker = "\n[tool result truncated for the model context]"
+    if (maxChars <= marker.length) return copy(output = "[tool result omitted: model context budget exhausted]")
+
+    return copy(output = output.limitTo((maxChars - marker.length).coerceAtLeast(0)) + marker)
+}
 
 private const val DELIVER_NUDGE =
     "Your turn ended without sending anything to the user — no message, media, or reaction was delivered. " +

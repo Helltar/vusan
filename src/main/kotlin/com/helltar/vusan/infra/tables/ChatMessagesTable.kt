@@ -8,6 +8,7 @@ import java.time.Instant
 object ChatMessagesTable : LongIdTable("chat_messages") {
 
     val userId = long("user_id").index()
+    val interactionId = varchar("interaction_id", 36).nullable().index()
     val role = enumerationByName<ChatRole>("role", 16)
     val content = text("content")
     val toolCallId = varchar("tool_call_id", 128).nullable()

@@ -64,6 +64,7 @@ private fun openAiCompatibleModel(config: LlmProviderConfig.OpenAiCompatible): L
     LLModel(
         provider = LLMProvider.OpenAI,
         id = config.model,
+        contextLength = config.contextWindowTokens,
         capabilities =
             buildList {
                 add(LLMCapability.Completion)
@@ -129,7 +130,7 @@ private fun resolveHostedRuntime(config: LlmProviderConfig.Hosted, timeoutConfig
                         settings = OpenAIClientSettings(timeoutConfig = timeoutConfig),
                         explicitPromptCaching = true
                     ),
-                model = resolveOpenAiModel(config.model),
+                model = resolveOpenAiModel(config.model).withContextOverride(config.contextWindowTokens),
                 chatParams = OpenAIChatParams(promptCacheKey = OPENAI_PROMPT_CACHE_KEY)
             )
 
@@ -137,7 +138,7 @@ private fun resolveHostedRuntime(config: LlmProviderConfig.Hosted, timeoutConfig
             LlmRuntime(
                 providerLabel = "Anthropic",
                 client = AnthropicLLMClient(config.apiKey, AnthropicClientSettings(timeoutConfig = timeoutConfig)),
-                model = resolveModel(AnthropicModels, "Anthropic", config.model),
+                model = resolveModel(AnthropicModels, "Anthropic", config.model).withContextOverride(config.contextWindowTokens),
                 chatParams = AnthropicParams()
             )
 
@@ -145,7 +146,7 @@ private fun resolveHostedRuntime(config: LlmProviderConfig.Hosted, timeoutConfig
             LlmRuntime(
                 providerLabel = "Google",
                 client = GoogleLLMClient(config.apiKey, GoogleClientSettings(timeoutConfig = timeoutConfig)),
-                model = resolveModel(GoogleModels, "Google", config.model),
+                model = resolveModel(GoogleModels, "Google", config.model).withContextOverride(config.contextWindowTokens),
                 chatParams = GoogleParams()
             )
 
@@ -153,7 +154,7 @@ private fun resolveHostedRuntime(config: LlmProviderConfig.Hosted, timeoutConfig
             LlmRuntime(
                 providerLabel = "DeepSeek",
                 client = DeepSeekLLMClient(config.apiKey, DeepSeekClientSettings(timeoutConfig = timeoutConfig)),
-                model = resolveModel(DeepSeekModels, "DeepSeek", config.model),
+                model = resolveModel(DeepSeekModels, "DeepSeek", config.model).withContextOverride(config.contextWindowTokens),
                 chatParams = DeepSeekParams()
             )
     }
@@ -199,6 +200,9 @@ private fun normalizeModelKey(value: String): String =
         .trim()
         .lowercase()
         .replace('_', '-')
+
+private fun LLModel.withContextOverride(contextWindowTokens: Long?): LLModel =
+    contextWindowTokens?.let { copy(contextLength = it) } ?: this
 
 private const val OPENAI_API_BASE_URL = "https://api.openai.com"
 private const val OPENAI_PROMPT_CACHE_KEY = "vusan"

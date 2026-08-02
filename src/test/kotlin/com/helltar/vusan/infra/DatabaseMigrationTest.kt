@@ -57,6 +57,27 @@ class DatabaseMigrationTest {
         }
     }
 
+    @Test
+    fun `connect upgrades legacy chat history for interaction grouping and summaries`() {
+        val tempDir = Files.createTempDirectory("vusan-chat-history-migration-test")
+        val dbPath = tempDir.resolve("vusan.db")
+
+        try {
+            createLegacyChatMessagesTable(dbPath.toString())
+
+            runBlocking {
+                Db.connect(testConfig(dbPath.toString()))
+                Db.disconnect()
+            }
+
+            assertTrue("interaction_id" in tableColumns(dbPath.toString(), "chat_messages"))
+            assertTrue("chat_history_summaries" in tableNames(dbPath.toString()))
+        } finally {
+            runBlocking { Db.disconnect() }
+            tempDir.toFile().deleteRecursively()
+        }
+    }
+
     private fun createLegacyScheduledTasksTable(dbPath: String) {
         DriverManager.getConnection("jdbc:sqlite:$dbPath").use { connection ->
             connection.createStatement().use { statement ->
@@ -78,6 +99,27 @@ class DatabaseMigrationTest {
                         creator_message_id BIGINT,
                         creator_username VARCHAR(64),
                         creator_display_name VARCHAR(200)
+                    )
+                    """.trimIndent()
+                )
+            }
+        }
+    }
+
+    private fun createLegacyChatMessagesTable(dbPath: String) {
+        DriverManager.getConnection("jdbc:sqlite:$dbPath").use { connection ->
+            connection.createStatement().use { statement ->
+                statement.execute(
+                    """
+                    CREATE TABLE chat_messages (
+                        id INTEGER PRIMARY KEY AUTOINCREMENT,
+                        user_id BIGINT NOT NULL,
+                        role VARCHAR(16) NOT NULL,
+                        content TEXT NOT NULL,
+                        tool_call_id VARCHAR(128),
+                        tool_name VARCHAR(128),
+                        tool_is_error BOOLEAN,
+                        created_at TEXT NOT NULL
                     )
                     """.trimIndent()
                 )
@@ -114,6 +156,28 @@ class DatabaseMigrationTest {
                             while (rows.next())
                                 add(rows.getString("name"))
                         }
+                    }
+                }
+            }
+        }
+
+    private fun tableColumns(dbPath: String, table: String): Set<String> =
+        DriverManager.getConnection("jdbc:sqlite:$dbPath").use { connection ->
+            connection.createStatement().use { statement ->
+                statement.executeQuery("PRAGMA table_info(`$table`)").use { rows ->
+                    buildSet {
+                        while (rows.next()) add(rows.getString("name"))
+                    }
+                }
+            }
+        }
+
+    private fun tableNames(dbPath: String): Set<String> =
+        DriverManager.getConnection("jdbc:sqlite:$dbPath").use { connection ->
+            connection.createStatement().use { statement ->
+                statement.executeQuery("SELECT name FROM sqlite_master WHERE type = 'table'").use { rows ->
+                    buildSet {
+                        while (rows.next()) add(rows.getString("name"))
                     }
                 }
             }

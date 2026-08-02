@@ -10,6 +10,7 @@ import kotlin.time.Duration.Companion.seconds
 
 data class AppConfig(
     val allowedIds: Set<Long>,
+    val chatHistory: ChatHistoryConfig = ChatHistoryConfig(),
     val databasePath: String,
     val elevenLabsApiKey: String?,
     val elevenLabsTts: ElevenLabsTtsConfig?,
@@ -47,6 +48,18 @@ data class AppConfig(
 
             return AppConfig(
                 allowedIds = parseIdSet(readEnv("ALLOWED_IDS")),
+                chatHistory =
+                    ChatHistoryConfig(
+                        maxRecentInteractions =
+                            readEnv("CHAT_HISTORY_MAX_RECENT_INTERACTIONS")?.toIntOrNull()
+                                ?: ChatHistoryConfig.DEFAULT_MAX_RECENT_INTERACTIONS,
+                        maxStoredInteractions =
+                            readEnv("CHAT_HISTORY_MAX_STORED_INTERACTIONS")?.toIntOrNull()
+                                ?: ChatHistoryConfig.DEFAULT_MAX_STORED_INTERACTIONS,
+                        retentionDays =
+                            readEnv("CHAT_HISTORY_RETENTION_DAYS")?.toIntOrNull()
+                                ?: ChatHistoryConfig.DEFAULT_RETENTION_DAYS
+                    ),
                 databasePath = readEnv("DB_FILE") ?: "data/db/vusan.db",
                 elevenLabsApiKey = elevenLabsKey,
                 giphyApiKey = readEnv("GIPHY_API_KEY"),
@@ -142,6 +155,8 @@ data class AppConfig(
         private fun resolveLlmProvider(): LlmProviderConfig {
             val raw = requireEnv("LLM_PROVIDER")
 
+            val contextWindowTokens = readEnv("LLM_CONTEXT_WINDOW_TOKENS")?.toLongOrNull()
+
             val requestTimeout =
                 (readEnv("LLM_REQUEST_TIMEOUT_SECONDS")?.toLongOrNull()
                     ?: DEFAULT_LLM_REQUEST_TIMEOUT_SECONDS).seconds
@@ -155,7 +170,8 @@ data class AppConfig(
                     model = requireEnv("LLM_MODEL"),
                     endpoint = resolveOpenAiEndpoint(),
                     reasoningEffort = resolveReasoningEffort(),
-                    requestTimeout = requestTimeout
+                    requestTimeout = requestTimeout,
+                    contextWindowTokens = contextWindowTokens
                 )
             }
 
@@ -170,7 +186,8 @@ data class AppConfig(
                 provider = hosted,
                 apiKey = requireEnv("LLM_API_KEY"),
                 model = requireEnv("LLM_MODEL"),
-                requestTimeout = requestTimeout
+                requestTimeout = requestTimeout,
+                contextWindowTokens = contextWindowTokens
             )
         }
 

@@ -1,6 +1,8 @@
 package com.helltar.vusan.agent.history
 
+import com.helltar.vusan.common.limitTo
 import kotlinx.serialization.json.Json
+import kotlinx.serialization.json.JsonElement
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.JsonPrimitive
 import kotlinx.serialization.json.jsonObject
@@ -32,6 +34,7 @@ data class ChatTurn(
 }
 
 private const val TOOL_CALL_ARG_VALUE_MAX_CHARS = 2_000
+private const val TOOL_CALL_ARGS_MAX_CHARS = 4_000
 private const val TRUNCATION_MARKER = "… [truncated]"
 
 fun toolCallArgsForHistory(rawArgs: String): String {
@@ -49,5 +52,36 @@ fun toolCallArgsForHistory(rawArgs: String): String {
             }
         )
 
-    return bounded.toString()
+    val serialized = bounded.toString()
+    if (serialized.length <= TOOL_CALL_ARGS_MAX_CHARS) return serialized
+
+    for (valueLimit in listOf(1_000, 500, 200, 80, 20)) {
+        val compact =
+            JsonObject(
+                obj.mapValues { (_, value) ->
+                    when (value) {
+                        is JsonPrimitive ->
+                            if (value.isString)
+                                JsonPrimitive(value.content.limitTo(valueLimit))
+                            else
+                                value
+
+                        else -> JsonPrimitive(value.toString().limitTo(valueLimit))
+                    }
+                }
+            ).toString()
+
+        if (compact.length <= TOOL_CALL_ARGS_MAX_CHARS) return compact
+    }
+
+    val selected = linkedMapOf<String, JsonElement>()
+
+    for ((key, value) in obj) {
+        val compactValue = JsonPrimitive(value.toString().limitTo(20))
+        val candidate = JsonObject(selected + (key to compactValue))
+        if (candidate.toString().length > TOOL_CALL_ARGS_MAX_CHARS) break
+        selected[key] = compactValue
+    }
+
+    return JsonObject(selected).toString()
 }

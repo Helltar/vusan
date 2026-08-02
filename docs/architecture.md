@@ -25,9 +25,9 @@ Telegram ──► telegram/ ──► agent/ ──► tools/ ──► externa
 - **`agent/`** — agent orchestration on top of Koog. `AgentRunner` serializes per-user turns, assembles the current
   user turn (Telegram metadata + durable memory + request), and owns every history write for it, so no other layer
   appends or clears turns behind a running turn's back; `AgentFactory` builds the `AIAgent` (system prompt + history +
-  tools); `SystemPrompt` keeps the deployment's customizable personality and the fixed delivery/tool contract in
-  separate XML-delimited blocks. `agent/history/`
-  summarizes and persists chat turns; `agent/memory/` stores durable user/group memory that survives a history clear and
+  tools) and budgets its model context; `SystemPrompt` keeps the deployment's customizable personality and the fixed
+  delivery/tool contract in separate XML-delimited blocks. `agent/history/` groups turns into complete interactions,
+  persists raw history, and maintains its semantic recap; `agent/memory/` stores durable user/group memory that survives a history clear and
   is injected as `<user_memory>`/`<group_memory>`.
 - **`tools/`** — agent-callable tools, one subpackage per capability (search, voice, vision, scheduled tasks, …).
   `ToolRegistryFactory` owns clients and builds a per-request registry from required tools plus optional tools whose
@@ -87,21 +87,26 @@ A normal user message travels:
 4. **Run** — `AgentRunner.handle` takes the per-user lock (or returns "busy"), loads durable memory
    (`agent/memory/MemoryRepository` — the sender's user memory always, plus the group's memory in non-private chats),
    and places it with `<message_context>` immediately before the current request in one user-role turn.
-   `AgentFactory.build` constructs a Koog `AIAgent` with the stable system prompt, an older `<conversation_recap>` at
-   user priority, recent role-preserving history (`agent/history/ChatHistory`), current time, and the per-request tool
-   registry
-   (`ToolRegistryFactory.buildRegistry`).
+   `AgentFactory.prepare` builds the per-request tool registry and estimates the fixed system/tool/current-turn cost.
+   The history planner reserves room for output, future tool calls, and estimation error, then admits only complete
+   interactions. If an older prefix no longer fits or exceeds the configured recent count,
+   `LlmConversationCompactor` merges it into the persisted `<conversation_recap>` before `AgentFactory.build` creates
+   the Koog `AIAgent`. Native catalog context sizes are used automatically; `LLM_CONTEXT_WINDOW_TOKENS` supplies or
+   overrides the value for changing and OpenAI-compatible models.
 5. **Act** — during the agent loop, tools run and push results into the request's `BotOutbox`; tool calls/results are
-   recorded for history. The custom `single_run` strategy (`AgentFactory`)
-   guards against flaky models in two ways:
+   recorded for history. Live textual tool results share a cumulative bound derived from the reserved agent-growth
+   budget before later LLM calls. The custom `single_run` strategy (`AgentFactory`) guards against flaky models in two ways:
     - a tool call missing its declared required parameters (flaky models emit empty-arg siblings when they try to call
       tools in parallel) is short-circuited into a `ValidationError` result instead of being executed, so the run stays
       clean and the follow-up request stays well-formed;
     - a turn that ends having delivered nothing — no `sendMessage`, media, or reaction, and empty assistant text (flaky
       providers return an empty completion after a batch of tool results) — gets one nudge to actually deliver before
       finishing, so a full turn of research does not collapse into silence.
-6. **Collect** — `AgentRunner` persists the produced history turns through `ChatHistoryRepository` while it still holds
-   the per-user turn lock, then returns an `AgentResult` (outputs + optional comment). Persisting inside the lock is
+6. **Collect** — `AgentRunner` persists the produced history as one interaction through `ChatHistoryRepository` while
+   it still holds the per-user turn lock. Delivery tools whose payload already became assistant history are omitted;
+   other tool events are stored as bounded complete call/result pairs. Only the newest two interactions replay those
+   raw pairs, while older recent interactions replay user/assistant text. Summarized raw interactions are pruned by
+   whole interaction after the configured count or age. Persisting inside the lock is
    what makes a concurrent `/clear` safe: no caller can append a turn into a history that was just wiped.
 7. **Deliver** — `TelegramDelivery.send` routes each `BotOutput` to the chat, or to the user's private chat when a tool
    requested it, anchoring replies to the original message.
@@ -156,7 +161,8 @@ A normal user message travels:
   the agent-callable `clearChatHistory` tool. Both paths also advance the caller's persisted history revision, which
   invalidates unanswered choices created before the clear. The command goes through `AgentRunner.clearHistory` so it
   waits for the caller's turn lock; a turn already running would otherwise persist itself after the wipe. The tool
-  runs inside a turn and so keeps calling the repository directly.
+  runs inside a turn and so keeps calling the repository directly. The persisted semantic recap is deleted with the
+  raw transcript.
 - **Agent-created inline choices** — `askWithButtons` enqueues a plain-text question plus two to ten answer buttons.
   Callback data carries the intended user id, history revision, and option index; the labels remain in Telegram's
   message keyboard, while the current revision lives in `chat_history_state`, so an unanswered choice survives a bot
@@ -164,13 +170,16 @@ A normal user message travels:
   and the revision, atomically claims the message, replaces its keyboard with the selected label, answers the callback,
   and wraps the question/selection as `<inline_choice>` for a queued `AgentRunner` turn. The question and its options
   are persisted as assistant history, and the follow-up answer is delivered as a reply to that choice message.
-- **History summarization** — `agent/history/ChatHistory.summarizeForPrompt` keeps recent turns verbatim and condenses
-  older ones into a user-level `<conversation_recap>` so mixed user/assistant content is not mislabeled as an assistant
-  instruction; tool-call/result pairs stay anchored.
+- **History compaction** — `agent/history/ChatHistory.planHistoryForPrompt` token-budgets complete recent interactions.
+  `LlmConversationCompactor` rewrites the previous recap plus the next omitted interaction prefix into a standalone
+  semantic recap and advances a database checkpoint only after that model call succeeds. Failed compaction never
+  deletes source rows. Raw transcript retention and model-visible context are deliberately separate. The recap is
+  injected at user priority so mixed user/assistant history is not mislabeled as an assistant instruction. An initial
+  context-overflow failure retries once with recap only, but never after a tool ran, which avoids duplicated actions.
 - **LLM provider resolution** — `config/LlmRuntime.resolveLlmRuntime` turns
   `AppConfig.llmProvider` into a Koog client/model/params triple. Native clients cover OpenAI, Anthropic, Google, and
   DeepSeek — models are matched against each client's predefined catalog. `openai-compatible` keeps a hand-declared
-  model for any other server (llama.cpp, Ollama, …). Its endpoint capability and params type are declared as a pair
+  model for any other server (llama.cpp, Ollama, …), with a configurable context size. Its endpoint capability and params type are declared as a pair
   (`OpenAIChatParams` → `/v1/chat/completions`, `OpenAIResponsesParams` → `/v1/responses`), because the Koog client reads
   the route off the params type and rejects params the model does not declare an endpoint for. Direct OpenAI requests
   share a stable `prompt_cache_key`; for GPT-5.6 and later, `config/OpenAiPromptCaching` also marks the first stable
@@ -205,7 +214,7 @@ model-authored and untrusted — keep it that way.
 ## Startup
 
 `Main.kt` wires everything in order: load `AppConfig` → connect `Db` → create the `Http` client and LLM runtime → build
-repositories, `ToolRegistryFactory`, `AgentFactory`, `AgentRunner` → create `TaskMenuHandler` and
+repositories, context policy, conversation compactor, `ToolRegistryFactory`, `AgentFactory`, `AgentRunner` → create `TaskMenuHandler` and
 `InlineChoiceHandler`, and optionally enable voice transcription → start `TelegramBotRunner` and launch
 `TaskScheduler`, then block on the bot job until shutdown (closing the executor, HTTP client, and DB in `finally`).
 
@@ -224,7 +233,7 @@ A symptom-to-source map for finding the right file fast. Paths are under
 | A specific tool misbehaves                                                       | `tools/<feature>/<Feature>Tools.kt` for the tool surface, plus its `<Feature>Client.kt` for the external call                                                                                                                                                                                         |
 | Code execution times out, says "busy", or loses produced files                   | `tools/sandbox/SandboxClient.kt` (HTTP call + wait budget), then the service in [`sandbox/`](../sandbox/): `main.ts` (worker pool, `503` when none free) and `worker.ts` (Pyodide setup, output caps)                                                                                                 |
 | Wrong language in a canned reply (busy/error/voice/start/task menu)              | `i18n/Language.kt` (language selection) + `i18n/Messages.kt` (the strings)                                                                                                                                                                                                                            |
-| Bot forgets context or the history recap looks wrong                             | `agent/history/ChatHistory.kt` (summarize/slice) + `agent/history/ChatHistoryRepository.kt` (storage)                                                                                                                                                                                                 |
+| Bot forgets context or the history recap looks wrong                             | `agent/history/ChatHistory.kt` (budget/selection) + `agent/history/ConversationCompactor.kt` (semantic recap) + `agent/history/ChatHistoryRepository.kt` (storage/checkpoint)                                                                                                                         |
 | Voice/audio not transcribed                                                      | `telegram/inbound/VoiceTranscriber.kt` + `stt/OpenAiWhisperClient.kt` (needs `OPENAI_STT_API_KEY`); for a video's sound `tools/vision/VideoAudioTranscriber.kt`                                                                                                                                                                                                            |
 | Bot cannot see what is in a video                                                | `tools/vision/VisionTools.kt` (`describeVideo` guards and the preview-frame fallback), `tools/vision/VideoVisionClient.kt` (frames + transcript prompt), `tools/vision/VideoSampler.kt` (ffmpeg), `telegram/inbound/ReplyContext.kt` (which media becomes an `AttachedFile`)                                  |
 | Web search picks the wrong provider, or results are thin                        | the `@LLMDescription` text that ranks them: `tools/tavily/TavilyToolDescriptions.kt` (`webSearch`, the default) and `tools/searxng/SearxngToolDescriptions.kt` (`metaSearch`, the fallback)                                                                                                           |

@@ -114,7 +114,7 @@ Items marked *(opt-in)* need an API key or an extra service, see
 
 ### Remembers
 
-- **Conversation history** — recent messages, so replies keep context.
+- **Conversation history** — recent messages and a durable recap, so replies keep context.
 - **Memory** — separate from the history: facts it keeps about you, and about the group. Clearing
   the history leaves them; ask it to forget one or all of them.
 - **Scheduled tasks** — acts on its own later: once, on an interval, or on a cron schedule. You can

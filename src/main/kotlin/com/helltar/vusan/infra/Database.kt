@@ -2,6 +2,7 @@ package com.helltar.vusan.infra
 
 import com.helltar.vusan.config.AppConfig
 import com.helltar.vusan.infra.tables.ChatHistoryStateTable
+import com.helltar.vusan.infra.tables.ChatHistorySummaryTable
 import com.helltar.vusan.infra.tables.ChatMessagesTable
 import com.helltar.vusan.infra.tables.MemoryTable
 import com.helltar.vusan.infra.tables.ScheduledTasksTable
@@ -66,10 +67,23 @@ object Db {
                 }
             )
 
-            val tables = listOf(ChatMessagesTable, ChatHistoryStateTable, ScheduledTasksTable, MemoryTable)
+            val tables =
+                listOf(
+                    ChatMessagesTable,
+                    ChatHistoryStateTable,
+                    ChatHistorySummaryTable,
+                    ScheduledTasksTable,
+                    MemoryTable
+                )
 
             suspendTransaction(newDatabase) {
-                SchemaUtils.create(ChatMessagesTable, ChatHistoryStateTable, ScheduledTasksTable, MemoryTable)
+                SchemaUtils.create(
+                    ChatMessagesTable,
+                    ChatHistoryStateTable,
+                    ChatHistorySummaryTable,
+                    ScheduledTasksTable,
+                    MemoryTable
+                )
 
                 // `create` skips a table that already exists, so on an upgraded database the schema change
                 // has to be applied by hand: new columns first, then the indices that reference them.
