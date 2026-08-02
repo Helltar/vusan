@@ -86,7 +86,9 @@ A normal user message travels:
    `TelegramBotRunner.dispatchToAgent` assembles the agent input and the shorter history input.
 4. **Run** — `AgentRunner.handle` takes the per-user lock (or returns "busy"), loads durable memory
    (`agent/memory/MemoryRepository` — the sender's user memory always, plus the group's memory in non-private chats),
-   and places it with `<message_context>` immediately before the current request in one user-role turn.
+   and places it with `<message_context>` immediately before the current request in one user-role turn. That metadata
+   also carries `last_exchange` — how long ago this user last spoke with the bot — but only once the gap is long
+   enough to be worth noticing, so ordinary back-and-forth stays free of it.
    `AgentFactory.prepare` builds the per-request tool registry and estimates the fixed system/tool/current-turn cost.
    The history planner reserves room for output, future tool calls, and estimation error, then admits only complete
    interactions. If an older prefix no longer fits or exceeds the configured recent count,

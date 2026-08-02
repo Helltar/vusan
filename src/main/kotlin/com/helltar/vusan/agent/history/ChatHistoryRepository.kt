@@ -173,6 +173,19 @@ class ChatHistoryRepository {
         removableIds.size
     }
 
+    // when this user last exchanged anything with the bot. rows are inserted in turn order, so the
+    // newest id carries the newest timestamp and no aggregate is needed. the current turn is stored
+    // only after the run, so during a turn this is the previous exchange.
+    suspend fun lastInteractionAt(userId: Long): Instant? = dbTransaction {
+        ChatMessagesTable
+            .select(ChatMessagesTable.createdAt)
+            .where { ChatMessagesTable.userId eq userId }
+            .orderBy(ChatMessagesTable.id to SortOrder.DESC)
+            .limit(1)
+            .firstOrNull()
+            ?.get(ChatMessagesTable.createdAt)
+    }
+
     suspend fun revision(userId: Long): Long = dbTransaction {
         ChatHistoryStateTable
             .select(ChatHistoryStateTable.revision)

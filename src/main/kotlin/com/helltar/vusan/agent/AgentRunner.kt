@@ -129,7 +129,12 @@ class AgentRunner(
 
         val userMemory = memory.load(MemoryScope.USER, request.userId)
         val chatMemory = if (context.chatIsPrivate) emptyList() else memory.load(MemoryScope.CHAT, request.chatId)
-        val currentTurn = currentTurnPrompt(request.prompt, request.messageContext, userMemory, chatMemory)
+
+        // the turn is stored only after the run, so this still points at the previous exchange.
+        val messageContext =
+            request.messageContext?.copy(previousExchangeAt = history.lastInteractionAt(request.userId))
+
+        val currentTurn = currentTurnPrompt(request.prompt, messageContext, userMemory, chatMemory)
         val outbox = BotOutbox()
         val preparation = agentFactory.prepare(context, outbox, currentTurn)
         val historyPlan = historyPlanForPrompt(request.userId, preparation.tokenBudget.historyTokens)

@@ -1,5 +1,7 @@
 package com.helltar.vusan.agent
 
+import java.time.Duration
+import java.time.Instant
 import kotlin.test.Test
 import kotlin.test.assertFalse
 import kotlin.test.assertTrue
@@ -49,4 +51,42 @@ class MessageContextTest {
         assertTrue(prompt.contains("- display_name: Test User"))
         assertFalse(prompt.contains("weekend\nplans"))
     }
+
+    @Test
+    fun `toPromptBlock reports a long pause since the previous exchange`() {
+        val prompt = promptWithPreviousExchange(Duration.ofDays(3))
+
+        assertTrue(prompt.contains("- last_exchange: 3 days ago"), prompt)
+    }
+
+    @Test
+    fun `toPromptBlock keeps ordinary back-and-forth free of a pause line`() {
+        val prompt = promptWithPreviousExchange(Duration.ofMinutes(20))
+
+        assertFalse(prompt.contains("last_exchange"), prompt)
+    }
+
+    @Test
+    fun `toPromptBlock reports a pause of hours in hours`() {
+        val prompt = promptWithPreviousExchange(Duration.ofHours(9))
+
+        assertTrue(prompt.contains("- last_exchange: 9 hours ago"), prompt)
+    }
+
+    @Test
+    fun `toPromptBlock has no pause line for a first-ever exchange`() {
+        val prompt =
+            MessageContext(chatId = 1, chatType = "private", isPrivate = true, userId = 2).toPromptBlock()
+
+        assertFalse(prompt.contains("last_exchange"), prompt)
+    }
+
+    private fun promptWithPreviousExchange(ago: Duration): String =
+        MessageContext(
+            chatId = 1,
+            chatType = "private",
+            isPrivate = true,
+            userId = 2,
+            previousExchangeAt = Instant.now().minus(ago)
+        ).toPromptBlock()
 }
