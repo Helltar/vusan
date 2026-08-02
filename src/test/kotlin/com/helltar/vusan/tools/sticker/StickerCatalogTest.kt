@@ -172,6 +172,32 @@ class StickerCatalogTest {
     }
 
     @Test
+    fun `every set the chat uses is represented in the index`() = runBlocking {
+        val packs = listOf("pack_one", "pack_two", "pack_three")
+        val client = FakeStickerClient(setOf = emptyList())
+        val catalog = catalog(client, visionAnswer = "penguin waving")
+
+        packs.forEach { pack ->
+            client.setOf = (1..2).map { sticker("$pack-$it", set = pack) }
+            catalog.observe(CHAT, sticker("$pack-1", set = pack))
+        }
+
+        awaitDescriptionPass(catalog)
+
+        val index = assertNotNull(catalog.indexBlockFor(CHAT))
+        val shown = shownIds(index).map { setNameOf(it) }.toSet()
+
+        // how the index is shared once it overflows is pinned by RoundRobinTest, which does not
+        // have to wait on a vision pass per sticker
+        assertEquals(packs.toSet(), shown)
+    }
+
+    private fun shownIds(index: String): List<Long> =
+        index.lines()
+            .filter { it.startsWith("#") }
+            .map { it.removePrefix("#").substringBefore(' ').toLong() }
+
+    @Test
     fun `a rejected sticker gets its set re-read without waiting for the daily check`() = runBlocking {
         val client = FakeStickerClient(setOf = listOf(sticker("a")))
         val catalog = catalog(client, visionAnswer = "penguin waving")
@@ -234,7 +260,15 @@ class StickerCatalogTest {
             }
         }
 
-    private fun sticker(id: String, type: String = "regular"): Sticker =
+    private suspend fun setNameOf(stickerId: Long): String =
+        Db.dbTransaction {
+            StickersTable
+                .select(StickersTable.setName)
+                .where { StickersTable.id eq stickerId }
+                .single()[StickersTable.setName]
+        }
+
+    private fun sticker(id: String, type: String = "regular", set: String = SET_NAME): Sticker =
         Sticker.builder()
             .fileId("file-$id")
             .fileUniqueId("unique-$id")
@@ -244,7 +278,7 @@ class StickerCatalogTest {
             .isAnimated(false)
             .isVideo(false)
             .emoji("😂")
-            .setName(SET_NAME)
+            .setName(set)
             .thumbnail(PhotoSize.builder().fileId("thumb-$id").fileUniqueId("thumb-unique-$id").width(1).height(1).build())
             .build()
 

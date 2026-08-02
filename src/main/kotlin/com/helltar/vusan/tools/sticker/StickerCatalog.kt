@@ -20,6 +20,7 @@ import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
+import org.jetbrains.exposed.v1.core.ResultRow
 import org.jetbrains.exposed.v1.core.SortOrder
 import org.jetbrains.exposed.v1.core.and
 import org.jetbrains.exposed.v1.core.eq
@@ -84,6 +85,30 @@ private val REFUSAL_REGEX =
     )
 
 /**
+ * Take from each source in turn until [limit] is reached, so a long source cannot crowd out a short one.
+ * Sources are drawn in the order given, and one that runs out simply drops out of the rotation.
+ */
+internal fun <T> roundRobin(sources: List<List<T>>, limit: Int): List<T> {
+    require(limit >= 0) { "limit must not be negative" }
+
+    val queues = sources.map { it.iterator() }.filter { it.hasNext() }
+
+    return buildList {
+        while (size < limit) {
+            val before = size
+
+            for (queue in queues) {
+                if (size >= limit) break
+                if (queue.hasNext()) add(queue.next())
+            }
+
+            // every source is exhausted, so the result is simply smaller than the limit
+            if (size == before) break
+        }
+    }
+}
+
+/**
  * The stickers this bot knows how to send, learned from the ones people actually use.
  *
  * A sticker seen in an allowlisted chat reveals its set, the set is pulled in whole, and each of its
@@ -99,7 +124,7 @@ class StickerCatalog(
         val log = KotlinLogging.logger {}
     }
 
-    data class StickerEntry(val id: Long, val emoji: String?, val description: String)
+    data class StickerEntry(val id: Long, val setName: String, val emoji: String?, val description: String)
 
     /** Record a sticker seen in a chat, pulling in its set the first time that set shows up. */
     suspend fun observe(chatId: Long, sticker: Sticker) {
@@ -418,21 +443,26 @@ class StickerCatalog(
 
         if (setNames.isEmpty()) return@dbTransaction emptyList()
 
-        StickersTable
-            .selectAll()
-            .where { (StickersTable.setName inList setNames) and StickersTable.description.isNotNull() }
-            .orderBy(StickersTable.id to SortOrder.ASC)
-            .limit(MAX_INDEX_ENTRIES)
-            .mapNotNull { row ->
-                row[StickersTable.description]?.let { description ->
-                    StickerEntry(
-                        id = row[StickersTable.id].value,
-                        emoji = row[StickersTable.emoji],
-                        description = description
-                    )
-                }
-            }
+        val bySet =
+            StickersTable
+                .selectAll()
+                .where { (StickersTable.setName inList setNames) and StickersTable.description.isNotNull() }
+                .orderBy(StickersTable.id to SortOrder.ASC)
+                .mapNotNull { row -> row.toStickerEntryOrNull() }
+                .groupBy { it.setName }
+
+        roundRobin(setNames.map { bySet[it].orEmpty() }, MAX_INDEX_ENTRIES).sortedBy { it.id }
     }
+
+    private fun ResultRow.toStickerEntryOrNull(): StickerEntry? =
+        this[StickersTable.description]?.let { description ->
+            StickerEntry(
+                id = this[StickersTable.id].value,
+                setName = this[StickersTable.setName],
+                emoji = this[StickersTable.emoji],
+                description = description
+            )
+        }
 
     private suspend fun pendingDescriptions(): List<PendingSticker> = dbTransaction {
         StickersTable

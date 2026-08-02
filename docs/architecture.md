@@ -159,7 +159,8 @@ A normal user message travels:
   actually use — records the set, and pulls it in whole through `getStickerSet`. Only the set is stored, never message
   content. A background worker then describes each sticker's thumbnail once through the vision model and caches the
   result by `file_unique_id`; `AgentRunner` puts the described stickers for that chat into the trailing system context,
-  and `sendSticker` resends one by `file_id`. Without a vision runtime the catalog is never constructed and the tool is
+  and `sendSticker` resends one by `file_id`. That index holds the chat's most recently used sets, filled
+  round-robin so a set someone is using right now is never crowded out by one learned earlier. Without a vision runtime the catalog is never constructed and the tool is
   never registered, matching the vision tools. A sticker the model refuses to describe, or one that repeatedly fails,
   is counted out after `describe_attempts` so it neither enters the index nor blocks the queue behind it. The same
   worker re-reads each set a day after it was last checked: a `file_id` is only a handle and a set's owner can edit or
