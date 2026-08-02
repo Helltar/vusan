@@ -10,8 +10,8 @@
   <a href="https://github.com/Helltar/vusan/pkgs/container/vusan"><img src="https://img.shields.io/badge/ghcr-vusan-blue?logo=docker" alt="GHCR"></a>
 </p>
 
-Vusan is a Telegram AI agent for private chats and groups. You ask in plain language; it picks the
-tools itself — search, code, voice, images, and more.
+Vusan is a personal AI agent that lives in Telegram. Talk to it in a private chat or a group; it
+picks its own tools — search, code, voice, images, and more.
 
 Try it live in the [Vusan Playground](https://t.me/+56qi5dDwsNszZWFi) Telegram group.
 
@@ -107,8 +107,8 @@ Items marked *(opt-in)* need an API key or an extra service, see
   and continue as soon as you tap one.
 - **Polls and quizzes** — creates real Telegram polls and quizzes, not a text imitation.
 - **Reactions** — sometimes an emoji on your message is the whole answer.
-- **Stickers** *(opt-in)* — picks up the sticker sets your chat actually uses and answers with one when a wordless
-  reaction fits better than words. Needs image understanding to be available.
+- **Stickers** *(opt-in)* — picks up the sticker sets your chat actually uses and answers with one
+  when a wordless reaction fits better than words. Requires image understanding.
 - **Files and links** — sends what it wrote as a document, or downloads a link and passes it on
   as a file.
 - **Long structured answers** — headings, tables, and checklists when a reply is genuinely big.
@@ -117,12 +117,14 @@ Items marked *(opt-in)* need an API key or an extra service, see
 ### Remembers
 
 - **Conversation history** — recent messages and a durable recap, so replies keep context.
+- **Sense of time** — notices when you have not written for a while instead of treating every
+  message as if it followed immediately.
 - **Memory** — separate from the history: facts it keeps about you, and about the group. Clearing
   the history leaves them; ask it to forget one or all of them.
 - **Scheduled tasks** — acts on its own later: once, on an interval, or on a cron schedule. You can
   pause, resume, cancel, or edit them.
-- **Coming back to you** — when you mention something with a natural later moment — an exam tomorrow, an interview
-  on Friday — it can set itself a reminder to ask how it went.
+- **Follow-ups** — mention an exam tomorrow or an interview on Friday, and it can come back later
+  to ask how it went.
 
 ## Stack
 
