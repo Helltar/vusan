@@ -7,6 +7,7 @@ import com.helltar.vusan.infra.tables.ChatMessagesTable
 import com.helltar.vusan.infra.tables.ChatStickerSetsTable
 import com.helltar.vusan.infra.tables.MemoryTable
 import com.helltar.vusan.infra.tables.ScheduledTasksTable
+import com.helltar.vusan.infra.tables.StickerSetsTable
 import com.helltar.vusan.infra.tables.StickersTable
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.sync.Mutex
@@ -77,6 +78,7 @@ object Db {
                     ScheduledTasksTable,
                     MemoryTable,
                     StickersTable,
+                    StickerSetsTable,
                     ChatStickerSetsTable
                 )
 

@@ -5,10 +5,12 @@ import com.helltar.vusan.common.rethrowIfCancellation
 import com.helltar.vusan.common.xmlBlock
 import com.helltar.vusan.infra.Db.dbTransaction
 import com.helltar.vusan.infra.tables.ChatStickerSetsTable
+import com.helltar.vusan.infra.tables.StickerSetsTable
 import com.helltar.vusan.infra.tables.StickersTable
 import com.helltar.vusan.request.AttachedFile
 import com.helltar.vusan.request.AttachedFileKind
 import com.helltar.vusan.telegram.api
+import com.helltar.vusan.telegram.delivery.isStickerSetGone
 import com.helltar.vusan.telegram.downloadFileBytes
 import com.helltar.vusan.tools.vision.EMPTY_VISION_DESCRIPTION
 import com.helltar.vusan.tools.vision.ImageVisionClient
@@ -27,6 +29,7 @@ import org.jetbrains.exposed.v1.core.isNull
 import org.jetbrains.exposed.v1.core.less
 import org.jetbrains.exposed.v1.core.plus
 import org.jetbrains.exposed.v1.jdbc.batchInsert
+import org.jetbrains.exposed.v1.jdbc.deleteWhere
 import org.jetbrains.exposed.v1.jdbc.insert
 import org.jetbrains.exposed.v1.jdbc.select
 import org.jetbrains.exposed.v1.jdbc.selectAll
@@ -35,6 +38,7 @@ import org.telegram.telegrambots.meta.api.methods.stickers.GetStickerSet
 import org.telegram.telegrambots.meta.api.objects.stickers.Sticker
 import org.telegram.telegrambots.meta.generics.TelegramClient
 import java.time.Instant
+import kotlin.time.Duration.Companion.hours
 import kotlin.time.Duration.Companion.milliseconds
 import kotlin.time.Duration.Companion.seconds
 
@@ -54,8 +58,13 @@ private const val MAX_DESCRIPTION_CHARS = 90
 
 private const val DESCRIPTIONS_PER_PASS = 20
 private const val MAX_DESCRIBE_ATTEMPTS = 5
+private const val SETS_PER_REFRESH_PASS = 3
 private val DESCRIPTION_PAUSE = 300.milliseconds
 private val BACKLOG_POLL_INTERVAL = 60.seconds
+
+// sticker sets change rarely, and re-reading one costs an API call, so this only has to be often
+// enough that a deleted set stops being offered within a day.
+private val SET_REFRESH_INTERVAL = 24.hours
 
 private const val SKIP_SENTINEL = "SKIP"
 
@@ -99,7 +108,12 @@ class StickerCatalog(
 
         runCatching {
             recordChatUsage(chatId, setName)
-            if (!isSetStored(setName)) storeSet(setName)
+
+            if (!isSetStored(setName)) {
+                val stickers = fetchSet(setName)
+                syncSet(setName, stickers)
+                log.info { "learned sticker set=[$setName] (${stickers.size} stickers)" }
+            }
         }.onFailure {
             it.rethrowIfCancellation()
             log.warn(it) { "failed to learn sticker set=[$setName] from chat=$chatId" }
@@ -149,9 +163,44 @@ class StickerCatalog(
                         log.warn(it) { "sticker description pass failed" }
                     }
 
+                runCatching { refreshStaleSets() }
+                    .onFailure {
+                        it.rethrowIfCancellation()
+                        log.warn(it) { "sticker set refresh pass failed" }
+                    }
+
                 delay(BACKLOG_POLL_INTERVAL)
             }
         }
+
+    /**
+     * Re-read the sets learned longest ago. A `file_id` is only a handle, and a set's owner can add to
+     * it, remove from it, or delete it outright, so what the catalog offers the model has to be checked
+     * against Telegram now and then — otherwise the bot keeps proposing stickers whose send will fail.
+     */
+    private suspend fun refreshStaleSets() {
+        for (setName in staleSetNames()) {
+            val stickers =
+                runCatching { fetchSet(setName) }
+                    .onFailure { error ->
+                        error.rethrowIfCancellation()
+
+                        if (error.isStickerSetGone()) {
+                            forgetSet(setName)
+                            log.info { "sticker set=[$setName] no longer exists; dropped from the catalog" }
+                        } else {
+                            // a transient failure is no reason to throw away described stickers; back off
+                            // instead of retrying it on every poll.
+                            log.warn { "could not refresh sticker set=[$setName]: ${error.message}" }
+                            markRefreshed(setName)
+                        }
+                    }
+                    .getOrNull()
+                    ?: continue
+
+            syncSet(setName, stickers)
+        }
+    }
 
     private suspend fun describePending() {
         val pending = pendingDescriptions()
@@ -217,27 +266,49 @@ class StickerCatalog(
                 !equals(EMPTY_VISION_DESCRIPTION, ignoreCase = true) &&
                 !REFUSAL_REGEX.containsMatchIn(this)
 
-    private suspend fun storeSet(setName: String) {
-        val set = client.api { executeAsync(GetStickerSet.builder().name(setName).build()) }
+    private suspend fun fetchSet(setName: String): List<Sticker> =
+        client.api { executeAsync(GetStickerSet.builder().name(setName).build()) }
+            .stickers
+            .orEmpty()
+            .filter { it.type == null || it.type == REGULAR_STICKER }
 
-        val stickers =
-            set.stickers
-                .orEmpty()
-                .filter { it.type == null || it.type == REGULAR_STICKER }
-                .take(MAX_STICKERS_PER_SET)
+    // [live] is the set as Telegram has it now, uncapped: what is stored has to be judged against the
+    // whole set, or a sticker pushed past the cap by a reorder would look deleted and lose its description.
+    private suspend fun syncSet(setName: String, live: List<Sticker>) = dbTransaction {
+        val liveByUniqueId = live.associateBy { it.fileUniqueId }
 
-        if (stickers.isEmpty()) return
+        val stored =
+            StickersTable
+                .selectAll()
+                .where { StickersTable.setName eq setName }
+                .associate {
+                    it[StickersTable.fileUniqueId] to
+                            StoredHandles(it[StickersTable.fileId], it[StickersTable.thumbnailFileId])
+                }
 
-        dbTransaction {
-            val known =
-                StickersTable
-                    .select(StickersTable.fileUniqueId)
-                    .where { StickersTable.fileUniqueId inList stickers.map { it.fileUniqueId } }
-                    .mapTo(mutableSetOf()) { it[StickersTable.fileUniqueId] }
+        val gone = stored.keys - liveByUniqueId.keys
 
-            val fresh = stickers.filter { it.fileUniqueId !in known }
-            if (fresh.isEmpty()) return@dbTransaction
+        if (gone.isNotEmpty()) {
+            StickersTable.deleteWhere {
+                (StickersTable.setName eq setName) and (StickersTable.fileUniqueId inList gone)
+            }
 
+            log.info { "dropped ${gone.size} sticker(s) removed from set=[$setName]" }
+        }
+
+        liveByUniqueId.forEach { (uniqueId, sticker) ->
+            val handles = stored[uniqueId] ?: return@forEach
+            if (handles.fileId == sticker.fileId && handles.thumbnailFileId == sticker.thumbnail?.fileId) return@forEach
+
+            StickersTable.update({ StickersTable.fileUniqueId eq uniqueId }) {
+                it[fileId] = sticker.fileId
+                it[thumbnailFileId] = sticker.thumbnail?.fileId
+            }
+        }
+
+        val fresh = live.take(MAX_STICKERS_PER_SET).filter { it.fileUniqueId !in stored }
+
+        if (fresh.isNotEmpty()) {
             StickersTable.batchInsert(fresh) { sticker ->
                 this[StickersTable.fileUniqueId] = sticker.fileUniqueId
                 this[StickersTable.fileId] = sticker.fileId
@@ -247,16 +318,52 @@ class StickerCatalog(
             }
         }
 
-        log.info { "learned sticker set=[$setName] (${stickers.size} stickers)" }
+        markSetRefreshed(setName)
+    }
+
+    private suspend fun forgetSet(setName: String) = dbTransaction {
+        StickersTable.deleteWhere { StickersTable.setName eq setName }
+        ChatStickerSetsTable.deleteWhere { ChatStickerSetsTable.setName eq setName }
+        StickerSetsTable.deleteWhere { StickerSetsTable.name eq setName }
+        Unit
+    }
+
+    private suspend fun markRefreshed(setName: String) = dbTransaction { markSetRefreshed(setName) }
+
+    private fun markSetRefreshed(setName: String) {
+        val now = Instant.now()
+
+        val updated =
+            StickerSetsTable.update({ StickerSetsTable.name eq setName }) {
+                it[refreshedAt] = now
+            }
+
+        if (updated == 0) {
+            StickerSetsTable.insert {
+                it[name] = setName
+                it[refreshedAt] = now
+            }
+        }
+    }
+
+    private suspend fun staleSetNames(): List<String> = dbTransaction {
+        StickerSetsTable
+            .select(StickerSetsTable.name)
+            .where { StickerSetsTable.refreshedAt less Instant.now().minusSeconds(SET_REFRESH_INTERVAL.inWholeSeconds) }
+            .orderBy(StickerSetsTable.refreshedAt to SortOrder.ASC)
+            .limit(SETS_PER_REFRESH_PASS)
+            .map { it[StickerSetsTable.name] }
     }
 
     private suspend fun isSetStored(setName: String): Boolean = dbTransaction {
-        StickersTable
-            .select(StickersTable.id)
-            .where { StickersTable.setName eq setName }
+        StickerSetsTable
+            .select(StickerSetsTable.id)
+            .where { StickerSetsTable.name eq setName }
             .limit(1)
             .any()
     }
+
+    private data class StoredHandles(val fileId: String, val thumbnailFileId: String?)
 
     private suspend fun recordChatUsage(chatId: Long, setName: String) = dbTransaction {
         val now = Instant.now()

@@ -161,7 +161,11 @@ A normal user message travels:
   result by `file_unique_id`; `AgentRunner` puts the described stickers for that chat into the trailing system context,
   and `sendSticker` resends one by `file_id`. Without a vision runtime the catalog is never constructed and the tool is
   never registered, matching the vision tools. A sticker the model refuses to describe, or one that repeatedly fails,
-  is counted out after `describe_attempts` so it neither enters the index nor blocks the queue behind it.
+  is counted out after `describe_attempts` so it neither enters the index nor blocks the queue behind it. The same
+  worker re-reads each set a day after it was last checked: a `file_id` is only a handle and a set's owner can edit or
+  delete it, so stickers that disappeared are dropped, changed handles are refreshed, and a set Telegram reports as
+  gone (`STICKERSET_INVALID`) is forgotten entirely. Only that specific answer counts as gone — any other failure
+  backs off instead of discarding descriptions already paid for.
 - **Task menu** — `/tasks` bypasses the LLM and asks `TaskMenuHandler` to render the caller's enabled tasks. Private
   chats show all of that user's tasks; groups show only their tasks created in that chat. Callback data carries the
   menu owner, every action checks ownership and group scope, and Telegram is always sent an `answerCallbackQuery`.

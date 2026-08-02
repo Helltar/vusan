@@ -4,6 +4,7 @@ import com.helltar.vusan.config.AppConfig
 import com.helltar.vusan.config.HostedLlmProvider
 import com.helltar.vusan.config.LlmProviderConfig
 import com.helltar.vusan.infra.Db
+import com.helltar.vusan.infra.tables.StickerSetsTable
 import com.helltar.vusan.infra.tables.StickersTable
 import com.helltar.vusan.tools.vision.FakePromptExecutor
 import com.helltar.vusan.tools.vision.ImageVisionClient
@@ -13,18 +14,26 @@ import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.withTimeout
+import org.jetbrains.exposed.v1.core.eq
+import org.jetbrains.exposed.v1.jdbc.select
 import org.jetbrains.exposed.v1.jdbc.selectAll
+import org.jetbrains.exposed.v1.jdbc.update
 import org.telegram.telegrambots.meta.api.methods.GetFile
 import org.telegram.telegrambots.meta.api.methods.stickers.GetStickerSet
+import org.telegram.telegrambots.meta.api.objects.ApiResponse
 import org.telegram.telegrambots.meta.api.objects.File
 import org.telegram.telegrambots.meta.api.objects.photo.PhotoSize
 import org.telegram.telegrambots.meta.api.objects.stickers.Sticker
 import org.telegram.telegrambots.meta.api.objects.stickers.StickerSet
+import org.telegram.telegrambots.meta.exceptions.TelegramApiRequestException
 import org.telegram.telegrambots.meta.generics.TelegramClient
 import java.io.ByteArrayInputStream
+import java.io.Serializable
 import java.lang.reflect.Proxy
 import java.nio.file.Files
 import java.nio.file.Path
+import java.time.Instant
+import java.time.temporal.ChronoUnit
 import java.util.concurrent.CompletableFuture
 import kotlin.test.AfterTest
 import kotlin.test.BeforeTest
@@ -38,6 +47,7 @@ import kotlin.time.Duration.Companion.seconds
 
 private const val CHAT = -100L
 private const val OTHER_CHAT = -200L
+private const val SET_NAME = "vusan_test_set"
 
 class StickerCatalogTest {
 
@@ -110,22 +120,88 @@ class StickerCatalogTest {
         assertNull(catalog.indexBlockFor(CHAT))
     }
 
+    @Test
+    fun `a deleted sticker set is dropped from the catalog`() = runBlocking {
+        val client = FakeStickerClient(setOf = listOf(sticker("a"), sticker("b")))
+        val catalog = catalog(client, visionAnswer = "penguin waving")
+
+        catalog.observe(CHAT, sticker("a"))
+        awaitDescriptionPass(catalog)
+        assertNotNull(catalog.indexBlockFor(CHAT))
+
+        client.setGone = true
+        backdateSetRefresh()
+        awaitWorker(catalog) { storedStickers().isEmpty() }
+
+        assertNull(catalog.indexBlockFor(CHAT))
+    }
+
+    @Test
+    fun `a sticker removed from its set stops being offered`() = runBlocking {
+        val client = FakeStickerClient(setOf = listOf(sticker("a"), sticker("b")))
+        val catalog = catalog(client, visionAnswer = "penguin waving")
+
+        catalog.observe(CHAT, sticker("a"))
+        awaitDescriptionPass(catalog)
+        assertEquals(2, storedStickers().size)
+
+        client.setOf = listOf(sticker("a"))
+        backdateSetRefresh()
+        awaitWorker(catalog) { storedStickers().size == 1 }
+
+        // the survivor keeps the description already paid for
+        val index = assertNotNull(catalog.indexBlockFor(CHAT))
+        assertEquals(1, index.lines().count { it.startsWith("#") })
+        assertContains(index, "penguin waving")
+    }
+
+    @Test
+    fun `a set that cannot be reached right now is left alone`() = runBlocking {
+        val client = FakeStickerClient(setOf = listOf(sticker("a")))
+        val catalog = catalog(client, visionAnswer = "penguin waving")
+
+        catalog.observe(CHAT, sticker("a"))
+        awaitDescriptionPass(catalog)
+
+        client.failSet = true
+        backdateSetRefresh()
+        awaitWorker(catalog) { setRefreshedAt().isAfter(Instant.now().minusSeconds(3_600)) }
+
+        assertEquals(1, storedStickers().size)
+        assertNotNull(catalog.indexBlockFor(CHAT))
+    }
+
     private fun catalog(client: FakeStickerClient, visionAnswer: String) =
         StickerCatalog(client.proxy, ImageVisionClient(FakePromptExecutor(visionAnswer), TEST_MODEL))
 
     // the worker is the production entry point; one pass is done once no sticker is waiting on vision.
-    private suspend fun awaitDescriptionPass(catalog: StickerCatalog) = coroutineScope {
+    private suspend fun awaitDescriptionPass(catalog: StickerCatalog) =
+        awaitWorker(catalog) { storedStickers().none { it.description == null && it.describeAttempts == 0 } }
+
+    private suspend fun awaitWorker(catalog: StickerCatalog, until: suspend () -> Boolean) = coroutineScope {
         val job = catalog.launchDescriptionWorker(this)
 
         try {
             withTimeout(10.seconds) {
-                while (storedStickers().any { it.description == null && it.describeAttempts == 0 }) {
-                    delay(20)
-                }
+                while (!until()) delay(20)
             }
         } finally {
             job.cancelAndJoin()
         }
+    }
+
+    private suspend fun backdateSetRefresh() = Db.dbTransaction {
+        StickerSetsTable.update({ StickerSetsTable.name eq SET_NAME }) {
+            it[refreshedAt] = Instant.now().minus(2, ChronoUnit.DAYS)
+        }
+        Unit
+    }
+
+    private suspend fun setRefreshedAt(): Instant = Db.dbTransaction {
+        StickerSetsTable
+            .select(StickerSetsTable.refreshedAt)
+            .where { StickerSetsTable.name eq SET_NAME }
+            .single()[StickerSetsTable.refreshedAt]
     }
 
     private data class StoredSticker(val description: String?, val describeAttempts: Int)
@@ -147,11 +223,15 @@ class StickerCatalogTest {
             .isAnimated(false)
             .isVideo(false)
             .emoji("😂")
-            .setName("vusan_test_set")
+            .setName(SET_NAME)
             .thumbnail(PhotoSize.builder().fileId("thumb-$id").fileUniqueId("thumb-unique-$id").width(1).height(1).build())
             .build()
 
-    private class FakeStickerClient(private val setOf: List<Sticker>) {
+    private class FakeStickerClient(
+        var setOf: List<Sticker>,
+        var setGone: Boolean = false,
+        var failSet: Boolean = false
+    ) {
 
         val proxy: TelegramClient =
             Proxy.newProxyInstance(
@@ -159,30 +239,51 @@ class StickerCatalogTest {
                 arrayOf(TelegramClient::class.java)
             ) { _, method, args ->
                 when (method.name) {
-                    "executeAsync" -> CompletableFuture.completedFuture(respond(args.single()))
+                    "executeAsync" -> respond(args.single())
                     "downloadFileAsStream" -> ByteArrayInputStream(byteArrayOf(1, 2, 3))
                     else -> error("unexpected client call: ${method.name}")
                 }
             } as TelegramClient
 
-        private fun respond(request: Any): Any =
+        private fun respond(request: Any): CompletableFuture<Any> =
             when (request) {
                 is GetStickerSet ->
-                    StickerSet().apply {
-                        name = request.name
-                        title = "Vusan test set"
-                        stickerType = "regular"
-                        stickers = setOf
+                    when {
+                        setGone -> CompletableFuture.failedFuture(telegramError("Bad Request: STICKERSET_INVALID"))
+                        failSet -> CompletableFuture.failedFuture(telegramError("Bad Gateway: upstream"))
+
+                        else ->
+                            CompletableFuture.completedFuture(
+                                StickerSet().apply {
+                                    name = request.name
+                                    title = "Vusan test set"
+                                    stickerType = "regular"
+                                    stickers = setOf
+                                }
+                            )
                     }
 
                 is GetFile ->
-                    File().apply {
-                        fileId = request.fileId
-                        fileUniqueId = "u"
-                        filePath = "path"
-                    }
+                    CompletableFuture.completedFuture(
+                        File().apply {
+                            fileId = request.fileId
+                            fileUniqueId = "u"
+                            filePath = "path"
+                        }
+                    )
+
                 else -> error("unexpected request: ${request.javaClass.simpleName}")
             }
+
+        private fun telegramError(description: String): TelegramApiRequestException =
+            TelegramApiRequestException(
+                "Error executing request",
+                ApiResponse.builder<Serializable>()
+                    .ok(false)
+                    .errorCode(400)
+                    .errorDescription(description)
+                    .build()
+            )
     }
 
     private fun testConfig(dbPath: String) =

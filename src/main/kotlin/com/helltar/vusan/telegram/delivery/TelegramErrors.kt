@@ -24,6 +24,14 @@ internal fun Throwable.isReplyMessageNotFound(): Boolean {
 internal fun Throwable.isMessageNotModified(): Boolean =
     telegramDescription?.contains("message is not modified", ignoreCase = true) == true
 
+// a sticker set the owner deleted or renamed. telegram answers `getStickerSet` with either the raw
+// core error or the readable wording, and only these mean the set is really gone — any other
+// failure is transient and must not be taken as permission to drop what was learned from it.
+internal fun Throwable.isStickerSetGone(): Boolean {
+    val description = telegramDescription?.lowercase() ?: return false
+    return "stickerset_invalid" in description || "sticker set not found" in description
+}
+
 // the client wraps request failures in generic TelegramApiException chains, so search the causes
 // for the api-level exception that carries telegram's error description.
 private val Throwable.telegramDescription: String?
