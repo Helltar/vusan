@@ -24,7 +24,8 @@ Telegram ──► telegram/ ──► agent/ ──► tools/ ──► externa
   `InlineChoiceHandler` the agent-created choice buttons, whose selection becomes an agent input.
 - **`agent/`** — agent orchestration on top of Koog. `AgentRunner` serializes per-user turns and owns every history
   write for them, so no other layer appends or clears turns behind a running turn's back;
-  `AgentFactory` builds the `AIAgent` (system prompt + history + memory + tools). `agent/history/`
+  `AgentFactory` builds the `AIAgent` (system prompt + history + memory + tools); `SystemPrompt` keeps the deployment's
+  customizable personality and the fixed delivery/tool contract in separate XML-delimited blocks. `agent/history/`
   summarizes and persists chat turns; `agent/memory/` stores durable user/group memory that survives a history clear and
   is injected as `<user_memory>`/`<group_memory>`.
 - **`tools/`** — agent-callable tools, one subpackage per capability (search, voice, vision, scheduled tasks, …).
