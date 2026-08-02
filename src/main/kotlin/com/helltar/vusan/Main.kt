@@ -19,6 +19,8 @@ import com.helltar.vusan.telegram.callback.TaskMenuHandler
 import com.helltar.vusan.telegram.delivery.TelegramDelivery
 import com.helltar.vusan.telegram.inbound.VoiceTranscriber
 import com.helltar.vusan.tools.ToolRegistryFactory
+import com.helltar.vusan.tools.sticker.StickerCatalog
+import com.helltar.vusan.tools.vision.ImageVisionClient
 import io.github.oshai.kotlinlogging.KotlinLogging
 import io.ktor.client.*
 import kotlinx.coroutines.cancelAndJoin
@@ -50,13 +52,19 @@ suspend fun main() = coroutineScope {
         // a vision model of its own comes with a second executor to close; otherwise vision rides on the chat one
         visionExecutor = vision?.executor?.takeIf { it !== executor }
 
-        val toolRegistryFactory = ToolRegistryFactory(http, config, history, memory, tasks, vision)
+        val telegramClient = OkHttpTelegramClient(config.telegramBotToken)
+
+        // the catalog only ever holds stickers vision has looked at, so without vision there is nothing
+        // to learn and nothing to offer the model.
+        val stickerCatalog =
+            vision?.let { StickerCatalog(telegramClient, ImageVisionClient(it.executor, it.model)) }
+
+        val toolRegistryFactory = ToolRegistryFactory(http, config, history, memory, tasks, stickerCatalog, vision)
         val contextWindowPolicy = ContextWindowPolicy(llm.model)
         val agentFactory = AgentFactory(executor, toolRegistryFactory, llm.model, llm.chatParams, config.personality, contextWindowPolicy = contextWindowPolicy)
         val conversationCompactor = LlmConversationCompactor(executor, llm.model, llm.compactionParams, contextWindowPolicy)
-        val agentRunner = AgentRunner(agentFactory, history, memory, conversationCompactor, config.chatHistory)
+        val agentRunner = AgentRunner(agentFactory, history, memory, conversationCompactor, config.chatHistory, stickerCatalog)
 
-        val telegramClient = OkHttpTelegramClient(config.telegramBotToken)
         val delivery = TelegramDelivery(telegramClient)
         val voiceTranscriber = createVoiceTranscriber(http, config)
         val taskMenu = TaskMenuHandler(telegramClient, tasks, config.maxTasksPerUser)
@@ -72,17 +80,20 @@ suspend fun main() = coroutineScope {
                 taskMenu,
                 inlineChoices,
                 config.allowedIds,
-                voiceTranscriber
+                voiceTranscriber,
+                stickerCatalog
             )
 
         logStartup(llm, vision, toolRegistryFactory.availableToolNames)
 
         val botJob = botRunner.start(this)
         val schedulerJob = scheduler.launchIn(this)
+        val stickerJob = stickerCatalog?.launchDescriptionWorker(this)
 
         try {
             botJob.join()
         } finally {
+            stickerJob?.cancelAndJoin()
             schedulerJob.cancelAndJoin()
         }
     } finally {

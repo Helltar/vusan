@@ -36,7 +36,8 @@ internal fun botActionFor(output: BotOutput): ActionType? = when (output) {
     is BotOutput.RichMessage,
     is BotOutput.Quiz,
     is BotOutput.Poll -> ActionType.TYPING
-    is BotOutput.Reaction -> null
+    // nothing is uploaded for either: a reaction is instant, and a sticker is resent by file_id.
+    is BotOutput.Reaction, is BotOutput.Sticker -> null
 }
 
 // the chat action shown while a tool runs, so a slow media-producing call (image generation,

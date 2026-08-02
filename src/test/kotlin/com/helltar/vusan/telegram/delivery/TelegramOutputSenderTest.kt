@@ -13,6 +13,7 @@ import org.telegram.telegrambots.meta.api.methods.send.SendMediaGroup
 import org.telegram.telegrambots.meta.api.methods.send.SendMessage
 import org.telegram.telegrambots.meta.api.methods.send.SendPhoto
 import org.telegram.telegrambots.meta.api.methods.send.SendRichMessage
+import org.telegram.telegrambots.meta.api.methods.send.SendSticker
 import org.telegram.telegrambots.meta.api.methods.send.SendVideo
 import org.telegram.telegrambots.meta.api.objects.ApiResponse
 import org.telegram.telegrambots.meta.api.objects.message.Message
@@ -50,6 +51,23 @@ class TelegramOutputSenderTest {
             listOf("choice:42:7:0", "choice:42:7:1", "choice:42:7:2"),
             keyboard.keyboard.flatten().map { it.callbackData }
         )
+    }
+
+    @Test
+    fun `sticker is resent by file id and carries no caption`() = runBlocking {
+        val client = RecordingClient()
+
+        TelegramOutputSender.send(
+            client = client.proxy,
+            item = BotOutput.Sticker("sticker-file-id"),
+            chatId = 1L,
+            replyParameters = null,
+            caption = "this caption has nowhere to go",
+            formattingFileNotice = "notice"
+        )
+
+        val request = assertIs<SendSticker>(client.requests.single())
+        assertEquals("sticker-file-id", request.sticker.attachName)
     }
 
     @Test

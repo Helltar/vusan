@@ -20,6 +20,7 @@ import com.helltar.vusan.request.AttachedFile
 import com.helltar.vusan.request.RequestContext
 import com.helltar.vusan.tools.choice.InlineChoiceTools
 import com.helltar.vusan.tools.message.MessageTools
+import com.helltar.vusan.tools.sticker.StickerCatalog
 import io.github.oshai.kotlinlogging.KotlinLogging
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
@@ -57,7 +58,8 @@ class AgentRunner(
     private val history: ChatHistoryRepository,
     private val memory: MemoryRepository,
     private val conversationCompactor: ConversationCompactor,
-    private val historyConfig: ChatHistoryConfig = ChatHistoryConfig()
+    private val historyConfig: ChatHistoryConfig = ChatHistoryConfig(),
+    private val stickers: StickerCatalog? = null
 ) {
 
     private companion object {
@@ -136,7 +138,15 @@ class AgentRunner(
 
         val currentTurn = currentTurnPrompt(request.prompt, messageContext, userMemory, chatMemory)
         val outbox = BotOutbox()
-        val preparation = agentFactory.prepare(context, outbox, currentTurn)
+
+        val preparation =
+            agentFactory.prepare(
+                context = context,
+                outbox = outbox,
+                currentTurn = currentTurn,
+                stickerCatalog = stickers?.indexBlockFor(request.chatId)
+            )
+
         val historyPlan = historyPlanForPrompt(request.userId, preparation.tokenBudget.historyTokens)
         val plannedInputTokens = preparation.tokenBudget.fixedPromptTokens + historyPlan.estimatedTokens
 

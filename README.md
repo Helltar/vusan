@@ -107,6 +107,8 @@ Items marked *(opt-in)* need an API key or an extra service, see
   and continue as soon as you tap one.
 - **Polls and quizzes** — creates real Telegram polls and quizzes, not a text imitation.
 - **Reactions** — sometimes an emoji on your message is the whole answer.
+- **Stickers** *(opt-in)* — picks up the sticker sets your chat actually uses and answers with one when a wordless
+  reaction fits better than words. Needs image understanding to be available.
 - **Files and links** — sends what it wrote as a document, or downloads a link and passes it on
   as a file.
 - **Long structured answers** — headings, tables, and checklists when a reply is genuinely big.

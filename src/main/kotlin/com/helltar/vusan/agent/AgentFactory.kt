@@ -51,7 +51,9 @@ data class TokenUsage(
 data class AgentPromptPreparation(
     val toolRegistry: ToolRegistry,
     val systemPrompt: String,
-    val currentTime: String,
+    // system context that changes between turns, so it is seeded after the history instead of in the
+    // stable prefix a provider caches: the clock, and the stickers this chat has taught the bot.
+    val trailingSystemContext: String,
     val tokenBudget: ContextTokenBudget,
     val liveToolResultMaxChars: Int
 )
@@ -74,20 +76,22 @@ class AgentFactory(
     fun prepare(
         context: RequestContext,
         outbox: BotOutbox,
-        currentTurn: String
+        currentTurn: String,
+        stickerCatalog: String? = null
     ): AgentPromptPreparation {
         val toolRegistry = toolRegistryFactory.buildRegistry(context, outbox)
-        val currentTime = currentTimeSystemBlock()
+        val trailingSystemContext =
+            listOfNotNull(currentTimeSystemBlock(), stickerCatalog).joinToString("\n\n")
         val systemPrompt = systemPromptFor(personality ?: DEFAULT_PERSONALITY)
 
         return AgentPromptPreparation(
             toolRegistry = toolRegistry,
             systemPrompt = systemPrompt,
-            currentTime = currentTime,
+            trailingSystemContext = trailingSystemContext,
             tokenBudget =
                 contextWindowPolicy.budget(
                     systemPrompt = systemPrompt,
-                    currentTime = currentTime,
+                    trailingSystemContext = trailingSystemContext,
                     currentTurn = currentTurn,
                     toolRegistry = toolRegistry
                 ),
@@ -131,7 +135,7 @@ class AgentFactory(
                     }
                 }
 
-                system(preparation.currentTime)
+                system(preparation.trailingSystemContext)
             }
 
         val agentConfig =

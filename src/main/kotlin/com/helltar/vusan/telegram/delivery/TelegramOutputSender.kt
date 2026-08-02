@@ -57,6 +57,7 @@ internal object TelegramOutputSender {
             is BotOutput.Voice -> sendVoice(client, chatId, replyParameters, item, caption, formattingFileNotice)
             is BotOutput.Video -> sendVideo(client, chatId, replyParameters, item, caption, formattingFileNotice)
             is BotOutput.VideoNote -> sendVideoNote(client, chatId, replyParameters, item, formattingFileNotice)
+            is BotOutput.Sticker -> sendStickerFile(client, chatId, item.fileId, replyParameters)
             is BotOutput.Quiz -> sendQuiz(client, chatId, replyParameters, item)
             is BotOutput.Poll -> sendPoll(client, chatId, replyParameters, item)
             is BotOutput.Reaction -> sendReaction(client, chatId, item)

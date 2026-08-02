@@ -4,8 +4,10 @@ import com.helltar.vusan.config.AppConfig
 import com.helltar.vusan.infra.tables.ChatHistoryStateTable
 import com.helltar.vusan.infra.tables.ChatHistorySummaryTable
 import com.helltar.vusan.infra.tables.ChatMessagesTable
+import com.helltar.vusan.infra.tables.ChatStickerSetsTable
 import com.helltar.vusan.infra.tables.MemoryTable
 import com.helltar.vusan.infra.tables.ScheduledTasksTable
+import com.helltar.vusan.infra.tables.StickersTable
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
@@ -73,17 +75,13 @@ object Db {
                     ChatHistoryStateTable,
                     ChatHistorySummaryTable,
                     ScheduledTasksTable,
-                    MemoryTable
+                    MemoryTable,
+                    StickersTable,
+                    ChatStickerSetsTable
                 )
 
             suspendTransaction(newDatabase) {
-                SchemaUtils.create(
-                    ChatMessagesTable,
-                    ChatHistoryStateTable,
-                    ChatHistorySummaryTable,
-                    ScheduledTasksTable,
-                    MemoryTable
-                )
+                SchemaUtils.create(tables = tables.toTypedArray())
 
                 // `create` skips a table that already exists, so on an upgraded database the schema change
                 // has to be applied by hand: new columns first, then the indices that reference them.

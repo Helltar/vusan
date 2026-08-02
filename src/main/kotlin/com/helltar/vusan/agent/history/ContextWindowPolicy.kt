@@ -40,14 +40,14 @@ class ContextWindowPolicy(model: LLModel) {
 
     fun budget(
         systemPrompt: String,
-        currentTime: String,
+        trailingSystemContext: String,
         currentTurn: String,
         toolRegistry: ToolRegistry
     ): ContextTokenBudget {
         val tools = toolRegistry.tools.joinToString("\n") { it.descriptor.toString() }
         val fixedPromptTokens =
             estimateHistoryTokens(systemPrompt) +
-                    estimateHistoryTokens(currentTime) +
+                    estimateHistoryTokens(trailingSystemContext) +
                     estimateHistoryTokens(currentTurn) +
                     estimateHistoryTokens(tools) +
                     toolRegistry.tools.size * TOOL_SCHEMA_OVERHEAD_TOKENS +

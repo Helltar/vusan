@@ -29,6 +29,8 @@ import com.helltar.vusan.tools.sandbox.SandboxClient
 import com.helltar.vusan.tools.sandbox.SandboxTools
 import com.helltar.vusan.tools.searxng.SearxngClient
 import com.helltar.vusan.tools.searxng.SearxngTools
+import com.helltar.vusan.tools.sticker.StickerCatalog
+import com.helltar.vusan.tools.sticker.StickerTools
 import com.helltar.vusan.tools.tasks.TaskTools
 import com.helltar.vusan.tools.tavily.TavilyClient
 import com.helltar.vusan.tools.tavily.TavilyTools
@@ -52,6 +54,7 @@ class ToolRegistryFactory(
     private val history: ChatHistoryRepository,
     private val memory: MemoryRepository,
     private val tasks: TasksRepository,
+    private val stickers: StickerCatalog?,
     vision: VisionRuntime?
 ) {
 
@@ -142,6 +145,7 @@ class ToolRegistryFactory(
             tavilyClient?.let { tools(TavilyTools(it, imageDownloadClient, outbox)) }
             searxngClient?.let { tools(SearxngTools(it, imageDownloadClient, outbox)) }
             giphyClient?.let { tools(GiphyTools(it, outbox)) }
+            stickers?.let { tools(StickerTools(it, outbox)) }
             sandboxClient?.let { tools(SandboxTools(it, outbox, context.attachedFile)) }
 
             if (imageVisionClient != null && videoVisionClient != null) {

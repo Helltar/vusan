@@ -7,6 +7,9 @@ import ai.koog.prompt.message.AttachmentContent
 import ai.koog.prompt.message.AttachmentSource
 import com.helltar.vusan.request.AttachedFile
 
+/** What [ImageVisionClient.describe] answers when the model returns nothing at all. */
+internal const val EMPTY_VISION_DESCRIPTION = "Vision returned an empty description for the image."
+
 class ImageVisionClient(
     private val promptExecutor: PromptExecutor,
     private val model: LLModel
@@ -18,7 +21,7 @@ class ImageVisionClient(
                 .textContent()
                 .trim()
 
-        return description.ifBlank { "Vision returned an empty description for the image." }
+        return description.ifBlank { EMPTY_VISION_DESCRIPTION }
     }
 
     private fun buildPrompt(image: AttachedFile, bytes: ByteArray, focus: String) =

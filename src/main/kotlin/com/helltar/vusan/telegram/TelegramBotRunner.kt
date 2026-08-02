@@ -29,35 +29,32 @@ import com.helltar.vusan.telegram.inbound.attachedFileContextBlock
 import com.helltar.vusan.telegram.inbound.canLoadChatDescription
 import com.helltar.vusan.telegram.inbound.captionedPartOrNull
 import com.helltar.vusan.telegram.inbound.chatIdLong
-import com.helltar.vusan.telegram.inbound.contentTypeName
 import com.helltar.vusan.telegram.inbound.describeIncomingSticker
 import com.helltar.vusan.telegram.inbound.formatAgentInput
 import com.helltar.vusan.telegram.inbound.formatHistoryInput
 import com.helltar.vusan.telegram.inbound.isPrivateChat
 import com.helltar.vusan.telegram.inbound.isReplyToOtherUser
 import com.helltar.vusan.telegram.inbound.leadingBotCommandOrNull
+import com.helltar.vusan.telegram.inbound.logDenied
+import com.helltar.vusan.telegram.inbound.logIncoming
 import com.helltar.vusan.telegram.inbound.messageIdLong
 import com.helltar.vusan.telegram.inbound.messageTextOrNull
 import com.helltar.vusan.telegram.inbound.normalizeUsername
-import com.helltar.vusan.telegram.inbound.promptChatType
-import com.helltar.vusan.telegram.inbound.readableFormat
 import com.helltar.vusan.telegram.inbound.repliedAttachedFileOrNull
 import com.helltar.vusan.telegram.inbound.replyAuthorIdOrNull
 import com.helltar.vusan.telegram.inbound.replySummaryOrNull
 import com.helltar.vusan.telegram.inbound.replyToMessageIdOrNull
 import com.helltar.vusan.telegram.inbound.sanitizeUserText
-import com.helltar.vusan.telegram.inbound.senderDisplayNameOrNull
 import com.helltar.vusan.telegram.inbound.senderIdOrNull
 import com.helltar.vusan.telegram.inbound.senderLanguageCodeOrNull
-import com.helltar.vusan.telegram.inbound.senderUsernameOrNull
 import com.helltar.vusan.telegram.inbound.shouldHandle
 import com.helltar.vusan.telegram.inbound.textSnippetOrNull
-import com.helltar.vusan.telegram.inbound.titleOrDisplayName
 import com.helltar.vusan.telegram.inbound.toAttachedFileOrNull
 import com.helltar.vusan.telegram.inbound.toAudioInput
 import com.helltar.vusan.telegram.inbound.toMessageContext
 import com.helltar.vusan.telegram.inbound.toRichMarkdown
 import com.helltar.vusan.telegram.inbound.wrapAudioTranscript
+import com.helltar.vusan.tools.sticker.StickerCatalog
 import io.github.oshai.kotlinlogging.KotlinLogging
 import kotlinx.coroutines.*
 import kotlinx.coroutines.channels.Channel
@@ -86,7 +83,8 @@ internal class TelegramBotRunner(
     private val taskMenu: TaskMenuHandler,
     private val inlineChoices: InlineChoiceHandler,
     private val allowedIds: Set<Long>,
-    private val voiceTranscriber: VoiceTranscriber?
+    private val voiceTranscriber: VoiceTranscriber?,
+    private val stickerCatalog: StickerCatalog? = null
 ) {
 
     private companion object {
@@ -211,6 +209,9 @@ internal class TelegramBotRunner(
             }
 
             val message = update.message ?: continue
+
+            learnSticker(message)
+
             val albumKey = message.mediaGroupId?.let { "${message.chatIdLong}:$it" }
 
             if (albumKey == null) {
@@ -228,6 +229,17 @@ internal class TelegramBotRunner(
         }
 
         flushAlbums()
+    }
+
+    // a sticker teaches the bot the set it came from even when the message is not addressed to the bot:
+    // in a group, stickers people throw at each other are the only view it gets of what they actually use.
+    // only the set is recorded, never who sent it or what else the message said.
+    private fun CoroutineScope.learnSticker(message: Message) {
+        val catalog = stickerCatalog ?: return
+        val sticker = message.sticker ?: return
+        if (!message.isAllowed()) return
+
+        launchHandling(message) { catalog.observe(message.chatIdLong, sticker) }
     }
 
     // one bad update must neither kill the polling loop nor cancel sibling handlers.
@@ -604,41 +616,6 @@ internal class TelegramBotRunner(
         }
 
         return true
-    }
-
-    private fun Message.logIncoming() {
-        log.debug {
-            buildString {
-                append("message: chat=$chatIdLong chatType=${promptChatType()} msg=$messageIdLong")
-                append(" type=${contentTypeName()}")
-                chat.titleOrDisplayName()?.let { append(" chatTitle=[$it]") }
-                senderIdOrNull()?.let { append(" user=$it") }
-                senderUsernameOrNull()?.let { append(" username=[$it]") }
-                senderDisplayNameOrNull()?.let { append(" name=[$it]") }
-
-                sticker?.let { sticker ->
-                    append(" sticker=[${sticker.readableFormat()} ${sticker.type ?: "regular"}")
-                    sticker.emoji?.let { emoji -> append(" $emoji") }
-                    sticker.setName?.let { setName -> append(" set=$setName") }
-                    append("]")
-                }
-
-                textSnippetOrNull()
-                    ?.collapseWhitespaceAndCap(LOG_PROMPT_MAX_CHARS)
-                    ?.let { append(" text=[$it]") }
-            }
-        }
-    }
-
-    private fun Message.logDenied() {
-        log.warn {
-            buildString {
-                append("denied (not in allowlist): chat=$chatIdLong user=${senderIdOrNull()} type=${contentTypeName()}")
-                senderUsernameOrNull()?.let { append(" username=[$it]") }
-                senderDisplayNameOrNull()?.let { append(" name=[$it]") }
-                textSnippetOrNull()?.collapseWhitespaceAndCap(LOG_PROMPT_MAX_CHARS)?.let { append(" text=[$it]") }
-            }
-        }
     }
 
     private fun Message.isAllowed(): Boolean = isAllowed(chatIdLong, senderIdOrNull())

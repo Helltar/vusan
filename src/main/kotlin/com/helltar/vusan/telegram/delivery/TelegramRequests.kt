@@ -5,6 +5,7 @@ import com.helltar.vusan.telegram.api
 import java.io.ByteArrayInputStream
 import org.telegram.telegrambots.meta.api.methods.AnswerCallbackQuery
 import org.telegram.telegrambots.meta.api.methods.send.SendAnimation
+import org.telegram.telegrambots.meta.api.methods.send.SendSticker
 import org.telegram.telegrambots.meta.api.methods.send.SendDocument
 import org.telegram.telegrambots.meta.api.methods.send.SendMediaGroup
 import org.telegram.telegrambots.meta.api.methods.send.SendMessage
@@ -116,6 +117,24 @@ internal suspend fun sendAnimationFile(
                 .animation(animation)
                 .caption(caption)
                 .parseMode(parseMode)
+                .replyParameters(replyParameters)
+                .build()
+        )
+    }
+}
+
+// stickers are always resent by file_id from the catalog, and the Bot API takes no caption on one.
+internal suspend fun sendStickerFile(
+    client: TelegramClient,
+    chatId: Long,
+    fileId: String,
+    replyParameters: ReplyParameters?
+) {
+    client.api {
+        executeAsync(
+            SendSticker.builder()
+                .chatId(chatId)
+                .sticker(InputFile(fileId))
                 .replyParameters(replyParameters)
                 .build()
         )

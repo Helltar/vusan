@@ -153,6 +153,15 @@ A normal user message travels:
   it, and only when that message is gone does it fall back to a "following up with" notice instead of the
   "scheduled by" one, which would misattribute it to the user. The user sees and cancels them through `/tasks` like
   any other task.
+- **Sticker catalog** — `tools/sticker/StickerCatalog` learns which sticker sets a chat uses. The Bot API has no
+  sticker search, so a sticker can only be sent from a set known by name: `TelegramBotRunner` taps every sticker in an
+  allowlisted chat — including ones the bot is not addressed in, which in a group is its only view of what people
+  actually use — records the set, and pulls it in whole through `getStickerSet`. Only the set is stored, never message
+  content. A background worker then describes each sticker's thumbnail once through the vision model and caches the
+  result by `file_unique_id`; `AgentRunner` puts the described stickers for that chat into the trailing system context,
+  and `sendSticker` resends one by `file_id`. Without a vision runtime the catalog is never constructed and the tool is
+  never registered, matching the vision tools. A sticker the model refuses to describe, or one that repeatedly fails,
+  is counted out after `describe_attempts` so it neither enters the index nor blocks the queue behind it.
 - **Task menu** — `/tasks` bypasses the LLM and asks `TaskMenuHandler` to render the caller's enabled tasks. Private
   chats show all of that user's tasks; groups show only their tasks created in that chat. Callback data carries the
   menu owner, every action checks ownership and group scope, and Telegram is always sent an `answerCallbackQuery`.
@@ -230,9 +239,11 @@ model-authored and untrusted — keep it that way.
 ## Startup
 
 `Main.kt` wires everything in order: load `AppConfig` → connect `Db` → create the `Http` client and LLM runtime → build
-repositories, context policy, conversation compactor, `ToolRegistryFactory`, `AgentFactory`, `AgentRunner` → create `TaskMenuHandler` and
+repositories, context policy, conversation compactor, the Telegram client and (only with a vision runtime) the
+`StickerCatalog`, `ToolRegistryFactory`, `AgentFactory`, `AgentRunner` → create `TaskMenuHandler` and
 `InlineChoiceHandler`, and optionally enable voice transcription → start `TelegramBotRunner` and launch
-`TaskScheduler`, then block on the bot job until shutdown (closing the executor, HTTP client, and DB in `finally`).
+`TaskScheduler` and the sticker description worker, then block on the bot job until shutdown (closing the executor,
+HTTP client, and DB in `finally`).
 
 ## Where to look when…
 

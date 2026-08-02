@@ -68,6 +68,14 @@ sealed class BotOutput {
         }
     }
 
+    // sent by file_id from the learned sticker catalog. the Bot API takes no caption on a sticker, so
+    // it is always a message of its own.
+    data class Sticker(val fileId: String) : BotOutput() {
+        init {
+            require(fileId.isNotBlank()) { "Sticker file id must not be blank" }
+        }
+    }
+
     class Voice(
         val bytes: ByteArray,
         val durationSeconds: Int? = null
