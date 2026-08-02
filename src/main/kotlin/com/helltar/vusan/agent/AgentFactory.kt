@@ -21,9 +21,9 @@ import ai.koog.serialization.JSONObject
 import com.helltar.vusan.agent.history.ChatRole
 import com.helltar.vusan.agent.history.PromptHistory
 import com.helltar.vusan.agent.history.toolCallArgsForHistory
-import com.helltar.vusan.agent.memory.MemoryEntry
 import com.helltar.vusan.common.collapseWhitespaceAndCap
 import com.helltar.vusan.common.xmlBlock
+import com.helltar.vusan.common.xmlTextBlock
 import com.helltar.vusan.outbox.BotOutbox
 import com.helltar.vusan.request.RequestContext
 import com.helltar.vusan.tools.ToolRegistryFactory
@@ -67,20 +67,12 @@ class AgentFactory(
         outbox: BotOutbox,
         toolEvents: (ToolEvent) -> Unit,
         tokenUsage: (TokenUsage) -> Unit,
-        onToolStarting: (activity: ToolActivity) -> Unit = {},
-        messageContext: MessageContext? = null,
-        userMemory: List<MemoryEntry> = emptyList(),
-        chatMemory: List<MemoryEntry> = emptyList()
+        onToolStarting: (activity: ToolActivity) -> Unit = {}
     ): AIAgent<String, String> {
         val seededPrompt =
             prompt(id = "vusan-user-$userId", params = chatParams) {
                 system(systemPromptFor(personality ?: DEFAULT_PERSONALITY))
-                messageContext?.toSystemPrompt()?.let(::system)
-
-                if (userMemory.isNotEmpty()) system(xmlBlock("user_memory", renderMemory(userMemory)))
-                if (chatMemory.isNotEmpty()) system(xmlBlock("group_memory", renderMemory(chatMemory)))
-
-                history.summary?.let(::assistant)
+                history.summary?.let { user(xmlTextBlock("conversation_recap", it)) }
 
                 history.turns.forEach { turn ->
                     when (turn.role) {
@@ -285,15 +277,14 @@ private fun garbledToolCallResult(call: MessagePart.Tool.Call, missing: List<Str
     )
 }
 
-// renders memory as `#id content` lines so the model can reference an id when calling `forgetMemory`.
-private fun renderMemory(entries: List<MemoryEntry>): String =
-    entries.joinToString("\n") { "#${it.id} ${it.content}" }
-
 private val LOCAL_DATE_TIME = DateTimeFormatter.ofPattern("yyyy-MM-dd'T'HH:mm:ss")
 private val DAY_OF_WEEK = DateTimeFormatter.ofPattern("EEEE")
 
 private fun currentTimeSystemBlock(): String {
     val timezone = ZoneId.systemDefault()
     val now = ZonedDateTime.now(timezone)
-    return "Current time: ${LOCAL_DATE_TIME.format(now)} ${timezone.id} (${DAY_OF_WEEK.format(now)})"
+    return xmlBlock(
+        "current_time",
+        "${LOCAL_DATE_TIME.format(now)} ${timezone.id} (${DAY_OF_WEEK.format(now)})"
+    )
 }

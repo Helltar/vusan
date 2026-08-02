@@ -5,7 +5,7 @@ import ai.koog.prompt.executor.model.PromptExecutor
 import ai.koog.prompt.llm.LLModel
 import ai.koog.prompt.message.AttachmentContent
 import ai.koog.prompt.message.AttachmentSource
-import com.helltar.vusan.common.xmlBlock
+import com.helltar.vusan.common.xmlTextBlock
 import com.helltar.vusan.request.AttachedFile
 
 /**
@@ -42,7 +42,7 @@ class VideoVisionClient(
 
         // the agent gets the speech verbatim as well, so it can quote what was said instead of
         // paraphrasing it out of the description.
-        return transcript?.let { "$description\n\n${xmlBlock("audio_transcript", it)}" } ?: description
+        return transcript?.let { "$description\n\n${xmlTextBlock("audio_transcript", it)}" } ?: description
     }
 
     /** Describes the single preview frame Telegram ships with a video, used when the video itself is unreachable. */
@@ -112,12 +112,12 @@ class VideoVisionClient(
 
                         video.caption?.takeIf { it.isNotBlank() }?.let {
                             appendLine()
-                            appendLine(xmlBlock("caption", it))
+                            appendLine(xmlTextBlock("caption", it))
                         }
 
                         transcript?.let {
                             appendLine()
-                            appendLine(xmlBlock("audio_transcript", it))
+                            appendLine(xmlTextBlock("audio_transcript", it))
                         }
                     }
                 )

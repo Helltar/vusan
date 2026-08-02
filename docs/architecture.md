@@ -22,10 +22,11 @@ Telegram ──► telegram/ ──► agent/ ──► tools/ ──► externa
   HTML-formatting, opt-in rich-message, reply-anchor, media/document, media-group, and private-message fallbacks;
   `telegram/callback/` owns the inline-button flows — `TaskMenuHandler` the deterministic `/tasks` UI, and
   `InlineChoiceHandler` the agent-created choice buttons, whose selection becomes an agent input.
-- **`agent/`** — agent orchestration on top of Koog. `AgentRunner` serializes per-user turns and owns every history
-  write for them, so no other layer appends or clears turns behind a running turn's back;
-  `AgentFactory` builds the `AIAgent` (system prompt + history + memory + tools); `SystemPrompt` keeps the deployment's
-  customizable personality and the fixed delivery/tool contract in separate XML-delimited blocks. `agent/history/`
+- **`agent/`** — agent orchestration on top of Koog. `AgentRunner` serializes per-user turns, assembles the current
+  user turn (Telegram metadata + durable memory + request), and owns every history write for it, so no other layer
+  appends or clears turns behind a running turn's back; `AgentFactory` builds the `AIAgent` (system prompt + history +
+  tools); `SystemPrompt` keeps the deployment's customizable personality and the fixed delivery/tool contract in
+  separate XML-delimited blocks. `agent/history/`
   summarizes and persists chat turns; `agent/memory/` stores durable user/group memory that survives a history clear and
   is injected as `<user_memory>`/`<group_memory>`.
 - **`tools/`** — agent-callable tools, one subpackage per capability (search, voice, vision, scheduled tasks, …).
@@ -80,13 +81,15 @@ A normal user message travels:
    stickers become a metadata prompt; a rich message — which never carries `text` — is flattened back into rich
    markdown (`telegram/inbound/RichMessageText.kt`), both as its own input and when one is quoted in a reply, capped at
    `MAX_RICH_MESSAGE_CHARS` because Telegram allows it 32768 characters against plain text's 4096;
-   replied-message context is wrapped in `<reply_context>`/`<user_message>`; current
-   or replied photo, video, and document input becomes `AttachedFile`. `TelegramBotRunner.dispatchToAgent` assembles the agent
-   input and the shorter history input.
-4. **Run** — `AgentRunner.handle` takes the per-user lock (or returns "busy"), then
-   `AgentFactory.build` constructs a Koog `AIAgent` with the system prompt, current time, message context, summarized
-   history (`agent/history/ChatHistory`), durable memory (`agent/memory/MemoryRepository` — the sender's user memory
-   always, plus the group's memory in non-private chats), and the per-request tool registry
+   replied-message context is wrapped in `<reply_context>`/`<user_message>`; application-owned XML text nodes escape
+   user-controlled delimiters; current or replied photo, video, and document input becomes `AttachedFile`.
+   `TelegramBotRunner.dispatchToAgent` assembles the agent input and the shorter history input.
+4. **Run** — `AgentRunner.handle` takes the per-user lock (or returns "busy"), loads durable memory
+   (`agent/memory/MemoryRepository` — the sender's user memory always, plus the group's memory in non-private chats),
+   and places it with `<message_context>` immediately before the current request in one user-role turn.
+   `AgentFactory.build` constructs a Koog `AIAgent` with the stable system prompt, an older `<conversation_recap>` at
+   user priority, recent role-preserving history (`agent/history/ChatHistory`), current time, and the per-request tool
+   registry
    (`ToolRegistryFactory.buildRegistry`).
 5. **Act** — during the agent loop, tools run and push results into the request's `BotOutbox`; tool calls/results are
    recorded for history. The custom `single_run` strategy (`AgentFactory`)
@@ -162,7 +165,8 @@ A normal user message travels:
   and wraps the question/selection as `<inline_choice>` for a queued `AgentRunner` turn. The question and its options
   are persisted as assistant history, and the follow-up answer is delivered as a reply to that choice message.
 - **History summarization** — `agent/history/ChatHistory.summarizeForPrompt` keeps recent turns verbatim and condenses
-  older ones so the prompt stays within budget while keeping tool-call/result pairs anchored.
+  older ones into a user-level `<conversation_recap>` so mixed user/assistant content is not mislabeled as an assistant
+  instruction; tool-call/result pairs stay anchored.
 - **LLM provider resolution** — `config/LlmRuntime.resolveLlmRuntime` turns
   `AppConfig.llmProvider` into a Koog client/model/params triple. Native clients cover OpenAI (with prompt caching),
   Anthropic, Google, and DeepSeek — models are matched against each client's predefined catalog. `openai-compatible`

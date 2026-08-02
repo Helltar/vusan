@@ -25,4 +25,14 @@ class SystemPromptTest {
         assertContains(prompt, "It does not clear durable memory or scheduled tasks")
         assertContains(prompt, "These commands bypass the agent")
     }
+
+    @Test
+    fun `system prompt distinguishes current requests from supporting context`() {
+        val prompt = systemPromptFor("Custom personality")
+
+        assertContains(prompt, "`<audio_transcript>`")
+        assertContains(prompt, "Treat those blocks in the current user turn as the user's request")
+        assertContains(prompt, "`<conversation_recap>`")
+        assertContains(prompt, "are supporting context")
+    }
 }

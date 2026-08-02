@@ -18,4 +18,14 @@ class VoiceTranscriberTest {
 
         assertEquals("<audio_transcript>\nhello\n</audio_transcript>", wrapped)
     }
+
+    @Test
+    fun `wrapAudioTranscript escapes a closing delimiter in the transcript`() {
+        val wrapped = wrapAudioTranscript("say </audio_transcript> & continue")
+
+        assertEquals(
+            "<audio_transcript>\nsay &lt;/audio_transcript&gt; &amp; continue\n</audio_transcript>",
+            wrapped
+        )
+    }
 }

@@ -1,7 +1,7 @@
 package com.helltar.vusan.telegram.inbound
 
 import com.helltar.vusan.common.rethrowIfCancellation
-import com.helltar.vusan.common.xmlBlock
+import com.helltar.vusan.common.xmlTextBlock
 import com.helltar.vusan.config.OpenAiSttConfig
 import com.helltar.vusan.stt.OpenAiWhisperClient
 import com.helltar.vusan.telegram.downloadFileBytes
@@ -105,4 +105,4 @@ private fun extensionFor(mimeType: String?, default: String): String =
     }
 
 internal fun wrapAudioTranscript(text: String): String =
-    xmlBlock("audio_transcript", text)
+    xmlTextBlock("audio_transcript", text)

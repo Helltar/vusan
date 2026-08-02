@@ -1,8 +1,8 @@
 package com.helltar.vusan.telegram.callback
 
-import com.helltar.vusan.common.escapeHtml
 import com.helltar.vusan.common.rethrowIfCancellation
 import com.helltar.vusan.common.xmlBlock
+import com.helltar.vusan.common.xmlTextBlock
 import com.helltar.vusan.i18n.Messages
 import com.helltar.vusan.outbox.BotOutput
 import com.helltar.vusan.telegram.delivery.answerCallbackQuery
@@ -189,8 +189,8 @@ internal fun inlineChoiceAgentInput(selection: InlineChoiceSelection): String =
     xmlBlock(
         "inline_choice",
         buildString {
-            appendLine(xmlBlock("question", selection.question.escapeHtml()))
-            append(xmlBlock("selected_option", selection.option.escapeHtml()))
+            appendLine(xmlTextBlock("question", selection.question))
+            append(xmlTextBlock("selected_option", selection.option))
         }
     )
 

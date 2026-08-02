@@ -22,12 +22,11 @@ class ChatHistoryTest {
     }
 
     @Test
-    fun `long history condenses older turns and keeps a recap header`() {
+    fun `long history condenses older user and assistant turns`() {
         val result = summarizeForPrompt(historyWithToolPairAtNaiveSliceBoundary())
 
         val summary = result.summary
         assertTrue(summary != null, "expected a summary for a long history")
-        assertTrue("Earlier conversation recap" in summary)
         assertTrue("- User: older-user-0" in summary)
         assertTrue("- Assistant: older-assistant-0" in summary)
     }

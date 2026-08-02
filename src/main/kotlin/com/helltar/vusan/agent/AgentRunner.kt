@@ -2,11 +2,13 @@ package com.helltar.vusan.agent
 
 import ai.koog.prompt.executor.clients.LLMClientException
 import com.helltar.vusan.agent.history.*
+import com.helltar.vusan.agent.memory.MemoryEntry
 import com.helltar.vusan.agent.memory.MemoryRepository
 import com.helltar.vusan.agent.memory.MemoryScope
 import com.helltar.vusan.common.collapseWhitespaceAndCap
 import com.helltar.vusan.common.isEffectivelyBlank
 import com.helltar.vusan.common.rethrowIfCancellation
+import com.helltar.vusan.common.xmlTextBlock
 import com.helltar.vusan.i18n.Language
 import com.helltar.vusan.i18n.Messages
 import com.helltar.vusan.outbox.BotOutbox
@@ -137,15 +139,12 @@ class AgentRunner(
                 outbox = outbox,
                 toolEvents = toolEvents::add,
                 tokenUsage = tokenUsages::add,
-                onToolStarting = onToolStarting,
-                messageContext = request.messageContext,
-                userMemory = userMemory,
-                chatMemory = chatMemory
+                onToolStarting = onToolStarting
             )
 
         val answer =
             try {
-                agent.run(request.prompt)
+                agent.run(currentTurnPrompt(request.prompt, request.messageContext, userMemory, chatMemory))
             } catch (e: Throwable) {
                 e.rethrowIfCancellation()
                 return AgentResult(outputs = emptyList(), comment = replyForAgentFailure(request, e))
@@ -224,6 +223,29 @@ class AgentRunner(
 private const val TOOL_OUTPUT_MAX_CHARS = 4_000
 private const val LOG_REPLY_MAX_CHARS = 300
 private const val PROVIDER_ERROR_LOG_MAX_CHARS = 300
+
+internal fun currentTurnPrompt(
+    userInput: String,
+    messageContext: MessageContext?,
+    userMemory: List<MemoryEntry>,
+    chatMemory: List<MemoryEntry>
+): String =
+    buildList {
+        messageContext?.toPromptBlock()?.let(::add)
+        memoryBlock("user_memory", userMemory)?.let(::add)
+        memoryBlock("group_memory", chatMemory)?.let(::add)
+        add(userInput)
+    }.joinToString("\n\n")
+
+// renders memory as `#id content` lines so the model can reference an id when calling `forgetMemory`.
+private fun memoryBlock(
+    tag: String,
+    entries: List<MemoryEntry>
+): String? =
+    entries
+        .takeIf { it.isNotEmpty() }
+        ?.joinToString("\n") { "#${it.id} ${it.content}" }
+        ?.let { xmlTextBlock(tag, it) }
 
 // the provider's HTTP status is embedded in the client exception message ("Status code: 429").
 // 429 (rate limit / quota) and 503 (service overloaded) are transient — the provider asks us to back off.

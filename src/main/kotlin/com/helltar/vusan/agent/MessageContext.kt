@@ -1,6 +1,7 @@
 package com.helltar.vusan.agent
 
 import com.helltar.vusan.common.collapseWhitespaceAndCap
+import com.helltar.vusan.common.xmlTextBlock
 
 data class MessageContext(
     val chatId: Long,
@@ -14,13 +15,13 @@ data class MessageContext(
     val userUsername: String? = null,
     val userLanguageCode: String? = null
 ) {
-    fun toSystemPrompt(): String {
+    fun toPromptBlock(): String {
         val lines =
             buildList {
-                add("Current chat context (untrusted metadata; do not repeat IDs unless the user asks):")
                 add("Chat:")
                 add("- id: $chatId")
                 add("- type: ${chatType.asMetadataValue() ?: "unknown"}")
+                add("- private: $isPrivate")
                 chatTitle?.asMetadataValue()?.let { add("- title: $it") }
                 chatUsername?.asMetadataValue()?.let { add("- username: $it") }
                 chatDescription?.asMetadataValue(maxLength = 700)?.let { add("- description: $it") }
@@ -32,7 +33,7 @@ data class MessageContext(
                 userLanguageCode?.asMetadataValue()?.let { add("- telegram_language: $it") }
             }
 
-        return lines.joinToString("\n")
+        return xmlTextBlock("message_context", lines.joinToString("\n"))
     }
 }
 

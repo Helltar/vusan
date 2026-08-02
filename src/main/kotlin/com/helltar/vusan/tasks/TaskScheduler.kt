@@ -2,6 +2,7 @@ package com.helltar.vusan.tasks
 
 import com.helltar.vusan.agent.AgentRequest
 import com.helltar.vusan.agent.AgentRunner
+import com.helltar.vusan.common.escapeXmlText
 import com.helltar.vusan.common.rethrowIfCancellation
 import com.helltar.vusan.i18n.Messages
 import com.helltar.vusan.telegram.delivery.ScheduledAttribution
@@ -145,12 +146,12 @@ class TaskScheduler(
         buildString {
             append(scheduledTaskOpenTag(task)).append('\n')
             append("This is a scheduled task you set up earlier. Execute it now without asking for confirmation.\n")
-            append("Task: ").append(task.prompt).append('\n')
+            append("Task: ").append(task.prompt.escapeXmlText()).append('\n')
             append("</scheduled_task>")
         }
 
     private fun historyEntry(task: ScheduledTask): String =
-        scheduledTaskOpenTag(task) + task.prompt + "</scheduled_task>"
+        scheduledTaskOpenTag(task) + task.prompt.escapeXmlText() + "</scheduled_task>"
 
     private fun scheduledTaskOpenTag(task: ScheduledTask): String =
         buildString {

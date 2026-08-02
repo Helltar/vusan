@@ -39,6 +39,16 @@ internal fun String.isEffectivelyBlank(): Boolean =
 internal fun xmlBlock(tag: String, content: String): String =
     "<$tag>\n${content.trim()}\n</$tag>"
 
+/** Wraps plain text in an XML-style block without letting the text break its delimiters. */
+internal fun xmlTextBlock(tag: String, content: String): String =
+    xmlBlock(tag, content.escapeXmlText())
+
+/** Escapes characters that have structural meaning inside an XML text node. */
+internal fun String.escapeXmlText(): String =
+    replace("&", "&amp;")
+        .replace("<", "&lt;")
+        .replace(">", "&gt;")
+
 fun String.sanitizeFilename(): String =
     trim()
         .substringAfterLast('/')
@@ -68,7 +78,5 @@ private fun String.takeWholeChars(n: Int): String {
 
 /** Escapes the four characters Telegram's `HTML` parse mode reads as markup. */
 fun String.escapeHtml(): String =
-    replace("&", "&amp;")
-        .replace("<", "&lt;")
-        .replace(">", "&gt;")
+    escapeXmlText()
         .replace("\"", "&quot;")

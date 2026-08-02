@@ -1,9 +1,10 @@
 package com.helltar.vusan.telegram.inbound
 
 import com.helltar.vusan.common.collapseWhitespaceAndCap
+import com.helltar.vusan.common.escapeXmlText
 import com.helltar.vusan.common.limitTo
 import com.helltar.vusan.common.sanitizeFilename
-import com.helltar.vusan.common.xmlBlock
+import com.helltar.vusan.common.xmlTextBlock
 import com.helltar.vusan.request.AttachedFile
 import com.helltar.vusan.request.AttachedFileKind
 import com.helltar.vusan.telegram.downloadFileBytes
@@ -179,7 +180,7 @@ private fun documentKind(mimeType: String?, name: String): AttachedFileKind {
 }
 
 internal fun attachedFileContextBlock(file: AttachedFile): String =
-    xmlBlock(
+    xmlTextBlock(
         "attached_file",
         buildString {
             appendLine("name: ${file.name}")
@@ -235,21 +236,19 @@ private fun buildReplyContextPrompt(
 ): String =
     buildString {
         appendLine("<reply_context>")
-        appendLine("- type: ${repliedMessage.type}")
+        appendLine("- type: ${repliedMessage.type.escapeXmlText()}")
 
         if (repliedMessage.metadata.isNotEmpty()) {
             appendLine("- metadata:")
-            repliedMessage.metadata.forEach { appendLine("  - $it") }
+            repliedMessage.metadata.forEach { appendLine("  - ${it.escapeXmlText()}") }
         }
 
-        repliedMessage.textOrCaption?.let { appendLine(xmlBlock("text_caption", transformText(it))) }
-        repliedMessage.transcript?.let { appendLine(xmlBlock("audio_transcript", transformText(it))) }
+        repliedMessage.textOrCaption?.let { appendLine(xmlTextBlock("text_caption", transformText(it))) }
+        repliedMessage.transcript?.let { appendLine(xmlTextBlock("audio_transcript", transformText(it))) }
 
         appendLine("</reply_context>")
         appendLine()
-        appendLine("<user_message>")
-        appendLine(currentMessageText)
-        append("</user_message>")
+        append(xmlTextBlock("user_message", currentMessageText))
     }
 
 private fun Message.toReplySummary(): RepliedMessageSummary? =

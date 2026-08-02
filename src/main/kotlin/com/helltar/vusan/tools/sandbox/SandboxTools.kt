@@ -6,6 +6,7 @@ import ai.koog.agents.core.tools.reflect.ToolSet
 import com.helltar.vusan.common.limitTo
 import com.helltar.vusan.common.rethrowIfCancellation
 import com.helltar.vusan.common.sanitizeFilename
+import com.helltar.vusan.common.xmlTextBlock
 import com.helltar.vusan.outbox.BotOutbox
 import com.helltar.vusan.outbox.BotOutput
 import com.helltar.vusan.request.AttachedFile
@@ -81,15 +82,11 @@ class SandboxTools(
                 }
 
                 result.stdout.trim().takeIf { it.isNotEmpty() }?.let {
-                    appendLine("<stdout>")
-                    appendLine(it.limitTo(MAX_OUTPUT_CHARS))
-                    appendLine("</stdout>")
+                    appendLine(xmlTextBlock("stdout", it.limitTo(MAX_OUTPUT_CHARS)))
                 }
 
                 result.stderr.trim().takeIf { it.isNotEmpty() }?.let {
-                    appendLine("<stderr>")
-                    appendLine(it.limitTo(MAX_OUTPUT_CHARS))
-                    appendLine("</stderr>")
+                    appendLine(xmlTextBlock("stderr", it.limitTo(MAX_OUTPUT_CHARS)))
                 }
 
                 // image documents mirror the photo previews one-to-one (same filenames), so listing
