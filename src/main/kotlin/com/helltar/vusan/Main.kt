@@ -65,7 +65,7 @@ suspend fun main() = coroutineScope {
         val conversationCompactor = LlmConversationCompactor(executor, llm.model, llm.compactionParams, contextWindowPolicy)
         val agentRunner = AgentRunner(agentFactory, history, memory, conversationCompactor, config.chatHistory, stickerCatalog)
 
-        val delivery = TelegramDelivery(telegramClient)
+        val delivery = TelegramDelivery(telegramClient, stickerCatalog?.let { it::recheckSetOf })
         val voiceTranscriber = createVoiceTranscriber(http, config)
         val taskMenu = TaskMenuHandler(telegramClient, tasks, config.maxTasksPerUser)
         val inlineChoices = InlineChoiceHandler(telegramClient, history::revision)

@@ -59,7 +59,7 @@ class TelegramOutputSenderTest {
 
         TelegramOutputSender.send(
             client = client.proxy,
-            item = BotOutput.Sticker("sticker-file-id"),
+            item = BotOutput.Sticker("sticker-file-id", catalogId = 7L),
             chatId = 1L,
             replyParameters = null,
             caption = "this caption has nowhere to go",

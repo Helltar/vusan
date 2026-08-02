@@ -171,6 +171,24 @@ class StickerCatalogTest {
         assertNotNull(catalog.indexBlockFor(CHAT))
     }
 
+    @Test
+    fun `a rejected sticker gets its set re-read without waiting for the daily check`() = runBlocking {
+        val client = FakeStickerClient(setOf = listOf(sticker("a")))
+        val catalog = catalog(client, visionAnswer = "penguin waving")
+
+        catalog.observe(CHAT, sticker("a"))
+        awaitDescriptionPass(catalog)
+
+        val id = storedStickerIds().single()
+        client.setGone = true
+
+        // no backdating: the rejection itself is what has to make the set due
+        catalog.recheckSetOf(id)
+        awaitWorker(catalog) { storedStickers().isEmpty() }
+
+        assertNull(catalog.indexBlockFor(CHAT))
+    }
+
     private fun catalog(client: FakeStickerClient, visionAnswer: String) =
         StickerCatalog(client.proxy, ImageVisionClient(FakePromptExecutor(visionAnswer), TEST_MODEL))
 
@@ -205,6 +223,9 @@ class StickerCatalogTest {
     }
 
     private data class StoredSticker(val description: String?, val describeAttempts: Int)
+
+    private suspend fun storedStickerIds(): List<Long> =
+        Db.dbTransaction { StickersTable.selectAll().map { it[StickersTable.id].value } }
 
     private suspend fun storedStickers(): List<StoredSticker> =
         Db.dbTransaction {

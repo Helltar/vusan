@@ -24,6 +24,16 @@ internal fun Throwable.isReplyMessageNotFound(): Boolean {
 internal fun Throwable.isMessageNotModified(): Boolean =
     telegramDescription?.contains("message is not modified", ignoreCase = true) == true
 
+// a `file_id` telegram no longer accepts. the wordings vary and this does not have to catch every
+// one: a match only schedules an early re-read of the set, so a miss costs a day's delay and a false
+// positive costs one extra `getStickerSet` call.
+internal fun Throwable.isWrongFileIdentifier(): Boolean {
+    val description = telegramDescription?.lowercase() ?: return false
+    return "wrong file identifier" in description ||
+        "wrong remote file identifier" in description ||
+        "invalid file_id" in description
+}
+
 // a sticker set the owner deleted or renamed. telegram answers `getStickerSet` with either the raw
 // core error or the readable wording, and only these mean the set is really gone — any other
 // failure is transient and must not be taken as permission to drop what was learned from it.

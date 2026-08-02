@@ -56,7 +56,15 @@ data class ScheduledAttribution(
     val headerText: String
 )
 
-class TelegramDelivery(private val client: TelegramClient) {
+/**
+ * [onStickerRejected] is told the catalog id of a sticker Telegram would not accept. It is a hint, not
+ * a verdict: the catalog schedules an early re-read of that set rather than deleting anything here,
+ * because a send can fail for reasons that say nothing about the sticker (restricted chat, rate limit).
+ */
+class TelegramDelivery(
+    private val client: TelegramClient,
+    private val onStickerRejected: (suspend (Long) -> Unit)? = null
+) {
 
     private companion object {
         const val MAX_CAPTION_CHARS = 1000
@@ -248,10 +256,24 @@ class TelegramDelivery(private val client: TelegramClient) {
                 return ItemDeliveryOutcome.PrivateBlocked
             }
 
+            if (item is BotOutput.Sticker && e.isWrongFileIdentifier()) {
+                reportRejectedSticker(item.catalogId)
+            }
+
             log.warn(e) { "failed to send outgoing item to chat=${deliveryTarget.chatId}" }
 
             return ItemDeliveryOutcome.Ok
         }
+    }
+
+    private suspend fun reportRejectedSticker(catalogId: Long) {
+        val report = onStickerRejected ?: return
+
+        runCatching { report(catalogId) }
+            .onFailure {
+                it.rethrowIfCancellation()
+                log.warn(it) { "failed to report rejected sticker id=$catalogId to the catalog" }
+            }
     }
 
     private suspend fun deliverText(

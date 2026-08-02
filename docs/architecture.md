@@ -165,7 +165,10 @@ A normal user message travels:
   worker re-reads each set a day after it was last checked: a `file_id` is only a handle and a set's owner can edit or
   delete it, so stickers that disappeared are dropped, changed handles are refreshed, and a set Telegram reports as
   gone (`STICKERSET_INVALID`) is forgotten entirely. Only that specific answer counts as gone — any other failure
-  backs off instead of discarding descriptions already paid for.
+  backs off instead of discarding descriptions already paid for. A send Telegram rejects for a bad `file_id` is fed
+  back through `TelegramDelivery`'s `onStickerRejected` hook, which only marks that set for an early re-read: a send
+  also fails for reasons that say nothing about the sticker (a chat where stickers are restricted, a rate limit), and
+  the catalog is shared by every chat, so what gets deleted is still decided by asking Telegram about the set.
 - **Task menu** — `/tasks` bypasses the LLM and asks `TaskMenuHandler` to render the caller's enabled tasks. Private
   chats show all of that user's tasks; groups show only their tasks created in that chat. Callback data carries the
   menu owner, every action checks ownership and group scope, and Telegram is always sent an `answerCallbackQuery`.

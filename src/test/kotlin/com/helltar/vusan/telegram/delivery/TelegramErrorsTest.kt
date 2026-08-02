@@ -36,6 +36,26 @@ class TelegramErrorsTest {
     }
 
     @Test
+    fun `detects a file identifier telegram no longer accepts`() {
+        assertTrue(telegramError("Bad Request: wrong remote file identifier specified").isWrongFileIdentifier())
+        assertTrue(telegramError("Bad Request: wrong file identifier/HTTP URL specified").isWrongFileIdentifier())
+    }
+
+    @Test
+    fun `does not read a chat-level sticker refusal as a dead file identifier`() {
+        val error = telegramError("Bad Request: not enough rights to send stickers to the chat")
+
+        assertFalse(error.isWrongFileIdentifier())
+    }
+
+    @Test
+    fun `detects a sticker set telegram no longer has`() {
+        assertTrue(telegramError("Bad Request: STICKERSET_INVALID").isStickerSetGone())
+        assertTrue(telegramError("Bad Request: sticker set not found").isStickerSetGone())
+        assertFalse(telegramError("Bad Gateway").isStickerSetGone())
+    }
+
+    @Test
     fun `does not treat unrelated telegram errors as formatting issues`() {
         val error = telegramError("Bad Request: reply message not found")
 

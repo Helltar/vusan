@@ -69,10 +69,12 @@ sealed class BotOutput {
     }
 
     // sent by file_id from the learned sticker catalog. the Bot API takes no caption on a sticker, so
-    // it is always a message of its own.
-    data class Sticker(val fileId: String) : BotOutput() {
+    // it is always a message of its own. [catalogId] travels with it so a rejected file_id can be
+    // reported back to the catalog.
+    data class Sticker(val fileId: String, val catalogId: Long) : BotOutput() {
         init {
             require(fileId.isNotBlank()) { "Sticker file id must not be blank" }
+            require(catalogId > 0L) { "Sticker catalog id must be positive" }
         }
     }
 

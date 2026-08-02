@@ -23,7 +23,7 @@ class StickerTools(
             catalog.fileIdFor(id)
                 ?: return@suspendToolGuard "No sticker id=$id in the catalog. Use an id listed in `<sticker_catalog>`."
 
-        outbox.enqueue(BotOutput.Sticker(fileId))
+        outbox.enqueue(BotOutput.Sticker(fileId, catalogId = id))
 
         "Sticker $id queued."
     }

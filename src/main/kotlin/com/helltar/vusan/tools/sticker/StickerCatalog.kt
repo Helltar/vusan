@@ -149,6 +149,27 @@ class StickerCatalog(
     }
 
     /**
+     * Telegram rejected this sticker's `file_id`. Nothing is deleted on that alone — a send fails for
+     * plenty of reasons that say nothing about the sticker — so the set is only marked for an early
+     * re-read, and [refreshStaleSets] decides from Telegram's own answer what to drop.
+     */
+    suspend fun recheckSetOf(stickerId: Long) = dbTransaction {
+        val setName =
+            StickersTable
+                .select(StickersTable.setName)
+                .where { StickersTable.id eq stickerId }
+                .firstOrNull()
+                ?.get(StickersTable.setName)
+                ?: return@dbTransaction
+
+        StickerSetsTable.update({ StickerSetsTable.name eq setName }) {
+            it[refreshedAt] = Instant.EPOCH
+        }
+
+        log.info { "sticker id=$stickerId was rejected; set=[$setName] queued for an early re-read" }
+    }
+
+    /**
      * Describe newly learned stickers in the background. Vision failures are expected and survivable —
      * an undescribed sticker simply stays out of the index and is retried on a later pass.
      */
