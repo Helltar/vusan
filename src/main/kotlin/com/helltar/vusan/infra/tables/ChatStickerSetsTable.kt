@@ -13,6 +13,10 @@ object ChatStickerSetsTable : LongIdTable("chat_sticker_sets") {
     val seenCount = integer("seen_count").default(0)
     val lastSeenAt = timestamp("last_seen_at").clientDefault { Instant.now() }
 
+    // when this chat caused a set to be pulled in, which is the only moment a set costs anything.
+    // null for a set that was already known from elsewhere, or that has not earned its keep yet.
+    val learnedAt = timestamp("learned_at").nullable()
+
     init {
         uniqueIndex(chatId, setName)
     }

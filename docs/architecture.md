@@ -157,8 +157,10 @@ A normal user message travels:
   sticker search, so a sticker can only be sent from a set known by name: `TelegramBotRunner` taps every sticker in an
   allowlisted chat — including ones the bot is not addressed in, which in a group is its only view of what people
   actually use — records the set, and pulls it in whole through `getStickerSet`. Only the set is stored, never message
-  content. A background worker then describes each sticker's thumbnail once through the vision model and caches the
-  result by `file_unique_id`; `AgentRunner` puts the described stickers for that chat into the trailing system context,
+  content. Pulling a set in is the only expensive step — up to 60 vision calls, paid once — so it is gated twice: a set
+  is learned only on the second time a chat reaches for it, and no chat may pull in more than three new sets a day.
+  Neither gate applies to a set already known from elsewhere, which costs nothing to offer. A background worker then
+  describes each sticker's thumbnail once through the vision model and caches the result by `file_unique_id`; `AgentRunner` puts the described stickers for that chat into the trailing system context,
   and `sendSticker` resends one by `file_id`. That index holds the chat's most recently used sets, filled
   round-robin so a set someone is using right now is never crowded out by one learned earlier. Without a vision runtime the catalog is never constructed and the tool is
   never registered, matching the vision tools. A sticker the model refuses to describe, or one that repeatedly fails,

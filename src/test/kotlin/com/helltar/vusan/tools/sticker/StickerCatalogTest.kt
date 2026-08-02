@@ -49,6 +49,9 @@ private const val CHAT = -100L
 private const val OTHER_CHAT = -200L
 private const val SET_NAME = "vusan_test_set"
 
+// mirrors MIN_USES_BEFORE_LEARNING in the catalog
+private const val MIN_USES_IN_TEST = 2
+
 class StickerCatalogTest {
 
     private lateinit var tempDir: Path
@@ -66,11 +69,11 @@ class StickerCatalogTest {
     }
 
     @Test
-    fun `one sticker pulls in its whole set and the described ones reach the chat index`() = runBlocking {
+    fun `a set the chat comes back to is pulled in whole and its stickers reach the index`() = runBlocking {
         val client = FakeStickerClient(setOf = listOf(sticker("a"), sticker("b")))
         val catalog = catalog(client, visionAnswer = "cat shrugging, unbothered")
 
-        catalog.observe(CHAT, sticker("a"))
+        catalog.learn(sticker("a"))
         awaitDescriptionPass(catalog)
 
         val index = assertNotNull(catalog.indexBlockFor(CHAT))
@@ -85,7 +88,7 @@ class StickerCatalogTest {
         val client = FakeStickerClient(setOf = listOf(sticker("a")))
         val catalog = catalog(client, visionAnswer = "I'm sorry, I can't help with that.")
 
-        catalog.observe(CHAT, sticker("a"))
+        catalog.learn(sticker("a"))
         awaitDescriptionPass(catalog)
 
         assertNull(catalog.indexBlockFor(CHAT))
@@ -102,7 +105,7 @@ class StickerCatalogTest {
         val client = FakeStickerClient(setOf = listOf(sticker("a")))
         val catalog = catalog(client, visionAnswer = "dog wagging tail")
 
-        catalog.observe(CHAT, sticker("a"))
+        catalog.learn(sticker("a"))
         awaitDescriptionPass(catalog)
 
         assertNotNull(catalog.indexBlockFor(CHAT))
@@ -125,7 +128,7 @@ class StickerCatalogTest {
         val client = FakeStickerClient(setOf = listOf(sticker("a"), sticker("b")))
         val catalog = catalog(client, visionAnswer = "penguin waving")
 
-        catalog.observe(CHAT, sticker("a"))
+        catalog.learn(sticker("a"))
         awaitDescriptionPass(catalog)
         assertNotNull(catalog.indexBlockFor(CHAT))
 
@@ -141,7 +144,7 @@ class StickerCatalogTest {
         val client = FakeStickerClient(setOf = listOf(sticker("a"), sticker("b")))
         val catalog = catalog(client, visionAnswer = "penguin waving")
 
-        catalog.observe(CHAT, sticker("a"))
+        catalog.learn(sticker("a"))
         awaitDescriptionPass(catalog)
         assertEquals(2, storedStickers().size)
 
@@ -160,7 +163,7 @@ class StickerCatalogTest {
         val client = FakeStickerClient(setOf = listOf(sticker("a")))
         val catalog = catalog(client, visionAnswer = "penguin waving")
 
-        catalog.observe(CHAT, sticker("a"))
+        catalog.learn(sticker("a"))
         awaitDescriptionPass(catalog)
 
         client.failSet = true
@@ -179,7 +182,7 @@ class StickerCatalogTest {
 
         packs.forEach { pack ->
             client.setOf = (1..2).map { sticker("$pack-$it", set = pack) }
-            catalog.observe(CHAT, sticker("$pack-1", set = pack))
+            catalog.learn(sticker("$pack-1", set = pack))
         }
 
         awaitDescriptionPass(catalog)
@@ -192,6 +195,53 @@ class StickerCatalogTest {
         assertEquals(packs.toSet(), shown)
     }
 
+    @Test
+    fun `a set used once and never again is not pulled in`() = runBlocking {
+        val client = FakeStickerClient(setOf = (1..60).map { sticker("a$it") })
+        val catalog = catalog(client, visionAnswer = "penguin waving")
+
+        catalog.observe(CHAT, sticker("a1"))
+
+        // a passing sticker from a set nobody reaches for again must not cost 60 vision calls
+        assertTrue(storedStickers().isEmpty())
+        assertNull(catalog.indexBlockFor(CHAT))
+    }
+
+    @Test
+    fun `a chat cannot pull in more new sets than its daily budget`() = runBlocking {
+        val client = FakeStickerClient(setOf = emptyList())
+        val catalog = catalog(client, visionAnswer = "penguin waving")
+
+        val withinBudget = listOf("pack_one", "pack_two", "pack_three")
+
+        withinBudget.forEach { pack ->
+            client.setOf = listOf(sticker("$pack-1", set = pack))
+            catalog.learn(sticker("$pack-1", set = pack))
+        }
+
+        assertEquals(withinBudget.size, storedStickers().size)
+
+        client.setOf = listOf(sticker("pack_four-1", set = "pack_four"))
+        catalog.learn(sticker("pack_four-1", set = "pack_four"))
+
+        assertEquals(withinBudget.size, storedStickers().size, "the budget did not stop a fourth set")
+    }
+
+    @Test
+    fun `a set already known elsewhere costs a new chat nothing and needs no second use`() = runBlocking {
+        val client = FakeStickerClient(setOf = listOf(sticker("a")))
+        val catalog = catalog(client, visionAnswer = "penguin waving")
+
+        catalog.learn(sticker("a"))
+        awaitDescriptionPass(catalog)
+
+        client.setGone = true
+        catalog.observe(OTHER_CHAT, sticker("a"))
+
+        // no fetch happens at all, so the set being unreachable now cannot matter
+        assertNotNull(catalog.indexBlockFor(OTHER_CHAT))
+    }
+
     private fun shownIds(index: String): List<Long> =
         index.lines()
             .filter { it.startsWith("#") }
@@ -202,7 +252,7 @@ class StickerCatalogTest {
         val client = FakeStickerClient(setOf = listOf(sticker("a")))
         val catalog = catalog(client, visionAnswer = "penguin waving")
 
-        catalog.observe(CHAT, sticker("a"))
+        catalog.learn(sticker("a"))
         awaitDescriptionPass(catalog)
 
         val id = storedStickerIds().single()
@@ -213,6 +263,11 @@ class StickerCatalogTest {
         awaitWorker(catalog) { storedStickers().isEmpty() }
 
         assertNull(catalog.indexBlockFor(CHAT))
+    }
+
+    // a set is only pulled in once the chat has reached for it more than once
+    private suspend fun StickerCatalog.learn(sticker: Sticker, chatId: Long = CHAT) {
+        repeat(MIN_USES_IN_TEST) { observe(chatId, sticker) }
     }
 
     private fun catalog(client: FakeStickerClient, visionAnswer: String) =

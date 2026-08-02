@@ -24,6 +24,7 @@ import org.jetbrains.exposed.v1.core.ResultRow
 import org.jetbrains.exposed.v1.core.SortOrder
 import org.jetbrains.exposed.v1.core.and
 import org.jetbrains.exposed.v1.core.eq
+import org.jetbrains.exposed.v1.core.greater
 import org.jetbrains.exposed.v1.core.inList
 import org.jetbrains.exposed.v1.core.isNotNull
 import org.jetbrains.exposed.v1.core.isNull
@@ -56,6 +57,14 @@ private const val MAX_STICKERS_PER_SET = 60
 private const val MAX_INDEX_SETS = 3
 private const val MAX_INDEX_ENTRIES = 80
 private const val MAX_DESCRIPTION_CHARS = 90
+
+// pulling in a set is the only expensive thing here — up to MAX_STICKERS_PER_SET vision calls, paid
+// once. these two keep that bill tied to what a chat actually uses: a set nobody reaches for twice is
+// never learned, and no chat can pull in more than a handful of new sets a day however many stickers
+// it throws. neither applies to a set already known from another chat, which costs nothing to offer.
+private const val MIN_USES_BEFORE_LEARNING = 2
+private const val MAX_NEW_SETS_PER_CHAT_PER_DAY = 3
+private val NEW_SET_BUDGET_WINDOW = 24.hours
 
 private const val DESCRIPTIONS_PER_PASS = 20
 private const val MAX_DESCRIBE_ATTEMPTS = 5
@@ -126,19 +135,37 @@ class StickerCatalog(
 
     data class StickerEntry(val id: Long, val setName: String, val emoji: String?, val description: String)
 
-    /** Record a sticker seen in a chat, pulling in its set the first time that set shows up. */
+    /** Record a sticker seen in a chat, pulling in its set once that set has earned it. */
     suspend fun observe(chatId: Long, sticker: Sticker) {
         val setName = sticker.setName?.takeIf { it.isNotBlank() } ?: return
         if (sticker.type != null && sticker.type != REGULAR_STICKER) return
 
         runCatching {
-            recordChatUsage(chatId, setName)
+            val seenCount = recordChatUsage(chatId, setName)
 
-            if (!isSetStored(setName)) {
-                val stickers = fetchSet(setName)
-                syncSet(setName, stickers)
-                log.info { "learned sticker set=[$setName] (${stickers.size} stickers)" }
+            // a set already known from anywhere is free to offer here: no fetch, no vision, so neither
+            // of the cost guards below applies to it.
+            if (isSetStored(setName)) return@runCatching
+
+            if (seenCount < MIN_USES_BEFORE_LEARNING) {
+                log.debug { "sticker set=[$setName] seen $seenCount time(s) in chat=$chatId; not learning it yet" }
+                return@runCatching
             }
+
+            if (setsLearnedRecentlyIn(chatId) >= MAX_NEW_SETS_PER_CHAT_PER_DAY) {
+                log.warn {
+                    "chat=$chatId reached its new sticker set budget " +
+                            "($MAX_NEW_SETS_PER_CHAT_PER_DAY/day); set=[$setName] not learned"
+                }
+
+                return@runCatching
+            }
+
+            val stickers = fetchSet(setName)
+            syncSet(setName, stickers)
+            markLearnedIn(chatId, setName)
+
+            log.info { "learned sticker set=[$setName] (${stickers.size} stickers) from chat=$chatId" }
         }.onFailure {
             it.rethrowIfCancellation()
             log.warn(it) { "failed to learn sticker set=[$setName] from chat=$chatId" }
@@ -411,7 +438,8 @@ class StickerCatalog(
 
     private data class StoredHandles(val fileId: String, val thumbnailFileId: String?)
 
-    private suspend fun recordChatUsage(chatId: Long, setName: String) = dbTransaction {
+    /** Records this sighting and answers how many times the chat has now used the set. */
+    private suspend fun recordChatUsage(chatId: Long, setName: String): Int = dbTransaction {
         val now = Instant.now()
 
         val updated =
@@ -429,7 +457,35 @@ class StickerCatalog(
                 it[seenCount] = 1
                 it[lastSeenAt] = now
             }
+
+            return@dbTransaction 1
         }
+
+        ChatStickerSetsTable
+            .select(ChatStickerSetsTable.seenCount)
+            .where { (ChatStickerSetsTable.chatId eq chatId) and (ChatStickerSetsTable.setName eq setName) }
+            .single()[ChatStickerSetsTable.seenCount]
+    }
+
+    private suspend fun setsLearnedRecentlyIn(chatId: Long): Int = dbTransaction {
+        ChatStickerSetsTable
+            .selectAll()
+            .where {
+                (ChatStickerSetsTable.chatId eq chatId) and
+                        (ChatStickerSetsTable.learnedAt greater Instant.now().minusSeconds(NEW_SET_BUDGET_WINDOW.inWholeSeconds))
+            }
+            .count()
+            .toInt()
+    }
+
+    private suspend fun markLearnedIn(chatId: Long, setName: String) = dbTransaction {
+        ChatStickerSetsTable.update({
+            (ChatStickerSetsTable.chatId eq chatId) and (ChatStickerSetsTable.setName eq setName)
+        }) {
+            it[learnedAt] = Instant.now()
+        }
+
+        Unit
     }
 
     private suspend fun describedEntriesFor(chatId: Long): List<StickerEntry> = dbTransaction {
