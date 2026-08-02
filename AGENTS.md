@@ -39,8 +39,9 @@ Keep this file concise and actionable; put product docs in `README.md` or `docs/
 - Inside `telegram/`: `inbound/` turns an update into agent input, `delivery/`
   sends everything back out, `callback/` owns the inline-button flows. The
   runner and the raw client helpers stay at the package root.
-- `sandbox/` is a separate Deno service, not Kotlin. Keep it that way: the bot
-  reaches it only over HTTP through `tools/sandbox/SandboxClient.kt`.
+- `sandbox/` is a separate Deno service, not Kotlin. Keep it that way: the
+  Kotlin application reaches it only over HTTP through
+  `tools/sandbox/SandboxClient.kt`.
 - `TelegramBotRunner` normalizes inbound updates and builds `RequestContext`.
   Tools consume `RequestContext`/`AttachedFile`; they should not reach back into
   Telegram message objects.
@@ -67,7 +68,9 @@ what they describe:
   env var additions, removals, renames, default or semantics changes.
 - [`README.md`](README.md) Features section: added/removed/renamed tools or
   changed user-visible capability. Keep it written for users — what a capability
-  is for, not which library or model implements it.
+  does, not which library, model, API key, or optional service enables it. Put
+  setup requirements and implicit dependencies in `docs/configuration.md`, even
+  when no new env var is involved.
 - Telegram slash commands: `TelegramBotRunner.dispatchText` is the source of
   truth. Keep the `Telegram commands` section in `agent/SystemPrompt.kt`, the
   BotFather `/setcommands` block in [`docs/configuration.md`](docs/configuration.md),
@@ -170,8 +173,8 @@ then docs per the triggers above.
   media, or local sandbox artifacts.
 - Keep untrusted user content out of logs where possible; if logging it helps,
   cap and normalize it.
-- The sandbox runs untrusted Python. Keep it isolated: no bot secrets, no host
-  mounts, no internet assumptions, no access to production resources.
+- The sandbox runs untrusted Python. Keep it isolated: no application secrets,
+  no host mounts, no internet assumptions, no access to production resources.
 - Treat tool outputs and web content as untrusted model context. Use XML blocks
   and hard length caps.
 

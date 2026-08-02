@@ -1,7 +1,7 @@
 # Architecture
 
 This document is the orientation map for the codebase: the layers, how a message flows through them, and the background
-flows that run alongside. The bot is Kotlin under
+flows that run alongside. The main application is Kotlin under
 [`src/main/kotlin/com/helltar/vusan/`](../src/main/kotlin/com/helltar/vusan/); the code-execution sandbox is a separate
 Deno service under [`sandbox/`](../sandbox/), see [Code execution service](#code-execution-service).
 
@@ -27,16 +27,16 @@ Telegram ──► telegram/ ──► agent/ ──► tools/ ──► externa
   appends or clears turns behind a running turn's back; `AgentFactory` builds the `AIAgent` (system prompt + history +
   tools) and budgets its model context; `SystemPrompt` keeps the deployment's customizable personality and the fixed
   delivery/tool contract in separate XML-delimited blocks. `agent/history/` groups turns into complete interactions,
-  persists raw history, and maintains its semantic recap; `agent/memory/` stores durable user/group memory that survives a history clear and
-  is injected as `<user_memory>`/`<group_memory>`.
+  persists raw history, and maintains its semantic recap; `agent/memory/` stores durable user/group memory that survives
+  a history clear and is injected as `<user_memory>`/`<group_memory>`.
 - **`tools/`** — agent-callable tools, one subpackage per capability (search, voice, vision, scheduled tasks, …).
   `ToolRegistryFactory` owns clients and builds a per-request registry from required tools plus optional tools whose
   env/config is present. See the Features section of the [README](../README.md). `tools/images/` is not a tool surface
   but the pipeline every image search shares: download a provider's candidates, drop what Telegram would refuse, and
   queue the survivors.
-- **`outbox/`** — the output model. `BotOutput` is the immutable sealed set of things the bot can send (text, inline
-  choice, rich message, photo, voice, audio, video, document, poll, reaction, …); `BotOutbox` is the per-request queue
-  tools write into, holding each `BotOutput` as an `OutboxItem` that captures its private-routing decision.
+- **`outbox/`** — the output model. `BotOutput` is the immutable sealed set of Telegram outputs (text, inline choice,
+  rich message, photo, voice, audio, video, document, poll, reaction, …); `BotOutbox` is the per-request queue tools
+  write into, holding each `BotOutput` as an `OutboxItem` that captures its private-routing decision.
 - **`request/`** — the request-scoped input model shared across layers: `RequestContext`
   (chat/user/message ids and sender info tools see) and `AttachedFile` (photo, video, or document, from the current
   message or a replied-to message, that vision (`describeImage`, `describeVideo`) and code execution (`codeExecution`)
@@ -48,7 +48,8 @@ Telegram ──► telegram/ ──► agent/ ──► tools/ ──► externa
   `Http` client.
 - **`config/`** — `.env` parsing (`AppConfig`) and LLM provider/model resolution (`LlmRuntime`).
   `VisionRuntime` resolves separately which model looks at images: the `OPENAI_VISION_*` model when configured, the chat
-  model when it accepts images, and nothing at all otherwise — which leaves the vision tools unregistered.
+  model when it accepts images, and nothing at all otherwise — which leaves the vision tools and sticker catalog
+  unavailable.
 - **`stt/`** — OpenAI speech-to-text client (`OpenAiWhisperClient`, default model
   `gpt-4o-transcribe`); used for voice transcription and for the sound of a video the vision tool watches, opt-in via
   `OPENAI_STT_API_KEY`.
@@ -64,12 +65,10 @@ A normal user message travels:
 
 1. **Receive** — `TelegramBotRunner` long-polls via `TelegramBotsLongPollingApplication`, funnels updates into a
    channel, and dispatches each message by content (text/command, rich message, sticker, voice, audio, photo, video,
-   video note, GIF, document). Album (media
-   group) parts arrive as separate updates sharing a
+   video note, GIF, document). Album (media group) parts arrive as separate updates sharing a
    `media_group_id`; the runner buffers them until the update stream goes quiet (`ALBUM_QUIET_PERIOD`, or the ten-item
    album cap) and handles the batch as one gallery message: the caption may sit on any album part, only the first
-   inspectable item becomes the
-   `AttachedFile`, and the agent is told how many items it cannot see.
+   inspectable item becomes the `AttachedFile`, and the agent is told how many items it cannot see.
    `/tasks`, `/clear`, and task-menu callback queries take direct paths that never enter the agent loop. An
    agent-created inline-choice callback is different: it is validated and consumed by `InlineChoiceHandler`, then its
    selected option enters the agent loop as the user's next turn. Callback data no handler recognizes (a button from
@@ -87,17 +86,18 @@ A normal user message travels:
 4. **Run** — `AgentRunner.handle` takes the per-user lock (or returns "busy"), loads durable memory
    (`agent/memory/MemoryRepository` — the sender's user memory always, plus the group's memory in non-private chats),
    and places it with `<message_context>` immediately before the current request in one user-role turn. That metadata
-   also carries `last_exchange` — how long ago this user last spoke with the bot — but only once the gap is long
+   also carries `last_exchange` — how long ago this user last spoke with Vusan — but only once the gap is long
    enough to be worth noticing, so ordinary back-and-forth stays free of it.
    `AgentFactory.prepare` builds the per-request tool registry and estimates the fixed system/tool/current-turn cost.
    The history planner reserves room for output, future tool calls, and estimation error, then admits only complete
    interactions. If an older prefix no longer fits or exceeds the configured recent count,
    `LlmConversationCompactor` merges it into the persisted `<conversation_recap>` before `AgentFactory.build` creates
-   the Koog `AIAgent`. Native catalog context sizes are used automatically; `LLM_CONTEXT_WINDOW_TOKENS` supplies or
-   overrides the value for changing and OpenAI-compatible models.
+   the Koog `AIAgent`. Native catalog context sizes are used automatically; `LLM_CONTEXT_WINDOW_TOKENS` supplies a
+   missing value or overrides stale model metadata.
 5. **Act** — during the agent loop, tools run and push results into the request's `BotOutbox`; tool calls/results are
    recorded for history. Live textual tool results share a cumulative bound derived from the reserved agent-growth
-   budget before later LLM calls. The custom `single_run` strategy (`AgentFactory`) guards against flaky models in two ways:
+   budget before later LLM calls. The custom `single_run` strategy (`AgentFactory`) guards against flaky models in two
+   ways:
     - a tool call missing its declared required parameters (flaky models emit empty-arg siblings when they try to call
       tools in parallel) is short-circuited into a `ValidationError` result instead of being executed, so the run stays
       clean and the follow-up request stays well-formed;
@@ -122,7 +122,7 @@ A normal user message travels:
       `TelegramOutputSender` turns `<br>`-style tags into real newlines instead of letting Telegram reject the whole
       message. Rejected reply text is re-sent as a `message.html` document (`telegram/delivery/HtmlReplyDocument.kt` — a
       standalone, responsive, light/dark page with a no-script CSP) so the formatting still arrives; a rejected caption
-      resends the media captionless and delivers the caption the same way; bot notices fall back to plain text.
+      resends the media captionless and delivers the caption the same way; localized notices fall back to plain text.
     - **Rich messages** — opt-in Bot API 10.1 (`BotOutput.RichMessage`, github-flavored markdown) via the
       `sendRichMessage` tool, resent as a `message.md` document if rejected. Opt-in because some third-party clients
       (e.g. Telegram X) render rich messages as unsupported.
@@ -148,7 +148,7 @@ A normal user message travels:
   Recurrence math lives in `tasks/Recurrence.kt`.
 - **Self-initiated follow-ups** — `scheduleFollowUp` lets the agent set itself a single future turn when the
   conversation gives it a reason to come back ("ask how the exam went"). It is the same scheduler, store, and delivery
-  path as `scheduleTask`, narrowed: one-time only, its own `MAX_FOLLOW_UPS_PER_USER` limit so the bot cannot spend the
+  path as `scheduleTask`, narrowed: one-time only, its own `MAX_FOLLOW_UPS_PER_USER` limit so the agent cannot spend the
   user's task quota, and a `self_initiated` flag on the row. In a group it fires anchored to the message that prompted
   it, and only when that message is gone does it fall back to a "following up with" notice instead of the
   "scheduled by" one, which would misattribute it to the user. The user sees and cancels them through `/tasks` like
@@ -160,18 +160,19 @@ A normal user message travels:
   content. Pulling a set in is the only expensive step — up to 60 vision calls, paid once — so it is gated twice: a set
   is learned only on the second time a chat reaches for it, and no chat may pull in more than three new sets a day.
   Neither gate applies to a set already known from elsewhere, which costs nothing to offer. A background worker then
-  describes each sticker's thumbnail once through the vision model and caches the result by `file_unique_id`; `AgentRunner` puts the described stickers for that chat into the trailing system context,
-  and `sendSticker` resends one by `file_id`. That index holds the chat's most recently used sets, filled
-  round-robin so a set someone is using right now is never crowded out by one learned earlier. Without a vision runtime the catalog is never constructed and the tool is
-  never registered, matching the vision tools. A sticker the model refuses to describe, or one that repeatedly fails,
-  is counted out after `describe_attempts` so it neither enters the index nor blocks the queue behind it. The same
-  worker re-reads each set a day after it was last checked: a `file_id` is only a handle and a set's owner can edit or
-  delete it, so stickers that disappeared are dropped, changed handles are refreshed, and a set Telegram reports as
-  gone (`STICKERSET_INVALID`) is forgotten entirely. Only that specific answer counts as gone — any other failure
-  backs off instead of discarding descriptions already paid for. A send Telegram rejects for a bad `file_id` is fed
-  back through `TelegramDelivery`'s `onStickerRejected` hook, which only marks that set for an early re-read: a send
-  also fails for reasons that say nothing about the sticker (a chat where stickers are restricted, a rate limit), and
-  the catalog is shared by every chat, so what gets deleted is still decided by asking Telegram about the set.
+  describes each sticker's thumbnail once through the vision model and caches the result by `file_unique_id`;
+  `AgentRunner` puts the described stickers for that chat into the trailing system context, and `sendSticker` resends
+  one by `file_id`. That index holds the chat's most recently used sets, filled round-robin so a set someone is using
+  right now is never crowded out by one learned earlier. Without a vision runtime the catalog is never constructed and
+  the tool is never registered, matching the vision tools. A sticker the model refuses to describe, or one that
+  repeatedly fails, is counted out after `describe_attempts` so it neither enters the index nor blocks the queue behind
+  it. The same worker re-reads each set a day after it was last checked: a `file_id` is only a handle and a set's owner
+  can edit or delete it, so stickers that disappeared are dropped, changed handles are refreshed, and a set Telegram
+  reports as gone (`STICKERSET_INVALID`) is forgotten entirely. Only that specific answer counts as gone — any other
+  failure backs off instead of discarding descriptions already paid for. A send Telegram rejects for a bad `file_id`
+  is fed back through `TelegramDelivery`'s `onStickerRejected` hook, which only marks that set for an early re-read: a
+  send also fails for reasons that say nothing about the sticker (a chat where stickers are restricted, a rate limit),
+  and the catalog is shared by every chat, so what gets deleted is still decided by asking Telegram about the set.
 - **Task menu** — `/tasks` bypasses the LLM and asks `TaskMenuHandler` to render the caller's enabled tasks. Private
   chats show all of that user's tasks; groups show only their tasks created in that chat. Callback data carries the
   menu owner, every action checks ownership and group scope, and Telegram is always sent an `answerCallbackQuery`.
@@ -213,14 +214,15 @@ A normal user message travels:
 - **LLM provider resolution** — `config/LlmRuntime.resolveLlmRuntime` turns
   `AppConfig.llmProvider` into a Koog client/model/params triple. Native clients cover OpenAI, Anthropic, Google, and
   DeepSeek — models are matched against each client's predefined catalog. `openai-compatible` keeps a hand-declared
-  model for any other server (llama.cpp, Ollama, …), with a configurable context size. Its endpoint capability and params type are declared as a pair
-  (`OpenAIChatParams` → `/v1/chat/completions`, `OpenAIResponsesParams` → `/v1/responses`), because the Koog client reads
-  the route off the params type and rejects params the model does not declare an endpoint for. Direct OpenAI requests
-  share a stable `prompt_cache_key`, and history recaps get their own so their tool-free prefix does not dilute the
-  chat one; for GPT-5.6 and later, `config/OpenAiPromptCaching` also marks the first stable
-  system/developer content block as the only explicit cache breakpoint. This keeps the system prompt and tool schemas
-  reusable while excluding timestamps, history, memory, Telegram metadata, user input, and tool results from billable
-  cache writes. The adapter exists because Koog 1.1.1 cannot represent OpenAI's explicit breakpoint fields itself.
+  model for any other server (llama.cpp, Ollama, …), with a configurable context size. Its endpoint capability and
+  params type are declared as a pair (`OpenAIChatParams` → `/v1/chat/completions`, `OpenAIResponsesParams` →
+  `/v1/responses`), because the Koog client reads the route off the params type and rejects params the model does not
+  declare an endpoint for. Direct OpenAI requests share a stable `prompt_cache_key`, and history recaps get their own
+  so their tool-free prefix does not dilute the chat one; for GPT-5.6 and later, `config/OpenAiPromptCaching` marks the
+  first stable system/developer content block as the only explicit cache breakpoint. This keeps the system prompt and
+  tool schemas reusable while excluding timestamps, history, memory, Telegram metadata, user input, and tool results
+  from billable cache writes. The adapter exists because Koog 1.1.1 cannot represent OpenAI's explicit breakpoint
+  fields itself.
 
 ## Code execution service
 
@@ -244,7 +246,8 @@ Isolation is enforced by the Deno entrypoint flags, not by convention: `--allow-
 `--allow-read` to `/app`, `/deno-dir`, and `/fonts`, and there is no `--allow-write` at all. The code being run is
 model-authored and untrusted — keep it that way.
 
-`SANDBOX_TIMEOUT_SECONDS` is read by both sides: the service enforces it per run, the bot budgets its wait around it.
+`SANDBOX_TIMEOUT_SECONDS` is read by both sides: the service enforces it per run, while `SandboxClient` budgets its HTTP
+wait around the same value.
 
 ## Startup
 
@@ -252,7 +255,7 @@ model-authored and untrusted — keep it that way.
 repositories, context policy, conversation compactor, the Telegram client and (only with a vision runtime) the
 `StickerCatalog`, `ToolRegistryFactory`, `AgentFactory`, `AgentRunner` → create `TaskMenuHandler` and
 `InlineChoiceHandler`, and optionally enable voice transcription → start `TelegramBotRunner` and launch
-`TaskScheduler` and the sticker description worker, then block on the bot job until shutdown (closing the executor,
+`TaskScheduler` and the sticker description worker, then block on the runner job until shutdown (closing the executor,
 HTTP client, and DB in `finally`).
 
 ## Where to look when…
@@ -262,17 +265,17 @@ A symptom-to-source map for finding the right file fast. Paths are under
 
 | Symptom                                                                          | Start here                                                                                                                                                                                                                                                                                            |
 |----------------------------------------------------------------------------------|-------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
-| Bot ignores a message entirely                                                   | `telegram/inbound/MessageFilter.kt` (`shouldHandle` — group reply/mention rules), then `TelegramBotRunner.isAccepted`/`isAllowed` (the `ALLOWED_IDS` allowlist)                                                                                                                                               |
+| Vusan ignores a message entirely                                                 | `telegram/inbound/MessageFilter.kt` (`shouldHandle` — group reply/mention rules), then `TelegramBotRunner.isAccepted`/`isAllowed` (the `ALLOWED_IDS` allowlist)                                                                                                                                               |
 | Reply says "still working on your previous request"                              | `agent/AgentRunner.kt` — the per-user `Mutex` rejects a second concurrent turn                                                                                                                                                                                                                        |
 | Reply lands in the wrong chat, loses its reply anchor, or DM redirect misbehaves | `telegram/delivery/TelegramDelivery.kt` (routing/anchor/private-redirect *policy*)                                                                                                                                                                                                                             |
 | Formatting renders wrong, message rejected, or media falls back to document/text | `agent/SystemPrompt.kt` (allowed HTML tags the agent emits), `telegram/delivery/TelegramOutputSender.kt` (which call and which fallback each output kind gets), `telegram/delivery/TelegramSendFallbacks.kt` (the fallback *mechanism* itself), `telegram/delivery/TelegramErrors.kt` (which provider errors trigger a fallback) |
-| Bot floods a chat or stalls on Telegram 429 over a long multi-message reply      | `outbox/BotOutbox.kt` (text coalescing + `MAX_TEXT_MESSAGES` cap) + `telegram/delivery/TelegramDelivery.kt` (`INTER_MESSAGE_DELAY` pacing)                                                                                                                                                                     |
+| Vusan floods a chat or stalls on Telegram 429 over a long multi-message reply    | `outbox/BotOutbox.kt` (text coalescing + `MAX_TEXT_MESSAGES` cap) + `telegram/delivery/TelegramDelivery.kt` (`INTER_MESSAGE_DELAY` pacing)                                                                                                                                                                     |
 | A specific tool misbehaves                                                       | `tools/<feature>/<Feature>Tools.kt` for the tool surface, plus its `<Feature>Client.kt` for the external call                                                                                                                                                                                         |
 | Code execution times out, says "busy", or loses produced files                   | `tools/sandbox/SandboxClient.kt` (HTTP call + wait budget), then the service in [`sandbox/`](../sandbox/): `main.ts` (worker pool, `503` when none free) and `worker.ts` (Pyodide setup, output caps)                                                                                                 |
 | Wrong language in a canned reply (busy/error/voice/start/task menu)              | `i18n/Language.kt` (language selection) + `i18n/Messages.kt` (the strings)                                                                                                                                                                                                                            |
-| Bot forgets context or the history recap looks wrong                             | `agent/history/ChatHistory.kt` (budget/selection) + `agent/history/ConversationCompactor.kt` (semantic recap) + `agent/history/ChatHistoryRepository.kt` (storage/checkpoint)                                                                                                                         |
+| Vusan forgets context or the history recap looks wrong                           | `agent/history/ChatHistory.kt` (budget/selection) + `agent/history/ConversationCompactor.kt` (semantic recap) + `agent/history/ChatHistoryRepository.kt` (storage/checkpoint)                                                                                                                         |
 | Voice/audio not transcribed                                                      | `telegram/inbound/VoiceTranscriber.kt` + `stt/OpenAiWhisperClient.kt` (needs `OPENAI_STT_API_KEY`); for a video's sound `tools/vision/VideoAudioTranscriber.kt`                                                                                                                                                                                                            |
-| Bot cannot see what is in a video                                                | `tools/vision/VisionTools.kt` (`describeVideo` guards and the preview-frame fallback), `tools/vision/VideoVisionClient.kt` (frames + transcript prompt), `tools/vision/VideoSampler.kt` (ffmpeg), `telegram/inbound/ReplyContext.kt` (which media becomes an `AttachedFile`)                                  |
+| Vusan cannot see what is in a video                                              | `tools/vision/VisionTools.kt` (`describeVideo` guards and the preview-frame fallback), `tools/vision/VideoVisionClient.kt` (frames + transcript prompt), `tools/vision/VideoSampler.kt` (ffmpeg), `telegram/inbound/ReplyContext.kt` (which media becomes an `AttachedFile`)                                  |
 | Web search picks the wrong provider, or results are thin                        | the `@LLMDescription` text that ranks them: `tools/tavily/TavilyToolDescriptions.kt` (`webSearch`, the default) and `tools/searxng/SearxngToolDescriptions.kt` (`metaSearch`, the fallback)                                                                                                           |
 | Image search sends nothing, or sends irrelevant pictures                        | `tools/images/ImageSearchDelivery.kt` (candidate retries, size caps, media group) + `tools/images/ImageDownloadClient.kt` (user agent, format/dimension checks); for relevance, `SearxngTools.IMAGE_ENGINES` and `TavilyTools.imageExcludedDomains`                                                   |
 | A rich message reads as empty, `unknown`, or loses its structure                 | `telegram/inbound/RichMessageText.kt` (block tree → rich markdown), then `MessageMetadata.contentTypeName`/`textSnippetOrNull` and `ReplyContext.repliedTextOrNull`                                                                                                                                           |
@@ -297,8 +300,9 @@ A new agent tool typically touches these, in order:
 3. *(optional)* **`<Feature>Client.kt`** / **`<Feature>Models.kt`** — the external I/O and its DTOs.
 4. **`tools/ToolRegistryFactory.kt`** — register it in `buildRegistry`; wrap construction in the
    `optional(...)` helper when it depends on an API key that may be unset.
-5. **Docs** — add the tool to the Features section of the [README](../README.md); add any new env vars to
-   [`configuration.md`](configuration.md) and [`.env.example`](../.env.example).
+5. **Docs** — add the capability to the Features section of the [README](../README.md); document setup requirements
+   and implicit dependencies in [`configuration.md`](configuration.md), and add any new env vars to both that file and
+   [`.env.example`](../.env.example).
 
 ## Conventions
 
