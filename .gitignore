@@ -8,9 +8,9 @@
 
 build/
 data/
-docs/telegram/
 deploy/
 node_modules/
+notes/
 
 CLAUDE.local.md
 deno.lock
