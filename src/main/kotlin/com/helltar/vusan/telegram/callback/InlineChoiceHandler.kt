@@ -24,7 +24,7 @@ internal data class InlineChoiceSelection(
 
 internal class InlineChoiceHandler(
     private val client: TelegramClient,
-    private val currentHistoryRevision: suspend (Long) -> Long
+    private val currentHistoryRevision: suspend (userId: Long, chatId: Long) -> Long
 ) {
 
     private companion object {
@@ -68,7 +68,7 @@ internal class InlineChoiceHandler(
             return null
         }
 
-        if (action.historyRevision != currentHistoryRevision(userId))
+        if (action.historyRevision != currentHistoryRevision(userId, chatId))
             return unavailable(callbackQueryId, messages)
 
         val normalizedQuestion =

@@ -1,4 +1,4 @@
-package com.helltar.vusan.agent.history
+package com.helltar.vusan.agent.conversation
 
 import com.helltar.vusan.common.limitTo
 import kotlinx.serialization.json.Json
@@ -37,7 +37,7 @@ private const val TOOL_CALL_ARG_VALUE_MAX_CHARS = 2_000
 private const val TOOL_CALL_ARGS_MAX_CHARS = 4_000
 private const val TRUNCATION_MARKER = "… [truncated]"
 
-fun toolCallArgsForHistory(rawArgs: String): String {
+fun toolCallArgsForStorage(rawArgs: String): String {
     val obj = runCatching { Json.parseToJsonElement(rawArgs).jsonObject }.getOrNull() ?: return "{}"
 
     val bounded =

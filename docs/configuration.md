@@ -246,28 +246,66 @@ its wait budget. Setting it once keeps the two in sync.
 
 ## Memory
 
-The agent keeps a per-user conversation history plus a durable **memory** that survives the user clearing the chat:
-personal memory (keyed by user, follows them across DMs and groups) and shared group memory (keyed by chat). Built in;
-no env variable is required to enable it.
+The agent keeps a conversation history per person **per chat** plus a durable **memory** that survives the user
+clearing the chat: personal memory (keyed by user, follows them across DMs and groups) and shared group memory (keyed by
+chat). Built in; no env variable is required to enable it.
+
+Memory is the only thing that travels between chats. The history does not: what someone told the bot in a DM is not
+replayed inside a group, and two groups never see each other's exchanges. Ask the bot to remember something if it
+should follow you everywhere.
 
 | Variable               | Default | Description                                                               |
 |------------------------|---------|---------------------------------------------------------------------------|
 | `MAX_MEMORY_PER_SCOPE` | `10`    | Max durable memory entries per user and per chat; the oldest are evicted. |
 
-## Conversation history
+## Conversation
 
-History is global per Telegram user. Recent interactions are replayed exactly; older ones are merged by the active
-chat model into a persisted semantic recap. Raw rows remain available for a bounded time but never enter the prompt
-again after their recap checkpoint.
+Stored per Telegram user **and chat**, so a person keeps one thread in each place they talk to the bot, and it holds
+only the turns the bot took part in. Recent interactions are replayed exactly; older ones are merged by the active chat
+model into a persisted semantic recap. Raw rows remain available for a bounded time but never enter the prompt again
+after their recap checkpoint.
+
+Every limit below applies to one such thread. Someone active in a DM and two groups keeps three of them, each with its
+own recap and its own retention.
 
 | Variable                               | Default | Description                                                        |
 |----------------------------------------|---------|--------------------------------------------------------------------|
-| `CHAT_HISTORY_MAX_RECENT_INTERACTIONS` | `12`    | Complete unsummarized interactions kept in the model context.      |
-| `CHAT_HISTORY_MAX_STORED_INTERACTIONS` | `100`   | Complete raw interactions retained after they have been summarized. |
-| `CHAT_HISTORY_RETENTION_DAYS`          | `90`    | Days summarized raw interactions remain in SQLite.                 |
+| `CONVERSATION_MAX_RECENT_INTERACTIONS` | `12`    | Complete unsummarized interactions kept in the model context.      |
+| `CONVERSATION_MAX_STORED_INTERACTIONS` | `100`   | Complete raw interactions retained after they have been summarized. |
+| `CONVERSATION_RETENTION_DAYS`          | `90`    | Days summarized raw interactions remain in SQLite.                 |
 
-Cleanup runs when that user completes a turn. `/clear` removes both the raw transcript and its recap; durable memory
-and scheduled tasks remain.
+Cleanup runs when that thread completes a turn. `/clear` removes the raw transcript and its recap for the chat it was
+sent from, leaving the caller's other chats and everyone else's history alone; durable memory and scheduled tasks
+remain.
+
+## Group log
+
+Separate from conversation history and keyed by chat alone, with no sender in the key. In groups the bot records
+every message it receives, including the ones not addressed to it, so it can answer "what did I miss" and recap a day.
+Private chats are never recorded — they already have conversation history above. Nothing is recorded for a chat outside
+`ALLOWED_IDS`.
+
+What a row holds: the text (collapsed and capped at 2000 characters, 1000 for a forwarded post), who sent it and when,
+the kind of message, a short label for non-text content (`🐤 UtyaDuck`, `0:14`, `report.pdf`), the channel or person a
+forward came from, and the message it replied to. What it never holds: the media itself, or the Telegram file ids that
+would let it be fetched later. The bot's own replies into the group are recorded too; replies redirected to a user's
+DMs are not.
+
+Reading it back costs no extra model call while the requested window fits the context budget. When it does not, each
+closed day is compressed into a one-off recap by the active chat model and cached, so a repeated weekly or monthly
+question is answered from cache. The current day is never cached, because it is still being written to.
+
+| Variable                          | Default | Description                                                            |
+|-----------------------------------|---------|------------------------------------------------------------------------|
+| `GROUP_LOG_ENABLED`               | `true`  | Set to `false` to record nothing and drop the group-log tools entirely. |
+| `GROUP_LOG_RETENTION_DAYS`        | `30`    | Days a recorded message stays in SQLite.                               |
+| `GROUP_LOG_MAX_MESSAGES_PER_CHAT` | `20000` | Ceiling on rows per chat; the oldest are dropped past it.              |
+| `GROUP_LOG_RECENT_MESSAGES`       | `15`    | Recent messages shown to the model on each group turn; `0` disables.   |
+| `GROUP_LOG_RECENT_MINUTES`        | `60`    | How far back those recent messages may reach.                          |
+
+Cleanup is amortized over inserts rather than scheduled, so it runs every few hundred recorded messages in a chat.
+Asking the agent to forget the group log wipes that chat's messages and every cached daily recap; `/clear` does not
+touch it, since the log belongs to the group rather than to the person running the command.
 
 ## Scheduled tasks
 

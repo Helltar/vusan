@@ -13,7 +13,7 @@ import org.jetbrains.exposed.v1.jdbc.select
 import org.jetbrains.exposed.v1.jdbc.selectAll
 
 /**
- * Durable memory, separate from the conversation history ([com.helltar.vusan.agent.history]).
+ * Durable memory, separate from the conversation history ([com.helltar.vusan.agent.conversation]).
  * Entries survive a history wipe; [MemoryScope] decides whether a row is personal ([MemoryScope.USER],
  * keyed by `userId`) or shared by a group ([MemoryScope.CHAT], keyed by `chatId`).
  */

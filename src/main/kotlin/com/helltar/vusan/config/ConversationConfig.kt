@@ -1,16 +1,16 @@
 package com.helltar.vusan.config
 
-data class ChatHistoryConfig(
+data class ConversationConfig(
     val maxRecentInteractions: Int = DEFAULT_MAX_RECENT_INTERACTIONS,
     val maxStoredInteractions: Int = DEFAULT_MAX_STORED_INTERACTIONS,
     val retentionDays: Int = DEFAULT_RETENTION_DAYS
 ) {
     init {
-        require(maxRecentInteractions > 0) { "CHAT_HISTORY_MAX_RECENT_INTERACTIONS must be positive" }
+        require(maxRecentInteractions > 0) { "CONVERSATION_MAX_RECENT_INTERACTIONS must be positive" }
         require(maxStoredInteractions >= maxRecentInteractions) {
-            "CHAT_HISTORY_MAX_STORED_INTERACTIONS must be at least CHAT_HISTORY_MAX_RECENT_INTERACTIONS"
+            "CONVERSATION_MAX_STORED_INTERACTIONS must be at least CONVERSATION_MAX_RECENT_INTERACTIONS"
         }
-        require(retentionDays > 0) { "CHAT_HISTORY_RETENTION_DAYS must be positive" }
+        require(retentionDays > 0) { "CONVERSATION_RETENTION_DAYS must be positive" }
     }
 
     companion object {

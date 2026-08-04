@@ -1,4 +1,4 @@
-package com.helltar.vusan.agent.history
+package com.helltar.vusan.agent.conversation
 
 import ai.koog.agents.core.tools.ToolDescriptor
 import ai.koog.prompt.Prompt
@@ -27,7 +27,7 @@ class ConversationCompactorTest {
         val model = LLModel(LLMProvider.OpenAI, "test", contextLength = 16_384)
         val compactor = LlmConversationCompactor(executor, model)
         val interaction =
-            ChatInteraction(
+            ConversationInteraction(
                 id = "i-1",
                 lastMessageId = 7,
                 createdAt = Instant.EPOCH,

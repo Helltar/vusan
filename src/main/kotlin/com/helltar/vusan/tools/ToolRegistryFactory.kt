@@ -1,7 +1,10 @@
 package com.helltar.vusan.tools
 
 import ai.koog.agents.core.tools.ToolRegistry
-import com.helltar.vusan.agent.history.ChatHistoryRepository
+import com.helltar.vusan.agent.grouplog.GroupLogDigester
+import com.helltar.vusan.agent.grouplog.GroupLogReader
+import com.helltar.vusan.agent.grouplog.GroupLogRepository
+import com.helltar.vusan.agent.conversation.ConversationRepository
 import com.helltar.vusan.agent.memory.MemoryRepository
 import com.helltar.vusan.config.AppConfig
 import com.helltar.vusan.config.VisionRuntime
@@ -16,7 +19,8 @@ import com.helltar.vusan.tools.files.FileDownloadClient
 import com.helltar.vusan.tools.files.FileTools
 import com.helltar.vusan.tools.giphy.GiphyClient
 import com.helltar.vusan.tools.giphy.GiphyTools
-import com.helltar.vusan.tools.history.HistoryTools
+import com.helltar.vusan.tools.grouplog.GroupLogTools
+import com.helltar.vusan.tools.conversation.ConversationTools
 import com.helltar.vusan.tools.imagegen.ImageGenTools
 import com.helltar.vusan.tools.imagegen.OpenAiImageClient
 import com.helltar.vusan.tools.images.ImageDownloadClient
@@ -51,11 +55,14 @@ import kotlin.time.Duration.Companion.seconds
 class ToolRegistryFactory(
     http: HttpClient,
     private val config: AppConfig,
-    private val history: ChatHistoryRepository,
+    private val conversation: ConversationRepository,
     private val memory: MemoryRepository,
     private val tasks: TasksRepository,
     private val stickers: StickerCatalog?,
-    vision: VisionRuntime?
+    vision: VisionRuntime?,
+    private val groupLog: GroupLogRepository?,
+    groupLogDigester: GroupLogDigester?,
+    toolResultMaxChars: Int
 ) {
 
     private companion object {
@@ -66,6 +73,13 @@ class ToolRegistryFactory(
     val availableToolNames: List<String> by lazy {
         buildRegistry(TOOL_NAME_PROBE_CONTEXT, BotOutbox()).tools.map { it.name }.sorted()
     }
+
+    // one chat log read may not eat the whole run's tool budget: the model still has to fit its own
+    // answer, and a recap turn often calls other tools alongside it.
+    private val groupLogReader =
+        groupLog?.let {
+            GroupLogReader(it, groupLogDigester, budgetChars = (toolResultMaxChars / 2).coerceIn(4_000, 24_000))
+        }
 
     private val currency = CurrencyTools(ExchangeRateClient(http))
     private val fileDownloadClient = FileDownloadClient(http)
@@ -128,7 +142,7 @@ class ToolRegistryFactory(
     fun buildRegistry(context: RequestContext, outbox: BotOutbox): ToolRegistry =
         ToolRegistry {
             tools(MessageTools(outbox))
-            tools(InlineChoiceTools(context, outbox, history::revision))
+            tools(InlineChoiceTools(context, outbox, conversation::revision))
             tools(ReactionTools(context, outbox))
             tools(currency)
             tools(telegramChannel)
@@ -138,7 +152,7 @@ class ToolRegistryFactory(
             tools(FileTools(fileDownloadClient, outbox))
             tools(QuizTools(outbox))
             tools(PollTools(outbox))
-            tools(HistoryTools(history, context))
+            tools(ConversationTools(conversation, context))
             tools(MemoryTools(memory, context))
             tools(TaskTools(repo = tasks, context, config.maxTasksPerUser, config.maxFollowUpsPerUser))
 
@@ -147,6 +161,10 @@ class ToolRegistryFactory(
             giphyClient?.let { tools(GiphyTools(it, outbox)) }
             stickers?.let { tools(StickerTools(it, outbox)) }
             sandboxClient?.let { tools(SandboxTools(it, outbox, context.attachedFile)) }
+
+            if (groupLog != null && groupLogReader != null) {
+                tools(GroupLogTools(groupLog, groupLogReader, context))
+            }
 
             if (imageVisionClient != null && videoVisionClient != null) {
                 tools(VisionTools(imageVisionClient, videoVisionClient, context.attachedFile))

@@ -1,40 +1,36 @@
-package com.helltar.vusan.agent.history
+package com.helltar.vusan.agent.conversation
 
+import com.helltar.vusan.agent.ESTIMATED_BYTES_PER_TOKEN
+import com.helltar.vusan.agent.estimateTokens
 import com.helltar.vusan.common.limitTo
-import kotlin.math.ceil
-
-// bytes/3 deliberately overestimates typical latin text while staying useful for cyrillic, CJK,
-// emoji, JSON, and code. exact provider tokenizers differ, so ContextWindowPolicy also keeps a
-// separate safety reserve.
-internal const val ESTIMATED_BYTES_PER_TOKEN = 3
 
 private const val EXACT_TOOL_INTERACTIONS = 2
 private const val MESSAGE_OVERHEAD_TOKENS = 12
 
-data class PromptHistory(
+data class PromptConversation(
     val summary: String?,
     val turns: List<ChatTurn>
 )
 
-data class HistoryPromptPlan(
-    val history: PromptHistory,
-    val compactablePrefix: List<ChatInteraction>,
+data class ConversationPlan(
+    val prompt: PromptConversation,
+    val compactablePrefix: List<ConversationInteraction>,
     val estimatedTokens: Int,
     val includedInteractions: Int,
     val exactToolInteractions: Int,
-    val stats: ChatHistoryStats
+    val stats: ConversationStats
 )
 
-fun planHistoryForPrompt(
-    snapshot: ChatHistorySnapshot,
+fun planConversation(
+    snapshot: ConversationSnapshot,
     tokenBudget: Int,
     maxRecentInteractions: Int
-): HistoryPromptPlan {
+): ConversationPlan {
     require(maxRecentInteractions > 0) { "maxRecentInteractions must be positive" }
 
     val boundedBudget = tokenBudget.coerceAtLeast(0)
     val summary = snapshot.summary.fitToTokenBudget(boundedBudget)
-    val summaryTokens = summary?.let(::estimateHistoryTokens) ?: 0
+    val summaryTokens = summary?.let(::estimateTokens) ?: 0
     var remaining = (boundedBudget - summaryTokens).coerceAtLeast(0)
 
     val eligible = snapshot.interactions.takeLast(maxRecentInteractions)
@@ -48,7 +44,7 @@ fun planHistoryForPrompt(
                 .validForReplay()
                 .let { replayable -> if (exactTools) replayable else replayable.withoutToolEvents() }
 
-        val estimated = estimateHistoryTokens(turns)
+        val estimated = estimateTokens(turns)
 
         if (estimated <= remaining) {
             selected.addFirst(turns)
@@ -61,7 +57,7 @@ fun planHistoryForPrompt(
             val fitted = turns.withoutToolEvents().fitToTokenBudget(remaining)
             if (fitted.isNotEmpty()) {
                 selected.addFirst(fitted)
-                remaining -= estimateHistoryTokens(fitted)
+                remaining -= estimateTokens(fitted)
             }
         }
 
@@ -78,10 +74,10 @@ fun planHistoryForPrompt(
             0
     val compactableCount = maxOf(omittedByBudget, omittedByCount)
     val turns = selected.flatten()
-    val estimatedTokens = summaryTokens + estimateHistoryTokens(turns)
+    val estimatedTokens = summaryTokens + estimateTokens(turns)
 
-    return HistoryPromptPlan(
-        history = PromptHistory(summary = summary, turns = turns),
+    return ConversationPlan(
+        prompt = PromptConversation(summary = summary, turns = turns),
         compactablePrefix = snapshot.interactions.take(compactableCount),
         estimatedTokens = estimatedTokens,
         includedInteractions = includedCount,
@@ -90,30 +86,24 @@ fun planHistoryForPrompt(
     )
 }
 
-internal fun estimateHistoryTokens(text: String): Int {
-    if (text.isEmpty()) return 0
-
-    return ceil(text.encodeToByteArray().size.toDouble() / ESTIMATED_BYTES_PER_TOKEN).toInt().coerceAtLeast(1)
-}
-
-internal fun estimateHistoryTokens(turns: List<ChatTurn>): Int =
+internal fun estimateTokens(turns: List<ChatTurn>): Int =
     turns.sumOf { turn ->
         MESSAGE_OVERHEAD_TOKENS +
-                estimateHistoryTokens(turn.content) +
-                estimateHistoryTokens(turn.toolName.orEmpty()) +
-                estimateHistoryTokens(turn.toolCallId.orEmpty())
+                estimateTokens(turn.content) +
+                estimateTokens(turn.toolName.orEmpty()) +
+                estimateTokens(turn.toolCallId.orEmpty())
     }
 
 private fun String?.fitToTokenBudget(tokenBudget: Int): String? {
     val value = this?.trim()?.takeIf { it.isNotEmpty() } ?: return null
-    if (estimateHistoryTokens(value) <= tokenBudget) return value
+    if (estimateTokens(value) <= tokenBudget) return value
 
     return value.limitTo(tokenBudget * ESTIMATED_BYTES_PER_TOKEN).takeIf { it.isNotBlank() }
 }
 
 private fun List<ChatTurn>.fitToTokenBudget(tokenBudget: Int): List<ChatTurn> {
     if (tokenBudget <= MESSAGE_OVERHEAD_TOKENS) return emptyList()
-    if (estimateHistoryTokens(this) <= tokenBudget) return this
+    if (estimateTokens(this) <= tokenBudget) return this
 
     val humanTurns = withoutToolEvents()
     if (humanTurns.isEmpty()) return emptyList()
@@ -124,7 +114,7 @@ private fun List<ChatTurn>.fitToTokenBudget(tokenBudget: Int): List<ChatTurn> {
 
     while (charsPerTurn > 0) {
         val fitted = humanTurns.map { it.copy(content = it.content.limitTo(charsPerTurn)) }
-        if (estimateHistoryTokens(fitted) <= tokenBudget) return fitted
+        if (estimateTokens(fitted) <= tokenBudget) return fitted
         charsPerTurn = (charsPerTurn * 3) / 4
     }
 

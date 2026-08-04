@@ -1,19 +1,19 @@
-package com.helltar.vusan.agent.history
+package com.helltar.vusan.agent.conversation
 
 import java.time.Instant
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertTrue
 
-class ChatHistoryTest {
+class ConversationPlanTest {
 
     @Test
     fun `short history is returned verbatim within the token budget`() {
         val interactions = listOf(exchange(1, "hi", "hello"), exchange(2, "still there", "yep"))
 
-        val result = planHistoryForPrompt(snapshot(interactions), tokenBudget = 10_000, maxRecentInteractions = 12)
+        val result = planConversation(snapshot(interactions), tokenBudget = 10_000, maxRecentInteractions = 12)
 
-        assertEquals(interactions.flatMap { it.turns }, result.history.turns)
+        assertEquals(interactions.flatMap { it.turns }, result.prompt.turns)
         assertTrue(result.compactablePrefix.isEmpty())
         assertEquals(2, result.includedInteractions)
     }
@@ -22,44 +22,44 @@ class ChatHistoryTest {
     fun `recent limit compacts a whole interaction prefix`() {
         val interactions = (1L..5L).map { exchange(it, "user-$it", "assistant-$it") }
 
-        val result = planHistoryForPrompt(snapshot(interactions), tokenBudget = 10_000, maxRecentInteractions = 3)
+        val result = planConversation(snapshot(interactions), tokenBudget = 10_000, maxRecentInteractions = 3)
 
         assertEquals(listOf("i-1", "i-2", "i-3"), result.compactablePrefix.map { it.id })
-        assertEquals(listOf("user-3", "assistant-3", "user-4", "assistant-4", "user-5", "assistant-5"), result.history.turns.map { it.content })
+        assertEquals(listOf("user-3", "assistant-3", "user-4", "assistant-4", "user-5", "assistant-5"), result.prompt.turns.map { it.content })
     }
 
     @Test
     fun `only the newest two interactions replay raw tool events`() {
         val interactions = (1L..3L).map { toolExchange(it) }
 
-        val result = planHistoryForPrompt(snapshot(interactions), tokenBudget = 10_000, maxRecentInteractions = 12)
+        val result = planConversation(snapshot(interactions), tokenBudget = 10_000, maxRecentInteractions = 12)
 
         assertEquals(2, result.exactToolInteractions)
-        assertEquals(2, result.history.turns.count { it.role == ChatRole.TOOL_CALL })
-        assertEquals(2, result.history.turns.count { it.role == ChatRole.TOOL_RESULT })
+        assertEquals(2, result.prompt.turns.count { it.role == ChatRole.TOOL_CALL })
+        assertEquals(2, result.prompt.turns.count { it.role == ChatRole.TOOL_RESULT })
         assertTrue(result.compactablePrefix.isEmpty())
     }
 
     @Test
     fun `token budget keeps a newest complete interaction and compacts the older prefix`() {
         val interactions = (1L..3L).map { exchange(it, "u".repeat(120), "a".repeat(120)) }
-        val latestTokens = estimateHistoryTokens(interactions.last().turns)
+        val latestTokens = estimateTokens(interactions.last().turns)
 
         val result =
-            planHistoryForPrompt(
+            planConversation(
                 snapshot(interactions),
                 tokenBudget = latestTokens + 1,
                 maxRecentInteractions = 12
             )
 
         assertEquals(listOf("i-1", "i-2"), result.compactablePrefix.map { it.id })
-        assertEquals(interactions.last().turns, result.history.turns)
+        assertEquals(interactions.last().turns, result.prompt.turns)
     }
 
     @Test
     fun `broken legacy tool fragments are not replayed`() {
         val interaction =
-            ChatInteraction(
+            ConversationInteraction(
                 id = "legacy",
                 lastMessageId = 3,
                 createdAt = Instant.EPOCH,
@@ -71,21 +71,21 @@ class ChatHistoryTest {
                     )
             )
 
-        val result = planHistoryForPrompt(snapshot(listOf(interaction)), 10_000, 12)
+        val result = planConversation(snapshot(listOf(interaction)), 10_000, 12)
 
-        assertEquals(listOf(ChatRole.USER, ChatRole.ASSISTANT), result.history.turns.map { it.role })
+        assertEquals(listOf(ChatRole.USER, ChatRole.ASSISTANT), result.prompt.turns.map { it.role })
     }
 
-    private fun exchange(id: Long, user: String, assistant: String): ChatInteraction =
-        ChatInteraction(
+    private fun exchange(id: Long, user: String, assistant: String): ConversationInteraction =
+        ConversationInteraction(
             id = "i-$id",
             lastMessageId = id,
             createdAt = Instant.EPOCH,
             turns = listOf(ChatTurn(ChatRole.USER, user), ChatTurn(ChatRole.ASSISTANT, assistant))
         )
 
-    private fun toolExchange(id: Long): ChatInteraction =
-        ChatInteraction(
+    private fun toolExchange(id: Long): ConversationInteraction =
+        ConversationInteraction(
             id = "i-$id",
             lastMessageId = id,
             createdAt = Instant.EPOCH,
@@ -98,13 +98,13 @@ class ChatHistoryTest {
                 )
         )
 
-    private fun snapshot(interactions: List<ChatInteraction>): ChatHistorySnapshot =
-        ChatHistorySnapshot(
+    private fun snapshot(interactions: List<ConversationInteraction>): ConversationSnapshot =
+        ConversationSnapshot(
             summary = null,
             summarizedThroughMessageId = 0,
             interactions = interactions,
             stats =
-                ChatHistoryStats(
+                ConversationStats(
                     storedInteractions = interactions.size,
                     storedMessages = interactions.sumOf { it.turns.size },
                     storedChars = interactions.sumOf { interaction -> interaction.turns.sumOf { it.content.length.toLong() } },

@@ -10,7 +10,8 @@ import kotlin.time.Duration.Companion.seconds
 
 data class AppConfig(
     val allowedIds: Set<Long>,
-    val chatHistory: ChatHistoryConfig = ChatHistoryConfig(),
+    val chatHistory: ConversationConfig = ConversationConfig(),
+    val groupLog: GroupLogConfig = GroupLogConfig(),
     val databasePath: String,
     val elevenLabsApiKey: String?,
     val elevenLabsTts: ElevenLabsTtsConfig?,
@@ -51,16 +52,32 @@ data class AppConfig(
             return AppConfig(
                 allowedIds = parseIdSet(readEnv("ALLOWED_IDS")),
                 chatHistory =
-                    ChatHistoryConfig(
+                    ConversationConfig(
                         maxRecentInteractions =
-                            readEnv("CHAT_HISTORY_MAX_RECENT_INTERACTIONS")?.toIntOrNull()
-                                ?: ChatHistoryConfig.DEFAULT_MAX_RECENT_INTERACTIONS,
+                            readEnv("CONVERSATION_MAX_RECENT_INTERACTIONS")?.toIntOrNull()
+                                ?: ConversationConfig.DEFAULT_MAX_RECENT_INTERACTIONS,
                         maxStoredInteractions =
-                            readEnv("CHAT_HISTORY_MAX_STORED_INTERACTIONS")?.toIntOrNull()
-                                ?: ChatHistoryConfig.DEFAULT_MAX_STORED_INTERACTIONS,
+                            readEnv("CONVERSATION_MAX_STORED_INTERACTIONS")?.toIntOrNull()
+                                ?: ConversationConfig.DEFAULT_MAX_STORED_INTERACTIONS,
                         retentionDays =
-                            readEnv("CHAT_HISTORY_RETENTION_DAYS")?.toIntOrNull()
-                                ?: ChatHistoryConfig.DEFAULT_RETENTION_DAYS
+                            readEnv("CONVERSATION_RETENTION_DAYS")?.toIntOrNull()
+                                ?: ConversationConfig.DEFAULT_RETENTION_DAYS
+                    ),
+                groupLog =
+                    GroupLogConfig(
+                        enabled = readEnv("GROUP_LOG_ENABLED")?.toBooleanStrictOrNull() ?: true,
+                        retentionDays =
+                            readEnv("GROUP_LOG_RETENTION_DAYS")?.toIntOrNull()
+                                ?: GroupLogConfig.DEFAULT_RETENTION_DAYS,
+                        maxMessagesPerChat =
+                            readEnv("GROUP_LOG_MAX_MESSAGES_PER_CHAT")?.toIntOrNull()
+                                ?: GroupLogConfig.DEFAULT_MAX_MESSAGES_PER_CHAT,
+                        recentMessages =
+                            readEnv("GROUP_LOG_RECENT_MESSAGES")?.toIntOrNull()
+                                ?: GroupLogConfig.DEFAULT_RECENT_MESSAGES,
+                        recentMinutes =
+                            readEnv("GROUP_LOG_RECENT_MINUTES")?.toIntOrNull()
+                                ?: GroupLogConfig.DEFAULT_RECENT_MINUTES
                     ),
                 databasePath = readEnv("DB_FILE") ?: "data/db/vusan.db",
                 elevenLabsApiKey = elevenLabsKey,

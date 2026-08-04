@@ -58,20 +58,23 @@ class DatabaseMigrationTest {
     }
 
     @Test
-    fun `connect upgrades legacy chat history for interaction grouping and summaries`() {
-        val tempDir = Files.createTempDirectory("vusan-chat-history-migration-test")
+    fun `connect creates the conversation tables on a database that predates them`() {
+        val tempDir = Files.createTempDirectory("vusan-conversation-migration-test")
         val dbPath = tempDir.resolve("vusan.db")
 
         try {
-            createLegacyChatMessagesTable(dbPath.toString())
+            createLegacyScheduledTasksTable(dbPath.toString())
 
             runBlocking {
                 Db.connect(testConfig(dbPath.toString()))
                 Db.disconnect()
             }
 
-            assertTrue("interaction_id" in tableColumns(dbPath.toString(), "chat_messages"))
-            assertTrue("chat_history_summaries" in tableNames(dbPath.toString()))
+            val tables = tableNames(dbPath.toString())
+            assertTrue("conversation_messages" in tables, "tables were $tables")
+            assertTrue("conversation_summaries" in tables, "tables were $tables")
+            assertTrue("conversation_state" in tables, "tables were $tables")
+            assertTrue("interaction_id" in tableColumns(dbPath.toString(), "conversation_messages"))
         } finally {
             runBlocking { Db.disconnect() }
             tempDir.toFile().deleteRecursively()
@@ -106,24 +109,30 @@ class DatabaseMigrationTest {
         }
     }
 
-    private fun createLegacyChatMessagesTable(dbPath: String) {
-        DriverManager.getConnection("jdbc:sqlite:$dbPath").use { connection ->
-            connection.createStatement().use { statement ->
-                statement.execute(
-                    """
-                    CREATE TABLE chat_messages (
-                        id INTEGER PRIMARY KEY AUTOINCREMENT,
-                        user_id BIGINT NOT NULL,
-                        role VARCHAR(16) NOT NULL,
-                        content TEXT NOT NULL,
-                        tool_call_id VARCHAR(128),
-                        tool_name VARCHAR(128),
-                        tool_is_error BOOLEAN,
-                        created_at TEXT NOT NULL
-                    )
-                    """.trimIndent()
-                )
+    @Test
+    fun `connect creates the chat log tables on a database that predates them`() {
+        val tempDir = Files.createTempDirectory("vusan-chat-log-migration-test")
+        val dbPath = tempDir.resolve("vusan.db")
+
+        try {
+            createLegacyScheduledTasksTable(dbPath.toString())
+
+            runBlocking {
+                Db.connect(testConfig(dbPath.toString()))
+                Db.disconnect()
             }
+
+            val tables = tableNames(dbPath.toString())
+            assertTrue("group_log" in tables, "tables were $tables")
+            assertTrue("group_log_digests" in tables, "tables were $tables")
+
+            val columns = tableColumns(dbPath.toString(), "group_log")
+            assertTrue("forward_from" in columns, "columns were $columns")
+            assertTrue("sent_at" in columns, "columns were $columns")
+            assertTrue("thread_id" in columns, "columns were $columns")
+        } finally {
+            runBlocking { Db.disconnect() }
+            tempDir.toFile().deleteRecursively()
         }
     }
 

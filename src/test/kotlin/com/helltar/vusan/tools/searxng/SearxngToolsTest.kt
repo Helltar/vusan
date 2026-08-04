@@ -92,11 +92,11 @@ class SearxngToolsTest {
     fun `supported scoping parameters are passed through`() = runBlocking {
         val probe = SearchProbe()
         tools(resultsJson("https://a"), probe = probe)
-            .metaSearch("вибухи", categories = "News", timeRange = "Week", language = "uk-UA")
+            .metaSearch("explosions", categories = "News", timeRange = "Week", language = "en-US")
 
         assertEquals("news", probe.last["categories"])
         assertEquals("week", probe.last["time_range"])
-        assertEquals("uk-UA", probe.last["language"])
+        assertEquals("en-US", probe.last["language"])
     }
 
     @Test

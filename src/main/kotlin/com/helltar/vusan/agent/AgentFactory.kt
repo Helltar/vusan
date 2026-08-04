@@ -18,11 +18,9 @@ import ai.koog.prompt.message.Message
 import ai.koog.prompt.message.MessagePart
 import ai.koog.prompt.params.LLMParams
 import ai.koog.serialization.JSONObject
-import com.helltar.vusan.agent.history.ChatRole
-import com.helltar.vusan.agent.history.ContextTokenBudget
-import com.helltar.vusan.agent.history.ContextWindowPolicy
-import com.helltar.vusan.agent.history.PromptHistory
-import com.helltar.vusan.agent.history.toolCallArgsForHistory
+import com.helltar.vusan.agent.conversation.ChatRole
+import com.helltar.vusan.agent.conversation.PromptConversation
+import com.helltar.vusan.agent.conversation.toolCallArgsForStorage
 import com.helltar.vusan.common.collapseWhitespaceAndCap
 import com.helltar.vusan.common.limitTo
 import com.helltar.vusan.common.xmlBlock
@@ -101,7 +99,7 @@ class AgentFactory(
 
     fun build(
         userId: Long,
-        history: PromptHistory,
+        conversation: PromptConversation,
         preparation: AgentPromptPreparation,
         outbox: BotOutbox,
         toolEvents: (ToolEvent) -> Unit,
@@ -111,9 +109,9 @@ class AgentFactory(
         val seededPrompt =
             prompt(id = "vusan-user-$userId", params = chatParams) {
                 system(preparation.systemPrompt)
-                history.summary?.let { user(xmlBlock("conversation_recap", it)) }
+                conversation.summary?.let { user(xmlBlock("conversation_recap", it)) }
 
-                history.turns.forEach { turn ->
+                conversation.turns.forEach { turn ->
                     when (turn.role) {
                         ChatRole.USER -> user(turn.content)
                         ChatRole.ASSISTANT -> assistant(turn.content)
@@ -121,7 +119,7 @@ class AgentFactory(
                         ChatRole.TOOL_CALL ->
                             toolCall(
                                 tool = checkNotNull(turn.toolName) { "TOOL_CALL row without toolName" },
-                                args = toolCallArgsForHistory(turn.content),
+                                args = toolCallArgsForStorage(turn.content),
                                 id = checkNotNull(turn.toolCallId) { "TOOL_CALL row without toolCallId" }
                             )
 

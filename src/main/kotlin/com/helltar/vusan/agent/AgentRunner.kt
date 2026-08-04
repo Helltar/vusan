@@ -1,7 +1,10 @@
 package com.helltar.vusan.agent
 
 import ai.koog.prompt.executor.clients.LLMClientException
-import com.helltar.vusan.agent.history.*
+import com.helltar.vusan.agent.grouplog.GroupLogRepository
+import com.helltar.vusan.agent.grouplog.renderGroupLog
+import com.helltar.vusan.agent.grouplog.withoutExchangesWith
+import com.helltar.vusan.agent.conversation.*
 import com.helltar.vusan.agent.memory.MemoryEntry
 import com.helltar.vusan.agent.memory.MemoryRepository
 import com.helltar.vusan.agent.memory.MemoryScope
@@ -10,7 +13,8 @@ import com.helltar.vusan.common.isEffectivelyBlank
 import com.helltar.vusan.common.limitTo
 import com.helltar.vusan.common.rethrowIfCancellation
 import com.helltar.vusan.common.xmlBlock
-import com.helltar.vusan.config.ChatHistoryConfig
+import com.helltar.vusan.config.ConversationConfig
+import com.helltar.vusan.config.GroupLogConfig
 import com.helltar.vusan.i18n.Language
 import com.helltar.vusan.i18n.Messages
 import com.helltar.vusan.outbox.BotOutbox
@@ -25,7 +29,14 @@ import io.github.oshai.kotlinlogging.KotlinLogging
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import java.time.Instant
+import java.time.ZoneId
 import java.time.temporal.ChronoUnit
+
+// `<recent_chat>` rides along on every group turn, so it is budgeted for cheapness, not for detail:
+// enough to know what is being talked about, never enough to answer a recap question on its own.
+private const val RECENT_CHAT_MAX_CHARS = 1_000
+private const val RECENT_CHAT_LINE_CHARS = 120
+private const val RECENT_CHAT_OVERFETCH = 3
 
 private const val TOOL_OUTPUT_MAX_CHARS = 4_000
 private const val TOOL_EVENTS_MAX_COUNT = 8
@@ -40,7 +51,7 @@ data class AgentRequest(
     val messageId: Long,
     val replyToMessageId: Long? = null,
     val prompt: String,
-    val historyEntry: String,
+    val conversationEntry: String,
     val messageContext: MessageContext? = null,
     val chatIsPrivate: Boolean = false,
     val attachedFile: AttachedFile? = null,
@@ -55,21 +66,24 @@ data class AgentResult(
 
 class AgentRunner(
     private val agentFactory: AgentFactory,
-    private val history: ChatHistoryRepository,
+    private val conversation: ConversationRepository,
     private val memory: MemoryRepository,
     private val conversationCompactor: ConversationCompactor,
-    private val historyConfig: ChatHistoryConfig = ChatHistoryConfig(),
-    private val stickers: StickerCatalog? = null
+    private val conversationConfig: ConversationConfig = ConversationConfig(),
+    private val stickers: StickerCatalog? = null,
+    private val groupLog: GroupLogRepository? = null,
+    private val groupLogConfig: GroupLogConfig = GroupLogConfig()
 ) {
 
     private companion object {
         val log = KotlinLogging.logger {}
     }
 
-    private val userLocks = HashMap<Long, UserLock>()
+    private val conversationLocks = HashMap<ConversationKey, ConversationLock>()
 
     suspend fun handle(request: AgentRequest, onToolStarting: (activity: ToolActivity) -> Unit = {}): AgentResult {
-        val lock = retainLock(request.userId)
+        val key = ConversationKey(request.userId, request.chatId)
+        val lock = retainLock(key)
 
         try {
             if (!lock.tryLock()) {
@@ -82,7 +96,7 @@ class AgentRunner(
                 lock.unlock()
             }
         } finally {
-            releaseLock(request.userId)
+            releaseLock(key)
         }
     }
 
@@ -93,25 +107,29 @@ class AgentRunner(
         request: AgentRequest,
         onToolStarting: (activity: ToolActivity) -> Unit = {}
     ): AgentResult {
-        val lock = retainLock(request.userId)
+        val key = ConversationKey(request.userId, request.chatId)
+        val lock = retainLock(key)
 
         try {
             return lock.withLock { runAgent(request, onToolStarting) }
         } finally {
-            releaseLock(request.userId)
+            releaseLock(key)
         }
     }
 
     // a turn persists its own history under this lock, so an outside clear (the `/clear` command) has to
     // take the same lock or a turn already in flight would append itself back into the wiped history.
-    // `clearChatHistory` runs inside a turn and must keep using the repository directly.
-    suspend fun clearHistory(userId: Long) {
-        val lock = retainLock(userId)
+    // the lock is keyed by what it guards, one conversation, so the same person writing in two chats is
+    // served in both instead of being told the bot is busy.
+    // `clearConversation` runs inside a turn and must keep using the repository directly.
+    suspend fun clearConversation(userId: Long, chatId: Long) {
+        val key = ConversationKey(userId, chatId)
+        val lock = retainLock(key)
 
         try {
-            lock.withLock { history.clear(userId) }
+            lock.withLock { conversation.clear(userId, chatId) }
         } finally {
-            releaseLock(userId)
+            releaseLock(key)
         }
     }
 
@@ -134,9 +152,12 @@ class AgentRunner(
 
         // the turn is stored only after the run, so this still points at the previous exchange.
         val messageContext =
-            request.messageContext?.copy(previousExchangeAt = history.lastInteractionAt(request.userId))
+            request.messageContext?.copy(
+                previousExchangeAt = conversation.lastInteractionAt(request.userId, request.chatId)
+            )
 
-        val currentTurn = currentTurnPrompt(request.prompt, messageContext, userMemory, chatMemory)
+        val currentTurn =
+            currentTurnPrompt(request.prompt, messageContext, userMemory, chatMemory, recentChatFor(context))
         val outbox = BotOutbox()
 
         val preparation =
@@ -147,17 +168,18 @@ class AgentRunner(
                 stickerCatalog = stickers?.indexBlockFor(request.chatId)
             )
 
-        val historyPlan = historyPlanForPrompt(request.userId, preparation.tokenBudget.historyTokens)
-        val plannedInputTokens = preparation.tokenBudget.fixedPromptTokens + historyPlan.estimatedTokens
+        val conversationPlan =
+            conversationPlanForPrompt(request.userId, request.chatId, preparation.tokenBudget.conversationTokens)
+        val plannedInputTokens = preparation.tokenBudget.fixedPromptTokens + conversationPlan.estimatedTokens
 
         log.info {
             "prompt history loaded: user=${request.userId} chat=${request.chatId} " +
-                    "storedInteractions=${historyPlan.stats.storedInteractions} storedMessages=${historyPlan.stats.storedMessages} " +
-                    "storedChars=${historyPlan.stats.storedChars} unsummarized=${historyPlan.stats.unsummarizedInteractions} " +
-                    "includedInteractions=${historyPlan.includedInteractions} turns=${historyPlan.history.turns.size} " +
-                    "summaryChars=${historyPlan.history.summary?.length ?: 0} exactToolInteractions=${historyPlan.exactToolInteractions} " +
+                    "storedInteractions=${conversationPlan.stats.storedInteractions} storedMessages=${conversationPlan.stats.storedMessages} " +
+                    "storedChars=${conversationPlan.stats.storedChars} unsummarized=${conversationPlan.stats.unsummarizedInteractions} " +
+                    "includedInteractions=${conversationPlan.includedInteractions} turns=${conversationPlan.prompt.turns.size} " +
+                    "summaryChars=${conversationPlan.prompt.summary?.length ?: 0} exactToolInteractions=${conversationPlan.exactToolInteractions} " +
                     "userMemory=${userMemory.size} chatMemory=${chatMemory.size} " +
-                    "promptChars=${request.prompt.length} historyChars=${request.historyEntry.length} " +
+                    "promptChars=${request.prompt.length} historyChars=${request.conversationEntry.length} " +
                     "attachedFile=${request.attachedFile != null}"
         }
 
@@ -165,13 +187,13 @@ class AgentRunner(
             "prompt context plan: user=${request.userId} chat=${request.chatId} " +
                     "contextTokens=${preparation.tokenBudget.contextWindowTokens} " +
                     "fixedTokens=${preparation.tokenBudget.fixedPromptTokens} " +
-                    "historyBudget=${preparation.tokenBudget.historyTokens} " +
-                    "historyTokens=${historyPlan.estimatedTokens} " +
+                    "historyBudget=${preparation.tokenBudget.conversationTokens} " +
+                    "conversationTokens=${conversationPlan.estimatedTokens} " +
                     "responseReserve=${preparation.tokenBudget.responseReserveTokens} " +
                     "agentReserve=${preparation.tokenBudget.agentReserveTokens} " +
                     "safetyReserve=${preparation.tokenBudget.safetyReserveTokens} " +
                     "plannedInputTokens=$plannedInputTokens " +
-                    "contextPercent=${preparation.tokenBudget.contextPercentFor(historyPlan.estimatedTokens)}"
+                    "contextPercent=${preparation.tokenBudget.contextPercentFor(conversationPlan.estimatedTokens)}"
         }
 
         val toolEvents = mutableListOf<ToolEvent>()
@@ -179,10 +201,10 @@ class AgentRunner(
 
         val answer =
             try {
-                runAgentWithHistory(
+                runAgentWithConversation(
                     userId = request.userId,
                     currentTurn = currentTurn,
-                    history = historyPlan.history,
+                    conversation = conversationPlan.prompt,
                     preparation = preparation,
                     outbox = outbox,
                     toolEvents = toolEvents,
@@ -208,9 +230,9 @@ class AgentRunner(
 
         val assistantText = assistantTextForHistory(outputs, comment)
 
-        val historyTurns =
-            buildHistoryTurns(
-                userEntry = request.historyEntry,
+        val turns =
+            buildTurns(
+                userEntry = request.conversationEntry,
                 toolEvents = toolEvents,
                 assistantText = assistantText
             )
@@ -221,15 +243,16 @@ class AgentRunner(
                     "text=[${assistantText?.collapseWhitespaceAndCap(LOG_REPLY_MAX_CHARS).orEmpty()}]"
         }
 
-        if (historyTurns.isNotEmpty()) {
-            history.appendInteraction(request.userId, historyTurns)
+        if (turns.isNotEmpty()) {
+            conversation.appendInteraction(request.userId, request.chatId, turns)
         }
 
         val pruned =
-            history.pruneCompacted(
+            conversation.pruneCompacted(
                 userId = request.userId,
-                maxStoredInteractions = historyConfig.maxStoredInteractions,
-                rawRetentionCutoff = Instant.now().minus(historyConfig.retentionDays.toLong(), ChronoUnit.DAYS)
+                chatId = request.chatId,
+                maxStoredInteractions = conversationConfig.maxStoredInteractions,
+                rawRetentionCutoff = Instant.now().minus(conversationConfig.retentionDays.toLong(), ChronoUnit.DAYS)
             )
 
         if (pruned > 0) {
@@ -239,10 +262,41 @@ class AgentRunner(
         return AgentResult(outputs, comment, outbox.redirectToPrivate)
     }
 
+    // what the group was saying just before this turn. in a group the bot only ever sees the messages
+    // addressed to it, so without this a question like "and what do you think?" arrives with no subject.
+    // the triggering message is left out — the model is already being shown it as the request itself.
+    private suspend fun recentChatFor(context: RequestContext): String? {
+        val repository = groupLog?.takeIf { groupLogConfig.recentChatEnabled && !context.chatIsPrivate } ?: return null
+
+        val entries =
+            try {
+                repository.recent(
+                    chatId = context.chatId,
+                    // over-fetch: dropping this user's own exchanges below must not thin the slice out.
+                    limit = groupLogConfig.recentMessages * RECENT_CHAT_OVERFETCH,
+                    since = Instant.now().minus(groupLogConfig.recentMinutes.toLong(), ChronoUnit.MINUTES),
+                    excludeMessageId = context.messageId
+                )
+            } catch (e: Throwable) {
+                e.rethrowIfCancellation()
+                log.warn(e) { "failed to load the recent chat slice for chat=${context.chatId}" }
+                return null
+            }
+
+        val recent =
+            entries
+                .withoutExchangesWith(context.userId)
+                .takeLast(groupLogConfig.recentMessages)
+
+        return renderGroupLog(recent, ZoneId.systemDefault(), RECENT_CHAT_LINE_CHARS, RECENT_CHAT_MAX_CHARS)
+            .text
+            .takeIf { it.isNotBlank() }
+    }
+
     // at most one recap per turn: it is an extra LLM round trip in front of the user's reply. whatever
     // is still over budget stays out of this prompt and gets its own recap on a later turn.
-    private suspend fun historyPlanForPrompt(userId: Long, tokenBudget: Int): HistoryPromptPlan {
-        val snapshot = history.load(userId)
+    private suspend fun conversationPlanForPrompt(userId: Long, chatId: Long, tokenBudget: Int): ConversationPlan {
+        val snapshot = conversation.load(userId, chatId)
         val plan = planFor(snapshot, tokenBudget)
 
         if (plan.compactablePrefix.isEmpty()) return plan
@@ -253,55 +307,58 @@ class AgentRunner(
             } catch (e: Throwable) {
                 e.rethrowIfCancellation()
                 log.warn {
-                    "history recap failed for user=$userId: " +
+                    "history recap failed for user=$userId chat=$chatId: " +
                             e.message?.collapseWhitespaceAndCap(PROVIDER_ERROR_LOG_MAX_CHARS).orEmpty()
                 }
                 return plan
             } ?: return plan
 
         val stored =
-            history.storeSummary(
+            conversation.storeSummary(
                 userId = userId,
+                chatId = chatId,
                 expectedThroughMessageId = snapshot.summarizedThroughMessageId,
                 throughMessageId = compacted.throughMessageId,
                 content = compacted.summary
             )
 
         if (!stored) {
-            log.warn { "history recap checkpoint changed before store for user=$userId; keeping the raw history" }
+            log.warn {
+                "history recap checkpoint changed before store for user=$userId chat=$chatId; keeping the raw history"
+            }
             return plan
         }
 
         log.info {
-            "history recap stored: user=$userId interactions=${compacted.interactionCount} " +
+            "history recap stored: user=$userId chat=$chatId interactions=${compacted.interactionCount} " +
                     "throughMessage=${compacted.throughMessageId} chars=${compacted.summary.length}"
         }
 
-        return planFor(history.load(userId), tokenBudget)
+        return planFor(conversation.load(userId, chatId), tokenBudget)
     }
 
-    private fun planFor(snapshot: ChatHistorySnapshot, tokenBudget: Int): HistoryPromptPlan =
-        planHistoryForPrompt(
+    private fun planFor(snapshot: ConversationSnapshot, tokenBudget: Int): ConversationPlan =
+        planConversation(
             snapshot = snapshot,
             tokenBudget = tokenBudget,
-            maxRecentInteractions = historyConfig.maxRecentInteractions
+            maxRecentInteractions = conversationConfig.maxRecentInteractions
         )
 
-    private suspend fun runAgentWithHistory(
+    private suspend fun runAgentWithConversation(
         userId: Long,
         currentTurn: String,
-        history: PromptHistory,
+        conversation: PromptConversation,
         preparation: AgentPromptPreparation,
         outbox: BotOutbox,
         toolEvents: MutableList<ToolEvent>,
         tokenUsages: MutableList<TokenUsage>,
         onToolStarting: (activity: ToolActivity) -> Unit
     ): String {
-        suspend fun run(promptHistory: PromptHistory): String =
+        suspend fun run(prompt: PromptConversation): String =
             agentFactory
                 .build(
                     userId = userId,
-                    history = promptHistory,
+                    conversation = prompt,
                     preparation = preparation,
                     outbox = outbox,
                     toolEvents = toolEvents::add,
@@ -311,25 +368,25 @@ class AgentRunner(
                 .run(currentTurn)
 
         return try {
-            run(history)
+            run(conversation)
         } catch (e: Throwable) {
             e.rethrowIfCancellation()
 
-            val emergencyHistory =
-                PromptHistory(
-                    summary = history.summary?.limitTo(EMERGENCY_SUMMARY_MAX_CHARS),
+            val emergencyConversation =
+                PromptConversation(
+                    summary = conversation.summary?.limitTo(EMERGENCY_SUMMARY_MAX_CHARS),
                     turns = emptyList()
                 )
             val safeToRetry =
                 e.isContextOverflow() &&
-                        history != emergencyHistory &&
+                        conversation != emergencyConversation &&
                         toolEvents.isEmpty() &&
                         outbox.pending.isEmpty()
 
             if (!safeToRetry) throw e
 
             log.warn { "context limit exceeded for user=$userId; retrying once with recap only" }
-            run(emergencyHistory)
+            run(emergencyConversation)
         }
     }
 
@@ -354,31 +411,35 @@ class AgentRunner(
         return if (providerError.isTransientOverload()) messages.overloadedReply else messages.fallbackErrorReply
     }
 
-    private fun retainLock(userId: Long): Mutex =
-        synchronized(userLocks) {
-            userLocks.getOrPut(userId) { UserLock() }.also { it.refCount++ }.mutex
+    private fun retainLock(key: ConversationKey): Mutex =
+        synchronized(conversationLocks) {
+            conversationLocks.getOrPut(key) { ConversationLock() }.also { it.refCount++ }.mutex
         }
 
-    private fun releaseLock(userId: Long) {
-        synchronized(userLocks) {
-            val entry = userLocks[userId] ?: return
-            if (--entry.refCount <= 0) userLocks.remove(userId)
+    private fun releaseLock(key: ConversationKey) {
+        synchronized(conversationLocks) {
+            val entry = conversationLocks[key] ?: return
+            if (--entry.refCount <= 0) conversationLocks.remove(key)
         }
     }
 
-    private class UserLock(val mutex: Mutex = Mutex(), var refCount: Int = 0)
+    private data class ConversationKey(val userId: Long, val chatId: Long)
+
+    private class ConversationLock(val mutex: Mutex = Mutex(), var refCount: Int = 0)
 }
 
 internal fun currentTurnPrompt(
     userInput: String,
     messageContext: MessageContext?,
     userMemory: List<MemoryEntry>,
-    chatMemory: List<MemoryEntry>
+    chatMemory: List<MemoryEntry>,
+    recentChat: String? = null
 ): String =
     buildList {
         messageContext?.toPromptBlock()?.let(::add)
         memoryBlock("user_memory", userMemory)?.let(::add)
         memoryBlock("group_memory", chatMemory)?.let(::add)
+        recentChat?.takeIf { it.isNotBlank() }?.let { add(xmlBlock("recent_chat", it)) }
         add(userInput)
     }.joinToString("\n\n")
 
@@ -482,7 +543,7 @@ private val TEXT_DUPLICATING_TOOLS =
 private fun BotOutput.InlineChoice.historyText(): String =
     question + "\n\n" + options.joinToString("\n") { "• $it" }
 
-internal fun buildHistoryTurns(userEntry: String, toolEvents: List<ToolEvent>, assistantText: String?): List<ChatTurn> =
+internal fun buildTurns(userEntry: String, toolEvents: List<ToolEvent>, assistantText: String?): List<ChatTurn> =
     buildList {
         add(ChatTurn(role = ChatRole.USER, content = userEntry))
 
@@ -491,7 +552,7 @@ internal fun buildHistoryTurns(userEntry: String, toolEvents: List<ToolEvent>, a
             add(
                 ChatTurn(
                     role = ChatRole.TOOL_CALL,
-                    content = toolCallArgsForHistory(event.args),
+                    content = toolCallArgsForStorage(event.args),
                     toolCallId = event.toolCallId,
                     toolName = event.toolName
                 )
@@ -520,7 +581,7 @@ private fun List<ToolEvent>.forHistory(): List<ToolEvent> {
     for (event in asReversed()) {
         if (event.toolName in TEXT_DUPLICATING_TOOLS) continue
 
-        val args = toolCallArgsForHistory(event.args)
+        val args = toolCallArgsForStorage(event.args)
         val output = event.output.collapseWhitespaceAndCap(TOOL_OUTPUT_MAX_CHARS).orEmpty()
         val cost = args.length + output.length
 

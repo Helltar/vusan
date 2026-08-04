@@ -109,7 +109,7 @@ class TaskScheduler(
                 messageId = 0L,
                 replyToMessageId = null,
                 prompt = wrapPrompt(task),
-                historyEntry = historyEntry(task),
+                conversationEntry = conversationEntry(task),
                 messageContext = null,
                 chatIsPrivate = task.chatIsPrivate,
                 language = task.language
@@ -149,7 +149,7 @@ class TaskScheduler(
             append("</scheduled_task>")
         }
 
-    private fun historyEntry(task: ScheduledTask): String =
+    private fun conversationEntry(task: ScheduledTask): String =
         scheduledTaskOpenTag(task) + task.prompt + "</scheduled_task>"
 
     private fun scheduledTaskOpenTag(task: ScheduledTask): String =

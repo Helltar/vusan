@@ -2,6 +2,9 @@ package com.helltar.vusan.telegram.delivery
 
 import com.helltar.vusan.agent.AgentResult
 import com.helltar.vusan.agent.ToolActivity
+import com.helltar.vusan.agent.grouplog.GroupLogEntry
+import com.helltar.vusan.agent.grouplog.GroupLogRepository
+import com.helltar.vusan.common.collapseWhitespaceAndCap
 import com.helltar.vusan.common.rethrowIfCancellation
 import com.helltar.vusan.i18n.Messages
 import com.helltar.vusan.outbox.BotOutput
@@ -19,6 +22,7 @@ import org.telegram.telegrambots.meta.api.methods.send.SendChatAction
 import org.telegram.telegrambots.meta.api.objects.ReplyParameters
 import org.telegram.telegrambots.meta.api.objects.message.Message
 import org.telegram.telegrambots.meta.generics.TelegramClient
+import java.time.Instant
 
 internal fun replyParameters(replyToMessageId: Long?): ReplyParameters? =
     replyToMessageId?.let { ReplyParameters.builder().messageId(it.toInt()).build() }
@@ -38,6 +42,32 @@ internal fun botActionFor(output: BotOutput): ActionType? = when (output) {
     is BotOutput.Poll -> ActionType.TYPING
     // nothing is uploaded for either: a reaction is instant, and a sticker is resent by file_id.
     is BotOutput.Reaction, is BotOutput.Sticker -> null
+}
+
+// what the bot said, for the group transcript. only outputs that carry words have text; the rest are
+// recorded the same way a person's media is, as a short label saying what arrived.
+private fun BotOutput.groupLogText(): String? = when (this) {
+    is BotOutput.Text -> text
+    is BotOutput.RichMessage -> markdown
+    is BotOutput.InlineChoice -> question
+    is BotOutput.Quiz -> question
+    is BotOutput.Poll -> question
+    else -> null
+}
+
+private fun BotOutput.groupLogDescriptor(): String? = when (this) {
+    is BotOutput.Photo -> "photo"
+    is BotOutput.PhotoGroup -> "photo album"
+    is BotOutput.Document -> filename
+    is BotOutput.DocumentGroup -> "documents"
+    is BotOutput.Animation -> "animation"
+    is BotOutput.Sticker -> "sticker"
+    is BotOutput.Voice -> "voice"
+    is BotOutput.VideoNote -> "video note"
+    is BotOutput.Video -> "video"
+    is BotOutput.Audio -> "audio"
+    // a reaction is not a message in the chat, so it leaves no transcript row at all.
+    else -> null
 }
 
 // the chat action shown while a tool runs, so a slow media-producing call (image generation,
@@ -63,11 +93,15 @@ data class ScheduledAttribution(
  */
 class TelegramDelivery(
     private val client: TelegramClient,
-    private val onStickerRejected: (suspend (Long) -> Unit)? = null
+    private val onStickerRejected: (suspend (Long) -> Unit)? = null,
+    private val groupLog: GroupLogRepository? = null
 ) {
 
     private companion object {
         const val MAX_CAPTION_CHARS = 1000
+
+        // matches what an inbound message is allowed to cost the transcript.
+        const val MAX_BOT_TEXT_CHARS = 2_000
 
         // pace consecutive sends in a multi-output reply so a batch does not trip Telegram's per-chat
         // rate limit. telegrambots does not retry a send that 429s, so pacing is the only guard here.
@@ -192,7 +226,16 @@ class TelegramDelivery(
             indicateAction(deliveryTarget.chatId, botActionFor(item.output))
 
             when (deliverItem(item.output, deliveryTarget, caption, routedToPrivate, currentChatTarget, messages)) {
-                ItemDeliveryOutcome.Ok -> Unit
+                ItemDeliveryOutcome.Ok ->
+                    recordBotMessage(
+                        chatId = deliveryTarget.chatId,
+                        routedToPrivate = routedToPrivate,
+                        senderPrivateChatId = senderPrivateChatId,
+                        text = caption ?: item.output.groupLogText(),
+                        descriptor = item.output.groupLogDescriptor(),
+                        answering = originTarget.replyToMessageId
+                    )
+
                 ItemDeliveryOutcome.ReplyMissing -> replyUnavailable = true
                 ItemDeliveryOutcome.PrivateBlocked -> if (!privateBlockedNoticed) {
                     privateBlockedNoticed = true
@@ -266,6 +309,44 @@ class TelegramDelivery(
         }
     }
 
+    // the bot's own turn belongs in the group transcript: a recap that shows the questions and not the
+    // answers reads as if nobody replied. best-effort — the message is already delivered either way.
+    private suspend fun recordBotMessage(
+        chatId: Long,
+        routedToPrivate: Boolean,
+        senderPrivateChatId: Long?,
+        text: String?,
+        descriptor: String?,
+        answering: Long?
+    ) {
+        val repository = groupLog ?: return
+
+        // a reply redirected to the sender's DM never happened in the group, so the transcript must not
+        // claim it did — the exchange is still kept as the origin chat's conversation history. a private
+        // chat is never part of the group log to begin with.
+        if (routedToPrivate || chatId == senderPrivateChatId) return
+        if (text == null && descriptor == null) return
+
+        runCatching {
+            repository.record(
+                GroupLogEntry(
+                    chatId = chatId,
+                    messageId = null,
+                    kind = GroupLogEntry.BOT_KIND,
+                    sentAt = Instant.now(),
+                    text = text?.collapseWhitespaceAndCap(MAX_BOT_TEXT_CHARS),
+                    descriptor = descriptor,
+                    // the anchor is what ties this reply to the message it answers, which is how the
+                    // recent-chat slice knows this exchange is already in that user's own history.
+                    replyToMessageId = answering
+                )
+            )
+        }.onFailure {
+            it.rethrowIfCancellation()
+            log.warn(it) { "failed to record a bot message in the chat log for chat=$chatId" }
+        }
+    }
+
     private suspend fun reportRejectedSticker(catalogId: Long) {
         val report = onStickerRejected ?: return
 
@@ -290,12 +371,28 @@ class TelegramDelivery(
         try {
             indicateAction(deliveryTarget.chatId, ActionType.TYPING)
             sendReplyText(deliveryTarget, text, messages)
+            recordBotMessage(
+                chatId = deliveryTarget.chatId,
+                routedToPrivate = routedToPrivate,
+                senderPrivateChatId = senderPrivateChatId,
+                text = text,
+                descriptor = null,
+                answering = originTarget.replyToMessageId
+            )
             return false
         } catch (e: Throwable) {
             e.rethrowIfCancellation()
 
             if (!routedToPrivate && deliveryTarget.replyToMessageId != null && e.isReplyMessageNotFound()) {
                 sendReplyText(deliveryTarget.withoutReply(), text, messages)
+                recordBotMessage(
+                chatId = deliveryTarget.chatId,
+                routedToPrivate = routedToPrivate,
+                senderPrivateChatId = senderPrivateChatId,
+                text = text,
+                descriptor = null,
+                answering = originTarget.replyToMessageId
+            )
                 return true
             }
 

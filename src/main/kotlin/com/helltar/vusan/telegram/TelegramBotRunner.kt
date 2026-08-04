@@ -4,6 +4,7 @@ import com.helltar.vusan.agent.AgentRequest
 import com.helltar.vusan.agent.AgentResult
 import com.helltar.vusan.agent.AgentRunner
 import com.helltar.vusan.agent.ToolActivity
+import com.helltar.vusan.agent.grouplog.GroupLogRepository
 import com.helltar.vusan.common.collapseWhitespaceAndCap
 import com.helltar.vusan.common.limitTo
 import com.helltar.vusan.common.rethrowIfCancellation
@@ -31,7 +32,7 @@ import com.helltar.vusan.telegram.inbound.captionedPartOrNull
 import com.helltar.vusan.telegram.inbound.chatIdLong
 import com.helltar.vusan.telegram.inbound.describeIncomingSticker
 import com.helltar.vusan.telegram.inbound.formatAgentInput
-import com.helltar.vusan.telegram.inbound.formatHistoryInput
+import com.helltar.vusan.telegram.inbound.formatConversationInput
 import com.helltar.vusan.telegram.inbound.isPrivateChat
 import com.helltar.vusan.telegram.inbound.isReplyToOtherUser
 import com.helltar.vusan.telegram.inbound.leadingBotCommandOrNull
@@ -51,6 +52,7 @@ import com.helltar.vusan.telegram.inbound.shouldHandle
 import com.helltar.vusan.telegram.inbound.textSnippetOrNull
 import com.helltar.vusan.telegram.inbound.toAttachedFileOrNull
 import com.helltar.vusan.telegram.inbound.toAudioInput
+import com.helltar.vusan.telegram.inbound.toGroupLogEntry
 import com.helltar.vusan.telegram.inbound.toMessageContext
 import com.helltar.vusan.telegram.inbound.toRichMarkdown
 import com.helltar.vusan.telegram.inbound.wrapAudioTranscript
@@ -84,7 +86,8 @@ internal class TelegramBotRunner(
     private val inlineChoices: InlineChoiceHandler,
     private val allowedIds: Set<Long>,
     private val voiceTranscriber: VoiceTranscriber?,
-    private val stickerCatalog: StickerCatalog? = null
+    private val stickerCatalog: StickerCatalog? = null,
+    private val groupLog: GroupLogRepository? = null
 ) {
 
     private companion object {
@@ -210,6 +213,7 @@ internal class TelegramBotRunner(
 
             val message = update.message ?: continue
 
+            recordGroupLog(message)
             learnSticker(message)
 
             val albumKey = message.mediaGroupId?.let { "${message.chatIdLong}:$it" }
@@ -229,6 +233,18 @@ internal class TelegramBotRunner(
         }
 
         flushAlbums()
+    }
+
+    // the group transcript has to be recorded before [shouldHandle] gets a say, because the messages
+    // worth recapping later are exactly the ones nobody addressed to the bot. this also sits ahead of
+    // album buffering so each part of a gallery is logged in its own right.
+    private fun CoroutineScope.recordGroupLog(message: Message) {
+        val repository = groupLog ?: return
+        if (message.isPrivateChat || !message.isAllowed()) return
+
+        val entry = message.toGroupLogEntry() ?: return
+
+        launchHandling(message) { repository.record(entry) }
     }
 
     // a sticker teaches the bot the set it came from even when the message is not addressed to the bot:
@@ -377,8 +393,8 @@ internal class TelegramBotRunner(
                 return
             }
 
-        agent.clearHistory(userId)
-        sendReply(message, Messages.of(message.language).historyClearedReply)
+        agent.clearConversation(userId, message.chatIdLong)
+        sendReply(message, Messages.of(message.language).conversationClearedReply)
     }
 
     private suspend fun dispatchCallback(callback: CallbackQuery) {
@@ -649,7 +665,7 @@ internal class TelegramBotRunner(
             message = message,
             agentInput =
                 effectiveAttachedFile?.let { "${attachedFileContextBlock(it)}\n\n$baseAgentInput" } ?: baseAgentInput,
-            historyInput = replySummary?.let { formatHistoryInput(prompt, it) } ?: prompt,
+            conversationInput = replySummary?.let { formatConversationInput(prompt, it) } ?: prompt,
             attachedFile = effectiveAttachedFile,
             replyToMessageId = if (replyToOtherUser) message.replyToMessageIdOrNull() else null,
             inputKind = inputKind
@@ -659,7 +675,7 @@ internal class TelegramBotRunner(
     private suspend fun handleAgentMessage(
         message: Message,
         agentInput: String,
-        historyInput: String,
+        conversationInput: String,
         attachedFile: AttachedFile?,
         replyToMessageId: Long?,
         inputKind: String
@@ -680,7 +696,7 @@ internal class TelegramBotRunner(
                 messageId = message.messageIdLong,
                 replyToMessageId = replyToMessageId,
                 prompt = agentInput,
-                historyEntry = historyInput,
+                conversationEntry = conversationInput,
                 messageContext = message.toMessageContext(loadChatDescription(message)),
                 attachedFile = attachedFile,
                 language = language
@@ -709,7 +725,7 @@ internal class TelegramBotRunner(
                 userId = user.id,
                 messageId = 0L,
                 prompt = input,
-                historyEntry = input,
+                conversationEntry = input,
                 messageContext = message.toMessageContext(user, loadChatDescription(message)),
                 language = language
             )

@@ -63,7 +63,7 @@ class TelegramDeliveryTest {
         val rejected = mutableListOf<Long>()
         val client = StickerRejectingClient("Bad Request: wrong remote file identifier specified")
 
-        deliverSticker(TelegramDelivery(client.proxy) { rejected += it })
+        deliverSticker(TelegramDelivery(client.proxy, onStickerRejected = { rejected += it }))
 
         assertEquals(listOf(42L), rejected)
     }
@@ -75,7 +75,7 @@ class TelegramDeliveryTest {
         // by every chat, so this must not be read as the sticker being broken.
         val client = StickerRejectingClient("Bad Request: not enough rights to send stickers to the chat")
 
-        deliverSticker(TelegramDelivery(client.proxy) { rejected += it })
+        deliverSticker(TelegramDelivery(client.proxy, onStickerRejected = { rejected += it }))
 
         assertTrue(rejected.isEmpty(), "a chat-level refusal was mistaken for a dead file_id")
     }

@@ -11,8 +11,9 @@ Deno service under [`sandbox/`](../sandbox/), see [Code execution service](#code
 Telegram ──► telegram/ ──► agent/ ──► tools/ ──► external services
                 │            │           │
                 │            │           └─ writes outputs into ─► outbox/
-                │            ├─ reads/stores history via ─► agent/history/ ─► infra/
+                │            ├─ reads/stores the dialogue via ─► agent/conversation/ ─► infra/
                 │            └─ reads/stores memory via ──► agent/memory/ ──► infra/
+                ├─ records every group message into ─► agent/grouplog/ ─► infra/
                 └─ delivers outbox back to Telegram
 ```
 
@@ -22,13 +23,19 @@ Telegram ──► telegram/ ──► agent/ ──► tools/ ──► externa
   HTML-formatting, opt-in rich-message, reply-anchor, media/document, media-group, and private-message fallbacks;
   `telegram/callback/` owns the inline-button flows — `TaskMenuHandler` the deterministic `/tasks` UI, and
   `InlineChoiceHandler` the agent-created choice buttons, whose selection becomes an agent input.
-- **`agent/`** — agent orchestration on top of Koog. `AgentRunner` serializes per-user turns, assembles the current
-  user turn (Telegram metadata + durable memory + request), and owns every history write for it, so no other layer
-  appends or clears turns behind a running turn's back; `AgentFactory` builds the `AIAgent` (system prompt + history +
-  tools) and budgets its model context; `SystemPrompt` keeps the deployment's customizable personality and the fixed
-  delivery/tool contract in separate XML-delimited blocks. `agent/history/` groups turns into complete interactions,
-  persists raw history, and maintains its semantic recap; `agent/memory/` stores durable user/group memory that survives
-  a history clear and is injected as `<user_memory>`/`<group_memory>`.
+- **`agent/`** — agent orchestration on top of Koog. `AgentRunner` serializes the turns of one conversation, assembles
+  the current user turn (Telegram metadata + durable memory + request), and owns every history write for it, so no other
+  layer appends or clears turns behind a running turn's back; `AgentFactory` builds the `AIAgent` (system prompt +
+  history + tools) and budgets its model context; `SystemPrompt` keeps the deployment's customizable personality and the
+  fixed delivery/tool contract in separate XML-delimited blocks. `agent/conversation/` groups turns into complete
+  interactions, persists raw history, and maintains its semantic recap, all keyed by the `(userId, chatId)` pair — one
+  person in one chat, so a private exchange can never be replayed as that person's own words inside a group, and what
+  travels between chats is durable memory rather than raw turns; `agent/memory/` stores that memory (user or group
+  scope), which survives a history clear and is injected as `<user_memory>`/`<group_memory>`; `agent/grouplog/` is the
+  group transcript, keyed by chat alone, holding every message the bot saw in a group rather than only the turns it took
+  part in.
+  `GroupLogReader` answers a window from it under a character budget, falling back to cached per-day recaps produced by
+  `GroupLogDigester` when the window is too wide to quote.
 - **`tools/`** — agent-callable tools, one subpackage per capability (search, voice, vision, scheduled tasks, …).
   `ToolRegistryFactory` owns clients and builds a per-request registry from required tools plus optional tools whose
   env/config is present. See the Features section of the [README](../README.md). `tools/images/` is not a tool surface
@@ -75,7 +82,10 @@ A normal user message travels:
    an older build) is still answered, so the caller's client stops spinning.
 2. **Filter** — `MessageFilter.shouldHandle` drops messages the bot shouldn't answer (in groups:
    only replies, mentions, or targeted commands); `TelegramBotRunner` then checks the allowlist (`ALLOWED_IDS`) and
-   rejects unknown chats/users.
+   rejects unknown chats/users. Two sinks run *before* this gate, on every allowlisted message, because what they
+   collect is precisely what nobody addressed to the bot: `recordGroupLog` writes the group transcript row, and
+   `learnSticker` teaches the catalog which sets the chat uses. Both sit ahead of album buffering too, so each part of
+   a gallery is seen individually.
 3. **Normalize** — text is sanitized (`MessageSanitizer`); voice/audio is transcribed (`VoiceTranscriber` → `stt/`);
    stickers become a metadata prompt; a rich message — which never carries `text` — is flattened back into rich
    markdown (`telegram/inbound/RichMessageText.kt`), both as its own input and when one is quoted in a reply, capped at
@@ -83,11 +93,16 @@ A normal user message travels:
    replied-message context is wrapped in `<reply_context>`/`<user_message>`; current or replied photo, video, and
    document input becomes `AttachedFile`.
    `TelegramBotRunner.dispatchToAgent` assembles the agent input and the shorter history input.
-4. **Run** — `AgentRunner.handle` takes the per-user lock (or returns "busy"), loads durable memory
+4. **Run** — `AgentRunner.handle` takes the conversation lock (or returns "busy"), loads durable memory
    (`agent/memory/MemoryRepository` — the sender's user memory always, plus the group's memory in non-private chats),
    and places it with `<message_context>` immediately before the current request in one user-role turn. That metadata
-   also carries `last_exchange` — how long ago this user last spoke with Vusan — but only once the gap is long
-   enough to be worth noticing, so ordinary back-and-forth stays free of it.
+   also carries `last_exchange` — how long ago this user last spoke with Vusan in this chat — but only once the gap is
+   long enough to be worth noticing, so ordinary back-and-forth stays free of it. In a group the turn also carries
+   `<recent_chat>`: a hard-capped slice of what the chat was saying just before, so a question with no subject
+   ("and what do you think?") still has one. It leaves out the triggering message and this user's own exchanges with
+   the bot, both of which the prompt already carries — the first as the request itself, the second as replayed
+   `user`/`assistant` turns. Other people's messages and the bot's replies to *them* stay, since one person's
+   conversation never contains those.
    `AgentFactory.prepare` builds the per-request tool registry and estimates the fixed system/tool/current-turn cost.
    The history planner reserves room for output, future tool calls, and estimation error, then admits only complete
    interactions. If an older prefix no longer fits or exceeds the configured recent count,
@@ -104,8 +119,8 @@ A normal user message travels:
     - a turn that ends having delivered nothing — no `sendMessage`, media, or reaction, and empty assistant text (flaky
       providers return an empty completion after a batch of tool results) — gets one nudge to actually deliver before
       finishing, so a full turn of research does not collapse into silence.
-6. **Collect** — `AgentRunner` persists the produced history as one interaction through `ChatHistoryRepository` while
-   it still holds the per-user turn lock. Delivery tools whose payload already became assistant history are omitted;
+6. **Collect** — `AgentRunner` persists the produced history as one interaction through `ConversationRepository` while
+   it still holds the turn lock. Delivery tools whose payload already became assistant history are omitted;
    other tool events are stored as bounded complete call/result pairs. Only the newest two interactions replay those
    raw pairs, while older recent interactions replay user/assistant text. Summarized raw interactions are pruned by
    whole interaction after the configured count or age. Persisting inside the lock is
@@ -153,6 +168,20 @@ A normal user message travels:
   it, and only when that message is gone does it fall back to a "following up with" notice instead of the
   "scheduled by" one, which would misattribute it to the user. The user sees and cancels them through `/tasks` like
   any other task.
+- **Group chat log** — `agent/grouplog/` records what a group says, so a recap can be asked for later. Ingestion is
+  `TelegramBotRunner.recordGroupLog`, a detached write that runs before the mention filter and outside private chats;
+  the bot's own group messages are recorded from `TelegramDelivery.dispatch` after a send succeeds, skipping anything
+  redirected to a DM. Text is collapsed and capped on write (harder for a forwarded post), media is reduced to a short
+  label, and no file id is kept. Retention is amortized over inserts rather than scheduled: every few hundred rows in a
+  chat, `GroupLogRepository` drops what is past `GROUP_LOG_RETENTION_DAYS` and trims to `GROUP_LOG_MAX_MESSAGES_PER_CHAT`.
+  On read, `GroupLogReader` quotes the window when it fits the budget derived from `liveToolResultMaxChars`; when it does
+  not and the window reaches back into a closed day, it splits by local day, replaces each **closed** day with a
+  `GroupLogDigester` recap cached in `group_log_digests`, and leaves the current day quoted. A window lying inside today
+  has no closed day to summarize, so it is truncated to its newest entries rather than widened to the whole day. Today is never cached — it is still being written to — which is
+  what makes a repeated weekly question cost nothing after the first one. Every result leads with the window's exact
+  message count, narrowed to one author when one was asked for, because the transcript under it may be only part of the
+  window and a "how many" answer must not be a tally of quoted lines. The digest path counts over the day-snapped window
+  it prints rather than the narrower one requested, and labels `<today>` with how many of its messages fit.
 - **Sticker catalog** — `tools/sticker/StickerCatalog` learns which sticker sets a chat uses. The Bot API has no
   sticker search, so a sticker can only be sent from a set known by name: `TelegramBotRunner` taps every sticker in an
   allowlisted chat — including ones the bot is not addressed in, which in a group is its only view of what people
@@ -185,21 +214,24 @@ A normal user message travels:
   while preserving the active/paused state; changing a cron timezone without replacing the expression recalculates
   its next occurrence. In groups, `listTasks`, edit, pause, resume, and cancel share the menu's current-chat scope
   instead of exposing tasks from private or unrelated chats.
-- **Direct history clear** — `/clear` bypasses the LLM, deletes all conversation history stored for the caller, and
-  sends a localized confirmation. It deliberately leaves long-term memory and scheduled tasks unchanged, matching
-  the agent-callable `clearChatHistory` tool. Both paths also advance the caller's persisted history revision, which
-  invalidates unanswered choices created before the clear. The command goes through `AgentRunner.clearHistory` so it
-  waits for the caller's turn lock; a turn already running would otherwise persist itself after the wipe. The tool
-  runs inside a turn and so keeps calling the repository directly. The persisted semantic recap is deleted with the
-  raw transcript.
+- **Direct history clear** — `/clear` bypasses the LLM, deletes the caller's conversation history **in the chat the
+  command was sent from**, and sends a localized confirmation. Their history in other chats, and everyone else's in
+  this one, are untouched: the wipe is as narrow as the conversation it belongs to, which is what keeps `/clear` in a
+  group from destroying context that is not the caller's. It deliberately leaves long-term memory and scheduled tasks
+  unchanged, matching the agent-callable `clearConversation` tool. Both paths also advance that conversation's persisted
+  history revision, which invalidates unanswered choices created before the clear. The command goes through
+  `AgentRunner.clearConversation` so it waits for the conversation's turn lock; a turn already running would otherwise
+  persist itself after the wipe. The tool runs inside a turn and so keeps calling the repository directly. The persisted
+  semantic recap is deleted with the raw transcript.
 - **Agent-created inline choices** — `askWithButtons` enqueues a plain-text question plus two to ten answer buttons.
   Callback data carries the intended user id, history revision, and option index; the labels remain in Telegram's
-  message keyboard, while the current revision lives in `chat_history_state`, so an unanswered choice survives a bot
-  restart but becomes unavailable after its conversation history is cleared. `InlineChoiceHandler` verifies ownership
+  message keyboard, while the current revision lives in `conversation_state`, so an unanswered choice survives a bot
+  restart but becomes unavailable after the conversation it was asked in is cleared — a clear in another chat leaves it
+  usable. `InlineChoiceHandler` verifies ownership
   and the revision, atomically claims the message, replaces its keyboard with the selected label, answers the callback,
   and wraps the question/selection as `<inline_choice>` for a queued `AgentRunner` turn. The question and its options
   are persisted as assistant history, and the follow-up answer is delivered as a reply to that choice message.
-- **History compaction** — `agent/history/ChatHistory.planHistoryForPrompt` token-budgets complete recent interactions.
+- **History compaction** — `agent/conversation/ConversationPlan.planConversation` token-budgets complete recent interactions.
   `LlmConversationCompactor` rewrites the previous recap plus the next omitted interaction prefix into a standalone
   semantic recap and advances a database checkpoint only after that model call succeeds. It runs at most once per turn,
   because it is an extra LLM round trip in front of the user's reply; a prefix that still does not fit stays out of the
@@ -266,14 +298,16 @@ A symptom-to-source map for finding the right file fast. Paths are under
 | Symptom                                                                          | Start here                                                                                                                                                                                                                                                                                            |
 |----------------------------------------------------------------------------------|-------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
 | Vusan ignores a message entirely                                                 | `telegram/inbound/MessageFilter.kt` (`shouldHandle` — group reply/mention rules), then `TelegramBotRunner.isAccepted`/`isAllowed` (the `ALLOWED_IDS` allowlist)                                                                                                                                               |
-| Reply says "still working on your previous request"                              | `agent/AgentRunner.kt` — the per-user `Mutex` rejects a second concurrent turn                                                                                                                                                                                                                        |
+| Reply says "still working on your previous request"                              | `agent/AgentRunner.kt` — the per-conversation `Mutex` rejects a second concurrent turn in the same chat                                                                                                                                                                                                                      |
 | Reply lands in the wrong chat, loses its reply anchor, or DM redirect misbehaves | `telegram/delivery/TelegramDelivery.kt` (routing/anchor/private-redirect *policy*)                                                                                                                                                                                                                             |
 | Formatting renders wrong, message rejected, or media falls back to document/text | `agent/SystemPrompt.kt` (allowed HTML tags the agent emits), `telegram/delivery/TelegramOutputSender.kt` (which call and which fallback each output kind gets), `telegram/delivery/TelegramSendFallbacks.kt` (the fallback *mechanism* itself), `telegram/delivery/TelegramErrors.kt` (which provider errors trigger a fallback) |
 | Vusan floods a chat or stalls on Telegram 429 over a long multi-message reply    | `outbox/BotOutbox.kt` (text coalescing + `MAX_TEXT_MESSAGES` cap) + `telegram/delivery/TelegramDelivery.kt` (`INTER_MESSAGE_DELAY` pacing)                                                                                                                                                                     |
 | A specific tool misbehaves                                                       | `tools/<feature>/<Feature>Tools.kt` for the tool surface, plus its `<Feature>Client.kt` for the external call                                                                                                                                                                                         |
 | Code execution times out, says "busy", or loses produced files                   | `tools/sandbox/SandboxClient.kt` (HTTP call + wait budget), then the service in [`sandbox/`](../sandbox/): `main.ts` (worker pool, `503` when none free) and `worker.ts` (Pyodide setup, output caps)                                                                                                 |
 | Wrong language in a canned reply (busy/error/voice/start/task menu)              | `i18n/Language.kt` (language selection) + `i18n/Messages.kt` (the strings)                                                                                                                                                                                                                            |
-| Vusan forgets context or the history recap looks wrong                           | `agent/history/ChatHistory.kt` (budget/selection) + `agent/history/ConversationCompactor.kt` (semantic recap) + `agent/history/ChatHistoryRepository.kt` (storage/checkpoint)                                                                                                                         |
+| Vusan forgets context or the history recap looks wrong                           | `agent/conversation/ConversationPlan.kt` (budget/selection) + `agent/conversation/ConversationCompactor.kt` (semantic recap) + `agent/conversation/ConversationRepository.kt` (storage/checkpoint)                                                                                                                         |
+| A group recap misses messages, or `readGroupLog` returns too little              | `telegram/TelegramBotRunner.recordGroupLog` + `telegram/inbound/GroupLogEntries.kt` (what gets recorded at all), then `agent/grouplog/GroupLogReader.kt` (window budget, day split, digest cache) and `agent/grouplog/GroupLogRepository.kt` (retention and the per-chat row cap)                              |
+| Vusan misreads what "that" refers to in a group, or parrots the group's chatter | `agent/AgentRunner.recentChatFor` (the `<recent_chat>` slice and its caps) + `agent/SystemPrompt.kt` (the `<recent_chat>` contract)                                                                                                                                                                            |
 | Voice/audio not transcribed                                                      | `telegram/inbound/VoiceTranscriber.kt` + `stt/OpenAiWhisperClient.kt` (needs `OPENAI_STT_API_KEY`); for a video's sound `tools/vision/VideoAudioTranscriber.kt`                                                                                                                                                                                                            |
 | Vusan cannot see what is in a video                                              | `tools/vision/VisionTools.kt` (`describeVideo` guards and the preview-frame fallback), `tools/vision/VideoVisionClient.kt` (frames + transcript prompt), `tools/vision/VideoSampler.kt` (ffmpeg), `telegram/inbound/ReplyContext.kt` (which media becomes an `AttachedFile`)                                  |
 | Web search picks the wrong provider, or results are thin                        | the `@LLMDescription` text that ranks them: `tools/tavily/TavilyToolDescriptions.kt` (`webSearch`, the default) and `tools/searxng/SearxngToolDescriptions.kt` (`metaSearch`, the fallback)                                                                                                           |
@@ -281,7 +315,7 @@ A symptom-to-source map for finding the right file fast. Paths are under
 | A rich message reads as empty, `unknown`, or loses its structure                 | `telegram/inbound/RichMessageText.kt` (block tree → rich markdown), then `MessageMetadata.contentTypeName`/`textSnippetOrNull` and `ReplyContext.repliedTextOrNull`                                                                                                                                           |
 | Scheduled task fires late, not at all, or reports "missed"                       | `tasks/TaskScheduler.kt` (polling/lateness) + `tasks/Recurrence.kt` (next-run math)                                                                                                                                                                                                                   |
 | `/tasks` or a plain-language task pause/resume/cancel fails                      | `telegram/callback/TaskMenuHandler.kt` (rendering, ownership, callbacks) + `tools/tasks/TaskTools.kt` (agent path) + `tasks/TasksRepository.kt` (shared scoped state changes)                                                                                                                                   |
-| `/clear` reports success but history survives                                    | `agent/AgentRunner.kt` (`clearHistory` and the turn lock that also guards the append) + `tools/history/HistoryTools.kt` (agent path) + `agent/history/ChatHistoryRepository.kt` (shared storage operation)                                                                                            |
+| `/clear` reports success but history survives                                    | `agent/AgentRunner.kt` (`clearConversation` and the turn lock that also guards the append) + `tools/conversation/ConversationTools.kt` (agent path) + `agent/conversation/ConversationRepository.kt` (shared storage operation)                                                                                            |
 | An agent choice button does nothing, repeats, or reaches the wrong user          | `tools/choice/InlineChoiceTools.kt` (tool contract) + `telegram/callback/InlineChoiceHandler.kt` (callback ownership/consumption) + `TelegramBotRunner.dispatchInlineChoiceCallback` (agent follow-up)                                                                                                          |
 | An env var has no effect                                                         | `config/AppConfig.kt` (parsing) — and check it is documented in [`configuration.md`](configuration.md) + [`.env.example`](../.env.example)                                                                                                                                                            |
 | Model / provider / request-timeout selection or OpenAI prompt-cache misses       | `config/LlmRuntime.kt` (provider → client/model/params) + `config/OpenAiPromptCaching.kt` (GPT-5.6+ explicit cache breakpoint)                                                                                                                                                                         |

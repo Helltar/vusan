@@ -112,7 +112,10 @@ Prerequisites: JDK 21, plus `ffmpeg` and `yt-dlp` on `PATH`.
 
 ### Remembers
 
-- **Conversation history** — recent messages and a durable recap, so replies keep context.
+- **Conversation history** — recent messages and a durable recap, so replies keep context. Every
+  chat keeps its own, so a private conversation never surfaces in a group.
+- **What the group said** — follows the whole conversation, not only what is aimed at it, so you
+  can ask what you missed or how much someone wrote. A week comes back recapped day by day.
 - **Sense of time** — notices when you have not written for a while instead of treating every
   message as if it followed immediately.
 - **Memory** — separate from the history: facts it keeps about you, and about the group. Clearing

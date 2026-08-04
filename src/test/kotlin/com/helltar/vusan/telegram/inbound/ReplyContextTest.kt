@@ -57,9 +57,9 @@ class ReplyContextTest {
     }
 
     @Test
-    fun `formatHistoryInput keeps compact replied text context`() {
+    fun `formatConversationInput keeps compact replied text context`() {
         val historyText =
-            formatHistoryInput(
+            formatConversationInput(
                 currentMessageText = "summarize this article and send it as a markdown file",
                 repliedMessage = RepliedMessageSummary(
                     type = "text",
@@ -152,7 +152,7 @@ class ReplyContextTest {
                   "file_id": "anim-1", "file_unique_id": "u2", "width": 480, "height": 270,
                   "duration": 3, "mime_type": "video/mp4", "file_size": 90000
                 },
-                "caption": "ахах"
+                "caption": "haha"
                 """
             )
 

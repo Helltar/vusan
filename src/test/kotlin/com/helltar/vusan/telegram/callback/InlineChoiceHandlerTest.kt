@@ -26,7 +26,7 @@ class InlineChoiceHandlerTest {
     @Test
     fun `owner selection removes buttons and returns the selected option`() = runBlocking {
         val client = RecordingClient()
-        val handler = InlineChoiceHandler(client.proxy) { 3L }
+        val handler = InlineChoiceHandler(client.proxy) { _, _ -> 3L }
         val keyboard = inlineChoiceKeyboard(choice())
 
         val selection =
@@ -54,7 +54,7 @@ class InlineChoiceHandlerTest {
     @Test
     fun `same choice message can only be consumed once`() = runBlocking {
         val client = RecordingClient()
-        val handler = InlineChoiceHandler(client.proxy) { 3L }
+        val handler = InlineChoiceHandler(client.proxy) { _, _ -> 3L }
         val keyboard = inlineChoiceKeyboard(choice())
 
         val first =
@@ -75,7 +75,7 @@ class InlineChoiceHandlerTest {
     @Test
     fun `another user cannot answer the choice`() = runBlocking {
         val client = RecordingClient()
-        val handler = InlineChoiceHandler(client.proxy) { 3L }
+        val handler = InlineChoiceHandler(client.proxy) { _, _ -> 3L }
 
         val selection =
             handler.handleCallback(
@@ -100,7 +100,7 @@ class InlineChoiceHandlerTest {
     fun `choice from a cleared history is unavailable`() = runBlocking {
         val client = RecordingClient()
         var currentRevision = 3L
-        val handler = InlineChoiceHandler(client.proxy) { currentRevision }
+        val handler = InlineChoiceHandler(client.proxy) { _, _ -> currentRevision }
         val keyboard = inlineChoiceKeyboard(choice())
         currentRevision = 4L
 

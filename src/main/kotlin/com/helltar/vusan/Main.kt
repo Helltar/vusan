@@ -3,9 +3,11 @@ package com.helltar.vusan
 import ai.koog.prompt.executor.llms.MultiLLMPromptExecutor
 import com.helltar.vusan.agent.AgentFactory
 import com.helltar.vusan.agent.AgentRunner
-import com.helltar.vusan.agent.history.ChatHistoryRepository
-import com.helltar.vusan.agent.history.ContextWindowPolicy
-import com.helltar.vusan.agent.history.LlmConversationCompactor
+import com.helltar.vusan.agent.ContextWindowPolicy
+import com.helltar.vusan.agent.conversation.ConversationRepository
+import com.helltar.vusan.agent.conversation.LlmConversationCompactor
+import com.helltar.vusan.agent.grouplog.GroupLogRepository
+import com.helltar.vusan.agent.grouplog.LlmGroupLogDigester
 import com.helltar.vusan.agent.memory.MemoryRepository
 import com.helltar.vusan.config.*
 import com.helltar.vusan.infra.Db
@@ -41,9 +43,10 @@ suspend fun main() = coroutineScope {
         Db.connect(config)
         http = Http.createClient()
 
-        val history = ChatHistoryRepository()
+        val conversation = ConversationRepository()
         val memory = MemoryRepository(config.maxMemoryPerScope)
         val tasks = TasksRepository()
+        val groupLog = GroupLogRepository(config.groupLog).takeIf { config.groupLog.enabled }
 
         val llm = resolveLlmRuntime(config.llmProvider)
         executor = MultiLLMPromptExecutor(llm.model.provider to llm.client)
@@ -56,32 +59,43 @@ suspend fun main() = coroutineScope {
 
         // the catalog only ever holds stickers vision has looked at, so without vision there is nothing
         // to learn and nothing to offer the model.
-        val stickerCatalog =
-            vision?.let { StickerCatalog(telegramClient, ImageVisionClient(it.executor, it.model)) }
+        val stickerCatalog = vision?.let { StickerCatalog(telegramClient, ImageVisionClient(it.executor, it.model)) }
 
-        val toolRegistryFactory = ToolRegistryFactory(http, config, history, memory, tasks, stickerCatalog, vision)
         val contextWindowPolicy = ContextWindowPolicy(llm.model)
-        val agentFactory = AgentFactory(executor, toolRegistryFactory, llm.model, llm.chatParams, config.personality, contextWindowPolicy = contextWindowPolicy)
-        val conversationCompactor = LlmConversationCompactor(executor, llm.model, llm.compactionParams, contextWindowPolicy)
-        val agentRunner = AgentRunner(agentFactory, history, memory, conversationCompactor, config.chatHistory, stickerCatalog)
+        val groupLogDigester = groupLog?.let { LlmGroupLogDigester(executor, llm.model, llm.compactionParams) }
 
-        val delivery = TelegramDelivery(telegramClient, stickerCatalog?.let { it::recheckSetOf })
+        val toolRegistryFactory =
+            ToolRegistryFactory(
+                http, config, conversation, memory, tasks, stickerCatalog, vision,
+                groupLog, groupLogDigester, contextWindowPolicy.liveToolResultMaxChars
+            )
+
+        val agentFactory =
+            AgentFactory(
+                executor, toolRegistryFactory, llm.model, llm.chatParams,
+                config.personality, contextWindowPolicy = contextWindowPolicy
+            )
+
+
+        val conversationCompactor =
+            LlmConversationCompactor(executor, llm.model, llm.compactionParams, contextWindowPolicy)
+
+        val agentRunner =
+            AgentRunner(
+                agentFactory, conversation, memory, conversationCompactor,
+                config.chatHistory, stickerCatalog, groupLog, config.groupLog
+            )
+
+        val delivery = TelegramDelivery(telegramClient, stickerCatalog?.let { it::recheckSetOf }, groupLog)
         val voiceTranscriber = createVoiceTranscriber(http, config)
         val taskMenu = TaskMenuHandler(telegramClient, tasks, config.maxTasksPerUser)
-        val inlineChoices = InlineChoiceHandler(telegramClient, history::revision)
+        val inlineChoices = InlineChoiceHandler(telegramClient, conversation::revision)
         val scheduler = TaskScheduler(tasks, agentRunner, delivery, config.taskMaxLatenessMinutes.minutes)
 
         val botRunner =
             TelegramBotRunner(
-                telegramClient,
-                config.telegramBotToken,
-                delivery,
-                agentRunner,
-                taskMenu,
-                inlineChoices,
-                config.allowedIds,
-                voiceTranscriber,
-                stickerCatalog
+                telegramClient, config.telegramBotToken, delivery, agentRunner, taskMenu,
+                inlineChoices, config.allowedIds, voiceTranscriber, stickerCatalog, groupLog
             )
 
         logStartup(llm, vision, toolRegistryFactory.availableToolNames)

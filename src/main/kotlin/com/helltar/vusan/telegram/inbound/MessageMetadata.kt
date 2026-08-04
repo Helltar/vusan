@@ -10,12 +10,24 @@ import org.telegram.telegrambots.meta.api.objects.Voice
 import org.telegram.telegrambots.meta.api.objects.chat.Chat
 import org.telegram.telegrambots.meta.api.objects.games.Animation
 import org.telegram.telegrambots.meta.api.objects.message.Message
+import org.telegram.telegrambots.meta.api.objects.messageorigin.MessageOrigin
+import org.telegram.telegrambots.meta.api.objects.messageorigin.MessageOriginChannel
+import org.telegram.telegrambots.meta.api.objects.messageorigin.MessageOriginChat
+import org.telegram.telegrambots.meta.api.objects.messageorigin.MessageOriginHiddenUser
+import org.telegram.telegrambots.meta.api.objects.messageorigin.MessageOriginUser
 import org.telegram.telegrambots.meta.api.objects.photo.PhotoSize
 import org.telegram.telegrambots.meta.api.objects.stickers.Sticker
 import org.telegram.telegrambots.meta.api.objects.User
 import org.telegram.telegrambots.meta.api.objects.Video
 
 private const val MAX_METADATA_VALUE_CHARS = 500
+
+// both mirror the varchar widths in GroupLogTable.
+private const val MAX_DESCRIPTOR_CHARS = 200
+private const val MAX_FORWARD_LABEL_CHARS = 128
+
+private const val SECONDS_PER_MINUTE = 60
+private const val MINUTES_PER_HOUR = 60
 
 internal val Message.chatIdLong: Long
     get() = chat.id
@@ -103,6 +115,57 @@ internal fun Message.contentTypeName(): String =
     }
 
 internal fun Message.mediaMetadataLines(): List<String> = mediaAttachment().metadataLines()
+
+/**
+ * A short human label for content the chat log cannot carry as text — what a person would say the
+ * message was. Deliberately not [mediaMetadataLines]: file ids describe nothing that happened in the
+ * conversation and only cost tokens when the transcript is read back.
+ */
+internal fun Message.groupLogDescriptor(): String? =
+    when {
+        sticker != null -> listOfNotNull(sticker.emoji, sticker.setName).joinToString(" ")
+        // animation is checked before document for the same reason as everywhere else: a gif carries both.
+        animation != null -> animation.duration?.asClock()
+        !photo.isNullOrEmpty() -> null
+        video != null -> video.duration?.asClock()
+        videoNote != null -> videoNote.duration?.asClock()
+        voice != null -> voice.duration?.asClock()
+        audio != null -> audioDescriptor()
+        document != null -> document.fileName
+        poll != null -> poll.question
+        venue != null -> venue.title
+        else -> null
+    }?.collapseWhitespaceAndCap(MAX_DESCRIPTOR_CHARS)
+
+/**
+ * Who a reposted message originally came from, or `null` when the message is not a forward. Telegram
+ * models a repost as a [MessageOrigin] variant rather than a flag on the text, so without this a
+ * forwarded channel post reads exactly as if the sender had typed it themselves.
+ */
+internal fun Message.forwardOriginLabel(): String? =
+    when (val origin = forwardOrigin) {
+        is MessageOriginChannel -> origin.chat?.titleOrDisplayName() ?: origin.chat?.userName
+        is MessageOriginChat -> origin.senderChat?.titleOrDisplayName()
+        is MessageOriginUser -> origin.senderUser?.let { displayName(it.firstName, it.lastName) ?: it.userName }
+        is MessageOriginHiddenUser -> origin.senderUserName
+        else -> null
+    }?.collapseWhitespaceAndCap(MAX_FORWARD_LABEL_CHARS)
+
+private fun Message.audioDescriptor(): String? =
+    listOfNotNull(audio.performer, audio.title)
+        .joinToString(" - ")
+        .ifBlank { audio.duration?.asClock() }
+
+private fun Int.asClock(): String {
+    val minutes = this / SECONDS_PER_MINUTE
+    val seconds = this % SECONDS_PER_MINUTE
+
+    if (minutes < MINUTES_PER_HOUR) return "$minutes:${seconds.toString().padStart(2, '0')}"
+
+    return "${minutes / MINUTES_PER_HOUR}:" +
+            "${(minutes % MINUTES_PER_HOUR).toString().padStart(2, '0')}:" +
+            seconds.toString().padStart(2, '0')
+}
 
 // external replies expose only the media descriptor of the quoted message, never its text.
 internal fun ExternalReplyInfo.summaryTypeNameOrNull(): String? =

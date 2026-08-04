@@ -1,4 +1,4 @@
-package com.helltar.vusan.agent.history
+package com.helltar.vusan.agent
 
 import ai.koog.agents.core.tools.ToolRegistry
 import ai.koog.prompt.llm.LLMProvider
@@ -27,7 +27,7 @@ class ContextWindowPolicyTest {
         assertTrue(budget.safetyReserveTokens >= 256)
         assertTrue(
             budget.fixedPromptTokens +
-                    budget.historyTokens +
+                    budget.conversationTokens +
                     budget.responseReserveTokens +
                     budget.agentReserveTokens +
                     budget.safetyReserveTokens <= budget.contextWindowTokens

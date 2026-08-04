@@ -1,4 +1,4 @@
-package com.helltar.vusan.agent.history
+package com.helltar.vusan.agent.conversation
 
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonPrimitive
@@ -12,33 +12,33 @@ class ChatTurnTest {
 
     @Test
     fun `valid object args are preserved`() {
-        assertEquals("""{"query":"news"}""", toolCallArgsForHistory("""{"query":"news"}"""))
+        assertEquals("""{"query":"news"}""", toolCallArgsForStorage("""{"query":"news"}"""))
     }
 
     @Test
     fun `blank args become an empty object`() {
-        assertEquals("{}", toolCallArgsForHistory(""))
-        assertEquals("{}", toolCallArgsForHistory("   "))
+        assertEquals("{}", toolCallArgsForStorage(""))
+        assertEquals("{}", toolCallArgsForStorage("   "))
     }
 
     @Test
     fun `garbled and non-object args become an empty object`() {
-        assertEquals("{}", toolCallArgsForHistory("""{"query":"new"""))
-        assertEquals("{}", toolCallArgsForHistory("[1,2,3]"))
-        assertEquals("{}", toolCallArgsForHistory("\"just a string\""))
+        assertEquals("{}", toolCallArgsForStorage("""{"query":"new"""))
+        assertEquals("{}", toolCallArgsForStorage("[1,2,3]"))
+        assertEquals("{}", toolCallArgsForStorage("\"just a string\""))
     }
 
     @Test
     fun `significant whitespace inside a value is not collapsed`() {
         val args = jsonArgs("code" to "def f():\n        return 1")
 
-        assertEquals("def f():\n        return 1", codeValue(toolCallArgsForHistory(args)))
+        assertEquals("def f():\n        return 1", codeValue(toolCallArgsForStorage(args)))
     }
 
     @Test
     fun `a long script value is truncated but stays valid JSON`() {
         val longCode = "x = 1\n".repeat(4_000) // ~24k chars, well over the cap
-        val result = toolCallArgsForHistory(jsonArgs("code" to longCode))
+        val result = toolCallArgsForStorage(jsonArgs("code" to longCode))
 
         // still a parseable JSON object that an OpenAI-compatible endpoint will accept.
         val code = codeValue(result)
@@ -48,9 +48,9 @@ class ChatTurnTest {
 
     @Test
     fun `re-applying the helper is idempotent`() {
-        val once = toolCallArgsForHistory(jsonArgs("code" to "x = 1\n".repeat(4_000)))
+        val once = toolCallArgsForStorage(jsonArgs("code" to "x = 1\n".repeat(4_000)))
 
-        assertEquals(once, toolCallArgsForHistory(once))
+        assertEquals(once, toolCallArgsForStorage(once))
     }
 
     @Test
@@ -62,7 +62,7 @@ class ChatTurnTest {
                 }
             }.toString()
 
-        val result = toolCallArgsForHistory(raw)
+        val result = toolCallArgsForStorage(raw)
 
         assertTrue(result.length <= 4_000)
         Json.parseToJsonElement(result).jsonObject

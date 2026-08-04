@@ -18,7 +18,7 @@ import org.telegram.telegrambots.meta.api.objects.photo.PhotoSize
 import org.telegram.telegrambots.meta.generics.TelegramClient
 
 private const val MAX_REPLIED_TEXT_CHARS = 4096
-private const val MAX_REPLIED_HISTORY_TEXT_CHARS = 600
+private const val MAX_REPLIED_STORED_TEXT_CHARS = 600
 
 internal data class RepliedMessageSummary(
     val type: String,
@@ -223,9 +223,9 @@ private fun formatFileSize(bytes: Long): String =
 internal fun formatAgentInput(currentMessageText: String, repliedMessage: RepliedMessageSummary): String =
     buildReplyContextPrompt(currentMessageText, repliedMessage) { it }
 
-internal fun formatHistoryInput(currentMessageText: String, repliedMessage: RepliedMessageSummary): String =
+internal fun formatConversationInput(currentMessageText: String, repliedMessage: RepliedMessageSummary): String =
     buildReplyContextPrompt(currentMessageText, repliedMessage) {
-        it.collapseWhitespaceAndCap(MAX_REPLIED_HISTORY_TEXT_CHARS).orEmpty()
+        it.collapseWhitespaceAndCap(MAX_REPLIED_STORED_TEXT_CHARS).orEmpty()
     }
 
 private fun buildReplyContextPrompt(

@@ -16,9 +16,11 @@ class InlineChoiceToolsTest {
     fun `askWithButtons stores a normalized owner-bound choice`() = runBlocking {
         val outbox = BotOutbox()
         var revisionOwnerId: Long? = null
+        var revisionChatId: Long? = null
         val tools =
-            InlineChoiceTools(RequestContext(chatId = 7L, userId = 42L, messageId = 9L), outbox) { userId ->
+            InlineChoiceTools(RequestContext(chatId = 7L, userId = 42L, messageId = 9L), outbox) { userId, chatId ->
                 revisionOwnerId = userId
+                revisionChatId = chatId
                 7L
             }
 
@@ -43,12 +45,13 @@ class InlineChoiceToolsTest {
             outbox.pending.single().output
         )
         assertEquals(42L, revisionOwnerId)
+        assertEquals(7L, revisionChatId, "a button is invalidated by the history of this chat, not of every chat")
     }
 
     @Test
     fun `askWithButtons rejects duplicate options`() = runBlocking {
         val outbox = BotOutbox()
-        val tools = InlineChoiceTools(RequestContext(chatId = 7L, userId = 42L, messageId = 9L), outbox) { 0L }
+        val tools = InlineChoiceTools(RequestContext(chatId = 7L, userId = 42L, messageId = 9L), outbox) { _, _ -> 0L }
 
         val result = tools.askWithButtons("Continue?", listOf("Yes", "yes"))
 
@@ -66,7 +69,7 @@ class InlineChoiceToolsTest {
         }
 
         outbox.useDirectMessages()
-        val tools = InlineChoiceTools(RequestContext(chatId = -7L, userId = 42L, messageId = 9L), outbox) { 0L }
+        val tools = InlineChoiceTools(RequestContext(chatId = -7L, userId = 42L, messageId = 9L), outbox) { _, _ -> 0L }
         tools.askWithButtons("Continue in private?", listOf("Yes", "No"))
 
         val choice = outbox.pending.last()

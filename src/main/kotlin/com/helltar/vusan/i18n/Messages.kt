@@ -8,7 +8,7 @@ interface Messages {
     val overloadedReply: String
     val formattingAsFileNotice: String
     val privateBlockedNotice: String
-    val historyClearedReply: String
+    val conversationClearedReply: String
     val voiceEmptyReply: String
     val voiceTranscriptionFailedReply: String
     val inlineChoiceNotOwnerAlert: String
@@ -83,8 +83,8 @@ internal object EnglishMessages : Messages {
     override val privateBlockedNotice =
         "I tried to DM you, but I can't — please open my chat and press /start first, then ask again 😊"
 
-    override val historyClearedReply =
-        "Conversation history cleared. Memory and scheduled tasks are unchanged. 🧹"
+    override val conversationClearedReply =
+        "Our conversation history in this chat is cleared. Other chats, memory and scheduled tasks are unchanged. 🧹"
 
     override val voiceEmptyReply = "I couldn't hear anything in that voice message — try again or send it as text 🙉"
 
@@ -186,8 +186,8 @@ internal object UkrainianMessages : Messages {
     override val privateBlockedNotice =
         "Хотіла написати тобі в особисті, але не виходить — відкрий мій чат, натисни /start, а потім спитай ще раз 😊"
 
-    override val historyClearedReply =
-        "Історію переписки очищено. Памʼять і заплановані завдання не змінено. 🧹"
+    override val conversationClearedReply =
+        "Історію нашої переписки в цьому чаті очищено. Інші чати, памʼять і заплановані завдання не змінено. 🧹"
 
     override val voiceEmptyReply = "Я нічого не розчула у цьому голосовому — спробуй ще раз або напиши текстом 🙉"
 

@@ -1,9 +1,11 @@
-package com.helltar.vusan.agent.history
+package com.helltar.vusan.agent.conversation
 
 import ai.koog.prompt.dsl.prompt
 import ai.koog.prompt.executor.model.PromptExecutor
 import ai.koog.prompt.llm.LLModel
 import ai.koog.prompt.params.LLMParams
+import com.helltar.vusan.agent.ContextWindowPolicy
+import com.helltar.vusan.agent.estimateTokens
 import com.helltar.vusan.common.collapseWhitespaceAndCap
 import com.helltar.vusan.common.limitTo
 import com.helltar.vusan.common.xmlBlock
@@ -25,7 +27,7 @@ data class CompactedConversation(
 )
 
 interface ConversationCompactor {
-    suspend fun compact(previousSummary: String?, interactions: List<ChatInteraction>): CompactedConversation?
+    suspend fun compact(previousSummary: String?, interactions: List<ConversationInteraction>): CompactedConversation?
 }
 
 class LlmConversationCompactor(
@@ -47,7 +49,7 @@ class LlmConversationCompactor(
 
     override suspend fun compact(
         previousSummary: String?,
-        interactions: List<ChatInteraction>
+        interactions: List<ConversationInteraction>
     ): CompactedConversation? {
         if (interactions.isEmpty()) return null
 
@@ -87,16 +89,16 @@ class LlmConversationCompactor(
 
     private fun selectBatch(
         previousSummary: String?,
-        interactions: List<ChatInteraction>
-    ): List<ChatInteraction> {
+        interactions: List<ConversationInteraction>
+    ): List<ConversationInteraction> {
         val tokenBudget =
             (contextWindowPolicy.contextWindowTokens / 3)
                 .coerceIn(MIN_COMPACTION_INPUT_TOKENS, MAX_COMPACTION_INPUT_TOKENS)
-        var used = estimateHistoryTokens(COMPACTION_SYSTEM_PROMPT) + estimateHistoryTokens(previousSummary.orEmpty())
-        val selected = mutableListOf<ChatInteraction>()
+        var used = estimateTokens(COMPACTION_SYSTEM_PROMPT) + estimateTokens(previousSummary.orEmpty())
+        val selected = mutableListOf<ConversationInteraction>()
 
         for (interaction in interactions) {
-            val tokens = estimateHistoryTokens(interaction.toCompactionSource())
+            val tokens = estimateTokens(interaction.toCompactionSource())
             if (selected.isNotEmpty() && used + tokens > tokenBudget) break
             selected += interaction
             used += tokens
@@ -105,7 +107,7 @@ class LlmConversationCompactor(
         return selected
     }
 
-    private fun ChatInteraction.toCompactionSource(): String =
+    private fun ConversationInteraction.toCompactionSource(): String =
         buildString {
             appendLine("<interaction>")
 
