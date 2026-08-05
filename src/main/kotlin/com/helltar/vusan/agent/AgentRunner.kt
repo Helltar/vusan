@@ -61,7 +61,9 @@ data class AgentRequest(
 data class AgentResult(
     val outputs: List<OutboxItem>,
     val comment: String?,
-    val commentToPrivate: Boolean = false
+    val commentToPrivate: Boolean = false,
+    // the run ended in an error and produced nothing: `comment` is the canned failure reply, not an answer.
+    val failed: Boolean = false
 )
 
 class AgentRunner(
@@ -213,7 +215,7 @@ class AgentRunner(
                 )
             } catch (e: Throwable) {
                 e.rethrowIfCancellation()
-                return AgentResult(outputs = emptyList(), comment = replyForAgentFailure(request, e))
+                return AgentResult(outputs = emptyList(), comment = replyForAgentFailure(request, e), failed = true)
             }
 
         log.info {

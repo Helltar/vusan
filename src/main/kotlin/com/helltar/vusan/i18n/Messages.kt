@@ -52,6 +52,8 @@ interface Messages {
 
     fun taskMissedNotice(id: Long, title: String?, scheduledFor: String): String
 
+    fun taskFailedNotice(id: Long, title: String?): String
+
     fun taskScheduledByNotice(mention: String): String
 
     fun taskFollowUpNotice(mention: String): String
@@ -165,6 +167,11 @@ internal object EnglishMessages : Messages {
         return "⏰ Skipped task #$id$label scheduled for $scheduledFor — I was offline."
     }
 
+    override fun taskFailedNotice(id: Long, title: String?): String {
+        val label = title?.let { " «$it»" } ?: ""
+        return "⚠️ Task #$id$label went nowhere — I couldn't finish it, even after a few tries."
+    }
+
     override fun taskScheduledByNotice(mention: String) = "⏰ Scheduled by $mention"
 
     override fun taskFollowUpNotice(mention: String) = "💬 Following up with $mention"
@@ -266,6 +273,11 @@ internal object UkrainianMessages : Messages {
     override fun taskMissedNotice(id: Long, title: String?, scheduledFor: String): String {
         val label = title?.let { " «$it»" } ?: ""
         return "⏰ Пропустила завдання #$id$label, заплановане на $scheduledFor — я була офлайн."
+    }
+
+    override fun taskFailedNotice(id: Long, title: String?): String {
+        val label = title?.let { " «$it»" } ?: ""
+        return "⚠️ Завдання #$id$label не вийшло — не змогла його виконати навіть за кілька спроб."
     }
 
     override fun taskScheduledByNotice(mention: String) = "⏰ Заплановано: $mention"

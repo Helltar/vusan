@@ -158,8 +158,12 @@ A normal user message travels:
   `AgentRunner.handleScheduled` (waits for the user lock instead of bailing) and are delivered with
   `TelegramDelivery.sendScheduled`. Tasks overdue beyond
   `TASK_MAX_LATENESS_MINUTES` (e.g. after downtime) get a "missed" notice and are advanced/disabled rather than fired. A
-  task whose run fails is still advanced/disabled (logged, no retry) so a persistent error cannot re-fire it on every
-  poll tick. Paused tasks remain stored and count toward the per-user task limit, but the due-task query skips them.
+  failed run (`AgentResult.failed`, or a thrown error) delivers nothing, so it is repeated up to `MAX_ATTEMPTS` times
+  with a short backoff, the retry prompt telling the agent that the earlier attempt delivered nothing; a failed
+  *delivery* is never repeated, since part of the answer may already be in the chat. Once the attempts are spent the
+  chat gets a "failed" notice. Either way the task is advanced/disabled afterwards, so a persistent error cannot
+  re-fire it on every poll tick. Paused tasks remain stored and count toward the per-user task limit, but the due-task
+  query skips them.
   Recurrence math lives in `tasks/Recurrence.kt`.
 - **Self-initiated follow-ups** — `scheduleFollowUp` lets the agent set itself a single future turn when the
   conversation gives it a reason to come back ("ask how the exam went"). It is the same scheduler, store, and delivery
@@ -313,7 +317,7 @@ A symptom-to-source map for finding the right file fast. Paths are under
 | Web search picks the wrong provider, or results are thin                        | the `@LLMDescription` text that ranks them: `tools/tavily/TavilyToolDescriptions.kt` (`webSearch`, the default) and `tools/searxng/SearxngToolDescriptions.kt` (`metaSearch`, the fallback)                                                                                                           |
 | Image search sends nothing, or sends irrelevant pictures                        | `tools/images/ImageSearchDelivery.kt` (candidate retries, size caps, media group) + `tools/images/ImageDownloadClient.kt` (user agent, format/dimension checks); for relevance, `SearxngTools.IMAGE_ENGINES` and `TavilyTools.imageExcludedDomains`                                                   |
 | A rich message reads as empty, `unknown`, or loses its structure                 | `telegram/inbound/RichMessageText.kt` (block tree → rich markdown), then `MessageMetadata.contentTypeName`/`textSnippetOrNull` and `ReplyContext.repliedTextOrNull`                                                                                                                                           |
-| Scheduled task fires late, not at all, or reports "missed"                       | `tasks/TaskScheduler.kt` (polling/lateness) + `tasks/Recurrence.kt` (next-run math)                                                                                                                                                                                                                   |
+| Scheduled task fires late, not at all, or reports "missed"/"failed"              | `tasks/TaskScheduler.kt` (polling, lateness, retries) + `tasks/Recurrence.kt` (next-run math)                                                                                                                                                                                                                   |
 | `/tasks` or a plain-language task pause/resume/cancel fails                      | `telegram/callback/TaskMenuHandler.kt` (rendering, ownership, callbacks) + `tools/tasks/TaskTools.kt` (agent path) + `tasks/TasksRepository.kt` (shared scoped state changes)                                                                                                                                   |
 | `/clear` reports success but history survives                                    | `agent/AgentRunner.kt` (`clearConversation` and the turn lock that also guards the append) + `tools/conversation/ConversationTools.kt` (agent path) + `agent/conversation/ConversationRepository.kt` (shared storage operation)                                                                                            |
 | An agent choice button does nothing, repeats, or reaches the wrong user          | `tools/choice/InlineChoiceTools.kt` (tool contract) + `telegram/callback/InlineChoiceHandler.kt` (callback ownership/consumption) + `TelegramBotRunner.dispatchInlineChoiceCallback` (agent follow-up)                                                                                                          |

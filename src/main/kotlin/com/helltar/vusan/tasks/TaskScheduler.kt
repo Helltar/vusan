@@ -28,6 +28,12 @@ class TaskScheduler(
         // implementation detail, not policy: a 30s tick is cheap (one SQLite query per tick)
         // and fine-grained enough for the 5-minute minimum task interval
         val POLL_INTERVAL = 30.seconds
+
+        // a failed run delivers nothing, so running it again cannot duplicate output. attempts stay few
+        // and the backoff short (30s, then 60s): a tick processes its due tasks one after another, so a
+        // task that keeps failing holds up everything due behind it.
+        const val MAX_ATTEMPTS = 3
+        val RETRY_BACKOFF = 30.seconds
     }
 
     fun launchIn(scope: CoroutineScope): Job =
@@ -69,12 +75,12 @@ class TaskScheduler(
             return
         }
 
-        // reschedule even when the run itself fails: a task left due would be retried on every
+        // reschedule even when every attempt fails: a task left due would be picked up again on every
         // poll tick, re-running the full agent indefinitely on a persistent error.
         runCatching { fire(task) }
             .onFailure {
                 it.rethrowIfCancellation()
-                log.error(it) { "task id=${task.id} run failed; rescheduling without retry" }
+                log.error(it) { "task id=${task.id} run failed; rescheduling" }
             }
 
         rescheduleAfterFire(task, now)
@@ -98,8 +104,32 @@ class TaskScheduler(
     }
 
     private suspend fun fire(task: ScheduledTask) {
+        for (attempt in 1..MAX_ATTEMPTS) {
+            if (runAttempt(task, attempt)) return
+
+            if (attempt < MAX_ATTEMPTS) {
+                val backoff = RETRY_BACKOFF * attempt
+
+                log.warn {
+                    "task id=${task.id} attempt=$attempt/$MAX_ATTEMPTS failed; " +
+                            "retrying in ${backoff.inWholeSeconds}s"
+                }
+
+                delay(backoff)
+            }
+        }
+
+        log.error { "task id=${task.id} failed on all $MAX_ATTEMPTS attempts; nothing was delivered" }
+
+        delivery.sendNotice(task.chatId, Messages.of(task.language).taskFailedNotice(task.id, task.title))
+    }
+
+    // one full run of the task. `false` means the run itself failed with nothing delivered, so it is safe
+    // to repeat; a failed delivery is not retried, since part of the answer may already be in the chat.
+    private suspend fun runAttempt(task: ScheduledTask, attempt: Int): Boolean {
         log.info {
-            "firing task id=${task.id} user=${task.userId} chat=${task.chatId} recurrence=[${task.recurrence.display}]"
+            "firing task id=${task.id} user=${task.userId} chat=${task.chatId} " +
+                    "recurrence=[${task.recurrence.display}] attempt=$attempt/$MAX_ATTEMPTS"
         }
 
         val request =
@@ -108,14 +138,24 @@ class TaskScheduler(
                 userId = task.userId,
                 messageId = 0L,
                 replyToMessageId = null,
-                prompt = wrapPrompt(task),
+                prompt = scheduledTaskPrompt(task, attempt),
                 conversationEntry = conversationEntry(task),
                 messageContext = null,
                 chatIsPrivate = task.chatIsPrivate,
                 language = task.language
             )
 
-        val result = agentRunner.handleScheduled(request)
+        // the agent answers its own failures with a canned reply instead of throwing, so the flag is the
+        // only thing separating "the task did not run" from a real answer.
+        val result =
+            runCatching { agentRunner.handleScheduled(request) }
+                .onFailure {
+                    it.rethrowIfCancellation()
+                    log.error(it) { "task id=${task.id} run failed" }
+                }
+                .getOrNull()
+                ?.takeUnless { it.failed }
+                ?: return false
 
         runCatching {
             delivery.sendScheduled(
@@ -130,6 +170,8 @@ class TaskScheduler(
 
             log.error(it) { "task id=${task.id} fired but delivery failed; not retrying to avoid duplicates" }
         }
+
+        return true
     }
 
     private suspend fun rescheduleAfterFire(task: ScheduledTask, now: Instant) {
@@ -141,24 +183,9 @@ class TaskScheduler(
             repo.reschedule(task.id, nextFire)
     }
 
-    private fun wrapPrompt(task: ScheduledTask): String =
-        buildString {
-            append(scheduledTaskOpenTag(task)).append('\n')
-            append("This is a scheduled task you set up earlier. Execute it now without asking for confirmation.\n")
-            append("Task: ").append(task.prompt).append('\n')
-            append("</scheduled_task>")
-        }
-
+    // the retry is not stored: history keeps the task as the user wrote it, without the retry hint.
     private fun conversationEntry(task: ScheduledTask): String =
         scheduledTaskOpenTag(task) + task.prompt + "</scheduled_task>"
-
-    private fun scheduledTaskOpenTag(task: ScheduledTask): String =
-        buildString {
-            append("<scheduled_task")
-            task.title?.let { appendXmlAttr("title", it) }
-            appendXmlAttr("recurrence", task.recurrence.display)
-            append('>')
-        }
 
     private fun attributionFor(task: ScheduledTask): ScheduledAttribution? {
         if (task.chatIsPrivate) return null
@@ -182,6 +209,29 @@ class TaskScheduler(
         )
     }
 }
+
+// a failed run left no history behind, so the retry has to say in the prompt what went wrong. the usual
+// failure is a run that spends its whole step budget researching and never delivers.
+private const val RETRY_HINT =
+    "An earlier attempt at this task ended without delivering anything. " +
+            "Get to the result faster this time: gather only what the task needs, then send it."
+
+internal fun scheduledTaskPrompt(task: ScheduledTask, attempt: Int): String =
+    buildString {
+        append(scheduledTaskOpenTag(task)).append('\n')
+        append("This is a scheduled task you set up earlier. Execute it now without asking for confirmation.\n")
+        append("Task: ").append(task.prompt).append('\n')
+        if (attempt > 1) append(RETRY_HINT).append('\n')
+        append("</scheduled_task>")
+    }
+
+private fun scheduledTaskOpenTag(task: ScheduledTask): String =
+    buildString {
+        append("<scheduled_task")
+        task.title?.let { appendXmlAttr("title", it) }
+        appendXmlAttr("recurrence", task.recurrence.display)
+        append('>')
+    }
 
 private fun StringBuilder.appendXmlAttr(name: String, value: String) {
     append(' ').append(name).append('=').append('"').append(escapeXml(value)).append('"')
