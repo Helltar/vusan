@@ -17,6 +17,10 @@ class YtDlpClient(private val runner: YtDlpRunner) {
         const val FORMAT_UNAVAILABLE_MARKER = "Requested format is not available"
         const val VIDEO_MAX_FILE_SIZE_MB = 50
         val VIDEO_HEIGHT_CAPS = listOf(720, 480, 360)
+
+        // --print-json implies --quiet, which swallows the max-filesize rejection that
+        // runMediaDownload reads to return TooLarge; without it the height ladder never steps down.
+        val PRINT_JSON_ARGS = listOf("--print-json", "--no-quiet")
         val log = KotlinLogging.logger {}
     }
 
@@ -218,7 +222,7 @@ class YtDlpClient(private val runner: YtDlpRunner) {
                 addAll(listOf("--format-sort", "proto:m3u8,res:360,acodec:m4a"))
                 addAll(listOf("--no-playlist", "--no-warnings"))
                 addAll(listOf("--max-filesize", "${maxFileSizeMb}M"))
-                add("--print-json")
+                addAll(PRINT_JSON_ARGS)
                 addAll(runner.authArgs())
                 addAll(runner.youtubeArgs())
                 addAll(listOf("-o", workDir.resolve("audio.%(ext)s").toString()))
@@ -296,7 +300,7 @@ class YtDlpClient(private val runner: YtDlpRunner) {
                 addAll(listOf("--write-thumbnail", "--convert-thumbnails", "jpg"))
                 addAll(listOf("--no-playlist", "--no-warnings"))
                 addAll(listOf("--max-filesize", "${maxFileSizeMb}M"))
-                add("--print-json")
+                addAll(PRINT_JSON_ARGS)
                 addAll(runner.authArgs())
                 addAll(runner.youtubeArgs())
                 addAll(listOf("-o", workDir.resolve("video.%(ext)s").toString()))
