@@ -88,7 +88,11 @@ class YtDlpRunner(
             ?: emptyList()
 
     fun youtubeArgs(): List<String> =
-        listOf("--remote-components", "ejs:github", "--user-agent", USER_AGENT)
+        listOf(
+            "--remote-components", "ejs:github",
+            "--extractor-args", PLAYER_CLIENTS,
+            "--user-agent", USER_AGENT
+        )
 
     fun authDiagnostics(): String {
         cookiesFile?.takeUnless { it.isBlank() }?.let { return cookieFileDiagnostics(it) }
@@ -210,6 +214,11 @@ class YtDlpRunner(
 
 internal const val YT_DLP_BINARY = "yt-dlp"
 internal const val USER_AGENT = "Mozilla/5.0 (X11; Linux x86_64; rv:127.0) Gecko/20100101 Firefox/127.0"
+
+// youtube answers the tv player with "the page needs to be reloaded" whenever cookies are attached,
+// and the remaining default clients are then left offering storyboards only. web_music still serves
+// music, web_embedded serves the rest; default stays first so plain extraction wins once it recovers.
+internal const val PLAYER_CLIENTS = "youtube:player_client=default,web_music,web_embedded"
 
 internal fun String.containsAny(vararg needles: String): Boolean =
     needles.any { contains(it, ignoreCase = true) }
