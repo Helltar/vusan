@@ -23,7 +23,7 @@ data class ScheduledTask(
     val creatorDisplayName: String?,
     val chatIsPrivate: Boolean,
     val language: Language,
-    /** The bot set this one up for itself as a follow-up, instead of the user asking for it. */
+    // the bot set this one up for itself as a follow-up, instead of the user asking for it.
     val selfInitiated: Boolean = false
 )
 
