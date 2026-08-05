@@ -62,7 +62,7 @@ class AgentFactory(
     private val model: LLModel,
     private val chatParams: LLMParams = LLMParams(),
     private val personality: String? = null,
-    private val maxIterations: Int = 60,
+    private val maxIterations: Int = 90,
     private val contextWindowPolicy: ContextWindowPolicy = ContextWindowPolicy(model)
 ) {
 
