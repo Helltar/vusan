@@ -201,18 +201,18 @@ internal object UkrainianMessages : Messages {
 
     override val fallbackErrorReply = "Щось пішло не так — спробуй ще раз? 🥲"
 
-    override val overloadedReply = "Зараз я трохи перевантажена — дай хвилинку й спробуй ще раз 🙏"
+    override val overloadedReply = "Зараз у мене забагато запитів — дай хвилинку й спробуй ще раз 🙏"
 
     override val formattingAsFileNotice =
         "Телеграм не зміг показати форматування, тож ось повна відповідь файлом 📄"
 
     override val privateBlockedNotice =
-        "Хотіла написати тобі в особисті, але не виходить — відкрий мій чат, натисни /start, а потім спитай ще раз 😊"
+        "Хочу написати тобі в особисті, але не виходить — відкрий мій чат, натисни /start, а потім спитай ще раз 😊"
 
     override val conversationClearedReply =
         "Історію нашої переписки в цьому чаті очищено. Інші чати, памʼять і заплановані завдання не змінено. 🧹"
 
-    override val voiceEmptyReply = "Я нічого не розчула у цьому голосовому — спробуй ще раз або напиши текстом 🙉"
+    override val voiceEmptyReply = "Не чую нічого в цьому голосовому — спробуй ще раз або напиши текстом 🙉"
 
     override val voiceTranscriptionFailedReply = "Не вдалося розпізнати це голосове — напиши краще текстом 😊"
 
@@ -241,7 +241,7 @@ internal object UkrainianMessages : Messages {
                 "надішли коротше або напиши текстом"
 
     override fun tokenBudgetExhaustedReply(untilReset: Duration): String =
-        "Я вичерпала бюджет на сьогодні — повертайся приблизно за ${waitLabel(untilReset)} ⏳"
+        "Бюджет на сьогодні вичерпано — повертайся приблизно за ${waitLabel(untilReset)} ⏳"
 
     private fun waitLabel(untilReset: Duration): String =
         untilReset.toComponents { hours, minutes, _, _ ->
@@ -300,12 +300,12 @@ internal object UkrainianMessages : Messages {
 
     override fun taskMissedNotice(id: Long, title: String?, scheduledFor: String): String {
         val label = title?.let { " «$it»" } ?: ""
-        return "⏰ Пропустила завдання #$id$label, заплановане на $scheduledFor — я була офлайн."
+        return "⏰ Завдання #$id$label, заплановане на $scheduledFor, пропущено — мене не було онлайн."
     }
 
     override fun taskFailedNotice(id: Long, title: String?): String {
         val label = title?.let { " «$it»" } ?: ""
-        return "⚠️ Завдання #$id$label не вийшло — не змогла його виконати навіть за кілька спроб."
+        return "⚠️ Завдання #$id$label не вийшло — не вдалося виконати його навіть за кілька спроб."
     }
 
     override fun taskScheduledByNotice(mention: String) = "⏰ Заплановано: $mention"
