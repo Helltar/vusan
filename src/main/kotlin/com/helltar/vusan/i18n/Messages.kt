@@ -28,6 +28,8 @@ interface Messages {
 
     fun tokenBudgetExhaustedReply(untilReset: Duration): String
 
+    fun tokenShareExhaustedReply(untilReset: Duration): String
+
     fun inlineChoiceSelected(option: String): String
 
     fun taskMenuTitle(currentChatOnly: Boolean): String
@@ -122,6 +124,10 @@ internal object EnglishMessages : Messages {
 
     override fun tokenBudgetExhaustedReply(untilReset: Duration): String =
         "Today's token budget is spent — come back in about ${waitLabel(untilReset)} ⏳"
+
+    override fun tokenShareExhaustedReply(untilReset: Duration): String =
+        "Today's token budget is running low, and your share of it is used up — " +
+                "I'm keeping the rest for everyone else. Come back in about ${waitLabel(untilReset)} ⏳"
 
     private fun waitLabel(untilReset: Duration): String =
         untilReset.toComponents { hours, minutes, _, _ ->
@@ -242,6 +248,10 @@ internal object UkrainianMessages : Messages {
 
     override fun tokenBudgetExhaustedReply(untilReset: Duration): String =
         "Бюджет токенів на сьогодні вичерпано — повертайся приблизно за ${waitLabel(untilReset)} ⏳"
+
+    override fun tokenShareExhaustedReply(untilReset: Duration): String =
+        "Бюджет токенів на сьогодні добігає кінця, і твоя частка вже вичерпана — " +
+                "решту тримаю для інших. Повертайся приблизно за ${waitLabel(untilReset)} ⏳"
 
     private fun waitLabel(untilReset: Duration): String =
         untilReset.toComponents { hours, minutes, _, _ ->

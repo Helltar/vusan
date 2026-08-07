@@ -51,9 +51,11 @@ Telegram ──► telegram/ ──► agent/ ──► tools/ ──► externa
   carries its duration and a loader for Telegram's own thumbnail.
 - **`tasks/`** — scheduled-task subsystem: storage, persisted pause state, recurrence math, and the
   background `TaskScheduler`.
-- **`budget/`** — the daily token ceiling. `TokenBudget` counts the day's spend and says how long until it resets;
+- **`budget/`** — the daily token ceiling and how the day is shared out. `TokenBudget` counts the day's spend, both in
+  total and per person, and answers why someone cannot spend right now (`TokenBudgetStop`);
   `BudgetedPromptExecutor` is the `PromptExecutor` wrapper that does the counting, so one place covers every LLM call
-  the bot makes. Inert unless `LLM_DAILY_TOKEN_BUDGET` is set.
+  the bot makes; `BudgetOwner` is the coroutine-context element that says whose share a nested call comes out of.
+  Inert unless `LLM_DAILY_TOKEN_BUDGET` is set.
 - **`infra/`** — cross-cutting infrastructure: the SQLite/Exposed `Db` singleton and the Ktor
   `Http` client.
 - **`config/`** — `.env` parsing (`AppConfig`) and LLM provider/model resolution (`LlmRuntime`).
@@ -172,12 +174,19 @@ A normal user message travels:
   the budget resets.
   Recurrence math lives in `tasks/Recurrence.kt`.
 - **Daily token budget** — with `LLM_DAILY_TOKEN_BUDGET` set, `budget/BudgetedPromptExecutor` wraps the executor every
-  LLM caller shares, adds each completed call's input plus output tokens to the day's total in `token_usage`, and
-  refuses to start a call once the total is over. `TokenBudget` reloads the day's spend whenever the budget date
-  changes, so a restart resumes the same day and midnight in `LLM_TOKEN_BUDGET_TIMEZONE` starts a fresh one. The
-  ceiling is checked before a call, never mid-call, so the day's last turn may overshoot by one turn. A turn that runs
-  out mid-way ends with the same "come back later" reply as one that never started, and is not counted as a failure to
-  retry.
+  LLM caller shares, adds each completed call's input plus output tokens to the day's total in `token_usage` and to its
+  author's row in `token_user_spend`, and refuses to start a call the budget has no room for. `TokenBudget` reloads the
+  day whenever the budget date changes, so a restart resumes the same day and midnight in `LLM_TOKEN_BUDGET_TIMEZONE`
+  starts a fresh one. The ceiling is checked before a call, never mid-call, so the day's last turn may overshoot by one
+  turn. A turn that runs out mid-way ends with the same "come back later" reply as one that never started, and is not
+  counted as a failure to retry.
+  Past `LLM_TOKEN_BUDGET_FAIR_SHARE_AT_PERCENT` of the day, a second rule joins the ceiling: a person over
+  `budget ÷ users active in the last week` is turned away while everyone below their share keeps working, so one heavy
+  user cannot take the end of the day from the rest. The divisor comes from `token_user_spend` rather than the
+  allowlist — only people who actually used the bot count, so idle members reserve nothing. Attribution rides on the
+  `BudgetOwner` coroutine-context element that `AgentRunner` installs around a turn, which is how a history recap or a
+  vision call inside that turn lands on the same person; work started outside a turn (the sticker description worker)
+  carries no owner and answers to the day's ceiling alone.
 - **Self-initiated follow-ups** — `scheduleFollowUp` lets the agent set itself a single future turn when the
   conversation gives it a reason to come back ("ask how the exam went"). It is the same scheduler, store, and delivery
   path as `scheduleTask`, narrowed: one-time only, its own `MAX_FOLLOW_UPS_PER_USER` limit so the agent cannot spend the
@@ -339,7 +348,7 @@ A symptom-to-source map for finding the right file fast. Paths are under
 | Model / provider / request-timeout selection or OpenAI prompt-cache misses       | `config/LlmRuntime.kt` (provider → client/model/params) + `config/OpenAiPromptCaching.kt` (GPT-5.6+ explicit cache breakpoint)                                                                                                                                                                         |
 | `describeImage`/`describeVideo` missing from the tool list                       | `config/VisionRuntime.kt` (chat model vs `OPENAI_VISION_API_KEY`), then `tools/ToolRegistryFactory.kt` (registration is skipped when there is no vision runtime)                                                                                                                                       |
 | Garbled or empty tool-call crashes from a flaky model                            | `agent/AgentFactory.kt` — `vusanSingleRunStrategy` and `missingRequiredArgs` short-circuit them                                                                                                                                                                                                       |
-| Vusan answers "come back later", or a scheduled task never fires                 | `budget/TokenBudget.kt` (the day's spend, the reset zone, the `token_usage` row) + `budget/BudgetedPromptExecutor.kt` (what is counted), then `LLM_DAILY_TOKEN_BUDGET` in [`configuration.md`](configuration.md)                                                                                       |
+| Vusan answers "come back later", or a scheduled task never fires                 | `budget/TokenBudget.kt` (the day's spend, the per-person share, the reset zone) + `budget/BudgetedPromptExecutor.kt` (what is counted) + `budget/TokenBudgetStop.kt` (day ceiling vs personal share, and the `BudgetOwner` attribution), then `LLM_DAILY_TOKEN_BUDGET` in [`configuration.md`](configuration.md) |
 
 ## Adding a tool
 

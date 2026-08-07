@@ -169,7 +169,12 @@ data class AppConfig(
                         .getOrElse { error("Unsupported LLM_TOKEN_BUDGET_TIMEZONE=[$raw], expected a zone id like Europe/Kyiv") }
                 } ?: TokenBudgetConfig.DEFAULT_ZONE
 
-            return TokenBudgetConfig(dailyTokens = dailyTokens, zone = zone)
+            val fairSharePercent =
+                readEnv("LLM_TOKEN_BUDGET_FAIR_SHARE_AT_PERCENT")?.let {
+                    it.toIntOrNull() ?: error("LLM_TOKEN_BUDGET_FAIR_SHARE_AT_PERCENT=[$it] is not a number")
+                } ?: TokenBudgetConfig.DEFAULT_FAIR_SHARE_PERCENT
+
+            return TokenBudgetConfig(dailyTokens = dailyTokens, zone = zone, fairSharePercent = fairSharePercent)
         }
 
         private fun resolveOpenAiStt(): OpenAiSttConfig? {

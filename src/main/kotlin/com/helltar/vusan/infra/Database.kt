@@ -12,6 +12,7 @@ import com.helltar.vusan.infra.tables.ScheduledTasksTable
 import com.helltar.vusan.infra.tables.StickerSetsTable
 import com.helltar.vusan.infra.tables.StickersTable
 import com.helltar.vusan.infra.tables.TokenUsageTable
+import com.helltar.vusan.infra.tables.TokenUserSpendTable
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
@@ -85,7 +86,8 @@ object Db {
                     StickersTable,
                     StickerSetsTable,
                     ChatStickerSetsTable,
-                    TokenUsageTable
+                    TokenUsageTable,
+                    TokenUserSpendTable
                 )
 
             suspendTransaction(newDatabase) {

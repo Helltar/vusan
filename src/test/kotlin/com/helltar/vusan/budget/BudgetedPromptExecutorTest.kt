@@ -17,6 +17,7 @@ import com.helltar.vusan.config.TokenBudgetConfig
 import com.helltar.vusan.infra.Db
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.runBlocking
+import kotlinx.coroutines.withContext
 import java.nio.file.Files
 import java.nio.file.Path
 import kotlin.test.AfterTest
@@ -24,8 +25,13 @@ import kotlin.test.BeforeTest
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFailsWith
+import kotlin.test.assertIs
+import kotlin.test.assertNull
 import kotlin.test.assertSame
 import kotlin.time.Duration.Companion.seconds
+
+private const val ALICE = 1L
+private const val BOB = 2L
 
 class BudgetedPromptExecutorTest {
 
@@ -60,6 +66,36 @@ class BudgetedPromptExecutorTest {
 
         assertFailsWith<TokenBudgetExhaustedException> { executor.execute(Prompt.build("test") { }, MODEL) }
         assertEquals(2, delegate.callCount, "the third call never reached the provider")
+    }
+
+    // the turn's author rides in the coroutine context, which is the only thing a nested call — a history
+    // recap, a vision tool — carries about whose tokens it is spending.
+    @Test
+    fun `the call is charged to the coroutine's budget owner`() = runBlocking {
+        val budget = TokenBudget(TokenBudgetConfig(dailyTokens = 1_000))
+        val executor = budget.meter(CountingPromptExecutor(inputTokens = 300, outputTokens = 0))
+
+        withContext(BudgetOwner(ALICE)) {
+            executor.execute(Prompt.build("test") { }, MODEL)
+            executor.execute(Prompt.build("test") { }, MODEL)
+        }
+
+        withContext(BudgetOwner(BOB)) { executor.execute(Prompt.build("test") { }, MODEL) }
+
+        // 900 of 1000 is past the 70% mark; Alice's two calls put her over her 500 of two shares, Bob's one
+        // call did not — which only holds if each call landed on the owner its coroutine carried.
+        assertIs<TokenBudgetStop.UserShare>(budget.stopFor(ALICE))
+        assertNull(budget.stopFor(BOB))
+    }
+
+    @Test
+    fun `a call with no owner is charged to the day alone`() = runBlocking {
+        val budget = TokenBudget(TokenBudgetConfig(dailyTokens = 1_000))
+        val executor = budget.meter(CountingPromptExecutor(inputTokens = 700, outputTokens = 0))
+
+        executor.execute(Prompt.build("test") { }, MODEL)
+
+        assertNull(budget.stopFor(ALICE))
     }
 
     // both overloads delegate outward, so a koog agent that resolves its model first is charged the same

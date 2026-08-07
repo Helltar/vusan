@@ -8,6 +8,7 @@ import ai.koog.prompt.llm.LLModel
 import ai.koog.prompt.message.Message
 import ai.koog.prompt.streaming.StreamFrame
 import com.helltar.vusan.budget.TokenBudgetExhaustedException
+import com.helltar.vusan.budget.TokenBudgetStop
 import com.helltar.vusan.config.AppConfig
 import com.helltar.vusan.config.HostedLlmProvider
 import com.helltar.vusan.config.LlmProviderConfig
@@ -370,7 +371,7 @@ class StickerCatalogTest {
 
         override suspend fun execute(prompt: Prompt, model: LLModel, tools: List<ToolDescriptor>): Message.Assistant {
             callCount++
-            throw TokenBudgetExhaustedException(3.hours)
+            throw TokenBudgetExhaustedException(TokenBudgetStop.DayBudget(3.hours))
         }
 
         override fun executeStreaming(prompt: Prompt, model: LLModel, tools: List<ToolDescriptor>): Flow<StreamFrame> =

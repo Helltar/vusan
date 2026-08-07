@@ -14,22 +14,9 @@ import ai.koog.prompt.streaming.StreamFrame
 import ai.koog.prompt.structure.json.generator.BasicJsonSchemaGenerator
 import ai.koog.prompt.structure.json.generator.StandardJsonSchemaGenerator
 import kotlinx.coroutines.flow.Flow
-import kotlin.time.Duration
-
-/** Thrown instead of starting an LLM call once the day's token budget is gone. */
-class TokenBudgetExhaustedException(val untilReset: Duration) :
-    RuntimeException("daily token budget spent; it resets in $untilReset")
 
 /**
- * The budget stop behind a failure, or `null` when it failed for some other reason. Callers that treat a
- * failure as a verdict on the work itself — a retry counter, a "give up on this one" flag — have to tell the
- * two apart: the budget will be back tomorrow, and the work with it.
- */
-fun Throwable.tokenBudgetStop(): TokenBudgetExhaustedException? =
-    generateSequence(this) { it.cause }.filterIsInstance<TokenBudgetExhaustedException>().firstOrNull()
-
-/**
- * Counts every completed LLM call against [budget] and refuses to start one after the day's budget is gone.
+ * Counts every completed LLM call against [budget] and refuses to start one the budget has no room for.
  *
  * It wraps the executor rather than the agent so that one place covers every call the bot makes: agent turns,
  * history recaps, group-log digests, and vision when it rides the chat model. Koog resolves a model before
@@ -93,19 +80,22 @@ internal class BudgetedPromptExecutor(
     override fun close() = delegate.close()
 
     private suspend fun metered(call: suspend () -> Message.Assistant): Message.Assistant {
-        checkBudget()
-        return call().also { budget.record(it.metaInfo) }
+        val owner = checkedOwner()
+        return call().also { budget.record(owner, it.metaInfo) }
     }
 
     private suspend fun meteredChoices(call: suspend () -> LLMChoice): LLMChoice {
-        checkBudget()
-        return call().also { choices -> choices.forEach { budget.record(it.metaInfo) } }
+        val owner = checkedOwner()
+        return call().also { choices -> choices.forEach { budget.record(owner, it.metaInfo) } }
     }
 
-    private suspend fun checkBudget() {
-        budget.exhaustedFor()?.let { throw TokenBudgetExhaustedException(it) }
+    // whose share this call comes out of, once the budget agrees it may happen at all.
+    private suspend fun checkedOwner(): Long? {
+        val owner = currentBudgetOwner()
+        budget.stopFor(owner)?.let { throw TokenBudgetExhaustedException(it) }
+        return owner
     }
 }
 
-private suspend fun TokenBudget.record(meta: ResponseMetaInfo) =
-    record(meta.inputTokensCount, meta.outputTokensCount)
+private suspend fun TokenBudget.record(userId: Long?, meta: ResponseMetaInfo) =
+    record(userId, meta.inputTokensCount, meta.outputTokensCount)

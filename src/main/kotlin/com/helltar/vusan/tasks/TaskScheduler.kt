@@ -77,11 +77,15 @@ class TaskScheduler(
             return
         }
 
-        // the day's token budget is gone: skip the run and move the recurrence on, the way an offline window
+        // no tokens for this task's owner: skip the run and move the recurrence on, the way an offline window
         // is skipped. spending the retry attempts here would only burn the next day's budget on a stale task,
         // and a notice per due task would fill the chat for as long as the budget stays out.
-        tokenBudget.exhaustedFor()?.let { untilReset ->
-            log.warn { "task id=${task.id} skipped: daily token budget spent, resetsIn=$untilReset" }
+        tokenBudget.stopFor(task.userId)?.let { stop ->
+            log.warn {
+                "task id=${task.id} skipped: token budget stop reason=${stop::class.simpleName} " +
+                        "resetsIn=${stop.untilReset}"
+            }
+
             rescheduleAfterFire(task, now)
             return
         }

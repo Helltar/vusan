@@ -104,10 +104,11 @@ A ceiling on the tokens Vusan may spend in a day, off by default. It exists for 
 clock — OpenAI hands out free daily tokens at 00:00 UTC in exchange for sharing API inputs and outputs — and works just
 as well as a plain daily spending cap.
 
-| Variable                    | Default     | Description                                                                              |
-|-----------------------------|-------------|------------------------------------------------------------------------------------------|
-| `LLM_DAILY_TOKEN_BUDGET`    | unlimited   | Input plus output tokens allowed per day. Unset means no ceiling and no bookkeeping at all. |
-| `LLM_TOKEN_BUDGET_TIMEZONE` | `UTC`       | The zone whose midnight starts the next budget, e.g. `Europe/Kyiv`. Match it to your provider's reset — OpenAI's is `UTC`. |
+| Variable                                 | Default   | Description                                                                              |
+|------------------------------------------|-----------|------------------------------------------------------------------------------------------|
+| `LLM_DAILY_TOKEN_BUDGET`                 | unlimited | Input plus output tokens allowed per day. Unset means no ceiling and no bookkeeping at all. |
+| `LLM_TOKEN_BUDGET_TIMEZONE`              | `UTC`     | The zone whose midnight starts the next budget, e.g. `Europe/Kyiv`. Match it to your provider's reset — OpenAI's is `UTC`. |
+| `LLM_TOKEN_BUDGET_FAIR_SHARE_AT_PERCENT` | `70`      | How much of the day is first come, first served. Past that point one person can no longer take the rest of it. `100` turns sharing off. |
 
 Everything Vusan asks the chat model counts: replies, its own history recaps, group-chat digests, and reading images
 when vision runs on the chat model. A separate `OPENAI_VISION_API_KEY` model has its own key and quota and is not
@@ -117,6 +118,21 @@ Once the day's budget is gone, Vusan answers every request with "come back in ab
 scheduled tasks that come due are skipped and moved to their next run rather than retried. The count survives a
 restart, and the ceiling is checked before each request rather than mid-reply, so the last request of the day can go
 slightly over it instead of being cut off in the middle.
+
+**Sharing it out.** Nobody gets a personal quota up front: splitting the day equally between everyone on the allowlist
+would freeze tokens for the members who never use the bot, while the few who do would run out by noon. Instead the day
+is free for all until `LLM_TOKEN_BUDGET_FAIR_SHARE_AT_PERCENT` of it is spent. Past that point a person who has already
+used more than `budget ÷ people active in the last week` waits for the reset, and everyone below their share carries on.
+The divisor counts who actually used the bot recently, not who is allowed to, so idle members reserve nothing.
+
+With a 2.5M budget and six people who used the bot this week, the first 1.75M go to whoever asks for them. After that
+the share is about 416k: someone who has already burned through 1.2M is told to come back later, while someone at 80k
+keeps working until the day's 2.5M is gone. If everyone still around is over their share, the remainder is held until
+the reset rather than handed to the heaviest user — that is the point of the rule, and the percentage is the knob for
+how much of the day it applies to.
+
+Vusan's own background work — describing stickers, digesting a group's day — belongs to no share and answers to the
+day's ceiling alone.
 
 ## Personality
 

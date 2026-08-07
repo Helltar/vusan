@@ -8,7 +8,9 @@ import com.helltar.vusan.agent.conversation.*
 import com.helltar.vusan.agent.memory.MemoryEntry
 import com.helltar.vusan.agent.memory.MemoryRepository
 import com.helltar.vusan.agent.memory.MemoryScope
+import com.helltar.vusan.budget.BudgetOwner
 import com.helltar.vusan.budget.TokenBudget
+import com.helltar.vusan.budget.TokenBudgetStop
 import com.helltar.vusan.budget.tokenBudgetStop
 import com.helltar.vusan.common.collapseWhitespaceAndCap
 import com.helltar.vusan.common.isEffectivelyBlank
@@ -30,6 +32,7 @@ import com.helltar.vusan.tools.sticker.StickerCatalog
 import io.github.oshai.kotlinlogging.KotlinLogging
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
+import kotlinx.coroutines.withContext
 import java.time.Instant
 import java.time.ZoneId
 import java.time.temporal.ChronoUnit
@@ -139,18 +142,21 @@ class AgentRunner(
     }
 
     private suspend fun runAgent(request: AgentRequest, onToolStarting: (activity: ToolActivity) -> Unit = {}): AgentResult {
-        tokenBudget.exhaustedFor()?.let { untilReset ->
+        tokenBudget.stopFor(request.userId)?.let { stop ->
             log.warn {
-                "daily token budget spent: turn skipped for chat=${request.chatId} user=${request.userId}, " +
-                        "resetsIn=$untilReset"
+                "token budget stop before the turn: chat=${request.chatId} user=${request.userId} " +
+                        "reason=${stop::class.simpleName} resetsIn=${stop.untilReset}"
             }
 
-            return AgentResult(
-                outputs = emptyList(),
-                comment = Messages.of(request.language).tokenBudgetExhaustedReply(untilReset)
-            )
+            return AgentResult(outputs = emptyList(), comment = Messages.of(request.language).replyFor(stop))
         }
 
+        // the turn spends tokens in places that never see the request — a history recap, a vision tool —
+        // so its author rides along in the coroutine context and every one of those calls is charged to them.
+        return withContext(BudgetOwner(request.userId)) { runTurn(request, onToolStarting) }
+    }
+
+    private suspend fun runTurn(request: AgentRequest, onToolStarting: (activity: ToolActivity) -> Unit): AgentResult {
         val context =
             RequestContext(
                 chatId = request.chatId,
@@ -414,11 +420,11 @@ class AgentRunner(
         e.tokenBudgetStop()
             ?.let { stop ->
                 log.warn {
-                    "daily token budget spent mid-turn for chat=${request.chatId} user=${request.userId}, " +
-                            "resetsIn=${stop.untilReset}"
+                    "token budget stop mid-turn: chat=${request.chatId} user=${request.userId} " +
+                            "reason=${stop::class.simpleName} resetsIn=${stop.untilReset}"
                 }
 
-                Messages.of(request.language).tokenBudgetExhaustedReply(stop.untilReset)
+                Messages.of(request.language).replyFor(stop)
             }
 
     // pick the user-facing reply and log accordingly. LLM provider errors arrive as a large JSON body, so
@@ -501,6 +507,12 @@ private fun Throwable.isContextOverflow(): Boolean =
     generateSequence(this) { it.cause }
         .filterIsInstance<LLMClientException>()
         .any { error -> error.message?.let(CONTEXT_OVERFLOW_REGEX::containsMatchIn) == true }
+
+private fun Messages.replyFor(stop: TokenBudgetStop): String =
+    when (stop) {
+        is TokenBudgetStop.DayBudget -> tokenBudgetExhaustedReply(stop.untilReset)
+        is TokenBudgetStop.UserShare -> tokenShareExhaustedReply(stop.untilReset)
+    }
 
 private fun tokenUsageLogSummary(usages: List<TokenUsage>): String {
 
