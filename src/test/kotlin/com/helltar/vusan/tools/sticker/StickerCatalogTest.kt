@@ -197,7 +197,7 @@ class StickerCatalogTest {
         awaitWorker(catalog) { setRefreshedAt().isAfter(Instant.now().minusSeconds(3_600)) }
 
         assertEquals(1, storedStickers().size)
-        assertNotNull(catalog.indexBlockFor(CHAT))
+        assertContains(assertNotNull(catalog.indexBlockFor(CHAT)), "penguin waving")
     }
 
     @Test
@@ -265,7 +265,7 @@ class StickerCatalogTest {
         catalog.observe(OTHER_CHAT, sticker("a"))
 
         // no fetch happens at all, so the set being unreachable now cannot matter
-        assertNotNull(catalog.indexBlockFor(OTHER_CHAT))
+        assertContains(assertNotNull(catalog.indexBlockFor(OTHER_CHAT)), "penguin waving")
     }
 
     private fun shownIds(index: String): List<Long> =
