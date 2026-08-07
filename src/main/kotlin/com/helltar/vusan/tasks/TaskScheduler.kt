@@ -155,7 +155,7 @@ class TaskScheduler(
                 replyToMessageId = null,
                 prompt = scheduledTaskPrompt(task, attempt),
                 conversationEntry = conversationEntry(task),
-                messageContext = null,
+                messageContext = task.toMessageContext(),
                 chatIsPrivate = task.chatIsPrivate,
                 language = task.language
             )

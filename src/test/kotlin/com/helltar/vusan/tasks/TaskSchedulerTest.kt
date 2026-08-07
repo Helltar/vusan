@@ -32,6 +32,21 @@ class TaskSchedulerTest {
         )
 
     @Test
+    fun `a fired task still names who set it up and where`() {
+        val block =
+            task
+                .copy(creatorUsername = "helltar", creatorDisplayName = "Helltar")
+                .toMessageContext()
+                .toPromptBlock()
+
+        assertContains(block, "- id: -200")
+        assertContains(block, "- private: false")
+        assertContains(block, "- id: 100")
+        assertContains(block, "- username: helltar")
+        assertContains(block, "- display_name: Helltar")
+    }
+
+    @Test
     fun `the first attempt carries the task and no retry hint`() {
         val prompt = scheduledTaskPrompt(task, attempt = 1)
 

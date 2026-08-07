@@ -1,5 +1,6 @@
 package com.helltar.vusan.tasks
 
+import com.helltar.vusan.agent.MessageContext
 import com.helltar.vusan.i18n.Language
 import java.time.Instant
 import java.time.ZoneId
@@ -48,6 +49,22 @@ private val FIRE_DISPLAY = DateTimeFormatter.ofPattern("yyyy-MM-dd'T'HH:mm")
 /** User-facing fire time, e.g. `2026-05-30T09:00 Europe/Kyiv`. */
 internal fun formatFire(instant: Instant, tz: ZoneId): String =
     "${FIRE_DISPLAY.format(ZonedDateTime.ofInstant(instant, tz))} ${tz.id}"
+
+/**
+ * The Telegram metadata a fired task can still name. A task runs with no incoming message behind it,
+ * so the live chat flavor, title, and description are gone; what survives is who set it up and where,
+ * which is what the turn needs to address the person by name instead of nobody.
+ */
+internal fun ScheduledTask.toMessageContext(): MessageContext =
+    MessageContext(
+        chatId = chatId,
+        chatType = if (chatIsPrivate) "private" else "group",
+        isPrivate = chatIsPrivate,
+        userId = userId,
+        userDisplayName = creatorDisplayName,
+        userUsername = creatorUsername,
+        userLanguageCode = language.codes.firstOrNull()
+    )
 
 /** Keeps a future slot, or advances a recurring task past every elapsed slot. */
 internal fun ScheduledTask.nextFireAfterResume(now: Instant): Instant? =
