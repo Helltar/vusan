@@ -121,7 +121,7 @@ internal object EnglishMessages : Messages {
                 "send a shorter one or type it out"
 
     override fun tokenBudgetExhaustedReply(untilReset: Duration): String =
-        "I've used up today's thinking budget — come back in about ${waitLabel(untilReset)} ⏳"
+        "Today's token budget is spent — come back in about ${waitLabel(untilReset)} ⏳"
 
     private fun waitLabel(untilReset: Duration): String =
         untilReset.toComponents { hours, minutes, _, _ ->
@@ -241,7 +241,7 @@ internal object UkrainianMessages : Messages {
                 "надішли коротше або напиши текстом"
 
     override fun tokenBudgetExhaustedReply(untilReset: Duration): String =
-        "Бюджет на сьогодні вичерпано — повертайся приблизно за ${waitLabel(untilReset)} ⏳"
+        "Бюджет токенів на сьогодні вичерпано — повертайся приблизно за ${waitLabel(untilReset)} ⏳"
 
     private fun waitLabel(untilReset: Duration): String =
         untilReset.toComponents { hours, minutes, _, _ ->
