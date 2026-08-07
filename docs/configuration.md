@@ -306,7 +306,7 @@ own recap and its own retention.
 
 | Variable                               | Default | Description                                                        |
 |----------------------------------------|---------|--------------------------------------------------------------------|
-| `CONVERSATION_MAX_RECENT_INTERACTIONS` | `12`    | Complete unsummarized interactions kept in the model context.      |
+| `CONVERSATION_MAX_RECENT_INTERACTIONS` | `24`    | Complete unsummarized interactions offered to the model context; the context window decides how many of them fit. |
 | `CONVERSATION_MAX_STORED_INTERACTIONS` | `100`   | Complete raw interactions retained after they have been summarized. |
 | `CONVERSATION_RETENTION_DAYS`          | `90`    | Days summarized raw interactions remain in SQLite.                 |
 

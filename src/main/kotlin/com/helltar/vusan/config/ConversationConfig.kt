@@ -14,7 +14,10 @@ data class ConversationConfig(
     }
 
     companion object {
-        const val DEFAULT_MAX_RECENT_INTERACTIONS = 12
+        // this is the count a recap is triggered by, not what the prompt ends up carrying — a window
+        // too small for these still fits only what its token budget allows. Kept well above that
+        // budget on a large window, where a low count buys nothing and only pays for recaps.
+        const val DEFAULT_MAX_RECENT_INTERACTIONS = 24
         const val DEFAULT_MAX_STORED_INTERACTIONS = 100
         const val DEFAULT_RETENTION_DAYS = 90
     }
