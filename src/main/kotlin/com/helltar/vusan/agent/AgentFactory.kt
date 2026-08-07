@@ -62,7 +62,10 @@ class AgentFactory(
     private val model: LLModel,
     private val chatParams: LLMParams = LLMParams(),
     private val personality: String? = null,
-    private val maxIterations: Int = 90,
+    // Koog counts graph nodes here, not LLM calls: one tool round is an execute plus a send-results
+    // node, so this is roughly 28 tool calls — well past a heavy research turn, and short enough
+    // that a model looping on a broken tool stops costing tokens sooner.
+    private val maxIterations: Int = 60,
     private val contextWindowPolicy: ContextWindowPolicy = ContextWindowPolicy(model)
 ) {
 
