@@ -42,7 +42,10 @@ class ContextWindowPolicy(model: LLModel) {
             .toInt()
 
     // room the agent may grow into during a run: tool results, retries, and the nudge exchange.
-    private val agentReserveTokens: Int = (contextWindowTokens / 4).coerceIn(1_024, 16_384)
+    // the ceiling bounds what one run may pile up, not what the window can hold — every later
+    // iteration re-sends the whole pile — so it is set to absorb several full-length tool results
+    // rather than to a share of a million-token window.
+    private val agentReserveTokens: Int = (contextWindowTokens / 4).coerceIn(1_024, 64_000)
 
     // everything the tools return during one run has to fit the agent reserve, so the reserve is
     // converted back to characters at the same ratio [estimateTokens] reads them. A fixed

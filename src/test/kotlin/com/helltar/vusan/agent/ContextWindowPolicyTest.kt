@@ -44,13 +44,15 @@ class ContextWindowPolicyTest {
     @Test
     fun `live tool result budget grows with the context window`() {
         val small = ContextWindowPolicy(model(contextLength = 16_384)).liveToolResultMaxChars
+        val medium = ContextWindowPolicy(model(contextLength = 128_000)).liveToolResultMaxChars
         val large = ContextWindowPolicy(model(contextLength = 400_000)).liveToolResultMaxChars
 
-        assertTrue(large > small, "budget did not grow: small=$small large=$large")
+        assertTrue(medium > small, "budget did not grow: small=$small medium=$medium")
+        assertTrue(large > medium, "budget stopped growing: medium=$medium large=$large")
 
-        // a full-length YouTube transcript must not consume the whole run on a large-window model,
-        // or every later tool result in the same turn comes back empty.
-        assertTrue(large > 2 * MAX_TRANSCRIPT_CHARS, "one transcript exhausts the run budget: $large")
+        // a research turn reads several sources, so a large window has to absorb more than a couple
+        // of full-length tool results before later ones start coming back truncated.
+        assertTrue(large > 6 * MAX_TRANSCRIPT_CHARS, "a few transcripts exhaust the run budget: $large")
     }
 
     @Test
