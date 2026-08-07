@@ -1,6 +1,8 @@
 package com.helltar.vusan.config
 
 import kotlinx.serialization.json.Json
+import kotlinx.serialization.json.JsonArray
+import kotlinx.serialization.json.JsonElement
 import kotlinx.serialization.json.jsonArray
 import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.jsonPrimitive
@@ -75,6 +77,55 @@ class OpenAiPromptCachingTest {
     }
 
     @Test
+    fun `a tool request also caches through the current user turn`() {
+        val request =
+            """
+            {
+              "model": "gpt-5.6",
+              "tools": [{"type": "function", "function": {"name": "sendMessage"}}],
+              "messages": [
+                {"role": "system", "content": "stable instructions"},
+                {"role": "user", "content": "older turn"},
+                {"role": "system", "content": "current time: changes"},
+                {"role": "user", "content": "current request"}
+              ]
+            }
+            """.trimIndent()
+
+        val messages = transformed(request)["messages"]!!.jsonArray
+
+        assertTrue(messages[0].isCacheBreakpoint(), "the system prefix lost its breakpoint")
+        assertTrue(messages[3].isCacheBreakpoint(), "the current turn was not marked")
+
+        // the run re-sends everything before the current turn on every tool iteration, so only these
+        // two positions are worth a write; a middle one would spend a slot on a prefix nobody rereads.
+        assertFalse(messages[1].isCacheBreakpoint())
+        assertFalse(messages[2].isCacheBreakpoint())
+    }
+
+    @Test
+    fun `a tool-free request caches only the system prefix`() {
+        val request =
+            """
+            {
+              "model": "gpt-5.6",
+              "messages": [
+                {"role": "system", "content": "recap instructions"},
+                {"role": "user", "content": "events to summarize"}
+              ]
+            }
+            """.trimIndent()
+
+        val messages = transformed(request)["messages"]!!.jsonArray
+
+        assertTrue(messages[0].isCacheBreakpoint())
+
+        // a recap prompt runs once and its user message never repeats, so marking it would buy a
+        // cache write that is never read.
+        assertFalse(messages[1].isCacheBreakpoint())
+    }
+
+    @Test
     fun `request stays implicit when no stable system prefix exists`() {
         val request = """{"model":"gpt-5.6","input":[{"role":"user","content":"hello"}]}"""
 
@@ -98,4 +149,8 @@ class OpenAiPromptCachingTest {
 
     private fun transformed(request: String) =
         Json.parseToJsonElement(addExplicitOpenAiPromptCacheBreakpoint(request)).jsonObject
+
+    // an unmarked message keeps its plain string content; marking is what turns it into text blocks.
+    private fun JsonElement.isCacheBreakpoint(): Boolean =
+        (jsonObject["content"] as? JsonArray)?.any { "prompt_cache_breakpoint" in it.jsonObject } == true
 }

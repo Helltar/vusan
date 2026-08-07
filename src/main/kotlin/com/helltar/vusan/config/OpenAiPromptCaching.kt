@@ -140,12 +140,16 @@ internal fun addExplicitOpenAiPromptCacheBreakpoint(requestBody: String, json: J
     val model = (root["model"] as? JsonPrimitive)?.contentOrNull ?: return requestBody
     if (!supportsExplicitOpenAiPromptCaching(model)) return requestBody
 
+    // the current turn is only worth its own cache write when the request can start a tool loop that
+    // re-sends it: a tool-free prompt (the history recap) never repeats its user message.
+    val markCurrentTurn = (root["tools"] as? JsonArray)?.isNotEmpty() == true
+
     val markedMessages =
         (root["input"] as? JsonArray)
-            ?.let { markStableSystemPrefix(it, "input_text") }
+            ?.let { markCachedPrefixes(it, "input_text", markCurrentTurn) }
             ?.let { "input" to it }
             ?: (root["messages"] as? JsonArray)
-                ?.let { markStableSystemPrefix(it, "text") }
+                ?.let { markCachedPrefixes(it, "text", markCurrentTurn) }
                 ?.let { "messages" to it }
             ?: return requestBody
 
@@ -160,20 +164,34 @@ internal fun supportsExplicitOpenAiPromptCaching(model: String): Boolean {
     return major > 5 || major == 5 && minor >= 6
 }
 
-private fun markStableSystemPrefix(messages: JsonArray, textBlockType: String): JsonArray? {
-    val index =
-        messages.indexOfFirst { message ->
-            val role = ((message as? JsonObject)?.get("role") as? JsonPrimitive)?.contentOrNull
-            role == "developer" || role == "system"
-        }
-    if (index < 0) return null
+/**
+ * Mark the two prefixes a turn re-sends, well inside the four cache writes a request may make: the
+ * system instructions, stable for the life of the deployment, and the last user message, stable for
+ * every iteration of one agent run — the tool loop re-sends the whole history on each of them.
+ * OpenAI reads from the longest matching prefix, so the turn that grew the history still reads the
+ * system one. Returns `null` when nothing could be marked, which keeps the caller from requesting
+ * `explicit` mode with no breakpoint at all — that disables caching outright.
+ */
+private fun markCachedPrefixes(messages: JsonArray, textBlockType: String, markCurrentTurn: Boolean): JsonArray? {
+    val systemIndex = messages.indexOfFirst { it.role == "developer" || it.role == "system" }
+    val currentTurnIndex = if (markCurrentTurn) messages.indexOfLast { it.role == "user" } else -1
 
-    val message = messages[index] as? JsonObject ?: return null
-    val markedContent = markLastTextBlock(message["content"], textBlockType) ?: return null
-    val markedMessage = JsonObject(message + ("content" to markedContent))
+    val marked = messages.toMutableList()
+    var markedAny = false
 
-    return JsonArray(messages.mapIndexed { messageIndex, value -> if (messageIndex == index) markedMessage else value })
+    for (index in setOf(systemIndex, currentTurnIndex).filter { it >= 0 }) {
+        val message = marked[index] as? JsonObject ?: continue
+        val content = markLastTextBlock(message["content"], textBlockType) ?: continue
+
+        marked[index] = JsonObject(message + ("content" to content))
+        markedAny = true
+    }
+
+    return if (markedAny) JsonArray(marked) else null
 }
+
+private val JsonElement.role: String?
+    get() = ((this as? JsonObject)?.get("role") as? JsonPrimitive)?.contentOrNull
 
 private fun markLastTextBlock(content: JsonElement?, textBlockType: String): JsonArray? {
     if (content is JsonPrimitive && content.isString) {
