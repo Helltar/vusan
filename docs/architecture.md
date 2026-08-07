@@ -51,6 +51,9 @@ Telegram ──► telegram/ ──► agent/ ──► tools/ ──► externa
   carries its duration and a loader for Telegram's own thumbnail.
 - **`tasks/`** — scheduled-task subsystem: storage, persisted pause state, recurrence math, and the
   background `TaskScheduler`.
+- **`budget/`** — the daily token ceiling. `TokenBudget` counts the day's spend and says how long until it resets;
+  `BudgetedPromptExecutor` is the `PromptExecutor` wrapper that does the counting, so one place covers every LLM call
+  the bot makes. Inert unless `LLM_DAILY_TOKEN_BUDGET` is set.
 - **`infra/`** — cross-cutting infrastructure: the SQLite/Exposed `Db` singleton and the Ktor
   `Http` client.
 - **`config/`** — `.env` parsing (`AppConfig`) and LLM provider/model resolution (`LlmRuntime`).
@@ -93,7 +96,8 @@ A normal user message travels:
    replied-message context is wrapped in `<reply_context>`/`<user_message>`; current or replied photo, video, and
    document input becomes `AttachedFile`.
    `TelegramBotRunner.dispatchToAgent` assembles the agent input and the shorter history input.
-4. **Run** — `AgentRunner.handle` takes the conversation lock (or returns "busy"), loads durable memory
+4. **Run** — `AgentRunner.handle` takes the conversation lock (or returns "busy"), turns the request away with a
+   "come back later" reply when the day's token budget is already spent, loads durable memory
    (`agent/memory/MemoryRepository` — the sender's user memory always, plus the group's memory in non-private chats),
    and places it with `<message_context>` immediately before the current request in one user-role turn. That metadata
    also carries `last_exchange` — how long ago this user last spoke with Vusan in this chat — but only once the gap is
@@ -163,8 +167,17 @@ A normal user message travels:
   *delivery* is never repeated, since part of the answer may already be in the chat. Once the attempts are spent the
   chat gets a "failed" notice. Either way the task is advanced/disabled afterwards, so a persistent error cannot
   re-fire it on every poll tick. Paused tasks remain stored and count toward the per-user task limit, but the due-task
-  query skips them.
+  query skips them. A due task is also skipped, silently and without retries, while the daily token budget is spent —
+  the same treatment an offline window gets, minus the notice, which would otherwise repeat for every task due until
+  the budget resets.
   Recurrence math lives in `tasks/Recurrence.kt`.
+- **Daily token budget** — with `LLM_DAILY_TOKEN_BUDGET` set, `budget/BudgetedPromptExecutor` wraps the executor every
+  LLM caller shares, adds each completed call's input plus output tokens to the day's total in `token_usage`, and
+  refuses to start a call once the total is over. `TokenBudget` reloads the day's spend whenever the budget date
+  changes, so a restart resumes the same day and midnight in `LLM_TOKEN_BUDGET_TIMEZONE` starts a fresh one. The
+  ceiling is checked before a call, never mid-call, so the day's last turn may overshoot by one turn. A turn that runs
+  out mid-way ends with the same "come back later" reply as one that never started, and is not counted as a failure to
+  retry.
 - **Self-initiated follow-ups** — `scheduleFollowUp` lets the agent set itself a single future turn when the
   conversation gives it a reason to come back ("ask how the exam went"). It is the same scheduler, store, and delivery
   path as `scheduleTask`, narrowed: one-time only, its own `MAX_FOLLOW_UPS_PER_USER` limit so the agent cannot spend the
@@ -287,7 +300,8 @@ wait around the same value.
 
 ## Startup
 
-`Main.kt` wires everything in order: load `AppConfig` → connect `Db` → create the `Http` client and LLM runtime → build
+`Main.kt` wires everything in order: load `AppConfig` → connect `Db` → create the `Http` client and LLM runtime →
+wrap the executor in the `TokenBudget` meter, which everything downstream then uses → build
 repositories, context policy, conversation compactor, the Telegram client and (only with a vision runtime) the
 `StickerCatalog`, `ToolRegistryFactory`, `AgentFactory`, `AgentRunner` → create `TaskMenuHandler` and
 `InlineChoiceHandler`, and optionally enable voice transcription → start `TelegramBotRunner` and launch
@@ -325,6 +339,7 @@ A symptom-to-source map for finding the right file fast. Paths are under
 | Model / provider / request-timeout selection or OpenAI prompt-cache misses       | `config/LlmRuntime.kt` (provider → client/model/params) + `config/OpenAiPromptCaching.kt` (GPT-5.6+ explicit cache breakpoint)                                                                                                                                                                         |
 | `describeImage`/`describeVideo` missing from the tool list                       | `config/VisionRuntime.kt` (chat model vs `OPENAI_VISION_API_KEY`), then `tools/ToolRegistryFactory.kt` (registration is skipped when there is no vision runtime)                                                                                                                                       |
 | Garbled or empty tool-call crashes from a flaky model                            | `agent/AgentFactory.kt` — `vusanSingleRunStrategy` and `missingRequiredArgs` short-circuit them                                                                                                                                                                                                       |
+| Vusan answers "come back later", or a scheduled task never fires                 | `budget/TokenBudget.kt` (the day's spend, the reset zone, the `token_usage` row) + `budget/BudgetedPromptExecutor.kt` (what is counted), then `LLM_DAILY_TOKEN_BUDGET` in [`configuration.md`](configuration.md)                                                                                       |
 
 ## Adding a tool
 

@@ -1,5 +1,7 @@
 package com.helltar.vusan.i18n
 
+import kotlin.time.Duration
+
 interface Messages {
 
     val startReply: String
@@ -23,6 +25,8 @@ interface Messages {
     val taskMenuDeleteButton: String
 
     fun voiceTooLongReply(durationSeconds: Long, maxSeconds: Long): String
+
+    fun tokenBudgetExhaustedReply(untilReset: Duration): String
 
     fun inlineChoiceSelected(option: String): String
 
@@ -115,6 +119,18 @@ internal object EnglishMessages : Messages {
     override fun voiceTooLongReply(durationSeconds: Long, maxSeconds: Long): String =
         "That voice message is ${durationSeconds}s long — I can only transcribe up to ${maxSeconds}s, " +
                 "send a shorter one or type it out"
+
+    override fun tokenBudgetExhaustedReply(untilReset: Duration): String =
+        "I've used up today's thinking budget — come back in about ${waitLabel(untilReset)} ⏳"
+
+    private fun waitLabel(untilReset: Duration): String =
+        untilReset.toComponents { hours, minutes, _, _ ->
+            when {
+                hours > 0 -> "${hours}h ${minutes}min"
+                minutes > 0 -> "${minutes}min"
+                else -> "a minute"
+            }
+        }
 
     override fun inlineChoiceSelected(option: String) = "✅ Selected: $option"
 
@@ -223,6 +239,18 @@ internal object UkrainianMessages : Messages {
     override fun voiceTooLongReply(durationSeconds: Long, maxSeconds: Long): String =
         "Це голосове триває ${durationSeconds}с — я можу розпізнати щонайбільше ${maxSeconds}с, " +
                 "надішли коротше або напиши текстом"
+
+    override fun tokenBudgetExhaustedReply(untilReset: Duration): String =
+        "Я вичерпала бюджет на сьогодні — повертайся приблизно за ${waitLabel(untilReset)} ⏳"
+
+    private fun waitLabel(untilReset: Duration): String =
+        untilReset.toComponents { hours, minutes, _, _ ->
+            when {
+                hours > 0 -> "$hours год $minutes хв"
+                minutes > 0 -> "$minutes хв"
+                else -> "хвилинку"
+            }
+        }
 
     override fun inlineChoiceSelected(option: String) = "✅ Обрано: $option"
 

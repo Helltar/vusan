@@ -1,5 +1,13 @@
 package com.helltar.vusan.tools.sticker
 
+import ai.koog.agents.core.tools.ToolDescriptor
+import ai.koog.prompt.Prompt
+import ai.koog.prompt.dsl.ModerationResult
+import ai.koog.prompt.executor.model.PromptExecutor
+import ai.koog.prompt.llm.LLModel
+import ai.koog.prompt.message.Message
+import ai.koog.prompt.streaming.StreamFrame
+import com.helltar.vusan.budget.TokenBudgetExhaustedException
 import com.helltar.vusan.config.AppConfig
 import com.helltar.vusan.config.HostedLlmProvider
 import com.helltar.vusan.config.LlmProviderConfig
@@ -12,6 +20,7 @@ import com.helltar.vusan.tools.vision.TEST_MODEL
 import kotlinx.coroutines.cancelAndJoin
 import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.withTimeout
 import org.jetbrains.exposed.v1.core.eq
@@ -43,6 +52,7 @@ import kotlin.test.assertEquals
 import kotlin.test.assertNotNull
 import kotlin.test.assertNull
 import kotlin.test.assertTrue
+import kotlin.time.Duration.Companion.hours
 import kotlin.time.Duration.Companion.seconds
 
 private const val CHAT = -100L
@@ -98,6 +108,22 @@ class StickerCatalogTest {
 
         // a refusal is final: the row must leave the queue instead of being asked about forever
         assertTrue(row.describeAttempts > 0, "refused sticker was left pending")
+    }
+
+    // a spent token budget says nothing about the sticker: counted as attempts, a budget that stays out for
+    // hours would retire the whole backlog before vision gets another chance at it.
+    @Test
+    fun `a sticker left undescribed by a spent token budget keeps its retries`() = runBlocking {
+        val client = FakeStickerClient(setOf = listOf(sticker("a")))
+        val vision = BudgetStopExecutor()
+        val catalog = StickerCatalog(client.proxy, ImageVisionClient(vision, TEST_MODEL))
+
+        catalog.learn(sticker("a"))
+        awaitWorker(catalog) { vision.callCount > 0 }
+
+        val row = assertNotNull(storedStickers().singleOrNull())
+        assertNull(row.description)
+        assertEquals(0, row.describeAttempts, "the sticker was charged for the budget being out")
     }
 
     @Test
@@ -336,6 +362,25 @@ class StickerCatalogTest {
             .setName(set)
             .thumbnail(PhotoSize.builder().fileId("thumb-$id").fileUniqueId("thumb-unique-$id").width(1).height(1).build())
             .build()
+
+    private class BudgetStopExecutor : PromptExecutor() {
+
+        var callCount = 0
+            private set
+
+        override suspend fun execute(prompt: Prompt, model: LLModel, tools: List<ToolDescriptor>): Message.Assistant {
+            callCount++
+            throw TokenBudgetExhaustedException(3.hours)
+        }
+
+        override fun executeStreaming(prompt: Prompt, model: LLModel, tools: List<ToolDescriptor>): Flow<StreamFrame> =
+            error("executeStreaming not used in test")
+
+        override suspend fun moderate(prompt: Prompt, model: LLModel): ModerationResult =
+            error("moderate not used in test")
+
+        override fun close() = Unit
+    }
 
     private class FakeStickerClient(
         var setOf: List<Sticker>,

@@ -2,6 +2,7 @@ package com.helltar.vusan.tasks
 
 import com.helltar.vusan.agent.AgentRequest
 import com.helltar.vusan.agent.AgentRunner
+import com.helltar.vusan.budget.TokenBudget
 import com.helltar.vusan.common.rethrowIfCancellation
 import com.helltar.vusan.i18n.Messages
 import com.helltar.vusan.telegram.delivery.ScheduledAttribution
@@ -19,7 +20,8 @@ class TaskScheduler(
     private val repo: TasksRepository,
     private val agentRunner: AgentRunner,
     private val delivery: TelegramDelivery,
-    private val maxLateness: Duration
+    private val maxLateness: Duration,
+    private val tokenBudget: TokenBudget = TokenBudget()
 ) {
 
     private companion object {
@@ -72,6 +74,15 @@ class TaskScheduler(
 
         if (latenessMillis > maxLateness.inWholeMilliseconds) {
             handleMissed(task, now)
+            return
+        }
+
+        // the day's token budget is gone: skip the run and move the recurrence on, the way an offline window
+        // is skipped. spending the retry attempts here would only burn the next day's budget on a stale task,
+        // and a notice per due task would fill the chat for as long as the budget stays out.
+        tokenBudget.exhaustedFor()?.let { untilReset ->
+            log.warn { "task id=${task.id} skipped: daily token budget spent, resetsIn=$untilReset" }
+            rescheduleAfterFire(task, now)
             return
         }
 

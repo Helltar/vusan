@@ -98,6 +98,26 @@ Set `LLM_CONTEXT_WINDOW_TOKENS` whenever an `openai-compatible` model has a diff
 that window for the response, tool results, and estimation error, then fits only complete conversation interactions
 into the remainder.
 
+### Daily token budget
+
+A ceiling on the tokens Vusan may spend in a day, off by default. It exists for a provider allowance that refills on a
+clock — OpenAI hands out free daily tokens at 00:00 UTC in exchange for sharing API inputs and outputs — and works just
+as well as a plain daily spending cap.
+
+| Variable                    | Default     | Description                                                                              |
+|-----------------------------|-------------|------------------------------------------------------------------------------------------|
+| `LLM_DAILY_TOKEN_BUDGET`    | unlimited   | Input plus output tokens allowed per day. Unset means no ceiling and no bookkeeping at all. |
+| `LLM_TOKEN_BUDGET_TIMEZONE` | `UTC`       | The zone whose midnight starts the next budget, e.g. `Europe/Kyiv`. Match it to your provider's reset — OpenAI's is `UTC`. |
+
+Everything Vusan asks the chat model counts: replies, its own history recaps, group-chat digests, and reading images
+when vision runs on the chat model. A separate `OPENAI_VISION_API_KEY` model has its own key and quota and is not
+counted here.
+
+Once the day's budget is gone, Vusan answers every request with "come back in about N hours" instead of thinking, and
+scheduled tasks that come due are skipped and moved to their next run rather than retried. The count survives a
+restart, and the ceiling is checked before each request rather than mid-reply, so the last request of the day can go
+slightly over it instead of being cut off in the middle.
+
 ## Personality
 
 The agent ships with a built-in personality named "Vusan", kept generic so each deployment can define its identity,

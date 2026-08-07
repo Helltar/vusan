@@ -8,6 +8,8 @@ import com.helltar.vusan.agent.conversation.*
 import com.helltar.vusan.agent.memory.MemoryEntry
 import com.helltar.vusan.agent.memory.MemoryRepository
 import com.helltar.vusan.agent.memory.MemoryScope
+import com.helltar.vusan.budget.TokenBudget
+import com.helltar.vusan.budget.tokenBudgetStop
 import com.helltar.vusan.common.collapseWhitespaceAndCap
 import com.helltar.vusan.common.isEffectivelyBlank
 import com.helltar.vusan.common.limitTo
@@ -74,7 +76,8 @@ class AgentRunner(
     private val conversationConfig: ConversationConfig = ConversationConfig(),
     private val stickers: StickerCatalog? = null,
     private val groupLog: GroupLogRepository? = null,
-    private val groupLogConfig: GroupLogConfig = GroupLogConfig()
+    private val groupLogConfig: GroupLogConfig = GroupLogConfig(),
+    private val tokenBudget: TokenBudget = TokenBudget()
 ) {
 
     private companion object {
@@ -136,6 +139,18 @@ class AgentRunner(
     }
 
     private suspend fun runAgent(request: AgentRequest, onToolStarting: (activity: ToolActivity) -> Unit = {}): AgentResult {
+        tokenBudget.exhaustedFor()?.let { untilReset ->
+            log.warn {
+                "daily token budget spent: turn skipped for chat=${request.chatId} user=${request.userId}, " +
+                        "resetsIn=$untilReset"
+            }
+
+            return AgentResult(
+                outputs = emptyList(),
+                comment = Messages.of(request.language).tokenBudgetExhaustedReply(untilReset)
+            )
+        }
+
         val context =
             RequestContext(
                 chatId = request.chatId,
@@ -215,6 +230,7 @@ class AgentRunner(
                 )
             } catch (e: Throwable) {
                 e.rethrowIfCancellation()
+                budgetStopReply(request, e)?.let { return AgentResult(outputs = emptyList(), comment = it) }
                 return AgentResult(outputs = emptyList(), comment = replyForAgentFailure(request, e), failed = true)
             }
 
@@ -391,6 +407,19 @@ class AgentRunner(
             run(emergencyConversation)
         }
     }
+
+    // the budget ran out with the turn already in flight. that is not a failure to retry — the turn is over
+    // until the budget resets — so it gets the same "come back later" reply as a turn that never started.
+    private fun budgetStopReply(request: AgentRequest, e: Throwable): String? =
+        e.tokenBudgetStop()
+            ?.let { stop ->
+                log.warn {
+                    "daily token budget spent mid-turn for chat=${request.chatId} user=${request.userId}, " +
+                            "resetsIn=${stop.untilReset}"
+                }
+
+                Messages.of(request.language).tokenBudgetExhaustedReply(stop.untilReset)
+            }
 
     // pick the user-facing reply and log accordingly. LLM provider errors arrive as a large JSON body, so
     // they get a single capped WARN line; a transient overload (429/503) gets a friendly "try again" reply,

@@ -1,5 +1,6 @@
 package com.helltar.vusan.tools.sticker
 
+import com.helltar.vusan.budget.tokenBudgetStop
 import com.helltar.vusan.common.collapseWhitespaceAndCap
 import com.helltar.vusan.common.rethrowIfCancellation
 import com.helltar.vusan.common.xmlBlock
@@ -292,6 +293,13 @@ class StickerCatalog(
                 }
 
                 is DescribeOutcome.Failed -> countFailedAttempt(row.id, row.describeAttempts)
+
+                // the day's tokens are gone, so no sticker in this backlog can be described. ending the pass
+                // keeps their attempts intact — counted, they would be given up on before the budget returns.
+                is DescribeOutcome.Postponed -> {
+                    log.info { "sticker description postponed: the daily token budget is spent" }
+                    return
+                }
             }
 
             delay(DESCRIPTION_PAUSE)
@@ -321,12 +329,13 @@ class StickerCatalog(
 
         val answer =
             runCatching { vision.describe(image, bytes, STICKER_VISION_FOCUS) }
-                .onFailure {
-                    it.rethrowIfCancellation()
-                    log.warn { "vision call failed for sticker id=${row.id}: ${it.message}" }
+                .getOrElse { error ->
+                    error.rethrowIfCancellation()
+                    if (error.tokenBudgetStop() != null) return DescribeOutcome.Postponed
+
+                    log.warn { "vision call failed for sticker id=${row.id}: ${error.message}" }
+                    return DescribeOutcome.Failed
                 }
-                .getOrNull()
-                ?: return DescribeOutcome.Failed
 
         val text = answer.collapseWhitespaceAndCap(MAX_DESCRIPTION_CHARS).orEmpty()
 
@@ -574,5 +583,6 @@ class StickerCatalog(
         data class Described(val text: String) : DescribeOutcome
         data object Refused : DescribeOutcome
         data object Failed : DescribeOutcome
+        data object Postponed : DescribeOutcome
     }
 }

@@ -9,6 +9,7 @@ import com.helltar.vusan.agent.conversation.LlmConversationCompactor
 import com.helltar.vusan.agent.grouplog.GroupLogRepository
 import com.helltar.vusan.agent.grouplog.LlmGroupLogDigester
 import com.helltar.vusan.agent.memory.MemoryRepository
+import com.helltar.vusan.budget.TokenBudget
 import com.helltar.vusan.config.*
 import com.helltar.vusan.infra.Db
 import com.helltar.vusan.infra.Http
@@ -50,10 +51,16 @@ suspend fun main() = coroutineScope {
 
         val llm = resolveLlmRuntime(config.llmProvider)
         executor = MultiLLMPromptExecutor(llm.model.provider to llm.client)
-        val vision = resolveVisionRuntime(config.openAiVision, llm, executor, config.llmProvider.requestTimeout)
+
+        // everything downstream talks to the metered executor, so every LLM call the bot makes — turns,
+        // history recaps, group-log digests, vision on the chat model — is counted against one daily budget.
+        val tokenBudget = TokenBudget(config.tokenBudget)
+        val chatExecutor = tokenBudget.meter(executor)
+
+        val vision = resolveVisionRuntime(config.openAiVision, llm, chatExecutor, config.llmProvider.requestTimeout)
 
         // a vision model of its own comes with a second executor to close; otherwise vision rides on the chat one
-        visionExecutor = vision?.executor?.takeIf { it !== executor }
+        visionExecutor = vision?.executor?.takeIf { it !== chatExecutor }
 
         val telegramClient = OkHttpTelegramClient(config.telegramBotToken)
 
@@ -62,7 +69,7 @@ suspend fun main() = coroutineScope {
         val stickerCatalog = vision?.let { StickerCatalog(telegramClient, ImageVisionClient(it.executor, it.model)) }
 
         val contextWindowPolicy = ContextWindowPolicy(llm.model)
-        val groupLogDigester = groupLog?.let { LlmGroupLogDigester(executor, llm.model, llm.compactionParams) }
+        val groupLogDigester = groupLog?.let { LlmGroupLogDigester(chatExecutor, llm.model, llm.compactionParams) }
 
         val toolRegistryFactory =
             ToolRegistryFactory(
@@ -72,25 +79,26 @@ suspend fun main() = coroutineScope {
 
         val agentFactory =
             AgentFactory(
-                executor, toolRegistryFactory, llm.model, llm.chatParams,
+                chatExecutor, toolRegistryFactory, llm.model, llm.chatParams,
                 config.personality, contextWindowPolicy = contextWindowPolicy
             )
 
 
         val conversationCompactor =
-            LlmConversationCompactor(executor, llm.model, llm.compactionParams, contextWindowPolicy)
+            LlmConversationCompactor(chatExecutor, llm.model, llm.compactionParams, contextWindowPolicy)
 
         val agentRunner =
             AgentRunner(
                 agentFactory, conversation, memory, conversationCompactor,
-                config.chatHistory, stickerCatalog, groupLog, config.groupLog
+                config.chatHistory, stickerCatalog, groupLog, config.groupLog, tokenBudget
             )
 
         val delivery = TelegramDelivery(telegramClient, stickerCatalog?.let { it::recheckSetOf }, groupLog)
         val voiceTranscriber = createVoiceTranscriber(http, config)
         val taskMenu = TaskMenuHandler(telegramClient, tasks, config.maxTasksPerUser)
         val inlineChoices = InlineChoiceHandler(telegramClient, conversation::revision)
-        val scheduler = TaskScheduler(tasks, agentRunner, delivery, config.taskMaxLatenessMinutes.minutes)
+        val scheduler =
+            TaskScheduler(tasks, agentRunner, delivery, config.taskMaxLatenessMinutes.minutes, tokenBudget)
 
         val botRunner =
             TelegramBotRunner(
@@ -98,7 +106,7 @@ suspend fun main() = coroutineScope {
                 inlineChoices, config.allowedIds, voiceTranscriber, stickerCatalog, groupLog
             )
 
-        logStartup(llm, vision, toolRegistryFactory.availableToolNames)
+        logStartup(llm, vision, toolRegistryFactory.availableToolNames, config.tokenBudget)
 
         val botJob = botRunner.start(this)
         val schedulerJob = scheduler.launchIn(this)
@@ -129,8 +137,19 @@ private fun createVoiceTranscriber(http: HttpClient, config: AppConfig): VoiceTr
     return VoiceTranscriber(OpenAiWhisperClient(http, sttConfig), sttConfig)
 }
 
-private fun logStartup(llm: LlmRuntime, vision: VisionRuntime?, toolNames: List<String>) {
+private fun logStartup(
+    llm: LlmRuntime,
+    vision: VisionRuntime?,
+    toolNames: List<String>,
+    tokenBudget: TokenBudgetConfig
+) {
     log.info { "Starting Vusan: provider=[${llm.providerLabel}] model=[${llm.model.id}]" }
+
+    if (tokenBudget.dailyTokens == null) {
+        log.info { "Daily token budget: unlimited" }
+    } else {
+        log.info { "Daily token budget: tokens=${tokenBudget.dailyTokens} resetZone=[${tokenBudget.zone}]" }
+    }
 
     if (llm.model.contextLength == null) {
         log.warn {

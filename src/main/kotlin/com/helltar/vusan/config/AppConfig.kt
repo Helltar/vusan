@@ -3,6 +3,7 @@ package com.helltar.vusan.config
 import ai.koog.prompt.executor.clients.openai.base.models.ReasoningEffort
 import io.github.cdimascio.dotenv.dotenv
 import io.github.oshai.kotlinlogging.KotlinLogging
+import java.time.ZoneId
 import kotlin.io.path.Path
 import kotlin.io.path.isReadable
 import kotlin.io.path.readText
@@ -31,6 +32,7 @@ data class AppConfig(
     val taskMaxLatenessMinutes: Long,
     val tavilyApiKey: String?,
     val telegramBotToken: String,
+    val tokenBudget: TokenBudgetConfig = TokenBudgetConfig(),
     val ytDlpCookiesFile: String?
 ) {
     companion object {
@@ -91,6 +93,7 @@ data class AppConfig(
                 searxngUrl = readEnv("SEARXNG_URL"),
                 tavilyApiKey = readEnv("TAVILY_API_KEY"),
                 telegramBotToken = requireEnv("TELEGRAM_BOT_TOKEN"),
+                tokenBudget = resolveTokenBudget(),
                 ytDlpCookiesFile = readEnv("YT_DLP_COOKIES_FILE"),
 
                 maxFollowUpsPerUser =
@@ -151,6 +154,22 @@ data class AppConfig(
             }
 
             return text
+        }
+
+        // a mistyped budget must not read as "no budget": both values are rejected loudly instead of ignored.
+        private fun resolveTokenBudget(): TokenBudgetConfig {
+            val dailyTokens =
+                readEnv("LLM_DAILY_TOKEN_BUDGET")?.let {
+                    it.toLongOrNull() ?: error("LLM_DAILY_TOKEN_BUDGET=[$it] is not a number")
+                }
+
+            val zone =
+                readEnv("LLM_TOKEN_BUDGET_TIMEZONE")?.let { raw ->
+                    runCatching { ZoneId.of(raw) }
+                        .getOrElse { error("Unsupported LLM_TOKEN_BUDGET_TIMEZONE=[$raw], expected a zone id like Europe/Kyiv") }
+                } ?: TokenBudgetConfig.DEFAULT_ZONE
+
+            return TokenBudgetConfig(dailyTokens = dailyTokens, zone = zone)
         }
 
         private fun resolveOpenAiStt(): OpenAiSttConfig? {
