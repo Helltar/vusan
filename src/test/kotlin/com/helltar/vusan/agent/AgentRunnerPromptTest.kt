@@ -40,7 +40,28 @@ class AgentRunnerPromptTest {
         assertFalse("<message_context>" in prompt)
         assertFalse("<user_memory>" in prompt)
         assertFalse("<group_memory>" in prompt)
-        assertTrue(prompt == "hello")
+        assertFalse("<sticker_catalog>" in prompt)
+        assertTrue(prompt.endsWith("hello"))
+    }
+
+    // both used to be a second system message. that reads as a higher-priority instruction, and koog
+    // hoists every system message into the top-level system field on Anthropic and Google, so neither
+    // would have stayed where it was put.
+    @Test
+    fun `the clock and the sticker index ride in the turn, ahead of the request`() {
+        val prompt =
+            currentTurnPrompt(
+                userInput = "send me something funny",
+                messageContext = null,
+                userMemory = emptyList(),
+                chatMemory = emptyList(),
+                stickerCatalog = "<sticker_catalog>\n#3 penguin waving\n</sticker_catalog>"
+            )
+
+        assertContains(prompt, "<current_time>")
+        assertContains(prompt, "#3 penguin waving")
+        assertTrue(prompt.indexOf("<current_time>") < prompt.indexOf("<sticker_catalog>"))
+        assertTrue(prompt.endsWith("send me something funny"))
     }
 
     private fun memory(id: Long, content: String): MemoryEntry =

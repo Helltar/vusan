@@ -53,16 +53,10 @@ class ContextWindowPolicy(model: LLModel) {
     // would consume the whole run and leave later tool results with nothing.
     val liveToolResultMaxChars: Int = agentReserveTokens * ESTIMATED_BYTES_PER_TOKEN
 
-    fun budget(
-        systemPrompt: String,
-        trailingSystemContext: String,
-        currentTurn: String,
-        toolRegistry: ToolRegistry
-    ): ContextTokenBudget {
+    fun budget(systemPrompt: String, currentTurn: String, toolRegistry: ToolRegistry): ContextTokenBudget {
         val tools = toolRegistry.tools.joinToString("\n") { it.descriptor.toString() }
         val fixedPromptTokens =
             estimateTokens(systemPrompt) +
-                    estimateTokens(trailingSystemContext) +
                     estimateTokens(currentTurn) +
                     estimateTokens(tools) +
                     toolRegistry.tools.size * TOOL_SCHEMA_OVERHEAD_TOKENS +

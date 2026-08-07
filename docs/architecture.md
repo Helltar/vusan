@@ -110,7 +110,10 @@ A normal user message travels:
    ("and what do you think?") still has one. It leaves out the triggering message and this user's own exchanges with
    the bot, both of which the prompt already carries — the first as the request itself, the second as replayed
    `user`/`assistant` turns. Other people's messages and the bot's replies to *them* stay, since one person's
-   conversation never contains those.
+   conversation never contains those. `<current_time>` and the chat's `<sticker_catalog>` ride in that same user turn
+   rather than in a system message of their own: a system message reads as a higher-priority instruction, which is
+   wrong for context assembled out of what people sent, and koog's Anthropic and Google clients hoist every system
+   message into the top-level system field regardless of where it sat.
    `AgentFactory.prepare` builds the per-request tool registry and estimates the fixed system/tool/current-turn cost.
    The history planner reserves room for output, future tool calls, and estimation error, then admits only complete
    interactions. If an older prefix no longer fits or exceeds the configured recent count,
@@ -220,7 +223,7 @@ A normal user message travels:
   is learned only on the second time a chat reaches for it, and no chat may pull in more than three new sets a day.
   Neither gate applies to a set already known from elsewhere, which costs nothing to offer. A background worker then
   describes each sticker's thumbnail once through the vision model and caches the result by `file_unique_id`;
-  `AgentRunner` puts the described stickers for that chat into the trailing system context, and `sendSticker` resends
+  `AgentRunner` puts the described stickers for that chat into the current user turn, and `sendSticker` resends
   one by `file_id`. That index holds the chat's most recently used sets, filled round-robin so a set someone is using
   right now is never crowded out by one learned earlier. Without a vision runtime the catalog is never constructed and
   the tool is never registered, matching the vision tools. A sticker the model refuses to describe, or one that

@@ -174,7 +174,7 @@ class StickerCatalog(
     }
 
     /**
-     * The sticker index for this chat's system context, or `null` when nothing is described yet —
+     * The sticker index for this chat's turn, or `null` when nothing is described yet —
      * which is the normal state of a fresh deployment and of a chat where nobody uses stickers.
      */
     suspend fun indexBlockFor(chatId: Long): String? {

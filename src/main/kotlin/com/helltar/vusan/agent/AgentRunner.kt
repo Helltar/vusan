@@ -35,6 +35,8 @@ import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
 import java.time.Instant
 import java.time.ZoneId
+import java.time.ZonedDateTime
+import java.time.format.DateTimeFormatter
 import java.time.temporal.ChronoUnit
 
 // `<recent_chat>` rides along on every group turn, so it is budgeted for cheapness, not for detail:
@@ -180,16 +182,17 @@ class AgentRunner(
             )
 
         val currentTurn =
-            currentTurnPrompt(request.prompt, messageContext, userMemory, chatMemory, recentChatFor(context))
-        val outbox = BotOutbox()
-
-        val preparation =
-            agentFactory.prepare(
-                context = context,
-                outbox = outbox,
-                currentTurn = currentTurn,
+            currentTurnPrompt(
+                userInput = request.prompt,
+                messageContext = messageContext,
+                userMemory = userMemory,
+                chatMemory = chatMemory,
+                recentChat = recentChatFor(context),
                 stickerCatalog = stickers?.indexBlockFor(request.chatId)
             )
+
+        val outbox = BotOutbox()
+        val preparation = agentFactory.prepare(context = context, outbox = outbox, currentTurn = currentTurn)
 
         val conversationPlan =
             conversationPlanForPrompt(request.userId, request.chatId, preparation.tokenBudget.conversationTokens)
@@ -465,20 +468,41 @@ class AgentRunner(
     private class ConversationLock(val mutex: Mutex = Mutex(), var refCount: Int = 0)
 }
 
+/**
+ * Everything the model is shown for this turn, request last.
+ *
+ * All of it rides in one user-role message, including the clock and the sticker index. A second
+ * system message would read as a higher-priority instruction — wrong for context assembled out of
+ * what people sent — and koog's Anthropic and Google clients hoist every system message into the
+ * top-level system field anyway, so a block placed here would not stay here on those providers.
+ */
 internal fun currentTurnPrompt(
     userInput: String,
     messageContext: MessageContext?,
     userMemory: List<MemoryEntry>,
     chatMemory: List<MemoryEntry>,
-    recentChat: String? = null
+    recentChat: String? = null,
+    stickerCatalog: String? = null
 ): String =
     buildList {
+        add(currentTimeBlock())
         messageContext?.toPromptBlock()?.let(::add)
         memoryBlock("user_memory", userMemory)?.let(::add)
         memoryBlock("group_memory", chatMemory)?.let(::add)
+        stickerCatalog?.takeIf { it.isNotBlank() }?.let(::add)
         recentChat?.takeIf { it.isNotBlank() }?.let { add(xmlBlock("recent_chat", it)) }
         add(userInput)
     }.joinToString("\n\n")
+
+private val LOCAL_DATE_TIME = DateTimeFormatter.ofPattern("yyyy-MM-dd'T'HH:mm:ss")
+private val DAY_OF_WEEK = DateTimeFormatter.ofPattern("EEEE")
+
+private fun currentTimeBlock(): String {
+    val timezone = ZoneId.systemDefault()
+    val now = ZonedDateTime.now(timezone)
+
+    return xmlBlock("current_time", "${LOCAL_DATE_TIME.format(now)} ${timezone.id} (${DAY_OF_WEEK.format(now)})")
+}
 
 // renders memory as `#id content` lines so the model can reference an id when calling `forgetMemory`.
 private fun memoryBlock(

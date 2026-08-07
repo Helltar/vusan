@@ -16,7 +16,6 @@ class ContextWindowPolicyTest {
         val budget =
             policy.budget(
                 systemPrompt = "system",
-                trailingSystemContext = "time",
                 currentTurn = "current request",
                 toolRegistry = ToolRegistry.EMPTY
             )
@@ -62,7 +61,6 @@ class ContextWindowPolicyTest {
         val budget =
             policy.budget(
                 systemPrompt = "system",
-                trailingSystemContext = "time",
                 currentTurn = "current request",
                 toolRegistry = ToolRegistry.EMPTY
             )

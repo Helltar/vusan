@@ -28,9 +28,6 @@ import com.helltar.vusan.outbox.BotOutbox
 import com.helltar.vusan.request.RequestContext
 import com.helltar.vusan.tools.ToolRegistryFactory
 import io.github.oshai.kotlinlogging.KotlinLogging
-import java.time.ZoneId
-import java.time.ZonedDateTime
-import java.time.format.DateTimeFormatter
 
 data class ToolEvent(
     val toolCallId: String,
@@ -49,9 +46,6 @@ data class TokenUsage(
 data class AgentPromptPreparation(
     val toolRegistry: ToolRegistry,
     val systemPrompt: String,
-    // system context that changes between turns, so it is seeded after the history instead of in the
-    // stable prefix a provider caches: the clock, and the stickers this chat has taught the bot.
-    val trailingSystemContext: String,
     val tokenBudget: ContextTokenBudget,
     val liveToolResultMaxChars: Int
 )
@@ -74,25 +68,16 @@ class AgentFactory(
         val log = KotlinLogging.logger {}
     }
 
-    fun prepare(
-        context: RequestContext,
-        outbox: BotOutbox,
-        currentTurn: String,
-        stickerCatalog: String? = null
-    ): AgentPromptPreparation {
+    fun prepare(context: RequestContext, outbox: BotOutbox, currentTurn: String): AgentPromptPreparation {
         val toolRegistry = toolRegistryFactory.buildRegistry(context, outbox)
-        val trailingSystemContext =
-            listOfNotNull(currentTimeSystemBlock(), stickerCatalog).joinToString("\n\n")
         val systemPrompt = systemPromptFor(personality ?: DEFAULT_PERSONALITY)
 
         return AgentPromptPreparation(
             toolRegistry = toolRegistry,
             systemPrompt = systemPrompt,
-            trailingSystemContext = trailingSystemContext,
             tokenBudget =
                 contextWindowPolicy.budget(
                     systemPrompt = systemPrompt,
-                    trailingSystemContext = trailingSystemContext,
                     currentTurn = currentTurn,
                     toolRegistry = toolRegistry
                 ),
@@ -135,8 +120,6 @@ class AgentFactory(
                             )
                     }
                 }
-
-                system(preparation.trailingSystemContext)
             }
 
         val agentConfig =
@@ -335,14 +318,3 @@ private fun garbledToolCallResult(call: MessagePart.Tool.Call, missing: List<Str
     )
 }
 
-private val LOCAL_DATE_TIME = DateTimeFormatter.ofPattern("yyyy-MM-dd'T'HH:mm:ss")
-private val DAY_OF_WEEK = DateTimeFormatter.ofPattern("EEEE")
-
-private fun currentTimeSystemBlock(): String {
-    val timezone = ZoneId.systemDefault()
-    val now = ZonedDateTime.now(timezone)
-    return xmlBlock(
-        "current_time",
-        "${LOCAL_DATE_TIME.format(now)} ${timezone.id} (${DAY_OF_WEEK.format(now)})"
-    )
-}

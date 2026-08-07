@@ -18,7 +18,7 @@ internal object TaskToolDescriptions {
         "When the task fires. " +
             "Pick ONE form and translate the user's phrasing into it:\n" +
             "- `once <ISO local datetime>` — a single fire, e.g. `once 2026-05-30T09:00`. " +
-            """Resolve relative phrases ("in 15 minutes", "tomorrow at 9") against the `Current time` in your system context.""" + "\n" +
+            """Resolve relative phrases ("in 15 minutes", "tomorrow at 9") against `<current_time>` in the current turn.""" + "\n" +
             "- `every <interval>` — a fixed repeating interval, e.g. `every 90m`, `every 2h`, `every 1h30m` (minimum 5 minutes). " +
             "Use this for plain intervals not tied to a wall-clock time; first fire is one interval from now.\n" +
             "- `cron <UNIX 5-field expr>` — `minute hour day-of-month month day-of-week`, for anything tied to clock times or specific days. " +
@@ -50,7 +50,7 @@ internal object TaskToolDescriptions {
 
     const val FOLLOW_UP_AT =
         "When to come back, as an ISO local datetime like `2026-05-31T10:00`. " +
-                "Resolve it against `<current_time>` in your system context. " +
+                "Resolve it against `<current_time>` in the current turn. " +
                 "Pick a considerate moment — the morning after the exam, not the middle of the night, and not so soon that nothing has happened yet."
 
     const val FOLLOW_UP_TIMEZONE =
