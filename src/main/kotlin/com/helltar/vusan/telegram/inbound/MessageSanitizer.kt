@@ -1,5 +1,6 @@
 package com.helltar.vusan.telegram.inbound
 
+import com.helltar.vusan.agent.neutralizePromptBlocks
 import org.telegram.telegrambots.meta.api.objects.EntityType
 import org.telegram.telegrambots.meta.api.objects.MessageEntity
 
@@ -22,7 +23,7 @@ internal fun sanitizeUserText(content: MessageText, botUserId: Long, botUsername
             .filter { content.isBotMention(it, botUserId, expectedUsername) }
             .sortedBy { it.offset }
 
-    if (removals.isEmpty()) return content.text.trim()
+    if (removals.isEmpty()) return content.text.trim().neutralizePromptBlocks()
 
     val sanitized =
         buildString {
@@ -37,7 +38,7 @@ internal fun sanitizeUserText(content: MessageText, botUserId: Long, botUsername
             append(content.text, position, content.text.length)
         }
 
-    return sanitized.cleanupAfterMentionRemoval()
+    return sanitized.cleanupAfterMentionRemoval().neutralizePromptBlocks()
 }
 
 private fun MessageText.isBotMention(entity: MessageEntity, botUserId: Long, expectedUsername: String?): Boolean =

@@ -1,5 +1,6 @@
 package com.helltar.vusan.telegram.inbound
 
+import com.helltar.vusan.agent.neutralizePromptBlocks
 import com.helltar.vusan.common.collapseWhitespaceAndCap
 import com.helltar.vusan.common.limitTo
 import com.helltar.vusan.common.sanitizeFilename
@@ -242,8 +243,14 @@ private fun buildReplyContextPrompt(
             repliedMessage.metadata.forEach { appendLine("  - $it") }
         }
 
-        repliedMessage.textOrCaption?.let { appendLine(xmlBlock("text_caption", transformText(it))) }
-        repliedMessage.transcript?.let { appendLine(xmlBlock("audio_transcript", transformText(it))) }
+        // the quoted message is somebody else's text and never passed through inbound sanitizing.
+        repliedMessage.textOrCaption?.let {
+            appendLine(xmlBlock("text_caption", transformText(it).neutralizePromptBlocks()))
+        }
+
+        repliedMessage.transcript?.let {
+            appendLine(xmlBlock("audio_transcript", transformText(it).neutralizePromptBlocks()))
+        }
 
         appendLine("</reply_context>")
         appendLine()

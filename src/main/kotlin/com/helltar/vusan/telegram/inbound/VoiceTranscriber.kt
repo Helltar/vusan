@@ -1,5 +1,6 @@
 package com.helltar.vusan.telegram.inbound
 
+import com.helltar.vusan.agent.neutralizePromptBlocks
 import com.helltar.vusan.common.rethrowIfCancellation
 import com.helltar.vusan.common.xmlBlock
 import com.helltar.vusan.config.OpenAiSttConfig
@@ -105,4 +106,4 @@ private fun extensionFor(mimeType: String?, default: String): String =
     }
 
 internal fun wrapAudioTranscript(text: String): String =
-    xmlBlock("audio_transcript", text)
+    xmlBlock("audio_transcript", text.neutralizePromptBlocks())
