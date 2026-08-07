@@ -56,6 +56,10 @@ class AgentFactory(
     private val model: LLModel,
     private val chatParams: LLMParams = LLMParams(),
     private val personality: String? = null,
+    // the bot's own Telegram handle: inbound sanitizing strips the mention before the prompt is
+    // built, so without this the model never sees the name people call it by.
+    private val botUsername: String? = null,
+    private val botDisplayName: String? = null,
     // Koog counts graph nodes here, not LLM calls: one tool round is an execute plus a send-results
     // node, so this is roughly 28 tool calls — well past a heavy research turn, and short enough
     // that a model looping on a broken tool stops costing tokens sooner.
@@ -70,7 +74,8 @@ class AgentFactory(
 
     fun prepare(context: RequestContext, outbox: BotOutbox, currentTurn: String): AgentPromptPreparation {
         val toolRegistry = toolRegistryFactory.buildRegistry(context, outbox)
-        val systemPrompt = systemPromptFor(personality ?: DEFAULT_PERSONALITY, model.id)
+        val systemPrompt =
+            systemPromptFor(personality ?: DEFAULT_PERSONALITY, model.id, botUsername, botDisplayName)
 
         return AgentPromptPreparation(
             toolRegistry = toolRegistry,

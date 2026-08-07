@@ -17,6 +17,7 @@ import com.helltar.vusan.stt.OpenAiWhisperClient
 import com.helltar.vusan.tasks.TaskScheduler
 import com.helltar.vusan.tasks.TasksRepository
 import com.helltar.vusan.telegram.TelegramBotRunner
+import com.helltar.vusan.telegram.botProfile
 import com.helltar.vusan.telegram.callback.InlineChoiceHandler
 import com.helltar.vusan.telegram.callback.TaskMenuHandler
 import com.helltar.vusan.telegram.delivery.TelegramDelivery
@@ -64,6 +65,9 @@ suspend fun main() = coroutineScope {
 
         val telegramClient = OkHttpTelegramClient(config.telegramBotToken)
 
+        // read once and shared: the runner matches mentions against it, the agent is told its own handle.
+        val botProfile = telegramClient.botProfile()
+
         // the catalog only ever holds stickers vision has looked at, so without vision there is nothing
         // to learn and nothing to offer the model.
         val stickerCatalog = vision?.let { StickerCatalog(telegramClient, ImageVisionClient(it.executor, it.model)) }
@@ -80,7 +84,8 @@ suspend fun main() = coroutineScope {
         val agentFactory =
             AgentFactory(
                 chatExecutor, toolRegistryFactory, llm.model, llm.chatParams,
-                config.personality, contextWindowPolicy = contextWindowPolicy
+                config.personality, botProfile.username, botProfile.displayName,
+                contextWindowPolicy = contextWindowPolicy
             )
 
 
@@ -103,7 +108,7 @@ suspend fun main() = coroutineScope {
         val botRunner =
             TelegramBotRunner(
                 telegramClient, config.telegramBotToken, delivery, agentRunner, taskMenu,
-                inlineChoices, config.allowedIds, voiceTranscriber, stickerCatalog, groupLog
+                inlineChoices, config.allowedIds, voiceTranscriber, botProfile, stickerCatalog, groupLog
             )
 
         logStartup(llm, vision, toolRegistryFactory.availableToolNames, config.tokenBudget)

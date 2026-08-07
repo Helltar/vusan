@@ -67,7 +67,6 @@ import kotlinx.coroutines.selects.onTimeout
 import kotlinx.coroutines.selects.select
 import org.telegram.telegrambots.longpolling.TelegramBotsLongPollingApplication
 import org.telegram.telegrambots.meta.api.methods.ActionType
-import org.telegram.telegrambots.meta.api.methods.GetMe
 import org.telegram.telegrambots.meta.api.methods.groupadministration.GetChat
 import org.telegram.telegrambots.meta.api.methods.send.SendChatAction
 import org.telegram.telegrambots.meta.api.objects.CallbackQuery
@@ -86,6 +85,7 @@ internal class TelegramBotRunner(
     private val inlineChoices: InlineChoiceHandler,
     private val allowedIds: Set<Long>,
     private val voiceTranscriber: VoiceTranscriber?,
+    private val profile: BotProfile,
     private val stickerCatalog: StickerCatalog? = null,
     private val groupLog: GroupLogRepository? = null
 ) {
@@ -133,15 +133,7 @@ internal class TelegramBotRunner(
         val log = KotlinLogging.logger {}
     }
 
-    private data class BotProfile(
-        val userId: Long,
-        val username: String?
-    )
-
-    suspend fun start(scope: CoroutineScope): Job {
-        val me = client.api { executeAsync(GetMe()) }
-        val profile = BotProfile(userId = me.id, username = me.userName)
-
+    fun start(scope: CoroutineScope): Job {
         log.info { "Bot started as ${profile.username ?: profile.userId}, allowed ids=${allowedIds.sorted()}" }
 
         if (allowedIds.isEmpty()) {

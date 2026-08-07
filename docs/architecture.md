@@ -318,7 +318,9 @@ wait around the same value.
 
 `Main.kt` wires everything in order: load `AppConfig` → connect `Db` → create the `Http` client and LLM runtime →
 wrap the executor in the `TokenBudget` meter, which everything downstream then uses → build
-repositories, context policy, conversation compactor, the Telegram client and (only with a vision runtime) the
+repositories, context policy, conversation compactor, the Telegram client and its `BotProfile` — one `getMe`
+call shared by the runner, which matches mentions against it, and `AgentFactory`, which puts the handle in the
+system prompt → (only with a vision runtime) the
 `StickerCatalog`, `ToolRegistryFactory`, `AgentFactory`, `AgentRunner` → create `TaskMenuHandler` and
 `InlineChoiceHandler`, and optionally enable voice transcription → start `TelegramBotRunner` and launch
 `TaskScheduler` and the sticker description worker, then block on the runner job until shutdown (closing the executor,

@@ -2,6 +2,7 @@ package com.helltar.vusan.agent
 
 import kotlin.test.Test
 import kotlin.test.assertContains
+import kotlin.test.assertFalse
 import kotlin.test.assertTrue
 
 private const val MODEL_ID = "gpt-5.6-terra"
@@ -14,6 +15,24 @@ class SystemPromptTest {
 
         assertContains(prompt, "You are served by the model `gpt-5.6-terra`")
         assertContains(prompt, "no assumed family name, release date, or training cutoff")
+    }
+
+    // inbound sanitizing removes the mention before the prompt is built, so the handle has to be
+    // stated outright or the model never learns the name it is called by.
+    @Test
+    fun `system prompt names the telegram account when one is known`() {
+        val prompt = systemPromptFor("Custom personality", MODEL_ID, "VusanBot", "Vusan")
+
+        assertContains(prompt, """Your Telegram account is `@VusanBot`, shown as "Vusan".""")
+        assertContains(prompt, "it is removed from the text you receive")
+    }
+
+    @Test
+    fun `system prompt says nothing about an account it does not know`() {
+        val prompt = systemPromptFor("Custom personality", MODEL_ID, botUsername = null, botDisplayName = "Vusan")
+
+        assertFalse("Telegram account" in prompt)
+        assertFalse("Vusan" in prompt.substringAfter("</personality>"))
     }
 
     @Test
