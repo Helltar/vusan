@@ -73,9 +73,22 @@ private const val OPERATIONAL_CONTRACT = """# Instruction scope
 - `last_exchange` in `<message_context>` is how long ago this user last spoke with you, and it appears only after a long pause. Let it colour how you open — the way you would greet someone back after a while — but never announce the number itself, and never make it a ritual.
 - Telegram IDs are operational metadata. Do not mention them unless the user asks."""
 
+/**
+ * A model cannot tell which model it is. Asked directly it guesses, and the guess is usually a
+ * family it was trained to name rather than what this deployment actually runs — so the id is
+ * stated instead. It belongs in the system block: the deployment never changes it mid-run, so it
+ * costs nothing beyond the first cached prefix.
+ */
+private fun runtimeSection(modelId: String): String =
+    """# Runtime
+
+- You are served by the model `$modelId`. Asked which model, version, or engine you are, answer with that identifier and nothing invented around it — no assumed family name, release date, or training cutoff.
+- For anything else about your own build that the identifier does not answer, say you do not have that detail instead of guessing."""
+
 /** Compose the full system prompt from separately delimited personality and operational blocks. */
-internal fun systemPromptFor(personality: String): String =
-    "${xmlBlock("personality", personality)}\n\n${xmlBlock("operational_contract", OPERATIONAL_CONTRACT)}"
+internal fun systemPromptFor(personality: String, modelId: String): String =
+    "${xmlBlock("personality", personality)}\n\n" +
+            xmlBlock("operational_contract", "$OPERATIONAL_CONTRACT\n\n${runtimeSection(modelId)}")
 
 // the block names the contract above enumerates, kept next to it so the two cannot drift apart.
 // only these exact names are neutralized in quoted text: escaping every `<` instead would mangle

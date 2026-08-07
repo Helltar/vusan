@@ -70,7 +70,7 @@ class AgentFactory(
 
     fun prepare(context: RequestContext, outbox: BotOutbox, currentTurn: String): AgentPromptPreparation {
         val toolRegistry = toolRegistryFactory.buildRegistry(context, outbox)
-        val systemPrompt = systemPromptFor(personality ?: DEFAULT_PERSONALITY)
+        val systemPrompt = systemPromptFor(personality ?: DEFAULT_PERSONALITY, model.id)
 
         return AgentPromptPreparation(
             toolRegistry = toolRegistry,

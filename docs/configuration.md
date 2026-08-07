@@ -20,7 +20,7 @@ LLM_API_KEY=sk-proj-qwerty
 | `ALLOWED_IDS`        | Telegram user/group IDs Vusan answers.                |
 | `TELEGRAM_BOT_TOKEN` | Bot token from [@BotFather](https://t.me/BotFather). |
 | `LLM_PROVIDER`       | LLM backend; see [LLM provider](#llm-provider).      |
-| `LLM_MODEL`          | Model id for the chosen provider.                    |
+| `LLM_MODEL`          | Model id for the chosen provider. Vusan also states it in the system prompt, so "which model are you?" is answered with what is actually deployed instead of a guess. |
 | `LLM_API_KEY`        | API key for the chosen provider.                     |
 
 `ALLOWED_IDS` accepts commas, whitespace, or semicolons as separators. Positive IDs are users; negative IDs are groups.
