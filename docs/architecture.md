@@ -97,6 +97,8 @@ A normal user message travels:
    `MAX_RICH_MESSAGE_CHARS` because Telegram allows it 32768 characters against plain text's 4096;
    replied-message context is wrapped in `<reply_context>`/`<user_message>`; current or replied photo, video, and
    document input becomes `AttachedFile`.
+   Text quoted from outside — the message itself, a transcript, a replied-to post — has this prompt's own block
+   tags defused first, so a message containing `</user_message>` cannot end a block early.
    `TelegramBotRunner.dispatchToAgent` assembles the agent input and the shorter history input.
 4. **Run** — `AgentRunner.handle` takes the conversation lock (or returns "busy"), turns the request away with a
    "come back later" reply when the day's token budget is already spent, loads durable memory
@@ -162,7 +164,9 @@ A normal user message travels:
 
 - **Task scheduler** — `TaskScheduler.launchIn` polls the task store every 30 seconds. Due tasks run through
   `AgentRunner.handleScheduled` (waits for the user lock instead of bailing) and are delivered with
-  `TelegramDelivery.sendScheduled`. Tasks overdue beyond
+  `TelegramDelivery.sendScheduled`. A task runs with no incoming message behind it, so its
+  `<message_context>` is rebuilt from what the task stored — the chat, and who set it up — instead of the
+  live chat flavor, title, and description a normal turn carries. Tasks overdue beyond
   `TASK_MAX_LATENESS_MINUTES` (e.g. after downtime) get a "missed" notice and are advanced/disabled rather than fired. A
   failed run (`AgentResult.failed`, or a thrown error) delivers nothing, so it is repeated up to `MAX_ATTEMPTS` times
   with a short backoff, the retry prompt telling the agent that the earlier attempt delivered nothing; a failed
@@ -345,7 +349,7 @@ A symptom-to-source map for finding the right file fast. Paths are under
 | `/clear` reports success but history survives                                    | `agent/AgentRunner.kt` (`clearConversation` and the turn lock that also guards the append) + `tools/conversation/ConversationTools.kt` (agent path) + `agent/conversation/ConversationRepository.kt` (shared storage operation)                                                                                            |
 | An agent choice button does nothing, repeats, or reaches the wrong user          | `tools/choice/InlineChoiceTools.kt` (tool contract) + `telegram/callback/InlineChoiceHandler.kt` (callback ownership/consumption) + `TelegramBotRunner.dispatchInlineChoiceCallback` (agent follow-up)                                                                                                          |
 | An env var has no effect                                                         | `config/AppConfig.kt` (parsing) — and check it is documented in [`configuration.md`](configuration.md) + [`.env.example`](../.env.example)                                                                                                                                                            |
-| Model / provider / request-timeout selection or OpenAI prompt-cache misses       | `config/LlmRuntime.kt` (provider → client/model/params) + `config/OpenAiPromptCaching.kt` (GPT-5.6+ explicit cache breakpoint)                                                                                                                                                                         |
+| Model / provider / request-timeout selection or OpenAI prompt-cache misses       | `config/LlmRuntime.kt` (provider → client/model/params) + `config/OpenAiPromptCaching.kt` (GPT-5.6+ explicit cache breakpoints on the system prefix and the current turn)                                                                                                                              |
 | `describeImage`/`describeVideo` missing from the tool list                       | `config/VisionRuntime.kt` (chat model vs `OPENAI_VISION_API_KEY`), then `tools/ToolRegistryFactory.kt` (registration is skipped when there is no vision runtime)                                                                                                                                       |
 | Garbled or empty tool-call crashes from a flaky model                            | `agent/AgentFactory.kt` — `vusanSingleRunStrategy` and `missingRequiredArgs` short-circuit them                                                                                                                                                                                                       |
 | Vusan answers "come back later", or a scheduled task never fires                 | `budget/TokenBudget.kt` (the day's spend, the per-person share, the reset zone) + `budget/BudgetedPromptExecutor.kt` (what is counted) + `budget/TokenBudgetStop.kt` (day ceiling vs personal share, and the `BudgetOwner` attribution), then `LLM_DAILY_TOKEN_BUDGET` in [`configuration.md`](configuration.md) |
