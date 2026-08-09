@@ -11,6 +11,7 @@ import kotlin.time.Duration.Companion.seconds
 
 data class AppConfig(
     val allowedIds: Set<Long>,
+    val bannedIds: Set<Long> = emptySet(),
     val chatHistory: ConversationConfig = ConversationConfig(),
     val groupLog: GroupLogConfig = GroupLogConfig(),
     val databasePath: String,
@@ -56,6 +57,7 @@ data class AppConfig(
 
             return AppConfig(
                 allowedIds = parseIdSet(readEnv("ALLOWED_IDS")),
+                bannedIds = parseIdSet(readEnv("BANNED_IDS")),
                 chatHistory =
                     ConversationConfig(
                         maxRecentInteractions =

@@ -84,6 +84,7 @@ internal class TelegramBotRunner(
     private val taskMenu: TaskMenuHandler,
     private val inlineChoices: InlineChoiceHandler,
     private val allowedIds: Set<Long>,
+    private val bannedIds: Set<Long>,
     private val voiceTranscriber: VoiceTranscriber?,
     private val profile: BotProfile,
     private val stickerCatalog: StickerCatalog? = null,
@@ -140,6 +141,15 @@ internal class TelegramBotRunner(
             log.warn {
                 "ALLOWED_IDS is empty — bot will ignore every message. " +
                         "Set ALLOWED_IDS to user/chat ids that may use the bot."
+            }
+        }
+
+        if (bannedIds.isNotEmpty()) {
+            log.info { "Banned ids=${bannedIds.sorted()}" }
+
+            // an id on both lists is a config mistake worth naming: the ban wins, silently.
+            allowedIds.intersect(bannedIds).takeIf { it.isNotEmpty() }?.let {
+                log.warn { "ids in both ALLOWED_IDS and BANNED_IDS stay banned: ${it.sorted()}" }
             }
         }
 
@@ -401,7 +411,7 @@ internal class TelegramBotRunner(
         val userId = callback.from.id
 
         if (!isAllowed(chatId, userId)) {
-            log.warn { "denied callback (not in allowlist): chat=$chatId user=$userId" }
+            log.warn { "denied callback (${denialReason(chatId, userId)}): chat=$chatId user=$userId" }
             taskMenu.answerUnavailable(callback.id, messages)
             return
         }
@@ -430,7 +440,7 @@ internal class TelegramBotRunner(
         val userId = user.id
 
         if (!isAllowed(chatId, userId)) {
-            log.warn { "denied inline choice callback (not in allowlist): chat=$chatId user=$userId" }
+            log.warn { "denied inline choice callback (${denialReason(chatId, userId)}): chat=$chatId user=$userId" }
             inlineChoices.answerUnavailable(callback.id, messages)
             return
         }
@@ -619,7 +629,7 @@ internal class TelegramBotRunner(
             return false
 
         if (!isAllowed()) {
-            logDenied()
+            logDenied(denialReason(chatIdLong, senderIdOrNull()))
             return false
         }
 
@@ -628,13 +638,10 @@ internal class TelegramBotRunner(
 
     private fun Message.isAllowed(): Boolean = isAllowed(chatIdLong, senderIdOrNull())
 
-    // an allowlisted chat admits every message in it, including the rare ones without a sender
-    // (anonymous admins, linked-channel forwards), so the chat check must not depend on the user id.
-    private fun isAllowed(chatId: Long, userId: Long?): Boolean {
-        if (allowedIds.isEmpty()) return false
-        if (chatId in allowedIds) return true
-        return userId != null && userId in allowedIds
-    }
+    private fun isAllowed(chatId: Long, userId: Long?): Boolean = isIdAllowed(chatId, userId, allowedIds, bannedIds)
+
+    private fun denialReason(chatId: Long, userId: Long?): String =
+        if (isIdBanned(chatId, userId, bannedIds)) "banned" else "not in allowlist"
 
     private suspend fun dispatchToAgent(
         message: Message,
@@ -845,4 +852,19 @@ internal class TelegramBotRunner(
             }
             .getOrNull()
     }
+}
+
+// an allowlisted chat admits every message in it, including the rare ones without a sender
+// (anonymous admins, linked-channel forwards), so the chat check must not depend on the user id.
+internal fun isIdAllowed(chatId: Long, userId: Long?, allowedIds: Set<Long>, bannedIds: Set<Long>): Boolean {
+    if (isIdBanned(chatId, userId, bannedIds)) return false
+    if (chatId in allowedIds) return true
+    return userId != null && userId in allowedIds
+}
+
+// the ban list wins over the allowlist: someone banned stays banned inside a group that is itself
+// allowlisted, which is the only way to shut one person out without closing the chat for everyone.
+internal fun isIdBanned(chatId: Long, userId: Long?, bannedIds: Set<Long>): Boolean {
+    if (chatId in bannedIds) return true
+    return userId != null && userId in bannedIds
 }

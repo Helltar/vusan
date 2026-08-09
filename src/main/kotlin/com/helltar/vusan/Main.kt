@@ -107,12 +107,14 @@ suspend fun main() = coroutineScope {
         val taskMenu = TaskMenuHandler(telegramClient, tasks, config.maxTasksPerUser)
         val inlineChoices = InlineChoiceHandler(telegramClient, conversation::revision)
         val scheduler =
-            TaskScheduler(tasks, agentRunner, delivery, config.taskMaxLatenessMinutes.minutes, tokenBudget)
+            TaskScheduler(
+                tasks, agentRunner, delivery, config.taskMaxLatenessMinutes.minutes, tokenBudget, config.bannedIds
+            )
 
         val botRunner =
             TelegramBotRunner(
-                telegramClient, config.telegramBotToken, delivery, agentRunner, taskMenu,
-                inlineChoices, config.allowedIds, voiceTranscriber, botProfile, stickerCatalog, groupLog
+                telegramClient, config.telegramBotToken, delivery, agentRunner, taskMenu, inlineChoices,
+                config.allowedIds, config.bannedIds, voiceTranscriber, botProfile, stickerCatalog, groupLog
             )
 
         logStartup(llm, vision, toolRegistryFactory.availableToolNames, config.tokenBudget)

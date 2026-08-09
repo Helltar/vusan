@@ -18,7 +18,8 @@ Telegram ──► telegram/ ──► agent/ ──► tools/ ──► externa
 ```
 
 - **`telegram/`** — Telegram I/O, split by direction. `TelegramBotRunner` at the root receives updates (text, voice,
-  audio, sticker, photo, video, video note, GIF, document, album, callback query) and filters them by allowlist;
+  audio, sticker, photo, video, video note, GIF, document, album, callback query) and filters them by allowlist and
+  ban list;
   `telegram/inbound/` normalizes an update into agent input; `telegram/delivery/` sends agent results back, including
   HTML-formatting, opt-in rich-message, reply-anchor, media/document, media-group, and private-message fallbacks;
   `telegram/callback/` owns the inline-button flows — `TaskMenuHandler` the deterministic `/tasks` UI, and
@@ -88,7 +89,9 @@ A normal user message travels:
    an older build) is still answered, so the caller's client stops spinning.
 2. **Filter** — `MessageFilter.shouldHandle` drops messages the bot shouldn't answer (in groups:
    only replies, mentions, or targeted commands); `TelegramBotRunner` then checks the allowlist (`ALLOWED_IDS`) and
-   rejects unknown chats/users. Two sinks run *before* this gate, on every allowlisted message, because what they
+   rejects unknown chats/users. `BANNED_IDS` is checked first and wins over the allowlist, so a banned user is denied
+   inside a chat that is otherwise open; `TaskScheduler` skips their scheduled tasks the same way, moving each fire on
+   without running or announcing it. Two sinks run *before* this gate, on every allowlisted message, because what they
    collect is precisely what nobody addressed to the bot: `recordGroupLog` writes the group transcript row, and
    `learnSticker` teaches the catalog which sets the chat uses. Both sit ahead of album buffering too, so each part of
    a gallery is seen individually.
@@ -179,7 +182,8 @@ A normal user message travels:
   re-fire it on every poll tick. Paused tasks remain stored and count toward the per-user task limit, but the due-task
   query skips them. A due task is also skipped, silently and without retries, while the daily token budget is spent —
   the same treatment an offline window gets, minus the notice, which would otherwise repeat for every task due until
-  the budget resets.
+  the budget resets. A task whose owner or chat is in `BANNED_IDS` is skipped the same way, ahead of the lateness
+  check, so a ban produces no "missed" notices either.
   Recurrence math lives in `tasks/Recurrence.kt`.
 - **Daily token budget** — with `LLM_DAILY_TOKEN_BUDGET` set, `budget/BudgetedPromptExecutor` wraps the executor every
   LLM caller shares, adds each completed call's input plus output tokens to the day's total in `token_usage` and to its
@@ -360,7 +364,7 @@ A symptom-to-source map for finding the right file fast. Paths are under
 
 | Symptom                                                                          | Start here                                                                                                                                                                                                                                                                                            |
 |----------------------------------------------------------------------------------|-------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
-| Vusan ignores a message entirely                                                 | `telegram/inbound/MessageFilter.kt` (`shouldHandle` — group reply/mention rules), then `TelegramBotRunner.isAccepted`/`isAllowed` (the `ALLOWED_IDS` allowlist)                                                                                                                                               |
+| Vusan ignores a message entirely                                                 | `telegram/inbound/MessageFilter.kt` (`shouldHandle` — group reply/mention rules), then `TelegramBotRunner.isAccepted`/`isIdAllowed` (the `ALLOWED_IDS` allowlist and the `BANNED_IDS` ban list)                                                                                                                                               |
 | Reply says "still working on your previous request"                              | `agent/AgentRunner.kt` — the per-conversation `Mutex` rejects a second concurrent turn in the same chat                                                                                                                                                                                                                      |
 | Reply lands in the wrong chat, loses its reply anchor, or DM redirect misbehaves | `telegram/delivery/TelegramDelivery.kt` (routing/anchor/private-redirect *policy*)                                                                                                                                                                                                                             |
 | Formatting renders wrong, message rejected, or media falls back to document/text | `agent/SystemPrompt.kt` (allowed HTML tags the agent emits), `telegram/delivery/TelegramOutputSender.kt` (which call and which fallback each output kind gets), `telegram/delivery/TelegramSendFallbacks.kt` (the fallback *mechanism* itself), `telegram/delivery/TelegramErrors.kt` (which provider errors trigger a fallback) |

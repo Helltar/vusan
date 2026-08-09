@@ -32,10 +32,10 @@ internal fun Message.logIncoming() {
     }
 }
 
-internal fun Message.logDenied() {
+internal fun Message.logDenied(reason: String) {
     log.warn {
         buildString {
-            append("denied (not in allowlist): chat=$chatIdLong user=${senderIdOrNull()} type=${contentTypeName()}")
+            append("denied ($reason): chat=$chatIdLong user=${senderIdOrNull()} type=${contentTypeName()}")
             senderUsernameOrNull()?.let { append(" username=[$it]") }
             senderDisplayNameOrNull()?.let { append(" name=[$it]") }
             textSnippetOrNull()?.collapseWhitespaceAndCap(LOG_TEXT_MAX_CHARS)?.let { append(" text=[$it]") }

@@ -26,6 +26,18 @@ LLM_API_KEY=sk-proj-qwerty
 `ALLOWED_IDS` accepts commas, whitespace, or semicolons as separators. Positive IDs are users; negative IDs are groups.
 Empty/unset means Vusan answers nobody.
 
+## Banning someone
+
+| Variable     | Default | Description                                             |
+|--------------|---------|---------------------------------------------------------|
+| `BANNED_IDS` | empty   | Telegram user/group IDs Vusan ignores, whatever else allows them. |
+
+Same format as `ALLOWED_IDS`, and it wins over it — the point is to shut one person out of a group that stays open for
+everyone else, so there is no need to touch `ALLOWED_IDS` at all. For a banned ID nothing happens: messages get no
+reply, buttons stop working, the group log does not record what they say, their stickers teach the bot nothing, and
+their scheduled tasks stay in place but never fire. Removing the ID from the list restores all of it; nothing is
+deleted meanwhile. An ID on both lists stays banned, and startup says so in the log.
+
 ## Telegram command menu
 
 To expose the direct commands in Telegram's menu, paste this into
@@ -364,7 +376,7 @@ remain.
 Separate from conversation history and keyed by chat alone, with no sender in the key. In groups the bot records
 every message it receives, including the ones not addressed to it, so it can answer "what did I miss" and recap a day.
 Private chats are never recorded — they already have conversation history above. Nothing is recorded for a chat outside
-`ALLOWED_IDS`.
+`ALLOWED_IDS`, and nothing for a sender in [`BANNED_IDS`](#banning-someone).
 
 What a row holds: the text (collapsed and capped at 2000 characters, 1000 for a forwarded post), who sent it and when,
 the kind of message, a short label for non-text content (`🐤 UtyaDuck`, `0:14`, `report.pdf`), the channel or person a

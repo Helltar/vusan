@@ -21,7 +21,8 @@ class TaskScheduler(
     private val agentRunner: AgentRunner,
     private val delivery: TelegramDelivery,
     private val maxLateness: Duration,
-    private val tokenBudget: TokenBudget = TokenBudget()
+    private val tokenBudget: TokenBudget = TokenBudget(),
+    private val bannedIds: Set<Long> = emptySet()
 ) {
 
     private companion object {
@@ -70,6 +71,14 @@ class TaskScheduler(
     }
 
     private suspend fun processOne(task: ScheduledTask, now: Instant) {
+        // a banned owner's tasks keep their schedule but never run, and never report themselves as missed
+        // either; lifting the ban resumes them instead of resurrecting a backlog of skipped fires.
+        if (task.userId in bannedIds || task.chatId in bannedIds) {
+            log.info { "task id=${task.id} skipped: user=${task.userId} chat=${task.chatId} is banned" }
+            rescheduleAfterFire(task, now)
+            return
+        }
+
         val latenessMillis = now.toEpochMilli() - task.nextFireAt.toEpochMilli()
 
         if (latenessMillis > maxLateness.inWholeMilliseconds) {
