@@ -206,6 +206,7 @@ class TokenBudgetTest {
 
     private fun testConfig(dbPath: String) =
         AppConfig(
+            agentMaxIterations = 70,
             allowedIds = emptySet(),
             databasePath = dbPath,
             elevenLabsApiKey = null,

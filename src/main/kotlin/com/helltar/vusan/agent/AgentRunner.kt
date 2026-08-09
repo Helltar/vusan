@@ -241,7 +241,23 @@ class AgentRunner(
             } catch (e: Throwable) {
                 e.rethrowIfCancellation()
                 budgetStopReply(request, e)?.let { return AgentResult(outputs = emptyList(), comment = it) }
-                return AgentResult(outputs = emptyList(), comment = replyForAgentFailure(request, e), failed = true)
+
+                // logs the cause either way; the reply itself is only used when nothing was delivered.
+                val failureReply = replyForAgentFailure(request, e)
+
+                if (outbox.pending.isEmpty()) {
+                    return AgentResult(outputs = emptyList(), comment = failureReply, failed = true)
+                }
+
+                // the run died with an answer already queued. deliver that instead of replacing it with the
+                // canned failure, and let the turn finish normally so the work reaches the history — a
+                // scheduled task then counts the attempt as delivered rather than paying for it all again.
+                log.warn {
+                    "agent.run failed after partial delivery for chat=${request.chatId} user=${request.userId}; " +
+                            "sending ${outbox.pending.size} queued output(s)"
+                }
+
+                ""
             }
 
         log.info {

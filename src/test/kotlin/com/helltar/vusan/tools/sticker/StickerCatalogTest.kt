@@ -444,6 +444,7 @@ class StickerCatalogTest {
 
     private fun testConfig(dbPath: String) =
         AppConfig(
+            agentMaxIterations = 70,
             allowedIds = setOf(1L),
             databasePath = dbPath,
             elevenLabsApiKey = null,

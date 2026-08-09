@@ -10,6 +10,7 @@ import kotlin.io.path.readText
 import kotlin.time.Duration.Companion.seconds
 
 data class AppConfig(
+    val agentMaxIterations: Int,
     val allowedIds: Set<Long>,
     val bannedIds: Set<Long> = emptySet(),
     val chatHistory: ConversationConfig = ConversationConfig(),
@@ -37,6 +38,7 @@ data class AppConfig(
     val ytDlpCookiesFile: String?
 ) {
     companion object {
+        private const val DEFAULT_AGENT_MAX_ITERATIONS = 70
         private const val DEFAULT_LLM_REQUEST_TIMEOUT_SECONDS = 120L
         private const val DEFAULT_MAX_FOLLOW_UPS_PER_USER = 3
         private const val DEFAULT_MAX_MEMORY_PER_SCOPE = 10
@@ -56,6 +58,9 @@ data class AppConfig(
             val imageRoute = resolveImageRoute(openAiImageKey != null, llmProvider)
 
             return AppConfig(
+                agentMaxIterations =
+                    readEnv("AGENT_MAX_ITERATIONS")?.toIntOrNull() ?: DEFAULT_AGENT_MAX_ITERATIONS,
+
                 allowedIds = parseIdSet(readEnv("ALLOWED_IDS")),
                 bannedIds = parseIdSet(readEnv("BANNED_IDS")),
                 chatHistory =

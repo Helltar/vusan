@@ -351,6 +351,19 @@ should follow you everywhere.
 |------------------------|---------|---------------------------------------------------------------------------|
 | `MAX_MEMORY_PER_SCOPE` | `10`    | Max durable memory entries per user and per chat; the oldest are evicted. |
 
+## Agent loop
+
+One turn may call tools repeatedly — search, read a page, search again — before it answers. The loop has a ceiling, so a
+model looping on a broken tool stops costing tokens instead of running forever.
+
+| Variable               | Default | Description                                                                      |
+|------------------------|---------|-----------------------------------------------------------------------------------|
+| `AGENT_MAX_ITERATIONS` | `70`    | Steps one turn may take. A tool round is two steps, so this allows roughly 34 tool calls. |
+
+Reaching the ceiling is not an error: the last steps are reserved for a wrap-up in which the agent answers from what it
+already gathered and says which parts it could not finish. Deep research over many sources is what runs into it — raise
+the value if such answers arrive routinely cut short, at the cost of a longer, more expensive worst-case turn.
+
 ## Conversation
 
 Stored per Telegram user **and chat**, so a person keeps one thread in each place they talk to the bot, and it holds

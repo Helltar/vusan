@@ -89,6 +89,7 @@ suspend fun main() = coroutineScope {
             AgentFactory(
                 chatExecutor, toolRegistryFactory, llm.model, llm.chatParams,
                 config.personality, botProfile.username, botProfile.displayName,
+                maxIterations = config.agentMaxIterations,
                 contextWindowPolicy = contextWindowPolicy
             )
 

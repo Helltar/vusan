@@ -29,6 +29,9 @@ import com.helltar.vusan.request.RequestContext
 import com.helltar.vusan.tools.ToolRegistryFactory
 import io.github.oshai.kotlinlogging.KotlinLogging
 
+// the strategy is built outside the class, so it cannot reach AgentFactory's own logger
+private val strategyLog = KotlinLogging.logger("AgentStrategy")
+
 data class ToolEvent(
     val toolCallId: String,
     val toolName: String,
@@ -61,9 +64,9 @@ class AgentFactory(
     private val botUsername: String? = null,
     private val botDisplayName: String? = null,
     // Koog counts graph nodes here, not LLM calls: one tool round is an execute plus a send-results
-    // node, so this is roughly 28 tool calls — well past a heavy research turn, and short enough
-    // that a model looping on a broken tool stops costing tokens sooner.
-    private val maxIterations: Int = 60,
+    // node, so the ceiling on tool calls is roughly half of this. the last few are spent landing a
+    // turn that runs long (see `outOfToolBudget`) instead of crashing it.
+    private val maxIterations: Int,
     private val contextWindowPolicy: ContextWindowPolicy = ContextWindowPolicy(model)
 ) {
 
@@ -137,7 +140,7 @@ class AgentFactory(
         return AIAgent(
             promptExecutor = promptExecutor,
             agentConfig = agentConfig,
-            strategy = vusanSingleRunStrategy(outbox, preparation.liveToolResultMaxChars),
+            strategy = vusanSingleRunStrategy(outbox, preparation.liveToolResultMaxChars, maxIterations, userId),
             toolRegistry = preparation.toolRegistry,
             id = "vusan-user-$userId"
         ) {
@@ -201,13 +204,20 @@ class AgentFactory(
 // an empty completion after a batch of tool results. when that happens we nudge the model once to
 // actually deliver, then let the normal edges finish. built per run so the strategy can read the
 // live `outbox` to tell whether anything was delivered.
+//
+// landing: the last iterations of the run are reserved for a wrap-up request. koog otherwise throws
+// AIAgentMaxNumberOfIterationsReachedException the moment the limit is passed, and a research turn
+// dies with every search it paid for still unanswered.
 private fun vusanSingleRunStrategy(
     outbox: BotOutbox,
-    liveToolResultMaxChars: Int
+    liveToolResultMaxChars: Int,
+    maxIterations: Int,
+    userId: Long
 ): AIAgentGraphStrategy<String, String> =
     strategy<String, String>("single_run") {
         var nudged = false
         var remainingToolResultChars = liveToolResultMaxChars
+        var toolBudgetSpent = false
 
         // the model ended its turn without putting anything in front of the user: it delivered
         // nothing (no tool call to execute, no caption text) and the outbox is still empty. nudge at
@@ -218,6 +228,10 @@ private fun vusanSingleRunStrategy(
         val nodeCallLLM by nodeLLMRequest()
 
         val nodeExecuteTool by node<ToolCalls, ReceivedToolResults>("executeValidToolCalls") { toolCalls ->
+            // this batch still runs — it is already paid for, and it may carry the delivery call — but once
+            // the budget is this thin the results go to the wrap-up instead of buying another tool round.
+            toolBudgetSpent = stateManager.withStateLock { outOfToolBudget(it.iterations, maxIterations) }
+
             ReceivedToolResults(
                 toolCalls.toolCalls.map { call ->
                     val missing = call.missingRequiredArgs(llm.toolRegistry)
@@ -236,6 +250,33 @@ private fun vusanSingleRunStrategy(
         }
 
         val nodeSendToolResult by nodeLLMSendToolResults()
+
+        // the turn is out of iterations: answer from what it already gathered. the request carries no tools
+        // at all, so the model cannot spend the reserve on one more search, and its text becomes the reply.
+        val nodeWrapUp by node<ReceivedToolResults, String>("wrapUpWithoutTools") { results ->
+            strategyLog.warn {
+                "tool budget spent for user=$userId (limit $maxIterations iterations); " +
+                        "answering with what the turn already gathered"
+            }
+
+            val answer =
+                llm.writeSession {
+                    appendPrompt {
+                        user { results.toolResults.forEach { result -> toolResult(result.toMessagePart()) } }
+                        user(TOOL_BUDGET_WRAP_UP)
+                    }
+
+                    requestLLMWithoutTools()
+                }.textContent()
+
+            // queue it rather than leave it as the run's trailing text: a turn that already reacted or sent a
+            // message has that text dropped as duplicate chatter, and here it is the whole answer.
+            if (answer.isNotBlank() && !outbox.enqueueText(answer)) {
+                strategyLog.warn { "no room left in the outbox for the wrap-up answer for user=$userId" }
+            }
+
+            answer
+        }
 
         val nodeNudgeDeliver by node<Message.Assistant, Message.Assistant>("nudgeDeliver") {
             nudged = true
@@ -260,10 +301,13 @@ private fun vusanSingleRunStrategy(
         edge(nodeCallLLM forwardTo nodeNudgeDeliver onCondition { undelivered(it) })
         finishWhenNoToolCalls(nodeCallLLM)
 
+        edge(nodeExecuteTool forwardTo nodeWrapUp onCondition { toolBudgetSpent })
         edge(nodeExecuteTool forwardTo nodeSendToolResult)
         edge(nodeSendToolResult forwardTo nodeExecuteTool onToolCalls { true })
         edge(nodeSendToolResult forwardTo nodeNudgeDeliver onCondition { undelivered(it) })
         finishWhenNoToolCalls(nodeSendToolResult)
+
+        edge(nodeWrapUp forwardTo nodeFinish)
 
         edge(nodeNudgeDeliver forwardTo nodeExecuteTool onToolCalls { true })
         finishWhenNoToolCalls(nodeNudgeDeliver)
@@ -277,6 +321,20 @@ private fun ReceivedToolResult.boundedForLiveContext(maxChars: Int): ReceivedToo
 
     return copy(output = output.limitTo((maxChars - marker.length).coerceAtLeast(0)) + marker)
 }
+
+// koog counts one iteration per node execution, nodeStart and nodeFinish included, and throws the
+// moment the count passes the limit. the wrap-up needs two of them (the no-tools request and
+// nodeFinish); the spare covers the odd pass the nudge path adds.
+private const val WRAP_UP_ITERATIONS = 4
+
+internal fun outOfToolBudget(iterations: Int, maxIterations: Int): Boolean =
+    maxIterations - iterations <= WRAP_UP_ITERATIONS
+
+private const val TOOL_BUDGET_WRAP_UP =
+    "This turn has used up its tool budget — no further tool calls will run, and this is your last reply. " +
+            "Answer now from what you have already gathered; your text goes straight to the user. " +
+            "Report what you did find, and state plainly which parts you could not finish. " +
+            "Do not promise to continue later."
 
 private const val DELIVER_NUDGE =
     "Your turn ended without sending anything to the user — no message, media, or reaction was delivered. " +

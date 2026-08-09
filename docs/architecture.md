@@ -134,12 +134,24 @@ A normal user message travels:
     - a turn that ends having delivered nothing — no `sendMessage`, media, or reaction, and empty assistant text (flaky
       providers return an empty completion after a batch of tool results) — gets one nudge to actually deliver before
       finishing, so a full turn of research does not collapse into silence.
+
+   It also lands a turn that runs long instead of letting it crash. Koog counts one iteration per graph node and throws
+   `AIAgentMaxNumberOfIterationsReachedException` the moment `AGENT_MAX_ITERATIONS` is passed, which would throw away
+   every search the turn already paid for. The strategy reads that live counter as each tool batch executes
+   and, once only the reserve is left, sends the results to a wrap-up request carrying no tools at all: the model cannot
+   spend the reserve on one more search, and its answer — written from what it gathered, saying what it could not
+   finish — is queued into the outbox like any other message, so it survives even a turn that already reacted or sent
+   something (trailing agent text is otherwise dropped as duplicate chatter).
 6. **Collect** — `AgentRunner` persists the produced history as one interaction through `ConversationRepository` while
    it still holds the turn lock. Delivery tools whose payload already became assistant history are omitted;
    other tool events are stored as bounded complete call/result pairs. Only the newest two interactions replay those
    raw pairs, while older recent interactions replay user/assistant text. Summarized raw interactions are pruned by
    whole interaction after the configured count or age. Persisting inside the lock is
    what makes a concurrent `/clear` safe: no caller can append a turn into a history that was just wiped.
+   A run that dies with outputs already queued is collected all the same: the queued answer is delivered and stored
+   instead of being replaced by the canned failure reply, and the turn does not count as failed — so a scheduled task
+   keeps what it produced rather than paying for the whole run again on a retry. A failure with an empty outbox still
+   answers with the canned reply (`AgentResult.failed`).
 7. **Deliver** — `TelegramDelivery.send` routes each `BotOutput` to the chat, or to the user's private chat when a tool
    requested it, anchoring replies to the original message.
     - **Chat action** — a live indicator runs through the whole turn (`TelegramBotRunner.withLiveChatAction`): it starts
@@ -372,6 +384,7 @@ A symptom-to-source map for finding the right file fast. Paths are under
 | A specific tool misbehaves                                                       | `tools/<feature>/<Feature>Tools.kt` for the tool surface, plus its `<Feature>Client.kt` for the external call                                                                                                                                                                                         |
 | Code execution times out, says "busy", or loses produced files                   | `tools/sandbox/SandboxClient.kt` (HTTP call + wait budget), then the service in [`sandbox/`](../sandbox/): `main.ts` (worker pool, `503` when none free) and `worker.ts` (Pyodide setup, output caps)                                                                                                 |
 | Wrong language in a canned reply (busy/error/voice/start/task menu)              | `i18n/Language.kt` (language selection) + `i18n/Messages.kt` (the strings)                                                                                                                                                                                                                            |
+| A long research turn ends in the generic error reply or is answered mid-way      | `agent/AgentFactory.kt` (`maxIterations`, `outOfToolBudget` and the wrap-up node that lands the turn) + `agent/AgentRunner.kt` (delivering what the outbox holds when a run fails)                                                                                                                     |
 | Vusan forgets context or the history recap looks wrong                           | `agent/conversation/ConversationPlan.kt` (budget/selection) + `agent/conversation/ConversationCompactor.kt` (semantic recap) + `agent/conversation/ConversationRepository.kt` (storage/checkpoint)                                                                                                                         |
 | A group recap misses messages, or `readGroupLog` returns too little              | `telegram/TelegramBotRunner.recordGroupLog` + `telegram/inbound/GroupLogEntries.kt` (what gets recorded at all), then `agent/grouplog/GroupLogReader.kt` (window budget, day split, digest cache) and `agent/grouplog/GroupLogRepository.kt` (retention and the per-chat row cap)                              |
 | Vusan misreads what "that" refers to in a group, or parrots the group's chatter | `agent/AgentRunner.recentChatFor` (the `<recent_chat>` slice and its caps) + `agent/SystemPrompt.kt` (the `<recent_chat>` contract)                                                                                                                                                                            |

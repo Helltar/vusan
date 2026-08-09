@@ -73,6 +73,28 @@ class AgentFactoryTest {
     }
 
     @Test
+    fun `a run with iterations to spare keeps calling tools`() {
+        assertFalse(outOfToolBudget(iterations = 2, maxIterations = 60))
+        assertFalse(outOfToolBudget(iterations = 55, maxIterations = 60))
+    }
+
+    @Test
+    fun `the last iterations are reserved for the wrap-up`() {
+        assertTrue(outOfToolBudget(iterations = 56, maxIterations = 60))
+        assertTrue(outOfToolBudget(iterations = 60, maxIterations = 60))
+    }
+
+    // a tool round costs two iterations, so the check may first see an already thinned budget; whenever it
+    // does, the wrap-up request and nodeFinish must both still fit under the limit.
+    @Test
+    fun `landing always leaves room for the wrap-up request and the finish node`() {
+        val maxIterations = 60
+        val landing = (1..maxIterations).first { outOfToolBudget(it, maxIterations) }
+
+        assertTrue(maxIterations - landing >= 2)
+    }
+
+    @Test
     fun `only the trailing empty assistant is dropped`() {
         val earlier = listOf(user("hello"), assistant(MessagePart.Text("earlier reply")), user("ok then"))
         assertEquals(earlier, (earlier + assistant()).withoutTrailingEmptyAssistant())
