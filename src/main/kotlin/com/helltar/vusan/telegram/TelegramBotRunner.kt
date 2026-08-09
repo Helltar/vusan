@@ -41,6 +41,7 @@ import com.helltar.vusan.telegram.inbound.logIncoming
 import com.helltar.vusan.telegram.inbound.messageIdLong
 import com.helltar.vusan.telegram.inbound.messageTextOrNull
 import com.helltar.vusan.telegram.inbound.normalizeUsername
+import com.helltar.vusan.telegram.inbound.quotedFragmentOrNull
 import com.helltar.vusan.telegram.inbound.repliedAttachedFileOrNull
 import com.helltar.vusan.telegram.inbound.replyAuthorIdOrNull
 import com.helltar.vusan.telegram.inbound.replySummaryOrNull
@@ -654,17 +655,21 @@ internal class TelegramBotRunner(
         val replyToOtherUser = isReplyToOtherUser(message.replyAuthorIdOrNull(), botProfile.userId)
         val replySummary = if (replyToOtherUser) message.replySummaryOrNull(client, voiceTranscriber) else null
 
+        // the fragment travels even without a reply summary: a reply to the bot's own message carries no
+        // `<reply_context>`, since that message is already in the history, but the selected piece is not.
+        val quotedFragment = message.quotedFragmentOrNull()
+
         val effectiveAttachedFile =
             attachedFile
                 ?: if (loadRepliedAttachment) replySummary?.let { message.repliedAttachedFileOrNull(client) } else null
 
-        val baseAgentInput = replySummary?.let { formatAgentInput(prompt, it) } ?: prompt
+        val baseAgentInput = formatAgentInput(prompt, replySummary, quotedFragment)
 
         handleAgentMessage(
             message = message,
             agentInput =
                 effectiveAttachedFile?.let { "${attachedFileContextBlock(it)}\n\n$baseAgentInput" } ?: baseAgentInput,
-            conversationInput = replySummary?.let { formatConversationInput(prompt, it) } ?: prompt,
+            conversationInput = formatConversationInput(prompt, replySummary, quotedFragment),
             attachedFile = effectiveAttachedFile,
             replyToMessageId = if (replyToOtherUser) message.replyToMessageIdOrNull() else null,
             inputKind = inputKind

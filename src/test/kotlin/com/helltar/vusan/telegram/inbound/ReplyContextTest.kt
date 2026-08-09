@@ -19,7 +19,8 @@ class ReplyContextTest {
         val prompt =
             formatAgentInput(
                 currentMessageText = "summarize this article",
-                repliedMessage = RepliedMessageSummary(type = "text", textOrCaption = "https://example.com/article/4034")
+                repliedMessage = RepliedMessageSummary(type = "text", textOrCaption = "https://example.com/article/4034"),
+                quotedFragment = null
             )
 
         assertTrue(prompt.contains("<reply_context>"))
@@ -40,7 +41,8 @@ class ReplyContextTest {
                     type = "photo",
                     textOrCaption = null,
                     metadata = listOf("file_id: abc123", "width: 1280", "height: 720")
-                )
+                ),
+                quotedFragment = null
             )
 
         assertTrue(prompt.contains("- type: photo"))
@@ -65,7 +67,8 @@ class ReplyContextTest {
                     type = "text",
                     textOrCaption = "https://example.com/article/4034",
                     metadata = listOf("file_id: file-1")
-                )
+                ),
+                quotedFragment = null
             )
 
         assertTrue(historyText.contains("<reply_context>"))
@@ -88,11 +91,93 @@ class ReplyContextTest {
                 repliedMessage = RepliedMessageSummary(
                     type = "text",
                     textOrCaption = "quoted & content"
-                )
+                ),
+                quotedFragment = null
             )
 
         assertTrue(prompt.contains("<text_caption>\nquoted & content\n</text_caption>"))
         assertTrue(prompt.contains("<user_message>\nanswer & continue\n</user_message>"))
+    }
+
+    @Test
+    fun `quotedFragmentOrNull reads the part the sender selected`() {
+        val message =
+            message(
+                """
+                "text": "це шо",
+                "quote": {"text": "Вічний Мангекьо Шарінган", "position": 147, "is_manual": true}
+                """
+            )
+
+        val withoutQuote =
+            message(
+                """
+                "text": "так а шо він робить"
+                """
+            )
+
+        assertEquals("Вічний Мангекьо Шарінган", message.quotedFragmentOrNull())
+        assertNull(withoutQuote.quotedFragmentOrNull())
+    }
+
+    // a reply to the bot's own message carries no reply context — that message is already in the
+    // history — so the fragment is the only thing saying which part the question is about.
+    @Test
+    fun `formatAgentInput carries a quoted fragment without a reply summary`() {
+        val prompt =
+            formatAgentInput(
+                currentMessageText = "це шо",
+                repliedMessage = null,
+                quotedFragment = "Вічний Мангекьо Шарінган"
+            )
+
+        assertFalse(prompt.contains("<reply_context>"))
+        assertTrue(prompt.contains("<quoted_fragment>\nВічний Мангекьо Шарінган\n</quoted_fragment>"))
+        assertTrue(prompt.indexOf("</quoted_fragment>") < prompt.indexOf("<user_message>"))
+    }
+
+    @Test
+    fun `formatAgentInput keeps a quoted fragment next to the replied message it came from`() {
+        val prompt =
+            formatAgentInput(
+                currentMessageText = "what does this mean?",
+                repliedMessage = RepliedMessageSummary(type = "text", textOrCaption = "one two three four"),
+                quotedFragment = "three"
+            )
+
+        assertTrue(prompt.contains("<text_caption>\none two three four\n</text_caption>"))
+        assertTrue(prompt.contains("<quoted_fragment>\nthree\n</quoted_fragment>"))
+        assertTrue(prompt.indexOf("</reply_context>") < prompt.indexOf("<quoted_fragment>"))
+    }
+
+    @Test
+    fun `a fragment covering the whole replied message is not repeated`() {
+        val prompt =
+            formatAgentInput(
+                currentMessageText = "what does this mean?",
+                repliedMessage = RepliedMessageSummary(type = "text", textOrCaption = "one two three"),
+                quotedFragment = "one two three"
+            )
+
+        assertFalse(prompt.contains("<quoted_fragment>"))
+    }
+
+    @Test
+    fun `plain input stays plain when nothing is replied to or quoted`() {
+        assertEquals("hello", formatAgentInput("hello", repliedMessage = null, quotedFragment = null))
+        assertEquals("hello", formatConversationInput("hello", repliedMessage = null, quotedFragment = null))
+    }
+
+    @Test
+    fun `a quoted fragment is stored with the history entry`() {
+        val historyText =
+            formatConversationInput(
+                currentMessageText = "це шо",
+                repliedMessage = null,
+                quotedFragment = "Вічний Мангекьо Шарінган"
+            )
+
+        assertTrue(historyText.contains("<quoted_fragment>\nВічний Мангекьо Шарінган\n</quoted_fragment>"))
     }
 
     @Test

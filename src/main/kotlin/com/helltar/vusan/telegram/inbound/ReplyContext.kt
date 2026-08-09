@@ -20,6 +20,7 @@ import org.telegram.telegrambots.meta.generics.TelegramClient
 
 private const val MAX_REPLIED_TEXT_CHARS = 4096
 private const val MAX_REPLIED_STORED_TEXT_CHARS = 600
+private const val MAX_QUOTED_FRAGMENT_CHARS = 1024
 
 internal data class RepliedMessageSummary(
     val type: String,
@@ -30,6 +31,13 @@ internal data class RepliedMessageSummary(
 
 internal fun isReplyToOtherUser(replyAuthorId: Long?, botUserId: Long): Boolean =
     replyAuthorId != botUserId
+
+// the part of the replied message the sender selected before answering — the whole point of their
+// question ("what is this?" against one term inside a long answer). it also carries its own weight
+// when the reply goes to the bot: that message is already in the history, but which piece of it the
+// user pointed at is not, and without this the turn reads as a question about the whole thing.
+internal fun Message.quotedFragmentOrNull(): String? =
+    quote?.text?.collapseWhitespaceAndCap(MAX_QUOTED_FRAGMENT_CHARS)?.takeIf { it.isNotBlank() }
 
 internal suspend fun Message.replySummaryOrNull(
     client: TelegramClient,
@@ -221,41 +229,66 @@ private fun formatFileSize(bytes: Long): String =
         else -> "$bytes B"
     }
 
-internal fun formatAgentInput(currentMessageText: String, repliedMessage: RepliedMessageSummary): String =
-    buildReplyContextPrompt(currentMessageText, repliedMessage) { it }
+internal fun formatAgentInput(
+    currentMessageText: String,
+    repliedMessage: RepliedMessageSummary?,
+    quotedFragment: String?
+): String =
+    buildReplyContextPrompt(currentMessageText, repliedMessage, quotedFragment) { it }
 
-internal fun formatConversationInput(currentMessageText: String, repliedMessage: RepliedMessageSummary): String =
-    buildReplyContextPrompt(currentMessageText, repliedMessage) {
+internal fun formatConversationInput(
+    currentMessageText: String,
+    repliedMessage: RepliedMessageSummary?,
+    quotedFragment: String?
+): String =
+    buildReplyContextPrompt(currentMessageText, repliedMessage, quotedFragment) {
         it.collapseWhitespaceAndCap(MAX_REPLIED_STORED_TEXT_CHARS).orEmpty()
     }
 
 private fun buildReplyContextPrompt(
     currentMessageText: String,
-    repliedMessage: RepliedMessageSummary,
+    repliedMessage: RepliedMessageSummary?,
+    quotedFragment: String?,
     transformText: (String) -> String
-): String =
-    buildString {
-        appendLine("<reply_context>")
-        appendLine("- type: ${repliedMessage.type}")
+): String {
+    if (repliedMessage == null && quotedFragment == null) return currentMessageText
 
-        if (repliedMessage.metadata.isNotEmpty()) {
-            appendLine("- metadata:")
-            repliedMessage.metadata.forEach { appendLine("  - $it") }
+    // quoting the whole message says nothing beyond the reply itself, and repeating it would read as
+    // two different pieces of context.
+    val fragment = quotedFragment?.takeUnless { it.trim() == repliedMessage?.textOrCaption?.trim() }
+
+    return buildString {
+        if (repliedMessage != null) {
+            appendLine("<reply_context>")
+            appendLine("- type: ${repliedMessage.type}")
+
+            if (repliedMessage.metadata.isNotEmpty()) {
+                appendLine("- metadata:")
+                repliedMessage.metadata.forEach { appendLine("  - $it") }
+            }
+
+            // the quoted message is somebody else's text and never passed through inbound sanitizing.
+            repliedMessage.textOrCaption?.let {
+                appendLine(xmlBlock("text_caption", transformText(it).neutralizePromptBlocks()))
+            }
+
+            repliedMessage.transcript?.let {
+                appendLine(xmlBlock("audio_transcript", transformText(it).neutralizePromptBlocks()))
+            }
+
+            appendLine("</reply_context>")
+            appendLine()
         }
 
-        // the quoted message is somebody else's text and never passed through inbound sanitizing.
-        repliedMessage.textOrCaption?.let {
-            appendLine(xmlBlock("text_caption", transformText(it).neutralizePromptBlocks()))
+        // last before the request: the fragment is what the request is about.
+        fragment?.let {
+            appendLine(xmlBlock("quoted_fragment", it.neutralizePromptBlocks()))
+            appendLine()
         }
 
-        repliedMessage.transcript?.let {
-            appendLine(xmlBlock("audio_transcript", transformText(it).neutralizePromptBlocks()))
-        }
-
-        appendLine("</reply_context>")
-        appendLine()
         append(xmlBlock("user_message", currentMessageText))
     }
+}
 
 private fun Message.toReplySummary(): RepliedMessageSummary? =
     replyToMessage?.summarizeInternalReply()
