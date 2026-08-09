@@ -58,7 +58,8 @@ Telegram ──► telegram/ ──► agent/ ──► tools/ ──► externa
   Inert unless `LLM_DAILY_TOKEN_BUDGET` is set.
 - **`infra/`** — cross-cutting infrastructure: the SQLite/Exposed `Db` singleton and the Ktor
   `Http` client.
-- **`config/`** — `.env` parsing (`AppConfig`) and LLM provider/model resolution (`LlmRuntime`).
+- **`config/`** — `.env` parsing (`AppConfig`), LLM provider/model resolution (`LlmRuntime`), and the ChatGPT
+  subscription credentials the Codex CLI writes (`CodexAuth`).
   `VisionRuntime` resolves separately which model looks at images: the `OPENAI_VISION_*` model when configured, the chat
   model when it accepts images, and nothing at all otherwise — which leaves the vision tools and sticker catalog
   unavailable.
@@ -288,6 +289,24 @@ A normal user message travels:
   tool schemas reusable while excluding timestamps, history, memory, Telegram metadata, user input, and tool results
   from billable cache writes. The adapter exists because Koog 1.1.1 cannot represent OpenAI's explicit breakpoint
   fields itself.
+- **ChatGPT subscription (`codex`)** — the same Koog OpenAI client pointed at the Codex backend's Responses API, with
+  no API key. `config/CodexAuth.CodexAuthStore` owns the credentials `codex login` writes to `~/.codex/auth.json`
+  (or `$CODEX_HOME`), refreshing them a few minutes before expiry and writing the rotated refresh token back, serialized
+  on a mutex so concurrent turns cannot burn one another's single-use refresh token. Because Koog bakes the
+  `Authorization` header into the client at construction, `config/CodexHttpClient` re-resolves the bearer token and
+  account header on every request instead — per-request headers replace configured ones. Signing in, out, device-code
+  and keyring storage all stay the CLI's job; Vusan never implements OAuth itself.
+
+  The backend accepts streaming requests only (`stream=false` and `store=true` are both rejected), and its final
+  `response.completed` event carries an empty `output`. So `CodexHttpClient` answers Koog's ordinary non-streaming
+  `post` by streaming the call and folding the `response.output_item.done` items back into the response object the
+  non-streaming API would have returned. Bridging at the transport keeps Koog's own parsing of tool calls, reasoning
+  items and usage, and leaves `AgentRunner` and the token budget unaware that this provider streams.
+
+  Model discovery runs at startup through `config/CodexCatalog`: the account's own catalog decides which ids and context
+  window are valid, since Codex and the Platform API expose different model sets. A catalog that cannot be read is a
+  warning, not a failure — the endpoint is undocumented, so a shape change there must not take a working bot down — but a
+  model the account plainly cannot run stops startup with the list of ones it can.
 
 ## Code execution service
 
@@ -316,7 +335,9 @@ wait around the same value.
 
 ## Startup
 
-`Main.kt` wires everything in order: load `AppConfig` → connect `Db` → create the `Http` client and LLM runtime →
+`Main.kt` wires everything in order: load `AppConfig` → connect `Db` → create the `Http` client → (only with
+`LLM_PROVIDER=codex`) build the `CodexAuthStore` and run `codexPreflight`, which proves the ChatGPT session works and
+fills the context window in from the account's model catalog before any message is served → create the LLM runtime →
 wrap the executor in the `TokenBudget` meter, which everything downstream then uses → build
 repositories, context policy, conversation compactor, the Telegram client and its `BotProfile` — one `getMe`
 call shared by the runner, which matches mentions against it, and `AgentFactory`, which puts the handle in the
@@ -355,6 +376,7 @@ A symptom-to-source map for finding the right file fast. Paths are under
 | An agent choice button does nothing, repeats, or reaches the wrong user          | `tools/choice/InlineChoiceTools.kt` (tool contract) + `telegram/callback/InlineChoiceHandler.kt` (callback ownership/consumption) + `TelegramBotRunner.dispatchInlineChoiceCallback` (agent follow-up)                                                                                                          |
 | An env var has no effect                                                         | `config/AppConfig.kt` (parsing) — and check it is documented in [`configuration.md`](configuration.md) + [`.env.example`](../.env.example)                                                                                                                                                            |
 | Model / provider / request-timeout selection or OpenAI prompt-cache misses       | `config/LlmRuntime.kt` (provider → client/model/params) + `config/OpenAiPromptCaching.kt` (GPT-5.6+ explicit cache breakpoints on the system prefix and the current turn)                                                                                                                              |
+| "Sign in again" replies, ChatGPT-subscription auth, or a rejected `LLM_MODEL` on `codex` | `config/CodexAuth.kt` (token load/refresh/persist) + `config/CodexCatalog.kt` (which models the plan offers) + `config/CodexHttpClient.kt` (per-request bearer and account headers)                                                                                                                    |
 | `describeImage`/`describeVideo` missing from the tool list                       | `config/VisionRuntime.kt` (chat model vs `OPENAI_VISION_API_KEY`), then `tools/ToolRegistryFactory.kt` (registration is skipped when there is no vision runtime)                                                                                                                                       |
 | Garbled or empty tool-call crashes from a flaky model                            | `agent/AgentFactory.kt` — `vusanSingleRunStrategy` and `missingRequiredArgs` short-circuit them                                                                                                                                                                                                       |
 | Vusan answers "come back later", or a scheduled task never fires                 | `budget/TokenBudget.kt` (the day's spend, the per-person share, the reset zone) + `budget/BudgetedPromptExecutor.kt` (what is counted) + `budget/TokenBudgetStop.kt` (day ceiling vs personal share, and the `BudgetOwner` attribution), then `LLM_DAILY_TOKEN_BUDGET` in [`configuration.md`](configuration.md) |

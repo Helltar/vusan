@@ -47,10 +47,12 @@ clear - Clear conversation history
 | `google`            | `gemini-2.5-flash`                  |
 | `deepseek`          | `deepseek-v4-pro`                   |
 | `openai-compatible` | any model id the server understands |
+| `codex`             | any model the ChatGPT plan offers   |
 
 The four native providers talk to each vendor's own API and accept only model ids they know; an unrecognized id fails at
 startup and lists the supported ones. `openai-compatible` targets any OpenAI-compatible server, remote or local, and
-takes whatever model string it serves.
+takes whatever model string it serves. `codex` runs on a ChatGPT subscription instead of an API key — see
+[ChatGPT subscription](#chatgpt-subscription).
 
 | Variable                      | Default       | Description                                                                  |
 |-------------------------------|---------------|------------------------------------------------------------------------------|
@@ -97,6 +99,42 @@ LLM_MODEL=gemma4
 Set `LLM_CONTEXT_WINDOW_TOKENS` whenever an `openai-compatible` model has a different window. Vusan reserves part of
 that window for the response, tool results, and estimation error, then fits only complete conversation interactions
 into the remainder.
+
+## ChatGPT subscription
+
+`LLM_PROVIDER=codex` runs Vusan on a ChatGPT Plus, Pro, Business or Enterprise plan instead of a paid API key. There is
+no `LLM_API_KEY`: the credentials come from the [Codex CLI](https://developers.openai.com/codex/cli), which has to be
+installed on the same host and signed in.
+
+```dotenv
+LLM_PROVIDER=codex
+LLM_MODEL=gpt-5.6-terra
+```
+
+Sign in once, as the same user that runs the bot:
+
+```bash
+codex login              # opens a browser
+codex login --device-auth  # headless hosts: shows a code to enter elsewhere
+codex login status       # confirm it worked
+```
+
+That writes `~/.codex/auth.json`. Vusan reads the access token from there, refreshes it a few minutes before it expires,
+and writes the rotated token back, so a long-running bot stays signed in without further attention. Set `CODEX_HOME` to
+move the file — useful in a container, where the simplest setup is to mount the host's `~/.codex` read-write. Treat that
+file like a password: it holds live access tokens.
+
+`codex logout` ends the session; Vusan then replies that its connection needs renewing until you sign in again.
+
+`LLM_MODEL` is checked against the models your plan actually offers, and startup fails with the available ids if it does
+not match — Codex and the OpenAI Platform API expose different model sets, so a Platform-only id would otherwise fail on
+the first message with an opaque error. The context window comes from the same catalog, so `LLM_CONTEXT_WINDOW_TOKENS`
+is only needed to override it. `LLM_REASONING_EFFORT` applies here too.
+
+Two limits are worth knowing. Usage is metered against the plan rather than billed per token, so a heavy day ends in a
+"usage limit reached" reply until the window resets — `LLM_DAILY_TOKEN_BUDGET` still works but is not what stops you
+first. And this route depends on an endpoint OpenAI documents for its own Codex clients rather than for third-party
+apps, so an OpenAI-side change can break it; `LLM_PROVIDER=openai` with an API key stays the supported fallback.
 
 ### Daily token budget
 

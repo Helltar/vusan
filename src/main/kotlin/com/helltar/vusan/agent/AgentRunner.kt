@@ -17,6 +17,7 @@ import com.helltar.vusan.common.isEffectivelyBlank
 import com.helltar.vusan.common.limitTo
 import com.helltar.vusan.common.rethrowIfCancellation
 import com.helltar.vusan.common.xmlBlock
+import com.helltar.vusan.config.CodexAuthException
 import com.helltar.vusan.config.ConversationConfig
 import com.helltar.vusan.config.GroupLogConfig
 import com.helltar.vusan.i18n.Language
@@ -436,6 +437,14 @@ class AgentRunner(
     // full stack trace, since it points at a real bug).
     private fun replyForAgentFailure(request: AgentRequest, e: Throwable): String {
         val messages = Messages.of(request.language)
+
+        // the ChatGPT session died mid-turn (expired, revoked, or reused refresh token). nothing the
+        // user can do, and nothing to retry — say so plainly instead of the generic failure reply.
+        generateSequence(e) { it.cause }.filterIsInstance<CodexAuthException>().firstOrNull()?.let { authError ->
+            log.error { "codex auth failed for chat=${request.chatId} user=${request.userId}: ${authError.message}" }
+            return messages.signInRequiredReply
+        }
+
         val providerError = generateSequence(e) { it.cause }.filterIsInstance<LLMClientException>().firstOrNull()
 
         if (providerError == null) {
@@ -448,7 +457,12 @@ class AgentRunner(
                     providerError.message?.collapseWhitespaceAndCap(PROVIDER_ERROR_LOG_MAX_CHARS).orEmpty()
         }
 
-        return if (providerError.isTransientOverload()) messages.overloadedReply else messages.fallbackErrorReply
+        return when {
+            providerError.isSubscriptionLimit() -> messages.subscriptionLimitReply
+            providerError.isUnauthorized() -> messages.signInRequiredReply
+            providerError.isTransientOverload() -> messages.overloadedReply
+            else -> messages.fallbackErrorReply
+        }
     }
 
     private fun retainLock(key: ConversationKey): Mutex =
@@ -526,6 +540,27 @@ private val CONTEXT_OVERFLOW_REGEX =
 
 private fun LLMClientException.isTransientOverload(): Boolean =
     message?.let { TRANSIENT_STATUS_REGEX.containsMatchIn(it) } == true
+
+// a subscription that has run out of Codex usage reports it in the error body rather than by status:
+// a plain 429 is an ordinary rate limit that retrying fixes, while these mean "come back later".
+private fun LLMClientException.isSubscriptionLimit(): Boolean =
+    message?.let { SUBSCRIPTION_LIMIT_REGEX.containsMatchIn(it) } == true
+
+private fun LLMClientException.isUnauthorized(): Boolean =
+    message?.let { UNAUTHORIZED_REGEX.containsMatchIn(it) } == true
+
+private val SUBSCRIPTION_LIMIT_REGEX =
+    Regex(
+        "usage_limit_reached|usage limit reached|usage_not_included|quota_exceeded|" +
+                "insufficient_quota|exceeded your current quota",
+        RegexOption.IGNORE_CASE
+    )
+
+private val UNAUTHORIZED_REGEX =
+    Regex(
+        "\\b401\\b|missing_authorization_header|token_expired|invalid_api_key|unauthorized",
+        RegexOption.IGNORE_CASE
+    )
 
 private fun Throwable.isContextOverflow(): Boolean =
     generateSequence(this) { it.cause }

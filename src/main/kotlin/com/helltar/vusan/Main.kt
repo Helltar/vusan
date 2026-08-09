@@ -50,7 +50,11 @@ suspend fun main() = coroutineScope {
         val tasks = TasksRepository()
         val groupLog = GroupLogRepository(config.groupLog).takeIf { config.groupLog.enabled }
 
-        val llm = resolveLlmRuntime(config.llmProvider)
+        // signing in is the codex CLI's job, so the only thing left at startup is to fail loudly when
+        // nobody has run `codex login` here, and to reject a model this subscription cannot run before
+        // the first user turn hits an opaque backend error.
+        val codexAuth = (config.llmProvider as? LlmProviderConfig.Codex)?.let { CodexAuthStore(http) }
+        val llm = resolveLlmRuntime(codexPreflight(config.llmProvider, http, codexAuth), codexAuth)
         executor = MultiLLMPromptExecutor(llm.model.provider to llm.client)
 
         // everything downstream talks to the metered executor, so every LLM call the bot makes — turns,
@@ -140,6 +144,33 @@ private fun createVoiceTranscriber(http: HttpClient, config: AppConfig): VoiceTr
             }
 
     return VoiceTranscriber(OpenAiWhisperClient(http, sttConfig), sttConfig)
+}
+
+/**
+ * Prove the ChatGPT session works before the bot starts taking messages, and fill in the context
+ * window from the account's own catalog when it was not configured explicitly.
+ *
+ * Reading the token here also forces a refresh on a stale `auth.json`, so a host that has been idle
+ * for days fails at startup with a "run `codex login`" message instead of on someone's first turn.
+ */
+private suspend fun codexPreflight(
+    config: LlmProviderConfig,
+    http: HttpClient,
+    auth: CodexAuthStore?
+): LlmProviderConfig {
+    if (auth == null || config !is LlmProviderConfig.Codex) return config
+
+    val plan = auth.planType()
+    log.info { "Codex: signed in to ChatGPT${plan?.let { " (plan=[$it])" }.orEmpty()}" }
+
+    val discovered = verifyCodexModel(http, auth, config.model) ?: return config
+
+    log.info { "Codex: model=[${discovered.id}] (${discovered.displayName})" }
+
+    return config.contextWindowTokens
+        ?.let { config }
+        ?: discovered.contextWindowTokens?.let { config.copy(contextWindowTokens = it) }
+        ?: config
 }
 
 private fun logStartup(

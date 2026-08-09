@@ -209,6 +209,15 @@ data class AppConfig(
 
             val provider = raw.trim().lowercase()
 
+            if (provider == "codex") {
+                return LlmProviderConfig.Codex(
+                    model = requireEnv("LLM_MODEL"),
+                    reasoningEffort = resolveReasoningEffort(),
+                    requestTimeout = requestTimeout,
+                    contextWindowTokens = contextWindowTokens
+                )
+            }
+
             if (provider == "openai-compatible") {
                 return LlmProviderConfig.OpenAiCompatible(
                     baseUrl = requireEnv("LLM_BASE_URL"),
@@ -225,7 +234,7 @@ data class AppConfig(
                 runCatching { HostedLlmProvider.valueOf(provider.uppercase()) }.getOrNull()
                     ?: error(
                         "Unsupported LLM_PROVIDER=[$provider]. " +
-                                "Supported values: openai, anthropic, google, deepseek, openai-compatible"
+                                "Supported values: openai, anthropic, google, deepseek, openai-compatible, codex"
                     )
 
             return LlmProviderConfig.Hosted(

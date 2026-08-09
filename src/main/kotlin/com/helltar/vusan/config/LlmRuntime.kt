@@ -44,11 +44,18 @@ data class LlmRuntime(
     val compactionParams: LLMParams = chatParams
 )
 
-fun resolveLlmRuntime(config: LlmProviderConfig): LlmRuntime {
+fun resolveLlmRuntime(config: LlmProviderConfig, codexAuth: CodexAuthStore? = null): LlmRuntime {
     val timeoutConfig = connectionTimeouts(config.requestTimeout)
 
     return when (config) {
         is LlmProviderConfig.Hosted -> resolveHostedRuntime(config, timeoutConfig)
+
+        is LlmProviderConfig.Codex ->
+            resolveCodexRuntime(
+                config = config,
+                timeoutConfig = timeoutConfig,
+                auth = requireNotNull(codexAuth) { "LLM_PROVIDER=codex needs a CodexAuthStore" }
+            )
 
         is LlmProviderConfig.OpenAiCompatible ->
             LlmRuntime(
@@ -110,6 +117,58 @@ private fun openAiCompatibleParams(config: LlmProviderConfig.OpenAiCompatible, p
                 reasoning = config.reasoningEffort?.let { ReasoningConfig(effort = it) }
             )
     }
+
+// the codex backend speaks the Responses API, so the ordinary openai client drives it once the token
+// and the account header are resolved per request and the path drops the `v1` prefix the CLI does not
+// use. the api key is a placeholder: CodexHttpClientFactory replaces the Authorization header on every
+// call, and koog will not build a client without some non-blank value here.
+private fun resolveCodexRuntime(
+    config: LlmProviderConfig.Codex,
+    timeoutConfig: ConnectionTimeoutConfig,
+    auth: CodexAuthStore
+): LlmRuntime =
+    LlmRuntime(
+        providerLabel = "ChatGPT subscription (Codex)",
+        client =
+            OpenAILLMClient(
+                apiKey = "codex-oauth",
+                settings =
+                    OpenAIClientSettings(
+                        baseUrl = CODEX_BACKEND_BASE_URL,
+                        timeoutConfig = timeoutConfig,
+                        responsesAPIPath = "responses"
+                    ),
+                httpClientFactory = codexHttpClientFactory(auth)
+            ),
+        model = codexModel(config),
+        chatParams = codexParams(config, OPENAI_PROMPT_CACHE_KEY),
+        compactionParams = codexParams(config, OPENAI_COMPACTION_CACHE_KEY)
+    )
+
+private fun codexModel(config: LlmProviderConfig.Codex): LLModel =
+    LLModel(
+        provider = LLMProvider.OpenAI,
+        id = config.model,
+        contextLength = config.contextWindowTokens,
+        capabilities =
+            listOf(
+                LLMCapability.Completion,
+                LLMCapability.Temperature,
+                LLMCapability.Schema.JSON.Standard,
+                LLMCapability.Tools,
+                LLMCapability.OpenAIEndpoint.Responses,
+                // codex models are reasoning models, and without Thinking the client drops the reasoning
+                // items they echo back, so each tool result would re-derive the whole chain of thought.
+                LLMCapability.Thinking
+            )
+    )
+
+private fun codexParams(config: LlmProviderConfig.Codex, promptCacheKey: String): LLMParams =
+    OpenAIResponsesParams(
+        parallelToolCalls = false,
+        promptCacheKey = promptCacheKey,
+        reasoning = config.reasoningEffort?.let { ReasoningConfig(effort = it) }
+    )
 
 // prompt_cache_key is an openai extension, so do not leak it to arbitrary compatible servers that may
 // reject unknown fields.

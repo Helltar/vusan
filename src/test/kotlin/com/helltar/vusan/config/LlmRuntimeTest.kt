@@ -7,11 +7,14 @@ import ai.koog.prompt.executor.clients.openai.OpenAIResponsesParams
 import ai.koog.prompt.executor.clients.openai.base.models.ReasoningEffort
 import ai.koog.prompt.llm.LLMCapability
 import ai.koog.prompt.llm.LLMProvider
+import com.helltar.vusan.infra.Http
+import io.ktor.client.engine.mock.*
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFailsWith
 import kotlin.test.assertFalse
 import kotlin.test.assertIs
+import kotlin.test.assertNotNull
 import kotlin.test.assertNull
 import kotlin.test.assertTrue
 import kotlin.time.Duration.Companion.seconds
@@ -147,6 +150,55 @@ class LlmRuntimeTest {
         assertEquals(32_768L, compatible.model.contextLength)
         assertEquals(65_536L, native.model.contextLength)
     }
+
+    @Test
+    fun `codex provider targets the responses endpoint with reasoning enabled`() {
+        val runtime = codex()
+
+        assertEquals("gpt-5.6-terra", runtime.model.id)
+        assertEquals(LLMProvider.OpenAI, runtime.model.provider)
+        assertTrue(runtime.model.supports(LLMCapability.OpenAIEndpoint.Responses))
+        assertTrue(runtime.model.supports(LLMCapability.Thinking))
+        assertTrue(runtime.model.supports(LLMCapability.Tools))
+        assertIs<OpenAIResponsesParams>(runtime.chatParams)
+    }
+
+    @Test
+    fun `codex chat and compaction prompts use separate cache keys`() {
+        val runtime = codex()
+
+        val chat = assertIs<OpenAIResponsesParams>(runtime.chatParams)
+        val compaction = assertIs<OpenAIResponsesParams>(runtime.compactionParams)
+
+        assertNotNull(chat.promptCacheKey)
+        assertTrue(chat.promptCacheKey != compaction.promptCacheKey)
+        assertFalse(chat.parallelToolCalls == true)
+    }
+
+    @Test
+    fun `codex provider requires an auth store`() {
+        assertFailsWith<IllegalArgumentException> {
+            resolveLlmRuntime(
+                LlmProviderConfig.Codex(model = "gpt-5.6-terra", requestTimeout = 120.seconds),
+                codexAuth = null
+            )
+        }
+    }
+
+    @Test
+    fun `codex provider carries the configured context window`() {
+        assertEquals(400_000L, codex(contextWindowTokens = 400_000).model.contextLength)
+    }
+
+    private fun codex(contextWindowTokens: Long? = null): LlmRuntime =
+        resolveLlmRuntime(
+            LlmProviderConfig.Codex(
+                model = "gpt-5.6-terra",
+                requestTimeout = 120.seconds,
+                contextWindowTokens = contextWindowTokens
+            ),
+            codexAuth = CodexAuthStore(Http.createClient(MockEngine { error("no calls expected") }))
+        )
 
     private fun openAiCompatible(
         baseUrl: String = "https://example.test",

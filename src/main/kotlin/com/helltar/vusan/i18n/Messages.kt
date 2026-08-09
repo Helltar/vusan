@@ -8,6 +8,8 @@ interface Messages {
     val busyReply: String
     val fallbackErrorReply: String
     val overloadedReply: String
+    val subscriptionLimitReply: String
+    val signInRequiredReply: String
     val formattingAsFileNotice: String
     val privateBlockedNotice: String
     val conversationClearedReply: String
@@ -84,6 +86,8 @@ internal object EnglishMessages : Messages {
     override val fallbackErrorReply = "Something went wrong — try again? 🥲"
 
     override val overloadedReply = "I'm a bit overloaded right now — give me a moment and try again 🙏"
+    override val subscriptionLimitReply = "I've hit my usage limit for now — it resets after a while, try again later 🙏"
+    override val signInRequiredReply = "My connection to the AI service needs renewing — my owner has to sign in again 🔑"
 
     override val formattingAsFileNotice =
         "Telegram couldn't display the formatting, so here's the full reply as a file 📄"
@@ -208,6 +212,8 @@ internal object UkrainianMessages : Messages {
     override val fallbackErrorReply = "Щось пішло не так — спробуй ще раз? 🥲"
 
     override val overloadedReply = "Зараз у мене забагато запитів — дай хвилинку й спробуй ще раз 🙏"
+    override val subscriptionLimitReply = "Я вичерпав ліміт використання — він скоро оновиться, спробуй пізніше 🙏"
+    override val signInRequiredReply = "Моє підключення до AI-сервісу треба поновити — власнику потрібно зайти знову 🔑"
 
     override val formattingAsFileNotice =
         "Телеграм не зміг показати форматування, тож ось повна відповідь файлом 📄"

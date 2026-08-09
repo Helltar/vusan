@@ -40,6 +40,26 @@ sealed interface LlmProviderConfig {
         }
     }
 
+    /**
+     * A ChatGPT subscription reached through the credentials `codex login` writes, instead of an
+     * API key. There is no `apiKey` here on purpose: the bearer token is resolved per request from
+     * `~/.codex/auth.json`, because it expires and is rotated behind our back.
+     */
+    data class Codex(
+        val model: String,
+        val reasoningEffort: ReasoningEffort? = null,
+        override val requestTimeout: Duration,
+        override val contextWindowTokens: Long? = null
+    ) : LlmProviderConfig {
+        init {
+            require(model.isNotBlank()) { "LLM_MODEL must not be blank" }
+            require(requestTimeout.isPositive()) { "LLM_REQUEST_TIMEOUT_SECONDS must be positive" }
+            require(contextWindowTokens == null || contextWindowTokens > 0L) {
+                "LLM_CONTEXT_WINDOW_TOKENS must be positive"
+            }
+        }
+    }
+
     data class OpenAiCompatible(
         val baseUrl: String,
         val apiKey: String,
