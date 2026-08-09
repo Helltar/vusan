@@ -46,7 +46,8 @@ Telegram ──► telegram/ ──► agent/ ──► tools/ ──► externa
   rich message, photo, voice, audio, video, document, poll, reaction, …); `BotOutbox` is the per-request queue tools
   write into, holding each `BotOutput` as an `OutboxItem` that captures its private-routing decision.
 - **`request/`** — the request-scoped input model shared across layers: `RequestContext`
-  (chat/user/message ids and sender info tools see) and `AttachedFile` (photo, video, or document, from the current
+  (chat/user/message ids and sender info tools see), `ChatCapabilities` (what the chat lets the bot post, and its slow
+  mode — defaulting to unrestricted so a failed lookup never removes an ability), and `AttachedFile` (photo, video, or document, from the current
   message or a replied-to message, that vision (`describeImage`, `describeVideo`) and code execution (`codeExecution`)
   can lazily download). Its `kind` (`IMAGE`/`VIDEO`/`OTHER`) decides which of those tools accepts it; a video also
   carries its duration and a loader for Telegram's own thumbnail.
@@ -122,6 +123,13 @@ A normal user message travels:
    rather than in a system message of their own: a system message reads as a higher-priority instruction, which is
    wrong for context assembled out of what people sent, and koog's Anthropic and Google clients hoist every system
    message into the top-level system field regardless of where it sat.
+   In a group the turn also carries what that chat lets the bot post, read through `telegram/ChatProfile.kt`: one
+   cached `getChat` + `getChatMember` pair yields the chat description, the permissions binding a bot that is a plain
+   member (an administrator is bound by none of them, slow mode included), and the slow-mode delay. `ChatCapabilities`
+   travels in `RequestContext` and reaches two places — `ToolRegistryFactory` leaves out the tools whose output the
+   chat would refuse, so the model cannot spend an image generation or a download on something undeliverable, and
+   `<message_context>` names the rest so the agent knows why and answers in one message under slow mode. Anything the
+   lookup could not answer counts as unrestricted, since guessing "forbidden" would strip real abilities.
    `AgentFactory.prepare` builds the per-request tool registry and estimates the fixed system/tool/current-turn cost.
    The history planner reserves room for output, future tool calls, and estimation error, then admits only complete
    interactions. If an older prefix no longer fits or exceeds the configured recent count,
@@ -416,6 +424,7 @@ A symptom-to-source map for finding the right file fast. Paths are under
 | A rich message reads as empty, `unknown`, or loses its structure                 | `telegram/inbound/RichMessageText.kt` (block tree → rich markdown), then `MessageMetadata.contentTypeName`/`textSnippetOrNull` and `ReplyContext.repliedTextOrNull`                                                                                                                                           |
 | Scheduled task fires late, not at all, or reports "missed"/"failed"              | `tasks/TaskScheduler.kt` (polling, lateness, retries) + `tasks/Recurrence.kt` (next-run math)                                                                                                                                                                                                                   |
 | A chat's tasks all went paused on their own, or one keeps firing into a chat the bot was removed from | `telegram/BotMembership.kt` (the `my_chat_member` path) + `telegram/delivery/TelegramErrors.kt` (`isChatUnreachable`) + `tasks/TaskScheduler.kt` (`parkTasksOfUnreachableChat`)                                                                                                                |
+| A tool is missing in one group but present elsewhere, or a chat restriction is stale                | `telegram/ChatProfile.kt` (`capabilitiesOf`, the cache and its `forget`) + `tools/ToolRegistryFactory.buildRegistry` (which capability gates which tool)                                                                                                                                       |
 | `/tasks` or a plain-language task pause/resume/cancel fails                      | `telegram/callback/TaskMenuHandler.kt` (rendering, ownership, callbacks) + `tools/tasks/TaskTools.kt` (agent path) + `tasks/TasksRepository.kt` (shared scoped state changes)                                                                                                                                   |
 | `/clear` reports success but history survives                                    | `agent/AgentRunner.kt` (`clearConversation` and the turn lock that also guards the append) + `tools/conversation/ConversationTools.kt` (agent path) + `agent/conversation/ConversationRepository.kt` (shared storage operation)                                                                                            |
 | An agent choice button does nothing, repeats, reaches the wrong user, or its answer lost the photo | `tools/choice/InlineChoiceTools.kt` (tool contract) + `telegram/callback/InlineChoiceHandler.kt` (callback ownership/consumption, parked attachment) + `TelegramBotRunner.dispatchInlineChoiceCallback` (agent follow-up)                                                                             |

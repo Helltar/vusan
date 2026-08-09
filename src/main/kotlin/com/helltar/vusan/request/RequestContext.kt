@@ -11,7 +11,8 @@ data class RequestContext(
     val senderDisplayName: String? = null,
     val chatIsPrivate: Boolean = true,
     val attachedFile: AttachedFile? = null,
-    val language: Language = Language.DEFAULT
+    val language: Language = Language.DEFAULT,
+    val chatCapabilities: ChatCapabilities = ChatCapabilities.UNRESTRICTED
 )
 
 fun RequestContext.requireUserId(): Long {

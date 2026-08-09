@@ -70,7 +70,6 @@ import kotlinx.coroutines.selects.onTimeout
 import kotlinx.coroutines.selects.select
 import org.telegram.telegrambots.longpolling.TelegramBotsLongPollingApplication
 import org.telegram.telegrambots.meta.api.methods.ActionType
-import org.telegram.telegrambots.meta.api.methods.groupadministration.GetChat
 import org.telegram.telegrambots.meta.api.methods.send.SendChatAction
 import org.telegram.telegrambots.meta.api.objects.CallbackQuery
 import org.telegram.telegrambots.meta.api.objects.Update
@@ -87,6 +86,7 @@ internal class TelegramBotRunner(
     private val taskMenu: TaskMenuHandler,
     private val inlineChoices: InlineChoiceHandler,
     private val tasks: TasksRepository,
+    private val chatProfiles: ChatProfiles,
     private val allowedIds: Set<Long>,
     private val bannedIds: Set<Long>,
     private val voiceTranscriber: VoiceTranscriber?,
@@ -220,6 +220,7 @@ internal class TelegramBotRunner(
             val membership = update.myChatMember
 
             if (membership != null) {
+                chatProfiles.forget(membership.chat.id)
                 launch { parkTasksOnLostAccess(tasks, membership) }
                 continue
             }
@@ -711,7 +712,7 @@ internal class TelegramBotRunner(
                 replyToMessageId = replyToMessageId,
                 prompt = agentInput,
                 conversationEntry = conversationInput,
-                messageContext = message.toMessageContext(loadChatDescription(message)),
+                messageContext = message.toMessageContext(chatProfile(message)),
                 attachedFile = attachedFile,
                 language = language
             )
@@ -741,7 +742,7 @@ internal class TelegramBotRunner(
                 messageId = 0L,
                 prompt = attachedFile?.let { "${attachedFileContextBlock(it)}\n\n$input" } ?: input,
                 conversationEntry = input,
-                messageContext = message.toMessageContext(user, loadChatDescription(message)),
+                messageContext = message.toMessageContext(user, chatProfile(message)),
                 attachedFile = attachedFile,
                 language = language
             )
@@ -865,18 +866,10 @@ internal class TelegramBotRunner(
         )
     }
 
-    private suspend fun loadChatDescription(message: Message): String? {
-        if (!message.canLoadChatDescription) return null
-
-        return runCatching {
-            client.api { executeAsync(GetChat.builder().chatId(message.chatIdLong).build()) }.description
-        }
-            .onFailure { error ->
-                error.rethrowIfCancellation()
-                log.debug(error) { "failed to fetch extended chat context for chat=${message.chatIdLong}" }
-            }
-            .getOrNull()
-    }
+    // only a group-flavored chat has a description or restrictions to read; anywhere else the lookup
+    // would spend two API calls to learn nothing.
+    private suspend fun chatProfile(message: Message): ChatProfile =
+        if (message.canLoadChatDescription) chatProfiles.of(message.chatIdLong) else ChatProfile.NONE
 }
 
 // an allowlisted chat admits every message in it, including the rare ones without a sender

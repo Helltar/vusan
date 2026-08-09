@@ -16,6 +16,7 @@ import com.helltar.vusan.infra.Http
 import com.helltar.vusan.stt.OpenAiWhisperClient
 import com.helltar.vusan.tasks.TaskScheduler
 import com.helltar.vusan.tasks.TasksRepository
+import com.helltar.vusan.telegram.ChatProfiles
 import com.helltar.vusan.telegram.TelegramBotRunner
 import com.helltar.vusan.telegram.botProfile
 import com.helltar.vusan.telegram.callback.InlineChoiceHandler
@@ -105,17 +106,20 @@ suspend fun main() = coroutineScope {
 
         val delivery = TelegramDelivery(telegramClient, stickerCatalog?.let { it::recheckSetOf }, groupLog)
         val voiceTranscriber = createVoiceTranscriber(http, config)
+        val chatProfiles = ChatProfiles(telegramClient, botProfile.userId)
         val taskMenu = TaskMenuHandler(telegramClient, tasks, config.maxTasksPerUser)
         val inlineChoices = InlineChoiceHandler(telegramClient, conversation::revision)
         val scheduler =
             TaskScheduler(
-                tasks, agentRunner, delivery, config.taskMaxLatenessMinutes.minutes, tokenBudget, config.bannedIds
+                tasks, agentRunner, delivery, config.taskMaxLatenessMinutes.minutes, chatProfiles, tokenBudget,
+                config.bannedIds
             )
 
         val botRunner =
             TelegramBotRunner(
                 telegramClient, config.telegramBotToken, delivery, agentRunner, taskMenu, inlineChoices, tasks,
-                config.allowedIds, config.bannedIds, voiceTranscriber, botProfile, stickerCatalog, groupLog
+                chatProfiles, config.allowedIds, config.bannedIds, voiceTranscriber, botProfile, stickerCatalog,
+                groupLog
             )
 
         logStartup(llm, vision, toolRegistryFactory.availableToolNames, config.tokenBudget)

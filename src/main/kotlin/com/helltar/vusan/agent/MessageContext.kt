@@ -2,6 +2,7 @@ package com.helltar.vusan.agent
 
 import com.helltar.vusan.common.collapseWhitespaceAndCap
 import com.helltar.vusan.common.xmlBlock
+import com.helltar.vusan.request.ChatCapabilities
 import java.time.Instant
 import kotlin.time.Duration.Companion.days
 import kotlin.time.Duration.Companion.hours
@@ -18,7 +19,8 @@ data class MessageContext(
     val userDisplayName: String? = null,
     val userUsername: String? = null,
     val userLanguageCode: String? = null,
-    val previousExchangeAt: Instant? = null
+    val previousExchangeAt: Instant? = null,
+    val chatCapabilities: ChatCapabilities = ChatCapabilities.UNRESTRICTED
 ) {
     fun toPromptBlock(): String {
         val lines =
@@ -30,6 +32,14 @@ data class MessageContext(
                 chatTitle?.asMetadataValue()?.let { add("- title: $it") }
                 chatUsername?.asMetadataValue()?.let { add("- username: $it") }
                 chatDescription?.asMetadataValue(maxLength = 700)?.let { add("- description: $it") }
+                chatCapabilities.restrictedKinds
+                    .takeIf { it.isNotEmpty() }
+                    ?.let { add("- this chat does not accept: ${it.joinToString(", ")}") }
+
+                chatCapabilities.slowModeSeconds
+                    .takeIf { it > 0 }
+                    ?.let { add("- slow mode: one message every ${it}s, so answer in a single message") }
+
                 add("")
                 add("Sender:")
                 add("- id: $userId")

@@ -1,5 +1,6 @@
 package com.helltar.vusan.agent
 
+import com.helltar.vusan.request.ChatCapabilities
 import java.time.Duration
 import java.time.Instant
 import kotlin.test.Test
@@ -33,6 +34,30 @@ class MessageContextTest {
         assertTrue(prompt.contains("- display_name: Ada Lovelace"))
         assertTrue(prompt.contains("- username: @ada"))
         assertTrue(prompt.contains("- telegram_language: en"))
+    }
+
+    @Test
+    fun `toPromptBlock names what the chat refuses and its slow mode`() {
+        val prompt =
+            MessageContext(
+                chatId = -100123,
+                chatType = "supergroup",
+                isPrivate = false,
+                userId = 42,
+                chatCapabilities = ChatCapabilities(photos = false, stickersAndAnimations = false, slowModeSeconds = 30)
+            ).toPromptBlock()
+
+        assertTrue(prompt.contains("- this chat does not accept: photos, stickers and GIFs"))
+        assertTrue(prompt.contains("- slow mode: one message every 30s"))
+    }
+
+    @Test
+    fun `toPromptBlock stays silent about a chat that restricts nothing`() {
+        val prompt =
+            MessageContext(chatId = -100123, chatType = "supergroup", isPrivate = false, userId = 42).toPromptBlock()
+
+        assertFalse(prompt.contains("does not accept"))
+        assertFalse(prompt.contains("slow mode"))
     }
 
     @Test

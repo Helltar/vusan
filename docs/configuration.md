@@ -38,6 +38,22 @@ reply, buttons stop working, the group log does not record what they say, their 
 their scheduled tasks stay in place but never fire. Removing the ID from the list restores all of it; nothing is
 deleted meanwhile. An ID on both lists stays banned, and startup says so in the log.
 
+## Rights in a group
+
+Vusan reads what the group lets it post before each turn and adapts: a chat that forbids photos is never offered
+image generation, one that forbids polls gets no poll tools, and slow mode is stated in the turn so the answer comes
+as one message instead of several that Telegram would drop. Nothing has to be configured for this — but two group
+settings do change what it can do:
+
+- **A bot that is a plain member is bound by the group's default permissions.** Turning off photos, stickers, polls,
+  voice messages, or files for everyone turns them off for Vusan too, and the matching tools disappear from that chat.
+  Promoting it to administrator lifts all of it, slow mode included.
+- **Losing the right to write pauses that chat's scheduled tasks.** Removing Vusan from a group, or taking its send
+  permission away, pauses every task scheduled there rather than letting each one run a full turn and fail at delivery.
+  They stay listed in `/tasks`; resume them after adding it back.
+
+A permission lookup that fails is treated as "unrestricted", so a Telegram hiccup never silently strips capabilities.
+
 ## Telegram command menu
 
 To expose the direct commands in Telegram's menu, paste this into

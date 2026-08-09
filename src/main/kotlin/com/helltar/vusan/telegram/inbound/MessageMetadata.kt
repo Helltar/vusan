@@ -2,6 +2,7 @@ package com.helltar.vusan.telegram.inbound
 
 import com.helltar.vusan.agent.MessageContext
 import com.helltar.vusan.common.collapseWhitespaceAndCap
+import com.helltar.vusan.telegram.ChatProfile
 import org.telegram.telegrambots.meta.api.objects.Audio
 import org.telegram.telegrambots.meta.api.objects.Document
 import org.telegram.telegrambots.meta.api.objects.ExternalReplyInfo
@@ -57,23 +58,24 @@ internal fun Message.replyAuthorIdOrNull(): Long? = replyToMessage?.from?.id
 
 internal fun Message.replyToMessageIdOrNull(): Long? = replyToMessage?.messageId?.toLong()
 
-internal fun Message.toMessageContext(chatDescription: String?): MessageContext? {
+internal fun Message.toMessageContext(profile: ChatProfile): MessageContext? {
     val sender = from ?: return null
-    return toMessageContext(sender, chatDescription)
+    return toMessageContext(sender, profile)
 }
 
-internal fun Message.toMessageContext(sender: User, chatDescription: String?): MessageContext =
+internal fun Message.toMessageContext(sender: User, profile: ChatProfile): MessageContext =
     MessageContext(
         chatId = chatIdLong,
         chatType = promptChatType(),
         isPrivate = isPrivateChat,
         chatTitle = chat.titleOrDisplayName(),
         chatUsername = chat.userName,
-        chatDescription = chatDescription,
+        chatDescription = profile.description,
         userId = sender.id,
         userDisplayName = displayName(sender.firstName, sender.lastName),
         userUsername = sender.userName,
-        userLanguageCode = sender.languageCode
+        userLanguageCode = sender.languageCode,
+        chatCapabilities = profile.capabilities
     )
 
 // the bot api models chat flavors as flags on `Chat` and `Message` rather than distinct types,

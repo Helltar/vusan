@@ -5,6 +5,8 @@ import com.helltar.vusan.agent.AgentRunner
 import com.helltar.vusan.budget.TokenBudget
 import com.helltar.vusan.common.rethrowIfCancellation
 import com.helltar.vusan.i18n.Messages
+import com.helltar.vusan.telegram.ChatProfile
+import com.helltar.vusan.telegram.ChatProfiles
 import com.helltar.vusan.telegram.delivery.ScheduledAttribution
 import com.helltar.vusan.telegram.delivery.TelegramDelivery
 import io.github.oshai.kotlinlogging.KotlinLogging
@@ -21,6 +23,7 @@ class TaskScheduler(
     private val agentRunner: AgentRunner,
     private val delivery: TelegramDelivery,
     private val maxLateness: Duration,
+    private val chatProfiles: ChatProfiles,
     private val tokenBudget: TokenBudget = TokenBudget(),
     private val bannedIds: Set<Long> = emptySet()
 ) {
@@ -195,7 +198,7 @@ class TaskScheduler(
                 replyToMessageId = null,
                 prompt = scheduledTaskPrompt(task, attempt),
                 conversationEntry = conversationEntry(task),
-                messageContext = task.toMessageContext(),
+                messageContext = task.toMessageContext(chatProfileFor(task)),
                 chatIsPrivate = task.chatIsPrivate,
                 language = task.language
             )
@@ -231,6 +234,11 @@ class TaskScheduler(
 
         return if (chatUnreachable) FireOutcome.ChatUnreachable else FireOutcome.Delivered
     }
+
+    // a task is the case this matters most for: nobody is waiting to be told the chat refused the
+    // answer, and the whole agent run is spent before the first send would say so.
+    private suspend fun chatProfileFor(task: ScheduledTask): ChatProfile =
+        if (task.chatIsPrivate) ChatProfile.NONE else chatProfiles.of(task.chatId)
 
     private suspend fun rescheduleAfterFire(task: ScheduledTask, now: Instant) {
         val nextFire = task.recurrence.catchUpAfter(task.nextFireAt, task.timezone, now)

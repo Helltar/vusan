@@ -152,28 +152,43 @@ class ToolRegistryFactory(
             )
         }
 
-    fun buildRegistry(context: RequestContext, outbox: BotOutbox): ToolRegistry =
-        ToolRegistry {
+    /**
+     * A tool the chat would refuse is left out rather than registered and rejected at delivery: producing
+     * its output costs a download, an image generation, or a speech synthesis first, and the model cannot
+     * spend any of that on a tool it was never offered. Text-first tools stay registered even when the
+     * chat bans pictures — they still answer, just without the extras.
+     */
+    fun buildRegistry(context: RequestContext, outbox: BotOutbox): ToolRegistry {
+        val chat = context.chatCapabilities
+
+        return ToolRegistry {
             tools(MessageTools(outbox))
             tools(InlineChoiceTools(context, outbox, conversation::revision))
-            tools(ReactionTools(context, outbox))
             tools(currency)
             tools(telegramChannel)
-            tools(YouTubeMusicTools(ytDlpClient, outbox))
-            tools(YouTubeVideoTools(ytDlpClient, outbox))
             tools(youTubeTranscript)
-            tools(FileTools(fileDownloadClient, outbox))
-            tools(QuizTools(outbox))
-            tools(PollTools(outbox))
             tools(ConversationTools(conversation, context))
             tools(MemoryTools(memory, context))
             tools(TaskTools(repo = tasks, context, config.maxTasksPerUser, config.maxFollowUpsPerUser))
 
+            if (chat.reactions) tools(ReactionTools(context, outbox))
+            if (chat.audios) tools(YouTubeMusicTools(ytDlpClient, outbox))
+            if (chat.videos) tools(YouTubeVideoTools(ytDlpClient, outbox))
+            if (chat.documents) tools(FileTools(fileDownloadClient, outbox))
+
+            if (chat.polls) {
+                tools(QuizTools(outbox))
+                tools(PollTools(outbox))
+            }
+
             tavilyClient?.let { tools(TavilyTools(it, imageDownloadClient, outbox)) }
             searxngClient?.let { tools(SearxngTools(it, imageDownloadClient, outbox)) }
-            giphyClient?.let { tools(GiphyTools(it, outbox)) }
-            stickers?.let { tools(StickerTools(it, outbox)) }
             sandboxClient?.let { tools(SandboxTools(it, outbox, context.attachedFile)) }
+
+            if (chat.stickersAndAnimations) {
+                giphyClient?.let { tools(GiphyTools(it, outbox)) }
+                stickers?.let { tools(StickerTools(it, outbox)) }
+            }
 
             if (groupLog != null && groupLogReader != null) {
                 tools(GroupLogTools(groupLog, groupLogReader, context))
@@ -183,14 +198,15 @@ class ToolRegistryFactory(
                 tools(VisionTools(imageVisionClient, videoVisionClient, context.attachedFile))
             }
 
-            if (elevenLabsTtsClient != null && elevenLabsTts != null) {
+            if (chat.voiceNotes && elevenLabsTtsClient != null && elevenLabsTts != null) {
                 tools(VoiceTools(elevenLabsTtsClient, elevenLabsTts, outbox))
             }
 
-            if (openAiImageClient != null && openAiImage != null) {
+            if (chat.photos && openAiImageClient != null && openAiImage != null) {
                 tools(ImageGenTools(openAiImageClient, openAiImage, outbox, context.attachedFile))
             }
         }
+    }
 
     private fun <T> optional(envName: String, key: String?, toolDescription: String, build: (String) -> T): T? {
         if (key == null) {

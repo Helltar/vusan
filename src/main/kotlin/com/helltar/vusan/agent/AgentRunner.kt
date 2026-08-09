@@ -26,6 +26,7 @@ import com.helltar.vusan.outbox.BotOutbox
 import com.helltar.vusan.outbox.BotOutput
 import com.helltar.vusan.outbox.OutboxItem
 import com.helltar.vusan.request.AttachedFile
+import com.helltar.vusan.request.ChatCapabilities
 import com.helltar.vusan.request.RequestContext
 import com.helltar.vusan.tools.choice.InlineChoiceTools
 import com.helltar.vusan.tools.message.MessageTools
@@ -170,7 +171,8 @@ class AgentRunner(
                 senderDisplayName = request.messageContext?.userDisplayName,
                 chatIsPrivate = request.messageContext?.isPrivate ?: request.chatIsPrivate,
                 attachedFile = request.attachedFile,
-                language = request.language
+                language = request.language,
+                chatCapabilities = request.messageContext?.chatCapabilities ?: ChatCapabilities.UNRESTRICTED
             )
 
         val userMemory = memory.load(MemoryScope.USER, request.userId)
