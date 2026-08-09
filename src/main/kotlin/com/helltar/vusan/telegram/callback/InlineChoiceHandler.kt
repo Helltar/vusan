@@ -4,6 +4,7 @@ import com.helltar.vusan.common.rethrowIfCancellation
 import com.helltar.vusan.common.xmlBlock
 import com.helltar.vusan.i18n.Messages
 import com.helltar.vusan.outbox.BotOutput
+import com.helltar.vusan.request.AttachedFile
 import com.helltar.vusan.telegram.delivery.answerCallbackQuery
 import com.helltar.vusan.telegram.delivery.editTextMessage
 import com.helltar.vusan.telegram.delivery.isMessageNotModified
@@ -29,17 +30,41 @@ internal class InlineChoiceHandler(
 
     private companion object {
         const val MAX_RECENT_SELECTIONS = 1_000
+        const val MAX_PARKED_ATTACHMENTS = 200
 
         val log = KotlinLogging.logger {}
     }
 
     private data class MessageKey(val chatId: Long, val messageId: Int)
 
+    private data class ConversationKey(val chatId: Long, val userId: Long)
+
     private val claimedMessages =
         object : LinkedHashMap<MessageKey, Unit>(16, 0.75f, true) {
             override fun removeEldestEntry(eldest: MutableMap.MutableEntry<MessageKey, Unit>?): Boolean =
                 size > MAX_RECENT_SELECTIONS
         }
+
+    // the turn that asked the question may have been about a photo, but the selection that answers it
+    // arrives as a callback with no message of its own, so the attachment has to wait here or the
+    // follow-up turn runs with the picture gone. one slot per person and chat: every later turn
+    // replaces or clears it, and buttons older than that are already dead by history revision.
+    private val parkedAttachments =
+        object : LinkedHashMap<ConversationKey, AttachedFile>(16, 0.75f, true) {
+            override fun removeEldestEntry(eldest: MutableMap.MutableEntry<ConversationKey, AttachedFile>?): Boolean =
+                size > MAX_PARKED_ATTACHMENTS
+        }
+
+    fun parkAttachment(chatId: Long, userId: Long, file: AttachedFile?) {
+        val key = ConversationKey(chatId, userId)
+
+        synchronized(parkedAttachments) {
+            if (file == null) parkedAttachments.remove(key) else parkedAttachments[key] = file
+        }
+    }
+
+    fun parkedAttachment(chatId: Long, userId: Long): AttachedFile? =
+        synchronized(parkedAttachments) { parkedAttachments[ConversationKey(chatId, userId)] }
 
     fun handles(callbackData: String?): Boolean =
         callbackData?.startsWith(INLINE_CHOICE_CALLBACK_PREFIX) == true

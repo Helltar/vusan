@@ -3,6 +3,8 @@ package com.helltar.vusan.telegram.callback
 import com.helltar.vusan.i18n.Language
 import com.helltar.vusan.i18n.Messages
 import com.helltar.vusan.outbox.BotOutput
+import com.helltar.vusan.request.AttachedFile
+import com.helltar.vusan.request.AttachedFileKind
 import java.lang.reflect.Proxy
 import java.util.concurrent.CompletableFuture
 import kotlin.test.Test
@@ -137,6 +139,38 @@ class InlineChoiceHandlerTest {
         assertContains(input, "<question>\nTea or coffee?\n</question>")
         assertContains(input, "<selected_option>\nTea\n</selected_option>")
     }
+
+    // the selection turn has no message of its own, so a photo the question was asked about only
+    // reaches it through the parked slot.
+    @Test
+    fun `an attachment parked with a question survives until the selection`() {
+        val handler = InlineChoiceHandler(RecordingClient().proxy) { _, _ -> 3L }
+
+        handler.parkAttachment(chatId = -7L, userId = 42L, file = photo())
+
+        assertEquals("photo.jpg", handler.parkedAttachment(chatId = -7L, userId = 42L)?.name)
+        assertNull(handler.parkedAttachment(chatId = -7L, userId = 99L))
+        assertNull(handler.parkedAttachment(chatId = -8L, userId = 42L))
+    }
+
+    @Test
+    fun `a turn without a question clears the parked attachment`() {
+        val handler = InlineChoiceHandler(RecordingClient().proxy) { _, _ -> 3L }
+
+        handler.parkAttachment(chatId = -7L, userId = 42L, file = photo())
+        handler.parkAttachment(chatId = -7L, userId = 42L, file = null)
+
+        assertNull(handler.parkedAttachment(chatId = -7L, userId = 42L))
+    }
+
+    private fun photo() =
+        AttachedFile(
+            name = "photo.jpg",
+            fileSizeBytes = 1000L,
+            mimeType = "image/jpeg",
+            kind = AttachedFileKind.IMAGE,
+            loadBytes = { error("bytes are never read here") }
+        )
 
     private fun choice() =
         BotOutput.InlineChoice(

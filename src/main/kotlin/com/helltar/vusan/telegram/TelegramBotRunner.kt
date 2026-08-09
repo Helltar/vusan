@@ -11,6 +11,7 @@ import com.helltar.vusan.common.rethrowIfCancellation
 import com.helltar.vusan.common.xmlBlock
 import com.helltar.vusan.i18n.Language
 import com.helltar.vusan.i18n.Messages
+import com.helltar.vusan.outbox.BotOutput
 import com.helltar.vusan.request.AttachedFile
 import com.helltar.vusan.telegram.callback.InlineChoiceHandler
 import com.helltar.vusan.telegram.callback.InlineChoiceSelection
@@ -723,14 +724,16 @@ internal class TelegramBotRunner(
     ) {
         val input = inlineChoiceAgentInput(selection)
         val language = Language.fromCode(user.languageCode)
+        val attachedFile = inlineChoices.parkedAttachment(message.chatIdLong, user.id)
         val request =
             AgentRequest(
                 chatId = message.chatIdLong,
                 userId = user.id,
                 messageId = 0L,
-                prompt = input,
+                prompt = attachedFile?.let { "${attachedFileContextBlock(it)}\n\n$input" } ?: input,
                 conversationEntry = input,
                 messageContext = message.toMessageContext(user, loadChatDescription(message)),
+                attachedFile = attachedFile,
                 language = language
             )
 
@@ -783,6 +786,14 @@ internal class TelegramBotRunner(
                     else
                         agent.handle(request, onToolStarting)
                 }
+
+            // a question with buttons ends the turn without answering, so whatever it was asked about has
+            // to outlive it; any other turn clears the slot instead of leaving a stale file behind.
+            inlineChoices.parkAttachment(
+                chatId = request.chatId,
+                userId = request.userId,
+                file = request.attachedFile?.takeIf { result.outputs.any { it.output is BotOutput.InlineChoice } }
+            )
 
             deliver(result)
         } catch (error: Throwable) {
