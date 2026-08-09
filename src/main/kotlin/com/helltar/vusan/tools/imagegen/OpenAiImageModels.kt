@@ -13,6 +13,21 @@ internal data class OpenAiImageRequest(
 )
 
 @Serializable
+internal data class CodexImageEditRequest(
+    val images: List<CodexImageSource>,
+    val prompt: String,
+    val model: String,
+    val quality: String,
+    val n: Int = 1
+)
+
+@Serializable
+internal data class CodexImageSource(
+    @SerialName("image_url")
+    val imageUrl: String
+)
+
+@Serializable
 internal data class OpenAiImageResponse(
     val data: List<OpenAiImageData> = emptyList()
 )

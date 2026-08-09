@@ -82,7 +82,7 @@ suspend fun main() = coroutineScope {
         val toolRegistryFactory =
             ToolRegistryFactory(
                 http, config, conversation, memory, tasks, stickerCatalog, vision,
-                groupLog, groupLogDigester, contextWindowPolicy.liveToolResultMaxChars
+                groupLog, groupLogDigester, contextWindowPolicy.liveToolResultMaxChars, codexAuth
             )
 
         val agentFactory =

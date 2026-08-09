@@ -50,6 +50,9 @@ data class AppConfig(
         fun fromEnv(): AppConfig {
             val elevenLabsKey = readEnv("ELEVENLABS_API_KEY")
             val openAiImageKey = readEnv("OPENAI_IMAGE_API_KEY")
+            val llmProvider = resolveLlmProvider()
+
+            val imageRoute = resolveImageRoute(openAiImageKey != null, llmProvider)
 
             return AppConfig(
                 allowedIds = parseIdSet(readEnv("ALLOWED_IDS")),
@@ -84,7 +87,7 @@ data class AppConfig(
                 databasePath = readEnv("DB_FILE") ?: "data/db/vusan.db",
                 elevenLabsApiKey = elevenLabsKey,
                 giphyApiKey = readEnv("GIPHY_API_KEY"),
-                llmProvider = resolveLlmProvider(),
+                llmProvider = llmProvider,
                 openAiImageApiKey = openAiImageKey,
                 openAiStt = resolveOpenAiStt(),
                 openAiVision = resolveOpenAiVision(),
@@ -119,10 +122,11 @@ data class AppConfig(
                     },
 
                 openAiImage =
-                    openAiImageKey?.let {
+                    imageRoute?.let { route ->
                         OpenAiImageConfig(
-                            model = readEnv("OPENAI_IMAGE_MODEL") ?: OpenAiImageConfig.DEFAULT_MODEL,
-                            quality = readEnv("OPENAI_IMAGE_QUALITY") ?: OpenAiImageConfig.DEFAULT_QUALITY
+                            model = readEnv("OPENAI_IMAGE_MODEL") ?: defaultImageModel(route),
+                            quality = readEnv("OPENAI_IMAGE_QUALITY") ?: OpenAiImageConfig.DEFAULT_QUALITY,
+                            route = route
                         )
                     }
             )

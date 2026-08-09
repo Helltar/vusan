@@ -195,7 +195,7 @@ and Vusan keeps running.
 | `GIPHY_API_KEY`         | GIF lookup                                | Giphy                                 |
 | `ELEVENLABS_API_KEY`    | Voice output                              | ElevenLabs TTS                        |
 | `OPENAI_STT_API_KEY`    | Voice input, sound of a video             | Reuse your OpenAI key                 |
-| `OPENAI_IMAGE_API_KEY`  | Image generation                          | Reuse your OpenAI key                 |
+| `OPENAI_IMAGE_API_KEY`  | Image generation                          | Reuse your OpenAI key; optional on `codex` |
 | `OPENAI_VISION_API_KEY` | Vision on a chat model that cannot see    | See [Vision](#vision)                 |
 | `SANDBOX_URL`           | Code execution                            | See [Code execution](#code-execution) |
 
@@ -246,14 +246,21 @@ search:
 
 ### Image generation tuning
 
-`OPENAI_IMAGE_API_KEY` enables the `generateImage` tool (OpenAI `/v1/images/generations`). It can reuse your OpenAI key.
-The agent picks the aspect ratio per request; the model and quality are operator-controlled so generation cost stays
-predictable.
+`OPENAI_IMAGE_API_KEY` enables the `generateImage` and `editImage` tools (OpenAI `/v1/images/generations`). It can reuse
+your OpenAI key. The agent picks the aspect ratio per request; the model and quality are operator-controlled so
+generation cost stays predictable.
 
-| Variable               | Default         | Description                                            |
-|------------------------|-----------------|--------------------------------------------------------|
-| `OPENAI_IMAGE_MODEL`   | `gpt-image-1.5` | Image model.                                           |
-| `OPENAI_IMAGE_QUALITY` | `medium`        | Rendering quality: `low`, `medium`, `high`, or `auto`. |
+On `LLM_PROVIDER=codex` the key is optional: with none set, both tools run on the ChatGPT subscription instead, and the
+model defaults to `gpt-image-2`. Setting `OPENAI_IMAGE_API_KEY` always wins, because it bills separately rather than
+spending the same subscription allowance the conversation itself runs on. Two differences are worth knowing before
+relying on the subscription route: images count against your ChatGPT usage limit, so a heavy image day can exhaust the
+same quota that answers messages; and the model chooses its own output dimensions, so the requested aspect ratio is a
+hint rather than a guarantee.
+
+| Variable               | Default                            | Description                                            |
+|------------------------|------------------------------------|--------------------------------------------------------|
+| `OPENAI_IMAGE_MODEL`   | `gpt-image-1.5` / `gpt-image-2` on `codex` | Image model.                                   |
+| `OPENAI_IMAGE_QUALITY` | `medium`                           | Rendering quality: `low`, `medium`, `high`, or `auto`. |
 
 ### Vision
 

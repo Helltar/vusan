@@ -308,6 +308,12 @@ A normal user message travels:
   warning, not a failure — the endpoint is undocumented, so a shape change there must not take a working bot down — but a
   model the account plainly cannot run stops startup with the list of ones it can.
 
+  The same session also covers image generation. `resolveImageRoute` picks `PLATFORM` whenever `OPENAI_IMAGE_API_KEY` is
+  set and `CODEX` otherwise, so a paid key keeps billing separately instead of spending the conversation's own
+  subscription allowance. `OpenAiImageClient` takes an `ImageAuth` telling it which: the generation call differs only by
+  URL and credentials, but the edit call genuinely forks — the Platform endpoint takes a multipart upload while the Codex
+  one takes JSON with the source inlined as a data URL and infers the output size from it.
+
 ## Code execution service
 
 `codeExecution` is the only tool backed by a service living in this repo instead of a third-party API. It is Deno +

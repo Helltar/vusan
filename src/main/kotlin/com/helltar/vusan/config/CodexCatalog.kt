@@ -31,6 +31,18 @@ internal fun codexClientVersion(): String = detectedClientVersion
 /** Whitelisted `codex_cli_rs/<version>` shape, with the real caller named in the trailing comment. */
 internal fun codexUserAgent(): String = "$CODEX_ORIGINATOR/${codexClientVersion()} (Vusan)"
 
+/**
+ * Everything a plain HTTP call to the Codex backend needs: the token plus the two headers Cloudflare
+ * checks. Shared so a second caller cannot quietly omit one and fail only once deployed to a VPS.
+ */
+fun codexImageHeaders(credentials: CodexCredentials): Map<String, String> =
+    buildMap {
+        put("Authorization", "Bearer ${credentials.accessToken}")
+        put("originator", CODEX_ORIGINATOR)
+        put("User-Agent", codexUserAgent())
+        credentials.accountId?.let { put("ChatGPT-Account-ID", it) }
+    }
+
 /** A model the signed-in ChatGPT account may actually run through Codex. */
 data class CodexModel(
     val id: String,
@@ -63,10 +75,7 @@ suspend fun fetchCodexModels(http: HttpClient, auth: CodexAuthStore): List<Codex
         http.get("$CODEX_BACKEND_BASE_URL/models") {
             // the endpoint 400s without it: "query.client_version: Field required"
             parameter("client_version", codexClientVersion())
-            header("Authorization", "Bearer ${credentials.accessToken}")
-            header("originator", CODEX_ORIGINATOR)
-            header("User-Agent", codexUserAgent())
-            credentials.accountId?.let { header("ChatGPT-Account-ID", it) }
+            codexImageHeaders(credentials).forEach { (name, value) -> header(name, value) }
         }.body()
 
     return response.models

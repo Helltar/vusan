@@ -45,7 +45,7 @@ class ImageGenToolsTest {
                     )
                 }
             )
-        return ImageGenTools(OpenAiImageClient(http, "sk-test"), config, outbox, attachedFile = null)
+        return ImageGenTools(OpenAiImageClient(http, ImageAuth.ApiKey("sk-test")), config, outbox, attachedFile = null)
     }
 
     private fun editTools(outbox: BotOutbox, attachedFile: AttachedFile?): ImageGenTools {
@@ -60,7 +60,7 @@ class ImageGenToolsTest {
                     )
                 }
             )
-        return ImageGenTools(OpenAiImageClient(http, "sk-test"), config, outbox, attachedFile)
+        return ImageGenTools(OpenAiImageClient(http, ImageAuth.ApiKey("sk-test")), config, outbox, attachedFile)
     }
 
     private fun imageAttachment(

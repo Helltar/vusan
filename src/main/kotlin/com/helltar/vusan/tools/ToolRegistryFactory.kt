@@ -22,6 +22,9 @@ import com.helltar.vusan.tools.giphy.GiphyTools
 import com.helltar.vusan.tools.grouplog.GroupLogTools
 import com.helltar.vusan.tools.conversation.ConversationTools
 import com.helltar.vusan.tools.imagegen.ImageGenTools
+import com.helltar.vusan.config.CodexAuthStore
+import com.helltar.vusan.config.ImageRoute
+import com.helltar.vusan.tools.imagegen.ImageAuth
 import com.helltar.vusan.tools.imagegen.OpenAiImageClient
 import com.helltar.vusan.tools.images.ImageDownloadClient
 import com.helltar.vusan.tools.memory.MemoryTools
@@ -62,7 +65,10 @@ class ToolRegistryFactory(
     vision: VisionRuntime?,
     private val groupLog: GroupLogRepository?,
     groupLogDigester: GroupLogDigester?,
-    toolResultMaxChars: Int
+    toolResultMaxChars: Int,
+    // present only on LLM_PROVIDER=codex; lets image generation ride the ChatGPT session
+    // instead of needing a second paid key.
+    codexAuth: CodexAuthStore? = null
 ) {
 
     private companion object {
@@ -119,8 +125,15 @@ class ToolRegistryFactory(
         }
 
     private val openAiImageClient =
-        optional("OPENAI_IMAGE_API_KEY", config.openAiImageApiKey, "image generation/editing tools") {
-            OpenAiImageClient(http, it)
+        when (openAiImage?.route) {
+            ImageRoute.CODEX ->
+                codexAuth?.let { OpenAiImageClient(http, ImageAuth.Codex(it)) }
+                    ?: null.also { log.warn { "Codex auth unavailable — image generation/editing tools disabled" } }
+
+            ImageRoute.PLATFORM, null ->
+                optional("OPENAI_IMAGE_API_KEY", config.openAiImageApiKey, "image generation/editing tools") {
+                    OpenAiImageClient(http, ImageAuth.ApiKey(it))
+                }
         }
 
     private val sandboxClient =
