@@ -123,6 +123,22 @@ class TasksRepository {
             } > 0
     }
 
+    /**
+     * Pauses every task scheduled in one chat and answers how many that was. Used when the bot loses the
+     * right to post there: pausing rather than disabling keeps the tasks listed in `/tasks`, so their
+     * owners can resume them if the bot gets back in.
+     */
+    suspend fun pauseAllInChat(chatId: Long): Int = dbTransaction {
+        ScheduledTasksTable
+            .update({
+                (ScheduledTasksTable.chatId eq chatId) and
+                        (ScheduledTasksTable.enabled eq true) and
+                        (ScheduledTasksTable.paused eq false)
+            }) {
+                it[paused] = true
+            }
+    }
+
     suspend fun reschedule(id: Long, nextFireAt: Instant) = dbTransaction {
         ScheduledTasksTable
             .update({ ScheduledTasksTable.id eq id }) {

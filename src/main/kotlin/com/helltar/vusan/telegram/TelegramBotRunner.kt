@@ -13,6 +13,7 @@ import com.helltar.vusan.i18n.Language
 import com.helltar.vusan.i18n.Messages
 import com.helltar.vusan.outbox.BotOutput
 import com.helltar.vusan.request.AttachedFile
+import com.helltar.vusan.tasks.TasksRepository
 import com.helltar.vusan.telegram.callback.InlineChoiceHandler
 import com.helltar.vusan.telegram.callback.InlineChoiceSelection
 import com.helltar.vusan.telegram.callback.TaskMenuHandler
@@ -85,6 +86,7 @@ internal class TelegramBotRunner(
     private val agent: AgentRunner,
     private val taskMenu: TaskMenuHandler,
     private val inlineChoices: InlineChoiceHandler,
+    private val tasks: TasksRepository,
     private val allowedIds: Set<Long>,
     private val bannedIds: Set<Long>,
     private val voiceTranscriber: VoiceTranscriber?,
@@ -212,6 +214,13 @@ internal class TelegramBotRunner(
                     else -> launchUnknownCallbackAnswer(callback)
                 }
 
+                continue
+            }
+
+            val membership = update.myChatMember
+
+            if (membership != null) {
+                launch { parkTasksOnLostAccess(tasks, membership) }
                 continue
             }
 

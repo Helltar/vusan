@@ -11,6 +11,7 @@ import java.lang.reflect.Proxy
 import java.util.concurrent.CompletableFuture
 import kotlin.test.Test
 import kotlin.test.assertEquals
+import kotlin.test.assertFalse
 import kotlin.test.assertNull
 import kotlin.test.assertTrue
 import kotlinx.coroutines.runBlocking
@@ -61,7 +62,7 @@ class TelegramDeliveryTest {
     @Test
     fun `a sticker telegram will not accept is reported to the catalog`() = runBlocking {
         val rejected = mutableListOf<Long>()
-        val client = StickerRejectingClient("Bad Request: wrong remote file identifier specified")
+        val client = RejectingClient("Bad Request: wrong remote file identifier specified")
 
         deliverSticker(TelegramDelivery(client.proxy, onStickerRejected = { rejected += it }))
 
@@ -73,11 +74,64 @@ class TelegramDeliveryTest {
         val rejected = mutableListOf<Long>()
         // a group where admins restricted stickers rejects every one of them; the catalog is shared
         // by every chat, so this must not be read as the sticker being broken.
-        val client = StickerRejectingClient("Bad Request: not enough rights to send stickers to the chat")
+        val client = RejectingClient("Bad Request: not enough rights to send stickers to the chat")
 
         deliverSticker(TelegramDelivery(client.proxy, onStickerRejected = { rejected += it }))
 
         assertTrue(rejected.isEmpty(), "a chat-level refusal was mistaken for a dead file_id")
+    }
+
+    @Test
+    fun `a scheduled send into a chat the bot was removed from reports the chat as gone`() = runBlocking {
+        val client = RejectingClient("Forbidden: bot was kicked from the supergroup chat")
+
+        val unreachable =
+            TelegramDelivery(client.proxy).sendScheduled(
+                result = AgentResult(outputs = emptyList(), comment = "The weekly summary is ready."),
+                chatId = -1L,
+                userId = 2L,
+                messages = Messages.of(Language.ENGLISH)
+            )
+
+        assertTrue(unreachable, "a kicked bot must not keep firing tasks into that chat")
+    }
+
+    @Test
+    fun `a send rejected for its own content leaves the chat usable`() = runBlocking {
+        val client = RejectingClient("Bad Request: message is too long")
+
+        val unreachable =
+            TelegramDelivery(client.proxy).sendScheduled(
+                result = AgentResult(outputs = emptyList(), comment = "The weekly summary is ready."),
+                chatId = -1L,
+                userId = 2L,
+                messages = Messages.of(Language.ENGLISH)
+            )
+
+        assertFalse(unreachable, "one rejected message must not park the chat's tasks")
+    }
+
+    @Test
+    fun `nothing else is attempted once the chat turns out to be gone`() = runBlocking {
+        val client = RejectingClient("Forbidden: bot was kicked from the supergroup chat")
+        val outbox =
+            BotOutbox().apply {
+                enqueue(BotOutput.Photo(oneByte, "first.png"))
+                enqueue(BotOutput.Photo(oneByte, "second.png"))
+                enqueue(BotOutput.Photo(oneByte, "third.png"))
+            }
+
+        val unreachable =
+            TelegramDelivery(client.proxy).sendScheduled(
+                result = AgentResult(outputs = outbox.pending, comment = null),
+                chatId = -1L,
+                userId = 2L,
+                messages = Messages.of(Language.ENGLISH)
+            )
+
+        assertTrue(unreachable)
+        // the chat action of the first item, then its send. the two remaining photos are never tried.
+        assertEquals(2, client.calls)
     }
 
     private suspend fun deliverSticker(delivery: TelegramDelivery) {
@@ -91,7 +145,10 @@ class TelegramDeliveryTest {
         )
     }
 
-    private class StickerRejectingClient(private val description: String) {
+    private class RejectingClient(private val description: String) {
+
+        var calls = 0
+            private set
 
         val proxy: TelegramClient =
             Proxy.newProxyInstance(
@@ -99,6 +156,7 @@ class TelegramDeliveryTest {
                 arrayOf(TelegramClient::class.java)
             ) { _, method, _ ->
                 check(method.name == "executeAsync") { "unexpected client call: ${method.name}" }
+                calls++
 
                 CompletableFuture.failedFuture<Any>(
                     TelegramApiRequestException(

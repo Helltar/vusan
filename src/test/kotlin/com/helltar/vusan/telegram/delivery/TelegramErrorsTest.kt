@@ -85,6 +85,41 @@ class TelegramErrorsTest {
     }
 
     @Test
+    fun `detects a chat the bot can no longer post into`() {
+        val descriptions =
+            listOf(
+                "Forbidden: bot was kicked from the supergroup chat",
+                "Forbidden: bot is not a member of the supergroup chat",
+                "Forbidden: bot was blocked by the user",
+                "Bad Request: chat not found",
+                "Bad Request: CHAT_WRITE_FORBIDDEN",
+                "Bad Request: not enough rights to send text messages to the chat",
+                "Bad Request: group chat was deactivated"
+            )
+
+        descriptions.forEach { description ->
+            assertTrue(telegramError(description).isChatUnreachable(), "expected unreachable for [$description]")
+        }
+    }
+
+    @Test
+    fun `a refusal of one output kind is not read as an unreachable chat`() {
+        // photos or stickers can be off in a chat that still takes text, and the send fallbacks handle
+        // that; treating it as unreachable would park every task scheduled there.
+        val descriptions =
+            listOf(
+                "Bad Request: not enough rights to send photos to the chat",
+                "Bad Request: not enough rights to send stickers to the chat",
+                "Too Many Requests: retry after 30",
+                "Bad Request: message is too long"
+            )
+
+        descriptions.forEach { description ->
+            assertFalse(telegramError(description).isChatUnreachable(), "expected reachable for [$description]")
+        }
+    }
+
+    @Test
     fun `detects the old reply-not-found wording`() {
         val error = telegramError("Bad Request: reply message not found")
 

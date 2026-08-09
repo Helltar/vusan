@@ -63,11 +63,30 @@ class TasksRepositoryTest {
         assertEquals(schedulerNextFire, stored.nextFireAt)
     }
 
-    private suspend fun createTask(nextFireAt: Instant): Long =
+    @Test
+    fun `losing a chat parks every task scheduled there and nothing else`() = runBlocking {
+        val due = Instant.parse("2026-07-28T09:00:00Z")
+        val lostChat = -500L
+
+        val first = createTask(Instant.parse("2026-07-28T08:00:00Z"), chatId = lostChat)
+        val second = createTask(Instant.parse("2026-07-28T08:30:00Z"), chatId = lostChat)
+        val elsewhere = createTask(Instant.parse("2026-07-28T08:45:00Z"), chatId = -600L)
+
+        assertEquals(2, repo.pauseAllInChat(lostChat))
+        assertEquals(listOf(elsewhere), repo.findDue(due).map { it.id })
+
+        // parked, not deleted: they stay listed so their owner can resume them if the bot gets back in.
+        assertTrue(repo.listEnabledByUser(100L).map { it.id }.containsAll(listOf(first, second)))
+
+        // a second removal notice for the same chat must not re-park what is already parked.
+        assertEquals(0, repo.pauseAllInChat(lostChat))
+    }
+
+    private suspend fun createTask(nextFireAt: Instant, chatId: Long = 100L): Long =
         repo.create(
             NewScheduledTask(
                 userId = 100L,
-                chatId = 100L,
+                chatId = chatId,
                 prompt = "send reminder",
                 title = "reminder",
                 recurrence = Recurrence.Once,

@@ -87,6 +87,8 @@ A normal user message travels:
    agent-created inline-choice callback is different: it is validated and consumed by `InlineChoiceHandler`, then its
    selected option enters the agent loop as the user's next turn. Callback data no handler recognizes (a button from
    an older build) is still answered, so the caller's client stops spinning.
+   A `my_chat_member` update — the bot's own membership changing, which Telegram delivers by default — carries no
+   message and goes straight to `telegram/BotMembership.kt` instead of the dispatch below.
 2. **Filter** — `MessageFilter.shouldHandle` drops messages the bot shouldn't answer (in groups:
    only replies, mentions, or targeted commands); `TelegramBotRunner` then checks the allowlist (`ALLOWED_IDS`) and
    rejects unknown chats/users. `BANNED_IDS` is checked first and wins over the allowlist, so a banned user is denied
@@ -172,6 +174,12 @@ A normal user message travels:
       (e.g. Telegram X) render rich messages as unsupported.
     - **Gone targets and blocked DMs** — a reply whose target no longer exists is retried without the anchor
       (`DeliveryTarget.withoutReply`); a private chat the bot cannot write to produces a notice in the group instead.
+    - **Unreachable chats** — a chat that refuses the bot rather than the payload (kicked, left, blocked, deleted,
+      write rights taken away — `TelegramErrors.isChatUnreachable`) is answered differently from every other rejection:
+      no fallback can help, so the send cascade stops instead of buying one more rejection per degradation step, the
+      rest of the queued outputs are abandoned, and `sendScheduled` reports it so `TaskScheduler` can park the chat's
+      tasks. A refusal of one output kind ("not enough rights to send photos") is deliberately *not* this, and keeps
+      its normal media-to-document fallback.
     - **Rate limits** — consecutive sends are paced (`INTER_MESSAGE_DELAY`) to stay under Telegram's per-chat limit.
       Upstream, `BotOutbox` coalesces consecutive `sendMessage` text into the trailing bubble while it fits
       (`MAX_TEXT_MESSAGE_CHARS`), so a model that splits one answer into many messages produces few real sends, and caps
@@ -193,7 +201,13 @@ A normal user message travels:
   with a short backoff, the retry prompt telling the agent that the earlier attempt delivered nothing; a failed
   *delivery* is never repeated, since part of the answer may already be in the chat. Once the attempts are spent the
   chat gets a "failed" notice. Either way the task is advanced/disabled afterwards, so a persistent error cannot
-  re-fire it on every poll tick. Paused tasks remain stored and count toward the per-user task limit, but the due-task
+  re-fire it on every poll tick. A chat the bot cannot write to at all is the exception to that advance: rather than
+  rescheduling one task, `TasksRepository.pauseAllInChat` pauses every task in that chat at once, because otherwise
+  each of them would run a full agent turn on every fire and only discover at delivery that nothing can arrive. It is
+  reached from either end — `TelegramDelivery` reporting the fire (or even the missed/failed notice) as undeliverable,
+  and `parkTasksOnLostAccess` acting on the `my_chat_member` update the moment the bot is removed or silenced. Paused
+  rather than disabled, so the tasks stay listed in `/tasks` and their owners can resume them if the bot gets back in.
+  Paused tasks remain stored and count toward the per-user task limit, but the due-task
   query skips them. A due task is also skipped, silently and without retries, while the daily token budget is spent —
   the same treatment an offline window gets, minus the notice, which would otherwise repeat for every task due until
   the budget resets. A task whose owner or chat is in `BANNED_IDS` is skipped the same way, ahead of the lateness
@@ -401,6 +415,7 @@ A symptom-to-source map for finding the right file fast. Paths are under
 | Vusan answers about a whole message when the user quoted one part of it          | `telegram/inbound/ReplyContext.kt` (`quotedFragmentOrNull` and the `<quoted_fragment>` block) + `agent/SystemPrompt.kt` (what the block means)                                                                                                                                                        |
 | A rich message reads as empty, `unknown`, or loses its structure                 | `telegram/inbound/RichMessageText.kt` (block tree → rich markdown), then `MessageMetadata.contentTypeName`/`textSnippetOrNull` and `ReplyContext.repliedTextOrNull`                                                                                                                                           |
 | Scheduled task fires late, not at all, or reports "missed"/"failed"              | `tasks/TaskScheduler.kt` (polling, lateness, retries) + `tasks/Recurrence.kt` (next-run math)                                                                                                                                                                                                                   |
+| A chat's tasks all went paused on their own, or one keeps firing into a chat the bot was removed from | `telegram/BotMembership.kt` (the `my_chat_member` path) + `telegram/delivery/TelegramErrors.kt` (`isChatUnreachable`) + `tasks/TaskScheduler.kt` (`parkTasksOfUnreachableChat`)                                                                                                                |
 | `/tasks` or a plain-language task pause/resume/cancel fails                      | `telegram/callback/TaskMenuHandler.kt` (rendering, ownership, callbacks) + `tools/tasks/TaskTools.kt` (agent path) + `tasks/TasksRepository.kt` (shared scoped state changes)                                                                                                                                   |
 | `/clear` reports success but history survives                                    | `agent/AgentRunner.kt` (`clearConversation` and the turn lock that also guards the append) + `tools/conversation/ConversationTools.kt` (agent path) + `agent/conversation/ConversationRepository.kt` (shared storage operation)                                                                                            |
 | An agent choice button does nothing, repeats, reaches the wrong user, or its answer lost the photo | `tools/choice/InlineChoiceTools.kt` (tool contract) + `telegram/callback/InlineChoiceHandler.kt` (callback ownership/consumption, parked attachment) + `TelegramBotRunner.dispatchInlineChoiceCallback` (agent follow-up)                                                                             |

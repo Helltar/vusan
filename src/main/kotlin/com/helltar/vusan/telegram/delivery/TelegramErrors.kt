@@ -15,6 +15,20 @@ internal fun Throwable.isForbidden(): Boolean {
     return "forbidden" in description || "chat not found" in description
 }
 
+// nothing at all can be delivered into this chat any more: the bot was kicked or left, the user
+// blocked it, the chat is gone, or an admin took its right to write away. distinct from one output
+// kind being refused (photos off, text still allowed), which the send fallbacks already handle —
+// this one means every further send into the chat, now and on the next fire, is wasted.
+internal fun Throwable.isChatUnreachable(): Boolean {
+    if (isForbidden()) return true
+
+    val description = telegramDescription?.lowercase() ?: return false
+
+    return "chat_write_forbidden" in description ||
+        "not enough rights to send text messages" in description ||
+        "group chat was deactivated" in description
+}
+
 // telegram has used both wordings for a missing reply target, so match either.
 internal fun Throwable.isReplyMessageNotFound(): Boolean {
     val description = telegramDescription?.lowercase() ?: return false

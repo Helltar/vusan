@@ -25,6 +25,8 @@ class TaskScheduler(
     private val bannedIds: Set<Long> = emptySet()
 ) {
 
+    private enum class FireOutcome { Delivered, RunFailed, ChatUnreachable }
+
     private companion object {
         val log = KotlinLogging.logger {}
 
@@ -101,11 +103,18 @@ class TaskScheduler(
 
         // reschedule even when every attempt fails: a task left due would be picked up again on every
         // poll tick, re-running the full agent indefinitely on a persistent error.
-        runCatching { fire(task) }
-            .onFailure {
-                it.rethrowIfCancellation()
-                log.error(it) { "task id=${task.id} run failed; rescheduling" }
-            }
+        val chatUnreachable =
+            runCatching { fire(task) }
+                .getOrElse {
+                    it.rethrowIfCancellation()
+                    log.error(it) { "task id=${task.id} run failed; rescheduling" }
+                    false
+                }
+
+        if (chatUnreachable) {
+            parkTasksOfUnreachableChat(task.chatId)
+            return
+        }
 
         rescheduleAfterFire(task, now)
     }
@@ -118,18 +127,31 @@ class TaskScheduler(
                     "late by ${(now.toEpochMilli() - task.nextFireAt.toEpochMilli()) / 1000}s); user offline window"
         }
 
-        delivery
-            .sendNotice(
-                task.chatId,
-                Messages.of(task.language).taskMissedNotice(task.id, task.title, scheduledLabel)
-            )
+        val delivered =
+            delivery
+                .sendNotice(
+                    task.chatId,
+                    Messages.of(task.language).taskMissedNotice(task.id, task.title, scheduledLabel)
+                )
+
+        // the notice costs one API call and the run costs a whole agent turn, so a chat that refuses
+        // even the notice is caught here rather than on the next on-time fire.
+        if (!delivered) {
+            parkTasksOfUnreachableChat(task.chatId)
+            return
+        }
 
         rescheduleAfterFire(task, now)
     }
 
-    private suspend fun fire(task: ScheduledTask) {
+    // `true` means the chat itself is gone, not that the task failed.
+    private suspend fun fire(task: ScheduledTask): Boolean {
         for (attempt in 1..MAX_ATTEMPTS) {
-            if (runAttempt(task, attempt)) return
+            when (runAttempt(task, attempt)) {
+                FireOutcome.Delivered -> return false
+                FireOutcome.ChatUnreachable -> return true
+                FireOutcome.RunFailed -> Unit
+            }
 
             if (attempt < MAX_ATTEMPTS) {
                 val backoff = RETRY_BACKOFF * attempt
@@ -145,12 +167,21 @@ class TaskScheduler(
 
         log.error { "task id=${task.id} failed on all $MAX_ATTEMPTS attempts; nothing was delivered" }
 
-        delivery.sendNotice(task.chatId, Messages.of(task.language).taskFailedNotice(task.id, task.title))
+        return !delivery.sendNotice(task.chatId, Messages.of(task.language).taskFailedNotice(task.id, task.title))
     }
 
-    // one full run of the task. `false` means the run itself failed with nothing delivered, so it is safe
-    // to repeat; a failed delivery is not retried, since part of the answer may already be in the chat.
-    private suspend fun runAttempt(task: ScheduledTask, attempt: Int): Boolean {
+    // the bot cannot post into this chat any more: it was removed from the group, the user blocked it,
+    // or an admin took its right to write away. every task scheduled there would run the whole agent and
+    // only then fail at the send, so the whole chat is parked at once instead of once per task per fire.
+    private suspend fun parkTasksOfUnreachableChat(chatId: Long) {
+        val paused = repo.pauseAllInChat(chatId)
+
+        log.warn { "chat=$chatId is unreachable; paused $paused scheduled task(s) there" }
+    }
+
+    // one full run of the task. `RunFailed` means the run itself failed with nothing delivered, so it is
+    // safe to repeat; a failed delivery is not retried, since part of the answer may already be in the chat.
+    private suspend fun runAttempt(task: ScheduledTask, attempt: Int): FireOutcome {
         log.info {
             "firing task id=${task.id} user=${task.userId} chat=${task.chatId} " +
                     "recurrence=[${task.recurrence.display}] attempt=$attempt/$MAX_ATTEMPTS"
@@ -179,23 +210,26 @@ class TaskScheduler(
                 }
                 .getOrNull()
                 ?.takeUnless { it.failed }
-                ?: return false
+                ?: return FireOutcome.RunFailed
 
-        runCatching {
-            delivery.sendScheduled(
-                result = result,
-                chatId = task.chatId,
-                userId = task.userId,
-                messages = Messages.of(task.language),
-                attribution = attributionFor(task)
-            )
-        }.onFailure {
-            it.rethrowIfCancellation()
+        val chatUnreachable =
+            runCatching {
+                delivery.sendScheduled(
+                    result = result,
+                    chatId = task.chatId,
+                    userId = task.userId,
+                    messages = Messages.of(task.language),
+                    attribution = attributionFor(task)
+                )
+            }.getOrElse {
+                it.rethrowIfCancellation()
 
-            log.error(it) { "task id=${task.id} fired but delivery failed; not retrying to avoid duplicates" }
-        }
+                log.error(it) { "task id=${task.id} fired but delivery failed; not retrying to avoid duplicates" }
 
-        return true
+                false
+            }
+
+        return if (chatUnreachable) FireOutcome.ChatUnreachable else FireOutcome.Delivered
     }
 
     private suspend fun rescheduleAfterFire(task: ScheduledTask, now: Instant) {

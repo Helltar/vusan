@@ -114,7 +114,7 @@ suspend fun main() = coroutineScope {
 
         val botRunner =
             TelegramBotRunner(
-                telegramClient, config.telegramBotToken, delivery, agentRunner, taskMenu, inlineChoices,
+                telegramClient, config.telegramBotToken, delivery, agentRunner, taskMenu, inlineChoices, tasks,
                 config.allowedIds, config.bannedIds, voiceTranscriber, botProfile, stickerCatalog, groupLog
             )
 

@@ -26,6 +26,13 @@ internal fun rethrowIfReplyNotFound(error: Throwable, replyParameters: ReplyPara
     if (replyParameters != null && error.isReplyMessageNotFound()) throw error
 }
 
+// every fallback here degrades the payload, which cannot help when the chat refuses the bot rather
+// than the content: the document retry and the text retry would each buy one more rejection. stop the
+// cascade and let the caller act on it — delivery reports the chat, the scheduler parks its tasks.
+internal fun rethrowIfChatUnreachable(error: Throwable) {
+    if (error.isChatUnreachable()) throw error
+}
+
 internal suspend fun sendWithHtmlFallback(send: suspend (parseMode: String?) -> Unit) {
     runCatching { send(ParseMode.HTML) }
         .recoverCatching { e ->
@@ -82,12 +89,14 @@ internal suspend fun sendMediaWithDocumentFallback(
         .recoverCatching { e ->
             e.rethrowIfCancellation()
             rethrowIfReplyNotFound(e, replyParameters)
+            rethrowIfChatUnreachable(e)
             log.warn(e) { "$mediaLabel failed for chat=$chatId, retrying as document" }
             sendDocumentWithCaptionFallback(client, chatId, bytes, filename, caption, replyParameters, formattingFileNotice)
         }
         .onFailure { e ->
             e.rethrowIfCancellation()
             rethrowIfReplyNotFound(e, replyParameters)
+            rethrowIfChatUnreachable(e)
             log.warn(e) { "$mediaLabel document fallback failed for chat=$chatId, falling back to text" }
             onTextFallback()
         }
@@ -103,6 +112,7 @@ internal suspend fun sendOrFallback(
     runCatching { send() }.onFailure { e ->
         e.rethrowIfCancellation()
         rethrowIfReplyNotFound(e, replyParameters)
+        rethrowIfChatUnreachable(e)
         log.warn(e) { "$failureMessage chat=$chatId" }
         onFallback()
     }
@@ -141,6 +151,7 @@ internal suspend fun sendTextAsDocument(
         )
     }.recoverCatching { e ->
         e.rethrowIfCancellation()
+        rethrowIfChatUnreachable(e)
         log.warn(e) { "Document fallback failed for chat=$chatId, sending plain text" }
         sendTextMessage(client, chatId, text, parseMode = null, replyParameters = replyParameters)
     }.getOrThrow()
@@ -164,6 +175,7 @@ internal suspend fun sendMarkdownDocument(
         )
     }.recoverCatching { e ->
         e.rethrowIfCancellation()
+        rethrowIfChatUnreachable(e)
         log.warn(e) { "Markdown document fallback failed for chat=$chatId, sending plain text" }
         sendTextMessage(client, chatId, markdown, parseMode = null, replyParameters = replyParameters)
     }.getOrThrow()

@@ -153,6 +153,9 @@ internal object TelegramOutputSender {
             }
         }.onFailure { e ->
             e.rethrowIfCancellation()
+            // a failed reaction never breaks a turn — except when it failed because the chat is gone,
+            // which the caller has to hear about.
+            rethrowIfChatUnreachable(e)
             log.warn(e) {
                 "setMessageReaction failed chat=$chatId message=${reaction.messageId} emoji=[${reaction.emoji}]"
             }

@@ -119,7 +119,9 @@ class TelegramDelivery(
                 copy(replyToMessageId = null)
     }
 
-    private enum class ItemDeliveryOutcome { Ok, ReplyMissing, PrivateBlocked }
+    private enum class ItemDeliveryOutcome { Ok, ReplyMissing, PrivateBlocked, ChatUnreachable }
+
+    private data class DispatchOutcome(val replyUnavailable: Boolean, val chatUnreachable: Boolean)
 
     suspend fun send(message: Message, result: AgentResult) {
         dispatch(
@@ -131,29 +133,33 @@ class TelegramDelivery(
         )
     }
 
+    /** Returns `true` when the chat turned out to be unreachable, so the caller can stop firing into it. */
     suspend fun sendScheduled(
         result: AgentResult,
         chatId: Long,
         userId: Long,
         messages: Messages,
         attribution: ScheduledAttribution? = null
-    ) {
+    ): Boolean {
         val plainTarget = DeliveryTarget(chatId = chatId)
 
         if (attribution?.creatorMessageId == null) {
             attribution?.let { sendNotice(chatId, it.headerText) }
-            dispatch(result, plainTarget, plainTarget, senderPrivateChatId = userId, messages = messages)
-            return
+
+            return dispatch(result, plainTarget, plainTarget, senderPrivateChatId = userId, messages = messages)
+                .chatUnreachable
         }
 
         val anchorTarget = DeliveryTarget(chatId, replyToMessageId = attribution.creatorMessageId)
 
-        val replyUnavailable =
+        val outcome =
             dispatch(result, anchorTarget, plainTarget, senderPrivateChatId = userId, messages = messages)
 
-        if (replyUnavailable) {
+        if (outcome.replyUnavailable && !outcome.chatUnreachable) {
             sendNotice(chatId, attribution.headerText)
         }
+
+        return outcome.chatUnreachable
     }
 
     suspend fun sendCallback(
@@ -173,14 +179,20 @@ class TelegramDelivery(
         )
     }
 
-    /** Send a plain-text notice from the bot itself (no reply anchor, no formatting fallback retry chain). */
-    suspend fun sendNotice(chatId: Long, text: String) {
-        runCatching { TelegramOutputSender.sendText(client, chatId, text, replyParameters = null) }
-            .onFailure {
-                it.rethrowIfCancellation()
-                log.warn(it) { "failed to send notice to chat=$chatId" }
-            }
-    }
+    /**
+     * Send a plain-text notice from the bot itself (no reply anchor, no formatting fallback retry chain).
+     * Returns `false` only when the chat itself is unreachable; any other failure is logged and reported
+     * as sent, since it says nothing about whether the next message would arrive.
+     */
+    suspend fun sendNotice(chatId: Long, text: String): Boolean =
+        runCatching {
+            TelegramOutputSender.sendText(client, chatId, text, replyParameters = null)
+            true
+        }.getOrElse { error ->
+            error.rethrowIfCancellation()
+            log.warn(error) { "failed to send notice to chat=$chatId" }
+            !error.isChatUnreachable()
+        }
 
     private suspend fun dispatch(
         result: AgentResult,
@@ -188,13 +200,14 @@ class TelegramDelivery(
         currentChatTarget: DeliveryTarget,
         senderPrivateChatId: Long?,
         messages: Messages
-    ): Boolean {
+    ): DispatchOutcome {
         val comment = result.comment?.takeIf { it.isNotBlank() }
         var replyUnavailable = false
+        var chatUnreachable = false
         var privateBlockedNoticed = false
 
         suspend fun deliverCommentText(text: String, origin: DeliveryTarget) {
-            val deliveredWithoutReply =
+            when (
                 deliverText(
                     text = text,
                     toPrivate = result.commentToPrivate,
@@ -202,19 +215,22 @@ class TelegramDelivery(
                     senderPrivateChatId = senderPrivateChatId,
                     messages = messages
                 )
-
-            if (deliveredWithoutReply) replyUnavailable = true
+            ) {
+                ItemDeliveryOutcome.ReplyMissing -> replyUnavailable = true
+                ItemDeliveryOutcome.ChatUnreachable -> chatUnreachable = true
+                ItemDeliveryOutcome.Ok, ItemDeliveryOutcome.PrivateBlocked -> Unit
+            }
         }
 
         if (result.outputs.isEmpty()) {
             comment?.let { deliverCommentText(text = it, origin = originTarget) }
-            return replyUnavailable
+            return DispatchOutcome(replyUnavailable, chatUnreachable)
         }
 
         val captionIndex =
             comment?.takeIf { it.length <= MAX_CAPTION_CHARS }?.let { singleCaptionIndex(result.outputs) } ?: -1
 
-        result.outputs.forEachIndexed { index, item ->
+        for ((index, item) in result.outputs.withIndex()) {
             if (index > 0) delay(INTER_MESSAGE_DELAY)
 
             val caption = comment?.takeIf { index == captionIndex }
@@ -241,17 +257,23 @@ class TelegramDelivery(
                     privateBlockedNoticed = true
                     notifyPrivateChatBlocked(originTarget, messages)
                 }
+
+                // every remaining item would fail the same way, so stop paying for the round trips.
+                ItemDeliveryOutcome.ChatUnreachable -> {
+                    chatUnreachable = true
+                    break
+                }
             }
         }
 
-        if (captionIndex < 0 && comment != null) {
+        if (captionIndex < 0 && comment != null && !chatUnreachable) {
             // a trailing comment always follows at least one item send above (the empty-outputs case
             // returned earlier), so pace it the same as the loop.
             delay(INTER_MESSAGE_DELAY)
             deliverCommentText(comment, if (replyUnavailable) originTarget.withoutReply() else originTarget)
         }
 
-        return replyUnavailable
+        return DispatchOutcome(replyUnavailable, chatUnreachable)
     }
 
     private fun singleCaptionIndex(outputs: List<OutboxItem>): Int {
@@ -297,6 +319,11 @@ class TelegramDelivery(
 
             if (routedToPrivate && isPrivateChatBlocked(e)) {
                 return ItemDeliveryOutcome.PrivateBlocked
+            }
+
+            if (!routedToPrivate && e.isChatUnreachable()) {
+                log.warn(e) { "chat=${deliveryTarget.chatId} no longer accepts messages from the bot" }
+                return ItemDeliveryOutcome.ChatUnreachable
             }
 
             if (item is BotOutput.Sticker && e.isWrongFileIdentifier()) {
@@ -363,14 +390,12 @@ class TelegramDelivery(
         originTarget: DeliveryTarget,
         senderPrivateChatId: Long?,
         messages: Messages
-    ): Boolean {
+    ): ItemDeliveryOutcome {
         val privateTarget = senderPrivateChatId?.takeIf { toPrivate }?.let(::DeliveryTarget)
         val routedToPrivate = privateTarget != null
         val deliveryTarget = privateTarget ?: originTarget
 
-        try {
-            indicateAction(deliveryTarget.chatId, ActionType.TYPING)
-            sendReplyText(deliveryTarget, text, messages)
+        suspend fun record() =
             recordBotMessage(
                 chatId = deliveryTarget.chatId,
                 routedToPrivate = routedToPrivate,
@@ -379,30 +404,34 @@ class TelegramDelivery(
                 descriptor = null,
                 answering = originTarget.replyToMessageId
             )
-            return false
+
+        try {
+            indicateAction(deliveryTarget.chatId, ActionType.TYPING)
+            sendReplyText(deliveryTarget, text, messages)
+            record()
+            return ItemDeliveryOutcome.Ok
         } catch (e: Throwable) {
             e.rethrowIfCancellation()
 
             if (!routedToPrivate && deliveryTarget.replyToMessageId != null && e.isReplyMessageNotFound()) {
                 sendReplyText(deliveryTarget.withoutReply(), text, messages)
-                recordBotMessage(
-                chatId = deliveryTarget.chatId,
-                routedToPrivate = routedToPrivate,
-                senderPrivateChatId = senderPrivateChatId,
-                text = text,
-                descriptor = null,
-                answering = originTarget.replyToMessageId
-            )
-                return true
+                record()
+                return ItemDeliveryOutcome.ReplyMissing
             }
 
             if (routedToPrivate && isPrivateChatBlocked(e)) {
                 notifyPrivateChatBlocked(originTarget, messages)
-            } else {
-                log.warn(e) { "failed to send text to chat=${deliveryTarget.chatId}" }
+                return ItemDeliveryOutcome.PrivateBlocked
             }
 
-            return false
+            if (!routedToPrivate && e.isChatUnreachable()) {
+                log.warn(e) { "chat=${deliveryTarget.chatId} no longer accepts messages from the bot" }
+                return ItemDeliveryOutcome.ChatUnreachable
+            }
+
+            log.warn(e) { "failed to send text to chat=${deliveryTarget.chatId}" }
+
+            return ItemDeliveryOutcome.Ok
         }
     }
 
