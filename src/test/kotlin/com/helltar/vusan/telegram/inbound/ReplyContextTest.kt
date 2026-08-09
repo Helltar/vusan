@@ -104,19 +104,19 @@ class ReplyContextTest {
         val message =
             message(
                 """
-                "text": "це шо",
-                "quote": {"text": "Вічний Мангекьо Шарінган", "position": 147, "is_manual": true}
+                "text": "what is this",
+                "quote": {"text": "the second engine stage", "position": 147, "is_manual": true}
                 """
             )
 
         val withoutQuote =
             message(
                 """
-                "text": "так а шо він робить"
+                "text": "what is this"
                 """
             )
 
-        assertEquals("Вічний Мангекьо Шарінган", message.quotedFragmentOrNull())
+        assertEquals("the second engine stage", message.quotedFragmentOrNull())
         assertNull(withoutQuote.quotedFragmentOrNull())
     }
 
@@ -126,13 +126,13 @@ class ReplyContextTest {
     fun `formatAgentInput carries a quoted fragment without a reply summary`() {
         val prompt =
             formatAgentInput(
-                currentMessageText = "це шо",
+                currentMessageText = "what is this",
                 repliedMessage = null,
-                quotedFragment = "Вічний Мангекьо Шарінган"
+                quotedFragment = "the second engine stage"
             )
 
         assertFalse(prompt.contains("<reply_context>"))
-        assertTrue(prompt.contains("<quoted_fragment>\nВічний Мангекьо Шарінган\n</quoted_fragment>"))
+        assertTrue(prompt.contains("<quoted_fragment>\nthe second engine stage\n</quoted_fragment>"))
         assertTrue(prompt.indexOf("</quoted_fragment>") < prompt.indexOf("<user_message>"))
     }
 
@@ -172,12 +172,12 @@ class ReplyContextTest {
     fun `a quoted fragment is stored with the history entry`() {
         val historyText =
             formatConversationInput(
-                currentMessageText = "це шо",
+                currentMessageText = "what is this",
                 repliedMessage = null,
-                quotedFragment = "Вічний Мангекьо Шарінган"
+                quotedFragment = "the second engine stage"
             )
 
-        assertTrue(historyText.contains("<quoted_fragment>\nВічний Мангекьо Шарінган\n</quoted_fragment>"))
+        assertTrue(historyText.contains("<quoted_fragment>\nthe second engine stage\n</quoted_fragment>"))
     }
 
     @Test
