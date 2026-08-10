@@ -21,6 +21,7 @@ import ai.koog.prompt.executor.clients.openai.OpenAIClientSettings
 import ai.koog.prompt.executor.clients.openai.OpenAILLMClient
 import ai.koog.prompt.executor.clients.openai.OpenAIModels
 import ai.koog.prompt.executor.clients.openai.OpenAIResponsesParams
+import ai.koog.prompt.executor.clients.openai.base.models.ReasoningEffort
 import ai.koog.prompt.executor.clients.openai.models.ReasoningConfig
 import ai.koog.prompt.llm.LLMCapability
 import ai.koog.prompt.llm.LLMProvider
@@ -43,6 +44,16 @@ data class LlmRuntime(
     // instead of diluting the chat prefix OpenAI keeps warm for every turn.
     val compactionParams: LLMParams = chatParams
 )
+
+// the effort only ever reaches the model through the request params, so read it back from there
+// instead of carrying the provider config around just to report it.
+val LlmRuntime.reasoningEffort: ReasoningEffort?
+    get() =
+        when (val params = chatParams) {
+            is OpenAIChatParams -> params.reasoningEffort
+            is OpenAIResponsesParams -> params.reasoning?.effort
+            else -> null
+        }
 
 fun resolveLlmRuntime(config: LlmProviderConfig, codexAuth: CodexAuthStore? = null): LlmRuntime {
     val timeoutConfig = connectionTimeouts(config.requestTimeout)

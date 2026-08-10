@@ -109,6 +109,7 @@ suspend fun main() = coroutineScope {
         val chatProfiles = ChatProfiles(telegramClient, botProfile.userId)
         val taskMenu = TaskMenuHandler(telegramClient, tasks, config.maxTasksPerUser)
         val inlineChoices = InlineChoiceHandler(telegramClient, conversation::revision)
+
         val scheduler =
             TaskScheduler(
                 tasks, agentRunner, delivery, config.taskMaxLatenessMinutes.minutes, chatProfiles, tokenBudget,
@@ -168,6 +169,7 @@ private suspend fun codexPreflight(
     if (auth == null || config !is LlmProviderConfig.Codex) return config
 
     val plan = auth.planType()
+
     log.info { "Codex: signed in to ChatGPT${plan?.let { " (plan=[$it])" }.orEmpty()}" }
 
     val discovered = verifyCodexModel(http, auth, config.model) ?: return config
@@ -186,7 +188,10 @@ private fun logStartup(
     toolNames: List<String>,
     tokenBudget: TokenBudgetConfig
 ) {
-    log.info { "Starting Vusan: provider=[${llm.providerLabel}] model=[${llm.model.id}]" }
+    log.info {
+        "Starting Vusan: provider=[${llm.providerLabel}] model=[${llm.model.id}]" +
+                llm.reasoningEffort?.let { " reasoningEffort=[${it.name.lowercase()}]" }.orEmpty()
+    }
 
     if (tokenBudget.dailyTokens == null) {
         log.info { "Daily token budget: unlimited" }

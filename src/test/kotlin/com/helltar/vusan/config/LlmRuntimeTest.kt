@@ -105,6 +105,16 @@ class LlmRuntimeTest {
     }
 
     @Test
+    fun `runtime reports the reasoning effort of either endpoint`() {
+        assertEquals(ReasoningEffort.NONE, openAiCompatible(reasoningEffort = ReasoningEffort.NONE).reasoningEffort)
+        assertEquals(
+            ReasoningEffort.HIGH,
+            openAiCompatible(endpoint = OpenAiEndpoint.RESPONSES, reasoningEffort = ReasoningEffort.HIGH).reasoningEffort
+        )
+        assertNull(openAiCompatible().reasoningEffort)
+    }
+
+    @Test
     fun `official OpenAI compatible endpoint uses the prompt cache key`() {
         val completions =
             openAiCompatible(baseUrl = "https://API.openai.com/")
