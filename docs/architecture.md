@@ -417,6 +417,11 @@ system prompt → (only with a vision runtime) the
 `TaskScheduler` and the sticker description worker, then block on the runner job until shutdown (closing the executor,
 HTTP client, and DB in `finally`).
 
+The runner's first act is `publishCommandMenu` (`telegram/CommandMenu.kt`): a `setMyCommands` call per `Language`, so
+the menu Telegram shows follows `dispatchText` without an operator step. It writes the same list BotFather's
+`/setcommands` edits, which means a manual edit there is replaced on the next start. A rejected call is a warning, not
+a failed startup — an out-of-date menu is not worth refusing to serve over.
+
 ## Where to look when…
 
 A symptom-to-source map for finding the right file fast. Paths are under

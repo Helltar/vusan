@@ -73,9 +73,9 @@ what they describe:
   when no new env var is involved.
 - Telegram slash commands: `TelegramBotRunner.dispatchText` is the source of
   truth. Keep the `Telegram commands` section in `agent/SystemPrompt.kt`, the
-  BotFather `/setcommands` block in [`docs/configuration.md`](docs/configuration.md),
-  and the direct-command flow in [`docs/architecture.md`](docs/architecture.md)
-  aligned with it.
+  menu published by `telegram/CommandMenu.kt` (with a description per `Language`
+  in `i18n/Messages`), and the direct-command flow in
+  [`docs/architecture.md`](docs/architecture.md) aligned with it.
 - `sandbox/packages.ts` / `sandbox/extra-wheels.txt` and the
   `Available libraries` line in `tools/sandbox/SandboxToolDescriptions.kt`: the
   image and that line must agree, or the model offers a library that cannot be

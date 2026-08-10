@@ -56,13 +56,10 @@ A permission lookup that fails is treated as "unrestricted", so a Telegram hiccu
 
 ## Telegram command menu
 
-To expose the direct commands in Telegram's menu, paste this into
-BotFather's `/setcommands`:
+Nothing to set up: the bot publishes its own command menu on every start, in each language it speaks.
 
-```text
-tasks - Manage scheduled tasks
-clear - Clear conversation history
-```
+That is the same list BotFather's `/setcommands` edits — there is no separate one — so an edit made
+there survives only until the bot restarts.
 
 ## LLM provider
 

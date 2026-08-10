@@ -27,6 +27,10 @@ interface Messages {
     val taskMenuBackButton: String
     val taskMenuDeleteButton: String
 
+    /** Command menu entries, as Telegram lists them next to the input field. */
+    val tasksCommandDescription: String
+    val clearCommandDescription: String
+
     fun voiceTooLongReply(durationSeconds: Long, maxSeconds: Long): String
 
     fun tokenBudgetExhaustedReply(untilReset: Duration): String
@@ -128,6 +132,9 @@ internal object EnglishMessages : Messages {
     override val taskMenuBackButton = "↩️ Back"
 
     override val taskMenuDeleteButton = "🗑 Delete"
+
+    override val tasksCommandDescription = "Manage scheduled tasks"
+    override val clearCommandDescription = "Clear conversation history"
 
     override fun voiceTooLongReply(durationSeconds: Long, maxSeconds: Long): String =
         "That voice message is ${durationSeconds}s long — I can only transcribe up to ${maxSeconds}s, " +
@@ -276,6 +283,9 @@ internal object UkrainianMessages : Messages {
     override val taskMenuBackButton = "↩️ Назад"
 
     override val taskMenuDeleteButton = "🗑 Видалити"
+
+    override val tasksCommandDescription = "Керувати запланованими завданнями"
+    override val clearCommandDescription = "Очистити історію переписки"
 
     override fun voiceTooLongReply(durationSeconds: Long, maxSeconds: Long): String =
         "Це голосове триває ${durationSeconds}с — я можу розпізнати щонайбільше ${maxSeconds}с, " +

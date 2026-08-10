@@ -157,6 +157,8 @@ internal class TelegramBotRunner(
         // handlers inherit this dispatcher; without it, they would run on the single-threaded
         // event loop of `suspend main` instead of parallelizing across cores.
         return scope.launch(Dispatchers.Default) {
+            client.publishCommandMenu()
+
             try {
                 processUpdates(updates, profile)
             } finally {
@@ -343,8 +345,8 @@ internal class TelegramBotRunner(
         when {
             command == null -> handleTextUpdate(message, content, profile)
             command.matches("start", profile) -> handleStartCommand(message, profile)
-            command.matches("tasks", profile) -> handleTasksCommand(message, profile)
-            command.matches("clear", profile) -> handleClearCommand(message, profile)
+            command.matches(TASKS_COMMAND, profile) -> handleTasksCommand(message, profile)
+            command.matches(CLEAR_COMMAND, profile) -> handleClearCommand(message, profile)
             else -> Unit
         }
     }
