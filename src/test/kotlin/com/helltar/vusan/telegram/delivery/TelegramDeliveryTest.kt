@@ -172,11 +172,22 @@ class TelegramDeliveryTest {
     }
 
     @Test
-    fun `translates each tool activity to its chat action`() {
-        assertEquals(ActionType.UPLOAD_PHOTO, chatActionFor(ToolActivity.PHOTO))
-        assertEquals(ActionType.UPLOAD_VIDEO, chatActionFor(ToolActivity.VIDEO))
-        assertEquals(ActionType.RECORD_VOICE, chatActionFor(ToolActivity.VOICE))
-        assertEquals(ActionType.UPLOAD_DOCUMENT, chatActionFor(ToolActivity.DOCUMENT))
-        assertEquals(ActionType.TYPING, chatActionFor(ToolActivity.TEXT))
+    fun `translates a media-producing activity to its chat action`() {
+        assertEquals(ActionType.UPLOAD_PHOTO, chatActionFor(ToolActivity.DRAWING))
+        assertEquals(ActionType.UPLOAD_PHOTO, chatActionFor(ToolActivity.SEARCHING_IMAGES))
+        assertEquals(ActionType.UPLOAD_VIDEO, chatActionFor(ToolActivity.DOWNLOADING_VIDEO))
+        assertEquals(ActionType.UPLOAD_VIDEO, chatActionFor(ToolActivity.SEARCHING_GIF))
+        assertEquals(ActionType.RECORD_VOICE, chatActionFor(ToolActivity.SPEAKING))
+        assertEquals(ActionType.UPLOAD_DOCUMENT, chatActionFor(ToolActivity.SENDING_FILE))
+        assertEquals(ActionType.UPLOAD_DOCUMENT, chatActionFor(ToolActivity.DOWNLOADING_AUDIO))
+    }
+
+    @Test
+    fun `everything that produces no media reads as typing`() {
+        assertEquals(ActionType.TYPING, chatActionFor(null))
+        assertEquals(ActionType.TYPING, chatActionFor(ToolActivity.WRITING))
+        assertEquals(ActionType.TYPING, chatActionFor(ToolActivity.SEARCHING_WEB))
+        assertEquals(ActionType.TYPING, chatActionFor(ToolActivity.RUNNING_CODE))
+        assertEquals(ActionType.TYPING, chatActionFor(ToolActivity.WATCHING_VIDEO))
     }
 }

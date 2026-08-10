@@ -3,7 +3,6 @@ package com.helltar.vusan.telegram
 import com.helltar.vusan.agent.AgentRequest
 import com.helltar.vusan.agent.AgentResult
 import com.helltar.vusan.agent.AgentRunner
-import com.helltar.vusan.agent.ToolActivity
 import com.helltar.vusan.agent.grouplog.GroupLogRepository
 import com.helltar.vusan.common.collapseWhitespaceAndCap
 import com.helltar.vusan.common.limitTo
@@ -21,7 +20,6 @@ import com.helltar.vusan.telegram.callback.inlineChoiceAgentInput
 import com.helltar.vusan.telegram.delivery.TelegramDelivery
 import com.helltar.vusan.telegram.delivery.TelegramOutputSender
 import com.helltar.vusan.telegram.delivery.answerCallbackQuery
-import com.helltar.vusan.telegram.delivery.chatActionFor
 import com.helltar.vusan.telegram.delivery.replyParameters
 import com.helltar.vusan.telegram.inbound.AudioInput
 import com.helltar.vusan.telegram.inbound.BotCommand
@@ -64,13 +62,9 @@ import io.github.oshai.kotlinlogging.KotlinLogging
 import kotlinx.coroutines.*
 import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.channels.ReceiveChannel
-import kotlinx.coroutines.flow.MutableStateFlow
-import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.selects.onTimeout
 import kotlinx.coroutines.selects.select
 import org.telegram.telegrambots.longpolling.TelegramBotsLongPollingApplication
-import org.telegram.telegrambots.meta.api.methods.ActionType
-import org.telegram.telegrambots.meta.api.methods.send.SendChatAction
 import org.telegram.telegrambots.meta.api.objects.CallbackQuery
 import org.telegram.telegrambots.meta.api.objects.Update
 import org.telegram.telegrambots.meta.api.objects.User
@@ -127,9 +121,6 @@ internal class TelegramBotRunner(
 
         // telegram caps an album at ten items, so a group with that many parts is complete.
         const val MAX_ALBUM_PARTS = 10
-
-        // Telegram clears a chat action after ~5s, so re-assert it just under that.
-        val ACTION_REFRESH = 4.seconds
 
         // album parts arrive as separate updates with a shared media_group_id and no terminator;
         // a group is treated as complete once the update stream stays quiet this long.
@@ -782,19 +773,14 @@ internal class TelegramBotRunner(
         }
 
         try {
-            // a live indicator runs through the whole agent turn: it starts as typing and switches to the
-            // action of the currently executing tool (upload_photo while an image generates, etc.). delivery
-            // then shows its own per-item action. a plain typing action would force typing the whole time.
+            // the agent gets the setter so the indicator follows the tool it is running; delivery then
+            // shows its own per-item action.
             val result =
-                withLiveChatAction(request.chatId) { setAction ->
-                    val onToolStarting = { activity: ToolActivity ->
-                        setAction(chatActionFor(activity))
-                    }
-
+                client.withLiveProgress(request) { setActivity ->
                     if (waitForTurn)
-                        agent.handleQueued(request, onToolStarting)
+                        agent.handleQueued(request, setActivity)
                     else
-                        agent.handle(request, onToolStarting)
+                        agent.handle(request, setActivity)
                 }
 
             // a question with buttons ends the turn without answering, so whatever it was asked about has
@@ -805,6 +791,8 @@ internal class TelegramBotRunner(
                 file = request.attachedFile?.takeIf { result.outputs.any { it.output is BotOutput.InlineChoice } }
             )
 
+            // the progress draft has to become the reply, so it is handed the text just before the send.
+            client.handOffProgressDraft(request, result)
             deliver(result)
         } catch (error: Throwable) {
             error.rethrowIfCancellation()
@@ -820,40 +808,6 @@ internal class TelegramBotRunner(
                         "failed to send fallback error reply for chat=${request.chatId} user=${request.userId}"
                     }
                 }
-        }
-    }
-
-    // keep a chat action alive for the whole [block], re-asserting it every [ACTION_REFRESH] (Telegram
-    // clears an action after a few seconds). [block] receives a setter to switch the action mid-run;
-    // [collectLatest] cancels the in-flight refresh loop and re-sends immediately when it changes.
-    private suspend fun <T> withLiveChatAction(chatId: Long, block: suspend ((ActionType) -> Unit) -> T): T =
-        coroutineScope {
-            val action = MutableStateFlow(ActionType.TYPING)
-
-            val ticker =
-                launch {
-                    action.collectLatest { current ->
-                        // collectLatest cancels this block's own child job on a new action, which the
-                        // outer launch's isActive would not reflect.
-                        while (currentCoroutineContext().isActive) {
-                            runCatching { indicateChatAction(chatId, current) }
-                                .onFailure { it.rethrowIfCancellation() }
-
-                            delay(ACTION_REFRESH)
-                        }
-                    }
-                }
-
-            try {
-                block { action.value = it }
-            } finally {
-                ticker.cancel()
-            }
-        }
-
-    private suspend fun indicateChatAction(chatId: Long, action: ActionType) {
-        client.api {
-            executeAsync(SendChatAction.builder().chatId(chatId).action(action.toString()).build())
         }
     }
 

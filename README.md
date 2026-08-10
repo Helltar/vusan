@@ -99,6 +99,8 @@ Prerequisites: JDK 21, plus `ffmpeg` and `yt-dlp` on `PATH`.
 
 ### In the chat
 
+- **Live progress** — in a private chat it says what it is busy with — searching, running code,
+  drawing — instead of leaving you watching a typing indicator.
 - **Inline choices** — when it needs a specific decision or confirmation, it can ask with buttons
   and continue as soon as you tap one.
 - **Polls and quizzes** — creates real Telegram polls and quizzes, not a text imitation.

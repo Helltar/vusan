@@ -72,13 +72,14 @@ private fun BotOutput.groupLogDescriptor(): String? = when (this) {
 
 // the chat action shown while a tool runs, so a slow media-producing call (image generation,
 // video download, speech synthesis) hints at what is coming. the activity itself is resolved in the
-// agent layer (`toolActivityFor`); here it is only translated to a concrete Telegram action.
-internal fun chatActionFor(activity: ToolActivity): ActionType = when (activity) {
-    ToolActivity.PHOTO -> ActionType.UPLOAD_PHOTO
-    ToolActivity.VIDEO -> ActionType.UPLOAD_VIDEO
-    ToolActivity.VOICE -> ActionType.RECORD_VOICE
-    ToolActivity.DOCUMENT -> ActionType.UPLOAD_DOCUMENT
-    ToolActivity.TEXT -> ActionType.TYPING
+// agent layer (`toolActivityFor`); here it is only translated to a concrete Telegram action. anything
+// that produces no media — and a turn with no tool running — reads as plain typing.
+internal fun chatActionFor(activity: ToolActivity?): ActionType = when (activity) {
+    ToolActivity.SEARCHING_IMAGES, ToolActivity.DRAWING -> ActionType.UPLOAD_PHOTO
+    ToolActivity.SEARCHING_GIF, ToolActivity.DOWNLOADING_VIDEO -> ActionType.UPLOAD_VIDEO
+    ToolActivity.DOWNLOADING_AUDIO, ToolActivity.SENDING_FILE -> ActionType.UPLOAD_DOCUMENT
+    ToolActivity.SPEAKING -> ActionType.RECORD_VOICE
+    else -> ActionType.TYPING
 }
 
 data class ScheduledAttribution(

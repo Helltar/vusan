@@ -100,7 +100,7 @@ class AgentFactory(
         outbox: BotOutbox,
         toolEvents: (ToolEvent) -> Unit,
         tokenUsage: (TokenUsage) -> Unit,
-        onToolStarting: (activity: ToolActivity) -> Unit = {}
+        onToolStarting: (activity: ToolActivity?) -> Unit = {}
     ): AIAgent<String, String> {
         val seededPrompt =
             prompt(id = "vusan-user-$userId", params = chatParams) {

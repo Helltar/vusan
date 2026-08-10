@@ -1,5 +1,6 @@
 package com.helltar.vusan.i18n
 
+import com.helltar.vusan.agent.ToolActivity
 import kotlin.time.Duration
 
 interface Messages {
@@ -65,6 +66,12 @@ interface Messages {
     fun taskScheduledByNotice(mention: String): String
 
     fun taskFollowUpNotice(mention: String): String
+
+    /**
+     * What the progress draft says while [activity] runs. Present tense and no trailing punctuation:
+     * the client animates its own ellipsis after the text, so a written one shows up twice.
+     */
+    fun progressLabel(activity: ToolActivity): String
 
     companion object {
         fun of(language: Language): Messages =
@@ -201,6 +208,28 @@ internal object EnglishMessages : Messages {
     override fun taskScheduledByNotice(mention: String) = "⏰ Scheduled by $mention"
 
     override fun taskFollowUpNotice(mention: String) = "💬 Following up with $mention"
+
+    override fun progressLabel(activity: ToolActivity): String =
+        when (activity) {
+            ToolActivity.WRITING -> "Writing a reply"
+            ToolActivity.SEARCHING_WEB -> "Searching the web"
+            ToolActivity.READING_PAGE -> "Reading the page"
+            ToolActivity.READING_CHANNEL -> "Reading the channel"
+            ToolActivity.READING_TRANSCRIPT -> "Reading the video transcript"
+            ToolActivity.READING_CHAT_LOG -> "Reading the chat history"
+            ToolActivity.SEARCHING_IMAGES -> "Looking for pictures"
+            ToolActivity.SEARCHING_GIF -> "Looking for a GIF"
+            ToolActivity.DRAWING -> "Drawing"
+            ToolActivity.RUNNING_CODE -> "Running code"
+            ToolActivity.LOOKING_AT_IMAGE -> "Looking at the image"
+            ToolActivity.WATCHING_VIDEO -> "Watching the video"
+            ToolActivity.DOWNLOADING_VIDEO -> "Downloading the video"
+            ToolActivity.DOWNLOADING_AUDIO -> "Getting the audio"
+            ToolActivity.SENDING_FILE -> "Preparing the file"
+            ToolActivity.SPEAKING -> "Recording a voice message"
+            ToolActivity.REMEMBERING -> "Updating what I remember"
+            ToolActivity.MANAGING_TASKS -> "Updating your scheduled tasks"
+        }
 }
 
 internal object UkrainianMessages : Messages {
@@ -327,4 +356,26 @@ internal object UkrainianMessages : Messages {
     override fun taskScheduledByNotice(mention: String) = "⏰ Заплановано: $mention"
 
     override fun taskFollowUpNotice(mention: String) = "💬 Повертаюся до розмови з $mention"
+
+    override fun progressLabel(activity: ToolActivity): String =
+        when (activity) {
+            ToolActivity.WRITING -> "Пишу відповідь"
+            ToolActivity.SEARCHING_WEB -> "Шукаю в інтернеті"
+            ToolActivity.READING_PAGE -> "Читаю сторінку"
+            ToolActivity.READING_CHANNEL -> "Читаю канал"
+            ToolActivity.READING_TRANSCRIPT -> "Читаю субтитри до відео"
+            ToolActivity.READING_CHAT_LOG -> "Читаю історію чату"
+            ToolActivity.SEARCHING_IMAGES -> "Шукаю картинки"
+            ToolActivity.SEARCHING_GIF -> "Шукаю GIF"
+            ToolActivity.DRAWING -> "Малюю"
+            ToolActivity.RUNNING_CODE -> "Виконую код"
+            ToolActivity.LOOKING_AT_IMAGE -> "Дивлюся на зображення"
+            ToolActivity.WATCHING_VIDEO -> "Дивлюся відео"
+            ToolActivity.DOWNLOADING_VIDEO -> "Завантажую відео"
+            ToolActivity.DOWNLOADING_AUDIO -> "Дістаю аудіо"
+            ToolActivity.SENDING_FILE -> "Готую файл"
+            ToolActivity.SPEAKING -> "Записую голосове"
+            ToolActivity.REMEMBERING -> "Оновлюю памʼять"
+            ToolActivity.MANAGING_TASKS -> "Оновлюю заплановані завдання"
+        }
 }

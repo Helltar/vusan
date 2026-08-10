@@ -93,7 +93,7 @@ class AgentRunner(
 
     private val conversationLocks = HashMap<ConversationKey, ConversationLock>()
 
-    suspend fun handle(request: AgentRequest, onToolStarting: (activity: ToolActivity) -> Unit = {}): AgentResult {
+    suspend fun handle(request: AgentRequest, onToolStarting: (activity: ToolActivity?) -> Unit = {}): AgentResult {
         val key = ConversationKey(request.userId, request.chatId)
         val lock = retainLock(key)
 
@@ -117,7 +117,7 @@ class AgentRunner(
 
     suspend fun handleQueued(
         request: AgentRequest,
-        onToolStarting: (activity: ToolActivity) -> Unit = {}
+        onToolStarting: (activity: ToolActivity?) -> Unit = {}
     ): AgentResult {
         val key = ConversationKey(request.userId, request.chatId)
         val lock = retainLock(key)
@@ -145,7 +145,7 @@ class AgentRunner(
         }
     }
 
-    private suspend fun runAgent(request: AgentRequest, onToolStarting: (activity: ToolActivity) -> Unit = {}): AgentResult {
+    private suspend fun runAgent(request: AgentRequest, onToolStarting: (activity: ToolActivity?) -> Unit = {}): AgentResult {
         tokenBudget.stopFor(request.userId)?.let { stop ->
             log.warn {
                 "token budget stop before the turn: chat=${request.chatId} user=${request.userId} " +
@@ -160,7 +160,7 @@ class AgentRunner(
         return withContext(BudgetOwner(request.userId)) { runTurn(request, onToolStarting) }
     }
 
-    private suspend fun runTurn(request: AgentRequest, onToolStarting: (activity: ToolActivity) -> Unit): AgentResult {
+    private suspend fun runTurn(request: AgentRequest, onToolStarting: (activity: ToolActivity?) -> Unit): AgentResult {
         val context =
             RequestContext(
                 chatId = request.chatId,
@@ -398,7 +398,7 @@ class AgentRunner(
         outbox: BotOutbox,
         toolEvents: MutableList<ToolEvent>,
         tokenUsages: MutableList<TokenUsage>,
-        onToolStarting: (activity: ToolActivity) -> Unit
+        onToolStarting: (activity: ToolActivity?) -> Unit
     ): String {
         suspend fun run(prompt: PromptConversation): String =
             agentFactory

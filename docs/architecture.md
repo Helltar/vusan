@@ -166,11 +166,31 @@ A normal user message travels:
    answers with the canned reply (`AgentResult.failed`).
 7. **Deliver** — `TelegramDelivery.send` routes each `BotOutput` to the chat, or to the user's private chat when a tool
    requested it, anchoring replies to the original message.
-    - **Chat action** — a live indicator runs through the whole turn (`TelegramBotRunner.withLiveChatAction`): it starts
-      as `typing`, then follows the executing tool, e.g. `upload_photo` while an image generates. Koog's
-      `onToolCallStarting` resolves the running tool to a neutral `ToolActivity` (`agent/ToolActivity.kt`, keyed by
-      `@Tool` method references); the Telegram layer translates that to a chat action (`chatActionFor`). During delivery
-      each item is preceded by the action matching its own content (`botActionFor`).
+    - **Live progress** — an indicator runs through the whole turn (`telegram/TelegramProgress.kt`,
+      `withLiveProgress`). Koog's `onToolCallStarting` resolves the running tool to a neutral `ToolActivity`
+      (`agent/ToolActivity.kt`, keyed by `@Tool` method references), and the Telegram layer renders it one of two ways:
+      in a private chat as a message draft carrying the words for it (`Messages.progressLabel`), everywhere else as a
+      chat action (`chatActionFor`, e.g. `upload_photo` while an image generates). Only one is on screen — a draft
+      announces the same turn the action would, so the action carries the turn until the first draft lands and then
+      stands down, and it keeps the turn to itself if drafts are rejected. A tool too fast to read a caption for is left
+      unmapped and reads as `null`: plain `typing`, and no draft. During delivery each item is still preceded by the
+      action matching its own content (`botActionFor`).
+    - **Progress drafts** — `sendMessageDraft` is Telegram's surface for a generating agent: a 30-second ephemeral
+      preview, re-pushed every `DRAFT_REFRESH` and animated between updates that share a `draft_id` (derived per turn by
+      `draftIdFor`, which Telegram requires to be non-zero). The Bot API accepts it for **private chats only**; a group
+      turn keeps the chat action alone. A draft never touches `BotOutbox` or `TelegramDelivery` — it is not an output.
+    - **Ending a draft** — a draft cannot be withdrawn, and it does not step aside for the reply: it *becomes* the
+      message whose text starts with the draft's own text, and otherwise sits there until it expires. So the turn ends
+      by handing the answer to the draft (`handOffProgressDraft`) immediately before delivery sends it, which requires
+      the text that will land first (`draftHandoffText`: a queued `BotOutput.Text`, or the closing comment when nothing
+      was queued). A reply that opens with media, a voice note or a rich message has nothing to hand over and leaves the
+      last progress caption to expire — visible on Telegram Desktop, which keeps a stale draft on screen, while Android
+      drops it as soon as the reply lands.
+    - **Why a draft needs a named activity** — a live draft blocks the send button on mobile until it turns into a
+      message, and a turn that answers with a reaction alone, or stays silent, has no message to release it and no way
+      to withdraw it. Such a turn never resolves a tool to a named `ToolActivity` (`setReaction` is deliberately
+      unmapped), so the draft opens on the first non-null activity instead of at the start of the turn, and never
+      reverts to the placeholder afterwards. Pure thinking is carried by the chat action alone.
     - **HTML and its fallbacks** — text and captions go out with Telegram's `HTML` parse mode; `agent/SystemPrompt.kt`
       instructs the agent to use only the supported tags and escape `<`/`>`/`&`. Models still slip in `<br>`, so
       `TelegramOutputSender` turns `<br>`-style tags into real newlines instead of letting Telegram reject the whole
@@ -412,6 +432,7 @@ A symptom-to-source map for finding the right file fast. Paths are under
 | A specific tool misbehaves                                                       | `tools/<feature>/<Feature>Tools.kt` for the tool surface, plus its `<Feature>Client.kt` for the external call                                                                                                                                                                                         |
 | Code execution times out, says "busy", or loses produced files                   | `tools/sandbox/SandboxClient.kt` (HTTP call + wait budget), then the service in [`sandbox/`](../sandbox/): `main.ts` (worker pool, `503` when none free) and `worker.ts` (Pyodide setup, output caps)                                                                                                 |
 | Wrong language in a canned reply (busy/error/voice/start/task menu)              | `i18n/Language.kt` (language selection) + `i18n/Messages.kt` (the strings)                                                                                                                                                                                                                            |
+| The typing indicator or the progress draft is wrong, stale, or missing           | `telegram/TelegramProgress.kt` (both tickers, the private-chat gate, the named-activity gate, `handOffProgressDraft`) + `agent/ToolActivity.kt` (which tool means what) + `i18n/Messages.progressLabel` (the words) + `telegram/delivery/TelegramDelivery.chatActionFor` (the action)                                                     |
 | A long research turn ends in the generic error reply or is answered mid-way      | `agent/AgentFactory.kt` (`maxIterations`, `outOfToolBudget` and the wrap-up node that lands the turn) + `agent/AgentRunner.kt` (delivering what the outbox holds when a run fails)                                                                                                                     |
 | Vusan forgets context or the history recap looks wrong                           | `agent/conversation/ConversationPlan.kt` (budget/selection) + `agent/conversation/ConversationCompactor.kt` (semantic recap) + `agent/conversation/ConversationRepository.kt` (storage/checkpoint)                                                                                                                         |
 | A group recap misses messages, or `readGroupLog` returns too little              | `telegram/TelegramBotRunner.recordGroupLog` + `telegram/inbound/GroupLogEntries.kt` (what gets recorded at all), then `agent/grouplog/GroupLogReader.kt` (window budget, day split, digest cache) and `agent/grouplog/GroupLogRepository.kt` (retention and the per-chat row cap)                              |
