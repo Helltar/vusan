@@ -3,7 +3,9 @@ package com.helltar.vusan.i18n
 enum class Language(val codes: Set<String>) {
 
     ENGLISH(setOf("en")),
-    UKRAINIAN(setOf("uk"));
+    UKRAINIAN(setOf("uk")),
+    RUSSIAN(setOf("ru")),
+    SPANISH(setOf("es"));
 
     companion object {
         val DEFAULT = ENGLISH

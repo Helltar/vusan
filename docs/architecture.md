@@ -68,9 +68,10 @@ Telegram ──► telegram/ ──► agent/ ──► tools/ ──► externa
 - **`stt/`** — OpenAI speech-to-text client (`OpenAiWhisperClient`, default model
   `gpt-4o-transcribe`); used for voice transcription and for the sound of a video the vision tool watches, opt-in via
   `OPENAI_STT_API_KEY`.
-- **`i18n/`** — user-facing message strings, one `Messages` implementation per `Language`.
-  `Language.fromCode` picks the language from the sender's Telegram language code (default English); add a language by
-  adding an enum entry and a `Messages` impl.
+- **`i18n/`** — user-facing message strings: the `Messages` interface, and one implementation per `Language` in a file of
+  its own (English, Ukrainian, Russian, Spanish). `Language.fromCode` picks the language from the sender's Telegram
+  language code, falling back to English. Adding a language is an enum entry plus a `Messages` file — the exhaustive
+  `when` in `Messages.of` and the interface itself make the compiler name everything still missing.
 - **`common/`** — tiny shared utilities: prompt/text helpers (`Strings.kt`) and cancellation rethrow
   (`Cancellation.kt`).
 

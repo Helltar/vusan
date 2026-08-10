@@ -9,6 +9,8 @@ class LanguageTest {
     fun `maps primary subtag to language`() {
         assertEquals(Language.UKRAINIAN, Language.fromCode("uk"))
         assertEquals(Language.ENGLISH, Language.fromCode("en"))
+        assertEquals(Language.RUSSIAN, Language.fromCode("ru"))
+        assertEquals(Language.SPANISH, Language.fromCode("es"))
     }
 
     @Test
@@ -16,6 +18,7 @@ class LanguageTest {
         assertEquals(Language.ENGLISH, Language.fromCode("en-US"))
         assertEquals(Language.UKRAINIAN, Language.fromCode("UK-ua"))
         assertEquals(Language.UKRAINIAN, Language.fromCode("  uk  "))
+        assertEquals(Language.SPANISH, Language.fromCode("es-MX"))
     }
 
     @Test
@@ -31,6 +34,8 @@ class LanguageTest {
     fun `resolves messages per language`() {
         assertEquals(EnglishMessages, Messages.of(Language.ENGLISH))
         assertEquals(UkrainianMessages, Messages.of(Language.UKRAINIAN))
+        assertEquals(RussianMessages, Messages.of(Language.RUSSIAN))
+        assertEquals(SpanishMessages, Messages.of(Language.SPANISH))
         assertEquals(UkrainianMessages, Messages.forCode("uk"))
         assertEquals(EnglishMessages, Messages.forCode(null))
     }
