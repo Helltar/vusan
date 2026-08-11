@@ -423,6 +423,15 @@ the menu Telegram shows follows `dispatchText` without an operator step. It writ
 `/setcommands` edits, which means a manual edit there is replaced on the next start. A rejected call is a warning, not
 a failed startup — an out-of-date menu is not worth refusing to serve over.
 
+Registration also wraps the session's `getUpdates` generator, so every poll cycle marks `infra/Heartbeat`, which keeps
+`/tmp/health` fresh for as long as the loop turns; the image's `HEALTHCHECK` reads nothing but that file's age, and the
+runner cancels the heartbeat when it shuts down. The hook belongs on the generator rather than the update consumer
+because the session skips the consumer entirely when a batch comes back empty — a bot nobody writes to would otherwise
+look dead within minutes. Freshness follows the loop rather than whether Telegram answers, so a brief outage upstream
+does not mark every bot unhealthy over something a restart cannot fix — while a long one does, once the session's
+backoff decays to a 15-minute retry interval and a restart becomes the thing that clears it. See
+[Health check](configuration.md#health-check).
+
 ## Where to look when…
 
 A symptom-to-source map for finding the right file fast. Paths are under
@@ -431,6 +440,7 @@ A symptom-to-source map for finding the right file fast. Paths are under
 | Symptom                                                                          | Start here                                                                                                                                                                                                                                                                                            |
 |----------------------------------------------------------------------------------|-------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
 | Vusan ignores a message entirely                                                 | `telegram/inbound/MessageFilter.kt` (`shouldHandle` — group reply/mention rules), then `TelegramBotRunner.isAccepted`/`isIdAllowed` (the `ALLOWED_IDS` allowlist and the `BANNED_IDS` ban list)                                                                                                                                               |
+| Container says `Up` but the bot answers nothing                                  | `infra/Heartbeat.kt` (the `/tmp/health` freshness signal, and the `ERROR` logged once when polling stalls) + `TelegramBotRunner.start` (the `getUpdates` generator hook that feeds it)                                                                                                                                        |
 | Reply says "still working on your previous request"                              | `agent/AgentRunner.kt` — the per-conversation `Mutex` rejects a second concurrent turn in the same chat                                                                                                                                                                                                                      |
 | Reply lands in the wrong chat, loses its reply anchor, or DM redirect misbehaves | `telegram/delivery/TelegramDelivery.kt` (routing/anchor/private-redirect *policy*)                                                                                                                                                                                                                             |
 | Formatting renders wrong, message rejected, or media falls back to document/text | `agent/SystemPrompt.kt` (allowed HTML tags the agent emits), `telegram/delivery/TelegramOutputSender.kt` (which call and which fallback each output kind gets), `telegram/delivery/TelegramSendFallbacks.kt` (the fallback *mechanism* itself), `telegram/delivery/TelegramErrors.kt` (which provider errors trigger a fallback) |

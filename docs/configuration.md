@@ -457,3 +457,50 @@ them.
 
 `YT_DLP_COOKIES_FILE` must point to a Netscape-format `cookies.txt`; see
 the [yt-dlp wiki](https://github.com/yt-dlp/yt-dlp/wiki/Extractors#exporting-youtube-cookies).
+
+## Health check
+
+The image ships a Docker `HEALTHCHECK`, so `docker ps` and `docker compose ps` report whether the bot
+is actually working rather than just whether its process exists:
+
+```
+$ docker compose ps
+NAME              STATUS
+vusan-container   Up 6 hours (healthy)
+```
+
+There is nothing to configure. Vusan refreshes `/tmp/health` every 30 seconds for as long as its
+`getUpdates` loop keeps cycling, and the check fails once that file is older than 90 seconds. A
+container needs about two minutes to report the first `healthy`, which is the startup grace period.
+
+What this catches is a bot that is running but no longer polling — the process is alive, the
+container says `Up`, and nothing new appears in the logs. Long polling runs on a scheduled executor
+that the JVM outlives, so without the heartbeat that state is invisible from outside.
+
+An idle chat is not a failure, so the heartbeat follows poll cycles rather than incoming messages: a
+bot nobody writes to all day stays healthy.
+
+When polling does stall, the log says so once, at `ERROR`, instead of simply going quiet.
+
+### When Telegram is unreachable
+
+A short outage does not make the bot unhealthy. Its polling loop retries on an exponential backoff
+that tops out around a minute — well inside the staleness window — and it resumes on its own once
+Telegram answers again. Nothing needs to happen, and a check that failed here would fail on every bot
+at once over something a restart cannot fix.
+
+Past roughly 15 minutes of continuous failures that changes. The backoff stops growing and begins
+sleeping 15 minutes between attempts, so the container goes unhealthy — and here that is worth acting
+on. A bot retrying four times an hour is polling in name only, and once Telegram recovers it can stay
+silent for another 15 minutes until its next attempt. Restarting the container resets the backoff and
+it picks up straight away, which makes this one of the few failures a restart genuinely fixes.
+
+An outage that hangs connections instead of refusing them trips the check sooner, because every
+attempt then burns its 100-second read timeout before the next cycle starts.
+
+To act on the status automatically, pair it with a container that restarts unhealthy services, or
+point an uptime monitor at Docker's health state. To read it directly:
+
+```bash
+docker inspect --format '{{.State.Health.Status}}' vusan-container
+```

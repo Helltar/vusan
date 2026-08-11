@@ -10,6 +10,7 @@ import com.helltar.vusan.common.rethrowIfCancellation
 import com.helltar.vusan.common.xmlBlock
 import com.helltar.vusan.i18n.Language
 import com.helltar.vusan.i18n.Messages
+import com.helltar.vusan.infra.Heartbeat
 import com.helltar.vusan.outbox.BotOutput
 import com.helltar.vusan.request.AttachedFile
 import com.helltar.vusan.tasks.TasksRepository
@@ -65,6 +66,8 @@ import kotlinx.coroutines.channels.ReceiveChannel
 import kotlinx.coroutines.selects.onTimeout
 import kotlinx.coroutines.selects.select
 import org.telegram.telegrambots.longpolling.TelegramBotsLongPollingApplication
+import org.telegram.telegrambots.longpolling.util.DefaultGetUpdatesGenerator
+import org.telegram.telegrambots.meta.TelegramUrl
 import org.telegram.telegrambots.meta.api.objects.CallbackQuery
 import org.telegram.telegrambots.meta.api.objects.Update
 import org.telegram.telegrambots.meta.api.objects.User
@@ -129,6 +132,8 @@ internal class TelegramBotRunner(
         val log = KotlinLogging.logger {}
     }
 
+    private val heartbeat = Heartbeat()
+
     fun start(scope: CoroutineScope): Job {
         log.info { "Bot started as ${profile.username ?: profile.userId}, allowed ids=${allowedIds.sorted()}" }
 
@@ -152,16 +157,32 @@ internal class TelegramBotRunner(
         // dispatch (and album aggregation) happens inside the coroutine world.
         val updates = Channel<Update>(Channel.UNLIMITED)
         val longPolling = TelegramBotsLongPollingApplication()
-        longPolling.registerBot(botToken) { batch -> batch.forEach { updates.trySend(it) } }
+        val getUpdates = DefaultGetUpdatesGenerator()
+
+        // the generator is where the heartbeat hooks in, because the session calls it once per poll
+        // cycle before every request. the consumer below would not do: the session skips it entirely
+        // on an empty batch, so a bot nobody writes to would look dead within minutes.
+        longPolling.registerBot(
+            botToken,
+            { TelegramUrl.DEFAULT_URL },
+            { offset ->
+                heartbeat.markPoll()
+                getUpdates.apply(offset)
+            }
+        ) { batch -> batch.forEach { updates.trySend(it) } }
 
         // handlers inherit this dispatcher; without it, they would run on the single-threaded
         // event loop of `suspend main` instead of parallelizing across cores.
         return scope.launch(Dispatchers.Default) {
+            val heartbeatJob = heartbeat.launchIn(this)
+
             client.publishCommandMenu()
 
             try {
                 processUpdates(updates, profile)
             } finally {
+                heartbeatJob.cancel()
+
                 runCatching { longPolling.close() }
                     .onFailure { log.warn(it) { "failed to stop long polling cleanly" } }
             }
