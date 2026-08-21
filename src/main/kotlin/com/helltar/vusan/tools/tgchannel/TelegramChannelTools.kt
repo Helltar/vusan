@@ -3,115 +3,51 @@ package com.helltar.vusan.tools.tgchannel
 import ai.koog.agents.core.tools.annotations.LLMDescription
 import ai.koog.agents.core.tools.annotations.Tool
 import ai.koog.agents.core.tools.reflect.ToolSet
-import com.helltar.vusan.common.limitTo
-import com.helltar.vusan.common.rethrowIfCancellation
+import com.helltar.vusan.tasks.Recurrence
 import com.helltar.vusan.tools.suspendToolGuard
+import kotlin.time.Duration.Companion.days
 
-private const val MAX_POST_TEXT_CHARS = 800
-private const val MAX_IMAGE_DESCRIPTION_CHARS = 600
-private const val MAX_LINKS_PER_POST = 6
-private const val MAX_IMAGES_TO_DESCRIBE = 4
+private val MAX_WINDOW = 30.days
 
 @Suppress("unused")
-class TelegramChannelTools(
-    private val client: TelegramChannelClient,
-    private val imageDescriber: TelegramChannelImageDescriber?
-) : ToolSet {
+class TelegramChannelTools(private val reader: TelegramChannelReader) : ToolSet {
 
     @Tool
     @LLMDescription(TelegramChannelToolDescriptions.READ_TELEGRAM_CHANNEL_POSTS)
     suspend fun readTelegramChannelPosts(
         @LLMDescription(TelegramChannelToolDescriptions.CHANNEL)
         channel: String,
+        @LLMDescription(TelegramChannelToolDescriptions.WINDOW)
+        window: String = "",
+        @LLMDescription(TelegramChannelToolDescriptions.QUERY)
+        query: String = "",
         @LLMDescription(TelegramChannelToolDescriptions.MAX_POSTS)
-        maxPosts: Int = 12,
+        maxPosts: Int = 0,
         @LLMDescription(TelegramChannelToolDescriptions.DESCRIBE_IMAGES)
         describeImages: Boolean = true,
         @LLMDescription(TelegramChannelToolDescriptions.IMAGE_FOCUS)
         imageFocus: String = ""
     ): String = suspendToolGuard {
-        val page = client.read(channel = channel, maxPosts = maxPosts)
+        val trimmedWindow = window.trim()
 
-        // no vision model configured means no describer, so the post text is all that comes back
-        val imageDescriptions =
-            imageDescriber
-                ?.takeIf { describeImages }
-                ?.let { describePostImages(page, imageFocus, it) }
-                .orEmpty()
-
-        if (page.posts.isEmpty()) {
-            return@suspendToolGuard "No public posts found for @${page.username} at ${page.url}. " +
-                    "The channel may be private, empty, age-restricted, unavailable, or blocked by Telegram web preview."
-        }
-
-        buildString {
-            appendLine("Telegram channel @${page.username}: ${page.title}")
-            appendLine("Source: ${page.url}")
-            appendLine("Posts read: ${page.posts.size} recent post(s), newest first.")
-
-            page.posts.forEachIndexed { index, post ->
-                appendLine()
-                append(index + 1)
-                append(". Post ")
-                appendLine(post.id)
-                appendLine("URL: ${post.url}")
-                post.datetime?.let { appendLine("Date: $it") }
-                post.views?.let { appendLine("Views: $it") }
-                appendLine("Media: ${if (post.hasMedia) "yes" else "no"}")
-                appendLine("Text:")
-                appendLine(post.text.ifBlank { "[media post without text]" }.trimPostText())
-
-                imageDescriptions[post.id]?.let { descriptions ->
-                    appendLine("Image descriptions:")
-                    descriptions.forEachIndexed { imageIndex, description ->
-                        appendLine("- Image ${imageIndex + 1}: ${description.limitTo(MAX_IMAGE_DESCRIPTION_CHARS)}")
-                    }
+        val parsedWindow =
+            trimmedWindow
+                .takeIf { it.isNotEmpty() }
+                ?.let {
+                    Recurrence.parseInterval(it)
+                        ?: return@suspendToolGuard "Unknown window=`$it`. Use a duration like `6h`, `24h`, `2d`, or `7d`."
                 }
 
-                val links = post.links.take(MAX_LINKS_PER_POST)
+        if (parsedWindow != null && parsedWindow > MAX_WINDOW)
+            return@suspendToolGuard "Window `$trimmedWindow` is too long. A channel can be read back `30d` at most."
 
-                if (links.isNotEmpty()) {
-                    appendLine("Links:")
-                    links.forEach { appendLine("- $it") }
-                    if (post.links.size > MAX_LINKS_PER_POST) {
-                        appendLine("- ...and ${post.links.size - MAX_LINKS_PER_POST} more")
-                    }
-                }
-            }
-        }.trim()
+        reader.read(
+            channel = channel,
+            window = parsedWindow,
+            query = query.trim(),
+            maxPosts = maxPosts,
+            describeImages = describeImages,
+            imageFocus = imageFocus.trim()
+        )
     }
-
-    private suspend fun describePostImages(
-        page: TelegramChannelPage,
-        focus: String,
-        describer: TelegramChannelImageDescriber
-    ): Map<String, List<String>> {
-        val result = linkedMapOf<String, MutableList<String>>()
-        var remaining = MAX_IMAGES_TO_DESCRIBE
-
-        for (post in page.posts) {
-            if (remaining <= 0) break
-
-            for (imageUrl in post.imageUrls) {
-                if (remaining <= 0) break
-
-                val description =
-                    runCatching {
-                        val image = client.downloadImage(imageUrl)
-                        describer.describe(image, post, focus)
-                    }.getOrElse { t ->
-                        t.rethrowIfCancellation()
-                        "Could not inspect image: ${t.message ?: t::class.simpleName}"
-                    }
-
-                result.getOrPut(post.id) { mutableListOf() } += description
-                remaining--
-            }
-        }
-
-        return result
-    }
-
-    private fun String.trimPostText(): String =
-        trim().limitTo(MAX_POST_TEXT_CHARS)
 }

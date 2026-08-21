@@ -5,23 +5,32 @@ import io.ktor.client.request.*
 import io.ktor.client.statement.*
 import io.ktor.http.*
 
+// t.me serves the preview only to a browser-shaped client.
+private const val USER_AGENT = "Mozilla/5.0 (compatible; VusanBot/1.0; +https://t.me)"
+
 class TelegramChannelClient(private val http: HttpClient) {
 
-    suspend fun read(channel: String, maxPosts: Int = 12): TelegramChannelPage {
-        val reference = TelegramChannelReference.parse(channel)
-        val limit = maxPosts.coerceIn(1, 20)
+    internal suspend fun read(
+        reference: TelegramChannelReference,
+        before: Long? = null,
+        query: String = "",
+        maxPosts: Int = POSTS_PER_PAGE
+    ): TelegramChannelPage {
+        val url = reference.webPreviewUrl(before, query)
+        val response: HttpResponse = http.get(url) { header(HttpHeaders.UserAgent, USER_AGENT) }
 
-        val response: HttpResponse =
-            http.get(reference.webPreviewUrl) {
-                header("User-Agent", "Mozilla/5.0 (compatible; VusanBot/1.0; +https://t.me)")
-            }
+        // a username that is not a channel with a public preview (a bot, a user, a group, a channel
+        // that turned the preview off, or nothing at all) redirects to the plain t.me/<name> page.
+        val previewAvailable = response.request.url.encodedPath.startsWith("/s/")
 
-        return TelegramChannelParser.parse(
-            html = response.bodyAsText(),
-            username = reference.username,
-            url = reference.webPreviewUrl,
-            maxPosts = limit
-        )
+        return TelegramChannelParser
+            .parse(
+                html = response.bodyAsText(),
+                username = reference.username,
+                url = url,
+                maxPosts = maxPosts
+            )
+            .copy(previewAvailable = previewAvailable)
     }
 
     suspend fun downloadImage(url: String): TelegramChannelImage {

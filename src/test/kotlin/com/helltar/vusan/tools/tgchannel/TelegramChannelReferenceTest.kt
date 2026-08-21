@@ -15,6 +15,18 @@ class TelegramChannelReferenceTest {
     }
 
     @Test
+    fun `webPreviewUrl carries the search and the backwards cursor`() {
+        val reference = TelegramChannelReference.parse("example_channel")
+
+        assertEquals("https://t.me/s/example_channel", reference.webPreviewUrl())
+        assertEquals("https://t.me/s/example_channel?before=517", reference.webPreviewUrl(before = 517))
+        assertEquals(
+            "https://t.me/s/example_channel?q=release%20notes&before=517",
+            reference.webPreviewUrl(before = 517, query = "release notes")
+        )
+    }
+
+    @Test
     fun `parse rejects private and invite links`() {
         assertFailsWith<IllegalArgumentException> {
             TelegramChannelReference.parse("https://t.me/c/123456/78")

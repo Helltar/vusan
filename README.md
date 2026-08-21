@@ -80,8 +80,8 @@ Prerequisites: JDK 21, plus `ffmpeg` and `yt-dlp` on `PATH`.
 
 - **Web search** — searches the web and reads the pages it finds.
 - **Image search** — finds pictures on the web and sends them.
-- **Telegram channels** — reads recent posts from any public channel, and can look at the images
-  in them.
+- **Telegram channels** — recaps what a public channel posted over a day or a week, searches
+  it by keyword, and reads the memes and screenshots it posts instead of words.
 - **Currency** — live exchange rates.
 
 ### YouTube

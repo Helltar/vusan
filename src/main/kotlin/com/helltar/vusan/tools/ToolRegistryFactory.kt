@@ -43,6 +43,7 @@ import com.helltar.vusan.tools.tavily.TavilyClient
 import com.helltar.vusan.tools.tavily.TavilyTools
 import com.helltar.vusan.tools.tgchannel.TelegramChannelClient
 import com.helltar.vusan.tools.tgchannel.TelegramChannelImageDescriber
+import com.helltar.vusan.tools.tgchannel.TelegramChannelReader
 import com.helltar.vusan.tools.tgchannel.TelegramChannelTools
 import com.helltar.vusan.tools.vision.ImageVisionClient
 import com.helltar.vusan.tools.vision.VideoVisionClient
@@ -100,8 +101,10 @@ class ToolRegistryFactory(
 
     private val telegramChannel =
         TelegramChannelTools(
-            telegramChannelClient,
-            vision?.let { TelegramChannelImageDescriber(it.executor, it.model) }
+            TelegramChannelReader(
+                telegramChannelClient,
+                vision?.let { TelegramChannelImageDescriber(it.executor, it.model) }
+            )
         )
 
     private val tavilyClient =

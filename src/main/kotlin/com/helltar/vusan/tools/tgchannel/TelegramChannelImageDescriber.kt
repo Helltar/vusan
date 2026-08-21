@@ -48,7 +48,7 @@ class TelegramChannelImageDescriber(
                         appendLine()
                         appendLine("Post metadata:")
                         appendLine("- post_url: ${post.url}")
-                        post.datetime?.let { appendLine("- datetime: $it") }
+                        post.postedAt?.let { appendLine("- posted_at: $it") }
                         post.text.takeIf { it.isNotBlank() }?.let {
                             appendLine("- post_text:")
                             appendLine(it.limitTo(1_000))
