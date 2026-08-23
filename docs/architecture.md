@@ -371,7 +371,9 @@ A normal user message travels:
   Model discovery runs at startup through `config/CodexCatalog`: the account's own catalog decides which ids and context
   window are valid, since Codex and the Platform API expose different model sets. A catalog that cannot be read is a
   warning, not a failure — the endpoint is undocumented, so a shape change there must not take a working bot down — but a
-  model the account plainly cannot run stops startup with the list of ones it can.
+  model the account plainly cannot run stops startup with the list of ones it can. The same Responses runtime accepts
+  image input, so it is also the default vision runtime unless `OPENAI_VISION_API_KEY` explicitly selects a separate
+  OpenAI model.
 
   The same session also covers image generation. `resolveImageRoute` picks `PLATFORM` whenever `OPENAI_IMAGE_API_KEY` is
   set and `CODEX` otherwise, so a paid key keeps billing separately instead of spending the conversation's own

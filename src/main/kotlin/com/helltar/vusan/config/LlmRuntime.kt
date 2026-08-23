@@ -167,6 +167,7 @@ private fun codexModel(config: LlmProviderConfig.Codex): LLModel =
                 LLMCapability.Temperature,
                 LLMCapability.Schema.JSON.Standard,
                 LLMCapability.Tools,
+                LLMCapability.Vision.Image,
                 LLMCapability.OpenAIEndpoint.Responses,
                 // codex models are reasoning models, and without Thinking the client drops the reasoning
                 // items they echo back, so each tool result would re-derive the whole chain of thought.

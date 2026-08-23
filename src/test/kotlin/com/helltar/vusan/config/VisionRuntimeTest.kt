@@ -1,7 +1,9 @@
 package com.helltar.vusan.config
 
 import ai.koog.prompt.llm.LLMProvider
+import com.helltar.vusan.infra.Http
 import com.helltar.vusan.tools.vision.FakePromptExecutor
+import io.ktor.client.engine.mock.MockEngine
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFailsWith
@@ -17,6 +19,15 @@ class VisionRuntimeTest {
     @Test
     fun `vision falls back to a chat model that can see images`() {
         val chat = hostedChat(HostedLlmProvider.OPENAI, "gpt-5.4-mini")
+        val vision = resolveVisionRuntime(config = null, chat = chat, chatExecutor = chatExecutor, requestTimeout = TIMEOUT)
+
+        assertEquals(chat.model, vision?.model)
+        assertSame(chatExecutor, vision?.executor)
+    }
+
+    @Test
+    fun `vision falls back to the codex chat model`() {
+        val chat = codexChat()
         val vision = resolveVisionRuntime(config = null, chat = chat, chatExecutor = chatExecutor, requestTimeout = TIMEOUT)
 
         assertEquals(chat.model, vision?.model)
@@ -83,6 +94,12 @@ class VisionRuntimeTest {
                 model = model,
                 requestTimeout = TIMEOUT
             )
+        )
+
+    private fun codexChat(): LlmRuntime =
+        resolveLlmRuntime(
+            LlmProviderConfig.Codex(model = "gpt-5.6-terra", requestTimeout = TIMEOUT),
+            codexAuth = CodexAuthStore(Http.createClient(MockEngine { error("no calls expected") }))
         )
 
     private companion object {

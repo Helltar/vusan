@@ -170,6 +170,7 @@ class LlmRuntimeTest {
         assertTrue(runtime.model.supports(LLMCapability.OpenAIEndpoint.Responses))
         assertTrue(runtime.model.supports(LLMCapability.Thinking))
         assertTrue(runtime.model.supports(LLMCapability.Tools))
+        assertTrue(runtime.model.supports(LLMCapability.Vision.Image))
         assertIs<OpenAIResponsesParams>(runtime.chatParams)
     }
 
