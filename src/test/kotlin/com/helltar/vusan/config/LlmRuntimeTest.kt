@@ -5,6 +5,7 @@ import ai.koog.prompt.executor.clients.openai.OpenAIChatParams
 import ai.koog.prompt.executor.clients.openai.OpenAIModels
 import ai.koog.prompt.executor.clients.openai.OpenAIResponsesParams
 import ai.koog.prompt.executor.clients.openai.base.models.ReasoningEffort
+import ai.koog.prompt.executor.clients.openai.models.OpenAIInclude
 import ai.koog.prompt.llm.LLMCapability
 import ai.koog.prompt.llm.LLMProvider
 import com.helltar.vusan.infra.Http
@@ -184,6 +185,15 @@ class LlmRuntimeTest {
         assertNotNull(chat.promptCacheKey)
         assertTrue(chat.promptCacheKey != compaction.promptCacheKey)
         assertFalse(chat.parallelToolCalls == true)
+        assertEquals(listOf(OpenAIInclude.REASONING_ENCRYPTED_CONTENT), chat.include)
+        assertEquals(listOf(OpenAIInclude.REASONING_ENCRYPTED_CONTENT), compaction.include)
+    }
+
+    @Test
+    fun `codex model omits vision when the catalog marks it text only`() {
+        val runtime = codex(supportsVision = false)
+
+        assertFalse(runtime.model.supports(LLMCapability.Vision.Image))
     }
 
     @Test
@@ -201,12 +211,13 @@ class LlmRuntimeTest {
         assertEquals(400_000L, codex(contextWindowTokens = 400_000).model.contextLength)
     }
 
-    private fun codex(contextWindowTokens: Long? = null): LlmRuntime =
+    private fun codex(contextWindowTokens: Long? = null, supportsVision: Boolean = true): LlmRuntime =
         resolveLlmRuntime(
             LlmProviderConfig.Codex(
                 model = "gpt-5.6-terra",
                 requestTimeout = 120.seconds,
-                contextWindowTokens = contextWindowTokens
+                contextWindowTokens = contextWindowTokens,
+                supportsVision = supportsVision
             ),
             codexAuth = CodexAuthStore(Http.createClient(MockEngine { error("no calls expected") }))
         )

@@ -42,6 +42,13 @@ class VisionRuntimeTest {
     }
 
     @Test
+    fun `vision stays off when the codex catalog marks the chat model text only`() {
+        val chat = codexChat(supportsVision = false)
+
+        assertNull(resolveVisionRuntime(config = null, chat = chat, chatExecutor = chatExecutor, requestTimeout = TIMEOUT))
+    }
+
+    @Test
     fun `a vision key gives a blind chat model its own openai model and executor`() {
         val chat = hostedChat(HostedLlmProvider.DEEPSEEK, "deepseek-v4-pro")
 
@@ -96,9 +103,13 @@ class VisionRuntimeTest {
             )
         )
 
-    private fun codexChat(): LlmRuntime =
+    private fun codexChat(supportsVision: Boolean = true): LlmRuntime =
         resolveLlmRuntime(
-            LlmProviderConfig.Codex(model = "gpt-5.6-terra", requestTimeout = TIMEOUT),
+            LlmProviderConfig.Codex(
+                model = "gpt-5.6-terra",
+                supportsVision = supportsVision,
+                requestTimeout = TIMEOUT
+            ),
             codexAuth = CodexAuthStore(Http.createClient(MockEngine { error("no calls expected") }))
         )
 

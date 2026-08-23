@@ -224,6 +224,7 @@ data class AppConfig(
                 return LlmProviderConfig.Codex(
                     model = requireEnv("LLM_MODEL"),
                     reasoningEffort = resolveReasoningEffort(),
+                    authFile = defaultCodexAuthFile(readEnv("CODEX_HOME")),
                     requestTimeout = requestTimeout,
                     contextWindowTokens = contextWindowTokens
                 )

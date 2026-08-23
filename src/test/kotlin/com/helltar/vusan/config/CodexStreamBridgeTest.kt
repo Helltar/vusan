@@ -74,6 +74,22 @@ class CodexStreamBridgeTest {
     }
 
     @Test
+    fun `completed output is preserved when no item events were sent`() {
+        val response =
+            collectStreamedResponse(
+                listOf(
+                    """data: {"type":"response.completed","response":{"id":"r","output":[{"type":"message","id":"m"}]}}"""
+                ),
+                json,
+                "codex"
+            )
+
+        val output = checkNotNull(response["output"]).jsonArray
+        assertEquals(1, output.size)
+        assertEquals("message", output.single().jsonObject["type"]?.jsonPrimitive?.content)
+    }
+
+    @Test
     fun `a stream that never completes is an error rather than an empty reply`() {
         val error =
             assertFailsWith<KoogHttpClientException> {
@@ -92,6 +108,19 @@ class CodexStreamBridgeTest {
                 "codex"
             )
         }.also { assertTrue("usage_limit_reached" in it.message.orEmpty(), it.message.orEmpty()) }
+    }
+
+    @Test
+    fun `incomplete and cancelled streams are explicit failures`() {
+        listOf("response.incomplete", "response.cancelled").forEach { type ->
+            assertFailsWith<KoogHttpClientException> {
+                collectStreamedResponse(
+                    listOf("""data: {"type":"$type","response":{"status":"$type"}}"""),
+                    json,
+                    "codex"
+                )
+            }.also { assertTrue(type in it.message.orEmpty(), it.message.orEmpty()) }
+        }
     }
 
     @Test

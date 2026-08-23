@@ -52,9 +52,12 @@ suspend fun main() = coroutineScope {
         val groupLog = GroupLogRepository(config.groupLog).takeIf { config.groupLog.enabled }
 
         // signing in is the codex CLI's job, so the only thing left at startup is to fail loudly when
-        // nobody has run `codex login` here, and to reject a model this subscription cannot run before
-        // the first user turn hits an opaque backend error.
-        val codexAuth = (config.llmProvider as? LlmProviderConfig.Codex)?.let { CodexAuthStore(http) }
+        // nobody has run `codex login` here, then validate the selected model and its capabilities
+        // before the first user turn hits an opaque backend error.
+        val codexAuth =
+            (config.llmProvider as? LlmProviderConfig.Codex)?.let { codex ->
+                CodexAuthStore(http, codex.authFile)
+            }
         val llm = resolveLlmRuntime(codexPreflight(config.llmProvider, http, codexAuth), codexAuth)
         executor = MultiLLMPromptExecutor(llm.model.provider to llm.client)
 
@@ -93,7 +96,6 @@ suspend fun main() = coroutineScope {
                 maxIterations = config.agentMaxIterations,
                 contextWindowPolicy = contextWindowPolicy
             )
-
 
         val conversationCompactor =
             LlmConversationCompactor(chatExecutor, llm.model, llm.compactionParams, contextWindowPolicy)
@@ -155,8 +157,8 @@ private fun createVoiceTranscriber(http: HttpClient, config: AppConfig): VoiceTr
 }
 
 /**
- * Prove the ChatGPT session works before the bot starts taking messages, and fill in the context
- * window from the account's own catalog when it was not configured explicitly.
+ * Prove the ChatGPT session works before the bot starts taking messages, then apply the context
+ * window and capabilities advertised by the account's own model catalog.
  *
  * Reading the token here also forces a refresh on a stale `auth.json`, so a host that has been idle
  * for days fails at startup with a "run `codex login`" message instead of on someone's first turn.
@@ -176,10 +178,7 @@ private suspend fun codexPreflight(
 
     log.info { "Codex: model=[${discovered.id}] (${discovered.displayName})" }
 
-    return config.contextWindowTokens
-        ?.let { config }
-        ?: discovered.contextWindowTokens?.let { config.copy(contextWindowTokens = it) }
-        ?: config
+    return applyCodexModelMetadata(config, discovered)
 }
 
 private fun logStartup(

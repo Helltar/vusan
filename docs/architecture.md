@@ -356,24 +356,31 @@ A normal user message travels:
   fields itself.
 - **ChatGPT subscription (`codex`)** — the same Koog OpenAI client pointed at the Codex backend's Responses API, with
   no API key. `config/CodexAuth.CodexAuthStore` owns the credentials `codex login` writes to `~/.codex/auth.json`
-  (or `$CODEX_HOME`), refreshing them a few minutes before expiry and writing the rotated refresh token back, serialized
-  on a mutex so concurrent turns cannot burn one another's single-use refresh token. Because Koog bakes the
-  `Authorization` header into the client at construction, `config/CodexHttpClient` re-resolves the bearer token and
-  account header on every request instead — per-request headers replace configured ones. Signing in, out, device-code
-  and keyring storage all stay the CLI's job; Vusan never implements OAuth itself.
+  (or `$CODEX_HOME`). `AppConfig` resolves that path into the Codex provider config, and the store rereads the file per
+  request so an external login, logout, workspace switch, or CLI refresh takes effect without a restart. It refreshes
+  OAuth sessions a few minutes before expiry and replaces the file atomically through an owner-only temporary file,
+  preserving CLI-owned fields and refusing to overwrite a version that changed during refresh. A mutex keeps concurrent bot turns
+  from spending the same single-use refresh token. Because Koog bakes the `Authorization` header into the client at
+  construction, `config/CodexHttpClient` re-resolves the bearer token and account header on every request instead.
+  Signing in, out, and device-code stay the CLI's job; this bridge requires file-backed credentials and cannot read the
+  OS keyring.
 
   The backend accepts streaming requests only (`stream=false` and `store=true` are both rejected), and its final
   `response.completed` event carries an empty `output`. So `CodexHttpClient` answers Koog's ordinary non-streaming
   `post` by streaming the call and folding the `response.output_item.done` items back into the response object the
-  non-streaming API would have returned. Bridging at the transport keeps Koog's own parsing of tool calls, reasoning
-  items and usage, and leaves `AgentRunner` and the token budget unaware that this provider streams.
+  non-streaming API would have returned, while preserving a non-empty completed output if the backend supplies one and
+  rejecting failed, incomplete, or cancelled terminal events. Codex requests use `store=false` and explicitly request
+  encrypted reasoning content, so reasoning items can be echoed through a stateless multi-step tool loop. Bridging at
+  the transport keeps Koog's own parsing of tool calls, reasoning items and usage, and leaves `AgentRunner` and the
+  token budget unaware that this provider streams.
 
   Model discovery runs at startup through `config/CodexCatalog`: the account's own catalog decides which ids and context
-  window are valid, since Codex and the Platform API expose different model sets. A catalog that cannot be read is a
-  warning, not a failure — the endpoint is undocumented, so a shape change there must not take a working bot down — but a
-  model the account plainly cannot run stops startup with the list of ones it can. The same Responses runtime accepts
-  image input, so it is also the default vision runtime unless `OPENAI_VISION_API_KEY` explicitly selects a separate
-  OpenAI model.
+  window are valid, since Codex and the Platform API expose different model sets. Input modalities decide whether the
+  model may be reused for vision, and advertised reasoning efforts validate `LLM_REASONING_EFFORT`; older catalog
+  entries without those fields keep the compatibility defaults. A catalog that cannot be read is a warning, not a
+  failure — the endpoint is undocumented, so a shape change there must not take a working bot down — but a model the
+  account plainly cannot run stops startup with the list of ones it can. `OPENAI_VISION_API_KEY` still explicitly
+  selects a separate OpenAI vision model.
 
   The same session also covers image generation. `resolveImageRoute` picks `PLATFORM` whenever `OPENAI_IMAGE_API_KEY` is
   set and `CODEX` otherwise, so a paid key keeps billing separately instead of spending the conversation's own

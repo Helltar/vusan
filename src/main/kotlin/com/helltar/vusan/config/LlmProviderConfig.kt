@@ -1,6 +1,7 @@
 package com.helltar.vusan.config
 
 import ai.koog.prompt.executor.clients.openai.base.models.ReasoningEffort
+import java.nio.file.Path
 import kotlin.time.Duration
 
 enum class HostedLlmProvider {
@@ -48,6 +49,8 @@ sealed interface LlmProviderConfig {
     data class Codex(
         val model: String,
         val reasoningEffort: ReasoningEffort? = null,
+        val supportsVision: Boolean = true,
+        val authFile: Path = defaultCodexAuthFile(),
         override val requestTimeout: Duration,
         override val contextWindowTokens: Long? = null
     ) : LlmProviderConfig {

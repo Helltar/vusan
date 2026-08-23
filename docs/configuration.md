@@ -87,8 +87,8 @@ takes whatever model string it serves. `codex` runs on a ChatGPT subscription in
 | `LLM_REQUEST_TIMEOUT_SECONDS` | `120`         | Seconds one LLM call may hang before it fails and Vusan replies with an error. Raise it for slow local servers and heavy reasoning models. |
 | `LLM_CONTEXT_WINDOW_TOKENS`   | model metadata or `16384` | Context size override. Native models use catalog metadata; unknown compatible models fall back to `16384`. |
 
-`LLM_OPENAI_ENDPOINT` and `LLM_REASONING_EFFORT` apply to `openai-compatible` only. Give `LLM_BASE_URL` no `/v1` — the
-API path is appended for you.
+`LLM_OPENAI_ENDPOINT` applies to `openai-compatible` only; `LLM_REASONING_EFFORT` applies to both
+`openai-compatible` and `codex`. Give `LLM_BASE_URL` no `/v1` — the API path is appended for you.
 
 An OpenAI model released after the `openai` provider's model list was last updated is rejected there as unknown, but
 stays reachable through `openai-compatible` pointed at OpenAI itself. Newer reasoning models additionally refuse tools
@@ -128,33 +128,47 @@ into the remainder.
 ## ChatGPT subscription
 
 `LLM_PROVIDER=codex` runs Vusan on a ChatGPT Plus, Pro, Business or Enterprise plan instead of a paid API key. There is
-no `LLM_API_KEY`: the credentials come from the [Codex CLI](https://developers.openai.com/codex/cli), which has to be
-installed on the same host and signed in.
+no `LLM_API_KEY`: the credentials come from the [Codex CLI](https://developers.openai.com/codex/cli), which has to sign
+in on the bot host.
 
 ```dotenv
 LLM_PROVIDER=codex
 LLM_MODEL=gpt-5.6-terra
 ```
 
-Sign in once, as the same user that runs the bot:
+Use a dedicated `CODEX_HOME` for the bot rather than sharing the interactive CLI's live credential file. In that
+directory's `config.toml`, force [file-backed credentials](https://developers.openai.com/codex/auth) because Vusan
+cannot read tokens kept in the OS keyring:
 
-```bash
-codex login              # opens a browser
-codex login --device-auth  # headless hosts: shows a code to enter elsewhere
-codex login status       # confirm it worked
+```toml
+cli_auth_credentials_store = "file"
 ```
 
-That writes `~/.codex/auth.json`. Vusan reads the access token from there, refreshes it a few minutes before it expires,
-and writes the rotated token back, so a long-running bot stays signed in without further attention. Set `CODEX_HOME` to
-move the file — useful in a container, where the simplest setup is to mount the host's `~/.codex` read-write. Treat that
-file like a password: it holds live access tokens.
+Then sign in as the same user that runs the bot, with the same `CODEX_HOME` value that goes in Vusan's `.env`:
+
+```bash
+CODEX_HOME=/home/vusan/.codex-vusan codex login
+CODEX_HOME=/home/vusan/.codex-vusan codex login --device-auth
+CODEX_HOME=/home/vusan/.codex-vusan codex login status
+```
+
+That writes `$CODEX_HOME/auth.json`. Vusan rereads it before every request, so a later CLI login, logout, workspace
+switch, or token rotation is visible without restarting the bot. It refreshes OAuth sessions a few minutes before
+expiry and atomically writes the rotated token back with owner-only permissions; if the file changed during the
+refresh, the newer CLI-written version wins. In a container, mount the dedicated directory read-write. Treat
+`auth.json` like a password because it holds live access and refresh tokens.
+
+`codex login --with-access-token` is also accepted, but that credential has no refresh token. Vusan uses it while it is
+fresh and asks for a replacement as expiry approaches instead of failing a user request after it expires.
 
 `codex logout` ends the session; Vusan then replies that its connection needs renewing until you sign in again.
 
 `LLM_MODEL` is checked against the models your plan actually offers, and startup fails with the available ids if it does
 not match — Codex and the OpenAI Platform API expose different model sets, so a Platform-only id would otherwise fail on
-the first message with an opaque error. The context window comes from the same catalog, so `LLM_CONTEXT_WINDOW_TOKENS`
-is only needed to override it. `LLM_REASONING_EFFORT` applies here too.
+the first message with an opaque error. The same catalog supplies the context window, supported input modalities, and
+reasoning efforts. That makes the Codex chat model the default vision model only when it accepts images, and rejects an
+unsupported `LLM_REASONING_EFFORT` during startup. `LLM_CONTEXT_WINDOW_TOKENS` is only needed to override the discovered
+window. Older catalog responses without capability metadata retain the compatible image-capable default.
 
 Two limits are worth knowing. Usage is metered against the plan rather than billed per token, so a heavy day ends in a
 "usage limit reached" reply until the window resets — `LLM_DAILY_TOKEN_BUDGET` still works but is not what stops you

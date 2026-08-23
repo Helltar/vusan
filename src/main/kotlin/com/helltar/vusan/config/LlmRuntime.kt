@@ -22,6 +22,7 @@ import ai.koog.prompt.executor.clients.openai.OpenAILLMClient
 import ai.koog.prompt.executor.clients.openai.OpenAIModels
 import ai.koog.prompt.executor.clients.openai.OpenAIResponsesParams
 import ai.koog.prompt.executor.clients.openai.base.models.ReasoningEffort
+import ai.koog.prompt.executor.clients.openai.models.OpenAIInclude
 import ai.koog.prompt.executor.clients.openai.models.ReasoningConfig
 import ai.koog.prompt.llm.LLMCapability
 import ai.koog.prompt.llm.LLMProvider
@@ -162,21 +163,22 @@ private fun codexModel(config: LlmProviderConfig.Codex): LLModel =
         id = config.model,
         contextLength = config.contextWindowTokens,
         capabilities =
-            listOf(
-                LLMCapability.Completion,
-                LLMCapability.Temperature,
-                LLMCapability.Schema.JSON.Standard,
-                LLMCapability.Tools,
-                LLMCapability.Vision.Image,
-                LLMCapability.OpenAIEndpoint.Responses,
+            buildList {
+                add(LLMCapability.Completion)
+                add(LLMCapability.Temperature)
+                add(LLMCapability.Schema.JSON.Standard)
+                add(LLMCapability.Tools)
+                if (config.supportsVision) add(LLMCapability.Vision.Image)
+                add(LLMCapability.OpenAIEndpoint.Responses)
                 // codex models are reasoning models, and without Thinking the client drops the reasoning
                 // items they echo back, so each tool result would re-derive the whole chain of thought.
-                LLMCapability.Thinking
-            )
+                add(LLMCapability.Thinking)
+            }
     )
 
 private fun codexParams(config: LlmProviderConfig.Codex, promptCacheKey: String): LLMParams =
     OpenAIResponsesParams(
+        include = listOf(OpenAIInclude.REASONING_ENCRYPTED_CONTENT),
         parallelToolCalls = false,
         promptCacheKey = promptCacheKey,
         reasoning = config.reasoningEffort?.let { ReasoningConfig(effort = it) }

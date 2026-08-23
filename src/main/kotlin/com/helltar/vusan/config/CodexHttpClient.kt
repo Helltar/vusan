@@ -237,7 +237,8 @@ internal fun collectStreamedResponse(lines: List<String>, json: Json, clientName
         when ((event["type"] as? JsonPrimitive)?.contentOrNull) {
             "response.output_item.done" -> event["item"]?.let { output.add(it) }
             "response.completed" -> envelope = event["response"] as? JsonObject
-            "response.failed", "error" -> throw KoogHttpClientException(clientName, 200, payload)
+            "response.failed", "response.incomplete", "response.cancelled", "error" ->
+                throw KoogHttpClientException(clientName, 200, payload)
         }
     }
 
@@ -245,5 +246,10 @@ internal fun collectStreamedResponse(lines: List<String>, json: Json, clientName
         envelope
             ?: throw KoogHttpClientException(clientName, 200, "Codex stream ended without a completed response")
 
-    return JsonObject(response + mapOf("output" to JsonArray(output)))
+    val completedOutput =
+        output.takeIf { it.isNotEmpty() }?.let(::JsonArray)
+            ?: (response["output"] as? JsonArray)
+            ?: JsonArray(emptyList())
+
+    return JsonObject(response + mapOf("output" to completedOutput))
 }

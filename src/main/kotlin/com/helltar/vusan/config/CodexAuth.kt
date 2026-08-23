@@ -13,15 +13,24 @@ import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonObject
+import kotlinx.serialization.json.JsonPrimitive
+import kotlinx.serialization.json.contentOrNull
 import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.jsonPrimitive
 import kotlinx.serialization.json.longOrNull
+import java.nio.file.AtomicMoveNotSupportedException
+import java.nio.file.Files
 import java.nio.file.Path
+import java.nio.file.StandardCopyOption
+import java.nio.file.attribute.PosixFileAttributeView
+import java.nio.file.attribute.PosixFilePermission
+import java.nio.file.attribute.PosixFilePermissions
+import java.security.MessageDigest
 import java.time.Instant
+import java.util.Base64
 import kotlin.io.path.Path
-import kotlin.io.path.createParentDirectories
+import kotlin.io.path.createDirectories
 import kotlin.io.path.isReadable
-import kotlin.io.path.moveTo
 import kotlin.io.path.readText
 import kotlin.io.path.writeText
 import kotlin.time.Duration.Companion.minutes
@@ -37,6 +46,7 @@ private const val CODEX_TOKEN_URL = "https://auth.openai.com/oauth/token"
 // codex refreshes 5 minutes before expiry; matching it keeps the two from disagreeing about whether a
 // shared auth.json is still fresh.
 private val REFRESH_WINDOW = 5.minutes
+private val OWNER_ONLY_PERMISSIONS = setOf(PosixFilePermission.OWNER_READ, PosixFilePermission.OWNER_WRITE)
 
 private val log = KotlinLogging.logger {}
 
@@ -64,18 +74,22 @@ private fun codexAuthError(message: String, cause: Throwable? = null): Nothing =
     throw CodexAuthException(message, cause)
 
 @Serializable
-private data class CodexAuthFile(
-    @SerialName("OPENAI_API_KEY") val openAiApiKey: String? = null,
-    val tokens: CodexTokens? = null,
-    @SerialName("last_refresh") val lastRefresh: String? = null
-)
-
-@Serializable
 private data class CodexTokens(
     @SerialName("id_token") val idToken: String = "",
     @SerialName("access_token") val accessToken: String = "",
-    @SerialName("refresh_token") val refreshToken: String = "",
+    @SerialName("refresh_token") val refreshToken: String? = null,
     @SerialName("account_id") val accountId: String? = null
+)
+
+private data class CodexAuthSnapshot(
+    val root: JsonObject,
+    val tokens: CodexTokens,
+    val fingerprint: String
+)
+
+private data class CachedCodexTokens(
+    val tokens: CodexTokens,
+    val sourceFingerprint: String
 )
 
 @Serializable
@@ -95,9 +109,10 @@ private data class CodexRefreshResponse(
 /**
  * Owns the ChatGPT credentials written by `codex login`.
  *
- * The CLI is the only thing that mints tokens here — this store reads `auth.json`, hands out the
- * access token, and refreshes it against the same endpoint the CLI uses once it is close to expiry.
- * Login, logout, device-code and keyring storage all stay the CLI's job.
+ * The CLI is the only thing that mints tokens here — this store reads file-backed `auth.json`, hands
+ * out the access token, and refreshes it against the same endpoint the CLI uses once it is close to
+ * expiry. Login, logout and device-code stay the CLI's job; keyring-backed credentials are not
+ * readable outside the CLI and therefore are not supported by this direct HTTP bridge.
  */
 class CodexAuthStore(
     private val http: HttpClient,
@@ -105,7 +120,7 @@ class CodexAuthStore(
 ) {
 
     private val mutex = Mutex()
-    private var cached: CodexTokens? = null
+    private var cached: CachedCodexTokens? = null
 
     /**
      * The current access token, refreshed first when it is within [REFRESH_WINDOW] of expiring.
@@ -115,8 +130,21 @@ class CodexAuthStore(
      */
     suspend fun credentials(): CodexCredentials =
         mutex.withLock {
-            val tokens = cached ?: readTokens().also { cached = it }
-            val fresh = if (tokens.accessToken.expiresWithin(REFRESH_WINDOW)) refresh(tokens) else tokens
+            val snapshot = currentTokens()
+            val tokens = snapshot.tokens
+            val fresh =
+                if (tokens.accessToken.expiresWithin(REFRESH_WINDOW)) {
+                    val refreshToken =
+                        tokens.refreshToken?.takeIf { it.isNotBlank() }
+                            ?: codexAuthError(
+                                "The Codex access token in [$authFile] is expiring and cannot be refreshed. " +
+                                        "Rotate it with `codex login --with-access-token` or sign in again."
+                            )
+
+                    refresh(snapshot, refreshToken)
+                } else {
+                    tokens
+                }
 
             CodexCredentials(
                 accessToken = fresh.accessToken,
@@ -126,22 +154,41 @@ class CodexAuthStore(
 
     /** Plan on the signed-in account, for the startup log. Absent when the claim is missing. */
     suspend fun planType(): String? =
-        mutex.withLock { (cached ?: readTokens().also { cached = it }).idToken.claimString("chatgpt_plan_type") }
+        mutex.withLock { currentTokens().tokens.idToken.claimString("chatgpt_plan_type") }
 
-    private fun readTokens(): CodexTokens {
+    // reread the file on every request so `codex login`, `codex logout`, workspace changes and a CLI
+    // refresh become visible without restarting vusan. the cached entry only carries a token we refreshed
+    // in memory when writing it back failed; it remains usable while the on-disk source is unchanged.
+    private fun currentTokens(): CodexAuthSnapshot {
+        val snapshot = readSnapshot()
+        val remembered = cached?.takeIf { it.sourceFingerprint == snapshot.fingerprint }
+
+        return if (remembered != null) {
+            snapshot.copy(tokens = remembered.tokens)
+        } else {
+            snapshot.also { cached = CachedCodexTokens(it.tokens, it.fingerprint) }
+        }
+    }
+
+    private fun readSnapshot(): CodexAuthSnapshot {
         if (!authFile.isReadable())
             codexAuthError(
-                "Not signed in to ChatGPT: [$authFile] does not exist or is not readable. Run `codex login` on this host."
+                "Not signed in to ChatGPT: [$authFile] does not exist or is not readable. " +
+                        "Configure Codex with `cli_auth_credentials_store = \"file\"` and run `codex login` on this host."
             )
 
-        val parsed =
-            runCatching { authJson.decodeFromString<CodexAuthFile>(authFile.readText()) }
+        val content =
+            runCatching { authFile.readText() }
+                .getOrElse { codexAuthError("Could not read [$authFile]. Run `codex login` again.", it) }
+
+        val root =
+            runCatching { authJson.parseToJsonElement(content).jsonObject }
                 .getOrElse { codexAuthError("Could not parse [$authFile]. Run `codex login` again.", it) }
 
-        val tokens =
-            parsed.tokens
+        val tokenElement =
+            root["tokens"]
                 ?: codexAuthError(
-                    if (parsed.openAiApiKey != null)
+                    if ((root["OPENAI_API_KEY"] as? JsonPrimitive)?.contentOrNull?.isNotBlank() == true)
                         "[$authFile] holds an API key, not a ChatGPT session. " +
                                 "Run `codex logout` then `codex login` to sign in with ChatGPT, " +
                                 "or set LLM_PROVIDER=openai with LLM_API_KEY to use the API key directly."
@@ -149,13 +196,17 @@ class CodexAuthStore(
                         "[$authFile] has no ChatGPT tokens. Run `codex login` on this host."
                 )
 
-        if (tokens.accessToken.isBlank() || tokens.refreshToken.isBlank())
-            codexAuthError("[$authFile] has no usable ChatGPT tokens. Run `codex login` again.")
+        val tokens =
+            runCatching { authJson.decodeFromJsonElement(CodexTokens.serializer(), tokenElement) }
+                .getOrElse { codexAuthError("Could not parse the ChatGPT tokens in [$authFile].", it) }
 
-        return tokens
+        if (tokens.accessToken.isBlank())
+            codexAuthError("[$authFile] has no usable ChatGPT access token. Run `codex login` again.")
+
+        return CodexAuthSnapshot(root, tokens, content.fingerprint())
     }
 
-    private suspend fun refresh(tokens: CodexTokens): CodexTokens {
+    private suspend fun refresh(snapshot: CodexAuthSnapshot, refreshToken: String): CodexTokens {
         log.info { "Codex: refreshing the ChatGPT access token" }
 
         val response =
@@ -168,7 +219,7 @@ class CodexAuthStore(
                     setBody(
                         CodexRefreshRequest(
                             clientId = CODEX_OAUTH_CLIENT_ID,
-                            refreshToken = tokens.refreshToken
+                            refreshToken = refreshToken
                         )
                     )
                 }
@@ -188,42 +239,91 @@ class CodexAuthStore(
                 ?: codexAuthError("$CODEX_TOKEN_URL returned no access token. Run `codex login` again.")
 
         val refreshed =
-            tokens.copy(
-                idToken = body.idToken?.takeIf { it.isNotBlank() } ?: tokens.idToken,
+            snapshot.tokens.copy(
+                idToken = body.idToken?.takeIf { it.isNotBlank() } ?: snapshot.tokens.idToken,
                 accessToken = accessToken,
                 // the endpoint rotates the refresh token; dropping the new one strands the next refresh
-                refreshToken = body.refreshToken?.takeIf { it.isNotBlank() } ?: tokens.refreshToken
+                refreshToken = body.refreshToken?.takeIf { it.isNotBlank() } ?: refreshToken
             )
 
-        cached = refreshed
-        persist(refreshed)
+        val persistedFingerprint = persist(refreshed, snapshot.fingerprint)
+        cached = CachedCodexTokens(refreshed, persistedFingerprint ?: snapshot.fingerprint)
 
         return refreshed
     }
 
-    // write the rotated tokens back so a bot restart does not have to burn another refresh, and so the
-    // codex CLI on this host sees the same session. atomic rename keeps a crash mid-write from leaving
-    // a truncated auth.json behind, which would read as "not signed in".
-    private fun persist(tokens: CodexTokens) {
-        runCatching {
-            val existing =
-                runCatching { authJson.decodeFromString<CodexAuthFile>(authFile.readText()) }
-                    .getOrDefault(CodexAuthFile())
+    // preserve every top-level field the CLI owns and replace the file only if it is still the version
+    // we refreshed. this prevents an overlapping `codex login`, logout or CLI refresh from being lost.
+    private fun persist(tokens: CodexTokens, expectedFingerprint: String): String? {
+        var temp: Path? = null
 
-            val temp = authFile.resolveSibling("${authFile.fileName}.vusan.tmp")
-            temp.createParentDirectories()
-            temp.writeText(
-                authJson.encodeToString(
-                    existing.copy(tokens = tokens, lastRefresh = Instant.now().toString())
+        return runCatching {
+            val current = readSnapshot()
+
+            if (current.fingerprint != expectedFingerprint) {
+                log.warn { "Codex: [$authFile] changed during token refresh; leaving the newer file untouched" }
+                return@runCatching null
+            }
+
+            val currentTokenFields = checkNotNull(current.root["tokens"] as? JsonObject)
+            val updated =
+                JsonObject(
+                    current.root +
+                            mapOf(
+                                "tokens" to
+                                        JsonObject(
+                                            currentTokenFields +
+                                                    authJson
+                                                        .encodeToJsonElement(CodexTokens.serializer(), tokens)
+                                                        .jsonObject
+                                        ),
+                                "last_refresh" to JsonPrimitive(Instant.now().toString())
+                            )
                 )
-            )
-            temp.moveTo(authFile, overwrite = true)
+            val content = authJson.encodeToString(JsonObject.serializer(), updated)
+            val parent = authFile.toAbsolutePath().parent
+            parent.createDirectories()
+
+            temp = createSecureTempFile(parent, authFile.fileName.toString())
+            temp.writeText(content)
+            setOwnerOnlyPermissions(temp)
+            moveReplacing(temp, authFile)
+
+            content.fingerprint()
         }.onFailure {
             // the in-memory token is still good, so the turn can proceed; only the next restart pays for it.
             log.warn { "Codex: refreshed token could not be written back to [$authFile]: ${it.message}" }
+        }.getOrNull().also {
+            temp?.let { path -> runCatching { Files.deleteIfExists(path) } }
         }
     }
 }
+
+private fun createSecureTempFile(parent: Path, authFileName: String): Path {
+    val prefix = ".$authFileName.vusan-"
+    val posix = Files.getFileAttributeView(parent, PosixFileAttributeView::class.java)
+
+    return if (posix != null)
+        Files.createTempFile(parent, prefix, ".tmp", PosixFilePermissions.asFileAttribute(OWNER_ONLY_PERMISSIONS))
+    else
+        Files.createTempFile(parent, prefix, ".tmp")
+}
+
+private fun setOwnerOnlyPermissions(path: Path) {
+    if (Files.getFileAttributeView(path, PosixFileAttributeView::class.java) != null)
+        Files.setPosixFilePermissions(path, OWNER_ONLY_PERMISSIONS)
+}
+
+private fun moveReplacing(source: Path, target: Path) {
+    try {
+        Files.move(source, target, StandardCopyOption.ATOMIC_MOVE, StandardCopyOption.REPLACE_EXISTING)
+    } catch (_: AtomicMoveNotSupportedException) {
+        Files.move(source, target, StandardCopyOption.REPLACE_EXISTING)
+    }
+}
+
+private fun String.fingerprint(): String =
+    Base64.getEncoder().encodeToString(MessageDigest.getInstance("SHA-256").digest(toByteArray()))
 
 private fun refreshFailureMessage(status: HttpStatusCode, body: String?): String {
     val reLogin = "Run `codex logout` then `codex login` on this host."
@@ -232,6 +332,7 @@ private fun refreshFailureMessage(status: HttpStatusCode, body: String?): String
         "refresh_token_expired" -> "The ChatGPT session has expired. $reLogin"
         "refresh_token_reused" -> "The ChatGPT refresh token was already used. $reLogin"
         "refresh_token_invalidated" -> "The ChatGPT session was revoked. $reLogin"
+        "refresh_token_account_mismatch" -> "The ChatGPT session belongs to another workspace. $reLogin"
         else -> "Could not refresh the ChatGPT session (HTTP ${status.value}). $reLogin"
     }
 }
@@ -245,9 +346,9 @@ private fun refreshErrorCode(body: String): String? =
 private fun kotlinx.serialization.json.JsonPrimitive.contentOrNullSafe(): String? =
     runCatching { content }.getOrNull()
 
-/** `CODEX_HOME` wins so a container can mount the credentials wherever it likes, matching the CLI. */
-internal fun defaultCodexAuthFile(): Path {
-    val home = System.getenv("CODEX_HOME")?.takeIf { it.isNotBlank() }
+/** Resolves `auth.json` from the configured `CODEX_HOME`, with the CLI default as fallback. */
+internal fun defaultCodexAuthFile(codexHome: String? = null): Path {
+    val home = codexHome?.trim()?.takeIf { it.isNotBlank() }
     return if (home != null) Path(home, "auth.json") else Path(System.getProperty("user.home"), ".codex", "auth.json")
 }
 
