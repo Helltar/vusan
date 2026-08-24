@@ -304,8 +304,9 @@ hint rather than a guarantee.
 ### Vision
 
 Vision lets the agent inspect photos, sampled video frames, and images in Telegram channel posts. It also lets Vusan
-learn the sticker sets a chat uses and choose replies from them. These features need a model that accepts images. By
-default, that is the chat model itself, so an `openai`, `anthropic`, `google`, or `codex` setup needs nothing extra.
+learn the sticker sets a chat uses, search them by meaning, and choose replies from them. These features need a model
+that accepts images. By default, that is the chat model itself, so an `openai`, `anthropic`, `google`, or `codex` setup
+needs nothing extra.
 
 When the chat model cannot accept images, `OPENAI_VISION_API_KEY` runs vision on its own OpenAI model, the way
 `OPENAI_STT_API_KEY` runs speech on one, and the chat model keeps answering everything else:

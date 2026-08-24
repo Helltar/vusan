@@ -6,6 +6,7 @@ import com.helltar.vusan.common.rethrowIfCancellation
 import com.helltar.vusan.common.xmlBlock
 import com.helltar.vusan.infra.Db.dbTransaction
 import com.helltar.vusan.infra.tables.ChatStickerSetsTable
+import com.helltar.vusan.infra.tables.ChatStickersTable
 import com.helltar.vusan.infra.tables.StickerSetsTable
 import com.helltar.vusan.infra.tables.StickersTable
 import com.helltar.vusan.request.AttachedFile
@@ -41,6 +42,7 @@ import org.telegram.telegrambots.meta.api.methods.stickers.GetStickerSet
 import org.telegram.telegrambots.meta.api.objects.stickers.Sticker
 import org.telegram.telegrambots.meta.generics.TelegramClient
 import java.time.Instant
+import java.util.Locale
 import kotlin.time.Duration.Companion.hours
 import kotlin.time.Duration.Companion.milliseconds
 import kotlin.time.Duration.Companion.seconds
@@ -52,11 +54,11 @@ private const val REGULAR_STICKER = "regular"
 // without paying for its long tail.
 private const val MAX_STICKERS_PER_SET = 60
 
-// how much of the catalog the model is shown on a turn. the catalog itself grows without limit as
-// people keep sending stickers; the prompt cannot, so the index stays bounded by the sets a chat
-// actually uses and, within them, by a hard entry count.
-private const val MAX_INDEX_SETS = 3
-private const val MAX_INDEX_ENTRIES = 80
+// the prompt keeps a small ready-to-send selection; the search tool reaches the full chat catalog
+// when none of these fits. half of the shortlist is reserved for recent individual stickers, then
+// frequent ones and a round-robin fallback across known sets fill what remains.
+private const val MAX_INDEX_ENTRIES = 16
+private const val RECENT_INDEX_ENTRIES = MAX_INDEX_ENTRIES / 2
 private const val MAX_DESCRIPTION_CHARS = 90
 
 // pulling in a set is the only expensive thing here — up to MAX_STICKERS_PER_SET vision calls, paid
@@ -78,6 +80,9 @@ private val BACKLOG_POLL_INTERVAL = 60.seconds
 private val SET_REFRESH_INTERVAL = 24.hours
 
 private const val SKIP_SENTINEL = "SKIP"
+
+private val SEARCH_WORD_REGEX = Regex("[\\p{L}\\p{N}]+")
+private val SEARCH_WHITESPACE_REGEX = Regex("\\s+")
 
 private const val STICKER_VISION_FOCUS =
     "This image is a Telegram sticker, used in chat the way a reaction or a punchline is. " +
@@ -118,6 +123,21 @@ internal fun <T> roundRobin(sources: List<List<T>>, limit: Int): List<T> {
     }
 }
 
+internal data class StickerEntry(val id: Long, val setName: String, val emoji: String?, val description: String)
+
+internal fun StickerEntry.catalogLine(): String =
+    buildString {
+        append('#').append(id).append(' ')
+        emoji?.let { append(it).append(' ') }
+        append(description)
+    }
+
+private data class SearchMatch(val entry: StickerEntry, val score: Int)
+
+private fun String.matchesSearchWord(queryWord: String): Boolean =
+    this == queryWord ||
+            (length >= 4 && queryWord.length >= 4 && (startsWith(queryWord) || queryWord.startsWith(this)))
+
 /**
  * The stickers this bot knows how to send, learned from the ones people actually use.
  *
@@ -134,14 +154,13 @@ class StickerCatalog(
         val log = KotlinLogging.logger {}
     }
 
-    data class StickerEntry(val id: Long, val setName: String, val emoji: String?, val description: String)
-
     /** Record a sticker seen in a chat, pulling in its set once that set has earned it. */
     suspend fun observe(chatId: Long, sticker: Sticker) {
         val setName = sticker.setName?.takeIf { it.isNotBlank() } ?: return
         if (sticker.type != null && sticker.type != REGULAR_STICKER) return
 
         runCatching {
+            recordStickerUsage(chatId, sticker.fileUniqueId)
             val seenCount = recordChatUsage(chatId, setName)
 
             // a set already known from anywhere is free to offer here: no fetch, no vision, so neither
@@ -183,20 +202,53 @@ class StickerCatalog(
 
         return xmlBlock(
             "sticker_catalog",
-            entries.joinToString("\n") { entry ->
-                buildString {
-                    append('#').append(entry.id).append(' ')
-                    entry.emoji?.let { append(it).append(' ') }
-                    append(entry.description)
-                }
-            }
+            entries.joinToString("\n", transform = StickerEntry::catalogLine)
         )
     }
 
-    suspend fun fileIdFor(id: Long): String? = dbTransaction {
+    /** Find described stickers from every set this chat has used, ranked by textual meaning. */
+    internal suspend fun search(chatId: Long, query: String, limit: Int): List<StickerEntry> {
+        require(limit >= 0) { "limit must not be negative" }
+
+        val normalizedQuery = query.trim().lowercase(Locale.ROOT).replace(SEARCH_WHITESPACE_REGEX, " ")
+        if (normalizedQuery.isEmpty() || limit == 0) return emptyList()
+
+        val queryWords = SEARCH_WORD_REGEX.findAll(normalizedQuery).map { it.value }.toSet()
+
+        return describedCatalogFor(chatId)
+            .stickers
+            .mapNotNull { known ->
+                val entry = known.entry
+                val haystack = "${entry.emoji.orEmpty()} ${entry.description}".lowercase(Locale.ROOT)
+                val words = SEARCH_WORD_REGEX.findAll(haystack).map { it.value }.toSet()
+                val phraseMatch = normalizedQuery in haystack
+                val matchedWords = queryWords.count { queryWord -> words.any { it.matchesSearchWord(queryWord) } }
+
+                if (!phraseMatch && matchedWords == 0) return@mapNotNull null
+
+                val score =
+                    (if (phraseMatch) 100 else 0) +
+                            (if (queryWords.isNotEmpty() && matchedWords == queryWords.size) 25 else 0) +
+                            matchedWords * 10
+
+                SearchMatch(entry, score)
+            }
+            .sortedWith(compareByDescending<SearchMatch> { it.score }.thenBy { it.entry.id })
+            .take(limit)
+            .map { it.entry }
+    }
+
+    suspend fun fileIdFor(chatId: Long, id: Long): String? = dbTransaction {
+        val setNames = chatSetNames(chatId)
+        if (setNames.isEmpty()) return@dbTransaction null
+
         StickersTable
             .select(StickersTable.fileId)
-            .where { StickersTable.id eq id }
+            .where {
+                (StickersTable.id eq id) and
+                        (StickersTable.setName inList setNames) and
+                        StickersTable.description.isNotNull()
+            }
             .firstOrNull()
             ?.get(StickersTable.fileId)
     }
@@ -371,6 +423,7 @@ class StickerCatalog(
         val gone = stored.keys - liveByUniqueId.keys
 
         if (gone.isNotEmpty()) {
+            ChatStickersTable.deleteWhere { ChatStickersTable.fileUniqueId inList gone }
             StickersTable.deleteWhere {
                 (StickersTable.setName eq setName) and (StickersTable.fileUniqueId inList gone)
             }
@@ -404,6 +457,16 @@ class StickerCatalog(
     }
 
     private suspend fun forgetSet(setName: String) = dbTransaction {
+        val fileUniqueIds =
+            StickersTable
+                .select(StickersTable.fileUniqueId)
+                .where { StickersTable.setName eq setName }
+                .map { it[StickersTable.fileUniqueId] }
+
+        if (fileUniqueIds.isNotEmpty()) {
+            ChatStickersTable.deleteWhere { ChatStickersTable.fileUniqueId inList fileUniqueIds }
+        }
+
         StickersTable.deleteWhere { StickersTable.setName eq setName }
         ChatStickerSetsTable.deleteWhere { ChatStickerSetsTable.setName eq setName }
         StickerSetsTable.deleteWhere { StickerSetsTable.name eq setName }
@@ -446,6 +509,35 @@ class StickerCatalog(
     }
 
     private data class StoredHandles(val fileId: String, val thumbnailFileId: String?)
+
+    private data class KnownSticker(val fileUniqueId: String, val entry: StickerEntry)
+
+    private data class StickerUsage(val fileUniqueId: String, val seenCount: Int, val lastSeenAt: Instant)
+
+    private data class DescribedCatalog(val setNames: List<String>, val stickers: List<KnownSticker>)
+
+    private suspend fun recordStickerUsage(chatId: Long, fileUniqueId: String) = dbTransaction {
+        val now = Instant.now()
+
+        val updated =
+            ChatStickersTable.update({
+                (ChatStickersTable.chatId eq chatId) and (ChatStickersTable.fileUniqueId eq fileUniqueId)
+            }) {
+                it[seenCount] = ChatStickersTable.seenCount + 1
+                it[lastSeenAt] = now
+            }
+
+        if (updated == 0) {
+            ChatStickersTable.insert {
+                it[ChatStickersTable.chatId] = chatId
+                it[ChatStickersTable.fileUniqueId] = fileUniqueId
+                it[seenCount] = 1
+                it[lastSeenAt] = now
+            }
+        }
+
+        Unit
+    }
 
     /** Records this sighting and answers how many times the chat has now used the set. */
     private suspend fun recordChatUsage(chatId: Long, setName: String): Int = dbTransaction {
@@ -497,35 +589,86 @@ class StickerCatalog(
         Unit
     }
 
-    private suspend fun describedEntriesFor(chatId: Long): List<StickerEntry> = dbTransaction {
-        val setNames =
-            ChatStickerSetsTable
-                .select(ChatStickerSetsTable.setName)
-                .where { ChatStickerSetsTable.chatId eq chatId }
-                .orderBy(ChatStickerSetsTable.lastSeenAt to SortOrder.DESC)
-                .limit(MAX_INDEX_SETS)
-                .map { it[ChatStickerSetsTable.setName] }
+    private suspend fun describedEntriesFor(chatId: Long): List<StickerEntry> {
+        val catalog = describedCatalogFor(chatId)
+        if (catalog.stickers.isEmpty()) return emptyList()
 
-        if (setNames.isEmpty()) return@dbTransaction emptyList()
+        val usage = stickerUsageFor(chatId)
+        val knownByUniqueId = catalog.stickers.associateBy { it.fileUniqueId }
+        val selected = linkedMapOf<Long, KnownSticker>()
 
-        val bySet =
+        usage
+            .sortedWith(compareByDescending<StickerUsage> { it.lastSeenAt }.thenByDescending { it.seenCount })
+            .mapNotNull { knownByUniqueId[it.fileUniqueId] }
+            .take(RECENT_INDEX_ENTRIES)
+            .forEach { selected[it.entry.id] = it }
+
+        usage
+            .sortedWith(compareByDescending<StickerUsage> { it.seenCount }.thenByDescending { it.lastSeenAt })
+            .mapNotNull { knownByUniqueId[it.fileUniqueId] }
+            .forEach { known ->
+                if (selected.size < MAX_INDEX_ENTRIES) selected[known.entry.id] = known
+            }
+
+        if (selected.size < MAX_INDEX_ENTRIES) {
+            val bySet = catalog.stickers.groupBy { it.entry.setName }
+            val remainingBySet =
+                catalog.setNames.map { setName ->
+                    bySet[setName].orEmpty().filterNot { it.entry.id in selected }
+                }
+
+            roundRobin(remainingBySet, MAX_INDEX_ENTRIES - selected.size)
+                .forEach { selected[it.entry.id] = it }
+        }
+
+        return selected.values.map { it.entry }
+    }
+
+    private suspend fun describedCatalogFor(chatId: Long): DescribedCatalog = dbTransaction {
+        val setNames = chatSetNames(chatId)
+        if (setNames.isEmpty()) return@dbTransaction DescribedCatalog(emptyList(), emptyList())
+
+        val stickers =
             StickersTable
                 .selectAll()
                 .where { (StickersTable.setName inList setNames) and StickersTable.description.isNotNull() }
                 .orderBy(StickersTable.id to SortOrder.ASC)
-                .mapNotNull { row -> row.toStickerEntryOrNull() }
-                .groupBy { it.setName }
+                .mapNotNull { row -> row.toKnownStickerOrNull() }
 
-        roundRobin(setNames.map { bySet[it].orEmpty() }, MAX_INDEX_ENTRIES).sortedBy { it.id }
+        DescribedCatalog(setNames, stickers)
     }
 
-    private fun ResultRow.toStickerEntryOrNull(): StickerEntry? =
+    private fun chatSetNames(chatId: Long): List<String> =
+        ChatStickerSetsTable
+            .select(ChatStickerSetsTable.setName)
+            .where { ChatStickerSetsTable.chatId eq chatId }
+            .orderBy(ChatStickerSetsTable.lastSeenAt to SortOrder.DESC)
+            .map { it[ChatStickerSetsTable.setName] }
+
+    private suspend fun stickerUsageFor(chatId: Long): List<StickerUsage> = dbTransaction {
+        ChatStickersTable
+            .selectAll()
+            .where { ChatStickersTable.chatId eq chatId }
+            .map { row ->
+                StickerUsage(
+                    fileUniqueId = row[ChatStickersTable.fileUniqueId],
+                    seenCount = row[ChatStickersTable.seenCount],
+                    lastSeenAt = row[ChatStickersTable.lastSeenAt]
+                )
+            }
+    }
+
+    private fun ResultRow.toKnownStickerOrNull(): KnownSticker? =
         this[StickersTable.description]?.let { description ->
-            StickerEntry(
-                id = this[StickersTable.id].value,
-                setName = this[StickersTable.setName],
-                emoji = this[StickersTable.emoji],
-                description = description
+            KnownSticker(
+                fileUniqueId = this[StickersTable.fileUniqueId],
+                entry =
+                    StickerEntry(
+                        id = this[StickersTable.id].value,
+                        setName = this[StickersTable.setName],
+                        emoji = this[StickersTable.emoji],
+                        description = description
+                    )
             )
         }
 

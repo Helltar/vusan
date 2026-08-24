@@ -13,8 +13,11 @@ import com.helltar.vusan.config.AppConfig
 import com.helltar.vusan.config.HostedLlmProvider
 import com.helltar.vusan.config.LlmProviderConfig
 import com.helltar.vusan.infra.Db
+import com.helltar.vusan.infra.tables.ChatStickersTable
 import com.helltar.vusan.infra.tables.StickerSetsTable
 import com.helltar.vusan.infra.tables.StickersTable
+import com.helltar.vusan.outbox.BotOutbox
+import com.helltar.vusan.request.RequestContext
 import com.helltar.vusan.tools.vision.FakePromptExecutor
 import com.helltar.vusan.tools.vision.ImageVisionClient
 import com.helltar.vusan.tools.vision.TEST_MODEL
@@ -223,6 +226,68 @@ class StickerCatalogTest {
     }
 
     @Test
+    fun `the short index keeps a frequently used sticker ahead of arbitrary set entries`() = runBlocking {
+        val stickers = (1..20).map { sticker("a$it") }
+        val client = FakeStickerClient(setOf = stickers)
+        val catalog = catalog(client, visionAnswer = "unused")
+
+        catalog.learn(stickers.first())
+        catalog.observe(CHAT, stickers.last())
+        describeStored { uniqueId -> "description for $uniqueId" }
+
+        Db.dbTransaction {
+            ChatStickersTable.update({ ChatStickersTable.fileUniqueId eq stickers.last().fileUniqueId }) {
+                it[seenCount] = 50
+                it[lastSeenAt] = Instant.EPOCH
+            }
+        }
+
+        val index = assertNotNull(catalog.indexBlockFor(CHAT))
+        val shown = shownIds(index)
+
+        assertEquals(16, shown.size)
+        assertTrue(stickerId(stickers.last().fileUniqueId) in shown, index)
+    }
+
+    @Test
+    fun `sticker search reaches past the short index and stays scoped to the chat`() = runBlocking {
+        val stickers = (1..20).map { sticker("a$it") }
+        val client = FakeStickerClient(setOf = stickers)
+        val catalog = catalog(client, visionAnswer = "unused")
+
+        catalog.learn(stickers.first())
+        describeStored { uniqueId ->
+            if (uniqueId == stickers.last().fileUniqueId) "sleepy fox refusing to wake up" else "penguin waving"
+        }
+
+        val hiddenId = stickerId(stickers.last().fileUniqueId)
+        assertTrue(hiddenId !in shownIds(assertNotNull(catalog.indexBlockFor(CHAT))))
+
+        val tools = StickerTools(catalog, RequestContext(CHAT, userId = 1L, messageId = 1L), BotOutbox())
+        val result = tools.searchStickers("sleepy fox")
+
+        assertContains(result, "#$hiddenId")
+        assertContains(result, "sleepy fox refusing to wake up")
+
+        val otherChatTools = StickerTools(catalog, RequestContext(OTHER_CHAT, userId = 1L, messageId = 1L), BotOutbox())
+        assertContains(otherChatTools.searchStickers("sleepy fox"), "No stickers matched")
+    }
+
+    @Test
+    fun `send sticker rejects an id from a different chat catalog`() = runBlocking {
+        val client = FakeStickerClient(setOf = listOf(sticker("a")))
+        val catalog = catalog(client, visionAnswer = "penguin waving")
+
+        catalog.learn(sticker("a"))
+        val id = storedStickerIds().single()
+        val outbox = BotOutbox()
+        val tools = StickerTools(catalog, RequestContext(OTHER_CHAT, userId = 1L, messageId = 1L), outbox)
+
+        assertContains(tools.sendSticker(id), "this chat's catalog")
+        assertTrue(outbox.pending.isEmpty())
+    }
+
+    @Test
     fun `a set used once and never again is not pulled in`() = runBlocking {
         val client = FakeStickerClient(setOf = (1..60).map { sticker("a$it") })
         val catalog = catalog(client, visionAnswer = "penguin waving")
@@ -340,6 +405,23 @@ class StickerCatalogTest {
             StickersTable.selectAll().map {
                 StoredSticker(it[StickersTable.description], it[StickersTable.describeAttempts])
             }
+        }
+
+    private suspend fun describeStored(description: (String) -> String) = Db.dbTransaction {
+        StickersTable.selectAll().forEach { row ->
+            StickersTable.update({ StickersTable.id eq row[StickersTable.id] }) {
+                it[StickersTable.description] = description(row[StickersTable.fileUniqueId])
+            }
+        }
+    }
+
+    private suspend fun stickerId(fileUniqueId: String): Long =
+        Db.dbTransaction {
+            StickersTable
+                .select(StickersTable.id)
+                .where { StickersTable.fileUniqueId eq fileUniqueId }
+                .single()[StickersTable.id]
+                .value
         }
 
     private suspend fun setNameOf(stickerId: Long): String =

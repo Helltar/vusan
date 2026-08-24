@@ -105,8 +105,8 @@ Prerequisites: JDK 21, plus `ffmpeg` and `yt-dlp` on `PATH`.
   and continue as soon as you tap one.
 - **Polls and quizzes** — creates real Telegram polls and quizzes, not a text imitation.
 - **Reactions** — sometimes an emoji on your message is the whole answer.
-- **Stickers** — picks up the sticker sets your chat actually uses and answers with one when a
-  wordless reaction fits better than words.
+- **Stickers** — learns the stickers your chat actually uses, finds a fitting one across the
+  collection, and answers with it when a wordless reaction works better than words.
 - **Files and links** — sends what it wrote as a document, or downloads a link and passes it on
   as a file.
 - **Long structured answers** — headings, tables, and checklists when a reply is genuinely big.

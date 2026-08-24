@@ -136,6 +136,32 @@ class DatabaseMigrationTest {
         }
     }
 
+    @Test
+    fun `connect creates individual sticker usage on a database that predates it`() {
+        val tempDir = Files.createTempDirectory("vusan-sticker-usage-migration-test")
+        val dbPath = tempDir.resolve("vusan.db")
+
+        try {
+            createLegacyScheduledTasksTable(dbPath.toString())
+
+            runBlocking {
+                Db.connect(testConfig(dbPath.toString()))
+                Db.disconnect()
+            }
+
+            val tables = tableNames(dbPath.toString())
+            assertTrue("chat_stickers" in tables, "tables were $tables")
+
+            val columns = tableColumns(dbPath.toString(), "chat_stickers")
+            assertTrue("file_unique_id" in columns, "columns were $columns")
+            assertTrue("seen_count" in columns, "columns were $columns")
+            assertTrue("last_seen_at" in columns, "columns were $columns")
+        } finally {
+            runBlocking { Db.disconnect() }
+            tempDir.toFile().deleteRecursively()
+        }
+    }
+
     private fun scheduledTaskColumnDefaults(dbPath: String): Map<String, String?> =
         DriverManager.getConnection("jdbc:sqlite:$dbPath").use { connection ->
             connection.createStatement().use { statement ->

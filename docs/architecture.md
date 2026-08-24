@@ -280,18 +280,20 @@ A normal user message travels:
 - **Sticker catalog** — `tools/sticker/StickerCatalog` learns which sticker sets a chat uses. The Bot API has no
   sticker search, so a sticker can only be sent from a set known by name: `TelegramBotRunner` taps every sticker in an
   allowlisted chat — including ones the bot is not addressed in, which in a group is its only view of what people
-  actually use — records the set, and pulls it in whole through `getStickerSet`. Only the set is stored, never message
-  content. Pulling a set in is the only expensive step — up to 60 vision calls, paid once — so it is gated twice: a set
-  is learned only on the second time a chat reaches for it, and no chat may pull in more than three new sets a day.
-  Neither gate applies to a set already known from elsewhere, which costs nothing to offer. A background worker then
-  describes each sticker's thumbnail once through the vision model and caches the result by `file_unique_id`;
-  `AgentRunner` puts the described stickers for that chat into the current user turn, and `sendSticker` resends
-  one by `file_id`. That index holds the chat's most recently used sets, filled round-robin so a set someone is using
-  right now is never crowded out by one learned earlier. Without a vision runtime the catalog is never constructed and
-  the tool is never registered, matching the vision tools. A sticker the model refuses to describe, or one that
-  repeatedly fails, is counted out after `describe_attempts` so it neither enters the index nor blocks the queue behind
-  it. The same worker re-reads each set a day after it was last checked: a `file_id` is only a handle and a set's owner
-  can edit or delete it, so stickers that disappeared are dropped, changed handles are refreshed, and a set Telegram
+  actually use — records the set and the individual sticker, and pulls the set in whole through `getStickerSet`. No
+  message content or sender identity is stored. Pulling a set in is the only expensive step — up to 60 vision calls,
+  paid once — so it is gated twice: a set is learned only on the second time a chat reaches for it, and no chat may pull
+  in more than three new sets a day. Neither gate applies to a set already known from elsewhere, which costs nothing to
+  offer. A background worker then describes each sticker's thumbnail once through the vision model and caches the
+  result by `file_unique_id`. `AgentRunner` puts at most 16 ready-to-send entries into the current user turn: recently
+  used individual stickers first, then frequent ones, with spare room filled round-robin across every described set the
+  chat knows. `searchStickers` searches the descriptions and emoji across that full chat-scoped collection, while
+  `sendSticker` accepts only an id belonging to it and resends the matching `file_id`. Without a vision runtime the
+  catalog is never constructed and neither tool is registered, matching the vision tools. A sticker the model refuses
+  to describe, or one that repeatedly fails, is counted out after `describe_attempts` so it neither enters the index nor
+  blocks the queue behind it. The same worker re-reads each set a day after it was last checked: a `file_id` is only a
+  handle and a set's owner can edit or delete it, so stickers that disappeared are dropped, changed handles are
+  refreshed, and a set Telegram
   reports as gone (`STICKERSET_INVALID`) is forgotten entirely. Only that specific answer counts as gone — any other
   failure backs off instead of discarding descriptions already paid for. A send Telegram rejects for a bad `file_id`
   is fed back through `TelegramDelivery`'s `onStickerRejected` hook, which only marks that set for an early re-read: a

@@ -190,7 +190,7 @@ class ToolRegistryFactory(
 
             if (chat.stickersAndAnimations) {
                 giphyClient?.let { tools(GiphyTools(it, outbox)) }
-                stickers?.let { tools(StickerTools(it, outbox)) }
+                stickers?.let { tools(StickerTools(it, context, outbox)) }
             }
 
             if (groupLog != null && groupLogReader != null) {
