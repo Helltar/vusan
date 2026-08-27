@@ -63,13 +63,15 @@ internal suspend fun resolveSelfImage(
  *
  * The edit endpoint's default reading of a prompt is "keep this picture, change what I named", so the
  * wrapper spells out the opposite: identity stays, the frame around it is thrown away. Without that
- * the result is the avatar with a hat on rather than the scene that was asked for.
+ * the result is the avatar with a hat on rather than the scene that was asked for. "Face" has to be
+ * split from "head angle and expression" just as explicitly, or every picture comes back with the
+ * reference's own straight-on stare on a new body.
  */
 internal fun selfPortraitPrompt(scene: String, appearance: String?): String =
     buildString {
-        append("Draw a completely new picture of the person in the reference image. ")
-        append("Keep their face, hair, and build exactly as in the reference, unmistakably the same person. ")
-        append("Take nothing else from it — pose, framing, clothing, lighting, and background all come from the description below.")
+        append("Draw a completely new photo of the person in the reference image. ")
+        append("Treat the reference as a likeness sheet rather than a frame to copy: keep their face shape, features, hair, and build, unmistakably the same person, and take nothing else from it. ")
+        append("Head angle, gaze, expression, pose, framing, clothing, lighting, and background all come from the description below, never from the reference.")
         appearance?.let { append("\n\n$it") }
         append("\n\n$scene")
     }

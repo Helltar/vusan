@@ -29,6 +29,7 @@ internal object ImageGenToolDescriptions {
                 """Set it to `true` for a selfie, a photo or drawing of yourself, you in some place, outfit, era, or art style, or you next to someone else ("send a selfie", "draw yourself as an anime character"). """ +
                 "Your own reference photo is then used as the subject, so you look like the same person in every picture you send. " +
                 "With `true`, write the `prompt` about the scene, pose, clothing, and mood only — your face, hair, and build come from that photo, not from the text. " +
+                "Say how the shot is framed and what you are doing in it — where you are looking, close-up or full height, mid-turn, over the shoulder, caught laughing — because whatever you leave out is copied from that photo, and every picture ends up the same head at the same angle. " +
                 "Leave it `false` (the default) for every picture that is not of you."
 
     const val EDIT_IMAGE =
