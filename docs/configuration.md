@@ -222,6 +222,23 @@ The operational rules for output and tools are always appended separately and ca
 | `PERSONALITY`      | Inline personality text, for something short. Takes precedence when set.                           |
 | `PERSONALITY_FILE` | Path to a file, for longer multi-line text. Unreadable fails startup; blank falls back to built-in. |
 
+## Appearance
+
+Text-to-image invents a face on every call, so "send me a selfie" drawn from the prompt alone shows a different person
+each time. Vusan builds a picture of itself from a reference photo instead, which keeps one face across every picture it
+sends. The reference is the bot's own Telegram avatar unless a file overrides it, so a deployment that set an avatar in
+[@BotFather](https://t.me/BotFather) already has this.
+
+| Variable          | Description                                                                                            |
+|-------------------|--------------------------------------------------------------------------------------------------------|
+| `SELF_IMAGE_FILE` | PNG, JPEG, or WebP reference photo. Unreadable fails startup; unset falls back to the Telegram avatar. |
+| `APPEARANCE`      | Inline notes on what a portrait cannot show — height, build, tattoos, usual clothes.                   |
+| `APPEARANCE_FILE` | Path to a file, for longer text. Takes effect only when `APPEARANCE` is unset.                         |
+
+Point `SELF_IMAGE_FILE` at the original whenever you have it: Telegram serves an avatar at 640x640, and a bigger, sharper
+face gives the image model more to hold on to. Keep the written notes short — a few sentences. They go to the image model
+and nowhere else, so if you also want the agent to describe its looks in words, say it in the personality too.
+
 ## Optional tools
 
 Each optional tool is enabled by one env variable. If it is missing, that tool is skipped at startup with a `WARN` log
@@ -287,7 +304,8 @@ search:
 
 `OPENAI_IMAGE_API_KEY` enables the `generateImage` and `editImage` tools (OpenAI `/v1/images/generations`). It can reuse
 your OpenAI key. The agent picks the aspect ratio per request; the model and quality are operator-controlled so
-generation cost stays predictable.
+generation cost stays predictable. A picture of the bot itself goes to `/v1/images/edits` instead, with the reference
+photo from [Appearance](#appearance) as its subject.
 
 On `LLM_PROVIDER=codex` the key is optional: with none set, both tools run on the ChatGPT subscription instead, and the
 model defaults to `gpt-image-2`. Setting `OPENAI_IMAGE_API_KEY` always wins, because it bills separately rather than

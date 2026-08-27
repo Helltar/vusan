@@ -12,6 +12,7 @@ import kotlin.time.Duration.Companion.seconds
 data class AppConfig(
     val agentMaxIterations: Int,
     val allowedIds: Set<Long>,
+    val appearance: String?,
     val bannedIds: Set<Long> = emptySet(),
     val chatHistory: ConversationConfig = ConversationConfig(),
     val groupLog: GroupLogConfig = GroupLogConfig(),
@@ -31,6 +32,7 @@ data class AppConfig(
     val sandboxTimeoutSeconds: Long,
     val sandboxUrl: String?,
     val searxngUrl: String?,
+    val selfImageFile: String?,
     val taskMaxLatenessMinutes: Long,
     val tavilyApiKey: String?,
     val telegramBotToken: String,
@@ -62,6 +64,7 @@ data class AppConfig(
                     readEnv("AGENT_MAX_ITERATIONS")?.toIntOrNull() ?: DEFAULT_AGENT_MAX_ITERATIONS,
 
                 allowedIds = parseIdSet(readEnv("ALLOWED_IDS")),
+                appearance = resolveAppearance(),
                 bannedIds = parseIdSet(readEnv("BANNED_IDS")),
                 chatHistory =
                     ConversationConfig(
@@ -101,6 +104,7 @@ data class AppConfig(
                 personality = resolvePersonality(),
                 sandboxUrl = readEnv("SANDBOX_URL"),
                 searxngUrl = readEnv("SEARXNG_URL"),
+                selfImageFile = readEnv("SELF_IMAGE_FILE"),
                 tavilyApiKey = readEnv("TAVILY_API_KEY"),
                 telegramBotToken = requireEnv("TELEGRAM_BOT_TOKEN"),
                 tokenBudget = resolveTokenBudget(),
@@ -165,6 +169,22 @@ data class AppConfig(
             }
 
             return text
+        }
+
+        // what the bot looks like, kept out of the personality block on purpose: it is written for the
+        // image model, and a chat model handed a physical description tends to recite it.
+        private fun resolveAppearance(): String? {
+            val text =
+                readEnv("APPEARANCE")
+                    ?: readEnv("APPEARANCE_FILE")?.let { path ->
+                        val file = Path(path)
+
+                        require(file.isReadable()) { "APPEARANCE_FILE=[$path] does not exist or is not readable" }
+
+                        file.readText()
+                    }
+
+            return text?.trim()?.ifBlank { null }?.also { log.info { "Appearance: ${it.length} chars" } }
         }
 
         // a mistyped budget must not read as "no budget": both values are rejected loudly instead of ignored.

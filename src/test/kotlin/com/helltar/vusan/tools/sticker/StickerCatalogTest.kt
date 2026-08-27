@@ -528,6 +528,7 @@ class StickerCatalogTest {
         AppConfig(
             agentMaxIterations = 70,
             allowedIds = setOf(1L),
+            appearance = null,
             databasePath = dbPath,
             elevenLabsApiKey = null,
             elevenLabsTts = null,
@@ -549,6 +550,7 @@ class StickerCatalogTest {
             sandboxTimeoutSeconds = 60L,
             sandboxUrl = null,
             searxngUrl = null,
+            selfImageFile = null,
             personality = null,
             taskMaxLatenessMinutes = 60L,
             tavilyApiKey = null,

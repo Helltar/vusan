@@ -24,6 +24,7 @@ import com.helltar.vusan.telegram.callback.TaskMenuHandler
 import com.helltar.vusan.telegram.delivery.TelegramDelivery
 import com.helltar.vusan.telegram.inbound.VoiceTranscriber
 import com.helltar.vusan.tools.ToolRegistryFactory
+import com.helltar.vusan.tools.imagegen.resolveSelfImage
 import com.helltar.vusan.tools.sticker.StickerCatalog
 import com.helltar.vusan.tools.vision.ImageVisionClient
 import io.github.oshai.kotlinlogging.KotlinLogging
@@ -55,9 +56,8 @@ suspend fun main() = coroutineScope {
         // nobody has run `codex login` here, then validate the selected model and its capabilities
         // before the first user turn hits an opaque backend error.
         val codexAuth =
-            (config.llmProvider as? LlmProviderConfig.Codex)?.let { codex ->
-                CodexAuthStore(http, codex.authFile)
-            }
+            (config.llmProvider as? LlmProviderConfig.Codex)?.let { codex -> CodexAuthStore(http, codex.authFile) }
+
         val llm = resolveLlmRuntime(codexPreflight(config.llmProvider, http, codexAuth), codexAuth)
         executor = MultiLLMPromptExecutor(llm.model.provider to llm.client)
 
@@ -65,7 +65,6 @@ suspend fun main() = coroutineScope {
         // history recaps, group-log digests, vision on the chat model — is counted against one daily budget.
         val tokenBudget = TokenBudget(config.tokenBudget)
         val chatExecutor = tokenBudget.meter(executor)
-
         val vision = resolveVisionRuntime(config.openAiVision, llm, chatExecutor, config.llmProvider.requestTimeout)
 
         // a vision model of its own comes with a second executor to close; otherwise vision rides on the chat one
@@ -75,6 +74,13 @@ suspend fun main() = coroutineScope {
 
         // read once and shared: the runner matches mentions against it, the agent is told its own handle.
         val botProfile = telegramClient.botProfile()
+
+        // a picture of the bot itself has to show the same face every time, which text-to-image cannot
+        // hold on its own — so the reference is read once, here, and only where it can be used at all.
+        val selfImage =
+            config.openAiImage?.let {
+                resolveSelfImage(config.selfImageFile, config.appearance, telegramClient, botProfile.userId)
+            }
 
         // the catalog only ever holds stickers vision has looked at, so without vision there is nothing
         // to learn and nothing to offer the model.
@@ -86,7 +92,7 @@ suspend fun main() = coroutineScope {
         val toolRegistryFactory =
             ToolRegistryFactory(
                 http, config, conversation, memory, tasks, stickerCatalog, vision,
-                groupLog, groupLogDigester, contextWindowPolicy.liveToolResultMaxChars, codexAuth
+                groupLog, groupLogDigester, contextWindowPolicy.liveToolResultMaxChars, codexAuth, selfImage
             )
 
         val agentFactory =

@@ -423,7 +423,10 @@ fills the context window in from the account's model catalog before any message 
 wrap the executor in the `TokenBudget` meter, which everything downstream then uses → build
 repositories, context policy, conversation compactor, the Telegram client and its `BotProfile` — one `getMe`
 call shared by the runner, which matches mentions against it, and `AgentFactory`, which puts the handle in the
-system prompt → (only with a vision runtime) the
+system prompt → (only when image generation is configured) `resolveSelfImage` (`tools/imagegen/SelfImage.kt`), which
+reads the reference photo self-portraits are drawn from: `SELF_IMAGE_FILE` when set, otherwise one
+`getUserProfilePhotos` on the bot's own id, and a failure there is a warning rather than a failed startup →
+(only with a vision runtime) the
 `StickerCatalog`, `ToolRegistryFactory`, `AgentFactory`, `AgentRunner` → create `TaskMenuHandler` and
 `InlineChoiceHandler`, and optionally enable voice transcription → start `TelegramBotRunner` and launch
 `TaskScheduler` and the sticker description worker, then block on the runner job until shutdown (closing the executor,
@@ -469,6 +472,7 @@ A symptom-to-source map for finding the right file fast. Paths are under
 | Vusan cannot see what is in a video                                              | `tools/vision/VisionTools.kt` (`describeVideo` guards and the preview-frame fallback), `tools/vision/VideoVisionClient.kt` (frames + transcript prompt), `tools/vision/VideoSampler.kt` (ffmpeg), `telegram/inbound/ReplyContext.kt` (which media becomes an `AttachedFile`)                                  |
 | Web search picks the wrong provider, or results are thin                        | the `@LLMDescription` text that ranks them: `tools/tavily/TavilyToolDescriptions.kt` (`webSearch`, the default) and `tools/searxng/SearxngToolDescriptions.kt` (`metaSearch`, the fallback)                                                                                                           |
 | Image search sends nothing, or sends irrelevant pictures                        | `tools/images/ImageSearchDelivery.kt` (candidate retries, size caps, media group) + `tools/images/ImageDownloadClient.kt` (user agent, format/dimension checks); for relevance, `SearxngTools.IMAGE_ENGINES` and `TavilyTools.imageExcludedDomains`                                                   |
+| A selfie shows a stranger instead of the bot's avatar                            | `tools/imagegen/SelfImage.kt` (which reference photo is read at startup, and the prompt that keeps the face while dropping the rest of it) + `tools/imagegen/ImageGenToolDescriptions.SELF_PORTRAIT` (whether the model sets the flag at all)                                                          |
 | Vusan answers about a whole message when the user quoted one part of it          | `telegram/inbound/ReplyContext.kt` (`quotedFragmentOrNull` and the `<quoted_fragment>` block) + `agent/SystemPrompt.kt` (what the block means)                                                                                                                                                        |
 | A rich message reads as empty, `unknown`, or loses its structure                 | `telegram/inbound/RichMessageText.kt` (block tree → rich markdown), then `MessageMetadata.contentTypeName`/`textSnippetOrNull` and `ReplyContext.repliedTextOrNull`                                                                                                                                           |
 | Scheduled task fires late, not at all, or reports "missed"/"failed"              | `tasks/TaskScheduler.kt` (polling, lateness, retries) + `tasks/Recurrence.kt` (next-run math)                                                                                                                                                                                                                   |

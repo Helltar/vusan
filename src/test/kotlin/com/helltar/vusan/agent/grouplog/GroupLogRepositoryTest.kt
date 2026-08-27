@@ -213,6 +213,7 @@ class GroupLogRepositoryTest {
         AppConfig(
             agentMaxIterations = 70,
             allowedIds = emptySet(),
+            appearance = null,
             databasePath = dbPath,
             elevenLabsApiKey = null,
             elevenLabsTts = null,
@@ -234,6 +235,7 @@ class GroupLogRepositoryTest {
             sandboxTimeoutSeconds = 30L,
             sandboxUrl = null,
             searxngUrl = null,
+            selfImageFile = null,
             personality = null,
             taskMaxLatenessMinutes = 60L,
             tavilyApiKey = null,

@@ -17,7 +17,8 @@ class ImageGenTools(
     private val client: OpenAiImageClient,
     private val config: OpenAiImageConfig,
     private val outbox: BotOutbox,
-    private val attachedFile: AttachedFile?
+    private val attachedFile: AttachedFile?,
+    private val selfImage: SelfImage? = null
 ) : ToolSet {
 
     companion object {
@@ -32,7 +33,9 @@ class ImageGenTools(
         @LLMDescription(ImageGenToolDescriptions.PROMPT)
         prompt: String,
         @LLMDescription(ImageGenToolDescriptions.ORIENTATION)
-        orientation: String = "square"
+        orientation: String = "square",
+        @LLMDescription(ImageGenToolDescriptions.SELF_PORTRAIT)
+        selfPortrait: Boolean = false
     ): String = suspendToolGuard {
         val trimmed = prompt.trim()
 
@@ -44,14 +47,25 @@ class ImageGenTools(
                     "which exceeds the $IMAGE_PROMPT_MAX_CHARS-character limit. Shorten it and try again."
 
         val size = orientation.toImageSize()
+        val self = selfImage?.takeIf { selfPortrait }
+        val reference = self?.reference
 
         val bytes =
-            runCatching { client.generate(trimmed, size, config) }
+            runCatching {
+                if (reference == null)
+                    client.generate(trimmed.withAppearance(self?.appearance), size, config)
+                else
+                    client.edit(
+                        selfPortraitPrompt(trimmed, self?.appearance),
+                        reference.bytes, reference.filename, reference.contentType, size, config
+                    )
+            }
                 .getOrElse { e ->
                     e.rethrowIfCancellation()
 
                     log.warn(e) {
-                        "OpenAI image generation failed: model=${config.model} size=$size promptChars=${trimmed.length}"
+                        "OpenAI image generation failed: model=${config.model} size=$size " +
+                                "promptChars=${trimmed.length} selfPortrait=$selfPortrait"
                     }
 
                     return@suspendToolGuard "Image generation failed: ${e.message ?: e::class.simpleName}"
@@ -123,13 +137,17 @@ private val SUPPORTED_EDIT_MIME_TYPES = setOf("image/png", "image/jpeg", "image/
 private fun AttachedFile.editContentTypeOrNull(): String? {
     mimeType?.lowercase()?.let { if (it in SUPPORTED_EDIT_MIME_TYPES) return it }
 
-    return when (name.substringAfterLast('.', "").lowercase()) {
+    return imageContentTypeOrNull(name)
+}
+
+/** The image types both edit routes accept, read off a filename when nothing else declares one. */
+internal fun imageContentTypeOrNull(filename: String): String? =
+    when (filename.substringAfterLast('.', "").lowercase()) {
         "png" -> "image/png"
         "jpg", "jpeg" -> "image/jpeg"
         "webp" -> "image/webp"
         else -> null
     }
-}
 
 private fun String.toImageSize(): String =
     when (trim().lowercase()) {

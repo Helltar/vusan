@@ -26,6 +26,7 @@ import com.helltar.vusan.config.CodexAuthStore
 import com.helltar.vusan.config.ImageRoute
 import com.helltar.vusan.tools.imagegen.ImageAuth
 import com.helltar.vusan.tools.imagegen.OpenAiImageClient
+import com.helltar.vusan.tools.imagegen.SelfImage
 import com.helltar.vusan.tools.images.ImageDownloadClient
 import com.helltar.vusan.tools.memory.MemoryTools
 import com.helltar.vusan.tools.message.MessageTools
@@ -69,7 +70,8 @@ class ToolRegistryFactory(
     toolResultMaxChars: Int,
     // present only on LLM_PROVIDER=codex; lets image generation ride the ChatGPT session
     // instead of needing a second paid key.
-    codexAuth: CodexAuthStore? = null
+    codexAuth: CodexAuthStore? = null,
+    private val selfImage: SelfImage? = null
 ) {
 
     private companion object {
@@ -206,7 +208,7 @@ class ToolRegistryFactory(
             }
 
             if (chat.photos && openAiImageClient != null && openAiImage != null) {
-                tools(ImageGenTools(openAiImageClient, openAiImage, outbox, context.attachedFile))
+                tools(ImageGenTools(openAiImageClient, openAiImage, outbox, context.attachedFile, selfImage))
             }
         }
     }

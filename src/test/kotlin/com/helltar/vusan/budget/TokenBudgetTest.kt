@@ -208,6 +208,7 @@ class TokenBudgetTest {
         AppConfig(
             agentMaxIterations = 70,
             allowedIds = emptySet(),
+            appearance = null,
             databasePath = dbPath,
             elevenLabsApiKey = null,
             elevenLabsTts = null,
@@ -229,6 +230,7 @@ class TokenBudgetTest {
             sandboxTimeoutSeconds = 30L,
             sandboxUrl = null,
             searxngUrl = null,
+            selfImageFile = null,
             taskMaxLatenessMinutes = 60L,
             tavilyApiKey = null,
             telegramBotToken = "test",
