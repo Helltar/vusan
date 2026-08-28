@@ -7,7 +7,7 @@ COPY extra-wheels.txt .
 RUN pip download --no-deps --dest /wheels -r extra-wheels.txt
 
 # the official image pins the exact Deno version; alpine variant keeps apk for the font step below
-FROM denoland/deno:alpine-2.8.2@sha256:e2a641dfee05544402cf0b149a41458bd373a8f47bff6544834177ded55d662d AS base
+FROM denoland/deno:alpine-2.9.5@sha256:b49ac52f05c3d8d0da890b6628168e9bfb5721f7bccc00305bb3ad29ed0e40af AS base
 WORKDIR /app
 
 # the image ships a non-root `deno` user (uid/gid 1000) used below
