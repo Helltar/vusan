@@ -135,7 +135,9 @@ _ImageDraw.ImageDraw.text = _text_with_emoji
 
 ready.then(() => self.postMessage({ type: "ready" }));
 
-self.onmessage = async (event: MessageEvent<{ code: string; files?: InputFile[] }>) => {
+self.onmessage = async (
+  event: MessageEvent<{ code: string; files?: InputFile[] }>,
+) => {
   const pyodide = await ready;
   const { code, files: inputFiles } = event.data;
 
@@ -160,13 +162,24 @@ self.onmessage = async (event: MessageEvent<{ code: string; files?: InputFile[] 
   const elapsedMs = Math.round(performance.now() - startedAt);
 
   const { files, skipped } = collectFiles(pyodide, inputNames);
-  const result: RunResult = { ok, error, stdout: out.value, stderr: err.value, files, skipped, elapsedMs };
+  const result: RunResult = {
+    ok,
+    error,
+    stdout: out.value,
+    stderr: err.value,
+    files,
+    skipped,
+    elapsedMs,
+  };
   self.postMessage(result);
 };
 
 // Write caller-supplied files into the working directory so the script can read them by name.
 // Basenames only (no path traversal) and the same per-file size cap as outputs.
-function writeInputFiles(pyodide: PyodideInterface, files: InputFile[]): Set<string> {
+function writeInputFiles(
+  pyodide: PyodideInterface,
+  files: InputFile[],
+): Set<string> {
   const written = new Set<string>();
   for (const file of files) {
     const name = file.name.split("/").pop()?.split("\\").pop() ?? "";
@@ -221,7 +234,10 @@ async function unpackWheels(pyodide: PyodideInterface): Promise<void> {
 
   pyodide.FS.mkdir(WHEEL_FS_DIR);
   for (const name of names) {
-    pyodide.FS.writeFile(`${WHEEL_FS_DIR}/${name}`, Deno.readFileSync(`${WHEEL_DIR}/${name}`));
+    pyodide.FS.writeFile(
+      `${WHEEL_FS_DIR}/${name}`,
+      Deno.readFileSync(`${WHEEL_DIR}/${name}`),
+    );
   }
 
   await pyodide.runPythonAsync(`
@@ -239,7 +255,9 @@ sys.path.insert(0, "${WHEEL_SITE}")
 function injectFonts(pyodide: PyodideInterface): void {
   let files: string[];
   try {
-    files = [...Deno.readDirSync(FONT_DIR)].filter((e) => e.isFile).map((e) => e.name);
+    files = [...Deno.readDirSync(FONT_DIR)].filter((e) => e.isFile).map((e) =>
+      e.name
+    );
   } catch {
     return;
   }
@@ -247,7 +265,10 @@ function injectFonts(pyodide: PyodideInterface): void {
 
   pyodide.FS.mkdir(FONT_DIR);
   for (const name of files) {
-    pyodide.FS.writeFile(`${FONT_DIR}/${name}`, Deno.readFileSync(`${FONT_DIR}/${name}`));
+    pyodide.FS.writeFile(
+      `${FONT_DIR}/${name}`,
+      Deno.readFileSync(`${FONT_DIR}/${name}`),
+    );
   }
 }
 
@@ -290,7 +311,10 @@ function collectFiles(
         continue;
       }
 
-      files.push({ name: rel, base64: encodeBase64(pyodide.FS.readFile(path)) });
+      files.push({
+        name: rel,
+        base64: encodeBase64(pyodide.FS.readFile(path)),
+      });
     }
   };
 

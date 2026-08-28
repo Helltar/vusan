@@ -42,7 +42,9 @@ interface RunResult {
 function parseInputFiles(raw: unknown): InputFile[] {
   if (!Array.isArray(raw)) return [];
   return raw.slice(0, MAX_INPUT_FILES).flatMap((f) =>
-    f && typeof f.name === "string" && typeof f.base64 === "string" ? [{ name: f.name, base64: f.base64 }] : []
+    f && typeof f.name === "string" && typeof f.base64 === "string"
+      ? [{ name: f.name, base64: f.base64 }]
+      : []
   );
 }
 
@@ -50,7 +52,9 @@ const warm: Worker[] = [];
 const waiters: Array<(w: Worker) => void> = [];
 
 function spawn(): void {
-  const worker = new Worker(new URL("./worker.ts", import.meta.url), { type: "module" });
+  const worker = new Worker(new URL("./worker.ts", import.meta.url), {
+    type: "module",
+  });
   worker.onmessage = (e: MessageEvent) => {
     if (e.data?.type !== "ready") return;
     worker.onmessage = null; // the per-request handler is attached on dispatch
@@ -88,7 +92,11 @@ function acquire(): Promise<Worker> {
   });
 }
 
-function runOnce(worker: Worker, code: string, files: InputFile[]): Promise<RunResult> {
+function runOnce(
+  worker: Worker,
+  code: string,
+  files: InputFile[],
+): Promise<RunResult> {
   return new Promise<RunResult>((resolve) => {
     const timer = setTimeout(() => {
       resolve({
@@ -110,7 +118,13 @@ function runOnce(worker: Worker, code: string, files: InputFile[]): Promise<RunR
     worker.onerror = (e) => {
       e.preventDefault();
       clearTimeout(timer);
-      resolve({ ok: false, error: `worker crashed: ${e.message}`, stdout: "", stderr: "", files: [] });
+      resolve({
+        ok: false,
+        error: `worker crashed: ${e.message}`,
+        stdout: "",
+        stderr: "",
+        files: [],
+      });
     };
     worker.postMessage({ code, files });
   }).finally(() => {

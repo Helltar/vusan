@@ -24,12 +24,13 @@ COPY fonts/*.ttf /fonts/
 # the document-library wheels live under /app so the runtime read allowlist covers them
 COPY --from=wheels /wheels /app/wheels
 
-COPY deno.json packages.ts warmup.ts worker.ts main.ts ./
+COPY deno.json deno.lock packages.ts warmup.ts worker.ts main.ts ./
 
 # Resolve module deps and download every Pyodide wheel into ./node_modules so
 # the running container needs no network. The populated caches become part of
 # the image; at runtime the service runs offline (no --allow-write).
-RUN deno cache main.ts worker.ts warmup.ts && \
+RUN deno ci && \
+    deno cache --frozen main.ts worker.ts warmup.ts && \
     deno task warmup && \
     chown -R deno:deno /app /deno-dir
 
