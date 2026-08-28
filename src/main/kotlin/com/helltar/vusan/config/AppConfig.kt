@@ -70,10 +70,30 @@ data class AppConfig(
 
             return AppConfig(
                 agentMaxIterations = readIntEnv("AGENT_MAX_ITERATIONS") ?: DEFAULT_AGENT_MAX_ITERATIONS,
-
                 allowedIds = readIdSetEnv("ALLOWED_IDS"),
                 appearance = resolveAppearance(),
                 bannedIds = readIdSetEnv("BANNED_IDS"),
+                databasePath = readEnv("DB_FILE") ?: "data/db/vusan.db",
+                elevenLabsApiKey = elevenLabsKey,
+                giphyApiKey = readEnv("GIPHY_API_KEY"),
+                llmProvider = llmProvider,
+                maxFollowUpsPerUser = readIntEnv("MAX_FOLLOW_UPS_PER_USER") ?: DEFAULT_MAX_FOLLOW_UPS_PER_USER,
+                maxMemoryPerScope = readIntEnv("MAX_MEMORY_PER_SCOPE") ?: DEFAULT_MAX_MEMORY_PER_SCOPE,
+                maxTasksPerUser = readIntEnv("MAX_TASKS_PER_USER") ?: DEFAULT_MAX_TASKS_PER_USER,
+                openAiImageApiKey = openAiImageKey,
+                openAiStt = resolveOpenAiStt(),
+                openAiVision = resolveOpenAiVision(),
+                personality = resolvePersonality(),
+                sandboxTimeoutSeconds = readLongEnv("SANDBOX_TIMEOUT_SECONDS") ?: DEFAULT_SANDBOX_TIMEOUT_SECONDS,
+                sandboxUrl = readEnv("SANDBOX_URL"),
+                searxngUrl = readEnv("SEARXNG_URL"),
+                selfImageFile = readEnv("SELF_IMAGE_FILE"),
+                taskMaxLatenessMinutes = readLongEnv("TASK_MAX_LATENESS_MINUTES") ?: DEFAULT_TASK_MAX_LATENESS_MINUTES,
+                tavilyApiKey = readEnv("TAVILY_API_KEY"),
+                telegramBotToken = requireEnv("TELEGRAM_BOT_TOKEN"),
+                tokenBudget = resolveTokenBudget(),
+                ytDlpCookiesFile = readEnv("YT_DLP_COOKIES_FILE"),
+
                 chatHistory =
                     ConversationConfig(
                         maxRecentInteractions =
@@ -86,6 +106,7 @@ data class AppConfig(
                             readIntEnv("CONVERSATION_RETENTION_DAYS")
                                 ?: ConversationConfig.DEFAULT_RETENTION_DAYS
                     ),
+
                 groupLog =
                     GroupLogConfig(
                         enabled = readBooleanEnv("GROUP_LOG_ENABLED") ?: true,
@@ -102,30 +123,6 @@ data class AppConfig(
                             readIntEnv("GROUP_LOG_RECENT_MINUTES")
                                 ?: GroupLogConfig.DEFAULT_RECENT_MINUTES
                     ),
-                databasePath = readEnv("DB_FILE") ?: "data/db/vusan.db",
-                elevenLabsApiKey = elevenLabsKey,
-                giphyApiKey = readEnv("GIPHY_API_KEY"),
-                llmProvider = llmProvider,
-                openAiImageApiKey = openAiImageKey,
-                openAiStt = resolveOpenAiStt(),
-                openAiVision = resolveOpenAiVision(),
-                personality = resolvePersonality(),
-                sandboxUrl = readEnv("SANDBOX_URL"),
-                searxngUrl = readEnv("SEARXNG_URL"),
-                selfImageFile = readEnv("SELF_IMAGE_FILE"),
-                tavilyApiKey = readEnv("TAVILY_API_KEY"),
-                telegramBotToken = requireEnv("TELEGRAM_BOT_TOKEN"),
-                tokenBudget = resolveTokenBudget(),
-                ytDlpCookiesFile = readEnv("YT_DLP_COOKIES_FILE"),
-
-                maxFollowUpsPerUser = readIntEnv("MAX_FOLLOW_UPS_PER_USER") ?: DEFAULT_MAX_FOLLOW_UPS_PER_USER,
-                maxMemoryPerScope = readIntEnv("MAX_MEMORY_PER_SCOPE") ?: DEFAULT_MAX_MEMORY_PER_SCOPE,
-                maxTasksPerUser = readIntEnv("MAX_TASKS_PER_USER") ?: DEFAULT_MAX_TASKS_PER_USER,
-
-                sandboxTimeoutSeconds = readLongEnv("SANDBOX_TIMEOUT_SECONDS") ?: DEFAULT_SANDBOX_TIMEOUT_SECONDS,
-
-                taskMaxLatenessMinutes =
-                    readLongEnv("TASK_MAX_LATENESS_MINUTES") ?: DEFAULT_TASK_MAX_LATENESS_MINUTES,
 
                 elevenLabsTts =
                     elevenLabsKey?.let {
