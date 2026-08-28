@@ -34,6 +34,7 @@ import com.helltar.vusan.telegram.inbound.chatIdLong
 import com.helltar.vusan.telegram.inbound.describeIncomingSticker
 import com.helltar.vusan.telegram.inbound.formatAgentInput
 import com.helltar.vusan.telegram.inbound.formatConversationInput
+import com.helltar.vusan.telegram.inbound.isBotCommand
 import com.helltar.vusan.telegram.inbound.isPrivateChat
 import com.helltar.vusan.telegram.inbound.isReplyToOtherUser
 import com.helltar.vusan.telegram.inbound.leadingBotCommandOrNull
@@ -73,6 +74,9 @@ import org.telegram.telegrambots.meta.api.objects.Update
 import org.telegram.telegrambots.meta.api.objects.User
 import org.telegram.telegrambots.meta.api.objects.message.Message
 import org.telegram.telegrambots.meta.generics.TelegramClient
+import java.time.Instant
+import kotlin.time.Duration
+import kotlin.time.Duration.Companion.minutes
 import kotlin.time.Duration.Companion.seconds
 
 internal class TelegramBotRunner(
@@ -125,6 +129,11 @@ internal class TelegramBotRunner(
         // telegram caps an album at ten items, so a group with that many parts is complete.
         const val MAX_ALBUM_PARTS = 10
 
+        // how long an edit stays interesting. it bounds both halves of the rule: an older edit never
+        // starts a turn, and a message is remembered as answered only for as long as an edit to it
+        // could still start one.
+        val EDIT_TURN_WINDOW = 5.minutes
+
         // album parts arrive as separate updates with a shared media_group_id and no terminator;
         // a group is treated as complete once the update stream stays quiet this long.
         val ALBUM_QUIET_PERIOD = 1.seconds
@@ -133,6 +142,8 @@ internal class TelegramBotRunner(
     }
 
     private val heartbeat = Heartbeat()
+
+    private val answeredMessages = AnsweredMessages(EDIT_TURN_WINDOW)
 
     fun start(scope: CoroutineScope): Job {
         log.info { "Bot started as ${profile.username ?: profile.userId}, allowed ids=${allowedIds.sorted()}" }
@@ -243,6 +254,11 @@ internal class TelegramBotRunner(
 
             if (edited != null) {
                 recordGroupLog(edited, edited = true)
+
+                if (edited.startsTurnOnEdit()) {
+                    launchHandling(edited) { dispatch(edited, profile) }
+                }
+
                 continue
             }
 
@@ -661,6 +677,8 @@ internal class TelegramBotRunner(
         )
     }
 
+    // the single gate every inbound path goes through, so it is also where a message is marked answered:
+    // the alternative is remembering to do it at each of the callers.
     private fun Message.isAccepted(botProfile: BotProfile, captionSource: Message = this): Boolean {
         if (!shouldHandle(this, botProfile.userId, botProfile.username, captionSource))
             return false
@@ -670,8 +688,19 @@ internal class TelegramBotRunner(
             return false
         }
 
+        answeredMessages.remember(chatIdLong, messageIdLong, Instant.now())
         return true
     }
+
+    private fun Message.startsTurnOnEdit(): Boolean =
+        startsTurnOnEdit(
+            editedAt = editDate?.let { Instant.ofEpochSecond(it.toLong()) },
+            now = Instant.now(),
+            window = EDIT_TURN_WINDOW,
+            alreadyAnswered = answeredMessages.contains(chatIdLong, messageIdLong, Instant.now()),
+            isCommand = messageTextOrNull()?.let(::isBotCommand) == true,
+            inAlbum = mediaGroupId != null
+        )
 
     private fun Message.isAllowed(): Boolean = isAllowed(chatIdLong, senderIdOrNull())
 
@@ -858,6 +887,35 @@ internal class TelegramBotRunner(
     // would spend two API calls to learn nothing.
     private suspend fun chatProfile(message: Message): ChatProfile =
         if (message.canLoadChatDescription) chatProfiles.of(message.chatIdLong) else ChatProfile.NONE
+}
+
+/**
+ * Whether an edited message should start a turn of its own. It may only do so when the edit is what made
+ * the message addressed to the bot — someone adding the mention they forgot. A message already answered
+ * stays answered once: fixing a typo in it is a reflex rather than a request for a second reply, and in a
+ * group that reply would land under a thread which has moved on.
+ *
+ * The caller still runs the edited message through `shouldHandle` and the allowlist, so this only decides
+ * what an edit itself changes.
+ */
+internal fun startsTurnOnEdit(
+    editedAt: Instant?,
+    now: Instant,
+    window: Duration,
+    alreadyAnswered: Boolean,
+    isCommand: Boolean,
+    inAlbum: Boolean
+): Boolean {
+    // an edit of something answered before this process started looks exactly like one never seen, so an
+    // edit is only ever acted on while it is fresh enough for that memory to still hold.
+    if (editedAt == null || now.isAfter(editedAt.plusMillis(window.inWholeMilliseconds))) return false
+
+    // a command is invoked by sending it, not by editing a message into one — `/clear` would wipe a
+    // history nobody asked it to.
+    if (alreadyAnswered || isCommand) return false
+
+    // an album is answered as a whole, off whichever part carries the caption; one edited part is not one.
+    return !inAlbum
 }
 
 // an allowlisted chat admits every message in it, including the rare ones without a sender

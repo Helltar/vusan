@@ -91,8 +91,11 @@ A normal user message travels:
    an older build) is still answered, so the caller's client stops spinning.
    A `my_chat_member` update — the bot's own membership changing, which Telegram delivers by default — carries no
    message and goes straight to `telegram/BotMembership.kt` instead of the dispatch below.
-   An `edited_message` update rewrites its group-transcript row (`GroupLogRepository.recordEdit`, which also drops the
-   cached digest of that message's day) and is not dispatched.
+   An `edited_message` update always rewrites its group-transcript row (`GroupLogRepository.recordEdit`, which also
+   drops the cached digest of that message's day), and only then may enter the dispatch below. `startsTurnOnEdit`
+   decides: an edit answers only when it is what made the message addressed to the bot — someone adding the mention
+   they forgot — so a message already answered is never answered twice. Edits older than `EDIT_TURN_WINDOW`, edits
+   into a slash command, and edits of an album part are recorded but never answered.
 2. **Filter** — `MessageFilter.shouldHandle` drops messages the bot shouldn't answer (in groups:
    only replies, mentions, or targeted commands); `TelegramBotRunner` then checks the allowlist (`ALLOWED_IDS`) and
    rejects unknown chats/users. `BANNED_IDS` is checked first and wins over the allowlist, so a banned user is denied
@@ -455,6 +458,7 @@ A symptom-to-source map for finding the right file fast. Paths are under
 
 | Symptom                                                                          | Start here                                                                                                                                                                                                                                                                                            |
 |----------------------------------------------------------------------------------|-------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
+| An edited message is answered twice, or editing one to add the mention does nothing | `TelegramBotRunner.startsTurnOnEdit` (the four conditions an edit must pass) + `answeredMessages` (per-process, empty after a restart) |
 | Vusan ignores a message entirely                                                 | `telegram/inbound/MessageFilter.kt` (`shouldHandle` — group reply/mention rules), then `TelegramBotRunner.isAccepted`/`isIdAllowed` (the `ALLOWED_IDS` allowlist and the `BANNED_IDS` ban list)                                                                                                                                               |
 | Container says `Up` but the bot answers nothing                                  | `infra/Heartbeat.kt` (the `/tmp/health` freshness signal, and the `ERROR` logged once when polling stalls) + `TelegramBotRunner.start` (the `getUpdates` generator hook that feeds it)                                                                                                                                        |
 | Reply says "still working on your previous request"                              | `agent/AgentRunner.kt` — the per-conversation `Mutex` rejects a second concurrent turn in the same chat                                                                                                                                                                                                                      |

@@ -103,6 +103,8 @@ Prerequisites: JDK 21, plus `ffmpeg` and `yt-dlp` on `PATH`.
   drawing — instead of leaving you watching a typing indicator.
 - **Inline choices** — when it needs a specific decision or confirmation, it can ask with buttons
   and continue as soon as you tap one.
+- **Edits** — forgot to tag it in a message you already sent? Add the mention and it answers,
+  instead of making you type the whole thing again.
 - **Polls and quizzes** — creates real Telegram polls and quizzes, not a text imitation.
 - **Reactions** — sometimes an emoji on your message is the whole answer.
 - **Stickers** — learns the stickers your chat actually uses, finds a fitting one across the
