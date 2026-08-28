@@ -1,7 +1,7 @@
 # Pure-Python document libraries (python-docx, fpdf2, pypdf, defusedxml) that the
 # Pyodide distribution does not ship. Downloaded here and unpacked onto sys.path
 # at runtime in worker.ts, so the offline sandbox can create and edit docx/pdf.
-FROM python:3.13-alpine AS wheels
+FROM python:3.14-alpine AS wheels
 WORKDIR /wheels-src
 COPY extra-wheels.txt .
 RUN pip download --no-deps --dest /wheels -r extra-wheels.txt
