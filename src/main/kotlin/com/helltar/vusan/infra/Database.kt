@@ -97,9 +97,13 @@ object Db {
 
                 // `create` skips a table that already exists, so on an upgraded database the schema change
                 // has to be applied by hand: new columns first, then the indices that reference them.
+                val missingColumnStatements =
+                    tables.flatMap { SchemaUtils.addMissingColumnsStatements(it, withLogs = false) }
                 val migrations =
-                    tables.flatMap { SchemaUtils.addMissingColumnsStatements(it, withLogs = false) } +
-                            tables.flatMap { SchemaUtils.checkMappingConsistence(it, withLogs = false) }
+                    missingColumnStatements +
+                        tables
+                            .flatMap { SchemaUtils.checkMappingConsistence(it, withLogs = false) }
+                            .filterNot(missingColumnStatements::contains)
 
                 migrations.forEach { exec(it) }
             }
