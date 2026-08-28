@@ -39,6 +39,15 @@ data class AppConfig(
     val tokenBudget: TokenBudgetConfig = TokenBudgetConfig(),
     val ytDlpCookiesFile: String?
 ) {
+    init {
+        require(agentMaxIterations > 0) { "AGENT_MAX_ITERATIONS must be positive" }
+        require(maxFollowUpsPerUser >= 0) { "MAX_FOLLOW_UPS_PER_USER must not be negative" }
+        require(maxMemoryPerScope >= 0) { "MAX_MEMORY_PER_SCOPE must not be negative" }
+        require(maxTasksPerUser >= 0) { "MAX_TASKS_PER_USER must not be negative" }
+        require(sandboxTimeoutSeconds > 0) { "SANDBOX_TIMEOUT_SECONDS must be positive" }
+        require(taskMaxLatenessMinutes >= 0) { "TASK_MAX_LATENESS_MINUTES must not be negative" }
+    }
+
     companion object {
         private const val DEFAULT_AGENT_MAX_ITERATIONS = 70
         private const val DEFAULT_LLM_REQUEST_TIMEOUT_SECONDS = 120L
@@ -60,38 +69,37 @@ data class AppConfig(
             val imageRoute = resolveImageRoute(openAiImageKey != null, llmProvider)
 
             return AppConfig(
-                agentMaxIterations =
-                    readEnv("AGENT_MAX_ITERATIONS")?.toIntOrNull() ?: DEFAULT_AGENT_MAX_ITERATIONS,
+                agentMaxIterations = readIntEnv("AGENT_MAX_ITERATIONS") ?: DEFAULT_AGENT_MAX_ITERATIONS,
 
-                allowedIds = parseIdSet(readEnv("ALLOWED_IDS")),
+                allowedIds = readIdSetEnv("ALLOWED_IDS"),
                 appearance = resolveAppearance(),
-                bannedIds = parseIdSet(readEnv("BANNED_IDS")),
+                bannedIds = readIdSetEnv("BANNED_IDS"),
                 chatHistory =
                     ConversationConfig(
                         maxRecentInteractions =
-                            readEnv("CONVERSATION_MAX_RECENT_INTERACTIONS")?.toIntOrNull()
+                            readIntEnv("CONVERSATION_MAX_RECENT_INTERACTIONS")
                                 ?: ConversationConfig.DEFAULT_MAX_RECENT_INTERACTIONS,
                         maxStoredInteractions =
-                            readEnv("CONVERSATION_MAX_STORED_INTERACTIONS")?.toIntOrNull()
+                            readIntEnv("CONVERSATION_MAX_STORED_INTERACTIONS")
                                 ?: ConversationConfig.DEFAULT_MAX_STORED_INTERACTIONS,
                         retentionDays =
-                            readEnv("CONVERSATION_RETENTION_DAYS")?.toIntOrNull()
+                            readIntEnv("CONVERSATION_RETENTION_DAYS")
                                 ?: ConversationConfig.DEFAULT_RETENTION_DAYS
                     ),
                 groupLog =
                     GroupLogConfig(
-                        enabled = readEnv("GROUP_LOG_ENABLED")?.toBooleanStrictOrNull() ?: true,
+                        enabled = readBooleanEnv("GROUP_LOG_ENABLED") ?: true,
                         retentionDays =
-                            readEnv("GROUP_LOG_RETENTION_DAYS")?.toIntOrNull()
+                            readIntEnv("GROUP_LOG_RETENTION_DAYS")
                                 ?: GroupLogConfig.DEFAULT_RETENTION_DAYS,
                         maxMessagesPerChat =
-                            readEnv("GROUP_LOG_MAX_MESSAGES_PER_CHAT")?.toIntOrNull()
+                            readIntEnv("GROUP_LOG_MAX_MESSAGES_PER_CHAT")
                                 ?: GroupLogConfig.DEFAULT_MAX_MESSAGES_PER_CHAT,
                         recentMessages =
-                            readEnv("GROUP_LOG_RECENT_MESSAGES")?.toIntOrNull()
+                            readIntEnv("GROUP_LOG_RECENT_MESSAGES")
                                 ?: GroupLogConfig.DEFAULT_RECENT_MESSAGES,
                         recentMinutes =
-                            readEnv("GROUP_LOG_RECENT_MINUTES")?.toIntOrNull()
+                            readIntEnv("GROUP_LOG_RECENT_MINUTES")
                                 ?: GroupLogConfig.DEFAULT_RECENT_MINUTES
                     ),
                 databasePath = readEnv("DB_FILE") ?: "data/db/vusan.db",
@@ -110,19 +118,14 @@ data class AppConfig(
                 tokenBudget = resolveTokenBudget(),
                 ytDlpCookiesFile = readEnv("YT_DLP_COOKIES_FILE"),
 
-                maxFollowUpsPerUser =
-                    readEnv("MAX_FOLLOW_UPS_PER_USER")?.toIntOrNull() ?: DEFAULT_MAX_FOLLOW_UPS_PER_USER,
+                maxFollowUpsPerUser = readIntEnv("MAX_FOLLOW_UPS_PER_USER") ?: DEFAULT_MAX_FOLLOW_UPS_PER_USER,
+                maxMemoryPerScope = readIntEnv("MAX_MEMORY_PER_SCOPE") ?: DEFAULT_MAX_MEMORY_PER_SCOPE,
+                maxTasksPerUser = readIntEnv("MAX_TASKS_PER_USER") ?: DEFAULT_MAX_TASKS_PER_USER,
 
-                maxMemoryPerScope = readEnv("MAX_MEMORY_PER_SCOPE")?.toIntOrNull() ?: DEFAULT_MAX_MEMORY_PER_SCOPE,
-                maxTasksPerUser = readEnv("MAX_TASKS_PER_USER")?.toIntOrNull() ?: DEFAULT_MAX_TASKS_PER_USER,
-
-                sandboxTimeoutSeconds =
-                    readEnv("SANDBOX_TIMEOUT_SECONDS")?.toLongOrNull()
-                        ?: DEFAULT_SANDBOX_TIMEOUT_SECONDS,
+                sandboxTimeoutSeconds = readLongEnv("SANDBOX_TIMEOUT_SECONDS") ?: DEFAULT_SANDBOX_TIMEOUT_SECONDS,
 
                 taskMaxLatenessMinutes =
-                    readEnv("TASK_MAX_LATENESS_MINUTES")?.toLongOrNull()
-                        ?: DEFAULT_TASK_MAX_LATENESS_MINUTES,
+                    readLongEnv("TASK_MAX_LATENESS_MINUTES") ?: DEFAULT_TASK_MAX_LATENESS_MINUTES,
 
                 elevenLabsTts =
                     elevenLabsKey?.let {
@@ -187,25 +190,20 @@ data class AppConfig(
             return text?.trim()?.ifBlank { null }?.also { log.info { "Appearance: ${it.length} chars" } }
         }
 
-        // a mistyped budget must not read as "no budget": both values are rejected loudly instead of ignored.
         private fun resolveTokenBudget(): TokenBudgetConfig {
-            val dailyTokens =
-                readEnv("LLM_DAILY_TOKEN_BUDGET")?.let {
-                    it.toLongOrNull() ?: error("LLM_DAILY_TOKEN_BUDGET=[$it] is not a number")
-                }
-
             val zone =
                 readEnv("LLM_TOKEN_BUDGET_TIMEZONE")?.let { raw ->
                     runCatching { ZoneId.of(raw) }
                         .getOrElse { error("Unsupported LLM_TOKEN_BUDGET_TIMEZONE=[$raw], expected a zone id like Europe/Kyiv") }
                 } ?: TokenBudgetConfig.DEFAULT_ZONE
 
-            val fairSharePercent =
-                readEnv("LLM_TOKEN_BUDGET_FAIR_SHARE_AT_PERCENT")?.let {
-                    it.toIntOrNull() ?: error("LLM_TOKEN_BUDGET_FAIR_SHARE_AT_PERCENT=[$it] is not a number")
-                } ?: TokenBudgetConfig.DEFAULT_FAIR_SHARE_PERCENT
-
-            return TokenBudgetConfig(dailyTokens = dailyTokens, zone = zone, fairSharePercent = fairSharePercent)
+            return TokenBudgetConfig(
+                dailyTokens = readLongEnv("LLM_DAILY_TOKEN_BUDGET"),
+                zone = zone,
+                fairSharePercent =
+                    readIntEnv("LLM_TOKEN_BUDGET_FAIR_SHARE_AT_PERCENT")
+                        ?: TokenBudgetConfig.DEFAULT_FAIR_SHARE_PERCENT
+            )
         }
 
         private fun resolveOpenAiStt(): OpenAiSttConfig? {
@@ -215,8 +213,7 @@ data class AppConfig(
                 apiKey = key,
                 model = readEnv("OPENAI_STT_MODEL") ?: OpenAiSttConfig.DEFAULT_MODEL,
                 maxDurationSeconds =
-                    readEnv("OPENAI_STT_MAX_DURATION_SECONDS")?.toLongOrNull()
-                        ?: OpenAiSttConfig.DEFAULT_MAX_DURATION_SECONDS
+                    readLongEnv("OPENAI_STT_MAX_DURATION_SECONDS") ?: OpenAiSttConfig.DEFAULT_MAX_DURATION_SECONDS
             )
         }
 
@@ -232,11 +229,10 @@ data class AppConfig(
         private fun resolveLlmProvider(): LlmProviderConfig {
             val raw = requireEnv("LLM_PROVIDER")
 
-            val contextWindowTokens = readEnv("LLM_CONTEXT_WINDOW_TOKENS")?.toLongOrNull()
+            val contextWindowTokens = readLongEnv("LLM_CONTEXT_WINDOW_TOKENS")
 
             val requestTimeout =
-                (readEnv("LLM_REQUEST_TIMEOUT_SECONDS")?.toLongOrNull()
-                    ?: DEFAULT_LLM_REQUEST_TIMEOUT_SECONDS).seconds
+                (readLongEnv("LLM_REQUEST_TIMEOUT_SECONDS") ?: DEFAULT_LLM_REQUEST_TIMEOUT_SECONDS).seconds
 
             val provider = raw.trim().lowercase()
 
@@ -304,11 +300,38 @@ data class AppConfig(
         private fun requireEnv(env: String): String =
             requireNotNull(readEnv(env)) { "Missing required environment variable $env" }
 
-        private fun parseIdSet(raw: String?): Set<Long> =
-            raw
-                ?.split(',', ' ', '\n', '\t', ';')
-                ?.mapNotNull { it.trim().takeIf(String::isNotEmpty)?.toLongOrNull() }
-                ?.toSet()
-                .orEmpty()
+        private fun readIntEnv(env: String): Int? = parseIntEnv(env, readEnv(env))
+
+        private fun readLongEnv(env: String): Long? = parseLongEnv(env, readEnv(env))
+
+        private fun readBooleanEnv(env: String): Boolean? = parseBooleanEnv(env, readEnv(env))
+
+        private fun readIdSetEnv(env: String): Set<Long> = parseIdSetEnv(env, readEnv(env))
     }
 }
+
+// a value that is set but unreadable must not fall back to the default: writing the variable down at all
+// says the default was not wanted, so a typo stops the startup instead of silently restoring it.
+internal fun parseIntEnv(env: String, raw: String?): Int? =
+    raw?.let { it.trim().toIntOrNull() ?: error("$env=[$it] is not a whole number") }
+
+internal fun parseLongEnv(env: String, raw: String?): Long? =
+    raw?.let { it.trim().toLongOrNull() ?: error("$env=[$it] is not a whole number") }
+
+// case-insensitive on purpose: `toBooleanStrictOrNull` on its own rejects `False` and `TRUE`, and reading
+// those as "unset" would leave the feature running in whichever state the default happens to be.
+internal fun parseBooleanEnv(env: String, raw: String?): Boolean? =
+    raw?.let {
+        it.trim().lowercase().toBooleanStrictOrNull()
+            ?: error("$env=[$it] is not a boolean, expected true or false")
+    }
+
+// a dropped id fails open on BANNED_IDS — the person stays unbanned — so an unreadable one is an error
+// rather than something to skip.
+internal fun parseIdSetEnv(env: String, raw: String?): Set<Long> =
+    raw
+        ?.split(',', ' ', '\n', '\t', ';')
+        ?.mapNotNull { it.trim().takeIf(String::isNotEmpty) }
+        ?.map { it.toLongOrNull() ?: error("$env contains [$it], which is not a numeric telegram id") }
+        ?.toSet()
+        .orEmpty()

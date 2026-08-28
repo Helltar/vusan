@@ -3,6 +3,12 @@
 Vusan reads configuration from environment variables. For Docker, put them in a `.env` file in the repo root;
 [`.env.example`](../.env.example) is the copy-paste starting point. Blank values are treated as missing.
 
+A value that is set but unreadable — `AGENT_MAX_ITERATIONS=7O`, `GROUP_LOG_ENABLED=off`, an ID that is not a number —
+stops the bot at startup with a message naming the variable and what it was given. It is never ignored in favour of
+the default: writing the variable down at all says the default was not wanted. Booleans take `true` or `false` in any
+case and nothing else, and a number that parses but cannot work (a zero timeout, a negative limit) is refused the same
+way.
+
 ## Minimum setup
 
 Fill in these values:
