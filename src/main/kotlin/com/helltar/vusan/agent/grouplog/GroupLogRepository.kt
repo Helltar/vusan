@@ -22,6 +22,7 @@ import org.jetbrains.exposed.v1.jdbc.deleteWhere
 import org.jetbrains.exposed.v1.jdbc.insertIgnore
 import org.jetbrains.exposed.v1.jdbc.select
 import org.jetbrains.exposed.v1.jdbc.selectAll
+import org.jetbrains.exposed.v1.jdbc.update
 import org.jetbrains.exposed.v1.jdbc.upsert
 import java.time.Instant
 import java.time.LocalDate
@@ -66,6 +67,37 @@ class GroupLogRepository(private val config: GroupLogConfig) {
 
         if (shouldPrune(entry.chatId)) {
             prune(entry.chatId)
+        }
+    }
+
+    /**
+     * Applies an edit to a message already in the transcript, changing only what Telegram lets an edit
+     * change. A message the log never saw is deliberately not inserted: the stretch around it is missing
+     * too, and one backfilled row would read as if nothing else had been said there.
+     */
+    suspend fun recordEdit(entry: GroupLogEntry): Boolean {
+        val editedMessageId = entry.messageId ?: return false
+
+        return dbTransaction {
+            val updated =
+                GroupLogTable.update({
+                    (GroupLogTable.chatId eq entry.chatId) and (GroupLogTable.messageId eq editedMessageId)
+                }) {
+                    it[kind] = entry.kind.limitTo(KIND_COLUMN_CHARS)
+                    it[text] = entry.text
+                    it[descriptor] = entry.descriptor.fitColumn(DESCRIPTOR_COLUMN_CHARS)
+                }
+
+            // the edited message's day may already be closed and cached, and nothing else would ever
+            // invalidate that digest — it would keep reciting the text the edit replaced.
+            if (updated > 0) {
+                GroupLogDigestsTable.deleteWhere {
+                    (GroupLogDigestsTable.chatId eq entry.chatId) and
+                            (GroupLogDigestsTable.day eq LocalDate.ofInstant(entry.sentAt, ZONE).toString())
+                }
+            }
+
+            updated > 0
         }
     }
 

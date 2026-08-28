@@ -9,11 +9,13 @@ import java.nio.file.Files
 import java.nio.file.Path
 import java.time.Instant
 import java.time.LocalDate
+import java.time.ZoneId
 import java.time.temporal.ChronoUnit
 import kotlin.test.AfterTest
 import kotlin.test.BeforeTest
 import kotlin.test.Test
 import kotlin.test.assertEquals
+import kotlin.test.assertFalse
 import kotlin.test.assertNull
 import kotlin.test.assertTrue
 import kotlin.time.Duration.Companion.seconds
@@ -185,6 +187,54 @@ class GroupLogRepositoryTest {
 
         repository.storeDigest(CHAT, day, messageCount = 12, content = "second take")
         assertEquals("second take", repository.digestFor(CHAT, day))
+    }
+
+    @Test
+    fun `an edit rewrites what the transcript quotes`() = runBlocking {
+        val repository = GroupLogRepository(GroupLogConfig())
+
+        repository.record(entry(messageId = 1L, text = "wehter in kyiv", at = now.minusSeconds(100)))
+
+        assertTrue(repository.recordEdit(entry(messageId = 1L, text = "weather in kyiv", at = now.minusSeconds(100))))
+
+        val entries = repository.readWindow(CHAT, now.minusSeconds(600), now, limit = 10)
+
+        assertEquals(listOf("weather in kyiv"), entries.map { it.text })
+    }
+
+    @Test
+    fun `an edit drops the cached digest of the day it belongs to`() = runBlocking {
+        // the day may already be closed, and nothing else would ever invalidate a stored digest
+        val repository = GroupLogRepository(GroupLogConfig())
+        val sentAt = now.minusSeconds(100)
+        val day = LocalDate.ofInstant(sentAt, ZoneId.systemDefault())
+
+        repository.record(entry(messageId = 1L, text = "before", at = sentAt))
+        repository.storeDigest(CHAT, day, messageCount = 4, content = "a recap quoting before")
+
+        repository.recordEdit(entry(messageId = 1L, text = "after", at = sentAt))
+
+        assertNull(repository.digestFor(CHAT, day))
+    }
+
+    @Test
+    fun `an edit of a message the log never saw is not backfilled`() = runBlocking {
+        val repository = GroupLogRepository(GroupLogConfig())
+
+        assertFalse(repository.recordEdit(entry(messageId = 7L, text = "never recorded", at = now)))
+        assertEquals(0L, repository.countInWindow(CHAT, now.minusSeconds(600), now))
+    }
+
+    @Test
+    fun `an edit leaves the original send time alone`() = runBlocking {
+        // sent_at drives the day a message is filed under; an edit must not move it to the edit's own day
+        val repository = GroupLogRepository(GroupLogConfig())
+        val sentAt = now.minusSeconds(500)
+
+        repository.record(entry(messageId = 1L, text = "before", at = sentAt))
+        repository.recordEdit(entry(messageId = 1L, text = "after", at = now))
+
+        assertEquals(1L, repository.countInWindow(CHAT, sentAt.minusSeconds(1), sentAt.plusSeconds(1)))
     }
 
     private fun entry(

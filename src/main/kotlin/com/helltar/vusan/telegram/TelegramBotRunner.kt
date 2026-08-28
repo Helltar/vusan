@@ -239,6 +239,13 @@ internal class TelegramBotRunner(
                 continue
             }
 
+            val edited = update.editedMessage
+
+            if (edited != null) {
+                recordGroupLog(edited, edited = true)
+                continue
+            }
+
             val message = update.message ?: continue
 
             recordGroupLog(message)
@@ -266,13 +273,17 @@ internal class TelegramBotRunner(
     // the group transcript has to be recorded before [shouldHandle] gets a say, because the messages
     // worth recapping later are exactly the ones nobody addressed to the bot. this also sits ahead of
     // album buffering so each part of a gallery is logged in its own right.
-    private fun CoroutineScope.recordGroupLog(message: Message) {
+    private fun CoroutineScope.recordGroupLog(message: Message, edited: Boolean = false) {
         val repository = groupLog ?: return
         if (message.isPrivateChat || !message.isAllowed()) return
 
         val entry = message.toGroupLogEntry() ?: return
 
-        launchHandling(message) { repository.record(entry) }
+        // an edit rewrites what the chat says: left alone, a later recap keeps quoting text that is no
+        // longer there. the guards and the mapping above are the same either way, so only the sink differs.
+        launchHandling(message) {
+            if (edited) repository.recordEdit(entry) else repository.record(entry)
+        }
     }
 
     // a sticker teaches the bot the set it came from even when the message is not addressed to the bot:

@@ -91,6 +91,8 @@ A normal user message travels:
    an older build) is still answered, so the caller's client stops spinning.
    A `my_chat_member` update — the bot's own membership changing, which Telegram delivers by default — carries no
    message and goes straight to `telegram/BotMembership.kt` instead of the dispatch below.
+   An `edited_message` update rewrites its group-transcript row (`GroupLogRepository.recordEdit`, which also drops the
+   cached digest of that message's day) and is not dispatched.
 2. **Filter** — `MessageFilter.shouldHandle` drops messages the bot shouldn't answer (in groups:
    only replies, mentions, or targeted commands); `TelegramBotRunner` then checks the allowlist (`ALLOWED_IDS`) and
    rejects unknown chats/users. `BANNED_IDS` is checked first and wins over the allowlist, so a banned user is denied
