@@ -6,7 +6,7 @@ import org.telegram.telegrambots.meta.api.objects.richtext.*
 private const val MAX_HEADING_SIZE = 6
 
 // a rich message never arrives as `text`: telegram delivers it as a block tree. it is flattened
-// back into the rich markdown dialect the agent itself writes for `sendRichMessage`, so a quoted
+// back into the rich Markdown dialect the agent itself writes for `sendRichMessage`, so a quoted
 // or incoming rich message reads to the model exactly like one it would have produced.
 internal fun RichMessage.toRichMarkdown(): String = blocks.renderBlocks()
 
@@ -18,12 +18,12 @@ private fun List<RichBlock?>?.renderBlocks(): String =
 private fun RichBlock.render(): String =
     when (this) {
         is RichBlockParagraph -> text.render()
-        is RichBlockSectionHeading -> "${"#".repeat(size?.coerceIn(1, MAX_HEADING_SIZE) ?: 1)} ${text.render()}"
+        is RichBlockSectionHeading -> "${"#".repeat(size.coerceIn(1, MAX_HEADING_SIZE))} ${text.render()}"
         is RichBlockPreformatted -> "```${language.orEmpty()}\n${text.render()}\n```"
         is RichBlockFooter -> text.render()
         is RichBlockDivider -> "---"
         is RichBlockMathematicalExpression -> "```math\n$expression\n```"
-        is RichBlockList -> items.orEmpty().joinToString("\n") { it.render() }
+        is RichBlockList -> items.joinToString("\n") { it.render() }
         is RichBlockBlockQuotation -> blocks.renderBlocks().quoted().withCredit(credit)
         is RichBlockPullQuotation -> text.render().quoted().withCredit(credit)
         is RichBlockDetails -> listOf(summary.render(), blocks.renderBlocks()).joinNonBlank("\n\n")
@@ -50,7 +50,7 @@ private fun RichBlockListItem.render(): String {
     val marker =
         when {
             hasCheckbox == true -> if (isChecked == true) "- [x]" else "- [ ]"
-            else -> label?.takeIf { it.isNotBlank() } ?: "-"
+            else -> label.takeIf { it.isNotBlank() } ?: "-"
         }
 
     // continuation lines are indented so nested content stays inside the item.
@@ -58,12 +58,12 @@ private fun RichBlockListItem.render(): String {
 }
 
 private fun RichBlockTable.renderTable(): String {
-    val rows = cells.orEmpty().map { row -> row.orEmpty().map { it.text.render() } }
+    val rows = cells.map { row -> row.orEmpty().map { it.text.render() } }
     if (rows.isEmpty()) return caption.render()
 
     val body = rows.map { row -> row.joinToString(" | ", prefix = "| ", postfix = " |") }
     val separator = List(rows.first().size) { "---" }.joinToString(" | ", prefix = "| ", postfix = " |")
-    val header = cells.orEmpty().first().orEmpty().any { it.isHeader == true }
+    val header = cells.first().orEmpty().any { it.isHeader == true }
 
     return listOf(
         if (header) (listOf(body.first(), separator) + body.drop(1)).joinToString("\n") else body.joinToString("\n"),
@@ -74,8 +74,8 @@ private fun RichBlockTable.renderTable(): String {
 private fun RichText?.render(): String =
     when (this) {
         null -> ""
-        is RichTextPlain -> text.orEmpty()
-        is RichTextConcat -> texts.orEmpty().joinToString("") { it.render() }
+        is RichTextPlain -> text
+        is RichTextConcat -> texts.joinToString("") { it.render() }
         is RichTextBold -> "**${text.render()}**"
         is RichTextItalic -> "*${text.render()}*"
         is RichTextUnderline -> "<u>${text.render()}</u>"
@@ -86,9 +86,9 @@ private fun RichText?.render(): String =
         is RichTextSubscript -> "<sub>${text.render()}</sub>"
         is RichTextSuperscript -> "<sup>${text.render()}</sup>"
         is RichTextUrl -> "[${text.render()}]($url)"
-        is RichTextTextMention -> "[${text.render()}](tg://user?id=${user?.id})"
-        is RichTextCustomEmoji -> alternativeText.orEmpty()
-        is RichTextMathematicalExpression -> "$" + expression + "$"
+        is RichTextTextMention -> "[${text.render()}](tg://user?id=${user.id})"
+        is RichTextCustomEmoji -> alternativeText
+        is RichTextMathematicalExpression -> "$$expression$"
 
         // entity-like spans already read as themselves (`@name`, `#tag`, `/cmd`, the number), and
         // date-time, anchor links and references only wrap their own text.

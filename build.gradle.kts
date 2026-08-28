@@ -1,6 +1,7 @@
 plugins {
     alias(libs.plugins.kotlin.jvm)
     alias(libs.plugins.kotlin.serialization)
+    alias(libs.plugins.kotlin.lombok)
     alias(libs.plugins.shadow)
     alias(libs.plugins.detekt)
     application

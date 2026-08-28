@@ -56,7 +56,7 @@ class ImageGenTools(
                     client.generate(trimmed.withAppearance(self?.appearance), size, config)
                 else
                     client.edit(
-                        selfPortraitPrompt(trimmed, self?.appearance),
+                        selfPortraitPrompt(trimmed, self.appearance),
                         reference.bytes, reference.filename, reference.contentType, size, config
                     )
             }

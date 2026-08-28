@@ -39,5 +39,6 @@ logback-classic = { module = "ch.qos.logback:logback-classic", version.ref = "lo
 [plugins]
 kotlin-jvm = { id = "org.jetbrains.kotlin.jvm", version.ref = "kotlin" }
 kotlin-serialization = { id = "org.jetbrains.kotlin.plugin.serialization", version.ref = "kotlin" }
+kotlin-lombok = { id = "org.jetbrains.kotlin.plugin.lombok", version.ref = "kotlin" }
 shadow = { id = "com.gradleup.shadow", version.ref = "shadow" }
 detekt = { id = "io.gitlab.arturbosch.detekt", version.ref = "detekt" }

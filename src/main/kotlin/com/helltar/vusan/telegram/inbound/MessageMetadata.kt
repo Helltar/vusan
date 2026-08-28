@@ -3,23 +3,13 @@ package com.helltar.vusan.telegram.inbound
 import com.helltar.vusan.agent.MessageContext
 import com.helltar.vusan.common.collapseWhitespaceAndCap
 import com.helltar.vusan.telegram.ChatProfile
-import org.telegram.telegrambots.meta.api.objects.Audio
-import org.telegram.telegrambots.meta.api.objects.Document
-import org.telegram.telegrambots.meta.api.objects.ExternalReplyInfo
-import org.telegram.telegrambots.meta.api.objects.VideoNote
-import org.telegram.telegrambots.meta.api.objects.Voice
+import org.telegram.telegrambots.meta.api.objects.*
 import org.telegram.telegrambots.meta.api.objects.chat.Chat
 import org.telegram.telegrambots.meta.api.objects.games.Animation
 import org.telegram.telegrambots.meta.api.objects.message.Message
-import org.telegram.telegrambots.meta.api.objects.messageorigin.MessageOrigin
-import org.telegram.telegrambots.meta.api.objects.messageorigin.MessageOriginChannel
-import org.telegram.telegrambots.meta.api.objects.messageorigin.MessageOriginChat
-import org.telegram.telegrambots.meta.api.objects.messageorigin.MessageOriginHiddenUser
-import org.telegram.telegrambots.meta.api.objects.messageorigin.MessageOriginUser
+import org.telegram.telegrambots.meta.api.objects.messageorigin.*
 import org.telegram.telegrambots.meta.api.objects.photo.PhotoSize
 import org.telegram.telegrambots.meta.api.objects.stickers.Sticker
-import org.telegram.telegrambots.meta.api.objects.User
-import org.telegram.telegrambots.meta.api.objects.Video
 
 private const val MAX_METADATA_VALUE_CHARS = 500
 
@@ -127,7 +117,7 @@ internal fun Message.groupLogDescriptor(): String? =
     when {
         sticker != null -> listOfNotNull(sticker.emoji, sticker.setName).joinToString(" ")
         // animation is checked before document for the same reason as everywhere else: a gif carries both.
-        animation != null -> animation.duration?.asClock()
+        animation != null -> animation.duration.asClock()
         !photo.isNullOrEmpty() -> null
         video != null -> video.duration?.asClock()
         videoNote != null -> videoNote.duration?.asClock()
