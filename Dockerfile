@@ -1,4 +1,4 @@
-FROM eclipse-temurin:21-jdk-alpine@sha256:4fb80de7aeb277ad949cfbe89b4f504e50bb34c57fd908c5825236473d71e986 AS build
+FROM eclipse-temurin:25-jdk-alpine@sha256:09349d79941fd53bb3d487b393ca118d8853c08c09193f416fe6a8718df9e732 AS build
 WORKDIR /app
 
 COPY gradlew settings.gradle.kts build.gradle.kts gradle.properties ./
