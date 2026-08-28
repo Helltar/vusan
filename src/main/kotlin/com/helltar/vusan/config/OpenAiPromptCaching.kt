@@ -12,7 +12,7 @@ import kotlinx.serialization.json.contentOrNull
 import kotlinx.serialization.json.put
 import kotlin.reflect.KClass
 
-// koog 1.1.1 exposes prompt_cache_key but not gpt-5.6 cache breakpoints, so rewrite only official
+// koog 1.2.0 exposes prompt_cache_key but not gpt-5.6 cache breakpoints, so rewrite only official
 // openai requests until the client can represent these fields itself.
 internal class OpenAiPromptCachingHttpClientFactory(
     private val delegate: KoogHttpClient.Factory

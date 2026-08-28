@@ -354,7 +354,7 @@ A normal user message travels:
   so their tool-free prefix does not dilute the chat one; for GPT-5.6 and later, `config/OpenAiPromptCaching` marks the
   first stable system/developer content block as the only explicit cache breakpoint. This keeps the system prompt and
   tool schemas reusable while excluding timestamps, history, memory, Telegram metadata, user input, and tool results
-  from billable cache writes. The adapter exists because Koog 1.1.1 cannot represent OpenAI's explicit breakpoint
+  from billable cache writes. The adapter exists because Koog 1.2.0 cannot represent OpenAI's explicit breakpoint
   fields itself.
 - **ChatGPT subscription (`codex`)** — the same Koog OpenAI client pointed at the Codex backend's Responses API, with
   no API key. `config/CodexAuth.CodexAuthStore` owns the credentials `codex login` writes to `~/.codex/auth.json`
