@@ -22,6 +22,7 @@ dependencies {
 
     implementation(libs.telegrambots.client)
     implementation(libs.telegrambots.longpolling)
+    compileOnly(libs.lombok)
 
     runtimeOnly(libs.sqlite.jdbc)
     implementation(libs.exposed.jdbc)
