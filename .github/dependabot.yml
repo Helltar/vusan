@@ -7,6 +7,9 @@ updates:
     open-pull-requests-limit: 5
     commit-message:
       prefix: build
+    labels:
+      - dependencies
+      - gradle
 
   - package-ecosystem: github-actions
     directory: /
@@ -35,3 +38,6 @@ updates:
     open-pull-requests-limit: 5
     commit-message:
       prefix: sandbox
+    labels:
+      - dependencies
+      - sandbox
