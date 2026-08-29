@@ -14,7 +14,7 @@ on:
       - gradle/**
       - gradle.properties
       - settings.gradle.kts
-      - src/**
+      - src/main/**
   pull_request:
     paths:
       - .dockerignore
@@ -27,7 +27,7 @@ on:
       - gradle/**
       - gradle.properties
       - settings.gradle.kts
-      - src/**
+      - src/main/**
   release:
     types: [published]
   workflow_dispatch:
@@ -56,6 +56,7 @@ jobs:
         with:
           context: .
           file: ./Dockerfile
+          platforms: linux/amd64
           push: false
           cache-from: type=gha,scope=vusan
           cache-to: type=gha,mode=max,scope=vusan
@@ -92,6 +93,7 @@ jobs:
         with:
           context: .
           file: ./Dockerfile
+          platforms: linux/amd64
           push: true
           tags: ${{ steps.metadata.outputs.tags }}
           labels: ${{ steps.metadata.outputs.labels }}
