@@ -13,7 +13,9 @@
          package. Tool-level diagnostics live under ai.koog.agents.core.environment and are left intact. -->
     <logger name="ai.koog.agents.core.agent" level="OFF"/>
 
-    <root level="INFO">
+    <!-- A level logback does not recognize (a typo, an empty value) silently becomes DEBUG here, so
+         a stray LOG_LEVEL floods rather than quiets. -->
+    <root level="${LOG_LEVEL:-INFO}">
         <appender-ref ref="STDOUT"/>
     </root>
 

@@ -497,6 +497,18 @@ them.
 `YT_DLP_COOKIES_FILE` must point to a Netscape-format `cookies.txt`; see
 the [yt-dlp wiki](https://github.com/yt-dlp/yt-dlp/wiki/Extractors#exporting-youtube-cookies).
 
+## Logging
+
+The level is read by logback at startup, not by `AppConfig`, so it is set like any other variable in
+`.env` and takes effect on the next restart.
+
+| Variable    | Default | Description                                       |
+|-------------|---------|---------------------------------------------------|
+| `LOG_LEVEL` | `INFO`  | Level for everything Vusan and its libraries log. |
+
+A level logback does not recognize — a typo, an empty value — is read as `DEBUG`, which is the
+opposite of what a stray value usually intends.
+
 ## Health check
 
 The image ships a Docker `HEALTHCHECK`, so `docker ps` and `docker compose ps` report whether the bot
