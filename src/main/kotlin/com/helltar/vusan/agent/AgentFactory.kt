@@ -166,6 +166,10 @@ class AgentFactory(
                     )
                 }
 
+                onLLMCallStarting { ctx ->
+                    logPromptDump(ctx.prompt, ctx.model.id, ctx.tools)
+                }
+
                 onLLMCallCompleted { ctx ->
                     ctx.response?.metaInfo?.let { meta ->
                         tokenUsage(TokenUsage(meta.inputTokensCount, meta.outputTokensCount, meta.totalTokensCount))

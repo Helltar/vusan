@@ -499,14 +499,22 @@ the [yt-dlp wiki](https://github.com/yt-dlp/yt-dlp/wiki/Extractors#exporting-you
 
 ## Logging
 
-The level is read by logback at startup, not by `AppConfig`, so it is set like any other variable in
-`.env` and takes effect on the next restart.
+Both levels are read by logback at startup, not by `AppConfig`, so they are set like any other
+variable in `.env` and take effect on the next restart.
 
-| Variable    | Default | Description                                       |
-|-------------|---------|---------------------------------------------------|
-| `LOG_LEVEL` | `INFO`  | Level for everything Vusan and its libraries log. |
+| Variable            | Default | Description                                              |
+|---------------------|---------|----------------------------------------------------------|
+| `LOG_LEVEL`         | `INFO`  | Level for everything Vusan and its libraries log.        |
+| `PROMPT_DUMP_LEVEL` | `OFF`   | `DEBUG` prints every request sent to the model, in full. |
 
-A level logback does not recognize — a typo, an empty value — is read as `DEBUG`, which is the
+`PROMPT_DUMP_LEVEL=DEBUG` is a debugging aid, not something to leave on: it prints the whole request
+on every LLM call — system prompt, conversation recap, replayed history, the current turn with its
+context blocks, and each tool call with its result — so one turn can run to tens of thousands of
+characters, and all of it is raw chat content sitting in the container log. It is independent of
+`LOG_LEVEL`: the dump stays off when everything else is at `DEBUG`, and it still prints when the rest
+is quieter.
+
+A level neither of them recognizes — a typo, an empty value — is read as `DEBUG`, which is the
 opposite of what a stray value usually intends.
 
 ## Health check

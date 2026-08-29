@@ -13,6 +13,11 @@
          package. Tool-level diagnostics live under ai.koog.agents.core.environment and are left intact. -->
     <logger name="ai.koog.agents.core.agent" level="OFF"/>
 
+    <!-- The full request sent to the model on every LLM call: system prompt, recap, history, the
+         current turn with its context blocks, tool calls and their results. It is verbose and it
+         prints raw user content, so it is off unless PROMPT_DUMP_LEVEL=DEBUG is set. -->
+    <logger name="PromptDump" level="${PROMPT_DUMP_LEVEL:-OFF}"/>
+
     <!-- A level logback does not recognize (a typo, an empty value) silently becomes DEBUG here, so
          a stray LOG_LEVEL floods rather than quiets. -->
     <root level="${LOG_LEVEL:-INFO}">
