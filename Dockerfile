@@ -15,6 +15,10 @@ RUN ./gradlew --no-daemon shadowJar
 FROM alpine:3.24@sha256:28bd5fe8b56d1bd048e5babf5b10710ebe0bae67db86916198a6eec434943f8b AS runtime
 WORKDIR /app
 
+# deno is here for yt-dlp, not for the sandbox service that runs its own: youtube's signature and
+# nsig challenges are solved through it ("[jsc:deno] Solving JS challenges using deno"), and yt-dlp
+# deprecates extraction without a JS runtime, warning that formats may be missing. it is the only
+# runtime yt-dlp enables by default, so dropping the package silently degrades every youtube tool.
 RUN apk add --no-cache deno ffmpeg openjdk21-jre-headless python3 && \
     apk add --no-cache --virtual .pip py3-pip && \
     pip install --pre --no-cache-dir --break-system-packages "yt-dlp[default]" && \
