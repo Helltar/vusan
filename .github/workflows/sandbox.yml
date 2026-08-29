@@ -18,8 +18,11 @@ permissions:
   contents: read
 
 concurrency:
-  group: sandbox-${{ github.ref }}
-  cancel-in-progress: ${{ github.event_name != 'release' }}
+  # only a pull request may drop an older run: on master every commit gets its own group, so a burst
+  # of merges neither cancels the run in progress nor discards the ones waiting behind it — a pending
+  # run is dropped when the next one queues, which would leave commits verified by nothing.
+  group: sandbox-${{ github.event_name == 'pull_request' && github.ref || github.sha }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 env:
   IMAGE: ghcr.io/helltar/vusan-sandbox
