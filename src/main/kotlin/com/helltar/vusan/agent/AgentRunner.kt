@@ -191,7 +191,7 @@ class AgentRunner(
                 userMemory = userMemory,
                 chatMemory = chatMemory,
                 recentChat = recentChatFor(context),
-                stickerCatalog = stickers?.indexBlockFor(request.chatId)
+                stickerCatalog = stickerCatalogFor(context)
             )
 
         val outbox = BotOutbox()
@@ -307,6 +307,14 @@ class AgentRunner(
 
         return AgentResult(outputs, comment, outbox.redirectToPrivate)
     }
+
+    // the catalog is worth its tokens only where the reply can actually carry a sticker: a group that
+    // forbids them keeps StickerTools out of the registry, so an index here would offer the model a
+    // shortlist it has no tool to send.
+    private suspend fun stickerCatalogFor(context: RequestContext): String? =
+        stickers
+            ?.takeIf { context.chatCapabilities.stickersAndAnimations }
+            ?.indexBlockFor(context.chatId)
 
     // what the group was saying just before this turn. in a group the bot only ever sees the messages
     // addressed to it, so without this a question like "and what do you think?" arrives with no subject.

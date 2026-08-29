@@ -292,7 +292,9 @@ A normal user message travels:
   offer. A background worker then describes each sticker's thumbnail once through the vision model and caches the
   result by `file_unique_id`. `AgentRunner` puts at most 16 ready-to-send entries into the current user turn: recently
   used individual stickers first, then frequent ones, with spare room filled round-robin across every described set the
-  chat knows. `searchStickers` searches the descriptions and emoji across that full chat-scoped collection, while
+  chat knows. A group that forbids stickers gets no index at all, matching the registry: the tools are gated on
+  the same capability, so a shortlist there would be an offer with no tool behind it.
+  `searchStickers` searches the descriptions and emoji across that full chat-scoped collection, while
   `sendSticker` accepts only an id belonging to it and resends the matching `file_id`. Without a vision runtime the
   catalog is never constructed and neither tool is registered, matching the vision tools. A sticker the model refuses
   to describe, or one that repeatedly fails, is counted out after `describe_attempts` so it neither enters the index nor
