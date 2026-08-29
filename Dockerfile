@@ -19,6 +19,8 @@ WORKDIR /app
 # nsig challenges are solved through it ("[jsc:deno] Solving JS challenges using deno"), and yt-dlp
 # deprecates extraction without a JS runtime, warning that formats may be missing. it is the only
 # runtime yt-dlp enables by default, so dropping the package silently degrades every youtube tool.
+# its version is whatever alpine ships and is deliberately not held to the sandbox service's pin:
+# yt-dlp needs a JS runtime, not a particular one, and alpine offers no version to pin to anyway.
 RUN apk add --no-cache deno ffmpeg openjdk21-jre-headless python3 && \
     apk add --no-cache --virtual .pip py3-pip && \
     pip install --pre --no-cache-dir --break-system-packages "yt-dlp[default]" && \
