@@ -10,6 +10,17 @@ updates:
     labels:
       - dependencies
       - gradle
+    # one pull request per ecosystem per week instead of one per dependency: fewer CI runs, one
+    # merge, and no textual conflict between bumps that sit on adjacent lines of the version catalog.
+    # majors stay outside the group on purpose — koog and telegrambots each need their own audit
+    # before landing, which cannot happen inside a pull request that also moves five patch versions.
+    groups:
+      gradle:
+        patterns:
+          - "*"
+        update-types:
+          - minor
+          - patch
 
   - package-ecosystem: github-actions
     directory: /
@@ -18,6 +29,13 @@ updates:
     open-pull-requests-limit: 5
     commit-message:
       prefix: ci
+    groups:
+      actions:
+        patterns:
+          - "*"
+        update-types:
+          - minor
+          - patch
 
   - package-ecosystem: docker
     directory: /
@@ -30,6 +48,12 @@ updates:
       - dependency-name: eclipse-temurin
         update-types:
           - version-update:semver-major
+    # no update-types here, unlike gradle above: these base images are pinned by digest, and a
+    # rebuilt image keeps its tag, so a refresh carries no semver for a filter to match on.
+    groups:
+      docker:
+        patterns:
+          - "*"
 
   - package-ecosystem: docker
     directory: /sandbox
@@ -41,3 +65,7 @@ updates:
     labels:
       - dependencies
       - sandbox
+    groups:
+      sandbox:
+        patterns:
+          - "*"
