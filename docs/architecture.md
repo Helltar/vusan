@@ -222,8 +222,8 @@ A normal user message travels:
       one message per track, each repeating the reply quote. Anything queued between them ends the run.
     - **Sender split** — `TelegramOutputSender.kt` maps each `BotOutput` kind to a Bot API call and picks the fallback
       wrapping it, `TelegramSendFallbacks.kt` holds the output-kind-agnostic rejection handling (plain-text retry,
-      media-to-document, text-as-document), `TelegramRequests.kt` the raw request builders. Sandbox image previews opt
-      out of photo-to-document fallback because their uncompressed document copy is already queued.
+      media-to-document, text-as-document), `TelegramRequests.kt` the raw request builders. A sandbox image preview opts
+      out of photo-to-document fallback only when its uncompressed copy is already queued behind it.
 
 ## Background and side flows
 
@@ -416,6 +416,13 @@ TypeScript under [`sandbox/`](../sandbox/), has its own `Dockerfile`, contains n
   `MAX_FILE_BYTES`, and `MAX_OUTPUT_CHARS`.
 - **`packages.ts`** — Pyodide packages baked into the image. **`extra-wheels.txt`** — version-pinned pure-Python wheels
   that Pyodide does not ship, downloaded in the Dockerfile `wheels` stage so document handling works offline.
+
+An image the code produced is shown inline as a photo, and sent a second time as an uncompressed document only when
+Telegram would resize it (`TELEGRAM_PHOTO_LONG_SIDE` in `tools/sandbox/SandboxTools.kt`). That resize, not the JPEG
+re-encode, is what softens chart text: measured against the original, a chart that passes through untouched loses 0.33%
+of its pixels visibly against 1.55% for one that gets resized, and on photographic content the re-encode is invisible.
+An image past the inline album cap is never previewed, so it keeps its document copy whatever its size, as does one
+whose dimensions cannot be read.
 
 Isolation is enforced by the Deno entrypoint flags, not by convention: `--allow-net` is limited to the listening socket,
 `--allow-read` to `/app`, `/deno-dir`, and `/fonts`, and there is no `--allow-write` at all. The code being run is

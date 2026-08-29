@@ -5,6 +5,9 @@ import com.helltar.vusan.outbox.BotOutbox
 import com.helltar.vusan.outbox.BotOutput
 import io.ktor.client.engine.mock.*
 import io.ktor.http.*
+import java.awt.image.BufferedImage
+import java.io.ByteArrayOutputStream
+import javax.imageio.ImageIO
 import kotlinx.coroutines.runBlocking
 import kotlin.test.Test
 import kotlin.test.assertContentEquals
@@ -44,9 +47,9 @@ class SandboxToolsTest {
     }
 
     @Test
-    fun `chart png is sent as both an inline photo and an uncompressed document`() = runBlocking {
+    fun `a chart telegram would shrink is sent as an inline photo and an uncompressed document`() = runBlocking {
         val outbox = BotOutbox()
-        val pngBytes = byteArrayOf(1, 2, 3)
+        val pngBytes = png(width = 1600, height = 820)
         val base64 = java.util.Base64.getEncoder().encodeToString(pngBytes)
         val result =
             tools(outbox, """{"ok":true,"stdout":"chart done\n","files":[{"name":"chart.png","base64":"$base64"}]}""")
@@ -68,9 +71,34 @@ class SandboxToolsTest {
     }
 
     @Test
+    fun `a chart small enough to arrive untouched is sent once`() = runBlocking {
+        val outbox = BotOutbox()
+        val base64 = java.util.Base64.getEncoder().encodeToString(png(width = 700, height = 360))
+        val result =
+            tools(outbox, """{"ok":true,"files":[{"name":"ozon_week.png","base64":"$base64"}]}""")
+                .codeExecution("...")
+
+        val photo = assertIs<BotOutput.Photo>(outbox.pending.single().output)
+        assertEquals("ozon_week.png", photo.filename)
+        // nothing follows it now, so the preview keeps its own document fallback.
+        assertTrue(photo.fallbackToDocument)
+        assertContains(result, "Delivered 1 file(s) to the chat: ozon_week.png")
+    }
+
+    @Test
+    fun `an image nothing can measure keeps its uncompressed copy`() = runBlocking {
+        val outbox = BotOutbox()
+        val base64 = java.util.Base64.getEncoder().encodeToString(byteArrayOf(1, 2, 3))
+        tools(outbox, """{"ok":true,"files":[{"name":"chart.png","base64":"$base64"}]}""").codeExecution("...")
+
+        assertIs<BotOutput.Photo>(outbox.pending[0].output)
+        assertIs<BotOutput.Document>(outbox.pending[1].output)
+    }
+
+    @Test
     fun `multiple images are sent as a photo group plus a document group`() = runBlocking {
         val outbox = BotOutbox()
-        val b64 = java.util.Base64.getEncoder().encodeToString(byteArrayOf(9))
+        val b64 = java.util.Base64.getEncoder().encodeToString(png(width = 1600, height = 820))
         tools(
             outbox,
             """{"ok":true,"files":[{"name":"a.png","base64":"$b64"},{"name":"b.png","base64":"$b64"}]}"""
@@ -150,4 +178,10 @@ class SandboxToolsTest {
         assertContains(result, "no output")
         assertTrue(outbox.pending.isEmpty())
     }
+
+    // a real encoded PNG: the delivery rule reads its dimensions, so invented bytes would not exercise it.
+    private fun png(width: Int, height: Int): ByteArray =
+        ByteArrayOutputStream()
+            .also { ImageIO.write(BufferedImage(width, height, BufferedImage.TYPE_INT_RGB), "png", it) }
+            .toByteArray()
 }

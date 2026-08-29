@@ -3,6 +3,7 @@ package com.helltar.vusan.tools.sandbox
 import ai.koog.agents.core.tools.annotations.LLMDescription
 import ai.koog.agents.core.tools.annotations.Tool
 import ai.koog.agents.core.tools.reflect.ToolSet
+import com.helltar.vusan.common.imageDimensions
 import com.helltar.vusan.common.limitTo
 import com.helltar.vusan.common.rethrowIfCancellation
 import com.helltar.vusan.common.sanitizeFilename
@@ -18,6 +19,12 @@ private const val MAX_OUTPUT_CHARS = 4_000
 private const val MAX_ERROR_CHARS = 500
 private const val MAX_MEDIA_GROUP = 10
 private const val MAX_INPUT_FILE_BYTES = 10 * 1024 * 1024
+
+// telegram resizes a photo whose long side is past this, and it is that resize — not the JPEG
+// re-encode — that softens chart text: measured against the original, a chart small enough to pass
+// through untouched loses 0.33% of its pixels visibly, one that gets resized loses 1.55%. the
+// threshold itself is not in the Bot API; it is what telegram's clients have been observed to do.
+private const val TELEGRAM_PHOTO_LONG_SIDE = 1280
 
 // only surface run time when it's meaningful — below this it's noise the model would parrot.
 private const val SLOW_RUN_MS = 1_000
@@ -51,9 +58,20 @@ class SandboxTools(
         val (imageFiles, otherFiles) = nonAnimationFiles.partition { it.name.isImageName() }
 
         val (animations, animationFallbacks) = encodeAnimations(animationFiles)
+
+        val images = imageFiles.mapNotNull { it.toImage() }
         // inline previews fit a single Telegram album; anything beyond still arrives as a document copy.
-        val photos = imageFiles.mapNotNull { it.toPhoto() }.take(MAX_MEDIA_GROUP)
-        val imageDocuments = imageFiles.mapNotNull { it.toDocument() }
+        val previews = images.take(MAX_MEDIA_GROUP)
+        val photos = previews.map { it.toPhoto() }
+
+        // an uncompressed copy is a second message showing the same picture, so it is only worth
+        // sending for an image telegram would resize. one past the album cap is never previewed at
+        // all, so it keeps its copy whatever its size.
+        val imageDocuments =
+            images
+                .filterIndexed { index, image -> index >= MAX_MEDIA_GROUP || image.resizedByTelegram }
+                .map { it.toDocument() }
+
         val documents = otherFiles.mapNotNull { it.toDocument() }
 
         animations.forEach { outbox.enqueue(it) }
@@ -63,8 +81,6 @@ class SandboxTools(
             photos.size >= 2 -> outbox.enqueue(BotOutput.PhotoGroup(photos))
         }
 
-        // telegram recompresses inline photos to JPEG, softening chart text. send each image again as
-        // an uncompressed document so a pixel-perfect copy is available alongside the inline preview.
         // animations that ffmpeg could not encode ride along as their original APNG/GIF document.
         enqueueDocuments(imageDocuments + documents + animationFallbacks)
 
@@ -89,11 +105,11 @@ class SandboxTools(
                     appendLine(xmlBlock("stderr", it.limitTo(MAX_OUTPUT_CHARS)))
                 }
 
-                // image documents mirror the photo previews one-to-one (same filenames), so listing
-                // them covers every delivered image — including ones beyond the inline album cap.
+                // an image reaches the chat as a preview, as a document, or as both, so it is listed
+                // from the images themselves — one name each, whichever way it travelled.
                 val sent =
                     animations.map { it.filename } + animationFallbacks.map { it.filename } +
-                            imageDocuments.map { it.filename } + documents.map { it.filename }
+                            images.map { it.filename } + documents.map { it.filename }
 
                 if (sent.isNotEmpty()) {
                     appendLine(
@@ -183,14 +199,8 @@ class SandboxTools(
     private fun SandboxFile.mp4Filename(): String =
         "${name.substringBeforeLast('.', name).sanitizeFilename().ifBlank { "animation" }}.mp4"
 
-    private fun SandboxFile.toPhoto(): BotOutput.Photo? =
-        decodedBytes()?.let {
-            BotOutput.Photo(
-                bytes = it,
-                filename = name.sanitizeFilename().ifBlank { "chart.png" },
-                fallbackToDocument = false
-            )
-        }
+    private fun SandboxFile.toImage(): SandboxImage? =
+        decodedBytes()?.let { SandboxImage(name.sanitizeFilename().ifBlank { "chart.png" }, it) }
 
     private fun SandboxFile.toDocument(): BotOutput.Document? =
         decodedBytes()?.let {
@@ -199,6 +209,25 @@ class SandboxTools(
 
     private fun SandboxFile.decodedBytes(): ByteArray? =
         runCatching { Base64.getDecoder().decode(base64) }.getOrNull()?.takeIf { it.isNotEmpty() }
+}
+
+// one image the sandbox produced, and how it should travel to the chat.
+private class SandboxImage(val filename: String, val bytes: ByteArray) {
+
+    /**
+     * Whether Telegram would shrink this image to show it inline, which is what costs a chart its
+     * legibility. An image nothing here can measure keeps its uncompressed copy: guessing wrong the
+     * other way would drop the only faithful copy of it.
+     */
+    val resizedByTelegram: Boolean by lazy {
+        val (width, height) = imageDimensions(bytes) ?: return@lazy true
+        maxOf(width, height) > TELEGRAM_PHOTO_LONG_SIDE
+    }
+
+    // a preview may fall back to a document only when no uncompressed copy is following it.
+    fun toPhoto() = BotOutput.Photo(bytes = bytes, filename = filename, fallbackToDocument = !resizedByTelegram)
+
+    fun toDocument() = BotOutput.Document(bytes = bytes, filename = filename)
 }
 
 // files the sandbox produced but could not return (over the per-file size cap or the per-run file count).

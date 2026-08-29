@@ -1,12 +1,11 @@
 package com.helltar.vusan.tools.images
 
+import com.helltar.vusan.common.imageDimensions
 import io.github.oshai.kotlinlogging.KotlinLogging
 import io.ktor.client.*
 import io.ktor.client.request.*
 import io.ktor.client.statement.*
 import io.ktor.http.*
-import java.io.ByteArrayInputStream
-import javax.imageio.ImageIO
 import kotlin.math.max
 import kotlin.math.min
 
@@ -52,23 +51,6 @@ class ImageDownloadClient(private val http: HttpClient) {
 
         return bytes
     }
-
-    private fun imageDimensions(bytes: ByteArray): Pair<Int, Int>? =
-        runCatching {
-            ImageIO.createImageInputStream(ByteArrayInputStream(bytes))?.use { stream ->
-                val readers = ImageIO.getImageReaders(stream)
-                if (!readers.hasNext()) return@use null
-
-                val reader = readers.next()
-
-                try {
-                    reader.input = stream
-                    reader.getWidth(0) to reader.getHeight(0)
-                } finally {
-                    reader.dispose()
-                }
-            }
-        }.getOrNull()
 
     private fun isTelegramPhotoCompatible(width: Int, height: Int): Boolean {
         if (width <= 0 || height <= 0) return false
