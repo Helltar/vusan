@@ -417,12 +417,15 @@ TypeScript under [`sandbox/`](../sandbox/), has its own `Dockerfile`, contains n
 - **`packages.ts`** — Pyodide packages baked into the image. **`extra-wheels.txt`** — version-pinned pure-Python wheels
   that Pyodide does not ship, downloaded in the Dockerfile `wheels` stage so document handling works offline.
 
-An image the code produced is shown inline as a photo, and sent a second time as an uncompressed document only when
-Telegram would resize it (`TELEGRAM_PHOTO_LONG_SIDE` in `tools/sandbox/SandboxTools.kt`). That resize, not the JPEG
-re-encode, is what softens chart text: measured against the original, a chart that passes through untouched loses 0.33%
-of its pixels visibly against 1.55% for one that gets resized, and on photographic content the re-encode is invisible.
-An image past the inline album cap is never previewed, so it keeps its document copy whatever its size, as does one
-whose dimensions cannot be read.
+An image the code produced is shown inline as a photo, and sent a second time as an uncompressed document only when its
+long side is past `TELEGRAM_PHOTO_LONG_SIDE` (`tools/sandbox/SandboxTools.kt`). Below that, Telegram re-encodes a
+bot-uploaded photo to JPEG but does not resize it, and the re-encode alone is not worth a second message: two delivered
+charts, 1423 and 1584 px wide, came back at their original size with 0.16% and 0.22% of pixels visibly changed. The
+1280 px limit usually quoted for Telegram photos belongs to the compressor a person's app applies before upload and
+does not touch what a bot sends. Past the cap the image is resized by an unknown factor, so the copy is kept as the
+only faithful version — a precaution for dense screenshots rather than a measured need for charts, since a chart
+rendered at 3168 px survives the downscale better than a 1584 px one survives the re-encode. An image past the inline
+album cap is never previewed, so it keeps its copy whatever its size, as does one whose dimensions cannot be read.
 
 Isolation is enforced by the Deno entrypoint flags, not by convention: `--allow-net` is limited to the listening socket,
 `--allow-read` to `/app`, `/deno-dir`, and `/fonts`, and there is no `--allow-write` at all. The code being run is

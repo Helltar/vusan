@@ -20,11 +20,13 @@ private const val MAX_ERROR_CHARS = 500
 private const val MAX_MEDIA_GROUP = 10
 private const val MAX_INPUT_FILE_BYTES = 10 * 1024 * 1024
 
-// telegram resizes a photo whose long side is past this, and it is that resize — not the JPEG
-// re-encode — that softens chart text: measured against the original, a chart small enough to pass
-// through untouched loses 0.33% of its pixels visibly, one that gets resized loses 1.55%. the
-// threshold itself is not in the Bot API; it is what telegram's clients have been observed to do.
-private const val TELEGRAM_PHOTO_LONG_SIDE = 1280
+// telegram keeps a photo a bot uploaded up to this long side, re-encoding it to JPEG but not
+// resizing it: measured on two delivered charts (1423 and 1584 px wide), the re-encode changes
+// 0.16-0.22% of pixels visibly, which does not earn a second message. the 1280 figure usually quoted
+// for telegram photos is the compressor a person's app applies before upload and never touches this
+// path. past this cap the image is resized by an unknown factor, so the copy stays as the only
+// faithful version — a precaution for dense screenshots rather than a measured need for charts.
+private const val TELEGRAM_PHOTO_LONG_SIDE = 2560
 
 // only surface run time when it's meaningful — below this it's noise the model would parrot.
 private const val SLOW_RUN_MS = 1_000

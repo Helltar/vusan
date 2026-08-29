@@ -49,7 +49,7 @@ class SandboxToolsTest {
     @Test
     fun `a chart telegram would shrink is sent as an inline photo and an uncompressed document`() = runBlocking {
         val outbox = BotOutbox()
-        val pngBytes = png(width = 1600, height = 820)
+        val pngBytes = png(width = 3000, height = 1600)
         val base64 = java.util.Base64.getEncoder().encodeToString(pngBytes)
         val result =
             tools(outbox, """{"ok":true,"stdout":"chart done\n","files":[{"name":"chart.png","base64":"$base64"}]}""")
@@ -73,7 +73,7 @@ class SandboxToolsTest {
     @Test
     fun `a chart small enough to arrive untouched is sent once`() = runBlocking {
         val outbox = BotOutbox()
-        val base64 = java.util.Base64.getEncoder().encodeToString(png(width = 700, height = 360))
+        val base64 = java.util.Base64.getEncoder().encodeToString(png(width = 1584, height = 874))
         val result =
             tools(outbox, """{"ok":true,"files":[{"name":"ozon_week.png","base64":"$base64"}]}""")
                 .codeExecution("...")
@@ -98,7 +98,7 @@ class SandboxToolsTest {
     @Test
     fun `multiple images are sent as a photo group plus a document group`() = runBlocking {
         val outbox = BotOutbox()
-        val b64 = java.util.Base64.getEncoder().encodeToString(png(width = 1600, height = 820))
+        val b64 = java.util.Base64.getEncoder().encodeToString(png(width = 3000, height = 1600))
         tools(
             outbox,
             """{"ok":true,"files":[{"name":"a.png","base64":"$b64"},{"name":"b.png","base64":"$b64"}]}"""
