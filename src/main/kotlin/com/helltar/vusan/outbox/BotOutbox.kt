@@ -17,6 +17,9 @@ class BotOutbox {
         const val MAX_TEXT_MESSAGE_CHARS = 4000
 
         private const val TEXT_SEPARATOR = "\n\n"
+
+        // telegram's album size. an eleventh track starts a second album rather than being dropped.
+        private const val MAX_MEDIA_GROUP = 10
     }
 
     private val items = mutableListOf<OutboxItem>()
@@ -31,7 +34,28 @@ class BotOutbox {
         // reactions always target a specific message in the current chat —
         // they must never be routed to the sender's DMs by `useDirectMessages`.
         val toPrivate = redirectToPrivate && item !is BotOutput.Reaction
+
+        if (item is BotOutput.Audio && mergeIntoTrailingAlbum(item, toPrivate)) return
+
         items += OutboxItem(item, toPrivate)
+    }
+
+    // a track is fetched one tool call at a time, so seven of them would otherwise arrive as seven
+    // messages, each repeating the reply quote. consecutive ones become one album instead — the
+    // moment anything else is queued between them, the run of tracks is over and a new album starts.
+    private fun mergeIntoTrailingAlbum(audio: BotOutput.Audio, toPrivate: Boolean): Boolean {
+        val last = items.lastOrNull()?.takeIf { it.toPrivate == toPrivate } ?: return false
+
+        val album =
+            when (val output = last.output) {
+                is BotOutput.Audio -> listOf(output, audio)
+                is BotOutput.AudioGroup -> output.audios.takeIf { it.size < MAX_MEDIA_GROUP }?.plus(audio)
+                else -> null
+            } ?: return false
+
+        items[items.lastIndex] = last.copy(output = BotOutput.AudioGroup(album))
+
+        return true
     }
 
     // enqueues a standalone text message, coalescing it into the trailing text bubble while the result

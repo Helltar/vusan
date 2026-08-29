@@ -31,7 +31,8 @@ internal fun replyParameters(replyToMessageId: Long?): ReplyParameters? =
 // "recording audio", etc. matching what is about to arrive. reactions are instant and get none.
 internal fun botActionFor(output: BotOutput): ActionType? = when (output) {
     is BotOutput.Photo, is BotOutput.PhotoGroup -> ActionType.UPLOAD_PHOTO
-    is BotOutput.Document, is BotOutput.DocumentGroup, is BotOutput.Audio -> ActionType.UPLOAD_DOCUMENT
+    is BotOutput.Document, is BotOutput.DocumentGroup -> ActionType.UPLOAD_DOCUMENT
+    is BotOutput.Audio, is BotOutput.AudioGroup -> ActionType.UPLOAD_DOCUMENT
     is BotOutput.Video, is BotOutput.Animation -> ActionType.UPLOAD_VIDEO
     is BotOutput.VideoNote -> ActionType.RECORD_VIDEO_NOTE
     is BotOutput.Voice -> ActionType.RECORD_VOICE
@@ -66,6 +67,7 @@ private fun BotOutput.groupLogDescriptor(): String? = when (this) {
     is BotOutput.VideoNote -> "video note"
     is BotOutput.Video -> "video"
     is BotOutput.Audio -> "audio"
+    is BotOutput.AudioGroup -> "tracks"
     // a reaction is not a message in the chat, so it leaves no transcript row at all.
     else -> null
 }

@@ -620,6 +620,7 @@ private fun outputsLogSummary(outputs: List<OutboxItem>): String =
             is BotOutput.Reaction -> "reaction ${output.emoji}"
             is BotOutput.PhotoGroup -> "photoGroup(${output.photos.size})"
             is BotOutput.DocumentGroup -> "documentGroup(${output.documents.size})"
+            is BotOutput.AudioGroup -> "audioGroup(${output.audios.size})"
             else -> output::class.simpleName ?: "?"
         }
     }

@@ -112,6 +112,14 @@ sealed class BotOutput {
         override val acceptsCaption: Boolean get() = true
     }
 
+    class AudioGroup(val audios: List<Audio>) : BotOutput() {
+        init {
+            require(audios.size in 2..10) {
+                "AudioGroup requires 2..10 audios, got ${audios.size}"
+            }
+        }
+    }
+
     data class Quiz(
         val question: String,
         val options: List<String>,

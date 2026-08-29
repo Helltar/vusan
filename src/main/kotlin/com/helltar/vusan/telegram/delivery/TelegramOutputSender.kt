@@ -17,6 +17,7 @@ import org.telegram.telegrambots.meta.api.methods.send.SendVideoNote
 import org.telegram.telegrambots.meta.api.methods.send.SendVoice
 import org.telegram.telegrambots.meta.api.objects.InputFile
 import org.telegram.telegrambots.meta.api.objects.ReplyParameters
+import org.telegram.telegrambots.meta.api.objects.media.InputMediaAudio
 import org.telegram.telegrambots.meta.api.objects.media.InputMediaDocument
 import org.telegram.telegrambots.meta.api.objects.media.InputMediaPhoto
 import org.telegram.telegrambots.meta.api.objects.message.Message
@@ -54,6 +55,7 @@ internal object TelegramOutputSender {
             is BotOutput.Document -> sendDocument(client, chatId, replyParameters, item, caption, formattingFileNotice)
             is BotOutput.DocumentGroup -> sendDocumentGroup(client, chatId, replyParameters, item, formattingFileNotice)
             is BotOutput.Audio -> sendAudio(client, chatId, replyParameters, item, caption, formattingFileNotice)
+            is BotOutput.AudioGroup -> sendAudioGroup(client, chatId, replyParameters, item, formattingFileNotice)
             is BotOutput.Voice -> sendVoice(client, chatId, replyParameters, item, caption, formattingFileNotice)
             is BotOutput.Video -> sendVideo(client, chatId, replyParameters, item, caption, formattingFileNotice)
             is BotOutput.VideoNote -> sendVideoNote(client, chatId, replyParameters, item, formattingFileNotice)
@@ -335,6 +337,43 @@ internal object TelegramOutputSender {
                     .onFailure { ie ->
                         ie.rethrowIfCancellation()
                         log.warn(ie) { "Fallback sendDocument failed for chat=$chatId" }
+                    }
+            }
+        }
+    )
+
+    private suspend fun sendAudioGroup(
+        client: TelegramClient,
+        chatId: Long,
+        replyParameters: ReplyParameters?,
+        group: BotOutput.AudioGroup,
+        formattingFileNotice: String
+    ) = sendOrFallback(
+        chatId = chatId,
+        replyParameters = replyParameters,
+        failureMessage = "sendAudioGroup failed, falling back to individual tracks",
+        send = {
+            // the album carries what a single sendAudio would: player metadata per track, and the
+            // source link as that track's own caption rather than one caption for the whole batch.
+            val media = group.audios.map { audio ->
+                InputMediaAudio.builder()
+                    .media(ByteArrayInputStream(audio.bytes), audio.filename)
+                    .title(audio.title)
+                    .performer(audio.performer)
+                    .duration(audio.durationSeconds)
+                    .caption(captionWithSourceLink(caption = null, sourceUrl = audio.trackUrl))
+                    .parseMode(ParseMode.HTML)
+                    .build()
+            }
+
+            sendMediaGroup(client, chatId, media, replyParameters)
+        },
+        onFallback = {
+            group.audios.forEach { audio ->
+                runCatching { sendAudio(client, chatId, replyParameters, audio, caption = null, formattingFileNotice) }
+                    .onFailure { ie ->
+                        ie.rethrowIfCancellation()
+                        log.warn(ie) { "Fallback sendAudio failed for chat=$chatId" }
                     }
             }
         }

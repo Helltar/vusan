@@ -99,4 +99,78 @@ class BotOutboxTest {
         assertFalse(outbox.enqueueText(full))
         assertEquals(BotOutbox.MAX_TEXT_MESSAGES, outbox.pending.count { it.output is BotOutput.Text })
     }
+
+    @Test
+    fun `consecutive tracks become one album`() {
+        val outbox = BotOutbox()
+
+        outbox.enqueue(track("Nocturne"))
+        outbox.enqueue(track("Prelude"))
+        outbox.enqueue(track("Requiem"))
+
+        val album = assertIs<BotOutput.AudioGroup>(outbox.pending.single().output)
+        assertEquals(listOf("Nocturne", "Prelude", "Requiem"), album.audios.map { it.title })
+    }
+
+    @Test
+    fun `a single track is sent on its own`() {
+        val outbox = BotOutbox()
+
+        outbox.enqueue(track("Nocturne"))
+
+        assertIs<BotOutput.Audio>(outbox.pending.single().output)
+    }
+
+    @Test
+    fun `anything queued between tracks starts a new album`() {
+        val outbox = BotOutbox()
+
+        outbox.enqueue(track("first"))
+        outbox.enqueue(track("second"))
+        assertTrue(outbox.enqueueText("and now the second half"))
+        outbox.enqueue(track("third"))
+        outbox.enqueue(track("fourth"))
+
+        assertEquals(
+            listOf("audioGroup(2)", "text", "audioGroup(2)"),
+            outbox.pending.map {
+                when (val output = it.output) {
+                    is BotOutput.AudioGroup -> "audioGroup(${output.audios.size})"
+                    is BotOutput.Text -> "text"
+                    else -> "?"
+                }
+            }
+        )
+    }
+
+    @Test
+    fun `an eleventh track starts a second album instead of being dropped`() {
+        val outbox = BotOutbox()
+
+        repeat(11) { outbox.enqueue(track("track $it")) }
+
+        val albums = outbox.pending.map { it.output }
+        assertEquals(10, assertIs<BotOutput.AudioGroup>(albums.first()).audios.size)
+        assertEquals("track 10", assertIs<BotOutput.Audio>(albums.last()).title)
+    }
+
+    @Test
+    fun `a track redirected to direct messages does not join the album before it`() {
+        val outbox = BotOutbox()
+
+        outbox.enqueue(track("in the group"))
+        outbox.useDirectMessages()
+        outbox.enqueue(track("in the dm"))
+
+        assertEquals(listOf(false, true), outbox.pending.map { it.toPrivate })
+        assertEquals(2, outbox.pending.count { it.output is BotOutput.Audio })
+    }
+
+    private fun track(title: String) =
+        BotOutput.Audio(
+            bytes = ByteArray(4),
+            filename = "$title.m4a",
+            title = title,
+            performer = "an orchestra"
+        )
 }
