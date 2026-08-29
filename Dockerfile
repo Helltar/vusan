@@ -3,12 +3,13 @@ WORKDIR /app
 
 COPY gradlew settings.gradle.kts build.gradle.kts gradle.properties ./
 COPY gradle ./gradle
-RUN --mount=type=cache,target=/root/.gradle \
-    ./gradlew --no-daemon shadowJar
+# deliberately no --mount=type=cache for ~/.gradle: buildkit cache mounts are never
+# exported to the github actions cache, so this warm-up has to stay in the layer for
+# image.yml to restore the wrapper and the dependencies with cache-from
+RUN ./gradlew --no-daemon shadowJar
 
 COPY src ./src
-RUN --mount=type=cache,target=/root/.gradle \
-    ./gradlew --no-daemon shadowJar
+RUN ./gradlew --no-daemon shadowJar
 
 
 FROM alpine:3.24@sha256:28bd5fe8b56d1bd048e5babf5b10710ebe0bae67db86916198a6eec434943f8b AS runtime
