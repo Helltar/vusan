@@ -499,8 +499,15 @@ the [yt-dlp wiki](https://github.com/yt-dlp/yt-dlp/wiki/Extractors#exporting-you
 
 ## Logging
 
-Both levels are read by logback at startup, not by `AppConfig`, so they are set like any other
-variable in `.env` and take effect on the next restart.
+Both levels are read by logback at startup rather than by `AppConfig`, and that is the one place
+where writing them into `.env` is not enough: logback looks at the process environment, while `.env`
+reaches the application through dotenv and nowhere else. In the compose deployment they work from
+`.env` anyway, because `env_file` turns it into real environment variables. A local run does not, so
+set them where that run gets its environment — the IDE run configuration, or the command line:
+
+```bash
+PROMPT_DUMP_LEVEL=DEBUG java -jar build/libs/vusan-*-all.jar
+```
 
 | Variable            | Default | Description                                              |
 |---------------------|---------|----------------------------------------------------------|
