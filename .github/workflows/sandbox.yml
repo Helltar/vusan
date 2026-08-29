@@ -42,6 +42,24 @@ jobs:
           # that tag, never this input
           deno-version: v2.9.6
           cache: true
+      # the comment above is a request; this is the enforcement. dependabot bumps the image tag and
+      # leaves the input behind, and the two denos then drift apart unnoticed.
+      - name: deno version matches the image
+        run: |
+          image=$(sed -n 's/^FROM denoland\/deno:alpine-\([0-9][0-9.]*\)@.*/\1/p' Dockerfile)
+          installed=$(deno --version | head -1 | cut -d' ' -f2)
+
+          if [ -z "$image" ]; then
+            echo "::error::cannot read the deno version out of sandbox/Dockerfile"
+            exit 1
+          fi
+
+          if [ "$image" != "$installed" ]; then
+            echo "::error::deno drift: sandbox/Dockerfile runs $image, this workflow checks the code with $installed. Set deno-version to v$image in .github/workflows/sandbox.yml"
+            exit 1
+          fi
+
+          echo "deno $installed matches sandbox/Dockerfile"
       - run: deno ci
       - run: deno fmt --check *.ts deno.json
       - run: deno lint *.ts
