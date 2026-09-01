@@ -63,16 +63,16 @@ internal class AgentTurns(
         loadRepliedAttachment: Boolean = true,
         attachedFile: AttachedFile? = null
     ) {
-        val replyToOtherUser = isReplyToOtherUser(message.replyAuthorIdOrNull(), botProfile.userId)
-        val replySummary = if (replyToOtherUser) message.replySummaryOrNull(client, voiceTranscriber) else null
-
-        // the fragment travels even without a reply summary: a reply to the bot's own message carries no
-        // `<reply_context>`, since that message is already in the history, but the selected piece is not.
+        // every reply describes what it answers, the bot's own messages included: the history that would
+        // otherwise carry them belongs to one person and one chat, so in a group the message is missing
+        // from the replier's history whenever it was written for somebody else.
+        val replySummary = message.replySummaryOrNull(client, voiceTranscriber, botProfile.userId)
         val quotedFragment = message.quotedFragmentOrNull()
 
+        // the file travels with it for the same reason, and because no history carries bytes: without this
+        // "edit this" against a picture the bot itself drew has nothing to work on.
         val effectiveAttachedFile =
-            attachedFile
-                ?: if (loadRepliedAttachment) replySummary?.let { message.repliedAttachedFileOrNull(client) } else null
+            attachedFile ?: if (loadRepliedAttachment) message.repliedAttachedFileOrNull(client) else null
 
         val baseAgentInput = formatAgentInput(prompt, replySummary, quotedFragment)
 
@@ -82,7 +82,10 @@ internal class AgentTurns(
                 effectiveAttachedFile?.let { "${attachedFileContextBlock(it)}\n\n$baseAgentInput" } ?: baseAgentInput,
             conversationInput = formatConversationInput(prompt, replySummary, quotedFragment),
             attachedFile = effectiveAttachedFile,
-            replyToMessageId = if (replyToOtherUser) message.replyToMessageIdOrNull() else null,
+            // a reaction may only land on somebody else's message, so this stays narrower than the context above.
+            replyToMessageId =
+                message.replyToMessageIdOrNull()
+                    ?.takeIf { isReplyToOtherUser(message.replyAuthorIdOrNull(), botProfile.userId) },
             inputKind = inputKind
         )
     }

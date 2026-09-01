@@ -22,9 +22,16 @@ private const val MAX_REPLIED_TEXT_CHARS = 4096
 private const val MAX_REPLIED_STORED_TEXT_CHARS = 600
 private const val MAX_QUOTED_FRAGMENT_CHARS = 1024
 
+// a first name, a last name and a username, with room to spare for telegram's own limits.
+private const val MAX_AUTHOR_CHARS = 160
+
 internal data class RepliedMessageSummary(
     val type: String,
     val textOrCaption: String?,
+    // who wrote the message being replied to, `you` when it is the bot's own. in a group the person
+    // replying is often not the one that message was written for, so their history carries nothing
+    // about it — this block is then all the model gets.
+    val author: String? = null,
     val metadata: List<String> = emptyList(),
     val transcript: String? = null
 )
@@ -41,9 +48,10 @@ internal fun Message.quotedFragmentOrNull(): String? =
 
 internal suspend fun Message.replySummaryOrNull(
     client: TelegramClient,
-    voiceTranscriber: VoiceTranscriber?
+    voiceTranscriber: VoiceTranscriber?,
+    botUserId: Long
 ): RepliedMessageSummary? {
-    val base = toReplySummary() ?: return null
+    val base = toReplySummary(botUserId) ?: return null
     val transcript = transcribeRepliedAudioOrNull(client, voiceTranscriber)
     return transcript?.let { base.copy(transcript = it) } ?: base
 }
@@ -260,6 +268,7 @@ private fun buildReplyContextPrompt(
     return buildString {
         if (repliedMessage != null) {
             appendLine("<reply_context>")
+            repliedMessage.author?.let { appendLine("- author: $it") }
             appendLine("- type: ${repliedMessage.type}")
 
             if (repliedMessage.metadata.isNotEmpty()) {
@@ -290,17 +299,34 @@ private fun buildReplyContextPrompt(
     }
 }
 
-private fun Message.toReplySummary(): RepliedMessageSummary? =
-    replyToMessage?.summarizeInternalReply()
+private fun Message.toReplySummary(botUserId: Long): RepliedMessageSummary? =
+    replyToMessage?.summarizeInternalReply(botUserId)
         ?: externalReplyInfo?.summarize()
         ?: replyToStory?.let { RepliedMessageSummary(type = "story", textOrCaption = null) }
 
-private fun Message.summarizeInternalReply(): RepliedMessageSummary =
+private fun Message.summarizeInternalReply(botUserId: Long): RepliedMessageSummary =
     RepliedMessageSummary(
         type = contentTypeName(),
         textOrCaption = repliedTextOrNull(),
+        author = authorLabel(botUserId),
         metadata = mediaMetadataLines()
     )
+
+// a channel post forwarded into a discussion group and an anonymous admin both arrive without a sender
+// user, and are named by the chat that posted them instead.
+private fun Message.authorLabel(botUserId: Long): String? {
+    val sender = from ?: return senderChat?.titleOrDisplayName().authorValueOrNull()
+
+    if (sender.id == botUserId) return "you"
+
+    return listOfNotNull(displayName(sender.firstName, sender.lastName), sender.userName?.let { "@$it" })
+        .joinToString(" ")
+        .authorValueOrNull()
+}
+
+// a display name is whatever its owner typed, and it lands on a line of its own inside the block.
+private fun String?.authorValueOrNull(): String? =
+    this?.collapseWhitespaceAndCap(MAX_AUTHOR_CHARS)?.takeIf { it.isNotBlank() }?.neutralizePromptBlocks()
 
 // a quoted rich message keeps its layout: collapsing a tree of headings, lists and code into one
 // line leaves the model guessing at the structure it is being asked about.

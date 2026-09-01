@@ -93,7 +93,7 @@ Prerequisites: JDK 21, plus `ffmpeg` and `yt-dlp` on `PATH`.
 
 - **Code execution** — runs Python for exact math, data crunching, charts, Word and PDF documents,
   and animations.
-- **Images** — draws a picture from a description, or edits one you sent.
+- **Images** — draws a picture from a description, or edits one: yours, or one it drew earlier.
 - **Voice replies** — answers out loud with a generated voice message.
 - **GIFs** — finds and sends a fitting GIF.
 
@@ -105,6 +105,8 @@ Prerequisites: JDK 21, plus `ffmpeg` and `yt-dlp` on `PATH`.
   and continue as soon as you tap one.
 - **Edits** — forgot to tag it in a message you already sent? Add the mention and it answers,
   instead of making you type the whole thing again.
+- **Replies** — reply to any message and it answers about that one, whoever wrote it. A file or a
+  picture it made for somebody else counts: in a group you can pick up where another person left off.
 - **Polls and quizzes** — creates real Telegram polls and quizzes, not a text imitation.
 - **Reactions** — sometimes an emoji on your message is the whole answer.
 - **Stickers** — learns the stickers your chat actually uses, finds a fitting one across the

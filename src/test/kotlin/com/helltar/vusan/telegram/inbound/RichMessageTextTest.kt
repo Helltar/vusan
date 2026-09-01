@@ -133,7 +133,8 @@ class RichMessageTextTest {
                 """.trimIndent()
             )
 
-        val summary = runBlocking { message.replySummaryOrNull(unusedClient, voiceTranscriber = null) }
+        val summary =
+            runBlocking { message.replySummaryOrNull(unusedClient, voiceTranscriber = null, botUserId = BOT_USER_ID) }
 
         assertEquals("rich message", summary?.type)
         assertEquals("# Plan\n\nstep one", summary?.textOrCaption)

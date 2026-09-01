@@ -113,9 +113,12 @@ A normal user message travels:
    markdown (`telegram/inbound/RichMessageText.kt`), both as its own input and when one is quoted in a reply, capped at
    `MAX_RICH_MESSAGE_CHARS` because Telegram allows it 32768 characters against plain text's 4096;
    replied-message context is wrapped in `<reply_context>`/`<user_message>`; current or replied photo, video, and
-   document input becomes `AttachedFile`. A reply that quotes part of a message adds `<quoted_fragment>` right before
-   the request — including when the reply targets one of the bot's own messages, which gets no `<reply_context>` at all
-   because the history already carries it; there the fragment is the only record of which part was asked about.
+   document input becomes `AttachedFile`. A reply carries that context whoever wrote the message it answers, the bot's
+   own included, and an `author` line says whose it is (`you` for the bot's own). The history that would otherwise
+   carry it belongs to one user in one chat, so in a group a reply to something the bot wrote for somebody else has
+   nothing behind it — and no history carries bytes, which is why the replied file travels along and "edit this"
+   works against a picture the bot drew. A reply that quotes part of a message adds `<quoted_fragment>` right before
+   the request, so the fragment says which part was asked about.
    Text quoted from outside — the message itself, a transcript, a replied-to post — has this prompt's own block
    tags defused first, so a message containing `</user_message>` cannot end a block early.
    `AgentTurns.dispatchToAgent` assembles the agent input and the shorter history input.
@@ -503,6 +506,7 @@ A symptom-to-source map for finding the right file fast. Paths are under
 | Image search sends nothing, or sends irrelevant pictures                        | `tools/images/ImageSearchDelivery.kt` (candidate retries, size caps, media group) + `tools/images/ImageDownloadClient.kt` (user agent, format/dimension checks); for relevance, `SearxngTools.IMAGE_ENGINES` and `TavilyTools.imageExcludedDomains`                                                   |
 | A selfie shows a stranger instead of the bot's avatar                            | `tools/imagegen/SelfImage.kt` (which reference photo is read at startup, and the prompt that keeps the face while dropping the rest of it) + `tools/imagegen/ImageGenToolDescriptions.SELF_PORTRAIT` (whether the model sets the flag at all)                                                          |
 | Vusan answers about a whole message when the user quoted one part of it          | `telegram/inbound/ReplyContext.kt` (`quotedFragmentOrNull` and the `<quoted_fragment>` block) + `agent/SystemPrompt.kt` (what the block means)                                                                                                                                                        |
+| Vusan does not know what a reply is about, or cannot edit a picture it made itself | `telegram/AgentTurns.kt` (the reply summary and replied file are built for every reply) + `telegram/inbound/ReplyContext.kt` (`replySummaryOrNull`, the `author` line, `repliedAttachedFileOrNull`)                                                                                                    |
 | A rich message reads as empty, `unknown`, or loses its structure                 | `telegram/inbound/RichMessageText.kt` (block tree → rich markdown), then `MessageMetadata.contentTypeName`/`textSnippetOrNull` and `ReplyContext.repliedTextOrNull`                                                                                                                                           |
 | Scheduled task fires late, not at all, or reports "missed"/"failed"              | `tasks/TaskScheduler.kt` (polling, lateness, retries) + `tasks/Recurrence.kt` (next-run math)                                                                                                                                                                                                                   |
 | A chat's tasks all went paused on their own, or one keeps firing into a chat the bot was removed from | `telegram/BotMembership.kt` (the `my_chat_member` path) + `telegram/delivery/TelegramErrors.kt` (`isChatUnreachable`) + `tasks/TaskScheduler.kt` (`parkTasksOfUnreachableChat`)                                                                                                                |
