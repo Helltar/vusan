@@ -72,5 +72,8 @@ private fun elapsedSinceOrNull(previous: Instant): String? {
 private fun Long.agoIn(unit: String): String =
     "$this $unit${if (this == 1L) "" else "s"} ago"
 
+// every value here is something a person typed — a display name, a group title, its description —
+// and each lands on a line of its own inside the block, so both the line and the block have to
+// survive whatever they named themselves.
 private fun String.asMetadataValue(maxLength: Int = 160): String? =
-    collapseWhitespaceAndCap(maxLength)
+    collapseWhitespaceAndCap(maxLength)?.neutralizePromptBlocks()
