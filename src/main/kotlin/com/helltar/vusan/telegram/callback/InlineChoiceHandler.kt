@@ -18,9 +18,15 @@ import org.telegram.telegrambots.meta.generics.TelegramClient
 private const val COMPACT_BUTTON_MAX_CHARS = 24
 private const val INLINE_CHOICE_CALLBACK_PREFIX = "choice:"
 
+// a question asked by a turn that had no message of its own (a selection answering an earlier question,
+// a fired task) carries no origin, so the answer falls back to replying to the question itself.
+private const val NO_ORIGIN_MESSAGE = 0L
+
 internal data class InlineChoiceSelection(
     val question: String,
-    val option: String
+    val option: String,
+    // the user message the question was asked about, when the button still carries it.
+    val originMessageId: Long? = null
 )
 
 internal class InlineChoiceHandler(
@@ -155,7 +161,7 @@ internal class InlineChoiceHandler(
                 log.warn(it) { "failed to answer inline choice callback query" }
             }
 
-        return InlineChoiceSelection(normalizedQuestion, option)
+        return InlineChoiceSelection(normalizedQuestion, option, action.originMessageId.takeIf { it > 0L })
     }
 
     suspend fun answerUnavailable(callbackQueryId: String, messages: Messages) {
@@ -194,7 +200,14 @@ internal fun inlineChoiceKeyboard(choice: BotOutput.InlineChoice): InlineKeyboar
         choice.options.mapIndexed { index, option ->
             InlineKeyboardButton.builder()
                 .text(option)
-                .callbackData(InlineChoiceAction(choice.ownerId, choice.historyRevision, index).serialize())
+                .callbackData(
+                    InlineChoiceAction(
+                        ownerId = choice.ownerId,
+                        historyRevision = choice.historyRevision,
+                        optionIndex = index,
+                        originMessageId = choice.originMessageId ?: NO_ORIGIN_MESSAGE
+                    ).serialize()
+                )
                 .build()
         }
 
@@ -226,21 +239,24 @@ private fun emptyInlineKeyboard(): InlineKeyboardMarkup =
 private data class InlineChoiceAction(
     val ownerId: Long,
     val historyRevision: Long,
-    val optionIndex: Int
+    val optionIndex: Int,
+    val originMessageId: Long
 ) {
-    fun serialize(): String = "$INLINE_CHOICE_CALLBACK_PREFIX$ownerId:$historyRevision:$optionIndex"
+    fun serialize(): String =
+        "$INLINE_CHOICE_CALLBACK_PREFIX$ownerId:$historyRevision:$optionIndex:$originMessageId"
 
     companion object {
         fun parse(raw: String): InlineChoiceAction? {
             if (!raw.startsWith(INLINE_CHOICE_CALLBACK_PREFIX)) return null
 
             val parts = raw.removePrefix(INLINE_CHOICE_CALLBACK_PREFIX).split(':')
-            if (parts.size != 3) return null
+            if (parts.size != 4) return null
 
             val ownerId = parts[0].toLongOrNull()?.takeIf { it > 0L } ?: return null
             val historyRevision = parts[1].toLongOrNull()?.takeIf { it >= 0L } ?: return null
             val optionIndex = parts[2].toIntOrNull()?.takeIf { it in 0..9 } ?: return null
-            return InlineChoiceAction(ownerId, historyRevision, optionIndex)
+            val originMessageId = parts[3].toLongOrNull()?.takeIf { it >= NO_ORIGIN_MESSAGE } ?: return null
+            return InlineChoiceAction(ownerId, historyRevision, optionIndex, originMessageId)
         }
     }
 }

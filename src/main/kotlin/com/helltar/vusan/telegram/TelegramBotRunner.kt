@@ -789,11 +789,14 @@ internal class TelegramBotRunner(
         val input = inlineChoiceAgentInput(selection)
         val language = Language.fromCode(user.languageCode)
         val attachedFile = inlineChoices.parkedAttachment(message.chatIdLong, user.id)
+
+        // the selection continues the exchange the user started, so the turn runs as if it came from that
+        // message: it is what a reaction lands on, and what a task scheduled here is anchored to later.
         val request =
             AgentRequest(
                 chatId = message.chatIdLong,
                 userId = user.id,
-                messageId = 0L,
+                messageId = selection.originMessageId ?: 0L,
                 prompt = attachedFile?.let { "${attachedFileContextBlock(it)}\n\n$input" } ?: input,
                 conversationEntry = input,
                 messageContext = message.toMessageContext(user, chatProfile(message)),
@@ -809,11 +812,12 @@ internal class TelegramBotRunner(
                 delivery.sendCallback(
                     result = result,
                     message = message,
+                    originMessageId = selection.originMessageId,
                     userId = user.id,
                     messages = messages
                 )
             },
-            sendFallback = { sendReply(message, messages.fallbackErrorReply) }
+            sendFallback = { sendReply(message, messages.fallbackErrorReply, selection.originMessageId) }
         )
     }
 
@@ -874,12 +878,14 @@ internal class TelegramBotRunner(
         }
     }
 
-    private suspend fun sendReply(message: Message, text: String) {
+    // [replyToMessageId] anchors the reply somewhere other than [message] itself, which is what an inline
+    // choice needs: the question carries the buttons, but the answer belongs under the message that asked.
+    private suspend fun sendReply(message: Message, text: String, replyToMessageId: Long? = null) {
         TelegramOutputSender.sendText(
             client = client,
             chatId = message.chatIdLong,
             text = text,
-            replyParameters = replyParameters(message.messageIdLong)
+            replyParameters = replyParameters(replyToMessageId ?: message.messageIdLong)
         )
     }
 

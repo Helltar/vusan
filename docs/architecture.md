@@ -330,13 +330,16 @@ A normal user message travels:
   persist itself after the wipe. The tool runs inside a turn and so keeps calling the repository directly. The persisted
   semantic recap is deleted with the raw transcript.
 - **Agent-created inline choices** — `askWithButtons` enqueues a plain-text question plus two to ten answer buttons.
-  Callback data carries the intended user id, history revision, and option index; the labels remain in Telegram's
-  message keyboard, while the current revision lives in `conversation_state`, so an unanswered choice survives a bot
-  restart but becomes unavailable after the conversation it was asked in is cleared — a clear in another chat leaves it
-  usable. `InlineChoiceHandler` verifies ownership
-  and the revision, atomically claims the message, replaces its keyboard with the selected label, answers the callback,
-  and wraps the question/selection as `<inline_choice>` for a queued `AgentRunner` turn. The question and its options
-  are persisted as assistant history, and the follow-up answer is delivered as a reply to that choice message.
+  Callback data carries the intended user id, history revision, option index, and the id of the user message the question
+  was asked about; the labels remain in Telegram's message keyboard, while the current revision lives in
+  `conversation_state`, so an unanswered choice survives a bot restart but becomes unavailable after the conversation it
+  was asked in is cleared — a clear in another chat leaves it usable. `InlineChoiceHandler` verifies ownership and the
+  revision, atomically claims the message, replaces its keyboard with the selected label, answers the callback, and wraps
+  the question/selection as `<inline_choice>` for a queued `AgentRunner` turn. The question and its options are persisted
+  as assistant history. The selection turn then runs as if it came from the message that started the exchange: that is
+  what the answer replies to, what a reaction lands on, and what a task created by the selection is anchored to when it
+  fires. A question asked by a turn with no message of its own (a selection answering an earlier question, a fired task)
+  carries no such origin, and its answer replies to the choice message instead.
   A selection arrives as a callback with no message of its own, so an attachment the question was asked about ("edit
   this photo" → "which style?") would be gone by the time the answer runs. `TelegramBotRunner` parks the turn's
   `AttachedFile` in the handler whenever the turn queued a choice, and clears that slot on any other turn; the selection
@@ -501,7 +504,7 @@ A symptom-to-source map for finding the right file fast. Paths are under
 | A tool is missing in one group but present elsewhere, or a chat restriction is stale                | `telegram/ChatProfile.kt` (`capabilitiesOf`, the cache and its `forget`) + `tools/ToolRegistryFactory.buildRegistry` (which capability gates which tool)                                                                                                                                       |
 | `/tasks` or a plain-language task pause/resume/cancel fails                      | `telegram/callback/TaskMenuHandler.kt` (rendering, ownership, callbacks) + `tools/tasks/TaskTools.kt` (agent path) + `tasks/TasksRepository.kt` (shared scoped state changes)                                                                                                                                   |
 | `/clear` reports success but history survives                                    | `agent/AgentRunner.kt` (`clearConversation` and the turn lock that also guards the append) + `tools/conversation/ConversationTools.kt` (agent path) + `agent/conversation/ConversationRepository.kt` (shared storage operation)                                                                                            |
-| An agent choice button does nothing, repeats, reaches the wrong user, or its answer lost the photo | `tools/choice/InlineChoiceTools.kt` (tool contract) + `telegram/callback/InlineChoiceHandler.kt` (callback ownership/consumption, parked attachment) + `TelegramBotRunner.dispatchInlineChoiceCallback` (agent follow-up)                                                                             |
+| An agent choice button does nothing, repeats, reaches the wrong user, loses the photo, or its answer replies to the bot's own question | `tools/choice/InlineChoiceTools.kt` (tool contract) + `telegram/callback/InlineChoiceHandler.kt` (callback ownership/consumption, origin message id, parked attachment) + `TelegramBotRunner.handleInlineChoiceSelection` (agent follow-up and its reply anchor)                                                                             |
 | An env var has no effect                                                         | `config/AppConfig.kt` (parsing) — and check it is documented in [`configuration.md`](configuration.md) + [`.env.example`](../.env.example)                                                                                                                                                            |
 | Model / provider / request-timeout selection or OpenAI prompt-cache misses       | `config/LlmRuntime.kt` (provider → client/model/params) + `config/OpenAiPromptCaching.kt` (GPT-5.6+ explicit cache breakpoints on the system prefix and the current turn)                                                                                                                              |
 | "Sign in again" replies, ChatGPT-subscription auth, or a rejected `LLM_MODEL` on `codex` | `config/CodexAuth.kt` (token load/refresh/persist) + `config/CodexCatalog.kt` (which models the plan offers) + `config/CodexHttpClient.kt` (per-request bearer and account headers)                                                                                                                    |

@@ -33,7 +33,8 @@ class TelegramOutputSenderTest {
                 question = "Which format?",
                 options = listOf("PDF", "DOCX", "Plain text"),
                 ownerId = 42L,
-                historyRevision = 7L
+                historyRevision = 7L,
+                originMessageId = 5L
             ),
             chatId = 1L,
             replyParameters = null,
@@ -48,7 +49,7 @@ class TelegramOutputSenderTest {
         val keyboard = assertIs<InlineKeyboardMarkup>(request.replyMarkup)
         assertEquals(listOf(2, 1), keyboard.keyboard.map { it.size })
         assertEquals(
-            listOf("choice:42:7:0", "choice:42:7:1", "choice:42:7:2"),
+            listOf("choice:42:7:0:5", "choice:42:7:1:5", "choice:42:7:2:5"),
             keyboard.keyboard.flatten().map { it.callbackData }
         )
     }

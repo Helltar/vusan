@@ -31,7 +31,8 @@ class InlineChoiceTools(
                 question = question.trim(),
                 options = options.map { it.trim() },
                 ownerId = ownerId,
-                historyRevision = currentHistoryRevision(ownerId, context.requireChatId())
+                historyRevision = currentHistoryRevision(ownerId, context.requireChatId()),
+                originMessageId = context.messageId.takeIf { it > 0L }
             )
 
         if (outbox.enqueueInlineChoice(choice)) {

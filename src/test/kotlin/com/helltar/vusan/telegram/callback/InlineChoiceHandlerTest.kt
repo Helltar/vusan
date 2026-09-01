@@ -34,7 +34,7 @@ class InlineChoiceHandlerTest {
         val selection =
             handler.handleCallback(
                 callbackQueryId = "query",
-                callbackData = "choice:42:3:1",
+                callbackData = "choice:42:3:1:5",
                 userId = 42L,
                 chatId = -7L,
                 messageId = 9,
@@ -43,7 +43,7 @@ class InlineChoiceHandlerTest {
                 messages = messages
             )
 
-        assertEquals(InlineChoiceSelection("Which format?", "DOCX"), selection)
+        assertEquals(InlineChoiceSelection("Which format?", "DOCX", originMessageId = 5L), selection)
 
         val edit = assertIs<EditMessageText>(client.requests.first())
         assertEquals("Which format?\n\n✅ Selected: DOCX", edit.text)
@@ -53,6 +53,29 @@ class InlineChoiceHandlerTest {
         Unit
     }
 
+    // the answer has to land under the message that started the exchange, not under the bot's question,
+    // and a task set up by the selection is anchored to the same message when it fires.
+    @Test
+    fun `a question asked without a message of its own carries no origin`() = runBlocking {
+        val client = RecordingClient()
+        val handler = InlineChoiceHandler(client.proxy) { _, _ -> 3L }
+        val keyboard = inlineChoiceKeyboard(choice(originMessageId = null))
+
+        val selection =
+            handler.handleCallback(
+                callbackQueryId = "query",
+                callbackData = "choice:42:3:0:0",
+                userId = 42L,
+                chatId = -7L,
+                messageId = 9,
+                question = "Which format?",
+                keyboard = keyboard,
+                messages = messages
+            )
+
+        assertEquals(InlineChoiceSelection("Which format?", "PDF"), selection)
+    }
+
     @Test
     fun `same choice message can only be consumed once`() = runBlocking {
         val client = RecordingClient()
@@ -60,12 +83,12 @@ class InlineChoiceHandlerTest {
         val keyboard = inlineChoiceKeyboard(choice())
 
         val first =
-            handler.handleCallback("first", "choice:42:3:0", 42L, -7L, 9, "Which format?", keyboard, messages)
+            handler.handleCallback("first", "choice:42:3:0:5", 42L, -7L, 9, "Which format?", keyboard, messages)
 
         client.requests.clear()
 
         val second =
-            handler.handleCallback("second", "choice:42:3:1", 42L, -7L, 9, "Which format?", keyboard, messages)
+            handler.handleCallback("second", "choice:42:3:1:5", 42L, -7L, 9, "Which format?", keyboard, messages)
 
         assertNotNull(first)
         assertNull(second)
@@ -82,7 +105,7 @@ class InlineChoiceHandlerTest {
         val selection =
             handler.handleCallback(
                 callbackQueryId = "query",
-                callbackData = "choice:42:3:0",
+                callbackData = "choice:42:3:0:5",
                 userId = 99L,
                 chatId = -7L,
                 messageId = 9,
@@ -109,7 +132,7 @@ class InlineChoiceHandlerTest {
         val selection =
             handler.handleCallback(
                 callbackQueryId = "query",
-                callbackData = "choice:42:3:0",
+                callbackData = "choice:42:3:0:5",
                 userId = 42L,
                 chatId = -7L,
                 messageId = 9,
@@ -123,6 +146,28 @@ class InlineChoiceHandlerTest {
         val answer = assertIs<AnswerCallbackQuery>(client.requests.single())
         assertEquals(true, answer.showAlert)
         assertContains(assertNotNull(answer.text), "no longer available")
+    }
+
+    // telegram caps callback_data at 64 bytes, and the origin message id is a fourth field packed into it.
+    // the widest each field can get: a user id is capped at 52 significant bits, a message id is a 32-bit
+    // integer, an option index is a single digit, and the revision only grows by one per `/clear` here.
+    @Test
+    fun `callback data of the widest possible choice still fits telegram's limit`() {
+        val keyboard =
+            inlineChoiceKeyboard(
+                BotOutput.InlineChoice(
+                    question = "Which format?",
+                    options = List(10) { "option $it" },
+                    ownerId = 4_503_599_627_370_495L,
+                    historyRevision = 999_999_999L,
+                    originMessageId = Int.MAX_VALUE.toLong()
+                )
+            )
+
+        keyboard.keyboard.flatten().forEach {
+            val bytes = it.callbackData.toByteArray().size
+            assertTrue(bytes <= 64, "callback data is $bytes bytes: ${it.callbackData}")
+        }
     }
 
     @Test
@@ -172,12 +217,13 @@ class InlineChoiceHandlerTest {
             loadBytes = { error("bytes are never read here") }
         )
 
-    private fun choice() =
+    private fun choice(originMessageId: Long? = 5L) =
         BotOutput.InlineChoice(
             question = "Which format?",
             options = listOf("PDF", "DOCX"),
             ownerId = 42L,
-            historyRevision = 3L
+            historyRevision = 3L,
+            originMessageId = originMessageId
         )
 
     private class RecordingClient {

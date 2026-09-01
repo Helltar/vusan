@@ -165,13 +165,20 @@ class TelegramDelivery(
         return outcome.chatUnreachable
     }
 
+    /**
+     * [message] is the bot's own question, the one the buttons are on. The answer belongs under
+     * [originMessageId], the message the exchange started from, and falls back to the question itself only
+     * when there was none — a question asked by a turn with no message behind it.
+     */
     suspend fun sendCallback(
         result: AgentResult,
         message: Message,
+        originMessageId: Long?,
         userId: Long,
         messages: Messages
     ) {
-        val originTarget = DeliveryTarget(message.chatIdLong, replyToMessageId = message.messageIdLong)
+        val originTarget =
+            DeliveryTarget(message.chatIdLong, replyToMessageId = originMessageId ?: message.messageIdLong)
 
         dispatch(
             result = result,

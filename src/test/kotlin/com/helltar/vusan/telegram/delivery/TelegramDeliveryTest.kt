@@ -16,7 +16,10 @@ import kotlin.test.assertNull
 import kotlin.test.assertTrue
 import kotlinx.coroutines.runBlocking
 import org.telegram.telegrambots.meta.api.methods.ActionType
+import org.telegram.telegrambots.meta.api.methods.send.SendMessage
 import org.telegram.telegrambots.meta.api.objects.ApiResponse
+import org.telegram.telegrambots.meta.api.objects.chat.Chat
+import org.telegram.telegrambots.meta.api.objects.message.Message
 import org.telegram.telegrambots.meta.exceptions.TelegramApiRequestException
 import org.telegram.telegrambots.meta.generics.TelegramClient
 
@@ -132,6 +135,68 @@ class TelegramDeliveryTest {
         assertTrue(unreachable)
         // the chat action of the first item, then its send. the two remaining photos are never tried.
         assertEquals(2, client.calls)
+    }
+
+    // the buttons sit on the bot's own question, but the answer belongs under the message the user wrote,
+    // the same place a plain reply would land.
+    @Test
+    fun `a callback answer replies to the message the exchange started from`() = runBlocking {
+        val client = RecordingClient()
+
+        TelegramDelivery(client.proxy).sendCallback(
+            result = AgentResult(outputs = emptyList(), comment = "The reminder is set."),
+            message = choiceMessage(),
+            originMessageId = 11L,
+            userId = 2L,
+            messages = Messages.of(Language.ENGLISH)
+        )
+
+        assertEquals(11, client.replyTargets.single())
+    }
+
+    @Test
+    fun `a callback answer falls back to the question it belongs to`() = runBlocking {
+        val client = RecordingClient()
+
+        TelegramDelivery(client.proxy).sendCallback(
+            result = AgentResult(outputs = emptyList(), comment = "The reminder is set."),
+            message = choiceMessage(),
+            originMessageId = null,
+            userId = 2L,
+            messages = Messages.of(Language.ENGLISH)
+        )
+
+        assertEquals(77, client.replyTargets.single())
+    }
+
+    private fun choiceMessage() =
+        Message().apply {
+            messageId = 77
+            chat = Chat.builder().id(-7L).type("supergroup").build()
+        }
+
+    private class RecordingClient {
+
+        val replyTargets = mutableListOf<Int?>()
+
+        val proxy: TelegramClient =
+            Proxy.newProxyInstance(
+                TelegramClient::class.java.classLoader,
+                arrayOf(TelegramClient::class.java)
+            ) { _, method, args ->
+                check(method.name == "executeAsync") { "unexpected client call: ${method.name}" }
+                handle(args.single())
+            } as TelegramClient
+
+        private fun handle(request: Any): CompletableFuture<Any> =
+            when (request) {
+                is SendMessage -> {
+                    replyTargets += request.replyParameters?.messageId
+                    CompletableFuture.completedFuture(Message())
+                }
+
+                else -> CompletableFuture.completedFuture(true)
+            }
     }
 
     private suspend fun deliverSticker(delivery: TelegramDelivery) {

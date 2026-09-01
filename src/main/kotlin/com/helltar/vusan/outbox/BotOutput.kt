@@ -7,16 +7,23 @@ sealed class BotOutput {
 
     data class Text(val text: String) : BotOutput()
 
+    // [originMessageId] is the user message this exchange started from. the selection comes back as a
+    // callback with no message of its own, so without it the follow-up turn would answer the bot's own
+    // question and anything it schedules would lose the message that asked for it.
     data class InlineChoice(
         val question: String,
         val options: List<String>,
         val ownerId: Long,
-        val historyRevision: Long
+        val historyRevision: Long,
+        val originMessageId: Long? = null
     ) : BotOutput() {
         init {
             validateQuestionAndOptions("Inline choice", question, options)
             require(ownerId > 0L) { "Inline choice owner id must be positive" }
             require(historyRevision >= 0L) { "Inline choice history revision must not be negative" }
+            require(originMessageId == null || originMessageId > 0L) {
+                "Inline choice origin message id must be positive"
+            }
         }
     }
 
