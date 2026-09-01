@@ -18,12 +18,15 @@ Telegram ──► telegram/ ──► agent/ ──► tools/ ──► externa
 ```
 
 - **`telegram/`** — Telegram I/O, split by direction. `TelegramBotRunner` at the root receives updates (text, voice,
-  audio, sticker, photo, video, video note, GIF, document, album, callback query) and filters them by allowlist and
-  ban list;
+  audio, sticker, photo, video, video note, GIF, document, album, callback query), filters them by allowlist and ban
+  list, and works out what each one says; `AgentTurns`, also at the root, takes it from there — the reply context, the
+  `AgentRequest`, the progress indicator, the delivery and its fallback — so a turn started by a message and one
+  started by a button follow the same path;
   `telegram/inbound/` normalizes an update into agent input; `telegram/delivery/` sends agent results back, including
   HTML-formatting, opt-in rich-message, reply-anchor, media/document, media-group, and private-message fallbacks;
-  `telegram/callback/` owns the inline-button flows — `TaskMenuHandler` the deterministic `/tasks` UI, and
-  `InlineChoiceHandler` the agent-created choice buttons, whose selection becomes an agent input.
+  `telegram/callback/` owns the inline-button flows — `CallbackRouter` validates a pressed button and picks its flow,
+  `TaskMenuHandler` runs the deterministic `/tasks` UI, and `InlineChoiceHandler` the agent-created choice buttons,
+  whose selection becomes an agent input.
 - **`agent/`** — agent orchestration on top of Koog. `AgentRunner` serializes the turns of one conversation, assembles
   the current user turn (Telegram metadata + durable memory + request), and owns every history write for it, so no other
   layer appends or clears turns behind a running turn's back; `AgentFactory` builds the `AIAgent` (system prompt +
@@ -85,10 +88,11 @@ A normal user message travels:
    `media_group_id`; the runner buffers them until the update stream goes quiet (`ALBUM_QUIET_PERIOD`, or the ten-item
    album cap) and handles the batch as one gallery message: the caption may sit on any album part, only the first
    inspectable item becomes the `AttachedFile`, and the agent is told how many items it cannot see.
-   `/tasks`, `/clear`, and task-menu callback queries take direct paths that never enter the agent loop. An
-   agent-created inline-choice callback is different: it is validated and consumed by `InlineChoiceHandler`, then its
-   selected option enters the agent loop as the user's next turn. Callback data no handler recognizes (a button from
-   an older build) is still answered, so the caller's client stops spinning.
+   `/tasks`, `/clear`, and task-menu callback queries take direct paths that never enter the agent loop. Every
+   pressed button reaches `CallbackRouter`, which rechecks the allowlist and picks the flow: an agent-created
+   inline-choice callback is validated and consumed by `InlineChoiceHandler`, and its selected option then enters the
+   agent loop as the user's next turn. Callback data no handler recognizes (a button from an older build) is still
+   answered, so the caller's client stops spinning.
    A `my_chat_member` update — the bot's own membership changing, which Telegram delivers by default — carries no
    message and goes straight to `telegram/BotMembership.kt` instead of the dispatch below.
    An `edited_message` update always rewrites its group-transcript row (`GroupLogRepository.recordEdit`, which also
@@ -114,7 +118,7 @@ A normal user message travels:
    because the history already carries it; there the fragment is the only record of which part was asked about.
    Text quoted from outside — the message itself, a transcript, a replied-to post — has this prompt's own block
    tags defused first, so a message containing `</user_message>` cannot end a block early.
-   `TelegramBotRunner.dispatchToAgent` assembles the agent input and the shorter history input.
+   `AgentTurns.dispatchToAgent` assembles the agent input and the shorter history input.
 4. **Run** — `AgentRunner.handle` takes the conversation lock (or returns "busy"), turns the request away with a
    "come back later" reply when the day's token budget is already spent, loads durable memory
    (`agent/memory/MemoryRepository` — the sender's user memory always, plus the group's memory in non-private chats),
@@ -341,7 +345,7 @@ A normal user message travels:
   fires. A question asked by a turn with no message of its own (a selection answering an earlier question, a fired task)
   carries no such origin, and its answer replies to the choice message instead.
   A selection arrives as a callback with no message of its own, so an attachment the question was asked about ("edit
-  this photo" → "which style?") would be gone by the time the answer runs. `TelegramBotRunner` parks the turn's
+  this photo" → "which style?") would be gone by the time the answer runs. `AgentTurns` parks the turn's
   `AttachedFile` in the handler whenever the turn queued a choice, and clears that slot on any other turn; the selection
   turn picks it back up and re-announces it as `<attached_file>`.
 - **History compaction** — `agent/conversation/ConversationPlan.planConversation` token-budgets complete recent interactions.
@@ -450,7 +454,8 @@ reads the reference photo self-portraits are drawn from: `SELF_IMAGE_FILE` when 
 `getUserProfilePhotos` on the bot's own id, and a failure there is a warning rather than a failed startup →
 (only with a vision runtime) the
 `StickerCatalog`, `ToolRegistryFactory`, `AgentFactory`, `AgentRunner` → create `TaskMenuHandler` and
-`InlineChoiceHandler`, and optionally enable voice transcription → start `TelegramBotRunner` and launch
+`InlineChoiceHandler`, and optionally enable voice transcription → start `TelegramBotRunner`, which builds its own
+`AgentTurns` and `CallbackRouter` over those, and launch
 `TaskScheduler` and the sticker description worker, then block on the runner job until shutdown (closing the executor,
 HTTP client, and DB in `finally`).
 
@@ -504,7 +509,7 @@ A symptom-to-source map for finding the right file fast. Paths are under
 | A tool is missing in one group but present elsewhere, or a chat restriction is stale                | `telegram/ChatProfile.kt` (`capabilitiesOf`, the cache and its `forget`) + `tools/ToolRegistryFactory.buildRegistry` (which capability gates which tool)                                                                                                                                       |
 | `/tasks` or a plain-language task pause/resume/cancel fails                      | `telegram/callback/TaskMenuHandler.kt` (rendering, ownership, callbacks) + `tools/tasks/TaskTools.kt` (agent path) + `tasks/TasksRepository.kt` (shared scoped state changes)                                                                                                                                   |
 | `/clear` reports success but history survives                                    | `agent/AgentRunner.kt` (`clearConversation` and the turn lock that also guards the append) + `tools/conversation/ConversationTools.kt` (agent path) + `agent/conversation/ConversationRepository.kt` (shared storage operation)                                                                                            |
-| An agent choice button does nothing, repeats, reaches the wrong user, loses the photo, or its answer replies to the bot's own question | `tools/choice/InlineChoiceTools.kt` (tool contract) + `telegram/callback/InlineChoiceHandler.kt` (callback ownership/consumption, origin message id, parked attachment) + `TelegramBotRunner.handleInlineChoiceSelection` (agent follow-up and its reply anchor)                                                                             |
+| An agent choice button does nothing, repeats, reaches the wrong user, loses the photo, or its answer replies to the bot's own question | `tools/choice/InlineChoiceTools.kt` (tool contract) + `telegram/callback/InlineChoiceHandler.kt` (callback ownership/consumption, origin message id, parked attachment) + `telegram/AgentTurns.kt` (the follow-up turn and its reply anchor)                                                                             |
 | An env var has no effect                                                         | `config/AppConfig.kt` (parsing) — and check it is documented in [`configuration.md`](configuration.md) + [`.env.example`](../.env.example)                                                                                                                                                            |
 | Model / provider / request-timeout selection or OpenAI prompt-cache misses       | `config/LlmRuntime.kt` (provider → client/model/params) + `config/OpenAiPromptCaching.kt` (GPT-5.6+ explicit cache breakpoints on the system prefix and the current turn)                                                                                                                              |
 | "Sign in again" replies, ChatGPT-subscription auth, or a rejected `LLM_MODEL` on `codex` | `config/CodexAuth.kt` (token load/refresh/persist) + `config/CodexCatalog.kt` (which models the plan offers) + `config/CodexHttpClient.kt` (per-request bearer and account headers)                                                                                                                    |

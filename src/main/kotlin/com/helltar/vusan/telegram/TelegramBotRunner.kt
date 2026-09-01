@@ -1,62 +1,40 @@
 package com.helltar.vusan.telegram
 
-import com.helltar.vusan.agent.AgentRequest
-import com.helltar.vusan.agent.AgentResult
 import com.helltar.vusan.agent.AgentRunner
 import com.helltar.vusan.agent.grouplog.GroupLogRepository
-import com.helltar.vusan.common.collapseWhitespaceAndCap
 import com.helltar.vusan.common.limitTo
 import com.helltar.vusan.common.rethrowIfCancellation
 import com.helltar.vusan.common.xmlBlock
-import com.helltar.vusan.i18n.Language
 import com.helltar.vusan.i18n.Messages
 import com.helltar.vusan.infra.Heartbeat
-import com.helltar.vusan.outbox.BotOutput
-import com.helltar.vusan.request.AttachedFile
 import com.helltar.vusan.tasks.TasksRepository
+import com.helltar.vusan.telegram.callback.CallbackRouter
 import com.helltar.vusan.telegram.callback.InlineChoiceHandler
-import com.helltar.vusan.telegram.callback.InlineChoiceSelection
 import com.helltar.vusan.telegram.callback.TaskMenuHandler
-import com.helltar.vusan.telegram.callback.inlineChoiceAgentInput
 import com.helltar.vusan.telegram.delivery.TelegramDelivery
-import com.helltar.vusan.telegram.delivery.TelegramOutputSender
-import com.helltar.vusan.telegram.delivery.answerCallbackQuery
-import com.helltar.vusan.telegram.delivery.replyParameters
 import com.helltar.vusan.telegram.inbound.AudioInput
 import com.helltar.vusan.telegram.inbound.BotCommand
 import com.helltar.vusan.telegram.inbound.MessageText
 import com.helltar.vusan.telegram.inbound.VoiceTranscriber
 import com.helltar.vusan.telegram.inbound.VoiceTranscriptionResult
-import com.helltar.vusan.telegram.inbound.attachedFileContextBlock
-import com.helltar.vusan.telegram.inbound.canLoadChatDescription
 import com.helltar.vusan.telegram.inbound.captionedPartOrNull
 import com.helltar.vusan.telegram.inbound.chatIdLong
 import com.helltar.vusan.telegram.inbound.describeIncomingSticker
-import com.helltar.vusan.telegram.inbound.formatAgentInput
-import com.helltar.vusan.telegram.inbound.formatConversationInput
 import com.helltar.vusan.telegram.inbound.isBotCommand
 import com.helltar.vusan.telegram.inbound.isPrivateChat
-import com.helltar.vusan.telegram.inbound.isReplyToOtherUser
+import com.helltar.vusan.telegram.inbound.language
 import com.helltar.vusan.telegram.inbound.leadingBotCommandOrNull
 import com.helltar.vusan.telegram.inbound.logDenied
 import com.helltar.vusan.telegram.inbound.logIncoming
 import com.helltar.vusan.telegram.inbound.messageIdLong
 import com.helltar.vusan.telegram.inbound.messageTextOrNull
 import com.helltar.vusan.telegram.inbound.normalizeUsername
-import com.helltar.vusan.telegram.inbound.quotedFragmentOrNull
-import com.helltar.vusan.telegram.inbound.repliedAttachedFileOrNull
-import com.helltar.vusan.telegram.inbound.replyAuthorIdOrNull
-import com.helltar.vusan.telegram.inbound.replySummaryOrNull
-import com.helltar.vusan.telegram.inbound.replyToMessageIdOrNull
 import com.helltar.vusan.telegram.inbound.sanitizeUserText
 import com.helltar.vusan.telegram.inbound.senderIdOrNull
-import com.helltar.vusan.telegram.inbound.senderLanguageCodeOrNull
 import com.helltar.vusan.telegram.inbound.shouldHandle
-import com.helltar.vusan.telegram.inbound.textSnippetOrNull
 import com.helltar.vusan.telegram.inbound.toAttachedFileOrNull
 import com.helltar.vusan.telegram.inbound.toAudioInput
 import com.helltar.vusan.telegram.inbound.toGroupLogEntry
-import com.helltar.vusan.telegram.inbound.toMessageContext
 import com.helltar.vusan.telegram.inbound.toRichMarkdown
 import com.helltar.vusan.telegram.inbound.wrapAudioTranscript
 import com.helltar.vusan.tools.sticker.StickerCatalog
@@ -119,8 +97,6 @@ internal class TelegramBotRunner(
                     "Call `describeVideo` to get what they said, then answer that. " +
                     "Do not describe how the video looks unless they ask."
 
-        const val LOG_PROMPT_MAX_CHARS = 300
-
         // a rich message may carry 32768 characters where plain text tops out at 4096, and
         // flattening adds markup on top of that. this is the only inbound content without a
         // telegram-side ceiling, so it gets one here.
@@ -142,6 +118,10 @@ internal class TelegramBotRunner(
     }
 
     private val heartbeat = Heartbeat()
+
+    private val turns = AgentTurns(client, agent, delivery, inlineChoices, chatProfiles, voiceTranscriber)
+
+    private val callbacks = CallbackRouter(client, taskMenu, inlineChoices, turns, allowedIds, bannedIds)
 
     private val answeredMessages = AnsweredMessages(EDIT_TURN_WINDOW)
 
@@ -231,14 +211,7 @@ internal class TelegramBotRunner(
             val callback = update.callbackQuery
 
             if (callback != null) {
-                when {
-                    taskMenu.handles(callback.data) -> launchCallbackHandling(callback)
-                    inlineChoices.handles(callback.data) -> launchInlineChoiceHandling(callback)
-                    // callback data from a scheme this build no longer knows. telegram keeps the
-                    // client's button spinning until the query is answered, so answer it anyway.
-                    else -> launchUnknownCallbackAnswer(callback)
-                }
-
+                launchCallbackHandling(callback)
                 continue
             }
 
@@ -326,36 +299,11 @@ internal class TelegramBotRunner(
 
     private fun CoroutineScope.launchCallbackHandling(callback: CallbackQuery) {
         launch {
-            runCatching { dispatchCallback(callback) }
+            runCatching { callbacks.route(callback) }
                 .onFailure { error ->
                     error.rethrowIfCancellation()
                     log.error(error) {
-                        "callback handling failed for chat=${callback.message?.chatId} " +
-                                "msg=${callback.message?.messageId} user=${callback.from?.id}"
-                    }
-                }
-        }
-    }
-
-    private fun CoroutineScope.launchUnknownCallbackAnswer(callback: CallbackQuery) {
-        launch {
-            log.warn { "unrecognized callback data=[${callback.data}] user=${callback.from?.id}" }
-
-            runCatching { answerCallbackQuery(client, callback.id) }
-                .onFailure { error ->
-                    error.rethrowIfCancellation()
-                    log.warn(error) { "failed to answer unrecognized callback query" }
-                }
-        }
-    }
-
-    private fun CoroutineScope.launchInlineChoiceHandling(callback: CallbackQuery) {
-        launch {
-            runCatching { dispatchInlineChoiceCallback(callback) }
-                .onFailure { error ->
-                    error.rethrowIfCancellation()
-                    log.error(error) {
-                        "inline choice handling failed for chat=${callback.message?.chatId} " +
+                        "callback handling failed for data=[${callback.data}] chat=${callback.message?.chatId} " +
                                 "msg=${callback.message?.messageId} user=${callback.from?.id}"
                     }
                 }
@@ -403,12 +351,9 @@ internal class TelegramBotRunner(
         command == name &&
                 (targetUsername == null || normalizeUsername(targetUsername) == normalizeUsername(profile.username))
 
-    private val Message.language: Language
-        get() = Language.fromCode(senderLanguageCodeOrNull())
-
     private suspend fun handleStartCommand(message: Message, botProfile: BotProfile) {
         if (message.isAccepted(botProfile))
-            sendReply(message, Messages.of(message.language).startReply)
+            delivery.sendReply(message, Messages.of(message.language).startReply)
     }
 
     private suspend fun handleTasksCommand(message: Message, botProfile: BotProfile) {
@@ -435,7 +380,7 @@ internal class TelegramBotRunner(
         }.onFailure { error ->
             error.rethrowIfCancellation()
             log.error(error) { "failed to send task menu for chat=${message.chatIdLong} user=$userId" }
-            sendReply(message, messages.fallbackErrorReply)
+            delivery.sendReply(message, messages.fallbackErrorReply)
         }
     }
 
@@ -449,68 +394,7 @@ internal class TelegramBotRunner(
             }
 
         agent.clearConversation(userId, message.chatIdLong)
-        sendReply(message, Messages.of(message.language).conversationClearedReply)
-    }
-
-    private suspend fun dispatchCallback(callback: CallbackQuery) {
-        val messages = Messages.forCode(callback.from?.languageCode)
-        val message =
-            callback.message ?: run {
-                taskMenu.answerUnavailable(callback.id, messages)
-                return
-            }
-
-        val chatId = message.chatId
-        val userId = callback.from.id
-
-        if (!isAllowed(chatId, userId)) {
-            log.warn { "denied callback (${denialReason(chatId, userId)}): chat=$chatId user=$userId" }
-            taskMenu.answerUnavailable(callback.id, messages)
-            return
-        }
-
-        taskMenu.handleCallback(
-            callbackQueryId = callback.id,
-            callbackData = callback.data,
-            userId = userId,
-            chatId = chatId,
-            messageId = message.messageId,
-            chatIsPrivate = message.chat.isUserChat,
-            messages = messages
-        )
-    }
-
-    private suspend fun dispatchInlineChoiceCallback(callback: CallbackQuery) {
-        val user = callback.from
-        val messages = Messages.forCode(user?.languageCode)
-        val message =
-            callback.message as? Message ?: run {
-                inlineChoices.answerUnavailable(callback.id, messages)
-                return
-            }
-
-        val chatId = message.chatId
-        val userId = user.id
-
-        if (!isAllowed(chatId, userId)) {
-            log.warn { "denied inline choice callback (${denialReason(chatId, userId)}): chat=$chatId user=$userId" }
-            inlineChoices.answerUnavailable(callback.id, messages)
-            return
-        }
-
-        val selection =
-            inlineChoices.handleCallback(
-                callbackQueryId = callback.id,
-                callbackData = callback.data,
-                userId = userId,
-                chatId = chatId,
-                messageId = message.messageId,
-                question = message.text,
-                keyboard = message.replyMarkup,
-                messages = messages
-            ) ?: return
-
-        handleInlineChoiceSelection(message, user, selection, messages)
+        delivery.sendReply(message, Messages.of(message.language).conversationClearedReply)
     }
 
     private suspend fun handleTextUpdate(message: Message, content: MessageText, botProfile: BotProfile) {
@@ -520,7 +404,7 @@ internal class TelegramBotRunner(
             sanitizeUserText(content, botProfile.userId, botProfile.username)
                 .ifBlank { MENTION_ONLY_PROMPT }
 
-        dispatchToAgent(message, userText, botProfile, inputKind = "text")
+        turns.dispatchToAgent(message, userText, botProfile, inputKind = "text")
     }
 
     private suspend fun handleTranscribableUpdate(
@@ -570,25 +454,25 @@ internal class TelegramBotRunner(
                 is VoiceTranscriptionResult.Success -> result.text
 
                 is VoiceTranscriptionResult.TooLong -> {
-                    sendReply(message, messages.voiceTooLongReply(result.durationSeconds, result.maxSeconds))
+                    delivery.sendReply(message, messages.voiceTooLongReply(result.durationSeconds, result.maxSeconds))
                     return
                 }
 
                 is VoiceTranscriptionResult.Empty -> {
                     log.info { "$inputKind transcription empty (chat=${message.chatIdLong}): ${result.reason}" }
-                    sendReply(message, messages.voiceEmptyReply)
+                    delivery.sendReply(message, messages.voiceEmptyReply)
                     return
                 }
 
                 is VoiceTranscriptionResult.Failed -> {
-                    sendReply(message, messages.voiceTranscriptionFailedReply)
+                    delivery.sendReply(message, messages.voiceTranscriptionFailedReply)
                     return
                 }
             }
 
         val prompt = buildTranscribedPrompt(caption, transcript)
 
-        dispatchToAgent(message, prompt, botProfile, inputKind = inputKind)
+        turns.dispatchToAgent(message, prompt, botProfile, inputKind = inputKind)
     }
 
     private fun buildTranscribedPrompt(caption: String, transcript: String): String {
@@ -604,13 +488,13 @@ internal class TelegramBotRunner(
         val markdown = message.richMessage.toRichMarkdown().limitTo(MAX_RICH_MESSAGE_CHARS)
         if (markdown.isBlank()) return
 
-        dispatchToAgent(message, xmlBlock("rich_message", markdown), botProfile, inputKind = "rich message")
+        turns.dispatchToAgent(message, xmlBlock("rich_message", markdown), botProfile, inputKind = "rich message")
     }
 
     private suspend fun handleStickerUpdate(message: Message, botProfile: BotProfile) {
         if (!message.isAccepted(botProfile)) return
         val prompt = describeIncomingSticker(message.sticker)
-        dispatchToAgent(message, prompt, botProfile, inputKind = "sticker", loadRepliedAttachment = false)
+        turns.dispatchToAgent(message, prompt, botProfile, inputKind = "sticker", loadRepliedAttachment = false)
     }
 
     private suspend fun handleMediaUpdate(
@@ -627,7 +511,7 @@ internal class TelegramBotRunner(
                 .orEmpty()
                 .ifBlank { noCaptionPrompt }
 
-        dispatchToAgent(
+        turns.dispatchToAgent(
             message,
             caption,
             botProfile,
@@ -668,7 +552,7 @@ internal class TelegramBotRunner(
                 }
             )
 
-        dispatchToAgent(
+        turns.dispatchToAgent(
             anchor,
             "$albumContext\n\n$caption",
             botProfile,
@@ -684,7 +568,7 @@ internal class TelegramBotRunner(
             return false
 
         if (!isAllowed()) {
-            logDenied(denialReason(chatIdLong, senderIdOrNull()))
+            logDenied(denialReason(chatIdLong, senderIdOrNull(), bannedIds))
             return false
         }
 
@@ -706,193 +590,6 @@ internal class TelegramBotRunner(
 
     private fun isAllowed(chatId: Long, userId: Long?): Boolean = isIdAllowed(chatId, userId, allowedIds, bannedIds)
 
-    private fun denialReason(chatId: Long, userId: Long?): String =
-        if (isIdBanned(chatId, userId, bannedIds)) "banned" else "not in allowlist"
-
-    private suspend fun dispatchToAgent(
-        message: Message,
-        prompt: String,
-        botProfile: BotProfile,
-        inputKind: String,
-        loadRepliedAttachment: Boolean = true,
-        attachedFile: AttachedFile? = null
-    ) {
-        val replyToOtherUser = isReplyToOtherUser(message.replyAuthorIdOrNull(), botProfile.userId)
-        val replySummary = if (replyToOtherUser) message.replySummaryOrNull(client, voiceTranscriber) else null
-
-        // the fragment travels even without a reply summary: a reply to the bot's own message carries no
-        // `<reply_context>`, since that message is already in the history, but the selected piece is not.
-        val quotedFragment = message.quotedFragmentOrNull()
-
-        val effectiveAttachedFile =
-            attachedFile
-                ?: if (loadRepliedAttachment) replySummary?.let { message.repliedAttachedFileOrNull(client) } else null
-
-        val baseAgentInput = formatAgentInput(prompt, replySummary, quotedFragment)
-
-        handleAgentMessage(
-            message = message,
-            agentInput =
-                effectiveAttachedFile?.let { "${attachedFileContextBlock(it)}\n\n$baseAgentInput" } ?: baseAgentInput,
-            conversationInput = formatConversationInput(prompt, replySummary, quotedFragment),
-            attachedFile = effectiveAttachedFile,
-            replyToMessageId = if (replyToOtherUser) message.replyToMessageIdOrNull() else null,
-            inputKind = inputKind
-        )
-    }
-
-    private suspend fun handleAgentMessage(
-        message: Message,
-        agentInput: String,
-        conversationInput: String,
-        attachedFile: AttachedFile?,
-        replyToMessageId: Long?,
-        inputKind: String
-    ) {
-        val chatId = message.chatIdLong
-
-        val userId =
-            message.senderIdOrNull() ?: run {
-                log.warn { "skipping $inputKind message without sender user (chat=$chatId)" }
-                return
-            }
-
-        val language = message.language
-        val request =
-            AgentRequest(
-                chatId = chatId,
-                userId = userId,
-                messageId = message.messageIdLong,
-                replyToMessageId = replyToMessageId,
-                prompt = agentInput,
-                conversationEntry = conversationInput,
-                messageContext = message.toMessageContext(chatProfile(message)),
-                attachedFile = attachedFile,
-                language = language
-            )
-
-        runAgentTurn(
-            request = request,
-            inputKind = inputKind,
-            waitForTurn = false,
-            deliver = { result -> delivery.send(message, result) },
-            sendFallback = { sendReply(message, Messages.of(language).fallbackErrorReply) }
-        )
-    }
-
-    private suspend fun handleInlineChoiceSelection(
-        message: Message,
-        user: User,
-        selection: InlineChoiceSelection,
-        messages: Messages
-    ) {
-        val input = inlineChoiceAgentInput(selection)
-        val language = Language.fromCode(user.languageCode)
-        val attachedFile = inlineChoices.parkedAttachment(message.chatIdLong, user.id)
-
-        // the selection continues the exchange the user started, so the turn runs as if it came from that
-        // message: it is what a reaction lands on, and what a task scheduled here is anchored to later.
-        val request =
-            AgentRequest(
-                chatId = message.chatIdLong,
-                userId = user.id,
-                messageId = selection.originMessageId ?: 0L,
-                prompt = attachedFile?.let { "${attachedFileContextBlock(it)}\n\n$input" } ?: input,
-                conversationEntry = input,
-                messageContext = message.toMessageContext(user, chatProfile(message)),
-                attachedFile = attachedFile,
-                language = language
-            )
-
-        runAgentTurn(
-            request = request,
-            inputKind = "inline choice",
-            waitForTurn = true,
-            deliver = { result ->
-                delivery.sendCallback(
-                    result = result,
-                    message = message,
-                    originMessageId = selection.originMessageId,
-                    userId = user.id,
-                    messages = messages
-                )
-            },
-            sendFallback = { sendReply(message, messages.fallbackErrorReply, selection.originMessageId) }
-        )
-    }
-
-    private suspend fun runAgentTurn(
-        request: AgentRequest,
-        inputKind: String,
-        waitForTurn: Boolean,
-        deliver: suspend (AgentResult) -> Unit,
-        sendFallback: suspend () -> Unit
-    ) {
-        log.info {
-            buildString {
-                append("incoming $inputKind: chat=${request.chatId} user=${request.userId} msg=${request.messageId}")
-                request.messageContext?.userUsername?.let { append(" username=[$it]") }
-                request.messageContext?.userDisplayName?.let { append(" name=[$it]") }
-                request.replyToMessageId?.let { append(" replyTo=$it") }
-                request.attachedFile?.let { append(" attachedFile=[${it.name}]") }
-                append(" text=[${request.prompt.collapseWhitespaceAndCap(LOG_PROMPT_MAX_CHARS).orEmpty()}]")
-            }
-        }
-
-        try {
-            // the agent gets the setter so the indicator follows the tool it is running; delivery then
-            // shows its own per-item action.
-            val result =
-                client.withLiveProgress(request) { setActivity ->
-                    if (waitForTurn)
-                        agent.handleQueued(request, setActivity)
-                    else
-                        agent.handle(request, setActivity)
-                }
-
-            // a question with buttons ends the turn without answering, so whatever it was asked about has
-            // to outlive it; any other turn clears the slot instead of leaving a stale file behind.
-            inlineChoices.parkAttachment(
-                chatId = request.chatId,
-                userId = request.userId,
-                file = request.attachedFile?.takeIf { result.outputs.any { it.output is BotOutput.InlineChoice } }
-            )
-
-            // the progress draft has to become the reply, so it is handed the text just before the send.
-            client.handOffProgressDraft(request, result)
-            deliver(result)
-        } catch (error: Throwable) {
-            error.rethrowIfCancellation()
-
-            log.error(error) {
-                "telegram $inputKind handling failed for chat=${request.chatId} user=${request.userId}"
-            }
-
-            runCatching { sendFallback() }
-                .onFailure { replyError ->
-                    replyError.rethrowIfCancellation()
-                    log.warn(replyError) {
-                        "failed to send fallback error reply for chat=${request.chatId} user=${request.userId}"
-                    }
-                }
-        }
-    }
-
-    // [replyToMessageId] anchors the reply somewhere other than [message] itself, which is what an inline
-    // choice needs: the question carries the buttons, but the answer belongs under the message that asked.
-    private suspend fun sendReply(message: Message, text: String, replyToMessageId: Long? = null) {
-        TelegramOutputSender.sendText(
-            client = client,
-            chatId = message.chatIdLong,
-            text = text,
-            replyParameters = replyParameters(replyToMessageId ?: message.messageIdLong)
-        )
-    }
-
-    // only a group-flavored chat has a description or restrictions to read; anywhere else the lookup
-    // would spend two API calls to learn nothing.
-    private suspend fun chatProfile(message: Message): ChatProfile =
-        if (message.canLoadChatDescription) chatProfiles.of(message.chatIdLong) else ChatProfile.NONE
 }
 
 /**
@@ -938,3 +635,6 @@ internal fun isIdBanned(chatId: Long, userId: Long?, bannedIds: Set<Long>): Bool
     if (chatId in bannedIds) return true
     return userId != null && userId in bannedIds
 }
+
+internal fun denialReason(chatId: Long, userId: Long?, bannedIds: Set<Long>): String =
+    if (isIdBanned(chatId, userId, bannedIds)) "banned" else "not in allowlist"

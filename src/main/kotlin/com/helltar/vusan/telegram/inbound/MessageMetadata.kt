@@ -2,6 +2,7 @@ package com.helltar.vusan.telegram.inbound
 
 import com.helltar.vusan.agent.MessageContext
 import com.helltar.vusan.common.collapseWhitespaceAndCap
+import com.helltar.vusan.i18n.Language
 import com.helltar.vusan.telegram.ChatProfile
 import org.telegram.telegrambots.meta.api.objects.*
 import org.telegram.telegrambots.meta.api.objects.chat.Chat
@@ -40,6 +41,9 @@ internal fun Message.senderDisplayNameOrNull(): String? =
 internal fun Message.senderUsernameOrNull(): String? = from?.userName
 
 internal fun Message.senderLanguageCodeOrNull(): String? = from?.languageCode
+
+internal val Message.language: Language
+    get() = Language.fromCode(senderLanguageCodeOrNull())
 
 internal fun Message.textSnippetOrNull(): String? =
     text ?: caption ?: richMessage?.toRichMarkdown()?.takeIf { it.isNotBlank() }

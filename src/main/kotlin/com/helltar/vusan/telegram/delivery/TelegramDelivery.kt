@@ -190,6 +190,22 @@ class TelegramDelivery(
     }
 
     /**
+     * Send a canned reply — a command answer, a voice notice, a fallback after a failed turn. It carries
+     * none of the agent-reply machinery: no formatting fallback chain, no private routing, no retry when
+     * the anchor is gone. [replyToMessageId] anchors it somewhere other than [message] itself, which is
+     * what an inline choice needs: the question carries the buttons, but the answer belongs under the
+     * message that asked.
+     */
+    suspend fun sendReply(message: Message, text: String, replyToMessageId: Long? = null) {
+        TelegramOutputSender.sendText(
+            client = client,
+            chatId = message.chatIdLong,
+            text = text,
+            replyParameters = replyParameters(replyToMessageId ?: message.messageIdLong)
+        )
+    }
+
+    /**
      * Send a plain-text notice from the bot itself (no reply anchor, no formatting fallback retry chain).
      * Returns `false` only when the chat itself is unreachable; any other failure is logged and reported
      * as sent, since it says nothing about whether the next message would arrive.

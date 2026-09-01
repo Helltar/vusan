@@ -38,11 +38,12 @@ Keep this file concise and actionable; put product docs in `README.md` or `docs/
   [`docs/architecture.md`](docs/architecture.md#layers).
 - Inside `telegram/`: `inbound/` turns an update into agent input, `delivery/`
   sends everything back out, `callback/` owns the inline-button flows. The
-  runner and the raw client helpers stay at the package root.
+  runner, `AgentTurns`, and the raw client helpers stay at the package root.
 - `sandbox/` is a separate Deno service, not Kotlin. Keep it that way: the
   Kotlin application reaches it only over HTTP through
   `tools/sandbox/SandboxClient.kt`.
-- `TelegramBotRunner` normalizes inbound updates and builds `RequestContext`.
+- `TelegramBotRunner` normalizes inbound updates into a prompt; `AgentTurns`
+  builds the `AgentRequest` from there and owns the turn up to its delivery.
   Tools consume `RequestContext`/`AttachedFile`; they should not reach back into
   Telegram message objects.
 - Tools enqueue `BotOutput` into `BotOutbox`, never TelegramBots send methods
