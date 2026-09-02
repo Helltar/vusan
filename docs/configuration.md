@@ -177,9 +177,10 @@ unsupported `LLM_REASONING_EFFORT` during startup. `LLM_CONTEXT_WINDOW_TOKENS` i
 window. Older catalog responses without capability metadata retain the compatible image-capable default.
 
 Two limits are worth knowing. Usage is metered against the plan rather than billed per token, so a heavy day ends in a
-"usage limit reached" reply until the window resets — `LLM_DAILY_TOKEN_BUDGET` still works but is not what stops you
-first. And this route depends on an endpoint OpenAI documents for its own Codex clients rather than for third-party
-apps, so an OpenAI-side change can break it; `LLM_PROVIDER=openai` with an API key stays the supported fallback.
+"usage limit reached" reply that says how long the window still has to run — `LLM_DAILY_TOKEN_BUDGET` still works but is
+not what stops you first. And this route depends on an endpoint OpenAI documents for its own Codex clients rather than
+for third-party apps, so an OpenAI-side change can break it; `LLM_PROVIDER=openai` with an API key stays the supported
+fallback.
 
 ### Daily token budget
 

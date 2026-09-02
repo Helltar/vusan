@@ -9,7 +9,6 @@ interface Messages {
     val busyReply: String
     val fallbackErrorReply: String
     val overloadedReply: String
-    val subscriptionLimitReply: String
     val signInRequiredReply: String
     val formattingAsFileNotice: String
     val privateBlockedNotice: String
@@ -32,6 +31,9 @@ interface Messages {
     val clearCommandDescription: String
 
     fun voiceTooLongReply(durationSeconds: Long, maxSeconds: Long): String
+
+    /** The provider's usage limit is spent; [untilReset] is `null` when the error body did not say when it lifts. */
+    fun subscriptionLimitReply(untilReset: Duration?): String
 
     fun tokenBudgetExhaustedReply(untilReset: Duration): String
 

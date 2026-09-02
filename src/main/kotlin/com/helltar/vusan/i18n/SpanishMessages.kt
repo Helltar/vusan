@@ -12,7 +12,6 @@ internal object SpanishMessages : Messages {
     override val fallbackErrorReply = "Algo salió mal, ¿lo intentamos otra vez? 🥲"
 
     override val overloadedReply = "Ahora mismo tengo demasiadas peticiones — dame un momento e inténtalo de nuevo 🙏"
-    override val subscriptionLimitReply = "He agotado mi límite de uso — se renueva en un rato, inténtalo más tarde 🙏"
     override val signInRequiredReply =
         "Hay que renovar mi conexión con el servicio de IA — requiere iniciar sesión de nuevo 🔑"
 
@@ -57,6 +56,11 @@ internal object SpanishMessages : Messages {
         "Ese mensaje de voz dura ${durationSeconds}s — solo puedo transcribir hasta ${maxSeconds}s, " +
                 "manda uno más corto o escríbelo"
 
+    override fun subscriptionLimitReply(untilReset: Duration?): String =
+        untilReset
+            ?.let { "He agotado mi límite de uso — se renueva en unos ${waitLabel(it)}, inténtalo entonces ⏳" }
+            ?: "He agotado mi límite de uso — se renueva en un rato, inténtalo más tarde 🙏"
+
     override fun tokenBudgetExhaustedReply(untilReset: Duration): String =
         "El presupuesto de tokens de hoy está agotado — vuelve en unos ${waitLabel(untilReset)} ⏳"
 
@@ -65,8 +69,9 @@ internal object SpanishMessages : Messages {
                 "guardo el resto para los demás. Vuelve en unos ${waitLabel(untilReset)} ⏳"
 
     private fun waitLabel(untilReset: Duration): String =
-        untilReset.toComponents { hours, minutes, _, _ ->
+        untilReset.toComponents { days, hours, minutes, _, _ ->
             when {
+                days > 0 -> "$days d $hours h"
                 hours > 0 -> "$hours h $minutes min"
                 minutes > 0 -> "$minutes min"
                 else -> "un minuto"

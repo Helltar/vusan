@@ -12,7 +12,6 @@ internal object UkrainianMessages : Messages {
     override val fallbackErrorReply = "Щось пішло не так — спробуй ще раз? 🥲"
 
     override val overloadedReply = "Зараз у мене забагато запитів — дай хвилинку й спробуй ще раз 🙏"
-    override val subscriptionLimitReply = "Ліміт використання вичерпано — він скоро оновиться, спробуй пізніше 🙏"
     override val signInRequiredReply = "Моє підключення до AI-сервісу треба поновити — потрібен повторний вхід 🔑"
 
     override val formattingAsFileNotice =
@@ -55,6 +54,11 @@ internal object UkrainianMessages : Messages {
         "Це голосове триває ${durationSeconds}с — я можу розпізнати щонайбільше ${maxSeconds}с, " +
                 "надішли коротше або напиши текстом"
 
+    override fun subscriptionLimitReply(untilReset: Duration?): String =
+        untilReset
+            ?.let { "Ліміт використання вичерпано — оновиться приблизно за ${waitLabel(it)}, тоді спробуй ще раз ⏳" }
+            ?: "Ліміт використання вичерпано — він скоро оновиться, спробуй пізніше 🙏"
+
     override fun tokenBudgetExhaustedReply(untilReset: Duration): String =
         "Бюджет токенів на сьогодні вичерпано — повертайся приблизно за ${waitLabel(untilReset)} ⏳"
 
@@ -63,8 +67,9 @@ internal object UkrainianMessages : Messages {
                 "решту тримаю для інших. Повертайся приблизно за ${waitLabel(untilReset)} ⏳"
 
     private fun waitLabel(untilReset: Duration): String =
-        untilReset.toComponents { hours, minutes, _, _ ->
+        untilReset.toComponents { days, hours, minutes, _, _ ->
             when {
+                days > 0 -> "$days дн $hours год"
                 hours > 0 -> "$hours год $minutes хв"
                 minutes > 0 -> "$minutes хв"
                 else -> "хвилинку"
