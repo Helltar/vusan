@@ -54,6 +54,7 @@ import org.telegram.telegrambots.meta.api.objects.message.Message
 import org.telegram.telegrambots.meta.generics.TelegramClient
 import java.time.Instant
 import kotlin.time.Duration
+import kotlin.time.Duration.Companion.hours
 import kotlin.time.Duration.Companion.minutes
 import kotlin.time.Duration.Companion.seconds
 
@@ -105,10 +106,13 @@ internal class TelegramBotRunner(
         // telegram caps an album at ten items, so a group with that many parts is complete.
         const val MAX_ALBUM_PARTS = 10
 
-        // how long an edit stays interesting. it bounds both halves of the rule: an older edit never
-        // starts a turn, and a message is remembered as answered only for as long as an edit to it
-        // could still start one.
+        // how long a message stays open to being answered by an edit of it. the reply anchors to that
+        // message, so past this the exchange it belongs to has moved on and there is nothing to answer.
         val EDIT_TURN_WINDOW = 5.minutes
+
+        // how long a message stays known as answered. telegram delivers the same one more than once, and
+        // keeps an update it could not hand over for 24 hours, so the memory has to outlive that window.
+        val ANSWERED_MEMORY = 24.hours
 
         // album parts arrive as separate updates with a shared media_group_id and no terminator;
         // a group is treated as complete once the update stream stays quiet this long.
@@ -123,7 +127,7 @@ internal class TelegramBotRunner(
 
     private val callbacks = CallbackRouter(client, taskMenu, inlineChoices, turns, allowedIds, bannedIds)
 
-    private val answeredMessages = AnsweredMessages(EDIT_TURN_WINDOW)
+    private val answeredMessages = AnsweredMessages(ANSWERED_MEMORY)
 
     fun start(scope: CoroutineScope): Job {
         log.info { "Bot started as ${profile.username ?: profile.userId}, allowed ids=${allowedIds.sorted()}" }
@@ -229,6 +233,9 @@ internal class TelegramBotRunner(
                 recordGroupLog(edited, edited = true)
 
                 if (edited.startsTurnOnEdit()) {
+                    // an edit reaches the agent through the same path as a new message, so without this the
+                    // two are indistinguishable in the log.
+                    log.info { "edit starts a turn: chat=${edited.chatIdLong} msg=${edited.messageIdLong}" }
                     launchHandling(edited) { dispatch(edited, profile) }
                 }
 
@@ -561,8 +568,8 @@ internal class TelegramBotRunner(
         )
     }
 
-    // the single gate every inbound path goes through, so it is also where a message is marked answered:
-    // the alternative is remembering to do it at each of the callers.
+    // the single gate every inbound path goes through, so it is also where a message is claimed for its
+    // one turn: the alternative is remembering to do that at each of the callers.
     private fun Message.isAccepted(botProfile: BotProfile, captionSource: Message = this): Boolean {
         if (!shouldHandle(this, botProfile.userId, botProfile.username, captionSource))
             return false
@@ -572,16 +579,23 @@ internal class TelegramBotRunner(
             return false
         }
 
-        answeredMessages.remember(chatIdLong, messageIdLong, Instant.now())
+        // telegram hands the same message over more than once — as an edit of it, and as a plain
+        // redelivery under a fresh update id, which the polling session's own duplicate filter misses. the
+        // second turn would repeat an answer into a conversation that has moved on since.
+        if (!answeredMessages.markAnswered(chatIdLong, messageIdLong, Instant.now())) {
+            log.warn { "skipping a message already answered: chat=$chatIdLong msg=$messageIdLong" }
+            return false
+        }
+
         return true
     }
 
     private fun Message.startsTurnOnEdit(): Boolean =
         startsTurnOnEdit(
+            sentAt = Instant.ofEpochSecond(date.toLong()),
             editedAt = editDate?.let { Instant.ofEpochSecond(it.toLong()) },
             now = Instant.now(),
             window = EDIT_TURN_WINDOW,
-            alreadyAnswered = answeredMessages.contains(chatIdLong, messageIdLong, Instant.now()),
             isCommand = messageTextOrNull()?.let(::isBotCommand) == true,
             inAlbum = mediaGroupId != null
         )
@@ -594,28 +608,30 @@ internal class TelegramBotRunner(
 
 /**
  * Whether an edited message should start a turn of its own. It may only do so when the edit is what made
- * the message addressed to the bot — someone adding the mention they forgot. A message already answered
- * stays answered once: fixing a typo in it is a reflex rather than a request for a second reply, and in a
- * group that reply would land under a thread which has moved on.
+ * the message addressed to the bot — someone adding the mention they forgot.
  *
- * The caller still runs the edited message through `shouldHandle` and the allowlist, so this only decides
- * what an edit itself changes.
+ * The caller still runs the edited message through `shouldHandle`, the allowlist and the one-turn-per-message
+ * claim, so this only decides what an edit itself changes.
  */
 internal fun startsTurnOnEdit(
+    sentAt: Instant,
     editedAt: Instant?,
     now: Instant,
     window: Duration,
-    alreadyAnswered: Boolean,
     isCommand: Boolean,
     inAlbum: Boolean
 ): Boolean {
-    // an edit of something answered before this process started looks exactly like one never seen, so an
-    // edit is only ever acted on while it is fresh enough for that memory to still hold.
-    if (editedAt == null || now.isAfter(editedAt.plusMillis(window.inWholeMilliseconds))) return false
+    // without an edit_date telegram is not describing an edit at all, whatever else the update carries.
+    if (editedAt == null) return false
+
+    // the reply lands under the message, so the message's own age decides: one the chat has left behind
+    // gets no new answer however fresh the edit is, and a redelivered old message reads exactly the same
+    // way. an edit_date is never earlier than the message, so this bounds the edit itself too.
+    if (now.isAfter(sentAt.plusMillis(window.inWholeMilliseconds))) return false
 
     // a command is invoked by sending it, not by editing a message into one — `/clear` would wipe a
     // history nobody asked it to.
-    if (alreadyAnswered || isCommand) return false
+    if (isCommand) return false
 
     // an album is answered as a whole, off whichever part carries the caption; one edited part is not one.
     return !inAlbum

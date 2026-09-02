@@ -12,50 +12,48 @@ class AnsweredMessagesTest {
     private val chat = -100L
 
     @Test
-    fun `a remembered message is recognised inside the window`() {
+    fun `the first claim on a message wins and the next one is refused`() {
         val answered = AnsweredMessages(5.minutes)
 
-        answered.remember(chat, messageId = 1L, now = now)
-
-        assertTrue(answered.contains(chat, messageId = 1L, now = now.plusSeconds(299)))
+        assertTrue(answered.markAnswered(chat, messageId = 1L, now = now))
+        assertFalse(answered.markAnswered(chat, messageId = 1L, now = now.plusSeconds(299)))
     }
 
     @Test
-    fun `it forgets once the window has passed`() {
+    fun `a message claimed again past the retention starts a turn of its own`() {
         val answered = AnsweredMessages(5.minutes)
 
-        answered.remember(chat, messageId = 1L, now = now)
+        answered.markAnswered(chat, messageId = 1L, now = now)
 
-        assertFalse(answered.contains(chat, messageId = 1L, now = now.plusSeconds(301)))
+        assertTrue(answered.markAnswered(chat, messageId = 1L, now = now.plusSeconds(301)))
     }
 
     @Test
-    fun `a message it never saw is not remembered`() {
+    fun `another message in the same chat is claimed on its own`() {
         val answered = AnsweredMessages(5.minutes)
 
-        answered.remember(chat, messageId = 1L, now = now)
+        answered.markAnswered(chat, messageId = 1L, now = now)
 
-        assertFalse(answered.contains(chat, messageId = 2L, now = now))
+        assertTrue(answered.markAnswered(chat, messageId = 2L, now = now))
     }
 
     @Test
     fun `the same message id in another chat is a different message`() {
         val answered = AnsweredMessages(5.minutes)
 
-        answered.remember(chat, messageId = 1L, now = now)
+        answered.markAnswered(chat, messageId = 1L, now = now)
 
-        assertFalse(answered.contains(chatId = -200L, messageId = 1L, now = now))
+        assertTrue(answered.markAnswered(chatId = -200L, messageId = 1L, now = now))
     }
 
     @Test
     fun `a later write drops what has aged out`() {
-        // the window is what bounds the map, so eviction has to happen on write or it grows forever
+        // retention is what bounds the map, so eviction has to happen on write or it grows forever
         val answered = AnsweredMessages(5.minutes)
 
-        answered.remember(chat, messageId = 1L, now = now)
-        answered.remember(chat, messageId = 2L, now = now.plusSeconds(301))
+        answered.markAnswered(chat, messageId = 1L, now = now)
+        answered.markAnswered(chat, messageId = 2L, now = now.plusSeconds(301))
 
-        assertFalse(answered.contains(chat, messageId = 1L, now = now))
-        assertTrue(answered.contains(chat, messageId = 2L, now = now.plusSeconds(301)))
+        assertTrue(answered.markAnswered(chat, messageId = 1L, now = now.plusSeconds(301)))
     }
 }

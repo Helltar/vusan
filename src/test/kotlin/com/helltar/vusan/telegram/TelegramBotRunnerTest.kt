@@ -47,16 +47,11 @@ class TelegramBotRunnerTest {
     }
 
     @Test
-    fun `an edit of a message the bot already answered brings no second reply`() {
-        // fixing a typo in an answered question is a reflex, not a request to answer it again
-        assertFalse(edit(alreadyAnswered = true))
-    }
-
-    @Test
-    fun `a stale edit is left alone`() {
-        // past the window the bot can no longer tell an answered message from one it never saw
-        assertFalse(edit(editedAt = now.minusSeconds(301)))
-        assertTrue(edit(editedAt = now.minusSeconds(299)))
+    fun `an edit of a message the chat has left behind is not answered`() {
+        // however fresh the edit, the reply would land under a message half an hour of conversation
+        // above the current one — and telegram redelivering that message reads exactly the same way
+        assertFalse(edit(sentAt = now.minusSeconds(301)))
+        assertTrue(edit(sentAt = now.minusSeconds(299)))
     }
 
     @Test
@@ -78,16 +73,16 @@ class TelegramBotRunnerTest {
     private val now: Instant = Instant.parse("2026-08-28T12:00:00Z")
 
     private fun edit(
+        sentAt: Instant = now.minusSeconds(30),
         editedAt: Instant? = now.minusSeconds(10),
-        alreadyAnswered: Boolean = false,
         isCommand: Boolean = false,
         inAlbum: Boolean = false
     ): Boolean =
         startsTurnOnEdit(
+            sentAt = sentAt,
             editedAt = editedAt,
             now = now,
             window = 5.minutes,
-            alreadyAnswered = alreadyAnswered,
             isCommand = isCommand,
             inAlbum = inAlbum
         )
