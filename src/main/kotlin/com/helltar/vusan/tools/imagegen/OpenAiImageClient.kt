@@ -10,10 +10,11 @@ import io.ktor.client.request.*
 import io.ktor.client.request.forms.*
 import io.ktor.http.*
 import java.util.*
+import kotlin.time.Duration.Companion.minutes
 
 private const val PLATFORM_BASE_URL = "https://api.openai.com/v1/images"
 private const val CODEX_BASE_URL = "https://chatgpt.com/backend-api/codex/images"
-private const val IMAGE_TIMEOUT_MILLIS = 180_000L
+private val IMAGE_TIMEOUT = 5.minutes
 
 /**
  * Where the image request goes and how it authenticates.
@@ -153,8 +154,8 @@ private fun dataUrl(bytes: ByteArray, contentType: String): String =
 
 private fun HttpRequestBuilder.imageTimeout() {
     timeout {
-        requestTimeoutMillis = IMAGE_TIMEOUT_MILLIS
-        socketTimeoutMillis = IMAGE_TIMEOUT_MILLIS
+        requestTimeoutMillis = IMAGE_TIMEOUT.inWholeMilliseconds
+        socketTimeoutMillis = IMAGE_TIMEOUT.inWholeMilliseconds
     }
 }
 
