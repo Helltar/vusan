@@ -3,6 +3,7 @@ package com.helltar.vusan.config
 import com.helltar.vusan.infra.Http
 import io.ktor.client.engine.mock.*
 import io.ktor.http.*
+import io.ktor.http.content.*
 import io.ktor.utils.io.*
 import kotlinx.coroutines.runBlocking
 import kotlinx.serialization.json.Json
@@ -128,6 +129,33 @@ class CodexAuthTest {
                 Files.getPosixFilePermissions(file)
             )
         }
+    }
+
+    @Test
+    fun `the refresh request sends every field the endpoint requires`() = runBlocking {
+        val file = authFile(accessToken = jwt(expiresInMinutes = 1), refreshToken = "refresh-old")
+        var body: JsonObject? = null
+
+        val http =
+            Http.createClient(
+                MockEngine { request ->
+                    body = Json.parseToJsonElement((request.body as TextContent).text).jsonObject
+
+                    respond(
+                        content = ByteReadChannel("""{"access_token":"${jwt(expiresInMinutes = 60)}"}"""),
+                        status = HttpStatusCode.OK,
+                        headers = headersOf(HttpHeaders.ContentType, ContentType.Application.Json.toString())
+                    )
+                }
+            )
+
+        CodexAuthStore(http, file).credentials()
+
+        // a default value on the request class is dropped by `encodeDefaults = false`, and the endpoint
+        // answers `missing_required_parameter` — which looks exactly like a session that has died.
+        assertEquals("refresh_token", body?.get("grant_type")?.jsonPrimitive?.content)
+        assertEquals("refresh-old", body?.get("refresh_token")?.jsonPrimitive?.content)
+        assertTrue(body?.get("client_id")?.jsonPrimitive?.content.orEmpty().startsWith("app_"))
     }
 
     @Test

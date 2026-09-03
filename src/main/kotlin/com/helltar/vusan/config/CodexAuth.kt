@@ -92,10 +92,15 @@ private data class CachedCodexTokens(
     val sourceFingerprint: String
 )
 
+/**
+ * Deliberately without default values. The shared client encodes with kotlinx-serialization's
+ * `encodeDefaults = false`, so a defaulted `grant_type` is dropped from the body and the endpoint
+ * answers `missing_required_parameter` — a 400 that reads like a dead session and is not one.
+ */
 @Serializable
 private data class CodexRefreshRequest(
     @SerialName("client_id") val clientId: String,
-    @SerialName("grant_type") val grantType: String = "refresh_token",
+    @SerialName("grant_type") val grantType: String,
     @SerialName("refresh_token") val refreshToken: String
 )
 
@@ -219,6 +224,7 @@ class CodexAuthStore(
                     setBody(
                         CodexRefreshRequest(
                             clientId = CODEX_OAUTH_CLIENT_ID,
+                            grantType = "refresh_token",
                             refreshToken = refreshToken
                         )
                     )
