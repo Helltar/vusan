@@ -111,8 +111,8 @@ Prerequisites: JDK 21, plus `ffmpeg` and `yt-dlp` on `PATH`.
 - **Reactions** — sometimes an emoji on your message is the whole answer.
 - **Stickers** — learns the stickers your chat actually uses, finds a fitting one across the
   collection, and answers with it when a wordless reaction works better than words.
-- **Files and links** — sends what it wrote as a document, or downloads a link and passes it on
-  as a file.
+- **Files and links** — sends what it wrote as a document, downloads a link, or hands back the
+  original file behind a sticker or picture already in the chat.
 - **Long structured answers** — headings, tables, and checklists when a reply is genuinely big.
 - **Private replies** — moves the answer into your DMs when you ask.
 

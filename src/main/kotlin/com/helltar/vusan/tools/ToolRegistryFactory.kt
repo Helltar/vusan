@@ -56,9 +56,12 @@ import com.helltar.vusan.tools.youtube.*
 import io.github.oshai.kotlinlogging.KotlinLogging
 import io.ktor.client.*
 import kotlin.time.Duration.Companion.seconds
+import org.telegram.telegrambots.meta.generics.TelegramClient
 
 class ToolRegistryFactory(
     http: HttpClient,
+    // the bot's own client: the only way to reach a file telegram already stores, by `file_id`
+    private val telegramClient: TelegramClient,
     private val config: AppConfig,
     private val conversation: ConversationRepository,
     private val memory: MemoryRepository,
@@ -179,7 +182,7 @@ class ToolRegistryFactory(
             if (chat.reactions) tools(ReactionTools(context, outbox))
             if (chat.audios) tools(YouTubeMusicTools(ytDlpClient, outbox))
             if (chat.videos) tools(YouTubeVideoTools(ytDlpClient, outbox))
-            if (chat.documents) tools(FileTools(fileDownloadClient, outbox))
+            if (chat.documents) tools(FileTools(fileDownloadClient, telegramClient, outbox))
 
             if (chat.polls) {
                 tools(QuizTools(outbox))

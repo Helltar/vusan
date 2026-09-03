@@ -48,6 +48,10 @@ internal fun Throwable.isWrongFileIdentifier(): Boolean {
         "invalid file_id" in description
 }
 
+// getFile refuses a file above the 20 MB bot download limit before serving any of it.
+internal fun Throwable.isFileTooBig(): Boolean =
+    telegramDescription?.contains("file is too big", ignoreCase = true) == true
+
 // a sticker set the owner deleted or renamed. telegram answers `getStickerSet` with either the raw
 // core error or the readable wording, and only these mean the set is really gone — any other
 // failure is transient and must not be taken as permission to drop what was learned from it.

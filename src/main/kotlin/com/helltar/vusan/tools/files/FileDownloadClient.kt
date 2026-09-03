@@ -258,5 +258,5 @@ private fun String.withExtensionFor(contentType: ContentType?): String {
 private val String.looksLikeExtension: Boolean
     get() = isNotEmpty() && length <= MAX_EXTENSION_CHARS && all(Char::isLetterOrDigit)
 
-private val String.hasFileExtension: Boolean
+internal val String.hasFileExtension: Boolean
     get() = substringAfterLast('.', "").looksLikeExtension
