@@ -122,7 +122,10 @@ private data class CodexRefreshRequest(
 private data class CodexRefreshResponse(
     @SerialName("id_token") val idToken: String? = null,
     @SerialName("access_token") val accessToken: String? = null,
-    @SerialName("refresh_token") val refreshToken: String? = null
+    @SerialName("refresh_token") val refreshToken: String? = null,
+    // the endpoint reports when it will accept the next refresh and refuses anything sooner. logged
+    // rather than honoured until a real value shows what shape it arrives in.
+    @SerialName("earliest_refresh_at") val earliestRefreshAt: JsonElement? = null
 )
 
 /**
@@ -292,6 +295,8 @@ class CodexAuthStore(
         val accessToken =
             body.accessToken?.takeIf { it.isNotBlank() }
                 ?: codexAuthError("$CODEX_TOKEN_URL returned no access token. Run `codex login` again.")
+
+        log.info { "Codex: ChatGPT access token refreshed, earliest_refresh_at=[${body.earliestRefreshAt}]" }
 
         val refreshed =
             snapshot.tokens.copy(
