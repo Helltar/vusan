@@ -105,7 +105,7 @@ class CodexAuthTest {
                     respond(
                         content =
                             ByteReadChannel(
-                                """{"access_token":"${jwt(expiresInMinutes = 60)}","refresh_token":"refresh-new"}"""
+                                """{"access_token":"${jwt(expiresInMinutes = FRESH_MINUTES)}","refresh_token":"refresh-new"}"""
                             ),
                         status = HttpStatusCode.OK,
                         headers = headersOf(HttpHeaders.ContentType, ContentType.Application.Json.toString())
@@ -132,35 +132,8 @@ class CodexAuthTest {
     }
 
     @Test
-    fun `the refresh request sends every field the endpoint requires`() = runBlocking {
-        val file = authFile(accessToken = jwt(expiresInMinutes = 1), refreshToken = "refresh-old")
-        var body: JsonObject? = null
-
-        val http =
-            Http.createClient(
-                MockEngine { request ->
-                    body = Json.parseToJsonElement((request.body as TextContent).text).jsonObject
-
-                    respond(
-                        content = ByteReadChannel("""{"access_token":"${jwt(expiresInMinutes = 60)}"}"""),
-                        status = HttpStatusCode.OK,
-                        headers = headersOf(HttpHeaders.ContentType, ContentType.Application.Json.toString())
-                    )
-                }
-            )
-
-        CodexAuthStore(http, file).credentials()
-
-        // a default value on the request class is dropped by `encodeDefaults = false`, and the endpoint
-        // answers `missing_required_parameter` — which looks exactly like a session that has died.
-        assertEquals("refresh_token", body?.get("grant_type")?.jsonPrimitive?.content)
-        assertEquals("refresh-old", body?.get("refresh_token")?.jsonPrimitive?.content)
-        assertTrue(body?.get("client_id")?.jsonPrimitive?.content.orEmpty().startsWith("app_"))
-    }
-
-    @Test
     fun `a fresh token is used without contacting the refresh endpoint`() = runBlocking {
-        val file = authFile(accessToken = jwt(expiresInMinutes = 60))
+        val file = authFile(accessToken = jwt(expiresInMinutes = FRESH_MINUTES))
         val store = CodexAuthStore(Http.createClient(MockEngine { error("refresh must not be called") }), file)
 
         store.credentials()
@@ -169,7 +142,7 @@ class CodexAuthTest {
 
     @Test
     fun `a fresh access-token login works without a refresh token`() = runBlocking {
-        val accessToken = jwt(expiresInMinutes = 60)
+        val accessToken = jwt(expiresInMinutes = FRESH_MINUTES)
         val file = authFile(accessToken = accessToken, refreshToken = null)
         val store = CodexAuthStore(Http.createClient(MockEngine { error("refresh must not be called") }), file)
 
@@ -188,8 +161,8 @@ class CodexAuthTest {
 
     @Test
     fun `an external login replaces cached credentials without a restart`() = runBlocking {
-        val firstToken = jwt(expiresInMinutes = 60)
-        val secondToken = jwt(expiresInMinutes = 61)
+        val firstToken = jwt(expiresInMinutes = FRESH_MINUTES)
+        val secondToken = jwt(expiresInMinutes = FRESH_MINUTES + 1)
         val file = authFile(accessToken = firstToken)
         val store = CodexAuthStore(Http.createClient(MockEngine { error("refresh must not be called") }), file)
 
@@ -203,7 +176,7 @@ class CodexAuthTest {
 
     @Test
     fun `an external logout invalidates cached credentials without a restart`() = runBlocking {
-        val file = authFile(accessToken = jwt(expiresInMinutes = 60))
+        val file = authFile(accessToken = jwt(expiresInMinutes = FRESH_MINUTES))
         val store = CodexAuthStore(Http.createClient(MockEngine { error("refresh must not be called") }), file)
 
         store.credentials()
@@ -216,8 +189,8 @@ class CodexAuthTest {
     @Test
     fun `a login racing a refresh is not overwritten`() = runBlocking {
         val file = authFile(accessToken = jwt(expiresInMinutes = 1), refreshToken = "refresh-old")
-        val refreshedToken = jwt(expiresInMinutes = 60)
-        val externalToken = jwt(expiresInMinutes = 61)
+        val refreshedToken = jwt(expiresInMinutes = FRESH_MINUTES)
+        val externalToken = jwt(expiresInMinutes = FRESH_MINUTES + 1)
 
         val http =
             Http.createClient(
@@ -279,6 +252,149 @@ class CodexAuthTest {
     }
 
     @Test
+    fun `a refusal is survived while the token is still usable`() = runBlocking {
+        val file = authFile(accessToken = jwt(expiresInMinutes = 60))
+        var refreshCalls = 0
+
+        val http =
+            Http.createClient(
+                MockEngine {
+                    refreshCalls++
+                    respond(
+                        content = ByteReadChannel("""{"error":{"code":"too_soon"}}"""),
+                        status = HttpStatusCode.BadRequest,
+                        headers = headersOf(HttpHeaders.ContentType, ContentType.Application.Json.toString())
+                    )
+                }
+            )
+        val store = CodexAuthStore(http, file)
+
+        assertTrue(store.credentials().accessToken.isNotBlank())
+
+        // the retry interval keeps a standing refusal off the endpoint for the rest of the window
+        store.credentials()
+        assertEquals(1, refreshCalls)
+    }
+
+    @Test
+    fun `a refusal that is not a rejected credential does not ask for a new login`() = runBlocking {
+        val file = authFile(accessToken = jwt(expiresInMinutes = 1))
+
+        val http =
+            Http.createClient(
+                MockEngine {
+                    respond(
+                        content = ByteReadChannel("""{"error":{"code":"too_soon","message":"try later"}}"""),
+                        status = HttpStatusCode.BadRequest,
+                        headers = headersOf(HttpHeaders.ContentType, ContentType.Application.Json.toString())
+                    )
+                }
+            )
+
+        val error = assertFailsWith<CodexAuthException> { CodexAuthStore(http, file).credentials() }
+
+        assertTrue("refused the refresh" in error.message.orEmpty(), error.message.orEmpty())
+        assertTrue("codex login" !in error.message.orEmpty(), error.message.orEmpty())
+    }
+
+    @Test
+    fun `an error object rather than an error string is still classified`() = runBlocking {
+        val file = authFile(accessToken = jwt(expiresInMinutes = 1))
+
+        val http =
+            Http.createClient(
+                MockEngine {
+                    respond(
+                        content =
+                            ByteReadChannel(
+                                """{"error":{"code":"invalid_grant","message":"token no longer accepted"}}"""
+                            ),
+                        status = HttpStatusCode.BadRequest,
+                        headers = headersOf(HttpHeaders.ContentType, ContentType.Application.Json.toString())
+                    )
+                }
+            )
+
+        val error = assertFailsWith<CodexAuthException> { CodexAuthStore(http, file).credentials() }
+
+        assertTrue("rejected as invalid" in error.message.orEmpty(), error.message.orEmpty())
+        assertTrue("HTTP 400" !in error.message.orEmpty(), error.message.orEmpty())
+    }
+
+    @Test
+    fun `the refresh request sends every field the endpoint requires`() = runBlocking {
+        val file = authFile(accessToken = jwt(expiresInMinutes = 1), refreshToken = "refresh-old")
+        var body: JsonObject? = null
+
+        val http =
+            Http.createClient(
+                MockEngine { request ->
+                    body = Json.parseToJsonElement((request.body as TextContent).text).jsonObject
+
+                    respond(
+                        content = ByteReadChannel("""{"access_token":"${jwt(expiresInMinutes = FRESH_MINUTES)}"}"""),
+                        status = HttpStatusCode.OK,
+                        headers = headersOf(HttpHeaders.ContentType, ContentType.Application.Json.toString())
+                    )
+                }
+            )
+
+        CodexAuthStore(http, file).credentials()
+
+        // a default value on the request class is dropped by `encodeDefaults = false`, and the endpoint
+        // answers `missing_required_parameter` — which looks exactly like a session that has died.
+        assertEquals("refresh_token", body?.get("grant_type")?.jsonPrimitive?.content)
+        assertEquals("refresh-old", body?.get("refresh_token")?.jsonPrimitive?.content)
+        assertTrue(body?.get("client_id")?.jsonPrimitive?.content.orEmpty().startsWith("app_"))
+    }
+
+    @Test
+    fun `the refresh request carries the headers cloudflare checks`() = runBlocking {
+        val file = authFile(accessToken = jwt(expiresInMinutes = 1))
+        var originator: String? = null
+        var userAgent: String? = null
+
+        val http =
+            Http.createClient(
+                MockEngine { request ->
+                    originator = request.headers["originator"]
+                    userAgent = request.headers[HttpHeaders.UserAgent]
+
+                    respond(
+                        content = ByteReadChannel("""{"access_token":"${jwt(expiresInMinutes = FRESH_MINUTES)}"}"""),
+                        status = HttpStatusCode.OK,
+                        headers = headersOf(HttpHeaders.ContentType, ContentType.Application.Json.toString())
+                    )
+                }
+            )
+
+        CodexAuthStore(http, file).credentials()
+
+        assertEquals("codex_cli_rs", originator)
+        assertTrue(userAgent.orEmpty().startsWith("codex_cli_rs/"), userAgent.orEmpty())
+    }
+
+    @Test
+    fun `an unclassified rejection keeps the response body in the message`() = runBlocking {
+        val file = authFile(accessToken = jwt(expiresInMinutes = 1))
+
+        val http =
+            Http.createClient(
+                MockEngine {
+                    respond(
+                        content = ByteReadChannel("<html>\n  edge said no\n</html>"),
+                        status = HttpStatusCode.BadRequest,
+                        headers = headersOf(HttpHeaders.ContentType, ContentType.Text.Html.toString())
+                    )
+                }
+            )
+
+        val error = assertFailsWith<CodexAuthException> { CodexAuthStore(http, file).credentials() }
+
+        assertTrue("body=[<html> edge said no </html>]" in error.message.orEmpty(), error.message.orEmpty())
+    }
+
+    @Test
     fun `expiresWithin treats an unparseable token as already expired`() {
         assertTrue("not-a-jwt".expiresWithin(5.minutes))
     }
@@ -300,6 +416,8 @@ class CodexAuthTest {
         assertEquals(Path.of("/srv/vusan-codex", "auth.json"), defaultCodexAuthFile(" /srv/vusan-codex "))
     }
 }
+
+private const val FRESH_MINUTES = 7L * 24 * 60
 
 private fun authFile(
     accessToken: String,

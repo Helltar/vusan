@@ -1,5 +1,7 @@
 package com.helltar.vusan.config
 
+import com.helltar.vusan.common.collapseWhitespaceAndCap
+import com.helltar.vusan.common.rethrowIfCancellation
 import io.github.oshai.kotlinlogging.KotlinLogging
 import io.ktor.client.*
 import io.ktor.client.call.*
@@ -12,6 +14,7 @@ import kotlinx.coroutines.sync.withLock
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.Json
+import kotlinx.serialization.json.JsonElement
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.JsonPrimitive
 import kotlinx.serialization.json.contentOrNull
@@ -33,6 +36,7 @@ import kotlin.io.path.createDirectories
 import kotlin.io.path.isReadable
 import kotlin.io.path.readText
 import kotlin.io.path.writeText
+import kotlin.time.Duration.Companion.hours
 import kotlin.time.Duration.Companion.minutes
 
 /**
@@ -43,9 +47,19 @@ import kotlin.time.Duration.Companion.minutes
 private const val CODEX_OAUTH_CLIENT_ID = "app_EMoamEEZ73f0CkXaXp7hrann"
 private const val CODEX_TOKEN_URL = "https://auth.openai.com/oauth/token"
 
-// codex refreshes 5 minutes before expiry; matching it keeps the two from disagreeing about whether a
-// shared auth.json is still fresh.
-private val REFRESH_WINDOW = 5.minutes
+// the access token lives ten days, so the refresh is attempted a full day out: a refusal then still
+// leaves dozens of turns to succeed on, instead of being the single shot that takes the bot down.
+private val REFRESH_WINDOW = 24.hours
+
+// inside this last stretch the token is gone for practical purposes, and a failed refresh becomes the
+// operator's problem rather than something to sit out.
+private val EXPIRY_GRACE = 5.minutes
+
+// the endpoint answers a successful refresh with `earliest_refresh_at` and refuses anything sooner, so
+// a failure waits rather than repeating on every message for the rest of the window.
+private val REFRESH_RETRY_INTERVAL = 1.hours
+
+private const val REFRESH_ERROR_MAX_CHARS = 500
 private val OWNER_ONLY_PERMISSIONS = setOf(PosixFilePermission.OWNER_READ, PosixFilePermission.OWNER_WRITE)
 
 private val log = KotlinLogging.logger {}
@@ -126,36 +140,70 @@ class CodexAuthStore(
 
     private val mutex = Mutex()
     private var cached: CachedCodexTokens? = null
+    private var lastRefreshFailure: Instant? = null
 
     /**
      * The current access token, refreshed first when it is within [REFRESH_WINDOW] of expiring.
      *
-     * Serialized on a mutex: a burst of concurrent turns must not fire a refresh each, because the
-     * endpoint invalidates a refresh token once it is used and the losers would all fail.
+     * Serialized on a mutex so a burst of concurrent turns fires one refresh rather than one each: the
+     * endpoint rate-limits them, and the write back to `auth.json` has a single writer this way.
      */
     suspend fun credentials(): CodexCredentials =
         mutex.withLock {
-            val snapshot = currentTokens()
-            val tokens = snapshot.tokens
-            val fresh =
-                if (tokens.accessToken.expiresWithin(REFRESH_WINDOW)) {
-                    val refreshToken =
-                        tokens.refreshToken?.takeIf { it.isNotBlank() }
-                            ?: codexAuthError(
-                                "The Codex access token in [$authFile] is expiring and cannot be refreshed. " +
-                                        "Rotate it with `codex login --with-access-token` or sign in again."
-                            )
-
-                    refresh(snapshot, refreshToken)
-                } else {
-                    tokens
-                }
+            val fresh = refreshedIfDue(currentTokens())
 
             CodexCredentials(
                 accessToken = fresh.accessToken,
                 accountId = fresh.accountId ?: fresh.idToken.claimString("chatgpt_account_id")
             )
         }
+
+    /**
+     * The tokens to use for this request, refreshed first when the access token is inside
+     * [REFRESH_WINDOW].
+     *
+     * A refresh that fails while the token still has days on it is a warning, not an error. The
+     * endpoint refuses a refresh that comes too soon after the previous one, and answering that with
+     * "sign in again" sends the operator to re-authenticate a session that is working fine.
+     */
+    private suspend fun refreshedIfDue(snapshot: CodexAuthSnapshot): CodexTokens {
+        val tokens = snapshot.tokens
+
+        if (!tokens.accessToken.expiresWithin(REFRESH_WINDOW))
+            return tokens
+
+        val fatal = tokens.accessToken.expiresWithin(EXPIRY_GRACE)
+        val refreshToken = tokens.refreshToken?.takeIf { it.isNotBlank() }
+
+        if (refreshToken == null) {
+            val message =
+                "The Codex access token in [$authFile] is expiring and cannot be refreshed. " +
+                        "Rotate it with `codex login --with-access-token` or sign in again."
+
+            if (fatal) codexAuthError(message)
+
+            log.warn { message }
+            return tokens
+        }
+
+        if (!fatal && !retryDue())
+            return tokens
+
+        return runCatching { refresh(snapshot, refreshToken) }
+            .onSuccess { lastRefreshFailure = null }
+            .getOrElse { e ->
+                e.rethrowIfCancellation()
+                lastRefreshFailure = Instant.now()
+
+                if (fatal) throw e
+
+                log.warn { "Codex: token refresh failed while the current token is still usable: ${e.message}" }
+                tokens
+            }
+    }
+
+    private fun retryDue(): Boolean =
+        lastRefreshFailure?.let { Instant.now().isAfter(it.plusSeconds(REFRESH_RETRY_INTERVAL.inWholeSeconds)) } ?: true
 
     /** Plan on the signed-in account, for the startup log. Absent when the claim is missing. */
     suspend fun planType(): String? =
@@ -221,6 +269,7 @@ class CodexAuthStore(
                     // instead of letting the shared validator collapse it into a status-only error.
                     expectSuccess = false
                     contentType(ContentType.Application.Json)
+                    headers { codexCloudflareHeaders().forEach { (name, value) -> set(name, value) } }
                     setBody(
                         CodexRefreshRequest(
                             clientId = CODEX_OAUTH_CLIENT_ID,
@@ -334,22 +383,44 @@ private fun String.fingerprint(): String =
 private fun refreshFailureMessage(status: HttpStatusCode, body: String?): String {
     val reLogin = "Run `codex logout` then `codex login` on this host."
 
-    return when (body?.let { refreshErrorCode(it) }) {
-        "refresh_token_expired" -> "The ChatGPT session has expired. $reLogin"
+    return when (body?.let { refreshErrorCode(it) }?.lowercase()) {
+        "refresh_token_expired", "token_expired" -> "The ChatGPT session has expired. $reLogin"
         "refresh_token_reused" -> "The ChatGPT refresh token was already used. $reLogin"
         "refresh_token_invalidated" -> "The ChatGPT session was revoked. $reLogin"
         "refresh_token_account_mismatch" -> "The ChatGPT session belongs to another workspace. $reLogin"
-        else -> "Could not refresh the ChatGPT session (HTTP ${status.value}). $reLogin"
+        "invalid_grant", "invalid_refresh_token" -> "The ChatGPT refresh token was rejected as invalid. $reLogin"
+        // a rejected credential comes back as 401. anything else means the request itself was refused —
+        // too soon after the previous refresh, most likely — and signing in again would not help.
+        else ->
+            buildString {
+                append(
+                    if (status == HttpStatusCode.Unauthorized)
+                        "The ChatGPT session was rejected (HTTP 401). $reLogin"
+                    else
+                        "The token endpoint refused the refresh (HTTP ${status.value})."
+                )
+                body?.collapseWhitespaceAndCap(REFRESH_ERROR_MAX_CHARS)?.let { append(" body=[$it]") }
+            }
     }
 }
 
+// the endpoint answers in more than one shape: `error` as a bare string, `error` as an object carrying
+// `code` and `message`, or the code at the top level. reading only the first is how a dead session gets
+// logged as a bare "HTTP 400" — openclaw's `TOKEN_FAILURE_REASON_BY_CODE` reads all of them.
 private fun refreshErrorCode(body: String): String? =
     runCatching {
         val root = authJson.parseToJsonElement(body).jsonObject
-        (root["error"]?.jsonPrimitive?.contentOrNullSafe()) ?: root["error_code"]?.jsonPrimitive?.contentOrNullSafe()
+        val error = root["error"]
+
+        (error as? JsonObject)?.get("code").stringOrNull()
+            ?: error.stringOrNull()
+            ?: root["error_code"].stringOrNull()
+            ?: root["code"].stringOrNull()
     }.getOrNull()
 
-private fun kotlinx.serialization.json.JsonPrimitive.contentOrNullSafe(): String? =
+private fun JsonElement?.stringOrNull(): String? = (this as? JsonPrimitive)?.contentOrNullSafe()
+
+private fun JsonPrimitive.contentOrNullSafe(): String? =
     runCatching { content }.getOrNull()
 
 /** Resolves `auth.json` from the configured `CODEX_HOME`, with the CLI default as fallback. */

@@ -56,14 +56,21 @@ internal fun codexClientVersion(): String = detectedClientVersion
 internal fun codexUserAgent(): String = "$CODEX_ORIGINATOR/${codexClientVersion()} (Vusan)"
 
 /**
- * Everything a plain HTTP call to the Codex backend needs: the token plus the two headers Cloudflare
- * checks. Shared so a second caller cannot quietly omit one and fail only once deployed to a VPS.
+ * The two headers Cloudflare checks on every host Codex talks to, `auth.openai.com` included — the CLI
+ * puts them on its auth route as well. Shared so a second caller cannot quietly omit one and fail only
+ * once deployed to a VPS.
  */
+internal fun codexCloudflareHeaders(): Map<String, String> =
+    mapOf(
+        "originator" to CODEX_ORIGINATOR,
+        "User-Agent" to codexUserAgent()
+    )
+
+/** Everything a plain HTTP call to the Codex backend needs: the token plus the Cloudflare headers. */
 fun codexImageHeaders(credentials: CodexCredentials): Map<String, String> =
     buildMap {
         put("Authorization", "Bearer ${credentials.accessToken}")
-        put("originator", CODEX_ORIGINATOR)
-        put("User-Agent", codexUserAgent())
+        putAll(codexCloudflareHeaders())
         credentials.accountId?.let { put("ChatGPT-Account-ID", it) }
     }
 
