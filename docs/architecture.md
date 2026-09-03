@@ -101,16 +101,19 @@ A normal user message travels:
    they forgot. An edit of a message older than `EDIT_TURN_WINDOW`, an edit into a slash command, and an edit of an
    album part are recorded but never answered; the reply anchors to the edited message, so once the chat has moved
    past it there is nothing left to answer.
-2. **Filter** — `MessageFilter.shouldHandle` drops messages the bot shouldn't answer (in groups:
-   only replies, mentions, or targeted commands); `TelegramBotRunner` then checks the allowlist (`ALLOWED_IDS`) and
-   rejects unknown chats/users. `BANNED_IDS` is checked first and wins over the allowlist, so a banned user is denied
-   inside a chat that is otherwise open; `TaskScheduler` skips their scheduled tasks the same way, moving each fire on
-   without running or announcing it. Two sinks run *before* this gate, on every allowlisted message, because what they
-   collect is precisely what nobody addressed to the bot: `recordGroupLog` writes the group transcript row, and
-   `learnSticker` teaches the catalog which sets the chat uses. Both sit ahead of album buffering too, so each part of
-   a gallery is seen individually. Past that gate `isAccepted` claims the message in `AnsweredMessages`, and a message
-   already claimed is dropped with a warning: Telegram hands the same one over more than once — as an edit of it, and
-   as a plain redelivery under a fresh update id, which the polling session's own duplicate filter does not catch.
+2. **Filter** — the allowlist (`ALLOWED_IDS`) comes first, in `TelegramBotRunner.passesAllowlist`, on the polling
+   loop itself: an update from a chat and user it does not name is dropped there, before the transcript, the sticker
+   catalog, album buffering or a dispatch coroutine can cost anything, and only a message actually aimed at the bot is
+   logged as denied. `BANNED_IDS` is checked first and wins over the allowlist, so a banned user is denied inside a
+   chat that is otherwise open; `TaskScheduler` skips their scheduled tasks the same way, moving each fire on without
+   running or announcing it. Two sinks then run on every allowlisted message, *before* the addressing check, because
+   what they collect is precisely what nobody addressed to the bot: `recordGroupLog` writes the group transcript row,
+   and `learnSticker` teaches the catalog which sets the chat uses. Both sit ahead of album buffering too, so each part
+   of a gallery is seen individually. `MessageFilter.shouldHandle` then drops messages the bot shouldn't answer (in
+   groups: only replies, mentions, or targeted commands), and past it `isAccepted` claims the message in
+   `AnsweredMessages`; a message already claimed is dropped with a warning, because Telegram hands the same one over
+   more than once — as an edit of it, and as a plain redelivery under a fresh update id, which the polling session's
+   own duplicate filter does not catch.
 3. **Normalize** — text is sanitized (`MessageSanitizer`); voice/audio is transcribed (`VoiceTranscriber` → `stt/`);
    stickers become a metadata prompt; a rich message — which never carries `text` — is flattened back into rich
    markdown (`telegram/inbound/RichMessageText.kt`), both as its own input and when one is quoted in a reply, capped at
@@ -494,7 +497,7 @@ A symptom-to-source map for finding the right file fast. Paths are under
 | Symptom                                                                          | Start here                                                                                                                                                                                                                                                                                            |
 |----------------------------------------------------------------------------------|-------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
 | The same message is answered twice, or editing one to add the mention does nothing | `TelegramBotRunner.startsTurnOnEdit` (what an edit must pass to start a turn) + `TelegramBotRunner.isAccepted`/`AnsweredMessages` (one turn per message, per-process, empty after a restart) |
-| Vusan ignores a message entirely                                                 | `telegram/inbound/MessageFilter.kt` (`shouldHandle` — group reply/mention rules), then `TelegramBotRunner.isAccepted`/`isIdAllowed` (the `ALLOWED_IDS` allowlist and the `BANNED_IDS` ban list)                                                                                                                                               |
+| Vusan ignores a message entirely                                                 | `TelegramBotRunner.passesAllowlist`/`isIdAllowed` (the `ALLOWED_IDS` allowlist and the `BANNED_IDS` ban list, applied on the polling loop), then `telegram/inbound/MessageFilter.kt` (`shouldHandle` — group reply/mention rules)                                                                                                                                               |
 | Container says `Up` but the bot answers nothing                                  | `infra/Heartbeat.kt` (the `/tmp/health` freshness signal, and the `ERROR` logged once when polling stalls) + `TelegramBotRunner.start` (the `getUpdates` generator hook that feeds it)                                                                                                                                        |
 | Reply says "still working on your previous request"                              | `agent/AgentRunner.kt` — the per-conversation `Mutex` rejects a second concurrent turn in the same chat                                                                                                                                                                                                                      |
 | Reply lands in the wrong chat, loses its reply anchor, or DM redirect misbehaves | `telegram/delivery/TelegramDelivery.kt` (routing/anchor/private-redirect *policy*)                                                                                                                                                                                                                             |

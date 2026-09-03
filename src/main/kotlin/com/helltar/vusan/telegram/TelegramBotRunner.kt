@@ -230,19 +230,19 @@ internal class TelegramBotRunner(
             val edited = update.editedMessage
 
             if (edited != null) {
+                if (!edited.passesAllowlist(profile)) continue
+
                 recordGroupLog(edited, edited = true)
 
-                if (edited.startsTurnOnEdit()) {
-                    // an edit reaches the agent through the same path as a new message, so without this the
-                    // two are indistinguishable in the log.
-                    log.info { "edit starts a turn: chat=${edited.chatIdLong} msg=${edited.messageIdLong}" }
+                if (edited.startsTurnOnEdit())
                     launchHandling(edited) { dispatch(edited, profile) }
-                }
 
                 continue
             }
 
             val message = update.message ?: continue
+
+            if (!message.passesAllowlist(profile)) continue
 
             recordGroupLog(message)
             learnSticker(message)
@@ -271,7 +271,7 @@ internal class TelegramBotRunner(
     // album buffering so each part of a gallery is logged in its own right.
     private fun CoroutineScope.recordGroupLog(message: Message, edited: Boolean = false) {
         val repository = groupLog ?: return
-        if (message.isPrivateChat || !message.isAllowed()) return
+        if (message.isPrivateChat) return
 
         val entry = message.toGroupLogEntry() ?: return
 
@@ -288,7 +288,6 @@ internal class TelegramBotRunner(
     private fun CoroutineScope.learnSticker(message: Message) {
         val catalog = stickerCatalog ?: return
         val sticker = message.sticker ?: return
-        if (!message.isAllowed()) return
 
         launchHandling(message) { catalog.observe(message.chatIdLong, sticker) }
     }
@@ -568,16 +567,29 @@ internal class TelegramBotRunner(
         )
     }
 
-    // the single gate every inbound path goes through, so it is also where a message is claimed for its
-    // one turn: the alternative is remembering to do that at each of the callers.
+    // nothing outside the allowlist is worth a single cycle: a chat the bot merely sits in must not cost a
+    // transcript row, a sticker set lookup, an album buffer or a dispatch coroutine. so this runs on the
+    // polling loop, ahead of all of them, and every path into [isAccepted] is behind it.
+    private fun Message.passesAllowlist(botProfile: BotProfile): Boolean {
+        if (isIdAllowed(chatIdLong, senderIdOrNull(), allowedIds, bannedIds)) return true
+
+        // only a message aimed at the bot is worth a line — the rest is chat traffic it happens to see.
+        if (shouldHandle(this, botProfile.userId, botProfile.username))
+            logDenied(denialReason(chatIdLong, senderIdOrNull(), bannedIds))
+
+        return false
+    }
+
+    // the single gate every dispatched message goes through, so it is also where a message is claimed for
+    // its one turn: the alternative is remembering to do that at each of the callers.
     private fun Message.isAccepted(botProfile: BotProfile, captionSource: Message = this): Boolean {
         if (!shouldHandle(this, botProfile.userId, botProfile.username, captionSource))
             return false
 
-        if (!isAllowed()) {
-            logDenied(denialReason(chatIdLong, senderIdOrNull(), bannedIds))
-            return false
-        }
+        // an edit reaches the agent through the same path as a new message, so without this the two are
+        // indistinguishable in the log. it sits behind the addressing check because an edit of a message
+        // nobody aimed at the bot starts nothing, and ahead of the claim so a refused duplicate is labeled.
+        if (editDate != null) log.info { "edit reaches the agent: chat=$chatIdLong msg=$messageIdLong" }
 
         // telegram hands the same message over more than once — as an edit of it, and as a plain
         // redelivery under a fresh update id, which the polling session's own duplicate filter misses. the
@@ -600,18 +612,14 @@ internal class TelegramBotRunner(
             inAlbum = mediaGroupId != null
         )
 
-    private fun Message.isAllowed(): Boolean = isAllowed(chatIdLong, senderIdOrNull())
-
-    private fun isAllowed(chatId: Long, userId: Long?): Boolean = isIdAllowed(chatId, userId, allowedIds, bannedIds)
-
 }
 
 /**
  * Whether an edited message should start a turn of its own. It may only do so when the edit is what made
  * the message addressed to the bot — someone adding the mention they forgot.
  *
- * The caller still runs the edited message through `shouldHandle`, the allowlist and the one-turn-per-message
- * claim, so this only decides what an edit itself changes.
+ * The edited message is already past the allowlist by the time this is asked, and the caller still runs it
+ * through `shouldHandle` and the one-turn-per-message claim, so this only decides what an edit itself changes.
  */
 internal fun startsTurnOnEdit(
     sentAt: Instant,
