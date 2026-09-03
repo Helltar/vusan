@@ -230,7 +230,8 @@ class CodexAuthStore(
         if (!authFile.isReadable())
             codexAuthError(
                 "Not signed in to ChatGPT: [$authFile] does not exist or is not readable. " +
-                        "Configure Codex with `cli_auth_credentials_store = \"file\"` and run `codex login` on this host."
+                        "Run `codex login` on this host as the user that runs Vusan. If the CLI keeps its " +
+                        "credentials in the OS keyring, switch it back with `cli_auth_credentials_store = \"file\"`."
             )
 
         val content =

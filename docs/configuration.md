@@ -3,6 +3,19 @@
 Vusan reads configuration from environment variables. For Docker, put them in a `.env` file in the repo root;
 [`.env.example`](../.env.example) is the copy-paste starting point. Blank values are treated as missing.
 
+- **Getting started** — [Minimum setup](#minimum-setup) · [Banning someone](#banning-someone) ·
+  [Rights in a group](#rights-in-a-group) · [Telegram command menu](#telegram-command-menu)
+- **The model** — [LLM provider](#llm-provider) · [ChatGPT subscription](#chatgpt-subscription) ·
+  [Daily token budget](#daily-token-budget)
+- **Who it is** — [Personality](#personality) · [Appearance](#appearance)
+- **Tools** — [Optional tools](#optional-tools) · [Web search](#web-search) · [TTS](#tts-tuning) ·
+  [STT](#stt-tuning) · [Image generation](#image-generation-tuning) · [Vision](#vision) ·
+  [Code execution](#code-execution)
+- **What it keeps** — [Memory](#memory) · [Conversation](#conversation) · [Group log](#group-log) ·
+  [Scheduled tasks](#scheduled-tasks) · [Agent loop](#agent-loop)
+- **Running it** — [Storage and binaries](#storage-and-binaries) · [Logging](#logging) ·
+  [Health check](#health-check)
+
 A value that is set but unreadable — `AGENT_MAX_ITERATIONS=7O`, `GROUP_LOG_ENABLED=off`, an ID that is not a number —
 stops the bot at startup with a message naming the variable and what it was given. It is never ignored in favour of
 the default: writing the variable down at all says the default was not wanted. Booleans take `true` or `false` in any
@@ -26,11 +39,14 @@ LLM_API_KEY=sk-proj-qwerty
 | `ALLOWED_IDS`        | Telegram user/group IDs Vusan answers.                |
 | `TELEGRAM_BOT_TOKEN` | Bot token from [@BotFather](https://t.me/BotFather). |
 | `LLM_PROVIDER`       | LLM backend; see [LLM provider](#llm-provider).      |
-| `LLM_MODEL`          | Model id for the chosen provider. Vusan also states it in the system prompt, so "which model are you?" is answered with what is actually deployed instead of a guess. |
+| `LLM_MODEL`          | Model id for the chosen provider.                    |
 | `LLM_API_KEY`        | API key for the chosen provider.                     |
 
 `ALLOWED_IDS` accepts commas, whitespace, or semicolons as separators. Positive IDs are users; negative IDs are groups.
 Empty/unset means Vusan answers nobody.
+
+Vusan states `LLM_MODEL` in its own system prompt, so "which model are you?" is answered with what is actually
+deployed instead of a guess.
 
 ## Banning someone
 
@@ -90,11 +106,12 @@ takes whatever model string it serves. `codex` runs on a ChatGPT subscription in
 | `LLM_BASE_URL`                | —             | Server address. Required by `openai-compatible`, unused by the others.       |
 | `LLM_OPENAI_ENDPOINT`         | `completions` | Which OpenAI API to call: `completions` or `responses`.                      |
 | `LLM_REASONING_EFFORT`        | model default | Reasoning depth: `none`, `minimal`, `low`, `medium`, or `high`.              |
-| `LLM_REQUEST_TIMEOUT_SECONDS` | `120`         | Seconds one LLM call may hang before it fails and Vusan replies with an error. Raise it for slow local servers and heavy reasoning models. |
-| `LLM_CONTEXT_WINDOW_TOKENS`   | model metadata or `16384` | Context size override. Native models use catalog metadata; unknown compatible models fall back to `16384`. |
+| `LLM_REQUEST_TIMEOUT_SECONDS` | `120`         | Seconds one LLM call may hang before Vusan gives up and replies with an error. |
+| `LLM_CONTEXT_WINDOW_TOKENS`   | model metadata or `16384` | Context size override.                                            |
 
 `LLM_OPENAI_ENDPOINT` applies to `openai-compatible` only; `LLM_REASONING_EFFORT` applies to both
-`openai-compatible` and `codex`. Give `LLM_BASE_URL` no `/v1` — the API path is appended for you.
+`openai-compatible` and `codex`. Give `LLM_BASE_URL` no `/v1` — the API path is appended for you. Raise the timeout for
+slow local servers and heavy reasoning models.
 
 An OpenAI model released after the `openai` provider's model list was last updated is rejected there as unknown, but
 stays reachable through `openai-compatible` pointed at OpenAI itself. Newer reasoning models additionally refuse tools
@@ -142,39 +159,46 @@ LLM_PROVIDER=codex
 LLM_MODEL=gpt-5.6-terra
 ```
 
-Use a dedicated `CODEX_HOME` for the bot rather than sharing the interactive CLI's live credential file. In that
-directory's `config.toml`, force [file-backed credentials](https://developers.openai.com/codex/auth) because Vusan
-cannot read tokens kept in the OS keyring:
-
-```toml
-cli_auth_credentials_store = "file"
-```
-
-Then sign in as the same user that runs the bot, with the same `CODEX_HOME` value that goes in Vusan's `.env`:
+Sign in as the user that runs the bot:
 
 ```bash
-CODEX_HOME=/home/vusan/.codex-vusan codex login
-CODEX_HOME=/home/vusan/.codex-vusan codex login --device-auth
-CODEX_HOME=/home/vusan/.codex-vusan codex login status
+codex login
 ```
 
-That writes `$CODEX_HOME/auth.json`. Vusan rereads it before every request, so a later CLI login, logout, workspace
-switch, or token rotation is visible without restarting the bot. It refreshes OAuth sessions a few minutes before
-expiry and atomically writes the rotated token back with owner-only permissions; if the file changed during the
-refresh, the newer CLI-written version wins. In a container, mount the dedicated directory read-write. Treat
-`auth.json` like a password because it holds live access and refresh tokens.
+Add `--device-auth` when the host has no browser, and `codex login status` checks the session afterwards. `codex logout`
+ends it; Vusan then replies that its connection needs renewing until you sign in again.
+
+That writes `~/.codex/auth.json` — the home directory of whoever ran the command, so a bot running under its own user
+already has its own session. `CODEX_HOME` points both the CLI and Vusan somewhere else; set it in `.env` and pass the
+same value to `codex login` if you want the credentials elsewhere:
+
+```dotenv
+CODEX_HOME=/home/vusan/.codex-vusan
+```
+
+Vusan reads that `auth.json` and cannot reach the OS keyring, so if your setup switched the CLI to keyring storage, put
+`cli_auth_credentials_store = "file"` back in that directory's `config.toml`.
+
+Vusan rereads `auth.json` before every request, so a later CLI login, logout, workspace switch, or token rotation is
+visible without restarting the bot. Sharing one file with an interactive CLI is fine — a refresh from either side keeps
+the other working, and if the file changed underneath a refresh the newer version wins. A ChatGPT access token lives ten
+days; Vusan refreshes it about a day before expiry and atomically writes the rotated token back with owner-only
+permissions. In a container, mount the directory read-write. Treat `auth.json` like a password because it holds live
+access and refresh tokens.
 
 `codex login --with-access-token` is also accepted, but that credential has no refresh token. Vusan uses it while it is
 fresh and asks for a replacement as expiry approaches instead of failing a user request after it expires.
 
-`codex logout` ends the session; Vusan then replies that its connection needs renewing until you sign in again.
+The catalog of models your plan actually offers is read at startup, and several settings are checked against it:
 
-`LLM_MODEL` is checked against the models your plan actually offers, and startup fails with the available ids if it does
-not match — Codex and the OpenAI Platform API expose different model sets, so a Platform-only id would otherwise fail on
-the first message with an opaque error. The same catalog supplies the context window, supported input modalities, and
-reasoning efforts. That makes the Codex chat model the default vision model only when it accepts images, and rejects an
-unsupported `LLM_REASONING_EFFORT` during startup. `LLM_CONTEXT_WINDOW_TOKENS` is only needed to override the discovered
-window. Older catalog responses without capability metadata retain the compatible image-capable default.
+- **`LLM_MODEL` is checked against it** — startup fails with the available ids if it does not match. Codex and the
+  OpenAI Platform API expose different model sets, so a Platform-only id would otherwise fail on the first message
+  with an opaque error.
+- **Vision follows the chat model** — it becomes the default vision model only when the catalog says it reads images.
+- **`LLM_REASONING_EFFORT` is validated** — an effort the model does not offer stops startup instead of a turn.
+- **The context window comes from there too** — `LLM_CONTEXT_WINDOW_TOKENS` is only needed to override it.
+
+Older catalog responses without capability metadata retain the compatible image-capable default.
 
 `CODEX_SERVICE_TIER=priority` buys the faster serving tier — roughly the speed-up the Codex CLI offers as `/fast`, at
 the price of spending the plan's allowance quicker. It is off unless you set it, and startup fails if the chosen model
@@ -186,9 +210,9 @@ CODEX_SERVICE_TIER=priority
 
 Two limits are worth knowing. Usage is metered against the plan rather than billed per token, so a heavy day ends in a
 "usage limit reached" reply that says how long the window still has to run — `LLM_DAILY_TOKEN_BUDGET` still works but is
-not what stops you first. And this route depends on an endpoint OpenAI documents for its own Codex clients rather than
-for third-party apps, so an OpenAI-side change can break it; `LLM_PROVIDER=openai` with an API key stays the supported
-fallback.
+not what stops you first. And this route depends on an endpoint OpenAI ships for its own Codex clients rather than
+documents for third-party apps, so an OpenAI-side change can break it; `LLM_PROVIDER=openai` with an API key stays the
+supported fallback.
 
 ### Daily token budget
 
@@ -198,9 +222,12 @@ as well as a plain daily spending cap.
 
 | Variable                                 | Default   | Description                                                                              |
 |------------------------------------------|-----------|------------------------------------------------------------------------------------------|
-| `LLM_DAILY_TOKEN_BUDGET`                 | unlimited | Input plus output tokens allowed per day. Unset means no ceiling and no bookkeeping at all. |
-| `LLM_TOKEN_BUDGET_TIMEZONE`              | `UTC`     | The zone whose midnight starts the next budget, e.g. `Europe/Kyiv`. Match it to your provider's reset — OpenAI's is `UTC`. |
-| `LLM_TOKEN_BUDGET_FAIR_SHARE_AT_PERCENT` | `70`      | How much of the day is first come, first served. Past that point one person can no longer take the rest of it. `100` turns sharing off. |
+| `LLM_DAILY_TOKEN_BUDGET`                 | unlimited | Input plus output tokens allowed per day.                     |
+| `LLM_TOKEN_BUDGET_TIMEZONE`              | `UTC`     | The zone whose midnight starts the next budget, e.g. `Europe/Kyiv`. |
+| `LLM_TOKEN_BUDGET_FAIR_SHARE_AT_PERCENT` | `70`      | How much of the day is first come, first served; `100` turns sharing off. |
+
+Leaving `LLM_DAILY_TOKEN_BUDGET` unset means no ceiling and no bookkeeping at all. Match the timezone to your
+provider's reset — OpenAI's is `UTC`.
 
 Everything Vusan asks the chat model counts: replies, its own history recaps, group-chat digests, and reading images
 when vision runs on the chat model. A separate `OPENAI_VISION_API_KEY` model has its own key and quota and is not
@@ -312,8 +339,10 @@ search:
 
 | Variable                          | Default             | Description                                                                                        |
 |-----------------------------------|---------------------|----------------------------------------------------------------------------------------------------|
-| `OPENAI_STT_MODEL`                | `gpt-4o-transcribe` | Speech-to-text model.                                                                              |
-| `OPENAI_STT_MAX_DURATION_SECONDS` | `300`               | Max voice/video length to transcribe; a longer voice message is refused, a longer video is watched without its sound. |
+| `OPENAI_STT_MODEL`                | `gpt-4o-transcribe` | Speech-to-text model.                     |
+| `OPENAI_STT_MAX_DURATION_SECONDS` | `300`               | Longest voice or video Vusan transcribes. |
+
+Past that length a voice message is refused, and a video is watched without its sound.
 
 ### Image generation tuning
 
@@ -370,10 +399,11 @@ back, as text only. Vision calls share the `LLM_REQUEST_TIMEOUT_SECONDS` budget.
 
 ## Code execution
 
-The `codeExecution` tool lets the agent run Python in an isolated sandbox to compute exact answers, transform data, and
-render charts (`numpy`, `pandas`, `matplotlib`, `sympy`, `scipy`, `Pillow`). A file the user uploads (or one they reply
-to) is placed in the working directory so the script can read it by name. The sandbox executes untrusted code on an
-internal-only network with no secrets, no internet, and no host mounts. Its own source and internals are described in
+The `codeExecution` tool lets the agent run Python in an isolated sandbox to compute exact answers, transform data,
+render charts, and write Word and PDF files — `numpy`, `pandas`, `matplotlib`, `sympy`, `scipy`, `Pillow`,
+`python-docx`, `fpdf2` and `pypdf` are available. A file the user uploads (or one they reply to) is placed in the
+working directory so the script can read it by name. The sandbox executes untrusted code on an internal-only network
+with no secrets, no internet, and no host mounts. Its own source and internals are described in
 [architecture.md](architecture.md#code-execution-service).
 
 Docker starts it by default:
@@ -419,11 +449,12 @@ model looping on a broken tool stops costing tokens instead of running forever.
 
 | Variable               | Default | Description                                                                      |
 |------------------------|---------|-----------------------------------------------------------------------------------|
-| `AGENT_MAX_ITERATIONS` | `70`    | Steps one turn may take. A tool round is two steps, so this allows roughly 34 tool calls. |
+| `AGENT_MAX_ITERATIONS` | `70`    | Steps one turn may take.                                                          |
 
-Reaching the ceiling is not an error: the last steps are reserved for a wrap-up in which the agent answers from what it
-already gathered and says which parts it could not finish. Deep research over many sources is what runs into it — raise
-the value if such answers arrive routinely cut short, at the cost of a longer, more expensive worst-case turn.
+A tool round is two steps, so the default allows roughly 34 tool calls. Reaching the ceiling is not an error: the last
+steps are reserved for a wrap-up in which the agent answers from what it already gathered and says which parts it could
+not finish. Deep research over many sources is what runs into it — raise the value if such answers arrive routinely cut
+short, at the cost of a longer, more expensive worst-case turn.
 
 ## Conversation
 
@@ -437,13 +468,13 @@ own recap and its own retention.
 
 | Variable                               | Default | Description                                                        |
 |----------------------------------------|---------|--------------------------------------------------------------------|
-| `CONVERSATION_MAX_RECENT_INTERACTIONS` | `24`    | Complete unsummarized interactions offered to the model context; the context window decides how many of them fit. |
-| `CONVERSATION_MAX_STORED_INTERACTIONS` | `100`   | Complete raw interactions retained after they have been summarized. |
+| `CONVERSATION_MAX_RECENT_INTERACTIONS` | `24`    | Unsummarized interactions offered to the model.                    |
+| `CONVERSATION_MAX_STORED_INTERACTIONS` | `100`   | Raw interactions retained after they have been summarized.         |
 | `CONVERSATION_RETENTION_DAYS`          | `90`    | Days summarized raw interactions remain in SQLite.                 |
 
-Cleanup runs when that thread completes a turn. `/clear` removes the raw transcript and its recap for the chat it was
-sent from, leaving the caller's other chats and everyone else's history alone; durable memory and scheduled tasks
-remain.
+How many of those recent interactions actually fit is decided by the context window. Cleanup runs when that thread
+completes a turn. `/clear` removes the raw transcript and its recap for the chat it was sent from, leaving the caller's
+other chats and everyone else's history alone; durable memory and scheduled tasks remain.
 
 ## Group log
 

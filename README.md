@@ -30,8 +30,8 @@ Copy the env template:
 cp .env.example .env
 ```
 
-Only a few values are required to start (see
-[minimum setup](docs/configuration.md#minimum-setup)); everything else is optional:
+Only these values are required to start; everything else is optional and covered in
+[configuration.md](docs/configuration.md):
 
 ```dotenv
 ALLOWED_IDS=123456789,-1001234567890
@@ -135,8 +135,8 @@ Prerequisites: JDK 21, plus `ffmpeg` and `yt-dlp` on `PATH`.
 
 Built on [Koog](https://github.com/JetBrains/koog) — JetBrains' Kotlin agent framework — with
 [TelegramBots](https://github.com/rubenlagus/TelegramBots) for Telegram and Exposed/SQLite for
-storage. Works with OpenAI, Anthropic, Google, DeepSeek, or any OpenAI-compatible server — see
-[configuration.md](docs/configuration.md#llm-provider).
+storage. Works with OpenAI, Anthropic, Google, DeepSeek, any OpenAI-compatible server, or a ChatGPT
+subscription instead of a paid API key — see [configuration.md](docs/configuration.md#llm-provider).
 
 For a tour of the layers and how a message flows through them, see
 [architecture.md](docs/architecture.md).
