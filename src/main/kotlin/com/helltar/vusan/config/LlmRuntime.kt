@@ -150,7 +150,7 @@ private fun resolveCodexRuntime(
                         timeoutConfig = timeoutConfig,
                         responsesAPIPath = "responses"
                     ),
-                httpClientFactory = codexHttpClientFactory(auth)
+                httpClientFactory = codexHttpClientFactory(auth, codexRoutingHint(config.model, config.serviceTier))
             ),
         model = codexModel(config),
         chatParams = codexParams(config, OPENAI_PROMPT_CACHE_KEY),
@@ -181,7 +181,8 @@ private fun codexParams(config: LlmProviderConfig.Codex, promptCacheKey: String)
         include = listOf(OpenAIInclude.REASONING_ENCRYPTED_CONTENT),
         parallelToolCalls = false,
         promptCacheKey = promptCacheKey,
-        reasoning = config.reasoningEffort?.let { ReasoningConfig(effort = it) }
+        reasoning = config.reasoningEffort?.let { ReasoningConfig(effort = it) },
+        serviceTier = config.serviceTier
     )
 
 // prompt_cache_key is an openai extension, so do not leak it to arbitrary compatible servers that may

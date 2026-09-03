@@ -3,6 +3,7 @@ package com.helltar.vusan.config
 import ai.koog.http.client.KoogHttpClient
 import ai.koog.http.client.KoogHttpClientException
 import ai.koog.http.client.ktor.KtorKoogHttpClient
+import ai.koog.prompt.executor.clients.openai.base.models.ServiceTier
 import io.ktor.client.*
 import io.ktor.client.engine.cio.*
 import io.ktor.client.plugins.api.*
@@ -30,7 +31,16 @@ internal const val CODEX_BACKEND_BASE_URL = "https://chatgpt.com/backend-api/cod
 // value, and keep the honest name in the User-Agent comment rather than pretending outright.
 internal const val CODEX_ORIGINATOR = "codex_cli_rs"
 
+private const val CODEX_ROUTING_HINT_HEADER = "x-codex-routing-hint"
 private const val SSE_DATA_PREFIX = "data:"
+
+/**
+ * What the CLI tells the backend to route a turn on: the model, plus the serving tier when one is asked
+ * for. The tier is honoured without it today — it travels in the request body — but this is how Codex
+ * itself asks, and on this endpoint matching the CLI is what keeps working.
+ */
+internal fun codexRoutingHint(model: String, serviceTier: ServiceTier?): String =
+    "model=$model" + serviceTier?.let { ";tier=${it.requestValue}" }.orEmpty()
 
 /**
  * The Koog HTTP factory Codex requests go through: a Ktor client that stamps a currently-valid ChatGPT
@@ -41,7 +51,7 @@ private const val SSE_DATA_PREFIX = "data:"
  * survive to the wire on the raw-lines path this bridge depends on, and because Koog otherwise freezes
  * `Authorization` at construction from a `String` api key — which cannot work for a token that expires.
  */
-internal fun codexHttpClientFactory(auth: CodexAuthStore): KoogHttpClient.Factory =
+internal fun codexHttpClientFactory(auth: CodexAuthStore, routingHint: String): KoogHttpClient.Factory =
     CodexHttpClientFactory(
         delegate =
             KtorKoogHttpClient.Factory(
@@ -58,6 +68,7 @@ internal fun codexHttpClientFactory(auth: CodexAuthStore): KoogHttpClient.Factor
                                         "Bearer ${credentials.accessToken}"
                                     )
                                     request.headers.append("originator", CODEX_ORIGINATOR)
+                                    request.headers.append(CODEX_ROUTING_HINT_HEADER, routingHint)
 
                                     // the whitelist is matched on the User-Agent shape too, so lead with the
                                     // CLI token and installed version, then say who is really calling.

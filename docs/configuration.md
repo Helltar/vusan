@@ -176,6 +176,14 @@ reasoning efforts. That makes the Codex chat model the default vision model only
 unsupported `LLM_REASONING_EFFORT` during startup. `LLM_CONTEXT_WINDOW_TOKENS` is only needed to override the discovered
 window. Older catalog responses without capability metadata retain the compatible image-capable default.
 
+`CODEX_SERVICE_TIER=priority` buys the faster serving tier — roughly the speed-up the Codex CLI offers as `/fast`, at
+the price of spending the plan's allowance quicker. It is off unless you set it, and startup fails if the chosen model
+does not offer the tier, so check the model first:
+
+```dotenv
+CODEX_SERVICE_TIER=priority
+```
+
 Two limits are worth knowing. Usage is metered against the plan rather than billed per token, so a heavy day ends in a
 "usage limit reached" reply that says how long the window still has to run — `LLM_DAILY_TOKEN_BUDGET` still works but is
 not what stops you first. And this route depends on an endpoint OpenAI documents for its own Codex clients rather than

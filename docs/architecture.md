@@ -387,7 +387,8 @@ A normal user message travels:
   from spending the same single-use refresh token. Because Koog bakes the `Authorization` header into the client at
   construction, `config/CodexHttpClient` re-resolves the bearer token and account header on every request instead.
   Signing in, out, and device-code stay the CLI's job; this bridge requires file-backed credentials and cannot read the
-  OS keyring.
+  OS keyring. `CODEX_SERVICE_TIER` rides along as the Responses `service_tier` field and in the `x-codex-routing-hint`
+  header the CLI sends beside it, both fixed for the process at startup.
 
   The backend accepts streaming requests only (`stream=false` and `store=true` are both rejected), and its final
   `response.completed` event carries an empty `output`. So `CodexHttpClient` answers Koog's ordinary non-streaming
@@ -400,8 +401,8 @@ A normal user message travels:
 
   Model discovery runs at startup through `config/CodexCatalog`: the account's own catalog decides which ids and context
   window are valid, since Codex and the Platform API expose different model sets. Input modalities decide whether the
-  model may be reused for vision, and advertised reasoning efforts validate `LLM_REASONING_EFFORT`; older catalog
-  entries without those fields keep the compatibility defaults. A catalog that cannot be read is a warning, not a
+  model may be reused for vision, advertised reasoning efforts validate `LLM_REASONING_EFFORT`, and advertised service
+  tiers validate `CODEX_SERVICE_TIER`; older catalog entries without those fields keep the compatibility defaults. A catalog that cannot be read is a warning, not a
   failure — the endpoint is undocumented, so a shape change there must not take a working bot down — but a model the
   account plainly cannot run stops startup with the list of ones it can. `OPENAI_VISION_API_KEY` still explicitly
   selects a separate OpenAI vision model.

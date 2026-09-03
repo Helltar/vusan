@@ -1,6 +1,7 @@
 package com.helltar.vusan.config
 
 import ai.koog.prompt.executor.clients.openai.base.models.ReasoningEffort
+import ai.koog.prompt.executor.clients.openai.base.models.ServiceTier
 import io.github.cdimascio.dotenv.dotenv
 import io.github.oshai.kotlinlogging.KotlinLogging
 import java.time.ZoneId
@@ -237,6 +238,7 @@ data class AppConfig(
                 return LlmProviderConfig.Codex(
                     model = requireEnv("LLM_MODEL"),
                     reasoningEffort = resolveReasoningEffort(),
+                    serviceTier = resolveCodexServiceTier(),
                     authFile = defaultCodexAuthFile(readEnv("CODEX_HOME")),
                     requestTimeout = requestTimeout,
                     contextWindowTokens = contextWindowTokens
@@ -283,6 +285,18 @@ data class AppConfig(
 
             return enumOrNull<ReasoningEffort>(raw)
                 ?: error("Unsupported LLM_REASONING_EFFORT=[$raw]. Supported values: ${supportedValues<ReasoningEffort>()}")
+        }
+
+        // `default` is Codex's own sentinel for "no tier chosen" rather than a tier the catalog offers, so
+        // it reads as off here too instead of failing the catalog check with a value that means nothing.
+        private fun resolveCodexServiceTier(): ServiceTier? {
+            val raw = readEnv("CODEX_SERVICE_TIER") ?: return null
+
+            val tier =
+                enumOrNull<ServiceTier>(raw)
+                    ?: error("Unsupported CODEX_SERVICE_TIER=[$raw]. Supported values: ${supportedValues<ServiceTier>()}")
+
+            return tier.takeUnless { it == ServiceTier.DEFAULT }
         }
 
         private inline fun <reified T : Enum<T>> enumOrNull(raw: String): T? =

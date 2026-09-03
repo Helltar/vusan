@@ -5,6 +5,7 @@ import ai.koog.prompt.executor.clients.openai.OpenAIChatParams
 import ai.koog.prompt.executor.clients.openai.OpenAIModels
 import ai.koog.prompt.executor.clients.openai.OpenAIResponsesParams
 import ai.koog.prompt.executor.clients.openai.base.models.ReasoningEffort
+import ai.koog.prompt.executor.clients.openai.base.models.ServiceTier
 import ai.koog.prompt.executor.clients.openai.models.OpenAIInclude
 import ai.koog.prompt.llm.LLMCapability
 import ai.koog.prompt.llm.LLMProvider
@@ -211,13 +212,37 @@ class LlmRuntimeTest {
         assertEquals(400_000L, codex(contextWindowTokens = 400_000).model.contextLength)
     }
 
-    private fun codex(contextWindowTokens: Long? = null, supportsVision: Boolean = true): LlmRuntime =
+    @Test
+    fun `codex asks for no serving tier by default`() {
+        assertNull(assertIs<OpenAIResponsesParams>(codex().chatParams).serviceTier)
+        assertEquals("model=gpt-5.6-terra", codexRoutingHint("gpt-5.6-terra", serviceTier = null))
+    }
+
+    @Test
+    fun `a configured serving tier reaches both the request params and the routing hint`() {
+        val runtime = codex(serviceTier = ServiceTier.PRIORITY)
+
+        assertEquals(ServiceTier.PRIORITY, assertIs<OpenAIResponsesParams>(runtime.chatParams).serviceTier)
+        // a history recap is billed against the same allowance, so it travels on the same tier
+        assertEquals(ServiceTier.PRIORITY, assertIs<OpenAIResponsesParams>(runtime.compactionParams).serviceTier)
+        assertEquals(
+            "model=gpt-5.6-terra;tier=priority",
+            codexRoutingHint("gpt-5.6-terra", ServiceTier.PRIORITY)
+        )
+    }
+
+    private fun codex(
+        contextWindowTokens: Long? = null,
+        supportsVision: Boolean = true,
+        serviceTier: ServiceTier? = null
+    ): LlmRuntime =
         resolveLlmRuntime(
             LlmProviderConfig.Codex(
                 model = "gpt-5.6-terra",
                 requestTimeout = 120.seconds,
                 contextWindowTokens = contextWindowTokens,
-                supportsVision = supportsVision
+                supportsVision = supportsVision,
+                serviceTier = serviceTier
             ),
             codexAuth = CodexAuthStore(Http.createClient(MockEngine { error("no calls expected") }))
         )

@@ -1,6 +1,7 @@
 package com.helltar.vusan.config
 
 import ai.koog.prompt.executor.clients.openai.base.models.ReasoningEffort
+import ai.koog.prompt.executor.clients.openai.base.models.ServiceTier
 import com.helltar.vusan.infra.Http
 import io.ktor.client.engine.mock.*
 import io.ktor.http.*
@@ -57,6 +58,27 @@ class CodexCatalogTest {
 
         assertTrue(models.single().supportsVision)
         assertNull(models.single().supportedReasoningEfforts)
+        assertNull(models.single().supportedServiceTiers)
+    }
+
+    @Test
+    fun `the catalog reports which serving tiers a model offers`() = runBlocking {
+        val models = fetchCodexModels(
+            catalogClient(
+                """
+                {"models":[
+                  {"slug":"fast-model","service_tiers":[{"id":"priority","name":"Fast",
+                   "description":"1.5x speed, increased usage"}]},
+                  {"slug":"plain-model","service_tiers":[]}
+                ]}
+                """.trimIndent()
+            ),
+            store()
+        )
+
+        assertEquals(setOf("priority"), models.first().supportedServiceTiers)
+        // an explicit empty array is the catalog saying this model has no tier beyond the standard one
+        assertEquals(emptySet(), models.last().supportedServiceTiers)
     }
 
     @Test
@@ -105,6 +127,50 @@ class CodexCatalogTest {
 
         assertTrue("high" in error.message.orEmpty(), error.message.orEmpty())
         assertTrue("low" in error.message.orEmpty(), error.message.orEmpty())
+    }
+
+    @Test
+    fun `a service tier the model does not offer fails before startup`() {
+        val config =
+            LlmProviderConfig.Codex(
+                model = "text-model",
+                serviceTier = ServiceTier.PRIORITY,
+                requestTimeout = 120.seconds
+            )
+
+        val error =
+            assertFailsWith<IllegalArgumentException> {
+                applyCodexModelMetadata(config, codexModel(supportedServiceTiers = emptySet()))
+            }
+
+        assertTrue("priority" in error.message.orEmpty(), error.message.orEmpty())
+        assertTrue("text-model" in error.message.orEmpty(), error.message.orEmpty())
+    }
+
+    @Test
+    fun `a service tier the model offers passes the catalog check`() {
+        val config =
+            LlmProviderConfig.Codex(
+                model = "text-model",
+                serviceTier = ServiceTier.PRIORITY,
+                requestTimeout = 120.seconds
+            )
+
+        val configured = applyCodexModelMetadata(config, codexModel(supportedServiceTiers = setOf("priority")))
+
+        assertEquals(ServiceTier.PRIORITY, configured.serviceTier)
+    }
+
+    @Test
+    fun `an unknown tier list leaves the configured tier alone`() {
+        val config =
+            LlmProviderConfig.Codex(
+                model = "text-model",
+                serviceTier = ServiceTier.PRIORITY,
+                requestTimeout = 120.seconds
+            )
+
+        assertEquals(ServiceTier.PRIORITY, applyCodexModelMetadata(config, codexModel()).serviceTier)
     }
 
     @Test
@@ -217,14 +283,16 @@ class CodexCatalogTest {
 private fun codexModel(
     supportsVision: Boolean = true,
     contextWindowTokens: Long? = null,
-    supportedEfforts: Set<ReasoningEffort>? = null
+    supportedEfforts: Set<ReasoningEffort>? = null,
+    supportedServiceTiers: Set<String>? = null
 ): CodexModel =
     CodexModel(
         id = "text-model",
         displayName = "Text Model",
         contextWindowTokens = contextWindowTokens,
         supportsVision = supportsVision,
-        supportedReasoningEfforts = supportedEfforts
+        supportedReasoningEfforts = supportedEfforts,
+        supportedServiceTiers = supportedServiceTiers
     )
 
 private fun catalogClient(body: String) = Http.createClient(MockEngine { respondJson(body) })

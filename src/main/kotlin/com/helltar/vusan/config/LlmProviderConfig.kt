@@ -1,6 +1,7 @@
 package com.helltar.vusan.config
 
 import ai.koog.prompt.executor.clients.openai.base.models.ReasoningEffort
+import ai.koog.prompt.executor.clients.openai.base.models.ServiceTier
 import java.nio.file.Path
 import kotlin.time.Duration
 
@@ -49,6 +50,9 @@ sealed interface LlmProviderConfig {
     data class Codex(
         val model: String,
         val reasoningEffort: ReasoningEffort? = null,
+        // the plan's faster serving tier. it is not free: the same allowance is spent quicker, so it stays
+        // off unless the operator asks for it.
+        val serviceTier: ServiceTier? = null,
         val supportsVision: Boolean = true,
         val authFile: Path = defaultCodexAuthFile(),
         override val requestTimeout: Duration,

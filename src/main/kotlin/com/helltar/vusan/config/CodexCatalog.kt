@@ -1,6 +1,7 @@
 package com.helltar.vusan.config
 
 import ai.koog.prompt.executor.clients.openai.base.models.ReasoningEffort
+import ai.koog.prompt.executor.clients.openai.base.models.ServiceTier
 import io.github.oshai.kotlinlogging.KotlinLogging
 import io.ktor.client.*
 import io.ktor.client.call.*
@@ -74,13 +75,20 @@ fun codexImageHeaders(credentials: CodexCredentials): Map<String, String> =
         credentials.accountId?.let { put("ChatGPT-Account-ID", it) }
     }
 
+/** The value a tier travels as, which is also the id the model catalog lists it under. */
+internal val ServiceTier.requestValue: String
+    get() = name.lowercase()
+
 /** A model the signed-in ChatGPT account may actually run through Codex. */
 data class CodexModel(
     val id: String,
     val displayName: String,
     val contextWindowTokens: Long?,
     val supportsVision: Boolean,
-    val supportedReasoningEfforts: Set<ReasoningEffort>?
+    val supportedReasoningEfforts: Set<ReasoningEffort>?,
+    // the serving tiers this model offers beyond the standard one, by their request value. an empty set
+    // means the catalog says none; `null` means it did not say.
+    val supportedServiceTiers: Set<String>?
 )
 
 @Serializable
@@ -94,8 +102,12 @@ private data class CodexModelInfo(
     @SerialName("max_context_window") val maxContextWindow: Long? = null,
     @SerialName("input_modalities") val inputModalities: List<String>? = null,
     @SerialName("supported_reasoning_efforts") val supportedReasoningEfforts: JsonElement? = null,
-    @SerialName("supported_reasoning_levels") val supportedReasoningLevels: JsonElement? = null
+    @SerialName("supported_reasoning_levels") val supportedReasoningLevels: JsonElement? = null,
+    @SerialName("service_tiers") val serviceTiers: List<CodexServiceTierInfo>? = null
 )
+
+@Serializable
+private data class CodexServiceTierInfo(val id: String = "")
 
 /**
  * The model catalog the signed-in subscription is entitled to.
@@ -124,7 +136,9 @@ suspend fun fetchCodexModels(http: HttpClient, auth: CodexAuthStore): List<Codex
                 // older catalogs omit modalities; those models predate this metadata and accepted images.
                 supportsVision = it.inputModalities?.any { modality -> modality.equals("image", true) } ?: true,
                 supportedReasoningEfforts =
-                    (it.supportedReasoningEfforts ?: it.supportedReasoningLevels).reasoningEfforts()
+                    (it.supportedReasoningEfforts ?: it.supportedReasoningLevels).reasoningEfforts(),
+                supportedServiceTiers =
+                    it.serviceTiers?.mapNotNull { tier -> tier.id.takeIf(String::isNotBlank) }?.toSet()
             )
         }
 }
@@ -162,6 +176,17 @@ internal fun applyCodexModelMetadata(
             "LLM_REASONING_EFFORT=[${configuredEffort.name.lowercase()}] is not supported by " +
                     "LLM_MODEL=[${model.id}]. Supported values: " +
                     supportedEfforts.map { it.name.lowercase() }.sorted().joinToString()
+        }
+    }
+
+    val configuredTier = config.serviceTier
+    val supportedTiers = model.supportedServiceTiers
+
+    if (configuredTier != null && supportedTiers != null) {
+        require(configuredTier.requestValue in supportedTiers) {
+            "CODEX_SERVICE_TIER=[${configuredTier.requestValue}] is not supported by " +
+                    "LLM_MODEL=[${model.id}]. Supported values: " +
+                    supportedTiers.sorted().joinToString().ifEmpty { "none" }
         }
     }
 
