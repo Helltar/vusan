@@ -49,6 +49,17 @@ application {
     mainClass.set("com.helltar.vusan.MainKt")
 }
 
+// the running bot reports its own version from here, so a deployed container can be identified from
+// its first log line. a classpath run has no manifest and says `dev` instead.
+tasks.jar {
+    manifest {
+        attributes(
+            "Implementation-Title" to project.name,
+            "Implementation-Version" to project.version
+        )
+    }
+}
+
 kotlin {
     jvmToolchain(21)
 }

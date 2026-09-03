@@ -22,6 +22,7 @@ import ai.koog.prompt.executor.clients.openai.OpenAILLMClient
 import ai.koog.prompt.executor.clients.openai.OpenAIModels
 import ai.koog.prompt.executor.clients.openai.OpenAIResponsesParams
 import ai.koog.prompt.executor.clients.openai.base.models.ReasoningEffort
+import ai.koog.prompt.executor.clients.openai.base.models.ServiceTier
 import ai.koog.prompt.executor.clients.openai.models.OpenAIInclude
 import ai.koog.prompt.executor.clients.openai.models.ReasoningConfig
 import ai.koog.prompt.llm.LLMCapability
@@ -55,6 +56,10 @@ val LlmRuntime.reasoningEffort: ReasoningEffort?
             is OpenAIResponsesParams -> params.reasoning?.effort
             else -> null
         }
+
+// same as the effort above: the tier reaches the model through the request params and nowhere else.
+val LlmRuntime.serviceTier: ServiceTier?
+    get() = (chatParams as? OpenAIResponsesParams)?.serviceTier
 
 fun resolveLlmRuntime(config: LlmProviderConfig, codexAuth: CodexAuthStore? = null): LlmRuntime {
     val timeoutConfig = connectionTimeouts(config.requestTimeout)

@@ -37,6 +37,8 @@ import kotlin.time.Duration.Companion.minutes
 private val log = KotlinLogging.logger {}
 
 suspend fun main() = coroutineScope {
+    log.info { "Starting Vusan ${appVersion()}" }
+
     val config = AppConfig.fromEnv()
 
     var http: HttpClient? = null
@@ -131,7 +133,7 @@ suspend fun main() = coroutineScope {
                 groupLog
             )
 
-        logStartup(llm, vision, toolRegistryFactory.availableToolNames, config.tokenBudget)
+        logStartup(config, llm, vision, toolRegistryFactory.availableToolNames)
 
         val botJob = botRunner.start(this)
         val schedulerJob = scheduler.launchIn(this)
@@ -150,6 +152,10 @@ suspend fun main() = coroutineScope {
         Db.disconnect()
     }
 }
+
+// stamped into the jar manifest at build time and read back off any class from it. a classpath run
+// (`./gradlew run`) has no manifest, so it says so instead of inventing a number.
+private fun appVersion(): String = AppConfig::class.java.`package`?.implementationVersion ?: "dev"
 
 private fun createVoiceTranscriber(http: HttpClient, config: AppConfig): VoiceTranscriber? {
     val sttConfig =
@@ -178,7 +184,9 @@ private suspend fun codexPreflight(
 
     val plan = auth.planType()
 
-    log.info { "Codex: signed in to ChatGPT${plan?.let { " (plan=[$it])" }.orEmpty()}" }
+    log.info {
+        "Codex: signed in to ChatGPT${plan?.let { " (plan=[$it])" }.orEmpty()} auth=[${config.authFile}]"
+    }
 
     val discovered = verifyCodexModel(http, auth, config.model) ?: return config
 
@@ -187,21 +195,18 @@ private suspend fun codexPreflight(
     return applyCodexModelMetadata(config, discovered)
 }
 
+// ordered as an operator reads it: which model, how much room it has, what it may spend, what it can
+// see, where it writes, and what it can call.
 private fun logStartup(
+    config: AppConfig,
     llm: LlmRuntime,
     vision: VisionRuntime?,
-    toolNames: List<String>,
-    tokenBudget: TokenBudgetConfig
+    toolNames: List<String>
 ) {
     log.info {
-        "Starting Vusan: provider=[${llm.providerLabel}] model=[${llm.model.id}]" +
-                llm.reasoningEffort?.let { " reasoningEffort=[${it.name.lowercase()}]" }.orEmpty()
-    }
-
-    if (tokenBudget.dailyTokens == null) {
-        log.info { "Daily token budget: unlimited" }
-    } else {
-        log.info { "Daily token budget: tokens=${tokenBudget.dailyTokens} resetZone=[${tokenBudget.zone}]" }
+        "LLM: provider=[${llm.providerLabel}] model=[${llm.model.id}]" +
+                llm.reasoningEffort?.let { " reasoningEffort=[${it.name.lowercase()}]" }.orEmpty() +
+                llm.serviceTier?.let { " serviceTier=[${it.requestValue}]" }.orEmpty()
     }
 
     if (llm.model.contextLength == null) {
@@ -213,6 +218,14 @@ private fun logStartup(
         log.info { "Model context window: tokens=${llm.model.contextLength}" }
     }
 
+    val tokenBudget = config.tokenBudget
+
+    if (tokenBudget.dailyTokens == null) {
+        log.info { "Daily token budget: unlimited" }
+    } else {
+        log.info { "Daily token budget: tokens=${tokenBudget.dailyTokens} resetZone=[${tokenBudget.zone}]" }
+    }
+
     if (vision != null) {
         log.info { "Vision: provider=[${vision.providerLabel}] model=[${vision.model.id}]" }
     } else {
@@ -222,5 +235,6 @@ private fun logStartup(
         }
     }
 
+    log.info { "Database: [${config.databasePath}]" }
     log.info { "Tools enabled (${toolNames.size}): [${toolNames.joinToString(", ")}]" }
 }

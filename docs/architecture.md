@@ -466,6 +466,12 @@ reads the reference photo self-portraits are drawn from: `SELF_IMAGE_FILE` when 
 `TaskScheduler` and the sticker description worker, then block on the runner job until shutdown (closing the executor,
 HTTP client, and DB in `finally`).
 
+What that leaves in the log, in order: a `Starting Vusan <version>` banner (read from the jar manifest, `dev` on a
+classpath run), then whatever the Codex preflight and the optional-tool checks have to say, then one summary block from
+`logStartup` just before the runner starts — the LLM line (provider, model, reasoning effort, service tier), context
+window, daily budget, vision, database file, enabled tools. `TelegramBotRunner` closes it with the bot's own handle and
+the allowlist.
+
 The runner's first act is `publishCommandMenu` (`telegram/CommandMenu.kt`): a `setMyCommands` call per `Language`, so
 the menu Telegram shows follows `dispatchText` without an operator step. It writes the same list BotFather's
 `/setcommands` edits, which means a manual edit there is replaced on the next start. A rejected call is a warning, not
