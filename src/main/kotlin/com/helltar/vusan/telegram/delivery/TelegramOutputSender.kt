@@ -32,6 +32,7 @@ import org.telegram.telegrambots.meta.generics.TelegramClient
  */
 internal object TelegramOutputSender {
 
+    private const val VIDEO_NOTE_FILENAME = "video-note.mp4"
     private const val VIDEO_THUMBNAIL_FILENAME = "thumbnail.jpg"
     private const val VIDEO_COVER_FILENAME = "cover.jpg"
 
@@ -502,30 +503,39 @@ internal object TelegramOutputSender {
         videoNote: BotOutput.VideoNote,
         formattingFileNotice: String
     ) {
-        sendMediaWithDocumentFallback(
-            client = client,
-            chatId = chatId,
-            replyParameters = replyParameters,
-            mediaLabel = "sendVideoNote",
-            bytes = videoNote.bytes,
-            filename = "video-note.mp4",
-            caption = null,
-            formattingFileNotice = formattingFileNotice,
-            send = {
-                client.api<Message> {
-                    executeAsync(
-                        SendVideoNote.builder()
-                            .chatId(chatId)
-                            .videoNote(videoNote.bytes.asInputFile("video-note.mp4"))
-                            .duration(videoNote.durationSeconds)
-                            .length(videoNote.size)
-                            .replyParameters(replyParameters)
-                            .build()
-                    )
-                }
+        runCatching {
+            client.api<Message> {
+                executeAsync(
+                    SendVideoNote.builder()
+                        .chatId(chatId)
+                        .videoNote(videoNote.bytes.asInputFile(VIDEO_NOTE_FILENAME))
+                        .duration(videoNote.durationSeconds)
+                        .length(videoNote.size)
+                        .replyParameters(replyParameters)
+                        .build()
+                )
             }
-        )
+        }.recoverCatching { e ->
+            e.rethrowIfCancellation()
+            rethrowIfReplyNotFound(e, replyParameters)
+            rethrowIfChatUnreachable(e)
+
+            // a recipient can refuse voice and video messages from anyone outside their contacts, which
+            // comes back as `VOICE_MESSAGES_FORBIDDEN`. the same mp4 is still allowed as an ordinary
+            // video, and one that plays in the chat beats the document the generic fallback would attach.
+            log.warn(e) { "sendVideoNote rejected for chat=$chatId, sending the same mp4 as a video" }
+            sendVideo(client, chatId, replyParameters, videoNote.asVideo(), caption = null, formattingFileNotice)
+        }.getOrThrow()
     }
+
+    private fun BotOutput.VideoNote.asVideo(): BotOutput.Video =
+        BotOutput.Video(
+            bytes = bytes,
+            filename = VIDEO_NOTE_FILENAME,
+            durationSeconds = durationSeconds,
+            width = size,
+            height = size
+        )
 
     private suspend fun sendQuiz(
         client: TelegramClient,

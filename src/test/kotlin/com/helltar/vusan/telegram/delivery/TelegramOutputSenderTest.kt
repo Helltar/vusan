@@ -195,6 +195,28 @@ class TelegramOutputSenderTest {
     }
 
     @Test
+    fun `round video falls back to an inline video when the recipient forbids voice messages`() = runBlocking {
+        val client = RecordingClient(failVideoNote = true)
+
+        TelegramOutputSender.send(
+            client = client.proxy,
+            item = BotOutput.VideoNote(bytes = byteArrayOf(1, 2, 3), durationSeconds = 7, size = 384),
+            chatId = 1L,
+            replyParameters = null,
+            caption = null,
+            formattingFileNotice = "notice"
+        )
+
+        assertEquals(listOf("sendVideoNote", "sendVideo"), client.methods)
+
+        val request = assertIs<SendVideo>(client.requests.last())
+        assertEquals("video-note.mp4", request.video.mediaName)
+        assertEquals(384, request.width)
+        assertEquals(384, request.height)
+        assertEquals(7, request.duration)
+    }
+
+    @Test
     fun `rich message is sent via sendRichMessage`() = runBlocking {
         val client = RecordingClient()
 
@@ -251,7 +273,8 @@ class TelegramOutputSenderTest {
         private val failHtmlText: Boolean = false,
         private var failHtmlCaptionOnce: Boolean = false,
         private val failRichMessage: Boolean = false,
-        private val failDocument: Boolean = false
+        private val failDocument: Boolean = false,
+        private val failVideoNote: Boolean = false
     ) {
         val methods = mutableListOf<String>()
         val requests = mutableListOf<Any>()
@@ -288,6 +311,7 @@ class TelegramOutputSenderTest {
                 failRichMessage && method == "sendRichMessage" -> "Bad Request: can't parse entities"
                 failDocument && method == "sendDocument" -> "Bad Request: file too big"
                 failPhoto && method == "sendPhoto" -> "Bad Request: PHOTO_INVALID_DIMENSIONS"
+                failVideoNote && method == "sendVideoNote" -> "Bad Request: VOICE_MESSAGES_FORBIDDEN"
                 failHtmlText && method == "sendMessage" -> "Bad Request: can't parse entities"
                 else -> null
             }

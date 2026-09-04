@@ -157,7 +157,8 @@ then docs per the triggers above.
 - `TelegramDelivery` owns route choice, reply anchoring, reply-missing retry,
   and private-blocked notices.
 - `TelegramOutputSender` maps each `BotOutput` kind to its Bot API call, picks
-  the fallback wrapping it, and owns the media-group fallback.
+  the fallback wrapping it, and owns the kind-specific ones: the media-group
+  fallback, and a round video note degrading to an ordinary video.
   `TelegramRequests` holds the raw Bot API request builders and nothing else.
 - `TelegramSendFallbacks` owns the kind-agnostic rejection handling: plain-text
   retry, media-to-document, markdown document, text/caption as a document. Add a
