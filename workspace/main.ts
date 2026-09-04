@@ -26,6 +26,13 @@ const SWEEP_INTERVAL_MS = 60_000;
 // encode is meant to work — but nothing else would ever reap one that was simply abandoned.
 const lastTouched = new Map<string, { workspace: Workspace; at: number }>();
 
+// what a command was, fit for a log line: model-authored text goes in capped and on one line,
+// or a heredoc would spread one run across a screenful of output
+function forLog(command: string): string {
+  const flat = command.replace(/\s+/g, " ").trim();
+  return flat.length > 200 ? `${flat.slice(0, 200)}…` : flat;
+}
+
 function json(body: unknown, status = 200): Response {
   return new Response(JSON.stringify(body), {
     status,
@@ -58,9 +65,11 @@ async function handleExec(body: Record<string, unknown>, url: URL): Promise<Resp
   // a refusal below is an answer the model has to read, not a transport failure, so it travels
   // as 200 with an `error` field; the bot's shared HTTP client turns any non-2xx into an exception
   if (busy.has(workspace.id)) {
+    console.log(`refused workspace=[${workspace.id}] reason=[busy]`);
     return json({ error: "This workspace is already running a command. Wait for it to finish." });
   }
   if (running >= config.maxConcurrent) {
+    console.log(`refused workspace=[${workspace.id}] reason=[at capacity] running=[${running}]`);
     return json({ error: "The workspace service is at capacity. Try again shortly." });
   }
 
@@ -69,6 +78,7 @@ async function handleExec(body: Record<string, unknown>, url: URL): Promise<Resp
   // clean up" instead of a write that fails halfway through a build
   const before = await usedBytes(workspace);
   if (before > quotaBytes) {
+    console.log(`refused workspace=[${workspace.id}] reason=[out of space] used=[${before}]`);
     return json({
       error: `The workspace is out of space (${Math.round(before / 1048576)} MB of ` +
         `${config.quotaMb} MB). Delete files before running anything else.`,
@@ -81,6 +91,16 @@ async function handleExec(body: Record<string, unknown>, url: URL): Promise<Resp
   running++;
   try {
     const result = await runCommand(workspace, command, timeout);
+
+    // one line per run, so that "what has this workspace been doing" is answerable at all.
+    // there is nowhere else it is recorded: the full output goes into the workspace, which its
+    // own commands can delete.
+    console.log(
+      `exec workspace=[${workspace.id}] exit=[${result.exitCode}]` +
+        `${result.timedOut ? " timedOut=[true]" : ""} elapsed=[${result.elapsedMs}ms]` +
+        ` out=[${result.stdout.bytes + result.stderr.bytes}B] cmd=[${forLog(command)}]`,
+    );
+
     return json({
       exitCode: result.exitCode,
       timedOut: result.timedOut,

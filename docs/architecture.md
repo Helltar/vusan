@@ -429,7 +429,9 @@ all land in the volume and survive, while the image itself stays immutable and n
 
 - **`main.ts`** — HTTP server on port 8080: `POST /exec`, `PUT`/`GET /files`, `GET /list`, `DELETE /workspace`, and
   `GET /health`. Owns what the container cannot express: one command at a time per workspace, a global concurrency cap,
-  the disk quota, and the idle sweep — a command started with `setsid` outlives its run on purpose, so a workspace
+  the disk quota, the per-command audit line — workspace, exit code, elapsed, output size and the
+  command flattened to 200 characters, which is the only record of what ran anywhere, since the full
+  log lives in the workspace and the workspace's own commands can delete it — and the idle sweep — a command started with `setsid` outlives its run on purpose, so a workspace
   nobody has touched for `WORKSPACE_IDLE_MINUTES` has whatever it left behind killed by uid.
   Being busy, at capacity, or out of space answers `200` with an `error` field rather than a `4xx`,
   because the bot's shared HTTP client turns every non-2xx into an exception and those three are answers the model has

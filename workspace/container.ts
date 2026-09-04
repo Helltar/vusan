@@ -97,6 +97,11 @@ async function ensureRunning(workspace: Workspace): Promise<void> {
 
   const started = await engine(args);
   if (!started.ok) throw new Error(`Could not start the workspace container: ${started.out}`);
+
+  console.log(
+    `started container=[${name}] image=[${config.image}] runtime=[${config.runtime ?? "default"}] ` +
+      `mem=[${config.memory}] cpus=[${config.cpus}]`,
+  );
 }
 
 export async function runCommand(
