@@ -51,6 +51,7 @@ import com.helltar.vusan.tools.vision.VideoVisionClient
 import com.helltar.vusan.tools.vision.VisionTools
 import com.helltar.vusan.tools.vision.WhisperVideoAudioTranscriber
 import com.helltar.vusan.tools.voice.ElevenLabsTtsClient
+import com.helltar.vusan.tools.voice.VideoNoteTools
 import com.helltar.vusan.tools.voice.VoiceTools
 import com.helltar.vusan.tools.youtube.*
 import io.github.oshai.kotlinlogging.KotlinLogging
@@ -132,6 +133,15 @@ class ToolRegistryFactory(
             ElevenLabsTtsClient(http, it)
         }
 
+    // the round video message is the portrait plus the voice, so without a reference photo there is
+    // nothing to put in the circle and the tool is left out rather than sending an empty one.
+    private val selfPortrait =
+        selfImage?.reference?.bytes
+            ?: null.also {
+                if (elevenLabsTtsClient != null)
+                    log.warn { "No reference photo — the round video message tool is disabled" }
+            }
+
     private val openAiImageClient =
         when (openAiImage?.route) {
             ImageRoute.CODEX ->
@@ -206,8 +216,11 @@ class ToolRegistryFactory(
                 tools(VisionTools(imageVisionClient, videoVisionClient, context.attachedFile))
             }
 
-            if (chat.voiceNotes && elevenLabsTtsClient != null && elevenLabsTts != null) {
-                tools(VoiceTools(elevenLabsTtsClient, elevenLabsTts, outbox))
+            if (elevenLabsTtsClient != null && elevenLabsTts != null) {
+                if (chat.voiceNotes) tools(VoiceTools(elevenLabsTtsClient, elevenLabsTts, outbox))
+
+                if (chat.videoNotes && selfPortrait != null)
+                    tools(VideoNoteTools(elevenLabsTtsClient, elevenLabsTts, selfPortrait, outbox))
             }
 
             if (chat.photos && openAiImageClient != null && openAiImage != null) {
