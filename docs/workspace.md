@@ -45,7 +45,40 @@ WORKSPACE_TOKEN=$(openssl rand -hex 32) \
 docker compose -f compose.workspace.yaml up -d
 ```
 
-Put both values in a `.env` next to the file so they survive a restart.
+Put both values in a `.env` next to the file so they survive a restart. `WORKSPACE_IMAGE` points
+both the supervisor and every workspace container at a build of your own instead of the published
+one. `WORKSPACE_DIR` overrides the directory if `/srv/workspaces` is not where the disk is mounted — it is passed to the service
+*and* used as the mount path on both sides of the colon, because a workspace container's mount is
+resolved by the engine on the host rather than inside the supervisor that asked for it.
+
+This file runs `WORKSPACE_ISOLATION=container`: every workspace gets a container of its own, from
+the same image, holding nothing but that workspace's directory. The supervisor never runs a command
+itself here — it only starts, execs into, and tears down containers — which is why it can drop
+almost every capability while each workspace still gets its own network policy and its own
+`WORKSPACE_MEM` / `WORKSPACE_CPUS` / `WORKSPACE_PIDS_LIMIT`.
+
+It reaches the engine through the socket mounted into it. **Reaching that socket is reaching this
+host**, which is the whole reason for the separate machine: there is nothing here to take. If the
+host runs rootless podman instead, point `WORKSPACE_SOCKET` at its socket — its API is
+docker-compatible, so the client baked into the image drives it unchanged, and `WORKSPACE_ENGINE`
+only needs changing if you put podman's own CLI in an image of your own — and an escape then lands
+on an unprivileged account rather than root. Expect to solve uid mapping first: this design gives
+each workspace its own uid on the host, and rootless podman maps container uids into a subuid
+range instead. That path is not tested.
+
+Once it works, `WORKSPACE_RUNTIME=runsc` puts every workspace behind gVisor — a userspace kernel
+between the workspace and the host's, so an escape needs a bug in gVisor rather than in Linux. Install
+`runsc`, register it with the engine (`runsc install`, then restart it), and set the variable. Measured
+cost on this workload: a warm command went from 28 ms to 38 ms and an `npm install` plus build was
+unchanged, so the overhead is not a reason to avoid it.
+
+**gVisor and `WORKSPACE_NETWORK` interact.** Its network stack has no iptables, so a workspace under
+`runsc` cannot install its own egress policy and the container refuses to start. That refusal is
+correct, and the answer is not to weaken it: set `WORKSPACE_NETWORK=external` *only* once the machine's
+own egress is filtered from outside — the firewall rules below — and the container then knows the job
+is done elsewhere.
+
+`kata` gives each workspace a real kernel instead, and needs nested virtualisation on the machine.
 
 **4. Point the bot at it.** In the bot's `.env`:
 
@@ -57,6 +90,27 @@ WORKSPACE_TOKEN=<the same secret>
 Then remove the `vusan-workspace` service from the bot machine's `compose.yaml`, or simply never
 start it: `docker compose up -d vusan`.
 
+## Updating it later
+
+Update both images together. The bot ships the API and the tool descriptions the service answers to,
+so a half-updated pair produces failures that read like anything but a version mismatch.
+
+On the machine running the workspaces:
+
+```bash
+docker compose -f compose.workspace.yaml pull
+docker ps -aq --filter name=vusan-ws- | xargs -r docker rm -f
+docker compose -f compose.workspace.yaml up -d
+```
+
+**The middle line is the one that is easy to miss.** A workspace container keeps the image it was
+started from, and an idle one lives for `WORKSPACE_IDLE_MINUTES` — so without it the supervisor
+updates and the workspaces do not, for up to an hour. They are disposable by design: the files are on
+the volume and survive being removed, and the next command starts a fresh container.
+
+`WORKSPACE_IMAGE` in that machine's `.env` decides which image is pulled, and is also what every
+workspace container is started from, so a tag changes in one place rather than two.
+
 ## Locking the machine down
 
 Two rules matter more than the rest, and both belong **outside** the VM. Rules inside it are
@@ -66,22 +120,32 @@ not.
 - **Block every local range outbound.** `10.0.0.0/8`, `172.16.0.0/12`, `192.168.0.0/16`,
   `169.254.0.0/16` (which is where cloud metadata credentials live), `100.64.0.0/10`. On Proxmox:
   Datacenter → the VM → Firewall → a rule per range, direction `out`, action `DROP`. This also
-  stops the workspace machine from reaching the bot machine, while the bot still reaches it.
+  stops the workspace machine from reaching the bot machine, while the bot still reaches it —
+  replies to the bot's own connections are `ESTABLISHED` and are accepted before these rules.
+
+  Two things on the machine itself would otherwise be caught by those ranges. Give it a **public
+  resolver** rather than the one on the local network — its names are not this machine's business
+  and a public one needs no exception. And if the private link is inside one of the ranges (a
+  `10.10.10.0/24` bridge is inside `10.0.0.0/8`), let that subnet through *before* the drops, or
+  the machine cannot answer the bot at all.
 - **Expose nothing inbound but the API, and only on the private link.** The compose file already
   binds to `WORKSPACE_BIND` rather than every interface; the firewall should agree.
 
 Keep the kernel on this machine patched aggressively. It is the boundary now, and patching it
 cannot break the bot.
 
-## What this does not change yet
+## What it still does not change
 
-Workspaces on this machine are still separated by unix user inside one container, not by a
-container each. That means people are separated by file permissions rather than namespaces, and
-resource limits are shared rather than per person — `/sys/fs/cgroup` is read-only inside a
-container, so a per-workspace CPU or memory limit is not something the shared runner can apply. The
-process list is shared too: `ps` shows one person what another is running, though not their files,
-their environment, or any way to signal them, and hiding it would cost `CAP_SYS_ADMIN`.
+A container per workspace is a boundary between people, not a boundary against a determined escape.
+Every workspace container on this machine is started by the same engine and, unless
+`WORKSPACE_RUNTIME` says otherwise, shares the host kernel with the others — so a kernel bug still
+leads out of one and onto this machine, which is why nothing valuable may live here and why the
+machine is worth re-imaging on a schedule.
 
-A container per workspace (`WORKSPACE_ISOLATION=container`) is the intended next step and is not
-built yet; the service refuses to start if it is asked for. Once it exists it belongs here, on
-this machine, where spawning containers does not put the bot's host at stake.
+Workspace directories are owned by unprivileged uids and mounted one per container, but they all sit
+on this host's filesystem: something that escapes onto the host reaches every one of them. Only the
+runtime changes that (`runsc`, `kata`), not the arrangement.
+
+`WORKSPACE_ISOLATION=shared` remains available here and is what the bot's own machine runs. It needs
+no socket at all, and on a machine that already holds nothing, the gap between the two is much
+narrower than it is next to the bot.

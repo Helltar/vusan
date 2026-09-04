@@ -43,6 +43,10 @@ Keep this file concise and actionable; put product docs in `README.md` or `docs/
   Kotlin application reaches it only over HTTP through
   `tools/workspace/WorkspaceClient.kt`, and knows nothing about how it isolates
   what it runs.
+- The two runners behind `runner.ts` (`exec.ts` beside the supervisor,
+  `container.ts` one container per workspace) must stay interchangeable: same
+  API, same image, same Kotlin side. Anything true of only one of them belongs
+  in that file, not in `main.ts`.
 - `TelegramBotRunner` normalizes inbound updates into a prompt; `AgentTurns`
   builds the `AgentRequest` from there and owns the turn up to its delivery.
   Tools consume `RequestContext`/`AttachedFile`; they should not reach back into

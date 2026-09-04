@@ -1,6 +1,7 @@
 import { config } from "./config.ts";
 import { type Capture, capture, LogSink } from "./output.ts";
 import type { Workspace } from "./registry.ts";
+import { workspaceEnvironment } from "./env.ts";
 
 export interface ExecResult {
   exitCode: number;
@@ -12,39 +13,6 @@ export interface ExecResult {
 }
 
 const KILL_GRACE_MS = 3_000;
-
-/**
- * Nothing in here may wait on a prompt: a command blocked on stdin would sit until the
- * timeout and report nothing useful. stdin is /dev/null and the environment tells every
- * common tool it is not on a terminal.
- */
-function environment(workspace: Workspace): Record<string, string> {
-  const home = workspace.home;
-  return {
-    HOME: home,
-    USER: `ws${workspace.slot}`,
-    LOGNAME: `ws${workspace.slot}`,
-    SHELL: "/bin/bash",
-    PWD: home,
-    TMPDIR: `${home}/tmp`,
-    PATH:
-      `${home}/.local/bin:${home}/node_modules/.bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin`,
-    LANG: "C.UTF-8",
-    LC_ALL: "C.UTF-8",
-    TERM: "dumb",
-    NO_COLOR: "1",
-    CI: "1",
-    DEBIAN_FRONTEND: "noninteractive",
-    GIT_TERMINAL_PROMPT: "0",
-    PIP_DISABLE_PIP_VERSION_CHECK: "1",
-    PIP_NO_INPUT: "1",
-    PYTHONUNBUFFERED: "1",
-    npm_config_yes: "true",
-    npm_config_fund: "false",
-    npm_config_audit: "false",
-    npm_config_progress: "false",
-  };
-}
 
 export async function runCommand(
   workspace: Workspace,
@@ -62,7 +30,7 @@ export async function runCommand(
     args: ["bash", "-lc", command],
     cwd: workspace.home,
     clearEnv: true,
-    env: environment(workspace),
+    env: workspaceEnvironment(workspace.home, workspace.slot),
     uid: workspace.uid,
     gid: workspace.gid,
     stdin: "null",

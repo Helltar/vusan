@@ -446,6 +446,13 @@ it.
 
 Set `WORKSPACE_NETWORK=none` to take the internet away entirely; installs and downloads then stop working.
 
+`WORKSPACE_NETWORK=external` says the opposite: *something else* filters egress and this container must
+not try. It exists because gVisor's network stack has no iptables, so a workspace running under
+`WORKSPACE_RUNTIME=runsc` cannot install the policy and would otherwise refuse to start — which is the
+right behaviour, since a policy that quietly gives up when it cannot be applied is worse than no policy
+at all. Only set it where a layer outside the machine enforces the same restriction, and write down
+where that layer is.
+
 ### Tuning
 
 All of these go in the repo-root `.env`; the default `compose.yaml` passes them into the workspace container.
@@ -457,7 +464,7 @@ All of these go in the repo-root `.env`; the default `compose.yaml` passes them 
 | `WORKSPACE_MAX_CONCURRENT`      | `2`     | workspace          | Commands running at once across every workspace.             |
 | `WORKSPACE_IDLE_MINUTES`        | `60`    | workspace          | Untouched for this long, anything still running is killed.   |
 | `WORKSPACE_QUOTA_MB`            | `2048`  | workspace          | Disk a workspace may use before it is asked to clean up.     |
-| `WORKSPACE_NETWORK`             | `open`  | workspace          | `open` or `none`, as above.                                  |
+| `WORKSPACE_NETWORK`             | `open`  | workspace          | `open`, `none`, or `external`, as above.                     |
 | `WORKSPACE_TOKEN`               | —       | Vusan + workspace  | Shared secret; required when the service is not on this host. |
 
 `WORKSPACE_MAX_TIMEOUT_SECONDS` is shared on purpose: the service clamps a requested timeout to it, while Vusan uses the
@@ -477,15 +484,20 @@ with `failed tty get` rather than hanging, and the batch forms (`top -b -n1`, `p
 One thing people in the default setup *can* see of each other: the process list is shared, so a
 command line is visible to everyone with a workspace on that host — `ps` shows what someone else is
 running, though not their files, their environment, or any way to signal them. Hiding it needs
-`CAP_SYS_ADMIN`, which is not a trade worth making. It goes away with a container per workspace.
+`CAP_SYS_ADMIN`, which is not a trade worth making here; a container per workspace removes it
+instead, along with the shared resource ceiling — see [workspace.md](workspace.md).
 
 ### Running it somewhere safer
 
-The default puts workspaces in one container, separated by unix user. That protects the host from what runs in them,
-but it is the weaker of the two arrangements: people are separated only by file permissions, and resource limits are
-shared rather than per person. Moving the service to a machine of its own — where a container per workspace becomes
-possible and an escape lands somewhere holding no token, no database and no history — is described in
-[workspace.md](workspace.md).
+The default puts every workspace in one container, separated by unix user. That protects the host from what runs in
+them, but it is the weaker of the two arrangements: people are separated by file permissions rather than namespaces,
+they share one resource ceiling, and they can see each other's command lines.
+
+`WORKSPACE_ISOLATION=container` gives each workspace a container of its own instead — its own filesystem, process
+table, network namespace, and its own `WORKSPACE_MEM`/`WORKSPACE_CPUS`/`WORKSPACE_PIDS_LIMIT` rather than a share of
+one. It needs a container engine socket, and reaching that socket is reaching the host holding it, so it belongs on a
+machine that runs nothing else. That deployment — and why the machine being disposable matters as much as the
+isolation — is [workspace.md](workspace.md).
 
 ## Memory
 

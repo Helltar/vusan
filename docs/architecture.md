@@ -437,10 +437,17 @@ all land in the volume and survive, while the image itself stays immutable and n
 - **`registry.ts`** — which uid a workspace runs as. Telegram ids do not fit `uid_t`, so a slot comes out of a pool
   baked into the image (the rootfs is read-only, so `/etc/passwd` cannot grow a user at runtime) and is held for life,
   because the files on the volume are owned by it.
-- **`exec.ts`** — runs the command through `setsid` so the timeout can take down the whole process tree by process
-  group, not just the shell that spawned it. The timeout lives here on purpose: a `timeout` inside the workspace is the
-  command's own child and is bypassed by the code it is meant to bound. The environment is built from nothing
-  (`clearEnv`) and tells every common tool it is not on a terminal, so nothing blocks on a prompt.
+- **`runner.ts`** — picks the runner and is the only file that knows which one is in use. **`exec.ts`** is `shared`:
+  the command runs beside the supervisor under its own uid, wrapped in `setsid` so the timeout can take down the whole
+  process tree by process group rather than only the shell that spawned it. **`container.ts`** is `container`: one
+  container per workspace, started on demand from this same image with nothing mounted but that workspace's directory,
+  which is what buys it a filesystem, a process table, a network namespace and a share of CPU and memory of its own.
+  It deliberately does **not** call `setsid` — an engine already gives an `exec` its own session, so calling it forks,
+  and the direct child then exits ahead of the real command and takes the output stream with it.
+- **`env.ts`** — the environment both runners hand a command: built from nothing rather than inherited, and telling
+  every common tool it is not on a terminal so that nothing blocks on a prompt. In both, the timeout is enforced from
+  outside the workspace, because a `timeout` inside it is the command's own child and is bypassed by the code it is
+  meant to bound.
 - **`output.ts`** — a command's stdout is attacker-controlled bytes on their way into a Telegram message. It is capped
   *while* the pipe is drained (a reader that stops reading blocks the writer and the command hangs), stripped of ANSI
   and control characters, collapsed at carriage returns so a progress bar arrives as its final line, and forced back
@@ -448,10 +455,13 @@ all land in the volume and survive, while the image itself stays immutable and n
   so the model can `grep` it rather than rerun the command.
 - **`files.ts`** — path resolution that refuses anything leaving the workspace, symlinks resolved *before* the check so
   a link planted by the workspace's own code cannot read or overwrite the rest of the volume.
-- **`entrypoint.sh`** — installs the egress policy in the container's own network namespace as root, then hands off to
-  the supervisor; every workspace afterwards runs as an unprivileged uid that cannot undo it. It **fails closed**: a
-  rule that will not install stops the container, because unfiltered egress looks exactly like a working setup until
-  the day it matters.
+- **`netpolicy.sh` / `entrypoint.sh`** — one image, two roles. `supervisor` serves the API; `workspace` is what a
+  per-workspace container runs, and does nothing but hold its namespace open for `exec`. Each installs the egress
+  policy as root in whichever network namespace it owns before anything untrusted runs, and a `container`-mode
+  supervisor skips it because nothing untrusted runs there at all. It **fails closed**: a rule that will not install
+  stops the container, because unfiltered egress looks exactly like a working setup until the day it matters. The one
+  way out is `WORKSPACE_NETWORK=external`, which has to be set deliberately and states that a layer below this
+  container filters egress instead — needed under gVisor, whose network stack has no iptables.
 
 Isolation is not enforced here but around it, and the layers are deliberate. The container drops every capability
 except the few the supervisor needs (`NET_ADMIN`/`NET_RAW` to install the rules, `SETUID`/`SETGID`/`CHOWN`/
@@ -462,10 +472,16 @@ zombies that eat `pids_limit`.
 `WORKSPACE_NETWORK=open` gives a workspace the whole internet except every local range, filtered by destination IP in
 the kernel rather than by hostname — an allowlisted name can resolve to a private address on the second lookup, and a
 name-based check walks straight into it. IPv6 is not configured for a workspace at all, which removes `::ffff:0:0/96`
-and the rest of that bypass class. `WORKSPACE_ISOLATION` selects the runner. Only `shared` exists — workspaces are
-processes under their own uid inside this container — and an unknown value stops the service rather than quietly
-running everything in one container after someone asked for more. A container per workspace is the intended second
-runner and belongs on a machine of its own, see [`workspace.md`](workspace.md).
+and the rest of that bypass class. `WORKSPACE_ISOLATION` selects the runner, and an unknown value stops the service rather than quietly
+running everything in one container after someone asked for more. `shared` is the compose default and needs nothing:
+workspaces are processes under their own uid beside the supervisor. `container` needs an engine socket, which is root
+on the host holding it, so it belongs on a machine that runs nothing else — see [`workspace.md`](workspace.md).
+`WORKSPACE_ENGINE` names the client (`podman` speaks the same CLI, and its API is docker-compatible, so the client
+baked into the image drives either) and `WORKSPACE_RUNTIME` hands each workspace to `runsc` or `kata` without
+anything else changing.
+
+The mount is why `WORKSPACE_ROOT` has to be the same path inside the supervisor and on its host in `container` mode:
+a workspace container's `-v` is resolved by the engine, on the host, not inside the supervisor that asked for it.
 
 `WORKSPACE_MAX_TIMEOUT_SECONDS` is read by both sides: the service clamps a requested timeout to it, while
 `WorkspaceClient` budgets its HTTP wait around the same value.
@@ -524,7 +540,7 @@ A symptom-to-source map for finding the right file fast. Paths are under
 | Vusan floods a chat or stalls on Telegram 429 over a long multi-message reply    | `outbox/BotOutbox.kt` (text and album coalescing + `MAX_TEXT_MESSAGES` cap) + `telegram/delivery/TelegramDelivery.kt` (`INTER_MESSAGE_DELAY` pacing)                                                                                                                                                                     |
 | A specific tool misbehaves                                                       | `tools/<feature>/<Feature>Tools.kt` for the tool surface, plus its `<Feature>Client.kt` for the external call                                                                                                                                                                                         |
 | Vusan will not hand a file from the chat back, or sends it under the wrong name  | `tools/files/FileTools.sendChatFile` (the `file_id` path and `chatFilename`) + `telegram/TelegramApi.downloadFileById` (`getFile`, and the 20 MB limit on what Telegram serves a bot) |
-| A command times out, says the workspace is busy, or its output is cut short      | `tools/workspace/WorkspaceClient.kt` (HTTP call + wait budget), then the service in [`workspace/`](../workspace/): `main.ts` (routing, the busy/capacity/quota refusals), `exec.ts` (the timeout and the process-group kill) and `output.ts` (the byte cap, ANSI stripping, the full log)              |
+| A command times out, says the workspace is busy, or its output is cut short      | `tools/workspace/WorkspaceClient.kt` (HTTP call + wait budget), then the service in [`workspace/`](../workspace/): `main.ts` (routing, the busy/capacity/quota refusals), `runner.ts` → `exec.ts`/`container.ts` (the timeout and the process-group kill) and `output.ts` (the byte cap, ANSI stripping, the full log)              |
 | A workspace loses files, or someone sees another person's                        | `tools/workspace/WorkspaceModels.workspaceId` (the `(userId, chatId)` key), then `workspace/registry.ts` (the uid a workspace holds for life) and `workspace/files.ts` (path resolution, which refuses anything outside the workspace)                                                                 |
 | Wrong language in a canned reply (busy/error/voice/start/task menu)              | `i18n/Language.kt` (language selection) + `i18n/Messages.kt` (the strings)                                                                                                                                                                                                                            |
 | The typing indicator or the progress draft is wrong, stale, or missing           | `telegram/TelegramProgress.kt` (both tickers, the private-chat gate, the named-activity gate, `handOffProgressDraft`) + `agent/ToolActivity.kt` (which tool means what) + `i18n/Messages.progressLabel` (the words) + `telegram/delivery/TelegramDelivery.chatActionFor` (the action)                                                     |

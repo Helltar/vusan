@@ -10,10 +10,9 @@ function str(name: string, fallback: string): string {
   return Deno.env.get(name)?.trim() || fallback;
 }
 
-// the second runner — a container per workspace — is not built yet, so an unknown value stops
-// the service instead of silently running everything in one container after someone asked for
-// stronger isolation
-const ISOLATIONS = ["shared"];
+// an unknown value stops the service rather than quietly running everything in one container
+// after someone asked for stronger isolation
+const ISOLATIONS = ["shared", "container"];
 
 export const config = {
   port: 8080,
@@ -41,6 +40,19 @@ export const config = {
   maxOutputBytes: num("WORKSPACE_MAX_OUTPUT_BYTES", 64 * 1024),
   maxLogBytes: num("WORKSPACE_MAX_LOG_BYTES", 8 * 1024 * 1024),
   maxUploadBytes: num("WORKSPACE_MAX_UPLOAD_BYTES", 64 * 1024 * 1024),
+
+  // `container` mode only. podman and docker agree on run/exec/stop/rm, so one code path drives
+  // either; which one is right depends on where this is deployed, not on the code.
+  engine: str("WORKSPACE_ENGINE", "docker"),
+  // the runtime the engine hands each workspace to: `runsc` (gVisor) and `kata` cut the kernel
+  // attack surface, and neither needs anything here to change
+  runtime: Deno.env.get("WORKSPACE_RUNTIME")?.trim() || null,
+  image: str("WORKSPACE_IMAGE", "ghcr.io/helltar/vusan-workspace:latest"),
+  // limits per workspace rather than one ceiling shared by everyone, which is the whole point of
+  // this mode: /sys/fs/cgroup is read-only inside a container, so `shared` cannot apply them
+  memory: str("WORKSPACE_MEM", "2g"),
+  cpus: str("WORKSPACE_CPUS", "2"),
+  pidsLimit: num("WORKSPACE_PIDS_LIMIT", 512),
 } as const;
 
 if (!ISOLATIONS.includes(config.isolation)) {

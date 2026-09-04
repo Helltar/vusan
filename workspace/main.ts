@@ -7,7 +7,7 @@
 
 import { config } from "./config.ts";
 import { listEntries, resolvePath, usedBytes, writeFile } from "./files.ts";
-import { killWorkspace, runCommand } from "./exec.ts";
+import { killWorkspace, runCommand } from "./runner.ts";
 import {
   BadRequest,
   forgetWorkspace,
@@ -189,7 +189,9 @@ async function sweepIdleWorkspaces(): Promise<void> {
 
     lastTouched.delete(id);
     const killed = await killWorkspace(entry.workspace).catch(() => 0);
-    if (killed > 0) console.log(`swept ${killed} process(es) left behind by workspace [${id}]`);
+    // logged whichever runner is in use: in `container` mode this is the teardown of a container,
+    // which is worth a line even when the workspace left nothing of its own running
+    console.log(`swept idle workspace [${id}], ${killed} process(es) still running`);
   }
 }
 
