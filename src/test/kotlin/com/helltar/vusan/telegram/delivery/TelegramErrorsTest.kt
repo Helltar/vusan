@@ -85,6 +85,16 @@ class TelegramErrorsTest {
     }
 
     @Test
+    fun `a content rejection named after forbidden is not a rejected recipient`() {
+        // a recipient who allows voice and video messages only from contacts refuses those two kinds
+        // and nothing else; reading it as a block would park the chat's tasks and drop the reply.
+        val error = telegramError("Bad Request: VOICE_MESSAGES_FORBIDDEN")
+
+        assertFalse(error.isForbidden())
+        assertFalse(error.isChatUnreachable())
+    }
+
+    @Test
     fun `detects a chat the bot can no longer post into`() {
         val descriptions =
             listOf(

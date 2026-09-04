@@ -225,8 +225,9 @@ A normal user message travels:
       write rights taken away — `TelegramErrors.isChatUnreachable`) is answered differently from every other rejection:
       no fallback can help, so the send cascade stops instead of buying one more rejection per degradation step, the
       rest of the queued outputs are abandoned, and `sendScheduled` reports it so `TaskScheduler` can park the chat's
-      tasks. A refusal of one output kind ("not enough rights to send photos") is deliberately *not* this, and keeps
-      its normal media-to-document fallback.
+      tasks. A refusal of one output kind ("not enough rights to send photos", or `VOICE_MESSAGES_FORBIDDEN` from a
+      recipient who takes voice and video messages only from contacts) is deliberately *not* this, and keeps its normal
+      fallback — which is why `isForbidden` matches only a leading `Forbidden:` and not the word wherever it appears.
     - **Rate limits** — consecutive sends are paced (`INTER_MESSAGE_DELAY`) to stay under Telegram's per-chat limit.
       Upstream, `BotOutbox` coalesces consecutive `sendMessage` text into the trailing bubble while it fits
       (`MAX_TEXT_MESSAGE_CHARS`), so a model that splits one answer into many messages produces few real sends, and caps

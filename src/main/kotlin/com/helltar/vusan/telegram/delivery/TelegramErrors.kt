@@ -9,10 +9,12 @@ internal fun Throwable.isEntityParseError(): Boolean =
 
 // a private delivery rejected by the recipient comes back as a 403 "Forbidden: ..." (bot blocked,
 // can't initiate conversation, user deactivated) or as "Bad Request: chat not found" when the user
-// never interacted with the bot.
+// never interacted with the bot. only the leading word counts: telegram also names content rejections
+// after it (`VOICE_MESSAGES_FORBIDDEN`), and those are one output kind being refused by a chat that
+// still takes everything else.
 internal fun Throwable.isForbidden(): Boolean {
     val description = telegramDescription?.lowercase() ?: return false
-    return "forbidden" in description || "chat not found" in description
+    return description.startsWith("forbidden:") || "chat not found" in description
 }
 
 // nothing at all can be delivered into this chat any more: the bot was kicked or left, the user
