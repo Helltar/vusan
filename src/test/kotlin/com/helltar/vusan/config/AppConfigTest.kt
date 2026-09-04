@@ -13,7 +13,7 @@ class AppConfigTest {
     @Test
     fun `an unset value stays unset so the caller can pick its default`() {
         assertNull(parseIntEnv("MAX_TASKS_PER_USER", null))
-        assertNull(parseLongEnv("SANDBOX_TIMEOUT_SECONDS", null))
+        assertNull(parseLongEnv("WORKSPACE_MAX_TIMEOUT_SECONDS", null))
         assertNull(parseBooleanEnv("GROUP_LOG_ENABLED", null))
         assertEquals(emptySet(), parseIdSetEnv("ALLOWED_IDS", null))
     }
@@ -22,7 +22,7 @@ class AppConfigTest {
     fun `numbers are read, with surrounding whitespace tolerated`() {
         assertEquals(9, parseIntEnv("MAX_TASKS_PER_USER", "9"))
         assertEquals(9, parseIntEnv("MAX_TASKS_PER_USER", " 9 "))
-        assertEquals(300L, parseLongEnv("SANDBOX_TIMEOUT_SECONDS", "300"))
+        assertEquals(300L, parseLongEnv("WORKSPACE_MAX_TIMEOUT_SECONDS", "300"))
         assertEquals(-1, parseIntEnv("MAX_TASKS_PER_USER", "-1"))
     }
 
@@ -35,8 +35,8 @@ class AppConfigTest {
         assertContains(failure.message.orEmpty(), "7O")
 
         assertFailsWith<IllegalStateException> { parseIntEnv("MAX_TASKS_PER_USER", "many") }
-        assertFailsWith<IllegalStateException> { parseLongEnv("SANDBOX_TIMEOUT_SECONDS", "120s") }
-        assertFailsWith<IllegalStateException> { parseLongEnv("SANDBOX_TIMEOUT_SECONDS", "1.5") }
+        assertFailsWith<IllegalStateException> { parseLongEnv("WORKSPACE_MAX_TIMEOUT_SECONDS", "120s") }
+        assertFailsWith<IllegalStateException> { parseLongEnv("WORKSPACE_MAX_TIMEOUT_SECONDS", "1.5") }
     }
 
     @Test
@@ -79,7 +79,7 @@ class AppConfigTest {
     @Test
     fun `a number that parses but cannot work is rejected too`() {
         assertFailsWith<IllegalArgumentException> { config(agentMaxIterations = 0) }
-        assertFailsWith<IllegalArgumentException> { config(sandboxTimeoutSeconds = 0) }
+        assertFailsWith<IllegalArgumentException> { config(workspaceMaxTimeoutSeconds = 0) }
         assertFailsWith<IllegalArgumentException> { config(maxTasksPerUser = -1) }
         assertFailsWith<IllegalArgumentException> { config(taskMaxLatenessMinutes = -1) }
     }
@@ -94,7 +94,7 @@ class AppConfigTest {
         maxFollowUpsPerUser: Int = 3,
         maxMemoryPerScope: Int = 10,
         maxTasksPerUser: Int = 5,
-        sandboxTimeoutSeconds: Long = 120,
+        workspaceMaxTimeoutSeconds: Long = 600,
         taskMaxLatenessMinutes: Long = 60
     ): AppConfig =
         AppConfig(
@@ -120,8 +120,9 @@ class AppConfigTest {
             openAiStt = null,
             openAiVision = null,
             personality = null,
-            sandboxTimeoutSeconds = sandboxTimeoutSeconds,
-            sandboxUrl = null,
+            workspaceMaxTimeoutSeconds = workspaceMaxTimeoutSeconds,
+            workspaceToken = null,
+            workspaceUrl = null,
             searxngUrl = null,
             selfImageFile = null,
             taskMaxLatenessMinutes = taskMaxLatenessMinutes,

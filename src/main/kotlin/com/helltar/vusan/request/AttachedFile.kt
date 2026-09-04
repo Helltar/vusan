@@ -16,7 +16,7 @@ class AttachedFile(
     // the one frame still reachable when the video itself is over the bot download limit.
     val durationSeconds: Int? = null,
     val loadThumbnailBytes: (suspend () -> ByteArray)? = null,
-    // a GIF is a video everywhere it matters (sampling, size limits, no sandbox upload), so it stays
+    // a GIF is a video everywhere it matters (sampling, size limits), so it stays
     // kind VIDEO; this only marks the two places where it is not one — it carries no audio, and it is
     // usually thrown into a chat as a reaction rather than as something to review.
     val isAnimation: Boolean = false,

@@ -8,7 +8,7 @@ services:
     build:
       context: .
 
-  vusan-sandbox:
-    image: vusan-sandbox:local
+  vusan-workspace:
+    image: vusan-workspace:local
     build:
-      context: ./sandbox
+      context: ./workspace

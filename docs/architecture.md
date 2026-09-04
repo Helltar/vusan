@@ -2,8 +2,8 @@
 
 This document is the orientation map for the codebase: the layers, how a message flows through them, and the background
 flows that run alongside. The main application is Kotlin under
-[`src/main/kotlin/com/helltar/vusan/`](../src/main/kotlin/com/helltar/vusan/); the code-execution sandbox is a separate
-Deno service under [`sandbox/`](../sandbox/), see [Code execution service](#code-execution-service).
+[`src/main/kotlin/com/helltar/vusan/`](../src/main/kotlin/com/helltar/vusan/); the shell workspace is a separate
+Deno service under [`workspace/`](../workspace/), see [Workspace service](#workspace-service).
 
 ## Layers
 
@@ -51,8 +51,8 @@ Telegram ──► telegram/ ──► agent/ ──► tools/ ──► externa
 - **`request/`** — the request-scoped input model shared across layers: `RequestContext`
   (chat/user/message ids and sender info tools see), `ChatCapabilities` (what the chat lets the bot post, and its slow
   mode — defaulting to unrestricted so a failed lookup never removes an ability), and `AttachedFile` (photo, video, or document, from the current
-  message or a replied-to message, that vision (`describeImage`, `describeVideo`) and code execution (`codeExecution`)
-  can lazily download). Its `kind` (`IMAGE`/`VIDEO`/`OTHER`) decides which of those tools accepts it; a video also
+  message or a replied-to message, that vision (`describeImage`, `describeVideo`) and the workspace (`runCommand`,
+  which copies it into `inbox/`) can lazily download). Its `kind` (`IMAGE`/`VIDEO`/`OTHER`) decides which of those tools accepts it; a video also
   carries its duration and a loader for Telegram's own thumbnail.
 - **`tasks/`** — scheduled-task subsystem: storage, persisted pause state, recurrence math, and the
   background `TaskScheduler`.
@@ -236,8 +236,7 @@ A normal user message travels:
       one message per track, each repeating the reply quote. Anything queued between them ends the run.
     - **Sender split** — `TelegramOutputSender.kt` maps each `BotOutput` kind to a Bot API call and picks the fallback
       wrapping it, `TelegramSendFallbacks.kt` holds the output-kind-agnostic rejection handling (plain-text retry,
-      media-to-document, text-as-document), `TelegramRequests.kt` the raw request builders. A sandbox image preview opts
-      out of photo-to-document fallback only when its uncompressed copy is already queued behind it.
+      media-to-document, text-as-document), `TelegramRequests.kt` the raw request builders.
 
 ## Background and side flows
 
@@ -417,40 +416,59 @@ A normal user message travels:
   URL and credentials, but the edit call genuinely forks — the Platform endpoint takes a multipart upload while the Codex
   one takes JSON with the source inlined as a data URL and infers the output size from it.
 
-## Code execution service
+## Workspace service
 
-`codeExecution` is the only tool backed by a service living in this repo instead of a third-party API. It is Deno +
-TypeScript under [`sandbox/`](../sandbox/), has its own `Dockerfile`, contains no Kotlin, and is reached over HTTP from
-`tools/sandbox/SandboxClient.kt`.
+The workspace is the only tool backed by a service living in this repo instead of a third-party API. It is Deno +
+TypeScript under [`workspace/`](../workspace/), has its own `Dockerfile`, contains no Kotlin, and is reached over HTTP
+from `tools/workspace/WorkspaceClient.kt`.
 
-- **`main.ts`** — HTTP server on port 8080: `POST /run` (code plus input files) and `GET /health`. Keeps a pool of warm
-  Pyodide workers (`SANDBOX_POOL_SIZE`, default 2), hands one out per request, and **terminates it after the run and
-  spawns a replacement** — one run per worker, so no state leaks between executions. Oversized input is rejected before
-  a worker is taken (`MAX_CODE_CHARS`, `MAX_INPUT_FILES`); an empty pool answers `503` after
-  `ACQUIRE_TIMEOUT_SECONDS`; a crashed worker leaves the pool and is respawned after a backoff.
-- **`worker.ts`** — one Pyodide instance: loads the baked packages, unpacks the extra wheels onto `sys.path`, registers
-  the bundled fonts so matplotlib and Pillow draw real glyphs instead of tofu, warms the font cache during startup,
-  runs the code in `/work`, and returns stdout/stderr plus the files written there, capped by `MAX_FILES`,
-  `MAX_FILE_BYTES`, and `MAX_OUTPUT_CHARS`.
-- **`packages.ts`** — Pyodide packages baked into the image. **`extra-wheels.txt`** — version-pinned pure-Python wheels
-  that Pyodide does not ship, downloaded in the Dockerfile `wheels` stage so document handling works offline.
+Each person gets a durable home directory keyed by `(userId, chatId)` — the same key the raw conversation history uses,
+so every member of a group has one of their own and nobody's project is readable from another chat. `HOME` **is** that
+directory, which is what makes the whole thing work: `pip install --user`, `npm install`, `~/.cargo` and `node_modules`
+all land in the volume and survive, while the image itself stays immutable and nobody needs root.
 
-An image the code produced is shown inline as a photo, and sent a second time as an uncompressed document only when its
-long side is past `TELEGRAM_PHOTO_LONG_SIDE` (`tools/sandbox/SandboxTools.kt`). Below that, Telegram re-encodes a
-bot-uploaded photo to JPEG but does not resize it, and the re-encode alone is not worth a second message: two delivered
-charts, 1423 and 1584 px wide, came back at their original size with 0.16% and 0.22% of pixels visibly changed. The
-1280 px limit usually quoted for Telegram photos belongs to the compressor a person's app applies before upload and
-does not touch what a bot sends. Past the cap the image is resized by an unknown factor, so the copy is kept as the
-only faithful version — a precaution for dense screenshots rather than a measured need for charts, since a chart
-rendered at 3168 px survives the downscale better than a 1584 px one survives the re-encode. An image past the inline
-album cap is never previewed, so it keeps its copy whatever its size, as does one whose dimensions cannot be read.
+- **`main.ts`** — HTTP server on port 8080: `POST /exec`, `PUT`/`GET /files`, `GET /list`, `DELETE /workspace`, and
+  `GET /health`. Owns what the container cannot express: one command at a time per workspace, a global concurrency cap,
+  the disk quota, and the idle sweep — a command started with `setsid` outlives its run on purpose, so a workspace
+  nobody has touched for `WORKSPACE_IDLE_MINUTES` has whatever it left behind killed by uid.
+  Being busy, at capacity, or out of space answers `200` with an `error` field rather than a `4xx`,
+  because the bot's shared HTTP client turns every non-2xx into an exception and those three are answers the model has
+  to read.
+- **`registry.ts`** — which uid a workspace runs as. Telegram ids do not fit `uid_t`, so a slot comes out of a pool
+  baked into the image (the rootfs is read-only, so `/etc/passwd` cannot grow a user at runtime) and is held for life,
+  because the files on the volume are owned by it.
+- **`exec.ts`** — runs the command through `setsid` so the timeout can take down the whole process tree by process
+  group, not just the shell that spawned it. The timeout lives here on purpose: a `timeout` inside the workspace is the
+  command's own child and is bypassed by the code it is meant to bound. The environment is built from nothing
+  (`clearEnv`) and tells every common tool it is not on a terminal, so nothing blocks on a prompt.
+- **`output.ts`** — a command's stdout is attacker-controlled bytes on their way into a Telegram message. It is capped
+  *while* the pipe is drained (a reader that stops reading blocks the writer and the command hangs), stripped of ANSI
+  and control characters, collapsed at carriage returns so a progress bar arrives as its final line, and forced back
+  into valid UTF-8. Mostly-binary output is replaced by a note instead of shown. The whole log is kept in the workspace
+  so the model can `grep` it rather than rerun the command.
+- **`files.ts`** — path resolution that refuses anything leaving the workspace, symlinks resolved *before* the check so
+  a link planted by the workspace's own code cannot read or overwrite the rest of the volume.
+- **`entrypoint.sh`** — installs the egress policy in the container's own network namespace as root, then hands off to
+  the supervisor; every workspace afterwards runs as an unprivileged uid that cannot undo it. It **fails closed**: a
+  rule that will not install stops the container, because unfiltered egress looks exactly like a working setup until
+  the day it matters.
 
-Isolation is enforced by the Deno entrypoint flags, not by convention: `--allow-net` is limited to the listening socket,
-`--allow-read` to `/app`, `/deno-dir`, and `/fonts`, and there is no `--allow-write` at all. The code being run is
-model-authored and untrusted — keep it that way.
+Isolation is not enforced here but around it, and the layers are deliberate. The container drops every capability
+except the few the supervisor needs (`NET_ADMIN`/`NET_RAW` to install the rules, `SETUID`/`SETGID`/`CHOWN`/
+`DAC_OVERRIDE`/`KILL` to run and clean up after each workspace), the rootfs is read-only, and `init: true` is required
+rather than cosmetic: a killed process tree orphans children onto pid 1, and a pid 1 that reaps nothing turns them into
+zombies that eat `pids_limit`.
 
-`SANDBOX_TIMEOUT_SECONDS` is read by both sides: the service enforces it per run, while `SandboxClient` budgets its HTTP
-wait around the same value.
+`WORKSPACE_NETWORK=open` gives a workspace the whole internet except every local range, filtered by destination IP in
+the kernel rather than by hostname — an allowlisted name can resolve to a private address on the second lookup, and a
+name-based check walks straight into it. IPv6 is not configured for a workspace at all, which removes `::ffff:0:0/96`
+and the rest of that bypass class. `WORKSPACE_ISOLATION` selects the runner. Only `shared` exists — workspaces are
+processes under their own uid inside this container — and an unknown value stops the service rather than quietly
+running everything in one container after someone asked for more. A container per workspace is the intended second
+runner and belongs on a machine of its own, see [`workspace.md`](workspace.md).
+
+`WORKSPACE_MAX_TIMEOUT_SECONDS` is read by both sides: the service clamps a requested timeout to it, while
+`WorkspaceClient` budgets its HTTP wait around the same value.
 
 ## Startup
 
@@ -506,7 +524,8 @@ A symptom-to-source map for finding the right file fast. Paths are under
 | Vusan floods a chat or stalls on Telegram 429 over a long multi-message reply    | `outbox/BotOutbox.kt` (text and album coalescing + `MAX_TEXT_MESSAGES` cap) + `telegram/delivery/TelegramDelivery.kt` (`INTER_MESSAGE_DELAY` pacing)                                                                                                                                                                     |
 | A specific tool misbehaves                                                       | `tools/<feature>/<Feature>Tools.kt` for the tool surface, plus its `<Feature>Client.kt` for the external call                                                                                                                                                                                         |
 | Vusan will not hand a file from the chat back, or sends it under the wrong name  | `tools/files/FileTools.sendChatFile` (the `file_id` path and `chatFilename`) + `telegram/TelegramApi.downloadFileById` (`getFile`, and the 20 MB limit on what Telegram serves a bot) |
-| Code execution times out, says "busy", or loses produced files                   | `tools/sandbox/SandboxClient.kt` (HTTP call + wait budget), then the service in [`sandbox/`](../sandbox/): `main.ts` (worker pool, `503` when none free) and `worker.ts` (Pyodide setup, output caps)                                                                                                 |
+| A command times out, says the workspace is busy, or its output is cut short      | `tools/workspace/WorkspaceClient.kt` (HTTP call + wait budget), then the service in [`workspace/`](../workspace/): `main.ts` (routing, the busy/capacity/quota refusals), `exec.ts` (the timeout and the process-group kill) and `output.ts` (the byte cap, ANSI stripping, the full log)              |
+| A workspace loses files, or someone sees another person's                        | `tools/workspace/WorkspaceModels.workspaceId` (the `(userId, chatId)` key), then `workspace/registry.ts` (the uid a workspace holds for life) and `workspace/files.ts` (path resolution, which refuses anything outside the workspace)                                                                 |
 | Wrong language in a canned reply (busy/error/voice/start/task menu)              | `i18n/Language.kt` (language selection) + `i18n/Messages.kt` (the strings)                                                                                                                                                                                                                            |
 | The typing indicator or the progress draft is wrong, stale, or missing           | `telegram/TelegramProgress.kt` (both tickers, the private-chat gate, the named-activity gate, `handOffProgressDraft`) + `agent/ToolActivity.kt` (which tool means what) + `i18n/Messages.progressLabel` (the words) + `telegram/delivery/TelegramDelivery.chatActionFor` (the action)                                                     |
 | A long research turn ends in the generic error reply or is answered mid-way      | `agent/AgentFactory.kt` (`maxIterations`, `outOfToolBudget` and the wrap-up node that lands the turn) + `agent/AgentRunner.kt` (delivering what the outbox holds when a run fails)                                                                                                                     |

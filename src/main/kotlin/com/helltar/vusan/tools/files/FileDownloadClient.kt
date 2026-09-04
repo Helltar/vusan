@@ -172,7 +172,7 @@ class FileDownloadClient(http: HttpClient) {
     /**
      * URLs reach this client straight from chat text, so a caller can aim the bot at its own network.
      * Resolve the host up front and refuse loopback, link-local (cloud metadata endpoints), and private
-     * ranges — the bot process shares a network with the sandbox service and the database.
+     * ranges — the bot process shares a network with the workspace service and the database.
      */
     private suspend fun requirePublicHost(target: Url) {
         val addresses =

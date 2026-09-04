@@ -51,8 +51,8 @@ Use the published images:
 docker compose up -d
 ```
 
-This starts two containers: the bot and the code-execution sandbox. To run without the sandbox,
-see [code execution](docs/configuration.md#code-execution).
+This starts two containers: the bot and the workspace it runs commands in. To run without the
+workspace, see [workspace](docs/configuration.md#workspace).
 
 Or build from source:
 
@@ -91,8 +91,11 @@ Prerequisites: JDK 21, plus `ffmpeg` and `yt-dlp` on `PATH`.
 
 ### Creates
 
-- **Code execution** — runs Python for exact math, data crunching, charts, Word and PDF documents,
-  and animations.
+- **Its own workspace** — a private Linux home directory per person that keeps its files between
+  messages and between days. It writes and runs programs there, builds whole multi-file projects,
+  converts and edits media, crunches data and draws charts, makes Word and PDF documents, and sends
+  back whatever you ask for. Come back a month later and the project is still there, ready to be
+  picked up.
 - **Images** — draws a picture from a description, or edits one: yours, or one it drew earlier.
 - **Voice replies** — answers out loud with a generated voice message.
 - **Round video messages** — answers with a circle: its own face, speaking out loud.

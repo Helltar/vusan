@@ -295,7 +295,7 @@ and Vusan keeps running.
 | `OPENAI_STT_API_KEY`    | Voice input, sound of a video             | Reuse your OpenAI key                 |
 | `OPENAI_IMAGE_API_KEY`  | Image generation                          | Reuse your OpenAI key; optional on `codex` |
 | `OPENAI_VISION_API_KEY` | Vision on a chat model that cannot see    | See [Vision](#vision)                 |
-| `SANDBOX_URL`           | Code execution                            | See [Code execution](#code-execution) |
+| `WORKSPACE_URL`         | Shell workspace                           | See [Workspace](#workspace)           |
 
 ### Web search
 
@@ -402,36 +402,90 @@ The key always wins when it is set, even where the chat model could have looked 
 all, a startup `WARN` says so and Vusan answers without looking at attachments; Telegram channel posts still come
 back, as text only. Vision calls share the `LLM_REQUEST_TIMEOUT_SECONDS` budget.
 
-## Code execution
+## Workspace
 
-The `codeExecution` tool lets the agent run Python in an isolated sandbox to compute exact answers, transform data,
-render charts, and write Word and PDF files — `numpy`, `pandas`, `matplotlib`, `sympy`, `scipy`, `Pillow`,
-`python-docx`, `fpdf2` and `pypdf` are available. A file the user uploads (or one they reply to) is placed in the
-working directory so the script can read it by name. The sandbox executes untrusted code on an internal-only network
-with no secrets, no internet, and no host mounts. Its own source and internals are described in
-[architecture.md](architecture.md#code-execution-service).
+The workspace gives the agent a real Linux home directory it can work in with a shell: write and run programs, build a
+multi-file project, convert media, crunch data, draw charts, produce Word and PDF files, and send any of it back to the
+chat. `python3` with `pip`, `node` with `npm`, `git`, `curl`, `ffmpeg`, `imagemagick`, `pandoc`, `sqlite3`, `jq`,
+`ripgrep`, `zip` and a C/C++ toolchain are preinstalled, and anything else is installed into the workspace itself.
+
+**The workspace persists.** There is one per person per chat — the same `(userId, chatId)` key the conversation history
+uses — and it keeps everything between messages and between days, including what `pip install --user` and
+`npm install` put there, because the workspace *is* the home directory. Coming back weeks later finds the project
+intact. Two consequences worth knowing: every member of a group has a workspace of their own and cannot read anyone
+else's, and the same person's private workspace is separate from their workspace in a group. To move a file between
+them, have the bot send it and attach it again in the other chat — an attached file is placed in `inbox/`.
+
+A file the user uploads (or one they reply to) is copied into `inbox/` under its own name before the first command
+runs. Files the agent creates are **not** sent to the chat until it sends them, which keeps intermediate build output
+out of the conversation.
+
+`/clear` does not touch a workspace: files survive it the way memory does.
 
 Docker starts it by default:
 
 ```dotenv
-SANDBOX_URL=http://vusan-sandbox:8080
+WORKSPACE_URL=http://vusan-workspace:8080
 ```
 
-To disable code execution, comment `SANDBOX_URL` out and start only the bot with `docker compose up -d vusan`
-(`docker compose stop vusan-sandbox` if it is already running). A local JVM run has no sandbox container unless you
-start one yourself; point `SANDBOX_URL` at that service, or leave it commented.
+To disable the workspace, comment `WORKSPACE_URL` out and start only the bot with `docker compose up -d vusan`
+(`docker compose stop vusan-workspace` if it is already running). A local JVM run has no workspace container unless you
+start one yourself; point `WORKSPACE_URL` at that service, or leave it commented.
 
-### Sandbox tuning
+### Network access
 
-Both variables go in the repo-root `.env`; the default `compose.yaml` passes them into the sandbox container.
+By default a workspace reaches the whole internet **except every local address range** — private networks, loopback,
+link-local (including cloud metadata endpoints), and CGNAT — filtered by destination IP in the kernel. It has no IPv6.
+This is what lets `pip install`, `npm install` and downloads work.
 
-| Variable                  | Default | Used by           | Description                      |
-|---------------------------|---------|-------------------|----------------------------------|
-| `SANDBOX_POOL_SIZE`       | `2`     | sandbox           | Warm Pyodide workers kept ready. |
-| `SANDBOX_TIMEOUT_SECONDS` | `120`   | Vusan + sandbox   | Hard per-run limit.              |
+Understand what open egress buys and costs. Anyone who can steer the bot — and that includes a prompt injection in a
+page it was asked to read — can make it fetch from your address, and anything inside a workspace can be posted out.
+Nothing in a workspace may therefore be worth stealing: it holds no secrets, gets none of the bot's environment, and
+mounts nothing from the host. Outbound mail (25/465/587) is refused, since spam is the one abuse whose cost outlives
+it.
 
-`SANDBOX_TIMEOUT_SECONDS` is shared on purpose: the sandbox enforces the run limit, while Vusan uses the same value for
-its wait budget. Setting it once keeps the two in sync.
+Set `WORKSPACE_NETWORK=none` to take the internet away entirely; installs and downloads then stop working.
+
+### Tuning
+
+All of these go in the repo-root `.env`; the default `compose.yaml` passes them into the workspace container.
+
+| Variable                        | Default | Used by            | Description                                                  |
+|---------------------------------|---------|--------------------|--------------------------------------------------------------|
+| `WORKSPACE_TIMEOUT_SECONDS`     | `120`   | workspace          | Time limit for a command that does not ask for one.          |
+| `WORKSPACE_MAX_TIMEOUT_SECONDS` | `600`   | Vusan + workspace  | Ceiling on what a command may ask for.                       |
+| `WORKSPACE_MAX_CONCURRENT`      | `2`     | workspace          | Commands running at once across every workspace.             |
+| `WORKSPACE_IDLE_MINUTES`        | `60`    | workspace          | Untouched for this long, anything still running is killed.   |
+| `WORKSPACE_QUOTA_MB`            | `2048`  | workspace          | Disk a workspace may use before it is asked to clean up.     |
+| `WORKSPACE_NETWORK`             | `open`  | workspace          | `open` or `none`, as above.                                  |
+| `WORKSPACE_TOKEN`               | —       | Vusan + workspace  | Shared secret; required when the service is not on this host. |
+
+`WORKSPACE_MAX_TIMEOUT_SECONDS` is shared on purpose: the service clamps a requested timeout to it, while Vusan uses the
+same value for its HTTP wait budget. Setting it once keeps the two in sync.
+
+### What a background command does
+
+A command normally takes everything it started with it: when it ends or hits its time limit, its
+whole process tree is killed. Something meant to outlive the command — a build, a long encode, a dev
+server — has to be started with `setsid`, and then nothing stops it until the agent checks on it.
+`WORKSPACE_IDLE_MINUTES` is the backstop: a workspace nobody has touched for that long has whatever
+it left running killed. Raise it if long unattended jobs are normal here.
+
+Interactive programs simply do not work: there is no terminal, and stdin is `/dev/null`. `top` exits
+with `failed tty get` rather than hanging, and the batch forms (`top -b -n1`, `ps`) are what to use.
+
+One thing people in the default setup *can* see of each other: the process list is shared, so a
+command line is visible to everyone with a workspace on that host — `ps` shows what someone else is
+running, though not their files, their environment, or any way to signal them. Hiding it needs
+`CAP_SYS_ADMIN`, which is not a trade worth making. It goes away with a container per workspace.
+
+### Running it somewhere safer
+
+The default puts workspaces in one container, separated by unix user. That protects the host from what runs in them,
+but it is the weaker of the two arrangements: people are separated only by file permissions, and resource limits are
+shared rather than per person. Moving the service to a machine of its own — where a container per workspace becomes
+possible and an escape lands somewhere holding no token, no database and no history — is described in
+[workspace.md](workspace.md).
 
 ## Memory
 

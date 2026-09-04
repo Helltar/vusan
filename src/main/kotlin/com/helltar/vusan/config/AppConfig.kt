@@ -30,13 +30,14 @@ data class AppConfig(
     val openAiStt: OpenAiSttConfig?,
     val openAiVision: OpenAiVisionConfig?,
     val personality: String?,
-    val sandboxTimeoutSeconds: Long,
-    val sandboxUrl: String?,
     val searxngUrl: String?,
     val selfImageFile: String?,
     val taskMaxLatenessMinutes: Long,
     val tavilyApiKey: String?,
     val telegramBotToken: String,
+    val workspaceMaxTimeoutSeconds: Long,
+    val workspaceToken: String?,
+    val workspaceUrl: String?,
     val tokenBudget: TokenBudgetConfig = TokenBudgetConfig(),
     val ytDlpCookiesFile: String?
 ) {
@@ -45,7 +46,7 @@ data class AppConfig(
         require(maxFollowUpsPerUser >= 0) { "MAX_FOLLOW_UPS_PER_USER must not be negative" }
         require(maxMemoryPerScope >= 0) { "MAX_MEMORY_PER_SCOPE must not be negative" }
         require(maxTasksPerUser >= 0) { "MAX_TASKS_PER_USER must not be negative" }
-        require(sandboxTimeoutSeconds > 0) { "SANDBOX_TIMEOUT_SECONDS must be positive" }
+        require(workspaceMaxTimeoutSeconds > 0) { "WORKSPACE_MAX_TIMEOUT_SECONDS must be positive" }
         require(taskMaxLatenessMinutes >= 0) { "TASK_MAX_LATENESS_MINUTES must not be negative" }
     }
 
@@ -55,8 +56,8 @@ data class AppConfig(
         private const val DEFAULT_MAX_FOLLOW_UPS_PER_USER = 3
         private const val DEFAULT_MAX_MEMORY_PER_SCOPE = 10
         private const val DEFAULT_MAX_TASKS_PER_USER = 5
-        private const val DEFAULT_SANDBOX_TIMEOUT_SECONDS = 120L
         private const val DEFAULT_TASK_MAX_LATENESS_MINUTES = 60L
+        private const val DEFAULT_WORKSPACE_MAX_TIMEOUT_SECONDS = 600L
 
         private val dotenv = dotenv { ignoreIfMissing = true }
 
@@ -85,13 +86,15 @@ data class AppConfig(
                 openAiStt = resolveOpenAiStt(),
                 openAiVision = resolveOpenAiVision(),
                 personality = resolvePersonality(),
-                sandboxTimeoutSeconds = readLongEnv("SANDBOX_TIMEOUT_SECONDS") ?: DEFAULT_SANDBOX_TIMEOUT_SECONDS,
-                sandboxUrl = readEnv("SANDBOX_URL"),
                 searxngUrl = readEnv("SEARXNG_URL"),
                 selfImageFile = readEnv("SELF_IMAGE_FILE"),
                 taskMaxLatenessMinutes = readLongEnv("TASK_MAX_LATENESS_MINUTES") ?: DEFAULT_TASK_MAX_LATENESS_MINUTES,
                 tavilyApiKey = readEnv("TAVILY_API_KEY"),
                 telegramBotToken = requireEnv("TELEGRAM_BOT_TOKEN"),
+                workspaceMaxTimeoutSeconds =
+                    readLongEnv("WORKSPACE_MAX_TIMEOUT_SECONDS") ?: DEFAULT_WORKSPACE_MAX_TIMEOUT_SECONDS,
+                workspaceToken = readEnv("WORKSPACE_TOKEN"),
+                workspaceUrl = readEnv("WORKSPACE_URL"),
                 tokenBudget = resolveTokenBudget(),
                 ytDlpCookiesFile = readEnv("YT_DLP_COOKIES_FILE"),
 

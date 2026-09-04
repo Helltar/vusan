@@ -205,21 +205,23 @@ internal fun attachedFileContextBlock(file: AttachedFile): String =
 
             when (file.kind) {
                 AttachedFileKind.IMAGE -> {
-                    append("This file is in the codeExecution working directory under this exact name. ")
-                    append("It is an image: call `describeImage` to answer about what is visible, or use `codeExecution` to process it (resize, filter, colors, dimensions).")
+                    append("The first workspace tool you call places this file in `inbox/` under this exact name. ")
+                    append("It is an image: call `describeImage` to answer about what is visible, or work on it with `runCommand` (resize, filter, colors, dimensions).")
                 }
 
                 // the GIF line has to live here rather than in the no-caption prompt: a caption replaces
                 // that prompt, and the reaction still is not something to review.
                 AttachedFileKind.VIDEO ->
                     if (file.isAnimation)
-                        append("It is a GIF: a short soundless loop, usually thrown into a chat as a reaction rather than as something to review. Call `describeVideo` only when the user asks what is in it, and never narrate it unasked. It is not available to `codeExecution`.")
-                    else
-                        append("It is a video: call `describeVideo` when your answer depends on what happens in it or what is said in it. It is not available to `codeExecution`.")
+                        append("It is a GIF: a short soundless loop, usually thrown into a chat as a reaction rather than as something to review. Call `describeVideo` only when the user asks what is in it, and never narrate it unasked.")
+                    else {
+                        append("It is a video: call `describeVideo` when your answer depends on what happens in it or what is said in it. ")
+                        append("To convert, cut or re-encode it instead, the first workspace tool you call places it in `inbox/` under this exact name, where `ffmpeg` can reach it.")
+                    }
 
                 AttachedFileKind.OTHER -> {
-                    append("This file is in the codeExecution working directory under this exact name. ")
-                    append("Read it directly from a codeExecution script (e.g. pandas.read_csv) instead of asking the user to resend it.")
+                    append("The first workspace tool you call places this file in `inbox/` under this exact name. ")
+                    append("Read it there with `runCommand` instead of asking the user to resend it.")
                 }
             }
         }

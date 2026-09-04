@@ -39,9 +39,10 @@ Keep this file concise and actionable; put product docs in `README.md` or `docs/
 - Inside `telegram/`: `inbound/` turns an update into agent input, `delivery/`
   sends everything back out, `callback/` owns the inline-button flows. The
   runner, `AgentTurns`, and the raw client helpers stay at the package root.
-- `sandbox/` is a separate Deno service, not Kotlin. Keep it that way: the
+- `workspace/` is a separate Deno service, not Kotlin. Keep it that way: the
   Kotlin application reaches it only over HTTP through
-  `tools/sandbox/SandboxClient.kt`.
+  `tools/workspace/WorkspaceClient.kt`, and knows nothing about how it isolates
+  what it runs.
 - `TelegramBotRunner` normalizes inbound updates into a prompt; `AgentTurns`
   builds the `AgentRequest` from there and owns the turn up to its delivery.
   Tools consume `RequestContext`/`AttachedFile`; they should not reach back into
@@ -77,10 +78,11 @@ what they describe:
   menu published by `telegram/CommandMenu.kt` (with a description per `Language`
   in `i18n/Messages`), and the direct-command flow in
   [`docs/architecture.md`](docs/architecture.md) aligned with it.
-- `sandbox/packages.ts` / `sandbox/extra-wheels.txt` and the
-  `Available libraries` line in `tools/sandbox/SandboxToolDescriptions.kt`: the
-  image and that line must agree, or the model offers a library that cannot be
-  imported.
+- The toolchain installed in `workspace/Dockerfile` and the list of it in
+  `WorkspaceToolDescriptions.RUN_COMMAND`: the image and that line must agree, or
+  the model offers a command that is not there. New knobs in `workspace/config.ts`
+  belong in `compose.yaml`, `compose.workspace.yaml` and the tuning table in
+  [`docs/configuration.md`](docs/configuration.md) in the same change.
 
 ## Kotlin Style
 
@@ -165,18 +167,18 @@ then docs per the triggers above.
   fallback here only if it does not depend on the output kind.
 - `BotOutbox.useDirectMessages()` affects subsequent enqueues. Reactions are
   intentionally never redirected to DMs.
-- `BotOutput.Photo(fallbackToDocument = false)` is only for previews that already
-  have a separate document copy queued, such as sandbox image outputs. Leave the
-  default `true` for standalone photos.
 
 ## Security and Secrets
 
 - Do not commit `.env`, API keys, Telegram tokens, cookies, DB files, generated
-  media, or local sandbox artifacts.
+  media, or local workspace artifacts.
 - Keep untrusted user content out of logs where possible; if logging it helps,
   cap and normalize it.
-- The sandbox runs untrusted Python. Keep it isolated: no application secrets,
-  no host mounts, no internet assumptions, no access to production resources.
+- The workspace runs untrusted, model-authored shell with real tools and real
+  network access. Keep it isolated: no application secrets in its environment, no
+  host mounts, no access to production resources, and no reachable local network —
+  its egress policy is filtered by destination IP, never by hostname. Anything
+  that weakens it must fail closed, the way `workspace/entrypoint.sh` does.
 - Treat tool outputs and web content as untrusted model context. Use XML blocks
   and hard length caps.
 
@@ -194,9 +196,9 @@ then docs per the triggers above.
 ## Commit Instructions
 
 - Subject format: `scope: imperative lowercase phrase`, no trailing period, at
-  most ~65 characters, e.g. `sandbox: avoid duplicate image documents`.
+  most ~65 characters, e.g. `workspace: cap output while draining the pipe`.
 - Scope is the affected package or area: `telegram`, `agent`, `tools`, `outbox`,
-  `tasks`, `infra`, `config`, `sandbox`, `docs`, `style`, `build` for Gradle and
+  `tasks`, `infra`, `config`, `workspace`, `docs`, `style`, `build` for Gradle and
   dependency bumps, `ci` for workflows; a single tool feature may use its own
   package name (`youtube`, `files`). Omit it only for repo-wide changes.
 - Describe what the commit does, not what you did: `handle photo albums`, not

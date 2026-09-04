@@ -83,7 +83,7 @@ internal class TelegramBotRunner(
         const val MEDIA_ONLY_PROMPT =
             "User sent this with no caption, so the media itself is their whole message. " +
                     "Reply the way a person would at this point in the conversation. " +
-                    "Look at it (`describeImage`, `describeVideo`) or process it (`codeExecution`) only when your answer depends on what is inside, " +
+                    "Look at it (`describeImage`, `describeVideo`) or process it (`runCommand`) only when your answer depends on what is inside, " +
                     "and do not narrate what you saw unless the user asked what is in it."
 
         // a gif is thrown into a chat the way a sticker is — as a reaction, not as a thing to review.

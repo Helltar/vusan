@@ -56,16 +56,16 @@ updates:
           - "*"
 
   - package-ecosystem: docker
-    directory: /sandbox
+    directory: /workspace
     schedule:
       interval: weekly
     open-pull-requests-limit: 5
     commit-message:
-      prefix: sandbox
+      prefix: workspace
     labels:
       - dependencies
-      - sandbox
+      - workspace
     groups:
-      sandbox:
+      workspace:
         patterns:
           - "*"

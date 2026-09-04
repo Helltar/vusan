@@ -33,8 +33,6 @@ import com.helltar.vusan.tools.message.MessageTools
 import com.helltar.vusan.tools.poll.PollTools
 import com.helltar.vusan.tools.quiz.QuizTools
 import com.helltar.vusan.tools.reaction.ReactionTools
-import com.helltar.vusan.tools.sandbox.SandboxClient
-import com.helltar.vusan.tools.sandbox.SandboxTools
 import com.helltar.vusan.tools.searxng.SearxngClient
 import com.helltar.vusan.tools.searxng.SearxngTools
 import com.helltar.vusan.tools.sticker.StickerCatalog
@@ -50,6 +48,8 @@ import com.helltar.vusan.tools.vision.ImageVisionClient
 import com.helltar.vusan.tools.vision.VideoVisionClient
 import com.helltar.vusan.tools.vision.VisionTools
 import com.helltar.vusan.tools.vision.WhisperVideoAudioTranscriber
+import com.helltar.vusan.tools.workspace.WorkspaceClient
+import com.helltar.vusan.tools.workspace.WorkspaceTools
 import com.helltar.vusan.tools.voice.ElevenLabsTtsClient
 import com.helltar.vusan.tools.voice.VideoNoteTools
 import com.helltar.vusan.tools.voice.VoiceTools
@@ -154,9 +154,9 @@ class ToolRegistryFactory(
                 }
         }
 
-    private val sandboxClient =
-        optional("SANDBOX_URL", config.sandboxUrl, "code execution tool") {
-            SandboxClient(http, it, config.sandboxTimeoutSeconds.seconds)
+    private val workspaceClient =
+        optional("WORKSPACE_URL", config.workspaceUrl, "workspace shell tools") {
+            WorkspaceClient(http, it, config.workspaceMaxTimeoutSeconds.seconds, config.workspaceToken)
         }
 
     // the key that enables voice transcription also hands a video's sound to the vision tool
@@ -201,7 +201,7 @@ class ToolRegistryFactory(
 
             tavilyClient?.let { tools(TavilyTools(it, imageDownloadClient, outbox)) }
             searxngClient?.let { tools(SearxngTools(it, imageDownloadClient, outbox)) }
-            sandboxClient?.let { tools(SandboxTools(it, outbox, context.attachedFile)) }
+            workspaceClient?.let { tools(WorkspaceTools(it, context, outbox, context.attachedFile)) }
 
             if (chat.stickersAndAnimations) {
                 giphyClient?.let { tools(GiphyTools(it, outbox)) }

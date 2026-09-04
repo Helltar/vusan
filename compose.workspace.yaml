@@ -1,0 +1,56 @@
+# The workspace service on a machine of its own. Nothing else runs here, so an escape from a
+# workspace lands on a host holding no bot token, no database and no conversation history —
+# which is the largest single improvement available to this setup. See docs/workspace.md.
+#
+# Not needed on the machine running the bot.
+#
+#   docker compose -f compose.workspace.yaml up -d
+
+x-logging: &default-logging
+  driver: json-file
+  options:
+    max-size: "10m"
+    max-file: "3"
+
+services:
+  vusan-workspace:
+    image: ghcr.io/helltar/vusan-workspace:latest
+    container_name: vusan-workspace-container
+    restart: unless-stopped
+    init: true
+
+    # bound to the private link between the two machines, so nothing listens on the internet.
+    # WORKSPACE_BIND is that interface's address on this host.
+    ports:
+      - "${WORKSPACE_BIND:?the private address to listen on, e.g. 10.10.10.2}:8080:8080"
+
+    environment:
+      WORKSPACE_ISOLATION: shared
+      WORKSPACE_NETWORK: "${WORKSPACE_NETWORK:-open}"
+      WORKSPACE_TIMEOUT_SECONDS: "${WORKSPACE_TIMEOUT_SECONDS:-120}"
+      WORKSPACE_MAX_TIMEOUT_SECONDS: "${WORKSPACE_MAX_TIMEOUT_SECONDS:-600}"
+      WORKSPACE_MAX_CONCURRENT: "${WORKSPACE_MAX_CONCURRENT:-4}"
+      WORKSPACE_IDLE_MINUTES: "${WORKSPACE_IDLE_MINUTES:-60}"
+      WORKSPACE_QUOTA_MB: "${WORKSPACE_QUOTA_MB:-4096}"
+      # the link is private, but a secret costs nothing and covers the day it stops being private
+      WORKSPACE_TOKEN: "${WORKSPACE_TOKEN:?a shared secret with the bot is required here}"
+
+    volumes:
+      # a directory rather than a named volume, so it can be a disk of its own and the machine
+      # around it stays disposable — re-image the host, keep the workspaces
+      - "${WORKSPACE_DIR:-/srv/workspaces}:/work"
+
+    cap_drop: [ALL]
+    cap_add: [NET_ADMIN, NET_RAW, SETUID, SETGID, CHOWN, DAC_OVERRIDE, KILL]
+    security_opt:
+      - no-new-privileges:true
+    read_only: true
+    tmpfs:
+      - /tmp:size=1g
+      - /run
+    pids_limit: 1024
+    mem_limit: "${WORKSPACE_MEM:-8g}"
+    cpus: ${WORKSPACE_CPUS:-4}
+    # here the local network is someone else's, so the names on it are not this machine's business
+    dns: ${WORKSPACE_DNS:-1.1.1.1}
+    logging: *default-logging

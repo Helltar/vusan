@@ -88,26 +88,6 @@ class TelegramOutputSenderTest {
     }
 
     @Test
-    fun `photo can skip document fallback when document copy is queued separately`() = runBlocking {
-        val client = RecordingClient(failPhoto = true)
-
-        TelegramOutputSender.send(
-            client = client.proxy,
-            item = BotOutput.Photo(
-                bytes = byteArrayOf(1, 2, 3),
-                filename = "chart.bmp",
-                fallbackToDocument = false
-            ),
-            chatId = 1L,
-            replyParameters = null,
-            caption = null,
-            formattingFileNotice = "notice"
-        )
-
-        assertEquals(listOf("sendPhoto"), client.methods)
-    }
-
-    @Test
     fun `caption with rejected formatting is resent captionless plus a document`() = runBlocking {
         val client = RecordingClient(failHtmlCaptionOnce = true)
 

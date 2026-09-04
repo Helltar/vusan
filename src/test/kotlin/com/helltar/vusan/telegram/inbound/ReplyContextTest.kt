@@ -406,7 +406,7 @@ class ReplyContextTest {
     }
 
     @Test
-    fun `attachedFileContextBlock sends a video to describeVideo and not to the sandbox`() {
+    fun `attachedFileContextBlock points a video at describeVideo and at the workspace`() {
         val message =
             message(
                 """
@@ -422,7 +422,8 @@ class ReplyContextTest {
         assertTrue(block.contains("name: clip.mp4"))
         assertTrue(block.contains("duration: 42s"))
         assertTrue(block.contains("`describeVideo`"))
-        assertFalse(block.contains("codeExecution working directory"))
+        // a video is worth re-encoding as well as watching, so it is offered to both
+        assertTrue(block.contains("`ffmpeg`"))
     }
 
     private val mapper = ObjectMapper()

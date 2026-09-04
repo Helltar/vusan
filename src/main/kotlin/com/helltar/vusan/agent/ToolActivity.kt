@@ -6,7 +6,6 @@ import com.helltar.vusan.tools.grouplog.GroupLogTools
 import com.helltar.vusan.tools.imagegen.ImageGenTools
 import com.helltar.vusan.tools.memory.MemoryTools
 import com.helltar.vusan.tools.message.MessageTools
-import com.helltar.vusan.tools.sandbox.SandboxTools
 import com.helltar.vusan.tools.searxng.SearxngTools
 import com.helltar.vusan.tools.tasks.TaskTools
 import com.helltar.vusan.tools.tavily.TavilyTools
@@ -16,6 +15,7 @@ import com.helltar.vusan.tools.voice.VoiceTools
 import com.helltar.vusan.tools.youtube.YouTubeMusicTools
 import com.helltar.vusan.tools.youtube.YouTubeTranscriptTools
 import com.helltar.vusan.tools.youtube.YouTubeVideoTools
+import com.helltar.vusan.tools.workspace.WorkspaceTools
 
 /**
  * What the agent is busy with, surfaced while a tool runs so the chat can show it — as a chat action,
@@ -63,13 +63,15 @@ private val TOOL_ACTIVITIES: Map<String, ToolActivity> = buildMap {
     put(GiphyTools::searchGif.name, ToolActivity.SEARCHING_GIF)
     put(ImageGenTools::generateImage.name, ToolActivity.DRAWING)
     put(ImageGenTools::editImage.name, ToolActivity.DRAWING)
-    put(SandboxTools::codeExecution.name, ToolActivity.RUNNING_CODE)
+    put(WorkspaceTools::runCommand.name, ToolActivity.RUNNING_CODE)
+    put(WorkspaceTools::writeWorkspaceFile.name, ToolActivity.RUNNING_CODE)
     put(VisionTools::describeImage.name, ToolActivity.LOOKING_AT_IMAGE)
     put(VisionTools::describeVideo.name, ToolActivity.WATCHING_VIDEO)
     put(YouTubeVideoTools::downloadVideo.name, ToolActivity.DOWNLOADING_VIDEO)
     put(YouTubeMusicTools::playFullTrack.name, ToolActivity.DOWNLOADING_AUDIO)
     put(FileTools::sendFile.name, ToolActivity.SENDING_FILE)
     put(FileTools::downloadFile.name, ToolActivity.SENDING_FILE)
+    put(WorkspaceTools::sendFromWorkspace.name, ToolActivity.SENDING_FILE)
     put(VoiceTools::speakWithVoice.name, ToolActivity.SPEAKING)
     put(MemoryTools::rememberAboutMe.name, ToolActivity.REMEMBERING)
     put(MemoryTools::rememberAboutGroup.name, ToolActivity.REMEMBERING)

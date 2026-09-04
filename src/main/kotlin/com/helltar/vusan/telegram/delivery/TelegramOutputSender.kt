@@ -263,18 +263,6 @@ internal object TelegramOutputSender {
                 }
             }
 
-        if (!photo.fallbackToDocument) {
-            sendOrFallback(
-                chatId = chatId,
-                replyParameters = replyParameters,
-                failureMessage = "sendPhoto failed, document copy should be delivered separately",
-                send = send,
-                onFallback = captionTextFallback(client, chatId, caption, replyParameters)
-            )
-
-            return
-        }
-
         sendMediaWithDocumentFallback(
             client = client,
             chatId = chatId,
