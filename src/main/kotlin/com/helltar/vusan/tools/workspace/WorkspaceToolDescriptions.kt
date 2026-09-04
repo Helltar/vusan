@@ -5,7 +5,10 @@ internal object WorkspaceToolDescriptions {
     const val RUN_COMMAND =
         "Runs a shell command in this person's own Linux workspace and returns its output. " +
                 "The workspace is a real home directory that persists between messages and between days, so use it for anything that has files: writing and running programs, building a multi-file project, converting or editing media, inspecting data, and picking work back up that was started earlier. " +
-                "Preinstalled: `python3` with `pip`, `node` with `npm`, `git`, `curl`, `wget`, `ffmpeg`, `imagemagick`, `pandoc`, `sqlite3`, `jq`, `ripgrep`, `zip` and a C/C++ toolchain. " +
+                "Preinstalled: `python3` with `pip`, `node` with `npm`, `git`, `curl`, `wget`, `ffmpeg`, `imagemagick`, `pandoc`, `sqlite3`, `jq`, `ripgrep`, `zip`, a headless `chromium`, and a C/C++ toolchain. " +
+                "Run a page or game you just wrote before claiming it works: `chromium --headless --screenshot=shot.png --window-size=1280,800 --virtual-time-budget=5000 file:///` plus its absolute path renders it, and a non-zero exit or anything on stderr means it is broken. " +
+                "For errors a screenshot cannot show — a thrown exception, a failed fetch, a canvas that never draws — install `puppeteer-core` and listen for `pageerror` and `console`; it finds the browser by itself, so the full `puppeteer` package is not needed. " +
+                "You cannot look at the screenshot yourself, so send it with `sendFromWorkspace` when the user should see the result, and check anything else in code. " +
                 "The workspace has internet access, so `pip install --user`, `npm install`, and downloads work, and what they install stays for next time because the workspace is the home directory. " +
                 "There is no `sudo` and no system package manager: install into the workspace instead of into the system. " +
                 "Each command starts in the workspace root and keeps no working directory or shell variables from the last one, so use absolute paths or chain them as `cd project && npm run build`. " +

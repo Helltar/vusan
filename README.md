@@ -94,8 +94,8 @@ Prerequisites: JDK 21, plus `ffmpeg` and `yt-dlp` on `PATH`.
 - **Its own workspace** — a private Linux home directory per person that keeps its files between
   messages and between days. It writes and runs programs there, builds whole multi-file projects,
   converts and edits media, crunches data and draws charts, makes Word and PDF documents, and sends
-  back whatever you ask for. Come back a month later and the project is still there, ready to be
-  picked up.
+  back whatever you ask for. It can open a page or a game it just wrote in a browser to check that
+  it actually runs. Come back a month later and the project is still there, ready to be picked up.
 - **Images** — draws a picture from a description, or edits one: yours, or one it drew earlier.
 - **Voice replies** — answers out loud with a generated voice message.
 - **Round video messages** — answers with a circle: its own face, speaking out loud.

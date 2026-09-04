@@ -15,6 +15,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
         ffmpeg imagemagick \
         build-essential pkg-config \
         sqlite3 ripgrep pandoc \
+        chromium \
         fonts-noto-core fonts-noto-cjk fonts-noto-color-emoji \
     && rm -rf /var/lib/apt/lists/*
 
@@ -40,6 +41,7 @@ WORKDIR /app
 COPY deno.json *.ts ./
 COPY entrypoint.sh netpolicy.sh /usr/local/bin/
 COPY profile.sh /etc/profile.d/vusan-workspace.sh
+COPY chromium-flags.sh /etc/chromium.d/vusan
 
 RUN deno check main.ts && chmod +x /usr/local/bin/entrypoint.sh /usr/local/bin/netpolicy.sh
 

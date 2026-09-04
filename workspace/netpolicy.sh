@@ -26,9 +26,15 @@ apply_network_policy() {
 
   # everything that is not the public internet. ::ffff:0:0/96 has no v4 equivalent here — IPv6 is
   # simply not configured for a workspace, which removes that whole class of bypass.
+  #
+  # 127.0.0.0/8 is deliberately NOT here. Loopback is not a route to anywhere: in `container` mode
+  # it is the workspace's own namespace, and in `shared` mode the one thing on it worth protecting
+  # is the supervisor's port, which the owner rule below covers precisely. Blocking all of it
+  # breaks every tool that talks to itself over TCP — puppeteer to the browser it just launched, a
+  # dev server being tested, a language server — which is most of the reason to have a browser here.
   local ranges=(
     10.0.0.0/8 172.16.0.0/12 192.168.0.0/16
-    127.0.0.0/8 169.254.0.0/16 100.64.0.0/10
+    169.254.0.0/16 100.64.0.0/10
     192.0.0.0/24 198.18.0.0/15 224.0.0.0/4 240.0.0.0/4 0.0.0.0/8
   )
 

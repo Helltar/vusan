@@ -26,5 +26,14 @@ export function workspaceEnvironment(home: string, slot: number): Record<string,
     npm_config_fund: "false",
     npm_config_audit: "false",
     npm_config_progress: "false",
+
+    // where the `-core` driver packages look for a browser, so `npm i puppeteer-core` stays a
+    // small install instead of a second copy of Chromium per workspace. The flags Chromium needs
+    // in here cannot travel in the environment — its launcher clears CHROMIUM_FLAGS — so they
+    // live in /etc/chromium.d/vusan instead, and this path goes through that launcher.
+    CHROME_PATH: "/usr/bin/chromium",
+    PUPPETEER_EXECUTABLE_PATH: "/usr/bin/chromium",
+    PUPPETEER_SKIP_DOWNLOAD: "true",
+    PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD: "1",
   };
 }

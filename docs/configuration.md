@@ -407,7 +407,14 @@ back, as text only. Vision calls share the `LLM_REQUEST_TIMEOUT_SECONDS` budget.
 The workspace gives the agent a real Linux home directory it can work in with a shell: write and run programs, build a
 multi-file project, convert media, crunch data, draw charts, produce Word and PDF files, and send any of it back to the
 chat. `python3` with `pip`, `node` with `npm`, `git`, `curl`, `ffmpeg`, `imagemagick`, `pandoc`, `sqlite3`, `jq`,
-`ripgrep`, `zip` and a C/C++ toolchain are preinstalled, and anything else is installed into the workspace itself.
+`ripgrep`, `zip`, a headless `chromium` and a C/C++ toolchain are preinstalled, and anything else is installed into
+the workspace itself.
+
+Chromium is there so a page or a game it just wrote gets opened before it is called finished — rendered to a
+screenshot, or driven with `puppeteer-core` to catch a thrown exception or a canvas that never draws. It runs with
+`--no-sandbox`, set for it in the environment along with the other flags it needs every time: Chromium's own sandbox
+wants privileges this container does not have, and it is not what isolates anything here — the container around it
+is.
 
 **The workspace persists.** There is one per person per chat — the same `(userId, chatId)` key the conversation history
 uses — and it keeps everything between messages and between days, including what `pip install --user` and
