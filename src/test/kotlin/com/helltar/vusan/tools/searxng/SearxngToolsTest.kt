@@ -3,6 +3,7 @@ package com.helltar.vusan.tools.searxng
 import com.helltar.vusan.infra.Http
 import com.helltar.vusan.outbox.BotOutbox
 import com.helltar.vusan.outbox.BotOutput
+import com.helltar.vusan.tools.files.FileDownloadClient
 import com.helltar.vusan.tools.images.ImageDownloadClient
 import io.ktor.client.engine.mock.*
 import io.ktor.http.*
@@ -21,7 +22,7 @@ class SearxngToolsTest {
 
     private companion object {
         const val BASE_URL = "http://searxng:8080"
-        const val IMAGE_HOST = "cdn.example.com"
+        const val IMAGE_HOST = "93.184.216.34"
     }
 
     private fun png(width: Int = 8, height: Int = 8): ByteArray =
@@ -54,7 +55,7 @@ class SearxngToolsTest {
                 }
             )
 
-        return SearxngTools(SearxngClient(http, BASE_URL), ImageDownloadClient(http), outbox)
+        return SearxngTools(SearxngClient(http, BASE_URL), ImageDownloadClient(FileDownloadClient(http)), outbox)
     }
 
     private fun resultsJson(vararg urls: String) =
@@ -220,7 +221,7 @@ class SearxngToolsTest {
     @Test
     fun `an unreachable instance is reported without retry advice`() = runBlocking {
         val http = Http.createClient(MockEngine { throw java.net.ConnectException("Connection refused") })
-        val tools = SearxngTools(SearxngClient(http, BASE_URL), ImageDownloadClient(http), BotOutbox())
+        val tools = SearxngTools(SearxngClient(http, BASE_URL), ImageDownloadClient(FileDownloadClient(http)), BotOutbox())
 
         assertContains(tools.metaSearch("kotlin"), "temporarily unavailable")
     }

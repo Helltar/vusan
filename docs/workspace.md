@@ -8,9 +8,11 @@ See [configuration](configuration.md#workspace) for the tools, limits and securi
 ## Storage and updates
 
 With the default namespace, workspace `u123` uses container `vusan-workspace-u123` and volume
-`vusan-workspace-u123-home`. A group workspace has an ID such as `u123_g100456`. Every container mounts
+`vusan-workspace-u123-home`. The same `u123` is used in private chat and every group. Every container mounts
 only its own home at `/work`; its UID 1000 owns the volume. The controller mounts none of these homes.
 Its command metadata and bounded logs live separately in Compose's `vusan-workspace-state` volume.
+The API secret lives in `vusan-workspace-auth`, shared only with the trusted bot. Preserve that volume
+across updates; recreating it rotates the generated token and requires restarting the bot too.
 
 Back up the home volumes and controller state using your Docker-volume backup tooling. Stop the
 controller first for a consistent copy; a normal stop also removes live workspace containers and
@@ -93,7 +95,7 @@ WORKSPACE_URL=http://10.10.10.2:8080
 WORKSPACE_TOKEN=<the same secret>
 ```
 
-Start the bot with `docker compose up -d vusan` and stop any previously running local workspace
+Start the bot with `docker compose up -d --no-deps vusan` and stop any previously running local workspace
 controller. For later remote updates, use the same two Compose files with `pull` and then `up -d`.
 
 A bearer token does not encrypt HTTP: the private transport must provide confidentiality. At the host
@@ -101,6 +103,30 @@ or infrastructure firewall, allow API access only from the bot and restrict outb
 networks and metadata endpoints. Preserve established replies to the bot's connections. The workspace's
 own firewall is still mandatory; there is no setting to skip it. Public internet access can still be
 used to upload workspace contents or abuse remote services, so it is not safe storage for credentials.
+
+## Storage emergency
+
+The controller checks the state volume's free bytes and inodes at admission and every five seconds.
+If either reserve is exhausted, or the check fails, it stops all workspace containers and latches closed.
+Its health check becomes unhealthy; `restart: unless-stopped` does not restart an unhealthy process.
+Free space or inodes using administrator tooling, then run `docker compose restart vusan-workspace`.
+No home volume is deleted automatically. Do not expose the API or disable the reserve to get around the guard.
+
+This is a best-effort emergency stop, not a hard volume quota. A writer can outrun it. Before exposing
+the service to untrusted users, provision hard byte/inode quotas and isolate workspace storage from the
+bot's database and other production data. The default guard covers the local Docker data filesystem;
+custom volume backends need monitoring of their own actual storage.
+
+## Moving from per-chat containers
+
+Workspace IDs are now `u<userId>` in every chat. Existing private-chat home volumes are reused unchanged.
+Former `u<userId>_g<chatId>` volumes and job records are retained but no longer opened by the bot. History
+and its `(userId, chatId)` key are unchanged.
+
+There is no automatic merge of group files: two chats may have different projects at the same path.
+Back up the old volumes, stop the controller, and copy wanted projects into separate subdirectories of
+the person's `u<userId>` home, preserving UID/GID `1000:1000`. Review collisions and keep the old copies
+until verified. Deploy the bot and controller together; the new health endpoint reports protocol 3.
 
 ## Moving from the old shared workspace
 

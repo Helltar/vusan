@@ -13,6 +13,7 @@ import com.helltar.vusan.budget.TokenBudget
 import com.helltar.vusan.config.*
 import com.helltar.vusan.infra.Db
 import com.helltar.vusan.infra.Http
+import com.helltar.vusan.infra.createPublicHttpClient
 import com.helltar.vusan.stt.OpenAiWhisperClient
 import com.helltar.vusan.tasks.TaskScheduler
 import com.helltar.vusan.tasks.TasksRepository
@@ -42,12 +43,14 @@ suspend fun main() = coroutineScope {
     val config = AppConfig.fromEnv()
 
     var http: HttpClient? = null
+    var publicHttp: HttpClient? = null
     var executor: MultiLLMPromptExecutor? = null
     var visionExecutor: AutoCloseable? = null
 
     try {
         Db.connect(config)
         http = Http.createClient()
+        publicHttp = createPublicHttpClient()
 
         val conversation = ConversationRepository()
         val memory = MemoryRepository(config.maxMemoryPerScope)
@@ -93,7 +96,7 @@ suspend fun main() = coroutineScope {
 
         val toolRegistryFactory =
             ToolRegistryFactory(
-                http, telegramClient, config, conversation, memory, tasks, stickerCatalog, vision,
+                http, publicHttp, telegramClient, config, conversation, memory, tasks, stickerCatalog, vision,
                 groupLog, groupLogDigester, contextWindowPolicy.liveToolResultMaxChars, codexAuth, selfImage
             )
 
@@ -149,6 +152,7 @@ suspend fun main() = coroutineScope {
         visionExecutor?.close()
         executor?.close()
         http?.close()
+        publicHttp?.close()
         Db.disconnect()
     }
 }

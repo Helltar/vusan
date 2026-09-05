@@ -8,7 +8,7 @@ import io.github.oshai.kotlinlogging.KotlinLogging
 
 const val MAX_IMAGE_RESULTS = 10
 
-private const val MAX_PHOTO_BYTES = 10 * 1024 * 1024
+internal const val MAX_PHOTO_BYTES = 10 * 1024 * 1024
 private const val MAX_IMAGE_DESCRIPTION_CHARS = 200
 private const val MAX_FILENAME_BASE_CHARS = 40
 

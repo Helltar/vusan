@@ -1,6 +1,7 @@
 package com.helltar.vusan.tools.tgchannel
 
 import com.helltar.vusan.infra.Http
+import com.helltar.vusan.tools.files.FileDownloadClient
 import io.ktor.client.engine.mock.*
 import io.ktor.client.request.*
 import io.ktor.http.*
@@ -24,11 +25,13 @@ class TelegramChannelReaderTest {
     private fun reader(respond: MockRequestHandleScope.(Url) -> HttpResponseData) =
         TelegramChannelReader(
             client = TelegramChannelClient(
-                Http.createClient(
-                    MockEngine { request ->
-                        requested += request.url
-                        respond(request.url)
-                    }
+                FileDownloadClient(
+                    Http.createClient(
+                        MockEngine { request ->
+                            requested += request.url
+                            respond(request.url)
+                        }
+                    )
                 )
             ),
             imageDescriber = null,

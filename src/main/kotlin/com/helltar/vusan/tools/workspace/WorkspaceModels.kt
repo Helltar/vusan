@@ -4,10 +4,9 @@ import com.helltar.vusan.request.RequestContext
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
 
-/** A person's files stay separate between private conversations and each group. */
+/** A person's files follow them across chats; conversation history remains chat-scoped. */
 fun workspaceId(context: RequestContext): String =
-    if (context.chatIsPrivate) "u${context.userId}"
-    else "u${context.userId}_g${context.chatId.toString().trimStart('-')}"
+    "u${context.userId}"
 
 @Serializable
 data class CommandRequest(val command: String, val timeoutSeconds: Int? = null)

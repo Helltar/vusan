@@ -2,8 +2,8 @@ import { deepStrictEqual, rejects, strictEqual, throws } from "node:assert/stric
 import { integer, jobId, readBounded, RequestError, workspaceId } from "./protocol.ts";
 
 Deno.test("identifiers cannot inject paths or Docker names", () => {
-  strictEqual(workspaceId("u42_g100123"), "u42_g100123");
-  for (const id of ["../u42", "u42/other", "--privileged", "u42_g-123", null, "u" + "1".repeat(64)]) {
+  strictEqual(workspaceId("u42"), "u42");
+  for (const id of ["../u42", "u42/other", "--privileged", "u42_g123", "u042", null, "u" + "1".repeat(64)]) {
     throws(() => workspaceId(id), RequestError);
   }
   strictEqual(jobId("d6e07bfb-61dd-469a-94ad-2d05e1a19493"), "d6e07bfb-61dd-469a-94ad-2d05e1a19493");

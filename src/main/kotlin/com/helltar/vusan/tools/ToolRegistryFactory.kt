@@ -61,6 +61,7 @@ import org.telegram.telegrambots.meta.generics.TelegramClient
 
 class ToolRegistryFactory(
     http: HttpClient,
+    publicHttp: HttpClient,
     // the bot's own client: the only way to reach a file telegram already stores, by `file_id`
     private val telegramClient: TelegramClient,
     private val config: AppConfig,
@@ -95,12 +96,12 @@ class ToolRegistryFactory(
         }
 
     private val currency = CurrencyTools(ExchangeRateClient(http))
-    private val fileDownloadClient = FileDownloadClient(http)
-    private val imageDownloadClient = ImageDownloadClient(http)
+    private val fileDownloadClient = FileDownloadClient(publicHttp)
+    private val imageDownloadClient = ImageDownloadClient(fileDownloadClient)
     private val elevenLabsTts = config.elevenLabsTts
     private val openAiImage = config.openAiImage
     private val imageVisionClient = vision?.let { ImageVisionClient(it.executor, it.model) }
-    private val telegramChannelClient = TelegramChannelClient(http)
+    private val telegramChannelClient = TelegramChannelClient(fileDownloadClient)
     private val ytDlpRunner = YtDlpRunner(config.ytDlpCookiesFile)
     private val ytDlpClient = YtDlpClient(ytDlpRunner)
     private val youTubeTranscript = YouTubeTranscriptTools(YouTubeTranscriptClient(ytDlpRunner))
@@ -156,7 +157,7 @@ class ToolRegistryFactory(
 
     private val workspaceClient =
         optional("WORKSPACE_URL", config.workspaceUrl, "workspace shell tools") {
-            WorkspaceClient(http, it, config.workspaceMaxTimeoutSeconds.seconds, config.workspaceToken)
+            WorkspaceClient(http, it, config.workspaceMaxTimeoutSeconds.seconds, requireNotNull(config.workspaceToken))
         }
 
     // the key that enables voice transcription also hands a video's sound to the vision tool

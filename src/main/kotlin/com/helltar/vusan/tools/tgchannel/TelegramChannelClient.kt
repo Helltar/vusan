@@ -1,14 +1,13 @@
 package com.helltar.vusan.tools.tgchannel
 
-import io.ktor.client.*
-import io.ktor.client.request.*
-import io.ktor.client.statement.*
-import io.ktor.http.*
+import com.helltar.vusan.tools.files.FileDownloadClient
+import com.helltar.vusan.tools.files.FileDownloadResult
 
-// t.me serves the preview only to a browser-shaped client.
-private const val USER_AGENT = "Mozilla/5.0 (compatible; VusanBot/1.0; +https://t.me)"
-
-class TelegramChannelClient(private val http: HttpClient) {
+class TelegramChannelClient(private val downloader: FileDownloadClient) {
+    private companion object {
+        const val PAGE_LIMIT = 4 * 1024 * 1024L
+        const val IMAGE_LIMIT = 10 * 1024 * 1024L
+    }
 
     internal suspend fun read(
         reference: TelegramChannelReference,
@@ -17,15 +16,16 @@ class TelegramChannelClient(private val http: HttpClient) {
         maxPosts: Int = POSTS_PER_PAGE
     ): TelegramChannelPage {
         val url = reference.webPreviewUrl(before, query)
-        val response: HttpResponse = http.get(url) { header(HttpHeaders.UserAgent, USER_AGENT) }
+        val response = downloader.download(url, maxBytes = PAGE_LIMIT)
+        check(response is FileDownloadResult.Success) { "Telegram preview exceeds the download limit" }
 
         // a username that is not a channel with a public preview (a bot, a user, a group, a channel
         // that turned the preview off, or nothing at all) redirects to the plain t.me/<name> page.
-        val previewAvailable = response.request.url.encodedPath.startsWith("/s/")
+        val previewAvailable = response.url.encodedPath.startsWith("/s/")
 
         return TelegramChannelParser
             .parse(
-                html = response.bodyAsText(),
+                html = response.bytes.toString(Charsets.UTF_8),
                 username = reference.username,
                 url = url,
                 maxPosts = maxPosts
@@ -36,20 +36,18 @@ class TelegramChannelClient(private val http: HttpClient) {
     suspend fun downloadImage(url: String): TelegramChannelImage {
         require(url.startsWith("http://") || url.startsWith("https://")) { "Image URL must be http(s)" }
 
-        val response: HttpResponse = http.get(url)
+        val response = downloader.download(url, maxBytes = IMAGE_LIMIT)
+        check(response is FileDownloadResult.Success) { "Telegram image exceeds the download limit" }
 
         val contentType =
-            response.headers[HttpHeaders.ContentType]
-                ?.substringBefore(';')
-                ?.trim()
-                ?.lowercase()
+            response.contentType?.lowercase()
                 ?: guessMimeType(url)
 
         check(contentType.startsWith("image/")) { "Telegram media is not an image ($contentType)" }
 
         return TelegramChannelImage(
             url = url,
-            bytes = response.bodyAsBytes(),
+            bytes = response.bytes,
             mimeType = contentType,
             filename = filenameFromUrl(url, contentType)
         )

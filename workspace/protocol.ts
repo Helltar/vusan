@@ -11,7 +11,7 @@ export class RequestError extends Error {
 }
 
 export function workspaceId(value: unknown): string {
-  if (typeof value !== "string" || !/^u[0-9]+(?:_g[0-9]+)?$/.test(value) || value.length > 64) {
+  if (typeof value !== "string" || !/^u(?:0|[1-9][0-9]{0,18})$/.test(value)) {
     throw new RequestError("Invalid workspace id");
   }
   return value;

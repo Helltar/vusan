@@ -3,6 +3,7 @@ package com.helltar.vusan.tools.workspace
 internal object WorkspaceToolDescriptions {
     const val RUN_COMMAND =
         "Runs `bash` in this person's persistent workspace; use it to work with files, programs, data, documents, media, or an existing project. " +
+                "The same person shares one workspace across private and group chats, while conversation histories stay separate. " +
                 "Files and dependencies under the home directory survive messages and container restarts. " +
                 "Check the tools and versions needed for the task; install dependencies locally when practical, or report what is missing. " +
                 "There is no `sudo`, system installation, interactive terminal, or input on stdin. " +
@@ -39,6 +40,7 @@ internal object WorkspaceToolDescriptions {
 
     const val SEND_FILES =
         "Sends finished files from the workspace to the chat: images as photos, videos as videos, and other files as documents. " +
+                "Files may come from this person's other chats; send only files requested for the current chat. " +
                 "For a multi-file project, create and send an archive. " +
                 "At most 10 files and 50 MB total per call; file-transfer paths must not contain symlinks."
     const val SEND_PATHS = "Paths relative to the workspace root, for example `project/result.zip`."

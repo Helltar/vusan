@@ -47,6 +47,7 @@ data class AppConfig(
         require(maxMemoryPerScope >= 0) { "MAX_MEMORY_PER_SCOPE must not be negative" }
         require(maxTasksPerUser >= 0) { "MAX_TASKS_PER_USER must not be negative" }
         require(workspaceMaxTimeoutSeconds > 0) { "WORKSPACE_MAX_TIMEOUT_SECONDS must be positive" }
+        require(workspaceUrl == null || !workspaceToken.isNullOrBlank()) { "Workspace API authentication is required" }
         require(taskMaxLatenessMinutes >= 0) { "TASK_MAX_LATENESS_MINUTES must not be negative" }
     }
 
@@ -67,6 +68,7 @@ data class AppConfig(
             val elevenLabsKey = readEnv("ELEVENLABS_API_KEY")
             val openAiImageKey = readEnv("OPENAI_IMAGE_API_KEY")
             val llmProvider = resolveLlmProvider()
+            val workspaceUrl = readEnv("WORKSPACE_URL")
 
             val imageRoute = resolveImageRoute(openAiImageKey != null, llmProvider)
 
@@ -93,8 +95,10 @@ data class AppConfig(
                 telegramBotToken = requireEnv("TELEGRAM_BOT_TOKEN"),
                 workspaceMaxTimeoutSeconds =
                     readLongEnv("WORKSPACE_MAX_TIMEOUT_SECONDS") ?: DEFAULT_WORKSPACE_MAX_TIMEOUT_SECONDS,
-                workspaceToken = readEnv("WORKSPACE_TOKEN"),
-                workspaceUrl = readEnv("WORKSPACE_URL"),
+                workspaceToken = workspaceUrl?.let {
+                    readWorkspaceToken(readEnv("WORKSPACE_TOKEN"), readEnv("WORKSPACE_TOKEN_FILE"))
+                },
+                workspaceUrl = workspaceUrl,
                 tokenBudget = resolveTokenBudget(),
                 ytDlpCookiesFile = readEnv("YT_DLP_COOKIES_FILE"),
 

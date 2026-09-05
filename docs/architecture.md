@@ -421,18 +421,22 @@ A normal user message travels:
 The shell service is Deno/TypeScript under [`workspace/`](../workspace/). Kotlin reaches it only through
 `tools/workspace/WorkspaceClient.kt`; Docker details never enter the bot's request flow.
 
-Each `(userId, chatId)` maps to a readable ID (`u<userId>` in private, `u<userId>_g<positiveChatId>`
-in a group). `container.ts` gives it one Docker container and a named volume mounted as `HOME=/work`.
+Each `userId` maps to a readable ID `u<userId>` in every chat. Conversation history still uses
+`(userId, chatId)`; only the files and workspace jobs are shared. `container.ts` gives the user one
+Docker container and a named volume mounted as `HOME=/work`.
 All commands and file transfers run inside that container as UID 1000. There is no UID pool, shared
 runner, engine selection or runtime selection. The same image serves controller and workspace roles.
 
 - **`main.ts`** — validates/authenticates HTTP requests, limits concurrent file transfers, owns the
   state lock, startup recovery, shutdown and idle-sweep timer. `POST /jobs?id=...` starts a command;
   `GET /jobs?id=...` lists recent ones; `GET`/`DELETE /jobs/<jobId>?id=...` reads/cancels one.
-  `PUT`/`GET /files?id=...&path=...` transfers a bounded file. `GET /health` reports protocol version 2.
+  `PUT`/`GET /files?id=...&path=...` transfers a bounded file. `GET /health` reports protocol version 3.
   Busy/capacity responses use `409`; invalid input, authentication and missing jobs have explicit
   HTTP errors. The Kotlin client parses error bodies instead of relying on the shared client's
   `expectSuccess` default.
+- **`auth.ts`** — validates mandatory API secrets and constant-time bearer comparisons. Compose shares
+  an automatically generated, persistent secret file with the bot; an explicit token overrides it.
+  No empty-token mode exists. Only `/health` is unauthenticated. The Kotlin workspace client refuses redirects.
 - **`jobs.ts`** — reserves the per-workspace and global command slots before awaiting anything.
   Commands initially wait at most ten seconds, then return a running ID; reads can wait up to twenty
   seconds and continue from a byte offset. Job records/logs live under the controller's `/state`,
@@ -444,6 +448,8 @@ runner, engine selection or runtime selection. The same image serves controller 
   only that person's named home volume. Cancelling or timing out removes the entire container,
   so `setsid` cannot evade cleanup. Idle removal never deletes the home. Startup removes only
   containers carrying this controller's namespace label; shutdown removes live containers too.
+  Commands and file transfers hold leases; at capacity, the oldest unleased container can be removed
+  without deleting its home. A user's different chats cannot reserve multiple containers.
 - **`docker.ts`** — bounded Docker CLI calls, including stdin/stdout draining and operation deadlines.
   A command's execution deadline is enforced by the controller, outside the untrusted workspace.
 - **`env.ts`** — constructs a secret-free, noninteractive command environment. Each invocation starts
@@ -456,6 +462,9 @@ runner, engine selection or runtime selection. The same image serves controller 
 - **`entrypoint.sh` / `netpolicy.sh`** — the workspace role installs its destination-IP firewall
   with a fixed system PATH, verifies IPv6 is disabled, then drops UID/GID and capabilities before
   waiting for commands. A failed rule stops startup. The controller role needs no network capabilities.
+- **`storage.ts`** — checks free bytes and inodes on the state filesystem. Admission and a five-second
+  watchdog fail closed on pressure or a failed check. The controller stops all children and latches
+  closed until an administrator frees space and restarts it. Status reads remain available; homes stay intact.
 
 Only the controller receives the Docker socket and its metadata volume. User containers are not on
 the bot's control network and receive no application environment or host bind mounts. Their own loopback
@@ -464,8 +473,10 @@ is read-only, writable temporary mounts are bounded, `no-new-privileges` is set,
 orphans. Docker's host kernel remains the isolation boundary; there is no gVisor layer.
 
 Home volumes have no hard disk quota in this deployment. Post-command usage is a warning, never a
-reason to reject cleanup commands. The namespace is persisted in the state volume and cannot be
-changed in place. File volumes outlive both idle cleanup and `docker compose down`; restarting does
+reason to reject cleanup commands unless the separate storage emergency guard has tripped. A writer
+can outrun the watchdog; custom volume backends may not share the monitored filesystem. The namespace
+is persisted in the state volume and cannot be changed in place. File volumes outlive both idle cleanup
+and `docker compose down`; restarting does
 not resume processes. See [configuration](configuration.md#workspace) for limits and
 [administration](workspace.md) for backups, updates and a separate host.
 
@@ -486,6 +497,13 @@ reads the reference photo self-portraits are drawn from: `SELF_IMAGE_FILE` when 
 `AgentTurns` and `CallbackRouter` over those, and launch
 `TaskScheduler` and the sticker description worker, then block on the runner job until shutdown (closing the executor,
 HTTP client, and DB in `finally`).
+
+Public URL downloads have their own `createPublicHttpClient` (`infra/PublicHttp.kt`), also closed at
+shutdown. Its OkHttp DNS resolver supplies only validated public addresses to the actual connection;
+literal IPs are guarded separately because OkHttp bypasses DNS for them. Proxies and automatic redirects
+are disabled. `FileDownloadClient` owns bounded streaming and explicit redirect validation, shared by
+file downloads, image search and Telegram channel pages/images. Do not give these downloaders the
+internal-service HTTP client or replace connection-time enforcement with a separate DNS preflight.
 
 What that leaves in the log, in order: a `Starting Vusan <version>` banner (read from the jar manifest, `dev` on a
 classpath run), then whatever the Codex preflight and the optional-tool checks have to say, then one summary block from
@@ -524,7 +542,7 @@ A symptom-to-source map for finding the right file fast. Paths are under
 | A specific tool misbehaves                                                       | `tools/<feature>/<Feature>Tools.kt` for the tool surface, plus its `<Feature>Client.kt` for the external call                                                                                                                                                                                         |
 | Vusan will not hand a file from the chat back, or sends it under the wrong name  | `tools/files/FileTools.sendChatFile` (the `file_id` path and `chatFilename`) + `telegram/TelegramApi.downloadFileById` (`getFile`, and the 20 MB limit on what Telegram serves a bot) |
 | A command times out, says the workspace is busy, or its output is cut short      | `tools/workspace/WorkspaceClient.kt` (HTTP errors and job polling), then `workspace/jobs.ts` (admission, timeouts, retention), `container.ts` (whole-container cleanup) and `output.ts` (bounded logs and control-code cleanup) |
-| A workspace loses files, or someone sees another person's                        | `tools/workspace/WorkspaceModels.workspaceId` (the `(userId, chatId)` key), then `workspace/container.ts` (one named home volume per workspace) and `workspace/files.ts` (unprivileged, scoped transfers) |
+| A workspace loses files, or someone sees another person's                        | `tools/workspace/WorkspaceModels.workspaceId` (the `userId` key), then `workspace/container.ts` (one named home volume per person) and `workspace/files.ts` (unprivileged, scoped transfers) |
 | Wrong language in a canned reply (busy/error/voice/start/task menu)              | `i18n/Language.kt` (language selection) + `i18n/Messages.kt` (the strings)                                                                                                                                                                                                                            |
 | The typing indicator or the progress draft is wrong, stale, or missing           | `telegram/TelegramProgress.kt` (both tickers, the private-chat gate, the named-activity gate, `handOffProgressDraft`) + `agent/ToolActivity.kt` (which tool means what) + `i18n/Messages.progressLabel` (the words) + `telegram/delivery/TelegramDelivery.chatActionFor` (the action)                                                     |
 | A long research turn ends in the generic error reply or is answered mid-way      | `agent/AgentFactory.kt` (`maxIterations`, `outOfToolBudget` and the wrap-up node that lands the turn) + `agent/AgentRunner.kt` (delivering what the outbox holds when a run fails)                                                                                                                     |

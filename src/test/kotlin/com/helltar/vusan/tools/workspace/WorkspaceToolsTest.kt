@@ -43,7 +43,7 @@ class WorkspaceToolsTest {
                 else -> error("Unexpected request")
             }
         }
-        return WorkspaceTools(WorkspaceClient(Http.createClient(engine), "http://workspace:8080", 600.seconds), context, outbox, attached)
+        return WorkspaceTools(WorkspaceClient(Http.createClient(engine), "http://workspace:8080", 600.seconds, "test-token"), context, outbox, attached)
     }
 
     @Test

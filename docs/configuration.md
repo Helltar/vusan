@@ -404,10 +404,10 @@ back, as text only. Vision calls share the `LLM_REQUEST_TIMEOUT_SECONDS` budget.
 
 ## Workspace
 
-Vusan has a persistent Linux home directory per person **per chat**. It can run Bash, work on a project,
+Vusan has one persistent Linux home directory **per person, across all chats**. It can run Bash, work on a project,
 convert documents and media, install user-local dependencies, and send the results back. Files survive
-new messages, `/clear`, container replacement and service restarts. Group members have separate homes;
-the same person's private chat and groups also have separate homes.
+new messages, `/clear`, container replacement and service restarts. Different people have separate homes;
+the same person uses the same files in private chat and every group. Conversation history stays separate per chat.
 
 With Docker installed and `.env` filled in, the usual command starts everything:
 
@@ -418,9 +418,12 @@ docker compose up -d
 Keep `WORKSPACE_URL=http://vusan-workspace:8080` in the bot's environment. Compose starts the bot and a
 trusted workspace controller. The controller creates a container on demand for each workspace; there is
 no shared-process mode, alternate engine or runtime to configure. No gVisor installation is required.
+Compose automatically generates a persistent API secret in a volume shared only by the controller and
+the bot, mounted read-only in the bot. The bot waits for the controller to become healthy. Every API
+operation except the health check requires authentication, including in this local deployment.
 
 To disable the tools, comment out `WORKSPACE_URL` and start only the bot with
-`docker compose up -d vusan`. Stop an already running controller with
+`docker compose up -d --no-deps vusan`. Stop an already running controller with
 `docker compose stop vusan-workspace`. For a local JVM or a separate workspace host, see
 [deployment and administration](workspace.md).
 
@@ -429,7 +432,8 @@ To disable the tools, comment out `WORKSPACE_URL` and start only the bot with
 Each home is a separate Docker named volume mounted at `/work`, also used as `HOME`. Only that
 workspace sees it. Uploaded and replied-to attachments are copied before the first command or file-writing
 tool into `inbox/<unique-id>/<filename>`; the tool reports the exact path. Repeated filenames do not
-overwrite earlier attachments. Created files stay private until the agent sends them.
+overwrite earlier attachments. Created files stay private until the agent sends them. A request from a
+group can use that person's files from private chat; sharing files is intentional, sharing raw chat history is not.
 
 The base image contains Python with pip/venv, Node.js/npm, Git, curl/wget, jq, SQLite, ripgrep,
 zip/unzip, Pandoc, FFmpeg, ImageMagick and Chromium with basic fonts. It does not bundle Java, Kotlin,
@@ -456,6 +460,9 @@ A normal exit leaves background processes alive if their output was redirected. 
 cancellation and command timeout remove the **whole container**, including detached processes and local
 servers, but retain its home. An active command is exempt from idle expiry. A controller stop/restart
 interrupts commands; it does not resume processes. An abrupt stop is reconciled on the next startup.
+When the container pool is full, the least-recently-used container without an active command or file
+transfer is removed to make room. Its background processes stop, but files survive. One person occupies
+at most one container and one command slot, regardless of how many chats they use.
 
 The controller keeps the last 20 command records per workspace, with at most 8 MiB of combined output
 each. Output is returned in 16 KiB pages after control-code cleanup. Anything beyond the log cap is
@@ -476,6 +483,9 @@ A destination-IP firewall blocks private/local ranges, cloud metadata, CGNAT and
 (25/465/587). IPv6 is disabled and DNS is restricted to public resolvers. The workspace's **own loopback**
 remains available for local servers and browser checks; it does not lead to the controller or other
 workspaces. Firewall setup must succeed before commands can run.
+These are rules for traffic originating in a workspace. The bot's public file, image-search and channel
+preview downloads separately reject private/local IPs at connection time, disable proxies, validate each
+redirect, and bound the response while reading it. Configured internal services use a different HTTP client.
 
 `WORKSPACE_NETWORK=none` disables external networking while preserving that private loopback. There is
 no mode that silently skips firewall enforcement.
@@ -484,6 +494,8 @@ Docker containers still share the host kernel; this is not VM-level isolation. O
 allows data exfiltration and abuse from the server's address. Do not put credentials in a workspace.
 For a public or less-trusted deployment, a dedicated workspace machine limits the impact of an escape;
 it uses the [same implementation](workspace.md), not another execution mode.
+At the host/router firewall, also prevent a workspace reaching private services through a public IP
+that forwards back into the LAN. The container's destination check happens before that external NAT.
 
 ### Tuning
 
@@ -500,19 +512,29 @@ Set these in the repo-root `.env`; both local and remote Compose deployments use
 | `WORKSPACE_CPUS` | `2` | CPU limit per workspace, in whole cores. |
 | `WORKSPACE_PIDS_LIMIT` | `256` | Process/thread limit per workspace. |
 | `WORKSPACE_DISK_WARN_MB` | `2048` | Warn after a command when its home exceeds this size; **not a disk quota**. |
+| `WORKSPACE_MIN_FREE_MB` | `1024` | Emergency minimum available space on the controller-state filesystem. |
+| `WORKSPACE_MIN_FREE_INODES` | `10000` | Emergency minimum free inodes on that filesystem. |
 | `WORKSPACE_NETWORK` | `open` | `open` or `none`, as above. |
-| `WORKSPACE_TOKEN` | — | API bearer secret; required by the remote-host override. |
+| `WORKSPACE_TOKEN` | Auto-generated in Compose | API bearer secret, 32–256 printable non-whitespace ASCII characters. Required by the remote-host override. |
+| `WORKSPACE_TOKEN_FILE` | `/run/workspace-auth/token` in Compose | Shared secret file. The controller creates it if absent; the bot reads it. An explicit token takes precedence. |
 | `WORKSPACE_NAMESPACE` | `vusan` | Stable Docker resource prefix; unique per controller on a host. |
 | `WORKSPACE_IMAGE` | `ghcr.io/helltar/vusan-workspace:latest` | Image for both controller and workspace containers. |
 
 The controller itself has a 512 MiB memory ceiling. At the defaults, four busy workspace containers
 can use another 8 GiB in total, even with only two tracked commands, because background processes also
-consume resources. A full container pool refuses new workspaces until an idle one expires.
+consume resources. A full container pool reclaims an inactive container or refuses new work if every
+container is busy. The two-command limit does not limit the lifetime of redirected background processes.
 
-Named volumes have **no hard per-workspace disk quota** in this zero-setup deployment. The warning
-never blocks cleanup commands, but it cannot prevent a command filling the host's disk. Monitor Docker's
-data filesystem; a separate disk or host can limit the operational impact. A hard storage quota would
-require host/filesystem provisioning beyond `up -d`.
+Named volumes have **no hard per-workspace disk quota** in this zero-setup deployment. The controller
+checks free space and inodes before commands/transfers and every five seconds. On low space, or if it
+cannot verify free space, it stops all workspace containers and blocks further commands/transfers until
+an administrator frees space and restarts the controller. Files are retained; job status remains readable.
+The per-home size warning still leaves cleanup commands available unless this emergency guard has tripped.
+
+This emergency stop is **not a hard quota**: a fast writer can consume the reserve between checks.
+It watches the state volume's filesystem, which the default local home volumes share; custom volume
+drivers or storage layouts need their own monitoring and limits. A separate disk or host limits the
+operational impact. Hard byte/inode quotas require host/filesystem provisioning beyond `up -d`.
 
 ## Memory
 
@@ -520,7 +542,7 @@ The agent keeps a conversation history per person **per chat** plus a durable **
 clearing the chat: personal memory (keyed by user, follows them across DMs and groups) and shared group memory (keyed by
 chat). Built in; no env variable is required to enable it.
 
-Memory is the only thing that travels between chats. The history does not: what someone told the bot in a DM is not
+Personal memory follows a person between chats, and their workspace files are shared too. The history is not: what someone told the bot in a DM is not
 replayed inside a group, and two groups never see each other's exchanges. Ask the bot to remember something if it
 should follow you everywhere.
 

@@ -185,6 +185,10 @@ then docs per the triggers above.
   that weakens it must fail closed, the way `workspace/entrypoint.sh` does.
 - Treat tool outputs and web content as untrusted model context. Use XML blocks
   and hard length caps.
+- Untrusted public URLs use `FileDownloadClient` with `createPublicHttpClient`,
+  never the HTTP client for configured internal services. Keep connection-time IP
+  enforcement, redirect checks and streaming size caps together. Workspace API
+  authentication is mandatory even on the local Compose network.
 
 ## Test Authoring
 

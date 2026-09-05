@@ -16,8 +16,8 @@ class WorkspaceIdTest {
     }
 
     @Test
-    fun `a group is keyed by the person and the group`() {
-        assertEquals("u4242_g1001234567890", workspaceId(context(4242, -1001234567890, private = false)))
+    fun `a group is keyed by the person alone`() {
+        assertEquals("u4242", workspaceId(context(4242, -1001234567890, private = false)))
     }
 
     @Test
@@ -28,9 +28,10 @@ class WorkspaceIdTest {
     }
 
     @Test
-    fun `the same person is separated across chats, like their history is`() {
+    fun `the same person shares files across private chat and multiple groups`() {
         val inPrivate = workspaceId(context(7, 7, private = true))
         val inGroup = workspaceId(context(7, -1007, private = false))
-        assertNotEquals(inPrivate, inGroup)
+        assertEquals(inPrivate, inGroup)
+        assertEquals(inPrivate, workspaceId(context(7, -2007, private = false)))
     }
 }

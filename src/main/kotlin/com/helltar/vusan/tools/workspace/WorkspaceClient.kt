@@ -16,11 +16,18 @@ import kotlin.time.Duration
 internal const val WORKSPACE_FILE_LIMIT = 50 * 1024 * 1024
 
 class WorkspaceClient(
-    private val http: HttpClient,
+    http: HttpClient,
     baseUrl: String,
     private val maxCommandTimeout: Duration,
-    private val token: String? = null
+    private val token: String
 ) {
+    init {
+        require(token.isNotBlank()) { "Workspace API authentication is required" }
+    }
+
+    // the configured API has no redirect contract; never relay its bearer secret to another origin.
+    private val http = http.config { followRedirects = false }
+
     private companion object {
         const val REQUEST_TIMEOUT_MS = 90_000L
         const val CHUNK_BYTES = 64 * 1024
@@ -89,7 +96,7 @@ class WorkspaceClient(
     }
 
     private fun HttpRequestBuilder.workspaceRequest(workspaceId: String) {
-        token?.let { bearerAuth(it) }
+        bearerAuth(token)
         parameter("id", workspaceId)
         expectSuccess = false
         timeout {

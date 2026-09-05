@@ -5,6 +5,7 @@ import { FILE_LIMIT, RequestError, workspaceId } from "./protocol.ts";
 
 export class Containers {
   private readonly live = new Map<string, number>();
+  private readonly leases = new Map<string, number>();
   private gate: Promise<unknown> = Promise.resolve();
   private image = "";
   private closing = false;
@@ -16,6 +17,19 @@ export class Containers {
 
   name(id: string): string {
     return `${this.config.namespace}-workspace-${workspaceId(id)}`;
+  }
+
+  reserve(id: string): Disposable {
+    workspaceId(id);
+    this.leases.set(id, (this.leases.get(id) ?? 0) + 1);
+    return {
+      [Symbol.dispose]: () => {
+        const remaining = (this.leases.get(id) ?? 1) - 1;
+        if (remaining) this.leases.set(id, remaining);
+        else this.leases.delete(id);
+        this.touch(id);
+      },
+    };
   }
 
   private exclusive<T>(action: () => Promise<T>): Promise<T> {
@@ -51,10 +65,10 @@ export class Containers {
         await this.remove(id);
       }
       if (this.live.size >= this.config.maxActive) {
-        throw new RequestError(
-          "All workspace slots are occupied. Try again after an idle workspace stops.",
-          409,
-        );
+        const idle = [...this.live].filter(([key]) => !this.leases.has(key))
+          .sort((a, b) => a[1] - b[1])[0];
+        if (!idle) throw new RequestError("All workspace slots are busy; try again shortly", 409);
+        await this.remove(idle[0]);
       }
       const volume = `${name}-home`;
       await docker(["volume", "create", "--label", this.label, volume]);
@@ -159,6 +173,7 @@ export class Containers {
   }
 
   async file(id: string, action: "read" | "write", path: string, input?: Uint8Array): Promise<Uint8Array> {
+    using _lease = this.reserve(id);
     const name = await this.ensure(id);
     return await docker([
       "exec",
@@ -231,7 +246,7 @@ export class Containers {
     await this.exclusive(async () => {
       const cutoff = Date.now() - this.config.idleMinutes * 60_000;
       for (const [id, touched] of this.live) {
-        if (touched < cutoff && !busy(id)) await this.remove(id);
+        if (touched < cutoff && !busy(id) && !this.leases.has(id)) await this.remove(id);
       }
     });
   }

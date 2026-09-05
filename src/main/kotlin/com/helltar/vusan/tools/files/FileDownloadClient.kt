@@ -1,6 +1,7 @@
 package com.helltar.vusan.tools.files
 
 import com.helltar.vusan.common.sanitizeFilename
+import com.helltar.vusan.infra.isPublicDestination
 import io.github.oshai.kotlinlogging.KotlinLogging
 import io.ktor.client.*
 import io.ktor.client.plugins.*
@@ -8,10 +9,7 @@ import io.ktor.client.request.*
 import io.ktor.client.statement.*
 import io.ktor.http.*
 import io.ktor.utils.io.*
-import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.withContext
 import java.io.ByteArrayOutputStream
-import java.net.Inet6Address
 import java.net.InetAddress
 import kotlin.time.Duration.Companion.minutes
 import kotlin.time.Duration.Companion.seconds
@@ -37,12 +35,13 @@ private const val USER_AGENT =
 
 sealed class FileDownloadResult {
 
-    class Success(val bytes: ByteArray, val filename: String) : FileDownloadResult()
+    class Success(val bytes: ByteArray, val filename: String, val url: Url, val contentType: String?) : FileDownloadResult()
 
     /** [sizeBytes] is the declared `Content-Length`, or `null` when the cap tripped mid-stream. */
     class TooLarge(val sizeBytes: Long?) : FileDownloadResult()
 }
 
+/** Uses the public-only connection engine supplied at startup, never the internal-service client. */
 class FileDownloadClient(http: HttpClient) {
 
     private companion object {
@@ -63,14 +62,15 @@ class FileDownloadClient(http: HttpClient) {
         requestedFilename: String = "",
         maxBytes: Long = MAX_DOWNLOAD_BYTES
     ): FileDownloadResult {
+        require(maxBytes in 1..MAX_DOWNLOAD_BYTES) { "Invalid download size limit" }
         var target = parseDownloadUrl(url)
 
         repeat(MAX_REDIRECTS + 1) {
-            requirePublicHost(target)
+            requirePublicLiteral(target)
 
             when (val hop = fetch(target, requestedFilename, maxBytes)) {
                 is Hop.Done -> return hop.result
-                is Hop.Redirect -> target = URLBuilder(target).takeFrom(hop.location).build()
+                is Hop.Redirect -> target = parseDownloadUrl(URLBuilder(target).takeFrom(hop.location).buildString())
             }
         }
 
@@ -152,7 +152,7 @@ class FileDownloadClient(http: HttpClient) {
 
         log.info { "download ok host=[${target.host}] filename=[$filename] bytes=${bytes.size}" }
 
-        return FileDownloadResult.Success(bytes, filename)
+        return FileDownloadResult.Success(bytes, filename, target, response.contentType()?.withoutParameters()?.toString())
     }
 
     private fun resolveFilename(requested: String, target: Url, response: HttpResponse): String {
@@ -169,18 +169,11 @@ class FileDownloadClient(http: HttpClient) {
         return name.withExtensionFor(response.contentType())
     }
 
-    /**
-     * URLs reach this client straight from chat text, so a caller can aim the bot at its own network.
-     * Resolve the host up front and refuse loopback, link-local (cloud metadata endpoints), and private
-     * ranges — the bot process shares a network with the workspace service and the database.
-     */
-    private suspend fun requirePublicHost(target: Url) {
-        val addresses =
-            withContext(Dispatchers.IO) { runCatching { InetAddress.getAllByName(target.host) }.getOrNull() }
-
-        requireNotNull(addresses) { "Could not resolve host [${target.host}]" }
-
-        require(addresses.isNotEmpty() && addresses.none { it.isPrivateOrLocal }) {
+    private fun requirePublicLiteral(target: Url) {
+        val host = target.host
+        // names are resolved and checked at connection time by PublicDns, without a DNS check/use race.
+        if (!host.contains(':') && !host.all { it.isDigit() || it == '.' }) return
+        require(InetAddress.getByName(host).isPublicDestination) {
             "Refusing to download from a private or local address: [${target.host}]"
         }
     }
@@ -202,21 +195,13 @@ private fun parseDownloadUrl(url: String): Url {
     }
 
     require(parsed.host.isNotBlank()) { "URL has no host: [$trimmed]" }
+    require(parsed.user.isNullOrEmpty() && parsed.password.isNullOrEmpty()) { "Download URLs must not contain credentials" }
 
     return parsed
 }
 
 private val HttpStatusCode.isRedirect: Boolean
     get() = value in 300..399
-
-private val InetAddress.isPrivateOrLocal: Boolean
-    get() = isAnyLocalAddress || isLoopbackAddress || isLinkLocalAddress || isSiteLocalAddress ||
-            isMulticastAddress || isUniqueLocalIpv6
-
-// java exposes no predicate for ipv6 unique-local (fc00::/7), the range docker and most private ipv6
-// networks actually use; isSiteLocalAddress only covers the deprecated fec0::/10.
-private val InetAddress.isUniqueLocalIpv6: Boolean
-    get() = this is Inet6Address && (address.first().toInt() and 0xfe) == 0xfc
 
 private fun HttpResponse.contentDispositionFilename(): String =
     headers[HttpHeaders.ContentDisposition]

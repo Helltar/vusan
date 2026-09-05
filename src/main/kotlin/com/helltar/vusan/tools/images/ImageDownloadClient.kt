@@ -1,11 +1,9 @@
 package com.helltar.vusan.tools.images
 
 import com.helltar.vusan.common.imageDimensions
+import com.helltar.vusan.tools.files.FileDownloadClient
+import com.helltar.vusan.tools.files.FileDownloadResult
 import io.github.oshai.kotlinlogging.KotlinLogging
-import io.ktor.client.*
-import io.ktor.client.request.*
-import io.ktor.client.statement.*
-import io.ktor.http.*
 import kotlin.math.max
 import kotlin.math.min
 
@@ -13,14 +11,9 @@ import kotlin.math.min
  * Fetches an image a search provider pointed at and rejects anything Telegram would refuse as a
  * photo. Shared by every image search tool, whichever provider produced the URL.
  */
-class ImageDownloadClient(private val http: HttpClient) {
+class ImageDownloadClient(private val downloader: FileDownloadClient) {
 
     private companion object {
-        // image CDNs and wikis answer a default ktor user agent with 403, so a search could return
-        // perfectly good URLs and still deliver nothing. mirrors FileDownloadClient's user agent.
-        const val USER_AGENT =
-            "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0.0.0 Safari/537.36"
-
         const val MAX_DIMENSION = 10_000
         const val MAX_ASPECT_RATIO = 20.0
 
@@ -29,22 +22,18 @@ class ImageDownloadClient(private val http: HttpClient) {
 
     /** Returns the bytes, or `null` when the response is not an image Telegram would show. */
     suspend fun download(url: String): ByteArray? {
-        val response =
-            http.get(url.withScheme()) {
-                header(HttpHeaders.UserAgent, USER_AGENT)
-                header(HttpHeaders.Accept, "image/*,*/*")
-            }
-
-        val bytes = response.bodyAsBytes()
+        val result = downloader.download(url.withScheme(), maxBytes = MAX_PHOTO_BYTES.toLong())
+        if (result !is FileDownloadResult.Success) return null
+        val bytes = result.bytes
 
         if (!looksLikeImage(bytes)) {
-            log.info { "download: response is not an image, skipping contentType=[${response.contentType()}] url=[$url]" }
+            log.info { "download: response is not an image, skipping" }
             return null
         }
 
         imageDimensions(bytes)?.let { (w, h) ->
             if (!isTelegramPhotoCompatible(w, h)) {
-                log.info { "download: incompatible dimensions ${w}x$h, skipping url=[$url]" }
+                log.info { "download: incompatible dimensions ${w}x$h, skipping" }
                 return null
             }
         }

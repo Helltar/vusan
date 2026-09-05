@@ -60,7 +60,7 @@ export class Jobs {
 
   async recover(): Promise<void> {
     for await (const directory of Deno.readDir(this.config.stateDir)) {
-      if (!directory.isDirectory) continue;
+      if (!directory.isDirectory || !/^u(?:0|[1-9][0-9]{0,18})$/.test(directory.name)) continue;
       const id = workspaceId(directory.name);
       for (const job of await this.list(id)) {
         if (job.status !== "running") continue;
@@ -124,6 +124,7 @@ export class Jobs {
   }
 
   private async execute(running: Running, command: string, timeout: number): Promise<void> {
+    using _lease = this.containers.reserve(running.job.workspaceId);
     const job = running.job;
     let child: Deno.ChildProcess | undefined;
     let deadline: ReturnType<typeof setTimeout> | undefined;

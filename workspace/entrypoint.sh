@@ -4,7 +4,7 @@ export PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
 
 case "${1:-supervisor}" in
   supervisor)
-    exec deno run --no-prompt --allow-net --allow-read --allow-write --allow-run=docker --allow-env /app/main.ts
+    exec deno run --no-prompt --allow-net --allow-read --allow-write --allow-run=docker --allow-env --allow-sys=statfs /app/main.ts
     ;;
   workspace)
     /usr/local/bin/netpolicy.sh

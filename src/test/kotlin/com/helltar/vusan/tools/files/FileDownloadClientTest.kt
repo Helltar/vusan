@@ -164,6 +164,15 @@ class FileDownloadClientTest {
     }
 
     @Test
+    fun `redirect destinations cannot change to a non-http scheme`() = runBlocking {
+        val client = client {
+            respond("", HttpStatusCode.Found, headersOf(HttpHeaders.Location, "file:///etc/passwd"))
+        }
+        val error = assertFailsWith<IllegalArgumentException> { client.download("https://$PUBLIC_HOST/short") }
+        assertContains(error.message.orEmpty(), "Only http and https")
+    }
+
+    @Test
     fun `refuses loopback hosts`() = runBlocking {
         val client = client { respond(content = "secret".toByteArray()) }
 

@@ -10,11 +10,11 @@ Deno.test({
     const namespace = `vusan-test-${crypto.randomUUID().slice(0, 8)}`;
     const supervisor = `${namespace}-supervisor`;
     const state = `${namespace}-state`;
+    const auth = `${namespace}-auth`;
     const label = `com.helltar.vusan.workspace=${namespace}`;
     const encoder = new TextEncoder();
     let base = "";
-    const token = "workspace-integration-secret";
-    const headers = { authorization: `Bearer ${token}` };
+    const headers = { authorization: "" };
     const request = async (path: string, options: RequestInit = {}) => {
       const response = await fetch(`${base}${path}`, { ...options, headers });
       return { status: response.status, body: await response.json() };
@@ -24,7 +24,7 @@ Deno.test({
         method: "POST",
         body: JSON.stringify({ command, timeoutSeconds }),
       });
-    const startSupervisor = async (network = "open") => {
+    const startSupervisor = async (network = "open", pressureTest = false) => {
       await docker([
         "run",
         "-d",
@@ -40,8 +40,11 @@ Deno.test({
         "127.0.0.1::8080",
         "-v",
         "/var/run/docker.sock:/var/run/docker.sock",
+        ...(pressureTest
+          ? ["--tmpfs", "/state:size=128m"]
+          : ["--mount", `type=volume,src=${state},dst=/state`]),
         "--mount",
-        `type=volume,src=${state},dst=/state`,
+        `type=volume,src=${auth},dst=/run/workspace-auth`,
         "-e",
         `WORKSPACE_IMAGE=${image}`,
         "-e",
@@ -49,7 +52,9 @@ Deno.test({
         "-e",
         `WORKSPACE_NETWORK=${network}`,
         "-e",
-        `WORKSPACE_TOKEN=${token}`,
+        "WORKSPACE_TOKEN_FILE=/run/workspace-auth/token",
+        "-e",
+        `WORKSPACE_MIN_FREE_MB=${pressureTest ? 120 : 1}`,
         "-e",
         "WORKSPACE_MAX_CONCURRENT=1",
         "-e",
@@ -66,7 +71,20 @@ Deno.test({
           await r.arrayBuffer();
           return r.ok;
         }).catch(() => false);
-        if (ready) return;
+        if (ready) {
+          const token = await dockerText([
+            "exec",
+            "--user",
+            "1000:1000",
+            supervisor,
+            "cat",
+            "/run/workspace-auth/token",
+          ]);
+          strictEqual(token.length, 64);
+          if (headers.authorization) strictEqual(headers.authorization, `Bearer ${token}`);
+          headers.authorization = `Bearer ${token}`;
+          return;
+        }
         await new Promise((resolve) => setTimeout(resolve, 100));
       }
       throw new Error(await dockerText(["logs", supervisor]));
@@ -77,6 +95,13 @@ Deno.test({
         const response = await fetch(`${base}/jobs?id=u90001`);
         strictEqual(response.status, 401);
         await response.arrayBuffer();
+        const file = await fetch(`${base}/files?id=u90001&path=private.png`);
+        strictEqual(file.status, 401);
+        await file.arrayBuffer();
+        const wrong = await fetch(`${base}/jobs?id=u90001`, { headers: { authorization: "Bearer wrong" } });
+        strictEqual(wrong.status, 401);
+        await wrong.arrayBuffer();
+        strictEqual((await request("/jobs?id=u90001_g42")).status, 400);
       });
       await t.step("bash starts unprivileged with a persistent home", async () => {
         const result = await run("id -u; printf 'alpha\\r\\nbeta\\r\\n'; printf saved > kept.txt");
@@ -178,6 +203,22 @@ Deno.test({
         const results = await Promise.all([run("sleep 2"), run("sleep 2", "u90002")]);
         deepStrictEqual(results.map((r) => r.status).sort(), [200, 409]);
       });
+      await t.step(
+        "idle slots are reclaimed without deleting files or evicting a running command",
+        async () => {
+          await run("printf third > marker.txt", "u90003");
+          const started = await run("sleep 100", "u90001", 120);
+          strictEqual(started.body.status, "running");
+          for (const id of ["u90004", "u90005"]) {
+            const write = await request(`/files?id=${id}&path=marker.txt`, { method: "PUT", body: "marker" });
+            strictEqual(write.status, 200);
+          }
+          strictEqual((await request(`/jobs/${started.body.jobId}?id=u90001`)).body.status, "running");
+          await request(`/jobs/${started.body.jobId}?id=u90001`, { method: "DELETE" });
+          strictEqual((await run("cat kept.txt")).body.output.trim(), "saved");
+          strictEqual((await run("cat marker.txt", "u90003")).body.output.trim(), "third");
+        },
+      );
       await t.step("timeout kills detached descendants while retaining files", async () => {
         const result = await run("setsid sleep 100 & wait", "u90001", 1);
         strictEqual(result.body.status, "timed_out", JSON.stringify(result.body));
@@ -243,13 +284,36 @@ Deno.test({
         strictEqual(result.body.exitCode, 0, JSON.stringify(result.body));
         ok(result.body.output.startsWith("saved"));
       });
+      await t.step("storage pressure stops running containers and latches admission closed", async () => {
+        await docker(["stop", "--time", "30", supervisor]);
+        await docker(["rm", supervisor]);
+        await startSupervisor("open", true);
+        const started = await run("sleep 100", "u90001", 120);
+        strictEqual(started.body.status, "running");
+        // a bounded tmpfs simulates low space; the host data disk is never filled.
+        await docker(["exec", supervisor, "dd", "if=/dev/zero", "of=/state/pressure", "bs=1M", "count=16"]);
+        for (let i = 0; i < 100; i++) {
+          const result = await request(`/jobs/${started.body.jobId}?id=u90001`);
+          const owned = await dockerText(["ps", "-aq", "--filter", `label=${label}`]);
+          if (result.body.status === "interrupted" && !owned) break;
+          await new Promise((resolve) => setTimeout(resolve, 100));
+        }
+        strictEqual((await request(`/jobs/${started.body.jobId}?id=u90001`)).body.status, "interrupted");
+        strictEqual(await dockerText(["ps", "-aq", "--filter", `label=${label}`]), "");
+        strictEqual((await run("printf blocked")).status, 507);
+        await docker(["exec", supervisor, "rm", "/state/pressure"]);
+        strictEqual((await run("printf still-blocked")).status, 507);
+      });
     } finally {
+      // let the controller finish its own removals before test cleanup touches the same children.
+      await docker(["stop", "--time", "30", supervisor]).catch(() => {});
       const owned = await dockerText(["ps", "-aq", "--filter", `label=${label}`]);
       for (const id of owned.split("\n").filter(Boolean)) await docker(["rm", "-f", id]);
       await docker(["rm", "-f", supervisor]).catch(() => {});
       const volumes = await dockerText(["volume", "ls", "-q", "--filter", `label=${label}`]);
       for (const volume of volumes.split("\n").filter(Boolean)) await docker(["volume", "rm", volume]);
       await docker(["volume", "rm", state]);
+      await docker(["volume", "rm", auth]);
     }
   },
 });
