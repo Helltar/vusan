@@ -91,6 +91,17 @@ class WorkspaceTools(
     }
 
     @Tool
+    @LLMDescription(WorkspaceToolDescriptions.DELETE_FILE)
+    suspend fun deleteWorkspaceFile(
+        @LLMDescription(WorkspaceToolDescriptions.DELETE_PATH)
+        path: String
+    ): String = suspendToolGuard {
+        val target = path.requireToolText("Path", MAX_PATH_CHARS)
+        client.deleteFile(id, target)
+        "Deleted `$target`. Other files were kept; background processes were stopped."
+    }
+
+    @Tool
     @LLMDescription(WorkspaceToolDescriptions.SEND_FILES)
     suspend fun sendFromWorkspace(
         @LLMDescription(WorkspaceToolDescriptions.SEND_PATHS)

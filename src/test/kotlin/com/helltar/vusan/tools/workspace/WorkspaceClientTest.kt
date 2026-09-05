@@ -67,6 +67,21 @@ class WorkspaceClientTest {
         assertEquals(CommandStatus.COMPLETED, result.status)
     }
 
+    @Test
+    fun `deletion sends an authenticated exact path without shell interpretation`() = runBlocking {
+        Http.createClient(MockEngine { request ->
+            assertEquals(HttpMethod.Delete, request.method)
+            assertEquals("/files", request.url.encodedPath)
+            assertEquals("u42", request.url.parameters["id"])
+            assertEquals("project/build output", request.url.parameters["path"])
+            assertEquals("Bearer test-token", request.headers[HttpHeaders.Authorization])
+            respond("{}", HttpStatusCode.OK)
+        }).use { http ->
+            WorkspaceClient(http, "http://workspace", 600.seconds, "test-token")
+                .deleteFile("u42", "project/build output")
+        }
+    }
+
     private fun clientThatThrows(error: Throwable): WorkspaceClient {
         val http = Http.createClient(MockEngine { throw error })
         return WorkspaceClient(http, "http://vusan-workspace:8080", 600.seconds, "test-token")

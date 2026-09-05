@@ -38,6 +38,14 @@ internal object WorkspaceToolDescriptions {
     const val WRITE_PATH = "Path relative to the workspace root, for example `project/main.py`; symlinks are refused."
     const val WRITE_CONTENT = "The complete file contents, not a patch or fragment."
 
+    const val DELETE_FILE =
+        "Deletes one exact file or directory from this person's workspace; directories are removed recursively. " +
+                "Use to remove unwanted files, including when storage pressure has paused commands and uploads. " +
+                "This stops background processes; cancel any running command first. " +
+                "Deletion is permanent, so select only paths the user wants removed. " +
+                "A final symlink is removed without following it; parent symlinks are refused."
+    const val DELETE_PATH = "An exact path relative to the workspace root, such as `project/build`; no globs or workspace root."
+
     const val SEND_FILES =
         "Sends finished files from the workspace to the chat: images as photos, videos as videos, and other files as documents. " +
                 "Files may come from this person's other chats; send only files requested for the current chat. " +

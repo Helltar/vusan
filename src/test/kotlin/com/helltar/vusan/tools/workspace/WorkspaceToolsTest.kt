@@ -19,6 +19,7 @@ import kotlin.time.Duration.Companion.seconds
 
 class WorkspaceToolsTest {
     private val context = RequestContext(chatId = 55L, userId = 55L, messageId = 1L, chatIsPrivate = true)
+    private val deletions = mutableListOf<String>()
     private val writes = mutableListOf<Pair<String, ByteArray>>()
 
     private fun tools(
@@ -34,6 +35,10 @@ class WorkspaceToolsTest {
             assertEquals("u55", request.url.parameters["id"])
             when {
                 path.startsWith("/jobs") -> respond(result, status, headersOf(HttpHeaders.ContentType, "application/json"))
+                path == "/files" && request.method == HttpMethod.Delete -> {
+                    deletions += wanted
+                    respond("{}", HttpStatusCode.OK)
+                }
                 path == "/files" && request.method == HttpMethod.Put -> {
                     writes += wanted to request.body.toByteArray()
                     respond("{}", HttpStatusCode.OK)
@@ -126,6 +131,19 @@ class WorkspaceToolsTest {
         assertEquals("project.zip", queued.filterIsInstance<BotOutput.Document>().single().filename)
         assertContains(result, "Not sent")
         assertContains(result, "missing.txt")
+    }
+
+    @Test
+    fun `cleanup deletes one exact path without uploading attachments`() = runBlocking {
+        val attached = AttachedFile(
+            name = "unused.csv", fileSizeBytes = 1, mimeType = "text/csv", kind = AttachedFileKind.OTHER,
+            loadBytes = { error("Cleanup must not download attachments") }
+        )
+        val result = tools(attached = attached).deleteWorkspaceFile("project/build output")
+        assertEquals(listOf("project/build output"), deletions)
+        assertTrue(writes.isEmpty())
+        assertContains(result, "Deleted")
+        assertContains(result, "background processes were stopped")
     }
 
     @Test
