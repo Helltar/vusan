@@ -19,10 +19,16 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 # exec, but neither should be the single thing standing between the workspace user and root.
 RUN find / -xdev -perm /6000 -type f -exec chmod u-s,g-s {} +
 
-# only the supervisor receives a docker socket; workspace containers never do.
+# only the supervisor receives a docker socket; workspace containers never do. this binary is what
+# the socket is driven with, so it is verified rather than piped straight from the network into the
+# image: update the checksum together with the version.
 ARG DOCKER_CLI_VERSION=29.7.2
-RUN curl -fsSL "https://download.docker.com/linux/static/stable/x86_64/docker-${DOCKER_CLI_VERSION}.tgz" \
-        | tar -xz -C /usr/local/bin --strip-components=1 docker/docker \
+ARG DOCKER_CLI_SHA256=803d433f226db4776e1768fd319fc6c6e4935a456acf84fcc0080818b854bc8f
+RUN curl -fsSL -o /tmp/docker.tgz \
+        "https://download.docker.com/linux/static/stable/x86_64/docker-${DOCKER_CLI_VERSION}.tgz" \
+    && echo "${DOCKER_CLI_SHA256}  /tmp/docker.tgz" | sha256sum -c - \
+    && tar -xzf /tmp/docker.tgz -C /usr/local/bin --strip-components=1 docker/docker \
+    && rm /tmp/docker.tgz \
     && docker --version
 
 # a newly created named volume inherits this directory's ownership.
