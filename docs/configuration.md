@@ -465,7 +465,8 @@ transfer is removed to make room. Its background processes stop, but files survi
 at most one container and one command slot, regardless of how many chats they use.
 
 The controller keeps the last 20 command records per workspace, with at most 8 MiB of combined output
-each. Output is returned in 16 KiB pages after control-code cleanup. Anything beyond the log cap is
+each, and drops a workspace's records entirely after 30 days without use; home volumes are untouched.
+Output is returned in 16 KiB pages after control-code cleanup. Anything beyond the log cap is
 discarded and marked as truncated; redirect to a workspace file when the complete output matters.
 A single file cannot grow past `WORKSPACE_MAX_FILE_MB`, 4 GiB by default; the writing process is stopped
 there. Transfers are limited to 50 MiB per file; sending to chat accepts up to 10 files and 50 MiB total per call.

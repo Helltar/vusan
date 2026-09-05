@@ -1,7 +1,18 @@
 import type { Config } from "./config.ts";
 import type { Containers } from "./container.ts";
 import { clean, completeUtf8Prefix, JobLog } from "./output.ts";
-import { COMMAND_LIMIT, jobId, JOBS_RETAINED, OUTPUT_CHUNK, RequestError, workspaceId } from "./protocol.ts";
+import {
+  COMMAND_LIMIT,
+  jobId,
+  JOBS_RETAINED,
+  JOBS_RETAINED_DAYS,
+  OUTPUT_CHUNK,
+  RequestError,
+  workspaceId,
+} from "./protocol.ts";
+
+const WORKSPACE_DIRECTORY = /^u(?:0|[1-9][0-9]{0,18})$/;
+const PRUNE_EVERY_MS = 60 * 60_000;
 
 type Status = "running" | "completed" | "timed_out" | "cancelled" | "interrupted" | "failed";
 export interface Job {
@@ -25,6 +36,7 @@ interface Running {
 
 export class Jobs {
   private readonly active = new Map<string, Running>();
+  private prunedAt = 0;
 
   constructor(private readonly config: Config, private readonly containers: Containers) {}
 
@@ -60,7 +72,7 @@ export class Jobs {
 
   async recover(): Promise<void> {
     for await (const directory of Deno.readDir(this.config.stateDir)) {
-      if (!directory.isDirectory || !/^u(?:0|[1-9][0-9]{0,18})$/.test(directory.name)) continue;
+      if (!directory.isDirectory || !WORKSPACE_DIRECTORY.test(directory.name)) continue;
       const id = workspaceId(directory.name);
       for (const job of await this.list(id)) {
         if (job.status !== "running") continue;
@@ -69,6 +81,21 @@ export class Jobs {
         job.error = "The workspace service restarted. Files were kept; the command was stopped.";
         await this.save(job);
       }
+    }
+  }
+
+  /** Records of people who stopped coming back are not an audit store; their home volumes are untouched. */
+  async prune(): Promise<void> {
+    if (Date.now() - this.prunedAt < PRUNE_EVERY_MS) return;
+    this.prunedAt = Date.now();
+    const cutoff = Date.now() - JOBS_RETAINED_DAYS * 24 * 60 * 60_000;
+    for await (const directory of Deno.readDir(this.config.stateDir)) {
+      if (!directory.isDirectory || !WORKSPACE_DIRECTORY.test(directory.name)) continue;
+      const id = directory.name;
+      if (this.active.has(id) || this.containers.liveIds().includes(id)) continue;
+      if ((await this.list(id)).some((job) => job.startedAt > cutoff)) continue;
+      await Deno.remove(this.directory(id), { recursive: true });
+      console.log(`pruned workspace=[${id}] command records after ${JOBS_RETAINED_DAYS} idle days`);
     }
   }
 

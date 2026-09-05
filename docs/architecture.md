@@ -441,7 +441,8 @@ runner, engine selection or runtime selection. The same image serves controller 
   Commands initially wait at most ten seconds, then return a running ID; reads can wait up to twenty
   seconds and continue from a byte offset. Job records/logs live under the controller's `/state`,
   not the user-editable home. Atomic metadata replacement supports interrupted-command recovery;
-  only the latest 20 jobs and at most 8 MiB of output per job are retained. A flattened, capped
+  only the latest 20 jobs and at most 8 MiB of output per job are retained, and an hourly sweep drops the
+  records of a workspace untouched for 30 days without touching its home. A flattened, capped
   command preview, workspace/job IDs, status, exit code and duration go to the service log.
 - **`container.ts`** — serialized lifecycle operations create, reuse and remove workspace containers.
   It resolves the image to an ID on startup, sets per-container CPU/memory/PID limits and the per-file

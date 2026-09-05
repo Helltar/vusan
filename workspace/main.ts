@@ -112,6 +112,7 @@ const sweep = setInterval(async () => {
   sweeping = true;
   try {
     await containers.sweep((id) => jobs.busy(id));
+    await jobs.prune();
   } catch (e) {
     console.error("workspace sweep failed", e);
   } finally {
