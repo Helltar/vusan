@@ -481,11 +481,14 @@ runner, engine selection or runtime selection. The same image serves controller 
   The controller never follows user filesystem paths or changes their ownership. It
   pipes request and response bodies straight through the helper's stdio; because the helper validates
   before it emits a byte, one peek at stdout still separates a clean rejection from a started transfer.
-- **`entrypoint.sh` / `netpolicy.sh`** — the workspace role installs its destination-IP firewall
-  with a fixed system PATH, verifies IPv6 is disabled, drops IPv6 output where the kernel has any,
-  installs bandwidth, packet and new-connection caps, then drops UID/GID and capabilities before waiting for commands. A failed rule stops startup. The controller
-  role needs no network capabilities and runs with Deno permissions scoped to its own state, the port it
-  serves and the `docker` binary.
+- **`entrypoint.sh` / `netpolicy.sh`** — `entrypoint.sh` starts the controller and nothing else, with
+  Deno permissions scoped to its own state, the port it serves and the `docker` binary. `netpolicy.sh`
+  runs from a short-lived helper in the host's network namespace, the one place a workspace cannot reach:
+  it rebuilds two chains per namespace, refusing private space, this pool's own subnet, the operator's
+  extra ranges, outbound SMTP and non-public DNS, dropping every connection opened toward a workspace or
+  toward the machine itself, and metering new connections and packets per workspace address. A bandwidth
+  cap, when asked for, is the pool's total on the shared bridge. Any failure stops startup, and so does a
+  probe that finds the policy is not actually in effect.
 - **`storage.ts`** — the host reserve guard. A one-second tick reads free bytes and inodes on the state
   filesystem. Directory walks run independently, triggered after 256 MiB of host-space loss or a minute,
   and use allocated blocks. A failed home measurement evicts that workspace. Host pressure or an

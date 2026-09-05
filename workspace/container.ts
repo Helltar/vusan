@@ -15,6 +15,25 @@ const WORKSPACE_CPU_SHARES = 256;
 const CLEAN_ENV = ["/usr/bin/env", "-i"];
 const HELPER_ENV = [...CLEAN_ENV, "DENO_DIR=/tmp/deno-cache"];
 
+// one chain per namespace: two controllers on the same host must never flush each other's rules.
+function policyChain(namespace: string): string {
+  return `WS_${namespace.toUpperCase().replace(/[^A-Z0-9]/g, "_").slice(0, 20)}`;
+}
+
+// what a workspace must not be able to open: the metadata service, private space in each RFC 1918
+// range, and the machine hosting it — the controller's own API included. Printing anything means the
+// policy is not doing its job, and the controller refuses to serve.
+const PROBE = `
+for target in 169.254.169.254 10.255.255.254 172.31.255.254 192.168.255.254; do
+  for port in 80 8080; do
+    timeout 2 bash -c "exec 3<>/dev/tcp/$target/$port" 2>/dev/null && echo "reached $target:$port"
+  done
+done
+gateway=$(ip -o -4 route show default | awk '{print $3; exit}')
+timeout 3 bash -c "exec 3<>/dev/tcp/$gateway/8080" 2>/dev/null && echo "reached the host at $gateway:8080"
+exit 0
+`;
+
 /** Keep the workspace pool within half the host's memory and cores, sharing a single-core host. */
 export function workspaceCapacity(config: Config, memoryBytes: number, cpus: number): number {
   if (!Number.isSafeInteger(memoryBytes) || memoryBytes <= 0 || !Number.isSafeInteger(cpus) || cpus <= 0) {
@@ -55,7 +74,7 @@ export class Containers {
   private image = "";
   private homes!: Homes;
   private capacity = 1;
-  private hostAddresses: string[] = [];
+  private network = "none";
   private closing = false;
   private storageFailure: string | null = null;
   private readonly cleaning = new Set<string>();
@@ -100,36 +119,7 @@ export class Containers {
     }
     this.capacity = workspaceCapacity(this.config, info.MemTotal, info.NCPU);
     if (this.capacity < 1) throw new Error("Not enough host memory or CPU budget for a workspace");
-    const addresses = JSON.parse(
-      await dockerText([
-        "run",
-        "--rm",
-        "--pull=never",
-        "--network=host",
-        "--read-only",
-        "--cap-drop=ALL",
-        "--security-opt=no-new-privileges",
-        "--user=1000:1000",
-        "--pids-limit=16",
-        "--memory=64m",
-        "--entrypoint",
-        "/usr/sbin/ip",
-        this.image,
-        "-j",
-        "-4",
-        "address",
-        "show",
-      ]),
-    );
-    this.hostAddresses = addresses.flatMap((entry: { addr_info: { local: string }[] }) =>
-      entry.addr_info.map((address) => address.local)
-    );
-    if (
-      !this.hostAddresses.length ||
-      this.hostAddresses.some((address) => !/^(?:[0-9]{1,3}\.){3}[0-9]{1,3}$/.test(address))
-    ) {
-      throw new Error("Cannot identify Docker host addresses for the workspace firewall");
-    }
+    if (this.config.network === "open") await this.openNetwork();
     const previous = await dockerText([
       "volume",
       "ls",
@@ -145,6 +135,87 @@ export class Containers {
       }
       await this.homes.close(disk.slice(0, -5));
     }
+  }
+
+  /**
+   * The pool gets a network of its own, and its policy is installed in the Docker host's namespace
+   * rather than inside each container: a workspace holds no capabilities and cannot reach the rules
+   * that bound it. Inter-container traffic is off at the bridge as well, so the two locks are
+   * independent. A policy that cannot be installed, or that does not hold, stops startup.
+   */
+  private async openNetwork(): Promise<void> {
+    const name = `${this.config.namespace}-workspaces`;
+    if (!await dockerText(["network", "ls", "-q", "--filter", `name=^${name}$`])) {
+      await docker([
+        "network",
+        "create",
+        "--driver",
+        "bridge",
+        "--label",
+        this.label,
+        "--opt",
+        "com.docker.network.bridge.enable_icc=false",
+        name,
+      ]);
+    }
+    const [network] = JSON.parse(await dockerText(["network", "inspect", name]));
+    if (network.Labels?.["com.helltar.vusan.workspace"] !== this.config.namespace) {
+      throw new Error("Workspace network belongs to another owner");
+    }
+    const subnet = network.IPAM?.Config?.[0]?.Subnet ?? "";
+    if (!/^(?:[0-9]{1,3}\.){3}[0-9]{1,3}\/[0-9]{1,2}$/.test(subnet)) {
+      throw new Error("Cannot read the workspace network subnet");
+    }
+    // the daemon derives a bridge from the network id unless it was given a name of its own.
+    const bridge = network.Options?.["com.docker.network.bridge.name"] || `br-${network.Id.slice(0, 12)}`;
+    await docker([
+      "run",
+      "--rm",
+      "--pull=never",
+      "--network=host",
+      "--read-only",
+      "--tmpfs",
+      "/run:size=1m",
+      "--cap-drop=ALL",
+      "--cap-add=NET_ADMIN",
+      "--security-opt=no-new-privileges",
+      "--pids-limit=32",
+      "--memory=64m",
+      "--entrypoint",
+      "/usr/local/bin/netpolicy.sh",
+      this.image,
+      policyChain(this.config.namespace),
+      bridge,
+      subnet,
+      this.config.networkMbit ?? "",
+      ...this.config.blockedCidrs,
+    ], { timeoutMs: 120_000 });
+    this.network = name;
+    await this.verifyNetwork();
+  }
+
+  /** Installing rules is not the same as having them: this asks a workspace what it can actually reach. */
+  private async verifyNetwork(): Promise<void> {
+    const reachable = await docker([
+      "run",
+      "--rm",
+      "--pull=never",
+      "--network",
+      this.network,
+      "--read-only",
+      "--user=1000:1000",
+      "--cap-drop=ALL",
+      "--security-opt=no-new-privileges",
+      "--pids-limit=32",
+      "--memory=64m",
+      "--entrypoint",
+      "/usr/bin/bash",
+      this.image,
+      "-c",
+      PROBE,
+    ], { timeoutMs: 120_000, includeStderr: true });
+    const reached = new TextDecoder().decode(reachable).trim();
+    if (reached) throw new Error(`Workspace network policy is not in effect: ${reached}`);
   }
 
   async ensure(id: string): Promise<string> {
@@ -187,12 +258,6 @@ export class Containers {
     }
     const volume = `${name}-home`;
     const device = await this.homes.open(name, cleanup);
-    const env = {
-      ...workspaceEnvironment(),
-      WORKSPACE_NETWORK: cleanup ? "none" : this.config.network,
-      WORKSPACE_BLOCKED_CIDRS: [...this.hostAddresses, ...this.config.blockedCidrs].join(" "),
-      ...(this.config.networkMbit ? { WORKSPACE_NETWORK_MBIT: this.config.networkMbit } : {}),
-    };
     try {
       await docker([
         "run",
@@ -207,6 +272,8 @@ export class Containers {
         "--init",
         "--no-healthcheck",
         "--read-only",
+        "--user",
+        "1000:1000",
         "--mount",
         `type=volume,src=${volume},dst=/work`,
         "--tmpfs",
@@ -214,11 +281,6 @@ export class Containers {
         "--tmpfs",
         "/run:rw,nosuid,nodev,size=16m",
         "--cap-drop=ALL",
-        "--cap-add=NET_ADMIN",
-        "--cap-add=NET_RAW",
-        "--cap-add=SETUID",
-        "--cap-add=SETGID",
-        "--cap-add=SETPCAP",
         "--security-opt=no-new-privileges",
         "--pids-limit",
         String(this.config.pids),
@@ -233,12 +295,12 @@ export class Containers {
         "--cpu-shares",
         String(WORKSPACE_CPU_SHARES),
         "--network",
-        cleanup || this.config.network === "none" ? "none" : "bridge",
+        cleanup || this.config.network === "none" ? "none" : this.network,
         "--sysctl",
         "net.ipv6.conf.all.disable_ipv6=1",
         "--sysctl",
         "net.ipv6.conf.default.disable_ipv6=1",
-        ...(this.config.network === "open" ? ["--dns", "1.1.1.1", "--dns", "8.8.8.8"] : []),
+        ...(this.config.network === "open" && !cleanup ? ["--dns", "1.1.1.1", "--dns", "8.8.8.8"] : []),
         ...(this.config.writeBps ? ["--device-write-bps", `${device}:${this.config.writeBps}`] : []),
         ...(this.config.readBps ? ["--device-read-bps", `${device}:${this.config.readBps}`] : []),
         "--log-driver",
@@ -247,25 +309,16 @@ export class Containers {
         "max-size=1m",
         "--log-opt",
         "max-file=2",
-        ...Object.entries(env).flatMap(([key, value]) => ["--env", `${key}=${value}`]),
+        ...Object.entries(workspaceEnvironment()).flatMap(([key, value]) => ["--env", `${key}=${value}`]),
+        // nothing in a workspace container runs as root, not even for the instant before it drops.
+        "--entrypoint",
+        "/usr/bin/sleep",
         this.image,
-        "workspace",
+        "infinity",
       ]);
       this.live.set(id, Date.now());
       this.burn.set(id, { usec: 0, seconds: 0 });
-      await docker([
-        "exec",
-        "--user",
-        "1000:1000",
-        name,
-        ...CLEAN_ENV,
-        "/usr/bin/timeout",
-        "15",
-        "/usr/bin/sh",
-        "-c",
-        "until test -f /run/workspace-ready; do /usr/bin/sleep 0.1; done" +
-        (cleanup ? "" : "; /usr/bin/mkdir -p /work/tmp /work/inbox"),
-      ]);
+      await this.settled(name, cleanup);
     } catch (e) {
       const details = await docker(["logs", "--tail", "10", name], { includeStderr: true })
         .then((out) => new TextDecoder().decode(out).trim()).catch(() => "");
@@ -273,6 +326,30 @@ export class Containers {
       throw new Error(`Workspace startup failed: ${details || String(e)}`);
     }
     return name;
+  }
+
+  /** `docker run` returns once the container is started, which an exec can still narrowly lose to. */
+  private async settled(name: string, cleanup: boolean): Promise<void> {
+    for (let attempt = 0;; attempt++) {
+      try {
+        await docker([
+          "exec",
+          "--user",
+          "1000:1000",
+          name,
+          ...CLEAN_ENV,
+          "/usr/bin/timeout",
+          "15",
+          "/usr/bin/sh",
+          "-c",
+          cleanup ? "true" : "/usr/bin/mkdir -p /work/tmp /work/inbox",
+        ]);
+        return;
+      } catch (e) {
+        if (attempt >= 5) throw e;
+        await new Promise((resolve) => setTimeout(resolve, 200));
+      }
+    }
   }
 
   command(id: string, command: string): Deno.ChildProcess {

@@ -46,7 +46,12 @@ Keep this file concise and actionable; put product docs in `README.md` or `docs/
 - There is one execution path: `workspace/container.ts` starts one Docker
   container and one persistent named home volume per workspace. Only the trusted
   HTTP controller receives the Docker socket; commands and file helpers run
-  inside their workspace as UID 1000. Do not reintroduce shared-process runners.
+  inside their workspace as UID 1000, with no capabilities and no privileged
+  phase at any point. Do not reintroduce shared-process runners.
+- The workspace is an optional, separate deployment: `compose.yaml` is the bot
+  alone and `compose.workspace.yaml` is the service, meant for a machine of its
+  own. Do not fold it back into the default Compose file or make the bot depend
+  on it; `WORKSPACE_URL` plus `WORKSPACE_TOKEN` is the whole switch.
 - `TelegramBotRunner` normalizes inbound updates into a prompt; `AgentTurns`
   builds the `AgentRequest` from there and owns the turn up to its delivery.
   Tools consume `RequestContext`/`AttachedFile`; they should not reach back into
@@ -185,14 +190,19 @@ then docs per the triggers above.
 - The workspace runs untrusted, model-authored shell with real tools and real
   network access. Keep it isolated: no application secrets in its environment, no
   host mounts, no access to production resources, and no reachable local network —
-  its egress policy is filtered by destination IP, never by hostname. Anything
-  that weakens it must fail closed, the way `workspace/entrypoint.sh` does.
+  its policy is filtered by destination IP, never by hostname, and it is installed
+  on the Docker host rather than inside the container, where nothing running in a
+  workspace can reach it. Anything that weakens it must fail closed, the way
+  `workspace/netpolicy.sh` and the startup probe in `container.ts` do: a policy
+  that cannot be installed, or that a throwaway workspace can be shown to escape,
+  stops the service instead of degrading it.
 - Treat tool outputs and web content as untrusted model context. Use XML blocks
   and hard length caps.
 - Untrusted public URLs use `FileDownloadClient` with `createPublicHttpClient`,
   never the HTTP client for configured internal services. Keep connection-time IP
   enforcement, redirect checks and streaming size caps together. Workspace API
-  authentication is mandatory even on the local Compose network.
+  authentication is mandatory on every deployment, private network or not, and
+  both sides are configured with the same secret rather than generating one.
 
 ## Test Authoring
 

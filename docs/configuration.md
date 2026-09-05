@@ -498,8 +498,9 @@ available when storage pressure has paused everything else.
 ### Network and security
 
 Each workspace has its own filesystem mounts, process table, network namespace and resource limits.
-Commands run as UID 1000 without capabilities, with Docker's default seccomp profile,
-`no-new-privileges` and a read-only root filesystem. They receive neither application secrets nor the
+Commands run as UID 1000 with an empty capability set — not merely unused capabilities, none at all —
+alongside Docker's default seccomp profile, `no-new-privileges` and a read-only root filesystem. Nothing
+in a workspace container is privileged at any point, including its first instant. They receive neither application secrets nor the
 Docker socket. Only the trusted controller gets that socket — **control of the controller means control
 of the Docker host**. A short-lived storage helper has `SYS_ADMIN`, `MKNOD` and access to loop devices to
 prepare or detach the fixed home filesystem. It has no network, runs only a fixed image-owned script,
@@ -507,17 +508,19 @@ and sees the backing image rather than user paths. User containers never receive
 loop devices, the backing image or a host bind mount.
 
 In the default `open` network policy, public internet access allows downloads and package installs.
-A destination-IP firewall blocks private/local ranges, cloud metadata, CGNAT and outbound SMTP
-(25/465/587). IPv6 is disabled and DNS is restricted to public resolvers. The workspace's **own loopback**
-remains available for local servers and browser checks; it does not lead to the controller or other
-workspaces. The controller also discovers the Docker host's IPv4 interface addresses on startup and
-blocks them, including public addresses. Restart the controller after host address changes. Extra public
-router or infrastructure addresses can be listed in `WORKSPACE_BLOCKED_CIDRS`. Firewall setup must succeed
-before commands can run.
-Nothing connects **into** a workspace either: incoming connections are refused, so a development server
-bound to every interface is still reachable only from inside that workspace, never from the host or from
-other containers sharing its bridge. Only the controller reaches in, and it does so through Docker rather
-than over the network.
+The pool has a Docker network of its own, and the policy for it lives **on the machine**, not inside the
+containers: a destination-IP firewall blocks private/local ranges, cloud metadata, CGNAT, the machine
+itself and outbound SMTP (25/465/587). IPv6 is disabled and DNS is restricted to public resolvers. The
+workspace's **own loopback** remains available for local servers and browser checks. Extra public router
+or infrastructure addresses can be listed in `WORKSPACE_BLOCKED_CIDRS`.
+Nothing connects **into** a workspace either: a development server bound to every interface is still
+reachable only from inside that workspace, never from the host, from another workspace, or from an
+unrelated container on the same machine. Only the controller reaches in, and it does so through Docker
+rather than over the network.
+Because the rules are outside the containers, nothing running in one can weaken them. The controller
+installs them at startup through a short-lived helper and then **proves them from a throwaway
+workspace**: if any of those destinations answers, it refuses to serve rather than run a command behind
+a policy that is not in effect.
 These are rules for traffic originating in a workspace. The bot's public file, image-search and channel
 preview downloads separately reject private/local IPs at connection time, disable proxies, validate each
 redirect, and bound the response while reading it. Configured internal services use a different HTTP client.
@@ -562,8 +565,8 @@ bot reads as well, from its own file: keep the two equal.
 | `WORKSPACE_BLOCKED_CIDRS` | unset | Additional IPv4 addresses/CIDRs to block, separated by spaces or commas; host interface addresses are included automatically. |
 | `WORKSPACE_WRITE_BPS` | `50mb` | Write bandwidth on the workspace loop device; `none` removes the cap. No host device configuration is needed. |
 | `WORKSPACE_READ_BPS` | `100mb` | The same for reads; `none` removes the cap. |
-| `WORKSPACE_TOKEN` | Auto-generated in Compose | API bearer secret, 32–256 printable non-whitespace ASCII characters. Required by the remote-host override. |
-| `WORKSPACE_TOKEN_FILE` | `/run/workspace-auth/token` in Compose | Shared secret file. The controller creates it if absent; the bot reads it. An explicit token takes precedence. |
+| `WORKSPACE_TOKEN` | — | API bearer secret, 32–256 printable non-whitespace ASCII characters. Required, and the same on both sides: `openssl rand -hex 32`. |
+| `WORKSPACE_TOKEN_FILE` | — | A file holding that secret instead, for deployments that mount secrets. An explicit token takes precedence. |
 | `WORKSPACE_NAMESPACE` | `vusan` | Stable Docker resource prefix; unique per controller on a host. |
 | `WORKSPACE_IMAGE` | `ghcr.io/helltar/vusan-workspace:latest` | Image for both controller and workspace containers. |
 

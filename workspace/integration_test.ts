@@ -239,26 +239,43 @@ Deno.test({
         strictEqual(limits.PidsLimit, 256);
         strictEqual(limits.ReadonlyRootfs, true);
         strictEqual(limits.Privileged, false);
-        ok(!limits.CapAdd.includes("SYS_ADMIN") && !limits.CapAdd.includes("CAP_SYS_ADMIN"));
+        // a workspace holds no capability at all, not even one it could never use: the network policy
+        // that used to need them lives on the host now.
+        deepStrictEqual(limits.CapAdd ?? [], []);
+        deepStrictEqual(limits.CapDrop, ["ALL"]);
+        const identity = await dockerText([
+          "inspect",
+          "--format",
+          "{{.Config.User}} {{index .Config.Entrypoint 0}}",
+          `${namespace}-workspace-u90001`,
+        ]);
+        strictEqual(identity, "1000:1000 /usr/bin/sleep");
+        const status = await run("grep -E '^(CapBnd|CapEff|NoNewPrivs):' /proc/self/status");
+        ok(status.body.output.includes("CapBnd:\t0000000000000000"), status.body.output);
+        ok(status.body.output.includes("NoNewPrivs:\t1"), status.body.output);
         strictEqual(limits.BlkioDeviceWriteBps[0].Rate, 50 * 1024 * 1024);
         strictEqual(limits.BlkioDeviceReadBps[0].Rate, 100 * 1024 * 1024);
         const rules = await dockerText([
-          "exec",
-          "--user",
-          "0",
-          `${namespace}-workspace-u90001`,
+          "run",
+          "--rm",
+          "--network=host",
+          "--tmpfs",
+          "/run:size=1m",
+          "--cap-drop=ALL",
+          "--cap-add=NET_ADMIN",
+          "--entrypoint",
           "/usr/sbin/iptables",
+          image!,
           "-S",
         ]);
         ok(rules.includes("203.0.113.7/32"), rules);
-        ok(rules.includes("--limit 2000/sec"), rules);
-        ok(rules.includes("--limit 100/sec"), rules);
-        ok(rules.includes("-A INPUT -j DROP"), rules);
-        // the blocked ranges name the host's own addresses, so they must be refused before the accept
-        // that a conntrack helper can reach with a connection of the remote side's choosing.
-        const blockedAt = rules.indexOf("-A OUTPUT -d 203.0.113.7/32");
-        const acceptedAt = rules.indexOf("-A OUTPUT -m conntrack --ctstate RELATED,ESTABLISHED -j ACCEPT");
-        ok(blockedAt >= 0 && acceptedAt >= 0 && blockedAt < acceptedAt, rules);
+        ok(rules.includes("--hashlimit-above 2000/sec"), rules);
+        ok(rules.includes("--hashlimit-above 100/sec"), rules);
+        const chain = `WS_${namespace.toUpperCase().replace(/[^A-Z0-9]/g, "_").slice(0, 20)}`;
+        ok(rules.includes(`-A DOCKER-USER -j ${chain}`), rules);
+        ok(rules.includes(`-A ${chain}_IN -i br-`) && rules.includes("-j DROP"), rules);
+        // the ranges an operator added by hand reach the policy too, not just the built-in ones.
+        ok(rules.includes(`-A ${chain} -s`) && rules.includes("-d 203.0.113.7/32 -j REJECT"), rules);
         const result = await run(
           'test -z "${WORKSPACE_TOKEN+x}" && test ! -e /state && test ! -e /storage && test ! -e /dev/loop-control && test ! -S /var/run/docker.sock && ' +
             "test -z \"$(cat /proc/*/environ 2>/dev/null | tr '\\0' '\\n' | grep -a '^WORKSPACE_' || true)\"",
@@ -474,7 +491,7 @@ Deno.test({
         strictEqual(started.body.status, "running");
         // a bounded tmpfs simulates low space; the host data disk is never filled.
         await docker(["exec", supervisor, "dd", "if=/dev/zero", "of=/state/pressure", "bs=1M", "count=16"]);
-        for (let i = 0; i < 100; i++) {
+        for (let i = 0; i < 300; i++) {
           const result = await request(`/jobs/${started.body.jobId}?id=u90001`);
           const owned = await dockerText(["ps", "-aq", "--filter", `label=${label}`]);
           if (result.body.status === "failed" && !owned) break;
@@ -488,7 +505,7 @@ Deno.test({
         strictEqual((await run("printf refused-again")).status, 507);
         strictEqual((await request("/files?id=u90001&path=kept.txt", { method: "DELETE" })).status, 200);
         await docker(["exec", supervisor, "rm", "/state/pressure"]);
-        for (let i = 0; i < 100; i++) {
+        for (let i = 0; i < 300; i++) {
           if (await fetch(`${base}/health`).then((response) => response.ok)) break;
           await new Promise((resolve) => setTimeout(resolve, 100));
         }
@@ -503,7 +520,24 @@ Deno.test({
       const volumes = await dockerText(["volume", "ls", "-q", "--filter", `label=${label}`]);
       for (const volume of volumes.split("\n").filter(Boolean)) await docker(["volume", "rm", volume]);
       await docker(["volume", "rm", state]);
-      await docker(["volume", "rm", auth]);
+      await docker(["network", "rm", `${namespace}-workspaces`]).catch(() => {});
+      const chain = `WS_${namespace.toUpperCase().replace(/[^A-Z0-9]/g, "_").slice(0, 20)}`;
+      await docker([
+        "run",
+        "--rm",
+        "--network=host",
+        "--tmpfs",
+        "/run:size=1m",
+        "--cap-drop=ALL",
+        "--cap-add=NET_ADMIN",
+        "--entrypoint",
+        "/usr/bin/bash",
+        image!,
+        "-c",
+        `iptables -D DOCKER-USER -j ${chain}; iptables -D INPUT -j ${chain}_IN;
+         iptables -F ${chain}; iptables -X ${chain};
+         iptables -F ${chain}_IN; iptables -X ${chain}_IN; true`,
+      ]).catch(() => {});
     }
   },
 });

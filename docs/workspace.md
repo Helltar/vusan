@@ -1,9 +1,56 @@
 # Workspace deployment and administration
 
-The default deployment is `docker compose up -d` on a rootful Linux Docker host with cgroup v2 and loop-device support. It starts the bot and a trusted
-controller; each person's workspace container is created on demand. There is only one implementation:
-Docker containers with bounded home filesystems backed by persistent named volumes. There is no gVisor or alternate-engine setup.
-See [configuration](configuration.md#workspace) for the tools, limits and security boundaries.
+The workspace shell is a **separate deployment**. `compose.yaml` starts the bot alone; this service is
+brought up on its own with `compose.workspace.yaml`, and the bot grows the shell tools only once it can
+reach it. It runs commands the model writes and holds the Docker socket in order to do that, so it
+belongs on a machine that holds nothing else — a small VM or a cheap VPS is enough. Running it beside
+the bot is supported and is what the same two values configure, but then anything that escapes a
+container lands where the bot's token, the database and every other service already live.
+
+It needs a rootful Linux Docker Engine with cgroup v2 and loop-device support. There is one
+implementation — Docker containers with bounded home filesystems — and no gVisor, alternate engine or
+runtime to choose. What it does once running is described in
+[configuration](configuration.md#workspace).
+
+## Setting it up
+
+On the workspace machine, from a checkout of this repository:
+
+```bash
+printf 'WORKSPACE_BIND=10.10.10.2\nWORKSPACE_TOKEN=%s\n' "$(openssl rand -hex 32)" > .env
+docker compose -f compose.workspace.yaml up -d
+```
+
+`WORKSPACE_BIND` is the address the API listens on, and it must be one **only the bot can reach** — a
+private network or an encrypted tunnel between the two machines. Compose refuses to start without it
+rather than defaulting to every interface. On the bot's own machine instead of a separate one, use the
+Docker bridge gateway `172.17.0.1`, which containers can reach and nothing outside the host can.
+
+`WORKSPACE_TOKEN` is the shared secret; nothing is generated for you, because the two services no longer
+share a filesystem. Put the same value, and the address, in the bot's `env/vusan.env`:
+
+```dotenv
+WORKSPACE_URL=http://10.10.10.2:8080
+WORKSPACE_TOKEN=<the same secret>
+```
+
+and restart the bot with `docker compose up -d`. Removing either line takes the tools away again; the
+files stay where they are. A bearer token is not encryption: the private transport has to provide that.
+
+Limits and networking for the service go in `env/workspace.env` on the workspace machine — see the
+[tuning table](configuration.md#tuning). The file is optional and every setting has a working default.
+
+At the host or infrastructure firewall, allow API access only from the bot, and prevent a workspace from
+reaching private services through a public address that forwards back into the LAN: the container's own
+destination check happens before that external NAT. The service installs its own policy on the machine
+regardless, and refuses to serve if it cannot prove that policy is in effect.
+
+To build the image from source instead of pulling it:
+
+```bash
+docker build -t vusan-workspace:local ./workspace
+WORKSPACE_IMAGE=vusan-workspace:local docker compose -f compose.workspace.yaml up -d
+```
 
 ## Storage and updates
 
@@ -171,7 +218,7 @@ and its `(userId, chatId)` key are unchanged.
 There is no automatic merge of group files: two chats may have different projects at the same path.
 Back up the old volumes, stop the controller, and copy wanted projects into separate subdirectories of
 the person's `u<userId>` home, preserving UID/GID `1000:1000`. Review collisions and keep the old copies
-until verified. Deploy the bot and controller together; the health endpoint reports protocol 4.
+until verified. Deploy the bot and controller together; the health endpoint reports protocol 5.
 
 ## Moving from the old shared workspace
 
