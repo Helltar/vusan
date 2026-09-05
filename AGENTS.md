@@ -121,6 +121,10 @@ what they describe:
   whitespace is noise (metadata, logs, snippets), `limitTo(max)` where inner
   whitespace matters, `xmlBlock(tag, content)` for structured text sent to the
   LLM, plus `isEffectivelyBlank`, `sanitizeFilename`, and `escapeHtml`.
+- `xmlBlock` escapes a closing tag of its own name inside the content, so tool
+  output or a fetched page cannot end its block early; blocks of other names are
+  untouched and still nest. Text quoted from a message additionally goes through
+  `neutralizePromptBlocks`, which defuses every tag the prompt itself uses.
 - Avoid plain prompt markers such as `Reply context:` or `[Sent N images]`;
   models tend to parrot them.
 

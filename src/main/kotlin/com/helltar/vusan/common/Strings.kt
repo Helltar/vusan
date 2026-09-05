@@ -35,9 +35,17 @@ fun String.limitTo(maxChars: Int): String =
 internal fun String.isEffectivelyBlank(): Boolean =
     all { it.isWhitespace() || it.category == CharCategory.FORMAT || it.category == CharCategory.CONTROL }
 
-/** Wraps [content] in an XML-style `<tag>…</tag>` block, trimming surrounding whitespace. */
-internal fun xmlBlock(tag: String, content: String): String =
-    "<$tag>\n${content.trim()}\n</$tag>"
+/**
+ * Wraps [content] in an XML-style `<tag>…</tag>` block, trimming surrounding whitespace. A closing tag
+ * of the same name inside [content] is escaped: command output, a transcript or a fetched page would
+ * otherwise be able to end the block early and have the rest read as the prompt's own text. Blocks of
+ * other names are left alone, so nesting still works — inbound message text is separately defused by
+ * `neutralizePromptBlocks`.
+ */
+internal fun xmlBlock(tag: String, content: String): String {
+    val closing = Regex("</\\s*${Regex.escape(tag)}", RegexOption.IGNORE_CASE)
+    return "<$tag>\n${closing.replace(content.trim()) { "&lt;${it.value.removePrefix("<")}" }}\n</$tag>"
+}
 
 fun String.sanitizeFilename(): String =
     trim()
