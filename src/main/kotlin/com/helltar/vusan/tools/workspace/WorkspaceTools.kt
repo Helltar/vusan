@@ -102,6 +102,13 @@ class WorkspaceTools(
     }
 
     @Tool
+    @LLMDescription(WorkspaceToolDescriptions.RESET_WORKSPACE)
+    suspend fun resetWorkspace(): String = suspendToolGuard {
+        client.resetWorkspace(id)
+        "The workspace is empty again. Every file and installed dependency is gone; the next command starts in a new home."
+    }
+
+    @Tool
     @LLMDescription(WorkspaceToolDescriptions.SEND_FILES)
     suspend fun sendFromWorkspace(
         @LLMDescription(WorkspaceToolDescriptions.SEND_PATHS)

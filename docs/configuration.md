@@ -488,6 +488,12 @@ File-transfer paths must be relative and must not contain symlinks; Bash can cop
 stops background processes and uses a fresh offline container without loading shell profiles. A running
 command must be cancelled first. A final symlink can be deleted, but parent symlinks and the workspace
 root are refused. This operation remains available when ordinary commands have been paused.
+`resetWorkspace` is the other recovery: it throws the whole home away and replaces it with an empty one.
+It is what to reach for when a workspace is too full, too broken or too tangled to repair file by file —
+including a home that can no longer start at all. Everything in it goes, permanently, and a new disk is
+formatted on the next command; other people's workspaces are untouched. Because it drops the disk rather
+than walking it, a home holding a million files is emptied as quickly as an empty one, and it stays
+available when storage pressure has paused everything else.
 
 ### Network and security
 

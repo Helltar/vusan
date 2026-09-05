@@ -349,6 +349,25 @@ export class Containers {
     }
   }
 
+  /**
+   * Empties a workspace by dropping the home itself rather than walking it: a home holding a million
+   * files, or one whose directories were made unreadable, is removed just as fast as an empty one.
+   * The next command formats a fresh home in its place.
+   */
+  async wipe(id: string): Promise<void> {
+    if (this.cleaning.has(id)) throw new RequestError("Workspace cleanup is in progress", 409);
+    using _lease = this.reserve(id);
+    this.cleaning.add(id);
+    try {
+      await this.exclusive(async () => {
+        await this.remove(id);
+        await this.homes.destroy(this.name(id));
+      });
+    } finally {
+      this.cleaning.delete(id);
+    }
+  }
+
   private async helperFailure(stderr: Promise<Uint8Array>): Promise<RequestError> {
     const reason = new TextDecoder().decode(await stderr).trim().slice(0, 1000);
     return new RequestError(reason || "File transfer failed", 422);

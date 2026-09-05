@@ -98,7 +98,8 @@ Prerequisites: JDK 21, plus `ffmpeg` and `yt-dlp` on `PATH`.
   documents, and sends back whatever you ask for. It can open a page or a game in a browser to check that
   it actually runs. Come back a month later and the project is still there, ready to be picked up.
   Long-running commands can be checked or cancelled without losing the project files.
-  It can delete unwanted files and directories to free workspace space.
+  It can delete unwanted files and directories to free workspace space, or wipe the whole workspace
+  and start over when you ask.
 - **Images** — draws a picture from a description, or edits one: yours, or one it drew earlier.
 - **Voice replies** — answers out loud with a generated voice message.
 - **Round video messages** — answers with a circle: its own face, speaking out loud.

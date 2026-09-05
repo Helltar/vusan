@@ -45,7 +45,7 @@ async function route(request: Request): Promise<Response> {
   if (closing) return json({ error: "Workspace service is stopping" }, 503);
   const url = new URL(request.url);
   if (request.method === "GET" && url.pathname === "/health") {
-    return json({ ok: guard.healthy, protocol: 4 }, guard.healthy ? 200 : 503);
+    return json({ ok: guard.healthy, protocol: 5 }, guard.healthy ? 200 : 503);
   }
   if (!authorized(request, token)) {
     return json({ error: "Unauthorized" }, 401);
@@ -71,6 +71,15 @@ async function route(request: Request): Promise<Response> {
     const offset = integer(url.searchParams.get("offset"), 0, Number.MAX_SAFE_INTEGER);
     const wait = integer(url.searchParams.get("waitSeconds"), 0, 20);
     return json(await jobs.read(id, run, offset, wait));
+  }
+  // deliberately outside the storage guard: emptying a workspace is how an operator gets space back.
+  if (url.pathname === "/workspace" && request.method === "DELETE") {
+    if (jobs.busy(id)) {
+      throw new RequestError("Cancel the running command before resetting the workspace", 409);
+    }
+    await containers.wipe(id);
+    await guard.tick();
+    return json({ id, reset: true });
   }
   if (url.pathname === "/files" && ["PUT", "GET", "DELETE"].includes(request.method)) {
     if (request.method === "PUT") {

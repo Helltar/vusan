@@ -79,6 +79,12 @@ class WorkspaceClient(
         }
     }
 
+    suspend fun resetWorkspace(workspaceId: String) {
+        reachable {
+            http.delete("$base/workspace") { workspaceRequest(workspaceId) }.requireSuccess()
+        }
+    }
+
     suspend fun readFile(workspaceId: String, path: String, maxBytes: Int = WORKSPACE_FILE_LIMIT): ByteArray = reachable {
         require(maxBytes in 1..WORKSPACE_FILE_LIMIT) { "Invalid file transfer budget" }
         http.prepareGet("$base/files") {

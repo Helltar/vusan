@@ -46,6 +46,13 @@ internal object WorkspaceToolDescriptions {
                 "A final symlink is removed without following it; parent symlinks are refused."
     const val DELETE_PATH = "An exact path relative to the workspace root, such as `project/build`; no globs or workspace root."
 
+    const val RESET_WORKSPACE =
+        "Empties this person's workspace completely and starts it over as a new, empty home. " +
+                "Use when the user asks to wipe or reset their workspace, or when a workspace cannot start because its storage is unusable. " +
+                "Every file, project and installed dependency is removed permanently and cannot be recovered afterwards. " +
+                "Use `deleteWorkspaceFile` instead when only some files should go. " +
+                "Cancel any running command first."
+
     const val SEND_FILES =
         "Sends finished files from the workspace to the chat: images as photos, videos as videos, and other files as documents. " +
                 "Files may come from this person's other chats; send only files requested for the current chat. " +

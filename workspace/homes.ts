@@ -104,6 +104,17 @@ export class Homes {
     return device;
   }
 
+  /** Drops the home outright, backing image included; the next `open` formats an empty one. */
+  async destroy(name: string): Promise<void> {
+    // unlike `close`, this also takes an unbounded volume left by an older build: nothing is kept.
+    if (await this.inspect(`${name}-home`)) await docker(["volume", "rm", `${name}-home`]);
+    const disk = await this.inspect(`${name}-disk`);
+    if (disk?.Labels?.["com.helltar.vusan.storage"] === "backing-disk") {
+      await this.helper(name, "release");
+      await docker(["volume", "rm", `${name}-disk`]);
+    }
+  }
+
   async close(name: string): Promise<void> {
     const home = await this.inspect(`${name}-home`);
     if (home?.Labels?.["com.helltar.vusan.storage"] === "bounded-home") {

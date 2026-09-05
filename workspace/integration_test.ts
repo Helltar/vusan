@@ -273,6 +273,26 @@ Deno.test({
         strictEqual(response.status, 200);
         strictEqual(await response.text(), "saved");
       });
+      await t.step("a reset empties the workspace and leaves it usable", async () => {
+        const id = "u90006";
+        // a deep tree with an unreadable directory is exactly what a recursive delete struggles with.
+        const seeded = await run(
+          "mkdir -p junk/deep/deeper && echo x > junk/deep/deeper/file && chmod 000 junk/deep && echo mine > mine.txt",
+          id,
+        );
+        strictEqual(seeded.body.exitCode, 0, JSON.stringify(seeded.body));
+        const reset = await request(`/workspace?id=${id}`, { method: "DELETE" });
+        strictEqual(reset.status, 200, JSON.stringify(reset));
+        const after = await run("test ! -e junk && test ! -e mine.txt && echo fresh > again.txt", id);
+        strictEqual(after.body.exitCode, 0, JSON.stringify(after.body));
+        // the replacement is a fresh bounded disk, not a leftover directory
+        const home = JSON.parse(
+          await dockerText(["volume", "inspect", `${namespace}-workspace-${id}-home`]),
+        )[0];
+        strictEqual(home.Labels["com.helltar.vusan.storage"], "bounded-home");
+        // and nobody else's files moved
+        strictEqual((await run("cat kept.txt")).body.output.trim(), "saved");
+      });
       await t.step("concurrency is reserved before asynchronous startup", async () => {
         const results = await Promise.all([run("sleep 2"), run("sleep 2", "u90002")]);
         deepStrictEqual(results.map((r) => r.status).sort(), [200, 409]);

@@ -20,6 +20,7 @@ import kotlin.time.Duration.Companion.seconds
 class WorkspaceToolsTest {
     private val context = RequestContext(chatId = 55L, userId = 55L, messageId = 1L, chatIsPrivate = true)
     private val deletions = mutableListOf<String>()
+    private var resets = 0
     private val writes = mutableListOf<Pair<String, ByteArray>>()
 
     private fun tools(
@@ -34,6 +35,10 @@ class WorkspaceToolsTest {
             val wanted = request.url.parameters["path"].orEmpty()
             assertEquals("u55", request.url.parameters["id"])
             when {
+                path == "/workspace" && request.method == HttpMethod.Delete -> {
+                    resets++
+                    respond("{}", HttpStatusCode.OK)
+                }
                 path.startsWith("/jobs") -> respond(result, status, headersOf(HttpHeaders.ContentType, "application/json"))
                 path == "/files" && request.method == HttpMethod.Delete -> {
                     deletions += wanted
@@ -144,6 +149,18 @@ class WorkspaceToolsTest {
         assertTrue(writes.isEmpty())
         assertContains(result, "Deleted")
         assertContains(result, "background processes were stopped")
+    }
+
+    @Test
+    fun `a reset empties the workspace without touching single paths`() = runBlocking {
+        val attached = AttachedFile(
+            name = "unused.csv", fileSizeBytes = 1, mimeType = "text/csv", kind = AttachedFileKind.OTHER,
+            loadBytes = { error("A reset must not download attachments") }
+        )
+        val result = tools(attached = attached).resetWorkspace()
+        assertEquals(1, resets)
+        assertTrue(deletions.isEmpty() && writes.isEmpty())
+        assertContains(result, "empty again")
     }
 
     @Test

@@ -132,6 +132,10 @@ A full home can be cleaned with Bash or `deleteWorkspaceFile`. The latter remove
 recursive directory in a fresh offline container, without shell profiles, and can repair inaccessible
 owned directories. Cancel a running command first; background processes are stopped by cleanup.
 
+`resetWorkspace` is the blunt instrument next to it: the home disk is dropped and reformatted, so a
+workspace that cannot start — including one left behind by an older, unbounded layout — becomes usable
+again in one call. Everything that person kept there is gone; nothing else on the host is affected.
+
 Deleting home files frees space within the fixed disk; it **does not shrink the backing image**.
 When the host reserve is exhausted, an administrator must free host storage. Back up an unwanted
 person's `-disk` volume before retiring it. The controller never deletes backing disks automatically.
