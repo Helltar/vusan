@@ -190,15 +190,17 @@ When the host reserve is exhausted, an administrator must free host storage. Bac
 person's `-disk` volume before retiring it. The controller never deletes backing disks automatically.
 The guard and health check recover once the reserve returns, without a service restart.
 
-Budget disk space for `WORKSPACE_MAX_HOME_MB` times everyone who has used the workspace, plus logs and
-the host reserve. Snapshots, thin provisioning and other services can consume additional storage.
+Budget disk space for `WORKSPACE_MAX_HOME_MB` times everyone who has used the workspace **within the
+retention window**, plus logs and the host reserve: a home goes away by itself once its owner has been
+absent for `WORKSPACE_RETAIN_DAYS`, so the number grows with active people rather than with everyone who
+ever tried the bot. Snapshots, thin provisioning and other services can consume additional storage.
 Changing the configured home size does not resize existing images: stop the controller, back up the
 backing volume, and resize the image/filesystem offline with ext4 administration tools before applying
 that setting. A size mismatch fails closed, preserving the existing disk.
 
 ## Moving from unbounded home volumes
 
-Fresh deployments need only `docker compose up -d`. Existing plain `*-home` volumes cannot silently
+A fresh deployment has nothing to migrate. Existing plain `*-home` volumes cannot silently
 remain writable without a capacity bound. The controller preserves them and reports that migration is
 required. Before upgrading, export each home using your volume backup tooling and retain the backup.
 Stop the old controller and remove only the old volume whose export has been verified. Start the new

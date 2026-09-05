@@ -1,18 +1,12 @@
 import type { Config } from "./config.ts";
 import type { Containers } from "./container.ts";
 import { clean, completeUtf8Prefix, JobLog } from "./output.ts";
-import {
-  COMMAND_LIMIT,
-  jobId,
-  JOBS_RETAINED,
-  JOBS_RETAINED_DAYS,
-  OUTPUT_CHUNK,
-  RequestError,
-  workspaceId,
-} from "./protocol.ts";
+import { COMMAND_LIMIT, jobId, JOBS_RETAINED, OUTPUT_CHUNK, RequestError, workspaceId } from "./protocol.ts";
 
 const WORKSPACE_DIRECTORY = /^u(?:0|[1-9][0-9]{0,18})$/;
 const PRUNE_EVERY_MS = 60 * 60_000;
+// one touch an hour is enough to date a workspace, and it keeps a long poll from writing every read.
+const MARK_EVERY_MS = 60 * 60_000;
 
 type Status = "running" | "completed" | "timed_out" | "cancelled" | "interrupted" | "failed";
 export interface Job {
@@ -36,6 +30,7 @@ interface Running {
 
 export class Jobs {
   private readonly active = new Map<string, Running>();
+  private readonly marked = new Map<string, number>();
   private prunedAt = 0;
 
   constructor(private readonly config: Config, private readonly containers: Containers) {}
@@ -84,19 +79,55 @@ export class Jobs {
     }
   }
 
-  /** Records of people who stopped coming back are not an audit store; their home volumes are untouched. */
+  /** Dates a workspace so an abandoned one can be told from a quiet one. */
+  async markUsed(id: string): Promise<void> {
+    const now = Date.now();
+    if (now - (this.marked.get(id) ?? 0) < MARK_EVERY_MS) return;
+    this.marked.set(id, now);
+    await Deno.mkdir(this.directory(id), { recursive: true, mode: 0o700 });
+    await Deno.writeTextFile(`${this.directory(id)}/used`, "", { mode: 0o600 });
+  }
+
+  /**
+   * A workspace nobody has touched for the retention period is deleted outright — files, home disk and
+   * command records alike. Keeping a preallocated disk for someone who stopped coming back only takes
+   * the space away from the people still here.
+   */
   async prune(): Promise<void> {
     if (Date.now() - this.prunedAt < PRUNE_EVERY_MS) return;
     this.prunedAt = Date.now();
-    const cutoff = Date.now() - JOBS_RETAINED_DAYS * 24 * 60 * 60_000;
+    const cutoff = Date.now() - this.config.retainDays * 24 * 60 * 60_000;
+    const ids = new Set(await this.containers.homeIds());
     for await (const directory of Deno.readDir(this.config.stateDir)) {
-      if (!directory.isDirectory || !WORKSPACE_DIRECTORY.test(directory.name)) continue;
-      const id = directory.name;
-      if (this.active.has(id) || this.containers.liveIds().includes(id)) continue;
-      if ((await this.list(id)).some((job) => job.startedAt > cutoff)) continue;
-      await Deno.remove(this.directory(id), { recursive: true });
-      console.log(`pruned workspace=[${id}] command records after ${JOBS_RETAINED_DAYS} idle days`);
+      if (directory.isDirectory && WORKSPACE_DIRECTORY.test(directory.name)) ids.add(directory.name);
     }
+    for (const id of ids) {
+      if (this.active.has(id) || this.containers.liveIds().includes(id)) continue;
+      if (await this.lastUsed(id) > cutoff) continue;
+      await this.reclaim(id).catch((e) => console.error(`cannot reclaim workspace=[${id}]`, e));
+    }
+  }
+
+  private async reclaim(id: string): Promise<void> {
+    await this.containers.wipe(id);
+    await Deno.remove(this.directory(id), { recursive: true }).catch((e) => {
+      if (!(e instanceof Deno.errors.NotFound)) throw e;
+    });
+    this.marked.delete(id);
+    console.log(`reclaimed workspace=[${id}] after ${this.config.retainDays} days without use`);
+  }
+
+  /**
+   * The newest of every signal there is, never the first one found: the mark is written at most once an
+   * hour, so a workspace that ran a command since then must not look older than it is. A home with no
+   * signal at all is dated by the day it appeared, and one that cannot be dated is left alone.
+   */
+  private async lastUsed(id: string): Promise<number> {
+    const marked = await Deno.stat(`${this.directory(id)}/used`)
+      .then((info) => info.mtime?.getTime() ?? 0).catch(() => 0);
+    const jobs = await this.list(id);
+    const known = Math.max(marked, ...jobs.map((job) => job.finishedAt ?? job.startedAt), 0);
+    return known || await this.containers.homeCreated(id);
   }
 
   async list(id: string): Promise<Job[]> {

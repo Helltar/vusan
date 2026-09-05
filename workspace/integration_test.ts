@@ -481,6 +481,35 @@ Deno.test({
         strictEqual(result.body.exitCode, 0, JSON.stringify(result.body));
         ok(result.body.output.startsWith("saved"));
       });
+      await t.step("a workspace nobody came back to is reclaimed whole", async () => {
+        const id = "u90007";
+        const disk = `${namespace}-workspace-${id}-disk`;
+        // a file transfer alone creates a home, so this workspace is dated by its mark and nothing else.
+        strictEqual(
+          (await request(`/files?id=${id}&path=old.txt`, { method: "PUT", body: "old" })).status,
+          200,
+        );
+        ok(await dockerText(["volume", "ls", "-q", "--filter", `name=^${disk}$`]));
+        await docker(["exec", supervisor, "touch", "-d", "3 days ago", `/state/${id}/used`]);
+        // pruning runs once an hour, and a restart is what brings the next one forward.
+        await docker(["stop", "--time", "30", supervisor]);
+        await docker(["rm", supervisor]);
+        await startSupervisor();
+        for (let i = 0; i < 600; i++) {
+          if (!await dockerText(["volume", "ls", "-q", "--filter", `name=^${disk}$`])) break;
+          await new Promise((resolve) => setTimeout(resolve, 100));
+        }
+        strictEqual(await dockerText(["volume", "ls", "-q", "--filter", `name=^${disk}$`]), "");
+        strictEqual(
+          await docker(["exec", supervisor, "test", "-e", `/state/${id}`]).then(() => "kept").catch(() =>
+            "gone"
+          ),
+          "gone",
+        );
+        // and the workspace that is still in use keeps everything
+        ok(await dockerText(["volume", "ls", "-q", "--filter", `name=^${namespace}-workspace-u90001-disk$`]));
+        strictEqual((await run("cat kept.txt")).body.output.trim(), "saved");
+      });
       await t.step("storage pressure stops containers, refuses uploads and then clears itself", async () => {
         const upload = (body: string) =>
           request("/files?id=u90001&path=pressure.txt", { method: "PUT", body });

@@ -54,11 +54,22 @@ Deno.test("shutdown during job admission cannot start a container afterwards", a
   }
 });
 
-Deno.test("records of a workspace nobody came back to are pruned, and not on every sweep", async () => {
+Deno.test("a workspace nobody came back to is deleted whole, and not on every sweep", async () => {
   const root = await Deno.makeTempDir();
   try {
-    const config = { ...readConfig(), stateDir: root };
-    const jobs = new Jobs(config, new Containers(config));
+    const config = { ...readConfig(), stateDir: root, retainDays: 14 };
+    const wiped: string[] = [];
+    const containers = {
+      homeIds: () => Promise.resolve(["u5"]),
+      liveIds: () => [],
+      // u5 has no records of its own; its home volume is all there is to date it by.
+      homeCreated: (id: string) => Promise.resolve(id === "u5" ? 0 : Date.now()),
+      wipe: (id: string) => {
+        wiped.push(id);
+        return Promise.resolve();
+      },
+    } as unknown as Containers;
+    const jobs = new Jobs(config, containers);
     const record = async (id: string, startedAt: number) => {
       const jobId = crypto.randomUUID();
       await Deno.mkdir(`${root}/${id}`, { recursive: true });
@@ -67,15 +78,19 @@ Deno.test("records of a workspace nobody came back to are pruned, and not on eve
         JSON.stringify({ jobId, workspaceId: id, status: "completed", startedAt, truncated: false }),
       );
     };
-    const stale = Date.now() - 40 * 24 * 60 * 60_000;
+    const stale = Date.now() - 20 * 24 * 60 * 60_000;
     await record("u1", stale);
     await record("u2", Date.now());
-    await Deno.mkdir(`${root}/u3`);
+    // a stale mark cannot condemn a workspace that ran something since: the newest signal wins.
+    await record("u3", Date.now());
+    await Deno.writeTextFile(`${root}/u3/used`, "");
+    await Deno.utime(`${root}/u3/used`, new Date(stale), new Date(stale));
 
     await jobs.prune();
+    strictEqual(wiped.sort().join(","), "u1,u5");
     await rejects(() => Deno.stat(`${root}/u1`));
-    await rejects(() => Deno.stat(`${root}/u3`));
     strictEqual((await jobs.list("u2")).length, 1);
+    strictEqual((await jobs.list("u3")).length, 1);
 
     await record("u4", stale);
     await jobs.prune();

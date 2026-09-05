@@ -63,6 +63,7 @@ export function readConfig() {
     maxConcurrent: positive("WORKSPACE_MAX_CONCURRENT", 2),
     maxActive: positive("WORKSPACE_MAX_ACTIVE", 2),
     idleMinutes: positive("WORKSPACE_IDLE_MINUTES", 60),
+    retainDays: positive("WORKSPACE_RETAIN_DAYS", 14),
     diskWarnMb: positive("WORKSPACE_DISK_WARN_MB", 2048),
     maxHomeMb: positive("WORKSPACE_MAX_HOME_MB", 4096),
     idleCpuSeconds: positive("WORKSPACE_IDLE_CPU_SECONDS", 600),

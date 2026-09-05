@@ -431,27 +431,32 @@ runner, engine selection or runtime selection. The same image serves controller 
 - **`main.ts`** — validates/authenticates HTTP requests, limits concurrent file transfers, owns the
   state lock, startup recovery, shutdown and idle-sweep timer. `POST /jobs?id=...` starts a command;
   `GET /jobs?id=...` lists recent ones; `GET`/`DELETE /jobs/<jobId>?id=...` reads/cancels one.
-  `PUT`/`GET /files?id=...&path=...` streams a bounded file in either direction, never buffering one whole. `DELETE /files?id=...&path=...` removes one exact path through isolated cleanup. `GET /health` reports protocol version 4.
+  `PUT`/`GET /files?id=...&path=...` streams a bounded file in either direction, never buffering one whole. `DELETE /files?id=...&path=...` removes one exact path through isolated cleanup, and `DELETE /workspace?id=...` discards the home entirely. `GET /health` reports protocol version 5.
   Busy/capacity responses use `409`; invalid input, authentication and missing jobs have explicit
   HTTP errors. The Kotlin client parses error bodies instead of relying on the shared client's
   `expectSuccess` default.
-- **`auth.ts`** — validates mandatory API secrets and constant-time bearer comparisons. Compose shares
-  an automatically generated, persistent secret file with the bot; an explicit token overrides it.
+- **`auth.ts`** — validates mandatory API secrets and constant-time bearer comparisons. The operator
+  configures both sides with the same secret, directly or through a file; nothing is generated, since
+  the two services no longer share a machine by default.
   No empty-token mode exists. Only `/health` is unauthenticated. The Kotlin workspace client refuses redirects.
 - **`jobs.ts`** — reserves the per-workspace and global command slots before awaiting anything.
   Commands initially wait at most ten seconds, then return a running ID; reads can wait up to twenty
   seconds and continue from a byte offset. Job records/logs live under the controller's `/state`,
   not the user-editable home. Atomic metadata replacement supports interrupted-command recovery;
-  only the latest 20 jobs and at most 8 MiB of output per job are retained, and an hourly sweep drops the
-  records of a workspace untouched for 30 days without touching its home. A flattened, capped
+  only the latest 20 jobs and at most 8 MiB of output per job are retained. An hourly sweep deletes a
+  workspace nobody has touched for `WORKSPACE_RETAIN_DAYS` outright — records, home and backing disk —
+  dating each one by the newest of its use mark, its last command and the day its home appeared, and
+  leaving alone any it cannot date. A flattened, capped
   command preview, workspace/job IDs, status, exit code and duration go to the service log.
 - **`container.ts`** — serialized lifecycle operations create, reuse and remove workspace containers.
   It resolves the image to an ID on startup, sets per-container CPU/memory/PID limits and the per-file
   size rlimit every command inherits, throttles reads/writes to its loop device, and mounts
   only that person's bounded home. Startup requires cgroup v2 resource controls and derives a container
-  pool ceiling from the host's memory/CPU capacity. It reads host IPv4 interface addresses with an
-  unprivileged, image-owned `ip` invocation in the host network namespace and adds them to the denylist.
-  Workspaces run at a low CPU weight, and the idle sweep also
+  pool ceiling from the host's memory/CPU capacity. It gives the pool a Docker network of its own with
+  inter-container traffic disabled, has the policy installed on the host, and proves it from a throwaway
+  container before serving anything. A workspace container itself runs as UID 1000 with `sleep` for an
+  entrypoint and an empty capability set: nothing in it is ever privileged, not even for the instant
+  before dropping. Workspaces run at a low CPU weight, and the idle sweep also
   measures the processor time each one spent with no command of its own running, removing a workspace
   that goes past its unattended budget. Cancelling or timing out removes the entire container,
   so `setsid` cannot evade cleanup. Idle removal never deletes the home. Startup removes only
@@ -497,11 +502,13 @@ runner, engine selection or runtime selection. The same image serves controller 
   Admission reopens when the reserve returns; deleting files inside a preallocated home does not reclaim
   host space, so host pressure requires administrator cleanup.
 
-Only the controller receives the Docker socket and its metadata volume. User containers are not on
-the bot's control network and receive no application environment or host bind mounts. Their own loopback
-works for local servers; private networks, cloud metadata and outbound SMTP do not. The root filesystem
-is read-only, writable temporary mounts are bounded, `no-new-privileges` is set, and an init process reaps
-orphans. Docker's host kernel remains the isolation boundary; there is no gVisor layer.
+Only the controller receives the Docker socket and its metadata volume. Workspaces sit on a network of
+their own, hold no capabilities, and receive no application environment or host bind mounts. Their own
+loopback works for local servers, and nothing reaches them from outside it; private networks, cloud
+metadata, the machine hosting them and outbound SMTP are equally out of reach. The root filesystem is
+read-only, writable temporary mounts are bounded, `no-new-privileges` is set, and an init process reaps
+orphans. Docker's host kernel remains the isolation boundary; there is no gVisor layer, which is why the
+service belongs on a machine of its own.
 
 Fixed home disks enforce byte and inode capacity in the kernel, including for open-but-deleted files,
 small-file metadata and fast preallocation. The per-file rlimit remains an extra bound. Backing volumes

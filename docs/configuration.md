@@ -416,25 +416,15 @@ convert documents and media, install user-local dependencies, and send the resul
 new messages, `/clear`, container replacement and service restarts. Different people have separate homes;
 the same person uses the same files in private chat and every group. Conversation history stays separate per chat.
 
-With Docker installed and `env/vusan.env` filled in, the usual command starts everything:
+**It is off by default and it is not part of `docker compose up -d`.** The shell runs commands the model
+writes, so it is deployed on its own, ideally on a machine that holds nothing else —
+[the workspace guide](workspace.md) is the setup, and the rest of this section is what it does once it
+runs. The bot grows the tools the moment `WORKSPACE_URL` and `WORKSPACE_TOKEN` are both set in
+`env/vusan.env`, and loses them again when they are removed; nothing else changes.
 
-```bash
-docker compose up -d
-```
-
-Keep `WORKSPACE_URL=http://vusan-workspace:8080` in the bot's environment. Compose starts the bot and a
-trusted workspace controller. The controller creates a container on demand for each workspace; there is
-no shared-process mode, alternate engine or runtime to configure. Use a rootful Linux Docker Engine with
-cgroup v2 and loop-device support. The service creates bounded home disks itself; no host quota setup or
-gVisor installation is required. Unsupported resource controls stop startup rather than weakening isolation.
-Compose automatically generates a persistent API secret in a volume shared only by the controller and
-the bot, mounted read-only in the bot. The bot waits for the controller to become healthy. Every API
-operation except the health check requires authentication, including in this local deployment.
-
-To disable the tools, comment out `WORKSPACE_URL` and start only the bot with
-`docker compose up -d --no-deps vusan`. Stop an already running controller with
-`docker compose stop vusan-workspace`. For a local JVM or a separate workspace host, see
-[deployment and administration](workspace.md).
+A workspace that nobody uses does not stay forever: after `WORKSPACE_RETAIN_DAYS` without a single
+command, transfer or reset, the whole thing is deleted — files, home disk and command records alike.
+Two weeks by default, and the counter restarts on any use.
 
 ### Files and installed tools
 
@@ -478,7 +468,8 @@ transfer is removed to make room. Its background processes stop, but files survi
 at most one container and one command slot, regardless of how many chats they use.
 
 The controller keeps the last 20 command records per workspace, with at most 8 MiB of combined output
-each, and drops a workspace's records entirely after 30 days without use; home volumes are untouched.
+each. A workspace nobody has used for `WORKSPACE_RETAIN_DAYS` is deleted whole, records and home
+disk together.
 Output is returned in 16 KiB pages after control-code cleanup. Anything beyond the log cap is
 discarded and marked as truncated; redirect to a workspace file when the complete output matters.
 A single file cannot grow past `WORKSPACE_MAX_FILE_MB`, 4 GiB by default; the writing process is stopped
@@ -551,6 +542,7 @@ bot reads as well, from its own file: keep the two equal.
 | `WORKSPACE_MAX_CONCURRENT` | `2` | Active commands across all workspaces; one per workspace. |
 | `WORKSPACE_MAX_ACTIVE` | `2` | Maximum live containers, including idle ones; further reduced to fit the host resource budget. |
 | `WORKSPACE_IDLE_MINUTES` | `60` | Remove an untouched container after this many minutes, unless a command is running. |
+| `WORKSPACE_RETAIN_DAYS` | `14` | Delete a workspace entirely — files, home disk and records — after this many days without use. |
 | `WORKSPACE_IDLE_CPU_SECONDS` | `600` | Processor time a workspace may spend while no command of its own runs, before its container is removed. |
 | `WORKSPACE_MEMORY_MB` | `1024` | Hard memory limit per workspace, with no additional swap allowance. |
 | `WORKSPACE_CPUS` | `1` | CPU limit per workspace, in whole cores. |

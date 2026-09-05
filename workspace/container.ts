@@ -62,6 +62,10 @@ export function accumulateBurn(previous: Burn | undefined, usec: number, attende
   return { usec, seconds: seconds + Math.max(0, usec - previous.usec) / 1_000_000 };
 }
 
+function isWorkspaceId(value: string): boolean {
+  return /^u(?:0|[1-9][0-9]{0,18})$/.test(value);
+}
+
 function empty(): ReadableStream<Uint8Array> {
   return new ReadableStream({ start: (controller) => controller.close() });
 }
@@ -559,6 +563,36 @@ export class Containers {
     const bytes = Number(out.split(/\s+/)[0]);
     if (!Number.isSafeInteger(bytes) || bytes < 0) throw new Error("Invalid workspace disk usage");
     return bytes;
+  }
+
+  /** Every home on this host, whether or not the controller has heard from it since starting. */
+  async homeIds(): Promise<string[]> {
+    const volumes = await dockerText([
+      "volume",
+      "ls",
+      "-q",
+      "--filter",
+      `label=${this.label}`,
+      "--filter",
+      "label=com.helltar.vusan.storage=backing-disk",
+    ]);
+    const prefix = `${this.config.namespace}-workspace-`;
+    return volumes.split("\n").filter(Boolean)
+      .map((volume) => volume.slice(prefix.length, -"-disk".length))
+      .filter(isWorkspaceId);
+  }
+
+  /** When a home first appeared, for one that has no record of ever being used. */
+  async homeCreated(id: string): Promise<number> {
+    const created = await dockerText([
+      "volume",
+      "inspect",
+      "--format",
+      "{{.CreatedAt}}",
+      `${this.name(id)}-disk`,
+    ]).catch(() => "");
+    const stamp = Date.parse(created);
+    return Number.isFinite(stamp) ? stamp : Date.now();
   }
 
   liveIds(): string[] {

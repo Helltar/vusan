@@ -51,6 +51,7 @@ async function route(request: Request): Promise<Response> {
     return json({ error: "Unauthorized" }, 401);
   }
   const id = workspaceId(url.searchParams.get("id"));
+  await jobs.markUsed(id);
   if (url.pathname === "/jobs" && request.method === "POST") {
     const body = JSON.parse(
       new TextDecoder().decode(await readBounded(request.body, COMMAND_LIMIT * 6 + 1024)),

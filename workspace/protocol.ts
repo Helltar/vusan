@@ -3,7 +3,6 @@ export const COMMAND_LIMIT = 16_000;
 export const LOG_LIMIT = 8 * 1024 * 1024;
 export const OUTPUT_CHUNK = 16 * 1024;
 export const JOBS_RETAINED = 20;
-export const JOBS_RETAINED_DAYS = 30;
 
 export class RequestError extends Error {
   constructor(message: string, readonly status = 400) {
