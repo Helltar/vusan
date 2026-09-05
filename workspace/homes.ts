@@ -60,7 +60,10 @@ export class Homes {
   async open(name: string, existingOnly = false): Promise<string> {
     const home = await this.inspect(`${name}-home`);
     if (home && home.Labels?.["com.helltar.vusan.storage"] !== "bounded-home") {
-      throw new Error("Legacy workspace volume needs migration to a bounded disk; existing files were kept");
+      throw new Error(
+        "This workspace was created by an older storage layout and cannot be opened. Its files are still " +
+          "on the host but cannot be reached from here; use resetWorkspace to start over as an empty home.",
+      );
     }
     if (existingOnly && !await this.inspect(`${name}-disk`)) {
       throw new RequestError("Workspace has no files to delete", 404);
