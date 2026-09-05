@@ -26,6 +26,7 @@ export function readConfig() {
   if (maxFileMb * 1024 * 1024 < FILE_LIMIT) {
     throw new Error("WORKSPACE_MAX_FILE_MB must not be below the 50 MB file transfer limit");
   }
+  const networkMbit = shaped("WORKSPACE_NETWORK_MBIT", /^[1-9][0-9]{0,4}$/, "a whole number of megabits");
   const writeDevice = shaped("WORKSPACE_WRITE_DEVICE", /^\/dev\/[A-Za-z0-9/_-]+$/, "an absolute /dev path");
   const writeBps = shaped("WORKSPACE_WRITE_BPS", /^[1-9][0-9]*(kb|mb|gb)?$/, "a byte rate such as `50mb`");
   // half a throttle is no throttle, and it would fail silently rather than at startup.
@@ -46,12 +47,14 @@ export function readConfig() {
     idleMinutes: positive("WORKSPACE_IDLE_MINUTES", 60),
     diskWarnMb: positive("WORKSPACE_DISK_WARN_MB", 2048),
     maxHomeMb: positive("WORKSPACE_MAX_HOME_MB", 4096),
+    idleCpuSeconds: positive("WORKSPACE_IDLE_CPU_SECONDS", 600),
     maxFileMb,
     minFreeMb: positive("WORKSPACE_MIN_FREE_MB", 1024),
     minFreeInodes: positive("WORKSPACE_MIN_FREE_INODES", 10_000),
     memoryMb: positive("WORKSPACE_MEMORY_MB", 2048),
     cpus: positive("WORKSPACE_CPUS", 2),
     pids: positive("WORKSPACE_PIDS_LIMIT", 256),
+    networkMbit,
     writeDevice,
     writeBps,
   };

@@ -5,7 +5,7 @@ ENV DENO_DIR=/tmp/deno-cache
 
 RUN apt-get update && apt-get install -y --no-install-recommends \
         bash coreutils findutils procps psmisc util-linux \
-        iptables ca-certificates \
+        iptables iproute2 ca-certificates \
         curl wget git jq zip unzip xz-utils \
         python3 python3-pip python3-venv \
         nodejs npm \

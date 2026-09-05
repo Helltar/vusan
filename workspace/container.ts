@@ -3,12 +3,33 @@ import { docker, dockerText, kill, spawnDocker } from "./docker.ts";
 import { workspaceEnvironment } from "./env.ts";
 import { FILE_LIMIT, readBounded, RequestError, workspaceId } from "./protocol.ts";
 
+// workspaces get the CPU nobody else wants: a runaway one must not slow the bot, the database or a
+// waiting administrator. it caps nothing on an idle host, which is what `--cpus` is for.
+const WORKSPACE_CPU_SHARES = 256;
+
+export interface Burn {
+  usec: number;
+  seconds: number;
+}
+
+/**
+ * Unattended CPU is what a workspace spends while none of its own commands is running. A tick during a
+ * command, and the tick right after one, only re-baseline: that cost was asked for and is already
+ * bounded by the command timeout.
+ */
+export function accumulateBurn(previous: Burn | undefined, usec: number, attended: boolean): Burn {
+  const seconds = previous?.seconds ?? 0;
+  if (attended || !previous || !Number.isFinite(previous.usec)) return { usec, seconds };
+  return { usec, seconds: seconds + Math.max(0, usec - previous.usec) / 1_000_000 };
+}
+
 function empty(): ReadableStream<Uint8Array> {
   return new ReadableStream({ start: (controller) => controller.close() });
 }
 
 export class Containers {
   private readonly live = new Map<string, number>();
+  private readonly burn = new Map<string, Burn>();
   private readonly leases = new Map<string, number>();
   private gate: Promise<unknown> = Promise.resolve();
   private image = "";
@@ -84,7 +105,11 @@ export class Containers {
         volume,
       ]);
       if (owner !== this.config.namespace) throw new Error("Workspace volume belongs to another owner");
-      const env = { ...workspaceEnvironment(), WORKSPACE_NETWORK: this.config.network };
+      const env = {
+        ...workspaceEnvironment(),
+        WORKSPACE_NETWORK: this.config.network,
+        ...(this.config.networkMbit ? { WORKSPACE_NETWORK_MBIT: this.config.networkMbit } : {}),
+      };
       try {
         await docker([
           "run",
@@ -122,6 +147,8 @@ export class Containers {
           `${this.config.memoryMb}m`,
           "--cpus",
           String(this.config.cpus),
+          "--cpu-shares",
+          String(WORKSPACE_CPU_SHARES),
           "--network",
           this.config.network === "none" ? "none" : "bridge",
           "--sysctl",
@@ -143,6 +170,7 @@ export class Containers {
           "workspace",
         ]);
         this.live.set(id, Date.now());
+        this.burn.set(id, { usec: 0, seconds: 0 });
         await docker([
           "exec",
           "--user",
@@ -320,6 +348,27 @@ export class Containers {
     return [...this.live.keys()];
   }
 
+  /** A finished command's own cost is not unattended burn, so the next tick measures from here. */
+  rebaseline(id: string): void {
+    const previous = this.burn.get(id);
+    if (previous) this.burn.set(id, { usec: Number.NaN, seconds: previous.seconds });
+  }
+
+  private async cpuUsec(id: string): Promise<number> {
+    const out = await dockerText([
+      "exec",
+      "--user",
+      "1000:1000",
+      this.name(id),
+      "/usr/bin/timeout",
+      "5",
+      "/usr/bin/head",
+      "-1",
+      "/sys/fs/cgroup/cpu.stat",
+    ]);
+    return Number.parseInt(out.split(/\s+/)[1] ?? "", 10);
+  }
+
   touch(id: string): void {
     if (this.live.has(id)) this.live.set(id, Date.now());
   }
@@ -346,13 +395,34 @@ export class Containers {
     ]);
     if (owned) await docker(["rm", "-f", owned]);
     this.live.delete(id);
+    this.burn.delete(id);
   }
 
   async sweep(busy: (id: string) => boolean): Promise<void> {
+    // measured outside the gate: reading a cgroup is one exec per live container.
+    const usage = new Map<string, number>();
+    for (const id of this.liveIds()) {
+      const usec = await this.cpuUsec(id).catch(() => Number.NaN);
+      if (Number.isFinite(usec)) usage.set(id, usec);
+    }
     await this.exclusive(async () => {
       const cutoff = Date.now() - this.config.idleMinutes * 60_000;
       for (const [id, touched] of this.live) {
-        if (touched < cutoff && !busy(id) && !this.leases.has(id)) await this.remove(id);
+        if (touched < cutoff && !busy(id) && !this.leases.has(id)) {
+          await this.remove(id);
+          continue;
+        }
+        const usec = usage.get(id);
+        if (usec === undefined) continue;
+        const burn = accumulateBurn(this.burn.get(id), usec, busy(id) || this.leases.has(id));
+        this.burn.set(id, burn);
+        if (burn.seconds > this.config.idleCpuSeconds) {
+          console.error(
+            `workspace=[${id}] burned cpu=[${Math.round(burn.seconds)}s] with no command of its own ` +
+              `(limit ${this.config.idleCpuSeconds}s); removing it`,
+          );
+          await this.remove(id);
+        }
       }
     });
   }

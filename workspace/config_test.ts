@@ -8,6 +8,8 @@ Deno.test("configuration fails closed on unsupported networking and invalid limi
     "WORKSPACE_NAMESPACE",
     "WORKSPACE_MAX_HOME_MB",
     "WORKSPACE_MAX_FILE_MB",
+    "WORKSPACE_IDLE_CPU_SECONDS",
+    "WORKSPACE_NETWORK_MBIT",
     "WORKSPACE_WRITE_DEVICE",
     "WORKSPACE_WRITE_BPS",
   ];
@@ -20,6 +22,8 @@ Deno.test("configuration fails closed on unsupported networking and invalid limi
         ["WORKSPACE_NAMESPACE", "../other"],
         ["WORKSPACE_MAX_HOME_MB", "0"],
         ["WORKSPACE_MAX_FILE_MB", "8"],
+        ["WORKSPACE_IDLE_CPU_SECONDS", "0"],
+        ["WORKSPACE_NETWORK_MBIT", "10mbit"],
         ["WORKSPACE_WRITE_DEVICE", "/etc/passwd"],
         ["WORKSPACE_WRITE_BPS", "50mb"],
       ]
@@ -35,6 +39,8 @@ Deno.test("configuration fails closed on unsupported networking and invalid limi
     strictEqual(readConfig().maxHomeMb, 4096);
     strictEqual(readConfig().maxFileMb, 4096);
     strictEqual(readConfig().writeBps, null);
+    strictEqual(readConfig().idleCpuSeconds, 600);
+    strictEqual(readConfig().networkMbit, null);
   } finally {
     settings.forEach((name, index) => {
       const value = saved[index];

@@ -456,9 +456,12 @@ A command returns within about ten seconds. If it is still running, the result i
 the agent can read its status/output or cancel it. An empty ID in the read tool lists recent commands,
 including after `/clear`. Run long builds normally; there is no need to detach them just to avoid an HTTP timeout.
 
-A normal exit leaves background processes alive if their output was redirected. Idle expiry,
-cancellation and command timeout remove the **whole container**, including detached processes and local
-servers, but retain its home. An active command is exempt from idle expiry. A controller stop/restart
+A normal exit leaves background processes alive, whether or not their output was redirected. What
+removes them is the **whole container** going away: idle expiry, cancellation, command timeout, or a
+workspace that keeps burning CPU while none of its own commands is running. Homes are retained in every
+case. That last rule is what bounds a detached loop, which otherwise costs nothing to keep running: a
+workspace may spend `WORKSPACE_IDLE_CPU_SECONDS` of processor time unattended before its container is
+removed. Work a command is waiting on does not count, and an idle background server spends nothing. An active command is exempt from idle expiry. A controller stop/restart
 interrupts commands; it does not resume processes. An abrupt stop is reconciled on the next startup.
 When the container pool is full, the least-recently-used container without an active command or file
 transfer is removed to make room. Its background processes stop, but files survive. One person occupies
@@ -490,7 +493,10 @@ preview downloads separately reject private/local IPs at connection time, disabl
 redirect, and bound the response while reading it. Configured internal services use a different HTTP client.
 
 `WORKSPACE_NETWORK=none` disables external networking while preserving that private loopback. There is
-no mode that silently skips firewall enforcement.
+no mode that silently skips firewall enforcement. `WORKSPACE_NETWORK_MBIT` additionally caps bandwidth in
+both directions; a value around 50 leaves package installs and downloads feeling immediate while making
+the server useless for sustained transfer. Requesting a cap that cannot be installed stops the workspace
+from starting rather than running it unshaped.
 
 Docker containers still share the host kernel; this is not VM-level isolation. Open internet access also
 allows data exfiltration and abuse from the server's address. Do not put credentials in a workspace.
@@ -510,6 +516,7 @@ Set these in the repo-root `.env`; both local and remote Compose deployments use
 | `WORKSPACE_MAX_CONCURRENT` | `2` | Active commands across all workspaces; one per workspace. |
 | `WORKSPACE_MAX_ACTIVE` | `4` | Live workspace containers, including idle ones. |
 | `WORKSPACE_IDLE_MINUTES` | `60` | Remove an untouched container after this many minutes, unless a command is running. |
+| `WORKSPACE_IDLE_CPU_SECONDS` | `600` | Processor time a workspace may spend while no command of its own runs, before its container is removed. |
 | `WORKSPACE_MEMORY_MB` | `2048` | Hard memory limit per workspace, with no additional swap allowance. |
 | `WORKSPACE_CPUS` | `2` | CPU limit per workspace, in whole cores. |
 | `WORKSPACE_PIDS_LIMIT` | `256` | Process/thread limit per workspace. |
@@ -519,6 +526,7 @@ Set these in the repo-root `.env`; both local and remote Compose deployments use
 | `WORKSPACE_MIN_FREE_MB` | `1024` | Reserve on the controller-state filesystem, kept free for cleanup commands. |
 | `WORKSPACE_MIN_FREE_INODES` | `10000` | The same reserve in free inodes. |
 | `WORKSPACE_NETWORK` | `open` | `open` or `none`, as above. |
+| `WORKSPACE_NETWORK_MBIT` | unset | Bandwidth cap per workspace, in whole megabits, in both directions. Unset means no cap. |
 | `WORKSPACE_WRITE_DEVICE` | unset | Host block device such as `/dev/nvme0n1` to throttle workspace writes on. |
 | `WORKSPACE_WRITE_BPS` | unset | Write bandwidth per workspace on that device, for example `50mb`. Set both or neither. |
 | `WORKSPACE_TOKEN` | Auto-generated in Compose | API bearer secret, 32–256 printable non-whitespace ASCII characters. Required by the remote-host override. |
@@ -527,7 +535,9 @@ Set these in the repo-root `.env`; both local and remote Compose deployments use
 | `WORKSPACE_IMAGE` | `ghcr.io/helltar/vusan-workspace:latest` | Image for both controller and workspace containers. |
 
 The controller itself has a 512 MiB memory ceiling, which file transfers do not compete with: they stream
-through it in both directions. At the defaults, four busy workspace containers
+through it in both directions. Workspace containers also run at a low CPU weight, so a runaway one loses
+the contested processor to the bot, the database and a waiting administrator rather than the other way
+round. That is a priority, not a cap; `WORKSPACE_CPUS` is the cap. At the defaults, four busy workspace containers
 can use another 8 GiB in total, even with only two tracked commands, because background processes also
 consume resources. A full container pool reclaims an inactive container or refuses new work if every
 container is busy. The two-command limit does not limit the lifetime of redirected background processes.

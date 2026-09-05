@@ -67,6 +67,8 @@ Deno.test({
         "WORKSPACE_MAX_HOME_MB=128",
         "-e",
         "WORKSPACE_MAX_FILE_MB=64",
+        "-e",
+        "WORKSPACE_IDLE_CPU_SECONDS=2",
         image!,
       ]);
       base = `http://${await dockerText(["port", supervisor, "8080/tcp"])}`;
@@ -307,6 +309,18 @@ Deno.test({
         ok(result.body.exitCode !== 0, JSON.stringify(result.body));
         strictEqual((await run("stat -c %s oversized.bin")).body.output.trim(), String(64 * 1024 * 1024));
         strictEqual((await run("rm -f oversized.bin")).body.exitCode, 0);
+      });
+      await t.step("a workspace burning cpu with no command of its own is removed", async () => {
+        const burner = "nohup sh -c 'while :; do :; done' >/dev/null 2>&1 &";
+        const started = await run(`${burner} ${burner} echo detached`);
+        strictEqual(started.body.exitCode, 0, JSON.stringify(started.body));
+        let owned = "unknown";
+        for (let i = 0; i < 120 && owned; i++) {
+          owned = await dockerText(["ps", "-aq", "--filter", `label=${label}`]);
+          if (owned) await new Promise((resolve) => setTimeout(resolve, 1000));
+        }
+        strictEqual(owned, "", "the container should have been removed for unattended cpu");
+        strictEqual((await run("cat kept.txt")).body.output.trim(), "saved");
       });
       await t.step("ordinary shutdown removes child containers but preserves volumes", async () => {
         await docker(["stop", "--time", "30", supervisor]);

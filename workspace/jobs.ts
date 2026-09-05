@@ -195,6 +195,7 @@ export class Jobs {
       job.status = running.reason ?? job.status;
       job.finishedAt = Date.now();
       this.containers.touch(job.workspaceId);
+      this.containers.rebaseline(job.workspaceId);
       try {
         await this.save(job);
       } catch (e) {

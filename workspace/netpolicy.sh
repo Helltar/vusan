@@ -29,6 +29,17 @@ case "${WORKSPACE_NETWORK:-open}" in
     done
     iptables -A OUTPUT -p udp --dport 53 -j REJECT
     iptables -A OUTPUT -p tcp --dport 53 -j REJECT
+    # an operator who asked for a bandwidth cap gets one or gets no workspace: shaping the wrong
+    # interface, or none, would be a limit that silently is not there.
+    if [[ -n "${WORKSPACE_NETWORK_MBIT:-}" ]]; then
+      device="$(ip -o route show default | awk '{print $5; exit}')"
+      [[ -n "$device" ]] || { echo "no default route to shape" >&2; exit 1; }
+      tc qdisc add dev "$device" root tbf \
+        rate "${WORKSPACE_NETWORK_MBIT}mbit" burst 512kb latency 200ms
+      tc qdisc add dev "$device" handle ffff: ingress
+      tc filter add dev "$device" parent ffff: protocol ip prio 1 u32 match u32 0 0 \
+        police rate "${WORKSPACE_NETWORK_MBIT}mbit" burst 512kb drop
+    fi
     ;;
   *)
     echo "WORKSPACE_NETWORK must be open or none" >&2

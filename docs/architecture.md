@@ -447,7 +447,9 @@ runner, engine selection or runtime selection. The same image serves controller 
 - **`container.ts`** — serialized lifecycle operations create, reuse and remove workspace containers.
   It resolves the image to an ID on startup, sets per-container CPU/memory/PID limits and the per-file
   size rlimit every command inherits, optionally throttles writes to a host device, and mounts
-  only that person's named home volume. Cancelling or timing out removes the entire container,
+  only that person's named home volume. Workspaces run at a low CPU weight, and the idle sweep also
+  measures the processor time each one spent with no command of its own running, removing a workspace
+  that goes past its unattended budget. Cancelling or timing out removes the entire container,
   so `setsid` cannot evade cleanup. Idle removal never deletes the home. Startup removes only
   containers carrying this controller's namespace label; shutdown removes live containers too.
   Commands and file transfers hold leases; at capacity, the oldest unleased container can be removed
@@ -464,8 +466,8 @@ runner, engine selection or runtime selection. The same image serves controller 
   pipes request and response bodies straight through the helper's stdio; because the helper validates
   before it emits a byte, one peek at stdout still separates a clean rejection from a started transfer.
 - **`entrypoint.sh` / `netpolicy.sh`** — the workspace role installs its destination-IP firewall
-  with a fixed system PATH, verifies IPv6 is disabled, drops IPv6 output where the kernel has any, then
-  drops UID/GID and capabilities before waiting for commands. A failed rule stops startup. The controller
+  with a fixed system PATH, verifies IPv6 is disabled, drops IPv6 output where the kernel has any,
+  installs the optional bandwidth cap, then drops UID/GID and capabilities before waiting for commands. A failed rule stops startup. The controller
   role needs no network capabilities and runs with Deno permissions scoped to its own state, the port it
   serves and the `docker` binary.
 - **`storage.ts`** — the disk guard. A one-second tick reads free bytes and inodes on the state
