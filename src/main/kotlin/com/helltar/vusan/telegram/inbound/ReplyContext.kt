@@ -205,7 +205,7 @@ internal fun attachedFileContextBlock(file: AttachedFile): String =
 
             when (file.kind) {
                 AttachedFileKind.IMAGE -> {
-                    append("The first workspace tool you call places this file in `inbox/` under this exact name. ")
+                    append("The workspace command or file-writing tool copies this file into `inbox/` and returns its exact path. ")
                     append("It is an image: call `describeImage` to answer about what is visible, or work on it with `runCommand` (resize, filter, colors, dimensions).")
                 }
 
@@ -216,11 +216,11 @@ internal fun attachedFileContextBlock(file: AttachedFile): String =
                         append("It is a GIF: a short soundless loop, usually thrown into a chat as a reaction rather than as something to review. Call `describeVideo` only when the user asks what is in it, and never narrate it unasked.")
                     else {
                         append("It is a video: call `describeVideo` when your answer depends on what happens in it or what is said in it. ")
-                        append("To convert, cut or re-encode it instead, the first workspace tool you call places it in `inbox/` under this exact name, where `ffmpeg` can reach it.")
+                        append("To convert, cut or re-encode it, use the workspace; its command or file-writing tool copies the file into `inbox/` and returns its exact path.")
                     }
 
                 AttachedFileKind.OTHER -> {
-                    append("The first workspace tool you call places this file in `inbox/` under this exact name. ")
+                    append("The workspace command or file-writing tool copies this file into `inbox/` and returns its exact path. ")
                     append("Read it there with `runCommand` instead of asking the user to resend it.")
                 }
             }

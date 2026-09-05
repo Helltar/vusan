@@ -51,8 +51,8 @@ Telegram ──► telegram/ ──► agent/ ──► tools/ ──► externa
 - **`request/`** — the request-scoped input model shared across layers: `RequestContext`
   (chat/user/message ids and sender info tools see), `ChatCapabilities` (what the chat lets the bot post, and its slow
   mode — defaulting to unrestricted so a failed lookup never removes an ability), and `AttachedFile` (photo, video, or document, from the current
-  message or a replied-to message, that vision (`describeImage`, `describeVideo`) and the workspace (`runCommand`,
-  which copies it into `inbox/`) can lazily download). Its `kind` (`IMAGE`/`VIDEO`/`OTHER`) decides which of those tools accepts it; a video also
+  message or a replied-to message, that vision (`describeImage`, `describeVideo`) and the workspace (`runCommand` or
+  `writeWorkspaceFile`, which copies it into a unique `inbox/` path) can lazily download). Its `kind` (`IMAGE`/`VIDEO`/`OTHER`) decides which of those tools accepts it; a video also
   carries its duration and a loader for Telegram's own thumbnail.
 - **`tasks/`** — scheduled-task subsystem: storage, persisted pause state, recurrence math, and the
   background `TaskScheduler`.
@@ -418,75 +418,56 @@ A normal user message travels:
 
 ## Workspace service
 
-The workspace is the only tool backed by a service living in this repo instead of a third-party API. It is Deno +
-TypeScript under [`workspace/`](../workspace/), has its own `Dockerfile`, contains no Kotlin, and is reached over HTTP
-from `tools/workspace/WorkspaceClient.kt`.
+The shell service is Deno/TypeScript under [`workspace/`](../workspace/). Kotlin reaches it only through
+`tools/workspace/WorkspaceClient.kt`; Docker details never enter the bot's request flow.
 
-Each person gets a durable home directory keyed by `(userId, chatId)` — the same key the raw conversation history uses,
-so every member of a group has one of their own and nobody's project is readable from another chat. `HOME` **is** that
-directory, which is what makes the whole thing work: `pip install --user`, `npm install`, `~/.cargo` and `node_modules`
-all land in the volume and survive, while the image itself stays immutable and nobody needs root.
+Each `(userId, chatId)` maps to a readable ID (`u<userId>` in private, `u<userId>_g<positiveChatId>`
+in a group). `container.ts` gives it one Docker container and a named volume mounted as `HOME=/work`.
+All commands and file transfers run inside that container as UID 1000. There is no UID pool, shared
+runner, engine selection or runtime selection. The same image serves controller and workspace roles.
 
-- **`main.ts`** — HTTP server on port 8080: `POST /exec`, `PUT`/`GET /files`, `GET /list`, `DELETE /workspace`, and
-  `GET /health`. Owns what the container cannot express: one command at a time per workspace, a global concurrency cap,
-  the disk quota, the per-command audit line — workspace, exit code, elapsed, output size and the
-  command flattened to 200 characters, which is the only record of what ran anywhere, since the full
-  log lives in the workspace and the workspace's own commands can delete it — and the idle sweep — a command started with `setsid` outlives its run on purpose, so a workspace
-  nobody has touched for `WORKSPACE_IDLE_MINUTES` has whatever it left behind killed by uid.
-  Being busy, at capacity, or out of space answers `200` with an `error` field rather than a `4xx`,
-  because the bot's shared HTTP client turns every non-2xx into an exception and those three are answers the model has
-  to read.
-- **`registry.ts`** — which uid a workspace runs as. Telegram ids do not fit `uid_t`, so a slot comes out of a pool
-  baked into the image (the rootfs is read-only, so `/etc/passwd` cannot grow a user at runtime) and is held for life,
-  because the files on the volume are owned by it.
-- **`runner.ts`** — picks the runner and is the only file that knows which one is in use. **`exec.ts`** is `shared`:
-  the command runs beside the supervisor under its own uid, wrapped in `setsid` so the timeout can take down the whole
-  process tree by process group rather than only the shell that spawned it. **`container.ts`** is `container`: one
-  container per workspace, started on demand from this same image with nothing mounted but that workspace's directory,
-  which is what buys it a filesystem, a process table, a network namespace and a share of CPU and memory of its own.
-  It deliberately does **not** call `setsid` — an engine already gives an `exec` its own session, so calling it forks,
-  and the direct child then exits ahead of the real command and takes the output stream with it.
-- **`env.ts`** — the environment both runners hand a command: built from nothing rather than inherited, and telling
-  every common tool it is not on a terminal so that nothing blocks on a prompt. In both, the timeout is enforced from
-  outside the workspace, because a `timeout` inside it is the command's own child and is bypassed by the code it is
-  meant to bound.
-- **`output.ts`** — a command's stdout is attacker-controlled bytes on their way into a Telegram message. It is capped
-  *while* the pipe is drained (a reader that stops reading blocks the writer and the command hangs), stripped of ANSI
-  and control characters, collapsed at carriage returns so a progress bar arrives as its final line, and forced back
-  into valid UTF-8. Mostly-binary output is replaced by a note instead of shown. The whole log is kept in the workspace
-  so the model can `grep` it rather than rerun the command.
-- **`files.ts`** — path resolution that refuses anything leaving the workspace, symlinks resolved *before* the check so
-  a link planted by the workspace's own code cannot read or overwrite the rest of the volume.
-- **`netpolicy.sh` / `entrypoint.sh`** — one image, two roles. `supervisor` serves the API; `workspace` is what a
-  per-workspace container runs, and does nothing but hold its namespace open for `exec`. Each installs the egress
-  policy as root in whichever network namespace it owns before anything untrusted runs, and a `container`-mode
-  supervisor skips it because nothing untrusted runs there at all. It **fails closed**: a rule that will not install
-  stops the container, because unfiltered egress looks exactly like a working setup until the day it matters. The one
-  way out is `WORKSPACE_NETWORK=external`, which has to be set deliberately and states that a layer below this
-  container filters egress instead — needed under gVisor, whose network stack has no iptables.
+- **`main.ts`** — validates/authenticates HTTP requests, limits concurrent file transfers, owns the
+  state lock, startup recovery, shutdown and idle-sweep timer. `POST /jobs?id=...` starts a command;
+  `GET /jobs?id=...` lists recent ones; `GET`/`DELETE /jobs/<jobId>?id=...` reads/cancels one.
+  `PUT`/`GET /files?id=...&path=...` transfers a bounded file. `GET /health` reports protocol version 2.
+  Busy/capacity responses use `409`; invalid input, authentication and missing jobs have explicit
+  HTTP errors. The Kotlin client parses error bodies instead of relying on the shared client's
+  `expectSuccess` default.
+- **`jobs.ts`** — reserves the per-workspace and global command slots before awaiting anything.
+  Commands initially wait at most ten seconds, then return a running ID; reads can wait up to twenty
+  seconds and continue from a byte offset. Job records/logs live under the controller's `/state`,
+  not the user-editable home. Atomic metadata replacement supports interrupted-command recovery;
+  only the latest 20 jobs and at most 8 MiB of output per job are retained. A flattened, capped
+  command preview, workspace/job IDs, status, exit code and duration go to the service log.
+- **`container.ts`** — serialized lifecycle operations create, reuse and remove workspace containers.
+  It resolves the image to an ID on startup, sets per-container CPU/memory/PID limits, and mounts
+  only that person's named home volume. Cancelling or timing out removes the entire container,
+  so `setsid` cannot evade cleanup. Idle removal never deletes the home. Startup removes only
+  containers carrying this controller's namespace label; shutdown removes live containers too.
+- **`docker.ts`** — bounded Docker CLI calls, including stdin/stdout draining and operation deadlines.
+  A command's execution deadline is enforced by the controller, outside the untrusted workspace.
+- **`env.ts`** — constructs a secret-free, noninteractive command environment. Each invocation starts
+  `bash -lc` in `/work`; only files and still-live background processes persist between invocations.
+- **`output.ts`** — drains stdout/stderr even after the retained-log cap, strips terminal/control
+  sequences on reads and marks binary or truncated output. There is no promise of an unlimited log.
+- **`files.ts`** — a helper executed inside the workspace with Deno filesystem permissions restricted
+  to `/work`. It rejects traversal and symlink components, bounds reads/writes and atomically replaces
+  uploaded files. The controller never follows user filesystem paths or changes their ownership.
+- **`entrypoint.sh` / `netpolicy.sh`** — the workspace role installs its destination-IP firewall
+  with a fixed system PATH, verifies IPv6 is disabled, then drops UID/GID and capabilities before
+  waiting for commands. A failed rule stops startup. The controller role needs no network capabilities.
 
-Isolation is not enforced here but around it, and the layers are deliberate. The container drops every capability
-except the few the supervisor needs (`NET_ADMIN`/`NET_RAW` to install the rules, `SETUID`/`SETGID`/`CHOWN`/
-`DAC_OVERRIDE`/`KILL` to run and clean up after each workspace), the rootfs is read-only, and `init: true` is required
-rather than cosmetic: a killed process tree orphans children onto pid 1, and a pid 1 that reaps nothing turns them into
-zombies that eat `pids_limit`.
+Only the controller receives the Docker socket and its metadata volume. User containers are not on
+the bot's control network and receive no application environment or host bind mounts. Their own loopback
+works for local servers; private networks, cloud metadata and outbound SMTP do not. The root filesystem
+is read-only, writable temporary mounts are bounded, `no-new-privileges` is set, and an init process reaps
+orphans. Docker's host kernel remains the isolation boundary; there is no gVisor layer.
 
-`WORKSPACE_NETWORK=open` gives a workspace the whole internet except every local range, filtered by destination IP in
-the kernel rather than by hostname — an allowlisted name can resolve to a private address on the second lookup, and a
-name-based check walks straight into it. IPv6 is not configured for a workspace at all, which removes `::ffff:0:0/96`
-and the rest of that bypass class. `WORKSPACE_ISOLATION` selects the runner, and an unknown value stops the service rather than quietly
-running everything in one container after someone asked for more. `shared` is the compose default and needs nothing:
-workspaces are processes under their own uid beside the supervisor. `container` needs an engine socket, which is root
-on the host holding it, so it belongs on a machine that runs nothing else — see [`workspace.md`](workspace.md).
-`WORKSPACE_ENGINE` names the client (`podman` speaks the same CLI, and its API is docker-compatible, so the client
-baked into the image drives either) and `WORKSPACE_RUNTIME` hands each workspace to `runsc` or `kata` without
-anything else changing.
-
-The mount is why `WORKSPACE_ROOT` has to be the same path inside the supervisor and on its host in `container` mode:
-a workspace container's `-v` is resolved by the engine, on the host, not inside the supervisor that asked for it.
-
-`WORKSPACE_MAX_TIMEOUT_SECONDS` is read by both sides: the service clamps a requested timeout to it, while
-`WorkspaceClient` budgets its HTTP wait around the same value.
+Home volumes have no hard disk quota in this deployment. Post-command usage is a warning, never a
+reason to reject cleanup commands. The namespace is persisted in the state volume and cannot be
+changed in place. File volumes outlive both idle cleanup and `docker compose down`; restarting does
+not resume processes. See [configuration](configuration.md#workspace) for limits and
+[administration](workspace.md) for backups, updates and a separate host.
 
 ## Startup
 
@@ -542,8 +523,8 @@ A symptom-to-source map for finding the right file fast. Paths are under
 | Vusan floods a chat or stalls on Telegram 429 over a long multi-message reply    | `outbox/BotOutbox.kt` (text and album coalescing + `MAX_TEXT_MESSAGES` cap) + `telegram/delivery/TelegramDelivery.kt` (`INTER_MESSAGE_DELAY` pacing)                                                                                                                                                                     |
 | A specific tool misbehaves                                                       | `tools/<feature>/<Feature>Tools.kt` for the tool surface, plus its `<Feature>Client.kt` for the external call                                                                                                                                                                                         |
 | Vusan will not hand a file from the chat back, or sends it under the wrong name  | `tools/files/FileTools.sendChatFile` (the `file_id` path and `chatFilename`) + `telegram/TelegramApi.downloadFileById` (`getFile`, and the 20 MB limit on what Telegram serves a bot) |
-| A command times out, says the workspace is busy, or its output is cut short      | `tools/workspace/WorkspaceClient.kt` (HTTP call + wait budget), then the service in [`workspace/`](../workspace/): `main.ts` (routing, the busy/capacity/quota refusals), `runner.ts` → `exec.ts`/`container.ts` (the timeout and the process-group kill) and `output.ts` (the byte cap, ANSI stripping, the full log)              |
-| A workspace loses files, or someone sees another person's                        | `tools/workspace/WorkspaceModels.workspaceId` (the `(userId, chatId)` key), then `workspace/registry.ts` (the uid a workspace holds for life) and `workspace/files.ts` (path resolution, which refuses anything outside the workspace)                                                                 |
+| A command times out, says the workspace is busy, or its output is cut short      | `tools/workspace/WorkspaceClient.kt` (HTTP errors and job polling), then `workspace/jobs.ts` (admission, timeouts, retention), `container.ts` (whole-container cleanup) and `output.ts` (bounded logs and control-code cleanup) |
+| A workspace loses files, or someone sees another person's                        | `tools/workspace/WorkspaceModels.workspaceId` (the `(userId, chatId)` key), then `workspace/container.ts` (one named home volume per workspace) and `workspace/files.ts` (unprivileged, scoped transfers) |
 | Wrong language in a canned reply (busy/error/voice/start/task menu)              | `i18n/Language.kt` (language selection) + `i18n/Messages.kt` (the strings)                                                                                                                                                                                                                            |
 | The typing indicator or the progress draft is wrong, stale, or missing           | `telegram/TelegramProgress.kt` (both tickers, the private-chat gate, the named-activity gate, `handOffProgressDraft`) + `agent/ToolActivity.kt` (which tool means what) + `i18n/Messages.progressLabel` (the words) + `telegram/delivery/TelegramDelivery.chatActionFor` (the action)                                                     |
 | A long research turn ends in the generic error reply or is answered mid-way      | `agent/AgentFactory.kt` (`maxIterations`, `outOfToolBudget` and the wrap-up node that lands the turn) + `agent/AgentRunner.kt` (delivering what the outbox holds when a run fails)                                                                                                                     |

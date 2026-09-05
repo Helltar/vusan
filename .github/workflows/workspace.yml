@@ -64,9 +64,9 @@ jobs:
       - run: deno fmt --check *.ts deno.json
       - run: deno lint *.ts
       - run: deno check *.ts
+      - run: deno task test
 
   verify-image:
-    if: github.event_name != 'release'
     needs: check
     runs-on: ubuntu-latest
     timeout-minutes: 45
@@ -79,12 +79,22 @@ jobs:
           file: ./workspace/Dockerfile
           platforms: linux/amd64
           push: false
+          load: true
+          tags: vusan-workspace:ci
           cache-from: type=gha,scope=vusan-workspace
           cache-to: type=gha,mode=max,scope=vusan-workspace
+      - uses: denoland/setup-deno@22d081ff2d3a40755e97629de92e3bcbfa7cf2ed # v2.0.5
+        with:
+          deno-version: v2.9.6
+      - name: container lifecycle and isolation
+        working-directory: workspace
+        env:
+          WORKSPACE_TEST_IMAGE: vusan-workspace:ci
+        run: deno test --allow-env --allow-net --allow-run=docker integration_test.ts
 
   publish:
     if: github.event_name == 'release'
-    needs: check
+    needs: verify-image
     runs-on: ubuntu-latest
     timeout-minutes: 45
     permissions:

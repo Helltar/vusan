@@ -10,5 +10,7 @@ services:
 
   vusan-workspace:
     image: vusan-workspace:local
+    environment:
+      WORKSPACE_IMAGE: vusan-workspace:local
     build:
       context: ./workspace

@@ -1,53 +1,45 @@
 package com.helltar.vusan.tools.workspace
 
 internal object WorkspaceToolDescriptions {
-
     const val RUN_COMMAND =
-        "Runs a shell command in this person's own Linux workspace and returns its output. " +
-                "The workspace is a real home directory that persists between messages and between days, so use it for anything that has files: writing and running programs, building a multi-file project, converting or editing media, inspecting data, and picking work back up that was started earlier. " +
-                "Preinstalled: `python3` with `pip`, `node` with `npm`, `git`, `curl`, `wget`, `ffmpeg`, `imagemagick`, `pandoc`, `sqlite3`, `jq`, `ripgrep`, `zip`, a headless `chromium`, and a C/C++ toolchain. " +
-                "Run a page or game you just wrote before claiming it works: `chromium --headless --screenshot=shot.png --window-size=1280,800 --virtual-time-budget=5000 file:///` plus its absolute path renders it, and a non-zero exit means it did not load at all. " +
-                "Ignore what Chromium writes to stderr: `dbus` and `crashpad` warnings are normal in a container and say nothing about the page. " +
-                "For errors a screenshot cannot show — a thrown exception, a failed fetch, a canvas that never draws — install `puppeteer-core` and listen for `pageerror` and `console`; it finds the browser by itself, so the full `puppeteer` package is not needed. " +
-                "You cannot look at the screenshot yourself, so send it with `sendFromWorkspace` when the user should see the result, and check anything else in code. " +
-                "The workspace has internet access, so `pip install --user`, `npm install`, and downloads work, and what they install stays for next time because the workspace is the home directory. " +
-                "There is no `sudo` and no system package manager: install into the workspace instead of into the system. " +
-                "Each command starts in the workspace root and keeps no working directory or shell variables from the last one, so use absolute paths or chain them as `cd project && npm run build`. " +
-                "A command that must outlive its run has to be started with `setsid`, for example `setsid npm run dev >dev.log 2>&1 &`. " +
-                "Files written here are NOT in the chat: call `sendFromWorkspace` for every file the user should receive. " +
-                "A file the user attached to their message is placed in `inbox/` under its own name. " +
-                "Long output is cut short and the whole log is kept in the workspace, so read the part you need with `grep` or `tail` rather than rerunning the command."
+        "Runs `bash` in this person's persistent workspace; use it to work with files, programs, data, documents, media, or an existing project. " +
+                "Files and dependencies under the home directory survive messages and container restarts. " +
+                "Check the tools and versions needed for the task; install dependencies locally when practical, or report what is missing. " +
+                "There is no `sudo`, system installation, interactive terminal, or input on stdin. " +
+                "Each command starts at the workspace root with a fresh shell; use `cd project && ...` when needed. " +
+                "A long command returns a job ID while it continues; use `readWorkspaceCommand` to collect its output and exit status. " +
+                "Run long builds normally without shell backgrounding, and choose a timeout that covers the work. " +
+                "Attached files are copied into `inbox/`; the tool result gives their exact paths. " +
+                "Use `sendFromWorkspace` to deliver files to the user."
 
-    const val COMMAND =
-        "The shell command to run, interpreted by `bash`. " +
-                "Chain several steps with `&&` when they belong to one action. " +
-                "Prefer `writeWorkspaceFile` over a heredoc for creating a file: quoting a long file inside a command is where its content gets corrupted."
+    const val COMMAND = "The command interpreted by `bash`; use `writeWorkspaceFile` for substantial file contents."
+    const val TIMEOUT_SECONDS = "Execution time limit in seconds; omit it for the default."
 
-    const val TIMEOUT_SECONDS =
-        "How long the command may run before it is killed, in seconds. " +
-                "Leave it out for the default. " +
-                "Raise it for a build, an install, or an encode, and prefer a background command with `setsid` over a very long wait."
+    const val READ_COMMAND =
+        "Reads a workspace command's status and the next part of its combined stdout and stderr. " +
+                "Use after `runCommand` returns a running job, or to retrieve output that did not fit. " +
+                "Use the returned `nextOffset` for the next read to avoid repeating output. " +
+                "An empty `jobId` lists recent commands in this workspace."
+    const val JOB_ID = "The job ID returned by a workspace tool."
+    const val READ_JOB_ID = "The job ID to read, or an empty string to list recent commands."
+    const val OFFSET = "Byte offset from the previous result's `nextOffset`; defaults to `0`."
+    const val WAIT_SECONDS = "Seconds to wait for a running command, from `0` to `20`; defaults to `10`."
+
+    const val CANCEL_COMMAND =
+        "Stops a running workspace command and all processes in its container, including background servers. " +
+                "Files remain intact and the next command starts a fresh container. " +
+                "Use when work should be abandoned or a process is stuck."
 
     const val WRITE_FILE =
-        "Writes a text file into the workspace, creating the directories in its path. " +
-                "Use this for every source file, config, or document you author — it keeps the content exactly as written, which a shell heredoc does not. " +
-                "The file is not in the chat until `sendFromWorkspace` sends it."
-
-    const val WRITE_PATH =
-        "Where to write, relative to the workspace root, for example `game/index.html`. " +
-                "Missing directories are created. " +
-                "An existing file at this path is replaced."
-
-    const val WRITE_CONTENT =
-        "The complete contents of the file. " +
-                "Write the whole file, not a fragment: this replaces what was there."
+        "Writes a complete UTF-8 text file in the workspace, creating missing parent directories. " +
+                "Use for source code, configuration, and documents; an existing file is replaced. " +
+                "Files are not delivered to the user until `sendFromWorkspace` is called."
+    const val WRITE_PATH = "Path relative to the workspace root, for example `project/main.py`; symlinks are refused."
+    const val WRITE_CONTENT = "The complete file contents, not a patch or fragment."
 
     const val SEND_FILES =
-        "Sends files from the workspace to the chat, which is the only way the user receives them. " +
-                "Images arrive as photos, videos as videos, everything else as a document. " +
-                "Send the finished result rather than intermediate files, and for a project of many files send a `zip` you built with a command."
-
-    const val SEND_PATHS =
-        "Paths relative to the workspace root, for example `game/index.html`. " +
-                "At most 10 files per call."
+        "Sends finished files from the workspace to the chat: images as photos, videos as videos, and other files as documents. " +
+                "For a multi-file project, create and send an archive. " +
+                "At most 10 files and 50 MB total per call; file-transfer paths must not contain symlinks."
+    const val SEND_PATHS = "Paths relative to the workspace root, for example `project/result.zip`."
 }

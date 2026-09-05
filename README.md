@@ -51,8 +51,9 @@ Use the published images:
 docker compose up -d
 ```
 
-This starts two containers: the bot and the workspace it runs commands in. To run without the
-workspace, see [workspace](docs/configuration.md#workspace).
+This starts the bot and a workspace controller, which creates a separate container for each person's
+workspace when needed. Docker is the only runtime to install; no gVisor setup is required. For limits,
+security and running without the workspace, see [workspace configuration](docs/configuration.md#workspace).
 
 Or build from source:
 
@@ -96,6 +97,7 @@ Prerequisites: JDK 21, plus `ffmpeg` and `yt-dlp` on `PATH`.
   converts and edits media, crunches data and draws charts, makes Word and PDF documents, and sends
   back whatever you ask for. It can open a page or a game it just wrote in a browser to check that
   it actually runs. Come back a month later and the project is still there, ready to be picked up.
+  Long-running commands can be checked or cancelled without losing the project files.
 - **Images** — draws a picture from a description, or edits one: yours, or one it drew earlier.
 - **Voice replies** — answers out loud with a generated voice message.
 - **Round video messages** — answers with a circle: its own face, speaking out loud.

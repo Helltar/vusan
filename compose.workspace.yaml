@@ -1,73 +1,13 @@
-# The workspace service on a machine of its own. Nothing else runs here, so an escape from a
-# workspace lands on a host holding no bot token, no database and no conversation history —
-# which is the largest single improvement available to this setup. See docs/workspace.md.
-#
-# Not needed on the machine running the bot.
-#
-#   docker compose -f compose.workspace.yaml up -d
-
-x-logging: &default-logging
-  driver: json-file
-  options:
-    max-size: "10m"
-    max-file: "3"
+# optional override: docker compose -f compose.yaml -f compose.workspace.yaml up -d
+# the same controller on a separate host; the private bind address and token are mandatory.
 
 services:
+  vusan:
+    profiles: [bot]
+
   vusan-workspace:
-    # one image in both roles: this supervisor, and every workspace container it starts. Override
-    # to run a build of your own — WORKSPACE_IMAGE below follows it.
-    image: "${WORKSPACE_IMAGE:-ghcr.io/helltar/vusan-workspace:latest}"
-    container_name: vusan-workspace-container
-    restart: unless-stopped
-    init: true
-
-    # bound to the private link between the two machines, so nothing listens on the internet.
-    # WORKSPACE_BIND is that interface's address on this host.
     ports:
-      - "${WORKSPACE_BIND:?the private address to listen on, e.g. 10.10.10.2}:8080:8080"
-
+      - "${WORKSPACE_BIND:?set a private listen address}:8080:8080"
     environment:
-      # a container per workspace: its own filesystem, process table, network namespace and share
-      # of CPU and memory. Only worth its engine socket on a machine that runs nothing else.
-      WORKSPACE_ISOLATION: container
-      WORKSPACE_ENGINE: "${WORKSPACE_ENGINE:-docker}"
-      WORKSPACE_IMAGE: "${WORKSPACE_IMAGE:-ghcr.io/helltar/vusan-workspace:latest}"
-      # gVisor (`runsc`) or Kata put a workspace behind more than the host kernel; neither needs
-      # anything else here to change. Leave empty for the engine's default.
-      WORKSPACE_RUNTIME: "${WORKSPACE_RUNTIME:-}"
-      # must equal the host path mounted below, on both sides of the colon
-      WORKSPACE_ROOT: "${WORKSPACE_DIR:-/srv/workspaces}"
-      WORKSPACE_NETWORK: "${WORKSPACE_NETWORK:-open}"
-      WORKSPACE_TIMEOUT_SECONDS: "${WORKSPACE_TIMEOUT_SECONDS:-120}"
-      WORKSPACE_MAX_TIMEOUT_SECONDS: "${WORKSPACE_MAX_TIMEOUT_SECONDS:-600}"
-      WORKSPACE_MAX_CONCURRENT: "${WORKSPACE_MAX_CONCURRENT:-4}"
-      WORKSPACE_IDLE_MINUTES: "${WORKSPACE_IDLE_MINUTES:-60}"
-      WORKSPACE_QUOTA_MB: "${WORKSPACE_QUOTA_MB:-4096}"
-      # per workspace, not one ceiling shared by everyone — the reason this mode exists
-      WORKSPACE_MEM: "${WORKSPACE_MEM:-2g}"
-      WORKSPACE_CPUS: "${WORKSPACE_CPUS:-2}"
-      WORKSPACE_PIDS_LIMIT: "${WORKSPACE_PIDS_LIMIT:-512}"
-      # the link is private, but a secret costs nothing and covers the day it stops being private
-      WORKSPACE_TOKEN: "${WORKSPACE_TOKEN:?a shared secret with the bot is required here}"
-
-    volumes:
-      # reaching this socket is reaching this host, which is exactly why nothing else runs here
-      - "${WORKSPACE_SOCKET:-/var/run/docker.sock}:/var/run/docker.sock"
-      # the same path on both sides: a workspace container's mount is resolved by the engine on
-      # the host, so the supervisor has to see the workspaces exactly where the engine will look
-      # for them. A directory rather than a named volume, so it can be a disk of its own and the
-      # machine around it stays disposable — re-image the host, keep the workspaces.
-      - "${WORKSPACE_DIR:-/srv/workspaces}:${WORKSPACE_DIR:-/srv/workspaces}"
-
-    # the supervisor runs no commands in this mode — each workspace container installs its own
-    # egress policy and the engine applies its limits — so it keeps only what file bookkeeping needs
-    cap_drop: [ALL]
-    cap_add: [CHOWN, DAC_OVERRIDE, FOWNER]
-    security_opt:
-      - no-new-privileges:true
-    read_only: true
-    tmpfs:
-      - /tmp:size=1g
-      - /run
-    pids_limit: 512
-    logging: *default-logging
+      WORKSPACE_TOKEN: "${WORKSPACE_TOKEN:?set a shared secret}"
+    networks: [default, workspace-control]

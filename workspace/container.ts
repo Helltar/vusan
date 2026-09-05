@@ -1,219 +1,238 @@
-// The `container` runner: one container per workspace, started on demand from the same image the
-// supervisor runs, holding nothing but that workspace's directory.
-//
-// This is where the isolation actually lives — a workspace sees its own filesystem, its own
-// process table, its own network namespace and its own share of CPU and memory, none of which
-// `shared` can offer. The price is a container engine, which is why this mode belongs on a machine
-// that runs nothing else: reaching the engine is reaching that host.
-
-import { config } from "./config.ts";
+import type { Config } from "./config.ts";
+import { docker, dockerText, spawnDocker } from "./docker.ts";
 import { workspaceEnvironment } from "./env.ts";
-import { capture, LogSink } from "./output.ts";
-import type { ExecResult } from "./exec.ts";
-import type { Workspace } from "./registry.ts";
+import { FILE_LIMIT, RequestError, workspaceId } from "./protocol.ts";
 
-const KILL_GRACE_MS = 3_000;
-const HOME = "/work";
-const START_TIMEOUT_MS = 60_000;
+export class Containers {
+  private readonly live = new Map<string, number>();
+  private gate: Promise<unknown> = Promise.resolve();
+  private image = "";
+  private closing = false;
+  private readonly label: string;
 
-function containerName(workspace: Workspace): string {
-  return `vusan-ws-${workspace.id}`;
-}
-
-async function engine(args: string[], timeoutMs = START_TIMEOUT_MS): Promise<{ ok: boolean; out: string }> {
-  const command = new Deno.Command(config.engine, { args, stdout: "piped", stderr: "piped" });
-  const child = command.spawn();
-  const abort = setTimeout(() => child.kill("SIGKILL"), timeoutMs);
-
-  try {
-    const result = await child.output();
-    const text = new TextDecoder().decode(result.success ? result.stdout : result.stderr).trim();
-    return { ok: result.success, out: text };
-  } finally {
-    clearTimeout(abort);
+  constructor(private readonly config: Config) {
+    this.label = `com.helltar.vusan.workspace=${config.namespace}`;
   }
-}
 
-async function isRunning(name: string): Promise<boolean> {
-  const state = await engine(["inspect", "-f", "{{.State.Running}}", name], 10_000);
-  return state.ok && state.out === "true";
-}
+  name(id: string): string {
+    return `${this.config.namespace}-workspace-${workspaceId(id)}`;
+  }
 
-/**
- * Brings the workspace's container up if it is not already. The container is disposable and holds
- * no state: everything that has to survive is on the mounted directory, so losing one costs a
- * second of start-up and nothing else.
- */
-async function ensureRunning(workspace: Workspace): Promise<void> {
-  const name = containerName(workspace);
-  if (await isRunning(name)) return;
+  private exclusive<T>(action: () => Promise<T>): Promise<T> {
+    const next = this.gate.then(action);
+    this.gate = next.catch(() => {});
+    return next;
+  }
 
-  // a stopped leftover cannot be started back into a clean state — its network policy and its
-  // limits were set at creation, and either may have changed since
-  await engine(["rm", "-f", name], 20_000);
+  async initialize(): Promise<void> {
+    // a restart interrupts commands explicitly; their files live in independent volumes.
+    const old = await dockerText(["ps", "-aq", "--filter", `label=${this.label}`]);
+    for (const id of old.split("\n").filter(Boolean)) await docker(["rm", "-f", id]);
+    this.image = await dockerText(["image", "inspect", "--format", "{{.Id}}", this.config.image]);
+  }
 
-  const env = workspaceEnvironment(HOME, workspace.slot);
-  const args = [
-    "run",
-    "--detach",
-    "--name",
-    name,
-    "--init",
-    // the image's healthcheck belongs to the supervisor role; here it would curl an API that this
-    // container does not serve and report unhealthy forever
-    "--no-healthcheck",
-    // the whole workspace, and nothing else on the host, at the path its commands expect
-    "--volume",
-    `${config.root}/${workspace.id}:${HOME}`,
-    "--workdir",
-    HOME,
-    "--read-only",
-    "--tmpfs",
-    "/tmp:size=512m",
-    "--tmpfs",
-    "/run",
-    "--cap-drop=ALL",
-    // the only two it needs, and only at start-up: the entrypoint installs this container's egress
-    // policy before anything of the workspace's runs. commands run as an unprivileged uid, whose
-    // effective set is empty, so nothing they start can reach them.
-    "--cap-add=NET_ADMIN",
-    "--cap-add=NET_RAW",
-    "--security-opt=no-new-privileges",
-    "--pids-limit",
-    String(config.pidsLimit),
-    "--memory",
-    config.memory,
-    "--memory-swap",
-    config.memory,
-    "--cpus",
-    config.cpus,
-    ...(config.runtime ? ["--runtime", config.runtime] : []),
-    "--env",
-    `WORKSPACE_NETWORK=${Deno.env.get("WORKSPACE_NETWORK") ?? "open"}`,
-    ...Object.entries(env).flatMap(([key, value]) => ["--env", `${key}=${value}`]),
-    config.image,
-    "workspace",
-  ];
+  async ensure(id: string): Promise<string> {
+    return await this.exclusive(async () => {
+      if (this.closing) throw new RequestError("Workspace service is stopping", 503);
+      const name = this.name(id);
+      if (this.live.has(id)) {
+        const running = await dockerText([
+          "ps",
+          "-q",
+          "--filter",
+          `label=${this.label}`,
+          "--filter",
+          `name=^/${name}$`,
+        ]);
+        if (running) {
+          this.live.set(id, Date.now());
+          return name;
+        }
+        await this.remove(id);
+      }
+      if (this.live.size >= this.config.maxActive) {
+        throw new RequestError(
+          "All workspace slots are occupied. Try again after an idle workspace stops.",
+          409,
+        );
+      }
+      const volume = `${name}-home`;
+      await docker(["volume", "create", "--label", this.label, volume]);
+      const owner = await dockerText([
+        "volume",
+        "inspect",
+        "--format",
+        '{{index .Labels "com.helltar.vusan.workspace"}}',
+        volume,
+      ]);
+      if (owner !== this.config.namespace) throw new Error("Workspace volume belongs to another owner");
+      const env = { ...workspaceEnvironment(), WORKSPACE_NETWORK: this.config.network };
+      try {
+        await docker([
+          "run",
+          "--detach",
+          "--pull=never",
+          "--name",
+          name,
+          "--label",
+          this.label,
+          "--label",
+          `com.helltar.vusan.workspace-id=${id}`,
+          "--init",
+          "--no-healthcheck",
+          "--read-only",
+          "--mount",
+          `type=volume,src=${volume},dst=/work`,
+          "--tmpfs",
+          "/tmp:rw,nosuid,nodev,size=256m",
+          "--tmpfs",
+          "/run:rw,nosuid,nodev,size=16m",
+          "--cap-drop=ALL",
+          "--cap-add=NET_ADMIN",
+          "--cap-add=NET_RAW",
+          "--cap-add=SETUID",
+          "--cap-add=SETGID",
+          "--cap-add=SETPCAP",
+          "--security-opt=no-new-privileges",
+          "--pids-limit",
+          String(this.config.pids),
+          "--memory",
+          `${this.config.memoryMb}m`,
+          "--memory-swap",
+          `${this.config.memoryMb}m`,
+          "--cpus",
+          String(this.config.cpus),
+          "--network",
+          this.config.network === "none" ? "none" : "bridge",
+          "--sysctl",
+          "net.ipv6.conf.all.disable_ipv6=1",
+          "--sysctl",
+          "net.ipv6.conf.default.disable_ipv6=1",
+          ...(this.config.network === "open" ? ["--dns", "1.1.1.1", "--dns", "8.8.8.8"] : []),
+          "--log-driver",
+          "local",
+          "--log-opt",
+          "max-size=1m",
+          "--log-opt",
+          "max-file=2",
+          ...Object.entries(env).flatMap(([key, value]) => ["--env", `${key}=${value}`]),
+          this.image,
+          "workspace",
+        ]);
+        this.live.set(id, Date.now());
+        await docker([
+          "exec",
+          "--user",
+          "1000:1000",
+          name,
+          "/usr/bin/timeout",
+          "15",
+          "/usr/bin/sh",
+          "-c",
+          "until test -f /run/workspace-ready; do sleep 0.1; done; mkdir -p /work/tmp /work/inbox",
+        ]);
+      } catch (e) {
+        const details = await docker(["logs", "--tail", "10", name], { includeStderr: true })
+          .then((out) => new TextDecoder().decode(out).trim()).catch(() => "");
+        await this.remove(id);
+        throw new Error(`Workspace startup failed: ${details || String(e)}`);
+      }
+      return name;
+    });
+  }
 
-  const started = await engine(args);
-  if (!started.ok) throw new Error(`Could not start the workspace container: ${started.out}`);
-
-  console.log(
-    `started container=[${name}] image=[${config.image}] runtime=[${config.runtime ?? "default"}] ` +
-      `mem=[${config.memory}] cpus=[${config.cpus}]`,
-  );
-}
-
-export async function runCommand(
-  workspace: Workspace,
-  command: string,
-  timeoutSeconds: number,
-): Promise<ExecResult> {
-  const started = performance.now();
-  await ensureRunning(workspace);
-
-  const runId = crypto.randomUUID().slice(0, 8);
-  const logPath = `${workspace.home}/.vusan/logs/${runId}.log`;
-  const log = await LogSink.open(logPath, config.maxLogBytes, workspace.uid, workspace.gid);
-  const pgidFile = `${workspace.home}/.vusan/run-${runId}.pgid`;
-
-  // the command travels as an environment variable and is never spliced into a shell string, so
-  // nothing in it can be read as syntax by the layers carrying it
-  const child = new Deno.Command(config.engine, {
-    args: [
+  command(id: string, command: string): Deno.ChildProcess {
+    return spawnDocker([
       "exec",
       "--user",
-      `${workspace.uid}:${workspace.gid}`,
-      "--env",
-      `VUSAN_COMMAND=${command}`,
-      "--env",
-      `VUSAN_PGID_FILE=${HOME}/.vusan/run-${runId}.pgid`,
-      containerName(workspace),
-      "bash",
-      "-c",
-      // no `setsid` here, unlike the shared runner: the engine already gives an exec its own
-      // session, so this process is the group leader and `$$` is the pgid the timeout needs.
-      // Calling setsid anyway would fork, and the direct child would then exit ahead of the real
-      // command — taking the output stream with it.
-      'echo $$ > "$VUSAN_PGID_FILE"; exec bash -lc "$VUSAN_COMMAND"',
-    ],
-    stdin: "null",
-    stdout: "piped",
-    stderr: "piped",
-  }).spawn();
-
-  let timedOut = false;
-  const deadline = setTimeout(() => {
-    timedOut = true;
-    void killRun(workspace, pgidFile, "TERM");
-    setTimeout(() => void killRun(workspace, pgidFile, "KILL"), KILL_GRACE_MS);
-  }, timeoutSeconds * 1000);
-
-  try {
-    const [stdout, stderr, status] = await Promise.all([
-      capture(child.stdout, config.maxOutputBytes, log),
-      capture(child.stderr, config.maxOutputBytes, log),
-      child.status,
+      "1000:1000",
+      "--workdir",
+      "/work",
+      this.name(id),
+      "/usr/bin/env",
+      "-i",
+      ...Object.entries(workspaceEnvironment()).map(([key, value]) => `${key}=${value}`),
+      "/usr/bin/bash",
+      "-lc",
+      command,
     ]);
-
-    return {
-      exitCode: status.code,
-      timedOut,
-      stdout,
-      stderr,
-      elapsedMs: Math.round(performance.now() - started),
-      logPath: log ? `.vusan/logs/${runId}.log` : null,
-    };
-  } finally {
-    clearTimeout(deadline);
-    log?.close();
-    await Deno.remove(pgidFile).catch(() => {});
-  }
-}
-
-/**
- * The timeout is enforced from out here, and by process group, for the same two reasons as in the
- * shared runner: a `timeout` inside the workspace is the command's own child, and killing only the
- * shell leaves its tree running. Signalling runs as the workspace's own uid, so the container needs
- * no `CAP_KILL` for it.
- *
- * The pgid is read from the host side of the mount rather than asked of the container, which keeps
- * the kill working even when the container is too loaded to answer promptly.
- */
-async function killRun(workspace: Workspace, pgidFile: string, signal: string): Promise<void> {
-  const pgid = await Deno.readTextFile(pgidFile).then((raw) => raw.trim()).catch(() => "");
-  if (!/^\d+$/.test(pgid)) return;
-
-  await engine([
-    "exec",
-    "--user",
-    `${workspace.uid}:${workspace.gid}`,
-    containerName(workspace),
-    "kill",
-    `-${signal}`,
-    `-${pgid}`,
-  ], 10_000).catch(() => undefined);
-}
-
-/** Removes the workspace's container. Returns how many processes it still had. */
-export async function killWorkspace(workspace: Workspace): Promise<number> {
-  const name = containerName(workspace);
-  if (!await isRunning(name)) {
-    await engine(["rm", "-f", name], 20_000).catch(() => undefined);
-    return 0;
   }
 
-  const counted = await engine([
-    "exec",
-    "--user",
-    `${workspace.uid}:${workspace.gid}`,
-    name,
-    "pgrep",
-    "-c",
-    "-u",
-    String(workspace.uid),
-  ], 10_000).catch(() => ({ ok: false, out: "" }));
+  async file(id: string, action: "read" | "write", path: string, input?: Uint8Array): Promise<Uint8Array> {
+    const name = await this.ensure(id);
+    return await docker([
+      "exec",
+      ...(input !== undefined ? ["-i"] : []),
+      "--user",
+      "1000:1000",
+      name,
+      "/usr/bin/timeout",
+      "-k",
+      "1",
+      "20",
+      "/usr/bin/deno",
+      "run",
+      "--no-prompt",
+      "--allow-read=/work",
+      "--allow-write=/work",
+      "/app/files.ts",
+      action,
+      path,
+    ], { input, cap: FILE_LIMIT }).catch((e) => {
+      if (e instanceof RequestError) throw e;
+      throw new RequestError(e instanceof Error ? e.message : "File transfer failed", 422);
+    });
+  }
 
-  await engine(["rm", "-f", name], 20_000);
-  return counted.ok ? Number.parseInt(counted.out, 10) || 0 : 0;
+  async usage(id: string): Promise<number> {
+    const out = await dockerText([
+      "exec",
+      "--user",
+      "1000:1000",
+      this.name(id),
+      "/usr/bin/timeout",
+      "5",
+      "/usr/bin/du",
+      "-sb",
+      "/work",
+    ]);
+    return Number.parseInt(out, 10);
+  }
+
+  touch(id: string): void {
+    if (this.live.has(id)) this.live.set(id, Date.now());
+  }
+
+  async stop(id: string): Promise<void> {
+    await this.exclusive(() => this.remove(id));
+  }
+
+  async shutdown(): Promise<void> {
+    this.closing = true;
+    await this.exclusive(async () => {
+      await Promise.all([...this.live.keys()].map((id) => this.remove(id)));
+    });
+  }
+
+  private async remove(id: string): Promise<void> {
+    const owned = await dockerText([
+      "ps",
+      "-aq",
+      "--filter",
+      `label=${this.label}`,
+      "--filter",
+      `name=^/${this.name(id)}$`,
+    ]);
+    if (owned) await docker(["rm", "-f", owned]);
+    this.live.delete(id);
+  }
+
+  async sweep(busy: (id: string) => boolean): Promise<void> {
+    await this.exclusive(async () => {
+      const cutoff = Date.now() - this.config.idleMinutes * 60_000;
+      for (const [id, touched] of this.live) {
+        if (touched < cutoff && !busy(id)) await this.remove(id);
+      }
+    });
+  }
 }

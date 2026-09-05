@@ -423,7 +423,8 @@ class ReplyContextTest {
         assertTrue(block.contains("duration: 42s"))
         assertTrue(block.contains("`describeVideo`"))
         // a video is worth re-encoding as well as watching, so it is offered to both
-        assertTrue(block.contains("`ffmpeg`"))
+        assertTrue(block.contains("`inbox/`"))
+        assertTrue(block.contains("returns its exact path"))
     }
 
     private val mapper = ObjectMapper()

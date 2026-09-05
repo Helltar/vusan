@@ -43,10 +43,10 @@ Keep this file concise and actionable; put product docs in `README.md` or `docs/
   Kotlin application reaches it only over HTTP through
   `tools/workspace/WorkspaceClient.kt`, and knows nothing about how it isolates
   what it runs.
-- The two runners behind `runner.ts` (`exec.ts` beside the supervisor,
-  `container.ts` one container per workspace) must stay interchangeable: same
-  API, same image, same Kotlin side. Anything true of only one of them belongs
-  in that file, not in `main.ts`.
+- There is one execution path: `workspace/container.ts` starts one Docker
+  container and one persistent named home volume per workspace. Only the trusted
+  HTTP controller receives the Docker socket; commands and file helpers run
+  inside their workspace as UID 1000. Do not reintroduce shared-process runners.
 - `TelegramBotRunner` normalizes inbound updates into a prompt; `AgentTurns`
   builds the `AgentRequest` from there and owns the turn up to its delivery.
   Tools consume `RequestContext`/`AttachedFile`; they should not reach back into
@@ -82,11 +82,11 @@ what they describe:
   menu published by `telegram/CommandMenu.kt` (with a description per `Language`
   in `i18n/Messages`), and the direct-command flow in
   [`docs/architecture.md`](docs/architecture.md) aligned with it.
-- The toolchain installed in `workspace/Dockerfile` and the list of it in
-  `WorkspaceToolDescriptions.RUN_COMMAND`: the image and that line must agree, or
-  the model offers a command that is not there. New knobs in `workspace/config.ts`
-  belong in `compose.yaml`, `compose.workspace.yaml` and the tuning table in
-  [`docs/configuration.md`](docs/configuration.md) in the same change.
+- Keep the base toolchain small and document it in `docs/configuration.md`, not
+  in LLM-facing descriptions: the agent checks what is installed for its task.
+  New knobs in `workspace/config.ts` belong in `compose.yaml`, `.env.example`
+  and the configuration tuning table in the same change; the remote Compose
+  override inherits them rather than duplicating the deployment.
 
 ## Kotlin Style
 

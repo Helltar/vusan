@@ -2,15 +2,49 @@ package com.helltar.vusan.tools.workspace
 
 import com.helltar.vusan.infra.Http
 import io.ktor.client.engine.mock.*
+import io.ktor.http.*
 import java.net.ConnectException
 import java.nio.channels.UnresolvedAddressException
 import kotlin.test.Test
 import kotlin.test.assertContains
 import kotlin.test.assertFailsWith
+import kotlin.test.assertEquals
 import kotlin.time.Duration.Companion.seconds
 import kotlinx.coroutines.runBlocking
 
 class WorkspaceClientTest {
+
+    @Test
+    fun `file size is bounded even without content length`() = runBlocking {
+        val http = Http.createClient(MockEngine { respond(byteArrayOf(1, 2, 3, 4, 5), HttpStatusCode.OK) })
+        val client = WorkspaceClient(http, "http://workspace", 600.seconds)
+        val error = assertFailsWith<IllegalStateException> { client.readFile("u1", "sample.bin", 4) }
+        assertContains(error.message.orEmpty(), "transfer limit")
+    }
+
+    @Test
+    fun `declared oversize is refused before accepting the response body`() = runBlocking {
+        val http = Http.createClient(MockEngine {
+            respond(byteArrayOf(1), HttpStatusCode.OK, headersOf(HttpHeaders.ContentLength, "100"))
+        })
+        val client = WorkspaceClient(http, "http://workspace", 600.seconds)
+        val error = assertFailsWith<IllegalArgumentException> { client.readFile("u1", "sample.bin", 4) }
+        assertContains(error.message.orEmpty(), "transfer limit")
+    }
+
+    @Test
+    fun `poll requests keep workspace scope and byte offset`() = runBlocking {
+        val http = Http.createClient(MockEngine { request ->
+            assertEquals("u42_g123", request.url.parameters["id"])
+            assertEquals("16384", request.url.parameters["offset"])
+            assertEquals("20", request.url.parameters["waitSeconds"])
+            respond("""{"jobId":"d6e07bfb-61dd-469a-94ad-2d05e1a19493","status":"completed"}""", HttpStatusCode.OK,
+                headersOf(HttpHeaders.ContentType, "application/json"))
+        })
+        val result = WorkspaceClient(http, "http://workspace", 600.seconds)
+            .readCommand("u42_g123", "d6e07bfb-61dd-469a-94ad-2d05e1a19493", 16384, 20)
+        assertEquals(CommandStatus.COMPLETED, result.status)
+    }
 
     private fun clientThatThrows(error: Throwable): WorkspaceClient {
         val http = Http.createClient(MockEngine { throw error })

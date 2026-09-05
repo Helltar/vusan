@@ -64,6 +64,8 @@ private val TOOL_ACTIVITIES: Map<String, ToolActivity> = buildMap {
     put(ImageGenTools::generateImage.name, ToolActivity.DRAWING)
     put(ImageGenTools::editImage.name, ToolActivity.DRAWING)
     put(WorkspaceTools::runCommand.name, ToolActivity.RUNNING_CODE)
+    put(WorkspaceTools::readWorkspaceCommand.name, ToolActivity.RUNNING_CODE)
+    put(WorkspaceTools::cancelWorkspaceCommand.name, ToolActivity.RUNNING_CODE)
     put(WorkspaceTools::writeWorkspaceFile.name, ToolActivity.RUNNING_CODE)
     put(VisionTools::describeImage.name, ToolActivity.LOOKING_AT_IMAGE)
     put(VisionTools::describeVideo.name, ToolActivity.WATCHING_VIDEO)

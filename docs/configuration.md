@@ -404,107 +404,115 @@ back, as text only. Vision calls share the `LLM_REQUEST_TIMEOUT_SECONDS` budget.
 
 ## Workspace
 
-The workspace gives the agent a real Linux home directory it can work in with a shell: write and run programs, build a
-multi-file project, convert media, crunch data, draw charts, produce Word and PDF files, and send any of it back to the
-chat. `python3` with `pip`, `node` with `npm`, `git`, `curl`, `ffmpeg`, `imagemagick`, `pandoc`, `sqlite3`, `jq`,
-`ripgrep`, `zip`, a headless `chromium` and a C/C++ toolchain are preinstalled, and anything else is installed into
-the workspace itself.
+Vusan has a persistent Linux home directory per person **per chat**. It can run Bash, work on a project,
+convert documents and media, install user-local dependencies, and send the results back. Files survive
+new messages, `/clear`, container replacement and service restarts. Group members have separate homes;
+the same person's private chat and groups also have separate homes.
 
-Chromium is there so a page or a game it just wrote gets opened before it is called finished — rendered to a
-screenshot, or driven with `puppeteer-core` to catch a thrown exception or a canvas that never draws. It runs with
-`--no-sandbox`, set for it in the environment along with the other flags it needs every time: Chromium's own sandbox
-wants privileges this container does not have, and it is not what isolates anything here — the container around it
-is.
+With Docker installed and `.env` filled in, the usual command starts everything:
 
-**The workspace persists.** There is one per person per chat — the same `(userId, chatId)` key the conversation history
-uses — and it keeps everything between messages and between days, including what `pip install --user` and
-`npm install` put there, because the workspace *is* the home directory. Coming back weeks later finds the project
-intact. Two consequences worth knowing: every member of a group has a workspace of their own and cannot read anyone
-else's, and the same person's private workspace is separate from their workspace in a group. To move a file between
-them, have the bot send it and attach it again in the other chat — an attached file is placed in `inbox/`.
-
-A file the user uploads (or one they reply to) is copied into `inbox/` under its own name before the first command
-runs. Files the agent creates are **not** sent to the chat until it sends them, which keeps intermediate build output
-out of the conversation.
-
-`/clear` does not touch a workspace: files survive it the way memory does.
-
-Docker starts it by default:
-
-```dotenv
-WORKSPACE_URL=http://vusan-workspace:8080
+```bash
+docker compose up -d
 ```
 
-To disable the workspace, comment `WORKSPACE_URL` out and start only the bot with `docker compose up -d vusan`
-(`docker compose stop vusan-workspace` if it is already running). A local JVM run has no workspace container unless you
-start one yourself; point `WORKSPACE_URL` at that service, or leave it commented.
+Keep `WORKSPACE_URL=http://vusan-workspace:8080` in the bot's environment. Compose starts the bot and a
+trusted workspace controller. The controller creates a container on demand for each workspace; there is
+no shared-process mode, alternate engine or runtime to configure. No gVisor installation is required.
 
-### Network access
+To disable the tools, comment out `WORKSPACE_URL` and start only the bot with
+`docker compose up -d vusan`. Stop an already running controller with
+`docker compose stop vusan-workspace`. For a local JVM or a separate workspace host, see
+[deployment and administration](workspace.md).
 
-By default a workspace reaches the whole internet **except every local address range** — private networks, loopback,
-link-local (including cloud metadata endpoints), and CGNAT — filtered by destination IP in the kernel. It has no IPv6.
-This is what lets `pip install`, `npm install` and downloads work.
+### Files and installed tools
 
-Understand what open egress buys and costs. Anyone who can steer the bot — and that includes a prompt injection in a
-page it was asked to read — can make it fetch from your address, and anything inside a workspace can be posted out.
-Nothing in a workspace may therefore be worth stealing: it holds no secrets, gets none of the bot's environment, and
-mounts nothing from the host. Outbound mail (25/465/587) is refused, since spam is the one abuse whose cost outlives
-it.
+Each home is a separate Docker named volume mounted at `/work`, also used as `HOME`. Only that
+workspace sees it. Uploaded and replied-to attachments are copied before the first command or file-writing
+tool into `inbox/<unique-id>/<filename>`; the tool reports the exact path. Repeated filenames do not
+overwrite earlier attachments. Created files stay private until the agent sends them.
 
-Set `WORKSPACE_NETWORK=none` to take the internet away entirely; installs and downloads then stop working.
+The base image contains Python with pip/venv, Node.js/npm, Git, curl/wget, jq, SQLite, ripgrep,
+zip/unzip, Pandoc, FFmpeg, ImageMagick and Chromium with basic fonts. It does not bundle Java, Kotlin,
+a C/C++ compiler or a document typesetting suite. Chromium supports checking generated pages and taking
+screenshots; its launcher disables the browser's own sandbox inside the isolated workspace container.
 
-`WORKSPACE_NETWORK=external` says the opposite: *something else* filters egress and this container must
-not try. It exists because gVisor's network stack has no iptables, so a workspace running under
-`WORKSPACE_RUNTIME=runsc` cannot install the policy and would otherwise refuse to start — which is the
-right behaviour, since a policy that quietly gives up when it cannot be applied is worse than no policy
-at all. Only set it where a layer outside the machine enforces the same restriction, and write down
-where that layer is.
+The model receives no preinstalled-package inventory. It checks what a task needs, installs dependencies
+under the home directory when practical, or reports what is missing. Prefer Python virtual environments
+and project-local npm packages; their files persist. There is no `sudo`, and the system image is read-only.
+An administrator adds system packages by rebuilding the image, not by installing into a disposable
+container; [see the example](workspace.md#adding-system-packages).
+
+### Commands and processes
+
+Every command starts a fresh `bash -lc` at `/work`. Use `cd project && ...` explicitly; shell variables
+and the current directory do not carry over. Files such as `~/.profile` can persist environment setup.
+There is no terminal or interactive stdin.
+
+A command returns within about ten seconds. If it is still running, the result includes a job ID:
+the agent can read its status/output or cancel it. An empty ID in the read tool lists recent commands,
+including after `/clear`. Run long builds normally; there is no need to detach them just to avoid an HTTP timeout.
+
+A normal exit leaves background processes alive if their output was redirected. Idle expiry,
+cancellation and command timeout remove the **whole container**, including detached processes and local
+servers, but retain its home. An active command is exempt from idle expiry. A controller stop/restart
+interrupts commands; it does not resume processes. An abrupt stop is reconciled on the next startup.
+
+The controller keeps the last 20 command records per workspace, with at most 8 MiB of combined output
+each. Output is returned in 16 KiB pages after control-code cleanup. Anything beyond the log cap is
+discarded and marked as truncated; redirect to a workspace file when the complete output matters.
+Transfers are limited to 50 MiB per file; sending to chat accepts up to 10 files and 50 MiB total per call.
+File-transfer paths must be relative and must not contain symlinks; Bash can copy a linked file first.
+
+### Network and security
+
+Each workspace has its own filesystem mounts, process table, network namespace and resource limits.
+Commands run as UID 1000 without capabilities, with Docker's default seccomp profile,
+`no-new-privileges` and a read-only root filesystem. They receive neither application secrets nor the
+Docker socket. Only the trusted controller gets that socket — **control of the controller means control
+of the Docker host**.
+
+In the default `open` network policy, public internet access allows downloads and package installs.
+A destination-IP firewall blocks private/local ranges, cloud metadata, CGNAT and outbound SMTP
+(25/465/587). IPv6 is disabled and DNS is restricted to public resolvers. The workspace's **own loopback**
+remains available for local servers and browser checks; it does not lead to the controller or other
+workspaces. Firewall setup must succeed before commands can run.
+
+`WORKSPACE_NETWORK=none` disables external networking while preserving that private loopback. There is
+no mode that silently skips firewall enforcement.
+
+Docker containers still share the host kernel; this is not VM-level isolation. Open internet access also
+allows data exfiltration and abuse from the server's address. Do not put credentials in a workspace.
+For a public or less-trusted deployment, a dedicated workspace machine limits the impact of an escape;
+it uses the [same implementation](workspace.md), not another execution mode.
 
 ### Tuning
 
-All of these go in the repo-root `.env`; the default `compose.yaml` passes them into the workspace container.
+Set these in the repo-root `.env`; both local and remote Compose deployments use the same settings.
 
-| Variable                        | Default | Used by            | Description                                                  |
-|---------------------------------|---------|--------------------|--------------------------------------------------------------|
-| `WORKSPACE_TIMEOUT_SECONDS`     | `120`   | workspace          | Time limit for a command that does not ask for one.          |
-| `WORKSPACE_MAX_TIMEOUT_SECONDS` | `600`   | Vusan + workspace  | Ceiling on what a command may ask for.                       |
-| `WORKSPACE_MAX_CONCURRENT`      | `2`     | workspace          | Commands running at once across every workspace.             |
-| `WORKSPACE_IDLE_MINUTES`        | `60`    | workspace          | Untouched for this long, anything still running is killed.   |
-| `WORKSPACE_QUOTA_MB`            | `2048`  | workspace          | Disk a workspace may use before it is asked to clean up.     |
-| `WORKSPACE_NETWORK`             | `open`  | workspace          | `open`, `none`, or `external`, as above.                     |
-| `WORKSPACE_TOKEN`               | —       | Vusan + workspace  | Shared secret; required when the service is not on this host. |
+| Variable | Default | Meaning |
+|---|---|---|
+| `WORKSPACE_TIMEOUT_SECONDS` | `120` | Default command time limit, clamped to the maximum. |
+| `WORKSPACE_MAX_TIMEOUT_SECONDS` | `600` | Maximum requested command time; shared by bot and controller. |
+| `WORKSPACE_MAX_CONCURRENT` | `2` | Active commands across all workspaces; one per workspace. |
+| `WORKSPACE_MAX_ACTIVE` | `4` | Live workspace containers, including idle ones. |
+| `WORKSPACE_IDLE_MINUTES` | `60` | Remove an untouched container after this many minutes, unless a command is running. |
+| `WORKSPACE_MEMORY_MB` | `2048` | Hard memory limit per workspace, with no additional swap allowance. |
+| `WORKSPACE_CPUS` | `2` | CPU limit per workspace, in whole cores. |
+| `WORKSPACE_PIDS_LIMIT` | `256` | Process/thread limit per workspace. |
+| `WORKSPACE_DISK_WARN_MB` | `2048` | Warn after a command when its home exceeds this size; **not a disk quota**. |
+| `WORKSPACE_NETWORK` | `open` | `open` or `none`, as above. |
+| `WORKSPACE_TOKEN` | — | API bearer secret; required by the remote-host override. |
+| `WORKSPACE_NAMESPACE` | `vusan` | Stable Docker resource prefix; unique per controller on a host. |
+| `WORKSPACE_IMAGE` | `ghcr.io/helltar/vusan-workspace:latest` | Image for both controller and workspace containers. |
 
-`WORKSPACE_MAX_TIMEOUT_SECONDS` is shared on purpose: the service clamps a requested timeout to it, while Vusan uses the
-same value for its HTTP wait budget. Setting it once keeps the two in sync.
+The controller itself has a 512 MiB memory ceiling. At the defaults, four busy workspace containers
+can use another 8 GiB in total, even with only two tracked commands, because background processes also
+consume resources. A full container pool refuses new workspaces until an idle one expires.
 
-### What a background command does
-
-A command normally takes everything it started with it: when it ends or hits its time limit, its
-whole process tree is killed. Something meant to outlive the command — a build, a long encode, a dev
-server — has to be started with `setsid`, and then nothing stops it until the agent checks on it.
-`WORKSPACE_IDLE_MINUTES` is the backstop: a workspace nobody has touched for that long has whatever
-it left running killed. Raise it if long unattended jobs are normal here.
-
-Interactive programs simply do not work: there is no terminal, and stdin is `/dev/null`. `top` exits
-with `failed tty get` rather than hanging, and the batch forms (`top -b -n1`, `ps`) are what to use.
-
-One thing people in the default setup *can* see of each other: the process list is shared, so a
-command line is visible to everyone with a workspace on that host — `ps` shows what someone else is
-running, though not their files, their environment, or any way to signal them. Hiding it needs
-`CAP_SYS_ADMIN`, which is not a trade worth making here; a container per workspace removes it
-instead, along with the shared resource ceiling — see [workspace.md](workspace.md).
-
-### Running it somewhere safer
-
-The default puts every workspace in one container, separated by unix user. That protects the host from what runs in
-them, but it is the weaker of the two arrangements: people are separated by file permissions rather than namespaces,
-they share one resource ceiling, and they can see each other's command lines.
-
-`WORKSPACE_ISOLATION=container` gives each workspace a container of its own instead — its own filesystem, process
-table, network namespace, and its own `WORKSPACE_MEM`/`WORKSPACE_CPUS`/`WORKSPACE_PIDS_LIMIT` rather than a share of
-one. It needs a container engine socket, and reaching that socket is reaching the host holding it, so it belongs on a
-machine that runs nothing else. That deployment — and why the machine being disposable matters as much as the
-isolation — is [workspace.md](workspace.md).
+Named volumes have **no hard per-workspace disk quota** in this zero-setup deployment. The warning
+never blocks cleanup commands, but it cannot prevent a command filling the host's disk. Monitor Docker's
+data filesystem; a separate disk or host can limit the operational impact. A hard storage quota would
+require host/filesystem provisioning beyond `up -d`.
 
 ## Memory
 

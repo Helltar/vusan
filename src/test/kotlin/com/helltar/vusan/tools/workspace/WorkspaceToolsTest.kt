@@ -8,21 +8,22 @@ import com.helltar.vusan.request.AttachedFileKind
 import com.helltar.vusan.request.RequestContext
 import io.ktor.client.engine.mock.*
 import io.ktor.http.*
+import kotlinx.coroutines.runBlocking
 import kotlin.test.Test
 import kotlin.test.assertContains
 import kotlin.test.assertEquals
 import kotlin.test.assertIs
+import kotlin.test.assertNotEquals
 import kotlin.test.assertTrue
 import kotlin.time.Duration.Companion.seconds
-import kotlinx.coroutines.runBlocking
 
 class WorkspaceToolsTest {
-
     private val context = RequestContext(chatId = 55L, userId = 55L, messageId = 1L, chatIsPrivate = true)
     private val writes = mutableListOf<Pair<String, ByteArray>>()
 
     private fun tools(
-        exec: String = """{"exitCode":0,"stdout":"","stderr":""}""",
+        result: String = """{"jobId":"d6e07bfb-61dd-469a-94ad-2d05e1a19493","status":"completed","exitCode":0}""",
+        status: HttpStatusCode = HttpStatusCode.OK,
         files: Map<String, ByteArray> = emptyMap(),
         attached: AttachedFile? = null,
         outbox: BotOutbox = BotOutbox()
@@ -30,120 +31,102 @@ class WorkspaceToolsTest {
         val engine = MockEngine { request ->
             val path = request.url.encodedPath
             val wanted = request.url.parameters["path"].orEmpty()
-
+            assertEquals("u55", request.url.parameters["id"])
             when {
-                path == "/exec" ->
-                    respond(exec, HttpStatusCode.OK, headersOf(HttpHeaders.ContentType, "application/json"))
-
+                path.startsWith("/jobs") -> respond(result, status, headersOf(HttpHeaders.ContentType, "application/json"))
                 path == "/files" && request.method == HttpMethod.Put -> {
                     writes += wanted to request.body.toByteArray()
-                    respond("""{"path":"$wanted"}""", HttpStatusCode.OK, headersOf(HttpHeaders.ContentType, "application/json"))
+                    respond("{}", HttpStatusCode.OK)
                 }
-
-                path == "/files" ->
-                    files[wanted]
-                        ?.let { respond(it, HttpStatusCode.OK) }
-                        ?: respond("""{"error":"No such path"}""", HttpStatusCode.BadRequest)
-
-                else -> respond("""{"error":"unexpected ${request.method.value} $path"}""", HttpStatusCode.NotFound)
+                path == "/files" -> files[wanted]?.let { respond(it, HttpStatusCode.OK) }
+                    ?: respond("""{"error":"No such path"}""", HttpStatusCode.BadRequest, headersOf(HttpHeaders.ContentType, "application/json"))
+                else -> error("Unexpected request")
             }
         }
-
-        val client = WorkspaceClient(Http.createClient(engine), "http://workspace:8080", 600.seconds)
-        return WorkspaceTools(client, context, outbox, attached)
+        return WorkspaceTools(WorkspaceClient(Http.createClient(engine), "http://workspace:8080", 600.seconds), context, outbox, attached)
     }
 
     @Test
-    fun `stdout comes back in its own block`() = runBlocking {
-        val result = tools(exec = """{"exitCode":0,"stdout":"seven crates counted","stderr":""}""")
-            .runCommand("ls", 0)
-
-        assertContains(result, "<stdout>")
-        assertContains(result, "seven crates counted")
-    }
-
-    @Test
-    fun `a failing command reports its exit code`() = runBlocking {
-        val result = tools(exec = """{"exitCode":2,"stdout":"","stderr":"no such recipe"}""")
-            .runCommand("make cake", 0)
-
-        assertContains(result, "Exit code 2.")
+    fun `command output and failed exit code are visible`() = runBlocking {
+        val result = tools(result = """{"jobId":"d6e07bfb-61dd-469a-94ad-2d05e1a19493","status":"completed","exitCode":2,"output":"no such recipe"}""")
+            .runCommand("make recipe")
+        assertContains(result, "<command_output>")
         assertContains(result, "no such recipe")
+        assertContains(result, "Exit code 2.")
     }
 
     @Test
-    fun `a timeout tells the model how to keep the work running`() = runBlocking {
-        val result = tools(exec = """{"exitCode":143,"timedOut":true,"stdout":"","stderr":""}""")
-            .runCommand("sleep 900", 5)
-
-        assertContains(result, "time limit")
-        assertContains(result, "setsid")
-        // the exit code of a killed command is noise next to the timeout itself
-        assertTrue("Exit code" !in result)
+    fun `running commands expose the id and continuation offset`() = runBlocking {
+        val result = tools(result = """{"jobId":"d6e07bfb-61dd-469a-94ad-2d05e1a19493","status":"running","output":"building","nextOffset":8}""")
+            .runCommand("make")
+        assertContains(result, "d6e07bfb-61dd-469a-94ad-2d05e1a19493")
+        assertContains(result, "readWorkspaceCommand")
+        assertContains(result, "offset=8")
     }
 
     @Test
-    fun `truncated output points at the log instead of inviting a rerun`() = runBlocking {
-        val result = tools(
-            exec = """{"exitCode":0,"stdout":"partial","stdoutTruncated":true,"logPath":".vusan/logs/ab12cd34.log"}"""
-        ).runCommand("./build.sh", 0)
-
-        assertContains(result, ".vusan/logs/ab12cd34.log")
-        assertContains(result, "grep")
+    fun `timeouts report stopped processes and retained files`() = runBlocking {
+        val result = tools(result = """{"jobId":"d6e07bfb-61dd-469a-94ad-2d05e1a19493","status":"timed_out"}""").runCommand("sleep 900", 5)
+        assertContains(result, "timed_out")
+        assertContains(result, "files were kept")
+        assertTrue("setsid" !in result)
     }
 
     @Test
-    fun `a service refusal is passed through untouched`() = runBlocking {
-        val result = tools(exec = """{"error":"This workspace is already running a command."}""")
-            .runCommand("ls", 0)
-
-        assertEquals("This workspace is already running a command.", result)
+    fun `truncated logs never claim the full output was retained`() = runBlocking {
+        val result = tools(result = """{"jobId":"d6e07bfb-61dd-469a-94ad-2d05e1a19493","status":"completed","truncated":true}""").runCommand("make")
+        assertContains(result, "later output was discarded")
     }
 
     @Test
-    fun `an attachment lands in inbox before the first command runs`() = runBlocking {
+    fun `capacity refusal reaches the model`() = runBlocking {
+        val result = tools(result = """{"error":"The workspace service is at capacity"}""", status = HttpStatusCode.Conflict).runCommand("ls")
+        assertContains(result, "at capacity")
+    }
+
+    @Test
+    fun `attachments get unique paths and are copied once per turn`() = runBlocking {
         val attached = AttachedFile(
-            name = "orders.csv",
-            fileSizeBytes = 12,
-            mimeType = "text/csv",
-            kind = AttachedFileKind.OTHER,
+            name = "orders.csv", fileSizeBytes = 9, mimeType = "text/csv", kind = AttachedFileKind.OTHER,
             loadBytes = { "id,total\n".toByteArray() }
         )
-
-        val workspace = tools(attached = attached)
-        val first = workspace.runCommand("ls inbox", 0)
-
-        assertContains(first, "inbox/orders.csv")
-        assertEquals("inbox/orders.csv", writes.single().first)
-
-        // and only once: a second command must not re-upload it or repeat the note
-        val second = workspace.runCommand("ls inbox", 0)
-        assertTrue("inbox/orders.csv" !in second)
+        val firstTurn = tools(attached = attached)
+        val result = firstTurn.runCommand("ls inbox")
+        val firstPath = writes.single().first
+        assertTrue(firstPath.startsWith("inbox/") && firstPath.endsWith("/orders.csv"))
+        assertContains(result, firstPath)
+        firstTurn.runCommand("ls inbox")
         assertEquals(1, writes.size)
+        tools(attached = attached).writeWorkspaceFile("notes.txt", "review the totals")
+        assertNotEquals(firstPath, writes[1].first)
     }
 
     @Test
-    fun `sending picks the output kind from the extension`() = runBlocking {
-        val outbox = BotOutbox()
-        val result = tools(
-            files = mapOf("art/cover.png" to byteArrayOf(1, 2, 3), "game.zip" to byteArrayOf(4, 5)),
-            outbox = outbox
-        ).sendFromWorkspace(listOf("art/cover.png", "game.zip"))
+    fun `file writing reports the imported attachment path`() = runBlocking {
+        val attached = AttachedFile(
+            name = "table.csv", fileSizeBytes = 1, mimeType = "text/csv", kind = AttachedFileKind.OTHER,
+            loadBytes = { byteArrayOf(1) }
+        )
+        val result = tools(attached = attached).writeWorkspaceFile("script.py", "print(1)")
+        assertContains(result, writes.first().first)
+    }
 
+    @Test
+    fun `sending picks media kinds and reports missing files`() = runBlocking {
+        val outbox = BotOutbox()
+        val result = tools(files = mapOf("cover.png" to byteArrayOf(1), "project.zip" to byteArrayOf(2)), outbox = outbox)
+            .sendFromWorkspace(listOf("cover.png", "project.zip", "missing.txt"))
         val queued = outbox.pending.map { it.output }
         assertIs<BotOutput.Photo>(queued.first { it is BotOutput.Photo })
-        assertEquals("game.zip", queued.filterIsInstance<BotOutput.Document>().single().filename)
-        assertContains(result, "cover.png")
+        assertEquals("project.zip", queued.filterIsInstance<BotOutput.Document>().single().filename)
+        assertContains(result, "Not sent")
+        assertContains(result, "missing.txt")
     }
 
     @Test
-    fun `a file that cannot be read is reported rather than silently dropped`() = runBlocking {
-        val outbox = BotOutbox()
-        val result = tools(files = mapOf("there.txt" to byteArrayOf(9)), outbox = outbox)
-            .sendFromWorkspace(listOf("there.txt", "gone.txt"))
-
-        assertEquals(1, outbox.pending.size)
-        assertContains(result, "Not sent")
-        assertContains(result, "gone.txt")
+    fun `recent commands can be rediscovered after a conversation is cleared`() = runBlocking {
+        val result = tools(result = """{"jobs":[{"jobId":"d6e07bfb-61dd-469a-94ad-2d05e1a19493","status":"interrupted"}]}""")
+            .readWorkspaceCommand()
+        assertContains(result, "d6e07bfb-61dd-469a-94ad-2d05e1a19493: interrupted")
     }
 }

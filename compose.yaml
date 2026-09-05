@@ -12,47 +12,48 @@ services:
     env_file: .env
     volumes:
       - vusan-data:/app/data
+    networks: [default, workspace-control]
     logging: *default-logging
 
   vusan-workspace:
-    image: ghcr.io/helltar/vusan-workspace:latest
+    image: "${WORKSPACE_IMAGE:-ghcr.io/helltar/vusan-workspace:latest}"
     container_name: vusan-workspace-container
     restart: unless-stopped
-    # a command's process tree is killed by process group, and what it orphans is reparented
-    # to pid 1 — which reaps nothing unless pid 1 is an init, and the zombies then eat the
-    # pid limit below
     init: true
+    stop_grace_period: 45s
     environment:
-      WORKSPACE_ISOLATION: shared
+      WORKSPACE_IMAGE: "${WORKSPACE_IMAGE:-ghcr.io/helltar/vusan-workspace:latest}"
+      WORKSPACE_NAMESPACE: "${WORKSPACE_NAMESPACE:-vusan}"
+      WORKSPACE_TOKEN: "${WORKSPACE_TOKEN:-}"
       WORKSPACE_NETWORK: "${WORKSPACE_NETWORK:-open}"
       WORKSPACE_TIMEOUT_SECONDS: "${WORKSPACE_TIMEOUT_SECONDS:-120}"
       WORKSPACE_MAX_TIMEOUT_SECONDS: "${WORKSPACE_MAX_TIMEOUT_SECONDS:-600}"
       WORKSPACE_MAX_CONCURRENT: "${WORKSPACE_MAX_CONCURRENT:-2}"
+      WORKSPACE_MAX_ACTIVE: "${WORKSPACE_MAX_ACTIVE:-4}"
       WORKSPACE_IDLE_MINUTES: "${WORKSPACE_IDLE_MINUTES:-60}"
-      WORKSPACE_QUOTA_MB: "${WORKSPACE_QUOTA_MB:-2048}"
-      WORKSPACE_TOKEN: "${WORKSPACE_TOKEN:-}"
+      WORKSPACE_DISK_WARN_MB: "${WORKSPACE_DISK_WARN_MB:-2048}"
+      WORKSPACE_MEMORY_MB: "${WORKSPACE_MEMORY_MB:-2048}"
+      WORKSPACE_CPUS: "${WORKSPACE_CPUS:-2}"
+      WORKSPACE_PIDS_LIMIT: "${WORKSPACE_PIDS_LIMIT:-256}"
     volumes:
-      - vusan-workspaces:/work
+      # only this trusted controller can reach docker; children receive just their own volume.
+      - /var/run/docker.sock:/var/run/docker.sock
+      - vusan-workspace-state:/state
+    networks: [workspace-control]
     cap_drop: [ALL]
-    # NET_ADMIN/NET_RAW let the entrypoint install the egress rules in this container's own
-    # network namespace before any workspace runs; an unprivileged uid cannot undo them.
-    # SETUID/SETGID/CHOWN/DAC_OVERRIDE/KILL are what the supervisor needs to run each
-    # workspace as its own user and clean up after it.
-    cap_add: [NET_ADMIN, NET_RAW, SETUID, SETGID, CHOWN, DAC_OVERRIDE, KILL]
-    security_opt:
-      - no-new-privileges:true
+    security_opt: [no-new-privileges:true]
     read_only: true
     tmpfs:
-      - /tmp:size=512m
-      - /run
-    pids_limit: 512
-    mem_limit: "4g"
-    cpus: 2.0
-    # a public resolver keeps a workspace from learning the names on the local network, whose
-    # addresses the egress rules already block. leave it out where public DNS is unreachable.
-    # dns: 1.1.1.1
+      - /tmp:size=256m
+    pids_limit: 128
+    mem_limit: 512m
+    cpus: 1.0
     logging: *default-logging
+
+networks:
+  workspace-control:
+    internal: true
 
 volumes:
   vusan-data:
-  vusan-workspaces:
+  vusan-workspace-state:
