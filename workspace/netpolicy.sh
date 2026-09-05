@@ -6,6 +6,10 @@ for setting in /proc/sys/net/ipv6/conf/{all,default}/disable_ipv6; do
   [[ "$(<"$setting")" == 1 ]] || { echo "ipv6 must be disabled" >&2; exit 1; }
 done
 
+# the rules below are v4 only. addresses are already disabled above, so this matters only if that
+# invariant ever breaks; a kernel built without ipv6 has nothing to drop and nothing to leak.
+ip6tables -P OUTPUT DROP 2>/dev/null || true
+
 case "${WORKSPACE_NETWORK:-open}" in
   none)
     # docker also supplies --network=none; preserve only this workspace's loopback.

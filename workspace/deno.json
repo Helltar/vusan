@@ -1,6 +1,6 @@
 {
   "tasks": {
-    "start": "deno run --allow-net --allow-read --allow-write --allow-run=docker --allow-env --allow-sys=statfs main.ts",
+    "start": "deno run --allow-net=0.0.0.0:8080 --allow-read=.,/state --allow-write=/state --allow-run=docker --allow-env=WORKSPACE_* --allow-sys=statfs main.ts",
     "test": "deno test --allow-read --allow-write --allow-env --allow-sys=statfs *_test.ts"
   },
   "fmt": {

@@ -464,8 +464,10 @@ runner, engine selection or runtime selection. The same image serves controller 
   pipes request and response bodies straight through the helper's stdio; because the helper validates
   before it emits a byte, one peek at stdout still separates a clean rejection from a started transfer.
 - **`entrypoint.sh` / `netpolicy.sh`** — the workspace role installs its destination-IP firewall
-  with a fixed system PATH, verifies IPv6 is disabled, then drops UID/GID and capabilities before
-  waiting for commands. A failed rule stops startup. The controller role needs no network capabilities.
+  with a fixed system PATH, verifies IPv6 is disabled, drops IPv6 output where the kernel has any, then
+  drops UID/GID and capabilities before waiting for commands. A failed rule stops startup. The controller
+  role needs no network capabilities and runs with Deno permissions scoped to its own state, the port it
+  serves and the `docker` binary.
 - **`storage.ts`** — the disk guard. A one-second tick reads free bytes and inodes on the state
   filesystem, measures live homes whenever that filesystem has lost 256 MiB or a minute has passed, and
   stops any workspace past `WORKSPACE_MAX_HOME_MB`. Host-wide pressure, or a check it cannot run at all,
