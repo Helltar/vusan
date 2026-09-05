@@ -16,6 +16,10 @@ case "${1:-supervisor}" in
     ;;
   workspace)
     /usr/local/bin/netpolicy.sh
+    # the policy is installed and nothing after this reads these again. WORKSPACE_BLOCKED_CIDRS names
+    # the host's own interface addresses, and this environment stays readable through /proc for every
+    # process the workspace user owns — commands are handed a clean one, this process is not.
+    for name in "${!WORKSPACE_@}"; do unset "$name"; done
     touch /run/workspace-ready
     # only startup can set the firewall; even the namespace's keeper drops every capability.
     exec setpriv --reuid=1000 --regid=1000 --clear-groups \

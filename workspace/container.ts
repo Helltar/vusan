@@ -8,6 +8,13 @@ import { FILE_LIMIT, readBounded, RequestError, workspaceId } from "./protocol.t
 // waiting administrator. it caps nothing on an idle host, which is what `--cpus` is for.
 const WORKSPACE_CPU_SHARES = 256;
 
+// docker builds every exec's environment from the container's own, which carries the host's interface
+// addresses in WORKSPACE_BLOCKED_CIDRS — readable in /proc for as long as the process lives. nothing
+// exec'd here needs it: these commands are absolute paths, and the helper is told where its cache goes
+// rather than falling back to one inside the user's home. keep DENO_DIR equal to the image's own.
+const CLEAN_ENV = ["/usr/bin/env", "-i"];
+const HELPER_ENV = [...CLEAN_ENV, "DENO_DIR=/tmp/deno-cache"];
+
 /** Keep the workspace pool within half the host's memory and cores, sharing a single-core host. */
 export function workspaceCapacity(config: Config, memoryBytes: number, cpus: number): number {
   if (!Number.isSafeInteger(memoryBytes) || memoryBytes <= 0 || !Number.isSafeInteger(cpus) || cpus <= 0) {
@@ -253,6 +260,7 @@ export class Containers {
         "--user",
         "1000:1000",
         name,
+        ...CLEAN_ENV,
         "/usr/bin/timeout",
         "15",
         "/usr/bin/sh",
@@ -294,6 +302,7 @@ export class Containers {
       "--user",
       "1000:1000",
       name,
+      ...HELPER_ENV,
       "/usr/bin/timeout",
       "-k",
       "1",
@@ -446,6 +455,7 @@ export class Containers {
       "--user",
       "1000:1000",
       this.name(id),
+      ...CLEAN_ENV,
       "/usr/bin/timeout",
       "5",
       "/usr/bin/du",
@@ -473,6 +483,7 @@ export class Containers {
       "--user",
       "1000:1000",
       this.name(id),
+      ...CLEAN_ENV,
       "/usr/bin/timeout",
       "5",
       "/usr/bin/head",

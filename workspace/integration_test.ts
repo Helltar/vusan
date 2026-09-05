@@ -260,7 +260,8 @@ Deno.test({
         const acceptedAt = rules.indexOf("-A OUTPUT -m conntrack --ctstate RELATED,ESTABLISHED -j ACCEPT");
         ok(blockedAt >= 0 && acceptedAt >= 0 && blockedAt < acceptedAt, rules);
         const result = await run(
-          'test -z "${WORKSPACE_TOKEN+x}" && test ! -e /state && test ! -e /storage && test ! -e /dev/loop-control && test ! -S /var/run/docker.sock',
+          'test -z "${WORKSPACE_TOKEN+x}" && test ! -e /state && test ! -e /storage && test ! -e /dev/loop-control && test ! -S /var/run/docker.sock && ' +
+            "test -z \"$(cat /proc/*/environ 2>/dev/null | tr '\\0' '\\n' | grep -a '^WORKSPACE_' || true)\"",
         );
         strictEqual(result.body.exitCode, 0, JSON.stringify(result.body));
       });
