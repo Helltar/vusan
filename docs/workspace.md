@@ -1,24 +1,28 @@
 # Workspace deployment and administration
 
-The default deployment is `docker compose up -d` on a Docker host. It starts the bot and a trusted
+The default deployment is `docker compose up -d` on a rootful Linux Docker host with cgroup v2 and loop-device support. It starts the bot and a trusted
 controller; each person's workspace container is created on demand. There is only one implementation:
-Docker containers with persistent named home volumes. There is no gVisor or alternate-engine setup.
+Docker containers with bounded home filesystems backed by persistent named volumes. There is no gVisor or alternate-engine setup.
 See [configuration](configuration.md#workspace) for the tools, limits and security boundaries.
 
 ## Storage and updates
 
-With the default namespace, workspace `u123` uses container `vusan-workspace-u123` and volume
-`vusan-workspace-u123-home`. The same `u123` is used in private chat and every group. Every container mounts
-only its own home at `/work`; its UID 1000 owns the volume. The controller mounts none of these homes.
-Its command metadata and bounded logs live separately in Compose's `vusan-workspace-state` volume.
-The API secret lives in `vusan-workspace-auth`, shared only with the trusted bot. Preserve that volume
-across updates; recreating it rotates the generated token and requires restarting the bot too.
+With the default namespace, workspace `u123` uses container `vusan-workspace-u123`. Its files live in
+`home.ext4` inside the **`vusan-workspace-u123-disk` backing volume**. The controller automatically
+attaches this preallocated image and creates `vusan-workspace-u123-home`, a temporary volume wrapper
+that mounts the bounded filesystem at `/work`. The same `u123` is used in private chat and every group.
 
-Back up the home volumes and controller state using your Docker-volume backup tooling. Stop the
-controller first for a consistent copy; a normal stop also removes live workspace containers and
-interrupts commands. Start it again after the snapshot. Home volumes are retained on stop, idle
-expiry, image replacement and `docker compose down`. Do not use volume-pruning commands as cleanup:
-an idle workspace's valuable files look like an unused volume to Docker.
+The user container receives only the mounted home, owned by UID 1000. A short-lived trusted storage
+helper receives the backing volume and loop-device access; it never runs user commands. Controller job
+metadata and bounded logs live separately in Compose's `vusan-workspace-state` volume. The API secret
+lives in `vusan-workspace-auth`, shared only with the trusted bot. Preserve it across updates; recreating
+it rotates the generated token and requires restarting the bot too.
+
+**Back up the `-disk` volumes and controller state.** Stop the controller first for a consistent copy;
+normal shutdown removes the user containers and mount wrappers and detaches their loop devices. Copy
+the backing volumes using ordinary Docker-volume backup tooling, then start the controller again.
+Backing volumes survive idle expiry, image replacement and `docker compose down`. Do not use volume
+pruning as cleanup: an idle person's backing disk looks like an unused Docker volume.
 
 Update the bot and workspace together because their HTTP contract changes together:
 
@@ -112,58 +116,68 @@ used to upload workspace contents or abuse remote services, so it is not safe st
 
 ## Disk limits and the storage emergency
 
-Three layers keep a workspace from filling the host, and only the first is enforced by the kernel:
+The defaults enforce limits without host quota configuration:
 
-- `WORKSPACE_MAX_FILE_MB` (4 GiB) caps any single file a command writes. The writing process is killed
-  with `File size limit exceeded`, which is what stops a stray `dd`.
-- `WORKSPACE_MAX_HOME_MB` (4 GiB) caps a whole home. The controller measures live homes whenever the
-  state filesystem has lost 256 MiB, and once a minute regardless; a workspace over the limit loses its
-  container and its running command ends as failed. Its files are kept, so the next command can delete them.
-- `WORKSPACE_MIN_FREE_MB` / `WORKSPACE_MIN_FREE_INODES` is the host reserve, checked every second. Below
-  it, or when the check itself fails, the controller stops every live workspace container and refuses
-  file uploads with `507`. Commands stay available, because deleting files is the way back and the
-  reserve exists to leave room for that. No home volume is ever deleted automatically.
+- **Home capacity** — each person gets a preallocated 4 GiB ext4 disk, including filesystem metadata.
+  Its fixed block and inode counts stop multi-file writes, preallocation and inode exhaustion at that
+  person's boundary. The backing image is not accessible from a workspace.
+- **Per-file limit** — `WORKSPACE_MAX_FILE_MB` additionally caps each file a command writes.
+- **Disk I/O** — the workspace loop device is selected automatically. Writes are capped at `10mb`
+  (`WORKSPACE_WRITE_BPS`), reads at `50mb`; no host device name is needed.
+- **Host reserve** — new disks reserve their full size only if `WORKSPACE_MIN_FREE_MB` remains available.
+  A separate one-second check watches host free bytes/inodes, blocks commands and uploads on pressure,
+  and retries stopping live containers. Slow or failed home measurements cannot delay this check.
 
-The guard clears itself as soon as space returns; the service does not need a restart. While it is
-latched the health check reports unhealthy, so `docker compose ps` shows the problem. Free space with
-administrator tooling if the pressure comes from outside the workspaces.
+A full home can be cleaned with Bash or `deleteWorkspaceFile`. The latter removes an exact file or
+recursive directory in a fresh offline container, without shell profiles, and can repair inaccessible
+owned directories. Cancel a running command first; background processes are stopped by cleanup.
 
-None of this is a filesystem quota: measurement is periodic, so a fast writer overshoots its home limit
-by whatever it writes between two checks. Setting `WORKSPACE_WRITE_DEVICE` and `WORKSPACE_WRITE_BPS`
-together caps a workspace's write bandwidth to a host block device and removes that overshoot:
+Deleting home files frees space within the fixed disk; it **does not shrink the backing image**.
+When the host reserve is exhausted, an administrator must free host storage. Back up an unwanted
+person's `-disk` volume before retiring it. The controller never deletes backing disks automatically.
+The guard and health check recover once the reserve returns, without a service restart.
 
-```dotenv
-WORKSPACE_WRITE_DEVICE=/dev/nvme0n1
-WORKSPACE_WRITE_BPS=50mb
-```
+Budget disk space for `WORKSPACE_MAX_HOME_MB` times everyone who has used the workspace, plus logs and
+the host reserve. Snapshots, thin provisioning and other services can consume additional storage.
+Changing the configured home size does not resize existing images: stop the controller, back up the
+backing volume, and resize the image/filesystem offline with ext4 administration tools before applying
+that setting. A size mismatch fails closed, preserving the existing disk.
 
-Size the disk for `WORKSPACE_MAX_HOME_MB` times the number of people plus the reserve, since homes
-persist for everyone who has ever used the workspace. Keep workspace storage on a filesystem separate
-from the bot's database where you can, and note that the guard watches the controller's state
-filesystem: a custom volume backend on different storage needs monitoring of its own.
+## Moving from unbounded home volumes
+
+Fresh deployments need only `docker compose up -d`. Existing plain `*-home` volumes cannot silently
+remain writable without a capacity bound. The controller preserves them and reports that migration is
+required. Before upgrading, export each home using your volume backup tooling and retain the backup.
+Stop the old controller and remove only the old volume whose export has been verified. Start the new
+controller and initialize that person's empty bounded workspace, then import the files as UID/GID 1000
+through the mounted home. Oversized imports fail at the filesystem capacity; reduce the data or choose
+a larger capacity before creating the new disk. Never import user files into the raw `-disk` volume.
+
+Deploy bot and controller together; the health endpoint reports protocol 4. Old `WORKSPACE_WRITE_DEVICE`
+settings are no longer used: the service always throttles its own loop device.
 
 ## Moving from per-chat containers
 
-Workspace IDs are now `u<userId>` in every chat. Existing private-chat home volumes are reused unchanged.
+Workspace IDs are now `u<userId>` in every chat. Existing private-chat data must also follow the bounded-volume migration above.
 Former `u<userId>_g<chatId>` volumes and job records are retained but no longer opened by the bot. History
 and its `(userId, chatId)` key are unchanged.
 
 There is no automatic merge of group files: two chats may have different projects at the same path.
 Back up the old volumes, stop the controller, and copy wanted projects into separate subdirectories of
 the person's `u<userId>` home, preserving UID/GID `1000:1000`. Review collisions and keep the old copies
-until verified. Deploy the bot and controller together; the new health endpoint reports protocol 3.
+until verified. Deploy the bot and controller together; the health endpoint reports protocol 4.
 
 ## Moving from the old shared workspace
 
 This rewrite changes the API, job storage and home layout. Deploy the bot and service together; do not
 mix the old client with the new service. Remove old isolation, engine, runtime, UID-pool, host-directory
-and quota settings from deployment overrides. `WORKSPACE_DISK_WARN_MB` is still only a warning; the
-limit that stops a workspace is `WORKSPACE_MAX_HOME_MB`, above.
+and quota settings from deployment overrides. `WORKSPACE_DISK_WARN_MB` is still only a warning;
+`WORKSPACE_MAX_HOME_MB` sets the bounded filesystem capacity.
 
 There is **no automatic import** of the old shared `vusan-workspaces` volume or bind-mounted homes.
 They are not deleted by this change. Back them up before deploying. To keep a project, export its
 `u<userId>[_g<chatId>]` home from the old store. First run a harmless command through the new bot so its
-controller creates and labels the target home volume. Stop the controller, then import into that volume,
-setting the imported files' ownership to `1000:1000`. Use an empty
-target volume or review collisions first; keep the old copy until the result is verified. The old
+controller creates and labels the target home volume. Pause the bot while importing through the mounted bounded home as `1000:1000`, never into the raw
+backing volume. Keep the controller running during import, since stopping it detaches the filesystem.
+Use an empty target home or review collisions first; keep the old copy until the result is verified. The old
 UID registry and old command logs are not part of the new controller state.

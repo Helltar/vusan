@@ -45,7 +45,7 @@ async function route(request: Request): Promise<Response> {
   if (closing) return json({ error: "Workspace service is stopping" }, 503);
   const url = new URL(request.url);
   if (request.method === "GET" && url.pathname === "/health") {
-    return json({ ok: guard.healthy, protocol: 3 }, guard.healthy ? 200 : 503);
+    return json({ ok: guard.healthy, protocol: 4 }, guard.healthy ? 200 : 503);
   }
   if (!authorized(request, token)) {
     return json({ error: "Unauthorized" }, 401);
@@ -58,6 +58,8 @@ async function route(request: Request): Promise<Response> {
     if (body === null || typeof body.command !== "string") throw new RequestError("Missing command");
     const timeout = integer(body.timeoutSeconds, config.defaultTimeoutSeconds, config.maxTimeoutSeconds) ||
       config.defaultTimeoutSeconds;
+    await guard.tick();
+    guard.guardWrites();
     const job = await jobs.start(id, body.command, timeout);
     return json(await jobs.read(id, job.jobId, 0, 10));
   }
@@ -70,11 +72,17 @@ async function route(request: Request): Promise<Response> {
     const wait = integer(url.searchParams.get("waitSeconds"), 0, 20);
     return json(await jobs.read(id, run, offset, wait));
   }
-  if (url.pathname === "/files" && ["PUT", "GET"].includes(request.method)) {
-    if (request.method === "PUT") guard.guardUploads();
+  if (url.pathname === "/files" && ["PUT", "GET", "DELETE"].includes(request.method)) {
+    if (request.method === "PUT") {
+      await guard.tick();
+      guard.guardWrites();
+    }
     if (transfers >= 2) throw new RequestError("File transfer capacity reached; try again shortly", 409);
     const path = url.searchParams.get("path");
     if (!path || path.length > 400) throw new RequestError("Missing or invalid file path");
+    if (request.method === "DELETE" && jobs.busy(id)) {
+      throw new RequestError("Cancel the running command before deleting workspace files", 409);
+    }
     transfers++;
     let released = false;
     const release = () => {
@@ -83,6 +91,11 @@ async function route(request: Request): Promise<Response> {
       transfers--;
     };
     try {
+      if (request.method === "DELETE") {
+        await containers.deleteFile(id, path);
+        await guard.tick();
+        return json({ path });
+      }
       if (request.method === "PUT") {
         const size = Number(request.headers.get("content-length"));
         if (size > FILE_LIMIT) throw new RequestError("File exceeds the 50 MB transfer limit", 413);
@@ -96,7 +109,7 @@ async function route(request: Request): Promise<Response> {
       release();
       throw e;
     } finally {
-      if (request.method === "PUT") release();
+      if (request.method !== "GET") release();
     }
   }
   return json({ error: "Not found" }, 404);
@@ -104,7 +117,9 @@ async function route(request: Request): Promise<Response> {
 
 let sweeping = false;
 const storageTick = setInterval(
-  () => void guard.tick().catch((e) => console.error("workspace storage tick failed", e)),
+  () =>
+    void guard.tick().then(() => guard.checkHomes())
+      .catch((e) => console.error("workspace storage tick failed", e)),
   1_000,
 );
 const sweep = setInterval(async () => {

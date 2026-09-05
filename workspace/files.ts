@@ -1,12 +1,18 @@
 // executed inside one workspace as its unprivileged user, never by the supervisor.
 import { FILE_LIMIT, readBounded, RequestError } from "./protocol.ts";
 
-export async function resolveFile(home: string, raw: string, createParents = false): Promise<string> {
+type FileAction = "read" | "write" | "delete";
+
+export async function resolveFile(home: string, raw: string, action: FileAction = "read"): Promise<string> {
   if (!raw || raw.length > 400 || raw.startsWith("/") || raw.includes("\0")) {
     throw new RequestError("Invalid relative path");
   }
   const parts = raw.split("/").filter((part) => part !== "" && part !== ".");
-  if (parts.includes("..")) throw new RequestError("Path must stay inside the workspace");
+  if (!parts.length || parts.includes("..")) {
+    throw new RequestError("Path must name an entry inside the workspace");
+  }
+  // deletion runs without any other user processes, so inaccessible owned directories can be repaired.
+  if (action === "delete") await Deno.chmod(home, 0o700);
   let path = home;
   for (const [index, part] of parts.entries()) {
     path += `/${part}`;
@@ -14,20 +20,39 @@ export async function resolveFile(home: string, raw: string, createParents = fal
       if (e instanceof Deno.errors.NotFound) return null;
       throw e;
     });
-    if (stat?.isSymlink) throw new RequestError("File transfers do not follow symlinks; copy the file first");
+    const last = index === parts.length - 1;
+    if (stat?.isSymlink && !(action === "delete" && last)) {
+      throw new RequestError("File paths must not follow symlinks");
+    }
     if (index < parts.length - 1) {
-      if (!stat && createParents) {
+      if (!stat && action === "write") {
         await Deno.mkdir(path, { mode: 0o700 });
         stat = await Deno.lstat(path);
       }
       if (!stat?.isDirectory) throw new RequestError("Missing parent directory");
+      if (action === "delete") await Deno.chmod(path, 0o700);
     }
   }
   return path;
 }
 
+export async function deleteWorkspacePath(home: string, raw: string): Promise<void> {
+  const path = await resolveFile(home, raw, "delete");
+  const remove = async (entry: string): Promise<void> => {
+    const info = await Deno.lstat(entry);
+    if (info.isDirectory) {
+      await Deno.chmod(entry, 0o700);
+      for await (const child of Deno.readDir(entry)) await remove(`${entry}/${child.name}`);
+    }
+    await Deno.remove(entry);
+  };
+  await remove(path);
+}
+
 async function transfer(action: string, raw: string): Promise<void> {
-  const path = await resolveFile("/work", raw, action === "write");
+  if (action === "delete") return await deleteWorkspacePath("/work", raw);
+  if (action !== "read" && action !== "write") throw new RequestError("Unknown file operation");
+  const path = await resolveFile("/work", raw, action);
   if (action === "write") {
     const bytes = await readBounded(Deno.stdin.readable, FILE_LIMIT);
     // rename replaces a raced final symlink instead of writing through it.

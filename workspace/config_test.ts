@@ -10,7 +10,7 @@ Deno.test("configuration fails closed on unsupported networking and invalid limi
     "WORKSPACE_MAX_FILE_MB",
     "WORKSPACE_IDLE_CPU_SECONDS",
     "WORKSPACE_NETWORK_MBIT",
-    "WORKSPACE_WRITE_DEVICE",
+    "WORKSPACE_BLOCKED_CIDRS",
     "WORKSPACE_WRITE_BPS",
   ];
   const saved = settings.map((name) => Deno.env.get(name));
@@ -24,8 +24,8 @@ Deno.test("configuration fails closed on unsupported networking and invalid limi
         ["WORKSPACE_MAX_FILE_MB", "8"],
         ["WORKSPACE_IDLE_CPU_SECONDS", "0"],
         ["WORKSPACE_NETWORK_MBIT", "10mbit"],
-        ["WORKSPACE_WRITE_DEVICE", "/etc/passwd"],
-        ["WORKSPACE_WRITE_BPS", "50mb"],
+        ["WORKSPACE_BLOCKED_CIDRS", "1.2.3.999/24"],
+        ["WORKSPACE_WRITE_BPS", "unlimited"],
       ]
     ) {
       for (const key of settings) Deno.env.delete(key);
@@ -34,13 +34,13 @@ Deno.test("configuration fails closed on unsupported networking and invalid limi
     }
     for (const key of settings) Deno.env.delete(key);
     strictEqual(readConfig().network, "open");
-    strictEqual(readConfig().maxActive, 4);
+    strictEqual(readConfig().maxActive, 2);
     strictEqual(readConfig().namespace, "vusan");
     strictEqual(readConfig().maxHomeMb, 4096);
     strictEqual(readConfig().maxFileMb, 4096);
-    strictEqual(readConfig().writeBps, null);
+    strictEqual(readConfig().writeBps, "10mb");
     strictEqual(readConfig().idleCpuSeconds, 600);
-    strictEqual(readConfig().networkMbit, null);
+    strictEqual(readConfig().networkMbit, "50");
   } finally {
     settings.forEach((name, index) => {
       const value = saved[index];

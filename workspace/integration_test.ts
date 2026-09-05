@@ -69,6 +69,8 @@ Deno.test({
         "WORKSPACE_MAX_FILE_MB=64",
         "-e",
         "WORKSPACE_IDLE_CPU_SECONDS=2",
+        "-e",
+        "WORKSPACE_BLOCKED_CIDRS=203.0.113.7/32",
         image!,
       ]);
       base = `http://${await dockerText(["port", supervisor, "8080/tcp"])}`;
@@ -204,11 +206,26 @@ Deno.test({
         );
         strictEqual(limits.Memory, 512 * 1024 * 1024);
         strictEqual(limits.MemorySwap, limits.Memory);
-        strictEqual(limits.NanoCpus, 2_000_000_000);
+        strictEqual(limits.NanoCpus, 1_000_000_000);
         strictEqual(limits.PidsLimit, 256);
         strictEqual(limits.ReadonlyRootfs, true);
+        strictEqual(limits.Privileged, false);
+        ok(!limits.CapAdd.includes("SYS_ADMIN") && !limits.CapAdd.includes("CAP_SYS_ADMIN"));
+        strictEqual(limits.BlkioDeviceWriteBps[0].Rate, 10 * 1024 * 1024);
+        strictEqual(limits.BlkioDeviceReadBps[0].Rate, 50 * 1024 * 1024);
+        const rules = await dockerText([
+          "exec",
+          "--user",
+          "0",
+          `${namespace}-workspace-u90001`,
+          "/usr/sbin/iptables",
+          "-S",
+        ]);
+        ok(rules.includes("203.0.113.7/32"), rules);
+        ok(rules.includes("--limit 2000/sec"), rules);
+        ok(rules.includes("--limit 100/sec"), rules);
         const result = await run(
-          'test -z "${WORKSPACE_TOKEN+x}" && test ! -e /state && test ! -S /var/run/docker.sock',
+          'test -z "${WORKSPACE_TOKEN+x}" && test ! -e /state && test ! -e /storage && test ! -e /dev/loop-control && test ! -S /var/run/docker.sock',
         );
         strictEqual(result.body.exitCode, 0, JSON.stringify(result.body));
       });
@@ -282,28 +299,60 @@ Deno.test({
         strictEqual(result.body.truncated, true);
       });
       await t.step("disk warnings leave cleanup commands available", async () => {
-        const result = await run("truncate -s 2M disposable.bin");
+        const result = await run("dd if=/dev/zero of=disposable.bin bs=1M count=2 status=none");
         strictEqual(result.body.diskWarning, true);
         strictEqual((await run("rm disposable.bin")).body.exitCode, 0);
       });
-      await t.step("a home over its hard limit loses its container mid-command", async () => {
-        const filling = await run(
-          "for i in $(seq 30); do dd if=/dev/zero of=fill.$i bs=1M count=16 status=none; sleep 0.2; done",
+      await t.step(
+        "the filesystem stops fast multi-file allocation without consuming host storage",
+        async () => {
+          const filling = await run(
+            "mkdir -p fill; for i in $(seq 30); do fallocate -l 16M fill/$i || exit 7; done",
+            "u90001",
+            120,
+          );
+          strictEqual(filling.body.exitCode, 7, JSON.stringify(filling.body));
+          ok(filling.body.output.includes("No space left on device"), JSON.stringify(filling.body));
+          const kept = await request("/files?id=u90001&path=fill", { method: "DELETE" });
+          strictEqual(kept.status, 200, JSON.stringify(kept));
+          strictEqual((await run("cat kept.txt")).body.output.trim(), "saved");
+        },
+      );
+      await t.step("the home inode limit stops tiny-file exhaustion inside the bounded disk", async () => {
+        const result = await run(
+          "mkdir -p tiny; python3 -c \"from pathlib import Path; [(Path('tiny') / str(i)).touch() for i in range(200000)]\"",
           "u90001",
           120,
         );
-        let job = filling.body;
-        for (let i = 0; i < 100; i++) {
-          job = (await request(`/jobs/${filling.body.jobId}?id=u90001`)).body;
-          const owned = await dockerText(["ps", "-aq", "--filter", `label=${label}`]);
-          if (job.status !== "running" && !owned) break;
-          await new Promise((resolve) => setTimeout(resolve, 200));
+        let job = result.body;
+        while (job.status === "running") {
+          job = (await request(`/jobs/${job.jobId}?id=u90001&waitSeconds=20`)).body;
         }
-        strictEqual(job.status, "failed", JSON.stringify(job));
-        ok(job.error.includes("exceeded its 128 MB limit"), job.error);
-        strictEqual(await dockerText(["ps", "-aq", "--filter", `label=${label}`]), "");
-        strictEqual((await run("rm -f fill.*")).body.exitCode, 0);
+        ok(job.exitCode !== 0, JSON.stringify(job));
+        ok(job.output.includes("No space left on device"), JSON.stringify(job));
+        strictEqual((await request("/files?id=u90001&path=tiny", { method: "DELETE" })).status, 200);
+        strictEqual((await run("cat kept.txt")).body.output.trim(), "saved");
       });
+      await t.step(
+        "cleanup bypasses poisoned profiles and repairs inaccessible owned directories",
+        async () => {
+          const poison = await run(
+            "mkdir -p closed/nested; printf disposable > closed/nested/file; chmod 000 closed/nested closed; " +
+              "printf 'touch /work/profile-ran\\n' > /work/.bash_profile",
+          );
+          strictEqual(poison.body.exitCode, 0);
+          const cleanup = await request("/files?id=u90001&path=closed", { method: "DELETE" });
+          strictEqual(cleanup.status, 200, JSON.stringify(cleanup));
+          const marker = await fetch(`${base}/files?id=u90001&path=profile-ran`, { headers });
+          strictEqual(marker.status, 422);
+          await marker.arrayBuffer();
+          strictEqual(
+            (await request("/files?id=u90001&path=.bash_profile", { method: "DELETE" })).status,
+            200,
+          );
+          strictEqual((await run("test ! -e closed && test ! -e profile-ran")).body.exitCode, 0);
+        },
+      );
       await t.step("a single file cannot grow past the workspace file limit", async () => {
         const result = await run("dd if=/dev/zero of=oversized.bin bs=1M count=128 status=none");
         ok(result.body.exitCode !== 0, JSON.stringify(result.body));
@@ -323,7 +372,25 @@ Deno.test({
         strictEqual((await run("cat kept.txt")).body.output.trim(), "saved");
       });
       await t.step("ordinary shutdown removes child containers but preserves volumes", async () => {
+        const limits = JSON.parse(
+          await dockerText(["inspect", "--format", "{{json .HostConfig}}", `${namespace}-workspace-u90001`]),
+        );
+        const loop = limits.BlkioDeviceWriteBps[0].Path.split("/").at(-1);
+        ok(/^loop[0-9]+$/.test(loop));
         await docker(["stop", "--time", "30", supervisor]);
+        await docker([
+          "run",
+          "--rm",
+          "--network=none",
+          "--cap-drop=ALL",
+          "--user=1000:1000",
+          "--read-only",
+          "--entrypoint",
+          "/usr/bin/sh",
+          image!,
+          "-c",
+          `! /usr/bin/grep -F '${namespace}' /sys/block/${loop}/loop/backing_file 2>/dev/null`,
+        ]);
         strictEqual(await dockerText(["ps", "-aq", "--filter", `label=${label}`]), "");
         await docker(["rm", supervisor]);
         await startSupervisor();
@@ -360,8 +427,10 @@ Deno.test({
         strictEqual((await request(`/jobs/${started.body.jobId}?id=u90001`)).body.status, "failed");
         strictEqual(await dockerText(["ps", "-aq", "--filter", `label=${label}`]), "");
         strictEqual((await upload("blocked")).status, 507);
-        // deleting files is the only way back, so commands are not part of what the latch closes.
-        strictEqual((await run("printf cleanup")).body.exitCode, 0);
+        // arbitrary shell cannot claim to be cleanup, and repeated attempts must remain blocked.
+        strictEqual((await run("printf refused")).status, 507);
+        strictEqual((await run("printf refused-again")).status, 507);
+        strictEqual((await request("/files?id=u90001&path=kept.txt", { method: "DELETE" })).status, 200);
         await docker(["exec", supervisor, "rm", "/state/pressure"]);
         for (let i = 0; i < 100; i++) {
           if (await fetch(`${base}/health`).then((response) => response.ok)) break;

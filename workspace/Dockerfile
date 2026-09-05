@@ -5,7 +5,7 @@ ENV DENO_DIR=/tmp/deno-cache
 
 RUN apt-get update && apt-get install -y --no-install-recommends \
         bash coreutils findutils procps psmisc util-linux \
-        iptables iproute2 ca-certificates \
+        iptables iproute2 ca-certificates e2fsprogs \
         curl wget git jq zip unzip xz-utils \
         python3 python3-pip python3-venv \
         nodejs npm \
@@ -34,11 +34,11 @@ RUN groupadd --gid 1000 workspace \
 
 WORKDIR /app
 COPY deno.json *.ts ./
-COPY entrypoint.sh netpolicy.sh /usr/local/bin/
+COPY entrypoint.sh netpolicy.sh home-disk.sh /usr/local/bin/
 COPY profile.sh /etc/profile.d/vusan-workspace.sh
 COPY chromium-flags.sh /etc/chromium.d/vusan
 
-RUN deno check main.ts && chmod +x /usr/local/bin/entrypoint.sh /usr/local/bin/netpolicy.sh
+RUN deno check main.ts && chmod +x /usr/local/bin/entrypoint.sh /usr/local/bin/netpolicy.sh /usr/local/bin/home-disk.sh
 
 EXPOSE 8080
 

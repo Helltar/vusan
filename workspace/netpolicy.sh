@@ -16,13 +16,26 @@ case "${WORKSPACE_NETWORK:-open}" in
     iptables -A OUTPUT ! -o lo -j REJECT
     ;;
   open)
+    # bound packet and connection churn as well as bytes; these buckets belong to one network namespace.
+    iptables -N WORKSPACE_RATE
+    iptables -A WORKSPACE_RATE -m limit --limit 2000/second --limit-burst 4000 -j RETURN
+    iptables -A WORKSPACE_RATE -j DROP
+    iptables -A OUTPUT ! -o lo -j WORKSPACE_RATE
     iptables -A OUTPUT -m conntrack --ctstate ESTABLISHED,RELATED -j ACCEPT
     iptables -A OUTPUT -o lo -j ACCEPT
     for range in 0.0.0.0/8 10.0.0.0/8 100.64.0.0/10 169.254.0.0/16 \
       172.16.0.0/12 192.0.0.0/24 192.168.0.0/16 198.18.0.0/15 224.0.0.0/4 240.0.0.0/4; do
       iptables -A OUTPUT -d "$range" -j REJECT
     done
+    read -r -a blocked <<< "${WORKSPACE_BLOCKED_CIDRS:-}"
+    for range in "${blocked[@]}"; do
+      iptables -A OUTPUT -d "$range" -j REJECT
+    done
     iptables -A OUTPUT -p tcp -m multiport --dports 25,465,587 -j REJECT
+    iptables -N WORKSPACE_NEW
+    iptables -A WORKSPACE_NEW -m limit --limit 100/second --limit-burst 200 -j RETURN
+    iptables -A WORKSPACE_NEW -j REJECT
+    iptables -A OUTPUT -m conntrack --ctstate NEW -j WORKSPACE_NEW
     for resolver in 1.1.1.1 8.8.8.8; do
       iptables -A OUTPUT -d "$resolver" -p udp --dport 53 -j ACCEPT
       iptables -A OUTPUT -d "$resolver" -p tcp --dport 53 -j ACCEPT

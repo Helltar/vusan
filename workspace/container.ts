@@ -1,11 +1,24 @@
 import type { Config } from "./config.ts";
 import { docker, dockerText, kill, spawnDocker } from "./docker.ts";
 import { workspaceEnvironment } from "./env.ts";
+import { Homes } from "./homes.ts";
 import { FILE_LIMIT, readBounded, RequestError, workspaceId } from "./protocol.ts";
 
 // workspaces get the CPU nobody else wants: a runaway one must not slow the bot, the database or a
 // waiting administrator. it caps nothing on an idle host, which is what `--cpus` is for.
 const WORKSPACE_CPU_SHARES = 256;
+
+/** Keep the workspace pool within half the host's memory and cores, sharing a single-core host. */
+export function workspaceCapacity(config: Config, memoryBytes: number, cpus: number): number {
+  if (!Number.isSafeInteger(memoryBytes) || memoryBytes <= 0 || !Number.isSafeInteger(cpus) || cpus <= 0) {
+    throw new Error("Cannot determine Docker host resource capacity");
+  }
+  return Math.min(
+    config.maxActive,
+    Math.floor(memoryBytes / 2 / (config.memoryMb * 1024 * 1024)),
+    Math.floor(Math.max(1, Math.floor(cpus / 2)) / config.cpus),
+  );
+}
 
 export interface Burn {
   usec: number;
@@ -33,7 +46,12 @@ export class Containers {
   private readonly leases = new Map<string, number>();
   private gate: Promise<unknown> = Promise.resolve();
   private image = "";
+  private homes!: Homes;
+  private capacity = 1;
+  private hostAddresses: string[] = [];
   private closing = false;
+  private storageFailure: string | null = null;
+  private readonly cleaning = new Set<string>();
   private readonly label: string;
 
   constructor(private readonly config: Config) {
@@ -68,131 +86,191 @@ export class Containers {
     const old = await dockerText(["ps", "-aq", "--filter", `label=${this.label}`]);
     for (const id of old.split("\n").filter(Boolean)) await docker(["rm", "-f", id]);
     this.image = await dockerText(["image", "inspect", "--format", "{{.Id}}", this.config.image]);
+    this.homes = new Homes(this.config, this.image);
+    const info = JSON.parse(await dockerText(["info", "--format", "{{json .}}"]));
+    if (info.CgroupVersion !== "2" || !info.MemoryLimit || !info.PidsLimit || !info.CpuCfsQuota) {
+      throw new Error("Workspace requires cgroup v2 with memory, process and CPU limits");
+    }
+    this.capacity = workspaceCapacity(this.config, info.MemTotal, info.NCPU);
+    if (this.capacity < 1) throw new Error("Not enough host memory or CPU budget for a workspace");
+    const addresses = JSON.parse(
+      await dockerText([
+        "run",
+        "--rm",
+        "--pull=never",
+        "--network=host",
+        "--read-only",
+        "--cap-drop=ALL",
+        "--security-opt=no-new-privileges",
+        "--user=1000:1000",
+        "--pids-limit=16",
+        "--memory=64m",
+        "--entrypoint",
+        "/usr/sbin/ip",
+        this.image,
+        "-j",
+        "-4",
+        "address",
+        "show",
+      ]),
+    );
+    this.hostAddresses = addresses.flatMap((entry: { addr_info: { local: string }[] }) =>
+      entry.addr_info.map((address) => address.local)
+    );
+    if (
+      !this.hostAddresses.length ||
+      this.hostAddresses.some((address) => !/^(?:[0-9]{1,3}\.){3}[0-9]{1,3}$/.test(address))
+    ) {
+      throw new Error("Cannot identify Docker host addresses for the workspace firewall");
+    }
+    const previous = await dockerText([
+      "volume",
+      "ls",
+      "-q",
+      "--filter",
+      `label=${this.label}`,
+      "--filter",
+      "label=com.helltar.vusan.storage=backing-disk",
+    ]);
+    for (const disk of previous.split("\n").filter(Boolean)) {
+      if (!disk.startsWith(`${this.config.namespace}-workspace-u`) || !disk.endsWith("-disk")) {
+        throw new Error("Invalid workspace backing volume name");
+      }
+      await this.homes.close(disk.slice(0, -5));
+    }
   }
 
   async ensure(id: string): Promise<string> {
-    return await this.exclusive(async () => {
-      if (this.closing) throw new RequestError("Workspace service is stopping", 503);
-      const name = this.name(id);
-      if (this.live.has(id)) {
-        const running = await dockerText([
-          "ps",
-          "-q",
-          "--filter",
-          `label=${this.label}`,
-          "--filter",
-          `name=^/${name}$`,
-        ]);
-        if (running) {
-          this.live.set(id, Date.now());
-          return name;
-        }
-        await this.remove(id);
-      }
-      if (this.live.size >= this.config.maxActive) {
-        const idle = [...this.live].filter(([key]) => !this.leases.has(key))
-          .sort((a, b) => a[1] - b[1])[0];
-        if (!idle) throw new RequestError("All workspace slots are busy; try again shortly", 409);
-        await this.remove(idle[0]);
-      }
-      const volume = `${name}-home`;
-      await docker(["volume", "create", "--label", this.label, volume]);
-      const owner = await dockerText([
-        "volume",
-        "inspect",
-        "--format",
-        '{{index .Labels "com.helltar.vusan.workspace"}}',
-        volume,
+    return await this.exclusive(() => this.ensureLocked(id));
+  }
+
+  blockStorage(message: string | null): void {
+    this.storageFailure = message;
+  }
+
+  private admit(id: string): void {
+    if (this.storageFailure) throw new RequestError(this.storageFailure, 507);
+    if (this.cleaning.has(id)) throw new RequestError("Workspace cleanup is in progress", 409);
+  }
+
+  private async ensureLocked(id: string, cleanup = false): Promise<string> {
+    if (this.closing) throw new RequestError("Workspace service is stopping", 503);
+    if (!cleanup) this.admit(id);
+    const name = this.name(id);
+    if (this.live.has(id)) {
+      const running = await dockerText([
+        "ps",
+        "-q",
+        "--filter",
+        `label=${this.label}`,
+        "--filter",
+        `name=^/${name}$`,
       ]);
-      if (owner !== this.config.namespace) throw new Error("Workspace volume belongs to another owner");
-      const env = {
-        ...workspaceEnvironment(),
-        WORKSPACE_NETWORK: this.config.network,
-        ...(this.config.networkMbit ? { WORKSPACE_NETWORK_MBIT: this.config.networkMbit } : {}),
-      };
-      try {
-        await docker([
-          "run",
-          "--detach",
-          "--pull=never",
-          "--name",
-          name,
-          "--label",
-          this.label,
-          "--label",
-          `com.helltar.vusan.workspace-id=${id}`,
-          "--init",
-          "--no-healthcheck",
-          "--read-only",
-          "--mount",
-          `type=volume,src=${volume},dst=/work`,
-          "--tmpfs",
-          "/tmp:rw,nosuid,nodev,size=256m",
-          "--tmpfs",
-          "/run:rw,nosuid,nodev,size=16m",
-          "--cap-drop=ALL",
-          "--cap-add=NET_ADMIN",
-          "--cap-add=NET_RAW",
-          "--cap-add=SETUID",
-          "--cap-add=SETGID",
-          "--cap-add=SETPCAP",
-          "--security-opt=no-new-privileges",
-          "--pids-limit",
-          String(this.config.pids),
-          "--ulimit",
-          `fsize=${this.config.maxFileMb * 1024 * 1024}`,
-          "--memory",
-          `${this.config.memoryMb}m`,
-          "--memory-swap",
-          `${this.config.memoryMb}m`,
-          "--cpus",
-          String(this.config.cpus),
-          "--cpu-shares",
-          String(WORKSPACE_CPU_SHARES),
-          "--network",
-          this.config.network === "none" ? "none" : "bridge",
-          "--sysctl",
-          "net.ipv6.conf.all.disable_ipv6=1",
-          "--sysctl",
-          "net.ipv6.conf.default.disable_ipv6=1",
-          ...(this.config.network === "open" ? ["--dns", "1.1.1.1", "--dns", "8.8.8.8"] : []),
-          ...(this.config.writeDevice && this.config.writeBps
-            ? ["--device-write-bps", `${this.config.writeDevice}:${this.config.writeBps}`]
-            : []),
-          "--log-driver",
-          "local",
-          "--log-opt",
-          "max-size=1m",
-          "--log-opt",
-          "max-file=2",
-          ...Object.entries(env).flatMap(([key, value]) => ["--env", `${key}=${value}`]),
-          this.image,
-          "workspace",
-        ]);
+      if (running) {
         this.live.set(id, Date.now());
-        this.burn.set(id, { usec: 0, seconds: 0 });
-        await docker([
-          "exec",
-          "--user",
-          "1000:1000",
-          name,
-          "/usr/bin/timeout",
-          "15",
-          "/usr/bin/sh",
-          "-c",
-          "until test -f /run/workspace-ready; do sleep 0.1; done; mkdir -p /work/tmp /work/inbox",
-        ]);
-      } catch (e) {
-        const details = await docker(["logs", "--tail", "10", name], { includeStderr: true })
-          .then((out) => new TextDecoder().decode(out).trim()).catch(() => "");
-        await this.remove(id);
-        throw new Error(`Workspace startup failed: ${details || String(e)}`);
+        return name;
       }
-      return name;
-    });
+      await this.remove(id);
+    }
+    if (this.live.size >= this.capacity) {
+      const idle = [...this.live].filter(([key]) => !this.leases.has(key))
+        .sort((a, b) => a[1] - b[1])[0];
+      if (!idle) throw new RequestError("All workspace slots are busy; try again shortly", 409);
+      await this.remove(idle[0]);
+    }
+    const volume = `${name}-home`;
+    const device = await this.homes.open(name, cleanup);
+    const env = {
+      ...workspaceEnvironment(),
+      WORKSPACE_NETWORK: cleanup ? "none" : this.config.network,
+      WORKSPACE_BLOCKED_CIDRS: [...this.hostAddresses, ...this.config.blockedCidrs].join(" "),
+      ...(this.config.networkMbit ? { WORKSPACE_NETWORK_MBIT: this.config.networkMbit } : {}),
+    };
+    try {
+      await docker([
+        "run",
+        "--detach",
+        "--pull=never",
+        "--name",
+        name,
+        "--label",
+        this.label,
+        "--label",
+        `com.helltar.vusan.workspace-id=${id}`,
+        "--init",
+        "--no-healthcheck",
+        "--read-only",
+        "--mount",
+        `type=volume,src=${volume},dst=/work`,
+        "--tmpfs",
+        "/tmp:rw,nosuid,nodev,size=256m",
+        "--tmpfs",
+        "/run:rw,nosuid,nodev,size=16m",
+        "--cap-drop=ALL",
+        "--cap-add=NET_ADMIN",
+        "--cap-add=NET_RAW",
+        "--cap-add=SETUID",
+        "--cap-add=SETGID",
+        "--cap-add=SETPCAP",
+        "--security-opt=no-new-privileges",
+        "--pids-limit",
+        String(this.config.pids),
+        "--ulimit",
+        `fsize=${this.config.maxFileMb * 1024 * 1024}`,
+        "--memory",
+        `${this.config.memoryMb}m`,
+        "--memory-swap",
+        `${this.config.memoryMb}m`,
+        "--cpus",
+        String(this.config.cpus),
+        "--cpu-shares",
+        String(WORKSPACE_CPU_SHARES),
+        "--network",
+        cleanup || this.config.network === "none" ? "none" : "bridge",
+        "--sysctl",
+        "net.ipv6.conf.all.disable_ipv6=1",
+        "--sysctl",
+        "net.ipv6.conf.default.disable_ipv6=1",
+        ...(this.config.network === "open" ? ["--dns", "1.1.1.1", "--dns", "8.8.8.8"] : []),
+        "--device-write-bps",
+        `${device}:${this.config.writeBps}`,
+        "--device-read-bps",
+        `${device}:50mb`,
+        "--log-driver",
+        "local",
+        "--log-opt",
+        "max-size=1m",
+        "--log-opt",
+        "max-file=2",
+        ...Object.entries(env).flatMap(([key, value]) => ["--env", `${key}=${value}`]),
+        this.image,
+        "workspace",
+      ]);
+      this.live.set(id, Date.now());
+      this.burn.set(id, { usec: 0, seconds: 0 });
+      await docker([
+        "exec",
+        "--user",
+        "1000:1000",
+        name,
+        "/usr/bin/timeout",
+        "15",
+        "/usr/bin/sh",
+        "-c",
+        "until test -f /run/workspace-ready; do /usr/bin/sleep 0.1; done" +
+        (cleanup ? "" : "; /usr/bin/mkdir -p /work/tmp /work/inbox"),
+      ]);
+    } catch (e) {
+      const details = await docker(["logs", "--tail", "10", name], { includeStderr: true })
+        .then((out) => new TextDecoder().decode(out).trim()).catch(() => "");
+      await this.remove(id);
+      throw new Error(`Workspace startup failed: ${details || String(e)}`);
+    }
+    return name;
   }
 
   command(id: string, command: string): Deno.ChildProcess {
+    this.admit(id);
     return spawnDocker([
       "exec",
       "--user",
@@ -209,7 +287,7 @@ export class Containers {
     ]);
   }
 
-  private helper(name: string, action: "read" | "write", path: string): Deno.ChildProcess {
+  private helper(name: string, action: "read" | "write" | "delete", path: string): Deno.ChildProcess {
     return spawnDocker([
       "exec",
       ...(action === "write" ? ["-i"] : []),
@@ -231,6 +309,37 @@ export class Containers {
     ], action === "write");
   }
 
+  /** Cleanup runs alone in a fresh, offline container and never loads a user shell profile. */
+  async deleteFile(id: string, path: string): Promise<void> {
+    if (this.cleaning.has(id)) throw new RequestError("Workspace cleanup is in progress", 409);
+    using _lease = this.reserve(id);
+    this.cleaning.add(id);
+    try {
+      await this.exclusive(async () => {
+        await this.remove(id);
+        try {
+          const name = await this.ensureLocked(id, true);
+          const child = this.helper(name, "delete", path);
+          try {
+            const [, stderr, status] = await Promise.all([
+              readBounded(child.stdout, 16 * 1024),
+              readBounded(child.stderr, 16 * 1024),
+              child.status,
+            ]);
+            if (!status.success) throw await this.helperFailure(Promise.resolve(stderr));
+          } finally {
+            kill(child);
+            await child.status;
+          }
+        } finally {
+          await this.remove(id);
+        }
+      });
+    } finally {
+      this.cleaning.delete(id);
+    }
+  }
+
   private async helperFailure(stderr: Promise<Uint8Array>): Promise<RequestError> {
     const reason = new TextDecoder().decode(await stderr).trim().slice(0, 1000);
     return new RequestError(reason || "File transfer failed", 422);
@@ -240,6 +349,7 @@ export class Containers {
   async writeFile(id: string, path: string, body: ReadableStream<Uint8Array> | null): Promise<number> {
     using _lease = this.reserve(id);
     const name = await this.ensure(id);
+    this.admit(id);
     const child = this.helper(name, "write", path);
     const stderr = readBounded(child.stderr, 16 * 1024);
     const stdout = readBounded(child.stdout, 16 * 1024);
@@ -288,6 +398,7 @@ export class Containers {
     };
     try {
       const name = await this.ensure(id);
+      this.admit(id);
       child = this.helper(name, "read", path);
       const process = child;
       const stderr = readBounded(process.stderr, 16 * 1024);
@@ -338,14 +449,16 @@ export class Containers {
       "/usr/bin/timeout",
       "5",
       "/usr/bin/du",
-      "-sb",
+      "-sB1",
       "/work",
     ]);
-    return Number.parseInt(out, 10);
+    const bytes = Number(out.split(/\s+/)[0]);
+    if (!Number.isSafeInteger(bytes) || bytes < 0) throw new Error("Invalid workspace disk usage");
+    return bytes;
   }
 
   liveIds(): string[] {
-    return [...this.live.keys()];
+    return [...this.live.keys()].filter((id) => !this.cleaning.has(id));
   }
 
   /** A finished command's own cost is not unattended burn, so the next tick measures from here. */
@@ -394,6 +507,7 @@ export class Containers {
       `name=^/${this.name(id)}$`,
     ]);
     if (owned) await docker(["rm", "-f", owned]);
+    await this.homes.close(this.name(id));
     this.live.delete(id);
     this.burn.delete(id);
   }
