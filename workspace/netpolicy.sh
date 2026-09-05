@@ -8,7 +8,16 @@ done
 
 # the rules below are v4 only. addresses are already disabled above, so this matters only if that
 # invariant ever breaks; a kernel built without ipv6 has nothing to drop and nothing to leak.
-ip6tables -P OUTPUT DROP 2>/dev/null || true
+for chain in INPUT OUTPUT; do
+  ip6tables -P "$chain" DROP 2>/dev/null || true
+done
+
+# a workspace answers nobody. a server it starts is for its own loopback and for screenshots taken
+# here, but binding 0.0.0.0 also publishes it to every container sharing the bridge, and the policy
+# below only governs the other direction.
+iptables -A INPUT -i lo -j ACCEPT
+iptables -A INPUT -m conntrack --ctstate ESTABLISHED,RELATED -j ACCEPT
+iptables -A INPUT -j DROP
 
 case "${WORKSPACE_NETWORK:-open}" in
   none)
@@ -16,13 +25,15 @@ case "${WORKSPACE_NETWORK:-open}" in
     iptables -A OUTPUT ! -o lo -j REJECT
     ;;
   open)
+    iptables -A OUTPUT -o lo -j ACCEPT
     # bound packet and connection churn as well as bytes; these buckets belong to one network namespace.
     iptables -N WORKSPACE_RATE
     iptables -A WORKSPACE_RATE -m limit --limit 2000/second --limit-burst 4000 -j RETURN
     iptables -A WORKSPACE_RATE -j DROP
-    iptables -A OUTPUT ! -o lo -j WORKSPACE_RATE
-    iptables -A OUTPUT -m conntrack --ctstate ESTABLISHED,RELATED -j ACCEPT
-    iptables -A OUTPUT -o lo -j ACCEPT
+    iptables -A OUTPUT -j WORKSPACE_RATE
+    # destinations are refused ahead of the established/related accept, not after it: a conntrack
+    # helper marks a brand new connection RELATED from an address the remote side chose, and this
+    # policy is about the address.
     for range in 0.0.0.0/8 10.0.0.0/8 100.64.0.0/10 169.254.0.0/16 \
       172.16.0.0/12 192.0.0.0/24 192.168.0.0/16 198.18.0.0/15 224.0.0.0/4 240.0.0.0/4; do
       iptables -A OUTPUT -d "$range" -j REJECT
@@ -32,6 +43,7 @@ case "${WORKSPACE_NETWORK:-open}" in
       iptables -A OUTPUT -d "$range" -j REJECT
     done
     iptables -A OUTPUT -p tcp -m multiport --dports 25,465,587 -j REJECT
+    iptables -A OUTPUT -m conntrack --ctstate ESTABLISHED,RELATED -j ACCEPT
     iptables -N WORKSPACE_NEW
     iptables -A WORKSPACE_NEW -m limit --limit 100/second --limit-burst 200 -j RETURN
     iptables -A WORKSPACE_NEW -j REJECT

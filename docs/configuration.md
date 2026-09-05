@@ -508,6 +508,10 @@ workspaces. The controller also discovers the Docker host's IPv4 interface addre
 blocks them, including public addresses. Restart the controller after host address changes. Extra public
 router or infrastructure addresses can be listed in `WORKSPACE_BLOCKED_CIDRS`. Firewall setup must succeed
 before commands can run.
+Nothing connects **into** a workspace either: incoming connections are refused, so a development server
+bound to every interface is still reachable only from inside that workspace, never from the host or from
+other containers sharing its bridge. Only the controller reaches in, and it does so through Docker rather
+than over the network.
 These are rules for traffic originating in a workspace. The bot's public file, image-search and channel
 preview downloads separately reject private/local IPs at connection time, disable proxies, validate each
 redirect, and bound the response while reading it. Configured internal services use a different HTTP client.

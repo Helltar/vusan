@@ -195,6 +195,35 @@ Deno.test({
         );
         strictEqual(result.body.exitCode, 0, JSON.stringify(result.body));
       });
+      await t.step("a server bound to every interface is still unreachable from the bridge", async () => {
+        const started = await run("python3 -m http.server 8766 --bind 0.0.0.0 >open.log 2>&1 &");
+        strictEqual(started.body.exitCode, 0, JSON.stringify(started.body));
+        const address = await dockerText([
+          "inspect",
+          "--format",
+          "{{range .NetworkSettings.Networks}}{{.IPAddress}}{{end}}",
+          `${namespace}-workspace-u90001`,
+        ]);
+        ok(/^(?:[0-9]{1,3}\.){3}[0-9]{1,3}$/.test(address), address);
+        const reached = await docker([
+          "run",
+          "--rm",
+          "--network=bridge",
+          "--entrypoint",
+          "/usr/bin/curl",
+          image!,
+          "-fsS",
+          "--max-time",
+          "3",
+          `http://${address}:8766/`,
+        ], { timeoutMs: 30_000 }).then(() => true).catch(() => false);
+        ok(!reached, "a neighbour on the bridge reached into the workspace");
+        // the bracket keeps the pattern from matching the shell that carries it on its own command line.
+        const own = await run(
+          "curl -fsS --max-time 3 http://127.0.0.1:8766/ >/dev/null; pkill -f '[h]ttp.server 8766'",
+        );
+        strictEqual(own.body.exitCode, 0, JSON.stringify(own.body));
+      });
       await t.step("resource limits and controller secrets stay outside user control", async () => {
         const limits = JSON.parse(
           await dockerText([
@@ -224,6 +253,12 @@ Deno.test({
         ok(rules.includes("203.0.113.7/32"), rules);
         ok(rules.includes("--limit 2000/sec"), rules);
         ok(rules.includes("--limit 100/sec"), rules);
+        ok(rules.includes("-A INPUT -j DROP"), rules);
+        // the blocked ranges name the host's own addresses, so they must be refused before the accept
+        // that a conntrack helper can reach with a connection of the remote side's choosing.
+        const blockedAt = rules.indexOf("-A OUTPUT -d 203.0.113.7/32");
+        const acceptedAt = rules.indexOf("-A OUTPUT -m conntrack --ctstate RELATED,ESTABLISHED -j ACCEPT");
+        ok(blockedAt >= 0 && acceptedAt >= 0 && blockedAt < acceptedAt, rules);
         const result = await run(
           'test -z "${WORKSPACE_TOKEN+x}" && test ! -e /state && test ! -e /storage && test ! -e /dev/loop-control && test ! -S /var/run/docker.sock',
         );
