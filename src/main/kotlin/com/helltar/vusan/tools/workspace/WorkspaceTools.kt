@@ -9,7 +9,6 @@ import com.helltar.vusan.common.xmlBlock
 import com.helltar.vusan.outbox.BotOutbox
 import com.helltar.vusan.outbox.BotOutput
 import com.helltar.vusan.request.AttachedFile
-import com.helltar.vusan.request.RequestContext
 import com.helltar.vusan.tools.requireToolText
 import com.helltar.vusan.tools.suspendToolGuard
 import java.util.Locale
@@ -26,11 +25,10 @@ private val VIDEO_EXTENSIONS = setOf("mp4", "mov", "m4v", "webm")
 @Suppress("unused")
 class WorkspaceTools(
     private val client: WorkspaceClient,
-    context: RequestContext,
+    private val id: String,
     private val outbox: BotOutbox,
     private val attachedFile: AttachedFile? = null
 ) : ToolSet {
-    private val id = workspaceId(context)
     private var attachmentHandled = false
 
     @Tool

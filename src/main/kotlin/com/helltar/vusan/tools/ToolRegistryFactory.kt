@@ -50,6 +50,7 @@ import com.helltar.vusan.tools.vision.VisionTools
 import com.helltar.vusan.tools.vision.WhisperVideoAudioTranscriber
 import com.helltar.vusan.tools.workspace.WorkspaceClient
 import com.helltar.vusan.tools.workspace.WorkspaceTools
+import com.helltar.vusan.tools.workspace.workspaceIdOrNull
 import com.helltar.vusan.tools.voice.ElevenLabsTtsClient
 import com.helltar.vusan.tools.voice.VideoNoteTools
 import com.helltar.vusan.tools.voice.VoiceTools
@@ -202,7 +203,9 @@ class ToolRegistryFactory(
 
             tavilyClient?.let { tools(TavilyTools(it, imageDownloadClient, outbox)) }
             searxngClient?.let { tools(SearxngTools(it, imageDownloadClient, outbox)) }
-            workspaceClient?.let { tools(WorkspaceTools(it, context, outbox, context.attachedFile)) }
+            workspaceClient?.let { client ->
+                workspaceIdOrNull(context)?.let { tools(WorkspaceTools(client, it, outbox, context.attachedFile)) }
+            }
 
             if (chat.stickersAndAnimations) {
                 giphyClient?.let { tools(GiphyTools(it, outbox)) }
