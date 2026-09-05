@@ -560,7 +560,8 @@ chat). Built in; no env variable is required to enable it.
 
 Personal memory follows a person between chats, and their workspace files are shared too. The history is not: what someone told the bot in a DM is not
 replayed inside a group, and two groups never see each other's exchanges. Ask the bot to remember something if it
-should follow you everywhere.
+should follow you everywhere. Both need to know who you are, so neither is offered to a sender Telegram
+delivers under an account shared with other people: an anonymous group admin or a linked channel's posts.
 
 | Variable               | Default | Description                                                               |
 |------------------------|---------|---------------------------------------------------------------------------|

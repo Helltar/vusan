@@ -28,6 +28,7 @@ import com.helltar.vusan.outbox.BotOutput
 import com.helltar.vusan.outbox.OutboxItem
 import com.helltar.vusan.request.AttachedFile
 import com.helltar.vusan.request.ChatCapabilities
+import com.helltar.vusan.request.identifiesOnePerson
 import com.helltar.vusan.request.RequestContext
 import com.helltar.vusan.tools.choice.InlineChoiceTools
 import com.helltar.vusan.tools.message.MessageTools
@@ -179,7 +180,7 @@ class AgentRunner(
                 chatCapabilities = request.messageContext?.chatCapabilities ?: ChatCapabilities.UNRESTRICTED
             )
 
-        val userMemory = memory.load(MemoryScope.USER, request.userId)
+        val userMemory = if (context.identifiesOnePerson) memory.load(MemoryScope.USER, request.userId) else emptyList()
         val chatMemory = if (context.chatIsPrivate) emptyList() else memory.load(MemoryScope.CHAT, request.chatId)
 
         // the turn is stored only after the run, so this still points at the previous exchange.

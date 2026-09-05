@@ -7,11 +7,15 @@ import com.helltar.vusan.agent.memory.MemoryRepository
 import com.helltar.vusan.agent.memory.MemoryScope
 import com.helltar.vusan.common.collapseWhitespaceAndCap
 import com.helltar.vusan.request.RequestContext
+import com.helltar.vusan.request.identifiesOnePerson
 import com.helltar.vusan.request.requireChatId
 import com.helltar.vusan.request.requireUserId
 import com.helltar.vusan.tools.suspendToolGuard
 
 private const val MAX_MEMORY_CHARS = 500
+private const val NO_PERSONAL_MEMORY =
+    "Telegram delivers this sender under an account shared with other people, so there is no personal " +
+        "memory here. Group memory still works; say so instead of saving the detail."
 
 @Suppress("unused")
 class MemoryTools(private val memory: MemoryRepository, private val context: RequestContext) : ToolSet {
@@ -22,6 +26,8 @@ class MemoryTools(private val memory: MemoryRepository, private val context: Req
         @LLMDescription(MemoryToolDescriptions.REMEMBER_ABOUT_ME_DETAIL)
         detail: String
     ): String = suspendToolGuard {
+        if (!context.identifiesOnePerson) return@suspendToolGuard NO_PERSONAL_MEMORY
+
         val userId = context.requireUserId()
 
         detail.collapseWhitespaceAndCap(MAX_MEMORY_CHARS)?.let { clean ->
@@ -64,6 +70,8 @@ class MemoryTools(private val memory: MemoryRepository, private val context: Req
     @Tool
     @LLMDescription(MemoryToolDescriptions.FORGET_EVERYTHING_ABOUT_ME)
     suspend fun forgetEverythingAboutMe(): String = suspendToolGuard {
+        if (!context.identifiesOnePerson) return@suspendToolGuard NO_PERSONAL_MEMORY
+
         val userId = context.requireUserId()
         val removed = memory.clearScope(MemoryScope.USER, userId)
         "Cleared your personal memory ($removed item(s) removed). Chat history and group memory are untouched."

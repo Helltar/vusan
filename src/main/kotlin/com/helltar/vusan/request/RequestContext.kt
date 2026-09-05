@@ -15,6 +15,18 @@ data class RequestContext(
     val chatCapabilities: ChatCapabilities = ChatCapabilities.UNRESTRICTED
 )
 
+// telegram delivers anonymous group admins as GroupAnonymousBot and linked-channel posts as Channel_Bot:
+// one account id standing in for many different senders in many chats.
+private val SHARED_SENDER_IDS = setOf(1_087_968_824L, 136_817_688L)
+
+/**
+ * Whether this sender's id belongs to one person. Anything that follows someone between chats — their
+ * personal memory, their workspace files — must be keyed on that and nothing else. Chat-scoped state is
+ * safe either way, since a shared account still cannot reach out of the chat it wrote in.
+ */
+val RequestContext.identifiesOnePerson: Boolean
+    get() = userId != 0L && userId !in SHARED_SENDER_IDS
+
 fun RequestContext.requireUserId(): Long {
     check(userId != 0L) { "User ID is unavailable" }
     return userId

@@ -1,19 +1,17 @@
 package com.helltar.vusan.tools.workspace
 
 import com.helltar.vusan.request.RequestContext
+import com.helltar.vusan.request.identifiesOnePerson
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
 
-// telegram's GroupAnonymousBot and Channel_Bot: one account standing in for many different senders.
-private val SHARED_SENDER_IDS = setOf(1_087_968_824L, 136_817_688L)
-
 /**
- * A person's files follow them across chats; conversation history remains chat-scoped. Senders that
- * Telegram delivers under a shared bot account get no workspace at all, since theirs would be one home
- * that every anonymous admin and every linked channel writes into.
+ * A person's files follow them across chats; conversation history remains chat-scoped. A sender without
+ * a personal identity gets no workspace at all, since theirs would be one home that every anonymous
+ * admin and every linked channel writes into.
  */
 fun workspaceIdOrNull(context: RequestContext): String? =
-    context.userId.takeUnless { it in SHARED_SENDER_IDS }?.let { "u$it" }
+    context.takeIf { it.identifiesOnePerson }?.let { "u${it.userId}" }
 
 @Serializable
 data class CommandRequest(val command: String, val timeoutSeconds: Int? = null)
