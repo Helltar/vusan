@@ -15,6 +15,10 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
         fonts-noto-core fonts-noto-color-emoji \
     && rm -rf /var/lib/apt/lists/*
 
+# no setuid path back to root. capabilities are already empty and no-new-privileges is set on every
+# exec, but neither should be the single thing standing between the workspace user and root.
+RUN find / -xdev -perm /6000 -type f -exec chmod u-s,g-s {} +
+
 # only the supervisor receives a docker socket; workspace containers never do.
 ARG DOCKER_CLI_VERSION=29.7.2
 RUN curl -fsSL "https://download.docker.com/linux/static/stable/x86_64/docker-${DOCKER_CLI_VERSION}.tgz" \
