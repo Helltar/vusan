@@ -2,7 +2,7 @@ import { readConfig } from "./config.ts";
 import { authorized, loadToken } from "./auth.ts";
 import { Containers } from "./container.ts";
 import { Jobs } from "./jobs.ts";
-import { checkStorage } from "./storage.ts";
+import { DiskGuard } from "./storage.ts";
 import {
   COMMAND_LIMIT,
   FILE_LIMIT,
@@ -36,44 +36,22 @@ const containers = new Containers(config);
 await containers.initialize();
 const jobs = new Jobs(config, containers);
 await jobs.recover();
+const guard = new DiskGuard(config, containers, jobs);
+await guard.tick();
 let transfers = 0;
 let closing = false;
-let storageFailure: string | null = null;
-let storageCleanup: Promise<void> | undefined;
-
-async function guardStorage(): Promise<void> {
-  if (!storageFailure) {
-    try {
-      await checkStorage(config);
-    } catch (e) {
-      storageFailure = e instanceof RequestError ? e.message : "Cannot verify workspace storage availability";
-      console.error(storageFailure);
-    }
-  }
-  if (storageFailure) {
-    // latch closed until an administrator frees space and restarts; stopping also covers background writers.
-    storageCleanup ??= jobs.shutdown().catch((e) => {
-      storageCleanup = undefined;
-      console.error("storage emergency cleanup failed", e);
-    });
-    throw new RequestError(storageFailure, 507);
-  }
-}
-
-await guardStorage();
 
 async function route(request: Request): Promise<Response> {
   if (closing) return json({ error: "Workspace service is stopping" }, 503);
   const url = new URL(request.url);
   if (request.method === "GET" && url.pathname === "/health") {
-    return json({ ok: !storageFailure, protocol: 3 }, storageFailure ? 503 : 200);
+    return json({ ok: guard.healthy, protocol: 3 }, guard.healthy ? 200 : 503);
   }
   if (!authorized(request, token)) {
     return json({ error: "Unauthorized" }, 401);
   }
   const id = workspaceId(url.searchParams.get("id"));
   if (url.pathname === "/jobs" && request.method === "POST") {
-    await guardStorage();
     const body = JSON.parse(
       new TextDecoder().decode(await readBounded(request.body, COMMAND_LIMIT * 6 + 1024)),
     );
@@ -93,7 +71,7 @@ async function route(request: Request): Promise<Response> {
     return json(await jobs.read(id, run, offset, wait));
   }
   if (url.pathname === "/files" && ["PUT", "GET"].includes(request.method)) {
-    await guardStorage();
+    if (request.method === "PUT") guard.guardUploads();
     if (transfers >= 2) throw new RequestError("File transfer capacity reached; try again shortly", 409);
     const path = url.searchParams.get("path");
     if (!path || path.length > 400) throw new RequestError("Missing or invalid file path");
@@ -118,7 +96,10 @@ async function route(request: Request): Promise<Response> {
 }
 
 let sweeping = false;
-const storageWatch = setInterval(() => void guardStorage().catch(() => {}), 5_000);
+const storageTick = setInterval(
+  () => void guard.tick().catch((e) => console.error("workspace storage tick failed", e)),
+  1_000,
+);
 const sweep = setInterval(async () => {
   if (sweeping) return;
   sweeping = true;
@@ -146,7 +127,7 @@ async function shutdown(): Promise<void> {
   if (closing) return;
   closing = true;
   clearInterval(sweep);
-  clearInterval(storageWatch);
+  clearInterval(storageTick);
   const stopped = server.shutdown();
   try {
     await jobs.shutdown();

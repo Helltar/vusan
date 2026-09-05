@@ -444,7 +444,8 @@ runner, engine selection or runtime selection. The same image serves controller 
   only the latest 20 jobs and at most 8 MiB of output per job are retained. A flattened, capped
   command preview, workspace/job IDs, status, exit code and duration go to the service log.
 - **`container.ts`** — serialized lifecycle operations create, reuse and remove workspace containers.
-  It resolves the image to an ID on startup, sets per-container CPU/memory/PID limits, and mounts
+  It resolves the image to an ID on startup, sets per-container CPU/memory/PID limits and the per-file
+  size rlimit every command inherits, optionally throttles writes to a host device, and mounts
   only that person's named home volume. Cancelling or timing out removes the entire container,
   so `setsid` cannot evade cleanup. Idle removal never deletes the home. Startup removes only
   containers carrying this controller's namespace label; shutdown removes live containers too.
@@ -462,9 +463,11 @@ runner, engine selection or runtime selection. The same image serves controller 
 - **`entrypoint.sh` / `netpolicy.sh`** — the workspace role installs its destination-IP firewall
   with a fixed system PATH, verifies IPv6 is disabled, then drops UID/GID and capabilities before
   waiting for commands. A failed rule stops startup. The controller role needs no network capabilities.
-- **`storage.ts`** — checks free bytes and inodes on the state filesystem. Admission and a five-second
-  watchdog fail closed on pressure or a failed check. The controller stops all children and latches
-  closed until an administrator frees space and restarts it. Status reads remain available; homes stay intact.
+- **`storage.ts`** — the disk guard. A one-second tick reads free bytes and inodes on the state
+  filesystem, measures live homes whenever that filesystem has lost 256 MiB or a minute has passed, and
+  stops any workspace past `WORKSPACE_MAX_HOME_MB`. Host-wide pressure, or a check it cannot run at all,
+  stops every live container and refuses uploads with `507`; commands stay open because deleting files is
+  the way back, and the latch clears itself once space returns. Homes stay intact throughout.
 
 Only the controller receives the Docker socket and its metadata volume. User containers are not on
 the bot's control network and receive no application environment or host bind mounts. Their own loopback
@@ -472,9 +475,10 @@ works for local servers; private networks, cloud metadata and outbound SMTP do n
 is read-only, writable temporary mounts are bounded, `no-new-privileges` is set, and an init process reaps
 orphans. Docker's host kernel remains the isolation boundary; there is no gVisor layer.
 
-Home volumes have no hard disk quota in this deployment. Post-command usage is a warning, never a
-reason to reject cleanup commands unless the separate storage emergency guard has tripped. A writer
-can outrun the watchdog; custom volume backends may not share the monitored filesystem. The namespace
+Home volumes have no filesystem-level quota in this deployment; the ceiling is a measured one, and a
+writer overshoots it by whatever it writes between two measurements. Only the per-file rlimit is
+enforced by the kernel. Post-command usage is a warning, never a reason to reject cleanup commands.
+Custom volume backends may not share the monitored filesystem. The namespace
 is persisted in the state volume and cannot be changed in place. File volumes outlive both idle cleanup
 and `docker compose down`; restarting does
 not resume processes. See [configuration](configuration.md#workspace) for limits and

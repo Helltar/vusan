@@ -467,7 +467,8 @@ at most one container and one command slot, regardless of how many chats they us
 The controller keeps the last 20 command records per workspace, with at most 8 MiB of combined output
 each. Output is returned in 16 KiB pages after control-code cleanup. Anything beyond the log cap is
 discarded and marked as truncated; redirect to a workspace file when the complete output matters.
-Transfers are limited to 50 MiB per file; sending to chat accepts up to 10 files and 50 MiB total per call.
+A single file cannot grow past `WORKSPACE_MAX_FILE_MB`, 4 GiB by default; the writing process is stopped
+there. Transfers are limited to 50 MiB per file; sending to chat accepts up to 10 files and 50 MiB total per call.
 File-transfer paths must be relative and must not contain symlinks; Bash can copy a linked file first.
 
 ### Network and security
@@ -511,10 +512,14 @@ Set these in the repo-root `.env`; both local and remote Compose deployments use
 | `WORKSPACE_MEMORY_MB` | `2048` | Hard memory limit per workspace, with no additional swap allowance. |
 | `WORKSPACE_CPUS` | `2` | CPU limit per workspace, in whole cores. |
 | `WORKSPACE_PIDS_LIMIT` | `256` | Process/thread limit per workspace. |
-| `WORKSPACE_DISK_WARN_MB` | `2048` | Warn after a command when its home exceeds this size; **not a disk quota**. |
-| `WORKSPACE_MIN_FREE_MB` | `1024` | Emergency minimum available space on the controller-state filesystem. |
-| `WORKSPACE_MIN_FREE_INODES` | `10000` | Emergency minimum free inodes on that filesystem. |
+| `WORKSPACE_DISK_WARN_MB` | `2048` | Warn after a command when its home exceeds this size. Keep it below the hard limit. |
+| `WORKSPACE_MAX_HOME_MB` | `4096` | Hard size limit for one home. A workspace over it loses its container; its files are kept. |
+| `WORKSPACE_MAX_FILE_MB` | `4096` | Largest single file a command may write. The writing process is killed at that size. |
+| `WORKSPACE_MIN_FREE_MB` | `1024` | Reserve on the controller-state filesystem, kept free for cleanup commands. |
+| `WORKSPACE_MIN_FREE_INODES` | `10000` | The same reserve in free inodes. |
 | `WORKSPACE_NETWORK` | `open` | `open` or `none`, as above. |
+| `WORKSPACE_WRITE_DEVICE` | unset | Host block device such as `/dev/nvme0n1` to throttle workspace writes on. |
+| `WORKSPACE_WRITE_BPS` | unset | Write bandwidth per workspace on that device, for example `50mb`. Set both or neither. |
 | `WORKSPACE_TOKEN` | Auto-generated in Compose | API bearer secret, 32–256 printable non-whitespace ASCII characters. Required by the remote-host override. |
 | `WORKSPACE_TOKEN_FILE` | `/run/workspace-auth/token` in Compose | Shared secret file. The controller creates it if absent; the bot reads it. An explicit token takes precedence. |
 | `WORKSPACE_NAMESPACE` | `vusan` | Stable Docker resource prefix; unique per controller on a host. |
@@ -525,16 +530,27 @@ can use another 8 GiB in total, even with only two tracked commands, because bac
 consume resources. A full container pool reclaims an inactive container or refuses new work if every
 container is busy. The two-command limit does not limit the lifetime of redirected background processes.
 
-Named volumes have **no hard per-workspace disk quota** in this zero-setup deployment. The controller
-checks free space and inodes before commands/transfers and every five seconds. On low space, or if it
-cannot verify free space, it stops all workspace containers and blocks further commands/transfers until
-an administrator frees space and restarts the controller. Files are retained; job status remains readable.
-The per-home size warning still leaves cleanup commands available unless this emergency guard has tripped.
+Named volumes have no filesystem-level quota in this zero-setup deployment, so the size ceiling is
+enforced by watching instead. `WORKSPACE_MAX_FILE_MB` is the exception: it is a kernel limit on any
+single file a command writes, so the writing process is stopped at that size with no controller involved.
+`WORKSPACE_MAX_HOME_MB` covers a whole home. The controller measures live homes whenever the state
+filesystem has lost 256 MiB since its last measurement, and once a minute regardless. A home over the
+limit loses its container, and a command running in it ends as failed with the reason. Files are kept:
+deleting them is the way back.
 
-This emergency stop is **not a hard quota**: a fast writer can consume the reserve between checks.
-It watches the state volume's filesystem, which the default local home volumes share; custom volume
-drivers or storage layouts need their own monitoring and limits. A separate disk or host limits the
-operational impact. Hard byte/inode quotas require host/filesystem provisioning beyond `up -d`.
+Under that sits the host-wide reserve. Every second the controller checks free bytes and inodes on the
+state filesystem. On pressure, or when it cannot read that filesystem at all, it stops every live
+workspace container and refuses file uploads with `507`. Commands stay available, because deleting files
+is the only way to recover and the reserve exists to leave room for exactly that. The guard clears itself
+once space returns; no restart is needed.
+
+This bounds disk use, but it is not a filesystem quota: measurement is periodic, so a fast writer
+overshoots its home limit by whatever it manages to write between two checks. `WORKSPACE_WRITE_DEVICE`
+and `WORKSPACE_WRITE_BPS`, set together, remove that overshoot by capping a workspace's write bandwidth
+to a host block device. Size the disk for `WORKSPACE_MAX_HOME_MB` times the number of people, plus the
+reserve: homes persist for everyone who has ever used the workspace, not only for containers that are
+live. A custom volume driver, or homes on a different filesystem than the controller state, needs its
+own monitoring.
 
 ## Memory
 

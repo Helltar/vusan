@@ -182,7 +182,16 @@ export class Jobs {
     }
   }
 
-  private async stop(running: Running, reason: "timed_out" | "cancelled"): Promise<void> {
+  /** The disk guard stops a workspace whether or not one of its commands is still running. */
+  async evict(id: string, message: string): Promise<void> {
+    const running = this.active.get(id);
+    if (!running) return await this.containers.stop(id);
+    running.job.error = message;
+    await this.stop(running, "failed");
+    await running.done;
+  }
+
+  private async stop(running: Running, reason: "timed_out" | "cancelled" | "failed"): Promise<void> {
     running.reason ??= reason;
     // removing the container also kills setsid children and processes holding an output pipe open.
     try {

@@ -63,6 +63,10 @@ Deno.test({
         "WORKSPACE_MEMORY_MB=512",
         "-e",
         "WORKSPACE_DISK_WARN_MB=1",
+        "-e",
+        "WORKSPACE_MAX_HOME_MB=128",
+        "-e",
+        "WORKSPACE_MAX_FILE_MB=64",
         image!,
       ]);
       base = `http://${await dockerText(["port", supervisor, "8080/tcp"])}`;
@@ -265,6 +269,30 @@ Deno.test({
         strictEqual(result.body.diskWarning, true);
         strictEqual((await run("rm disposable.bin")).body.exitCode, 0);
       });
+      await t.step("a home over its hard limit loses its container mid-command", async () => {
+        const filling = await run(
+          "for i in $(seq 30); do dd if=/dev/zero of=fill.$i bs=1M count=16 status=none; sleep 0.2; done",
+          "u90001",
+          120,
+        );
+        let job = filling.body;
+        for (let i = 0; i < 100; i++) {
+          job = (await request(`/jobs/${filling.body.jobId}?id=u90001`)).body;
+          const owned = await dockerText(["ps", "-aq", "--filter", `label=${label}`]);
+          if (job.status !== "running" && !owned) break;
+          await new Promise((resolve) => setTimeout(resolve, 200));
+        }
+        strictEqual(job.status, "failed", JSON.stringify(job));
+        ok(job.error.includes("exceeded its 128 MB limit"), job.error);
+        strictEqual(await dockerText(["ps", "-aq", "--filter", `label=${label}`]), "");
+        strictEqual((await run("rm -f fill.*")).body.exitCode, 0);
+      });
+      await t.step("a single file cannot grow past the workspace file limit", async () => {
+        const result = await run("dd if=/dev/zero of=oversized.bin bs=1M count=128 status=none");
+        ok(result.body.exitCode !== 0, JSON.stringify(result.body));
+        strictEqual((await run("stat -c %s oversized.bin")).body.output.trim(), String(64 * 1024 * 1024));
+        strictEqual((await run("rm -f oversized.bin")).body.exitCode, 0);
+      });
       await t.step("ordinary shutdown removes child containers but preserves volumes", async () => {
         await docker(["stop", "--time", "30", supervisor]);
         strictEqual(await dockerText(["ps", "-aq", "--filter", `label=${label}`]), "");
@@ -284,7 +312,9 @@ Deno.test({
         strictEqual(result.body.exitCode, 0, JSON.stringify(result.body));
         ok(result.body.output.startsWith("saved"));
       });
-      await t.step("storage pressure stops running containers and latches admission closed", async () => {
+      await t.step("storage pressure stops containers, refuses uploads and then clears itself", async () => {
+        const upload = (body: string) =>
+          request("/files?id=u90001&path=pressure.txt", { method: "PUT", body });
         await docker(["stop", "--time", "30", supervisor]);
         await docker(["rm", supervisor]);
         await startSupervisor("open", true);
@@ -295,14 +325,20 @@ Deno.test({
         for (let i = 0; i < 100; i++) {
           const result = await request(`/jobs/${started.body.jobId}?id=u90001`);
           const owned = await dockerText(["ps", "-aq", "--filter", `label=${label}`]);
-          if (result.body.status === "interrupted" && !owned) break;
+          if (result.body.status === "failed" && !owned) break;
           await new Promise((resolve) => setTimeout(resolve, 100));
         }
-        strictEqual((await request(`/jobs/${started.body.jobId}?id=u90001`)).body.status, "interrupted");
+        strictEqual((await request(`/jobs/${started.body.jobId}?id=u90001`)).body.status, "failed");
         strictEqual(await dockerText(["ps", "-aq", "--filter", `label=${label}`]), "");
-        strictEqual((await run("printf blocked")).status, 507);
+        strictEqual((await upload("blocked")).status, 507);
+        // deleting files is the only way back, so commands are not part of what the latch closes.
+        strictEqual((await run("printf cleanup")).body.exitCode, 0);
         await docker(["exec", supervisor, "rm", "/state/pressure"]);
-        strictEqual((await run("printf still-blocked")).status, 507);
+        for (let i = 0; i < 100; i++) {
+          if (await fetch(`${base}/health`).then((response) => response.ok)) break;
+          await new Promise((resolve) => setTimeout(resolve, 100));
+        }
+        strictEqual((await upload("allowed")).status, 200);
       });
     } finally {
       // let the controller finish its own removals before test cleanup touches the same children.

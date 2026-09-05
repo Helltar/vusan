@@ -110,6 +110,8 @@ export class Containers {
           "--security-opt=no-new-privileges",
           "--pids-limit",
           String(this.config.pids),
+          "--ulimit",
+          `fsize=${this.config.maxFileMb * 1024 * 1024}`,
           "--memory",
           `${this.config.memoryMb}m`,
           "--memory-swap",
@@ -123,6 +125,9 @@ export class Containers {
           "--sysctl",
           "net.ipv6.conf.default.disable_ipv6=1",
           ...(this.config.network === "open" ? ["--dns", "1.1.1.1", "--dns", "8.8.8.8"] : []),
+          ...(this.config.writeDevice && this.config.writeBps
+            ? ["--device-write-bps", `${this.config.writeDevice}:${this.config.writeBps}`]
+            : []),
           "--log-driver",
           "local",
           "--log-opt",
@@ -212,6 +217,10 @@ export class Containers {
       "/work",
     ]);
     return Number.parseInt(out, 10);
+  }
+
+  liveIds(): string[] {
+    return [...this.live.keys()];
   }
 
   touch(id: string): void {

@@ -104,18 +104,37 @@ networks and metadata endpoints. Preserve established replies to the bot's conne
 own firewall is still mandatory; there is no setting to skip it. Public internet access can still be
 used to upload workspace contents or abuse remote services, so it is not safe storage for credentials.
 
-## Storage emergency
+## Disk limits and the storage emergency
 
-The controller checks the state volume's free bytes and inodes at admission and every five seconds.
-If either reserve is exhausted, or the check fails, it stops all workspace containers and latches closed.
-Its health check becomes unhealthy; `restart: unless-stopped` does not restart an unhealthy process.
-Free space or inodes using administrator tooling, then run `docker compose restart vusan-workspace`.
-No home volume is deleted automatically. Do not expose the API or disable the reserve to get around the guard.
+Three layers keep a workspace from filling the host, and only the first is enforced by the kernel:
 
-This is a best-effort emergency stop, not a hard volume quota. A writer can outrun it. Before exposing
-the service to untrusted users, provision hard byte/inode quotas and isolate workspace storage from the
-bot's database and other production data. The default guard covers the local Docker data filesystem;
-custom volume backends need monitoring of their own actual storage.
+- `WORKSPACE_MAX_FILE_MB` (4 GiB) caps any single file a command writes. The writing process is killed
+  with `File size limit exceeded`, which is what stops a stray `dd`.
+- `WORKSPACE_MAX_HOME_MB` (4 GiB) caps a whole home. The controller measures live homes whenever the
+  state filesystem has lost 256 MiB, and once a minute regardless; a workspace over the limit loses its
+  container and its running command ends as failed. Its files are kept, so the next command can delete them.
+- `WORKSPACE_MIN_FREE_MB` / `WORKSPACE_MIN_FREE_INODES` is the host reserve, checked every second. Below
+  it, or when the check itself fails, the controller stops every live workspace container and refuses
+  file uploads with `507`. Commands stay available, because deleting files is the way back and the
+  reserve exists to leave room for that. No home volume is ever deleted automatically.
+
+The guard clears itself as soon as space returns; the service does not need a restart. While it is
+latched the health check reports unhealthy, so `docker compose ps` shows the problem. Free space with
+administrator tooling if the pressure comes from outside the workspaces.
+
+None of this is a filesystem quota: measurement is periodic, so a fast writer overshoots its home limit
+by whatever it writes between two checks. Setting `WORKSPACE_WRITE_DEVICE` and `WORKSPACE_WRITE_BPS`
+together caps a workspace's write bandwidth to a host block device and removes that overshoot:
+
+```dotenv
+WORKSPACE_WRITE_DEVICE=/dev/nvme0n1
+WORKSPACE_WRITE_BPS=50mb
+```
+
+Size the disk for `WORKSPACE_MAX_HOME_MB` times the number of people plus the reserve, since homes
+persist for everyone who has ever used the workspace. Keep workspace storage on a filesystem separate
+from the bot's database where you can, and note that the guard watches the controller's state
+filesystem: a custom volume backend on different storage needs monitoring of its own.
 
 ## Moving from per-chat containers
 
@@ -132,8 +151,8 @@ until verified. Deploy the bot and controller together; the new health endpoint 
 
 This rewrite changes the API, job storage and home layout. Deploy the bot and service together; do not
 mix the old client with the new service. Remove old isolation, engine, runtime, UID-pool, host-directory
-and quota settings from deployment overrides. `WORKSPACE_DISK_WARN_MB` is explicitly a warning, not a
-hard quota; plain Docker named volumes do not supply one.
+and quota settings from deployment overrides. `WORKSPACE_DISK_WARN_MB` is still only a warning; the
+limit that stops a workspace is `WORKSPACE_MAX_HOME_MB`, above.
 
 There is **no automatic import** of the old shared `vusan-workspaces` volume or bind-mounted homes.
 They are not deleted by this change. Back them up before deploying. To keep a project, export its
