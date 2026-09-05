@@ -125,6 +125,21 @@ Deno.test({
         strictEqual(response.status, 200, await response.clone().text());
         strictEqual(await response.text(), content);
       });
+      await t.step("a large transfer streams through the controller in both directions", async () => {
+        // neither direction may be buffered whole: the controller runs on a 512 MiB ceiling.
+        const bulk = new Uint8Array(40 * 1024 * 1024);
+        // a position-dependent pattern, so a reordered or dropped chunk changes the digest.
+        for (let i = 0; i < bulk.length; i++) bulk[i] = (i * 31 + (i >> 16)) & 0xff;
+        const digest = async (bytes: BufferSource) =>
+          [...new Uint8Array(await crypto.subtle.digest("SHA-256", bytes))]
+            .map((byte) => byte.toString(16).padStart(2, "0")).join("");
+        const written = await request("/files?id=u90001&path=bulk.bin", { method: "PUT", body: bulk });
+        strictEqual(written.body.bytes, bulk.length, JSON.stringify(written));
+        const response = await fetch(`${base}/files?id=u90001&path=bulk.bin`, { headers });
+        strictEqual(response.status, 200);
+        strictEqual(await digest(await response.arrayBuffer()), await digest(bulk));
+        strictEqual((await run("rm bulk.bin")).body.exitCode, 0);
+      });
       await t.step("the base tools and an unprivileged browser work without language SDKs", async () => {
         const result = await run(
           "command -v bash python3 node git curl jq pandoc ffmpeg sqlite3 rg; " +

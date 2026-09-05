@@ -430,7 +430,7 @@ runner, engine selection or runtime selection. The same image serves controller 
 - **`main.ts`** — validates/authenticates HTTP requests, limits concurrent file transfers, owns the
   state lock, startup recovery, shutdown and idle-sweep timer. `POST /jobs?id=...` starts a command;
   `GET /jobs?id=...` lists recent ones; `GET`/`DELETE /jobs/<jobId>?id=...` reads/cancels one.
-  `PUT`/`GET /files?id=...&path=...` transfers a bounded file. `GET /health` reports protocol version 3.
+  `PUT`/`GET /files?id=...&path=...` streams a bounded file in either direction, never buffering one whole. `GET /health` reports protocol version 3.
   Busy/capacity responses use `409`; invalid input, authentication and missing jobs have explicit
   HTTP errors. The Kotlin client parses error bodies instead of relying on the shared client's
   `expectSuccess` default.
@@ -459,7 +459,9 @@ runner, engine selection or runtime selection. The same image serves controller 
   sequences on reads and marks binary or truncated output. There is no promise of an unlimited log.
 - **`files.ts`** — a helper executed inside the workspace with Deno filesystem permissions restricted
   to `/work`. It rejects traversal and symlink components, bounds reads/writes and atomically replaces
-  uploaded files. The controller never follows user filesystem paths or changes their ownership.
+  uploaded files. The controller never follows user filesystem paths or changes their ownership. It
+  pipes request and response bodies straight through the helper's stdio; because the helper validates
+  before it emits a byte, one peek at stdout still separates a clean rejection from a started transfer.
 - **`entrypoint.sh` / `netpolicy.sh`** — the workspace role installs its destination-IP firewall
   with a fixed system PATH, verifies IPv6 is disabled, then drops UID/GID and capabilities before
   waiting for commands. A failed rule stops startup. The controller role needs no network capabilities.

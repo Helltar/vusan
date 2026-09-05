@@ -525,7 +525,8 @@ Set these in the repo-root `.env`; both local and remote Compose deployments use
 | `WORKSPACE_NAMESPACE` | `vusan` | Stable Docker resource prefix; unique per controller on a host. |
 | `WORKSPACE_IMAGE` | `ghcr.io/helltar/vusan-workspace:latest` | Image for both controller and workspace containers. |
 
-The controller itself has a 512 MiB memory ceiling. At the defaults, four busy workspace containers
+The controller itself has a 512 MiB memory ceiling, which file transfers do not compete with: they stream
+through it in both directions. At the defaults, four busy workspace containers
 can use another 8 GiB in total, even with only two tracked commands, because background processes also
 consume resources. A full container pool reclaims an inactive container or refuses new work if every
 container is busy. The two-command limit does not limit the lifetime of redirected background processes.

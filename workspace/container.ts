@@ -1,7 +1,11 @@
 import type { Config } from "./config.ts";
-import { docker, dockerText, spawnDocker } from "./docker.ts";
+import { docker, dockerText, kill, spawnDocker } from "./docker.ts";
 import { workspaceEnvironment } from "./env.ts";
-import { FILE_LIMIT, RequestError, workspaceId } from "./protocol.ts";
+import { FILE_LIMIT, readBounded, RequestError, workspaceId } from "./protocol.ts";
+
+function empty(): ReadableStream<Uint8Array> {
+  return new ReadableStream({ start: (controller) => controller.close() });
+}
 
 export class Containers {
   private readonly live = new Map<string, number>();
@@ -177,12 +181,10 @@ export class Containers {
     ]);
   }
 
-  async file(id: string, action: "read" | "write", path: string, input?: Uint8Array): Promise<Uint8Array> {
-    using _lease = this.reserve(id);
-    const name = await this.ensure(id);
-    return await docker([
+  private helper(name: string, action: "read" | "write", path: string): Deno.ChildProcess {
+    return spawnDocker([
       "exec",
-      ...(input !== undefined ? ["-i"] : []),
+      ...(action === "write" ? ["-i"] : []),
       "--user",
       "1000:1000",
       name,
@@ -198,10 +200,105 @@ export class Containers {
       "/app/files.ts",
       action,
       path,
-    ], { input, cap: FILE_LIMIT }).catch((e) => {
-      if (e instanceof RequestError) throw e;
-      throw new RequestError(e instanceof Error ? e.message : "File transfer failed", 422);
-    });
+    ], action === "write");
+  }
+
+  private async helperFailure(stderr: Promise<Uint8Array>): Promise<RequestError> {
+    const reason = new TextDecoder().decode(await stderr).trim().slice(0, 1000);
+    return new RequestError(reason || "File transfer failed", 422);
+  }
+
+  /** Bytes reach the helper's stdin as they arrive; nothing the size of a whole file is ever held here. */
+  async writeFile(id: string, path: string, body: ReadableStream<Uint8Array> | null): Promise<number> {
+    using _lease = this.reserve(id);
+    const name = await this.ensure(id);
+    const child = this.helper(name, "write", path);
+    const stderr = readBounded(child.stderr, 16 * 1024);
+    const stdout = readBounded(child.stdout, 16 * 1024);
+    let bytes = 0;
+    let overflow = false;
+    try {
+      const writer = child.stdin.getWriter();
+      try {
+        for await (const chunk of body ?? empty()) {
+          bytes += chunk.length;
+          if (bytes > FILE_LIMIT) {
+            overflow = true;
+            break;
+          }
+          await writer.write(chunk);
+        }
+        if (!overflow) await writer.close();
+      } catch {
+        /* the helper closed the pipe; its exit status carries the reason */
+      } finally {
+        writer.releaseLock();
+      }
+      if (overflow) throw new RequestError("File exceeds the 50 MB transfer limit", 413);
+      await stdout;
+      if (!(await child.status).success) throw await this.helperFailure(stderr);
+      return bytes;
+    } finally {
+      kill(child);
+      await child.status;
+    }
+  }
+
+  /**
+   * The helper validates the path and size before it writes anything, so one peek at stdout separates a
+   * clean rejection from a transfer that has started. `release` runs once, whenever the stream ends.
+   */
+  async readFile(id: string, path: string, release: () => void): Promise<ReadableStream<Uint8Array>> {
+    const lease = this.reserve(id);
+    let child: Deno.ChildProcess | undefined;
+    let closed = false;
+    const done = () => {
+      if (closed) return;
+      closed = true;
+      lease[Symbol.dispose]();
+      release();
+    };
+    try {
+      const name = await this.ensure(id);
+      child = this.helper(name, "read", path);
+      const process = child;
+      const stderr = readBounded(process.stderr, 16 * 1024);
+      const reader = process.stdout.getReader();
+      const first = await reader.read();
+      if (first.done && !(await process.status).success) throw await this.helperFailure(stderr);
+      let bytes = first.value?.length ?? 0;
+      return new ReadableStream<Uint8Array>({
+        start: (controller) => {
+          if (first.value) controller.enqueue(first.value);
+        },
+        pull: async (controller) => {
+          const next = await reader.read();
+          if (next.done) {
+            const status = await process.status;
+            done();
+            if (status.success) controller.close();
+            else controller.error(new Error("File transfer failed"));
+            return;
+          }
+          bytes += next.value.length;
+          if (bytes > FILE_LIMIT) {
+            kill(process);
+            done();
+            controller.error(new Error("File exceeds the 50 MB transfer limit"));
+            return;
+          }
+          controller.enqueue(next.value);
+        },
+        cancel: () => {
+          kill(process);
+          done();
+        },
+      });
+    } catch (e) {
+      if (child) kill(child);
+      done();
+      throw e;
+    }
   }
 
   async usage(id: string): Promise<number> {

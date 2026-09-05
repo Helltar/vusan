@@ -9,20 +9,21 @@ export function spawnDocker(args: string[], input = false): Deno.ChildProcess {
   }).spawn();
 }
 
+export function kill(child: Deno.ChildProcess): void {
+  try {
+    child.kill("SIGKILL");
+  } catch { /* already exited */ }
+}
+
 export async function docker(
   args: string[],
   options: { input?: Uint8Array; cap?: number; timeoutMs?: number; includeStderr?: boolean } = {},
 ): Promise<Uint8Array> {
   const child = spawnDocker(args, options.input !== undefined);
   let expired = false;
-  const kill = () => {
-    try {
-      child.kill("SIGKILL");
-    } catch { /* already exited */ }
-  };
   const timer = setTimeout(() => {
     expired = true;
-    kill();
+    kill(child);
   }, options.timeoutMs ?? 30_000);
   try {
     const write = async () => {
@@ -52,7 +53,7 @@ export async function docker(
     return combined;
   } finally {
     clearTimeout(timer);
-    kill();
+    kill(child);
     await child.status;
   }
 }

@@ -76,20 +76,27 @@ async function route(request: Request): Promise<Response> {
     const path = url.searchParams.get("path");
     if (!path || path.length > 400) throw new RequestError("Missing or invalid file path");
     transfers++;
+    let released = false;
+    const release = () => {
+      if (released) return;
+      released = true;
+      transfers--;
+    };
     try {
       if (request.method === "PUT") {
         const size = Number(request.headers.get("content-length"));
         if (size > FILE_LIMIT) throw new RequestError("File exceeds the 50 MB transfer limit", 413);
-        const input = await readBounded(request.body, FILE_LIMIT);
-        await containers.file(id, "write", path, input);
-        return json({ path, bytes: input.length });
+        return json({ path, bytes: await containers.writeFile(id, path, request.body) });
       }
-      const bytes = await containers.file(id, "read", path);
-      return new Response(bytes.slice(), {
-        headers: { "content-type": "application/octet-stream", "content-length": String(bytes.length) },
+      // the download holds its slot until the body has been read, so `release` outlives this block.
+      return new Response(await containers.readFile(id, path, release), {
+        headers: { "content-type": "application/octet-stream" },
       });
+    } catch (e) {
+      release();
+      throw e;
     } finally {
-      transfers--;
+      if (request.method === "PUT") release();
     }
   }
   return json({ error: "Not found" }, 404);
