@@ -471,6 +471,8 @@ runner, engine selection or runtime selection. The same image serves controller 
   helper sees the raw image or loop devices. Stop/idle eviction removes the mount wrapper and detaches
   the loop; the backing volume persists. Startup reconciles attachments after an interrupted shutdown.
   Existing unbounded volumes are preserved and refused until migrated; there is no unbounded fallback.
+  `resetWorkspace` (and reclamation) drops the wrapper, the backing volume and the loop attachment
+  together, which is also the only way past a home the current layout cannot open.
 - **`docker.ts`** — bounded Docker CLI calls, including stdin/stdout draining and operation deadlines.
   A command's execution deadline is enforced by the controller, outside the untrusted workspace.
 - **`env.ts`** — constructs a secret-free, noninteractive command environment. Each invocation starts

@@ -61,9 +61,8 @@ that mounts the bounded filesystem at `/work`. The same `u123` is used in privat
 
 The user container receives only the mounted home, owned by UID 1000. A short-lived trusted storage
 helper receives the backing volume and loop-device access; it never runs user commands. Controller job
-metadata and bounded logs live separately in Compose's `vusan-workspace-state` volume. The API secret
-lives in `vusan-workspace-auth`, shared only with the trusted bot. Preserve it across updates; recreating
-it rotates the generated token and requires restarting the bot too.
+metadata and bounded logs live separately in Compose's `vusan-workspace-state` volume. The API secret is
+configuration, not state: it lives in `.env` on this machine and in the bot's own environment.
 
 **Back up the `-disk` volumes and controller state.** Stop the controller first for a consistent copy;
 normal shutdown removes the user containers and mount wrappers and detaches their loop devices. Copy
@@ -71,22 +70,16 @@ the backing volumes using ordinary Docker-volume backup tooling, then start the 
 Backing volumes survive idle expiry, image replacement and `docker compose down`. Do not use volume
 pruning as cleanup: an idle person's backing disk looks like an unused Docker volume.
 
-Update the bot and workspace together because their HTTP contract changes together:
+Update the bot and workspace together because their HTTP contract changes together — on this machine:
 
 ```bash
-docker compose pull
-docker compose up -d
+docker compose -f compose.workspace.yaml pull
+docker compose -f compose.workspace.yaml up -d
 ```
 
 The controller removes its own old containers during startup, marks unfinished jobs interrupted and
 resolves the configured image to an immutable image ID for new containers. You do not need a separate
 container-removal command when upgrading. Files remain in their volumes; processes do not resume.
-
-For a source checkout, build and start both images with:
-
-```bash
-docker compose -f compose.yaml -f compose.local.yaml up --build -d
-```
 
 Keep `WORKSPACE_NAMESPACE` stable. It is recorded in the state volume and cannot be changed there in
 place. Each controller on a Docker host needs a unique namespace and its own state volume. The shipped
@@ -105,61 +98,14 @@ RUN apt-get update \
     && rm -rf /var/lib/apt/lists/*
 ```
 
-Build it on the workspace host as `vusan-workspace:custom`, set
-`WORKSPACE_IMAGE=vusan-workspace:custom` in the repo-root `.env`, which is where Compose reads the values
-it resolves itself, and run `docker compose up -d`. Both the controller
+Build it on the workspace machine as `vusan-workspace:custom`, set
+`WORKSPACE_IMAGE=vusan-workspace:custom` in the `.env` beside the Compose file, and run
+`docker compose -f compose.workspace.yaml up -d`. Both the controller
 and its workspace containers then use it. Rebuild custom images when their base is updated. For the
 source-build override, edit `workspace/Dockerfile` and use the source-build command above instead.
 
 Installing Java on the host with `sudo apt install` does not put Java inside a workspace. Do not make
 manual changes inside a running user container the source of its dependencies.
-
-## Separate workspace host
-
-This is the same controller and the same containers, moved to another Docker host. It is optional,
-but limits what a container escape can reach: keep the bot's tokens, database and other production
-services off that host. The controller's Docker socket has host-level authority; never expose its API
-publicly. Containers share the host kernel, so keep Docker and the kernel patched.
-
-Use a private network or an encrypted tunnel between the hosts. On the workspace host, put these
-values in `.env` beside the Compose files, because Compose resolves both itself (generate your own
-strong shared secret):
-
-```dotenv
-WORKSPACE_BIND=10.10.10.2
-WORKSPACE_TOKEN=<your shared secret>
-```
-
-The bot's own file never goes to this host. Nothing there holds an API key, which is the point of moving
-the workspace off the machine that does. Limits for the containers go in `env/workspace.env` beside it,
-and the same `WORKSPACE_TOKEN` goes into the bot's `env/vusan.env` on the other host.
-
-Start only the controller using the remote-host override:
-
-```bash
-docker compose -f compose.yaml -f compose.workspace.yaml up -d
-```
-
-The override requires both values, binds port 8080 to that address and puts the bot behind an inactive
-profile. It inherits all image and resource settings from the main Compose file. No host home-directory
-mount, runtime installation or manual UID mapping is needed. To use it for a JVM on the same host,
-bind to `127.0.0.1` instead and use the same token in the JVM's environment.
-
-On the bot host, set:
-
-```dotenv
-WORKSPACE_URL=http://10.10.10.2:8080
-WORKSPACE_TOKEN=<the same secret>
-```
-
-Start the bot with `docker compose up -d --no-deps vusan` and stop any previously running local workspace
-controller. For later remote updates, use the same two Compose files with `pull` and then `up -d`.
-
-A bearer token does not encrypt HTTP: the private transport must provide confidentiality. At the host
-or infrastructure firewall, allow API access only from the bot and restrict outbound access to private
-networks and metadata endpoints. Preserve established replies to the bot's connections. The workspace's
-own firewall is still mandatory; there is no setting to skip it. Public internet access can still be
-used to upload workspace contents or abuse remote services, so it is not safe storage for credentials.
 
 ## Disk limits and the storage emergency
 
@@ -208,7 +154,10 @@ controller and initialize that person's empty bounded workspace, then import the
 through the mounted home. Oversized imports fail at the filesystem capacity; reduce the data or choose
 a larger capacity before creating the new disk. Never import user files into the raw `-disk` volume.
 
-Deploy bot and controller together; the health endpoint reports protocol 4. Old `WORKSPACE_WRITE_DEVICE`
+A person who has nothing worth keeping in an old volume does not need any of this: `resetWorkspace`
+discards it and formats a bounded home in its place, from the chat, in one call.
+
+Deploy bot and controller together; the health endpoint reports protocol 5. Old `WORKSPACE_WRITE_DEVICE`
 settings are no longer used: the service always throttles its own loop device.
 
 ## Moving from per-chat containers

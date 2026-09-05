@@ -51,9 +51,9 @@ Use the published images:
 docker compose up -d
 ```
 
-This starts the bot and a workspace controller, which creates a separate container for each person's
-workspace when needed. Docker is the only runtime to install; no gVisor setup is required. For limits,
-security and running without the workspace, see [workspace configuration](docs/configuration.md#workspace).
+That starts the bot by itself. The workspace shell — the Linux home directory below — is a separate,
+optional service that runs model-authored commands, so it stays off until you deploy it, ideally on a
+machine of its own: see [the workspace guide](docs/workspace.md).
 
 Or build from source:
 

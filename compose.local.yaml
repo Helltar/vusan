@@ -1,16 +1,13 @@
-# Local development override: build images from this checkout while reusing
+# Local development override: build the bot from this checkout while reusing
 # compose.yaml for runtime settings.
 # Usage:
 #   docker compose -f compose.yaml -f compose.local.yaml up --build -d
+#
+# The workspace service is a separate deployment; build its image with
+#   docker build -t vusan-workspace:local ./workspace
+# and start it with WORKSPACE_IMAGE=vusan-workspace:local. See docs/workspace.md.
 services:
   vusan:
     image: vusan:local
     build:
       context: .
-
-  vusan-workspace:
-    image: vusan-workspace:local
-    environment:
-      WORKSPACE_IMAGE: vusan-workspace:local
-    build:
-      context: ./workspace

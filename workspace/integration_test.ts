@@ -10,7 +10,7 @@ Deno.test({
     const namespace = `vusan-test-${crypto.randomUUID().slice(0, 8)}`;
     const supervisor = `${namespace}-supervisor`;
     const state = `${namespace}-state`;
-    const auth = `${namespace}-auth`;
+    const secret = crypto.randomUUID().replace(/-/g, "").repeat(2);
     const label = `com.helltar.vusan.workspace=${namespace}`;
     const encoder = new TextEncoder();
     let base = "";
@@ -43,8 +43,6 @@ Deno.test({
         ...(pressureTest
           ? ["--tmpfs", "/state:size=128m"]
           : ["--mount", `type=volume,src=${state},dst=/state`]),
-        "--mount",
-        `type=volume,src=${auth},dst=/run/workspace-auth`,
         "-e",
         `WORKSPACE_IMAGE=${image}`,
         "-e",
@@ -52,7 +50,7 @@ Deno.test({
         "-e",
         `WORKSPACE_NETWORK=${network}`,
         "-e",
-        "WORKSPACE_TOKEN_FILE=/run/workspace-auth/token",
+        `WORKSPACE_TOKEN=${secret}`,
         "-e",
         `WORKSPACE_MIN_FREE_MB=${pressureTest ? 120 : 1}`,
         "-e",
@@ -70,27 +68,19 @@ Deno.test({
         "-e",
         "WORKSPACE_IDLE_CPU_SECONDS=2",
         "-e",
+        "WORKSPACE_RETAIN_DAYS=1",
+        "-e",
         "WORKSPACE_BLOCKED_CIDRS=203.0.113.7/32",
         image!,
       ]);
       base = `http://${await dockerText(["port", supervisor, "8080/tcp"])}`;
-      for (let i = 0; i < 100; i++) {
+      for (let i = 0; i < 300; i++) {
         const ready = await fetch(`${base}/health`).then(async (r) => {
           await r.arrayBuffer();
           return r.ok;
         }).catch(() => false);
         if (ready) {
-          const token = await dockerText([
-            "exec",
-            "--user",
-            "1000:1000",
-            supervisor,
-            "cat",
-            "/run/workspace-auth/token",
-          ]);
-          strictEqual(token.length, 64);
-          if (headers.authorization) strictEqual(headers.authorization, `Bearer ${token}`);
-          headers.authorization = `Bearer ${token}`;
+          headers.authorization = `Bearer ${secret}`;
           return;
         }
         await new Promise((resolve) => setTimeout(resolve, 100));

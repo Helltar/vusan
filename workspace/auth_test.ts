@@ -22,17 +22,16 @@ Deno.test("authentication fails closed without a secret or with a weak secret", 
   );
 });
 
-Deno.test("automatic API secrets survive restart and support explicit rotation", async () => {
+Deno.test("a secret may come from a file, and a broken one stops the service", async () => {
   const directory = await Deno.makeTempDir();
-  const path = `${directory}/auth/token`;
+  const path = `${directory}/token`;
   try {
-    const initial = await loadToken(null, path);
-    strictEqual(initial.length, 64);
-    strictEqual(await loadToken(null, path), initial);
-    strictEqual(await loadToken(secret, path), secret);
-    strictEqual(await Deno.readTextFile(path), secret);
-    strictEqual((await Deno.stat(path)).mode! & 0o777, 0o444);
-    await Deno.chmod(path, 0o600);
+    await rejects(() => loadToken(null, path), /Cannot read/);
+    await Deno.writeTextFile(path, `${secret}\n`);
+    strictEqual(await loadToken(null, path), secret);
+    // an explicit value wins over the file, and the file is never written back
+    strictEqual(await loadToken("b".repeat(40), path), "b".repeat(40));
+    strictEqual((await Deno.readTextFile(path)).trim(), secret);
     await Deno.writeTextFile(path, "broken");
     await rejects(() => loadToken(null, path), /32 to 256/);
   } finally {

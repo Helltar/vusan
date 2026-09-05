@@ -1,62 +1,16 @@
-x-logging: &default-logging
-  driver: json-file
-  options:
-    max-size: "10m"
-    max-file: "3"
-
 services:
   vusan:
     image: ghcr.io/helltar/vusan:latest
     container_name: vusan-container
     restart: unless-stopped
     env_file: env/vusan.env
-    environment:
-      WORKSPACE_TOKEN_FILE: /run/workspace-auth/token
-    depends_on:
-      vusan-workspace:
-        condition: service_healthy
     volumes:
       - vusan-data:/app/data
-      - vusan-workspace-auth:/run/workspace-auth:ro
-    networks: [default, workspace-control]
-    logging: *default-logging
-
-  vusan-workspace:
-    image: "${WORKSPACE_IMAGE:-ghcr.io/helltar/vusan-workspace:latest}"
-    container_name: vusan-workspace-container
-    restart: unless-stopped
-    init: true
-    stop_grace_period: 45s
-    # never the bot's file: this process holds the Docker socket and must not see an application
-    # secret. its own file is optional, because every setting in it has a working default.
-    env_file:
-      - path: env/workspace.env
-        required: false
-    environment:
-      # compose resolved the tag for `image:` above; the controller needs the same one for its children.
-      WORKSPACE_IMAGE: "${WORKSPACE_IMAGE:-ghcr.io/helltar/vusan-workspace:latest}"
-      WORKSPACE_TOKEN_FILE: /run/workspace-auth/token
-    volumes:
-      # only this trusted controller can reach docker; children receive just their own volume.
-      - /var/run/docker.sock:/var/run/docker.sock
-      - vusan-workspace-state:/state
-      - vusan-workspace-auth:/run/workspace-auth
-    networks: [workspace-control]
-    cap_drop: [ALL]
-    security_opt: [no-new-privileges:true]
-    read_only: true
-    tmpfs:
-      - /tmp:size=256m
-    pids_limit: 128
-    mem_limit: 512m
-    cpus: 1.0
-    logging: *default-logging
-
-networks:
-  workspace-control:
-    internal: true
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
 
 volumes:
   vusan-data:
-  vusan-workspace-state:
-  vusan-workspace-auth:

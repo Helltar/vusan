@@ -1,13 +1,46 @@
-# optional override: docker compose -f compose.yaml -f compose.workspace.yaml up -d
-# the same controller on a separate host; the private bind address and token are mandatory.
+# The workspace shell, deployed on its own: docker compose -f compose.workspace.yaml up -d
+#
+# This is a separate deployment, not an addition to compose.yaml, and it belongs on a machine of its
+# own — it holds the Docker socket and runs model-authored shell. See docs/workspace.md.
+#
+# WORKSPACE_BIND and WORKSPACE_TOKEN come from a .env beside this file; the token is the one the bot
+# is given too, and the bind address is one only the bot can reach.
 
 services:
-  vusan:
-    profiles: [bot]
-
   vusan-workspace:
-    ports:
-      - "${WORKSPACE_BIND:?set a private listen address}:8080:8080"
+    image: "${WORKSPACE_IMAGE:-ghcr.io/helltar/vusan-workspace:latest}"
+    container_name: vusan-workspace-container
+    restart: unless-stopped
+    init: true
+    stop_grace_period: 45s
+    # never the bot's file: this process holds the Docker socket and must not see an application
+    # secret. its own file is optional, because every setting in it has a working default.
+    env_file:
+      - path: env/workspace.env
+        required: false
     environment:
-      WORKSPACE_TOKEN: "${WORKSPACE_TOKEN:?set a shared secret}"
-    networks: [default, workspace-control]
+      # compose resolved the tag for `image:` above; the controller needs the same one for its children.
+      WORKSPACE_IMAGE: "${WORKSPACE_IMAGE:-ghcr.io/helltar/vusan-workspace:latest}"
+      WORKSPACE_TOKEN: "${WORKSPACE_TOKEN:?generate one with: openssl rand -hex 32}"
+    ports:
+      - "${WORKSPACE_BIND:?set an address only the bot can reach}:8080:8080"
+    volumes:
+      # only this trusted controller can reach docker; workspace containers receive just their own home.
+      - /var/run/docker.sock:/var/run/docker.sock
+      - vusan-workspace-state:/state
+    cap_drop: [ALL]
+    security_opt: [no-new-privileges:true]
+    read_only: true
+    tmpfs:
+      - /tmp:size=256m
+    pids_limit: 128
+    mem_limit: 512m
+    cpus: 1.0
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+volumes:
+  vusan-workspace-state:
