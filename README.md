@@ -27,7 +27,7 @@ cd vusan
 Copy the env template:
 
 ```bash
-cp .env.example .env
+cp env/vusan.env.example env/vusan.env
 ```
 
 Only these values are required to start; everything else is optional and covered in

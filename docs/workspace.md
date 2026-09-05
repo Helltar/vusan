@@ -55,7 +55,8 @@ RUN apt-get update \
 ```
 
 Build it on the workspace host as `vusan-workspace:custom`, set
-`WORKSPACE_IMAGE=vusan-workspace:custom` in `.env`, and run `docker compose up -d`. Both the controller
+`WORKSPACE_IMAGE=vusan-workspace:custom` in the repo-root `.env`, which is where Compose reads the values
+it resolves itself, and run `docker compose up -d`. Both the controller
 and its workspace containers then use it. Rebuild custom images when their base is updated. For the
 source-build override, edit `workspace/Dockerfile` and use the source-build command above instead.
 
@@ -70,12 +71,17 @@ services off that host. The controller's Docker socket has host-level authority;
 publicly. Containers share the host kernel, so keep Docker and the kernel patched.
 
 Use a private network or an encrypted tunnel between the hosts. On the workspace host, put these
-values in `.env` beside the Compose files (generate your own strong shared secret):
+values in `.env` beside the Compose files, because Compose resolves both itself (generate your own
+strong shared secret):
 
 ```dotenv
 WORKSPACE_BIND=10.10.10.2
 WORKSPACE_TOKEN=<your shared secret>
 ```
+
+The bot's own file never goes to this host. Nothing there holds an API key, which is the point of moving
+the workspace off the machine that does. Limits for the containers go in `env/workspace.env` beside it,
+and the same `WORKSPACE_TOKEN` goes into the bot's `env/vusan.env` on the other host.
 
 Start only the controller using the remote-host override:
 

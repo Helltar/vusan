@@ -1,7 +1,14 @@
 # Configuration
 
-Vusan reads configuration from environment variables. For Docker, put them in a `.env` file in the repo root;
-[`.env.example`](../.env.example) is the copy-paste starting point. Blank values are treated as missing.
+Vusan reads configuration from environment variables, one file per service under `env/`.
+[`env/vusan.env.example`](../env/vusan.env.example) is the copy-paste starting point for the bot, and
+[`env/workspace.env.example`](../env/workspace.env.example) covers the [workspace service](#workspace),
+which is optional because every setting there has a working default. Blank values are treated as missing.
+
+The split is a boundary, not tidiness: the workspace controller holds the Docker socket, so it is handed
+its own file and never the bot's. Do not merge them. A repo-root `.env` still exists for the two values
+Compose interpolates into the deployment itself rather than into a container — `WORKSPACE_IMAGE` and, on a
+separate workspace host, `WORKSPACE_BIND` — and a shell variable works just as well for those.
 
 - **Getting started** — [Minimum setup](#minimum-setup) · [Banning someone](#banning-someone) ·
   [Rights in a group](#rights-in-a-group) · [Telegram command menu](#telegram-command-menu)
@@ -169,7 +176,7 @@ Add `--device-auth` when the host has no browser, and `codex login status` check
 ends it; Vusan then replies that its connection needs renewing until you sign in again.
 
 That writes `~/.codex/auth.json` — the home directory of whoever ran the command, so a bot running under its own user
-already has its own session. `CODEX_HOME` points both the CLI and Vusan somewhere else; set it in `.env` and pass the
+already has its own session. `CODEX_HOME` points both the CLI and Vusan somewhere else; set it in `env/vusan.env` and pass the
 same value to `codex login` if you want the credentials elsewhere:
 
 ```dotenv
@@ -409,7 +416,7 @@ convert documents and media, install user-local dependencies, and send the resul
 new messages, `/clear`, container replacement and service restarts. Different people have separate homes;
 the same person uses the same files in private chat and every group. Conversation history stays separate per chat.
 
-With Docker installed and `.env` filled in, the usual command starts everything:
+With Docker installed and `env/vusan.env` filled in, the usual command starts everything:
 
 ```bash
 docker compose up -d
@@ -507,7 +514,9 @@ that forwards back into the LAN. The container's destination check happens befor
 
 ### Tuning
 
-Set these in the repo-root `.env`; both local and remote Compose deployments use the same settings.
+Set these in `env/workspace.env`; both local and remote Compose deployments use the same settings. The
+file is optional and the service starts without it. `WORKSPACE_MAX_TIMEOUT_SECONDS` is the one value the
+bot reads as well, from its own file: keep the two equal.
 
 | Variable | Default | Meaning |
 |---|---|---|
@@ -677,9 +686,9 @@ the [yt-dlp wiki](https://github.com/yt-dlp/yt-dlp/wiki/Extractors#exporting-you
 ## Logging
 
 Both levels are read by logback at startup rather than by `AppConfig`, and that is the one place
-where writing them into `.env` is not enough: logback looks at the process environment, while `.env`
-reaches the application through dotenv and nowhere else. In the compose deployment they work from
-`.env` anyway, because `env_file` turns it into real environment variables. A local run does not, so
+where writing them into `env/vusan.env` is not enough: logback looks at the process environment, while
+that file reaches the application through dotenv and nowhere else. In the compose deployment they work
+from it anyway, because `env_file` turns it into real environment variables. A local run does not, so
 set them where that run gets its environment — the IDE run configuration, or the command line:
 
 ```bash

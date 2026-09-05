@@ -22,7 +22,7 @@ Keep this file concise and actionable; put product docs in `README.md` or `docs/
 ## Commands and Verification
 
 - `./gradlew test`, `./gradlew detekt` (`maxIssues: 0`), `./gradlew build`
-  (compile + test + package), `./gradlew run` (local bot process using `.env`).
+  (compile + test + package), `./gradlew run` (local bot process using `env/vusan.env`).
   While iterating, run the narrowest meaningful test:
   `./gradlew test --tests "*AgentFactoryTest*"`.
 - Run Gradle itself on JDK 21: the build uses `jvmToolchain(21)`, and detekt
@@ -70,7 +70,7 @@ what they describe:
   delivery policy, scheduler behavior, startup wiring, or core orchestrators
   (`AgentRunner`, `AgentFactory`, `ToolRegistryFactory`, `TelegramDelivery`,
   `TelegramOutputSender`, `TaskScheduler`).
-- [`docs/configuration.md`](docs/configuration.md) and [`.env.example`](.env.example):
+- [`docs/configuration.md`](docs/configuration.md) and the `env/*.env.example` files:
   env var additions, removals, renames, default or semantics changes.
 - [`README.md`](README.md) Features section: added/removed/renamed tools or
   changed user-visible capability. Keep it written for users — what a capability
@@ -84,7 +84,7 @@ what they describe:
   [`docs/architecture.md`](docs/architecture.md) aligned with it.
 - Keep the base toolchain small and document it in `docs/configuration.md`, not
   in LLM-facing descriptions: the agent checks what is installed for its task.
-  New knobs in `workspace/config.ts` belong in `compose.yaml`, `.env.example`
+  New knobs in `workspace/config.ts` belong in `env/workspace.env.example`
   and the configuration tuning table in the same change; the remote Compose
   override inherits them rather than duplicating the deployment.
 
@@ -174,7 +174,7 @@ then docs per the triggers above.
 
 ## Security and Secrets
 
-- Do not commit `.env`, API keys, Telegram tokens, cookies, DB files, generated
+- Do not commit `env/*.env`, API keys, Telegram tokens, cookies, DB files, generated
   media, or local workspace artifacts.
 - Keep untrusted user content out of logs where possible; if logging it helps,
   cap and normalize it.

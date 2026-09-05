@@ -60,7 +60,12 @@ data class AppConfig(
         private const val DEFAULT_TASK_MAX_LATENESS_MINUTES = 60L
         private const val DEFAULT_WORKSPACE_MAX_TIMEOUT_SECONDS = 600L
 
-        private val dotenv = dotenv { ignoreIfMissing = true }
+        // the same file Compose hands the bot container, so a local run and a deployment read one source.
+        private val dotenv = dotenv {
+            directory = "./env"
+            filename = "vusan.env"
+            ignoreIfMissing = true
+        }
 
         private val log = KotlinLogging.logger {}
 

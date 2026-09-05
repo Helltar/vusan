@@ -63,7 +63,7 @@ Telegram ──► telegram/ ──► agent/ ──► tools/ ──► externa
   Inert unless `LLM_DAILY_TOKEN_BUDGET` is set.
 - **`infra/`** — cross-cutting infrastructure: the SQLite/Exposed `Db` singleton and the Ktor
   `Http` client.
-- **`config/`** — `.env` parsing (`AppConfig`), LLM provider/model resolution (`LlmRuntime`), and the ChatGPT
+- **`config/`** — `env/vusan.env` parsing (`AppConfig`), LLM provider/model resolution (`LlmRuntime`), and the ChatGPT
   subscription credentials the Codex CLI writes (`CodexAuth`).
   `VisionRuntime` resolves separately which model looks at images: the `OPENAI_VISION_*` model when configured, the chat
   model when it accepts images, and nothing at all otherwise — which leaves the vision tools and sticker catalog
@@ -577,7 +577,7 @@ A symptom-to-source map for finding the right file fast. Paths are under
 | `/tasks` or a plain-language task pause/resume/cancel fails                      | `telegram/callback/TaskMenuHandler.kt` (rendering, ownership, callbacks) + `tools/tasks/TaskTools.kt` (agent path) + `tasks/TasksRepository.kt` (shared scoped state changes)                                                                                                                                   |
 | `/clear` reports success but history survives                                    | `agent/AgentRunner.kt` (`clearConversation` and the turn lock that also guards the append) + `tools/conversation/ConversationTools.kt` (agent path) + `agent/conversation/ConversationRepository.kt` (shared storage operation)                                                                                            |
 | An agent choice button does nothing, repeats, reaches the wrong user, loses the photo, or its answer replies to the bot's own question | `tools/choice/InlineChoiceTools.kt` (tool contract) + `telegram/callback/InlineChoiceHandler.kt` (callback ownership/consumption, origin message id, parked attachment) + `telegram/AgentTurns.kt` (the follow-up turn and its reply anchor)                                                                             |
-| An env var has no effect                                                         | `config/AppConfig.kt` (parsing) — and check it is documented in [`configuration.md`](configuration.md) + [`.env.example`](../.env.example)                                                                                                                                                            |
+| An env var has no effect                                                         | `config/AppConfig.kt` (parsing) — and check it is documented in [`configuration.md`](configuration.md) + [`env/vusan.env.example`](../env/vusan.env.example)                                                                                                                                                            |
 | Model / provider / request-timeout selection or OpenAI prompt-cache misses       | `config/LlmRuntime.kt` (provider → client/model/params) + `config/OpenAiPromptCaching.kt` (GPT-5.6+ explicit cache breakpoints on the system prefix and the current turn)                                                                                                                              |
 | "Sign in again" replies, ChatGPT-subscription auth, or a rejected `LLM_MODEL` on `codex` | `config/CodexAuth.kt` (token load/refresh/persist) + `config/CodexCatalog.kt` (which models the plan offers) + `config/CodexHttpClient.kt` (per-request bearer and account headers)                                                                                                                    |
 | `describeImage`/`describeVideo` missing from the tool list                       | `config/VisionRuntime.kt` (chat model vs `OPENAI_VISION_API_KEY`), then `tools/ToolRegistryFactory.kt` (registration is skipped when there is no vision runtime)                                                                                                                                       |
@@ -598,7 +598,7 @@ A new agent tool typically touches these, in order:
    `optional(...)` helper when it depends on an API key that may be unset.
 5. **Docs** — add the capability to the Features section of the [README](../README.md); document setup requirements
    and implicit dependencies in [`configuration.md`](configuration.md), and add any new env vars to both that file and
-   [`.env.example`](../.env.example).
+   [`env/vusan.env.example`](../env/vusan.env.example).
 
 ## Conventions
 
