@@ -12,6 +12,7 @@ Deno.test("configuration fails closed on unsupported networking and invalid limi
     "WORKSPACE_NETWORK_MBIT",
     "WORKSPACE_BLOCKED_CIDRS",
     "WORKSPACE_WRITE_BPS",
+    "WORKSPACE_READ_BPS",
   ];
   const saved = settings.map((name) => Deno.env.get(name));
   try {
@@ -26,6 +27,7 @@ Deno.test("configuration fails closed on unsupported networking and invalid limi
         ["WORKSPACE_NETWORK_MBIT", "10mbit"],
         ["WORKSPACE_BLOCKED_CIDRS", "1.2.3.999/24"],
         ["WORKSPACE_WRITE_BPS", "unlimited"],
+        ["WORKSPACE_READ_BPS", "fast"],
       ]
     ) {
       for (const key of settings) Deno.env.delete(key);
@@ -38,7 +40,12 @@ Deno.test("configuration fails closed on unsupported networking and invalid limi
     strictEqual(readConfig().namespace, "vusan");
     strictEqual(readConfig().maxHomeMb, 4096);
     strictEqual(readConfig().maxFileMb, 4096);
-    strictEqual(readConfig().writeBps, "10mb");
+    strictEqual(readConfig().writeBps, "50mb");
+    strictEqual(readConfig().readBps, "100mb");
+    // `none` is the only way to ask for no cap at all; an empty value still means the default.
+    Deno.env.set("WORKSPACE_WRITE_BPS", "none");
+    strictEqual(readConfig().writeBps, null);
+    Deno.env.delete("WORKSPACE_WRITE_BPS");
     strictEqual(readConfig().idleCpuSeconds, 600);
     strictEqual(readConfig().networkMbit, "50");
   } finally {

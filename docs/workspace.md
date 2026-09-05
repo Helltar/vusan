@@ -122,8 +122,10 @@ The defaults enforce limits without host quota configuration:
   Its fixed block and inode counts stop multi-file writes, preallocation and inode exhaustion at that
   person's boundary. The backing image is not accessible from a workspace.
 - **Per-file limit** — `WORKSPACE_MAX_FILE_MB` additionally caps each file a command writes.
-- **Disk I/O** — the workspace loop device is selected automatically. Writes are capped at `10mb`
-  (`WORKSPACE_WRITE_BPS`), reads at `50mb`; no host device name is needed.
+- **Disk I/O** — the workspace loop device is selected automatically. Writes are capped at `50mb`
+  (`WORKSPACE_WRITE_BPS`) and reads at `100mb` (`WORKSPACE_READ_BPS`); no host device name is needed.
+  Both accept `none`. The cap protects a machine shared with other services; on a machine of its own,
+  where the fixed home size already bounds the damage, it mostly gets in the way of ordinary work.
 - **Host reserve** — new disks reserve their full size only if `WORKSPACE_MIN_FREE_MB` remains available.
   A separate one-second check watches host free bytes/inodes, blocks commands and uploads on pressure,
   and retries stopping live containers. Slow or failed home measurements cannot delay this check.

@@ -240,8 +240,8 @@ Deno.test({
         strictEqual(limits.ReadonlyRootfs, true);
         strictEqual(limits.Privileged, false);
         ok(!limits.CapAdd.includes("SYS_ADMIN") && !limits.CapAdd.includes("CAP_SYS_ADMIN"));
-        strictEqual(limits.BlkioDeviceWriteBps[0].Rate, 10 * 1024 * 1024);
-        strictEqual(limits.BlkioDeviceReadBps[0].Rate, 50 * 1024 * 1024);
+        strictEqual(limits.BlkioDeviceWriteBps[0].Rate, 50 * 1024 * 1024);
+        strictEqual(limits.BlkioDeviceReadBps[0].Rate, 100 * 1024 * 1024);
         const rules = await dockerText([
           "exec",
           "--user",

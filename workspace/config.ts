@@ -15,6 +15,14 @@ function shaped(name: string, shape: RegExp, hint: string): string | null {
   return raw;
 }
 
+// device throughput is capped so one workspace cannot stall everything else sharing the disk. that is
+// worth much less on a machine of its own, where the fixed home size already bounds the damage, so
+// `none` removes the cap entirely.
+function rate(name: string, fallback: string): string | null {
+  if (Deno.env.get(name)?.trim() === "none") return null;
+  return shaped(name, /^[1-9][0-9]*(kb|mb|gb)?$/, "a byte rate such as `50mb`, or `none`") ?? fallback;
+}
+
 export function readConfig() {
   const namespace = Deno.env.get("WORKSPACE_NAMESPACE")?.trim() || "vusan";
   if (!/^[a-z][a-z0-9-]{0,31}$/.test(namespace)) throw new Error("Invalid WORKSPACE_NAMESPACE");
@@ -28,8 +36,8 @@ export function readConfig() {
   }
   const networkMbit = shaped("WORKSPACE_NETWORK_MBIT", /^[1-9][0-9]{0,4}$/, "a whole number of megabits") ??
     "50";
-  const writeBps = shaped("WORKSPACE_WRITE_BPS", /^[1-9][0-9]*(kb|mb|gb)?$/, "a byte rate such as `10mb`") ??
-    "10mb";
+  const writeBps = rate("WORKSPACE_WRITE_BPS", "50mb");
+  const readBps = rate("WORKSPACE_READ_BPS", "100mb");
   const blockedCidrs = (Deno.env.get("WORKSPACE_BLOCKED_CIDRS")?.trim() || "").split(/[\s,]+/).filter(
     Boolean,
   );
@@ -67,6 +75,7 @@ export function readConfig() {
     networkMbit,
     blockedCidrs,
     writeBps,
+    readBps,
   };
 }
 

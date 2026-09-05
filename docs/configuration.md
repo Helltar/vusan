@@ -560,7 +560,8 @@ bot reads as well, from its own file: keep the two equal.
 | `WORKSPACE_NETWORK` | `open` | `open` or `none`, as above. |
 | `WORKSPACE_NETWORK_MBIT` | `50` | Bandwidth cap per workspace, in whole megabits, in both directions. |
 | `WORKSPACE_BLOCKED_CIDRS` | unset | Additional IPv4 addresses/CIDRs to block, separated by spaces or commas; host interface addresses are included automatically. |
-| `WORKSPACE_WRITE_BPS` | `10mb` | Write bandwidth on the workspace loop device. Reads are capped at `50mb`; no host device configuration is needed. |
+| `WORKSPACE_WRITE_BPS` | `50mb` | Write bandwidth on the workspace loop device; `none` removes the cap. No host device configuration is needed. |
+| `WORKSPACE_READ_BPS` | `100mb` | The same for reads; `none` removes the cap. |
 | `WORKSPACE_TOKEN` | Auto-generated in Compose | API bearer secret, 32–256 printable non-whitespace ASCII characters. Required by the remote-host override. |
 | `WORKSPACE_TOKEN_FILE` | `/run/workspace-auth/token` in Compose | Shared secret file. The controller creates it if absent; the bot reads it. An explicit token takes precedence. |
 | `WORKSPACE_NAMESPACE` | `vusan` | Stable Docker resource prefix; unique per controller on a host. |
