@@ -96,6 +96,40 @@ Budget the machine explicitly, because the service cannot see what else is on it
   from stalling the database it shares a disk with. Raise them, or set `none`, only on a machine where
   nothing else matters.
 
+## Removing it
+
+Nothing is installed on the machine and nothing is written to its filesystem: the service is containers,
+Docker volumes and two firewall chains that live in the kernel. That makes the cleanup short, and the
+order matters only in that the controller should stop first.
+
+```bash
+docker compose -f compose.workspace.yaml down
+docker ps -aq --filter label=com.helltar.vusan.workspace=vusan | xargs -r docker rm -f
+docker network rm vusan-workspaces
+```
+
+That leaves every home exactly where it was, which is the point: this is also what an update or a host
+reboot looks like. **To delete people's files as well**, and only then:
+
+```bash
+docker volume ls -q --filter label=com.helltar.vusan.workspace=vusan | xargs -r docker volume rm
+```
+
+The firewall chains are kernel state, so a reboot clears them and the next start puts them back. On a
+machine that keeps running, they linger — harmlessly, since they name a subnet that no longer exists —
+until you remove them:
+
+```bash
+sudo iptables -D DOCKER-USER -j WS_VUSAN
+sudo iptables -D INPUT -j WS_VUSAN_IN
+sudo iptables -F WS_VUSAN && sudo iptables -X WS_VUSAN
+sudo iptables -F WS_VUSAN_IN && sudo iptables -X WS_VUSAN_IN
+```
+
+Substitute your own `WORKSPACE_NAMESPACE`, uppercased, for `VUSAN` in those names. While the service is
+running, do not remove them by hand: they are re-read on a slow cadence and put back, and the removal
+would only take effect for as long as it takes the controller to notice.
+
 ## Storage and updates
 
 With the default namespace, workspace `u123` uses container `vusan-workspace-u123`. Its files live in
