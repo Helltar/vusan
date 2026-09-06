@@ -523,8 +523,7 @@ use Docker's ordinary local storage and survive idle cleanup and `docker compose
 mount volumes and loop attachments do not. What they do not survive is the retention window: a workspace
 nobody has used for `WORKSPACE_RETAIN_DAYS` is deleted with its disk. Keep backing volumes and controller
 state on the same storage filesystem. The namespace is persisted and cannot change in place. See
-[configuration](configuration.md#workspace) for defaults and
-[deployment](workspace.md) for setup, backups and migration.
+[the workspace guide](workspace.md) for behaviour, defaults, setup, backups and migration.
 
 ## Startup
 
