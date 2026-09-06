@@ -81,7 +81,10 @@ class ToolRegistryFactory(
 ) {
 
     private companion object {
-        val TOOL_NAME_PROBE_CONTEXT = RequestContext(chatId = 0L, userId = 0L, messageId = 0L)
+        // an ordinary person in an ordinary chat, because that is what the startup list is read as: what
+        // this deployment can do. A context identifying nobody — `userId = 0` — is treated as a shared bot
+        // account, which withholds exactly the tools whose configuration an operator most wants confirmed.
+        val TOOL_NAME_PROBE_CONTEXT = RequestContext(chatId = 1L, userId = 1L, messageId = 1L)
         val log = KotlinLogging.logger {}
     }
 
