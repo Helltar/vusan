@@ -45,7 +45,7 @@ With that in place, start the bot — in Docker, or on a local JVM.
 
 ### Docker
 
-Use the published images:
+Use the published image:
 
 ```bash
 docker compose up -d

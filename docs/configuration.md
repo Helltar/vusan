@@ -17,7 +17,7 @@ supplies both the values substituted into that deployment and the container's ow
 - **Who it is** — [Personality](#personality) · [Appearance](#appearance)
 - **Tools** — [Optional tools](#optional-tools) · [Web search](#web-search) · [TTS](#tts-tuning) ·
   [STT](#stt-tuning) · [Image generation](#image-generation-tuning) · [Vision](#vision) ·
-  [Code execution](#code-execution)
+  [Workspace](#workspace)
 - **What it keeps** — [Memory](#memory) · [Conversation](#conversation) · [Group log](#group-log) ·
   [Scheduled tasks](#scheduled-tasks) · [Agent loop](#agent-loop)
 - **Running it** — [Storage and binaries](#storage-and-binaries) · [Logging](#logging) ·
@@ -532,10 +532,12 @@ preview downloads separately reject private/local IPs at connection time, disabl
 redirect, and bound the response while reading it. Configured internal services use a different HTTP client.
 
 `WORKSPACE_NETWORK=none` disables external networking while preserving that private loopback. There is
-no mode that silently skips firewall enforcement. Bandwidth is capped at 50 Mbit/s per workspace in both
-directions by default. Outbound traffic also has a 2,000 packets/second bucket (burst 4,000) and new
-connections a 100/second bucket (burst 200). These caps limit sustained traffic and connection churn;
-they do not make abuse of public services impossible. A cap that cannot be installed stops startup.
+no mode that silently skips firewall enforcement. Bandwidth is capped at 50 Mbit/s in both directions by
+default, and that one is the pool's total, since the rules live on the bridge the workspaces share.
+Packets and new connections are counted **per workspace** instead: 2,000 packets/second (burst 4,000)
+and 100 new connections/second (burst 200), so one busy workspace cannot spend everyone else's budget.
+These caps limit sustained traffic and connection churn; they do not make abuse of public services
+impossible. A cap that cannot be installed stops startup.
 
 Docker containers still share the host kernel; this is not VM-level isolation. Open internet access also
 allows data exfiltration and abuse from the server's address. Do not put credentials in a workspace.
@@ -569,8 +571,8 @@ bot reads as well, from its own file: keep the two equal.
 | `WORKSPACE_MIN_FREE_MB` | `1024` | Host reserve in MiB, also retained when allocating each new home disk. |
 | `WORKSPACE_MIN_FREE_INODES` | `10000` | The same reserve in free inodes. |
 | `WORKSPACE_NETWORK` | `open` | `open` or `none`, as above. |
-| `WORKSPACE_NETWORK_MBIT` | `50` | Bandwidth cap per workspace, in whole megabits, in both directions. |
-| `WORKSPACE_BLOCKED_CIDRS` | unset | Additional IPv4 addresses/CIDRs to block, separated by spaces or commas; host interface addresses are included automatically. |
+| `WORKSPACE_NETWORK_MBIT` | `50` | Bandwidth cap for the whole pool, in whole megabits, in both directions. |
+| `WORKSPACE_BLOCKED_CIDRS` | unset | Additional IPv4 addresses/CIDRs to block, separated by spaces or commas. Private ranges and the machine itself are already refused. |
 | `WORKSPACE_WRITE_BPS` | `50mb` | Write bandwidth on the workspace loop device; `none` removes the cap. No host device configuration is needed. |
 | `WORKSPACE_READ_BPS` | `100mb` | The same for reads; `none` removes the cap. |
 | `WORKSPACE_TOKEN` | — | API bearer secret, 32–256 printable non-whitespace ASCII characters. Required, and the same on both sides: `openssl rand -hex 32`. |

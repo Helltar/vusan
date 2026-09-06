@@ -520,10 +520,11 @@ service belongs on a machine of its own.
 Fixed home disks enforce byte and inode capacity in the kernel, including for open-but-deleted files,
 small-file metadata and fast preallocation. The per-file rlimit remains an extra bound. Backing volumes
 use Docker's ordinary local storage and survive idle cleanup and `docker compose down`; the temporary
-mount volumes and loop attachments do not. Keep backing volumes and controller state on the same storage
-filesystem. The namespace is persisted and cannot change in place. See
+mount volumes and loop attachments do not. What they do not survive is the retention window: a workspace
+nobody has used for `WORKSPACE_RETAIN_DAYS` is deleted with its disk. Keep backing volumes and controller
+state on the same storage filesystem. The namespace is persisted and cannot change in place. See
 [configuration](configuration.md#workspace) for defaults and
-[administration](workspace.md) for backups, migration and a separate host.
+[deployment](workspace.md) for setup, backups and migration.
 
 ## Startup
 
@@ -587,6 +588,7 @@ A symptom-to-source map for finding the right file fast. Paths are under
 | A specific tool misbehaves                                                       | `tools/<feature>/<Feature>Tools.kt` for the tool surface, plus its `<Feature>Client.kt` for the external call                                                                                                                                                                                         |
 | Vusan will not hand a file from the chat back, or sends it under the wrong name  | `tools/files/FileTools.sendChatFile` (the `file_id` path and `chatFilename`) + `telegram/TelegramApi.downloadFileById` (`getFile`, and the 20 MB limit on what Telegram serves a bot) |
 | A command times out, says the workspace is busy, or its output is cut short      | `tools/workspace/WorkspaceClient.kt` (HTTP errors and job polling), then `workspace/jobs.ts` (admission, timeouts, retention), `container.ts` (whole-container cleanup) and `output.ts` (bounded logs and control-code cleanup) |
+| A workspace cannot reach the internet, or reaches something it should not | `workspace/netpolicy.sh` (the rules, installed on the host from a helper), then `workspace/container.ts` (the pool's own network and the startup probe) and `workspace/policy.ts` (the guard that re-reads and repairs them) |
 | A workspace loses files, or someone sees another person's                        | `tools/workspace/WorkspaceModels.workspaceIdOrNull` (the `userId` key, and the shared bot accounts that get no workspace at all), then `workspace/container.ts` and `workspace/homes.ts` (one bounded home disk per person) and `workspace/files.ts` (unprivileged, scoped transfers) |
 | Wrong language in a canned reply (busy/error/voice/start/task menu)              | `i18n/Language.kt` (language selection) + `i18n/Messages.kt` (the strings)                                                                                                                                                                                                                            |
 | The typing indicator or the progress draft is wrong, stale, or missing           | `telegram/TelegramProgress.kt` (both tickers, the private-chat gate, the named-activity gate, `handOffProgressDraft`) + `agent/ToolActivity.kt` (which tool means what) + `i18n/Messages.progressLabel` (the words) + `telegram/delivery/TelegramDelivery.chatActionFor` (the action)                                                     |
