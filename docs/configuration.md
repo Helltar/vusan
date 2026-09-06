@@ -417,9 +417,9 @@ new messages, `/clear`, container replacement and service restarts. Different pe
 the same person uses the same files in private chat and every group. Conversation history stays separate per chat.
 
 **It is off by default and it is not part of `docker compose up -d`.** The shell runs commands the model
-writes, so it is deployed on its own, ideally on a machine that holds nothing else —
-[the workspace guide](workspace.md) is the setup, and the rest of this section is what it does once it
-runs. The bot grows the tools the moment `WORKSPACE_URL` and `WORKSPACE_TOKEN` are both set in
+writes, so it is deployed on its own, ideally on a machine that holds nothing else — though it can share
+the bot's machine, and [the workspace guide](workspace.md) covers both. That guide is the setup; the rest
+of this section is what it does once it runs. The bot grows the tools the moment `WORKSPACE_URL` and `WORKSPACE_TOKEN` are both set in
 `env/vusan.env`, and loses them again when they are removed; nothing else changes.
 
 A workspace that nobody uses does not stay forever: after `WORKSPACE_RETAIN_DAYS` without a single

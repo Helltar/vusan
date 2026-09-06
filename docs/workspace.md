@@ -4,8 +4,8 @@ The workspace shell is a **separate deployment**. `compose.yaml` starts the bot 
 brought up on its own with `compose.workspace.yaml`, and the bot grows the shell tools only once it can
 reach it. It runs commands the model writes and holds the Docker socket in order to do that, so it
 belongs on a machine that holds nothing else — a small VM or a cheap VPS is enough. Running it beside
-the bot is supported and is what the same two values configure, but then anything that escapes a
-container lands where the bot's token, the database and every other service already live.
+the bot is supported and takes the same two values; [Both on one machine](#both-on-one-machine) covers
+what changes and what to budget.
 
 It needs a rootful Linux Docker Engine with cgroup v2 and loop-device support. There is one
 implementation — Docker containers with bounded home filesystems — and no gVisor, alternate engine or
@@ -23,8 +23,8 @@ docker compose -f compose.workspace.yaml up -d
 
 `WORKSPACE_BIND` is the address the API listens on, and it must be one **only the bot can reach** — a
 private network or an encrypted tunnel between the two machines. Compose refuses to start without it
-rather than defaulting to every interface. On the bot's own machine instead of a separate one, use the
-Docker bridge gateway `172.17.0.1`, which containers can reach and nothing outside the host can.
+rather than defaulting to every interface. To put both on one machine instead, see
+[Both on one machine](#both-on-one-machine) below.
 
 `WORKSPACE_TOKEN` is the shared secret; nothing is generated for you, because the two services no longer
 share a filesystem. Put the same value, and the address, in the bot's `env/vusan.env`:
@@ -51,6 +51,50 @@ To build the image from source instead of pulling it:
 docker build -t vusan-workspace:local ./workspace
 WORKSPACE_IMAGE=vusan-workspace:local docker compose -f compose.workspace.yaml up -d
 ```
+
+## Both on one machine
+
+This is the supported way to keep one machine, and the reason it is not the recommendation is worth
+stating rather than implying: the controller holds the Docker socket and runs shell that a language model
+wrote, so anything escaping a container lands where the bot's Telegram token, its database and whatever
+else you host already live. On a machine of its own, that same escape costs you a machine with nothing
+on it.
+
+What you keep either way is the network boundary. A workspace cannot reach the host, another workspace,
+or any other container on that machine: private ranges and the machine itself are refused, and nothing
+can open a connection into a workspace. Neighbouring services are protected from the workspaces over the
+network — they are not protected from an escape.
+
+Use the Docker bridge gateway as the bind address. Containers can reach it and nothing outside the host
+can; `127.0.0.1` does not work, because a container cannot reach the host's loopback.
+
+```bash
+printf 'WORKSPACE_BIND=172.17.0.1\nWORKSPACE_TOKEN=%s\n' "$(openssl rand -hex 32)" > .env
+docker compose -f compose.workspace.yaml up -d
+```
+
+Then in `env/vusan.env`, with the same secret:
+
+```dotenv
+WORKSPACE_URL=http://172.17.0.1:8080
+WORKSPACE_TOKEN=<the same secret>
+```
+
+and `docker compose up -d`. These stay two separate Compose projects on one host: they share no network
+and no volume, `down` on either leaves the other running, and each is pulled and updated on its own.
+
+Budget the machine explicitly, because the service cannot see what else is on it:
+
+- **Memory and CPU.** The pool sizes itself from *half* the host's RAM and cores, counting nothing that
+  the bot or your other containers already use. Lower `WORKSPACE_MEMORY_MB` and `WORKSPACE_MAX_ACTIVE`
+  until the remainder is comfortable — a wedged host is a worse outcome than a queued command.
+- **Disk.** Each home is preallocated, so `WORKSPACE_MAX_HOME_MB` times the number of people who use the
+  workspace has to fit alongside everything else on that filesystem, plus the image and
+  `WORKSPACE_MIN_FREE_MB` left untouched. On a small VM, halving the home size is usually the right call,
+  and it cannot be changed for homes that already exist.
+- **Throughput.** The default write and read caps exist for exactly this case: they keep a workspace
+  from stalling the database it shares a disk with. Raise them, or set `none`, only on a machine where
+  nothing else matters.
 
 ## Storage and updates
 
