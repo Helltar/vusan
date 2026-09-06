@@ -302,16 +302,18 @@ Deno.test({
             "-c",
             command,
           ], { includeStderr: true }).then((out) => new TextDecoder().decode(out).trim());
-        const jump = () =>
-          onHost(`iptables -C DOCKER-USER -j ${chain} >/dev/null 2>&1 && echo present || echo gone`);
-        // exactly what a firewall frontend rebuilding the tables would leave behind
-        await onHost(`iptables -D DOCKER-USER -j ${chain}`);
-        strictEqual(await jump(), "gone");
+        // one deny rule, not the whole chain: the shape survives, the policy does not, and counting
+        // rules used to call that healthy.
+        const denies = () => onHost(`iptables -S ${chain} | grep -c '192.168.0.0/16' || true`);
+        await onHost(
+          `spec=$(iptables -S ${chain} | grep '192.168.0.0/16'); iptables \${spec/-A/-D}`,
+        );
+        strictEqual(await denies(), "0");
         for (let i = 0; i < 600; i++) {
-          if (await jump() === "present") break;
+          if (await denies() === "1") break;
           await new Promise((resolve) => setTimeout(resolve, 100));
         }
-        strictEqual(await jump(), "present");
+        strictEqual(await denies(), "1");
         // repaired in place: nobody was stopped and the service never stopped answering
         ok(
           await fetch(`${base}/health`).then(async (r) => {

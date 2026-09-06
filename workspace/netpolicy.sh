@@ -19,26 +19,33 @@ forward="$(iptables -S FORWARD)"
   exit 1
 }
 
-# `check` answers one question — is the policy still the one we installed — and answers it by reading
-# the host's tables rather than by inference. A chain deleted, flushed or unhooked is every way a policy
-# realistically disappears: a firewall tool rebuilding the tables, an administrator flushing them, a
-# switch to another frontend. Exiting non-zero is the whole protocol.
+bridge="${3:?missing bridge}"
+[[ "$bridge" =~ ^[a-zA-Z0-9_.-]{1,15}$ ]] || { echo "invalid bridge name" >&2; exit 1; }
+
+# Everything that has to still be true, printed so the caller can compare it with what installing
+# produced. Counting rules was not enough: a single deleted REJECT, or a FORWARD chain that no longer
+# reaches DOCKER-USER, leaves the shape intact and the policy gone. Handles are stripped because the
+# kernel assigns them, so an unchanged qdisc always prints the same line.
+fingerprint() {
+  iptables -S "$chain"
+  iptables -S "${chain}_IN"
+  iptables -C FORWARD -j DOCKER-USER && echo "hooked FORWARD -> DOCKER-USER"
+  iptables -C DOCKER-USER -j "$chain" && echo "hooked DOCKER-USER -> $chain"
+  iptables -C INPUT -j "${chain}_IN" && echo "hooked INPUT -> ${chain}_IN"
+  tc qdisc show dev "$bridge" | sed -E 's/^(qdisc [a-z_]+) [0-9a-f]+:/\1:/'
+}
+
 if [[ "$mode" == check ]]; then
-  iptables -C DOCKER-USER -j "$chain" || exit 1
-  iptables -C INPUT -j "${chain}_IN" || exit 1
-  [[ "$(iptables -S "$chain" | wc -l)" -gt 1 ]] || exit 1
-  [[ "$(iptables -S "${chain}_IN" | wc -l)" -gt 1 ]] || exit 1
+  fingerprint
   exit 0
 fi
 [[ "$mode" == install ]] || { echo "unknown mode" >&2; exit 1; }
 
-bridge="${3:?missing bridge}"
 subnet="${4:?missing subnet}"
 mbit="${5:-}"
 shift 5 || shift $#
 blocked=("$@")
 
-[[ "$bridge" =~ ^[a-zA-Z0-9_.-]{1,15}$ ]] || { echo "invalid bridge name" >&2; exit 1; }
 [[ "$subnet" =~ ^([0-9]{1,3}\.){3}[0-9]{1,3}/(3[0-2]|[12]?[0-9])$ ]] || { echo "invalid subnet" >&2; exit 1; }
 [[ -z "$mbit" || "$mbit" =~ ^[1-9][0-9]{0,4}$ ]] || { echo "invalid bandwidth" >&2; exit 1; }
 for range in "${blocked[@]}"; do
@@ -76,6 +83,16 @@ for range in 0.0.0.0/8 10.0.0.0/8 100.64.0.0/10 169.254.0.0/16 \
 done
 iptables -A "$chain" -s "$subnet" -p tcp -m multiport --dports 25,465,587 -j REJECT
 
+# packet and connection churn are counted per workspace address, not for the pool as a whole, so one
+# busy workspace cannot spend everyone else's budget. these come before the DNS allowances below: an
+# early RETURN leaves the chain, so anything allowed past this point would never be counted at all.
+iptables -A "$chain" -s "$subnet" -m conntrack --ctstate NEW -m hashlimit \
+  --hashlimit-name vusan-ws-new --hashlimit-mode srcip \
+  --hashlimit-above 100/second --hashlimit-burst 200 -j REJECT
+iptables -A "$chain" -s "$subnet" -m hashlimit \
+  --hashlimit-name vusan-ws-rate --hashlimit-mode srcip \
+  --hashlimit-above 2000/second --hashlimit-burst 4000 -j DROP
+
 # name resolution goes to the resolvers the workspace was handed and nowhere else. Docker's embedded
 # server forwards from this namespace, so what this catches is a workspace addressing a resolver itself.
 for resolver in 1.1.1.1 8.8.8.8; do
@@ -84,15 +101,6 @@ for resolver in 1.1.1.1 8.8.8.8; do
 done
 iptables -A "$chain" -s "$subnet" -p udp --dport 53 -j REJECT
 iptables -A "$chain" -s "$subnet" -p tcp --dport 53 -j REJECT
-
-# packet and connection churn are counted per workspace address, not for the pool as a whole, so one
-# busy workspace cannot spend everyone else's budget.
-iptables -A "$chain" -s "$subnet" -m conntrack --ctstate NEW -m hashlimit \
-  --hashlimit-name vusan-ws-new --hashlimit-mode srcip \
-  --hashlimit-above 100/second --hashlimit-burst 200 -j REJECT
-iptables -A "$chain" -s "$subnet" -m hashlimit \
-  --hashlimit-name vusan-ws-rate --hashlimit-mode srcip \
-  --hashlimit-above 2000/second --hashlimit-burst 4000 -j DROP
 
 # an operator who asked for a bandwidth cap gets one or gets no workspace: shaping the wrong interface,
 # or none, would be a limit that silently is not there. this one is the pool's total, not each
@@ -104,3 +112,5 @@ if [[ -n "$mbit" ]]; then
   tc filter add dev "$bridge" parent ffff: protocol ip prio 1 u32 match u32 0 0 \
     police rate "${mbit}mbit" burst 512kb drop
 fi
+
+fingerprint

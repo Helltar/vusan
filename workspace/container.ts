@@ -20,22 +20,42 @@ function policyChain(namespace: string): string {
   return `WS_${namespace.toUpperCase().replace(/[^A-Z0-9]/g, "_").slice(0, 20)}`;
 }
 
-// what a workspace must not be able to open: the metadata service, private space in each RFC 1918
-// range, and the machine hosting it — the controller's own API included. A `leak` line means the policy
-// is not doing its job and the controller refuses to serve. `no-egress` is the opposite complaint and
-// only a warning: a workspace with no way out is broken, but it is broken safely, and a host firewall
-// having a bad minute must not take the service down with it.
-const PROBE = `
+// A listener the probe must fail to reach, so that "nothing answered" means something. Without it the
+// probe proves nothing: an address where no server exists refuses a connection exactly like a blocked
+// one does. It binds the pool's own gateway, which is a host address a workspace must never reach, and
+// it proves itself alive by connecting to itself before saying so.
+const CONTROL_PORT = 49531;
+const RESPONDER = `
+import socket, sys, time
+host, port = sys.argv[1], int(sys.argv[2])
+listener = socket.socket()
+listener.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+listener.bind((host, port))
+listener.listen(8)
+socket.create_connection((host, port), 3).close()
+print("READY", flush=True)
+time.sleep(60)
+`;
+
+// what a workspace must not be able to open: the control listener above, the metadata service, and
+// private space in each RFC 1918 range. A `leak` line means the policy is not doing its job and the
+// controller refuses to serve. `no-egress` is the opposite complaint and only a warning: a workspace
+// with no way out is broken, but it is broken safely, and a host firewall having a bad minute must not
+// take the service down with it.
+function probeScript(control: string): string {
+  return `
+timeout 3 bash -c "exec 3<>/dev/tcp/${
+    control.replace(":", "/")
+  }" 2>/dev/null && echo "leak control ${control}"
 for target in 169.254.169.254 10.255.255.254 172.31.255.254 192.168.255.254; do
   for port in 80 8080; do
     timeout 2 bash -c "exec 3<>/dev/tcp/$target/$port" 2>/dev/null && echo "leak $target:$port"
   done
 done
-gateway=$(ip -o -4 route show default | awk '{print $3; exit}')
-timeout 3 bash -c "exec 3<>/dev/tcp/$gateway/8080" 2>/dev/null && echo "leak host $gateway:8080"
 timeout 5 bash -c "exec 3<>/dev/tcp/1.1.1.1/443" 2>/dev/null || echo "no-egress"
 exit 0
 `;
+}
 
 /** Keep the workspace pool within half the host's memory and cores, sharing a single-core host. */
 export function workspaceCapacity(config: Config, memoryBytes: number, cpus: number): number {
@@ -84,6 +104,8 @@ export class Containers {
   private network = "none";
   private bridge = "";
   private subnet = "";
+  private gateway = "";
+  private policyPrint = "";
   private policyFailure: string | null = null;
   private closing = false;
   private storageFailure: string | null = null;
@@ -176,16 +198,21 @@ export class Containers {
     if (!/^(?:[0-9]{1,3}\.){3}[0-9]{1,3}\/[0-9]{1,2}$/.test(subnet)) {
       throw new Error("Cannot read the workspace network subnet");
     }
+    const gateway = network.IPAM?.Config?.[0]?.Gateway ?? "";
+    if (!/^(?:[0-9]{1,3}\.){3}[0-9]{1,3}$/.test(gateway)) {
+      throw new Error("Cannot read the workspace network gateway");
+    }
     // the daemon derives a bridge from the network id unless it was given a name of its own.
     this.bridge = network.Options?.["com.docker.network.bridge.name"] || `br-${network.Id.slice(0, 12)}`;
     this.subnet = subnet;
+    this.gateway = gateway;
     this.network = name;
     await this.restorePolicy();
   }
 
   /** Rebuilds the rules and proves them again; the script is written to be re-run at any time. */
   async restorePolicy(): Promise<void> {
-    await this.policyHelper([
+    this.policyPrint = await this.policyHelper([
       "install",
       policyChain(this.config.namespace),
       this.bridge,
@@ -197,17 +224,18 @@ export class Containers {
   }
 
   /**
-   * Whether the rules are still the ones that were installed. Read from the host's tables rather than
-   * inferred from behaviour: an address nobody answers looks the same blocked or not, so the reliable
-   * question is whether the chains are still there and still hooked up.
+   * Whether the rules are still the ones that were installed, compared rule for rule against what
+   * installing them produced. Read from the host's tables rather than inferred from behaviour: an
+   * address nobody answers looks the same blocked or not.
    */
   async policyHolds(): Promise<boolean> {
-    return await this.policyHelper(["check", policyChain(this.config.namespace)])
-      .then(() => true).catch(() => false);
+    const current = await this.policyHelper(["check", policyChain(this.config.namespace), this.bridge])
+      .catch(() => "");
+    return current !== "" && current === this.policyPrint;
   }
 
-  private async policyHelper(args: string[]): Promise<void> {
-    await docker([
+  private async policyHelper(args: string[]): Promise<string> {
+    const out = await docker([
       "run",
       "--rm",
       "--pull=never",
@@ -225,10 +253,60 @@ export class Containers {
       this.image,
       ...args,
     ], { timeoutMs: 120_000 });
+    return new TextDecoder().decode(out).trim();
   }
 
-  /** Installing rules is not the same as having them: this asks a workspace what it can actually reach. */
+  /**
+   * Installing rules is not the same as having them, so this asks a workspace what it can actually
+   * reach — against a listener that is definitely there. A probe with no control proves nothing, which
+   * is why the responder starts first and has to say so before anything is concluded from silence.
+   */
   private async verifyNetwork(): Promise<void> {
+    const control = `${this.gateway}:${CONTROL_PORT}`;
+    const responder = `${this.config.namespace}-policy-control`;
+    await docker(["rm", "-f", responder]).catch(() => {});
+    await docker([
+      "run",
+      "--detach",
+      "--rm",
+      "--name",
+      responder,
+      "--pull=never",
+      "--network=host",
+      "--read-only",
+      "--user=1000:1000",
+      "--cap-drop=ALL",
+      "--security-opt=no-new-privileges",
+      "--pids-limit=16",
+      "--memory=64m",
+      "--entrypoint",
+      "/usr/bin/python3",
+      this.image,
+      "-c",
+      RESPONDER,
+      this.gateway,
+      String(CONTROL_PORT),
+    ]);
+    try {
+      await this.responderReady(responder, control);
+      await this.readProbe(probeScript(control));
+    } finally {
+      await docker(["rm", "-f", responder]).catch(() => {});
+    }
+  }
+
+  /** A control that never came up would make every silence below look like proof. */
+  private async responderReady(responder: string, control: string): Promise<void> {
+    for (let attempt = 0; attempt < 50; attempt++) {
+      const log = await docker(["logs", responder], { includeStderr: true })
+        .then((out) => new TextDecoder().decode(out)).catch(() => "");
+      if (log.includes("READY")) return;
+      await new Promise((resolve) => setTimeout(resolve, 100));
+    }
+    throw new Error(`Cannot prove the workspace network policy: no control listener on ${control}`);
+  }
+
+  private async readProbe(script: string): Promise<void> {
     const reachable = await docker([
       "run",
       "--rm",
@@ -245,7 +323,7 @@ export class Containers {
       "/usr/bin/bash",
       this.image,
       "-c",
-      PROBE,
+      script,
     ], { timeoutMs: 120_000, includeStderr: true });
     const found = new TextDecoder().decode(reachable).trim().split("\n").filter(Boolean);
     const leaks = found.filter((line) => line.startsWith("leak "));

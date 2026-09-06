@@ -229,19 +229,26 @@ rather than in the containers.
 - **`WORKSPACE_NETWORK=none`** — drops external networking entirely, loopback included. No mode skips
   enforcement silently.
 
-Because the rules are outside the containers, nothing running in one can weaken them. The controller
-installs them at startup and then **proves them from a throwaway workspace**: if any blocked destination
-answers, it refuses to serve rather than run a command behind a policy that is not in effect. They are
-re-read every `WORKSPACE_POLICY_CHECK_SECONDS` afterwards, because they live on a machine this service
-does not own — a firewall frontend rebuilding the tables, an administrator flushing them, a switch to
-another tool. Drift is reinstalled and re-proved invisibly; only a policy that cannot be restored pauses
-commands, stops the workspaces that were running without it, and turns the health check red.
+Because the rules are outside the containers, nothing running in one can weaken them. Two checks say
+they are actually there:
+
+- **At startup, from a throwaway workspace.** The controller puts a listener on the pool's own gateway,
+  waits for it to prove itself alive, and then has a workspace try to reach it. Silence from an address
+  where nothing listens would prove nothing — with a live control behind it, silence is the answer. If
+  the control answers, or any blocked destination does, the service refuses to serve.
+- **On a cadence, from the host's own tables.** Every `WORKSPACE_POLICY_CHECK_SECONDS` the rules are read
+  back and compared with what installing them produced — every rule, both chain hooks, the jump from
+  `FORWARD`, the shaping. A single deleted deny is drift, not a detail.
+
+Drift is reinstalled and re-proved invisibly; only a policy that cannot be restored pauses commands,
+stops the workspaces that were running without it, and turns the health check red.
 
 ### Traffic caps
 
 | | |
 |---|---|
 | Bandwidth | 50 Mbit/s both ways, shared by the whole pool |
+| DNS | metered like everything else, and only to the two public resolvers |
 | Packets | 2,000/second per workspace, burst 4,000 |
 | New connections | 100/second per workspace, burst 200 |
 
@@ -267,6 +274,12 @@ Containers share the host kernel; this is not VM-level isolation. Open internet 
 exfiltration and abuse from the server's address, so **do not put credentials in a workspace**. For a
 public or less-trusted deployment, a machine of its own limits what an escape reaches — the same
 implementation, not another execution mode.
+
+Sharing a kernel also means sharing what the kernel counts globally. Native AIO contexts are the clearest
+example: `fs.aio-max-nr` is one pool for the whole machine, no cgroup owns a share of it, and a workspace
+can reserve from it while staying inside its own memory limit. Nothing else on a dedicated machine asks
+for those contexts, which is why this is a limit rather than a defect — but a database or a hypervisor
+beside it would be what runs out. One more reason the recommendation is a machine of its own.
 
 These rules cover traffic that starts in a workspace. The bot's own downloads — files, image search,
 channel previews — are a separate boundary: they reject private and local IPs at connection time,
