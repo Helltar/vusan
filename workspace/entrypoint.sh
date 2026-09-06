@@ -7,8 +7,8 @@ export PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
 # own script. narrow enough that a controller bug reaches its own state and the docker CLI, and nothing else.
 exec deno run --no-prompt \
   --allow-net=0.0.0.0:8080 \
-  --allow-read=/app,/state,/run/workspace-auth,/tmp \
-  --allow-write=/state,/run/workspace-auth,/tmp \
+  --allow-read=/app,/state,/run,/tmp \
+  --allow-write=/state,/tmp \
   --allow-run=docker \
   --allow-env=WORKSPACE_* \
   --allow-sys=statfs \
