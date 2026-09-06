@@ -73,66 +73,54 @@ Prerequisites: JDK 21, plus `ffmpeg` and `yt-dlp` on `PATH`.
 
 ### Understands what you send
 
-- **Photos** — looks at images you send or reply to and answers questions about them.
+- **Photos** — answers questions about images you send or reply to.
 - **Voice and audio** — listens to voice messages and audio files.
-- **Videos** — watches videos, video notes and GIFs, and understands any speech in them.
+- **Videos** — understands videos, video notes and GIFs, including speech.
 
 ### Looks things up
 
 - **Web search** — searches the web and reads the pages it finds.
 - **Image search** — finds pictures on the web and sends them.
-- **Telegram channels** — recaps what a public channel posted over a day or a week, searches
-  it by keyword, and reads the memes and screenshots it posts instead of words.
+- **Telegram channels** — recaps public channel posts by day or week, searches by keyword,
+  and reads memes and screenshots.
 - **Currency** — live exchange rates.
 
 ### YouTube
 
-- **Video and audio** — finds a video by name or link and sends it, or just its audio track.
-- **Transcripts** — reads a video's subtitles, so it can summarize it or answer questions about it.
+- **Video and audio** — finds videos by name or link and sends the video or audio track.
+- **Transcripts** — summarizes videos and answers questions using their subtitles.
 
 ### Creates
 
-- **Its own workspace** — an optional private Linux home per person, kept between chats and days, where
-  it writes and runs programs, builds projects, converts media and crunches data, and sends back the
-  result.
-- **Images** — draws a picture from a description, or edits one: yours, or one it drew earlier.
-- **Voice replies** — answers out loud with a generated voice message.
-- **Round video messages** — answers with a circle: its own face, speaking out loud.
+- **Its own workspace** — runs code, builds projects, converts media and analyzes data, then sends
+  the results. Each person gets a private Linux home that persists across chats.
+- **Images** — draws from descriptions and edits your pictures or its own.
+- **Voice replies** — answers out loud with voice messages.
+- **Round video messages** — replies with its own face and voice in a video circle.
 - **GIFs** — finds and sends a fitting GIF.
 
 ### In the chat
 
-- **Live progress** — in a private chat it says what it is busy with — searching, running code,
-  drawing — instead of leaving you watching a typing indicator.
-- **Inline choices** — when it needs a specific decision or confirmation, it can ask with buttons
-  and continue as soon as you tap one.
-- **Edits** — forgot to tag it in a message you already sent? Add the mention and it answers,
-  instead of making you type the whole thing again.
-- **Replies** — reply to any message and it answers about that one, whoever wrote it. A file or a
-  picture it made for somebody else counts: in a group you can pick up where another person left off.
-- **Polls and quizzes** — creates real Telegram polls and quizzes, not a text imitation.
+- **Live progress** — shows what it is doing in private chats: searching, running code, drawing.
+- **Inline choices** — asks for decisions or confirmation with buttons and continues when you tap.
+- **Edits** — answers when you add its mention to an earlier message.
+- **Replies** — uses the message you reply to as context, including other people's files and pictures.
+- **Polls and quizzes** — creates Telegram polls and quizzes.
 - **Reactions** — sometimes an emoji on your message is the whole answer.
-- **Stickers** — learns the stickers your chat actually uses, finds a fitting one across the
-  collection, and answers with it when a wordless reaction works better than words.
-- **Files and links** — sends what it wrote as a document, downloads a link, or hands back the
-  original file behind a sticker or picture already in the chat.
-- **Long structured answers** — headings, tables, and checklists when a reply is genuinely big.
+- **Stickers** — learns your chat's sticker collection and picks fitting replies from it.
+- **Files and links** — sends documents, downloads links, and retrieves files behind chat stickers
+  and pictures.
+- **Long structured answers** — formats longer replies with headings, tables, and checklists.
 - **Private replies** — moves the answer into your DMs when you ask.
 
 ### Remembers
 
-- **Conversation history** — recent messages and a durable recap, so replies keep context. Every
-  chat keeps its own, so a private conversation never surfaces in a group.
-- **What the group said** — follows the whole conversation, not only what is aimed at it, so you
-  can ask what you missed or how much someone wrote. A week comes back recapped day by day.
-- **Sense of time** — notices when you have not written for a while instead of treating every
-  message as if it followed immediately.
-- **Memory** — separate from the history: facts it keeps about you, and about the group. Clearing
-  the history leaves them; ask it to forget one or all of them.
-- **Scheduled tasks** — acts on its own later: once, on an interval, or on a cron schedule. You can
-  pause, resume, cancel, or edit them.
-- **Follow-ups** — mention an exam tomorrow or an interview on Friday, and it can come back later
-  to ask how it went.
+- **Conversation history** — keeps context with recent messages and recaps, separately in each chat.
+- **What the group said** — recaps the whole conversation and answers questions about who said what.
+- **Sense of time** — notices gaps between conversations.
+- **Memory** — remembers facts about you and the group across history resets; forgets them on request.
+- **Scheduled tasks** — runs tasks once or on a recurring schedule; lets you pause, resume, edit or cancel.
+- **Follow-ups** — checks back after an exam, interview or other event you mentioned.
 
 ## Stack
 
