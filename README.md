@@ -92,15 +92,9 @@ Prerequisites: JDK 21, plus `ffmpeg` and `yt-dlp` on `PATH`.
 
 ### Creates
 
-- **Its own workspace** — a private Linux home directory per person that keeps its files between
-  messages, between days, and across private and group chats. It writes and runs programs, builds
-  multi-file projects, converts and edits media, crunches data and draws charts, makes Word and PDF
-  documents, and sends back whatever you ask for. It can open a page or a game in a browser to check that
-  it actually runs. Come back a fortnight later and the project is still there, ready to be picked up;
-  a workspace nobody has used for two weeks is cleared to make room for the people still using theirs.
-  Long-running commands can be checked or cancelled without losing the project files.
-  It can delete unwanted files and directories to free workspace space, or wipe the whole workspace
-  and start over when you ask. This one is optional, and an administrator switches it on.
+- **Its own workspace** — an optional private Linux home per person, kept between chats and days, where
+  it writes and runs programs, builds projects, converts media and crunches data, and sends back the
+  result.
 - **Images** — draws a picture from a description, or edits one: yours, or one it drew earlier.
 - **Voice replies** — answers out loud with a generated voice message.
 - **Round video messages** — answers with a circle: its own face, speaking out loud.
