@@ -379,6 +379,11 @@ The controller removes its own old containers during startup, marks unfinished j
 resolves the configured image to an immutable image ID for new containers. You do not need a separate
 container-removal command when upgrading. Files remain in their volumes; processes do not resume.
 
+Deploy the bot and the service together: they share an HTTP contract that changes together, and the
+health endpoint reports the protocol version it speaks. A home the current layout cannot open — one left
+by an older build, say — is refused rather than opened unbounded, and `resetWorkspace` replaces it with
+an empty bounded one in a single call.
+
 Keep `WORKSPACE_NAMESPACE` stable. It is recorded in the state volume and cannot be changed there in
 place. Each controller on a Docker host needs a unique namespace and its own state volume. The shipped
 Compose files also have fixed service container names, so multiple complete deployments require
@@ -438,51 +443,3 @@ sudo iptables -F WS_VUSAN_IN && sudo iptables -X WS_VUSAN_IN
 Substitute your own `WORKSPACE_NAMESPACE`, uppercased, for `VUSAN` in those names. While the service is
 running, do not remove them by hand: they are re-read on a slow cadence and put back, and the removal
 would only take effect for as long as it takes the controller to notice.
-
-## Moving from unbounded home volumes
-
-A fresh deployment has nothing to migrate. An older plain `*-home` volume has no capacity bound, so the
-controller refuses to open it rather than run unbounded, and says so.
-
-**If nothing in it is worth keeping**, that is the whole procedure: `resetWorkspace` discards the old
-volume and formats a bounded home in its place, from the chat, in one call.
-
-**To carry the files across**, before upgrading:
-
-1. Export each home with your volume backup tooling, and keep the export.
-2. Stop the old controller; remove only volumes whose export you have verified.
-3. Start the new controller and let it create that person's empty bounded workspace.
-4. Import the files through the mounted home as UID/GID `1000:1000` — never into the raw `-disk` volume.
-
-Oversized imports stop at the filesystem's capacity: reduce the data, or raise `WORKSPACE_MAX_HOME_MB`
-before the new disk is created.
-
-Deploy bot and controller together; the health endpoint reports protocol 5. Old `WORKSPACE_WRITE_DEVICE`
-settings are no longer used: the service always throttles its own loop device.
-
-## Moving from per-chat containers
-
-Workspace IDs are now `u<userId>` in every chat. Existing private-chat data must also follow the
-bounded-volume migration above. Former `u<userId>_g<chatId>` volumes and job records are retained but no
-longer opened by the bot. History and its `(userId, chatId)` key are unchanged.
-
-There is no automatic merge of group files: two chats may have different projects at the same path.
-Back up the old volumes, stop the controller, and copy wanted projects into separate subdirectories of
-the person's `u<userId>` home, preserving UID/GID `1000:1000`. Review collisions and keep the old copies
-until verified. Deploy the bot and controller together; the health endpoint reports protocol 5.
-
-## Moving from the old shared workspace
-
-This rewrite changes the API, job storage and home layout. Deploy the bot and service together; do not
-mix the old client with the new service. Remove old isolation, engine, runtime, UID-pool, host-directory
-and quota settings from deployment overrides. `WORKSPACE_DISK_WARN_MB` is still only a warning;
-`WORKSPACE_MAX_HOME_MB` sets the bounded filesystem capacity.
-
-There is **no automatic import** of the old shared `vusan-workspaces` volume or bind-mounted homes. They
-are not deleted by this change. Back them up before deploying. To keep a project, export its
-`u<userId>[_g<chatId>]` home from the old store. First run a harmless command through the new bot so its
-controller creates and labels the target home volume. Pause the bot while importing through the mounted
-bounded home as `1000:1000`, never into the raw backing volume. Keep the controller running during
-import, since stopping it detaches the filesystem. Use an empty target home or review collisions first;
-keep the old copy until the result is verified. The old UID registry and old command logs are not part of
-the new controller state.

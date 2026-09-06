@@ -470,7 +470,7 @@ runner, engine selection or runtime selection. The same image serves controller 
   volume mounts that filesystem into the user container with `nosuid,nodev,nodiscard`. Only the trusted
   helper sees the raw image or loop devices. Stop/idle eviction removes the mount wrapper and detaches
   the loop; the backing volume persists. Startup reconciles attachments after an interrupted shutdown.
-  Existing unbounded volumes are preserved and refused until migrated; there is no unbounded fallback.
+  A volume that is not a bounded home is refused rather than opened, and there is no unbounded fallback.
   `resetWorkspace` (and reclamation) drops the wrapper, the backing volume and the loop attachment
   together, which is also the only way past a home the current layout cannot open.
 - **`docker.ts`** — bounded Docker CLI calls, including stdin/stdout draining and operation deadlines.
@@ -523,7 +523,7 @@ use Docker's ordinary local storage and survive idle cleanup and `docker compose
 mount volumes and loop attachments do not. What they do not survive is the retention window: a workspace
 nobody has used for `WORKSPACE_RETAIN_DAYS` is deleted with its disk. Keep backing volumes and controller
 state on the same storage filesystem. The namespace is persisted and cannot change in place. See
-[the workspace guide](workspace.md) for behaviour, defaults, setup, backups and migration.
+[the workspace guide](workspace.md) for behaviour, defaults, setup and backups.
 
 ## Startup
 
