@@ -32,23 +32,21 @@ export class PolicyGuard {
     this.checking = true;
     this.checkedAt = Date.now();
     try {
-      if (await this.containers.policyHolds()) return this.recovered();
-      console.error("workspace network policy is missing from the host; reinstalling it");
+      // the cheap read is enough only while things are fine. once admission is closed it is not: a
+      // half-written policy — chains in place, the last rule refused — passes it, and the piece that
+      // failed to install is exactly the one nobody would notice missing. Latched, we rebuild and prove.
+      if (this.failure === null && await this.containers.policyHolds()) return;
+      console.error("workspace network policy is not what it should be; reinstalling it");
       await this.containers.restorePolicy();
-      this.recovered();
-      console.log("workspace network policy reinstalled");
+      if (this.failure === null) return;
+      this.failure = null;
+      this.containers.blockPolicy(null);
+      console.log("workspace network policy restored");
     } catch (e) {
       await this.latch(e);
     } finally {
       this.checking = false;
     }
-  }
-
-  private recovered(): void {
-    if (!this.failure) return;
-    this.failure = null;
-    this.containers.blockPolicy(null);
-    console.log("workspace network policy restored");
   }
 
   /** Nothing was confined while the rules were gone, so live workspaces stop along with admission. */

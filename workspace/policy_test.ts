@@ -53,7 +53,13 @@ Deno.test("a policy that disappears is reinstalled, and a workspace waits only i
   ok(String(blocked).includes("Commands are paused"));
   strictEqual(evicted.join(","), "u1,u2");
 
-  // and it lets everyone back in only once the rules are actually there again
+  // while it is closed, the cheap read no longer counts: a half-written policy passes it, so nothing
+  // reopens until the rules have been rebuilt and proved again.
+  holds = true;
+  await guard.tick();
+  ok(!guard.healthy);
+
+  // and it lets everyone back in only once that succeeds
   restorable = true;
   await guard.tick();
   ok(guard.healthy);
