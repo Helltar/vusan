@@ -424,7 +424,9 @@ of this section is what it does once it runs. The bot grows the tools the moment
 
 A workspace that nobody uses does not stay forever: after `WORKSPACE_RETAIN_DAYS` without a single
 command, transfer or reset, the whole thing is deleted — files, home disk and command records alike.
-Two weeks by default, and the counter restarts on any use.
+Two weeks by default, and the counter restarts on any use. It counts from the last use rather than from
+when you deployed this, so anything already idle for longer goes on the first sweep after an upgrade —
+raise the setting first if that is not what you want.
 
 ### Files and installed tools
 
