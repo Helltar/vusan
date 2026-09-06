@@ -121,121 +121,156 @@ Budget the machine explicitly, because the service cannot see what else is on it
 
 ## Files and installed tools
 
-Each home is a separate 4 GiB ext4 filesystem mounted at `/work`, also used as `HOME`. Its fixed-size,
-preallocated backing image lives in a Docker named volume that user containers never receive. Only that
-workspace sees it. Uploaded and replied-to attachments are copied before the first command or file-writing
-tool into `inbox/<unique-id>/<filename>`; the tool reports the exact path. Repeated filenames do not
-overwrite earlier attachments. Created files stay private until the agent sends them. A request from a
-group can use that person's files from private chat; sharing files is intentional, sharing raw chat history is not.
+Each home is its own 4 GiB ext4 filesystem, mounted at `/work` and used as `HOME`. The preallocated
+image behind it sits in a Docker volume that no workspace container ever receives.
 
-The base image contains Python with pip/venv, Node.js/npm, Git, curl/wget, jq, SQLite, ripgrep,
-zip/unzip, Pandoc, FFmpeg, ImageMagick and Chromium with basic fonts. It does not bundle Java, Kotlin,
-a C/C++ compiler or a document typesetting suite. Chromium supports checking generated pages and taking
-screenshots; its launcher disables the browser's own sandbox inside the isolated workspace container.
+- **Attachments** — copied to `inbox/<unique-id>/<filename>` before the first command that might want
+  them, and the tool result names the exact path. Repeated filenames never overwrite.
+- **Privacy** — what a command creates stays in the workspace until the agent sends it.
+- **One home per person** — a request in a group reaches that person's files from private chat.
+  Sharing files across chats is intentional; sharing raw history is not.
 
-The model receives no preinstalled-package inventory. It checks what a task needs, installs dependencies
-under the home directory when practical, or reports what is missing. Prefer Python virtual environments
-and project-local npm packages; their files persist. There is no `sudo`, and the system image is read-only.
-An administrator adds system packages by rebuilding the image, not by installing into a disposable
-container; [see the example](workspace.md#adding-system-packages).
+### What the image ships
+
+Python with pip and venv, Node.js and npm, Git, curl, wget, jq, SQLite, ripgrep, zip, unzip, Pandoc,
+FFmpeg, ImageMagick, and Chromium with basic fonts.
+
+Not included: Java, Kotlin, a C/C++ compiler, a typesetting suite. Chromium is there to open a page or a
+game and confirm it runs; its launcher turns off the browser's own sandbox, because the container around
+it already is one.
+
+### Installing anything else
+
+The model gets no package inventory. It checks what a task needs, installs into the home where that
+works, and says what is missing where it does not. Virtual environments and project-local npm packages
+persist across restarts. There is no `sudo` and the system image is read-only, so system packages are an
+[image rebuild](#adding-system-packages) rather than a command.
 
 ## Commands and processes
 
-Every command starts a fresh `bash -lc` at `/work`. Use `cd project && ...` explicitly; shell variables
-and the current directory do not carry over. Files such as `~/.profile` can persist environment setup.
-There is no terminal or interactive stdin.
+Every command is a fresh `bash -lc` starting at `/work`.
 
-A command returns within about ten seconds. If it is still running, the result includes a job ID:
-the agent can read its status/output or cancel it. An empty ID in the read tool lists recent commands,
-including after `/clear`. Run long builds normally; there is no need to detach them just to avoid an HTTP timeout.
+- **Nothing carries over** — use `cd project && ...` explicitly; shell variables and the working
+  directory do not survive between commands. `~/.profile` is the place for setup that should.
+- **No terminal** — there is no interactive stdin and no TTY.
+- **Long commands do not block** — a call returns in about ten seconds with a job ID, and the agent
+  reads or cancels it from there. Run long builds normally; detaching them buys nothing.
+- **History outlives the chat** — asking for recent commands with an empty job ID works after `/clear`.
 
-A normal exit leaves background processes alive, whether or not their output was redirected. What
-removes them is the **whole container** going away: idle expiry, cancellation, command timeout, or a
-workspace that keeps burning CPU while none of its own commands is running. Homes are retained in every
-case. That last rule is what bounds a detached loop, which otherwise costs nothing to keep running: a
-workspace may spend `WORKSPACE_IDLE_CPU_SECONDS` of processor time unattended before its container is
-removed. Work a command is waiting on does not count, and an idle background server spends nothing. An active command is exempt from idle expiry. A controller stop/restart
-interrupts commands; it does not resume processes. An abrupt stop is reconciled on the next startup.
-When the container pool is full, the least-recently-used container without an active command or file
-transfer is removed to make room. Its background processes stop, but files survive. One person occupies
-at most one container and one command slot, regardless of how many chats they use.
+### What stops a background process
 
-The controller keeps the last 20 command records per workspace, with at most 8 MiB of combined output
-each. A workspace nobody has used for `WORKSPACE_RETAIN_DAYS` is deleted whole, records and home
-disk together.
-Output is returned in 16 KiB pages after control-code cleanup. Anything beyond the log cap is
-discarded and marked as truncated; redirect to a workspace file when the complete output matters.
-A single file cannot grow past `WORKSPACE_MAX_FILE_MB`, 4 GiB by default; the writing process is stopped
-there. Transfers are limited to 50 MiB per file; sending to chat accepts up to 10 files and 50 MiB total per call.
-File-transfer paths must be relative and must not contain symlinks; Bash can copy a linked file first.
-`deleteWorkspaceFile` removes one exact file or directory, including inaccessible owned directories. It
-stops background processes and uses a fresh offline container without loading shell profiles. A running
-command must be cancelled first. A final symlink can be deleted, but parent symlinks and the workspace
-root are refused. This operation remains available when ordinary commands have been paused.
-`resetWorkspace` is the other recovery: it throws the whole home away and replaces it with an empty one.
-It is what to reach for when a workspace is too full, too broken or too tangled to repair file by file —
-including a home that can no longer start at all. Everything in it goes, permanently, and a new disk is
-formatted on the next command; other people's workspaces are untouched. Because it drops the disk rather
-than walking it, a home holding a million files is emptied as quickly as an empty one, and it stays
-available when storage pressure has paused everything else.
+A normal exit does not. Whatever a command leaves running keeps running, redirected output or not, and
+only the **whole container** going away removes it:
+
+- **Idle expiry** — nobody has touched the workspace for `WORKSPACE_IDLE_MINUTES`.
+- **Cancellation or timeout** — the command was stopped, so its descendants are too.
+- **Unattended CPU** — the workspace spent `WORKSPACE_IDLE_CPU_SECONDS` of processor time while none of
+  its own commands was running. This is what bounds a detached loop, which otherwise costs one command
+  and then runs free. Waiting on work does not count, and an idle server spends nothing.
+- **Pool pressure** — at capacity, the least recently used container without an active command or
+  transfer is reclaimed.
+
+Files survive every one of them. A running command is exempt from idle expiry, a controller restart
+interrupts commands without resuming them, and an abrupt stop is reconciled at the next startup. One
+person occupies at most one container and one command slot, however many chats they use.
+
+### The numbers you will meet
+
+| | |
+|---|---|
+| Command records kept | last 20 per workspace |
+| Output stored per command | 8 MiB, then truncated and marked as such |
+| Output returned per read | 16 KiB, after control-code cleanup |
+| Largest single file | `WORKSPACE_MAX_FILE_MB`, 4 GiB by default |
+| One file transfer | 50 MiB |
+| Sending to chat | 10 files and 50 MiB per call |
+| Workspace kept without use | `WORKSPACE_RETAIN_DAYS`, then deleted whole |
+
+Redirect to a file when the complete output matters. Transfer paths are relative and must not contain
+symlinks; Bash can copy a linked file first.
+
+### Cleaning up
+
+- **`deleteWorkspaceFile`** — removes one exact file or directory, including owned directories made
+  unreadable. It stops background processes and runs in a fresh offline container with no shell
+  profiles, so cancel any running command first. A final symlink can go; parent symlinks and the
+  workspace root are refused. It keeps working when storage pressure has paused everything else.
+- **`resetWorkspace`** — throws the home away and formats an empty one. For a workspace too full, too
+  broken or too tangled to repair file by file, including one that can no longer start. Everything in it
+  goes permanently, other people's are untouched, and because it drops the disk instead of walking it, a
+  home holding a million files empties as fast as an empty one.
 
 ## Network and security
 
-Each workspace has its own filesystem mounts, process table, network namespace and resource limits.
-Commands run as UID 1000 with an empty capability set — not merely unused capabilities, none at all —
-alongside Docker's default seccomp profile, `no-new-privileges` and a read-only root filesystem. Nothing
-in a workspace container is privileged at any point, including its first instant. They receive neither application secrets nor the
-Docker socket. Only the trusted controller gets that socket — **control of the controller means control
-of the Docker host**. A short-lived storage helper has `SYS_ADMIN`, `MKNOD` and access to loop devices to
-prepare or detach the fixed home filesystem. It has no network, runs only a fixed image-owned script,
-and sees the backing image rather than user paths. User containers never receive those privileges,
-loop devices, the backing image or a host bind mount.
+Every workspace gets its own filesystem mounts, process table, network namespace and resource limits.
 
-In the default `open` network policy, public internet access allows downloads and package installs.
-The pool has a Docker network of its own, and the policy for it lives **on the machine**, not inside the
-containers: a destination-IP firewall blocks private/local ranges, cloud metadata, CGNAT, the machine
-itself and outbound SMTP (25/465/587). IPv6 is disabled and DNS is restricted to public resolvers. The
-workspace's **own loopback** remains available for local servers and browser checks. Extra public router
-or infrastructure addresses can be listed in `WORKSPACE_BLOCKED_CIDRS`.
-Nothing connects **into** a workspace either: a development server bound to every interface is still
-reachable only from inside that workspace, never from the host, from another workspace, or from an
-unrelated container on the same machine. Only the controller reaches in, and it does so through Docker
-rather than over the network.
+- **No privilege, ever** — commands run as UID 1000 with an **empty capability set**, not merely unused
+  ones, under Docker's default seccomp profile, `no-new-privileges` and a read-only root filesystem.
+  Nothing in the container is privileged at any point, including its first instant.
+- **No secrets, no socket** — a workspace receives neither. Only the controller holds the Docker
+  socket, which is why **control of the controller means control of the Docker host**.
+- **One privileged helper, briefly** — preparing or detaching a home disk needs `SYS_ADMIN`, `MKNOD` and
+  loop devices, so a short-lived container gets them, with no network and a fixed image-owned script. It
+  sees the backing image, never user paths, and workspaces never see any of it.
+
+### What a workspace can reach
+
+Under the default `open` policy it has the public internet, for downloads and package installs, and
+nothing else. The pool has a Docker network of its own, and the rules for it live **on the machine**
+rather than in the containers.
+
+- **Blocked outbound** — private and local ranges, cloud metadata, CGNAT, the machine hosting it, and
+  SMTP on 25, 465 and 587. IPv6 is off, DNS goes to public resolvers only, and
+  `WORKSPACE_BLOCKED_CIDRS` adds anything else your infrastructure needs refused.
+- **Blocked inbound** — a server bound to every interface is still reachable only from inside its own
+  workspace: not from the host, not from another workspace, not from an unrelated container. The
+  controller reaches in through Docker, never over the network.
+- **Its own loopback** — available, and useful for preview servers and browser checks.
+- **`WORKSPACE_NETWORK=none`** — drops external networking entirely, loopback included. No mode skips
+  enforcement silently.
+
 Because the rules are outside the containers, nothing running in one can weaken them. The controller
-installs them at startup through a short-lived helper and then **proves them from a throwaway
-workspace**: if any of those destinations answers, it refuses to serve rather than run a command behind
-a policy that is not in effect.
+installs them at startup and then **proves them from a throwaway workspace**: if any blocked destination
+answers, it refuses to serve rather than run a command behind a policy that is not in effect. They are
+re-read every `WORKSPACE_POLICY_CHECK_SECONDS` afterwards, because they live on a machine this service
+does not own — a firewall frontend rebuilding the tables, an administrator flushing them, a switch to
+another tool. Drift is reinstalled and re-proved invisibly; only a policy that cannot be restored pauses
+commands, stops the workspaces that were running without it, and turns the health check red.
 
-They live on a machine this service does not own, though, so they are re-read every
-`WORKSPACE_POLICY_CHECK_SECONDS`. A firewall frontend that rebuilds the tables, an administrator
-flushing them, a switch to another tool — any of it removes the rules silently. Finding them gone
-reinstalls and re-proves them, which is normally invisible; only a policy that cannot be restored pauses
-commands and stops the workspaces that were running without it. The health check reports that state too.
+### Traffic caps
 
-Two things about host firewalls are worth knowing before they cost you an afternoon. Published Docker
-ports are redirected before `ufw` sees them, so **ufw cannot hide the API port** — bind it to an address
-that is not public instead, which is what `WORKSPACE_BIND` is for. And ufw's own
-`DEFAULT_FORWARD_POLICY=DROP`, or a cloud provider's outbound rules, can cut a workspace off from the
-internet without breaking anything else; the startup probe says so in the log rather than leaving you to
-guess.
-These are rules for traffic originating in a workspace. The bot's public file, image-search and channel
-preview downloads separately reject private/local IPs at connection time, disable proxies, validate each
-redirect, and bound the response while reading it. Configured internal services use a different HTTP client.
+| | |
+|---|---|
+| Bandwidth | 50 Mbit/s both ways, shared by the whole pool |
+| Packets | 2,000/second per workspace, burst 4,000 |
+| New connections | 100/second per workspace, burst 200 |
 
-`WORKSPACE_NETWORK=none` disables external networking while preserving that private loopback. There is
-no mode that silently skips firewall enforcement. Bandwidth is capped at 50 Mbit/s in both directions by
-default, and that one is the pool's total, since the rules live on the bridge the workspaces share.
-Packets and new connections are counted **per workspace** instead: 2,000 packets/second (burst 4,000)
-and 100 new connections/second (burst 200), so one busy workspace cannot spend everyone else's budget.
-These caps limit sustained traffic and connection churn; they do not make abuse of public services
-impossible. A cap that cannot be installed stops startup.
+Per-workspace metering is what keeps one busy workspace from spending everyone else's budget. These caps
+bound sustained traffic and connection churn; they do not make abuse of public services impossible, and
+a cap that cannot be installed stops startup.
 
-Docker containers still share the host kernel; this is not VM-level isolation. Open internet access also
-allows data exfiltration and abuse from the server's address. Do not put credentials in a workspace.
-For a public or less-trusted deployment, a dedicated workspace machine limits the impact of an escape;
-it uses the [same implementation](workspace.md), not another execution mode.
-At the host/router firewall, also prevent a workspace reaching private services through a public IP
-that forwards back into the LAN. The container's destination check happens before that external NAT.
+### Two host-firewall traps
+
+- **`ufw` cannot hide the API port** — published Docker ports are redirected before ufw sees them. Bind
+  the port to a non-public address instead, which is what `WORKSPACE_BIND` is for.
+- **`DEFAULT_FORWARD_POLICY=DROP`** — ufw's own default, and a cloud provider's outbound rules, can cut
+  a workspace off from the internet while everything else keeps working. The startup probe says so in
+  the log rather than leaving you to guess.
+
+Also stop a workspace from reaching private services through a public address that forwards back into
+the LAN: the container's destination check happens before that external NAT, so that one belongs on the
+host or router.
+
+### What this does not protect against
+
+Containers share the host kernel; this is not VM-level isolation. Open internet access allows
+exfiltration and abuse from the server's address, so **do not put credentials in a workspace**. For a
+public or less-trusted deployment, a machine of its own limits what an escape reaches — the same
+implementation, not another execution mode.
+
+These rules cover traffic that starts in a workspace. The bot's own downloads — files, image search,
+channel previews — are a separate boundary: they reject private and local IPs at connection time,
+disable proxies, validate every redirect, and bound the response while reading it.
 
 ## Limits and tuning
 
@@ -272,61 +307,48 @@ equal.
 | `WORKSPACE_NAMESPACE` | `vusan` | Stable Docker resource prefix; unique per controller on a host. |
 | `WORKSPACE_IMAGE` | `ghcr.io/helltar/vusan-workspace:latest` | Image for both controller and workspace containers. |
 
-The controller has a 512 MiB memory ceiling; file transfers stream through it. By default, each workspace
-has 1 GiB RAM, one CPU and at most 256 processes. The pool contains at most two containers, and is reduced
-further so their combined memory limits fit within half the Docker host's RAM. On hosts with multiple
-CPUs, its CPU limits also fit within half the host's cores; a single-core host shares that core using a
-low workspace CPU weight. These limits leave capacity for the bot and OS, but do not reserve resources
-against unrelated services an administrator runs on the same host.
+The controller runs on a 512 MiB ceiling and streams transfers through it. Each workspace gets 1 GiB of
+RAM, one CPU and 256 processes, and the pool holds at most two containers — reduced further so their
+combined limits fit inside half the host's RAM and half its cores. A single-core host shares that core at
+a low workspace weight. That leaves room for the bot and the OS, but reserves nothing against other
+services on the same machine.
 
-The defaults enforce limits without host quota configuration:
+### What bounds a workspace
 
-- **Home capacity** — each person gets a preallocated 4 GiB ext4 disk, including filesystem metadata.
-  Its fixed block and inode counts stop multi-file writes, preallocation and inode exhaustion at that
-  person's boundary. The backing image is not accessible from a workspace.
-- **Per-file limit** — `WORKSPACE_MAX_FILE_MB` additionally caps each file a command writes.
-- **Disk I/O** — the workspace loop device is selected automatically. Writes are capped at `50mb`
-  (`WORKSPACE_WRITE_BPS`) and reads at `100mb` (`WORKSPACE_READ_BPS`); no host device name is needed.
-  Both accept `none`. The cap protects a machine shared with other services; on a machine of its own,
-  where the fixed home size already bounds the damage, it mostly gets in the way of ordinary work.
-- **Host reserve** — new disks reserve their full size only if `WORKSPACE_MIN_FREE_MB` remains available.
-  A separate one-second check watches host free bytes/inodes, blocks commands and uploads on pressure,
-  and retries stopping live containers. Slow or failed home measurements cannot delay this check.
+- **Home capacity** — a preallocated 4 GiB ext4 disk per person, metadata included. Its fixed block and
+  inode counts stop multi-file writes, `fallocate`, unreadable directories and open-but-deleted files in
+  the kernel rather than by measurement. There is no unbounded fallback.
+- **Per-file limit** — `WORKSPACE_MAX_FILE_MB` caps each file a command writes, as a second bound.
+- **Disk I/O** — writes at `50mb` and reads at `100mb` on the home's loop device, both accepting `none`.
+  The cap protects a machine shared with other services; on a dedicated one it mostly gets in the way.
+- **Host reserve** — a new home is created only if `WORKSPACE_MIN_FREE_MB` would still remain, so the
+  machine cannot be filled one workspace at a time.
 
-The home capacity is enforced by its **fixed filesystem**, including its finite inode table. Multi-file
-writes, `fallocate`, unreadable directories and open-but-deleted files cannot grow it. Disk space is
-reserved before formatting, leaving `WORKSPACE_MIN_FREE_MB` on the backing filesystem. A new workspace
-is refused if its disk cannot be reserved. The filesystem and loop attachment are created automatically;
-there is no fallback to an unbounded home. `WORKSPACE_MAX_FILE_MB` is an additional per-file kernel limit.
+### When the host runs low
 
-A one-second host-reserve check runs independently of home directory walks. Low free bytes or inodes, or
-an unreadable state filesystem, blocks commands and uploads with `507` and repeatedly attempts to stop
-live workspaces. Queued startup and shell execution also check that admission is still open. Home usage
-uses allocated blocks; a failed measurement stops that workspace instead of bypassing the check. The
-guard and health check recover once the reserve returns, without a service restart.
+A one-second check watches free bytes and inodes on the state filesystem, separately from the directory
+walks that measure homes, so a slow or unreadable home cannot delay it. Pressure blocks commands and
+uploads with `507`, keeps trying to stop live workspaces, and lifts by itself once the reserve returns —
+no restart needed. Home usage counts allocated blocks, and a failed measurement stops that workspace
+instead of bypassing the check.
 
-A full home can be cleaned with Bash or `deleteWorkspaceFile`. The latter removes an exact file or
-recursive directory in a fresh offline container, without shell profiles, and can repair inaccessible
-owned directories. Cancel a running command first; background processes are stopped by cleanup.
+Deleting files frees space **inside** a home; the preallocated disk keeps its size. Freeing host space is
+therefore an administrator's job — with one deliberate exception: a workspace unused for
+`WORKSPACE_RETAIN_DAYS` is deleted outright, disk included, so abandoned homes do not pile up. Back up a
+`-disk` volume you mean to keep before retiring it by hand, and see [Cleaning up](#cleaning-up) for what
+the agent can remove on its own.
 
-`resetWorkspace` is the blunt instrument next to it: the home disk is dropped and reformatted, so a
-workspace that cannot start — including one left behind by an older, unbounded layout — becomes usable
-again in one call. Everything that person kept there is gone; nothing else on the host is affected.
+### Sizing the disk
 
-Deleting files frees space **inside** a home; the preallocated backing disk stays the same size. Host
-storage pressure therefore needs an administrator to free host space or retire a backing volume — with
-one exception, and it is deliberate: a workspace nobody has used for `WORKSPACE_RETAIN_DAYS` is deleted
-outright, disk included, so abandoned homes do not accumulate. Back up a `-disk` volume you want to keep
-before retiring it by hand.
+Budget `WORKSPACE_MAX_HOME_MB` times the people who use the workspace **within the retention window**,
+plus controller logs and the host reserve. The number grows with active people, not with everyone who
+ever tried the bot. Homes survive idle eviction, image replacement and service shutdown. Keep the state
+volume on the same Docker filesystem as the backing volumes so the reserve check watches the storage that
+actually fills, and give snapshots or thin provisioning their own monitoring.
 
-Budget disk space for `WORKSPACE_MAX_HOME_MB` times everyone who uses the workspace **within the
-retention window**, plus controller logs and the host reserve: the number grows with active people
-rather than with everyone who ever tried the bot. Homes survive idle eviction, image replacement and
-service shutdown. Host snapshots, thin-provisioned storage and other services need their own capacity
-monitoring, and the state volume belongs on the same Docker storage filesystem as the backing volumes so
-the reserve check observes the storage that actually fills. Changing the configured home size does not
-resize existing images: stop the controller, back up the volume, and resize the image and filesystem
-offline with ext4 tools before applying the setting. A size mismatch fails closed, preserving the disk.
+Changing the home size does not resize existing images: stop the controller, back up the volume, resize
+the image and filesystem offline with ext4 tools, then apply the setting. A mismatch fails closed and
+preserves the disk.
 
 ## Storage and updates
 
@@ -375,9 +397,10 @@ RUN apt-get update \
 ```
 
 Build it on the workspace machine as `vusan-workspace:custom`, set
-`WORKSPACE_IMAGE=vusan-workspace:custom` in `env/workspace.env`, and bring the service up again. Both
-the controller and its workspace containers then use it. Rebuild custom images when their base is updated. For the
-source-build override, edit `workspace/Dockerfile` and use the source-build command above instead.
+`WORKSPACE_IMAGE=vusan-workspace:custom` in `env/workspace.env`, and bring the service up again. Both the
+controller and its workspace containers then use it. Rebuild custom images when their base is updated.
+For the source-build override, edit `workspace/Dockerfile` and use the source-build command above
+instead.
 
 Installing Java on the host with `sudo apt install` does not put Java inside a workspace. Do not make
 manual changes inside a running user container the source of its dependencies.
@@ -418,25 +441,30 @@ would only take effect for as long as it takes the controller to notice.
 
 ## Moving from unbounded home volumes
 
-A fresh deployment has nothing to migrate. Existing plain `*-home` volumes cannot silently
-remain writable without a capacity bound. The controller preserves them and reports that migration is
-required. Before upgrading, export each home using your volume backup tooling and retain the backup.
-Stop the old controller and remove only the old volume whose export has been verified. Start the new
-controller and initialize that person's empty bounded workspace, then import the files as UID/GID 1000
-through the mounted home. Oversized imports fail at the filesystem capacity; reduce the data or choose
-a larger capacity before creating the new disk. Never import user files into the raw `-disk` volume.
+A fresh deployment has nothing to migrate. An older plain `*-home` volume has no capacity bound, so the
+controller refuses to open it rather than run unbounded, and says so.
 
-A person who has nothing worth keeping in an old volume does not need any of this: `resetWorkspace`
-discards it and formats a bounded home in its place, from the chat, in one call.
+**If nothing in it is worth keeping**, that is the whole procedure: `resetWorkspace` discards the old
+volume and formats a bounded home in its place, from the chat, in one call.
+
+**To carry the files across**, before upgrading:
+
+1. Export each home with your volume backup tooling, and keep the export.
+2. Stop the old controller; remove only volumes whose export you have verified.
+3. Start the new controller and let it create that person's empty bounded workspace.
+4. Import the files through the mounted home as UID/GID `1000:1000` — never into the raw `-disk` volume.
+
+Oversized imports stop at the filesystem's capacity: reduce the data, or raise `WORKSPACE_MAX_HOME_MB`
+before the new disk is created.
 
 Deploy bot and controller together; the health endpoint reports protocol 5. Old `WORKSPACE_WRITE_DEVICE`
 settings are no longer used: the service always throttles its own loop device.
 
 ## Moving from per-chat containers
 
-Workspace IDs are now `u<userId>` in every chat. Existing private-chat data must also follow the bounded-volume migration above.
-Former `u<userId>_g<chatId>` volumes and job records are retained but no longer opened by the bot. History
-and its `(userId, chatId)` key are unchanged.
+Workspace IDs are now `u<userId>` in every chat. Existing private-chat data must also follow the
+bounded-volume migration above. Former `u<userId>_g<chatId>` volumes and job records are retained but no
+longer opened by the bot. History and its `(userId, chatId)` key are unchanged.
 
 There is no automatic merge of group files: two chats may have different projects at the same path.
 Back up the old volumes, stop the controller, and copy wanted projects into separate subdirectories of
@@ -450,10 +478,11 @@ mix the old client with the new service. Remove old isolation, engine, runtime, 
 and quota settings from deployment overrides. `WORKSPACE_DISK_WARN_MB` is still only a warning;
 `WORKSPACE_MAX_HOME_MB` sets the bounded filesystem capacity.
 
-There is **no automatic import** of the old shared `vusan-workspaces` volume or bind-mounted homes.
-They are not deleted by this change. Back them up before deploying. To keep a project, export its
+There is **no automatic import** of the old shared `vusan-workspaces` volume or bind-mounted homes. They
+are not deleted by this change. Back them up before deploying. To keep a project, export its
 `u<userId>[_g<chatId>]` home from the old store. First run a harmless command through the new bot so its
-controller creates and labels the target home volume. Pause the bot while importing through the mounted bounded home as `1000:1000`, never into the raw
-backing volume. Keep the controller running during import, since stopping it detaches the filesystem.
-Use an empty target home or review collisions first; keep the old copy until the result is verified. The old
-UID registry and old command logs are not part of the new controller state.
+controller creates and labels the target home volume. Pause the bot while importing through the mounted
+bounded home as `1000:1000`, never into the raw backing volume. Keep the controller running during
+import, since stopping it detaches the filesystem. Use an empty target home or review collisions first;
+keep the old copy until the result is verified. The old UID registry and old command logs are not part of
+the new controller state.
