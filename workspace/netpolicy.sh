@@ -9,6 +9,16 @@ mode="${1:?missing mode}"
 chain="${2:?missing chain}"
 [[ "$chain" =~ ^[A-Z][A-Z0-9_]{2,24}$ ]] || { echo "invalid chain name" >&2; exit 1; }
 
+# a container's iptables can address a different backend than the daemon uses — nft in here, legacy out
+# there — and then every rule below lands in a table nothing traverses, silently. The daemon's own rules
+# being visible from here is the only reliable evidence that this is the same netfilter it programs.
+# (no pipe: `grep -q` would close it early and `pipefail` would read the SIGPIPE as failure.)
+forward="$(iptables -S FORWARD)"
+[[ "$forward" == *"-j DOCKER"* ]] || {
+  echo "docker's own iptables rules are not visible from here: wrong netfilter backend" >&2
+  exit 1
+}
+
 # `check` answers one question — is the policy still the one we installed — and answers it by reading
 # the host's tables rather than by inference. A chain deleted, flushed or unhooked is every way a policy
 # realistically disappears: a firewall tool rebuilding the tables, an administrator flushing them, a
