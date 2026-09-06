@@ -589,6 +589,16 @@ private val UNAUTHORIZED_REGEX =
         RegexOption.IGNORE_CASE
     )
 
+// the provider refused the request itself over its content policy, and reports it in the error body:
+// the status is whatever the endpoint felt like, a flagged streaming call even comes back as 200. there
+// is nothing to wait out and nothing to retry — only a differently worded request gets through.
+private val CONTENT_POLICY_REGEX =
+    Regex(
+        "cyber_policy|content[_ ]policy|content[_ ]filter|moderation|invalid_prompt|" +
+                "prohibited_content|safety system|safety filter|was flagged",
+        RegexOption.IGNORE_CASE
+    )
+
 /**
  * The provider failure inside [this], as the message koog built for it.
  *
@@ -604,6 +614,8 @@ internal fun Throwable.providerErrorMessage(): String? =
 /** Which canned reply a provider error earns, from the status and the error body koog embedded in it. */
 internal fun Messages.providerErrorReply(providerError: String, now: Instant = Instant.now()): String =
     when {
+        CONTENT_POLICY_REGEX.containsMatchIn(providerError) -> contentPolicyReply
+
         SUBSCRIPTION_LIMIT_REGEX.containsMatchIn(providerError) ->
             subscriptionLimitReply(usageLimitResetIn(providerError, now))
 

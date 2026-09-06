@@ -14,6 +14,9 @@ internal object RussianMessages : Messages {
     override val overloadedReply = "Сейчас у меня слишком много запросов — дай минутку и попробуй снова 🙏"
     override val signInRequiredReply = "Моё подключение к AI-сервису надо обновить — нужен повторный вход 🔑"
 
+    override val contentPolicyReply =
+        "AI-сервис отклонил этот запрос из-за своей политики контента — попробуй сформулировать иначе 🚫"
+
     override val formattingAsFileNotice =
         "Телеграм не смог показать форматирование, поэтому вот полный ответ файлом 📄"
 

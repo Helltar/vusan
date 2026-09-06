@@ -14,6 +14,9 @@ internal object EnglishMessages : Messages {
     override val overloadedReply = "I'm a bit overloaded right now — give me a moment and try again 🙏"
     override val signInRequiredReply = "My connection to the AI service needs renewing — my owner has to sign in again 🔑"
 
+    override val contentPolicyReply =
+        "The AI service refused this request under its content policy — try wording it differently 🚫"
+
     override val formattingAsFileNotice =
         "Telegram couldn't display the formatting, so here's the full reply as a file 📄"
 

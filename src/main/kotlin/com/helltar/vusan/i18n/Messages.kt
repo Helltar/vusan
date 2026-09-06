@@ -10,6 +10,7 @@ interface Messages {
     val fallbackErrorReply: String
     val overloadedReply: String
     val signInRequiredReply: String
+    val contentPolicyReply: String
     val formattingAsFileNotice: String
     val privateBlockedNotice: String
     val conversationClearedReply: String

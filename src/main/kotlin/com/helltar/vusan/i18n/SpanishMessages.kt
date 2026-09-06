@@ -15,6 +15,9 @@ internal object SpanishMessages : Messages {
     override val signInRequiredReply =
         "Hay que renovar mi conexión con el servicio de IA — requiere iniciar sesión de nuevo 🔑"
 
+    override val contentPolicyReply =
+        "El servicio de IA rechazó esta petición por su política de contenido — prueba a plantearla de otra forma 🚫"
+
     override val formattingAsFileNotice =
         "Telegram no pudo mostrar el formato, así que aquí tienes la respuesta completa como archivo 📄"
 

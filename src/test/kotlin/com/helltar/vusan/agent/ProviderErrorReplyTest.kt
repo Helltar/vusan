@@ -82,6 +82,33 @@ class ProviderErrorReplyTest {
         assertEquals(EnglishMessages.signInRequiredReply, EnglishMessages.providerErrorReply(message, now))
     }
 
+    // a refused request is not an outage: the streaming endpoint answers 200 and puts the refusal in
+    // the body, so nothing but the code in it says the turn is over.
+    @Test
+    fun `a request the provider refused on policy says so`() {
+        val body =
+            """{"type":"error","error":{"type":"invalid_request","code":"cyber_policy",""" +
+                    """"message":"This request was flagged as a security risk. Try rephrasing it."}}"""
+        val message = LLMClientException("OpenAILLMClient", "Status code: 200 Error body: $body").message.orEmpty()
+
+        assertEquals(EnglishMessages.contentPolicyReply, EnglishMessages.providerErrorReply(message, now))
+    }
+
+    @Test
+    fun `a moderation refusal on any provider reads the same`() {
+        assertEquals(
+            EnglishMessages.contentPolicyReply,
+            EnglishMessages.providerErrorReply("Status code: 400\ncontent_policy_violation", now)
+        )
+    }
+
+    @Test
+    fun `every language answers a policy refusal`() {
+        Language.entries.forEach { language ->
+            assertTrue(Messages.of(language).contentPolicyReply.isNotBlank(), "$language")
+        }
+    }
+
     @Test
     fun `an unrecognized provider error falls back`() {
         assertEquals(
