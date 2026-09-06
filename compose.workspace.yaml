@@ -1,10 +1,11 @@
-# The workspace shell, deployed on its own: docker compose -f compose.workspace.yaml up -d
+# The workspace shell, deployed on its own:
+#   docker compose --env-file env/workspace.env -f compose.workspace.yaml up -d
 #
 # This is a separate deployment, not an addition to compose.yaml, and it belongs on a machine of its
 # own — it holds the Docker socket and runs model-authored shell. See docs/workspace.md.
 #
-# WORKSPACE_BIND and WORKSPACE_TOKEN come from a .env beside this file; the token is the one the bot
-# is given too, and the bind address is one only the bot can reach.
+# `env/workspace.env` is the whole configuration: Compose reads it for the values substituted below and
+# hands the same file to the container. Every command needs it, hence --env-file.
 
 services:
   vusan-workspace:
@@ -13,11 +14,8 @@ services:
     restart: unless-stopped
     init: true
     stop_grace_period: 45s
-    # never the bot's file: this process holds the Docker socket and must not see an application
-    # secret. its own file is optional, because every setting in it has a working default.
-    env_file:
-      - path: env/workspace.env
-        required: false
+    # never the bot's file: this process holds the Docker socket and must not see an application secret.
+    env_file: env/workspace.env
     environment:
       # compose resolved the tag for `image:` above; the controller needs the same one for its children.
       WORKSPACE_IMAGE: "${WORKSPACE_IMAGE:-ghcr.io/helltar/vusan-workspace:latest}"

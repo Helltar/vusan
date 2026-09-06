@@ -17,9 +17,16 @@ runtime to choose. What it does once running is described in
 On the workspace machine, from a checkout of this repository:
 
 ```bash
-printf 'WORKSPACE_BIND=10.10.10.2\nWORKSPACE_TOKEN=%s\n' "$(openssl rand -hex 32)" > .env
-docker compose -f compose.workspace.yaml up -d
+cp env/workspace.env.example env/workspace.env
+sed -i "s/^WORKSPACE_TOKEN=.*/WORKSPACE_TOKEN=$(openssl rand -hex 32)/" env/workspace.env
+$EDITOR env/workspace.env          # set WORKSPACE_BIND, and any limit you want to change
+docker compose --env-file env/workspace.env -f compose.workspace.yaml up -d
 ```
+
+`env/workspace.env` is the whole configuration for this machine. Compose reads it twice — for the values
+it substitutes into the deployment, and as the container's own environment — which is what `--env-file`
+is for; every command below carries it. Export `COMPOSE_ENV_FILES=env/workspace.env` once if you would
+rather not repeat it. The bot's file stays on the bot's machine and never comes here.
 
 `WORKSPACE_BIND` is the address the API listens on, and it must be one **only the bot can reach** — a
 private network or an encrypted tunnel between the two machines. Compose refuses to start without it
@@ -37,8 +44,8 @@ WORKSPACE_TOKEN=<the same secret>
 and restart the bot with `docker compose up -d`. Removing either line takes the tools away again; the
 files stay where they are. A bearer token is not encryption: the private transport has to provide that.
 
-Limits and networking for the service go in `env/workspace.env` on the workspace machine — see the
-[tuning table](configuration.md#tuning). The file is optional and every setting has a working default.
+Everything else in that file — limits, networking, retention — has a working default; see the
+[tuning table](configuration.md#tuning).
 
 At the host or infrastructure firewall, allow API access only from the bot, and prevent a workspace from
 reaching private services through a public address that forwards back into the LAN: the container's own
@@ -49,7 +56,8 @@ To build the image from source instead of pulling it:
 
 ```bash
 docker build -t vusan-workspace:local ./workspace
-WORKSPACE_IMAGE=vusan-workspace:local docker compose -f compose.workspace.yaml up -d
+WORKSPACE_IMAGE=vusan-workspace:local \
+  docker compose --env-file env/workspace.env -f compose.workspace.yaml up -d
 ```
 
 ## Both on one machine
@@ -69,9 +77,14 @@ Use the Docker bridge gateway as the bind address. Containers can reach it and n
 can; `127.0.0.1` does not work, because a container cannot reach the host's loopback.
 
 ```bash
-printf 'WORKSPACE_BIND=172.17.0.1\nWORKSPACE_TOKEN=%s\n' "$(openssl rand -hex 32)" > .env
-docker compose -f compose.workspace.yaml up -d
+cp env/workspace.env.example env/workspace.env
+sed -i "s/^WORKSPACE_BIND=.*/WORKSPACE_BIND=172.17.0.1/;
+        s/^WORKSPACE_TOKEN=.*/WORKSPACE_TOKEN=$(openssl rand -hex 32)/" env/workspace.env
+docker compose --env-file env/workspace.env -f compose.workspace.yaml up -d
 ```
+
+The two services keep one environment file each even here, and that is the point: the process holding
+the Docker socket never sees the bot's token, its model key or its database path.
 
 Then in `env/vusan.env`, with the same secret:
 
@@ -103,7 +116,7 @@ Docker volumes and two firewall chains that live in the kernel. That makes the c
 order matters only in that the controller should stop first.
 
 ```bash
-docker compose -f compose.workspace.yaml down
+docker compose --env-file env/workspace.env -f compose.workspace.yaml down
 docker ps -aq --filter label=com.helltar.vusan.workspace=vusan | xargs -r docker rm -f
 docker network rm vusan-workspaces
 ```
@@ -140,7 +153,7 @@ that mounts the bounded filesystem at `/work`. The same `u123` is used in privat
 The user container receives only the mounted home, owned by UID 1000. A short-lived trusted storage
 helper receives the backing volume and loop-device access; it never runs user commands. Controller job
 metadata and bounded logs live separately in Compose's `vusan-workspace-state` volume. The API secret is
-configuration, not state: it lives in `.env` on this machine and in the bot's own environment.
+configuration, not state: it lives in `env/workspace.env` here and in the bot's own file there.
 
 **Back up the `-disk` volumes and controller state.** Stop the controller first for a consistent copy;
 normal shutdown removes the user containers and mount wrappers and detaches their loop devices. Copy
@@ -151,8 +164,8 @@ pruning as cleanup: an idle person's backing disk looks like an unused Docker vo
 Update the bot and workspace together because their HTTP contract changes together — on this machine:
 
 ```bash
-docker compose -f compose.workspace.yaml pull
-docker compose -f compose.workspace.yaml up -d
+docker compose --env-file env/workspace.env -f compose.workspace.yaml pull
+docker compose --env-file env/workspace.env -f compose.workspace.yaml up -d
 ```
 
 The controller removes its own old containers during startup, marks unfinished jobs interrupted and
@@ -177,9 +190,8 @@ RUN apt-get update \
 ```
 
 Build it on the workspace machine as `vusan-workspace:custom`, set
-`WORKSPACE_IMAGE=vusan-workspace:custom` in the `.env` beside the Compose file, and run
-`docker compose -f compose.workspace.yaml up -d`. Both the controller
-and its workspace containers then use it. Rebuild custom images when their base is updated. For the
+`WORKSPACE_IMAGE=vusan-workspace:custom` in `env/workspace.env`, and bring the service up again. Both
+the controller and its workspace containers then use it. Rebuild custom images when their base is updated. For the
 source-build override, edit `workspace/Dockerfile` and use the source-build command above instead.
 
 Installing Java on the host with `sudo apt install` does not put Java inside a workspace. Do not make

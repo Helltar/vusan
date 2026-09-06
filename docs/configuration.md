@@ -3,12 +3,12 @@
 Vusan reads configuration from environment variables, one file per service under `env/`.
 [`env/vusan.env.example`](../env/vusan.env.example) is the copy-paste starting point for the bot, and
 [`env/workspace.env.example`](../env/workspace.env.example) covers the [workspace service](#workspace),
-which is optional because every setting there has a working default. Blank values are treated as missing.
+where only the bind address and the shared secret are required. Blank values are treated as missing.
 
 The split is a boundary, not tidiness: the workspace controller holds the Docker socket, so it is handed
-its own file and never the bot's. Do not merge them. A repo-root `.env` still exists for the two values
-Compose interpolates into the deployment itself rather than into a container — `WORKSPACE_IMAGE` and, on a
-separate workspace host, `WORKSPACE_BIND` — and a shell variable works just as well for those.
+its own file and never the bot's. Do not merge them, even when one machine runs both. One file per
+service is also all there is — the workspace's is passed to Compose with `--env-file`, because it
+supplies both the values substituted into that deployment and the container's own environment.
 
 - **Getting started** — [Minimum setup](#minimum-setup) · [Banning someone](#banning-someone) ·
   [Rights in a group](#rights-in-a-group) · [Telegram command menu](#telegram-command-menu)
