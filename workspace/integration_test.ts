@@ -19,6 +19,17 @@ Deno.test({
       const response = await fetch(`${base}${path}`, { ...options, headers });
       return { status: response.status, body: await response.json() };
     };
+    // the storage helper wears the same label while it attaches or detaches a loop device, so anything
+    // asserting "no workspaces are left" has to name the workspaces themselves.
+    const workspaces = () =>
+      dockerText([
+        "ps",
+        "-aq",
+        "--filter",
+        `label=${label}`,
+        "--filter",
+        `name=^/${namespace}-workspace-u[0-9]+$`,
+      ]);
     const run = (command: string, id = "u90001", timeoutSeconds = 30) =>
       request(`/jobs?id=${id}`, {
         method: "POST",
@@ -69,6 +80,8 @@ Deno.test({
         "WORKSPACE_IDLE_CPU_SECONDS=2",
         "-e",
         "WORKSPACE_RETAIN_DAYS=1",
+        "-e",
+        "WORKSPACE_POLICY_CHECK_SECONDS=5",
         "-e",
         "WORKSPACE_BLOCKED_CIDRS=203.0.113.7/32",
         image!,
@@ -272,6 +285,42 @@ Deno.test({
         );
         strictEqual(result.body.exitCode, 0, JSON.stringify(result.body));
       });
+      await t.step("a policy removed from the host is noticed and put back", async () => {
+        const chain = `WS_${namespace.toUpperCase().replace(/[^A-Z0-9]/g, "_").slice(0, 20)}`;
+        const onHost = (command: string) =>
+          docker([
+            "run",
+            "--rm",
+            "--network=host",
+            "--tmpfs",
+            "/run:size=1m",
+            "--cap-drop=ALL",
+            "--cap-add=NET_ADMIN",
+            "--entrypoint",
+            "/usr/bin/bash",
+            image!,
+            "-c",
+            command,
+          ], { includeStderr: true }).then((out) => new TextDecoder().decode(out).trim());
+        const jump = () =>
+          onHost(`iptables -C DOCKER-USER -j ${chain} >/dev/null 2>&1 && echo present || echo gone`);
+        // exactly what a firewall frontend rebuilding the tables would leave behind
+        await onHost(`iptables -D DOCKER-USER -j ${chain}`);
+        strictEqual(await jump(), "gone");
+        for (let i = 0; i < 600; i++) {
+          if (await jump() === "present") break;
+          await new Promise((resolve) => setTimeout(resolve, 100));
+        }
+        strictEqual(await jump(), "present");
+        // repaired in place: nobody was stopped and the service never stopped answering
+        ok(
+          await fetch(`${base}/health`).then(async (r) => {
+            await r.arrayBuffer();
+            return r.ok;
+          }),
+        );
+        strictEqual((await run("printf still-here")).body.output, "still-here");
+      });
       await t.step("user-installed commands cannot shadow transfer helpers", async () => {
         await run(
           "mkdir -p .local/bin; printf '#!/bin/sh\\nexit 99\\n' > .local/bin/deno; chmod +x .local/bin/deno",
@@ -428,7 +477,7 @@ Deno.test({
         strictEqual(started.body.exitCode, 0, JSON.stringify(started.body));
         let owned = "unknown";
         for (let i = 0; i < 120 && owned; i++) {
-          owned = await dockerText(["ps", "-aq", "--filter", `label=${label}`]);
+          owned = await workspaces();
           if (owned) await new Promise((resolve) => setTimeout(resolve, 1000));
         }
         strictEqual(owned, "", "the container should have been removed for unattended cpu");
@@ -454,7 +503,7 @@ Deno.test({
           "-c",
           `! /usr/bin/grep -F '${namespace}' /sys/block/${loop}/loop/backing_file 2>/dev/null`,
         ]);
-        strictEqual(await dockerText(["ps", "-aq", "--filter", `label=${label}`]), "");
+        strictEqual(await workspaces(), "");
         await docker(["rm", supervisor]);
         await startSupervisor();
         strictEqual((await run("cat kept.txt")).body.output.trim(), "saved");
@@ -512,12 +561,12 @@ Deno.test({
         await docker(["exec", supervisor, "dd", "if=/dev/zero", "of=/state/pressure", "bs=1M", "count=16"]);
         for (let i = 0; i < 300; i++) {
           const result = await request(`/jobs/${started.body.jobId}?id=u90001`);
-          const owned = await dockerText(["ps", "-aq", "--filter", `label=${label}`]);
+          const owned = await workspaces();
           if (result.body.status === "failed" && !owned) break;
           await new Promise((resolve) => setTimeout(resolve, 100));
         }
         strictEqual((await request(`/jobs/${started.body.jobId}?id=u90001`)).body.status, "failed");
-        strictEqual(await dockerText(["ps", "-aq", "--filter", `label=${label}`]), "");
+        strictEqual(await workspaces(), "");
         strictEqual((await upload("blocked")).status, 507);
         // arbitrary shell cannot claim to be cleanup, and repeated attempts must remain blocked.
         strictEqual((await run("printf refused")).status, 507);

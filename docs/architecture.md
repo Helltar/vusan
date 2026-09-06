@@ -431,7 +431,7 @@ runner, engine selection or runtime selection. The same image serves controller 
 - **`main.ts`** — validates/authenticates HTTP requests, limits concurrent file transfers, owns the
   state lock, startup recovery, shutdown and idle-sweep timer. `POST /jobs?id=...` starts a command;
   `GET /jobs?id=...` lists recent ones; `GET`/`DELETE /jobs/<jobId>?id=...` reads/cancels one.
-  `PUT`/`GET /files?id=...&path=...` streams a bounded file in either direction, never buffering one whole. `DELETE /files?id=...&path=...` removes one exact path through isolated cleanup, and `DELETE /workspace?id=...` discards the home entirely. `GET /health` reports protocol version 5.
+  `PUT`/`GET /files?id=...&path=...` streams a bounded file in either direction, never buffering one whole. `DELETE /files?id=...&path=...` removes one exact path through isolated cleanup, and `DELETE /workspace?id=...` discards the home entirely. `GET /health` reports protocol version 5, and is red while either guard has admission closed.
   Busy/capacity responses use `409`; invalid input, authentication and missing jobs have explicit
   HTTP errors. The Kotlin client parses error bodies instead of relying on the shared client's
   `expectSuccess` default.
@@ -454,7 +454,7 @@ runner, engine selection or runtime selection. The same image serves controller 
   only that person's bounded home. Startup requires cgroup v2 resource controls and derives a container
   pool ceiling from the host's memory/CPU capacity. It gives the pool a Docker network of its own with
   inter-container traffic disabled, has the policy installed on the host, and proves it from a throwaway
-  container before serving anything. A workspace container itself runs as UID 1000 with `sleep` for an
+  container before serving anything, and `policy.ts` keeps checking that it is still there. A workspace container itself runs as UID 1000 with `sleep` for an
   entrypoint and an empty capability set: nothing in it is ever privileged, not even for the instant
   before dropping. Workspaces run at a low CPU weight, and the idle sweep also
   measures the processor time each one spent with no command of its own running, removing a workspace
@@ -496,6 +496,11 @@ runner, engine selection or runtime selection. The same image serves controller 
   toward the machine itself, and metering new connections and packets per workspace address. A bandwidth
   cap, when asked for, is the pool's total on the shared bridge. Any failure stops startup, and so does a
   probe that finds the policy is not actually in effect.
+- **`policy.ts`** — the network policy guard. The rules sit on a host the service does not administer, so
+  a slow cadence re-reads them from the host's own tables rather than inferring anything from behaviour:
+  an address nobody answers looks identical whether it is blocked or merely absent. Drift is reinstalled
+  and re-proved in place, invisibly; only a policy that cannot be restored closes admission, stops the
+  workspaces that were running without it and turns the health check red.
 - **`storage.ts`** — the host reserve guard. A one-second tick reads free bytes and inodes on the state
   filesystem. Directory walks run independently, triggered after 256 MiB of host-space loss or a minute,
   and use allocated blocks. A failed home measurement evicts that workspace. Host pressure or an

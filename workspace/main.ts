@@ -2,6 +2,7 @@ import { readConfig } from "./config.ts";
 import { authorized, loadToken } from "./auth.ts";
 import { Containers } from "./container.ts";
 import { Jobs } from "./jobs.ts";
+import { PolicyGuard } from "./policy.ts";
 import { DiskGuard } from "./storage.ts";
 import {
   COMMAND_LIMIT,
@@ -38,6 +39,7 @@ const jobs = new Jobs(config, containers);
 await jobs.recover();
 const guard = new DiskGuard(config, containers, jobs);
 await guard.tick();
+const policy = new PolicyGuard(config, containers, jobs);
 let transfers = 0;
 let closing = false;
 
@@ -45,7 +47,8 @@ async function route(request: Request): Promise<Response> {
   if (closing) return json({ error: "Workspace service is stopping" }, 503);
   const url = new URL(request.url);
   if (request.method === "GET" && url.pathname === "/health") {
-    return json({ ok: guard.healthy, protocol: 5 }, guard.healthy ? 200 : 503);
+    const ok = guard.healthy && policy.healthy;
+    return json({ ok, protocol: 5 }, ok ? 200 : 503);
   }
   if (!authorized(request, token)) {
     return json({ error: "Unauthorized" }, 401);
@@ -137,6 +140,7 @@ const sweep = setInterval(async () => {
   sweeping = true;
   try {
     await containers.sweep((id) => jobs.busy(id));
+    await policy.tick();
     await jobs.prune();
   } catch (e) {
     console.error("workspace sweep failed", e);

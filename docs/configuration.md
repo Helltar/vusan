@@ -512,6 +512,19 @@ Because the rules are outside the containers, nothing running in one can weaken 
 installs them at startup through a short-lived helper and then **proves them from a throwaway
 workspace**: if any of those destinations answers, it refuses to serve rather than run a command behind
 a policy that is not in effect.
+
+They live on a machine this service does not own, though, so they are re-read every
+`WORKSPACE_POLICY_CHECK_SECONDS`. A firewall frontend that rebuilds the tables, an administrator
+flushing them, a switch to another tool — any of it removes the rules silently. Finding them gone
+reinstalls and re-proves them, which is normally invisible; only a policy that cannot be restored pauses
+commands and stops the workspaces that were running without it. The health check reports that state too.
+
+Two things about host firewalls are worth knowing before they cost you an afternoon. Published Docker
+ports are redirected before `ufw` sees them, so **ufw cannot hide the API port** — bind it to an address
+that is not public instead, which is what `WORKSPACE_BIND` is for. And ufw's own
+`DEFAULT_FORWARD_POLICY=DROP`, or a cloud provider's outbound rules, can cut a workspace off from the
+internet without breaking anything else; the startup probe says so in the log rather than leaving you to
+guess.
 These are rules for traffic originating in a workspace. The bot's public file, image-search and channel
 preview downloads separately reject private/local IPs at connection time, disable proxies, validate each
 redirect, and bound the response while reading it. Configured internal services use a different HTTP client.
@@ -543,6 +556,7 @@ bot reads as well, from its own file: keep the two equal.
 | `WORKSPACE_MAX_ACTIVE` | `2` | Maximum live containers, including idle ones; further reduced to fit the host resource budget. |
 | `WORKSPACE_IDLE_MINUTES` | `60` | Remove an untouched container after this many minutes, unless a command is running. |
 | `WORKSPACE_RETAIN_DAYS` | `14` | Delete a workspace entirely — files, home disk and records — after this many days without use. |
+| `WORKSPACE_POLICY_CHECK_SECONDS` | `300` | How often the network policy is re-read from the host and repaired if it has drifted. |
 | `WORKSPACE_IDLE_CPU_SECONDS` | `600` | Processor time a workspace may spend while no command of its own runs, before its container is removed. |
 | `WORKSPACE_MEMORY_MB` | `1024` | Hard memory limit per workspace, with no additional swap allowance. |
 | `WORKSPACE_CPUS` | `1` | CPU limit per workspace, in whole cores. |

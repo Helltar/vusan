@@ -67,6 +67,7 @@ export function readConfig() {
     diskWarnMb: positive("WORKSPACE_DISK_WARN_MB", 2048),
     maxHomeMb: positive("WORKSPACE_MAX_HOME_MB", 4096),
     idleCpuSeconds: positive("WORKSPACE_IDLE_CPU_SECONDS", 600),
+    policyCheckSeconds: positive("WORKSPACE_POLICY_CHECK_SECONDS", 300),
     maxFileMb,
     minFreeMb: positive("WORKSPACE_MIN_FREE_MB", 1024),
     minFreeInodes: positive("WORKSPACE_MIN_FREE_INODES", 10_000),

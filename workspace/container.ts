@@ -21,16 +21,19 @@ function policyChain(namespace: string): string {
 }
 
 // what a workspace must not be able to open: the metadata service, private space in each RFC 1918
-// range, and the machine hosting it — the controller's own API included. Printing anything means the
-// policy is not doing its job, and the controller refuses to serve.
+// range, and the machine hosting it — the controller's own API included. A `leak` line means the policy
+// is not doing its job and the controller refuses to serve. `no-egress` is the opposite complaint and
+// only a warning: a workspace with no way out is broken, but it is broken safely, and a host firewall
+// having a bad minute must not take the service down with it.
 const PROBE = `
 for target in 169.254.169.254 10.255.255.254 172.31.255.254 192.168.255.254; do
   for port in 80 8080; do
-    timeout 2 bash -c "exec 3<>/dev/tcp/$target/$port" 2>/dev/null && echo "reached $target:$port"
+    timeout 2 bash -c "exec 3<>/dev/tcp/$target/$port" 2>/dev/null && echo "leak $target:$port"
   done
 done
 gateway=$(ip -o -4 route show default | awk '{print $3; exit}')
-timeout 3 bash -c "exec 3<>/dev/tcp/$gateway/8080" 2>/dev/null && echo "reached the host at $gateway:8080"
+timeout 3 bash -c "exec 3<>/dev/tcp/$gateway/8080" 2>/dev/null && echo "leak host $gateway:8080"
+timeout 5 bash -c "exec 3<>/dev/tcp/1.1.1.1/443" 2>/dev/null || echo "no-egress"
 exit 0
 `;
 
@@ -79,6 +82,9 @@ export class Containers {
   private homes!: Homes;
   private capacity = 1;
   private network = "none";
+  private bridge = "";
+  private subnet = "";
+  private policyFailure: string | null = null;
   private closing = false;
   private storageFailure: string | null = null;
   private readonly cleaning = new Set<string>();
@@ -171,7 +177,36 @@ export class Containers {
       throw new Error("Cannot read the workspace network subnet");
     }
     // the daemon derives a bridge from the network id unless it was given a name of its own.
-    const bridge = network.Options?.["com.docker.network.bridge.name"] || `br-${network.Id.slice(0, 12)}`;
+    this.bridge = network.Options?.["com.docker.network.bridge.name"] || `br-${network.Id.slice(0, 12)}`;
+    this.subnet = subnet;
+    this.network = name;
+    await this.restorePolicy();
+  }
+
+  /** Rebuilds the rules and proves them again; the script is written to be re-run at any time. */
+  async restorePolicy(): Promise<void> {
+    await this.policyHelper([
+      "install",
+      policyChain(this.config.namespace),
+      this.bridge,
+      this.subnet,
+      this.config.networkMbit ?? "",
+      ...this.config.blockedCidrs,
+    ]);
+    await this.verifyNetwork();
+  }
+
+  /**
+   * Whether the rules are still the ones that were installed. Read from the host's tables rather than
+   * inferred from behaviour: an address nobody answers looks the same blocked or not, so the reliable
+   * question is whether the chains are still there and still hooked up.
+   */
+  async policyHolds(): Promise<boolean> {
+    return await this.policyHelper(["check", policyChain(this.config.namespace)])
+      .then(() => true).catch(() => false);
+  }
+
+  private async policyHelper(args: string[]): Promise<void> {
     await docker([
       "run",
       "--rm",
@@ -188,14 +223,8 @@ export class Containers {
       "--entrypoint",
       "/usr/local/bin/netpolicy.sh",
       this.image,
-      policyChain(this.config.namespace),
-      bridge,
-      subnet,
-      this.config.networkMbit ?? "",
-      ...this.config.blockedCidrs,
+      ...args,
     ], { timeoutMs: 120_000 });
-    this.network = name;
-    await this.verifyNetwork();
   }
 
   /** Installing rules is not the same as having them: this asks a workspace what it can actually reach. */
@@ -218,8 +247,17 @@ export class Containers {
       "-c",
       PROBE,
     ], { timeoutMs: 120_000, includeStderr: true });
-    const reached = new TextDecoder().decode(reachable).trim();
-    if (reached) throw new Error(`Workspace network policy is not in effect: ${reached}`);
+    const found = new TextDecoder().decode(reachable).trim().split("\n").filter(Boolean);
+    const leaks = found.filter((line) => line.startsWith("leak "));
+    if (leaks.length) {
+      throw new Error(`Workspace network policy is not in effect: ${leaks.join(", ")}`);
+    }
+    if (found.includes("no-egress")) {
+      console.error(
+        "workspaces cannot reach the public internet — check the host or provider firewall; " +
+          "on a ufw host, DEFAULT_FORWARD_POLICY is the usual cause",
+      );
+    }
   }
 
   async ensure(id: string): Promise<string> {
@@ -230,7 +268,16 @@ export class Containers {
     this.storageFailure = message;
   }
 
+  blockPolicy(message: string | null): void {
+    this.policyFailure = message;
+  }
+
+  get policed(): boolean {
+    return this.config.network === "open";
+  }
+
   private admit(id: string): void {
+    if (this.policyFailure) throw new RequestError(this.policyFailure, 503);
     if (this.storageFailure) throw new RequestError(this.storageFailure, 507);
     if (this.cleaning.has(id)) throw new RequestError("Workspace cleanup is in progress", 409);
   }

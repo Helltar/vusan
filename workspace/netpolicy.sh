@@ -5,14 +5,29 @@
 set -euo pipefail
 export PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
 
-chain="${1:?missing chain}"
-bridge="${2:?missing bridge}"
-subnet="${3:?missing subnet}"
-mbit="${4:-}"
-shift 4 || shift $#
+mode="${1:?missing mode}"
+chain="${2:?missing chain}"
+[[ "$chain" =~ ^[A-Z][A-Z0-9_]{2,24}$ ]] || { echo "invalid chain name" >&2; exit 1; }
+
+# `check` answers one question — is the policy still the one we installed — and answers it by reading
+# the host's tables rather than by inference. A chain deleted, flushed or unhooked is every way a policy
+# realistically disappears: a firewall tool rebuilding the tables, an administrator flushing them, a
+# switch to another frontend. Exiting non-zero is the whole protocol.
+if [[ "$mode" == check ]]; then
+  iptables -C DOCKER-USER -j "$chain" || exit 1
+  iptables -C INPUT -j "${chain}_IN" || exit 1
+  [[ "$(iptables -S "$chain" | wc -l)" -gt 1 ]] || exit 1
+  [[ "$(iptables -S "${chain}_IN" | wc -l)" -gt 1 ]] || exit 1
+  exit 0
+fi
+[[ "$mode" == install ]] || { echo "unknown mode" >&2; exit 1; }
+
+bridge="${3:?missing bridge}"
+subnet="${4:?missing subnet}"
+mbit="${5:-}"
+shift 5 || shift $#
 blocked=("$@")
 
-[[ "$chain" =~ ^[A-Z][A-Z0-9_]{2,24}$ ]] || { echo "invalid chain name" >&2; exit 1; }
 [[ "$bridge" =~ ^[a-zA-Z0-9_.-]{1,15}$ ]] || { echo "invalid bridge name" >&2; exit 1; }
 [[ "$subnet" =~ ^([0-9]{1,3}\.){3}[0-9]{1,3}/(3[0-2]|[12]?[0-9])$ ]] || { echo "invalid subnet" >&2; exit 1; }
 [[ -z "$mbit" || "$mbit" =~ ^[1-9][0-9]{0,4}$ ]] || { echo "invalid bandwidth" >&2; exit 1; }
