@@ -12,6 +12,7 @@ private val log = KotlinLogging.logger {}
 
 internal const val TASKS_COMMAND = "tasks"
 internal const val CLEAR_COMMAND = "clear"
+internal const val STOP_COMMAND = "stop"
 
 /**
  * Publish the command menu Telegram offers next to the input field, one list per [Language].
@@ -30,7 +31,8 @@ internal suspend fun TelegramClient.publishCommandMenu() {
         val commands =
             listOf(
                 BotCommand(TASKS_COMMAND, messages.tasksCommandDescription),
-                BotCommand(CLEAR_COMMAND, messages.clearCommandDescription)
+                BotCommand(CLEAR_COMMAND, messages.clearCommandDescription),
+                BotCommand(STOP_COMMAND, messages.stopCommandDescription)
             )
 
         // the list without a language answers everyone whose own language has no dedicated one

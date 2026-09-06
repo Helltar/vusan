@@ -88,7 +88,7 @@ A normal user message travels:
    `media_group_id`; the runner buffers them until the update stream goes quiet (`ALBUM_QUIET_PERIOD`, or the ten-item
    album cap) and handles the batch as one gallery message: the caption may sit on any album part, only the first
    inspectable item becomes the `AttachedFile`, and the agent is told how many items it cannot see.
-   `/tasks`, `/clear`, and task-menu callback queries take direct paths that never enter the agent loop. Every
+   `/tasks`, `/clear`, `/stop`, and task-menu callback queries take direct paths that never enter the agent loop. Every
    pressed button reaches `CallbackRouter`, which rechecks the allowlist and picks the flow: an agent-created
    inline-choice callback is validated and consumed by `InlineChoiceHandler`, and its selected option then enters the
    agent loop as the user's next turn. Callback data no handler recognizes (a button from an older build) is still
@@ -333,6 +333,15 @@ A normal user message travels:
   while preserving the active/paused state; changing a cron timezone without replacing the expression recalculates
   its next occurrence. In groups, `listTasks`, edit, pause, resume, and cancel share the menu's current-chat scope
   instead of exposing tasks from private or unrelated chats.
+- **Stopping a turn** — `/stop` cancels whatever the caller's conversation is running: the model call, the tool
+  inside it, and everything that tool started, since all of them are children of the turn's job. It is the one path
+  that must not take the conversation lock, because the turn it interrupts is holding it — so `AgentRunner` keeps the
+  running turn's `Job` in a small register (`RunningTurns`) alongside the lock, keyed the same way, and only a turn
+  that has actually started is in it. The interrupted turn reports itself rather than the command doing it: on
+  cancellation it hands its progress draft the stopped notice and replies with it, under `NonCancellable`, because a
+  live draft blocks the input field until something replaces it. `/stop` answers only when there was nothing running.
+  Work outside the process outlives the cancellation — a workspace command keeps going on its own machine until its
+  timeout, and the model can list and cancel those through the workspace tools.
 - **Direct history clear** — `/clear` bypasses the LLM, deletes the caller's conversation history **in the chat the
   command was sent from**, and sends a localized confirmation. Their history in other chats, and everyone else's in
   this one, are untouched: the wipe is as narrow as the conversation it belongs to, which is what keeps `/clear` in a
@@ -610,6 +619,7 @@ A symptom-to-source map for finding the right file fast. Paths are under
 | A chat's tasks all went paused on their own, or one keeps firing into a chat the bot was removed from | `telegram/BotMembership.kt` (the `my_chat_member` path) + `telegram/delivery/TelegramErrors.kt` (`isChatUnreachable`) + `tasks/TaskScheduler.kt` (`parkTasksOfUnreachableChat`)                                                                                                                |
 | A tool is missing in one group but present elsewhere, or a chat restriction is stale                | `telegram/ChatProfile.kt` (`capabilitiesOf`, the cache and its `forget`) + `tools/ToolRegistryFactory.buildRegistry` (which capability gates which tool)                                                                                                                                       |
 | `/tasks` or a plain-language task pause/resume/cancel fails                      | `telegram/callback/TaskMenuHandler.kt` (rendering, ownership, callbacks) + `tools/tasks/TaskTools.kt` (agent path) + `tasks/TasksRepository.kt` (shared scoped state changes)                                                                                                                                   |
+| `/stop` does not stop anything, or a turn keeps a draft on screen after it | `agent/RunningTurns.kt` (what is registered and cancelled) + `agent/AgentRunner.kt` (`stop`, and the lock the command must not take) + `telegram/AgentTurns.kt` (the notice and draft handoff on cancellation) |
 | `/clear` reports success but history survives                                    | `agent/AgentRunner.kt` (`clearConversation` and the turn lock that also guards the append) + `tools/conversation/ConversationTools.kt` (agent path) + `agent/conversation/ConversationRepository.kt` (shared storage operation)                                                                                            |
 | An agent choice button does nothing, repeats, reaches the wrong user, loses the photo, or its answer replies to the bot's own question | `tools/choice/InlineChoiceTools.kt` (tool contract) + `telegram/callback/InlineChoiceHandler.kt` (callback ownership/consumption, origin message id, parked attachment) + `telegram/AgentTurns.kt` (the follow-up turn and its reply anchor)                                                                             |
 | An env var has no effect                                                         | `config/AppConfig.kt` (parsing) — and check it is documented in [`configuration.md`](configuration.md) + [`env/vusan.env.example`](../env/vusan.env.example)                                                                                                                                                            |

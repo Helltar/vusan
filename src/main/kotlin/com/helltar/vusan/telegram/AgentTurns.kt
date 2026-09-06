@@ -30,6 +30,9 @@ import com.helltar.vusan.telegram.inbound.replyToMessageIdOrNull
 import com.helltar.vusan.telegram.inbound.senderIdOrNull
 import com.helltar.vusan.telegram.inbound.toMessageContext
 import io.github.oshai.kotlinlogging.KotlinLogging
+import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.NonCancellable
+import kotlinx.coroutines.withContext
 import org.telegram.telegrambots.meta.api.objects.User
 import org.telegram.telegrambots.meta.api.objects.message.Message
 import org.telegram.telegrambots.meta.generics.TelegramClient
@@ -125,7 +128,7 @@ internal class AgentTurns(
             inputKind = inputKind,
             waitForTurn = false,
             deliver = { result -> delivery.send(message, result) },
-            sendFallback = { delivery.sendReply(message, Messages.of(language).fallbackErrorReply) }
+            reply = { text -> delivery.sendReply(message, text) }
         )
     }
 
@@ -166,7 +169,7 @@ internal class AgentTurns(
                     messages = messages
                 )
             },
-            sendFallback = { delivery.sendReply(message, messages.fallbackErrorReply, selection.originMessageId) }
+            reply = { text -> delivery.sendReply(message, text, selection.originMessageId) }
         )
     }
 
@@ -175,7 +178,7 @@ internal class AgentTurns(
         inputKind: String,
         waitForTurn: Boolean,
         deliver: suspend (AgentResult) -> Unit,
-        sendFallback: suspend () -> Unit
+        reply: suspend (text: String) -> Unit
     ) {
         log.info {
             buildString {
@@ -211,13 +214,34 @@ internal class AgentTurns(
             client.handOffProgressDraft(request, result)
             deliver(result)
         } catch (error: Throwable) {
-            error.rethrowIfCancellation()
+            // `/stop` cancels this job wherever it happens to be. The turn still owns its progress draft,
+            // and a live draft blocks the input field until something replaces it, so the bubble is closed
+            // and the chat told — under NonCancellable, because the coroutine is already on its way out.
+            if (error is CancellationException) {
+                val messages = Messages.of(request.language)
+
+                withContext(NonCancellable) {
+                    runCatching {
+                        client.handOffProgressDraft(
+                            request,
+                            AgentResult(outputs = emptyList(), comment = messages.turnStoppedNotice)
+                        )
+                        reply(messages.turnStoppedNotice)
+                    }.onFailure { stopError ->
+                        log.warn(stopError) {
+                            "failed to report a stopped turn for chat=${request.chatId} user=${request.userId}"
+                        }
+                    }
+                }
+
+                throw error
+            }
 
             log.error(error) {
                 "telegram $inputKind handling failed for chat=${request.chatId} user=${request.userId}"
             }
 
-            runCatching { sendFallback() }
+            runCatching { reply(Messages.of(request.language).fallbackErrorReply) }
                 .onFailure { replyError ->
                     replyError.rethrowIfCancellation()
                     log.warn(replyError) {

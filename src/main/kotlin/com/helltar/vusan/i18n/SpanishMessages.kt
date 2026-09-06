@@ -25,6 +25,11 @@ internal object SpanishMessages : Messages {
         "El historial de nuestra conversación en este chat está borrado. " +
                 "Los demás chats, la memoria y las tareas programadas siguen intactos. 🧹"
 
+    override val turnStoppedNotice =
+        "Detenido. Lo que ya envié se queda; el historial y los archivos no cambian. ✋"
+
+    override val nothingToStopReply = "Ahora mismo no estoy haciendo nada — no hay nada que detener 🙂"
+
     override val voiceEmptyReply = "No oigo nada en ese mensaje de voz — inténtalo otra vez o escríbelo 🙉"
 
     override val voiceTranscriptionFailedReply = "No pude transcribir ese mensaje de voz — mejor escríbelo 😊"
@@ -51,6 +56,7 @@ internal object SpanishMessages : Messages {
 
     override val tasksCommandDescription = "Gestionar tareas programadas"
     override val clearCommandDescription = "Borrar el historial de la conversación"
+    override val stopCommandDescription = "Detener lo que estoy haciendo ahora"
 
     override fun voiceTooLongReply(durationSeconds: Long, maxSeconds: Long): String =
         "Ese mensaje de voz dura ${durationSeconds}s — solo puedo transcribir hasta ${maxSeconds}s, " +

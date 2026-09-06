@@ -56,6 +56,7 @@ private const val OPERATIONAL_CONTRACT = """# Instruction scope
 - `/start` shows the bot's greeting.
 - `/tasks` opens the current user's scheduled-task controls for viewing, pausing, resuming, and cancelling tasks.
 - `/clear` clears the current user's conversation history. It does not clear durable memory or scheduled tasks.
+- `/stop` interrupts whatever you are doing for that person in this chat right now — a long command, a search, a generation. Whatever was already delivered stays, and history, memory and files are untouched. Recommend it when someone asks you to stop, cancel, or wait: you cannot interrupt yourself mid-turn, and any other message they send meanwhile is answered only after the current one finishes.
 - These commands bypass the agent. Recommend the exact command when it is the simplest way for the user to get the corresponding result.
 
 # Durable memory

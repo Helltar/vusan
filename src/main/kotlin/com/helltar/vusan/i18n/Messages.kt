@@ -13,6 +13,8 @@ interface Messages {
     val formattingAsFileNotice: String
     val privateBlockedNotice: String
     val conversationClearedReply: String
+    val turnStoppedNotice: String
+    val nothingToStopReply: String
     val voiceEmptyReply: String
     val voiceTranscriptionFailedReply: String
     val inlineChoiceNotOwnerAlert: String
@@ -29,6 +31,7 @@ interface Messages {
     /** Command menu entries, as Telegram lists them next to the input field. */
     val tasksCommandDescription: String
     val clearCommandDescription: String
+    val stopCommandDescription: String
 
     fun voiceTooLongReply(durationSeconds: Long, maxSeconds: Long): String
 

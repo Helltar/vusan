@@ -349,6 +349,7 @@ internal class TelegramBotRunner(
             command.matches("start", profile) -> handleStartCommand(message, profile)
             command.matches(TASKS_COMMAND, profile) -> handleTasksCommand(message, profile)
             command.matches(CLEAR_COMMAND, profile) -> handleClearCommand(message, profile)
+            command.matches(STOP_COMMAND, profile) -> handleStopCommand(message, profile)
             else -> Unit
         }
     }
@@ -388,6 +389,26 @@ internal class TelegramBotRunner(
             log.error(error) { "failed to send task menu for chat=${message.chatIdLong} user=$userId" }
             delivery.sendReply(message, messages.fallbackErrorReply)
         }
+    }
+
+    // it arrives on its own coroutine, so the turn it stops holding the conversation lock is no obstacle:
+    // that is the whole point — every other path into the agent would answer `busyReply` and wait.
+    private suspend fun handleStopCommand(message: Message, botProfile: BotProfile) {
+        if (!message.isAccepted(botProfile)) return
+
+        val userId =
+            message.senderIdOrNull() ?: run {
+                log.warn { "skipping /stop without sender user (chat=${message.chatIdLong})" }
+                return
+            }
+
+        // the stopped turn reports where it was working; this only answers when there was nothing to stop.
+        if (agent.stop(userId, message.chatIdLong)) {
+            log.info { "stopped the running turn: chat=${message.chatIdLong} user=$userId" }
+            return
+        }
+
+        delivery.sendReply(message, Messages.of(message.language).nothingToStopReply)
     }
 
     private suspend fun handleClearCommand(message: Message, botProfile: BotProfile) {

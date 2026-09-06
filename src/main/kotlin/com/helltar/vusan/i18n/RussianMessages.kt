@@ -23,6 +23,11 @@ internal object RussianMessages : Messages {
     override val conversationClearedReply =
         "История нашей переписки в этом чате очищена. Другие чаты, память и запланированные задачи не тронуты. 🧹"
 
+    override val turnStoppedNotice =
+        "Остановил. Что уже отправлено — остаётся; история и файлы не тронуты. ✋"
+
+    override val nothingToStopReply = "Сейчас ничего не делаю — нечего останавливать 🙂"
+
     override val voiceEmptyReply = "Ничего не слышу в этом голосовом — попробуй ещё раз или напиши текстом 🙉"
 
     override val voiceTranscriptionFailedReply = "Не удалось распознать это голосовое — лучше напиши текстом 😊"
@@ -49,6 +54,7 @@ internal object RussianMessages : Messages {
 
     override val tasksCommandDescription = "Управлять запланированными задачами"
     override val clearCommandDescription = "Очистить историю переписки"
+    override val stopCommandDescription = "Остановить то, что я сейчас делаю"
 
     override fun voiceTooLongReply(durationSeconds: Long, maxSeconds: Long): String =
         "Это голосовое длится ${durationSeconds}с — я могу распознать не больше ${maxSeconds}с, " +

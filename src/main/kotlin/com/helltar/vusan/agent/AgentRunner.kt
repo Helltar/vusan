@@ -97,6 +97,7 @@ class AgentRunner(
     }
 
     private val conversationLocks = HashMap<ConversationKey, ConversationLock>()
+    private val running = RunningTurns<ConversationKey>()
 
     suspend fun handle(request: AgentRequest, onToolStarting: (activity: ToolActivity?) -> Unit = {}): AgentResult {
         val key = ConversationKey(request.userId, request.chatId)
@@ -108,7 +109,7 @@ class AgentRunner(
             }
 
             try {
-                return runAgent(request, onToolStarting)
+                return running.track(key) { runAgent(request, onToolStarting) }
             } finally {
                 lock.unlock()
             }
@@ -116,6 +117,15 @@ class AgentRunner(
             releaseLock(key)
         }
     }
+
+    /**
+     * Cancels the turn this conversation is running, and reports whether there was one. What it happened
+     * to be doing does not matter: the model call, the tool it is inside and everything that tool started
+     * are children of the same job. A workspace command outlives it on its own machine, bounded by its own
+     * timeout, and the model can list and cancel those separately.
+     */
+    fun stop(userId: Long, chatId: Long): Boolean =
+        running.cancel(ConversationKey(userId, chatId))
 
     suspend fun handleScheduled(request: AgentRequest): AgentResult =
         handleQueued(request)
@@ -128,7 +138,7 @@ class AgentRunner(
         val lock = retainLock(key)
 
         try {
-            return lock.withLock { runAgent(request, onToolStarting) }
+            return lock.withLock { running.track(key) { runAgent(request, onToolStarting) } }
         } finally {
             releaseLock(key)
         }

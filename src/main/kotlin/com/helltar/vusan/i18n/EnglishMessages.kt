@@ -23,6 +23,11 @@ internal object EnglishMessages : Messages {
     override val conversationClearedReply =
         "Our conversation history in this chat is cleared. Other chats, memory and scheduled tasks are unchanged. 🧹"
 
+    override val turnStoppedNotice =
+        "Stopped. Anything already sent stays; history and files are untouched. ✋"
+
+    override val nothingToStopReply = "I am not doing anything right now — nothing to stop 🙂"
+
     override val voiceEmptyReply = "I couldn't hear anything in that voice message — try again or send it as text 🙉"
 
     override val voiceTranscriptionFailedReply = "I couldn't transcribe that voice message — send it as text instead 😊"
@@ -49,6 +54,7 @@ internal object EnglishMessages : Messages {
 
     override val tasksCommandDescription = "Manage scheduled tasks"
     override val clearCommandDescription = "Clear conversation history"
+    override val stopCommandDescription = "Stop what I am doing right now"
 
     override fun voiceTooLongReply(durationSeconds: Long, maxSeconds: Long): String =
         "That voice message is ${durationSeconds}s long — I can only transcribe up to ${maxSeconds}s, " +
