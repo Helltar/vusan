@@ -20,14 +20,16 @@ import kotlin.time.Duration.Companion.seconds
 
 private val log = KotlinLogging.logger {}
 
-// what we tell the backend the calling Codex client is. reported from the locally installed CLI so the
-// value stays truthful as it is upgraded; the constant is only a floor for hosts where the binary is
-// absent but auth.json was copied in.
-private const val CODEX_FALLBACK_CLIENT_VERSION = "0.146.1"
+// the Codex client version we claim to the backend. `/models` is filtered by it: a model whose
+// `minimal_client_version` is newer is simply absent from the catalog, so an understated value makes
+// the newest model look like one the plan does not offer. a locally installed CLI wins while it is
+// newer, so a host that upgrades codex sees new models without a vusan release; the constant is the
+// floor everywhere else, the container included, where there is no binary to ask.
+private const val CODEX_CLIENT_VERSION_FLOOR = "0.153.4"
 private val CODEX_VERSION = Regex("""\d+\.\d+\.\d+""")
 
-private val detectedClientVersion: String by lazy {
-    detectCodexClientVersion() ?: CODEX_FALLBACK_CLIENT_VERSION
+private val reportedClientVersion: String by lazy {
+    detectCodexClientVersion()?.takeIf { it isNewerThan CODEX_CLIENT_VERSION_FLOOR } ?: CODEX_CLIENT_VERSION_FLOOR
 }
 
 internal fun detectCodexClientVersion(
@@ -51,7 +53,18 @@ internal fun detectCodexClientVersion(
         }
     }.getOrNull()
 
-internal fun codexClientVersion(): String = detectedClientVersion
+internal fun codexClientVersion(): String = reportedClientVersion
+
+/** Numeric `major.minor.patch` ordering, so `0.99.0` does not outrank `0.146.1` the way strings do. */
+internal infix fun String.isNewerThan(other: String): Boolean {
+    val mine = versionParts()
+    val theirs = other.versionParts()
+
+    return mine.zip(theirs).firstOrNull { (left, right) -> left != right }?.let { (left, right) -> left > right }
+        ?: (mine.size > theirs.size)
+}
+
+private fun String.versionParts(): List<Int> = split('.').map { it.toIntOrNull() ?: 0 }
 
 /** Whitelisted `codex_cli_rs/<version>` shape, with the real caller named in the trailing comment. */
 internal fun codexUserAgent(): String = "$CODEX_ORIGINATOR/${codexClientVersion()} (Vusan)"
@@ -222,8 +235,11 @@ suspend fun verifyCodexModel(http: HttpClient, auth: CodexAuthStore, model: Stri
     val match = catalog.firstOrNull { it.id.equals(model.trim(), ignoreCase = true) }
 
     checkNotNull(match) {
+        // the catalog is filtered by the version we claim, so a model too new for it is missing rather
+        // than refused — worth naming here, since the list alone reads as an entitlement problem.
         "LLM_MODEL=[$model] is not available on this ChatGPT subscription. " +
-                "Available models: ${catalog.map { it.id }.sorted().joinToString()}"
+                "Available models: ${catalog.map { it.id }.sorted().joinToString()}. " +
+                "Models newer than client_version=[${codexClientVersion()}] are hidden from that list."
     }
 
     return match

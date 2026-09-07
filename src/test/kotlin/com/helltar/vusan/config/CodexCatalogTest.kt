@@ -186,6 +186,35 @@ class CodexCatalogTest {
     }
 
     @Test
+    fun `version ordering compares numbers rather than strings`() {
+        // the pair that matters: as strings "0.99.0" sorts above "0.146.1"
+        assertTrue("0.146.1" isNewerThan "0.99.0")
+        assertTrue("0.153.4" isNewerThan "0.153.0")
+        assertTrue("0.153.1" isNewerThan "0.153")
+        assertTrue(!("0.153.0" isNewerThan "0.153.0"))
+        assertTrue(!("0.152.9" isNewerThan "0.153.0"))
+    }
+
+    @Test
+    fun `the catalog request claims a client version the newest models require`() = runBlocking {
+        var version: String? = null
+
+        val http =
+            Http.createClient(
+                MockEngine { request ->
+                    version = request.url.parameters["client_version"]
+                    respondJson("""{"models":[]}""")
+                }
+            )
+
+        fetchCodexModels(http, store())
+
+        // `/models` omits every model whose `minimal_client_version` is newer than what we claim, and a
+        // missing model reads as one the plan does not offer. `0.153.0` is what gpt-6-astra requires.
+        assertTrue(comparable(version.orEmpty()) >= comparable("0.153.0"), version.orEmpty())
+    }
+
+    @Test
     fun `the request carries the bearer token and account header`() = runBlocking {
         var authorization: String? = null
         var account: String? = null
@@ -294,6 +323,9 @@ private fun codexModel(
         supportedReasoningEfforts = supportedEfforts,
         supportedServiceTiers = supportedServiceTiers
     )
+
+/** Zero-padded so plain string ordering matches version ordering, independently of production code. */
+private fun comparable(version: String): String = version.split('.').joinToString(".") { it.padStart(5, '0') }
 
 private fun catalogClient(body: String) = Http.createClient(MockEngine { respondJson(body) })
 

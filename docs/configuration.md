@@ -188,6 +188,11 @@ four settings are checked against that list:
 
 Older catalog responses without capability metadata retain the compatible image-capable default.
 
+**When a brand-new model is missing.** That list is filtered by the Codex client version Vusan
+claims, so a model released alongside a newer CLI is absent from it and startup rejects it as one the
+plan does not offer. Vusan claims the newest CLI it knows of, and the installed one when that is
+newer, so upgrading `codex` on the host settles it.
+
 **A faster serving tier.** `CODEX_SERVICE_TIER=priority` buys roughly the speed-up the Codex CLI
 offers as `/fast`, at the price of spending the plan's allowance quicker. It is off unless you set
 it, and startup fails if the chosen model does not offer the tier, so check the model first:
