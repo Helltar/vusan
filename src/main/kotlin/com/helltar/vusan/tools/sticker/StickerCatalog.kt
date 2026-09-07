@@ -1,5 +1,6 @@
 package com.helltar.vusan.tools.sticker
 
+import com.helltar.vusan.agent.neutralizePromptBlocks
 import com.helltar.vusan.budget.tokenBudgetStop
 import com.helltar.vusan.common.collapseWhitespaceAndCap
 import com.helltar.vusan.common.rethrowIfCancellation
@@ -125,12 +126,14 @@ internal fun <T> roundRobin(sources: List<List<T>>, limit: Int): List<T> {
 
 internal data class StickerEntry(val id: Long, val setName: String, val emoji: String?, val description: String)
 
+// the description is written from an image somebody else sent into the chat, and the line lands both
+// in `<sticker_catalog>` and in a tool result, so it is defused once here for both.
 internal fun StickerEntry.catalogLine(): String =
     buildString {
         append('#').append(id).append(' ')
         emoji?.let { append(it).append(' ') }
         append(description)
-    }
+    }.neutralizePromptBlocks()
 
 private data class SearchMatch(val entry: StickerEntry, val score: Int)
 

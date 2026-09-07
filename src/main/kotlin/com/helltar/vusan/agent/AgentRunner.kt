@@ -555,13 +555,15 @@ private fun currentTimeBlock(): String {
 }
 
 // renders memory as `#id content` lines so the model can reference an id when calling `forgetMemory`.
+// an entry is written from what somebody said, and `group_memory` is editable by every member of the
+// chat, so it is quoted text and gets the same defusing.
 private fun memoryBlock(
     tag: String,
     entries: List<MemoryEntry>
 ): String? =
     entries
         .takeIf { it.isNotEmpty() }
-        ?.joinToString("\n") { "#${it.id} ${it.content}" }
+        ?.joinToString("\n") { "#${it.id} ${it.content.neutralizePromptBlocks()}" }
         ?.let { xmlBlock(tag, it) }
 
 // the provider's HTTP status is embedded in the client exception message ("Status code: 429").

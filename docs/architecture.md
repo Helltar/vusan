@@ -125,8 +125,10 @@ A normal user message travels:
    nothing behind it — and no history carries bytes, which is why the replied file travels along and "edit this"
    works against a picture the bot drew. A reply that quotes part of a message adds `<quoted_fragment>` right before
    the request, so the fragment says which part was asked about.
-   Text quoted from outside — the message itself, a transcript, a replied-to post — has this prompt's own block
-   tags defused first, so a message containing `</user_message>` cannot end a block early.
+   Text quoted from outside has this prompt's own block tags defused first — the message itself, a transcript, a
+   replied-to post, the group's transcript, durable memory, the recap, the sticker catalog — so no one's text can end
+   a block early or open one of its own. `xmlBlock` escapes only a closing tag of its own name, which is what keeps
+   nesting working, so this is the step that stops a group member forging a block in somebody else's turn.
    `AgentTurns.dispatchToAgent` assembles the agent input and the shorter history input.
 4. **Run** — `AgentRunner.handle` takes the conversation lock (or returns "busy"), turns the request away with a
    "come back later" reply when the day's token budget is already spent, loads durable memory

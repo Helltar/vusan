@@ -1,5 +1,6 @@
 package com.helltar.vusan.agent.grouplog
 
+import com.helltar.vusan.agent.neutralizePromptBlocks
 import com.helltar.vusan.common.limitTo
 import java.time.LocalDate
 import java.time.ZoneId
@@ -77,6 +78,10 @@ internal fun renderGroupLog(
     return RenderedGroupLog(lines.joinToString("\n"), lines.size)
 }
 
+// everything on the line but the clock is something a person typed — the name they gave themselves,
+// the channel they forwarded, the message itself — and this transcript is shown inside `<recent_chat>`,
+// ahead of the request. neutralizing the finished line is what stops one group member from opening a
+// block of the prompt's own vocabulary in somebody else's turn.
 private fun GroupLogEntry.toLine(zone: ZoneId, formatter: DateTimeFormatter, maxTextChars: Int): String =
     buildString {
         append(formatter.format(ZonedDateTime.ofInstant(sentAt, zone)))
@@ -85,7 +90,7 @@ private fun GroupLogEntry.toLine(zone: ZoneId, formatter: DateTimeFormatter, max
         forwardFrom?.let { append(" [forward from $it]") }
         mediaMarker()?.let { append(" $it") }
         text?.let { append(": ${it.limitTo(maxTextChars)}") }
-    }
+    }.neutralizePromptBlocks()
 
 private fun GroupLogEntry.authorLabel(): String =
     if (kind == GroupLogEntry.BOT_KIND) BOT_LABEL else senderUsername ?: senderName ?: ANONYMOUS_LABEL

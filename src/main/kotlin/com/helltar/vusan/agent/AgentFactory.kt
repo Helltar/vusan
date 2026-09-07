@@ -105,7 +105,8 @@ class AgentFactory(
         val seededPrompt =
             prompt(id = "vusan-user-$userId", params = chatParams) {
                 system(preparation.systemPrompt)
-                conversation.summary?.let { user(xmlBlock("conversation_recap", it)) }
+                // the recap is written from quoted events, so it can carry a delimiter out of them.
+                conversation.summary?.let { user(xmlBlock("conversation_recap", it.neutralizePromptBlocks())) }
 
                 conversation.turns.forEach { turn ->
                     when (turn.role) {

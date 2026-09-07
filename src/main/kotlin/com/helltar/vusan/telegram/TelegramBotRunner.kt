@@ -2,6 +2,7 @@ package com.helltar.vusan.telegram
 
 import com.helltar.vusan.agent.AgentRunner
 import com.helltar.vusan.agent.grouplog.GroupLogRepository
+import com.helltar.vusan.agent.neutralizePromptBlocks
 import com.helltar.vusan.common.limitTo
 import com.helltar.vusan.common.rethrowIfCancellation
 import com.helltar.vusan.common.xmlBlock
@@ -515,7 +516,13 @@ internal class TelegramBotRunner(
         val markdown = message.richMessage.toRichMarkdown().limitTo(MAX_RICH_MESSAGE_CHARS)
         if (markdown.isBlank()) return
 
-        turns.dispatchToAgent(message, xmlBlock("rich_message", markdown), botProfile, inputKind = "rich message")
+        turns.dispatchToAgent(
+            message,
+            // flattened markdown never passes MessageSanitizer, which is where ordinary text is defused.
+            xmlBlock("rich_message", markdown.neutralizePromptBlocks()),
+            botProfile,
+            inputKind = "rich message"
+        )
     }
 
     private suspend fun handleStickerUpdate(message: Message, botProfile: BotProfile) {

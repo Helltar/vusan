@@ -117,12 +117,14 @@ internal fun systemPromptFor(
 // only these exact names are neutralized in quoted text: escaping every `<` instead would mangle
 // the ordinary case of someone asking about `<div>` or `List<String>`. Names generic enough to
 // appear in pasted markup on their own — `user`, `question`, `caption` — are deliberately left out.
+// an opening tag is matched with its attributes too: `<scheduled_task>` is written with them, so a
+// forged one would otherwise be the single spelling that survives.
 private val PROMPT_BLOCK_TAG =
     Regex(
         "</?(?:album|attached_file|audio_transcript|conversation_recap|current_time|group_memory|" +
                 "inline_choice|message_context|operational_contract|personality|quoted_fragment|recent_chat|" +
                 "reply_context|rich_message|scheduled_task|selected_option|sticker_catalog|text_caption|" +
-                "user_memory|user_message)\\s*>",
+                "user_memory|user_message)(?:\\s[^<>\\n]*)?>",
         RegexOption.IGNORE_CASE
     )
 
