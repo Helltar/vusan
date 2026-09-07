@@ -9,17 +9,16 @@ import kotlin.test.assertFailsWith
 class ToolGuardTest {
 
     @Test
-    fun `returns failure string for regular exceptions`() = runBlocking {
-        val result = suspendToolGuard { error("boom") }
-
-        assertEquals("Tool failed: boom", result)
+    fun `reports a regular exception as a failed tool call`() = runBlocking {
+        assertEquals("Tool failed: boom", toolFailure { suspendToolGuard { error("boom") } })
     }
 
     @Test
-    fun `returns failure string for validation failures`() = runBlocking {
-        val result = suspendToolGuard { require(false) { "bad emoji" }; "" }
-
-        assertEquals("Tool failed: bad emoji", result)
+    fun `reports a rejected argument as a failed tool call`() = runBlocking {
+        assertEquals(
+            "Tool failed: bad emoji",
+            toolFailure { suspendToolGuard { require(false) { "bad emoji" }; "" } }
+        )
     }
 
     @Test

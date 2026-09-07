@@ -3,6 +3,7 @@ package com.helltar.vusan.tools.files
 import com.helltar.vusan.infra.Http
 import com.helltar.vusan.outbox.BotOutbox
 import com.helltar.vusan.outbox.BotOutput
+import com.helltar.vusan.tools.toolFailure
 import io.ktor.client.engine.mock.*
 import io.ktor.http.*
 import kotlinx.coroutines.runBlocking
@@ -107,11 +108,11 @@ class FileToolsTest {
         val outbox = BotOutbox()
         val tools = tools(outbox) { respond(content = "secret") }
 
-        val reply = tools.downloadFile(url = "http://127.0.0.1:9090/metrics")
+        val message = toolFailure { tools.downloadFile(url = "http://127.0.0.1:9090/metrics") }
 
         assertTrue(outbox.pending.isEmpty())
-        assertContains(reply, "Tool failed")
-        assertContains(reply, "private or local address")
+        assertContains(message, "Tool failed")
+        assertContains(message, "private or local address")
     }
 
     @Test

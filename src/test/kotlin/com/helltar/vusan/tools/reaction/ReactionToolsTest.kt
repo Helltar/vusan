@@ -3,6 +3,7 @@ package com.helltar.vusan.tools.reaction
 import com.helltar.vusan.outbox.BotOutbox
 import com.helltar.vusan.outbox.BotOutput
 import com.helltar.vusan.request.RequestContext
+import com.helltar.vusan.tools.toolFailure
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFalse
@@ -51,9 +52,9 @@ class ReactionToolsTest {
         val outbox = BotOutbox()
         val tools = ReactionTools(ctx(), outbox)
 
-        val result = tools.setReaction(emoji = "🔥", targetRepliedMessage = true)
+        val message = toolFailure { tools.setReaction(emoji = "🔥", targetRepliedMessage = true) }
 
-        assertTrue("No replied-to message in scope" in result)
+        assertTrue("No replied-to message in scope" in message)
         assertTrue(outbox.pending.isEmpty())
     }
 
@@ -88,35 +89,35 @@ class ReactionToolsTest {
     }
 
     @Test
-    fun `setReaction returns failure string for blank emoji`() = runBlocking {
+    fun `setReaction fails for blank emoji`() = runBlocking {
         val outbox = BotOutbox()
         val tools = ReactionTools(ctx(), outbox)
 
-        val result = tools.setReaction(emoji = "   ")
+        val message = toolFailure { tools.setReaction(emoji = "   ") }
 
-        assertTrue("Reaction emoji must be supplied" in result)
+        assertTrue("Reaction emoji must be supplied" in message)
         assertTrue(outbox.pending.isEmpty())
     }
 
     @Test
-    fun `setReaction returns failure string when emoji argument is omitted entirely`() = runBlocking {
+    fun `setReaction fails when the emoji argument is omitted entirely`() = runBlocking {
         val outbox = BotOutbox()
         val tools = ReactionTools(ctx(), outbox)
 
-        val result = tools.setReaction()
+        val message = toolFailure { tools.setReaction() }
 
-        assertTrue("Reaction emoji must be supplied" in result)
+        assertTrue("Reaction emoji must be supplied" in message)
         assertTrue(outbox.pending.isEmpty())
     }
 
     @Test
-    fun `setReaction returns failure string when no valid target available`() = runBlocking {
+    fun `setReaction fails when no valid target is available`() = runBlocking {
         val outbox = BotOutbox()
         val tools = ReactionTools(ctx(messageId = 0L), outbox)
 
-        val result = tools.setReaction(emoji = "❤")
+        val message = toolFailure { tools.setReaction(emoji = "❤") }
 
-        assertEquals("Tool failed: Reaction target message id must be positive", result)
+        assertEquals("Tool failed: Reaction target message id must be positive", message)
         assertTrue(outbox.pending.isEmpty())
     }
 
@@ -125,9 +126,9 @@ class ReactionToolsTest {
         val outbox = BotOutbox()
         val tools = ReactionTools(ctx(), outbox)
 
-        val result = tools.setReaction(emoji = "👋")
+        val message = toolFailure { tools.setReaction(emoji = "👋") }
 
-        assertTrue("not in Telegram's free reaction set" in result)
+        assertTrue("not in Telegram's free reaction set" in message)
         assertTrue(outbox.pending.isEmpty())
     }
 

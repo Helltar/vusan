@@ -5,6 +5,7 @@ import com.helltar.vusan.outbox.BotOutbox
 import com.helltar.vusan.outbox.BotOutput
 import com.helltar.vusan.tools.files.FileDownloadClient
 import com.helltar.vusan.tools.images.ImageDownloadClient
+import com.helltar.vusan.tools.toolFailure
 import io.ktor.client.engine.mock.*
 import io.ktor.http.*
 import kotlinx.coroutines.runBlocking
@@ -223,6 +224,6 @@ class SearxngToolsTest {
         val http = Http.createClient(MockEngine { throw java.net.ConnectException("Connection refused") })
         val tools = SearxngTools(SearxngClient(http, BASE_URL), ImageDownloadClient(FileDownloadClient(http)), BotOutbox())
 
-        assertContains(tools.metaSearch("kotlin"), "temporarily unavailable")
+        assertContains(toolFailure { tools.metaSearch("kotlin") }, "temporarily unavailable")
     }
 }

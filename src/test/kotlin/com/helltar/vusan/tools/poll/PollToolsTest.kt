@@ -2,6 +2,7 @@ package com.helltar.vusan.tools.poll
 
 import com.helltar.vusan.outbox.BotOutbox
 import com.helltar.vusan.outbox.BotOutput
+import com.helltar.vusan.tools.toolFailure
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertTrue
@@ -51,17 +52,19 @@ class PollToolsTest {
     }
 
     @Test
-    fun `createPoll returns failure string for too few options`() = runBlocking {
+    fun `createPoll fails for too few options`() = runBlocking {
         val outbox = BotOutbox()
         val tools = PollTools(outbox)
 
-        val result =
-            tools.createPoll(
-                question = "Is it worth it?",
-                options = listOf("Yes")
-            )
+        val message =
+            toolFailure {
+                tools.createPoll(
+                    question = "Is it worth it?",
+                    options = listOf("Yes")
+                )
+            }
 
-        assertEquals("Tool failed: Poll must have between 2 and 10 options", result)
+        assertEquals("Tool failed: Poll must have between 2 and 10 options", message)
         assertTrue(outbox.pending.isEmpty())
     }
 
@@ -70,13 +73,15 @@ class PollToolsTest {
         val outbox = BotOutbox()
         val tools = PollTools(outbox)
 
-        val result =
-            tools.createPoll(
-                question = "Choose a fruit",
-                options = listOf("Apple", "apple", "Pear")
-            )
+        val message =
+            toolFailure {
+                tools.createPoll(
+                    question = "Choose a fruit",
+                    options = listOf("Apple", "apple", "Pear")
+                )
+            }
 
-        assertEquals("Tool failed: Poll options must be distinct", result)
+        assertEquals("Tool failed: Poll options must be distinct", message)
         assertTrue(outbox.pending.isEmpty())
     }
 }

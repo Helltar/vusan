@@ -2,6 +2,7 @@ package com.helltar.vusan.tools.message
 
 import com.helltar.vusan.outbox.BotOutput
 import com.helltar.vusan.outbox.BotOutbox
+import com.helltar.vusan.tools.toolFailure
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertIs
@@ -86,9 +87,9 @@ class MessageToolsTest {
         val outbox = BotOutbox()
         val tools = MessageTools(outbox)
 
-        val result = tools.sendRichMessage("   ")
+        val message = toolFailure { tools.sendRichMessage("   ") }
 
-        assertEquals("Tool failed: Rich message must not be empty", result)
+        assertEquals("Tool failed: Rich message must not be empty", message)
         assertTrue(outbox.pending.isEmpty())
     }
 
@@ -97,9 +98,9 @@ class MessageToolsTest {
         val outbox = BotOutbox()
         val tools = MessageTools(outbox)
 
-        val result = tools.sendMessage("   ")
+        val message = toolFailure { tools.sendMessage("   ") }
 
-        assertEquals("Tool failed: Message text must not be empty", result)
+        assertEquals("Tool failed: Message text must not be empty", message)
         assertTrue(outbox.pending.isEmpty())
     }
 

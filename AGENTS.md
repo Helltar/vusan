@@ -144,7 +144,9 @@ then docs per the triggers above.
 
 - Every Koog tool method returning `String` is wrapped in `suspendToolGuard { ... }`
   from [`tools/ToolGuard.kt`](src/main/kotlin/com/helltar/vusan/tools/ToolGuard.kt).
-  Do not add a broad `try/catch` around the body for the same behavior.
+  Do not add a broad `try/catch` around the body for the same behavior. The guard reports
+  a failure by throwing `ToolException`, so koog records the call as failed and the model
+  still reads the message as the tool result; a failing tool is tested with `toolFailure { }`.
 - Use `requireToolText(label, maxChars)` for required text args when it fits.
 - Optional external tools are built through `ToolRegistryFactory.optional(...)`;
   a missing key disables the tool with a warning, not a startup failure.

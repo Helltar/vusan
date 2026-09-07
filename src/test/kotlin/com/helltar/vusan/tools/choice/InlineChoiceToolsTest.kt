@@ -3,6 +3,7 @@ package com.helltar.vusan.tools.choice
 import com.helltar.vusan.outbox.BotOutbox
 import com.helltar.vusan.outbox.BotOutput
 import com.helltar.vusan.request.RequestContext
+import com.helltar.vusan.tools.toolFailure
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFalse
@@ -68,9 +69,9 @@ class InlineChoiceToolsTest {
         val outbox = BotOutbox()
         val tools = InlineChoiceTools(RequestContext(chatId = 7L, userId = 42L, messageId = 9L), outbox) { _, _ -> 0L }
 
-        val result = tools.askWithButtons("Continue?", listOf("Yes", "yes"))
+        val message = toolFailure { tools.askWithButtons("Continue?", listOf("Yes", "yes")) }
 
-        assertEquals("Tool failed: Inline choice options must be distinct", result)
+        assertEquals("Tool failed: Inline choice options must be distinct", message)
         assertTrue(outbox.pending.isEmpty())
     }
 

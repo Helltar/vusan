@@ -2,6 +2,7 @@ package com.helltar.vusan.tools.quiz
 
 import com.helltar.vusan.outbox.BotOutput
 import com.helltar.vusan.outbox.BotOutbox
+import com.helltar.vusan.tools.toolFailure
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertTrue
@@ -36,18 +37,20 @@ class QuizToolsTest {
     }
 
     @Test
-    fun `createQuiz returns failure string for invalid options`() = runBlocking {
+    fun `createQuiz fails for invalid options`() = runBlocking {
         val outbox = BotOutbox()
         val tools = QuizTools(outbox)
 
-        val result =
-            tools.createQuiz(
-                question = "Pick the correct answer",
-                options = listOf("Yes"),
-                correctOptionIndex = 0
-            )
+        val message =
+            toolFailure {
+                tools.createQuiz(
+                    question = "Pick the correct answer",
+                    options = listOf("Yes"),
+                    correctOptionIndex = 0
+                )
+            }
 
-        assertEquals("Tool failed: Quiz must have between 2 and 10 options", result)
+        assertEquals("Tool failed: Quiz must have between 2 and 10 options", message)
         assertTrue(outbox.pending.isEmpty())
     }
 
@@ -56,14 +59,16 @@ class QuizToolsTest {
         val outbox = BotOutbox()
         val tools = QuizTools(outbox)
 
-        val result =
-            tools.createQuiz(
-                question = "Choose a fruit",
-                options = listOf("Apple", "apple", "Pear"),
-                correctOptionIndex = 1
-            )
+        val message =
+            toolFailure {
+                tools.createQuiz(
+                    question = "Choose a fruit",
+                    options = listOf("Apple", "apple", "Pear"),
+                    correctOptionIndex = 1
+                )
+            }
 
-        assertEquals("Tool failed: Quiz options must be distinct", result)
+        assertEquals("Tool failed: Quiz options must be distinct", message)
         assertTrue(outbox.pending.isEmpty())
     }
 }

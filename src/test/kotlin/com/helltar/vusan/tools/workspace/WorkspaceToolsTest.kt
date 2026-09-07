@@ -6,6 +6,7 @@ import com.helltar.vusan.outbox.BotOutput
 import com.helltar.vusan.request.AttachedFile
 import com.helltar.vusan.request.AttachedFileKind
 import com.helltar.vusan.request.RequestContext
+import com.helltar.vusan.tools.toolFailure
 import io.ktor.client.engine.mock.*
 import io.ktor.http.*
 import kotlinx.coroutines.runBlocking
@@ -95,8 +96,8 @@ class WorkspaceToolsTest {
 
     @Test
     fun `capacity refusal reaches the model`() = runBlocking {
-        val result = tools(result = """{"error":"The workspace service is at capacity"}""", status = HttpStatusCode.Conflict).runCommand("ls")
-        assertContains(result, "at capacity")
+        val workspace = tools(result = """{"error":"The workspace service is at capacity"}""", status = HttpStatusCode.Conflict)
+        assertContains(toolFailure { workspace.runCommand("ls") }, "at capacity")
     }
 
     @Test
