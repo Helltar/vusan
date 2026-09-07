@@ -85,11 +85,12 @@ suspend fun main() = coroutineScope {
         val botProfile = telegramClient.botProfile()
 
         // a picture of the bot itself has to show the same face every time, which text-to-image cannot
-        // hold on its own — so the reference is read once, here, and only where it can be used at all.
+        // hold on its own — so the reference is read once, here, and only where it can be used at all:
+        // the self-portrait it edits, and the round video message it puts in the circle.
         val selfImage =
-            config.openAiImage?.let {
+            if (config.openAiImage != null || config.elevenLabsApiKey != null)
                 resolveSelfImage(config.selfImageFile, config.appearance, telegramClient, botProfile.userId)
-            }
+            else null
 
         // the catalog only ever holds stickers vision has looked at, so without vision there is nothing
         // to learn and nothing to offer the model.

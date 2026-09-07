@@ -449,9 +449,10 @@ fills the context window in from the account's model catalog before any message 
 wrap the executor in the `TokenBudget` meter, which everything downstream then uses → build repositories, context
 policy, conversation compactor, the Telegram client and its `BotProfile` — one `getMe` call shared by the runner, which
 matches mentions against it, and `AgentFactory`, which puts the handle in the system prompt → (only when image
-generation is configured) `resolveSelfImage` (`tools/imagegen/SelfImage.kt`), which reads the reference photo
-self-portraits are drawn from: `SELF_IMAGE_FILE` when set, otherwise one `getUserProfilePhotos` on the bot's own id, and
-a failure there is a warning rather than a failed startup → (only with a vision runtime) the `StickerCatalog`,
+generation or `ELEVENLABS_API_KEY` is configured, the two things that use it) `resolveSelfImage`
+(`tools/imagegen/SelfImage.kt`), which reads the reference photo self-portraits and round video messages are drawn from:
+`SELF_IMAGE_FILE` when set, otherwise one `getUserProfilePhotos` on the bot's own id, and a failure there is a warning
+rather than a failed startup → (only with a vision runtime) the `StickerCatalog`,
 `ToolRegistryFactory`, `AgentFactory`, `AgentRunner` → create `TaskMenuHandler` and `InlineChoiceHandler`, and
 optionally enable voice transcription → start `TelegramBotRunner`, which builds its own `AgentTurns` and
 `CallbackRouter` over those, and launch `TaskScheduler` and the sticker description worker, then block on the runner job

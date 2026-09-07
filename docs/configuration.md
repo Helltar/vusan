@@ -274,7 +274,8 @@ Text-to-image invents a face on every call, so "send me a selfie" drawn from the
 a different person each time. Vusan builds a picture of itself from a reference photo instead, which
 keeps one face across every picture it sends. The reference is the bot's own Telegram avatar unless
 a file overrides it, so a deployment that set an avatar in [@BotFather](https://t.me/BotFather)
-already has this.
+already has this. The same photo is what a [round video message](#voice-output) puts in its circle,
+so it is read whenever either of those is enabled.
 
 | Variable          | Description                                                                                           |
 |-------------------|-------------------------------------------------------------------------------------------------------|
