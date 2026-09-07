@@ -46,6 +46,44 @@ class ConversationCompactorTest {
         assertContains(checkNotNull(executor.lastPrompt).messages.last().textContent(), "<conversation_events>")
     }
 
+    // a stored user entry is context first and request last, and the context alone can outrun the cap.
+    @Test
+    fun `a long reply context does not push the request out of the compaction source`() = runBlocking {
+        val executor = CapturingPromptExecutor("- Booking a flight")
+        val model = LLModel(LLMProvider.OpenAI, "test", contextLength = 16_384)
+        val compactor = LlmConversationCompactor(executor, model)
+        val storedEntry =
+            buildString {
+                appendLine("<reply_context>")
+                appendLine("- author: olena")
+                appendLine("- type: text")
+                appendLine("<text_caption>")
+                appendLine("the itinerary as she wrote it ".repeat(20))
+                appendLine("</text_caption>")
+                appendLine("</reply_context>")
+                appendLine()
+                appendLine("<quoted_fragment>")
+                appendLine("the paragraph she highlighted ".repeat(35))
+                appendLine("</quoted_fragment>")
+                appendLine()
+                append("<user_message>\nbook the Tuesday flight instead\n</user_message>")
+            }
+        val interaction =
+            ConversationInteraction(
+                id = "i-2",
+                lastMessageId = 11,
+                createdAt = Instant.EPOCH,
+                turns = listOf(ChatTurn(ChatRole.USER, storedEntry), ChatTurn(ChatRole.ASSISTANT, "done"))
+            )
+
+        compactor.compact(null, listOf(interaction))
+
+        val source = checkNotNull(executor.lastPrompt).messages.last().textContent()
+
+        assertContains(source, "book the Tuesday flight instead")
+        assertContains(source, "- author: olena", message = "the context in front of the request is kept too")
+    }
+
     private class CapturingPromptExecutor(private val answer: String) : PromptExecutor() {
         var lastPrompt: Prompt? = null
 

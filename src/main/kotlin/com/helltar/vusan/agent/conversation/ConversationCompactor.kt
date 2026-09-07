@@ -114,7 +114,7 @@ class LlmConversationCompactor(
             turns.forEach { turn ->
                 when (turn.role) {
                     ChatRole.USER ->
-                        appendLine(xmlBlock("user", turn.content.limitTo(MAX_USER_OR_ASSISTANT_SOURCE_CHARS)))
+                        appendLine(xmlBlock("user", turn.content.limitUserEntryTo(MAX_USER_OR_ASSISTANT_SOURCE_CHARS)))
 
                     ChatRole.ASSISTANT ->
                         appendLine(xmlBlock("assistant", turn.content.limitTo(MAX_USER_OR_ASSISTANT_SOURCE_CHARS)))
@@ -134,4 +134,31 @@ class LlmConversationCompactor(
 
             append("</interaction>")
         }
+}
+
+// below this a context excerpt is too short to say what the request was answering, so the request
+// takes the whole budget instead.
+private const val MIN_CONTEXT_SOURCE_CHARS = 200
+
+private const val USER_MESSAGE_OPEN_TAG = "<user_message>"
+
+/**
+ * Caps a stored user entry, budgeting the request separately from the context in front of it.
+ *
+ * The entry is written context first and request last: reply metadata, then a quoted fragment, and
+ * only then `<user_message>`. Those can run past the cap on their own, so plain head truncation
+ * silently drops the request and leaves a recap built from what the user was replying to instead of
+ * what they asked. Quoted text has its delimiters neutralized, so the opening tag can only be the
+ * real boundary.
+ */
+private fun String.limitUserEntryTo(maxChars: Int): String {
+    if (length <= maxChars) return this
+
+    val requestStart = indexOf(USER_MESSAGE_OPEN_TAG).takeIf { it > 0 } ?: return limitTo(maxChars)
+    val request = substring(requestStart)
+    val contextBudget = maxChars - request.length - 1
+
+    if (contextBudget < MIN_CONTEXT_SOURCE_CHARS) return request.limitTo(maxChars)
+
+    return substring(0, requestStart).trimEnd().limitTo(contextBudget) + "\n" + request
 }

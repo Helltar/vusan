@@ -155,7 +155,10 @@ A normal user message travels:
    The history planner reserves room for output, future tool calls, and estimation error, then admits only complete
    interactions. If an older prefix no longer fits or exceeds the configured recent count,
    `LlmConversationCompactor` merges it into the persisted `<conversation_recap>` before `AgentFactory.build` creates
-   the Koog `AIAgent`. Native catalog context sizes are used automatically; `LLM_CONTEXT_WINDOW_TOKENS` supplies a
+   the Koog `AIAgent`. Every turn is capped on the way into that recap prompt, and a user turn budgets its
+   `<user_message>` first: reply metadata and a quoted fragment are written ahead of the request and can outrun the
+   cap between them, so capping from the front alone would recap what the user was replying to and not what they
+   asked. Native catalog context sizes are used automatically; `LLM_CONTEXT_WINDOW_TOKENS` supplies a
    missing value or overrides stale model metadata.
 5. **Act** — during the agent loop, tools run and push results into the request's `BotOutbox`; tool calls/results are
    recorded for history. Live textual tool results share a cumulative bound derived from the reserved agent-growth
