@@ -199,11 +199,11 @@ A normal user message travels:
       Koog's `onToolCallStarting` resolves the running tool to a neutral `ToolActivity` (`agent/ToolActivity.kt`, keyed
       by `@Tool` method references), and the Telegram layer renders it two ways: as a chat action (`chatActionFor`, e.g.
       `upload_photo` while an image generates) and, once there is something to name, as the turn's status message
-      (`telegram/TurnStatus.kt`, `Messages.progressLabel`). Only one is on screen — both announce the same turn — so the
-      action carries the turn until the status message lands and then stands down, and it keeps the turn to itself when
-      there is no status. A tool too fast to read a caption for is left unmapped and reads as `null`: plain `typing`,
-      and nothing named. During delivery each item is still preceded by the action matching its own content
-      (`botActionFor`).
+      (`telegram/TurnStatus.kt`, the words of `Messages.progressLabel` behind an emoji per activity). Only one is on
+      screen — both announce the same turn — so the action carries the turn until the status message lands and then
+      stands down, and it keeps the turn to itself when there is no status. A tool too fast to read a caption for is
+      left unmapped and reads as `null`: plain `typing`, and nothing named. During delivery each item is still preceded
+      by the action matching its own content (`botActionFor`).
     - **The status message** — one silent message per turn, the same in every kind of chat, carrying the running line
       and a stop button. Telegram's own surface for a generating agent, `sendMessageDraft`, is accepted for **private
       chats only**, so it could never be half of this; an ordinary message is what a group can have too. It opens lazily
@@ -602,7 +602,7 @@ A symptom-to-source map for finding the right file fast. Paths are under
 | A workspace loses files, or someone sees another person's | `tools/workspace/WorkspaceModels.workspaceIdOrNull` (the `userId` key, and the shared bot accounts that get no workspace at all), then `workspace/container.ts` and `workspace/homes.ts` (one bounded home disk per person) and `workspace/files.ts` (unprivileged, scoped transfers) |
 | Wrong language in a canned reply (busy/error/voice/start/task menu) | `i18n/Language.kt` (language selection) + `i18n/Messages.kt` (the strings) |
 | A turn's plan reaches the chat only after the work it announced, or arrives twice | `tools/message/MessageTools.announcePlan` (the tool and its one-per-turn rule) + `telegram/TurnStatus.kt` (`say`, and what survives `finish`) + `outbox/BotOutbox.kt` (`recordDelivered`, `hasDelivered`) + `telegram/delivery/TelegramDelivery.dispatch` (skipping an item already in the chat) |
-| The typing indicator or the turn's status message is wrong, stale, or missing | `telegram/TelegramProgress.kt` (both tickers, the named-activity gate) + `telegram/TurnStatus.kt` (the message itself, its stop button, and how it ends) + `agent/ToolActivity.kt` (which tool means what) + `i18n/Messages.progressLabel` (the words) + `telegram/delivery/TelegramDelivery.chatActionFor` (the action) |
+| The typing indicator or the turn's status message is wrong, stale, or missing | `telegram/TelegramProgress.kt` (both tickers, the named-activity gate) + `telegram/TurnStatus.kt` (the message itself, the emoji beside each activity, its stop button, and how it ends) + `agent/ToolActivity.kt` (which tool means what) + `i18n/Messages.progressLabel` (the words) + `telegram/delivery/TelegramDelivery.chatActionFor` (the action) |
 | A long research turn ends in the generic error reply or is answered mid-way | `agent/AgentFactory.kt` (`maxIterations`, `outOfToolBudget` and the wrap-up node that lands the turn) + `agent/AgentRunner.kt` (delivering what the outbox holds when a run fails) |
 | The reply to a failed turn says nothing about what the provider did | `agent/AgentRunner.providerErrorReply` (which error body earns which canned reply: a content-policy refusal, a spent usage limit, a dead key, a 429/503 overload) + `i18n/Messages.kt` (the strings) |
 | You need to see exactly what the model was sent this turn | `agent/PromptDump.kt` (the whole request rendered per message) — it hangs on koog's `onLLMCallStarting` in `agent/AgentFactory.kt` and is switched by the `PromptDump` logger in [`logback.xml`](../src/main/resources/logback.xml) |

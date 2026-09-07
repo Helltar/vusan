@@ -41,6 +41,36 @@ internal fun statusMessageText(plan: String?, label: String?, html: Boolean): St
 }
 
 /**
+ * The words for the tool that is running, behind an emoji saying the same thing at a glance. The picture
+ * is the same in every language, so it lives here rather than repeated in each [Messages] implementation.
+ */
+internal fun activityStatusLabel(activity: ToolActivity, messages: Messages): String {
+    val emoji =
+        when (activity) {
+            ToolActivity.WRITING -> "✍️"
+            ToolActivity.SEARCHING_WEB -> "🌐"
+            ToolActivity.READING_PAGE -> "📄"
+            ToolActivity.READING_CHANNEL -> "📢"
+            ToolActivity.READING_TRANSCRIPT -> "📝"
+            ToolActivity.READING_CHAT_LOG -> "📜"
+            ToolActivity.SEARCHING_IMAGES -> "🖼️"
+            ToolActivity.SEARCHING_GIF -> "🎞️"
+            ToolActivity.DRAWING -> "🎨"
+            ToolActivity.RUNNING_CODE -> "💻"
+            ToolActivity.LOOKING_AT_IMAGE -> "👀"
+            ToolActivity.WATCHING_VIDEO -> "📺"
+            ToolActivity.DOWNLOADING_VIDEO -> "🎬"
+            ToolActivity.DOWNLOADING_AUDIO -> "🎵"
+            ToolActivity.SENDING_FILE -> "📎"
+            ToolActivity.SPEAKING -> "🎙️"
+            ToolActivity.REMEMBERING -> "🧠"
+            ToolActivity.MANAGING_TASKS -> "⏰"
+        }
+
+    return "$emoji ${messages.progressLabel(activity)}"
+}
+
+/**
  * What a turn shows while it runs: one silent message naming the tool currently working, carrying the
  * plan the model announces before starting long work, with a stop button on it. The same message in
  * every kind of chat — Telegram's own draft surface (`sendMessageDraft`) is private chats only, so it
@@ -82,7 +112,7 @@ internal class TurnStatus(
     /** Returns `true` while the bubble is up, which is what stands the chat action down. */
     suspend fun showActivity(activity: ToolActivity): Boolean =
         edits.withLock {
-            label = messages.progressLabel(activity)
+            label = activityStatusLabel(activity, messages)
 
             if (messageId == null && !activityOpensIt) false else render()
         }
