@@ -3,28 +3,20 @@
 Root instruction file for coding agents on Vusan, a Telegram AI agent built on
 [Koog](https://github.com/JetBrains/koog),
 [TelegramBots](https://github.com/rubenlagus/TelegramBots), and Exposed/SQLite.
-Keep this file concise and actionable; put product docs in `README.md` or `docs/`.
+It applies to the whole repository; `CLAUDE.md` is just the one-line `@AGENTS.md`
+import that points Claude Code here. Keep this file short and actionable —
+product docs go in `README.md` or `docs/`. The project is pre-1.0, so prefer
+clean removals over compatibility shims.
 
-## Scope
-
-- Applies to the whole repository; the nearest `AGENTS.md` to the edited path wins.
-- Explicit user instructions in the current chat override this file.
-- `CLAUDE.md` should stay a tiny Claude Code shim that imports this file.
-
-## Start Here
-
-- Read [`docs/architecture.md`](docs/architecture.md) before changing request
-  flow, delivery, tools, storage, scheduling, or startup wiring, and use its
-  [symptom map](docs/architecture.md#where-to-look-when) before broad searching.
-- The project is pre-1.0 and under active development. Prefer clean removals
-  over compatibility shims.
+Read [`docs/architecture.md`](docs/architecture.md) before changing request flow,
+delivery, tools, storage, scheduling or startup wiring, and use its
+[symptom map](docs/architecture.md#where-to-look-when) before broad searching.
 
 ## Commands and Verification
 
 - `./gradlew test`, `./gradlew detekt` (`maxIssues: 0`), `./gradlew build`
-  (compile + test + package), `./gradlew run` (local bot process using `env/vusan.env`).
-  While iterating, run the narrowest meaningful test:
-  `./gradlew test --tests "*AgentFactoryTest*"`.
+  (compile + test + package), `./gradlew run` (local bot on `env/vusan.env`).
+  While iterating: `./gradlew test --tests "*AgentFactoryTest*"`.
 - Run Gradle itself on JDK 21: the build uses `jvmToolchain(21)`, and detekt
   1.23.x crashes on JDK 25+.
 - Before finishing code changes, run `./gradlew test` and `./gradlew detekt`
@@ -34,37 +26,48 @@ Keep this file concise and actionable; put product docs in `README.md` or `docs/
 
 ## Architecture Rules
 
-- Preserve the package boundaries described in
-  [`docs/architecture.md`](docs/architecture.md#layers).
+Preserve the package boundaries in [`docs/architecture.md`](docs/architecture.md#layers).
+
 - Inside `telegram/`: `inbound/` turns an update into agent input, `delivery/`
-  sends everything back out, `callback/` owns the inline-button flows. The
-  runner, `AgentTurns`, and the raw client helpers stay at the package root.
-- `workspace/` is a separate Deno service, not Kotlin. Keep it that way: the
-  Kotlin application reaches it only over HTTP through
-  `tools/workspace/WorkspaceClient.kt`, and knows nothing about how it isolates
-  what it runs.
-- There is one execution path: `workspace/container.ts` starts one Docker
-  container and one persistent named home volume per workspace. Only the trusted
-  HTTP controller receives the Docker socket; commands and file helpers run
-  inside their workspace as UID 1000, with no capabilities and no privileged
-  phase at any point. Do not reintroduce shared-process runners.
-- The workspace is an optional, separate deployment: `compose.yaml` is the bot
-  alone and `compose.workspace.yaml` is the service, meant for a machine of its
-  own. Do not fold it back into the default Compose file or make the bot depend
-  on it; `WORKSPACE_URL` plus `WORKSPACE_TOKEN` is the whole switch.
+  sends everything back out, `callback/` owns the inline-button flows; the
+  runner, `AgentTurns` and the raw client helpers stay at the package root.
 - `TelegramBotRunner` normalizes inbound updates into a prompt; `AgentTurns`
   builds the `AgentRequest` from there and owns the turn up to its delivery.
-  Tools consume `RequestContext`/`AttachedFile`; they should not reach back into
-  Telegram message objects.
+  Tools consume `RequestContext`/`AttachedFile`, never Telegram message objects.
 - Tools enqueue `BotOutput` into `BotOutbox`, never TelegramBots send methods
-  directly. Delivery layering is in
-  [Telegram Delivery and Outbox](#telegram-delivery-and-outbox) below.
+  directly. Keep `BotOutput` immutable and enforce invariants in `init {}` blocks.
 - Canned bot text (`startReply`, `busyReply`, `fallbackErrorReply`,
   `privateBlockedNotice`, voice notices) belongs in `i18n/Messages`, one
   implementation per `Language` — no inline English in `telegram/` or `agent/`.
-- Keep `BotOutput` immutable and enforce invariants in `init {}` blocks.
+- A kind-specific send fallback belongs in `TelegramOutputSender`, a
+  kind-agnostic one in `TelegramSendFallbacks`, raw Bot API builders in
+  `TelegramRequests` and nowhere else; route choice and reply anchoring stay in
+  `TelegramDelivery`. `BotOutbox.useDirectMessages()` affects subsequent
+  enqueues, and reactions are intentionally never redirected to DMs.
+- `Db.connect(config)` in [`infra/Database.kt`](src/main/kotlin/com/helltar/vusan/infra/Database.kt)
+  is the single DB initialization point and application access goes through
+  `Db.dbTransaction { ... }`; never call Exposed `transaction {}` or
+  `suspendTransaction(...)` outside that file.
+- Env vars are parsed in `AppConfig.Companion` via private `readEnv` (optional,
+  with a fallback or `null`) and `requireEnv` (required). Never call
+  `System.getenv` directly.
 - Avoid thin abstractions and one-off helper objects. Add an abstraction only
   when it removes real complexity or matches an existing local pattern.
+
+### The workspace service
+
+- `workspace/` is a separate Deno service, not Kotlin. Keep it that way: Kotlin
+  reaches it only over HTTP through `tools/workspace/WorkspaceClient.kt` and
+  knows nothing about how it isolates what it runs.
+- One execution path: `workspace/container.ts` starts one Docker container and
+  one persistent named home volume per workspace. Only the trusted controller
+  receives the Docker socket; commands and file helpers run inside their
+  workspace as UID 1000, with no capabilities and no privileged phase at any
+  point. Do not reintroduce shared-process runners.
+- It is an optional, separate deployment — `compose.yaml` is the bot alone,
+  `compose.workspace.yaml` the service, running beside the bot or on a machine
+  of its own. Do not fold it into the default Compose file or make the bot
+  depend on it; `WORKSPACE_URL` plus `WORKSPACE_TOKEN` is the whole switch.
 
 ## Documentation Triggers
 
@@ -75,147 +78,113 @@ what they describe:
   delivery policy, scheduler behavior, startup wiring, or core orchestrators
   (`AgentRunner`, `AgentFactory`, `ToolRegistryFactory`, `TelegramDelivery`,
   `TelegramOutputSender`, `TaskScheduler`).
-- [`docs/configuration.md`](docs/configuration.md) and the `env/*.env.example` files:
-  env var additions, removals, renames, default or semantics changes.
+- [`docs/configuration.md`](docs/configuration.md) and
+  [`env/vusan.env.example`](env/vusan.env.example): env var additions, removals,
+  renames, default or semantics changes.
+- [`docs/workspace.md`](docs/workspace.md) and
+  [`env/workspace.env.example`](env/workspace.env.example): what a workspace can
+  do, its limits, isolation and deployment. Every knob in `workspace/config.ts`
+  lands in both, the [limits table](docs/workspace.md#limits-and-tuning) being
+  the tuning reference. Keep the base image toolchain small and documented there
+  rather than in LLM-facing descriptions: the agent checks what its task needs.
 - [`README.md`](README.md) Features section: added/removed/renamed tools or
-  changed user-visible capability. Keep it written for users — what a capability
-  does, not which library, model, API key, or optional service enables it. Put
-  setup requirements and implicit dependencies in `docs/configuration.md`, even
-  when no new env var is involved.
+  changed user-visible capability. Write it for users — what a capability does,
+  never which library, model, key or optional service enables it. Setup
+  requirements and implicit dependencies go to `docs/configuration.md` instead,
+  even when no new env var is involved.
 - Telegram slash commands: `TelegramBotRunner.dispatchText` is the source of
-  truth. Keep the `Telegram commands` section in `agent/SystemPrompt.kt`, the
-  menu published by `telegram/CommandMenu.kt` (with a description per `Language`
-  in `i18n/Messages`), and the direct-command flow in
-  [`docs/architecture.md`](docs/architecture.md) aligned with it.
-- Keep the base toolchain small and document it in `docs/configuration.md`, not
-  in LLM-facing descriptions: the agent checks what is installed for its task.
-  New knobs in `workspace/config.ts` belong in `env/workspace.env.example`
-  and the configuration tuning table in the same change; the remote Compose
-  override inherits them rather than duplicating the deployment.
+  truth. Keep aligned with it the `Telegram commands` section in
+  `agent/SystemPrompt.kt`, the menu in `telegram/CommandMenu.kt` (a description
+  per `Language` in `i18n/Messages`), and architecture.md's direct-command flow.
 
 ## Kotlin Style
 
 - Prefer `runCatching { ... }.recoverCatching/onFailure/getOrNull` for
-  non-control-flow errors.
-- Preserve cancellation: re-throw `CancellationException` or use
-  `Throwable.rethrowIfCancellation()`.
+  non-control-flow errors, and preserve cancellation: re-throw
+  `CancellationException` or use `Throwable.rethrowIfCancellation()`.
 - Use `require`, `requireNotNull`, `check`, `checkNotNull` instead of throwing
   `IllegalArgumentException` / `IllegalStateException` directly.
-- Prefer null-safe expressions (`?.let`, `?:`, `takeIf`, `takeUnless`) over
-  nested null ladders. Avoid `!!`; prove non-null via smart cast,
-  `requireNotNull`, or `checkNotNull`.
-- Prefer properties and receiver-style helpers over Java-style `getFoo()`; use
-  Java APIs only when Kotlin has no reasonable equivalent.
-- Use `kotlin.time.Duration` overloads (`delay(5.seconds)`,
-  `withTimeout(timeout)`); convert `java.time.Duration` via `.toKotlinDuration()`.
-- Prefer raw strings for text containing quotes when readable. In logs, delimit
+- Prefer null-safe expressions (`?.let`, `?:`, `takeIf`, `takeUnless`) to nested
+  null ladders. Avoid `!!`; prove non-null via smart cast or `requireNotNull`.
+- Prefer Kotlin idiom to Java: properties and receiver-style helpers over
+  `getFoo()`, `kotlin.time.Duration` overloads (`delay(5.seconds)`) over
+  `java.time.Duration` (`.toKotlinDuration()` converts), raw strings for quoted
+  text. Never suppress a compiler warning without a reason. In logs, delimit
   values as `key=[value]`, not `key="value"`.
-- Do not suppress compiler warnings without a specific reason.
 - Comment sparingly, and only on non-obvious constraints, invariants, or
   surprising behavior — say why, not what. Never leave commented-out code.
-- Class loggers live in a `private companion object`:
-  `val log = KotlinLogging.logger {}`. Use a top-level `private val log` only in
-  files without classes, or for a named utility logger such as `ToolGuard`.
-- Class-private constants go in that companion when one exists, otherwise stay
-  top-level. Constants used by top-level helpers must stay top-level.
+- Class loggers (`val log = KotlinLogging.logger {}`) and class-private constants
+  live in a `private companion object`. A top-level `private val log` or constant
+  belongs only in a file without classes, in a named utility logger such as
+  `ToolGuard`, or where a top-level helper uses it.
 
 ## Prompt and Text Handling
 
 - Reuse [`common/Strings.kt`](src/main/kotlin/com/helltar/vusan/common/Strings.kt)
-  instead of writing your own: `collapseWhitespaceAndCap(max)` where layout
+  rather than writing your own: `collapseWhitespaceAndCap(max)` where layout
   whitespace is noise (metadata, logs, snippets), `limitTo(max)` where inner
   whitespace matters, `xmlBlock(tag, content)` for structured text sent to the
-  LLM, plus `isEffectivelyBlank`, `sanitizeFilename`, and `escapeHtml`.
-- `xmlBlock` escapes a closing tag of its own name inside the content, so tool
-  output or a fetched page cannot end its block early; blocks of other names are
-  untouched and still nest. Text quoted from a message additionally goes through
-  `neutralizePromptBlocks`, which defuses every tag the prompt itself uses.
-- Avoid plain prompt markers such as `Reply context:` or `[Sent N images]`;
-  models tend to parrot them.
+  LLM, plus `isEffectivelyBlank`, `sanitizeFilename` and `escapeHtml`.
+- `xmlBlock` already escapes a closing tag of its own name, so tool output and
+  fetched pages cannot end their block early; text quoted from a message needs
+  `neutralizePromptBlocks` too, which defuses every tag the prompt uses. Avoid
+  plain markers such as `Reply context:` or `[Sent N images]` — models parrot them.
 
 ## Tools
 
 Layout: `tools/<feature>/<Feature>Tools.kt` (the `ToolSet` surface),
-`tools/<feature>/<Feature>ToolDescriptions.kt` (feature-local
-`internal object *ToolDescriptions`), optional client/model files for external
-I/O, registration in
+`<Feature>ToolDescriptions.kt` (a local `internal object *ToolDescriptions`), optional
+client/model files for external I/O, registration in
 [`ToolRegistryFactory`](src/main/kotlin/com/helltar/vusan/tools/ToolRegistryFactory.kt),
-then docs per the triggers above.
+then docs per the triggers above. A tool needing an optional key is registered
+through `ToolRegistryFactory.optional(...)`, which disables it with a warning
+rather than failing startup.
 
 - Every Koog tool method returning `String` is wrapped in `suspendToolGuard { ... }`
-  from [`tools/ToolGuard.kt`](src/main/kotlin/com/helltar/vusan/tools/ToolGuard.kt).
-  Do not add a broad `try/catch` around the body for the same behavior. The guard reports
-  a failure by throwing `ToolException`, so koog records the call as failed and the model
-  still reads the message as the tool result; a failing tool is tested with `toolFailure { }`.
+  from [`tools/ToolGuard.kt`](src/main/kotlin/com/helltar/vusan/tools/ToolGuard.kt);
+  no broad `try/catch` for the same behavior. It throws koog's `ToolException`, so
+  the call is recorded as failed and the model still reads the message as the
+  result; test one with `toolFailure { }`.
 - Use `requireToolText(label, maxChars)` for required text args when it fits.
-- Optional external tools are built through `ToolRegistryFactory.optional(...)`;
-  a missing key disables the tool with a warning, not a startup failure.
 - `@LLMDescription` values are all-or-nothing per module: constants only, never
-  a mix of constants and inline strings. Order them by tool method order.
-- Split concatenated description strings at sentence boundaries — each `+` chunk
-  is one full sentence ending with its period, never wrapped mid-sentence.
+  mixed with inline strings, ordered by tool method order. Split a concatenated
+  one at sentence boundaries — each `+` chunk is one full sentence ending in its
+  period, never wrapped mid-sentence.
 - In description text, backtick exact parameter values, tags, commands,
-  enum-like values, and formats (`current_chat`, `daily HH:MM`, `Europe/Kyiv`).
-- Tool return text carrying answer material is imperative ("Use these
-  snippets…"). Avoid extra "untrusted" warnings.
-
-## Database and Configuration
-
-- `Db.connect(config)` in [`infra/Database.kt`](src/main/kotlin/com/helltar/vusan/infra/Database.kt)
-  is the single DB initialization point, and application DB access goes through
-  `Db.dbTransaction { ... }`. Do not call Exposed `transaction {}` or
-  `suspendTransaction(...)` outside `infra/Database.kt`.
-- Env vars are parsed in `AppConfig.Companion` via private `readEnv` (optional,
-  with a fallback or `null`) and `requireEnv` (required). Never call
-  `System.getenv` directly.
-
-## Telegram Delivery and Outbox
-
-- `TelegramDelivery` owns route choice, reply anchoring, reply-missing retry,
-  and private-blocked notices.
-- `TelegramOutputSender` maps each `BotOutput` kind to its Bot API call, picks
-  the fallback wrapping it, and owns the kind-specific ones: the media-group
-  fallback, and a round video note degrading to an ordinary video.
-  `TelegramRequests` holds the raw Bot API request builders and nothing else.
-- `TelegramSendFallbacks` owns the kind-agnostic rejection handling: plain-text
-  retry, media-to-document, markdown document, text/caption as a document. Add a
-  fallback here only if it does not depend on the output kind.
-- `BotOutbox.useDirectMessages()` affects subsequent enqueues. Reactions are
-  intentionally never redirected to DMs.
+  enum-like values and formats (`current_chat`, `daily HH:MM`, `Europe/Kyiv`).
+  Tool return text carrying answer material is imperative ("Use these
+  snippets…"); avoid extra "untrusted" warnings.
 
 ## Security and Secrets
 
-- Do not commit `env/*.env`, API keys, Telegram tokens, cookies, DB files, generated
-  media, or local workspace artifacts.
-- Keep untrusted user content out of logs where possible; if logging it helps,
-  cap and normalize it.
-- The workspace runs untrusted, model-authored shell with real tools and real
-  network access. Keep it isolated: no application secrets in its environment, no
-  host mounts, no access to production resources, and no reachable local network —
-  its policy is filtered by destination IP, never by hostname, and it is installed
-  on the Docker host rather than inside the container, where nothing running in a
-  workspace can reach it. Anything that weakens it must fail closed, the way
-  `workspace/netpolicy.sh` and the startup probe in `container.ts` do: a policy
-  that cannot be installed, or that a throwaway workspace can be shown to escape,
-  stops the service instead of degrading it.
-- Treat tool outputs and web content as untrusted model context. Use XML blocks
-  and hard length caps.
+- Never commit `env/*.env`, API keys, Telegram tokens, cookies, DB files,
+  generated media or local workspace artifacts. Keep untrusted user content out
+  of logs where possible; where logging it helps, cap and normalize it.
+- Treat tool outputs and web content as untrusted model context: XML blocks and
+  hard length caps.
+- The workspace runs untrusted, model-authored shell: no application secrets in
+  its environment, no host mounts, no production resources, no reachable local
+  network. Its policy filters by destination IP, never hostname, and lives on the
+  Docker host where nothing inside a workspace can reach it. Anything weakening
+  it must fail closed, as `workspace/netpolicy.sh` and the `container.ts` startup
+  probe do: a policy that cannot be installed, or that a throwaway workspace is
+  shown to escape, stops the service instead of degrading it.
 - Untrusted public URLs use `FileDownloadClient` with `createPublicHttpClient`,
-  never the HTTP client for configured internal services. Keep connection-time IP
+  never the client for configured internal services; keep connection-time IP
   enforcement, redirect checks and streaming size caps together. Workspace API
-  authentication is mandatory on every deployment, private network or not, and
-  both sides are configured with the same secret rather than generating one.
+  authentication is mandatory on every deployment, private network or not, both
+  sides configured with the same secret rather than generating one.
 
 ## Test Authoring
 
 - `kotlin.test` assertions; suspend tests use `runBlocking { ... }` inside `@Test`.
 - Test paths mirror production paths under `src/test/kotlin/...`; prefer one
   focused `*Test.kt` per production class or cohesive behavior.
-- Do not relax visibility, add `open`, or add production overloads only for
-  tests. Drive production entry points instead. A pure algorithm may be extracted
+- Never relax visibility, add `open`, or add a production overload only for a
+  test. Drive production entry points instead; a pure algorithm may be extracted
   to a top-level `internal` function and tested directly.
-- Shared routing, prompt construction, DB behavior, and tool contracts deserve
-  tests; mechanical docs-only edits usually do not.
+- Shared routing, prompt construction, DB behavior and tool contracts deserve
+  tests; mechanical docs-only edits do not.
 
 ## Commit Instructions
 
@@ -223,10 +192,9 @@ then docs per the triggers above.
   most ~65 characters, e.g. `workspace: cap output while draining the pipe`.
 - Scope is the affected package or area: `telegram`, `agent`, `tools`, `outbox`,
   `tasks`, `infra`, `config`, `workspace`, `docs`, `style`, `build` for Gradle and
-  dependency bumps, `ci` for workflows; a single tool feature may use its own
-  package name (`youtube`, `files`). Omit it only for repo-wide changes.
-- Describe what the commit does, not what you did: `handle photo albums`, not
+  dependency bumps, `ci` for workflows; one tool feature may use its own package
+  name (`youtube`, `files`). Omit it only for repo-wide changes.
+- Describe what the commit does, not what you did: `handle photo albums`, never
   `handled` / `handling`.
-- Subject alone is usually enough. Add a body only when the why is not obvious
-  from the diff; wrap it at 72 characters.
-- Do not mix unrelated work in one commit.
+- Subject alone is usually enough; add a body wrapped at 72 characters only when
+  the why is not obvious from the diff. Never mix unrelated work in one commit.
