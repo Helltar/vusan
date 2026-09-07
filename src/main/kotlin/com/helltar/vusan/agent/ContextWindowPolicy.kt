@@ -9,6 +9,10 @@ import kotlin.math.ceil
 // separate safety reserve.
 internal const val ESTIMATED_BYTES_PER_TOKEN = 3
 
+// the widest a character gets in the text this bot handles: cyrillic is two bytes in UTF-8, latin one.
+// used to turn a token budget into a character cap without the cap quietly doubling on cyrillic.
+private const val ESTIMATED_BYTES_PER_CHAR = 2
+
 internal fun estimateTokens(text: String): Int {
     if (text.isEmpty()) return 0
 
@@ -47,11 +51,18 @@ class ContextWindowPolicy(model: LLModel) {
     // rather than to a share of a million-token window.
     private val agentReserveTokens: Int = (contextWindowTokens / 4).coerceIn(1_024, 64_000)
 
-    // everything the tools return during one run has to fit the agent reserve, so the reserve is
-    // converted back to characters at the same ratio [estimateTokens] reads them. A fixed
-    // ceiling here would silently starve a large-window model: one full-length YouTube transcript
-    // would consume the whole run and leave later tool results with nothing.
-    val liveToolResultMaxChars: Int = agentReserveTokens * ESTIMATED_BYTES_PER_TOKEN
+    // everything the tools return during one run has to fit the agent reserve, and the run spends it
+    // in the same estimated tokens the rest of the budget is counted in. Spending characters instead
+    // made one cap mean two things: a cyrillic character is two bytes, so a cyrillic result cost the
+    // run half of what it cost the prompt. A fixed ceiling here would instead silently starve a
+    // large-window model: one full-length YouTube transcript would consume the whole run and leave
+    // later tool results with nothing.
+    val liveToolResultMaxTokens: Int = agentReserveTokens
+
+    // the same reserve as a character count, for tools that must render text to a size before anything
+    // can estimate it. Assumes the widest character this bot handles, so the figure holds for cyrillic
+    // as well as latin.
+    val liveToolResultMaxChars: Int = agentReserveTokens * ESTIMATED_BYTES_PER_TOKEN / ESTIMATED_BYTES_PER_CHAR
 
     fun budget(systemPrompt: String, currentTurn: String, toolRegistry: ToolRegistry): ContextTokenBudget {
         val tools = toolRegistry.tools.joinToString("\n") { it.descriptor.toString() }

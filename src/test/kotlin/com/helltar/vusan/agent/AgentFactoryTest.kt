@@ -1,9 +1,14 @@
 package com.helltar.vusan.agent
 
+import ai.koog.agents.core.environment.ReceivedToolResult
+import ai.koog.agents.core.environment.ToolResultKind
+import ai.koog.prompt.message.AttachmentContent
+import ai.koog.prompt.message.AttachmentSource
 import ai.koog.prompt.message.Message
 import ai.koog.prompt.message.MessagePart
 import ai.koog.prompt.message.RequestMetaInfo
 import ai.koog.prompt.message.ResponseMetaInfo
+import ai.koog.serialization.JSONObject
 import ai.koog.utils.time.KoogClock
 import kotlin.test.Test
 import kotlin.test.assertEquals
@@ -99,4 +104,86 @@ class AgentFactoryTest {
         val earlier = listOf(user("hello"), assistant(MessagePart.Text("earlier reply")), user("ok then"))
         assertEquals(earlier, (earlier + assistant()).withoutTrailingEmptyAssistant())
     }
+
+    // koog fills `parts` for every tool that ran, and that is what reaches the LLM, so a cap read off
+    // `output` alone bounds nothing.
+    @Test
+    fun `a tool result is bounded through the parts the model actually receives`() {
+        val long = "x".repeat(5_000)
+        val bounded = toolResult(output = long, parts = listOf(MessagePart.Text(long))).boundedForLiveContext(500)
+
+        assertEquals(1_500, bounded.output.length)
+        assertEquals(1_500, (bounded.parts?.single() as MessagePart.Text).text.length)
+    }
+
+    @Test
+    fun `the budget is spent on the text the model receives, not on the unused output`() {
+        val result = toolResult(output = "x".repeat(300), parts = listOf(MessagePart.Text("y".repeat(30))))
+
+        assertEquals(10, result.liveContextTokens)
+        assertEquals(100, toolResult(output = "x".repeat(300), parts = null).liveContextTokens)
+    }
+
+    // the estimator reads bytes, so the same number of characters is not the same cost, and a budget
+    // spent in characters charged cyrillic half of what it puts in the prompt.
+    @Test
+    fun `cyrillic costs the run budget more than latin of the same length`() {
+        val latin = toolResult(output = "a".repeat(300), parts = listOf(MessagePart.Text("a".repeat(300))))
+        val cyrillic = toolResult(output = "я".repeat(300), parts = listOf(MessagePart.Text("я".repeat(300))))
+
+        assertEquals(100, latin.liveContextTokens)
+        assertEquals(200, cyrillic.liveContextTokens)
+    }
+
+    @Test
+    fun `the same token budget buys fewer cyrillic characters than latin ones`() {
+        val latin = toolResult(output = "a".repeat(3_000), parts = null).boundedForLiveContext(500)
+        val cyrillic = toolResult(output = "я".repeat(3_000), parts = null).boundedForLiveContext(500)
+
+        assertEquals(1_500, latin.output.length)
+        assertEquals(750, cyrillic.output.length)
+    }
+
+    @Test
+    fun `a tool result within the cap is left alone`() {
+        val result = toolResult(output = "short", parts = listOf(MessagePart.Text("short")))
+
+        assertEquals(result, result.boundedForLiveContext(500))
+    }
+
+    // an image cannot be shortened, only dropped, and dropping it would answer a different question.
+    @Test
+    fun `a non-text part survives the cap untouched`() {
+        val image =
+            MessagePart.Attachment(
+                AttachmentSource.Image(AttachmentContent.URL("https://example.invalid/a.png"), format = "png")
+            )
+        val long = "x".repeat(5_000)
+
+        val bounded = toolResult(output = long, parts = listOf(image, MessagePart.Text(long))).boundedForLiveContext(500)
+
+        assertEquals(image, bounded.parts?.first())
+        assertEquals(1_500, (bounded.parts?.last() as MessagePart.Text).text.length)
+    }
+
+    @Test
+    fun `a cap too small for the truncation notice omits the result instead`() {
+        val bounded = toolResult(output = "x".repeat(300), parts = listOf(MessagePart.Text("x".repeat(300))))
+            .boundedForLiveContext(5)
+
+        assertTrue(bounded.output.startsWith("[tool result omitted"))
+        assertTrue((bounded.parts?.single() as MessagePart.Text).text.startsWith("[tool result omitted"))
+    }
+
+    private fun toolResult(output: String, parts: List<MessagePart.ContentPart>?) =
+        ReceivedToolResult(
+            id = "call-1",
+            tool = "searchWeb",
+            toolArgs = JSONObject(emptyMap()),
+            toolDescription = null,
+            output = output,
+            resultKind = ToolResultKind.Success,
+            result = null,
+            parts = parts
+        )
 }

@@ -50,7 +50,7 @@ data class AgentPromptPreparation(
     val toolRegistry: ToolRegistry,
     val systemPrompt: String,
     val tokenBudget: ContextTokenBudget,
-    val liveToolResultMaxChars: Int
+    val liveToolResultMaxTokens: Int
 )
 
 class AgentFactory(
@@ -89,7 +89,7 @@ class AgentFactory(
                     currentTurn = currentTurn,
                     toolRegistry = toolRegistry
                 ),
-            liveToolResultMaxChars = contextWindowPolicy.liveToolResultMaxChars
+            liveToolResultMaxTokens = contextWindowPolicy.liveToolResultMaxTokens
         )
     }
 
@@ -141,7 +141,7 @@ class AgentFactory(
         return AIAgent(
             promptExecutor = promptExecutor,
             agentConfig = agentConfig,
-            strategy = vusanSingleRunStrategy(outbox, preparation.liveToolResultMaxChars, maxIterations, userId),
+            strategy = vusanSingleRunStrategy(outbox, preparation.liveToolResultMaxTokens, maxIterations, userId),
             toolRegistry = preparation.toolRegistry,
             id = "vusan-user-$userId"
         ) {
@@ -215,13 +215,13 @@ class AgentFactory(
 // dies with every search it paid for still unanswered.
 private fun vusanSingleRunStrategy(
     outbox: BotOutbox,
-    liveToolResultMaxChars: Int,
+    liveToolResultMaxTokens: Int,
     maxIterations: Int,
     userId: Long
 ): AIAgentGraphStrategy<String, String> =
     strategy<String, String>("single_run") {
         var nudged = false
-        var remainingToolResultChars = liveToolResultMaxChars
+        var remainingToolResultTokens = liveToolResultMaxTokens
         var toolBudgetSpent = false
 
         // the model ended its turn without putting anything in front of the user: it delivered
@@ -242,10 +242,9 @@ private fun vusanSingleRunStrategy(
                     val missing = call.missingRequiredArgs(llm.toolRegistry)
 
                     if (missing.isEmpty()) {
-                        val result = environment.executeTool(call).boundedForLiveContext(remainingToolResultChars)
-                        if (result.parts == null) {
-                            remainingToolResultChars = (remainingToolResultChars - result.output.length).coerceAtLeast(0)
-                        }
+                        val result = environment.executeTool(call).boundedForLiveContext(remainingToolResultTokens)
+                        remainingToolResultTokens =
+                            (remainingToolResultTokens - result.liveContextTokens).coerceAtLeast(0)
                         result
                     } else {
                         garbledToolCallResult(call, missing)
@@ -318,13 +317,56 @@ private fun vusanSingleRunStrategy(
         finishWhenNoToolCalls(nodeNudgeDeliver)
     }
 
-private fun ReceivedToolResult.boundedForLiveContext(maxChars: Int): ReceivedToolResult {
-    if (parts != null || output.length <= maxChars) return this
+private const val TRUNCATION_NOTICE = "\n[tool result truncated for the model context]"
+private const val OMITTED_NOTICE = "[tool result omitted: model context budget exhausted]"
 
-    val marker = "\n[tool result truncated for the model context]"
-    if (maxChars <= marker.length) return copy(output = "[tool result omitted: model context budget exhausted]")
+// what this result will cost the prompt. `parts` is what koog forwards to the LLM whenever it is set —
+// and ToolBase.encodeResultToParts sets it, to a single Text part, for every tool that ran — so
+// `output` is only the live text on the paths that never reached the tool at all.
+internal val ReceivedToolResult.liveContextTokens: Int
+    get() =
+        parts?.sumOf { part -> (part as? MessagePart.Text)?.let { estimateTokens(it.text) } ?: 0 }
+            ?: estimateTokens(output)
 
-    return copy(output = output.limitTo((maxChars - marker.length).coerceAtLeast(0)) + marker)
+/**
+ * Caps what this tool result contributes to the prompt, in estimated tokens.
+ *
+ * Both carriers are bounded: `ReceivedToolResult.toMessagePart` reads `parts ?: [Text(output)]`, so
+ * bounding one of them alone leaves the other free to overrun the budget. Non-text parts are left
+ * untouched — an image cannot be shortened, only dropped, and dropping it would silently answer a
+ * different question than the tool was asked.
+ */
+internal fun ReceivedToolResult.boundedForLiveContext(maxTokens: Int): ReceivedToolResult {
+    if (liveContextTokens <= maxTokens) return this
+
+    val bounded = copy(output = output.boundedToolText(maxTokens))
+    val parts = parts ?: return bounded
+    var remaining = maxTokens
+
+    return bounded.copy(
+        parts =
+            parts.map { part ->
+                if (part !is MessagePart.Text) return@map part
+
+                val text = part.text.boundedToolText(remaining)
+                remaining = (remaining - estimateTokens(text)).coerceAtLeast(0)
+                part.copy(text = text)
+            }
+    )
+}
+
+// how many characters a token budget buys depends on the text, because the estimator reads bytes: a
+// cyrillic character spends two where a latin one spends one. Measuring the text being cut keeps both
+// honest, and whatever the cut still overshoots the caller charges back at the real estimate.
+private fun String.boundedToolText(maxTokens: Int): String {
+    if (estimateTokens(this) <= maxTokens) return this
+
+    val maxChars =
+        (maxTokens.toLong() * ESTIMATED_BYTES_PER_TOKEN * length / encodeToByteArray().size).toInt()
+
+    if (maxChars <= TRUNCATION_NOTICE.length) return OMITTED_NOTICE
+
+    return limitTo(maxChars - TRUNCATION_NOTICE.length) + TRUNCATION_NOTICE
 }
 
 // koog counts one iteration per node execution, nodeStart and nodeFinish included, and throws the
