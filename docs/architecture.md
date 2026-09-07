@@ -164,9 +164,11 @@ A normal user message travels:
    recorded for history. Live textual tool results share a cumulative bound derived from the reserved agent-growth
    budget before later LLM calls. The custom `single_run` strategy (`AgentFactory`) guards against flaky models in two
    ways:
-    - a tool call missing its declared required parameters (flaky models emit empty-arg siblings when they try to call
-      tools in parallel) is short-circuited into a `ValidationError` result instead of being executed, so the run stays
-      clean and the follow-up request stays well-formed;
+    - a tool call that arrives with no arguments at all for a tool that takes them (flaky models emit empty-arg
+      siblings when they try to call tools in parallel) is short-circuited into a `ValidationError` result instead of
+      being executed, so the run stays clean and the follow-up request stays well-formed. Only that shape: koog's
+      generated schema lists Kotlin-defaulted parameters as required too, so checking them one by one turned away
+      ordinary calls that koog decodes into the defaults;
     - a turn that ends having delivered nothing — no `sendMessage`, media, or reaction, and empty assistant text (flaky
       providers return an empty completion after a batch of tool results) — gets one nudge to actually deliver before
       finishing, so a full turn of research does not collapse into silence.

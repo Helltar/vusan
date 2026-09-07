@@ -2,6 +2,7 @@ package com.helltar.vusan.agent
 
 import ai.koog.agents.core.environment.ReceivedToolResult
 import ai.koog.agents.core.environment.ToolResultKind
+import ai.koog.agents.core.tools.ToolRegistry
 import ai.koog.prompt.message.AttachmentContent
 import ai.koog.prompt.message.AttachmentSource
 import ai.koog.prompt.message.Message
@@ -12,6 +13,8 @@ import ai.koog.serialization.JSONObject
 import ai.koog.serialization.JSONPrimitive
 import ai.koog.utils.time.KoogClock
 import com.helltar.vusan.agent.conversation.toolCallArgsForStorage
+import com.helltar.vusan.outbox.BotOutbox
+import com.helltar.vusan.tools.poll.PollTools
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.jsonPrimitive
@@ -201,6 +204,41 @@ class AgentFactoryTest {
         assertTrue(json.contains("""C:\\tmp"""), "backslash was not escaped: $json")
         assertTrue(json.contains("""one\ntwo"""), "newline was not escaped: $json")
     }
+
+    // the guard exists for one observed shape: a sibling call in a garbled parallel batch arriving with
+    // no arguments at all.
+    @Test
+    fun `a call with no arguments at all is turned away`() {
+        val call = MessagePart.Tool.Call(id = "c1", tool = "createPoll", args = "{}")
+
+        assertEquals(
+            listOf("question", "options", "isAnonymous", "allowsMultipleAnswers"),
+            call.missingRequiredArgs(pollRegistry)
+        )
+    }
+
+    // koog's generated schema marks kotlin-defaulted parameters required, and koog itself decodes the
+    // call into their defaults, so leaving them out is an ordinary call and not a garbled one.
+    @Test
+    fun `a call that omits only defaulted arguments runs`() {
+        val call =
+            MessagePart.Tool.Call(
+                id = "c2",
+                tool = "createPoll",
+                args = """{"question":"Tea or coffee?","options":["tea","coffee"]}"""
+            )
+
+        assertEquals(emptyList(), call.missingRequiredArgs(pollRegistry))
+    }
+
+    @Test
+    fun `a call to a tool the registry does not have is left to koog`() {
+        val call = MessagePart.Tool.Call(id = "c3", tool = "noSuchTool", args = "{}")
+
+        assertEquals(emptyList(), call.missingRequiredArgs(pollRegistry))
+    }
+
+    private val pollRegistry = ToolRegistry { tools(PollTools(BotOutbox())) }
 
     private fun toolResult(output: String, parts: List<MessagePart.ContentPart>?) =
         ReceivedToolResult(

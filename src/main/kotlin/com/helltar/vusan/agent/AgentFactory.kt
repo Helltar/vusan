@@ -414,12 +414,20 @@ internal fun List<Message>.withoutTrailingEmptyAssistant(): List<Message> =
     dropLastWhile { it is Message.Assistant && it.parts.isEmpty() }
 
 // flaky OpenAI-compatible models garble parallel tool calls: sibling calls in the same batch arrive
-// with empty `{}` args. required args declared by the tool that the call omitted entirely.
-private fun MessagePart.Tool.Call.missingRequiredArgs(registry: ToolRegistry): List<String> {
+// with empty `{}` args. Only that shape is caught, and only for a tool that takes arguments at all.
+// Checking the declared parameters one at a time would reject far more than it should: koog's
+// generated schema lists every parameter as required, Kotlin defaults included, so a call that simply
+// left `isAnonymous` out was turned away even though koog decodes it into the default without
+// complaint. A call that omits a genuinely required argument still fails in koog's own decoding,
+// which answers the model with the parse error.
+internal fun MessagePart.Tool.Call.missingRequiredArgs(registry: ToolRegistry): List<String> {
     val required = registry.getToolOrNull(tool)?.descriptor?.requiredParameters.orEmpty()
     if (required.isEmpty()) return emptyList()
+
     val provided = runCatching { argsJson.keys }.getOrDefault(emptySet())
-    return required.map { it.name }.filterNot { it in provided }
+    if (provided.isNotEmpty()) return emptyList()
+
+    return required.map { it.name }
 }
 
 // synthesize a ValidationError result for a garbled call instead of handing it to the executor,
@@ -434,8 +442,8 @@ private fun garbledToolCallResult(call: MessagePart.Tool.Call, missing: List<Str
         tool = call.tool,
         toolArgs = JSONObject(emptyMap()),
         toolDescription = null,
-        output = "Tool `${call.tool}` was called without required argument(s): $names. " +
-                "Reissue it as a single, complete call with all required arguments.",
+        output = "Tool `${call.tool}` was called with no arguments at all; it takes: $names. " +
+                "Reissue it as a single, complete call with its arguments.",
         resultKind = ToolResultKind.ValidationError(IllegalArgumentException("Missing required argument(s): $names")),
         result = null
     )
