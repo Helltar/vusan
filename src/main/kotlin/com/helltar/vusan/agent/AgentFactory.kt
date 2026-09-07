@@ -76,8 +76,13 @@ class AgentFactory(
         val log = KotlinLogging.logger {}
     }
 
-    fun prepare(context: RequestContext, outbox: BotOutbox, currentTurn: String): AgentPromptPreparation {
-        val toolRegistry = toolRegistryFactory.buildRegistry(context, outbox)
+    fun prepare(
+        context: RequestContext,
+        outbox: BotOutbox,
+        currentTurn: String,
+        narrator: TurnNarrator? = null
+    ): AgentPromptPreparation {
+        val toolRegistry = toolRegistryFactory.buildRegistry(context, outbox, narrator)
         val systemPrompt =
             systemPromptFor(personality ?: DEFAULT_PERSONALITY, model.id, botUsername, botDisplayName)
 
@@ -238,10 +243,11 @@ private fun vusanSingleRunStrategy(
         var toolBudgetSpent = false
 
         // the model ended its turn without putting anything in front of the user: it delivered
-        // nothing (no tool call to execute, no caption text) and the outbox is still empty. nudge at
+        // nothing (no tool call to execute, no caption text) and the outbox holds nothing to send. an
+        // announced plan does not count as delivering — that is the promise, not the answer. nudge at
         // most once to avoid looping on a stubbornly empty model.
         fun undelivered(msg: Message.Assistant): Boolean =
-            !nudged && msg.deliveredNothing() && outbox.pending.isEmpty()
+            !nudged && msg.deliveredNothing() && !outbox.hasQueuedOutput
 
         val nodeCallLLM by nodeLLMRequest()
 

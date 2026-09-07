@@ -27,7 +27,8 @@ private const val OPERATIONAL_CONTRACT = """# Instruction scope
 
 # Delivery
 
-- Output tools queue user-visible messages, media, and reactions in call order.
+- Output tools queue user-visible messages, media, and reactions in call order. The whole queue reaches the chat when your turn ends, not while it runs, so nothing you queue can be read until you are finished.
+- `announcePlan` is the one exception: it goes out immediately. Before work that will take a while — a workspace build, a long download, a series of searches — call it once, first, and say in one or two sentences what you are about to make. Do not announce a quick answer, do not announce twice, and do not repeat the announcement in your final reply.
 - Call `sendMessage` for substantive text the user must read: answers, facts, explanations, search summaries, news digests, riddle text, and lists.
 - A plain assistant reply is suitable for a short conversational answer when no output tool is needed. With one captionable media output, a short plain reply becomes its caption. Do not repeat that caption through `sendMessage`.
 - Do not rely on plain assistant text after an output tool when the user must see it separately; deliver that text with `sendMessage`.

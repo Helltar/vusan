@@ -6,6 +6,7 @@ import com.helltar.vusan.outbox.OutboxItem
 import com.helltar.vusan.tools.message.MessageTools
 import kotlin.test.Test
 import kotlin.test.assertEquals
+import kotlin.test.assertNull
 
 class AgentHistoryPersistenceTest {
 
@@ -46,4 +47,21 @@ class AgentHistoryPersistenceTest {
             output = "result",
             isError = false
         )
+
+    // trailing chatter after a queued message is a duplicate and is dropped.
+    @Test
+    fun `a queued message silences the closing assistant text`() {
+        val outputs = listOf(OutboxItem(BotOutput.Text("here it is"), toPrivate = false))
+
+        assertNull(extractFinalComment("here it is", outputs))
+    }
+
+    // an announcement is the promise, not the answer: the text that closes the turn is what the user
+    // was actually waiting for, and dropping it would end the turn on "I will build the game".
+    @Test
+    fun `an announcement does not silence the closing assistant text`() {
+        val outputs = listOf(OutboxItem(BotOutput.Text("I will build the game"), toPrivate = false, delivered = true))
+
+        assertEquals("here it is", extractFinalComment("here it is", outputs))
+    }
 }

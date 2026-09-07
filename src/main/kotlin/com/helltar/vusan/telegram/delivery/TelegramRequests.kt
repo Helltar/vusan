@@ -10,6 +10,7 @@ import org.telegram.telegrambots.meta.api.methods.send.SendDocument
 import org.telegram.telegrambots.meta.api.methods.send.SendMediaGroup
 import org.telegram.telegrambots.meta.api.methods.send.SendMessage
 import org.telegram.telegrambots.meta.api.methods.send.SendRichMessage
+import org.telegram.telegrambots.meta.api.methods.updatingmessages.DeleteMessage
 import org.telegram.telegrambots.meta.api.methods.updatingmessages.EditMessageText
 import org.telegram.telegrambots.meta.api.objects.InputFile
 import org.telegram.telegrambots.meta.api.objects.ReplyParameters
@@ -42,12 +43,14 @@ internal suspend fun sendTextMessage(
     }
 }
 
+// a null [replyMarkup] does not keep the buttons the message has — it takes them off, which is what
+// ends a live status bubble.
 internal suspend fun editTextMessage(
     client: TelegramClient,
     chatId: Long,
     messageId: Int,
     text: String,
-    replyMarkup: InlineKeyboardMarkup,
+    replyMarkup: InlineKeyboardMarkup?,
     parseMode: String? = null
 ) {
     client.api {
@@ -58,6 +61,40 @@ internal suspend fun editTextMessage(
                 .text(text)
                 .parseMode(parseMode)
                 .replyMarkup(replyMarkup)
+                .build()
+        )
+    }
+}
+
+// the live status bubble: sent silently because it is not news, and returning its id because every
+// later edit and its removal address it.
+internal suspend fun sendStatusMessage(
+    client: TelegramClient,
+    chatId: Long,
+    text: String,
+    parseMode: String?,
+    replyParameters: ReplyParameters?,
+    replyMarkup: InlineKeyboardMarkup?
+): Int =
+    client.api {
+        executeAsync(
+            SendMessage.builder()
+                .chatId(chatId)
+                .text(text)
+                .parseMode(parseMode)
+                .replyParameters(replyParameters)
+                .replyMarkup(replyMarkup)
+                .disableNotification(true)
+                .build()
+        )
+    }.messageId
+
+internal suspend fun deleteChatMessage(client: TelegramClient, chatId: Long, messageId: Int) {
+    client.api {
+        executeAsync(
+            DeleteMessage.builder()
+                .chatId(chatId)
+                .messageId(messageId)
                 .build()
         )
     }

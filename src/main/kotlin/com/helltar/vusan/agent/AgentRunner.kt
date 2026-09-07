@@ -99,7 +99,11 @@ class AgentRunner(
     private val conversationLocks = HashMap<ConversationKey, ConversationLock>()
     private val running = RunningTurns<ConversationKey>()
 
-    suspend fun handle(request: AgentRequest, onToolStarting: (activity: ToolActivity?) -> Unit = {}): AgentResult {
+    suspend fun handle(
+        request: AgentRequest,
+        onToolStarting: (activity: ToolActivity?) -> Unit = {},
+        narrator: TurnNarrator? = null
+    ): AgentResult {
         val key = ConversationKey(request.userId, request.chatId)
         val lock = retainLock(key)
 
@@ -109,7 +113,7 @@ class AgentRunner(
             }
 
             try {
-                return running.track(key) { runAgent(request, onToolStarting) }
+                return running.track(key) { runAgent(request, onToolStarting, narrator) }
             } finally {
                 lock.unlock()
             }
@@ -132,13 +136,14 @@ class AgentRunner(
 
     suspend fun handleQueued(
         request: AgentRequest,
-        onToolStarting: (activity: ToolActivity?) -> Unit = {}
+        onToolStarting: (activity: ToolActivity?) -> Unit = {},
+        narrator: TurnNarrator? = null
     ): AgentResult {
         val key = ConversationKey(request.userId, request.chatId)
         val lock = retainLock(key)
 
         try {
-            return lock.withLock { running.track(key) { runAgent(request, onToolStarting) } }
+            return lock.withLock { running.track(key) { runAgent(request, onToolStarting, narrator) } }
         } finally {
             releaseLock(key)
         }
@@ -160,7 +165,11 @@ class AgentRunner(
         }
     }
 
-    private suspend fun runAgent(request: AgentRequest, onToolStarting: (activity: ToolActivity?) -> Unit = {}): AgentResult {
+    private suspend fun runAgent(
+        request: AgentRequest,
+        onToolStarting: (activity: ToolActivity?) -> Unit,
+        narrator: TurnNarrator?
+    ): AgentResult {
         tokenBudget.stopFor(request.userId)?.let { stop ->
             log.warn {
                 "token budget stop before the turn: chat=${request.chatId} user=${request.userId} " +
@@ -172,10 +181,14 @@ class AgentRunner(
 
         // the turn spends tokens in places that never see the request — a history recap, a vision tool —
         // so its author rides along in the coroutine context and every one of those calls is charged to them.
-        return withContext(BudgetOwner(request.userId)) { runTurn(request, onToolStarting) }
+        return withContext(BudgetOwner(request.userId)) { runTurn(request, onToolStarting, narrator) }
     }
 
-    private suspend fun runTurn(request: AgentRequest, onToolStarting: (activity: ToolActivity?) -> Unit): AgentResult {
+    private suspend fun runTurn(
+        request: AgentRequest,
+        onToolStarting: (activity: ToolActivity?) -> Unit,
+        narrator: TurnNarrator?
+    ): AgentResult {
         val context =
             RequestContext(
                 chatId = request.chatId,
@@ -210,7 +223,13 @@ class AgentRunner(
             )
 
         val outbox = BotOutbox()
-        val preparation = agentFactory.prepare(context = context, outbox = outbox, currentTurn = currentTurn)
+        val preparation =
+            agentFactory.prepare(
+                context = context,
+                outbox = outbox,
+                currentTurn = currentTurn,
+                narrator = narrator
+            )
 
         val conversationPlan =
             conversationPlanForPrompt(request.userId, request.chatId, preparation.tokenBudget.conversationTokens)
@@ -679,11 +698,13 @@ private fun outputsLogSummary(outputs: List<OutboxItem>): String =
         }
     }
 
-private fun extractFinalComment(answer: String, outputs: List<OutboxItem>): String? =
+// trailing assistant text after a delivery tool is duplicate chatter and is dropped — but an
+// announcement is not the answer, so it must not silence the closing text that is.
+internal fun extractFinalComment(answer: String, outputs: List<OutboxItem>): String? =
     answer.trim()
         .takeUnless { it.isEffectivelyBlank() }
         ?.takeUnless {
-            outputs.any {
+            outputs.filterNot { item -> item.delivered }.any {
                 it.output is BotOutput.Voice ||
                         it.output is BotOutput.VideoNote ||
                         it.output is BotOutput.Text ||
@@ -720,6 +741,7 @@ private val TEXT_DUPLICATING_TOOLS =
     setOf(
         MessageTools::sendMessage.name,
         MessageTools::sendRichMessage.name,
+        MessageTools::announcePlan.name,
         InlineChoiceTools::askWithButtons.name
     )
 

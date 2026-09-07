@@ -19,6 +19,45 @@ class BotOutboxTest {
         assertEquals("first\n\nsecond", text.text)
     }
 
+    // an announcement is already in the chat: coalescing into it would rewrite a message the user has
+    // read, and delivery would have no way to tell what still has to be sent.
+    @Test
+    fun `text never merges into what was already delivered`() {
+        val outbox = BotOutbox()
+
+        outbox.recordDelivered("I will build the game")
+
+        assertTrue(outbox.hasDelivered)
+        assertTrue(outbox.enqueueText("here it is"))
+
+        val texts = outbox.pending.map { assertIs<BotOutput.Text>(it.output).text }
+
+        assertEquals(listOf("I will build the game", "here it is"), texts)
+        assertEquals(listOf(true, false), outbox.pending.map { it.delivered })
+    }
+
+    // the nudge that saves a silent turn reads this: a turn that only announced still owes an answer.
+    @Test
+    fun `an announcement alone leaves nothing queued`() {
+        val outbox = BotOutbox()
+
+        outbox.recordDelivered("I will build the game")
+        assertFalse(outbox.hasQueuedOutput)
+
+        outbox.enqueueText("here it is")
+        assertTrue(outbox.hasQueuedOutput)
+    }
+
+    @Test
+    fun `an announcement is never routed to a private chat`() {
+        val outbox = BotOutbox()
+
+        outbox.useDirectMessages()
+        outbox.recordDelivered("I will build the game")
+
+        assertFalse(outbox.pending.single().toPrivate)
+    }
+
     @Test
     fun `starts a new bubble when a merge would exceed the char limit`() {
         val outbox = BotOutbox()

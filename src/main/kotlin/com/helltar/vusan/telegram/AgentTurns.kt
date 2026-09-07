@@ -192,14 +192,15 @@ internal class AgentTurns(
         }
 
         try {
-            // the agent gets the setter so the indicator follows the tool it is running; delivery then
-            // shows its own per-item action.
+            // the agent gets the setter so the indicator follows the tool it is running, and the status
+            // so a tool can say what the turn is about to do while it still matters; delivery then shows
+            // its own per-item action.
             val result =
-                client.withLiveProgress(request) { setActivity ->
+                client.withLiveProgress(request) { setActivity, status ->
                     if (waitForTurn)
-                        agent.handleQueued(request, setActivity)
+                        agent.handleQueued(request, setActivity, status)
                     else
-                        agent.handle(request, setActivity)
+                        agent.handle(request, setActivity, status)
                 }
 
             // a question with buttons ends the turn without answering, so whatever it was asked about has
@@ -210,22 +211,16 @@ internal class AgentTurns(
                 file = request.attachedFile?.takeIf { result.outputs.any { it.output is BotOutput.InlineChoice } }
             )
 
-            // the progress draft has to become the reply, so it is handed the text just before the send.
-            client.handOffProgressDraft(request, result)
             deliver(result)
         } catch (error: Throwable) {
-            // `/stop` cancels this job wherever it happens to be. The turn still owns its progress draft,
-            // and a live draft blocks the input field until something replaces it, so the bubble is closed
-            // and the chat told — under NonCancellable, because the coroutine is already on its way out.
+            // `/stop` cancels this job wherever it happens to be. The live status closes itself on the way
+            // out, so all that is left is to say so in the chat — under NonCancellable, because the
+            // coroutine is already leaving.
             if (error is CancellationException) {
                 val messages = Messages.of(request.language)
 
                 withContext(NonCancellable) {
                     runCatching {
-                        client.handOffProgressDraft(
-                            request,
-                            AgentResult(outputs = emptyList(), comment = messages.turnStoppedNotice)
-                        )
                         reply(messages.turnStoppedNotice)
                     }.onFailure { stopError ->
                         log.warn(stopError) {

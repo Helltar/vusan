@@ -231,6 +231,7 @@ class TelegramDelivery(
         var replyUnavailable = false
         var chatUnreachable = false
         var privateBlockedNoticed = false
+        var sentAnything = false
 
         suspend fun deliverCommentText(text: String, origin: DeliveryTarget) {
             when (
@@ -257,7 +258,24 @@ class TelegramDelivery(
             comment?.takeIf { it.length <= MAX_CAPTION_CHARS }?.let { singleCaptionIndex(result.outputs) } ?: -1
 
         for ((index, item) in result.outputs.withIndex()) {
-            if (index > 0) delay(INTER_MESSAGE_DELAY)
+            // the turn already put this in the chat while it was still running (a plan it announced
+            // before starting the work). it still belongs to the transcript; sending it would repeat it.
+            if (item.delivered) {
+                recordBotMessage(
+                    chatId = currentChatTarget.chatId,
+                    routedToPrivate = false,
+                    senderPrivateChatId = senderPrivateChatId,
+                    text = item.output.groupLogText(),
+                    descriptor = null,
+                    answering = originTarget.replyToMessageId
+                )
+
+                continue
+            }
+
+            if (sentAnything) delay(INTER_MESSAGE_DELAY)
+
+            sentAnything = true
 
             val caption = comment?.takeIf { index == captionIndex }
             val privateTarget = senderPrivateChatId?.takeIf { item.toPrivate }?.let(::DeliveryTarget)
@@ -293,26 +311,30 @@ class TelegramDelivery(
         }
 
         if (captionIndex < 0 && comment != null && !chatUnreachable) {
-            // a trailing comment always follows at least one item send above (the empty-outputs case
-            // returned earlier), so pace it the same as the loop.
-            delay(INTER_MESSAGE_DELAY)
+            // pace it the same as the loop, but only behind a send that actually happened: a turn whose
+            // whole outbox was already delivered mid-run leaves the comment as the first thing sent here.
+            if (sentAnything) delay(INTER_MESSAGE_DELAY)
             deliverCommentText(comment, if (replyUnavailable) originTarget.withoutReply() else originTarget)
         }
 
         return DispatchOutcome(replyUnavailable, chatUnreachable)
     }
 
+    // an already delivered item is out of the chat's future: it can neither carry the caption nor stop
+    // the one media output that still can from taking it.
     private fun singleCaptionIndex(outputs: List<OutboxItem>): Int {
+        val pending = outputs.withIndex().filter { !it.value.delivered }
+
         if (
-            outputs.any {
-                it.output is BotOutput.Text ||
-                        it.output is BotOutput.InlineChoice ||
-                        it.output is BotOutput.RichMessage
+            pending.any {
+                it.value.output is BotOutput.Text ||
+                        it.value.output is BotOutput.InlineChoice ||
+                        it.value.output is BotOutput.RichMessage
             }
         ) {
             return -1
         }
-        val captionables = outputs.withIndex().filter { it.value.output.acceptsCaption }
+        val captionables = pending.filter { it.value.output.acceptsCaption }
         return if (captionables.size == 1) captionables.single().index else -1
     }
 

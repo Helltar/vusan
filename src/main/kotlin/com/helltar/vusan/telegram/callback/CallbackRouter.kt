@@ -11,15 +11,16 @@ import org.telegram.telegrambots.meta.api.objects.message.Message
 import org.telegram.telegrambots.meta.generics.TelegramClient
 
 /**
- * Where a pressed button goes. Both flows validate the same three things — the query carries a message,
- * the presser is allowed here, and the button is one this build still knows — before their own handler
- * gets it; the difference is that a task-menu action is answered on the spot, while an inline choice
- * becomes the user's next agent turn.
+ * Where a pressed button goes. Every flow validates the same three things — the query carries a message,
+ * the presser is allowed here, and the button is one this build still knows — before its own handler gets
+ * it; what differs afterwards is that a task-menu action and a stop are answered on the spot, while an
+ * inline choice becomes the user's next agent turn.
  */
 internal class CallbackRouter(
     private val client: TelegramClient,
     private val taskMenu: TaskMenuHandler,
     private val inlineChoices: InlineChoiceHandler,
+    private val turnStop: TurnStopHandler,
     private val turns: AgentTurns,
     private val allowedIds: Set<Long>,
     private val bannedIds: Set<Long>
@@ -33,6 +34,7 @@ internal class CallbackRouter(
         when {
             taskMenu.handles(callback.data) -> routeTaskMenu(callback)
             inlineChoices.handles(callback.data) -> routeInlineChoice(callback)
+            turnStop.handles(callback.data) -> routeTurnStop(callback)
             // callback data from a scheme this build no longer knows. telegram keeps the client's button
             // spinning until the query is answered, so answer it anyway.
             else -> answerUnrecognized(callback)
@@ -102,6 +104,28 @@ internal class CallbackRouter(
             ) ?: return
 
         turns.dispatchSelection(message, user, selection, messages)
+    }
+
+    private suspend fun routeTurnStop(callback: CallbackQuery) {
+        val messages = Messages.forCode(callback.from?.languageCode)
+        val message = callback.message ?: return answerUnrecognized(callback)
+
+        val chatId = message.chatId
+        val userId = callback.from.id
+
+        if (!isAllowed(chatId, userId)) {
+            log.warn { "denied stop callback (${denialReason(chatId, userId, bannedIds)}): chat=$chatId user=$userId" }
+            answerCallbackQuery(client, callback.id, messages.turnStopNotOwnerAlert, showAlert = true)
+            return
+        }
+
+        turnStop.handleCallback(
+            callbackQueryId = callback.id,
+            callbackData = callback.data,
+            userId = userId,
+            chatId = chatId,
+            messages = messages
+        )
     }
 
     private suspend fun answerUnrecognized(callback: CallbackQuery) {

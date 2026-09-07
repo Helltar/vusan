@@ -31,6 +31,10 @@ internal object UkrainianMessages : Messages {
 
     override val nothingToStopReply = "Зараз нічого не роблю — нема чого зупиняти 🙂"
 
+    override val turnStopButton = "⏹ Зупинити"
+
+    override val turnStopNotOwnerAlert = "Це запит іншого користувача."
+
     override val voiceEmptyReply = "Не чую нічого в цьому голосовому — спробуй ще раз або напиши текстом 🙉"
 
     override val voiceTranscriptionFailedReply = "Не вдалося розпізнати це голосове — напиши краще текстом 😊"

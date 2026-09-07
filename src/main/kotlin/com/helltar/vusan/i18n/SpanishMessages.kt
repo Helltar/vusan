@@ -33,6 +33,10 @@ internal object SpanishMessages : Messages {
 
     override val nothingToStopReply = "Ahora mismo no estoy haciendo nada — no hay nada que detener 🙂"
 
+    override val turnStopButton = "⏹ Detener"
+
+    override val turnStopNotOwnerAlert = "Esta petición es de otra persona."
+
     override val voiceEmptyReply = "No oigo nada en ese mensaje de voz — inténtalo otra vez o escríbelo 🙉"
 
     override val voiceTranscriptionFailedReply = "No pude transcribir ese mensaje de voz — mejor escríbelo 😊"

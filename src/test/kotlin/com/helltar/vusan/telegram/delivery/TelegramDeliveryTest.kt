@@ -169,6 +169,25 @@ class TelegramDeliveryTest {
         assertEquals(77, client.replyTargets.single())
     }
 
+    // the turn announced its plan into the live status while it was still working, so the chat already
+    // has those words; delivery owes the user only what is left.
+    @Test
+    fun `an announcement already in the chat is not sent again`() = runBlocking {
+        val client = RecordingClient()
+        val outbox =
+            BotOutbox().apply {
+                recordDelivered("I will build the game")
+                enqueueText("here it is")
+            }
+
+        TelegramDelivery(client.proxy).send(
+            message = choiceMessage(),
+            result = AgentResult(outputs = outbox.pending, comment = null)
+        )
+
+        assertEquals(listOf("here it is"), client.sentTexts)
+    }
+
     private fun choiceMessage() =
         Message().apply {
             messageId = 77
@@ -178,6 +197,7 @@ class TelegramDeliveryTest {
     private class RecordingClient {
 
         val replyTargets = mutableListOf<Int?>()
+        val sentTexts = mutableListOf<String>()
 
         val proxy: TelegramClient =
             Proxy.newProxyInstance(
@@ -192,6 +212,7 @@ class TelegramDeliveryTest {
             when (request) {
                 is SendMessage -> {
                     replyTargets += request.replyParameters?.messageId
+                    sentTexts += request.text
                     CompletableFuture.completedFuture(Message())
                 }
 

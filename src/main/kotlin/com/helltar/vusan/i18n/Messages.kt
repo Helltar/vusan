@@ -16,6 +16,8 @@ interface Messages {
     val conversationClearedReply: String
     val turnStoppedNotice: String
     val nothingToStopReply: String
+    val turnStopButton: String
+    val turnStopNotOwnerAlert: String
     val voiceEmptyReply: String
     val voiceTranscriptionFailedReply: String
     val inlineChoiceNotOwnerAlert: String
@@ -78,8 +80,8 @@ interface Messages {
     fun taskFollowUpNotice(mention: String): String
 
     /**
-     * What the progress draft says while [activity] runs. Present tense and no trailing punctuation:
-     * the client animates its own ellipsis after the text, so a written one shows up twice.
+     * What the turn's live status says while [activity] runs. Present tense and no trailing punctuation:
+     * the status line is rendered with an ellipsis of its own.
      */
     fun progressLabel(activity: ToolActivity): String
 

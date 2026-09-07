@@ -19,8 +19,8 @@ import com.helltar.vusan.tools.workspace.WorkspaceTools
 
 /**
  * What the agent is busy with, surfaced while a tool runs so the chat can show it — as a chat action,
- * and in a private chat as the words of the progress draft. Deliberately neutral: the Telegram layer
- * owns both renderings, so no Telegram type leaks into [com.helltar.vusan.tools].
+ * and as the words of the turn's live status. Deliberately neutral: the Telegram layer owns both
+ * renderings, so no Telegram type leaks into [com.helltar.vusan.tools].
  *
  * `null` means nothing worth naming is running: the model is thinking, or the tool is over before a
  * caption for it could be read.

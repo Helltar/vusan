@@ -5,6 +5,7 @@ import com.helltar.vusan.agent.grouplog.GroupLogDigester
 import com.helltar.vusan.agent.grouplog.GroupLogReader
 import com.helltar.vusan.agent.grouplog.GroupLogRepository
 import com.helltar.vusan.agent.conversation.ConversationRepository
+import com.helltar.vusan.agent.TurnNarrator
 import com.helltar.vusan.agent.memory.MemoryRepository
 import com.helltar.vusan.config.AppConfig
 import com.helltar.vusan.config.VisionRuntime
@@ -181,11 +182,11 @@ class ToolRegistryFactory(
      * spend any of that on a tool it was never offered. Text-first tools stay registered even when the
      * chat bans pictures — they still answer, just without the extras.
      */
-    fun buildRegistry(context: RequestContext, outbox: BotOutbox): ToolRegistry {
+    fun buildRegistry(context: RequestContext, outbox: BotOutbox, narrator: TurnNarrator? = null): ToolRegistry {
         val chat = context.chatCapabilities
 
         return ToolRegistry {
-            tools(MessageTools(outbox))
+            tools(MessageTools(outbox, narrator))
             tools(InlineChoiceTools(context, outbox, conversation::revision))
             tools(currency)
             tools(telegramChannel)

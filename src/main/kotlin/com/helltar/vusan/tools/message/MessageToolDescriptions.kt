@@ -29,6 +29,18 @@ internal object MessageToolDescriptions {
                 "`-` / `1.` lists, `- [ ]` / `- [x]` task items, `>` quotes, `---` divider, fenced code blocks, and `| a | b |` tables with a `| --- | --- |` separator row. " +
                 "Must be non-empty; up to 32768 characters."
 
+    const val ANNOUNCE_PLAN =
+        "Tells the user what you are about to do, before you start doing it. " +
+                "Everything else you send reaches the chat only when your whole turn is over, so on work that will take a while — a workspace build, a long download, a series of searches — this is the only way to say anything while it is still worth saying. " +
+                "Call it once, before the first slow tool call, and only when the work ahead is genuinely long: a quick answer needs no announcement. " +
+                "One or two sentences in the user's language, saying what you are going to make, not how you will do it. " +
+                "Format with Telegram HTML tags only (`<b>`, `<i>`, `<code>`, ...), never Markdown. " +
+                "The user reads it while you work, so do not repeat it in your final answer."
+
+    const val PLAN_TEXT =
+        "What you are about to do, in one or two sentences. " +
+                "Must be non-empty."
+
     const val REPLY_IN_PRIVATE_MESSAGES =
         "Switches the reply target so all subsequent queued messages and media are sent to the user's private chat with the bot instead of the current chat. " +
                 "Use when the user explicitly asks for something to be sent in DMs, privately, or in personal messages, especially from a group. " +

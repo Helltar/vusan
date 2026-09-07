@@ -40,6 +40,18 @@ internal fun Throwable.isReplyMessageNotFound(): Boolean {
 internal fun Throwable.isMessageNotModified(): Boolean =
     telegramDescription?.contains("message is not modified", ignoreCase = true) == true
 
+// the message an edit or a deletion names is not there any more — somebody removed it, or it aged past
+// what the bot may still touch. distinct from a transient rejection: this one never recovers, so the
+// caller stops writing to that message instead of retrying.
+internal fun Throwable.isMessageGone(): Boolean {
+    val description = telegramDescription?.lowercase() ?: return false
+
+    return "message to edit not found" in description ||
+        "message to delete not found" in description ||
+        "message can't be edited" in description ||
+        "message can't be deleted" in description
+}
+
 // a `file_id` telegram no longer accepts. the wordings vary and this does not have to catch every
 // one: a match only schedules an early re-read of the set, so a miss costs a day's delay and a false
 // positive costs one extra `getStickerSet` call.

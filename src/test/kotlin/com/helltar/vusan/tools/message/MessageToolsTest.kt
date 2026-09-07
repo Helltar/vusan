@@ -1,10 +1,12 @@
 package com.helltar.vusan.tools.message
 
+import com.helltar.vusan.agent.TurnNarrator
 import com.helltar.vusan.outbox.BotOutput
 import com.helltar.vusan.outbox.BotOutbox
 import com.helltar.vusan.tools.toolFailure
 import kotlin.test.Test
 import kotlin.test.assertEquals
+import kotlin.test.assertFalse
 import kotlin.test.assertIs
 import kotlin.test.assertTrue
 import kotlinx.coroutines.runBlocking
@@ -21,6 +23,61 @@ class MessageToolsTest {
         assertTrue(result.startsWith("Delivered"))
         val text = assertIs<BotOutput.Text>(outbox.pending.single().output)
         assertEquals("Hello, world!", text.text)
+    }
+
+    // the whole point of an announcement: it reaches the chat now, and is recorded so the history and
+    // the group transcript still carry what the bot said.
+    @Test
+    fun `announcePlan goes out through the live status and is recorded as delivered`() = runBlocking {
+        val outbox = BotOutbox()
+        val narrator = RecordingNarrator(reaches = true)
+
+        val result = MessageTools(outbox, narrator).announcePlan("  I will build the game  ")
+
+        assertTrue(result.startsWith("Sent"))
+        assertEquals(listOf("I will build the game"), narrator.said)
+
+        val item = outbox.pending.single()
+
+        assertTrue(item.delivered)
+        assertEquals("I will build the game", assertIs<BotOutput.Text>(item.output).text)
+    }
+
+    // a scheduled run has nobody watching it go by, so the words travel with the answer instead of
+    // being dropped.
+    @Test
+    fun `announcePlan falls back to the queue when no one is watching`() = runBlocking {
+        val outbox = BotOutbox()
+
+        val result = MessageTools(outbox, narrator = null).announcePlan("I will build the game")
+
+        assertTrue(result.contains("queued"))
+
+        val item = outbox.pending.single()
+
+        assertFalse(item.delivered)
+        assertEquals("I will build the game", assertIs<BotOutput.Text>(item.output).text)
+    }
+
+    // the first announcement is what the user read; a second would rewrite it under them, and the
+    // history would then claim two messages where the chat shows one.
+    @Test
+    fun `announcePlan refuses to announce twice`() = runBlocking {
+        val outbox = BotOutbox()
+        val narrator = RecordingNarrator(reaches = true)
+        val tools = MessageTools(outbox, narrator)
+
+        tools.announcePlan("I will build the game")
+        val result = tools.announcePlan("actually, I will draw a picture")
+
+        assertTrue(result.startsWith("You have already announced"))
+        assertEquals(listOf("I will build the game"), narrator.said)
+        assertEquals(1, outbox.pending.size)
+    }
+
+    @Test
+    fun `announcePlan refuses empty text`() = runBlocking {
+        toolFailure { MessageTools(BotOutbox(), RecordingNarrator(reaches = true)).announcePlan("   ") }
     }
 
     @Test
@@ -116,5 +173,16 @@ class MessageToolsTest {
         assertIs<BotOutput.Text>(item.output)
         assertTrue(item.toPrivate)
         assertTrue(outbox.redirectToPrivate)
+    }
+
+    private class RecordingNarrator(private val reaches: Boolean) : TurnNarrator {
+
+        val said = mutableListOf<String>()
+
+        override suspend fun say(text: String): Boolean {
+            if (reaches) said += text
+
+            return reaches
+        }
     }
 }

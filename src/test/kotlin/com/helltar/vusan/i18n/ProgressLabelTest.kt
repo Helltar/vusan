@@ -8,7 +8,7 @@ import kotlin.test.assertTrue
 
 class ProgressLabelTest {
 
-    // the draft is the only place a user reads these, and an activity added without a translation
+    // the live status is the only place a user reads these, and an activity added without a translation
     // would surface as an empty bubble rather than as a compile error.
     @Test
     fun `every activity is spelled out in every language`() {
@@ -20,7 +20,7 @@ class ProgressLabelTest {
 
                 assertTrue(label.isNotBlank(), "$language has no label for $activity")
 
-                // the client animates its own ellipsis after the text, so a written one renders twice
+                // the status line is rendered with an ellipsis of its own, so a written one shows twice
                 assertFalse(label.endsWith("…"), "$language label for $activity ends in an ellipsis: $label")
                 assertFalse(label.endsWith("."), "$language label for $activity ends in a period: $label")
             }
@@ -38,7 +38,8 @@ class ProgressLabelTest {
         }
     }
 
-    // the labels ride in a plain-text draft: markup would show up as literal characters.
+    // the status line wraps the label in italics of its own, and falls back to plain text when the
+    // model's markup breaks — a label carrying tags would nest wrongly in one and show literally in the other.
     @Test
     fun `labels carry no markup`() {
         Language.entries.forEach { language ->
