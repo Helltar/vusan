@@ -13,9 +13,8 @@ sound one for a personal deployment, covered in [Both on one machine](#both-on-o
 machine of its own — a small VM or a cheap VPS — is the recommendation for anything public or less
 trusted, since the service runs commands the model writes and holds the Docker socket to do it.
 
-It needs a rootful Linux Docker Engine with cgroup v2 and loop-device support. There is one
-implementation — Docker containers with bounded home filesystems — and no gVisor, alternate engine
-or runtime to choose.
+It runs on an ordinary Linux Docker Engine. Rootless Docker is the one setup that cannot host it:
+every home is a real filesystem on a loop device, which a rootless daemon has no way to attach.
 
 - **Deploying it** — [Setting it up](#setting-it-up) · [Both on one machine](#both-on-one-machine)
 - **What it does** — [Files and installed tools](#files-and-installed-tools) ·
@@ -30,8 +29,14 @@ On the workspace machine, from a checkout of this repository:
 
 ```bash
 cp env/workspace.env.example env/workspace.env
+
+# write a fresh shared secret into it
 sed -i "s/^WORKSPACE_TOKEN=.*/WORKSPACE_TOKEN=$(openssl rand -hex 32)/" env/workspace.env
-$EDITOR env/workspace.env          # set WORKSPACE_BIND, and any limit you want to change
+```
+
+Then set `WORKSPACE_BIND` in that file, along with any limit you want to change, and start it:
+
+```bash
 docker compose --env-file env/workspace.env -f compose.workspace.yaml up -d
 ```
 
@@ -99,8 +104,11 @@ host can; `127.0.0.1` does not work, because a container cannot reach the host's
 
 ```bash
 cp env/workspace.env.example env/workspace.env
+
+# bind to the bridge gateway, and write a fresh shared secret
 sed -i "s/^WORKSPACE_BIND=.*/WORKSPACE_BIND=172.17.0.1/;
         s/^WORKSPACE_TOKEN=.*/WORKSPACE_TOKEN=$(openssl rand -hex 32)/" env/workspace.env
+
 docker compose --env-file env/workspace.env -f compose.workspace.yaml up -d
 ```
 
@@ -149,9 +157,8 @@ image behind it sits in a Docker volume that no workspace container ever receive
 Python with pip and venv, Node.js and npm, Git, curl, wget, jq, SQLite, ripgrep, zip, unzip, Pandoc,
 FFmpeg, ImageMagick, and Chromium with basic fonts.
 
-Not included: Java, Kotlin, a C/C++ compiler, a typesetting suite. Chromium is there to open a page
-or a game and confirm it runs; its launcher turns off the browser's own sandbox, because the
-container around it already is one.
+Chromium is there to open a page or a game and confirm it runs; its launcher turns off the browser's
+own sandbox, because the container around it already is one.
 
 ### Installing anything else
 
