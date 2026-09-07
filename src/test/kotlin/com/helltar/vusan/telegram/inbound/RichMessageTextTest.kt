@@ -75,6 +75,34 @@ class RichMessageTextTest {
     }
 
     @Test
+    fun `flattens the blocks and spans added in bot api 10_3`() {
+        val message =
+            richMessage(
+                """
+                {"type":"expandable_blockquote","text":"hidden detail","credit":"The Source"},
+                {"type":"document","document":{"file_id":"a","file_unique_id":"b"},
+                 "caption":{"text":"the report"}},
+                {"type":"buttons","buttons":[{"text":"Buy now"},{"text":"Learn more"}],"align":"center"},
+                {"type":"paragraph","text":["Press ",{"type":"button","button":{"text":"here"}}]}
+                """.trimIndent()
+            )
+
+        assertEquals(
+            """
+            > hidden detail
+            — The Source
+
+            the report
+
+            Buy now · Learn more
+
+            Press here
+            """.trimIndent(),
+            message.richMessage.toRichMarkdown()
+        )
+    }
+
+    @Test
     fun `renders a table with its header separator and caption`() {
         val message =
             richMessage(

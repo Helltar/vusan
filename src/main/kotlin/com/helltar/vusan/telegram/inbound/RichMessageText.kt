@@ -26,10 +26,16 @@ private fun RichBlock.render(): String =
         is RichBlockList -> items.joinToString("\n") { it.render() }
         is RichBlockBlockQuotation -> blocks.renderBlocks().quoted().withCredit(credit)
         is RichBlockPullQuotation -> text.render().quoted().withCredit(credit)
+        is RichBlockExpandableBlockQuotation -> text.render().quoted().withCredit(credit)
         is RichBlockDetails -> listOf(summary.render(), blocks.renderBlocks()).joinNonBlank("\n\n")
         is RichBlockCollage -> listOf(blocks.renderBlocks(), caption.render()).joinNonBlank("\n\n")
         is RichBlockSlideshow -> listOf(blocks.renderBlocks(), caption.render()).joinNonBlank("\n\n")
         is RichBlockTable -> renderTable()
+
+        // a button is an affordance the bot cannot use, but its label is text the sender chose to
+        // show, so the words are kept and the affordance is dropped — the same trade the media
+        // blocks make with their captions.
+        is RichBlockButtons -> buttons.renderButtons()
 
         // media carries no text of its own, so only its caption reaches the model; a bare marker
         // such as `[photo]` would just get parroted back into replies.
@@ -39,10 +45,14 @@ private fun RichBlock.render(): String =
         is RichBlockVideo -> caption.render()
         is RichBlockVoiceNote -> caption.render()
         is RichBlockMap -> caption.render()
+        is RichBlockDocument -> caption.render()
 
         // anchors are invisible link targets, and `thinking` exists only in streamed drafts.
         else -> ""
     }
+
+private fun List<RichMessageButton?>?.renderButtons(): String =
+    orEmpty().mapNotNull { it?.text.render().takeIf(String::isNotBlank) }.joinToString(" · ")
 
 private fun RichBlockCaption?.render(): String = this?.let { it.text.render().withCredit(it.credit) }.orEmpty()
 
@@ -91,7 +101,7 @@ private fun RichText?.render(): String =
         is RichTextMathematicalExpression -> "$$expression$"
 
         // entity-like spans already read as themselves (`@name`, `#tag`, `/cmd`, the number), and
-        // date-time, anchor links and references only wrap their own text.
+        // date-time, buttons, anchor links and references only wrap their own text.
         is RichTextDateTime -> text.render()
         is RichTextMention -> text.render()
         is RichTextHashtag -> text.render()
@@ -100,6 +110,7 @@ private fun RichText?.render(): String =
         is RichTextEmailAddress -> text.render()
         is RichTextPhoneNumber -> text.render()
         is RichTextBankCardNumber -> text.render()
+        is RichTextButton -> button.text.render()
         is RichTextAnchorLink -> text.render()
         is RichTextReference -> text.render()
         is RichTextReferenceLink -> text.render()
