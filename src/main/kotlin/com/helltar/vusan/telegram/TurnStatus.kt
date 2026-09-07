@@ -26,12 +26,11 @@ import org.telegram.telegrambots.meta.generics.TelegramClient
 
 /**
  * The status message's body: the plan the model announced, and under it the line naming what is running.
- * That line is italic so the plan reads as the bot talking and the line under it as the machine working,
- * and it carries its own ellipsis — nothing animates one after a plain message. [html] is off once broken
- * markup has forced the whole status into plain text.
+ * The line is plain text — the emoji already sets it apart from the plan above it — and carries its own
+ * ellipsis, since nothing animates one after a message is sent.
  */
-internal fun statusMessageText(plan: String?, label: String?, html: Boolean): String? {
-    val running = label?.let { if (html) "<i>$it…</i>" else "$it…" }
+internal fun statusMessageText(plan: String?, label: String?): String? {
+    val running = label?.let { "$it…" }
 
     return when {
         plan == null -> running
@@ -168,11 +167,10 @@ internal class TurnStatus(
 
                 when {
                     // the model writes its plan in HTML like any other message. broken markup costs the
-                    // formatting, not the status itself: the rest of the turn goes up as plain text, and
-                    // the line is rebuilt because its own italics were markup too.
+                    // formatting, not the status itself: the same text goes up again as plain text.
                     error.isEntityParseError() -> {
                         parseMode = null
-                        push(statusText() ?: text)
+                        push(text)
                     }
 
                     // whatever it was answering is gone, but the status still has something to say.
@@ -207,7 +205,7 @@ internal class TurnStatus(
             }
     }
 
-    private fun statusText(): String? = statusMessageText(announcement, label, html = parseMode != null)
+    private fun statusText(): String? = statusMessageText(announcement, label)
 
     // a write in flight when the turn ends must still finish. `/stop`, or simply the turn being over,
     // cancels the collector this runs in, and a send cancelled mid-flight can still have created the
