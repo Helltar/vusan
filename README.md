@@ -122,11 +122,9 @@ Prerequisites: JDK 21, plus `ffmpeg` and `yt-dlp` on `PATH`.
 
 ## Documentation
 
-- **[Configuration](docs/configuration.md)** — every setting, from the five values above to model
-  choice, tools, memory and the health check.
-- **[The workspace shell](docs/workspace.md)** — what the persistent Linux home can do, how it is
-  isolated, and how to deploy it.
-- **[Architecture](docs/architecture.md)** — the layers, and how a message flows through them.
+- [Configuration](docs/configuration.md) — every setting, from the required five onward.
+- [The workspace shell](docs/workspace.md) — what the persistent home does, and how to deploy it.
+- [Architecture](docs/architecture.md) — the layers, and how a message flows through them.
 
 ## Stack
 
