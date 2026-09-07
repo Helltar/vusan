@@ -98,12 +98,14 @@ A normal user message travels:
    `InlineChoiceHandler`, and its selected option then enters the agent loop as the user's next turn. Callback data no
    handler recognizes (a button from an older build) is still answered, so the caller's client stops spinning. A
    `my_chat_member` update — the bot's own membership changing, which Telegram delivers by default — carries no message
-   and goes straight to `telegram/BotMembership.kt` instead of the dispatch below. An `edited_message` update always
-   rewrites its group-transcript row (`GroupLogRepository.recordEdit`, which also drops the cached digest of that
-   message's day), and only then may enter the dispatch below. `startsTurnOnEdit` decides: an edit answers only when it
-   is what made the message addressed to the bot — someone adding the mention they forgot. An edit of a message older
-   than `EDIT_TURN_WINDOW`, an edit into a slash command, and an edit of an album part are recorded but never answered;
-   the reply anchors to the edited message, so once the chat has moved past it there is nothing left to answer.
+   and goes straight to `telegram/BotMembership.kt` instead of the dispatch below. A `stopped_message_generation` update
+   carries none either and is handled by `stopGeneration` (see **Stopping a turn** below); both are in the default
+   `allowed_updates` set, which is why neither needs that parameter set. An `edited_message` update always rewrites its
+   group-transcript row (`GroupLogRepository.recordEdit`, which also drops the cached digest of that message's day), and
+   only then may enter the dispatch below. `startsTurnOnEdit` decides: an edit answers only when it is what made the
+   message addressed to the bot — someone adding the mention they forgot. An edit of a message older than
+   `EDIT_TURN_WINDOW`, an edit into a slash command, and an edit of an album part are recorded but never answered; the
+   reply anchors to the edited message, so once the chat has moved past it there is nothing left to answer.
 2. **Filter** — the allowlist (`ALLOWED_IDS`) comes first, in `TelegramBotRunner.passesAllowlist`, on the polling loop
    itself: an update from a chat and user it does not name is dropped there, before the transcript, the sticker catalog,
    album buffering or a dispatch coroutine can cost anything, and only a message actually aimed at the bot is logged as
@@ -338,15 +340,18 @@ A normal user message travels:
   while preserving the active/paused state; changing a cron timezone without replacing the expression recalculates its
   next occurrence. In groups, `listTasks`, edit, pause, resume, and cancel share the menu's current-chat scope instead
   of exposing tasks from private or unrelated chats.
-- **Stopping a turn** — `/stop` cancels whatever the caller's conversation is running: the model call, the tool inside
-  it, and everything that tool started, since all of them are children of the turn's job. It is the one path that must
-  not take the conversation lock, because the turn it interrupts is holding it — so `AgentRunner` keeps the running
-  turn's `Job` in a small register (`RunningTurns`) alongside the lock, keyed the same way, and only a turn that has
-  actually started is in it. The interrupted turn reports itself rather than the command doing it: on cancellation it
-  hands its progress draft the stopped notice and replies with it, under `NonCancellable`, because a live draft blocks
-  the input field until something replaces it. `/stop` answers only when there was nothing running. Work outside the
-  process outlives the cancellation — a workspace command keeps going on its own machine until its timeout, and the
-  model can list and cancel those through the workspace tools.
+- **Stopping a turn** — `/stop`, or Telegram's own stop control on a progress draft, cancels whatever the caller's
+  conversation is running: the model call, the tool inside it, and everything that tool started, since all of them are
+  children of the turn's job. It is the one path that must not take the conversation lock, because the turn it
+  interrupts is holding it — so `AgentRunner` keeps the running turn's `Job` in a small register (`RunningTurns`)
+  alongside the lock, keyed the same way, and only a turn that has actually started is in it. The interrupted turn
+  reports itself rather than the command doing it: on cancellation it hands its progress draft the stopped notice and
+  replies with it, under `NonCancellable`, because a live draft blocks the input field until something replaces it.
+  `/stop` answers only when there was nothing running; the draft control reaches the same `AgentRunner.stop` through
+  `TelegramBotRunner.stopGeneration` and answers nothing either way, since its update carries a chat and a draft id but
+  no sender — a draft only exists in a private chat, so the chat is the user. Work outside the process outlives the
+  cancellation — a workspace command keeps going on its own machine until its timeout, and the model can list and cancel
+  those through the workspace tools.
 - **Direct history clear** — `/clear` bypasses the LLM, deletes the caller's conversation history **in the chat the
   command was sent from**, and sends a localized confirmation. Their history in other chats, and everyone else's in this
   one, are untouched: the wipe is as narrow as the conversation it belongs to, which is what keeps `/clear` in a group
@@ -614,7 +619,7 @@ A symptom-to-source map for finding the right file fast. Paths are under
 | A chat's tasks all went paused on their own, or one keeps firing into a chat the bot was removed from | `telegram/BotMembership.kt` (the `my_chat_member` path) + `telegram/delivery/TelegramErrors.kt` (`isChatUnreachable`) + `tasks/TaskScheduler.kt` (`parkTasksOfUnreachableChat`) |
 | A tool is missing in one group but present elsewhere, or a chat restriction is stale | `telegram/ChatProfile.kt` (`capabilitiesOf`, the cache and its `forget`) + `tools/ToolRegistryFactory.buildRegistry` (which capability gates which tool) |
 | `/tasks` or a plain-language task pause/resume/cancel fails | `telegram/callback/TaskMenuHandler.kt` (rendering, ownership, callbacks) + `tools/tasks/TaskTools.kt` (agent path) + `tasks/TasksRepository.kt` (shared scoped state changes) |
-| `/stop` does not stop anything, or a turn keeps a draft on screen after it | `agent/RunningTurns.kt` (what is registered and cancelled) + `agent/AgentRunner.kt` (`stop`, and the lock the command must not take) + `telegram/AgentTurns.kt` (the notice and draft handoff on cancellation) |
+| `/stop` does not stop anything, or a turn keeps a draft on screen after it | `agent/RunningTurns.kt` (what is registered and cancelled) + `agent/AgentRunner.kt` (`stop`, and the lock the command must not take) + `telegram/AgentTurns.kt` (the notice and draft handoff on cancellation) + `TelegramBotRunner.stopGeneration` (Telegram's own stop control on a draft) |
 | `/clear` reports success but history survives | `agent/AgentRunner.kt` (`clearConversation` and the turn lock that also guards the append) + `tools/conversation/ConversationTools.kt` (agent path) + `agent/conversation/ConversationRepository.kt` (shared storage operation) |
 | An agent choice button does nothing, repeats, reaches the wrong user, loses the photo, or its answer replies to the bot's own question | `tools/choice/InlineChoiceTools.kt` (tool contract) + `telegram/callback/InlineChoiceHandler.kt` (callback ownership/consumption, origin message id, parked attachment) + `telegram/AgentTurns.kt` (the follow-up turn and its reply anchor) |
 | An env var has no effect | `config/AppConfig.kt` (parsing) — and check it is documented in [`configuration.md`](configuration.md) + [`env/vusan.env.example`](../env/vusan.env.example) |

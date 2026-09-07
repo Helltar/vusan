@@ -52,6 +52,7 @@ import org.telegram.telegrambots.meta.api.objects.CallbackQuery
 import org.telegram.telegrambots.meta.api.objects.Update
 import org.telegram.telegrambots.meta.api.objects.User
 import org.telegram.telegrambots.meta.api.objects.message.Message
+import org.telegram.telegrambots.meta.api.objects.message.MessageGenerationStopped
 import org.telegram.telegrambots.meta.generics.TelegramClient
 import java.time.Instant
 import kotlin.time.Duration
@@ -228,6 +229,13 @@ internal class TelegramBotRunner(
                 continue
             }
 
+            val stopped = update.stoppedMessageGeneration
+
+            if (stopped != null) {
+                stopGeneration(stopped)
+                continue
+            }
+
             val edited = update.editedMessage
 
             if (edited != null) {
@@ -394,6 +402,21 @@ internal class TelegramBotRunner(
 
     // it arrives on its own coroutine, so the turn it stops holding the conversation lock is no obstacle:
     // that is the whole point — every other path into the agent would answer `busyReply` and wait.
+    /**
+     * Telegram's own stop control on a progress draft, which does what `/stop` does without the user
+     * having to type it. The update carries the chat and the draft but never a sender — a draft only
+     * exists in a private chat, so the chat *is* the user. Nothing is answered either way: the stopped
+     * turn reports itself, and unlike `/stop` there is no message here to reply to.
+     */
+    private fun stopGeneration(stopped: MessageGenerationStopped) {
+        val chatId = stopped.chat.id
+
+        if (!isIdAllowed(chatId, chatId, allowedIds, bannedIds)) return
+
+        if (agent.stop(chatId, chatId))
+            log.info { "stopped the running turn from the draft control: chat=$chatId draft=${stopped.draftId}" }
+    }
+
     private suspend fun handleStopCommand(message: Message, botProfile: BotProfile) {
         if (!message.isAccepted(botProfile)) return
 
