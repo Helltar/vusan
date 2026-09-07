@@ -17,16 +17,11 @@ Try it live in the [Vusan Playground](https://t.me/+56qi5dDwsNszZWFi) Telegram g
 
 ## Quick start
 
-Clone the repo and enter the project directory:
+Clone the repo and copy the env template:
 
 ```bash
 git clone https://github.com/Helltar/vusan.git
 cd vusan
-```
-
-Copy the env template:
-
-```bash
 cp env/vusan.env.example env/vusan.env
 ```
 
@@ -41,7 +36,7 @@ LLM_MODEL=gpt-5.4-mini
 LLM_API_KEY=sk-proj-qwerty
 ```
 
-With that in place, start the bot — in Docker, or on a local JVM.
+Then start the bot — in Docker, or on a local JVM.
 
 ### Docker
 
@@ -51,15 +46,15 @@ Use the published image:
 docker compose up -d
 ```
 
-That starts the bot by itself. The workspace shell — the Linux home directory below — is a separate,
-optional service that runs model-authored commands, so it stays off until you deploy it, ideally on a
-machine of its own: see [the workspace guide](docs/workspace.md).
-
 Or build from source:
 
 ```bash
 docker compose -f compose.yaml -f compose.local.yaml up --build -d
 ```
+
+That starts the bot by itself. The workspace shell — the Linux home directory below — is a separate,
+optional service that runs model-authored commands, so it stays off until you deploy it, on this
+machine or one of its own: see [the workspace guide](docs/workspace.md).
 
 ### Local JVM
 
@@ -81,14 +76,11 @@ Prerequisites: JDK 21, plus `ffmpeg` and `yt-dlp` on `PATH`.
 
 - **Web search** — searches the web and reads the pages it finds.
 - **Image search** — finds pictures on the web and sends them.
-- **Telegram channels** — recaps public channel posts by day or week, searches by keyword,
-  and reads memes and screenshots.
+- **Telegram channels** — recaps public channel posts by day or week, searches by keyword, and reads
+  memes and screenshots.
 - **Currency** — live exchange rates.
-
-### YouTube
-
-- **Video and audio** — finds videos by name or link and sends the video or audio track.
-- **Transcripts** — summarizes videos and answers questions using their subtitles.
+- **YouTube video and audio** — finds videos by name or link and sends the video or audio track.
+- **YouTube transcripts** — summarizes videos and answers questions using their subtitles.
 
 ### Creates
 
@@ -104,23 +96,37 @@ Prerequisites: JDK 21, plus `ffmpeg` and `yt-dlp` on `PATH`.
 - **Live progress** — shows what it is doing in private chats: searching, running code, drawing.
 - **Inline choices** — asks for decisions or confirmation with buttons and continues when you tap.
 - **Edits** — answers when you add its mention to an earlier message.
-- **Replies** — uses the message you reply to as context, including other people's files and pictures.
-- **Polls and quizzes** — creates Telegram polls and quizzes.
+- **Replies** — uses the message you reply to as context, including other people's files and
+  pictures.
+- **Private replies** — moves the answer into your DMs when you ask.
+
+### Speaks Telegram
+
 - **Reactions** — sometimes an emoji on your message is the whole answer.
 - **Stickers** — learns your chat's sticker collection and picks fitting replies from it.
+- **Polls and quizzes** — creates Telegram polls and quizzes.
 - **Files and links** — sends documents, downloads links, and retrieves files behind chat stickers
   and pictures.
 - **Long structured answers** — formats longer replies with headings, tables, and checklists.
-- **Private replies** — moves the answer into your DMs when you ask.
 
 ### Remembers
 
 - **Conversation history** — keeps context with recent messages and recaps, separately in each chat.
 - **What the group said** — recaps the whole conversation and answers questions about who said what.
 - **Sense of time** — notices gaps between conversations.
-- **Memory** — remembers facts about you and the group across history resets; forgets them on request.
-- **Scheduled tasks** — runs tasks once or on a recurring schedule; lets you pause, resume, edit or cancel.
+- **Memory** — remembers facts about you and the group across history resets; forgets them on
+  request.
+- **Scheduled tasks** — runs tasks once or on a recurring schedule; lets you pause, resume, edit or
+  cancel.
 - **Follow-ups** — checks back after an exam, interview or other event you mentioned.
+
+## Documentation
+
+- **[Configuration](docs/configuration.md)** — every setting, from the five values above to model
+  choice, tools, memory and the health check.
+- **[The workspace shell](docs/workspace.md)** — what the persistent Linux home can do, how it is
+  isolated, and how to deploy it.
+- **[Architecture](docs/architecture.md)** — the layers, and how a message flows through them.
 
 ## Stack
 
@@ -128,6 +134,3 @@ Built on [Koog](https://github.com/JetBrains/koog) — JetBrains' Kotlin agent f
 [TelegramBots](https://github.com/rubenlagus/TelegramBots) for Telegram and Exposed/SQLite for
 storage. Works with OpenAI, Anthropic, Google, DeepSeek, any OpenAI-compatible server, or a ChatGPT
 subscription instead of a paid API key — see [configuration.md](docs/configuration.md#llm-provider).
-
-For a tour of the layers and how a message flows through them, see
-[architecture.md](docs/architecture.md).

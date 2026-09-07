@@ -1,8 +1,9 @@
 # The workspace shell, deployed on its own:
 #   docker compose --env-file env/workspace.env -f compose.workspace.yaml up -d
 #
-# This is a separate deployment, not an addition to compose.yaml, and it belongs on a machine of its
-# own — it holds the Docker socket and runs model-authored shell. See docs/workspace.md.
+# This is a separate deployment, not an addition to compose.yaml: it holds the Docker socket and runs
+# model-authored shell. One machine is supported; a machine of its own is the recommendation for a
+# public deployment. See docs/workspace.md.
 #
 # `env/workspace.env` is the whole configuration: Compose reads it for the values substituted below and
 # hands the same file to the container. Every command needs it, hence --env-file.
