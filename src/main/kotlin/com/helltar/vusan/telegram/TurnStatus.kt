@@ -109,12 +109,16 @@ internal class TurnStatus(
     private var parseMode: String? = ParseMode.HTML
     private var gone = false
 
-    /** Returns `true` while the bubble is up, which is what stands the chat action down. */
-    suspend fun showActivity(activity: ToolActivity): Boolean =
+    /**
+     * Names [activity] in the status, spending a message on it only when [mayOpen]: an activity that is
+     * part of the exchange rather than a job fills a bubble already on screen but never opens one of its
+     * own. Returns `true` while the bubble is up, which is what stands the chat action down.
+     */
+    suspend fun showActivity(activity: ToolActivity, mayOpen: Boolean): Boolean =
         edits.withLock {
             label = activityStatusLabel(activity, messages)
 
-            if (messageId == null && !activityOpensIt) false else render()
+            if (messageId == null && !(mayOpen && activityOpensIt)) false else render()
         }
 
     override suspend fun say(text: String): Boolean =

@@ -207,14 +207,18 @@ A normal user message travels:
     - **The status message** — one silent message per turn, the same in every kind of chat, carrying the running line
       and a stop button. Telegram's own surface for a generating agent, `sendMessageDraft`, is accepted for **private
       chats only**, so it could never be half of this; an ordinary message is what a group can have too. It opens lazily
-      — on the first named activity after `STATUS_GRACE`, or the moment `announcePlan` says something — and, unlike a
-      draft or a chat action, it does not expire, so it is written only when something actually changes. The grace
-      period is what keeps an ordinary turn out of it: `sendMessage` names an activity like any other tool, so without
-      it a greeting would pay for a send and a delete nobody was meant to see. Its writes are `NonCancellable`, because
-      a send cancelled in flight can still have created the message, leaving a bubble whose id nobody holds. `finish` deletes it, or, when the model
-      put its own words in it, edits those words to stand alone without the running line and without the button; either
-      way that happens in `withLiveProgress`'s `finally`, so a turn cancelled by `/stop` still takes its bubble off the
-      screen. In a slow-mode group the bot's messages are rationed, so an activity alone never opens one — only words
+      — on a named activity that has outlasted its grace, or the moment `announcePlan` says something — and, unlike a
+      draft or a chat action, it does not expire, so it is written only when something actually changes. The grace is
+      per activity (`statusGraceFor`), and it is what decides which turns become a progress UI at all: a job the user
+      waits through — a search, a build, a download, a drawing — earns a message after `JOB_GRACE`, while an activity
+      that is part of the exchange, vision on a photo or `sendMessage` itself, waits `CONVERSATION_GRACE` and in a
+      normal turn never opens one, leaving the chat action to say the same thing the way a person typing does. The
+      clock runs from the start of the turn, so a run of quick searches adds up. Once a message is open every activity
+      fills it, light or not, since naming the next step is the edit it would make anyway (`showActivity`'s `mayOpen`).
+      Its writes are `NonCancellable`, because a send cancelled in flight can still have created the message, leaving a
+      bubble whose id nobody holds. `finish` deletes it, or, when the model put its own words in it, edits those words
+      to stand alone without the running line and without the button; either way that happens in `withLiveProgress`'s
+      `finally`, so a turn cancelled by `/stop` still takes its bubble off the screen. In a slow-mode group the bot's messages are rationed, so an activity alone never opens one — only words
       the model chose to send do.
     - **Announcing a plan before the work** — every output a tool produces is queued and delivered when the turn is
       over, which for a long turn means the plan arrives after the thing it planned. `announcePlan` (`MessageTools`) is
@@ -602,7 +606,7 @@ A symptom-to-source map for finding the right file fast. Paths are under
 | A workspace loses files, or someone sees another person's | `tools/workspace/WorkspaceModels.workspaceIdOrNull` (the `userId` key, and the shared bot accounts that get no workspace at all), then `workspace/container.ts` and `workspace/homes.ts` (one bounded home disk per person) and `workspace/files.ts` (unprivileged, scoped transfers) |
 | Wrong language in a canned reply (busy/error/voice/start/task menu) | `i18n/Language.kt` (language selection) + `i18n/Messages.kt` (the strings) |
 | A turn's plan reaches the chat only after the work it announced, or arrives twice | `tools/message/MessageTools.announcePlan` (the tool and its one-per-turn rule) + `telegram/TurnStatus.kt` (`say`, and what survives `finish`) + `outbox/BotOutbox.kt` (`recordDelivered`, `hasDelivered`) + `telegram/delivery/TelegramDelivery.dispatch` (skipping an item already in the chat) |
-| The typing indicator or the turn's status message is wrong, stale, or missing | `telegram/TelegramProgress.kt` (both tickers, the named-activity gate) + `telegram/TurnStatus.kt` (the message itself, the emoji beside each activity, its stop button, and how it ends) + `agent/ToolActivity.kt` (which tool means what) + `i18n/Messages.progressLabel` (the words) + `telegram/delivery/TelegramDelivery.chatActionFor` (the action) |
+| The typing indicator or the turn's status message is wrong, stale, or missing | `telegram/TelegramProgress.kt` (both tickers, and `statusGraceFor`, the per-activity gate deciding which turns get a message at all) + `telegram/TurnStatus.kt` (the message itself, the emoji beside each activity, its stop button, and how it ends) + `agent/ToolActivity.kt` (which tool means what) + `i18n/Messages.progressLabel` (the words) + `telegram/delivery/TelegramDelivery.chatActionFor` (the action) |
 | A long research turn ends in the generic error reply or is answered mid-way | `agent/AgentFactory.kt` (`maxIterations`, `outOfToolBudget` and the wrap-up node that lands the turn) + `agent/AgentRunner.kt` (delivering what the outbox holds when a run fails) |
 | The reply to a failed turn says nothing about what the provider did | `agent/AgentRunner.providerErrorReply` (which error body earns which canned reply: a content-policy refusal, a spent usage limit, a dead key, a 429/503 overload) + `i18n/Messages.kt` (the strings) |
 | You need to see exactly what the model was sent this turn | `agent/PromptDump.kt` (the whole request rendered per message) — it hangs on koog's `onLLMCallStarting` in `agent/AgentFactory.kt` and is switched by the `PromptDump` logger in [`logback.xml`](../src/main/resources/logback.xml) |
