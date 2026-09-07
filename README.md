@@ -93,9 +93,8 @@ Prerequisites: JDK 21, plus `ffmpeg` and `yt-dlp` on `PATH`.
 
 ### In the chat
 
-- **Live progress** — shows what it is doing while it works: searching, running code, drawing. Before
-  a long job it says what it is about to make, so you read the plan while it is still a plan.
-- **Stop button** — ends a running answer from the progress message, in groups as well as in private.
+- **Live progress** — shows what it is doing, and says what it is about to make before a long job.
+- **Stop button** — ends a running answer from the progress message, in groups too.
 - **Inline choices** — asks for decisions or confirmation with buttons and continues when you tap.
 - **Edits** — answers when you add its mention to an earlier message.
 - **Replies** — uses the message you reply to as context, including other people's files and
