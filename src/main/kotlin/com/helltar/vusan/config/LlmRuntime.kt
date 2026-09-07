@@ -203,9 +203,22 @@ internal fun connectionTimeouts(requestTimeout: Duration): ConnectionTimeoutConf
         socketTimeoutMillis = requestTimeout.inWholeMilliseconds
     )
 
+// the catalog carries models that speak only one of the two OpenAI endpoints — every `codex` and `pro`
+// entry is Responses-only — and params of the wrong kind make the client refuse the model on its first
+// call rather than at startup, so a deployment looks configured and then answers nothing. Koog picks the
+// endpoint itself when handed plain LLMParams, but the prompt cache key rides on the endpoint-specific
+// params, so the choice is made here. Completions stays the default wherever a model speaks both.
+internal fun openAiHostedParams(model: LLModel, promptCacheKey: String): LLMParams =
+    if (model.supports(LLMCapability.OpenAIEndpoint.Completions))
+        OpenAIChatParams(promptCacheKey = promptCacheKey)
+    else
+        OpenAIResponsesParams(promptCacheKey = promptCacheKey)
+
 private fun resolveHostedRuntime(config: LlmProviderConfig.Hosted, timeoutConfig: ConnectionTimeoutConfig): LlmRuntime =
     when (config.provider) {
-        HostedLlmProvider.OPENAI ->
+        HostedLlmProvider.OPENAI -> {
+            val model = resolveOpenAiModel(config.model).withContextOverride(config.contextWindowTokens)
+
             LlmRuntime(
                 providerLabel = "OpenAI",
                 client =
@@ -214,10 +227,11 @@ private fun resolveHostedRuntime(config: LlmProviderConfig.Hosted, timeoutConfig
                         settings = OpenAIClientSettings(timeoutConfig = timeoutConfig),
                         explicitPromptCaching = true
                     ),
-                model = resolveOpenAiModel(config.model).withContextOverride(config.contextWindowTokens),
-                chatParams = OpenAIChatParams(promptCacheKey = OPENAI_PROMPT_CACHE_KEY),
-                compactionParams = OpenAIChatParams(promptCacheKey = OPENAI_COMPACTION_CACHE_KEY)
+                model = model,
+                chatParams = openAiHostedParams(model, OPENAI_PROMPT_CACHE_KEY),
+                compactionParams = openAiHostedParams(model, OPENAI_COMPACTION_CACHE_KEY)
             )
+        }
 
         HostedLlmProvider.ANTHROPIC ->
             LlmRuntime(

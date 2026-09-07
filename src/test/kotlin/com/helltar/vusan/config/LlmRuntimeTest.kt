@@ -38,6 +38,53 @@ class LlmRuntimeTest {
     }
 
     @Test
+    fun `a responses-only model is not handed chat completions params`() {
+        assertIs<OpenAIResponsesParams>(openAiHostedParams(resolveOpenAiModel("gpt-5-pro"), "vusan"))
+        assertIs<OpenAIResponsesParams>(openAiHostedParams(resolveOpenAiModel("gpt-5-codex"), "vusan"))
+        assertIs<OpenAIChatParams>(openAiHostedParams(resolveOpenAiModel("gpt-5.4-mini"), "vusan"))
+    }
+
+    @Test
+    fun `the prompt cache key survives either endpoint`() {
+        val responses = openAiHostedParams(resolveOpenAiModel("gpt-5-pro"), "vusan-recap")
+        val chat = openAiHostedParams(resolveOpenAiModel("gpt-5.4-mini"), "vusan-recap")
+
+        assertEquals("vusan-recap", assertIs<OpenAIResponsesParams>(responses).promptCacheKey)
+        assertEquals("vusan-recap", assertIs<OpenAIChatParams>(chat).promptCacheKey)
+    }
+
+    // koog refuses the model on its first call, not at startup, so a catalog entry that speaks only one
+    // endpoint would leave a deployment looking configured and answering nothing.
+    @Test
+    fun `every openai model is given params its own endpoint accepts`() {
+        val endpointModels =
+            OpenAIModels.models.filter {
+                it.supports(LLMCapability.OpenAIEndpoint.Completions) ||
+                        it.supports(LLMCapability.OpenAIEndpoint.Responses)
+            }
+
+        assertTrue(endpointModels.isNotEmpty(), "the catalog declared no endpoint capabilities at all")
+
+        endpointModels.forEach { model ->
+            when (openAiHostedParams(model, "vusan")) {
+                is OpenAIChatParams ->
+                    assertTrue(
+                        model.supports(LLMCapability.OpenAIEndpoint.Completions),
+                        "${model.id} was given chat params but does not speak completions"
+                    )
+
+                is OpenAIResponsesParams ->
+                    assertTrue(
+                        model.supports(LLMCapability.OpenAIEndpoint.Responses),
+                        "${model.id} was given responses params but does not speak responses"
+                    )
+
+                else -> Unit
+            }
+        }
+    }
+
+    @Test
     fun `resolveModel matches a native provider catalog case-insensitively`() {
         val model = resolveModel(AnthropicModels, "Anthropic", "CLAUDE-SONNET-4-5")
         assertEquals("claude-sonnet-4-5", model.id)
