@@ -26,10 +26,25 @@ private val log = KotlinLogging.logger {}
 // newer, so a host that upgrades codex sees new models without a vusan release; the constant is the
 // floor everywhere else, the container included, where there is no binary to ask.
 private const val CODEX_CLIENT_VERSION_FLOOR = "0.153.4"
-private val CODEX_VERSION = Regex("""\d+\.\d+\.\d+""")
+internal val CODEX_VERSION = Regex("""\d+\.\d+\.\d+""")
+
+@Volatile
+private var pinnedClientVersion: String? = null
 
 private val reportedClientVersion: String by lazy {
     detectCodexClientVersion()?.takeIf { it isNewerThan CODEX_CLIENT_VERSION_FLOOR } ?: CODEX_CLIENT_VERSION_FLOOR
+}
+
+/**
+ * Claim [version] instead of the built-in floor, from `CODEX_CLIENT_VERSION`.
+ *
+ * The escape hatch for a model whose `minimal_client_version` is newer than any version this build knows
+ * of: until one is claimed the catalog simply omits that model and startup rejects it as one the plan
+ * does not offer. Installed once at startup rather than passed per call, because the process has a
+ * single Codex identity and a parameter would only let one caller claim a different one.
+ */
+internal fun pinCodexClientVersion(version: String?) {
+    pinnedClientVersion = version
 }
 
 internal fun detectCodexClientVersion(
@@ -53,7 +68,7 @@ internal fun detectCodexClientVersion(
         }
     }.getOrNull()
 
-internal fun codexClientVersion(): String = reportedClientVersion
+internal fun codexClientVersion(): String = pinnedClientVersion ?: reportedClientVersion
 
 /** Numeric `major.minor.patch` ordering, so `0.99.0` does not outrank `0.146.1` the way strings do. */
 internal infix fun String.isNewerThan(other: String): Boolean {

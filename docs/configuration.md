@@ -191,7 +191,15 @@ Older catalog responses without capability metadata retain the compatible image-
 **When a brand-new model is missing.** That list is filtered by the Codex client version Vusan
 claims, so a model released alongside a newer CLI is absent from it and startup rejects it as one the
 plan does not offer. Vusan claims the newest CLI it knows of, and the installed one when that is
-newer, so upgrading `codex` on the host settles it.
+newer, so upgrading `codex` on the host usually settles it. Where there is no CLI to upgrade — a
+container, most often — claim a version yourself:
+
+```dotenv
+CODEX_CLIENT_VERSION=0.153.4
+```
+
+It has to look like a Codex CLI version, and anything else stops startup. One older than the model
+needs hides it again, so use the release the model shipped with.
 
 **A faster serving tier.** `CODEX_SERVICE_TIER=priority` buys roughly the speed-up the Codex CLI
 offers as `/fast`, at the price of spending the plan's allowance quicker. It is off unless you set

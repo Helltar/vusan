@@ -54,6 +54,9 @@ sealed interface LlmProviderConfig {
         // off unless the operator asks for it.
         val serviceTier: ServiceTier? = null,
         val supportsVision: Boolean = true,
+        // the Codex CLI version reported to the backend, which decides how much of the model catalog it
+        // answers with. `null` leaves that to the installed CLI, or to this build's floor without one.
+        val clientVersion: String? = null,
         val authFile: Path = defaultCodexAuthFile(),
         override val requestTimeout: Duration,
         override val contextWindowTokens: Long? = null

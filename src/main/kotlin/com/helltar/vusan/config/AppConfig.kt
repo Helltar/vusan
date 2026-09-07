@@ -251,6 +251,7 @@ data class AppConfig(
                     model = requireEnv("LLM_MODEL"),
                     reasoningEffort = resolveReasoningEffort(),
                     serviceTier = resolveCodexServiceTier(),
+                    clientVersion = resolveCodexClientVersion(),
                     authFile = defaultCodexAuthFile(readEnv("CODEX_HOME")),
                     requestTimeout = requestTimeout,
                     contextWindowTokens = contextWindowTokens
@@ -309,6 +310,15 @@ data class AppConfig(
                     ?: error("Unsupported CODEX_SERVICE_TIER=[$raw]. Supported values: ${supportedValues<ServiceTier>()}")
 
             return tier.takeUnless { it == ServiceTier.DEFAULT }
+        }
+
+        // the catalog Codex answers with is filtered by this, so it is how an operator reaches a model
+        // that needs a newer CLI than this build ships a floor for, without waiting for a release.
+        private fun resolveCodexClientVersion(): String? {
+            val raw = readEnv("CODEX_CLIENT_VERSION")?.trim() ?: return null
+
+            return raw.takeIf { CODEX_VERSION.matches(it) }
+                ?: error("Unsupported CODEX_CLIENT_VERSION=[$raw]. Expected a Codex CLI version such as 0.153.4")
         }
 
         private inline fun <reified T : Enum<T>> enumOrNull(raw: String): T? =

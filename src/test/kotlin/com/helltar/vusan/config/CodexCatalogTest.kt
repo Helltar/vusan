@@ -215,6 +215,28 @@ class CodexCatalogTest {
     }
 
     @Test
+    fun `a pinned client version is what the catalog request claims`() = runBlocking {
+        var version: String? = null
+
+        val http =
+            Http.createClient(
+                MockEngine { request ->
+                    version = request.url.parameters["client_version"]
+                    respondJson("""{"models":[]}""")
+                }
+            )
+
+        try {
+            pinCodexClientVersion("0.199.0")
+            fetchCodexModels(http, store())
+        } finally {
+            pinCodexClientVersion(null)
+        }
+
+        assertEquals("0.199.0", version)
+    }
+
+    @Test
     fun `the request carries the bearer token and account header`() = runBlocking {
         var authorization: String? = null
         var account: String? = null
