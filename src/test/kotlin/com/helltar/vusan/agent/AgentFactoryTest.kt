@@ -9,7 +9,12 @@ import ai.koog.prompt.message.MessagePart
 import ai.koog.prompt.message.RequestMetaInfo
 import ai.koog.prompt.message.ResponseMetaInfo
 import ai.koog.serialization.JSONObject
+import ai.koog.serialization.JSONPrimitive
 import ai.koog.utils.time.KoogClock
+import com.helltar.vusan.agent.conversation.toolCallArgsForStorage
+import kotlinx.serialization.json.Json
+import kotlinx.serialization.json.jsonObject
+import kotlinx.serialization.json.jsonPrimitive
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFalse
@@ -173,6 +178,28 @@ class AgentFactoryTest {
 
         assertTrue(bounded.output.startsWith("[tool result omitted"))
         assertTrue((bounded.parts?.single() as MessagePart.Text).text.startsWith("[tool result omitted"))
+    }
+
+    // koog's JSONObject.toString() escapes nothing, and the storage layer drops anything it cannot
+    // parse — so a quoted shell argument used to leave history with `{}` and no record of the call.
+    @Test
+    fun `tool args survive a quote on the way into history`() {
+        val command = """printf "sample""""
+        val json = JSONObject(mapOf("command" to JSONPrimitive(command))).toToolArgsJson()
+
+        assertEquals(json, toolCallArgsForStorage(json), "the storage layer could not parse the args back")
+        assertEquals(command, Json.parseToJsonElement(json).jsonObject.getValue("command").jsonPrimitive.content)
+    }
+
+    @Test
+    fun `tool args survive a backslash and a newline too`() {
+        val args = JSONObject(mapOf("path" to JSONPrimitive("""C:\tmp"""), "text" to JSONPrimitive("one\ntwo")))
+
+        val json = args.toToolArgsJson()
+
+        assertEquals(json, toolCallArgsForStorage(json))
+        assertTrue(json.contains("""C:\\tmp"""), "backslash was not escaped: $json")
+        assertTrue(json.contains("""one\ntwo"""), "newline was not escaped: $json")
     }
 
     private fun toolResult(output: String, parts: List<MessagePart.ContentPart>?) =

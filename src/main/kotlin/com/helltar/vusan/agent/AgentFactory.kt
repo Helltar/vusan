@@ -18,6 +18,7 @@ import ai.koog.prompt.message.Message
 import ai.koog.prompt.message.MessagePart
 import ai.koog.prompt.params.LLMParams
 import ai.koog.serialization.JSONObject
+import ai.koog.serialization.kotlinx.toKotlinxJsonObject
 import com.helltar.vusan.agent.conversation.ChatRole
 import com.helltar.vusan.agent.conversation.PromptConversation
 import com.helltar.vusan.agent.conversation.toolCallArgsForStorage
@@ -150,7 +151,9 @@ class AgentFactory(
 
                 // koog dispatches a tool event here but emits no INFO line of its own, so log every call
                 // ourselves (name + capped args) — uniform across all tools, not just those that self-log.
-                fun record(toolCallId: String?, toolName: String, args: String, output: String, isError: Boolean) {
+                fun record(toolCallId: String?, toolName: String, toolArgs: JSONObject, output: String, isError: Boolean) {
+                    val args = toolArgs.toToolArgsJson()
+
                     log.info {
                         "tool call: name=[$toolName] error=$isError " +
                                 "args=[${args.collapseWhitespaceAndCap(TOOL_LOG_ARGS_MAX_CHARS).orEmpty()}]"
@@ -182,20 +185,30 @@ class AgentFactory(
                 }
 
                 onToolCallCompleted { ctx ->
-                    record(ctx.toolCallId, ctx.toolName, ctx.toolArgs.toString(), ctx.toolResult?.toString().orEmpty(), false)
+                    record(ctx.toolCallId, ctx.toolName, ctx.toolArgs, ctx.toolResult?.toString().orEmpty(), false)
                 }
 
                 onToolCallFailed { ctx ->
-                    record(ctx.toolCallId, ctx.toolName, ctx.toolArgs.toString(), ctx.message, true)
+                    record(ctx.toolCallId, ctx.toolName, ctx.toolArgs, ctx.message, true)
                 }
 
                 onToolValidationFailed { ctx ->
-                    record(ctx.toolCallId, ctx.toolName, ctx.toolArgs.toString(), ctx.message, true)
+                    record(ctx.toolCallId, ctx.toolName, ctx.toolArgs, ctx.message, true)
                 }
             }
         }
     }
 }
+
+/**
+ * Serializes tool-call arguments for the log and for history.
+ *
+ * Not `JSONObject.toString()`: koog's own implementation interpolates raw content between quotes and
+ * escapes nothing, neither keys nor values, so one quote or backslash in an argument makes the whole
+ * object unparseable — and `toolCallArgsForStorage`, which parses it back, then keeps `{}` and the
+ * later turns of the run no longer know what the call was for.
+ */
+internal fun JSONObject.toToolArgsJson(): String = toKotlinxJsonObject().toString()
 
 // mirrors Koog's built-in singleRunStrategy, but routes any assistant message without tool calls
 // to nodeFinish — including empty responses. the default strategy uses `onTextMessage { true }`,
