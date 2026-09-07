@@ -23,14 +23,23 @@ import org.telegram.telegrambots.meta.generics.TelegramClient
 // Telegram clears a chat action after ~5s, so re-assert it just under that.
 private val ACTION_REFRESH = 4.seconds
 
+// how long a turn runs before it is worth a message of its own. an ordinary answer — a greeting, a
+// short reply — is delivered well inside this, and a bubble that appears and is deleted a second later
+// is worse than none: `sendMessage` names an activity like any other tool, so without this every turn
+// would pay for a send and a delete nobody was meant to see.
+private val STATUS_GRACE = 2.seconds
+
 /**
  * Show what the turn is doing for as long as [block] runs. [block] receives a setter it hands to the
  * agent, so the indicator follows the tool that is currently executing, and the turn's [TurnStatus],
  * which the tools narrate a plan into.
  *
  * Two surfaces, in this order: a chat action from the first moment, since it costs nothing and needs no
- * decision, and then the status message once there is something to name — at which point the action
- * stands down, because leaving both up announces the same turn twice. The status is closed here rather
+ * decision, and then the status message once the turn has run long enough to deserve one and there is
+ * something to name — at which point the action stands down, because leaving both up announces the same
+ * turn twice. A turn that ends inside [STATUS_GRACE] is carried by the action alone; a plan the model
+ * announces opens the message immediately either way, since that is a deliberate act rather than a
+ * side effect of some tool being slow. The status is closed here rather
  * than by the caller so that a stopped turn, which leaves through the cancellation, still takes its
  * bubble off the screen.
  */
@@ -58,6 +67,8 @@ internal suspend fun <T> TelegramClient.withLiveProgress(
 
         val statusTicker =
             launch {
+                delay(STATUS_GRACE)
+
                 // a null activity means nothing worth naming is running; it never takes a live status
                 // back down, since the turn is still going and the last thing named is still the truth.
                 activity.filterNotNull().collect { current ->

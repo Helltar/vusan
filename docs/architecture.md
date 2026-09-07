@@ -207,8 +207,11 @@ A normal user message travels:
     - **The status message** — one silent message per turn, the same in every kind of chat, carrying the running line
       and a stop button. Telegram's own surface for a generating agent, `sendMessageDraft`, is accepted for **private
       chats only**, so it could never be half of this; an ordinary message is what a group can have too. It opens lazily
-      — on the first named activity, or on the first thing `announcePlan` says — and, unlike a draft or a chat action,
-      it does not expire, so it is written only when something actually changes. `finish` deletes it, or, when the model
+      — on the first named activity after `STATUS_GRACE`, or the moment `announcePlan` says something — and, unlike a
+      draft or a chat action, it does not expire, so it is written only when something actually changes. The grace
+      period is what keeps an ordinary turn out of it: `sendMessage` names an activity like any other tool, so without
+      it a greeting would pay for a send and a delete nobody was meant to see. Its writes are `NonCancellable`, because
+      a send cancelled in flight can still have created the message, leaving a bubble whose id nobody holds. `finish` deletes it, or, when the model
       put its own words in it, edits those words to stand alone without the running line and without the button; either
       way that happens in `withLiveProgress`'s `finally`, so a turn cancelled by `/stop` still takes its bubble off the
       screen. In a slow-mode group the bot's messages are rationed, so an activity alone never opens one — only words

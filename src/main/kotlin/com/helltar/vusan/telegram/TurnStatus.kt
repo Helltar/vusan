@@ -14,8 +14,10 @@ import com.helltar.vusan.telegram.delivery.isReplyMessageNotFound
 import com.helltar.vusan.telegram.delivery.replyParameters
 import com.helltar.vusan.telegram.delivery.sendStatusMessage
 import io.github.oshai.kotlinlogging.KotlinLogging
+import kotlinx.coroutines.NonCancellable
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
+import kotlinx.coroutines.withContext
 import org.telegram.telegrambots.meta.api.methods.ParseMode
 import org.telegram.telegrambots.meta.api.objects.replykeyboard.InlineKeyboardMarkup
 import org.telegram.telegrambots.meta.api.objects.replykeyboard.buttons.InlineKeyboardButton
@@ -173,32 +175,36 @@ internal class TurnStatus(
 
     private fun statusText(): String? = statusMessageText(announcement, label, html = parseMode != null)
 
-    private suspend fun push(text: String): String {
-        val id = messageId
+    // a write in flight when the turn ends must still finish. `/stop`, or simply the turn being over,
+    // cancels the collector this runs in, and a send cancelled mid-flight can still have created the
+    // message — leaving an id nobody holds and a status bubble nothing will ever take down.
+    private suspend fun push(text: String): String =
+        withContext(NonCancellable) {
+            val id = messageId
 
-        if (id == null) {
-            messageId =
-                sendStatusMessage(
+            if (id == null) {
+                messageId =
+                    sendStatusMessage(
+                        client = client,
+                        chatId = chatId,
+                        text = text,
+                        parseMode = parseMode,
+                        replyParameters = replyParameters(anchor),
+                        replyMarkup = stopKeyboard()
+                    )
+            } else {
+                editTextMessage(
                     client = client,
                     chatId = chatId,
+                    messageId = id,
                     text = text,
-                    parseMode = parseMode,
-                    replyParameters = replyParameters(anchor),
-                    replyMarkup = stopKeyboard()
+                    replyMarkup = stopKeyboard(),
+                    parseMode = parseMode
                 )
-        } else {
-            editTextMessage(
-                client = client,
-                chatId = chatId,
-                messageId = id,
-                text = text,
-                replyMarkup = stopKeyboard(),
-                parseMode = parseMode
-            )
-        }
+            }
 
-        return text
-    }
+            text
+        }
 
     private fun stopKeyboard(): InlineKeyboardMarkup =
         InlineKeyboardMarkup.builder()
