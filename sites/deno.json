@@ -1,0 +1,9 @@
+{
+  "tasks": {
+    "start": "deno run --allow-net=0.0.0.0:8090 --allow-read=.,/data --allow-write=/data --allow-env=SITES_* --allow-sys=statfs main.ts",
+    "test": "deno test --allow-read --allow-write --allow-env --allow-sys=statfs *_test.ts"
+  },
+  "fmt": {
+    "lineWidth": 110
+  }
+}

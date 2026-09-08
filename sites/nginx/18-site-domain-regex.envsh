@@ -1,0 +1,5 @@
+#!/bin/sh
+# The site vhost matches its host with a regex, so the domain's dots must be literal dots. Sourced by
+# the nginx entrypoint before it renders the templates, which is why this is `.envsh` and not `.sh`.
+SITES_DOMAIN_RE=$(printf '%s' "${SITES_DOMAIN}" | sed 's/[.]/\\./g')
+export SITES_DOMAIN_RE

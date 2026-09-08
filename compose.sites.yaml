@@ -1,0 +1,72 @@
+# The public site host, deployed on a machine with a real address:
+#   docker compose --env-file env/sites.env -f compose.sites.yaml up -d
+#
+# This is a separate deployment, not an addition to compose.yaml: it serves model-authored pages to the
+# internet and holds nothing else of the bot's. The bot reaches it outbound over HTTPS, so the machine
+# running Vusan needs no inbound address at all. See docs/sites.md.
+#
+# Both images come from the registry, so the whole deployment is a directory holding this file,
+# `env/sites.env`, the certificates and the published tree — no checkout on the machine, the same shape
+# the workspace service is deployed in:
+#
+#   ~/vusan/compose.sites.yaml
+#          /env/sites.env
+#          /certs/{site.pem,site.key,origin-pull-ca.pem}
+#          /data/    created before the first start, owned by the user running compose
+#
+# `env/sites.env` is the whole configuration: Compose reads it for the values substituted below and
+# hands the same file to the service. Every command needs it, hence --env-file.
+
+services:
+  vusan-sites:
+    image: "${SITES_IMAGE:-ghcr.io/helltar/vusan-sites:latest}"
+    container_name: vusan-sites-container
+    restart: unless-stopped
+    init: true
+    env_file: env/sites.env
+    volumes:
+      - "${SITES_HOST_DIR:-./data}:/data"
+    # deliberately no `ports`: a published docker port bypasses ufw, and nginx reaches this over the
+    # compose network by name.
+    cap_drop: [ALL]
+    security_opt: [no-new-privileges:true]
+    read_only: true
+    tmpfs:
+      - /tmp:size=64m
+    pids_limit: 64
+    mem_limit: 256m
+    cpus: 0.5
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+  vusan-sites-nginx:
+    image: "${SITES_NGINX_IMAGE:-ghcr.io/helltar/vusan-sites-nginx:latest}"
+    container_name: vusan-sites-nginx-container
+    restart: unless-stopped
+    init: true
+    depends_on: [vusan-sites]
+    environment:
+      SITES_DOMAIN: "${SITES_DOMAIN:?the domain sites are served under, such as example.com}"
+    ports:
+      # address-qualified on purpose: a bare `443:443` also binds `[::]`, and Cloudflare reaches this
+      # origin over IPv4 only. An unused v6 listener is a direct-to-origin path serving nobody.
+      - "0.0.0.0:443:443"
+    volumes:
+      - "${SITES_HOST_DIR:-./data}:/srv:ro"
+      # site.pem, site.key (Cloudflare Origin CA) and origin-pull-ca.pem (Authenticated Origin Pulls).
+      - "${SITES_CERT_DIR:-./certs}:/etc/nginx/certs:ro"
+    cap_drop: [ALL]
+    # DAC_OVERRIDE so the master process can read certificates whatever their owner;
+    # the rest is what the official image needs to bind 443 and drop to its own user.
+    cap_add: [CHOWN, SETUID, SETGID, NET_BIND_SERVICE, DAC_OVERRIDE]
+    security_opt: [no-new-privileges:true]
+    mem_limit: 64m
+    cpus: 0.5
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"

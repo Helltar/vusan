@@ -1,0 +1,80 @@
+# Rendered by the nginx image's entrypoint: `${SITES_*}` are substituted, nginx's own `$variables` are
+# not (NGINX_ENVSUBST_FILTER). `SITES_DOMAIN_RE` is the domain with its dots escaped, built by
+# 18-site-domain-regex.envsh, because the site vhost matches its host with a regex.
+
+# Cloudflare terminates TLS at the edge and reaches this origin with its client certificate; without a
+# matching one, nothing gets past the handshake. The certificate is Cloudflare's Origin CA, trusted by
+# Cloudflare alone, which is why the DNS records in front of this must stay proxied.
+ssl_certificate         /etc/nginx/certs/site.pem;
+ssl_certificate_key     /etc/nginx/certs/site.key;
+ssl_client_certificate  /etc/nginx/certs/origin-pull-ca.pem;
+ssl_verify_client       on;
+ssl_protocols           TLSv1.2 TLSv1.3;
+ssl_session_cache       shared:SSL:2m;
+ssl_session_timeout     1h;
+
+server_tokens off;
+
+# HTML must not be cached at the edge, or republishing a game shows the old one until the TTL expires.
+map $uri $site_cache {
+    default     "public, max-age=300";
+    ~*\.html?$  "no-cache";
+}
+
+# Anything that arrives with an unknown name — an IP scan, someone else's domain pointed here — never
+# gets a certificate offered.
+server {
+    listen 443 ssl default_server;
+    http2 on;
+    server_name _;
+    ssl_reject_handshake on;
+}
+
+# One person's site, at a label that is only ever digits.
+server {
+    listen 443 ssl;
+    http2 on;
+    # quoted because the value contains braces, which nginx would otherwise read as a block.
+    server_name "~^(?<site>[0-9]{1,19})\.${SITES_DOMAIN_RE}$";
+
+    root /srv/sites/$site;
+    index index.html;
+    autoindex off;
+    disable_symlinks on from=$document_root;
+
+    add_header X-Content-Type-Options nosniff always;
+    add_header X-Robots-Tag "noindex, nofollow" always;
+    add_header Referrer-Policy no-referrer always;
+    add_header Permissions-Policy "camera=(), microphone=(), geolocation=(), payment=(), usb=()" always;
+    add_header Cache-Control $site_cache always;
+
+    # no SPA fallback: a missing sprite must stay a 404 rather than answering with the game's page.
+    location / {
+        try_files $uri $uri/ =404;
+    }
+}
+
+# The publishing API. Only the bot reaches it, and only with the shared secret.
+server {
+    listen 443 ssl;
+    http2 on;
+    server_name api.${SITES_DOMAIN};
+
+    # keep above SITES_MAX_FILE_MB, or nginx rejects uploads the service would have accepted.
+    client_max_body_size 32m;
+
+    location / {
+        # a variable upstream is resolved per request through docker's embedded DNS, so nginx starts —
+        # and keeps serving every published site off the volume — while the service behind the API is
+        # down or restarting. Naming it directly makes a restarting service a dead site host.
+        resolver 127.0.0.11 valid=30s ipv6=off;
+        set $api vusan-sites;
+        proxy_pass http://$api:8090;
+        proxy_http_version 1.1;
+        # this host has under a gigabyte of memory: stream the upload through instead of spooling it.
+        proxy_request_buffering off;
+        proxy_read_timeout 120s;
+        proxy_send_timeout 120s;
+        proxy_set_header Host $host;
+    }
+}
