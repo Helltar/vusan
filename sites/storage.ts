@@ -221,7 +221,7 @@ export class Sites {
       if (!live.has(path)) await Deno.remove(path, { recursive: true }).catch(() => {});
     }
     const blocked = await this.blocked();
-    const retain = this.config.retainDays * 24 * HOUR_MS;
+    const retain = this.config.retainDays === null ? null : this.config.retainDays * 24 * HOUR_MS;
     const labels = new Set<string>();
     for await (const entry of Deno.readDir(this.root)) {
       if (entry.name.startsWith(INCOMING) || entry.name.startsWith(RETIRED)) {
@@ -235,6 +235,7 @@ export class Sites {
         await this.drop(entry.name);
         continue;
       }
+      if (retain === null) continue;
       // a site that cannot be dated is left alone: being unsure must never delete someone's work.
       const record = await this.record(entry.name);
       if (record && now - record.updatedAt > retain) {

@@ -122,7 +122,7 @@ one here needs no matching change in the bot.
 | `SITES_MAX_FILE_MB`         | `25`    | The largest one file may be. Above 32 needs nginx's body cap raised. |
 | `SITES_MAX_FILES`           | `1000`  | How many files one site may hold.                                   |
 | `SITES_MAX_DEPTH`           | `10`    | How deep a path inside a site may go.                               |
-| `SITES_RETAIN_DAYS`         | `14`    | A site nobody republishes for this long is deleted.                 |
+| `SITES_RETAIN_DAYS`         | never   | Days after which a site nobody republishes is deleted. Unset or `never` keeps sites indefinitely. |
 | `SITES_MIN_FREE_MB`         | `2048`  | Publishing pauses below this much free disk and resumes on its own.  |
 | `SITES_PUBLISHES_PER_HOUR`  | `20`    | How often one person may publish.                                   |
 | `SITES_UPLOAD_IDLE_MINUTES` | `15`    | An unfinished upload is discarded after this long.                  |
@@ -145,9 +145,15 @@ put back a moment ago. One numeric id per line; anything else on a line is ignor
 Published sites are ordinary files under `data/sites/<id>`, with one small record per site under
 `data/meta`. Reading, backing up or deleting them needs nothing but a shell.
 
-Sites nobody republishes are swept after `SITES_RETAIN_DAYS`, dated by their last publish; a directory
-with no record is left alone rather than guessed at. Uploads that were never committed expire on their
-own.
+**Nothing expires by default.** A published site is a finished thing someone handed a link to, so it
+stays until it is taken down. Setting `SITES_RETAIN_DAYS` turns on expiry, and it is worth knowing what
+the clock measures: a site's date is its **last publish**, and nothing else. Visits are served by nginx
+and never reach the service, so a page people read every day still ages. Nobody is warned before a
+deletion, and a directory with no record is left alone rather than guessed at. Uploads that were never
+committed expire on their own either way.
+
+The source stays in the workspace regardless, under its own retention, and that one counts any use of
+the shell — so the usual outcome of an expired site is that republishing it is one sentence.
 
 Updating is a pull and a restart, both images together:
 

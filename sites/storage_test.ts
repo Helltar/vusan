@@ -109,6 +109,23 @@ Deno.test("the listing reads the site itself, in order, and stops at its cap", a
   }
 });
 
+Deno.test("nothing expires unless an operator asked for it", async () => {
+  const { root, sites } = await fresh();
+  try {
+    const record = await publish(sites, "u42", { "index.html": "old" });
+    await Deno.writeTextFile(
+      `${root}/meta/42.json`,
+      JSON.stringify({ ...record, updatedAt: Date.now() - 3650 * 24 * 3_600_000 }),
+    );
+
+    await sites.sweep();
+
+    deepStrictEqual(await names(`${root}/sites`), ["42"]);
+  } finally {
+    await Deno.remove(root, { recursive: true });
+  }
+});
+
 Deno.test("the sweep removes expired and blocked sites but never an undated one", async () => {
   const { root, sites } = await fresh({ retainDays: 1 });
   try {
