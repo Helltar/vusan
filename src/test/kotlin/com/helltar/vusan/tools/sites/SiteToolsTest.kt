@@ -129,12 +129,32 @@ class SiteToolsTest {
     }
 
     @Test
-    fun `status reads the service rather than guessing`() = runBlocking {
+    fun `status reads the published site rather than guessing`() = runBlocking {
         assertContains(tools().siteStatus(), "Nothing is published")
-        val published = tools(site = """{"published":true,"url":"https://55.example.com/","files":3,"bytes":2048,"updatedAt":${System.currentTimeMillis()}}""")
-        val status = published.siteStatus()
+
+        val listing = """[{"path":"index.html","bytes":400},{"path":"assets/app.js","bytes":2048}]"""
+        val status = tools(
+            site = """{"published":true,"url":"https://55.example.com/","files":2,"bytes":2448,""" +
+                """"updatedAt":${System.currentTimeMillis()},"listing":$listing,"truncated":false}"""
+        ).siteStatus()
+
         assertContains(status, "https://55.example.com/")
-        assertContains(status, "3 file(s)")
+        assertContains(status, "2 file(s)")
+        assertContains(status, "<site_files>")
+        assertContains(status, "index.html")
+        assertContains(status, "assets/app.js")
+    }
+
+    @Test
+    fun `a listing the service had to cut short says so`() = runBlocking {
+        val listing = (1..3).joinToString(",") { """{"path":"page$it.html","bytes":10}""" }
+        val status = tools(
+            site = """{"published":true,"url":"https://55.example.com/","files":900,"bytes":2048,""" +
+                """"updatedAt":${System.currentTimeMillis()},"listing":[$listing],"truncated":true}"""
+        ).siteStatus()
+
+        assertContains(status, "900 file(s)")
+        assertContains(status, "Only the first 3 files are listed")
     }
 
     @Test

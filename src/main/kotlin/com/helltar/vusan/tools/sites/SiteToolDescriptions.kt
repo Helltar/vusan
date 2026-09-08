@@ -17,8 +17,8 @@ internal object SiteToolDescriptions {
         "Path of the `.zip` in the workspace, such as `site.zip` or `build/site.zip`."
 
     const val SITE_STATUS =
-        "Reports whether this person currently has a site published, with its address, size and when it last changed. " +
-                "Use it before answering questions about their site rather than assuming what is there."
+        "Reports whether this person currently has a site published: its address, size, when it last changed, and the files it actually holds. " +
+                "The listing is read from the published site, not from the workspace, so use it before answering questions about what is online rather than assuming the last publish is still what is there."
 
     const val UNPUBLISH_SITE =
         "Takes this person's site off the internet, address and all. " +

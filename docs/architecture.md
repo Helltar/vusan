@@ -605,8 +605,9 @@ never names a directory outside the tree.
 - **`sites/main.ts`** — `POST /uploads?owner=` opens a staging directory and answers with the caps this
   upload will be held to, so the limits live only on the side that enforces them. `PUT /uploads/<id>?path=`
   streams one file to disk, `POST /uploads/<id>/commit` swaps the tree in by rename, `DELETE /uploads/<id>`
-  abandons it. `GET`/`DELETE /site?owner=` report and remove a site. `GET /health` is the only
-  unauthenticated route.
+  abandons it. `GET /site?owner=` reports a site and walks it for a capped list of the files it actually
+  holds, so "what is published" is answered from the site rather than from whoever remembers uploading
+  it; `DELETE /site?owner=` removes one. `GET /health` is the only unauthenticated route.
 - **`sites/storage.ts`** — staging, the atomic swap, per-site and per-person caps, the disk floor that
   refuses writes and clears itself, the retention sweep, and the operator's `blocked` list. Published
   sites are ordinary files, so an operator with a shell can read or delete them without the bot.

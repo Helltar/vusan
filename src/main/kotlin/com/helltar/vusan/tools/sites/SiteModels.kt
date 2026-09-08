@@ -36,12 +36,18 @@ data class SiteRecord(
 )
 
 @Serializable
+data class SiteFile(val path: String, val bytes: Long = 0)
+
+@Serializable
 data class SiteStatus(
     val published: Boolean,
     val url: String? = null,
     val files: Int = 0,
     val bytes: Long = 0,
-    val updatedAt: Long = 0
+    val updatedAt: Long = 0,
+    // read off the site itself and capped by the service, which is why the count above can be larger.
+    val listing: List<SiteFile> = emptyList(),
+    val truncated: Boolean = false
 )
 
 @Serializable

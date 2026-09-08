@@ -80,6 +80,35 @@ Deno.test("one site cannot exceed its file, size or path limits", async () => {
   }
 });
 
+Deno.test("the listing reads the site itself, in order, and stops at its cap", async () => {
+  const { root, sites } = await fresh();
+  try {
+    await publish(sites, "u42", {
+      "index.html": "page",
+      "assets/game.js": "run()",
+      "assets/sprites/hero.png": "png",
+    });
+
+    const all = await sites.listing("u42", 10);
+    deepStrictEqual(all.files.map((file) => file.path), [
+      "assets/game.js",
+      "assets/sprites/hero.png",
+      "index.html",
+    ]);
+    deepStrictEqual(all.files.map((file) => file.bytes), [5, 3, 4]);
+    strictEqual(all.truncated, false);
+
+    const capped = await sites.listing("u42", 2);
+    strictEqual(capped.files.length, 2);
+    strictEqual(capped.truncated, true);
+
+    // nothing published is an empty listing, not a failure
+    deepStrictEqual(await sites.listing("u43", 10), { files: [], truncated: false });
+  } finally {
+    await Deno.remove(root, { recursive: true });
+  }
+});
+
 Deno.test("the sweep removes expired and blocked sites but never an undated one", async () => {
   const { root, sites } = await fresh({ retainDays: 1 });
   try {

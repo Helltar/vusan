@@ -3,6 +3,9 @@ import { authorized, loadToken } from "./auth.ts";
 import { Sites } from "./storage.ts";
 import { json, ownerId, RequestError, uploadId } from "./protocol.ts";
 
+// a site may hold a thousand files; this answer is read by a language model, not paged through.
+const LISTING_LIMIT = 200;
+
 const config = readConfig();
 const token = await loadToken(config.token, config.tokenFile);
 const sites = new Sites(config);
@@ -21,9 +24,16 @@ async function route(request: Request): Promise<Response> {
     const owner = ownerId(url.searchParams.get("owner"));
     if (request.method === "GET") {
       const record = await sites.status(owner);
-      return json(
-        record ? { ...record, published: true, url: sites.url(record.label) } : { published: false },
-      );
+      if (!record) return json({ published: false });
+      const listing = await sites.listing(owner, LISTING_LIMIT);
+      // `files` is the count the record carries; the paths go under their own key rather than over it.
+      return json({
+        ...record,
+        published: true,
+        url: sites.url(record.label),
+        listing: listing.files,
+        truncated: listing.truncated,
+      });
     }
     if (request.method === "DELETE") return json({ owner, removed: await sites.remove(owner) });
     throw new RequestError("Method not allowed", 405);

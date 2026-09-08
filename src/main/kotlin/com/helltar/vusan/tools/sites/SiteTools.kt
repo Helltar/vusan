@@ -4,6 +4,7 @@ import ai.koog.agents.core.tools.annotations.LLMDescription
 import ai.koog.agents.core.tools.annotations.Tool
 import ai.koog.agents.core.tools.reflect.ToolSet
 import com.helltar.vusan.common.rethrowIfCancellation
+import com.helltar.vusan.common.xmlBlock
 import com.helltar.vusan.tools.requireToolText
 import com.helltar.vusan.tools.suspendToolGuard
 import com.helltar.vusan.tools.workspace.WorkspaceClient
@@ -56,8 +57,7 @@ class SiteTools(
         if (!status.published || status.url == null) {
             "Nothing is published. Build the files in the workspace, zip them and use publishSite."
         } else {
-            "Published at ${status.url} — ${status.files} file(s), ${status.bytes.asMegabytes()}, " +
-                "last changed ${status.updatedAt.asAgeDescription()}."
+            describeStatus(status)
         }
     }
 
@@ -70,6 +70,18 @@ class SiteTools(
             "There was nothing published to take down."
         }
     }
+}
+
+private fun describeStatus(status: SiteStatus): String = buildString {
+    appendLine(
+        "Published at ${status.url} — ${status.files} file(s), ${status.bytes.asMegabytes()}, " +
+            "last changed ${status.updatedAt.asAgeDescription()}."
+    )
+    if (status.listing.isNotEmpty()) {
+        appendLine(xmlBlock("site_files", status.listing.joinToString("\n") { "${it.path} (${it.bytes.asMegabytes()})" }))
+        if (status.truncated) appendLine("Only the first ${status.listing.size} files are listed.")
+    }
+    append("This is what the site holds right now; the workspace may have moved on since it was published.")
 }
 
 private fun describePublished(record: SiteRecord, summary: SiteArchiveSummary): String = buildString {

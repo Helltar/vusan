@@ -12,6 +12,11 @@ const RETIRED = ".retired-";
 const LOW_STORAGE = "The site host is low on disk space. Publishing is paused; published sites were kept.";
 const UNREADABLE_STORAGE = "Cannot verify site storage availability. Publishing is paused.";
 
+export interface SiteFile {
+  path: string;
+  bytes: number;
+}
+
 export interface SiteRecord {
   owner: string;
   label: string;
@@ -165,6 +170,37 @@ export class Sites {
 
   async status(owner: string): Promise<SiteRecord | null> {
     return await this.record(siteLabel(owner));
+  }
+
+  /**
+   * What a site actually holds, so the answer to "what is published" comes from the site rather than
+   * from whoever remembers what they uploaded. Capped, because the caller is an LLM tool result.
+   */
+  async listing(owner: string, limit: number): Promise<{ files: SiteFile[]; truncated: boolean }> {
+    const root = `${this.root}/${siteLabel(owner)}`;
+    const files: SiteFile[] = [];
+    let truncated = false;
+
+    const walk = async (dir: string, prefix: string): Promise<void> => {
+      const entries: Deno.DirEntry[] = [];
+      for await (const entry of Deno.readDir(dir)) entries.push(entry);
+      entries.sort((a, b) => a.name.localeCompare(b.name));
+      for (const entry of entries) {
+        if (files.length >= limit) {
+          truncated = true;
+          return;
+        }
+        const path = prefix ? `${prefix}/${entry.name}` : entry.name;
+        // nothing here ever writes a symlink, and a directory is only ever walked, never followed out.
+        if (entry.isDirectory) await walk(`${dir}/${entry.name}`, path);
+        else if (entry.isFile) files.push({ path, bytes: (await Deno.stat(`${dir}/${entry.name}`)).size });
+      }
+    };
+
+    await walk(root, "").catch((e) => {
+      if (!(e instanceof Deno.errors.NotFound)) throw e;
+    });
+    return { files, truncated };
   }
 
   async remove(owner: string): Promise<boolean> {
