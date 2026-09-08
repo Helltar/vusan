@@ -205,7 +205,7 @@ private suspend fun codexPreflight(
 }
 
 // ordered as an operator reads it: which model, how much room it has, what it may spend, what it can
-// see, where it writes, and what it can call.
+// see, what it draws with, where it writes, and what it can call.
 private fun logStartup(
     config: AppConfig,
     llm: LlmRuntime,
@@ -242,6 +242,10 @@ private fun logStartup(
             "Vision disabled: model=[${llm.model.id}] cannot read images — " +
                     "set OPENAI_VISION_API_KEY to run vision on a separate model"
         }
+    }
+
+    config.openAiImage?.let {
+        log.info { "Images: route=[${it.route.name.lowercase()}] model=[${it.model}] quality=[${it.quality}]" }
     }
 
     log.info { "Database: [${config.databasePath}]" }
