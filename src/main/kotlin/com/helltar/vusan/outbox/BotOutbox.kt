@@ -3,9 +3,16 @@ package com.helltar.vusan.outbox
 /**
  * A queued [output] together with the routing decision ([toPrivate]) captured when it was enqueued.
  * [delivered] marks one that already reached the chat while the turn was still running: delivery must
- * record it and move on rather than sending it a second time.
+ * record it and move on rather than sending it a second time. [announcement] marks the plan a turn
+ * promised before starting work — it is sent like anything else, but it is not an answer, so a turn
+ * holding nothing but this has produced nothing.
  */
-data class OutboxItem(val output: BotOutput, val toPrivate: Boolean, val delivered: Boolean = false)
+data class OutboxItem(
+    val output: BotOutput,
+    val toPrivate: Boolean,
+    val delivered: Boolean = false,
+    val announcement: Boolean = false
+)
 
 class BotOutbox {
 
@@ -66,14 +73,16 @@ class BotOutbox {
     // fits [MAX_TEXT_MESSAGE_CHARS] so splitting one answer into many small messages stays cheap. a message
     // that cannot merge starts a new bubble; returns false once [MAX_TEXT_MESSAGES] bubbles are queued so
     // the caller can tell the model to stop instead of flooding the chat.
-    fun enqueueText(text: String): Boolean {
+    fun enqueueText(text: String, announcement: Boolean = false): Boolean {
         val last = items.lastOrNull()?.takeIf { it.toPrivate == redirectToPrivate && !it.delivered }
 
         if (last != null && last.output is BotOutput.Text) {
             val merged = last.output.text + TEXT_SEPARATOR + text
 
             if (merged.length <= MAX_TEXT_MESSAGE_CHARS) {
-                items[items.lastIndex] = last.copy(output = BotOutput.Text(merged))
+                // a bubble stops being a mere promise the moment a real message joins it.
+                items[items.lastIndex] =
+                    last.copy(output = BotOutput.Text(merged), announcement = last.announcement && announcement)
                 return true
             }
         }
@@ -81,7 +90,7 @@ class BotOutbox {
         if (standaloneBubbleCount() >= MAX_TEXT_MESSAGES)
             return false
 
-        enqueue(BotOutput.Text(text))
+        items += OutboxItem(BotOutput.Text(text), toPrivate = redirectToPrivate, announcement = announcement)
 
         return true
     }
@@ -95,13 +104,13 @@ class BotOutbox {
      * a turn that made one and queued nothing else still owes the user everything it announced.
      */
     val hasQueuedOutput: Boolean
-        get() = items.any { !it.delivered }
+        get() = items.any { !it.delivered && !it.announcement }
 
     // records text the turn already put in the chat itself, so it reaches the history and the group
     // transcript the same way a queued message does. never refused and never routed to a private chat:
     // it is already sent, and refusing it here would only lose it from the history.
     fun recordDelivered(text: String) {
-        items += OutboxItem(BotOutput.Text(text), toPrivate = false, delivered = true)
+        items += OutboxItem(BotOutput.Text(text), toPrivate = false, delivered = true, announcement = true)
     }
 
     // opt-in rich messages never coalesce — each is a deliberate structured send — but they share the

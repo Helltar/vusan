@@ -36,7 +36,8 @@ class BotOutboxTest {
         assertEquals(listOf(true, false), outbox.pending.map { it.delivered })
     }
 
-    // the nudge that saves a silent turn reads this: a turn that only announced still owes an answer.
+    // the nudge that saves a silent turn reads this, and so does the failure path: a turn that only
+    // announced still owes an answer, and if it broke instead it owes the reason.
     @Test
     fun `an announcement alone leaves nothing queued`() {
         val outbox = BotOutbox()
@@ -45,6 +46,32 @@ class BotOutboxTest {
         assertFalse(outbox.hasQueuedOutput)
 
         outbox.enqueueText("here it is")
+        assertTrue(outbox.hasQueuedOutput)
+    }
+
+    // a scheduled run has no live chat to announce into, so the promise waits in the queue instead of
+    // being delivered mid-turn. It is still a promise, and still not an answer.
+    @Test
+    fun `a queued announcement is not an answer either`() {
+        val outbox = BotOutbox()
+
+        assertTrue(outbox.enqueueText("I will build the game", announcement = true))
+        assertFalse(outbox.hasQueuedOutput)
+        assertEquals(1, outbox.pending.size)
+
+        // the same bubble stops being a promise once the answer is merged into it
+        assertTrue(outbox.enqueueText("here it is"))
+        assertTrue(outbox.hasQueuedOutput)
+        assertEquals(1, outbox.pending.size)
+    }
+
+    @Test
+    fun `an answer that an announcement merges into stays an answer`() {
+        val outbox = BotOutbox()
+
+        outbox.enqueueText("here it is")
+        outbox.enqueueText("and one more thing", announcement = true)
+
         assertTrue(outbox.hasQueuedOutput)
     }
 

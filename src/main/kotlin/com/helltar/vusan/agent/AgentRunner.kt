@@ -76,7 +76,9 @@ data class AgentResult(
     val outputs: List<OutboxItem>,
     val comment: String?,
     val commentToPrivate: Boolean = false,
-    // the run ended in an error and produced nothing: `comment` is the canned failure reply, not an answer.
+    // the run ended in an error and produced no answer: `comment` is the canned failure reply. `outputs`
+    // may still hold what the turn put in the chat before it broke, which delivery records without
+    // sending again.
     val failed: Boolean = false
 )
 
@@ -281,8 +283,11 @@ class AgentRunner(
                 // logs the cause either way; the reply itself is only used when nothing was delivered.
                 val failureReply = replyForAgentFailure(request, e)
 
-                if (outbox.pending.isEmpty()) {
-                    return AgentResult(outputs = emptyList(), comment = failureReply, failed = true)
+                // an announced plan is a promise, not an answer, so a turn holding nothing else owes the
+                // user the reason it stopped. Without this the chat sees "building it now…" and then
+                // silence forever, which is the worst reading of a failure there is.
+                if (!outbox.hasQueuedOutput) {
+                    return AgentResult(outputs = outbox.pending, comment = failureReply, failed = true)
                 }
 
                 // the run died with an answer already queued. deliver that instead of replacing it with the

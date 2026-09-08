@@ -78,7 +78,7 @@ class MessageTools(
 
             // nobody is watching this turn go by — a scheduled run has no one waiting on it — so the
             // words travel with the answer instead.
-            outbox.enqueueText(trimmed) ->
+            outbox.enqueueText(trimmed, announcement = true) ->
                 "This turn has no live chat to announce into, so the text was queued with the rest of the reply. " +
                     "Do not announce anything else; write the result into the same reply."
 
