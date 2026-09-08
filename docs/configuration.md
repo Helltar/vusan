@@ -371,10 +371,14 @@ request; the model and quality are operator-controlled so generation cost stays 
 picture of the bot itself goes to `/v1/images/edits` instead, with the reference photo from
 [Appearance](#appearance) as its subject.
 
-| Variable               | Default                                    | Description                                            |
-|------------------------|--------------------------------------------|--------------------------------------------------------|
-| `OPENAI_IMAGE_MODEL`   | `gpt-image-1.5` / `gpt-image-2` on `codex` | Image model.                                           |
-| `OPENAI_IMAGE_QUALITY` | `medium`                                   | Rendering quality: `low`, `medium`, `high`, or `auto`. |
+| Variable               | Default                                    | Description                                                            |
+|------------------------|--------------------------------------------|------------------------------------------------------------------------|
+|------------------------|--------------------------------------------|------------------------------------------------------------------------|
+| `OPENAI_IMAGE_QUALITY` | `medium`                                   | Rendering quality: `low`, `medium`, `high`, `xhigh`, `max`, or `auto`. |
+
+`xhigh` and `max` render only on the `gpt-image-2.5` models; every earlier model stops at `high`
+and fails the request if you ask for more. Quality drives the price per image, so raise it
+deliberately.
 
 On `LLM_PROVIDER=codex` the key is optional: with none set, both tools run on the ChatGPT
 subscription instead. Setting `OPENAI_IMAGE_API_KEY` always wins, because it bills separately rather

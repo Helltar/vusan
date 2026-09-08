@@ -46,6 +46,9 @@ data class OpenAiImageConfig(
         const val DEFAULT_CODEX_MODEL = "gpt-image-2"
 
         const val DEFAULT_QUALITY = "medium"
-        val ALLOWED_QUALITIES = setOf("low", "medium", "high", "auto")
+
+        // xhigh and max are gpt-image-2.5 only; older models top out at high and reject the rest,
+        // so the set is the union and the operator matches it to the model they configured.
+        val ALLOWED_QUALITIES = setOf("low", "medium", "high", "xhigh", "max", "auto")
     }
 }
