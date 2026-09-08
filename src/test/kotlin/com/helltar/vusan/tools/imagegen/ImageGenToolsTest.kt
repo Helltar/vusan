@@ -18,6 +18,7 @@ import kotlin.test.Test
 import kotlin.test.assertContains
 import kotlin.test.assertContentEquals
 import kotlin.test.assertEquals
+import kotlin.test.assertFalse
 import kotlin.test.assertIs
 import kotlin.test.assertTrue
 
@@ -37,7 +38,21 @@ class ImageGenToolsTest {
         var path: String? = null
     }
 
-    private fun tools(outbox: BotOutbox, probe: SizeProbe = SizeProbe()): ImageGenTools {
+    // records the multipart upload an edit built, which is where the source images end up.
+    private class EditProbe {
+        var form: String = ""
+
+        val imageParts: Int
+            get() = Regex("""name="image\[]"""").findAll(form).count()
+
+        fun filenames(): List<String> = Regex("""filename="([^"]+)"""").findAll(form).map { it.groupValues[1] }.toList()
+    }
+
+    private fun tools(
+        outbox: BotOutbox,
+        probe: SizeProbe = SizeProbe(),
+        config: OpenAiImageConfig = this.config
+    ): ImageGenTools {
         val encoded = Base64.getEncoder().encodeToString(imageBytes)
         val http =
             Http.createClient(
@@ -51,7 +66,7 @@ class ImageGenToolsTest {
                     )
                 }
             )
-        return ImageGenTools(OpenAiImageClient(http, ImageAuth.ApiKey("sk-test")), config, outbox, attachedFile = null)
+        return ImageGenTools(OpenAiImageClient(http, ImageAuth.ApiKey("sk-test")), config, outbox)
     }
 
     private fun selfTools(outbox: BotOutbox, selfImage: SelfImage?, probe: RouteProbe = RouteProbe()): ImageGenTools {
@@ -70,17 +85,24 @@ class ImageGenToolsTest {
             )
 
         return ImageGenTools(
-            OpenAiImageClient(http, ImageAuth.ApiKey("sk-test")), config, outbox, attachedFile = null, selfImage
+            OpenAiImageClient(http, ImageAuth.ApiKey("sk-test")), config, outbox, selfImage = selfImage
         )
     }
 
-    private fun reference() = ReferenceImage(byteArrayOf(1, 1, 1), "avatar.jpg", "image/jpeg")
+    private fun reference() = SourceImage(byteArrayOf(1, 1, 1), "avatar.jpg", "image/jpeg")
 
-    private fun editTools(outbox: BotOutbox, attachedFile: AttachedFile?): ImageGenTools {
+    private fun editTools(
+        outbox: BotOutbox,
+        vararg attached: AttachedFile,
+        selfImage: SelfImage? = null,
+        probe: EditProbe = EditProbe()
+    ): ImageGenTools {
         val encoded = Base64.getEncoder().encodeToString(imageBytes)
         val http =
             Http.createClient(
-                MockEngine {
+                MockEngine { request ->
+                    probe.form = String(request.body.toByteArray(), Charsets.ISO_8859_1)
+
                     respond(
                         content = """{"data":[{"b64_json":"$encoded"}]}""",
                         status = HttpStatusCode.OK,
@@ -88,7 +110,9 @@ class ImageGenToolsTest {
                     )
                 }
             )
-        return ImageGenTools(OpenAiImageClient(http, ImageAuth.ApiKey("sk-test")), config, outbox, attachedFile)
+        return ImageGenTools(
+            OpenAiImageClient(http, ImageAuth.ApiKey("sk-test")), config, outbox, attached.toList(), selfImage
+        )
     }
 
     private fun imageAttachment(
@@ -172,7 +196,7 @@ class ImageGenToolsTest {
     @Test
     fun `editImage without an attachment enqueues nothing`() = runBlocking {
         val outbox = BotOutbox()
-        val result = editTools(outbox, attachedFile = null).editImage("add a hat")
+        val result = editTools(outbox).editImage("add a hat")
 
         assertTrue(outbox.pending.isEmpty())
         assertContains(result, "No image is attached")
@@ -259,5 +283,94 @@ class ImageGenToolsTest {
         selfTools(BotOutbox(), selfImage = null, probe = probe).generateImage("a selfie", selfPortrait = true)
 
         assertEquals("/v1/images/generations", probe.path)
+    }
+
+    @Test
+    fun `a moderation block is answered with what to do next instead of a failure dump`() = runBlocking {
+        val outbox = BotOutbox()
+        val http =
+            Http.createClient(
+                MockEngine {
+                    respond(
+                        content = """{"error":{"code":"moderation_blocked","message":"rejected",""" +
+                                """"moderation_details":{"moderation_stage":"input","categories":["violence"]}}}""",
+                        status = HttpStatusCode.BadRequest,
+                        headers = headersOf(HttpHeaders.ContentType, ContentType.Application.Json.toString())
+                    )
+                }
+            )
+        val tools = ImageGenTools(OpenAiImageClient(http, ImageAuth.ApiKey("sk-test")), config, outbox)
+
+        val result = tools.generateImage("a duel at dawn")
+
+        assertTrue(outbox.pending.isEmpty())
+        assertContains(result, "content filter")
+        assertContains(result, "violence")
+        assertFalse(result.contains("HTTP 400"))
+    }
+
+    @Test
+    fun `editImage sends every attached image as its own source`() = runBlocking {
+        val outbox = BotOutbox()
+        val probe = EditProbe()
+        val tools = editTools(outbox, imageAttachment(name = "one.jpg"), imageAttachment(name = "two.jpg"), probe = probe)
+
+        val result = tools.editImage("put them side by side")
+
+        assertEquals(2, probe.imageParts)
+        assertEquals(listOf("one.jpg", "two.jpg"), probe.filenames())
+        assertIs<BotOutput.Photo>(outbox.pending.single().output)
+        assertContains(result, "2 source image(s)")
+    }
+
+    @Test
+    fun `editImage skips the parts of an album that are not editable images`() = runBlocking {
+        val outbox = BotOutbox()
+        val probe = EditProbe()
+        val video = imageAttachment(name = "clip.mp4", mimeType = "video/mp4", kind = AttachedFileKind.VIDEO)
+        val tools = editTools(outbox, imageAttachment(name = "one.jpg"), video, probe = probe)
+
+        tools.editImage("make it winter")
+
+        assertEquals(listOf("one.jpg"), probe.filenames())
+    }
+
+    @Test
+    fun `withYourself puts the reference photo first among the sources`() = runBlocking {
+        val outbox = BotOutbox()
+        val probe = EditProbe()
+        val tools =
+            editTools(
+                outbox,
+                imageAttachment(name = "room.jpg"),
+                selfImage = SelfImage(reference(), appearance = null),
+                probe = probe
+            )
+
+        tools.editImage("standing by the window", withYourself = true)
+
+        assertEquals(listOf("avatar.jpg", "room.jpg"), probe.filenames())
+    }
+
+    @Test
+    fun `withYourself without a reference photo edits only what the user sent`() = runBlocking {
+        val outbox = BotOutbox()
+        val probe = EditProbe()
+        val tools = editTools(outbox, imageAttachment(name = "room.jpg"), probe = probe)
+
+        tools.editImage("standing by the window", withYourself = true)
+
+        assertEquals(listOf("room.jpg"), probe.filenames())
+    }
+
+    @Test
+    fun `the 16-by-9 framings need a flexible-size model`() = runBlocking {
+        val legacy = SizeProbe()
+        tools(BotOutbox(), legacy).generateImage("x", orientation = "banner")
+        assertEquals("1536x1024", legacy.size)
+
+        val flexible = SizeProbe()
+        tools(BotOutbox(), flexible, config.copy(model = "gpt-image-2.5-flare")).generateImage("x", orientation = "story")
+        assertEquals("1152x2048", flexible.size)
     }
 }

@@ -245,7 +245,13 @@ private fun logStartup(
     }
 
     config.openAiImage?.let {
-        log.info { "Images: route=[${it.route.name.lowercase()}] model=[${it.model}] quality=[${it.quality}]" }
+        log.info {
+            "Images: route=[${it.route.name.lowercase()}] model=[${it.model}] quality=[${it.quality}] " +
+                    "moderation=[${it.moderation}]"
+        }
+
+        if (it.route == ImageRoute.CODEX && it.moderation != OpenAiImageConfig.DEFAULT_MODERATION)
+            log.warn { "OPENAI_IMAGE_MODERATION is ignored on the codex route, which has no such setting" }
     }
 
     log.info { "Database: [${config.databasePath}]" }

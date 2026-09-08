@@ -371,21 +371,40 @@ request; the model and quality are operator-controlled so generation cost stays 
 picture of the bot itself goes to `/v1/images/edits` instead, with the reference photo from
 [Appearance](#appearance) as its subject.
 
-| Variable               | Default                                    | Description                                                            |
-|------------------------|--------------------------------------------|------------------------------------------------------------------------|
-|------------------------|--------------------------------------------|------------------------------------------------------------------------|
-| `OPENAI_IMAGE_QUALITY` | `medium`                                   | Rendering quality: `low`, `medium`, `high`, `xhigh`, `max`, or `auto`. |
+| Variable                  | Default                                    | Description                                                            |
+|---------------------------|--------------------------------------------|------------------------------------------------------------------------|
+| `OPENAI_IMAGE_MODEL`      | `gpt-image-1.5` / `gpt-image-2` on `codex` | Image model.                                                           |
+| `OPENAI_IMAGE_QUALITY`    | `medium`                                   | Rendering quality: `low`, `medium`, `high`, `xhigh`, `max`, or `auto`. |
+| `OPENAI_IMAGE_MODERATION` | `auto`                                     | Content filter strictness: `auto` or `low`.                            |
 
 `xhigh` and `max` render only on the `gpt-image-2.5` models; every earlier model stops at `high`
 and fails the request if you ask for more. Quality drives the price per image, so raise it
 deliberately.
 
+OpenAI filters both the description it is given and the picture it produced, and that filter cannot
+be turned off — `OPENAI_IMAGE_MODERATION` only chooses between its standard setting and the less
+restrictive `low`. Either way a refusal comes back as a refusal: Vusan says the picture cannot be
+drawn and offers to change it, instead of reporting that something broke.
+
+Editing keeps the original as faithfully as the model allows, which is what holds a face still in a
+picture of the bot itself. On `gpt-image-1`, `gpt-image-1-mini` and `gpt-image-1.5` that costs extra
+input tokens; `gpt-image-2` and later always edit that way and cost the same either way.
+
+An edit works on everything one message carried, so an album sent with "merge these" becomes a single
+picture, and Vusan can put itself into it with the same face its self-portraits use. Wallpaper and
+banner framings, and any size beyond the three classic ones, need a `gpt-image-2` or newer model —
+older ones fall back to the nearest size they have rather than failing. Finished pictures arrive as
+JPEG, because Telegram re-encodes every photo it delivers anyway and the smaller upload is what keeps
+a `max`-quality picture inside Telegram's own size limit.
+
 On `LLM_PROVIDER=codex` the key is optional: with none set, both tools run on the ChatGPT
 subscription instead. Setting `OPENAI_IMAGE_API_KEY` always wins, because it bills separately rather
-than spending the same subscription allowance the conversation itself runs on. Two differences are
+than spending the same subscription allowance the conversation itself runs on. Three differences are
 worth knowing before relying on the subscription route: images count against your ChatGPT usage
-limit, so a heavy image day can exhaust the same quota that answers messages; and the model chooses
-its own output dimensions, so the requested aspect ratio is a hint rather than a guarantee.
+limit, so a heavy image day can exhaust the same quota that answers messages; the model chooses its
+own output dimensions, so the requested aspect ratio is a hint rather than a guarantee; and
+`OPENAI_IMAGE_MODERATION` does not reach it, since it filters the way ChatGPT does and takes no
+setting of its own.
 
 ### Vision
 

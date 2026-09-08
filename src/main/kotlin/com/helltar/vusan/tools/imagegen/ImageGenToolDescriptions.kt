@@ -21,8 +21,10 @@ internal object ImageGenToolDescriptions {
 
     const val ORIENTATION =
         "Aspect ratio of the image. " +
-                "Use `square` (default, 1:1), `portrait` (tall, 2:3) for posters, phone wallpapers, or full-body characters, " +
-                "or `landscape` (wide, 3:2) for scenery, banners, or desktop wallpapers."
+                "Use `square` (default, 1:1), `portrait` (2:3) for posters or full-body characters, " +
+                "`landscape` (3:2) for scenery and group scenes, " +
+                "`story` (9:16) for phone wallpapers and stories, or `banner` (16:9) for desktop wallpapers and covers. " +
+                "`story` and `banner` need a `gpt-image-2` or newer model; on an older one they fall back to `portrait` and `landscape`."
 
     const val SELF_PORTRAIT =
         "Whether the picture shows you. " +
@@ -33,8 +35,9 @@ internal object ImageGenToolDescriptions {
                 "Leave it `false` (the default) for every picture that is not of you."
 
     const val EDIT_IMAGE =
-        "Edit the image attached to this turn (a photo or image file the user sent, or a replied-to image) and send the result as a photo. " +
+        "Edit the image or images attached to this turn (a photo the user sent, an album of them, or a replied-to image) and send the result as one photo. " +
                 """Use when the user asks to change, modify, fix, retouch, add to, remove from, restyle, or recolor an image they provided ("remove the background", "add a hat to the cat", "make it look like winter", "turn this into a watercolor"). """ +
+                """When several images are attached it edits them into a single picture, so it is also the tool for "merge these", "put us in one photo", "add this logo to that poster", or a collage. """ +
                 "This requires an attached image: if none is present, ask the user to send or reply to one instead of calling this tool. " +
                 "To create a brand-new picture from scratch use `generateImage`; to answer questions about what is visible use `describeImage`; for data-driven charts use `runCommand`. " +
                 "After a successful call, do not send a separate confirmation; the edited image is delivered automatically. " +
@@ -48,5 +51,14 @@ internal object ImageGenToolDescriptions {
     const val EDIT_ORIENTATION =
         "Aspect ratio of the edited image. " +
                 "Use `auto` (default) to keep the dimensions close to the original; " +
-                "use `square` (1:1), `portrait` (tall, 2:3), or `landscape` (wide, 3:2) only when the user explicitly wants to change the framing."
+                "use `square` (1:1), `portrait` (2:3), `landscape` (3:2), `story` (9:16), or `banner` (16:9) " +
+                "only when the user explicitly wants to change the framing."
+
+    const val EDIT_WITH_YOURSELF =
+        "Whether you are in the edited picture. " +
+                """Set it to `true` when the user wants you together with what they sent ("photoshop yourself into this", "a selfie of you and my cat", "put yourself in this room"). """ +
+                "Your own reference photo is then added as the first source image, so you look like the same person as in every other picture you send, " +
+                "and the attached images are the scene you are placed into. " +
+                "Write the `prompt` about where you are in that scene and what you are doing there. " +
+                "Leave it `false` (the default) for an ordinary edit of the user's own images."
 }

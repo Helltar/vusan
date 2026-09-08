@@ -56,7 +56,13 @@ object Http {
 
 private const val ERROR_BODY_PREVIEW_LIMIT = 1_000
 
-private class HttpStatusException(status: Int, host: String, body: String?) :
+/**
+ * A non-2xx response from a configured service.
+ *
+ * The raw [body] is kept next to the capped message so a caller that knows the provider's error shape
+ * can read it structurally instead of matching on the text of a log line.
+ */
+internal class HttpStatusException(status: Int, host: String, val body: String?) :
     IllegalStateException(buildMessage(status, host, body)) {
 
     companion object {

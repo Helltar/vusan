@@ -18,9 +18,6 @@ private val log = KotlinLogging.logger("SelfImage")
 // still fixes the face; SELF_IMAGE_FILE exists for deployments that have the original.
 private const val TELEGRAM_PHOTO_NAME = "avatar.jpg"
 
-/** A picture of the character, handed to the image model as the identity it has to keep. */
-class ReferenceImage(val bytes: ByteArray, val filename: String, val contentType: String)
-
 /**
  * What a picture of the bot itself is built from.
  *
@@ -30,7 +27,7 @@ class ReferenceImage(val bytes: ByteArray, val filename: String, val contentType
  * reference cannot show — height, build, tattoos, what the character usually wears — and is the only
  * thing left when no reference exists.
  */
-class SelfImage(val reference: ReferenceImage?, val appearance: String?)
+class SelfImage(val reference: SourceImage?, val appearance: String?)
 
 /**
  * Read the character's reference photo once at startup: the operator's file when set, otherwise the
@@ -76,11 +73,31 @@ internal fun selfPortraitPrompt(scene: String, appearance: String?): String =
         append("\n\n$scene")
     }
 
+/**
+ * The same identity, but as one source among the user's own images rather than the only one.
+ *
+ * [selfPortraitPrompt] tells the model to take *nothing* but the face from its single reference, which
+ * is exactly wrong once the other images are the scene being edited — so the two are separate texts.
+ */
+internal fun selfInEditPrompt(instruction: String, appearance: String?, otherImages: Int): String =
+    buildString {
+        append("The first image is a likeness sheet for one person: keep their face shape, features, hair, and build, unmistakably the same person, and take nothing else from it. ")
+
+        if (otherImages == 1)
+            append("The second image is the picture being edited. ")
+        else
+            append("The other $otherImages images are the pictures being edited. ")
+
+        append("Place that person into it as the instruction below says, and leave the rest of it as it is.")
+        appearance?.let { append("\n\n$it") }
+        append("\n\n$instruction")
+    }
+
 /** The same picture asked for without a reference: the written description is all the identity there is. */
 internal fun String.withAppearance(appearance: String?): String =
     appearance?.let { "$it\n\n$this" } ?: this
 
-private fun readReferenceFile(path: String): ReferenceImage {
+private fun readReferenceFile(path: String): SourceImage {
     val file = Path(path)
 
     require(file.isReadable()) { "SELF_IMAGE_FILE=[$path] does not exist or is not readable" }
@@ -96,17 +113,17 @@ private fun readReferenceFile(path: String): ReferenceImage {
 
     log.info { "Self-portrait reference: SELF_IMAGE_FILE=[$path] (${bytes.size} bytes)" }
 
-    return ReferenceImage(bytes, file.name, contentType)
+    return SourceImage(bytes, file.name, contentType)
 }
 
 // a bot reads its own avatar the way it reads anyone's; nothing else in the Bot API exposes it.
-private suspend fun TelegramClient.profilePhotoReference(botId: Long): ReferenceImage? =
+private suspend fun TelegramClient.profilePhotoReference(botId: Long): SourceImage? =
     runCatching {
         api { executeAsync(GetUserProfilePhotos.builder().userId(botId).limit(1).build()) }
             .photos
             .firstOrNull()
             ?.maxByOrNull { it.width }
-            ?.let { ReferenceImage(downloadFileBytes(it.fileId), TELEGRAM_PHOTO_NAME, "image/jpeg") }
+            ?.let { SourceImage(downloadFileBytes(it.fileId), TELEGRAM_PHOTO_NAME, "image/jpeg") }
             ?.also { log.info { "Self-portrait reference: Telegram profile photo (${it.bytes.size} bytes)" } }
     }
         .onFailure { e ->

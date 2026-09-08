@@ -68,9 +68,14 @@ data class AgentRequest(
     val conversationEntry: String,
     val messageContext: MessageContext? = null,
     val chatIsPrivate: Boolean = false,
-    val attachedFile: AttachedFile? = null,
+    val attachedFiles: List<AttachedFile> = emptyList(),
     val language: Language = Language.DEFAULT
-)
+) {
+
+    /** The attachment for the tools that can only take one; see `RequestContext.attachedFile`. */
+    val attachedFile: AttachedFile?
+        get() = attachedFiles.firstOrNull()
+}
 
 data class AgentResult(
     val outputs: List<OutboxItem>,
@@ -200,7 +205,7 @@ class AgentRunner(
                 senderUsername = request.messageContext?.userUsername,
                 senderDisplayName = request.messageContext?.userDisplayName,
                 chatIsPrivate = request.messageContext?.isPrivate ?: request.chatIsPrivate,
-                attachedFile = request.attachedFile,
+                attachedFiles = request.attachedFiles,
                 language = request.language,
                 chatCapabilities = request.messageContext?.chatCapabilities ?: ChatCapabilities.UNRESTRICTED
             )
@@ -245,7 +250,7 @@ class AgentRunner(
                     "summaryChars=${conversationPlan.prompt.summary?.length ?: 0} exactToolInteractions=${conversationPlan.exactToolInteractions} " +
                     "userMemory=${userMemory.size} chatMemory=${chatMemory.size} " +
                     "promptChars=${request.prompt.length} historyChars=${request.conversationEntry.length} " +
-                    "attachedFile=${request.attachedFile != null}"
+                    "attachedFiles=${request.attachedFiles.size}"
         }
 
         log.info {

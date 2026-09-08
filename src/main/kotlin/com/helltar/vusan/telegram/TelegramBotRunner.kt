@@ -8,6 +8,7 @@ import com.helltar.vusan.common.rethrowIfCancellation
 import com.helltar.vusan.common.xmlBlock
 import com.helltar.vusan.i18n.Messages
 import com.helltar.vusan.infra.Heartbeat
+import com.helltar.vusan.request.AttachedFileKind
 import com.helltar.vusan.tasks.TasksRepository
 import com.helltar.vusan.telegram.callback.CallbackRouter
 import com.helltar.vusan.telegram.callback.InlineChoiceHandler
@@ -552,12 +553,12 @@ internal class TelegramBotRunner(
             caption,
             botProfile,
             inputKind = inputKind,
-            attachedFile = message.toAttachedFileOrNull(client)
+            attachedFiles = listOfNotNull(message.toAttachedFileOrNull(client))
         )
     }
 
-    // only the first inspectable item becomes the attached file; the model is told about the rest so
-    // it does not claim to have looked at every item.
+    // every inspectable item travels with the turn, but only image editing takes them all; the model is
+    // told which tools see the rest so it does not claim to have looked at every item.
     private suspend fun handleGalleryUpdate(parts: List<Message>, botProfile: BotProfile) {
         val anchor = parts.first()
         val captionedPart = parts.captionedPartOrNull()
@@ -566,7 +567,8 @@ internal class TelegramBotRunner(
 
         val photoCount = parts.count { !it.photo.isNullOrEmpty() }
         val videoCount = parts.count { it.video != null || it.animation != null }
-        val attachedFile = parts.firstNotNullOfOrNull { it.toAttachedFileOrNull(client) }
+        val attachedFiles = parts.mapNotNull { it.toAttachedFileOrNull(client) }
+        val attachedImages = attachedFiles.count { it.kind == AttachedFileKind.IMAGE }
 
         val caption =
             captionedPart?.messageTextOrNull()
@@ -580,9 +582,19 @@ internal class TelegramBotRunner(
                 buildString {
                     append("User sent an album of ${parts.size} media item(s): $photoCount photo(s), $videoCount video(s). ")
 
-                    attachedFile
-                        ?.let { append("Only `${it.name}` is available as the attached file; ") }
-                        ?: append("None of the items is available as an attached file; ")
+                    when {
+                        attachedFiles.isEmpty() ->
+                            append("None of the items is available as an attached file; ")
+
+                        attachedImages > 1 ->
+                            append(
+                                "All $attachedImages images are attached at once, and `editImage` works on them " +
+                                        "together — combining them, putting one into another, building a collage. " +
+                                        "Every other tool sees only the first item; "
+                            )
+
+                        else -> append("Only the first item, `${attachedFiles.first().name}`, is attached; ")
+                    }
 
                     append("mention this if the request depends on the other items.")
                 }
@@ -593,7 +605,7 @@ internal class TelegramBotRunner(
             "$albumContext\n\n$caption",
             botProfile,
             inputKind = "gallery",
-            attachedFile = attachedFile
+            attachedFiles = attachedFiles
         )
     }
 

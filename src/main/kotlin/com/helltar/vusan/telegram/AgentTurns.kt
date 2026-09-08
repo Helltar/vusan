@@ -64,7 +64,7 @@ internal class AgentTurns(
         botProfile: BotProfile,
         inputKind: String,
         loadRepliedAttachment: Boolean = true,
-        attachedFile: AttachedFile? = null
+        attachedFiles: List<AttachedFile> = emptyList()
     ) {
         // every reply describes what it answers, the bot's own messages included: the history that would
         // otherwise carry them belongs to one person and one chat, so in a group the message is missing
@@ -74,17 +74,21 @@ internal class AgentTurns(
 
         // the file travels with it for the same reason, and because no history carries bytes: without this
         // "edit this" against a picture the bot itself drew has nothing to work on.
-        val effectiveAttachedFile =
-            attachedFile ?: if (loadRepliedAttachment) message.repliedAttachedFileOrNull(client) else null
+        val effectiveAttachedFiles =
+            attachedFiles.ifEmpty {
+                listOfNotNull(if (loadRepliedAttachment) message.repliedAttachedFileOrNull(client) else null)
+            }
 
         val baseAgentInput = formatAgentInput(prompt, replySummary, quotedFragment)
 
         handleAgentMessage(
             message = message,
             agentInput =
-                effectiveAttachedFile?.let { "${attachedFileContextBlock(it)}\n\n$baseAgentInput" } ?: baseAgentInput,
+                effectiveAttachedFiles.firstOrNull()
+                    ?.let { "${attachedFileContextBlock(it)}\n\n$baseAgentInput" }
+                    ?: baseAgentInput,
             conversationInput = formatConversationInput(prompt, replySummary, quotedFragment),
-            attachedFile = effectiveAttachedFile,
+            attachedFiles = effectiveAttachedFiles,
             // a reaction may only land on somebody else's message, so this stays narrower than the context above.
             replyToMessageId =
                 message.replyToMessageIdOrNull()
@@ -97,7 +101,7 @@ internal class AgentTurns(
         message: Message,
         agentInput: String,
         conversationInput: String,
-        attachedFile: AttachedFile?,
+        attachedFiles: List<AttachedFile>,
         replyToMessageId: Long?,
         inputKind: String
     ) {
@@ -119,7 +123,7 @@ internal class AgentTurns(
                 prompt = agentInput,
                 conversationEntry = conversationInput,
                 messageContext = message.toMessageContext(chatProfile(message)),
-                attachedFile = attachedFile,
+                attachedFiles = attachedFiles,
                 language = language
             )
 
@@ -152,7 +156,7 @@ internal class AgentTurns(
                 prompt = attachedFile?.let { "${attachedFileContextBlock(it)}\n\n$input" } ?: input,
                 conversationEntry = input,
                 messageContext = message.toMessageContext(user, chatProfile(message)),
-                attachedFile = attachedFile,
+                attachedFiles = listOfNotNull(attachedFile),
                 language = language
             )
 

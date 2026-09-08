@@ -91,8 +91,9 @@ A normal user message travels:
    channel, and dispatches each message by content (text/command, rich message, sticker, voice, audio, photo, video,
    video note, GIF, document). Album (media group) parts arrive as separate updates sharing a `media_group_id`; the
    runner buffers them until the update stream goes quiet (`ALBUM_QUIET_PERIOD`, or the ten-item album cap) and handles
-   the batch as one gallery message: the caption may sit on any album part, only the first inspectable item becomes the
-   `AttachedFile`, and the agent is told how many items it cannot see. `/tasks`, `/clear`, `/stop`, and task-menu
+   the batch as one gallery message: the caption may sit on any album part, every inspectable item becomes an
+   `AttachedFile` on the turn, and the agent is told that only image editing takes them all while every other tool sees
+   the first. `/tasks`, `/clear`, `/stop`, and task-menu
    callback queries take direct paths that never enter the agent loop. Every pressed button reaches `CallbackRouter`,
    which rechecks the allowlist and picks the flow: an agent-created inline-choice callback is validated and consumed by
    `InlineChoiceHandler`, and its selected option then enters the agent loop as the user's next turn. Callback data no
@@ -435,11 +436,18 @@ A normal user message travels:
   not take a working bot down — but a model the account plainly cannot run stops startup with the list of ones it can.
   `OPENAI_VISION_API_KEY` still explicitly selects a separate OpenAI vision model.
 
-  The same session also covers image generation. `resolveImageRoute` picks `PLATFORM` whenever `OPENAI_IMAGE_API_KEY` is
-  set and `CODEX` otherwise, so a paid key keeps billing separately instead of spending the conversation's own
-  subscription allowance. `OpenAiImageClient` takes an `ImageAuth` telling it which: the generation call differs only by
-  URL and credentials, but the edit call genuinely forks — the Platform endpoint takes a multipart upload while the
-  Codex one takes JSON with the source inlined as a data URL and infers the output size from it.
+  The same session also covers image generation. `resolveImageRoute` picks `PLATFORM` whenever `OPENAI_IMAGE_API_KEY`
+  is set and `CODEX` otherwise, so a paid key keeps billing separately instead of spending the conversation's own
+  subscription allowance. `OpenAiImageClient` takes an `ImageAuth` telling it which: the generation call differs only
+  by URL and credentials, but the edit call genuinely forks — the Platform endpoint takes a multipart upload while the
+  Codex one takes JSON with the source inlined as a data URL and infers the output size from it. The fork extends to
+  what each request may carry: only the Platform one sends `OPENAI_IMAGE_MODERATION`, jpeg output, and high
+  `input_fidelity` on the models that accept it, because the Codex backend's request has none of those fields. Both
+  routes answer a refusal the same way: an error body naming OpenAI's content filter becomes an
+  `ImageModerationBlocked`, so the tool tells the model to rewrite the description or give up instead of handing it a
+  failed HTTP call to interpret. An edit takes every image the turn carries, which is what makes an album one picture;
+  the first source is the one both routes hold closest to the original, so a picture of the bot itself puts its
+  reference photo there.
 
 ## Startup
 

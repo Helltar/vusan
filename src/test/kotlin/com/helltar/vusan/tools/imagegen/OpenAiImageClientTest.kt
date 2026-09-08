@@ -12,6 +12,7 @@ import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.jsonPrimitive
 import java.util.*
 import kotlin.test.Test
+import kotlin.test.assertContains
 import kotlin.test.assertContentEquals
 import kotlin.test.assertEquals
 import kotlin.test.assertFailsWith
@@ -22,6 +23,9 @@ import kotlin.test.assertTrue
 class OpenAiImageClientTest {
 
     private val config = OpenAiImageConfig(model = "gpt-image-1.5", quality = "medium")
+
+    private fun source(filename: String, contentType: String, bytes: ByteArray = byteArrayOf(5, 6, 7)) =
+        SourceImage(bytes, filename, contentType)
 
     @Test
     fun `generate posts image request and decodes base64 image`() = runBlocking {
@@ -43,6 +47,7 @@ class OpenAiImageClientTest {
                     assertEquals("a red panda astronaut", payload["prompt"]?.jsonPrimitive?.content)
                     assertEquals("1536x1024", payload["size"]?.jsonPrimitive?.content)
                     assertEquals("medium", payload["quality"]?.jsonPrimitive?.content)
+                    assertEquals("auto", payload["moderation"]?.jsonPrimitive?.content)
                     // gpt-image-1 rejects response_format, so it must never be sent.
                     assertFalse(payload.containsKey("response_format"))
 
@@ -86,7 +91,7 @@ class OpenAiImageClientTest {
             )
         val client = OpenAiImageClient(http, ImageAuth.ApiKey("sk-test"))
 
-        val bytes = client.edit("add a hat", byteArrayOf(5, 6, 7), "photo.jpg", "image/jpeg", "auto", config)
+        val bytes = client.edit("add a hat", listOf(source("photo.jpg", "image/jpeg")), "auto", config)
 
         assertContentEquals(imageBytes, bytes)
         http.close()
@@ -97,7 +102,7 @@ class OpenAiImageClientTest {
         val client = OpenAiImageClient(Http.createClient(MockEngine { error("unused") }), ImageAuth.ApiKey("sk-test"))
 
         assertFailsWith<IllegalArgumentException> {
-            client.edit("add a hat", ByteArray(0), "photo.jpg", "image/jpeg", "auto", config)
+            client.edit("add a hat", listOf(SourceImage(ByteArray(0), "photo.jpg", "image/jpeg")), "auto", config)
         }
         Unit
     }
@@ -108,7 +113,7 @@ class OpenAiImageClientTest {
             Http.createClient(
                 MockEngine {
                     respond(
-                        content = """{"error":{"message":"content policy"}}""",
+                        content = """{"error":{"message":"unsupported size"}}""",
                         status = HttpStatusCode.BadRequest,
                         headers = headersOf(HttpHeaders.ContentType, ContentType.Application.Json.toString())
                     )
@@ -121,7 +126,7 @@ class OpenAiImageClientTest {
         }
 
         assertEquals(
-            """HTTP 400 from api.openai.com: {"error":{"message":"content policy"}}""",
+            """HTTP 400 from api.openai.com: {"error":{"message":"unsupported size"}}""",
             error.message
         )
         http.close()
@@ -145,5 +150,104 @@ class OpenAiImageClientTest {
             client.generate("anything", "1024x1024", config)
         }
         http.close()
+    }
+
+    @Test
+    fun `edit asks for high input fidelity only on the models that take it`() = runBlocking {
+        val onePointFive = editFormText(config)
+
+        assertContains(onePointFive, """name="input_fidelity"""")
+        assertContains(onePointFive, "high")
+        assertContains(onePointFive, """name="moderation"""")
+
+        // gpt-image-2 and later always edit at high fidelity and reject the parameter
+        assertFalse(editFormText(config.copy(model = "gpt-image-2.5-flare")).contains("input_fidelity"))
+    }
+
+    @Test
+    fun `edit posts one image part per source`() = runBlocking {
+        val form =
+            editFormText(
+                config,
+                listOf(source("one.png", "image/png"), source("two.png", "image/png", byteArrayOf(8, 9)))
+            )
+
+        assertEquals(2, Regex("""name="image\[]"""").findAll(form).count())
+        assertEquals(listOf("one.png", "two.png"), Regex("""filename="([^"]+)"""").findAll(form).map { it.groupValues[1] }.toList())
+    }
+
+    @Test
+    fun `the platform asks for jpeg output, which the codex route has no field for`() = runBlocking {
+        var payload = ""
+        val http =
+            Http.createClient(
+                MockEngine { request ->
+                    payload = assertIs<TextContent>(request.body).text
+
+                    respond(
+                        content = """{"data":[{"b64_json":"${Base64.getEncoder().encodeToString(byteArrayOf(1))}"}]}""",
+                        status = HttpStatusCode.OK,
+                        headers = headersOf(HttpHeaders.ContentType, ContentType.Application.Json.toString())
+                    )
+                }
+            )
+
+        OpenAiImageClient(http, ImageAuth.ApiKey("sk-test")).generate("a red panda", "1024x1024", config)
+
+        val body = Json.parseToJsonElement(payload).jsonObject
+
+        assertEquals("jpeg", body["output_format"]?.jsonPrimitive?.content)
+        assertEquals(95, body["output_compression"]?.jsonPrimitive?.content?.toInt())
+        http.close()
+    }
+
+    @Test
+    fun `a moderation block is raised as its own failure carrying the stage and categories`() = runBlocking {
+        val http =
+            Http.createClient(
+                MockEngine {
+                    respond(
+                        content = """{"error":{"code":"moderation_blocked","message":"rejected",""" +
+                                """"moderation_details":{"moderation_stage":"output","categories":["violence"]}}}""",
+                        status = HttpStatusCode.BadRequest,
+                        headers = headersOf(HttpHeaders.ContentType, ContentType.Application.Json.toString())
+                    )
+                }
+            )
+        val client = OpenAiImageClient(http, ImageAuth.ApiKey("sk-test"))
+
+        val blocked = assertFailsWith<ImageModerationBlocked> {
+            client.generate("a duel at dawn", "1024x1024", config)
+        }
+
+        assertEquals(ImageModerationStage.OUTPUT, blocked.stage)
+        assertEquals(listOf("violence"), blocked.categories)
+        http.close()
+    }
+
+    private suspend fun editFormText(
+        config: OpenAiImageConfig,
+        images: List<SourceImage> = listOf(source("photo.png", "image/png"))
+    ): String {
+        val encoded = Base64.getEncoder().encodeToString(byteArrayOf(1, 2))
+        var form = ""
+        val http =
+            Http.createClient(
+                MockEngine { request ->
+                    form = String(request.body.toByteArray(), Charsets.ISO_8859_1)
+
+                    respond(
+                        content = """{"data":[{"b64_json":"$encoded"}]}""",
+                        status = HttpStatusCode.OK,
+                        headers = headersOf(HttpHeaders.ContentType, ContentType.Application.Json.toString())
+                    )
+                }
+            )
+
+        OpenAiImageClient(http, ImageAuth.ApiKey("sk-test")).edit("add a hat", images, "auto", config)
+
+        http.close()
+
+        return form
     }
 }

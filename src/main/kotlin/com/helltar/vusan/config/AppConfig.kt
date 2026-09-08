@@ -156,6 +156,7 @@ data class AppConfig(
                         OpenAiImageConfig(
                             model = readEnv("OPENAI_IMAGE_MODEL") ?: defaultImageModel(route),
                             quality = readEnv("OPENAI_IMAGE_QUALITY") ?: OpenAiImageConfig.DEFAULT_QUALITY,
+                            moderation = readEnv("OPENAI_IMAGE_MODERATION") ?: OpenAiImageConfig.DEFAULT_MODERATION,
                             route = route
                         )
                     }

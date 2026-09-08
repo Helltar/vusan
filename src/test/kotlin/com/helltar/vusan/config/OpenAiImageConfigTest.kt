@@ -19,4 +19,13 @@ class OpenAiImageConfigTest {
             OpenAiImageConfig(model = "gpt-image-1.5", quality = "ultra")
         }
     }
+
+    @Test
+    fun `moderation accepts only the two settings the image api offers`() {
+        assertEquals("low", OpenAiImageConfig(model = "gpt-image-1.5", quality = "medium", moderation = "low").moderation)
+
+        assertFailsWith<IllegalArgumentException> {
+            OpenAiImageConfig(model = "gpt-image-1.5", quality = "medium", moderation = "off")
+        }
+    }
 }

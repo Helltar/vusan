@@ -20,6 +20,7 @@ import kotlin.io.path.writeText
 import kotlin.test.Test
 import kotlin.test.assertContentEquals
 import kotlin.test.assertEquals
+import kotlin.test.assertFailsWith
 import kotlin.test.assertFalse
 import kotlin.test.assertIs
 import kotlin.test.assertTrue
@@ -50,6 +51,9 @@ class CodexImageClientTest {
                     val payload = Json.parseToJsonElement(assertIs<TextContent>(request.body).text).jsonObject
                     assertEquals("gpt-image-2", payload["model"]?.jsonPrimitive?.content)
                     assertEquals("a red panda", payload["prompt"]?.jsonPrimitive?.content)
+
+                    // the codex request has no moderation field; sending one risks the whole request
+                    assertFalse(payload.containsKey("moderation"))
 
                     respondJson("""{"data":[{"b64_json":"$encoded"}]}""")
                 }
@@ -86,15 +90,69 @@ class CodexImageClientTest {
                     // gpt-image-2 infers the output size from the source, so asking for one is meaningless
                     assertFalse(payload.containsKey("size"))
 
+                    // gpt-image-2 always edits at high input fidelity and takes no such parameter
+                    assertFalse(payload.containsKey("input_fidelity"))
+                    assertFalse(payload.containsKey("moderation"))
+
                     respondJson("""{"data":[{"b64_json":"$encoded"}]}""")
                 }
             )
 
         val bytes =
             OpenAiImageClient(http, ImageAuth.Codex(store()))
-                .edit("make it blue", source, "in.png", "image/png", "1024x1024", config)
+                .edit("make it blue", listOf(SourceImage(source, "in.png", "image/png")), "1024x1024", config)
 
         assertContentEquals(result, bytes)
+    }
+
+    @Test
+    fun `edit inlines every source image as its own data url`() = runBlocking {
+        val encoded = Base64.getEncoder().encodeToString(byteArrayOf(5, 6))
+        var images = 0
+
+        val http =
+            Http.createClient(
+                MockEngine { request ->
+                    val payload = Json.parseToJsonElement(assertIs<TextContent>(request.body).text).jsonObject
+                    images = payload["images"].let { checkNotNull(it) }.jsonArray.size
+
+                    respondJson("""{"data":[{"b64_json":"$encoded"}]}""")
+                }
+            )
+
+        OpenAiImageClient(http, ImageAuth.Codex(store()))
+            .edit(
+                "put them together",
+                listOf(
+                    SourceImage(byteArrayOf(1), "one.png", "image/png"),
+                    SourceImage(byteArrayOf(2), "two.png", "image/png")
+                ),
+                "1024x1024",
+                config
+            )
+
+        assertEquals(2, images)
+    }
+
+    @Test
+    fun `a refusal carrying only the safety wording still reads as a moderation block`() = runBlocking {
+        val http =
+            Http.createClient(
+                MockEngine {
+                    respond(
+                        content = """{"error":{"message":"Your request was rejected as a result of our safety system."}}""",
+                        status = HttpStatusCode.BadRequest,
+                        headers = headersOf(HttpHeaders.ContentType, ContentType.Application.Json.toString())
+                    )
+                }
+            )
+
+        val blocked = assertFailsWith<ImageModerationBlocked> {
+            OpenAiImageClient(http, ImageAuth.Codex(store())).generate("a portrait", "1024x1024", config)
+        }
+
+        assertEquals(ImageModerationStage.UNKNOWN, blocked.stage)
+        assertTrue(blocked.categories.isEmpty())
     }
 }
 

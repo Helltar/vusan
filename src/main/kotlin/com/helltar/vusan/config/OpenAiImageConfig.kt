@@ -31,11 +31,13 @@ internal fun defaultImageModel(route: ImageRoute): String =
 data class OpenAiImageConfig(
     val model: String,
     val quality: String,
+    val moderation: String = DEFAULT_MODERATION,
     val route: ImageRoute = ImageRoute.PLATFORM
 ) {
     init {
         require(model.isNotBlank()) { "OPENAI_IMAGE_MODEL must not be blank" }
         require(quality in ALLOWED_QUALITIES) { "OPENAI_IMAGE_QUALITY must be one of $ALLOWED_QUALITIES" }
+        require(moderation in ALLOWED_MODERATIONS) { "OPENAI_IMAGE_MODERATION must be one of $ALLOWED_MODERATIONS" }
     }
 
     companion object {
@@ -50,5 +52,11 @@ data class OpenAiImageConfig(
         // xhigh and max are gpt-image-2.5 only; older models top out at high and reject the rest,
         // so the set is the union and the operator matches it to the model they configured.
         val ALLOWED_QUALITIES = setOf("low", "medium", "high", "xhigh", "max", "auto")
+
+        const val DEFAULT_MODERATION = "auto"
+
+        // the filter itself cannot be turned off; these are the two strictness settings the image API
+        // offers, and the codex route takes neither.
+        val ALLOWED_MODERATIONS = setOf("auto", "low")
     }
 }

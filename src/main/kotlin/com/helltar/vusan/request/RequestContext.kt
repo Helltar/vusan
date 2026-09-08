@@ -10,10 +10,20 @@ data class RequestContext(
     val senderUsername: String? = null,
     val senderDisplayName: String? = null,
     val chatIsPrivate: Boolean = true,
-    val attachedFile: AttachedFile? = null,
+    val attachedFiles: List<AttachedFile> = emptyList(),
     val language: Language = Language.DEFAULT,
     val chatCapabilities: ChatCapabilities = ChatCapabilities.UNRESTRICTED
-)
+) {
+
+    /**
+     * The attachment a tool means when it can only work on one — an album's first item.
+     *
+     * Only image editing takes the whole [attachedFiles] list; everything else looks at this one, and
+     * the album's own context block tells the model so.
+     */
+    val attachedFile: AttachedFile?
+        get() = attachedFiles.firstOrNull()
+}
 
 // telegram delivers anonymous group admins as GroupAnonymousBot and linked-channel posts as Channel_Bot:
 // one account id standing in for many different senders in many chats.

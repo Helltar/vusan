@@ -245,7 +245,7 @@ class ToolRegistryFactory(
             }
 
             if (chat.photos && openAiImageClient != null && openAiImage != null) {
-                tools(ImageGenTools(openAiImageClient, openAiImage, outbox, context.attachedFile, selfImage))
+                tools(ImageGenTools(openAiImageClient, openAiImage, outbox, context.attachedFiles, selfImage))
             }
         }
     }

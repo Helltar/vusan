@@ -88,7 +88,7 @@ Prerequisites: JDK 21, plus `ffmpeg` and `yt-dlp` on `PATH`.
   the results. Each person gets a private Linux home that persists across chats.
 - **Web pages** — puts a page, game or small app it built on the internet at your own address, and
   hands you the link.
-- **Images** — draws from descriptions and edits your pictures or its own.
+- **Images** — draws from descriptions, edits your pictures, and merges several into one.
 - **Voice replies** — answers out loud with voice messages.
 - **Round video messages** — replies with its own face and voice in a video circle.
 - **GIFs** — finds and sends a fitting GIF.
