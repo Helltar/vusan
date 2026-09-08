@@ -171,6 +171,8 @@ class BudgetedPromptExecutorTest {
             workspaceMaxTimeoutSeconds = 600L,
             workspaceToken = null,
             workspaceUrl = null,
+            sitesToken = null,
+            sitesUrl = null,
             searxngUrl = null,
             selfImageFile = null,
             taskMaxLatenessMinutes = 60L,

@@ -123,6 +123,8 @@ class AppConfigTest {
             workspaceMaxTimeoutSeconds = workspaceMaxTimeoutSeconds,
             workspaceToken = null,
             workspaceUrl = null,
+            sitesToken = null,
+            sitesUrl = null,
             searxngUrl = null,
             selfImageFile = null,
             taskMaxLatenessMinutes = taskMaxLatenessMinutes,

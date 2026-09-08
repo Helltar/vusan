@@ -1,17 +1,7 @@
 package com.helltar.vusan.tools.workspace
 
-import com.helltar.vusan.request.RequestContext
-import com.helltar.vusan.request.identifiesOnePerson
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
-
-/**
- * A person's files follow them across chats; conversation history remains chat-scoped. A sender without
- * a personal identity gets no workspace at all, since theirs would be one home that every anonymous
- * admin and every linked channel writes into.
- */
-fun workspaceIdOrNull(context: RequestContext): String? =
-    context.takeIf { it.identifiesOnePerson }?.let { "u${it.userId}" }
 
 @Serializable
 data class CommandRequest(val command: String, val timeoutSeconds: Int? = null)

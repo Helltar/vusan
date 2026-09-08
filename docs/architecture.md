@@ -586,6 +586,35 @@ What they do not survive is the retention window: a workspace nobody has used fo
 with its disk. Keep backing volumes and controller state on the same storage filesystem. The namespace is persisted and
 cannot change in place. See [the workspace guide](workspace.md) for behaviour, defaults, setup and backups.
 
+## Site host
+
+The publishing service is Deno/TypeScript under [`sites/`](../sites/), fronted by an nginx image built
+from [`sites/nginx/`](../sites/nginx/) that carries its own configuration. Kotlin reaches it only through
+`tools/sites/SiteClient.kt`. It is a separate deployment on a machine with a public address, and the bot
+only ever connects out to it — nothing reaches back.
+
+One person has one site, keyed by the same `personKeyOrNull` the workspace uses and served at
+`<userId>.<domain>`. A numeric label is asserted on both sides: it can never shadow `api` or `www`, and
+never names a directory outside the tree.
+
+- **`tools/sites/SiteTools.kt`** — reads one zip out of the person's workspace, uploads its files and
+  commits. On any failure before the commit it discards the staged upload rather than leaving the next
+  publish to start against the last one's files. `SiteArchive.kt` is the pure half: it checks every path,
+  refuses traversal, absolute paths and dotfiles, enforces the caps and reports whether the archive has an
+  `index.html` at its root, streaming one entry at a time so nothing larger than a single file is held.
+- **`sites/main.ts`** — `POST /uploads?owner=` opens a staging directory and answers with the caps this
+  upload will be held to, so the limits live only on the side that enforces them. `PUT /uploads/<id>?path=`
+  streams one file to disk, `POST /uploads/<id>/commit` swaps the tree in by rename, `DELETE /uploads/<id>`
+  abandons it. `GET`/`DELETE /site?owner=` report and remove a site. `GET /health` is the only
+  unauthenticated route.
+- **`sites/storage.ts`** — staging, the atomic swap, per-site and per-person caps, the disk floor that
+  refuses writes and clears itself, the retention sweep, and the operator's `blocked` list. Published
+  sites are ordinary files, so an operator with a shell can read or delete them without the bot.
+- **nginx** — terminates TLS with a Cloudflare Origin CA certificate and requires Cloudflare's client
+  certificate, so anything reaching the machine directly is refused at the handshake. It resolves the
+  service through a variable upstream, which keeps every published site being served while the API behind
+  it is restarting.
+
 ## Where to look when…
 
 A symptom-to-source map for finding the right file fast. Paths are under
@@ -604,7 +633,9 @@ A symptom-to-source map for finding the right file fast. Paths are under
 | Vusan will not hand a file from the chat back, or sends it under the wrong name | `tools/files/FileTools.sendChatFile` (the `file_id` path and `chatFilename`) + `telegram/TelegramApi.downloadFileById` (`getFile`, and the 20 MB limit on what Telegram serves a bot) |
 | A command times out, says the workspace is busy, or its output is cut short | `tools/workspace/WorkspaceClient.kt` (HTTP errors and job polling), then `workspace/jobs.ts` (admission, timeouts, retention), `container.ts` (whole-container cleanup) and `output.ts` (bounded logs and control-code cleanup) |
 | A workspace cannot reach the internet, or reaches something it should not | `workspace/netpolicy.sh` (the rules, installed on the host from a helper), then `workspace/container.ts` (the pool's own network and the startup probe) and `workspace/policy.ts` (the guard that re-reads and repairs them) |
-| A workspace loses files, or someone sees another person's | `tools/workspace/WorkspaceModels.workspaceIdOrNull` (the `userId` key, and the shared bot accounts that get no workspace at all), then `workspace/container.ts` and `workspace/homes.ts` (one bounded home disk per person) and `workspace/files.ts` (unprivileged, scoped transfers) |
+| A workspace loses files, or someone sees another person's | `request/RequestContext.personKeyOrNull` (the `userId` key both services use, and the shared bot accounts that get nothing of their own), then `workspace/container.ts` and `workspace/homes.ts` (one bounded home disk per person) and `workspace/files.ts` (unprivileged, scoped transfers) |
+| Publishing a site fails, or the link shows nothing | `tools/sites/SiteArchive.kt` (every path checked before a byte is uploaded, and the missing `index.html` warning), then `tools/sites/SiteClient.kt` (stage, upload, commit) and `sites/storage.ts` (the caps it is held to, and the rename that swaps a site in) |
+| A published page still serves its old files, or a site nobody wants is still up | the zone's Browser Cache TTL, which overrides what this host sends (see [the site guide](sites.md#dns-and-certificates)), then `sites/storage.ts` (`blocked`, retention) — and `data/sites/<id>` on the host, which an operator can delete with the bot down |
 | Wrong language in a canned reply (busy/error/voice/start/task menu) | `i18n/Language.kt` (language selection) + `i18n/Messages.kt` (the strings) |
 | A turn's plan reaches the chat only after the work it announced, or arrives twice | `tools/message/MessageTools.announcePlan` (the tool and its one-per-turn rule) + `telegram/TurnStatus.kt` (`say`, and what survives `finish`) + `outbox/BotOutbox.kt` (`recordDelivered`, `hasDelivered`) + `telegram/delivery/TelegramDelivery.dispatch` (skipping an item already in the chat) |
 | The typing indicator or the turn's status message is wrong, stale, or missing | `telegram/TelegramProgress.kt` (both tickers, and `statusGraceFor`, the per-activity gate deciding which turns get a message at all) + `telegram/TurnStatus.kt` (the message itself, the emoji beside each activity, its stop button, and how it ends) + `agent/ToolActivity.kt` (which tool means what) + `i18n/Messages.progressLabel` (the words) + `telegram/delivery/TelegramDelivery.chatActionFor` (the action) |

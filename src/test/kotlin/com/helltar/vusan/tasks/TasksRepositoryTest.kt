@@ -125,6 +125,8 @@ class TasksRepositoryTest {
             workspaceMaxTimeoutSeconds = 600L,
             workspaceToken = null,
             workspaceUrl = null,
+            sitesToken = null,
+            sitesUrl = null,
             searxngUrl = null,
             selfImageFile = null,
             personality = null,

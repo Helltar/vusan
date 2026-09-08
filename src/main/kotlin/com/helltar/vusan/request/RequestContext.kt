@@ -27,6 +27,15 @@ private val SHARED_SENDER_IDS = setOf(1_087_968_824L, 136_817_688L)
 val RequestContext.identifiesOnePerson: Boolean
     get() = userId != 0L && userId !in SHARED_SENDER_IDS
 
+/**
+ * The key for the services that hold a person's own things — their workspace home, their published
+ * site. Both are keyed on the person rather than the chat, and a sender without a personal identity
+ * gets neither: one shared account would be one home and one site that every anonymous admin and every
+ * linked channel writes into.
+ */
+val RequestContext.personKeyOrNull: String?
+    get() = takeIf { it.identifiesOnePerson }?.let { "u${it.userId}" }
+
 fun RequestContext.requireUserId(): Long {
     check(userId != 0L) { "User ID is unavailable" }
     return userId

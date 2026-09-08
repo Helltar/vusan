@@ -6,6 +6,7 @@ import com.helltar.vusan.outbox.BotOutput
 import com.helltar.vusan.request.AttachedFile
 import com.helltar.vusan.request.AttachedFileKind
 import com.helltar.vusan.request.RequestContext
+import com.helltar.vusan.request.personKeyOrNull
 import com.helltar.vusan.tools.toolFailure
 import io.ktor.client.engine.mock.*
 import io.ktor.http.*
@@ -56,7 +57,7 @@ class WorkspaceToolsTest {
         }
         return WorkspaceTools(
             WorkspaceClient(Http.createClient(engine), "http://workspace:8080", 600.seconds, "test-token"),
-            requireNotNull(workspaceIdOrNull(context)),
+            requireNotNull(context.personKeyOrNull),
             outbox,
             attached
         )

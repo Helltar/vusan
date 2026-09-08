@@ -86,6 +86,8 @@ Prerequisites: JDK 21, plus `ffmpeg` and `yt-dlp` on `PATH`.
 
 - **Its own workspace** — runs code, builds projects, converts media and analyzes data, then sends
   the results. Each person gets a private Linux home that persists across chats.
+- **Web pages** — puts a page, game or small app it built on the internet at your own address, and
+  hands you the link.
 - **Images** — draws from descriptions and edits your pictures or its own.
 - **Voice replies** — answers out loud with voice messages.
 - **Round video messages** — replies with its own face and voice in a video circle.

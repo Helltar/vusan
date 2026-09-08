@@ -32,6 +32,8 @@ data class AppConfig(
     val personality: String?,
     val searxngUrl: String?,
     val selfImageFile: String?,
+    val sitesToken: String?,
+    val sitesUrl: String?,
     val taskMaxLatenessMinutes: Long,
     val tavilyApiKey: String?,
     val telegramBotToken: String,
@@ -48,6 +50,7 @@ data class AppConfig(
         require(maxTasksPerUser >= 0) { "MAX_TASKS_PER_USER must not be negative" }
         require(workspaceMaxTimeoutSeconds > 0) { "WORKSPACE_MAX_TIMEOUT_SECONDS must be positive" }
         require(workspaceUrl == null || !workspaceToken.isNullOrBlank()) { "Workspace API authentication is required" }
+        require(sitesUrl == null || !sitesToken.isNullOrBlank()) { "Site API authentication is required" }
         require(taskMaxLatenessMinutes >= 0) { "TASK_MAX_LATENESS_MINUTES must not be negative" }
     }
 
@@ -74,6 +77,7 @@ data class AppConfig(
             val openAiImageKey = readEnv("OPENAI_IMAGE_API_KEY")
             val llmProvider = resolveLlmProvider()
             val workspaceUrl = readEnv("WORKSPACE_URL")
+            val sitesUrl = readEnv("SITES_URL")
 
             val imageRoute = resolveImageRoute(openAiImageKey != null, llmProvider)
 
@@ -95,13 +99,15 @@ data class AppConfig(
                 personality = resolvePersonality(),
                 searxngUrl = readEnv("SEARXNG_URL"),
                 selfImageFile = readEnv("SELF_IMAGE_FILE"),
+                sitesToken = sitesUrl?.let { readServiceToken("SITES", readEnv("SITES_TOKEN"), readEnv("SITES_TOKEN_FILE")) },
+                sitesUrl = sitesUrl,
                 taskMaxLatenessMinutes = readLongEnv("TASK_MAX_LATENESS_MINUTES") ?: DEFAULT_TASK_MAX_LATENESS_MINUTES,
                 tavilyApiKey = readEnv("TAVILY_API_KEY"),
                 telegramBotToken = requireEnv("TELEGRAM_BOT_TOKEN"),
                 workspaceMaxTimeoutSeconds =
                     readLongEnv("WORKSPACE_MAX_TIMEOUT_SECONDS") ?: DEFAULT_WORKSPACE_MAX_TIMEOUT_SECONDS,
                 workspaceToken = workspaceUrl?.let {
-                    readWorkspaceToken(readEnv("WORKSPACE_TOKEN"), readEnv("WORKSPACE_TOKEN_FILE"))
+                    readServiceToken("WORKSPACE", readEnv("WORKSPACE_TOKEN"), readEnv("WORKSPACE_TOKEN_FILE"))
                 },
                 workspaceUrl = workspaceUrl,
                 tokenBudget = resolveTokenBudget(),

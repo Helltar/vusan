@@ -303,6 +303,7 @@ with a `WARN` log and Vusan keeps running.
 | `OPENAI_IMAGE_API_KEY`  | Image generation                          | Reuse your OpenAI key; optional on `codex` |
 | `OPENAI_VISION_API_KEY` | Vision on a chat model that cannot see    | See [Vision](#vision)                      |
 | `WORKSPACE_URL`         | Shell workspace                           | See [Workspace](#workspace)                |
+| `SITES_URL`             | Publishing pages to the web               | See [Site host](#site-host)                |
 
 ### Web search
 
@@ -436,6 +437,27 @@ These are the bot's side of it, and belong in `env/vusan.env`:
 
 Both `WORKSPACE_URL` and a secret must be present, or the workspace tools are not registered and the
 bot never mentions them.
+
+## Site host
+
+Vusan can put a finished page, game or small web app on the public internet, one address **per person**
+at `<their Telegram id>.<your domain>`. Like the workspace it is **off by default and deploys on its
+own**, on a machine with a public address; the bot only connects out to it, so a bot behind CGNAT can
+publish to a VPS. What it serves, its limits, DNS and certificates, and how to deploy it are in
+[the site guide](sites.md).
+
+These are the bot's side of it, and belong in `env/vusan.env`:
+
+| Variable           | Default | Description                                                          |
+|--------------------|---------|----------------------------------------------------------------------|
+| `SITES_URL`        | —       | Address of the publishing API. Unset means the tools do not exist.   |
+| `SITES_TOKEN`      | —       | The shared API secret, the same value the host is given.             |
+| `SITES_TOKEN_FILE` | —       | A file holding that secret instead. An explicit token takes precedence. |
+
+Publishing is a snapshot of files the person built somewhere, so it needs the workspace: with
+`SITES_URL` set but `WORKSPACE_URL` missing the tools are not registered and the log says why. The
+service is authoritative about how large a site may be and how many files it may hold, and tells the bot
+those numbers when an upload starts — there is nothing to keep in step by hand.
 
 ## Conversation
 

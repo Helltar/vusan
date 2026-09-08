@@ -11,6 +11,7 @@ import com.helltar.vusan.config.AppConfig
 import com.helltar.vusan.config.VisionRuntime
 import com.helltar.vusan.outbox.BotOutbox
 import com.helltar.vusan.request.RequestContext
+import com.helltar.vusan.request.personKeyOrNull
 import com.helltar.vusan.stt.OpenAiWhisperClient
 import com.helltar.vusan.tasks.TasksRepository
 import com.helltar.vusan.tools.choice.InlineChoiceTools
@@ -49,9 +50,10 @@ import com.helltar.vusan.tools.vision.ImageVisionClient
 import com.helltar.vusan.tools.vision.VideoVisionClient
 import com.helltar.vusan.tools.vision.VisionTools
 import com.helltar.vusan.tools.vision.WhisperVideoAudioTranscriber
+import com.helltar.vusan.tools.sites.SiteClient
+import com.helltar.vusan.tools.sites.SiteTools
 import com.helltar.vusan.tools.workspace.WorkspaceClient
 import com.helltar.vusan.tools.workspace.WorkspaceTools
-import com.helltar.vusan.tools.workspace.workspaceIdOrNull
 import com.helltar.vusan.tools.voice.ElevenLabsTtsClient
 import com.helltar.vusan.tools.voice.VideoNoteTools
 import com.helltar.vusan.tools.voice.VoiceTools
@@ -165,6 +167,14 @@ class ToolRegistryFactory(
             WorkspaceClient(http, it, config.workspaceMaxTimeoutSeconds.seconds, requireNotNull(config.workspaceToken))
         }
 
+    // publishing means taking a snapshot of files the person built somewhere; without a workspace there
+    // is nothing to snapshot, so the site host stays configured but unused rather than half-working.
+    private val siteClient =
+        optional("SITES_URL", config.sitesUrl, "site publishing tools") { url ->
+            workspaceClient?.let { SiteClient(http, url, requireNotNull(config.sitesToken)) }
+                ?: null.also { log.warn { "WORKSPACE_URL not set — site publishing has nothing to publish; tools disabled" } }
+        }
+
     // the key that enables voice transcription also hands a video's sound to the vision tool
     private val videoVisionClient =
         vision?.let {
@@ -208,7 +218,10 @@ class ToolRegistryFactory(
             tavilyClient?.let { tools(TavilyTools(it, imageDownloadClient, outbox)) }
             searxngClient?.let { tools(SearxngTools(it, imageDownloadClient, outbox)) }
             workspaceClient?.let { client ->
-                workspaceIdOrNull(context)?.let { tools(WorkspaceTools(client, it, outbox, context.attachedFile)) }
+                context.personKeyOrNull?.let { person ->
+                    tools(WorkspaceTools(client, person, outbox, context.attachedFile))
+                    siteClient?.let { tools(SiteTools(it, client, person)) }
+                }
             }
 
             if (chat.stickersAndAnimations) {

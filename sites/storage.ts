@@ -75,6 +75,16 @@ export class Sites {
     return `https://${label}.${this.config.domain}/`;
   }
 
+  /** Told to the client when an upload starts, so one side owns these numbers rather than both. */
+  get limits() {
+    return {
+      files: this.config.maxFiles,
+      fileBytes: this.config.maxFileMb * 1024 * 1024,
+      totalBytes: this.config.maxMb * 1024 * 1024,
+      pathDepth: this.config.maxDepth,
+    };
+  }
+
   async begin(owner: string): Promise<string> {
     const label = siteLabel(owner);
     if ((await this.blocked()).has(label)) {

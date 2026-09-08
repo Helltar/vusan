@@ -57,6 +57,13 @@ Deno.test("publishing replaces the whole site and leaves nothing behind", async 
 Deno.test("one site cannot exceed its file, size or path limits", async () => {
   const { root, sites } = await fresh({ maxMb: 1, maxFileMb: 1, maxFiles: 2 });
   try {
+    // the client is told the numbers it will be held to, rather than carrying its own copy
+    deepStrictEqual(sites.limits, {
+      files: 2,
+      fileBytes: 1024 * 1024,
+      totalBytes: 1024 * 1024,
+      pathDepth: 10,
+    });
     const id = await sites.begin("u42");
     await sites.put(id, "index.html", body("x"), null);
     await rejects(() => sites.put(id, "index.html", body("x"), null), /already uploaded/);

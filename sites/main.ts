@@ -31,7 +31,11 @@ async function route(request: Request): Promise<Response> {
 
   if (url.pathname === "/uploads" && request.method === "POST") {
     const owner = ownerId(url.searchParams.get("owner"));
-    return json({ uploadId: await sites.begin(owner), expiresInMinutes: config.uploadIdleMinutes });
+    return json({
+      uploadId: await sites.begin(owner),
+      expiresInMinutes: config.uploadIdleMinutes,
+      limits: sites.limits,
+    });
   }
 
   if (url.pathname.startsWith("/uploads/")) {
