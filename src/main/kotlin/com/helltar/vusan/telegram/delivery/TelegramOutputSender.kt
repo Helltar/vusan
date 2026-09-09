@@ -44,7 +44,10 @@ internal object TelegramOutputSender {
         target: ChatTarget,
         replyParameters: ReplyParameters?,
         caption: String?,
-        formattingFileNotice: String
+        formattingFileNotice: String,
+        // told the id of a poll Telegram actually created. only a sent poll has one, and only then is
+        // there anything for a later `poll_answer` update to be matched against.
+        onPollSent: (suspend (String) -> Unit)? = null
     ) {
         when (item) {
             is BotOutput.Text -> sendReplyText(client, target, item.text, replyParameters, formattingFileNotice)
@@ -61,8 +64,8 @@ internal object TelegramOutputSender {
             is BotOutput.Video -> sendVideo(client, target, replyParameters, item, caption, formattingFileNotice)
             is BotOutput.VideoNote -> sendVideoNote(client, target, replyParameters, item, formattingFileNotice)
             is BotOutput.Sticker -> sendStickerFile(client, target, item.fileId, replyParameters)
-            is BotOutput.Quiz -> sendQuiz(client, target, replyParameters, item)
-            is BotOutput.Poll -> sendPoll(client, target, replyParameters, item)
+            is BotOutput.Quiz -> sendQuiz(client, target, replyParameters, item, onPollSent)
+            is BotOutput.Poll -> sendPoll(client, target, replyParameters, item, onPollSent)
             is BotOutput.Reaction -> sendReaction(client, target, item)
         }
     }
@@ -536,7 +539,8 @@ internal object TelegramOutputSender {
         client: TelegramClient,
         target: ChatTarget,
         replyParameters: ReplyParameters?,
-        quiz: BotOutput.Quiz
+        quiz: BotOutput.Quiz,
+        onPollSent: (suspend (String) -> Unit)?
     ) = sendOrFallback(
         target = target,
         replyParameters = replyParameters,
@@ -556,7 +560,7 @@ internal object TelegramOutputSender {
                         .replyParameters(replyParameters)
                         .build()
                 )
-            }
+            }.reportPoll(onPollSent)
         }
     )
 
@@ -564,7 +568,8 @@ internal object TelegramOutputSender {
         client: TelegramClient,
         target: ChatTarget,
         replyParameters: ReplyParameters?,
-        poll: BotOutput.Poll
+        poll: BotOutput.Poll,
+        onPollSent: (suspend (String) -> Unit)?
     ) = sendOrFallback(
         target = target,
         replyParameters = replyParameters,
@@ -583,9 +588,16 @@ internal object TelegramOutputSender {
                         .replyParameters(replyParameters)
                         .build()
                 )
-            }
+            }.reportPoll(onPollSent)
         }
     )
+
+    // the id lives on the poll inside the sent message, and only a send that really produced one has
+    // it: a fallback that turned the poll into text leaves nothing to match an answer against.
+    private suspend fun Message.reportPoll(onPollSent: (suspend (String) -> Unit)?) {
+        val id = poll?.id ?: return
+        onPollSent?.invoke(id)
+    }
 
     // deliver the caption as a plain message when the media itself could not be sent at all.
     private fun captionTextFallback(

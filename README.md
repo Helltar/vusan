@@ -107,7 +107,7 @@ Prerequisites: JDK 21, plus `ffmpeg` and `yt-dlp` on `PATH`.
 
 - **Reactions** — sometimes an emoji on your message is the whole answer.
 - **Stickers** — learns your chat's sticker collection and picks fitting replies from it.
-- **Polls and quizzes** — creates Telegram polls and quizzes.
+- **Polls and quizzes** — creates Telegram polls and quizzes, and follows who answered what in a quiz.
 - **Forum topics** — answers, notices and scheduled reminders stay in the topic they belong to.
 - **Files and links** — sends documents, downloads links, and retrieves files behind chat stickers
   and pictures.

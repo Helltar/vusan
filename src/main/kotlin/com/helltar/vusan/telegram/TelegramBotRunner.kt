@@ -55,6 +55,7 @@ import org.telegram.telegrambots.meta.api.objects.CallbackQuery
 import org.telegram.telegrambots.meta.api.objects.Update
 import org.telegram.telegrambots.meta.api.objects.User
 import org.telegram.telegrambots.meta.api.objects.message.Message
+import org.telegram.telegrambots.meta.api.objects.polls.PollAnswer
 import org.telegram.telegrambots.meta.generics.TelegramClient
 import java.time.Instant
 import kotlin.time.Duration
@@ -76,7 +77,8 @@ internal class TelegramBotRunner(
     private val voiceTranscriber: VoiceTranscriber?,
     private val profile: BotProfile,
     private val stickerCatalog: StickerCatalog? = null,
-    private val groupLog: GroupLogRepository? = null
+    private val groupLog: GroupLogRepository? = null,
+    private val polls: PollRegistry? = null
 ) {
 
     private companion object {
@@ -241,6 +243,13 @@ internal class TelegramBotRunner(
             // and the spool only ever promises to carry work nobody has started.
             spool.settle(update.updateId)
 
+            val pollAnswer = update.pollAnswer
+
+            if (pollAnswer != null) {
+                recordPollAnswer(pollAnswer)
+                continue
+            }
+
             val callback = update.callbackQuery
 
             if (callback != null) {
@@ -308,6 +317,25 @@ internal class TelegramBotRunner(
         // longer there. the guards and the mapping above are the same either way, so only the sink differs.
         launchHandling(message) {
             if (edited) repository.recordEdit(entry) else repository.record(entry)
+        }
+    }
+
+    // a vote is not a message: it reaches no dispatch path, appears in no chat, and is answered by
+    // nobody. without this the bot asks a question in a group and never learns what anyone said back,
+    // so it goes into the transcript the same way a person's message does.
+    private fun CoroutineScope.recordPollAnswer(answer: PollAnswer) {
+        val repository = groupLog ?: return
+        val registry = polls ?: return
+
+        launch {
+            runCatching {
+                registry.find(answer.pollId)
+                    ?.let { answer.toGroupLogEntry(it) }
+                    ?.let { repository.record(it) }
+            }.onFailure {
+                it.rethrowIfCancellation()
+                log.warn(it) { "failed to record an answer to poll id=[${answer.pollId}]" }
+            }
         }
     }
 

@@ -7,7 +7,9 @@ import kotlin.test.assertEquals
 import kotlin.test.assertNotNull
 import kotlin.test.assertNull
 import kotlin.test.assertTrue
+import com.helltar.vusan.telegram.SentPoll
 import org.telegram.telegrambots.meta.api.objects.message.Message
+import org.telegram.telegrambots.meta.api.objects.polls.PollAnswer
 
 class GroupLogEntriesTest {
 
@@ -179,6 +181,72 @@ class GroupLogEntriesTest {
     private val mapper = ObjectMapper()
 
     // `date` must stay non-zero: the bot api models a zero date as an InaccessibleMessage subtype.
+    @Test
+    fun `a vote on a quiz says who answered what, and whether it was right`() {
+        val entry =
+            assertNotNull(
+                pollAnswer(""""option_ids": [1]""").toGroupLogEntry(quiz)
+            )
+
+        assertEquals(-100L, entry.chatId)
+        assertEquals("poll answer", entry.kind)
+        assertEquals("answered: Kyiv (correct)", entry.text)
+        assertEquals(7L, entry.senderId)
+        assertEquals("olena", entry.senderUsername)
+        assertEquals("Olena Petrenko", entry.senderName)
+        // a vote is not a message, so nothing can reply to it and it has no id of its own.
+        assertNull(entry.messageId)
+    }
+
+    @Test
+    fun `a wrong quiz answer is recorded as one`() {
+        val entry = assertNotNull(pollAnswer(""""option_ids": [0]""").toGroupLogEntry(quiz))
+
+        assertEquals("answered: Lviv (wrong)", entry.text)
+    }
+
+    @Test
+    fun `an ordinary poll has no right answer to judge`() {
+        val poll = SentPoll(chatId = -100L, options = listOf("Tea", "Coffee"), correctOptionIndex = null)
+        val entry = assertNotNull(pollAnswer(""""option_ids": [1]""").toGroupLogEntry(poll))
+
+        assertEquals("answered: Coffee", entry.text)
+    }
+
+    @Test
+    fun `a multiple-choice vote names every option picked`() {
+        val poll = SentPoll(chatId = -100L, options = listOf("Tea", "Coffee", "Water"), correctOptionIndex = null)
+        val entry = assertNotNull(pollAnswer(""""option_ids": [0, 2]""").toGroupLogEntry(poll))
+
+        assertEquals("answered: Tea, Water", entry.text)
+    }
+
+    // telegram sends the retraction as an answer with nothing chosen; the transcript would otherwise
+    // read as if the person had answered with silence.
+    @Test
+    fun `a retracted vote is not an answer`() {
+        assertNull(pollAnswer(""""option_ids": []""").toGroupLogEntry(quiz))
+    }
+
+    @Test
+    fun `an anonymous vote names nobody and is left out`() {
+        val answer =
+            mapper.readValue(
+                """{"poll_id": "p1", "option_ids": [1], "voter_chat": {"id": -100, "type": "supergroup"}}""",
+                PollAnswer::class.java
+            )
+
+        assertNull(answer.toGroupLogEntry(quiz))
+    }
+
+    private val quiz = SentPoll(chatId = -100L, options = listOf("Lviv", "Kyiv"), correctOptionIndex = 1)
+
+    private fun pollAnswer(fields: String): PollAnswer =
+        mapper.readValue(
+            """{"poll_id": "p1", "user": {"id": 7, "is_bot": false, "first_name": "Olena", "last_name": "Petrenko", "username": "olena"}, ${fields.trim()}}""",
+            PollAnswer::class.java
+        )
+
     private fun message(fields: String): Message =
         mapper.readValue(
             """{"message_id": 1, "date": 1774000000, "chat": {"id": -100, "type": "supergroup"}, ${fields.trim()}}""",

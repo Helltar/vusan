@@ -9,6 +9,7 @@ import com.helltar.vusan.common.rethrowIfCancellation
 import com.helltar.vusan.i18n.Messages
 import com.helltar.vusan.outbox.BotOutput
 import com.helltar.vusan.outbox.OutboxItem
+import com.helltar.vusan.telegram.PollRegistry
 import com.helltar.vusan.telegram.api
 import com.helltar.vusan.telegram.inbound.chatIdLong
 import com.helltar.vusan.telegram.inbound.forumTopicIdOrNull
@@ -104,7 +105,8 @@ data class ScheduledAttribution(
 class TelegramDelivery(
     private val client: TelegramClient,
     private val onStickerRejected: (suspend (Long) -> Unit)? = null,
-    private val groupLog: GroupLogRepository? = null
+    private val groupLog: GroupLogRepository? = null,
+    private val polls: PollRegistry? = null
 ) {
 
     private companion object {
@@ -302,7 +304,16 @@ class TelegramDelivery(
 
             indicateAction(deliveryTarget.chat, botActionFor(item.output))
 
-            when (deliverItem(item.output, deliveryTarget, caption, routedToPrivate, currentChatTarget, messages)) {
+            // a poll is remembered only where its answers can be read back: the transcript this feeds
+            // covers groups, and the same guard keeps a redirected reply out of it.
+            val pollRegistry =
+                polls?.takeIf { !routedToPrivate && deliveryTarget.chatId != senderPrivateChatId }
+
+            when (
+                deliverItem(
+                    item.output, deliveryTarget, caption, routedToPrivate, currentChatTarget, messages, pollRegistry
+                )
+            ) {
                 ItemDeliveryOutcome.Ok ->
                     recordBotMessage(
                         chatId = deliveryTarget.chatId,
@@ -361,16 +372,17 @@ class TelegramDelivery(
         caption: String?,
         routedToPrivate: Boolean,
         currentChatTarget: DeliveryTarget,
-        messages: Messages
+        messages: Messages,
+        pollRegistry: PollRegistry? = null
     ): ItemDeliveryOutcome {
         try {
-            sendOutgoing(deliveryTarget, item, caption, messages)
+            sendOutgoing(deliveryTarget, item, caption, messages, pollRegistry)
             return ItemDeliveryOutcome.Ok
         } catch (e: Throwable) {
             e.rethrowIfCancellation()
 
             if (!routedToPrivate && deliveryTarget.replyToMessageId != null && e.isReplyMessageNotFound()) {
-                runCatching { sendOutgoing(currentChatTarget, item, caption, messages) }
+                runCatching { sendOutgoing(currentChatTarget, item, caption, messages, pollRegistry) }
                     .onFailure { retryError ->
                         retryError.rethrowIfCancellation()
 
@@ -546,7 +558,13 @@ class TelegramDelivery(
         }
     }
 
-    private suspend fun sendOutgoing(target: DeliveryTarget, item: BotOutput, caption: String?, messages: Messages) {
+    private suspend fun sendOutgoing(
+        target: DeliveryTarget,
+        item: BotOutput,
+        caption: String?,
+        messages: Messages,
+        pollRegistry: PollRegistry? = null
+    ) {
         withFloodWaitRetry(target.chatId) {
             TelegramOutputSender
                 .send(
@@ -555,7 +573,11 @@ class TelegramDelivery(
                     target.chat,
                     replyParameters(target.replyToMessageId),
                     caption,
-                    messages.formattingAsFileNotice
+                    messages.formattingAsFileNotice,
+                    onPollSent =
+                        pollRegistry?.let { registry ->
+                            { pollId -> registry.remember(pollId, target.chatId, item) }
+                        }
                 )
         }
     }

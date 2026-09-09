@@ -18,6 +18,7 @@ import com.helltar.vusan.stt.OpenAiWhisperClient
 import com.helltar.vusan.tasks.TaskScheduler
 import com.helltar.vusan.tasks.TasksRepository
 import com.helltar.vusan.telegram.ChatProfiles
+import com.helltar.vusan.telegram.PollRegistry
 import com.helltar.vusan.telegram.TelegramBotRunner
 import com.helltar.vusan.telegram.botProfile
 import com.helltar.vusan.telegram.callback.InlineChoiceHandler
@@ -122,7 +123,11 @@ suspend fun main() = coroutineScope {
                 config.chatHistory, stickerCatalog, groupLog, config.groupLog, tokenBudget
             )
 
-        val delivery = TelegramDelivery(telegramClient, stickerCatalog?.let { it::recheckSetOf }, groupLog)
+        // answers to a poll are read back through the group transcript, so without one there is
+        // nothing to record them into and no reason to remember the polls either.
+        val polls = groupLog?.let { PollRegistry() }
+
+        val delivery = TelegramDelivery(telegramClient, stickerCatalog?.let { it::recheckSetOf }, groupLog, polls)
         val voiceTranscriber = createVoiceTranscriber(http, config)
         val chatProfiles = ChatProfiles(telegramClient, botProfile.userId)
         val taskMenu = TaskMenuHandler(telegramClient, tasks, config.maxTasksPerUser)
@@ -138,7 +143,7 @@ suspend fun main() = coroutineScope {
             TelegramBotRunner(
                 telegramClient, config.telegramBotToken, delivery, agentRunner, taskMenu, inlineChoices, tasks,
                 chatProfiles, config.allowedIds, config.bannedIds, voiceTranscriber, botProfile, stickerCatalog,
-                groupLog
+                groupLog, polls
             )
 
         logStartup(config, llm, vision, toolRegistryFactory.availableToolNames)

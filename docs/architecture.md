@@ -335,6 +335,18 @@ A normal user message travels:
   to one author when one was asked for, because the transcript under it may be only part of the window and a "how many"
   answer must not be a tally of quoted lines. The digest path counts over the day-snapped window it prints rather than
   the narrower one requested, and labels `<today>` with how many of its messages fit.
+- **Poll answers** — a vote on a poll the bot put in a group reaches it as a `poll_answer` update, which carries a poll
+  id and option numbers and nothing else: not the question, not what the options said, not even the chat. `PollRegistry`
+  writes what a sent poll said (`polls`) at the moment `TelegramOutputSender` gets an id back for it, and only where the
+  answers can be read back — a poll redirected to a DM, or sent in a private chat, is not kept. The update itself is
+  handled in `TelegramBotRunner.recordPollAnswer` and lands in the group transcript through
+  `PollAnswer.toGroupLogEntry`, so the agent reads "answered: Kyiv (correct)" beside the messages around it. No
+  `allowed_updates` parameter is involved and none should be added: `poll_answer` is already in the default set, and
+  naming any type explicitly would silently drop `my_chat_member`, which `BotMembership` depends on.
+
+  Only a **non-anonymous** poll produces these updates at all. `sendQuiz` is non-anonymous by default and reports its
+  answers; `sendPoll` is anonymous by default and reports none unless the user asked for a public poll, which is the
+  right way round — anonymity is usually the point of an ordinary poll.
 - **Sticker catalog** — `tools/sticker/StickerCatalog` learns which sticker sets a chat uses. The Bot API has no sticker
   search, so a sticker can only be sent from a set known by name: `TelegramBotRunner` taps every sticker in an
   allowlisted chat — including ones the bot is not addressed in, which in a group is its only view of what people
@@ -676,6 +688,7 @@ A symptom-to-source map for finding the right file fast. Paths are under
 | The reply to a failed turn says nothing about what the provider did | `agent/AgentRunner.providerErrorReply` (which error body earns which canned reply: a content-policy refusal, a spent usage limit, a dead key, a 429/503 overload) + `i18n/Messages.kt` (the strings) |
 | You need to see exactly what the model was sent this turn | `agent/PromptDump.kt` (the whole request rendered per message) — it hangs on koog's `onLLMCallStarting` in `agent/AgentFactory.kt` and is switched by the `PromptDump` logger in [`logback.xml`](../src/main/resources/logback.xml) |
 | Vusan forgets context or the history recap looks wrong | `agent/conversation/ConversationPlan.kt` (budget/selection) + `agent/conversation/ConversationCompactor.kt` (semantic recap) + `agent/conversation/ConversationRepository.kt` (storage/checkpoint) |
+| Nobody's answers to a quiz reach the agent, or the wrong option is named | `telegram/PollRegistry.kt` (what a sent poll stores, and for how long) + `telegram/inbound/GroupLogEntries.kt` (`PollAnswer.toGroupLogEntry`) + `tools/quiz/QuizTools.kt` / `tools/poll/PollTools.kt` (`isAnonymous`, which decides whether Telegram reports votes at all) |
 | A group recap misses messages, or `readGroupLog` returns too little | `telegram/TelegramBotRunner.recordGroupLog` + `telegram/inbound/GroupLogEntries.kt` (what gets recorded at all), then `agent/grouplog/GroupLogReader.kt` (window budget, day split, digest cache) and `agent/grouplog/GroupLogRepository.kt` (retention and the per-chat row cap) |
 | Vusan misreads what "that" refers to in a group, or parrots the group's chatter | `agent/AgentRunner.recentChatFor` (the `<recent_chat>` slice and its caps) + `agent/SystemPrompt.kt` (the `<recent_chat>` contract) |
 | A channel recap misses posts, quotes the wrong text, or costs too much vision | `tools/tgchannel/TelegramChannelReader.kt` (the `?before=` walk, the window cutoff, the size budget, and which posts get vision) + `tools/tgchannel/TelegramChannelParser.kt` (own text vs the quote of a replied-to post, reactions, media kinds) |
