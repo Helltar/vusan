@@ -211,7 +211,7 @@ class AgentRunner(
                 stickerCatalog = stickerCatalogFor(context)
             )
 
-        val outbox = BotOutbox()
+        val outbox = BotOutbox(context.chat.capabilities)
         val preparation =
             agentFactory.prepare(
                 context = context,

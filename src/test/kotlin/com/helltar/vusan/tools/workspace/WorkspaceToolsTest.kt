@@ -11,6 +11,8 @@ import com.helltar.vusan.tools.toolFailure
 import io.ktor.client.engine.mock.*
 import io.ktor.http.*
 import kotlinx.coroutines.runBlocking
+import com.helltar.vusan.request.ChatCapabilities
+import kotlin.test.assertFalse
 import kotlin.test.Test
 import kotlin.test.assertContains
 import kotlin.test.assertEquals
@@ -138,6 +140,20 @@ class WorkspaceToolsTest {
         assertEquals("project.zip", queued.filterIsInstance<BotOutput.Document>().single().filename)
         assertContains(result, "Not sent")
         assertContains(result, "missing.txt")
+    }
+
+    // reporting a photo as sent into a chat that drops it leaves the model believing the user can see
+    // something nobody sent, so the refusal has to reach it by name.
+    @Test
+    fun `a file kind the chat refuses is named rather than reported as sent`() = runBlocking {
+        val outbox = BotOutbox(ChatCapabilities(photos = false))
+        val result = tools(files = mapOf("cover.png" to byteArrayOf(1), "notes.txt" to byteArrayOf(2)), outbox = outbox)
+            .sendFromWorkspace(listOf("cover.png", "notes.txt"))
+
+        assertEquals("notes.txt", assertIs<BotOutput.Document>(outbox.pending.single().output).filename)
+        assertContains(result, "does not accept these")
+        assertContains(result, "cover.png")
+        assertFalse("Sending 2 file" in result)
     }
 
     @Test

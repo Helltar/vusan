@@ -118,7 +118,7 @@ class WorkspaceTools(
         require(paths.size <= MAX_SEND_FILES) { "At most $MAX_SEND_FILES files per call" }
         val wanted = paths.map { it.requireToolText("Path", MAX_PATH_CHARS) }.distinct()
         val photos = mutableListOf<BotOutput.Photo>()
-        val others = mutableListOf<BotOutput>()
+        val others = mutableListOf<Pair<BotOutput, String>>()
         val sent = mutableListOf<String>()
         val failed = mutableListOf<String>()
         var remainingBytes = WORKSPACE_FILE_LIMIT
@@ -140,18 +140,30 @@ class WorkspaceTools(
             val name = path.substringAfterLast('/').sanitizeFilename().ifBlank { "file" }
             when (name.substringAfterLast('.', "").lowercase()) {
                 in IMAGE_EXTENSIONS -> photos += BotOutput.Photo(bytes = bytes, filename = name)
-                in VIDEO_EXTENSIONS -> others += BotOutput.Video(bytes = bytes, filename = name)
-                else -> others += BotOutput.Document(bytes = bytes, filename = name)
+                in VIDEO_EXTENSIONS -> others += BotOutput.Video(bytes = bytes, filename = name) to name
+                else -> others += BotOutput.Document(bytes = bytes, filename = name) to name
             }
             sent += name
         }
+        // a chat can forbid a whole kind of content, and the file the model picked may be one of them.
+        // the queue refuses those, and saying so is the point: reporting a photo as sent into a chat
+        // that drops it leaves the model believing the user can see something nobody sent.
+        val refused = mutableListOf<String>()
+
         when {
-            photos.size == 1 -> outbox.enqueue(photos.single())
-            photos.size > 1 -> outbox.enqueue(BotOutput.PhotoGroup(photos))
+            photos.size == 1 -> if (!outbox.enqueue(photos.single())) refused += photos.single().filename
+            photos.size > 1 -> if (!outbox.enqueue(BotOutput.PhotoGroup(photos))) refused += photos.map { it.filename }
         }
-        others.forEach { outbox.enqueue(it) }
+
+        others.forEach { (output, name) ->
+            if (!outbox.enqueue(output)) refused += name
+        }
+
+        val queued = sent - refused.toSet()
+
         buildString {
-            if (sent.isNotEmpty()) appendLine("Sending ${sent.size} file(s): ${sent.joinToString(", ")}. Say what they are; do not paste their contents.")
+            if (queued.isNotEmpty()) appendLine("Sending ${queued.size} file(s): ${queued.joinToString(", ")}. Say what they are; do not paste their contents.")
+            if (refused.isNotEmpty()) appendLine("This chat does not accept these, so they were not sent: ${refused.joinToString(", ")}.")
             if (failed.isNotEmpty()) appendLine("Not sent: ${failed.joinToString(", ")}.")
         }.trim()
     }

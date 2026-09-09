@@ -1,5 +1,8 @@
 package com.helltar.vusan.outbox
 
+import com.helltar.vusan.request.ChatCapabilities
+import io.github.oshai.kotlinlogging.KotlinLogging
+
 /**
  * A queued [output] together with the routing decision ([toPrivate]) captured when it was enqueued.
  * [delivered] marks one that already reached the chat while the turn was still running: delivery must
@@ -14,9 +17,19 @@ data class OutboxItem(
     val announcement: Boolean = false
 )
 
-class BotOutbox {
+/**
+ * The queue a turn writes its answer into.
+ *
+ * [capabilities] is what the destination will actually accept. An output it refuses is dropped here
+ * rather than after the download, generation or speech synthesis that produced it has been paid for
+ * and the send rejected — and [enqueue] says so, because a tool that reports "sent" for something
+ * nobody will see is worse than one that says it could not.
+ */
+class BotOutbox(val capabilities: ChatCapabilities = ChatCapabilities.UNRESTRICTED) {
 
     companion object {
+        private val log = KotlinLogging.logger {}
+
         // upper bound on standalone text bubbles per turn. consecutive sendMessage calls are coalesced
         // into the trailing bubble (see [enqueueText]), so a model that splits one answer into many small
         // messages produces few real sends. this cap still bounds a runaway loop that keeps emitting
@@ -41,15 +54,24 @@ class BotOutbox {
     val pending: List<OutboxItem>
         get() = items.toList()
 
-    fun enqueue(item: BotOutput) {
+    /** Queues [item], or answers `false` when this chat does not accept that kind of output at all. */
+    fun enqueue(item: BotOutput): Boolean {
+        if (!capabilities.allows(item)) {
+            log.info { "dropped a queued ${item.kindName()} output: this chat does not accept them" }
+            return false
+        }
+
         // reactions always target a specific message in the current chat —
         // they must never be routed to the sender's DMs by `useDirectMessages`.
         val toPrivate = redirectToPrivate && item !is BotOutput.Reaction
 
-        if (item is BotOutput.Audio && mergeIntoTrailingAlbum(item, toPrivate)) return
+        if (item is BotOutput.Audio && mergeIntoTrailingAlbum(item, toPrivate)) return true
 
         items += OutboxItem(item, toPrivate)
+
+        return true
     }
+
 
     // a track is fetched one tool call at a time, so seven of them would otherwise arrive as seven
     // messages, each repeating the reply quote. consecutive ones become one album instead — the

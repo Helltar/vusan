@@ -173,10 +173,13 @@ A normal user message travels:
    regardless of where it sat. In a group the turn also carries what that chat lets the bot post, read through
    `telegram/ChatProfiles.kt`: one cached `getChat` + `getChatMember` pair yields the chat description, the permissions
    binding a bot that is a plain member (an administrator is bound by none of them, slow mode included), and the
-   slow-mode delay. `ChatCapabilities` travels in `RequestContext.chat` and reaches two places — `ToolRegistryFactory` leaves
+   slow-mode delay. `ChatCapabilities` travels in `RequestContext.chat` and reaches three places — `ToolRegistryFactory` leaves
    out the tools whose output the chat would refuse, so the model cannot spend an image generation or a download on
-   something undeliverable, and `<message_context>` names the rest so the agent knows why and answers in one message
-   under slow mode. Anything the lookup could not answer counts as unrestricted, since guessing "forbidden" would strip
+   something undeliverable; `BotOutbox` refuses a queued output the chat does not accept, because registry gating alone
+   proves nothing about the *mixed-output* paths (a text-first search queues photos, the workspace sends whatever files
+   it was asked for), and those tools report the refusal to the model rather than claiming a send nobody will see —
+   image search checks first and never queries its provider at all; and `<message_context>` names the rest so the agent
+   knows why and answers in one message under slow mode. Anything the lookup could not answer counts as unrestricted, since guessing "forbidden" would strip
    real abilities. `AgentFactory.prepare` builds the per-request tool registry and estimates the fixed
    system/tool/current-turn cost. The history planner reserves room for output, future tool calls, and estimation error,
    then admits only complete interactions. If an older prefix no longer fits or exceeds the configured recent count,

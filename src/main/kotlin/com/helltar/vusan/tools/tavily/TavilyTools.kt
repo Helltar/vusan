@@ -9,6 +9,7 @@ import com.helltar.vusan.tools.images.FoundImage
 import com.helltar.vusan.tools.images.ImageDownloadClient
 import com.helltar.vusan.tools.images.MAX_IMAGE_RESULTS
 import com.helltar.vusan.tools.images.deliverImageResults
+import com.helltar.vusan.tools.images.photosRefusedReply
 import com.helltar.vusan.tools.suspendToolGuard
 import io.ktor.http.*
 
@@ -92,6 +93,8 @@ class TavilyTools(
         @LLMDescription(TavilyToolDescriptions.SEARCH_IMAGES_MAX_RESULTS)
         maxResults: Int = 5
     ): String = suspendToolGuard {
+        outbox.photosRefusedReply()?.let { return@suspendToolGuard it }
+
         val capped = maxResults.coerceIn(1, MAX_IMAGE_RESULTS)
 
         val response =

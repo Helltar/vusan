@@ -9,6 +9,7 @@ import com.helltar.vusan.tools.images.FoundImage
 import com.helltar.vusan.tools.images.ImageDownloadClient
 import com.helltar.vusan.tools.images.MAX_IMAGE_RESULTS
 import com.helltar.vusan.tools.images.deliverImageResults
+import com.helltar.vusan.tools.images.photosRefusedReply
 import com.helltar.vusan.tools.suspendToolGuard
 import io.github.oshai.kotlinlogging.KotlinLogging
 
@@ -129,6 +130,8 @@ class SearxngTools(
         @LLMDescription(SearxngToolDescriptions.META_SEARCH_IMAGES_MAX_RESULTS)
         maxResults: Int = 5
     ): String = suspendToolGuard {
+        outbox.photosRefusedReply()?.let { return@suspendToolGuard it }
+
         val response = client.search(query = query, engines = IMAGE_ENGINES)
 
         val candidates =

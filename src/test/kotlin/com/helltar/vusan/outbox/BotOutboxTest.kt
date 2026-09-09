@@ -1,5 +1,6 @@
 package com.helltar.vusan.outbox
 
+import com.helltar.vusan.request.ChatCapabilities
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFalse
@@ -7,6 +8,35 @@ import kotlin.test.assertIs
 import kotlin.test.assertTrue
 
 class BotOutboxTest {
+
+    // registry gating keeps a refused tool out of the turn, but a text-first search queues photos and
+    // the workspace sends whatever it was asked for, both through paths no capability gates.
+    @Test
+    fun `a chat that refuses a kind never queues one`() {
+        val outbox = BotOutbox(ChatCapabilities(photos = false, documents = false))
+
+        assertFalse(outbox.enqueue(BotOutput.Photo(bytes = ByteArray(1), filename = "cat.jpg")))
+        assertFalse(outbox.enqueue(BotOutput.Document(bytes = ByteArray(1), filename = "report.pdf")))
+        assertTrue(outbox.pending.isEmpty())
+    }
+
+    @Test
+    fun `a chat that refuses pictures still takes words`() {
+        val outbox = BotOutbox(ChatCapabilities(photos = false))
+
+        assertTrue(outbox.enqueue(BotOutput.Text("here is the link instead")))
+        assertTrue(outbox.enqueue(BotOutput.Video(bytes = ByteArray(1), filename = "clip.mp4")))
+        assertEquals(2, outbox.pending.size)
+    }
+
+    // telegram grants animations, games and stickers under one permission, so both go with it.
+    @Test
+    fun `stickers and animations follow the one permission telegram grants them under`() {
+        val outbox = BotOutbox(ChatCapabilities(stickersAndAnimations = false))
+
+        assertFalse(outbox.enqueue(BotOutput.Sticker("file-id", catalogId = 1L)))
+        assertTrue(outbox.pending.isEmpty())
+    }
 
     @Test
     fun `coalesces consecutive text into one bubble separated by a blank line`() {

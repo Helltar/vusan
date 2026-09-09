@@ -18,12 +18,30 @@ private const val ATTEMPTS_PER_IMAGE = 4
 
 private val log = KotlinLogging.logger("ImageSearch")
 
+/**
+ * The answer for a chat that will not show a photo, or `null` when it will.
+ *
+ * An image search asked in such a chat is answered before the provider is even queried: the pictures
+ * are the whole point of the call, and querying then fetching megabytes of them to have the send
+ * refused costs the turn for nothing. [deliverImageResults] checks again, so a caller that forgets
+ * still cannot queue something nobody will see.
+ */
+internal fun BotOutbox.photosRefusedReply(): String? =
+    if (capabilities.photos)
+        null
+    else
+        "This chat does not accept photos, so image search cannot deliver anything here. " +
+                "Tell the user that and answer with links or a description instead."
+
 /** One image a search provider found; [description] is what that provider says is in it. */
 data class FoundImage(val url: String, val description: String? = null)
 
 /**
- * Downloads [candidates] in order, keeps up to [limit] that Telegram can show as a photo, queues
- * them as a single photo or a media group, and returns the text the tool reports back to the model.
+ * Downloads [candidates] in order, keeps up to [limit] the chat can show as a photo, queues them as a
+ * single photo or a media group, and returns the text the tool reports back to the model.
+ *
+ * A chat that refuses photos is answered before the first download: the images are the whole point of
+ * the call, and fetching megabytes of them to have the send rejected costs the turn for nothing.
  */
 suspend fun ImageDownloadClient.deliverImageResults(
     query: String,
@@ -31,6 +49,8 @@ suspend fun ImageDownloadClient.deliverImageResults(
     limit: Int,
     outbox: BotOutbox
 ): String {
+    outbox.photosRefusedReply()?.let { return it }
+
     if (candidates.isEmpty()) {
         log.warn { "provider returned no image candidates query=[$query]" }
         return """No images found for "$query"."""

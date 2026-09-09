@@ -12,6 +12,7 @@ import kotlinx.coroutines.runBlocking
 import java.awt.image.BufferedImage
 import java.io.ByteArrayOutputStream
 import javax.imageio.ImageIO
+import com.helltar.vusan.request.ChatCapabilities
 import kotlin.test.Test
 import kotlin.test.assertContains
 import kotlin.test.assertEquals
@@ -180,6 +181,21 @@ class SearxngToolsTest {
 
         assertNull(probe.last["categories"])
         assertContains(probe.last["engines"] ?: "", "bing images")
+    }
+
+    // the images are the whole point of the call, so a chat that refuses them is answered before the
+    // first download rather than after megabytes have been fetched for a send that gets rejected.
+    @Test
+    fun `image search in a chat that refuses photos downloads nothing`() = runBlocking {
+        val outbox = BotOutbox(ChatCapabilities(photos = false))
+        val probe = SearchProbe()
+        val result =
+            tools(imagesJson(3), outbox = outbox, probe = probe, image = png())
+                .metaSearchImages("red panda", maxResults = 3)
+
+        assertTrue(outbox.pending.isEmpty())
+        assertTrue(probe.calls.isEmpty(), "the provider was queried for images this chat cannot show")
+        assertContains(result, "does not accept photos")
     }
 
     @Test
