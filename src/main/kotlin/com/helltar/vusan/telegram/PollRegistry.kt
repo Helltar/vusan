@@ -31,16 +31,16 @@ data class SentPoll(
  * Only polls put in a group are kept: the transcript this feeds does not cover private chats, and a
  * poll nobody but the sender can answer has nothing to report.
  */
-// long enough that a poll left open over a holiday still resolves its answers, short enough that the
-// table is not a permanent record of every question the bot ever asked.
-private val DEFAULT_POLL_RETENTION = 30.days
-
-class PollRegistry(private val retention: Duration = DEFAULT_POLL_RETENTION) {
+class PollRegistry(private val retention: Duration = DEFAULT_RETENTION) {
 
     private companion object {
         // telegram caps a poll option at 100 characters and a poll at 12 of them; the joined form has
         // room to spare, and an option cannot contain the newline that separates them.
         const val OPTION_SEPARATOR = "\n"
+
+        // long enough that a poll left open over a holiday still resolves its answers, short enough
+        // that the table is not a permanent record of every question the bot ever asked.
+        val DEFAULT_RETENTION = 30.days
 
         val log = KotlinLogging.logger {}
     }
