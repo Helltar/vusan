@@ -285,7 +285,7 @@ class MessageMetadataTest {
 
         assertEquals("-100", context.id)
         assertEquals("supergroup_forum", context.type)
-        assertEquals(77, context.threadId)
+        assertEquals("77", context.threadId)
         assertEquals("Crew", context.title)
         assertEquals("the rules", context.description)
         assertFalse(context.capabilities.polls)

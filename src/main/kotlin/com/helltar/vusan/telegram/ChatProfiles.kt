@@ -3,6 +3,8 @@ package com.helltar.vusan.telegram
 import com.helltar.vusan.common.rethrowIfCancellation
 import com.helltar.vusan.request.ChatCapabilities
 import com.helltar.vusan.request.ChatProfile
+import com.helltar.vusan.request.ChatProfileLookup
+import com.helltar.vusan.request.ChatRef
 import io.github.oshai.kotlinlogging.KotlinLogging
 import java.time.Instant
 import java.util.concurrent.ConcurrentHashMap
@@ -35,7 +37,9 @@ class ChatProfiles(
     private val client: TelegramClient,
     private val botId: Long,
     private val ttl: Duration = DEFAULT_TTL
-) {
+) : ChatProfileLookup {
+
+    override suspend fun of(chat: ChatRef): ChatProfile = of(chat.telegramChatId)
 
     private companion object {
         val DEFAULT_TTL = 10.minutes

@@ -21,6 +21,10 @@ internal val ChatRef.telegramChatId: Long
 internal val UserRef.telegramUserId: Long
     get() = numericId("user")
 
+/** A forum topic id, which the Bot API takes as an `Int` while the shared model keeps it opaque. */
+internal fun telegramThreadId(threadId: String?): Int? =
+    threadId?.let { requireNotNull(it.toIntOrNull()) { "Telegram topic id is not numeric: [$it]" } }
+
 private fun ChatRef.numericId(label: String): Long = numeric(platform, id, label)
 
 private fun UserRef.numericId(label: String): Long = numeric(platform, id, label)

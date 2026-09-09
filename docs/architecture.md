@@ -66,8 +66,12 @@ Telegram ──► telegram/ ──► agent/ ──► tools/ ──► externa
   (`runCommand` or `writeWorkspaceFile`, which copies it into a unique `inbox/` path) can lazily download). Its `kind`
   (`IMAGE`/`VIDEO`/`OTHER`) decides which of those tools accepts it; a video also carries its duration and a loader for
   Telegram's own thumbnail.
+- **`delivery/`** — the shared output address and port: a `Destination` (chat, optional thread, optional reply
+  anchor), the `Attribution` line naming who a scheduled answer belongs to, and `OutputDelivery`, which an adapter
+  implements so nothing outside one needs a messenger client to deliver a turn.
 - **`tasks/`** — scheduled-task subsystem: storage, persisted pause state, recurrence math, and the background
-  `TaskScheduler`.
+  `TaskScheduler`. It knows no messenger: it delivers through `OutputDelivery` and reads chat facts through
+  `ChatProfileLookup`.
 - **`budget/`** — the daily token ceiling and how the day is shared out. `TokenBudget` counts the day's spend, both in
   total and per person, and answers why someone cannot spend right now (`TokenBudgetStop`); `BudgetedPromptExecutor` is
   the `PromptExecutor` wrapper that does the counting, so one place covers every LLM call the bot makes; `BudgetOwner`
@@ -261,7 +265,10 @@ A normal user message travels:
     - **Unreachable chats** — a chat that refuses the bot rather than the payload (kicked, left, blocked, deleted, write
       rights taken away — `TelegramErrors.isChatUnreachable`) is answered differently from every other rejection: no
       fallback can help, so the send cascade stops instead of buying one more rejection per degradation step, the rest
-      of the queued outputs are abandoned, and `sendScheduled` reports it so `TaskScheduler` can park the chat's tasks.
+      of the queued outputs are abandoned, and the delivery port answers `DeliveryOutcome.Unreachable` so
+      `TaskScheduler` can park the chat's tasks. That outcome type deliberately has no `Partial`: an item refused for
+      its own content is retried through the fallback chain and can still land in another shape, so no adapter can
+      honestly report one, and a caller branching on it would be branching on a lie.
       A refusal of one output kind ("not enough rights to send photos", or `VOICE_MESSAGES_FORBIDDEN` from a recipient
       who takes voice and video messages only from contacts) is deliberately *not* this, and keeps its normal fallback —
       which is why `isForbidden` matches only a leading `Forbidden:` and not the word wherever it appears.
@@ -291,8 +298,10 @@ A normal user message travels:
 ## Background and side flows
 
 - **Task scheduler** — `TaskScheduler.launchIn` polls the task store every 30 seconds. Due tasks run through
-  `AgentRunner.handleScheduled` (waits for the user lock instead of bailing) and are delivered with
-  `TelegramDelivery.sendScheduled`. A task runs with no incoming message behind it, so its `<message_context>` is
+  `AgentRunner.handleScheduled` (waits for the user lock instead of bailing) and are delivered through the
+  `delivery/OutputDelivery` port, which is what keeps `tasks/` free of any messenger: it addresses a `Destination`
+  (chat, optional thread, optional anchor), names the `UserRef` a DM-routed item belongs to, and answers a
+  `DeliveryOutcome`. Chat facts come the same way, through `request/ChatProfileLookup`. A task runs with no incoming message behind it, so its `<message_context>` is
   rebuilt from what the task stored — the chat, and who set it up — instead of the live chat flavor, title, and
   description a normal turn carries. Tasks overdue beyond `TASK_MAX_LATENESS_MINUTES` (e.g. after downtime) get a
   "missed" notice and are advanced/disabled rather than fired. A failed run (`AgentResult.failed`, or a thrown error)
@@ -302,7 +311,7 @@ A normal user message travels:
   advanced/disabled afterwards, so a persistent error cannot re-fire it on every poll tick. A chat the bot cannot write
   to at all is the exception to that advance: rather than rescheduling one task, `TasksRepository.pauseAllInChat` pauses
   every task in that chat at once, because otherwise each of them would run a full agent turn on every fire and only
-  discover at delivery that nothing can arrive. It is reached from either end — `TelegramDelivery` reporting the fire
+  discover at delivery that nothing can arrive. It is reached from either end — the delivery port reporting the fire
   (or even the missed/failed notice) as undeliverable, and `parkTasksOnLostAccess` acting on the `my_chat_member` update
   the moment the bot is removed or silenced. Paused rather than disabled, so the tasks stay listed in `/tasks` and their
   owners can resume them if the bot gets back in. Paused tasks remain stored and count toward the per-user task limit,

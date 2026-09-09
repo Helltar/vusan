@@ -15,7 +15,7 @@ data class ChatContext(
     /** The adapter's name for this flavor of chat, e.g. `supergroup_forum`. */
     val type: String = if (isPrivate) "private" else "group",
     /** The sub-conversation this turn belongs to, where the platform has them; `null` is the chat itself. */
-    val threadId: Int? = null,
+    val threadId: String? = null,
     val title: String? = null,
     val username: String? = null,
     val description: String? = null,

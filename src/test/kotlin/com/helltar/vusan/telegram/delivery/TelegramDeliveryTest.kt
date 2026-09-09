@@ -9,6 +9,11 @@ import com.helltar.vusan.outbox.BotOutput
 import java.io.Serializable
 import java.lang.reflect.Proxy
 import java.util.concurrent.CompletableFuture
+import com.helltar.vusan.delivery.Attribution
+import com.helltar.vusan.delivery.Destination
+import com.helltar.vusan.delivery.TurnDelivery
+import com.helltar.vusan.request.testChat
+import com.helltar.vusan.request.testUser
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFalse
@@ -88,30 +93,34 @@ class TelegramDeliveryTest {
     fun `a scheduled send into a chat the bot was removed from reports the chat as gone`() = runBlocking {
         val client = RejectingClient("Forbidden: bot was kicked from the supergroup chat")
 
-        val unreachable =
-            TelegramDelivery(client.proxy).sendScheduled(
-                result = AgentResult(outputs = emptyList(), comment = "The weekly summary is ready."),
-                target = ChatTarget(-1L),
-                userId = 2L,
-                messages = Messages.of(Language.ENGLISH)
+        val outcome =
+            TelegramDelivery(client.proxy).deliver(
+                TurnDelivery(
+                    result = AgentResult(outputs = emptyList(), comment = "The weekly summary is ready."),
+                    destination = Destination(testChat(-1)),
+                    recipient = testUser(2),
+                    language = Language.ENGLISH
+                )
             )
 
-        assertTrue(unreachable, "a kicked bot must not keep firing tasks into that chat")
+        assertTrue(outcome.isUnreachable, "a kicked bot must not keep firing tasks into that chat")
     }
 
     @Test
     fun `a send rejected for its own content leaves the chat usable`() = runBlocking {
         val client = RejectingClient("Bad Request: message is too long")
 
-        val unreachable =
-            TelegramDelivery(client.proxy).sendScheduled(
-                result = AgentResult(outputs = emptyList(), comment = "The weekly summary is ready."),
-                target = ChatTarget(-1L),
-                userId = 2L,
-                messages = Messages.of(Language.ENGLISH)
+        val outcome =
+            TelegramDelivery(client.proxy).deliver(
+                TurnDelivery(
+                    result = AgentResult(outputs = emptyList(), comment = "The weekly summary is ready."),
+                    destination = Destination(testChat(-1)),
+                    recipient = testUser(2),
+                    language = Language.ENGLISH
+                )
             )
 
-        assertFalse(unreachable, "one rejected message must not park the chat's tasks")
+        assertFalse(outcome.isUnreachable, "one rejected message must not park the chat's tasks")
     }
 
     @Test
@@ -124,15 +133,17 @@ class TelegramDeliveryTest {
                 enqueue(BotOutput.Photo(oneByte, "third.png"))
             }
 
-        val unreachable =
-            TelegramDelivery(client.proxy).sendScheduled(
-                result = AgentResult(outputs = outbox.pending, comment = null),
-                target = ChatTarget(-1L),
-                userId = 2L,
-                messages = Messages.of(Language.ENGLISH)
+        val outcome =
+            TelegramDelivery(client.proxy).deliver(
+                TurnDelivery(
+                    result = AgentResult(outputs = outbox.pending, comment = null),
+                    destination = Destination(testChat(-1)),
+                    recipient = testUser(2),
+                    language = Language.ENGLISH
+                )
             )
 
-        assertTrue(unreachable)
+        assertTrue(outcome.isUnreachable)
         // the chat action of the first item, then its send. the two remaining photos are never tried.
         assertEquals(2, client.calls)
     }
@@ -194,11 +205,13 @@ class TelegramDeliveryTest {
     fun `a scheduled fire names the topic it was set up in`() = runBlocking {
         val client = RecordingClient()
 
-        TelegramDelivery(client.proxy).sendScheduled(
-            result = AgentResult(outputs = emptyList(), comment = "The weekly summary is ready."),
-            target = ChatTarget(-7L, messageThreadId = 42),
-            userId = 2L,
-            messages = Messages.of(Language.ENGLISH)
+        TelegramDelivery(client.proxy).deliver(
+            TurnDelivery(
+                result = AgentResult(outputs = emptyList(), comment = "The weekly summary is ready."),
+                destination = Destination(testChat(-7), threadId = "42"),
+                recipient = testUser(2),
+                language = Language.ENGLISH
+            )
         )
 
         assertEquals(listOf<Int?>(42), client.threadIds)
@@ -208,12 +221,14 @@ class TelegramDeliveryTest {
     fun `a fire in a chat without topics names none`() = runBlocking {
         val client = RecordingClient()
 
-        TelegramDelivery(client.proxy).sendScheduled(
-            result = AgentResult(outputs = emptyList(), comment = "The weekly summary is ready."),
-            target = ChatTarget(-7L),
-            userId = 2L,
-            messages = Messages.of(Language.ENGLISH)
-        )
+        TelegramDelivery(client.proxy).deliver(
+            TurnDelivery(
+                result = AgentResult(outputs = emptyList(), comment = "The weekly summary is ready."),
+                destination = Destination(testChat(-7)),
+                recipient = testUser(2),
+                language = Language.ENGLISH
+            )
+            )
 
         assertEquals(listOf<Int?>(null), client.threadIds)
     }
@@ -293,12 +308,14 @@ class TelegramDeliveryTest {
     private suspend fun deliverSticker(delivery: TelegramDelivery) {
         val outbox = BotOutbox().apply { enqueue(BotOutput.Sticker("dead-file-id", catalogId = 42L)) }
 
-        delivery.sendScheduled(
+        delivery.deliver(
+                TurnDelivery(
             result = AgentResult(outputs = outbox.pending, comment = null),
-            target = ChatTarget(1L),
-            userId = 2L,
-            messages = Messages.of(Language.ENGLISH)
-        )
+            destination = Destination(testChat(1)),
+            recipient = testUser(2),
+            language = Language.ENGLISH
+                )
+            )
     }
 
     private class RejectingClient(private val description: String) {

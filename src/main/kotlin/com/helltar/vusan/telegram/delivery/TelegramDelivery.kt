@@ -6,11 +6,18 @@ import com.helltar.vusan.agent.grouplog.GroupLogEntry
 import com.helltar.vusan.agent.grouplog.GroupLogRepository
 import com.helltar.vusan.common.collapseWhitespaceAndCap
 import com.helltar.vusan.common.rethrowIfCancellation
+import com.helltar.vusan.delivery.Destination
+import com.helltar.vusan.delivery.DeliveryOutcome
+import com.helltar.vusan.delivery.OutputDelivery
+import com.helltar.vusan.delivery.TurnDelivery
 import com.helltar.vusan.i18n.Messages
 import com.helltar.vusan.outbox.BotOutput
 import com.helltar.vusan.outbox.OutboxItem
 import com.helltar.vusan.telegram.PollRegistry
 import com.helltar.vusan.telegram.api
+import com.helltar.vusan.telegram.telegramChatId
+import com.helltar.vusan.telegram.telegramThreadId
+import com.helltar.vusan.telegram.telegramUserId
 import com.helltar.vusan.telegram.telegramChat
 import com.helltar.vusan.telegram.inbound.chatIdLong
 import com.helltar.vusan.telegram.inbound.forumTopicIdOrNull
@@ -93,10 +100,9 @@ internal fun chatActionFor(activity: ToolActivity?): ActionType = when (activity
     else -> ActionType.TYPING
 }
 
-data class ScheduledAttribution(
-    val creatorMessageId: Long?,
-    val headerText: String
-)
+// a destination the shared model addressed, in the terms the Bot API takes.
+private val Destination.chatTarget: ChatTarget
+    get() = ChatTarget(chat.telegramChatId, telegramThreadId(threadId))
 
 /**
  * [onStickerRejected] is told the catalog id of a sticker Telegram would not accept. It is a hint, not
@@ -108,7 +114,7 @@ class TelegramDelivery(
     private val onStickerRejected: (suspend (Long) -> Unit)? = null,
     private val groupLog: GroupLogRepository? = null,
     private val polls: PollRegistry? = null
-) {
+) : OutputDelivery {
 
     private companion object {
         const val MAX_CAPTION_CHARS = 1000
@@ -140,7 +146,14 @@ class TelegramDelivery(
 
     private enum class ItemDeliveryOutcome { Ok, ReplyMissing, PrivateBlocked, ChatUnreachable }
 
-    private data class DispatchOutcome(val replyUnavailable: Boolean, val chatUnreachable: Boolean)
+    private data class DispatchOutcome(val replyUnavailable: Boolean, val chatUnreachable: Boolean) {
+
+        // `replyUnavailable` is about one anchor, not about the chat, so only the second half reaches
+        // the caller: everything else is a send this chat happened to refuse, which says nothing about
+        // whether the next one would arrive.
+        fun asOutcome(): DeliveryOutcome =
+            if (chatUnreachable) DeliveryOutcome.Unreachable else DeliveryOutcome.Handled
+    }
 
     suspend fun send(message: Message, result: AgentResult) {
         dispatch(
@@ -152,33 +165,29 @@ class TelegramDelivery(
         )
     }
 
-    /** Returns `true` when the chat turned out to be unreachable, so the caller can stop firing into it. */
-    suspend fun sendScheduled(
-        result: AgentResult,
-        target: ChatTarget,
-        userId: Long,
-        messages: Messages,
-        attribution: ScheduledAttribution? = null
-    ): Boolean {
+    override suspend fun deliver(delivery: TurnDelivery): DeliveryOutcome {
+        val target = delivery.destination.chatTarget
+        val messages = Messages.of(delivery.language)
+        val recipient = delivery.recipient.telegramUserId
         val plainTarget = DeliveryTarget(target)
+        val attribution = delivery.attribution
 
-        if (attribution?.creatorMessageId == null) {
-            attribution?.let { sendNotice(target, it.headerText) }
+        if (attribution?.anchorMessageId == null) {
+            attribution?.let { notify(delivery.destination, it.headerText) }
 
-            return dispatch(result, plainTarget, plainTarget, senderPrivateChatId = userId, messages = messages)
-                .chatUnreachable
+            return dispatch(delivery.result, plainTarget, plainTarget, recipient, messages).asOutcome()
         }
 
-        val anchorTarget = DeliveryTarget(target, replyToMessageId = attribution.creatorMessageId)
+        val anchorTarget = DeliveryTarget(target, replyToMessageId = attribution.anchorMessageId)
+        val outcome = dispatch(delivery.result, anchorTarget, plainTarget, recipient, messages)
 
-        val outcome =
-            dispatch(result, anchorTarget, plainTarget, senderPrivateChatId = userId, messages = messages)
-
+        // the message the task was set up from is gone, so the answer arrived unanchored and the line
+        // saying whose it is has to be sent on its own.
         if (outcome.replyUnavailable && !outcome.chatUnreachable) {
-            sendNotice(target, attribution.headerText)
+            notify(delivery.destination, attribution.headerText)
         }
 
-        return outcome.chatUnreachable
+        return outcome.asOutcome()
     }
 
     /**
@@ -225,20 +234,25 @@ class TelegramDelivery(
 
     /**
      * Send a plain-text notice from the bot itself (no reply anchor, no formatting fallback retry chain).
-     * Returns `false` only when the chat itself is unreachable; any other failure is logged and reported
-     * as sent, since it says nothing about whether the next message would arrive.
+     * Only an unreachable chat is reported as such; any other failure is logged and reported as handled,
+     * since it says nothing about whether the next message would arrive.
      */
-    suspend fun sendNotice(target: ChatTarget, text: String): Boolean =
-        runCatching {
+    override suspend fun notify(destination: Destination, text: String): DeliveryOutcome {
+        val target = destination.chatTarget
+
+        return runCatching {
             withFloodWaitRetry(target.chatId) {
                 TelegramOutputSender.sendText(client, target, text, replyParameters = null)
             }
-            true
+
+            DeliveryOutcome.Handled
         }.getOrElse { error ->
             error.rethrowIfCancellation()
             log.warn(error) { "failed to send notice to chat=${target.chatId}" }
-            !error.isChatUnreachable()
+
+            if (error.isChatUnreachable()) DeliveryOutcome.Unreachable else DeliveryOutcome.Handled
         }
+    }
 
     private suspend fun dispatch(
         result: AgentResult,

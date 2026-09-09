@@ -33,10 +33,6 @@ class PlatformBoundaryTest {
          * the point; adding one means the boundary moved the wrong way and needs a deliberate decision.
          */
         val ALLOWED = mapOf(
-            "src/main/kotlin/com/helltar/vusan/tasks/ScheduledTask.kt" to
-                    "a task's destination is a Telegram ChatTarget and its prompt block a Telegram ChatProfile",
-            "src/main/kotlin/com/helltar/vusan/tasks/TaskScheduler.kt" to
-                    "fires through a concrete TelegramDelivery and reads chat facts from ChatProfiles",
             "src/main/kotlin/com/helltar/vusan/tools/ToolRegistryFactory.kt" to
                     "holds the bot's TelegramClient so file-id tools can be built",
             "src/main/kotlin/com/helltar/vusan/tools/files/FileTools.kt" to

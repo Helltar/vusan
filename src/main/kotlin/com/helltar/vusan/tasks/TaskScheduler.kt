@@ -5,14 +5,13 @@ import com.helltar.vusan.agent.AgentRunner
 import com.helltar.vusan.budget.TokenBudget
 import com.helltar.vusan.common.rethrowIfCancellation
 import com.helltar.vusan.i18n.Messages
+import com.helltar.vusan.delivery.Attribution
+import com.helltar.vusan.delivery.OutputDelivery
+import com.helltar.vusan.delivery.TurnDelivery
 import com.helltar.vusan.request.AccessPolicy
 import com.helltar.vusan.request.ChatProfile
+import com.helltar.vusan.request.ChatProfileLookup
 import com.helltar.vusan.request.ChatRef
-import com.helltar.vusan.telegram.ChatProfiles
-import com.helltar.vusan.telegram.telegramChatId
-import com.helltar.vusan.telegram.telegramUserId
-import com.helltar.vusan.telegram.delivery.ScheduledAttribution
-import com.helltar.vusan.telegram.delivery.TelegramDelivery
 import io.github.oshai.kotlinlogging.KotlinLogging
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Job
@@ -25,9 +24,9 @@ import kotlin.time.Duration.Companion.seconds
 class TaskScheduler(
     private val repo: TasksRepository,
     private val agentRunner: AgentRunner,
-    private val delivery: TelegramDelivery,
+    private val delivery: OutputDelivery,
     private val maxLateness: Duration,
-    private val chatProfiles: ChatProfiles,
+    private val chatProfiles: ChatProfileLookup,
     private val tokenBudget: TokenBudget = TokenBudget(),
     private val accessPolicy: AccessPolicy = AccessPolicy()
 ) {
@@ -134,16 +133,15 @@ class TaskScheduler(
                     "late by ${(now.toEpochMilli() - task.nextFireAt.toEpochMilli()) / 1000}s); user offline window"
         }
 
-        val delivered =
-            delivery
-                .sendNotice(
-                    task.chatTarget,
-                    Messages.of(task.language).taskMissedNotice(task.id, task.title, scheduledLabel)
-                )
+        val outcome =
+            delivery.notify(
+                task.destination,
+                Messages.of(task.language).taskMissedNotice(task.id, task.title, scheduledLabel)
+            )
 
         // the notice costs one API call and the run costs a whole agent turn, so a chat that refuses
         // even the notice is caught here rather than on the next on-time fire.
-        if (!delivered) {
+        if (outcome.isUnreachable) {
             parkTasksOfUnreachableChat(task.scope.chat)
             return
         }
@@ -174,7 +172,9 @@ class TaskScheduler(
 
         log.error { "task id=${task.id} failed on all $MAX_ATTEMPTS attempts; nothing was delivered" }
 
-        return !delivery.sendNotice(task.chatTarget, Messages.of(task.language).taskFailedNotice(task.id, task.title))
+        return delivery
+            .notify(task.destination, Messages.of(task.language).taskFailedNotice(task.id, task.title))
+            .isUnreachable
     }
 
     // the bot cannot post into this chat any more: it was removed from the group, the user blocked it,
@@ -210,13 +210,15 @@ class TaskScheduler(
 
         val chatUnreachable =
             runCatching {
-                delivery.sendScheduled(
-                    result = result,
-                    target = task.chatTarget,
-                    userId = task.scope.user.telegramUserId,
-                    messages = Messages.of(task.language),
-                    attribution = attributionFor(task)
-                )
+                delivery.deliver(
+                    TurnDelivery(
+                        result = result,
+                        destination = task.destination,
+                        recipient = task.scope.user,
+                        language = task.language,
+                        attribution = attributionFor(task)
+                    )
+                ).isUnreachable
             }.getOrElse {
                 it.rethrowIfCancellation()
 
@@ -231,7 +233,7 @@ class TaskScheduler(
     // a task is the case this matters most for: nobody is waiting to be told the chat refused the
     // answer, and the whole agent run is spent before the first send would say so.
     private suspend fun chatProfileFor(task: ScheduledTask): ChatProfile =
-        if (task.chatIsPrivate) ChatProfile.NONE else chatProfiles.of(task.scope.chat.telegramChatId)
+        if (task.chatIsPrivate) ChatProfile.NONE else chatProfiles.of(task.scope.chat)
 
     private suspend fun rescheduleAfterFire(task: ScheduledTask, now: Instant) {
         val nextFire = task.recurrence.catchUpAfter(task.nextFireAt, task.timezone, now)
@@ -242,7 +244,7 @@ class TaskScheduler(
             repo.reschedule(task.id, nextFire)
     }
 
-    private fun attributionFor(task: ScheduledTask): ScheduledAttribution? {
+    private fun attributionFor(task: ScheduledTask): Attribution? {
         if (task.chatIsPrivate) return null
 
         val mention =
@@ -256,8 +258,8 @@ class TaskScheduler(
 
         val messages = Messages.of(task.language)
 
-        return ScheduledAttribution(
-            creatorMessageId = task.creatorMessageId,
+        return Attribution(
+            anchorMessageId = task.creatorMessageId,
             headerText =
                 if (task.selfInitiated)
                     messages.taskFollowUpNotice(mention)

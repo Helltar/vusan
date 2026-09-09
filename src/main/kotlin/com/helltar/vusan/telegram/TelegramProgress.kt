@@ -4,6 +4,7 @@ import com.helltar.vusan.agent.AgentRequest
 import com.helltar.vusan.agent.ToolActivity
 import com.helltar.vusan.common.rethrowIfCancellation
 import com.helltar.vusan.i18n.Messages
+import com.helltar.vusan.request.RequestContext
 import com.helltar.vusan.telegram.delivery.ChatTarget
 import com.helltar.vusan.telegram.delivery.chatActionFor
 import kotlin.time.Duration
@@ -91,7 +92,7 @@ internal suspend fun <T> TelegramClient.withLiveProgress(
                     while (currentCoroutineContext().isActive) {
                         runCatching {
                             indicateChatAction(
-                                ChatTarget(request.context.chatRef.telegramChatId, request.context.chat.threadId),
+                                request.context.chatTarget,
                                 chatActionFor(current)
                             )
                         }
@@ -133,10 +134,14 @@ internal suspend fun <T> TelegramClient.withLiveProgress(
         }
     }
 
+// where the live status bubble and the typing indicator go: the turn's own chat and topic.
+private val RequestContext.chatTarget: ChatTarget
+    get() = ChatTarget(chatRef.telegramChatId, telegramThreadId(chat.threadId))
+
 private fun TelegramClient.statusFor(request: AgentRequest): TurnStatus =
     TurnStatus(
         client = this,
-        target = ChatTarget(request.context.chatRef.telegramChatId, request.context.chat.threadId),
+        target = request.context.chatTarget,
         ownerId = request.context.user.telegramUserId,
         replyToMessageId = request.context.messageId,
         messages = Messages.of(request.context.language),

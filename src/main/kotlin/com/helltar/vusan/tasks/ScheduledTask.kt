@@ -1,13 +1,12 @@
 package com.helltar.vusan.tasks
 
+import com.helltar.vusan.delivery.Destination
 import com.helltar.vusan.i18n.Language
 import com.helltar.vusan.request.ChatContext
 import com.helltar.vusan.request.ChatProfile
 import com.helltar.vusan.request.ConversationScope
 import com.helltar.vusan.request.RequestContext
 import com.helltar.vusan.request.SenderContext
-import com.helltar.vusan.telegram.delivery.ChatTarget
-import com.helltar.vusan.telegram.telegramChatId
 import java.time.Instant
 import java.time.ZoneId
 import java.time.ZonedDateTime
@@ -29,7 +28,7 @@ data class ScheduledTask(
     val creatorMessageId: Long?,
     // the forum topic the task was set up in. the creator message anchors a fire into the right topic
     // on its own, but the notices around it, and every fire after that message is gone, need this.
-    val creatorThreadId: Int?,
+    val creatorThreadId: String?,
     val creatorUsername: String?,
     val creatorDisplayName: String?,
     val chatIsPrivate: Boolean,
@@ -46,7 +45,7 @@ data class NewScheduledTask(
     val timezone: ZoneId,
     val nextFireAt: Instant,
     val creatorMessageId: Long?,
-    val creatorThreadId: Int?,
+    val creatorThreadId: String?,
     val creatorUsername: String?,
     val creatorDisplayName: String?,
     val chatIsPrivate: Boolean,
@@ -92,8 +91,8 @@ internal fun ScheduledTask.toRequestContext(profile: ChatProfile = ChatProfile.N
     )
 
 /** Where this task's fire, and every notice about it, belongs. */
-internal val ScheduledTask.chatTarget: ChatTarget
-    get() = ChatTarget(scope.chat.telegramChatId, creatorThreadId)
+internal val ScheduledTask.destination: Destination
+    get() = Destination(scope.chat, threadId = creatorThreadId)
 
 /** Keeps a future slot, or advances a recurring task past every elapsed slot. */
 internal fun ScheduledTask.nextFireAfterResume(now: Instant): Instant? =

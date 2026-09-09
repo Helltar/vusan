@@ -51,10 +51,10 @@ class TaskSchedulerTest {
 
     @Test
     fun `a fired task runs in the topic it was created in`() {
-        val request = scheduledAgentRequest(task.copy(creatorThreadId = 42), attempt = 1, ChatProfile.NONE)
+        val request = scheduledAgentRequest(task.copy(creatorThreadId = "42"), attempt = 1, ChatProfile.NONE)
 
         // a follow-up the turn schedules is anchored from here, so losing the topic sends it to General.
-        assertEquals(42, request.context.chat.threadId)
+        assertEquals("42", request.context.chat.threadId)
         assertEquals("-200", request.context.chat.id)
         // nothing sent the turn, so there is no message to answer and none is invented.
         assertNull(request.context.messageId)
