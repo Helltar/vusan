@@ -190,18 +190,7 @@ class TaskScheduler(
                     "recurrence=[${task.recurrence.display}] attempt=$attempt/$MAX_ATTEMPTS"
         }
 
-        val request =
-            AgentRequest(
-                chatId = task.chatId,
-                userId = task.userId,
-                messageId = 0L,
-                replyToMessageId = null,
-                prompt = scheduledTaskPrompt(task, attempt),
-                conversationEntry = conversationEntry(task),
-                messageContext = task.toMessageContext(chatProfileFor(task)),
-                chatIsPrivate = task.chatIsPrivate,
-                language = task.language
-            )
+        val request = scheduledAgentRequest(task, attempt, chatProfileFor(task))
 
         // the agent answers its own failures with a canned reply instead of throwing, so the flag is the
         // only thing separating "the task did not run" from a real answer.
@@ -249,10 +238,6 @@ class TaskScheduler(
             repo.reschedule(task.id, nextFire)
     }
 
-    // the retry is not stored: history keeps the task as the user wrote it, without the retry hint.
-    private fun conversationEntry(task: ScheduledTask): String =
-        scheduledTaskOpenTag(task) + task.prompt + "</scheduled_task>"
-
     private fun attributionFor(task: ScheduledTask): ScheduledAttribution? {
         if (task.chatIsPrivate) return null
 
@@ -281,6 +266,27 @@ class TaskScheduler(
 private const val RETRY_HINT =
     "An earlier attempt at this task ended without delivering anything. " +
             "Get to the result faster this time: gather only what the task needs, then send it."
+
+/** The turn a due task runs, with no incoming message behind it. */
+internal fun scheduledAgentRequest(task: ScheduledTask, attempt: Int, chatProfile: ChatProfile): AgentRequest =
+    AgentRequest(
+        chatId = task.chatId,
+        userId = task.userId,
+        messageId = 0L,
+        replyToMessageId = null,
+        // the turn runs in the topic the task was created in, so a follow-up it schedules is anchored
+        // there too rather than in the forum's General.
+        messageThreadId = task.creatorThreadId,
+        prompt = scheduledTaskPrompt(task, attempt),
+        conversationEntry = conversationEntry(task),
+        messageContext = task.toMessageContext(chatProfile),
+        chatIsPrivate = task.chatIsPrivate,
+        language = task.language
+    )
+
+// the retry is not stored: history keeps the task as the user wrote it, without the retry hint.
+private fun conversationEntry(task: ScheduledTask): String =
+    scheduledTaskOpenTag(task) + task.prompt + "</scheduled_task>"
 
 internal fun scheduledTaskPrompt(task: ScheduledTask, attempt: Int): String =
     buildString {

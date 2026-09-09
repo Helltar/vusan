@@ -263,7 +263,8 @@ A normal user message travels:
       address the chat directly. The id comes from `Message.forumTopicIdOrNull`, which is `message_thread_id` *only*
       when `is_topic_message` is set — outside a forum the same field identifies a reply chain, and sending with one of
       those is rejected. `ScheduledTasksTable.creatorThreadId` is what lets a task keep firing into its topic after the
-      message that created it is gone.
+      message that created it is gone, and it also rides into the turn on the `AgentRequest`, so a
+      follow-up that fire schedules inherits the topic instead of being anchored to General.
     - **Rate limits** — consecutive sends are paced (`INTER_MESSAGE_DELAY`) to stay under Telegram's per-chat limit, and
       a send that trips the limit anyway waits the number of seconds Telegram names in `parameters.retry_after` and goes
       again, once (`withFloodWaitRetry`, capped at `MAX_FLOOD_WAIT`). The fallbacks rethrow a 429 rather than degrading
