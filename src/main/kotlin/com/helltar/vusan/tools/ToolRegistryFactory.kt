@@ -21,6 +21,7 @@ import com.helltar.vusan.tools.choice.InlineChoiceTools
 import com.helltar.vusan.tools.currency.CurrencyTools
 import com.helltar.vusan.tools.currency.ExchangeRateClient
 import com.helltar.vusan.tools.files.FileDownloadClient
+import com.helltar.vusan.tools.files.ChatFileTools
 import com.helltar.vusan.tools.files.FileTools
 import com.helltar.vusan.tools.giphy.GiphyClient
 import com.helltar.vusan.tools.giphy.GiphyTools
@@ -216,7 +217,10 @@ class ToolRegistryFactory(
             if (chat.reactions) tools(ReactionTools(context, outbox))
             if (chat.audios) tools(YouTubeMusicTools(ytDlpClient, outbox))
             if (chat.videos) tools(YouTubeVideoTools(ytDlpClient, outbox))
-            if (chat.documents) tools(FileTools(fileDownloadClient, telegramClient, outbox))
+            if (chat.documents) {
+                tools(FileTools(fileDownloadClient, outbox))
+                tools(ChatFileTools(telegramClient, outbox))
+            }
 
             if (chat.polls) {
                 tools(QuizTools(outbox))

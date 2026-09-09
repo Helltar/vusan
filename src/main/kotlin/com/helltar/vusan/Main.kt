@@ -21,6 +21,7 @@ import com.helltar.vusan.telegram.ChatProfiles
 import com.helltar.vusan.telegram.PollRegistry
 import com.helltar.vusan.telegram.TelegramBotRunner
 import com.helltar.vusan.telegram.botProfile
+import com.helltar.vusan.telegram.profilePhotoReference
 import com.helltar.vusan.telegram.callback.InlineChoiceHandler
 import com.helltar.vusan.telegram.callback.TaskMenuHandler
 import com.helltar.vusan.telegram.delivery.TelegramDelivery
@@ -90,7 +91,9 @@ suspend fun main() = coroutineScope {
         // the self-portrait it edits, and the round video message it puts in the circle.
         val selfImage =
             if (config.openAiImage != null || config.elevenLabsApiKey != null)
-                resolveSelfImage(config.selfImageFile, config.appearance, telegramClient, botProfile.userId)
+                resolveSelfImage(config.selfImageFile, config.appearance) {
+                    telegramClient.profilePhotoReference(botProfile.userId)
+                }
             else null
 
         // the catalog only ever holds stickers vision has looked at, so without vision there is nothing
@@ -120,7 +123,8 @@ suspend fun main() = coroutineScope {
         val agentRunner =
             AgentRunner(
                 agentFactory, conversation, memory, conversationCompactor,
-                config.chatHistory, stickerCatalog, groupLog, config.groupLog, tokenBudget
+                config.chatHistory, stickerCatalog?.let { catalog -> catalog::indexBlockFor },
+                groupLog, config.groupLog, tokenBudget
             )
 
         // answers to a poll are read back through the group transcript, so without one there is

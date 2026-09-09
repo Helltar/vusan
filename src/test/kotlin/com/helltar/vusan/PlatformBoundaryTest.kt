@@ -35,13 +35,11 @@ class PlatformBoundaryTest {
         val ALLOWED = mapOf(
             "src/main/kotlin/com/helltar/vusan/tools/ToolRegistryFactory.kt" to
                     "holds the bot's TelegramClient so file-id tools can be built",
-            "src/main/kotlin/com/helltar/vusan/tools/files/FileTools.kt" to
-                    "sendChatFile resends by file_id; the public downloader beside it is already neutral",
-            "src/main/kotlin/com/helltar/vusan/tools/imagegen/SelfImage.kt" to
-                    "loads the bot's avatar through the Bot API instead of taking bytes from startup",
+            "src/main/kotlin/com/helltar/vusan/tools/files/ChatFileTools.kt" to
+                    "resends a file by Telegram's own file_id, which no other messenger has",
             "src/main/kotlin/com/helltar/vusan/tools/sticker/StickerCatalog.kt" to
                     "sticker sets are learned and resent by file_id, which is Telegram's own model",
-            "src/test/kotlin/com/helltar/vusan/tools/files/FileToolsTest.kt" to
+            "src/test/kotlin/com/helltar/vusan/tools/files/ChatFileToolsTest.kt" to
                     "drives sendChatFile against a fake TelegramClient",
             "src/test/kotlin/com/helltar/vusan/tools/sticker/StickerCatalogTest.kt" to
                     "drives the catalog against a fake TelegramClient"

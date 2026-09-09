@@ -1,22 +1,13 @@
 package com.helltar.vusan.tools.imagegen
 
 import com.helltar.vusan.common.isEffectivelyBlank
-import com.helltar.vusan.common.rethrowIfCancellation
-import com.helltar.vusan.telegram.api
-import com.helltar.vusan.telegram.downloadFileBytes
 import io.github.oshai.kotlinlogging.KotlinLogging
 import kotlin.io.path.Path
 import kotlin.io.path.isReadable
 import kotlin.io.path.name
 import kotlin.io.path.readBytes
-import org.telegram.telegrambots.meta.api.methods.GetUserProfilePhotos
-import org.telegram.telegrambots.meta.generics.TelegramClient
 
 private val log = KotlinLogging.logger("SelfImage")
-
-// telegram stores a profile photo as jpeg and caps it at 640x640, which is small for a reference but
-// still fixes the face; SELF_IMAGE_FILE exists for deployments that have the original.
-private const val TELEGRAM_PHOTO_NAME = "avatar.jpg"
 
 /**
  * What a picture of the bot itself is built from.
@@ -30,17 +21,18 @@ private const val TELEGRAM_PHOTO_NAME = "avatar.jpg"
 class SelfImage(val reference: SourceImage?, val appearance: String?)
 
 /**
- * Read the character's reference photo once at startup: the operator's file when set, otherwise the
- * bot's own Telegram avatar, which needs no configuration and is already the face people see next to
- * every message it sends.
+ * Read the character's reference photo once at startup: the operator's file when set, otherwise
+ * whatever [loadAvatar] finds — the bot's own picture on the platform it runs on, which needs no
+ * configuration and is already the face people see next to every message it sends.
+ *
+ * The operator's file wins, and a deployment with neither still works on [appearance] alone.
  */
 internal suspend fun resolveSelfImage(
     file: String?,
     appearance: String?,
-    client: TelegramClient,
-    botId: Long
+    loadAvatar: suspend () -> SourceImage? = { null }
 ): SelfImage? {
-    val reference = file?.let { readReferenceFile(it) } ?: client.profilePhotoReference(botId)
+    val reference = file?.let { readReferenceFile(it) } ?: loadAvatar()
     val notes = appearance?.takeUnless { it.isEffectivelyBlank() }
 
     if (reference == null && notes == null) {
@@ -116,18 +108,3 @@ private fun readReferenceFile(path: String): SourceImage {
     return SourceImage(bytes, file.name, contentType)
 }
 
-// a bot reads its own avatar the way it reads anyone's; nothing else in the Bot API exposes it.
-private suspend fun TelegramClient.profilePhotoReference(botId: Long): SourceImage? =
-    runCatching {
-        api { executeAsync(GetUserProfilePhotos.builder().userId(botId).limit(1).build()) }
-            .photos
-            .firstOrNull()
-            ?.maxByOrNull { it.width }
-            ?.let { SourceImage(downloadFileBytes(it.fileId), TELEGRAM_PHOTO_NAME, "image/jpeg") }
-            ?.also { log.info { "Self-portrait reference: Telegram profile photo (${it.bytes.size} bytes)" } }
-    }
-        .onFailure { e ->
-            e.rethrowIfCancellation()
-            log.warn(e) { "Reading the bot's Telegram profile photo failed" }
-        }
-        .getOrNull()

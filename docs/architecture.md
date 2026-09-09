@@ -511,8 +511,9 @@ policy, conversation compactor, the Telegram client and its `BotProfile` — one
 matches mentions against it, and `AgentFactory`, which puts the handle in the system prompt → (only when image
 generation or `ELEVENLABS_API_KEY` is configured, the two things that use it) `resolveSelfImage`
 (`tools/imagegen/SelfImage.kt`), which reads the reference photo self-portraits and round video messages are drawn from:
-`SELF_IMAGE_FILE` when set, otherwise one `getUserProfilePhotos` on the bot's own id, and a failure there is a warning
-rather than a failed startup → (only with a vision runtime) the `StickerCatalog`,
+`SELF_IMAGE_FILE` when set, otherwise whatever avatar loader startup hands it — for Telegram, one
+`getUserProfilePhotos` on the bot's own id (`telegram/BotAvatar.kt`), and a failure there is a warning rather than a
+failed startup → (only with a vision runtime) the `StickerCatalog`,
 `ToolRegistryFactory`, `AgentFactory`, `AgentRunner` → create `TaskMenuHandler` and `InlineChoiceHandler`, and
 optionally enable voice transcription → start `TelegramBotRunner`, which builds its own `AgentTurns` and
 `CallbackRouter` over those, and launch `TaskScheduler` and the sticker description worker, then block on the runner job
@@ -693,7 +694,7 @@ A symptom-to-source map for finding the right file fast. Paths are under
 | Vusan floods a chat or stalls on Telegram 429 over a long multi-message reply | `outbox/BotOutbox.kt` (text and album coalescing + `MAX_TEXT_MESSAGES` cap) + `telegram/delivery/TelegramDelivery.kt` (`INTER_MESSAGE_DELAY` pacing) + `telegram/delivery/TelegramSendFallbacks.kt` (`withFloodWaitRetry`, and the `MAX_FLOOD_WAIT` ceiling on what a turn will sit through) |
 | A reply, a notice or a scheduled fire lands in a forum's General instead of the topic it belongs to | `telegram/delivery/TelegramRequests.kt` (`ChatTarget`, and which builders name the topic) + `telegram/inbound/MessageMetadata.kt` (`forumTopicIdOrNull`, and why `is_topic_message` decides) + `tasks/ScheduledTask.kt` (`creatorThreadId`) |
 | A specific tool misbehaves | `tools/<feature>/<Feature>Tools.kt` for the tool surface, plus its `<Feature>Client.kt` for the external call |
-| Vusan will not hand a file from the chat back, or sends it under the wrong name | `tools/files/FileTools.sendChatFile` (the `file_id` path and `chatFilename`) + `telegram/TelegramApi.downloadFileById` (`getFile`, and the 20 MB limit on what Telegram serves a bot) |
+| Vusan will not hand a file from the chat back, or sends it under the wrong name | `tools/files/ChatFileTools.sendChatFile` (the `file_id` path and `chatFilename`) + `telegram/TelegramApi.downloadFileById` (`getFile`, and the 20 MB limit on what Telegram serves a bot) |
 | A command times out, says the workspace is busy, or its output is cut short | `tools/workspace/WorkspaceClient.kt` (HTTP errors and job polling), then `workspace/jobs.ts` (admission, timeouts, retention), `container.ts` (whole-container cleanup) and `output.ts` (bounded logs and control-code cleanup) |
 | A workspace cannot reach the internet, or reaches something it should not | `workspace/netpolicy.sh` (the rules, installed on the host from a helper), then `workspace/container.ts` (the pool's own network and the startup probe) and `workspace/policy.ts` (the guard that re-reads and repairs them) |
 | A workspace loses files, or someone sees another person's | `request/RequestContext.personKeyOrNull` (the sender key both services use) and `telegram/inbound/MessageMetadata.toSenderContext` (the shared accounts that get nothing of their own), then `workspace/container.ts` and `workspace/homes.ts` (one bounded home disk per person) and `workspace/files.ts` (unprivileged, scoped transfers) |

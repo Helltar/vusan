@@ -32,7 +32,6 @@ import com.helltar.vusan.request.RequestContext
 import com.helltar.vusan.request.UserRef
 import com.helltar.vusan.tools.choice.InlineChoiceTools
 import com.helltar.vusan.tools.message.MessageTools
-import com.helltar.vusan.tools.sticker.StickerCatalog
 import io.github.oshai.kotlinlogging.KotlinLogging
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
@@ -87,7 +86,10 @@ class AgentRunner(
     private val memory: MemoryRepository,
     private val conversationCompactor: ConversationCompactor,
     private val conversationConfig: ConversationConfig = ConversationConfig(),
-    private val stickers: StickerCatalog? = null,
+    // what the chat's sticker shortlist looks like, if this deployment has one. a function rather than
+    // the catalog itself: the catalog resends by `file_id`, which is one messenger's own model, and the
+    // runner has no business holding something that needs a client to exist.
+    private val stickerCatalog: (suspend (ChatRef) -> String?)? = null,
     private val groupLog: GroupLogRepository? = null,
     private val groupLogConfig: GroupLogConfig = GroupLogConfig(),
     private val tokenBudget: TokenBudget = TokenBudget()
@@ -335,9 +337,9 @@ class AgentRunner(
     // forbids them keeps StickerTools out of the registry, so an index here would offer the model a
     // shortlist it has no tool to send.
     private suspend fun stickerCatalogFor(context: RequestContext): String? =
-        stickers
+        stickerCatalog
             ?.takeIf { context.chat.capabilities.stickersAndAnimations }
-            ?.indexBlockFor(context.chatRef)
+            ?.invoke(context.chatRef)
 
     // what the group was saying just before this turn. in a group the bot only ever sees the messages
     // addressed to it, so without this a question like "and what do you think?" arrives with no subject.
