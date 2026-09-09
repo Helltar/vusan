@@ -122,10 +122,17 @@ internal class TelegramBotRunner(
         // a group is treated as complete once the update stream stays quiet this long.
         val ALBUM_QUIET_PERIOD = 1.seconds
 
+        // how late a message left over from the previous run may still be answered. past it the
+        // conversation has moved on, and an answer to what someone said hours ago reads worse than
+        // the silence they already got. shorter than telegram's own 24-hour hold on purpose.
+        val SPOOL_RETENTION = 30.minutes
+
         val log = KotlinLogging.logger {}
     }
 
     private val heartbeat = Heartbeat()
+
+    private val spool = UpdateSpool(SPOOL_RETENTION)
 
     private val turns = AgentTurns(client, agent, delivery, inlineChoices, chatProfiles, voiceTranscriber)
 
@@ -169,7 +176,14 @@ internal class TelegramBotRunner(
                 heartbeat.markPoll()
                 getUpdates.apply(offset)
             }
-        ) { batch -> batch.forEach { updates.trySend(it) } }
+        ) { batch ->
+            // blocking on purpose, on the session's own poller thread: the batch has to be on disk
+            // before this returns, because returning is what lets the next request confirm it to
+            // Telegram. the session polls again only after the callback finishes, so nothing else waits.
+            runBlocking { spool.record(batch) }
+
+            batch.forEach { updates.trySend(it) }
+        }
 
         // handlers inherit this dispatcher; without it, they would run on the single-threaded
         // event loop of `suspend main` instead of parallelizing across cores.
@@ -177,6 +191,11 @@ internal class TelegramBotRunner(
             val heartbeatJob = heartbeat.launchIn(this)
 
             client.publishCommandMenu()
+
+            // whatever the last run was handed and never got to. these go in behind anything the first
+            // poll already delivered, which only decides the order two answers arrive in — a message
+            // answered from both paths is still claimed once, by `AnsweredMessages`.
+            spool.drain().forEach { updates.trySend(it) }
 
             try {
                 processUpdates(updates, profile)
@@ -216,6 +235,11 @@ internal class TelegramBotRunner(
                         continue
                     }
                 }
+
+            // out of the queue and into this run's hands. an album part is settled here too, while it
+            // still waits for its siblings: a turn interrupted mid-flight is not replayed either way,
+            // and the spool only ever promises to carry work nobody has started.
+            spool.settle(update.updateId)
 
             val callback = update.callbackQuery
 

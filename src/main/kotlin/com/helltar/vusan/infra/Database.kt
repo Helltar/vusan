@@ -9,6 +9,7 @@ import com.helltar.vusan.infra.tables.ConversationMessagesTable
 import com.helltar.vusan.infra.tables.ChatStickerSetsTable
 import com.helltar.vusan.infra.tables.ChatStickersTable
 import com.helltar.vusan.infra.tables.MemoryTable
+import com.helltar.vusan.infra.tables.PendingUpdatesTable
 import com.helltar.vusan.infra.tables.ScheduledTasksTable
 import com.helltar.vusan.infra.tables.StickerSetsTable
 import com.helltar.vusan.infra.tables.StickersTable
@@ -89,7 +90,8 @@ object Db {
                     ChatStickerSetsTable,
                     ChatStickersTable,
                     TokenUsageTable,
-                    TokenUserSpendTable
+                    TokenUserSpendTable,
+                    PendingUpdatesTable
                 )
 
             suspendTransaction(newDatabase) {

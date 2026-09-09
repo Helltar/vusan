@@ -106,6 +106,16 @@ A normal user message travels:
    message addressed to the bot — someone adding the mention they forgot. An edit of a message older than
    `EDIT_TURN_WINDOW`, an edit into a slash command, and an edit of an album part are recorded but never answered; the
    reply anchors to the edited message, so once the chat has moved past it there is nothing left to answer.
+
+   Every polled batch is written to `pending_updates` (`telegram/UpdateSpool.kt`) before the poll callback returns, and
+   the row is deleted the moment the dispatch loop picks the update up. The write blocks the session's poller thread on
+   purpose: the session confirms updates to Telegram by asking for a higher offset on its *next* request, so returning
+   from the callback is what makes them unrecoverable. At startup `drain` replays what is left, oldest first, and drops
+   anything past `SPOOL_RETENTION` rather than answering a conversation that has moved on. The boundary is what was
+   never begun: a turn already running may have sent messages, spent tokens and written history, so it is dropped
+   instead of repeated. A replay racing Telegram's own redelivery of the same update is harmless — the row is written
+   with `ignore`, and `AnsweredMessages` claims the message once either way.
+
 2. **Filter** — the allowlist (`ALLOWED_IDS`) comes first, in `TelegramBotRunner.passesAllowlist`, on the polling loop
    itself: an update from a chat and user it does not name is dropped there, before the transcript, the sticker catalog,
    album buffering or a dispatch coroutine can cost anything, and only a message actually aimed at the bot is logged as
@@ -647,6 +657,7 @@ A symptom-to-source map for finding the right file fast. Paths are under
 | Vusan ignores a message entirely | `TelegramBotRunner.passesAllowlist`/`isIdAllowed` (the `ALLOWED_IDS` allowlist and the `BANNED_IDS` ban list, applied on the polling loop), then `telegram/inbound/MessageFilter.kt` (`shouldHandle` — group reply/mention rules) |
 | Container says `Up` but the bot answers nothing | `infra/Heartbeat.kt` (the `/tmp/health` freshness signal, and the `ERROR` logged once when polling stalls) + `TelegramBotRunner.start` (the `getUpdates` generator hook that feeds it) |
 | Reply says "still working on your previous request" | `agent/AgentRunner.kt` — the per-conversation `Mutex` rejects a second concurrent turn in the same chat |
+| A message goes unanswered after a restart or deploy, or one is answered twice | `telegram/UpdateSpool.kt` (what is kept, what is replayed, and `SPOOL_RETENTION`) + `telegram/TelegramBotRunner.kt` (the blocking spool write in the poll callback, and `settle` on pickup) + `telegram/AnsweredMessages.kt` (the one-turn-per-message claim) |
 | Reply lands in the wrong chat, loses its reply anchor, or DM redirect misbehaves | `telegram/delivery/TelegramDelivery.kt` (routing/anchor/private-redirect *policy*) |
 | Formatting renders wrong, message rejected, or media falls back to document/text | `agent/SystemPrompt.kt` (allowed HTML tags the agent emits), `telegram/delivery/TelegramOutputSender.kt` (which call and which fallback each output kind gets), `telegram/delivery/TelegramSendFallbacks.kt` (the fallback *mechanism* itself), `telegram/delivery/TelegramErrors.kt` (which provider errors trigger a fallback) |
 | Vusan floods a chat or stalls on Telegram 429 over a long multi-message reply | `outbox/BotOutbox.kt` (text and album coalescing + `MAX_TEXT_MESSAGES` cap) + `telegram/delivery/TelegramDelivery.kt` (`INTER_MESSAGE_DELAY` pacing) + `telegram/delivery/TelegramSendFallbacks.kt` (`withFloodWaitRetry`, and the `MAX_FLOOD_WAIT` ceiling on what a turn will sit through) |
