@@ -2,9 +2,13 @@ package com.helltar.vusan.telegram.delivery
 
 import java.io.Serializable
 import kotlin.test.Test
+import kotlin.test.assertEquals
 import kotlin.test.assertFalse
+import kotlin.test.assertNull
 import kotlin.test.assertTrue
+import kotlin.time.Duration.Companion.seconds
 import org.telegram.telegrambots.meta.api.objects.ApiResponse
+import org.telegram.telegrambots.meta.api.objects.ResponseParameters
 import org.telegram.telegrambots.meta.exceptions.TelegramApiException
 import org.telegram.telegrambots.meta.exceptions.TelegramApiRequestException
 
@@ -167,6 +171,54 @@ class TelegramErrorsTest {
 
         assertFalse(error.isMessageNotModified())
     }
+
+    @Test
+    fun `reads the wait telegram asks for on a flood-controlled request`() {
+        val error = floodError(retryAfter = 7)
+
+        assertEquals(7.seconds, error.retryAfterOrNull())
+    }
+
+    @Test
+    fun `finds the flood wait through a wrapping client exception`() {
+        val error = TelegramApiException("Unable to execute sendPhoto method", floodError(retryAfter = 12))
+
+        assertEquals(12.seconds, error.retryAfterOrNull())
+    }
+
+    @Test
+    fun `reports no wait when telegram sent none with the 429`() {
+        val error =
+            TelegramApiRequestException(
+                "Error executing request",
+                ApiResponse.builder<Serializable>()
+                    .ok(false)
+                    .errorCode(429)
+                    .errorDescription("Too Many Requests: retry after 5")
+                    .build()
+            )
+
+        // the seconds are also in the description, but parsing prose to find them would guess where the
+        // structured field is authoritative — a request with no parameters simply gets no retry.
+        assertNull(error.retryAfterOrNull())
+    }
+
+    @Test
+    fun `does not read other failures as flood control`() {
+        assertNull(telegramError("Bad Request: message is too long").retryAfterOrNull())
+        assertNull(RuntimeException("connection reset").retryAfterOrNull())
+    }
+
+    private fun floodError(retryAfter: Int): TelegramApiRequestException =
+        TelegramApiRequestException(
+            "Error executing request",
+            ApiResponse.builder<Serializable>()
+                .ok(false)
+                .errorCode(429)
+                .errorDescription("Too Many Requests: retry after $retryAfter")
+                .parameters(ResponseParameters(null, retryAfter))
+                .build()
+        )
 
     private fun telegramError(description: String): TelegramApiRequestException =
         TelegramApiRequestException(

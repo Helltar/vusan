@@ -107,7 +107,8 @@ class TelegramDelivery(
         const val MAX_BOT_TEXT_CHARS = 2_000
 
         // pace consecutive sends in a multi-output reply so a batch does not trip Telegram's per-chat
-        // rate limit. telegrambots does not retry a send that 429s, so pacing is the only guard here.
+        // rate limit in the first place. `withFloodWaitRetry` handles the one that trips it anyway,
+        // but it costs the wait Telegram names — this keeps most batches from ever paying it.
         val INTER_MESSAGE_DELAY = 700.milliseconds
 
         val log = KotlinLogging.logger {}
@@ -197,12 +198,14 @@ class TelegramDelivery(
      * message that asked.
      */
     suspend fun sendReply(message: Message, text: String, replyToMessageId: Long? = null) {
-        TelegramOutputSender.sendText(
-            client = client,
-            chatId = message.chatIdLong,
-            text = text,
-            replyParameters = replyParameters(replyToMessageId ?: message.messageIdLong)
-        )
+        withFloodWaitRetry(message.chatIdLong) {
+            TelegramOutputSender.sendText(
+                client = client,
+                chatId = message.chatIdLong,
+                text = text,
+                replyParameters = replyParameters(replyToMessageId ?: message.messageIdLong)
+            )
+        }
     }
 
     /**
@@ -212,7 +215,9 @@ class TelegramDelivery(
      */
     suspend fun sendNotice(chatId: Long, text: String): Boolean =
         runCatching {
-            TelegramOutputSender.sendText(client, chatId, text, replyParameters = null)
+            withFloodWaitRetry(chatId) {
+                TelegramOutputSender.sendText(client, chatId, text, replyParameters = null)
+            }
             true
         }.getOrElse { error ->
             error.rethrowIfCancellation()
@@ -499,36 +504,42 @@ class TelegramDelivery(
     }
 
     private suspend fun sendText(target: DeliveryTarget, text: String) {
-        TelegramOutputSender
-            .sendText(
-                client,
-                target.chatId,
-                text,
-                replyParameters(target.replyToMessageId)
-            )
+        withFloodWaitRetry(target.chatId) {
+            TelegramOutputSender
+                .sendText(
+                    client,
+                    target.chatId,
+                    text,
+                    replyParameters(target.replyToMessageId)
+                )
+        }
     }
 
     private suspend fun sendReplyText(target: DeliveryTarget, text: String, messages: Messages) {
-        TelegramOutputSender
-            .sendReplyText(
-                client,
-                target.chatId,
-                text,
-                replyParameters(target.replyToMessageId),
-                messages.formattingAsFileNotice
-            )
+        withFloodWaitRetry(target.chatId) {
+            TelegramOutputSender
+                .sendReplyText(
+                    client,
+                    target.chatId,
+                    text,
+                    replyParameters(target.replyToMessageId),
+                    messages.formattingAsFileNotice
+                )
+        }
     }
 
     private suspend fun sendOutgoing(target: DeliveryTarget, item: BotOutput, caption: String?, messages: Messages) {
-        TelegramOutputSender
-            .send(
-                client,
-                item,
-                target.chatId,
-                replyParameters(target.replyToMessageId),
-                caption,
-                messages.formattingAsFileNotice
-            )
+        withFloodWaitRetry(target.chatId) {
+            TelegramOutputSender
+                .send(
+                    client,
+                    item,
+                    target.chatId,
+                    replyParameters(target.replyToMessageId),
+                    caption,
+                    messages.formattingAsFileNotice
+                )
+        }
     }
 
     private fun isPrivateChatBlocked(error: Throwable): Boolean =

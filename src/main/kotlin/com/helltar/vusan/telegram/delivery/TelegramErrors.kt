@@ -1,6 +1,10 @@
 package com.helltar.vusan.telegram.delivery
 
 import org.telegram.telegrambots.meta.exceptions.TelegramApiRequestException
+import kotlin.time.Duration
+import kotlin.time.Duration.Companion.seconds
+
+private const val TOO_MANY_REQUESTS = 429
 
 // telegram prefixes every parse-mode failure with "Bad Request: can't parse entities: ...",
 // regardless of the specific HTML wording (unsupported tag, unclosed tag, unescaped `<`/`&`, ...).
@@ -74,10 +78,26 @@ internal fun Throwable.isStickerSetGone(): Boolean {
     return "stickerset_invalid" in description || "sticker set not found" in description
 }
 
-// the client wraps request failures in generic TelegramApiException chains, so search the causes
-// for the api-level exception that carries telegram's error description.
+/**
+ * How long Telegram's flood control says to wait, or `null` when the failure was not a 429.
+ *
+ * The number is the only thing worth acting on: it is exact, while any local pacing is a guess. It
+ * can also be far longer than a turn is worth waiting for, so the caller decides what it will still
+ * sit through — this only reports what was asked.
+ */
+internal fun Throwable.retryAfterOrNull(): Duration? =
+    telegramRequestError
+        ?.takeIf { it.errorCode == TOO_MANY_REQUESTS }
+        ?.parameters
+        ?.retryAfter
+        ?.seconds
+
 private val Throwable.telegramDescription: String?
+    get() = telegramRequestError?.apiResponse
+
+// the client wraps request failures in generic TelegramApiException chains, so search the causes
+// for the api-level exception that carries telegram's error description and its parameters.
+private val Throwable.telegramRequestError: TelegramApiRequestException?
     get() = generateSequence(this) { error -> error.cause.takeIf { it !== error } }
         .filterIsInstance<TelegramApiRequestException>()
         .firstOrNull()
-        ?.apiResponse

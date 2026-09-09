@@ -2,6 +2,8 @@ package com.helltar.vusan.telegram.delivery
 
 import com.helltar.vusan.common.rethrowIfCancellation
 import io.github.oshai.kotlinlogging.KotlinLogging
+import kotlinx.coroutines.delay
+import kotlin.time.Duration.Companion.seconds
 import org.telegram.telegrambots.meta.api.methods.ParseMode
 import org.telegram.telegrambots.meta.api.objects.ReplyParameters
 import org.telegram.telegrambots.meta.generics.TelegramClient
@@ -31,6 +33,36 @@ internal fun rethrowIfReplyNotFound(error: Throwable, replyParameters: ReplyPara
 // cascade and let the caller act on it — delivery reports the chat, the scheduler parks its tasks.
 internal fun rethrowIfChatUnreachable(error: Throwable) {
     if (error.isChatUnreachable()) throw error
+}
+
+// same reasoning as an unreachable chat: flood control says nothing about the payload, so degrading a
+// photo to a document only spends a second rejected request on it. the send is worth repeating whole,
+// which [withFloodWaitRetry] does once the cascade has let the error back out.
+internal fun rethrowIfRateLimited(error: Throwable) {
+    if (error.retryAfterOrNull() != null) throw error
+}
+
+// what a turn will still stand still for. telegram can ask for minutes at a time, and a wait that long
+// is worse than an unsent message: the user is left with a silent chat and the turn holds its lock.
+private val MAX_FLOOD_WAIT = 30.seconds
+
+/**
+ * Wait out Telegram's flood control once, then send again.
+ *
+ * The whole [send] is repeated rather than the single request under it, because every payload is
+ * rebuilt from the [com.helltar.vusan.outbox.BotOutput] on each attempt — the byte streams a first
+ * attempt consumed are not reusable, and rebuilding is what makes a retry safe at all.
+ */
+internal suspend fun withFloodWaitRetry(chatId: Long, send: suspend () -> Unit) {
+    runCatching { send() }
+        .recoverCatching { error ->
+            val wait = error.retryAfterOrNull()?.takeIf { it <= MAX_FLOOD_WAIT } ?: throw error
+
+            log.warn { "flood control on chat=$chatId, waiting ${wait.inWholeSeconds}s before one retry" }
+            delay(wait)
+            send()
+        }
+        .getOrThrow()
 }
 
 internal suspend fun sendWithHtmlFallback(send: suspend (parseMode: String?) -> Unit) {
@@ -89,6 +121,7 @@ internal suspend fun sendMediaWithDocumentFallback(
         .recoverCatching { e ->
             e.rethrowIfCancellation()
             rethrowIfReplyNotFound(e, replyParameters)
+            rethrowIfRateLimited(e)
             rethrowIfChatUnreachable(e)
             log.warn(e) { "$mediaLabel failed for chat=$chatId, retrying as document" }
             sendDocumentWithCaptionFallback(client, chatId, bytes, filename, caption, replyParameters, formattingFileNotice)
@@ -96,6 +129,7 @@ internal suspend fun sendMediaWithDocumentFallback(
         .onFailure { e ->
             e.rethrowIfCancellation()
             rethrowIfReplyNotFound(e, replyParameters)
+            rethrowIfRateLimited(e)
             rethrowIfChatUnreachable(e)
             log.warn(e) { "$mediaLabel document fallback failed for chat=$chatId, falling back to text" }
             onTextFallback()
@@ -112,6 +146,7 @@ internal suspend fun sendOrFallback(
     runCatching { send() }.onFailure { e ->
         e.rethrowIfCancellation()
         rethrowIfReplyNotFound(e, replyParameters)
+        rethrowIfRateLimited(e)
         rethrowIfChatUnreachable(e)
         log.warn(e) { "$failureMessage chat=$chatId" }
         onFallback()
@@ -151,6 +186,7 @@ internal suspend fun sendTextAsDocument(
         )
     }.recoverCatching { e ->
         e.rethrowIfCancellation()
+        rethrowIfRateLimited(e)
         rethrowIfChatUnreachable(e)
         log.warn(e) { "Document fallback failed for chat=$chatId, sending plain text" }
         sendTextMessage(client, chatId, text, parseMode = null, replyParameters = replyParameters)
@@ -175,6 +211,7 @@ internal suspend fun sendMarkdownDocument(
         )
     }.recoverCatching { e ->
         e.rethrowIfCancellation()
+        rethrowIfRateLimited(e)
         rethrowIfChatUnreachable(e)
         log.warn(e) { "Markdown document fallback failed for chat=$chatId, sending plain text" }
         sendTextMessage(client, chatId, markdown, parseMode = null, replyParameters = replyParameters)
