@@ -7,6 +7,7 @@ import com.helltar.vusan.request.ConversationScope
 import com.helltar.vusan.request.RequestContext
 import com.helltar.vusan.request.SenderContext
 import com.helltar.vusan.telegram.delivery.ChatTarget
+import com.helltar.vusan.telegram.telegramChatId
 import java.time.Instant
 import java.time.ZoneId
 import java.time.ZonedDateTime
@@ -92,7 +93,7 @@ internal fun ScheduledTask.toRequestContext(profile: ChatProfile = ChatProfile.N
 
 /** Where this task's fire, and every notice about it, belongs. */
 internal val ScheduledTask.chatTarget: ChatTarget
-    get() = ChatTarget(scope.chat.id.toLong(), creatorThreadId)
+    get() = ChatTarget(scope.chat.telegramChatId, creatorThreadId)
 
 /** Keeps a future slot, or advances a recurring task past every elapsed slot. */
 internal fun ScheduledTask.nextFireAfterResume(now: Instant): Instant? =
