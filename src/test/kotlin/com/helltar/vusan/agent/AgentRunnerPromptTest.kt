@@ -2,6 +2,7 @@ package com.helltar.vusan.agent
 
 import com.helltar.vusan.agent.memory.MemoryEntry
 import com.helltar.vusan.request.ChatContext
+import com.helltar.vusan.request.Platform
 import com.helltar.vusan.request.RequestContext
 import com.helltar.vusan.request.SenderContext
 import java.time.Instant
@@ -19,8 +20,9 @@ class AgentRunnerPromptTest {
                 userInput = "what do you remember?",
                 context =
                     RequestContext(
-                        chat = ChatContext(id = -10, isPrivate = false, title = "friends"),
-                        sender = SenderContext(id = 42)
+                        platform = Platform.TELEGRAM,
+                        chat = ChatContext(id = "-10", isPrivate = false, title = "friends"),
+                        sender = SenderContext(id = "42")
                     ),
                 userMemory = listOf(memory(7, "likes tea")),
                 chatMemory = listOf(memory(8, "movie night is Friday"))
@@ -81,5 +83,9 @@ class AgentRunnerPromptTest {
         MemoryEntry(id, content, Instant.EPOCH)
 
     private fun context(): RequestContext =
-        RequestContext(chat = ChatContext(id = 1, isPrivate = true), sender = SenderContext(id = 2))
+        RequestContext(
+            platform = Platform.TELEGRAM,
+            chat = ChatContext(id = "1", isPrivate = true),
+            sender = SenderContext(id = "2")
+        )
 }

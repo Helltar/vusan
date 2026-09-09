@@ -2,6 +2,7 @@ package com.helltar.vusan.telegram.inbound
 
 import com.fasterxml.jackson.databind.ObjectMapper
 import java.time.Instant
+import com.helltar.vusan.request.testChat
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertNotNull
@@ -23,11 +24,11 @@ class GroupLogEntriesTest {
                 ).toGroupLogEntry()
             )
 
-        assertEquals(-100L, entry.chatId)
+        assertEquals(testChat(-100), entry.chat)
         assertEquals(1L, entry.messageId)
         assertEquals("text", entry.kind)
         assertEquals("hello everyone", entry.text)
-        assertEquals(7L, entry.senderId)
+        assertEquals("7", entry.senderId)
         assertEquals("olena", entry.senderUsername)
         assertEquals("Olena Petrenko", entry.senderName)
         assertEquals(Instant.ofEpochSecond(1_774_000_000L), entry.sentAt)
@@ -188,10 +189,10 @@ class GroupLogEntriesTest {
                 pollAnswer(""""option_ids": [1]""").toGroupLogEntry(quiz)
             )
 
-        assertEquals(-100L, entry.chatId)
+        assertEquals(testChat(-100), entry.chat)
         assertEquals("poll answer", entry.kind)
         assertEquals("answered: Kyiv (correct)", entry.text)
-        assertEquals(7L, entry.senderId)
+        assertEquals("7", entry.senderId)
         assertEquals("olena", entry.senderUsername)
         assertEquals("Olena Petrenko", entry.senderName)
         // a vote is not a message, so nothing can reply to it and it has no id of its own.

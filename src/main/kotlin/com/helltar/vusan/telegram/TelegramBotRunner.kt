@@ -8,7 +8,11 @@ import com.helltar.vusan.common.rethrowIfCancellation
 import com.helltar.vusan.common.xmlBlock
 import com.helltar.vusan.i18n.Messages
 import com.helltar.vusan.infra.Heartbeat
+import com.helltar.vusan.request.AccessPolicy
+import com.helltar.vusan.request.AttachedFile
 import com.helltar.vusan.request.AttachedFileKind
+import com.helltar.vusan.request.ConversationScope
+import com.helltar.vusan.request.UserRef
 import com.helltar.vusan.tasks.TasksRepository
 import com.helltar.vusan.telegram.callback.CallbackRouter
 import com.helltar.vusan.telegram.callback.InlineChoiceHandler
@@ -72,8 +76,7 @@ internal class TelegramBotRunner(
     private val inlineChoices: InlineChoiceHandler,
     private val tasks: TasksRepository,
     private val chatProfiles: ChatProfiles,
-    private val allowedIds: Set<Long>,
-    private val bannedIds: Set<Long>,
+    private val accessPolicy: AccessPolicy,
     private val voiceTranscriber: VoiceTranscriber?,
     private val profile: BotProfile,
     private val stickerCatalog: StickerCatalog? = null,
@@ -139,25 +142,27 @@ internal class TelegramBotRunner(
     private val turns = AgentTurns(client, agent, delivery, inlineChoices, chatProfiles, voiceTranscriber)
 
     private val turnStop = TurnStopHandler(client, agent)
-    private val callbacks = CallbackRouter(client, taskMenu, inlineChoices, turnStop, turns, allowedIds, bannedIds)
+    private val callbacks = CallbackRouter(client, taskMenu, inlineChoices, turnStop, turns, accessPolicy)
 
     private val answeredMessages = AnsweredMessages(ANSWERED_MEMORY)
 
     fun start(scope: CoroutineScope): Job {
-        log.info { "Bot started as ${profile.username ?: profile.userId}, allowed ids=${allowedIds.sorted()}" }
+        log.info {
+            "Bot started as ${profile.username ?: profile.userId}, allowed ids=${accessPolicy.allowed.sorted()}"
+        }
 
-        if (allowedIds.isEmpty()) {
+        if (accessPolicy.allowed.isEmpty()) {
             log.warn {
                 "ALLOWED_IDS is empty — bot will ignore every message. " +
                         "Set ALLOWED_IDS to user/chat ids that may use the bot."
             }
         }
 
-        if (bannedIds.isNotEmpty()) {
-            log.info { "Banned ids=${bannedIds.sorted()}" }
+        if (accessPolicy.banned.isNotEmpty()) {
+            log.info { "Banned ids=${accessPolicy.banned.sorted()}" }
 
             // an id on both lists is a config mistake worth naming: the ban wins, silently.
-            allowedIds.intersect(bannedIds).takeIf { it.isNotEmpty() }?.let {
+            accessPolicy.contradictory.takeIf { it.isNotEmpty() }?.let {
                 log.warn { "ids in both ALLOWED_IDS and BANNED_IDS stay banned: ${it.sorted()}" }
             }
         }
@@ -460,7 +465,7 @@ internal class TelegramBotRunner(
             }
 
         // the stopped turn reports where it was working; this only answers when there was nothing to stop.
-        if (agent.stop(userId, message.chatIdLong)) {
+        if (agent.stop(message.conversationScopeOf(userId))) {
             log.info { "stopped the running turn: chat=${message.chatIdLong} user=$userId" }
             return
         }
@@ -477,7 +482,7 @@ internal class TelegramBotRunner(
                 return
             }
 
-        agent.clearConversation(userId, message.chatIdLong)
+        agent.clearConversation(message.conversationScopeOf(userId))
         delivery.sendReply(message, Messages.of(message.language).conversationClearedReply)
     }
 
@@ -666,11 +671,11 @@ internal class TelegramBotRunner(
     // transcript row, a sticker set lookup, an album buffer or a dispatch coroutine. so this runs on the
     // polling loop, ahead of all of them, and every path into [isAccepted] is behind it.
     private fun Message.passesAllowlist(botProfile: BotProfile): Boolean {
-        if (isIdAllowed(chatIdLong, senderIdOrNull(), allowedIds, bannedIds)) return true
+        if (accessPolicy.allows(telegramChat(chatIdLong), senderRefOrNull())) return true
 
         // only a message aimed at the bot is worth a line — the rest is chat traffic it happens to see.
         if (shouldHandle(this, botProfile.userId, botProfile.username))
-            logDenied(denialReason(chatIdLong, senderIdOrNull(), bannedIds))
+            logDenied(accessPolicy.denialReason(telegramChat(chatIdLong), senderRefOrNull()))
 
         return false
     }
@@ -740,20 +745,7 @@ internal fun startsTurnOnEdit(
     return !inAlbum
 }
 
-// an allowlisted chat admits every message in it, including the rare ones without a sender
-// (anonymous admins, linked-channel forwards), so the chat check must not depend on the user id.
-internal fun isIdAllowed(chatId: Long, userId: Long?, allowedIds: Set<Long>, bannedIds: Set<Long>): Boolean {
-    if (isIdBanned(chatId, userId, bannedIds)) return false
-    if (chatId in allowedIds) return true
-    return userId != null && userId in allowedIds
-}
+internal fun Message.senderRefOrNull(): UserRef? = senderIdOrNull()?.let(::telegramUser)
 
-// the ban list wins over the allowlist: someone banned stays banned inside a group that is itself
-// allowlisted, which is the only way to shut one person out without closing the chat for everyone.
-internal fun isIdBanned(chatId: Long, userId: Long?, bannedIds: Set<Long>): Boolean {
-    if (chatId in bannedIds) return true
-    return userId != null && userId in bannedIds
-}
-
-internal fun denialReason(chatId: Long, userId: Long?, bannedIds: Set<Long>): String =
-    if (isIdBanned(chatId, userId, bannedIds)) "banned" else "not in allowlist"
+internal fun Message.conversationScopeOf(userId: Long): ConversationScope =
+    ConversationScope(telegramUser(userId), telegramChat(chatIdLong))

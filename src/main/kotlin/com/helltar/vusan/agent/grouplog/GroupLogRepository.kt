@@ -5,6 +5,7 @@ import com.helltar.vusan.config.GroupLogConfig
 import com.helltar.vusan.infra.Db.dbTransaction
 import com.helltar.vusan.infra.tables.GroupLogDigestsTable
 import com.helltar.vusan.infra.tables.GroupLogTable
+import com.helltar.vusan.request.ChatRef
 import org.jetbrains.exposed.v1.core.LikePattern
 import org.jetbrains.exposed.v1.core.Op
 import org.jetbrains.exposed.v1.core.ResultRow
@@ -43,14 +44,15 @@ class GroupLogRepository(private val config: GroupLogConfig) {
         const val PRUNE_EVERY_INSERTS = 500
     }
 
-    private val insertsSincePrune = ConcurrentHashMap<Long, AtomicInteger>()
+    private val insertsSincePrune = ConcurrentHashMap<ChatRef, AtomicInteger>()
 
     suspend fun record(entry: GroupLogEntry) {
         // exposed rejects a value longer than the column instead of truncating it, and every field
         // here comes from outside the process, so the fit is enforced at the one place that writes.
         dbTransaction {
             GroupLogTable.insertIgnore {
-                it[chatId] = entry.chatId
+                it[platform] = entry.chat.platform
+                it[chatId] = entry.chat.id
                 it[messageId] = entry.messageId
                 it[threadId] = entry.threadId
                 it[senderId] = entry.senderId
@@ -65,8 +67,8 @@ class GroupLogRepository(private val config: GroupLogConfig) {
             }
         }
 
-        if (shouldPrune(entry.chatId)) {
-            prune(entry.chatId)
+        if (shouldPrune(entry.chat)) {
+            prune(entry.chat)
         }
     }
 
@@ -81,7 +83,7 @@ class GroupLogRepository(private val config: GroupLogConfig) {
         return dbTransaction {
             val updated =
                 GroupLogTable.update({
-                    (GroupLogTable.chatId eq entry.chatId) and (GroupLogTable.messageId eq editedMessageId)
+                    inChat(entry.chat) and (GroupLogTable.messageId eq editedMessageId)
                 }) {
                     it[kind] = entry.kind.limitTo(KIND_COLUMN_CHARS)
                     it[text] = entry.text
@@ -92,7 +94,7 @@ class GroupLogRepository(private val config: GroupLogConfig) {
             // invalidate that digest — it would keep reciting the text the edit replaced.
             if (updated > 0) {
                 GroupLogDigestsTable.deleteWhere {
-                    (GroupLogDigestsTable.chatId eq entry.chatId) and
+                    digestsInChat(entry.chat) and
                             (GroupLogDigestsTable.day eq LocalDate.ofInstant(entry.sentAt, ZONE).toString())
                 }
             }
@@ -107,7 +109,7 @@ class GroupLogRepository(private val config: GroupLogConfig) {
      * [countInWindow] for the real size.
      */
     suspend fun readWindow(
-        chatId: Long,
+        chat: ChatRef,
         from: Instant,
         to: Instant,
         limit: Int,
@@ -115,18 +117,18 @@ class GroupLogRepository(private val config: GroupLogConfig) {
     ): List<GroupLogEntry> = dbTransaction {
         GroupLogTable
             .selectAll()
-            .where { windowCondition(chatId, from, to, author) }
+            .where { windowCondition(chat, from, to, author) }
             .orderBy(GroupLogTable.sentAt to SortOrder.DESC, GroupLogTable.id to SortOrder.DESC)
             .limit(limit)
             .map { it.toEntry() }
             .reversed()
     }
 
-    suspend fun countInWindow(chatId: Long, from: Instant, to: Instant, author: String? = null): Long =
+    suspend fun countInWindow(chat: ChatRef, from: Instant, to: Instant, author: String? = null): Long =
         dbTransaction {
             GroupLogTable
                 .select(GroupLogTable.id)
-                .where { windowCondition(chatId, from, to, author) }
+                .where { windowCondition(chat, from, to, author) }
                 .count()
         }
 
@@ -135,7 +137,7 @@ class GroupLogRepository(private val config: GroupLogConfig) {
      * that triggered the current turn, which the model is already being shown as the request itself.
      */
     suspend fun recent(
-        chatId: Long,
+        chat: ChatRef,
         limit: Int,
         since: Instant,
         excludeMessageId: Long? = null
@@ -143,7 +145,7 @@ class GroupLogRepository(private val config: GroupLogConfig) {
         GroupLogTable
             .selectAll()
             .where {
-                var condition = (GroupLogTable.chatId eq chatId) and (GroupLogTable.sentAt greaterEq since)
+                var condition = inChat(chat) and (GroupLogTable.sentAt greaterEq since)
                 excludeMessageId?.let { condition = condition and (GroupLogTable.messageId neq it) }
                 condition
             }
@@ -153,21 +155,22 @@ class GroupLogRepository(private val config: GroupLogConfig) {
             .reversed()
     }
 
-    suspend fun digestFor(chatId: Long, day: LocalDate): String? = dbTransaction {
+    suspend fun digestFor(chat: ChatRef, day: LocalDate): String? = dbTransaction {
         GroupLogDigestsTable
             .select(GroupLogDigestsTable.content)
-            .where { (GroupLogDigestsTable.chatId eq chatId) and (GroupLogDigestsTable.day eq day.toString()) }
+            .where { digestsInChat(chat) and (GroupLogDigestsTable.day eq day.toString()) }
             .singleOrNull()
             ?.get(GroupLogDigestsTable.content)
     }
 
-    suspend fun storeDigest(chatId: Long, day: LocalDate, messageCount: Int, content: String) {
+    suspend fun storeDigest(chat: ChatRef, day: LocalDate, messageCount: Int, content: String) {
         require(content.isNotBlank()) { "Chat log digest must not be blank" }
 
         dbTransaction {
             // the conflict target has to be named: on a LongIdTable, upsert would otherwise aim at the
             // surrogate id, which never collides, and the insert would break on the unique index instead.
             GroupLogDigestsTable.upsert(
+                GroupLogDigestsTable.platform,
                 GroupLogDigestsTable.chatId,
                 GroupLogDigestsTable.day,
                 onUpdate = {
@@ -176,7 +179,8 @@ class GroupLogRepository(private val config: GroupLogConfig) {
                     it[GroupLogDigestsTable.createdAt] = Instant.now()
                 }
             ) {
-                it[GroupLogDigestsTable.chatId] = chatId
+                it[GroupLogDigestsTable.platform] = chat.platform
+                it[GroupLogDigestsTable.chatId] = chat.id
                 it[GroupLogDigestsTable.day] = day.toString()
                 it[GroupLogDigestsTable.messageCount] = messageCount
                 it[GroupLogDigestsTable.content] = content
@@ -184,14 +188,14 @@ class GroupLogRepository(private val config: GroupLogConfig) {
         }
     }
 
-    /** Drops everything recorded for [chatId], transcript and cached digests alike. */
-    suspend fun clear(chatId: Long): Int = dbTransaction {
-        GroupLogDigestsTable.deleteWhere { GroupLogDigestsTable.chatId eq chatId }
-        GroupLogTable.deleteWhere { GroupLogTable.chatId eq chatId }
+    /** Drops everything recorded for [chat], transcript and cached digests alike. */
+    suspend fun clear(chat: ChatRef): Int = dbTransaction {
+        GroupLogDigestsTable.deleteWhere { digestsInChat(chat) }
+        GroupLogTable.deleteWhere { inChat(chat) }
     }
 
-    private fun shouldPrune(chatId: Long): Boolean {
-        val counter = insertsSincePrune.computeIfAbsent(chatId) { AtomicInteger() }
+    private fun shouldPrune(chat: ChatRef): Boolean {
+        val counter = insertsSincePrune.computeIfAbsent(chat) { AtomicInteger() }
 
         if (counter.incrementAndGet() < PRUNE_EVERY_INSERTS) return false
 
@@ -199,28 +203,28 @@ class GroupLogRepository(private val config: GroupLogConfig) {
         return true
     }
 
-    private suspend fun prune(chatId: Long) {
+    private suspend fun prune(chat: ChatRef) {
         val cutoff = Instant.now().minusSeconds(config.retentionDays.toLong() * SECONDS_PER_DAY)
 
         dbTransaction {
-            GroupLogTable.deleteWhere { (GroupLogTable.chatId eq chatId) and (GroupLogTable.sentAt less cutoff) }
+            GroupLogTable.deleteWhere { inChat(chat) and (GroupLogTable.sentAt less cutoff) }
 
             GroupLogDigestsTable.deleteWhere {
-                (GroupLogDigestsTable.chatId eq chatId) and
+                digestsInChat(chat) and
                         (GroupLogDigestsTable.day less LocalDate.ofInstant(cutoff, ZONE).toString())
             }
 
             val keepMinId =
                 GroupLogTable
                     .select(GroupLogTable.id)
-                    .where { GroupLogTable.chatId eq chatId }
+                    .where { inChat(chat) }
                     .orderBy(GroupLogTable.id to SortOrder.DESC)
                     .limit(1)
                     .offset((config.maxMessagesPerChat - 1).toLong())
                     .map { it[GroupLogTable.id].value }
                     .firstOrNull() ?: return@dbTransaction
 
-            GroupLogTable.deleteWhere { (GroupLogTable.chatId eq chatId) and (GroupLogTable.id less keepMinId) }
+            GroupLogTable.deleteWhere { inChat(chat) and (GroupLogTable.id less keepMinId) }
         }
     }
 }
@@ -239,9 +243,15 @@ private fun String?.fitColumn(maxChars: Int): String? = this?.limitTo(maxChars)
 
 private val ZONE: ZoneId get() = ZoneId.systemDefault()
 
-private fun windowCondition(chatId: Long, from: Instant, to: Instant, author: String?): Op<Boolean> {
+private fun inChat(chat: ChatRef): Op<Boolean> =
+    (GroupLogTable.platform eq chat.platform) and (GroupLogTable.chatId eq chat.id)
+
+private fun digestsInChat(chat: ChatRef): Op<Boolean> =
+    (GroupLogDigestsTable.platform eq chat.platform) and (GroupLogDigestsTable.chatId eq chat.id)
+
+private fun windowCondition(chat: ChatRef, from: Instant, to: Instant, author: String?): Op<Boolean> {
     val window =
-        (GroupLogTable.chatId eq chatId) and
+        inChat(chat) and
                 (GroupLogTable.sentAt greaterEq from) and
                 (GroupLogTable.sentAt lessEq to)
 
@@ -260,7 +270,7 @@ private fun authorCondition(author: String): Op<Boolean> {
 
 private fun ResultRow.toEntry(): GroupLogEntry =
     GroupLogEntry(
-        chatId = this[GroupLogTable.chatId],
+        chat = ChatRef(this[GroupLogTable.platform], this[GroupLogTable.chatId]),
         messageId = this[GroupLogTable.messageId],
         kind = this[GroupLogTable.kind],
         sentAt = this[GroupLogTable.sentAt],

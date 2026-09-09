@@ -3,6 +3,8 @@ package com.helltar.vusan.tools.tasks
 import ai.koog.agents.core.tools.annotations.LLMDescription
 import ai.koog.agents.core.tools.annotations.Tool
 import ai.koog.agents.core.tools.reflect.ToolSet
+import com.helltar.vusan.request.ChatRef
+import com.helltar.vusan.request.ConversationScope
 import com.helltar.vusan.request.RequestContext
 import com.helltar.vusan.tasks.*
 import com.helltar.vusan.tools.requireToolText
@@ -33,8 +35,8 @@ class TaskTools(
         @LLMDescription(TaskToolDescriptions.SCHEDULE_TITLE)
         title: String? = null
     ): String = suspendToolGuard {
-        val userId = context.sender.id
-        val chatId = context.chat.id
+        val owner = context.user
+        val chat = context.chatRef
 
         val trimmedPrompt = prompt.requireToolText("Task prompt", MAX_PROMPT_CHARS)
 
@@ -54,7 +56,7 @@ class TaskTools(
                 is ScheduleParse.Ok -> parsed
             }
 
-        val enabledCount = repo.countEnabledByUser(userId, selfInitiated = false)
+        val enabledCount = repo.countEnabledByUser(owner, selfInitiated = false)
 
         if (enabledCount >= maxTasksPerUser) {
             return@suspendToolGuard "You already have $enabledCount scheduled tasks (limit $maxTasksPerUser). " +
@@ -64,8 +66,7 @@ class TaskTools(
         val id =
             repo.create(
                 newTask(
-                    userId = userId,
-                    chatId = chatId,
+                    scope = ConversationScope(owner, chat),
                     prompt = trimmedPrompt,
                     title = trimmedTitle,
                     recurrence = plan.recurrence,
@@ -90,8 +91,8 @@ class TaskTools(
         @LLMDescription(TaskToolDescriptions.FOLLOW_UP_TITLE)
         title: String? = null
     ): String = suspendToolGuard {
-        val userId = context.sender.id
-        val chatId = context.chat.id
+        val owner = context.user
+        val chat = context.chatRef
 
         val trimmedPrompt = prompt.requireToolText("Follow-up prompt", MAX_PROMPT_CHARS)
         val trimmedTitle = title?.trim()?.takeIf { it.isNotEmpty() }
@@ -112,7 +113,7 @@ class TaskTools(
                 is ScheduleParse.Ok -> parsed
             }
 
-        val pendingCount = repo.countEnabledByUser(userId, selfInitiated = true)
+        val pendingCount = repo.countEnabledByUser(owner, selfInitiated = true)
 
         if (pendingCount >= maxFollowUpsPerUser) {
             return@suspendToolGuard "You already owe this user $pendingCount follow-ups (limit $maxFollowUpsPerUser). " +
@@ -122,8 +123,7 @@ class TaskTools(
         val id =
             repo.create(
                 newTask(
-                    userId = userId,
-                    chatId = chatId,
+                    scope = ConversationScope(owner, chat),
                     prompt = trimmedPrompt,
                     title = trimmedTitle,
                     recurrence = plan.recurrence,
@@ -139,10 +139,10 @@ class TaskTools(
     @Tool
     @LLMDescription(TaskToolDescriptions.LIST_TASKS)
     suspend fun listTasks(): String = suspendToolGuard {
-        val userId = context.sender.id
-        val scopedChatId = scopedChatId()
+        val owner = context.user
+        val scopedChat = scopedChat()
 
-        val tasks = repo.listEnabledByUser(userId, scopedChatId)
+        val tasks = repo.listEnabledByUser(owner, scopedChat)
 
         if (tasks.isEmpty())
             return@suspendToolGuard "No scheduled tasks."
@@ -167,15 +167,15 @@ class TaskTools(
         @LLMDescription(TaskToolDescriptions.EDIT_TITLE)
         title: String? = null
     ): String = suspendToolGuard {
-        val userId = context.sender.id
-        val scopedChatId = scopedChatId()
+        val owner = context.user
+        val scopedChat = scopedChat()
 
         if (listOf(prompt, schedule, timezone, title).all { it == null })
             return@suspendToolGuard "No changes provided for task id=$id."
 
         val existing =
-            repo.findEnabledForUser(userId, id, scopedChatId)
-                ?: return@suspendToolGuard taskNotFound(id, scopedChatId)
+            repo.findEnabledForUser(owner, id, scopedChat)
+                ?: return@suspendToolGuard taskNotFound(id, scopedChat)
 
         val editedPrompt =
             prompt?.requireToolText("Task prompt", MAX_PROMPT_CHARS)
@@ -231,7 +231,7 @@ class TaskTools(
         if (edited == existing)
             return@suspendToolGuard "Task id=$id already has the requested values."
 
-        if (!repo.editEnabledForUser(userId, existing, edited, scopedChatId))
+        if (!repo.editEnabledForUser(owner, existing, edited, scopedChat))
             return@suspendToolGuard "Task id=$id is no longer available."
 
         "Updated task id=$id (next=${formatFire(edited.nextFireAt, edited.timezone)}, " +
@@ -244,17 +244,17 @@ class TaskTools(
         @LLMDescription(TaskToolDescriptions.PAUSE_ID)
         id: Long
     ): String = suspendToolGuard {
-        val userId = context.sender.id
-        val scopedChatId = scopedChatId()
+        val owner = context.user
+        val scopedChat = scopedChat()
 
         val existing =
-            repo.findEnabledForUser(userId, id, scopedChatId)
-                ?: return@suspendToolGuard taskNotFound(id, scopedChatId)
+            repo.findEnabledForUser(owner, id, scopedChat)
+                ?: return@suspendToolGuard taskNotFound(id, scopedChat)
 
         if (existing.paused)
             return@suspendToolGuard "Task id=$id is already paused."
 
-        if (!repo.pauseForUser(userId, id, scopedChatId))
+        if (!repo.pauseForUser(owner, id, scopedChat))
             return@suspendToolGuard "Task id=$id is no longer available."
 
         "Paused task id=$id (next=${formatFire(existing.nextFireAt, existing.timezone)})."
@@ -266,12 +266,12 @@ class TaskTools(
         @LLMDescription(TaskToolDescriptions.RESUME_ID)
         id: Long
     ): String = suspendToolGuard {
-        val userId = context.sender.id
-        val scopedChatId = scopedChatId()
+        val owner = context.user
+        val scopedChat = scopedChat()
 
         val existing =
-            repo.findEnabledForUser(userId, id, scopedChatId)
-                ?: return@suspendToolGuard taskNotFound(id, scopedChatId)
+            repo.findEnabledForUser(owner, id, scopedChat)
+                ?: return@suspendToolGuard taskNotFound(id, scopedChat)
 
         if (!existing.paused)
             return@suspendToolGuard "Task id=$id is already active."
@@ -281,7 +281,7 @@ class TaskTools(
                 ?: return@suspendToolGuard "Task id=$id is a one-time task whose scheduled time has passed. " +
                         "It cannot be resumed; schedule a new task instead."
 
-        if (!repo.resumeForUser(userId, id, nextFireAt, scopedChatId))
+        if (!repo.resumeForUser(owner, id, nextFireAt, scopedChat))
             return@suspendToolGuard "Task id=$id is no longer available."
 
         "Resumed task id=$id (next=${formatFire(nextFireAt, existing.timezone)})."
@@ -293,22 +293,21 @@ class TaskTools(
         @LLMDescription(TaskToolDescriptions.CANCEL_ID)
         id: Long
     ): String = suspendToolGuard {
-        val userId = context.sender.id
-        val scopedChatId = scopedChatId()
+        val owner = context.user
+        val scopedChat = scopedChat()
 
         val existing =
-            repo.findEnabledForUser(userId, id, scopedChatId)
-                ?: return@suspendToolGuard taskNotFound(id, scopedChatId)
+            repo.findEnabledForUser(owner, id, scopedChat)
+                ?: return@suspendToolGuard taskNotFound(id, scopedChat)
 
-        if (!repo.deleteEnabledForUser(userId, id, scopedChatId))
+        if (!repo.deleteEnabledForUser(owner, id, scopedChat))
             return@suspendToolGuard "Task id=$id is no longer available."
 
         "Cancelled task id=$id (${formatFire(existing.nextFireAt, existing.timezone)}, ${existing.recurrence.display})."
     }
 
     private fun newTask(
-        userId: Long,
-        chatId: Long,
+        scope: ConversationScope,
         prompt: String,
         title: String?,
         recurrence: Recurrence,
@@ -316,8 +315,7 @@ class TaskTools(
         nextFireAt: Instant,
         selfInitiated: Boolean
     ) = NewScheduledTask(
-        userId = userId,
-        chatId = chatId,
+        scope = scope,
         prompt = prompt,
         title = title,
         recurrence = recurrence,
@@ -337,11 +335,11 @@ class TaskTools(
         return runCatching { ZoneId.of(raw.trim()) }.getOrNull()
     }
 
-    private fun scopedChatId(): Long? =
-        context.chat.id.takeUnless { context.chat.isPrivate }
+    private fun scopedChat(): ChatRef? =
+        context.chatRef.takeUnless { context.chat.isPrivate }
 
-    private fun taskNotFound(id: Long, scopedChatId: Long?): String =
-        if (scopedChatId == null)
+    private fun taskNotFound(id: Long, scopedChat: ChatRef?): String =
+        if (scopedChat == null)
             "No scheduled task id=$id found for the current user."
         else
             "No scheduled task id=$id found for the current user in this chat."

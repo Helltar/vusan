@@ -10,7 +10,7 @@ import com.helltar.vusan.i18n.Language
  * arrive here as [threadId], and [type] is never matched on — it is a label the prompt shows the model.
  */
 data class ChatContext(
-    val id: Long,
+    val id: String,
     val isPrivate: Boolean,
     /** The adapter's name for this flavor of chat, e.g. `supergroup_forum`. */
     val type: String = if (isPrivate) "private" else "group",
@@ -33,7 +33,7 @@ data class ChatContext(
  * cannot reach out of the chat it wrote in.
  */
 data class SenderContext(
-    val id: Long,
+    val id: String,
     val displayName: String? = null,
     val username: String? = null,
     /** What the sender's client reports, where the platform passes it on; see `Language.fromCode`. */
@@ -50,6 +50,7 @@ data class SenderContext(
  * second messenger is one edit rather than one per copy.
  */
 data class RequestContext(
+    val platform: Platform,
     val chat: ChatContext,
     val sender: SenderContext,
     /** The message being answered; `null` when nothing sent one, as when a scheduled task fires. */
@@ -67,6 +68,18 @@ data class RequestContext(
      */
     val attachedFile: AttachedFile?
         get() = attachedFiles.firstOrNull()
+
+    /** Who this turn is for, qualified — the key for everything that follows them between chats. */
+    val user: UserRef
+        get() = UserRef(platform, sender.id)
+
+    /** Where this turn is, qualified — the key for everything that belongs to the conversation. */
+    val chatRef: ChatRef
+        get() = ChatRef(platform, chat.id)
+
+    /** Both together: what history, the turn lock and `/stop` are keyed on. */
+    val scope: ConversationScope
+        get() = ConversationScope(user, chatRef)
 }
 
 /**
@@ -74,6 +87,12 @@ data class RequestContext(
  * site. Both are keyed on the person rather than the chat, and a sender without a personal identity
  * gets neither: one shared account would be one home and one site that every anonymous admin and every
  * linked channel writes into.
+ *
+ * The workspace and site protocols accept `u` plus digits and nothing else, and a site's public
+ * address is built from that number, so this cannot simply become [UserRef.key]. Until those services
+ * are given a qualified key of their own, only Telegram gets a person key at all — a second platform
+ * silently reusing `u<id>` would hand somebody else's home and published site to whoever matched the
+ * number. See notes/second-platform.md.
  */
 val RequestContext.personKeyOrNull: String?
-    get() = sender.takeIf { it.isPerson }?.let { "u${it.id}" }
+    get() = sender.takeIf { it.isPerson && platform == Platform.TELEGRAM }?.let { "u${it.id}" }

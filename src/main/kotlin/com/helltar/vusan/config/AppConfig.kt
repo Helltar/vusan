@@ -5,6 +5,9 @@ import ai.koog.prompt.executor.clients.openai.base.models.ServiceTier
 import io.github.cdimascio.dotenv.dotenv
 import io.github.oshai.kotlinlogging.KotlinLogging
 import java.time.ZoneId
+import com.helltar.vusan.request.AccessPolicy
+import com.helltar.vusan.request.Platform
+import com.helltar.vusan.request.UserRef
 import kotlin.io.path.Path
 import kotlin.io.path.isReadable
 import kotlin.io.path.readText
@@ -12,9 +15,9 @@ import kotlin.time.Duration.Companion.seconds
 
 data class AppConfig(
     val agentMaxIterations: Int,
-    val allowedIds: Set<Long>,
+    val accessPolicy: AccessPolicy,
     val appearance: String?,
-    val bannedIds: Set<Long> = emptySet(),
+
     val chatHistory: ConversationConfig = ConversationConfig(),
     val groupLog: GroupLogConfig = GroupLogConfig(),
     val databasePath: String,
@@ -83,9 +86,12 @@ data class AppConfig(
 
             return AppConfig(
                 agentMaxIterations = readIntEnv("AGENT_MAX_ITERATIONS") ?: DEFAULT_AGENT_MAX_ITERATIONS,
-                allowedIds = readIdSetEnv("ALLOWED_IDS"),
+                accessPolicy =
+                    AccessPolicy(
+                        allowed = readIdSetEnv("ALLOWED_IDS"),
+                        banned = readIdSetEnv("BANNED_IDS")
+                    ),
                 appearance = resolveAppearance(),
-                bannedIds = readIdSetEnv("BANNED_IDS"),
                 databasePath = readEnv("DB_FILE") ?: "data/db/vusan.db",
                 elevenLabsApiKey = elevenLabsKey,
                 giphyApiKey = readEnv("GIPHY_API_KEY"),
@@ -346,7 +352,7 @@ data class AppConfig(
 
         private fun readBooleanEnv(env: String): Boolean? = parseBooleanEnv(env, readEnv(env))
 
-        private fun readIdSetEnv(env: String): Set<Long> = parseIdSetEnv(env, readEnv(env))
+        private fun readIdSetEnv(env: String): Set<String> = parseIdSetEnv(env, readEnv(env))
     }
 }
 
@@ -366,12 +372,34 @@ internal fun parseBooleanEnv(env: String, raw: String?): Boolean? =
             ?: error("$env=[$it] is not a boolean, expected true or false")
     }
 
-// a dropped id fails open on BANNED_IDS — the person stays unbanned — so an unreadable one is an error
-// rather than something to skip.
-internal fun parseIdSetEnv(env: String, raw: String?): Set<Long> =
+/**
+ * Parses an allow/ban list into platform-qualified keys.
+ *
+ * A bare number is read as a Telegram id, which is what every existing deployment has written; a
+ * `platform:id` entry names its own. A dropped id fails open on `BANNED_IDS` — the person stays
+ * unbanned — so an entry that cannot be read is an error rather than something to skip.
+ */
+internal fun parseIdSetEnv(env: String, raw: String?): Set<String> =
     raw
         ?.split(',', ' ', '\n', '\t', ';')
         ?.mapNotNull { it.trim().takeIf(String::isNotEmpty) }
-        ?.map { it.toLongOrNull() ?: error("$env contains [$it], which is not a numeric telegram id") }
+        ?.map { entry -> parsePolicyId(env, entry) }
         ?.toSet()
         .orEmpty()
+
+private fun parsePolicyId(env: String, entry: String): String {
+    val platform = entry.substringBefore(':', missingDelimiterValue = "").trim()
+    val id = entry.substringAfter(':').trim()
+
+    if (platform.isEmpty()) {
+        id.toLongOrNull() ?: error("$env contains [$entry], which is not a numeric telegram id")
+        return UserRef(Platform.TELEGRAM, id).key
+    }
+
+    val known =
+        Platform.entries.firstOrNull { it.name.equals(platform, ignoreCase = true) }
+            ?: error("$env contains [$entry], whose platform is not one of ${Platform.entries}")
+
+    require(id.isNotEmpty()) { "$env contains [$entry], which names a platform but no id" }
+    return UserRef(known, id).key
+}

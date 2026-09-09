@@ -9,6 +9,7 @@ import java.nio.file.Path
 import java.time.Instant
 import kotlin.test.AfterTest
 import kotlin.test.BeforeTest
+import com.helltar.vusan.request.AccessPolicy
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertTrue
@@ -111,7 +112,7 @@ class UpdateSpoolTest {
     private fun testConfig(dbPath: String) =
         AppConfig(
             agentMaxIterations = 70,
-            allowedIds = emptySet(),
+            accessPolicy = AccessPolicy(),
             appearance = null,
             databasePath = dbPath,
             elevenLabsApiKey = null,

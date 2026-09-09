@@ -12,6 +12,8 @@ import java.time.LocalDate
 import java.time.ZoneId
 import kotlin.test.AfterTest
 import kotlin.test.BeforeTest
+import com.helltar.vusan.request.AccessPolicy
+import com.helltar.vusan.request.testChat
 import kotlin.test.Test
 import kotlin.test.assertContains
 import kotlin.test.assertEquals
@@ -232,11 +234,11 @@ class GroupLogReaderTest {
     private suspend fun recordFrom(messageId: Long, text: String, at: Instant, username: String, name: String) {
         repository.record(
             GroupLogEntry(
-                chatId = CHAT,
+                chat = CHAT,
                 messageId = messageId,
                 kind = "text",
                 sentAt = at,
-                senderId = 1L,
+                senderId = "1",
                 senderUsername = username,
                 senderName = name,
                 text = text
@@ -261,13 +263,13 @@ class GroupLogReaderTest {
     }
 
     private companion object {
-        const val CHAT = -100L
+        val CHAT = testChat(-100)
     }
 
     private fun testConfig(dbPath: String) =
         AppConfig(
             agentMaxIterations = 70,
-            allowedIds = emptySet(),
+            accessPolicy = AccessPolicy(),
             appearance = null,
             databasePath = dbPath,
             elevenLabsApiKey = null,

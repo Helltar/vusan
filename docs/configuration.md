@@ -55,6 +55,10 @@ is actually deployed instead of a guess.
 negative IDs are groups, and an allowlisted group admits everyone in it. Empty or unset means Vusan
 answers nobody.
 
+A plain number is a Telegram ID. An entry may also name the messenger it belongs to —
+`telegram:123456789` — which is how the same number stays two different people once Vusan runs on
+more than one. Both lists take either form.
+
 | Variable     | Default | Description                                                |
 |--------------|---------|------------------------------------------------------------|
 | `BANNED_IDS` | empty   | IDs Vusan ignores, whatever else allows them. Same format. |

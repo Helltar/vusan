@@ -6,11 +6,12 @@ import java.time.Instant
 
 object ConversationSummariesTable : Table("conversation_summaries") {
 
-    val userId = long("user_id")
-    val chatId = long("chat_id")
+    val platform = platformColumn()
+    val userId = externalId("user_id")
+    val chatId = externalId("chat_id")
     val content = text("content")
     val throughMessageId = long("through_message_id")
     val updatedAt = timestamp("updated_at").clientDefault { Instant.now() }
 
-    override val primaryKey = PrimaryKey(userId, chatId)
+    override val primaryKey = PrimaryKey(platform, userId, chatId)
 }

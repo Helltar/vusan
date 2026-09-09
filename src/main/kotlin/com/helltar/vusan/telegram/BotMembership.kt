@@ -34,16 +34,16 @@ internal suspend fun parkTasksOnLostAccess(tasks: TasksRepository, membership: C
     val status = membership.newChatMember
     if (status.allowsPosting()) return
 
-    val chatId = membership.chat.id
+    val chat = telegramChat(membership.chat.id)
 
-    runCatching { tasks.pauseAllInChat(chatId) }
+    runCatching { tasks.pauseAllInChat(chat) }
         .onFailure { error ->
             error.rethrowIfCancellation()
-            log.error(error) { "failed to park scheduled tasks of chat=$chatId" }
+            log.error(error) { "failed to park scheduled tasks of chat=[$chat]" }
         }
         .onSuccess { paused ->
             log.info {
-                "bot can no longer post in chat=$chatId (status=${status.status}); " +
+                "bot can no longer post in chat=[$chat] (status=${status.status}); " +
                         "paused $paused scheduled task(s) there"
             }
         }

@@ -32,7 +32,7 @@ class TelegramOutputSenderTest {
             item = BotOutput.InlineChoice(
                 question = "Which format?",
                 options = listOf("PDF", "DOCX", "Plain text"),
-                ownerId = 42L,
+                ownerId = "42",
                 historyRevision = 7L,
                 originMessageId = 5L
             ),

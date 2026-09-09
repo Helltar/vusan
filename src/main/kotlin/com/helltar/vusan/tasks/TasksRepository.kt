@@ -3,6 +3,9 @@ package com.helltar.vusan.tasks
 import com.helltar.vusan.i18n.Language
 import com.helltar.vusan.infra.Db.dbTransaction
 import com.helltar.vusan.infra.tables.ScheduledTasksTable
+import com.helltar.vusan.request.ChatRef
+import com.helltar.vusan.request.ConversationScope
+import com.helltar.vusan.request.UserRef
 import org.jetbrains.exposed.v1.core.*
 import org.jetbrains.exposed.v1.jdbc.deleteWhere
 import org.jetbrains.exposed.v1.jdbc.insertAndGetId
@@ -17,8 +20,9 @@ class TasksRepository {
     suspend fun create(task: NewScheduledTask): Long = dbTransaction {
         ScheduledTasksTable
             .insertAndGetId {
-                it[userId] = task.userId
-                it[chatId] = task.chatId
+                it[platform] = task.scope.platform
+                it[userId] = task.scope.user.id
+                it[chatId] = task.scope.chat.id
                 it[prompt] = task.prompt
                 it[title] = task.title
                 it[recurrence] = task.recurrence.serialize()
@@ -37,19 +41,18 @@ class TasksRepository {
     // user-requested tasks and the bot's own follow-ups are counted against separate limits, so the
     // bot can never fill up the quota the user needs for their own reminders. [selfInitiated] null
     // counts both, which is what the task menu shows as the user's overall total.
-    suspend fun countEnabledByUser(userId: Long, selfInitiated: Boolean? = null): Int = dbTransaction {
-        var condition =
-            (ScheduledTasksTable.userId eq userId) and (ScheduledTasksTable.enabled eq true)
+    suspend fun countEnabledByUser(owner: UserRef, selfInitiated: Boolean? = null): Int = dbTransaction {
+        var condition = ownedBy(owner) and (ScheduledTasksTable.enabled eq true)
 
         selfInitiated?.let { condition = condition and (ScheduledTasksTable.selfInitiated eq it) }
 
         ScheduledTasksTable.selectAll().where { condition }.count().toInt()
     }
 
-    suspend fun listEnabledByUser(userId: Long, chatId: Long? = null): List<ScheduledTask> = dbTransaction {
+    suspend fun listEnabledByUser(owner: UserRef, chat: ChatRef? = null): List<ScheduledTask> = dbTransaction {
         ScheduledTasksTable
             .selectAll()
-            .where { enabledTaskCondition(userId, chatId = chatId) }
+            .where { enabledTaskCondition(owner, chat = chat) }
             .orderBy(ScheduledTasksTable.nextFireAt to SortOrder.ASC)
             .map { it.toScheduledTask() }
     }
@@ -66,39 +69,39 @@ class TasksRepository {
             .map { it.toScheduledTask() }
     }
 
-    suspend fun findEnabledForUser(userId: Long, id: Long, chatId: Long? = null): ScheduledTask? = dbTransaction {
+    suspend fun findEnabledForUser(owner: UserRef, id: Long, chat: ChatRef? = null): ScheduledTask? = dbTransaction {
         ScheduledTasksTable
             .selectAll()
-            .where { enabledTaskCondition(userId, id, chatId) }
+            .where { enabledTaskCondition(owner, id, chat) }
             .firstOrNull()
             ?.toScheduledTask()
     }
 
-    suspend fun pauseForUser(userId: Long, id: Long, chatId: Long? = null): Boolean = dbTransaction {
+    suspend fun pauseForUser(owner: UserRef, id: Long, chat: ChatRef? = null): Boolean = dbTransaction {
         ScheduledTasksTable
-            .update({ enabledTaskCondition(userId, id, chatId) }) {
+            .update({ enabledTaskCondition(owner, id, chat) }) {
                 it[paused] = true
             } > 0
     }
 
     suspend fun resumeForUser(
-        userId: Long,
+        owner: UserRef,
         id: Long,
         nextFireAt: Instant,
-        chatId: Long? = null
+        chat: ChatRef? = null
     ): Boolean = dbTransaction {
         ScheduledTasksTable
-            .update({ enabledTaskCondition(userId, id, chatId) }) {
+            .update({ enabledTaskCondition(owner, id, chat) }) {
                 it[ScheduledTasksTable.nextFireAt] = nextFireAt
                 it[paused] = false
             } > 0
     }
 
     suspend fun editEnabledForUser(
-        userId: Long,
+        owner: UserRef,
         original: ScheduledTask,
         edited: ScheduledTask,
-        chatId: Long? = null
+        chat: ChatRef? = null
     ): Boolean = dbTransaction {
         require(original.id == edited.id) { "original and edited task ids must match" }
 
@@ -106,7 +109,7 @@ class TasksRepository {
         // writing it back wholesale would silently undo a TaskScheduler reschedule that landed in between —
         // renaming a task would drag its fire time back to the already-fired slot.
         ScheduledTasksTable
-            .update({ enabledTaskCondition(userId, original.id, chatId) }) {
+            .update({ enabledTaskCondition(owner, original.id, chat) }) {
                 if (original.prompt != edited.prompt)
                     it[prompt] = edited.prompt
 
@@ -129,10 +132,10 @@ class TasksRepository {
      * right to post there: pausing rather than disabling keeps the tasks listed in `/tasks`, so their
      * owners can resume them if the bot gets back in.
      */
-    suspend fun pauseAllInChat(chatId: Long): Int = dbTransaction {
+    suspend fun pauseAllInChat(chat: ChatRef): Int = dbTransaction {
         ScheduledTasksTable
             .update({
-                (ScheduledTasksTable.chatId eq chatId) and
+                inChat(chat) and
                         (ScheduledTasksTable.enabled eq true) and
                         (ScheduledTasksTable.paused eq false)
             }) {
@@ -154,8 +157,8 @@ class TasksRepository {
             }
     }
 
-    suspend fun deleteEnabledForUser(userId: Long, id: Long, chatId: Long? = null): Boolean = dbTransaction {
-        ScheduledTasksTable.deleteWhere { enabledTaskCondition(userId, id, chatId) } > 0
+    suspend fun deleteEnabledForUser(owner: UserRef, id: Long, chat: ChatRef? = null): Boolean = dbTransaction {
+        ScheduledTasksTable.deleteWhere { enabledTaskCondition(owner, id, chat) } > 0
     }
 
     private fun ResultRow.toScheduledTask(): ScheduledTask {
@@ -164,8 +167,11 @@ class TasksRepository {
 
         return ScheduledTask(
             id = this[ScheduledTasksTable.id].value,
-            userId = this[ScheduledTasksTable.userId],
-            chatId = this[ScheduledTasksTable.chatId],
+            scope =
+                ConversationScope(
+                    user = UserRef(this[ScheduledTasksTable.platform], this[ScheduledTasksTable.userId]),
+                    chat = ChatRef(this[ScheduledTasksTable.platform], this[ScheduledTasksTable.chatId])
+                ),
             prompt = this[ScheduledTasksTable.prompt],
             title = this[ScheduledTasksTable.title],
             recurrence = Recurrence.parse(this[ScheduledTasksTable.recurrence]) ?: Recurrence.Once,
@@ -187,16 +193,20 @@ class TasksRepository {
     }
 
     private fun enabledTaskCondition(
-        userId: Long,
+        owner: UserRef,
         id: Long? = null,
-        chatId: Long? = null
+        chat: ChatRef? = null
     ): Op<Boolean> {
-        var condition =
-            (ScheduledTasksTable.userId eq userId) and
-                    (ScheduledTasksTable.enabled eq true)
+        var condition = ownedBy(owner) and (ScheduledTasksTable.enabled eq true)
 
         id?.let { condition = condition and (ScheduledTasksTable.id eq it) }
-        chatId?.let { condition = condition and (ScheduledTasksTable.chatId eq it) }
+        chat?.let { condition = condition and inChat(it) }
         return condition
     }
 }
+
+private fun ownedBy(owner: UserRef): Op<Boolean> =
+    (ScheduledTasksTable.platform eq owner.platform) and (ScheduledTasksTable.userId eq owner.id)
+
+private fun inChat(chat: ChatRef): Op<Boolean> =
+    (ScheduledTasksTable.platform eq chat.platform) and (ScheduledTasksTable.chatId eq chat.id)

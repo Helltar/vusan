@@ -7,6 +7,8 @@ import com.helltar.vusan.i18n.Language
 import com.helltar.vusan.infra.Db
 import com.helltar.vusan.request.RequestContext
 import com.helltar.vusan.request.requestContext
+import com.helltar.vusan.request.testScope
+import com.helltar.vusan.request.testUser
 import com.helltar.vusan.tasks.NewScheduledTask
 import com.helltar.vusan.tasks.Recurrence
 import com.helltar.vusan.tasks.TasksRepository
@@ -17,6 +19,7 @@ import java.time.ZoneId
 import java.time.temporal.ChronoUnit
 import kotlin.test.AfterTest
 import kotlin.test.BeforeTest
+import com.helltar.vusan.request.AccessPolicy
 import kotlin.test.Test
 import kotlin.test.assertContains
 import kotlin.test.assertEquals
@@ -53,10 +56,10 @@ class TaskToolsTest {
         val tools = tools(requestContext(chatId = 100L, userId = 100L))
 
         assertContains(tools.pauseTask(id), "Paused task id=$id")
-        assertTrue(assertNotNull(repo.findEnabledForUser(100L, id)).paused)
+        assertTrue(assertNotNull(repo.findEnabledForUser(testUser(100), id)).paused)
 
         assertContains(tools.resumeTask(id), "Resumed task id=$id")
-        val resumed = assertNotNull(repo.findEnabledForUser(100L, id))
+        val resumed = assertNotNull(repo.findEnabledForUser(testUser(100), id))
         assertFalse(resumed.paused)
         assertEquals(future.toEpochMilli(), resumed.nextFireAt.toEpochMilli())
     }
@@ -71,7 +74,7 @@ class TaskToolsTest {
                 recurrence = Recurrence.Every(1.hours),
                 nextFireAt = future
             )
-        repo.pauseForUser(100L, id)
+        repo.pauseForUser(testUser(100), id)
         val tools = tools(requestContext(chatId = 100L, userId = 100L))
 
         val result =
@@ -82,7 +85,7 @@ class TaskToolsTest {
             )
 
         assertContains(result, "Updated task id=$id")
-        val edited = assertNotNull(repo.findEnabledForUser(100L, id))
+        val edited = assertNotNull(repo.findEnabledForUser(testUser(100), id))
         assertEquals("send the revised report", edited.prompt)
         assertEquals(null, edited.title)
         assertEquals(Recurrence.Every(1.hours), edited.recurrence)
@@ -104,7 +107,7 @@ class TaskToolsTest {
             )
 
         assertContains(result, "Updated task id=$id")
-        val edited = assertNotNull(repo.findEnabledForUser(100L, id))
+        val edited = assertNotNull(repo.findEnabledForUser(testUser(100), id))
         assertEquals("Europe/Kyiv", edited.timezone.id)
         assertEquals("30 8 * * *", assertIs<Recurrence.Cron>(edited.recurrence).expression)
         assertTrue(edited.nextFireAt.isAfter(beforeEdit))
@@ -121,12 +124,12 @@ class TaskToolsTest {
                 recurrence = Recurrence.Every(1.hours),
                 nextFireAt = beforeResume.minusSeconds(10_800)
             )
-        repo.pauseForUser(100L, id)
+        repo.pauseForUser(testUser(100), id)
         val tools = tools(requestContext(chatId = 100L, userId = 100L))
 
         assertContains(tools.resumeTask(id), "Resumed task id=$id")
 
-        val resumed = assertNotNull(repo.findEnabledForUser(100L, id))
+        val resumed = assertNotNull(repo.findEnabledForUser(testUser(100), id))
         assertFalse(resumed.paused)
         assertTrue(resumed.nextFireAt.isAfter(beforeResume))
     }
@@ -139,13 +142,13 @@ class TaskToolsTest {
                 title = "old reminder",
                 nextFireAt = Instant.now().minusSeconds(60)
             )
-        repo.pauseForUser(100L, id)
+        repo.pauseForUser(testUser(100), id)
         val tools = tools(requestContext(chatId = 100L, userId = 100L))
 
         val result = tools.resumeTask(id)
 
         assertContains(result, "cannot be resumed")
-        assertTrue(assertNotNull(repo.findEnabledForUser(100L, id)).paused)
+        assertTrue(assertNotNull(repo.findEnabledForUser(testUser(100), id)).paused)
     }
 
     @Test
@@ -162,16 +165,16 @@ class TaskToolsTest {
         assertFalse(listed.contains("other group report"))
 
         assertContains(tools.pauseTask(otherId), "in this chat")
-        assertFalse(assertNotNull(repo.findEnabledForUser(100L, otherId)).paused)
+        assertFalse(assertNotNull(repo.findEnabledForUser(testUser(100), otherId)).paused)
 
         assertContains(tools.editTask(otherId, title = "leaked title"), "in this chat")
-        assertEquals("other group report", assertNotNull(repo.findEnabledForUser(100L, otherId)).title)
+        assertEquals("other group report", assertNotNull(repo.findEnabledForUser(testUser(100), otherId)).title)
 
         assertContains(tools.pauseTask(currentId), "Paused task id=$currentId")
-        assertTrue(assertNotNull(repo.findEnabledForUser(100L, currentId)).paused)
+        assertTrue(assertNotNull(repo.findEnabledForUser(testUser(100), currentId)).paused)
 
         assertContains(tools.cancelTask(otherId), "in this chat")
-        assertNotNull(repo.findEnabledForUser(100L, otherId))
+        assertNotNull(repo.findEnabledForUser(testUser(100), otherId))
         Unit
     }
 
@@ -182,7 +185,7 @@ class TaskToolsTest {
 
         assertContains(tools.scheduleFollowUp("ask how the exam went", at.toString()), "Follow-up id=")
 
-        val stored = assertNotNull(repo.listEnabledByUser(100L).singleOrNull())
+        val stored = assertNotNull(repo.listEnabledByUser(testUser(100)).singleOrNull())
         assertTrue(stored.selfInitiated)
         assertIs<Recurrence.Once>(stored.recurrence)
         assertEquals(7L, stored.creatorMessageId)
@@ -207,7 +210,7 @@ class TaskToolsTest {
         val past = Instant.now().atZone(ZoneId.systemDefault()).minusDays(1).toLocalDateTime().truncatedTo(ChronoUnit.MINUTES)
 
         assertContains(tools.scheduleFollowUp("too late", past.toString()), "in the past")
-        assertTrue(repo.listEnabledByUser(100L).isEmpty())
+        assertTrue(repo.listEnabledByUser(testUser(100)).isEmpty())
     }
 
     private fun tools(context: RequestContext) =
@@ -221,8 +224,7 @@ class TaskToolsTest {
     ): Long =
         repo.create(
             NewScheduledTask(
-                userId = 100L,
-                chatId = chatId,
+                scope = testScope(userId = 100, chatId = chatId),
                 prompt = "run $title",
                 title = title,
                 recurrence = recurrence,
@@ -240,7 +242,7 @@ class TaskToolsTest {
     private fun testConfig(dbPath: String) =
         AppConfig(
             agentMaxIterations = 70,
-            allowedIds = emptySet(),
+            accessPolicy = AccessPolicy(),
             appearance = null,
             databasePath = dbPath,
             elevenLabsApiKey = null,

@@ -36,7 +36,7 @@ class GroupLogTools(
             return@suspendToolGuard "Window `$window` is too long. The chat log only reaches back `90d`."
 
         reader.read(
-            chatId = context.chat.id,
+            chat = context.chatRef,
             window = parsed,
             author = author?.trim()?.takeIf { it.isNotEmpty() }
         )
@@ -48,7 +48,7 @@ class GroupLogTools(
         if (context.chat.isPrivate)
             return@suspendToolGuard "No group chat log in a private chat — use `/clear` to wipe this conversation."
 
-        val removed = repository.clear(context.chat.id)
+        val removed = repository.clear(context.chatRef)
 
         "Deleted this group's recorded messages ($removed) and every cached daily recap."
     }

@@ -8,7 +8,8 @@ import java.time.Instant
 // only days that can no longer receive messages are stored — see GroupLogRepository.
 object GroupLogDigestsTable : LongIdTable("group_log_digests") {
 
-    val chatId = long("chat_id")
+    val platform = platformColumn()
+    val chatId = externalId("chat_id")
 
     // local date as `yyyy-MM-dd`; the zone is the bot's own, the same one the model is told about.
     val day = varchar("day", 10)
@@ -18,6 +19,6 @@ object GroupLogDigestsTable : LongIdTable("group_log_digests") {
     val createdAt = timestamp("created_at").clientDefault { Instant.now() }
 
     init {
-        uniqueIndex(chatId, day)
+        uniqueIndex(platform, chatId, day)
     }
 }

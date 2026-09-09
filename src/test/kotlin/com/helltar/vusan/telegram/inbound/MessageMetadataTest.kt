@@ -283,7 +283,7 @@ class MessageMetadataTest {
                 chat = """{"id": -100, "type": "supergroup", "is_forum": true, "title": "Crew"}"""
             ).toChatContext(profile)
 
-        assertEquals(-100L, context.id)
+        assertEquals("-100", context.id)
         assertEquals("supergroup_forum", context.type)
         assertEquals(77, context.threadId)
         assertEquals("Crew", context.title)

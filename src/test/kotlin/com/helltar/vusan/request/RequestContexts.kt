@@ -19,10 +19,24 @@ internal fun requestContext(
     capabilities: ChatCapabilities = ChatCapabilities.UNRESTRICTED
 ): RequestContext =
     RequestContext(
-        chat = ChatContext(id = chatId, isPrivate = isPrivate, capabilities = capabilities),
-        sender = SenderContext(id = userId),
+        platform = Platform.TELEGRAM,
+        chat = ChatContext(id = chatId.toString(), isPrivate = isPrivate, capabilities = capabilities),
+        sender = SenderContext(id = userId.toString()),
         messageId = messageId,
         replyToMessageId = replyToMessageId,
         attachedFiles = attachedFiles,
         language = language
     )
+
+internal fun testUser(id: Long = 1L, platform: Platform = Platform.TELEGRAM): UserRef =
+    UserRef(platform, id.toString())
+
+internal fun testChat(id: Long = -100L, platform: Platform = Platform.TELEGRAM): ChatRef =
+    ChatRef(platform, id.toString())
+
+internal fun testScope(
+    userId: Long = 1L,
+    chatId: Long = -100L,
+    platform: Platform = Platform.TELEGRAM
+): ConversationScope =
+    ConversationScope(testUser(userId, platform), testChat(chatId, platform))

@@ -31,7 +31,7 @@ class StickerTools(
         maxResults: Int = DEFAULT_SEARCH_RESULTS
     ): String = suspendToolGuard {
         val cleanedQuery = query.requireToolText("query", MAX_QUERY_CHARS)
-        val matches = catalog.search(context.chat.id, cleanedQuery, maxResults.coerceIn(1, MAX_SEARCH_RESULTS))
+        val matches = catalog.search(context.chatRef, cleanedQuery, maxResults.coerceIn(1, MAX_SEARCH_RESULTS))
 
         if (matches.isEmpty()) {
             return@suspendToolGuard "No stickers matched query=[$cleanedQuery]. Try one short English synonym, " +
@@ -49,7 +49,7 @@ class StickerTools(
         id: Long
     ): String = suspendToolGuard {
         val fileId =
-            catalog.fileIdFor(context.chat.id, id)
+            catalog.fileIdFor(context.chatRef, id)
                 ?: return@suspendToolGuard "No sticker id=$id in this chat's catalog. Use an id listed in " +
                         "`<sticker_catalog>` or returned by `searchStickers`."
 

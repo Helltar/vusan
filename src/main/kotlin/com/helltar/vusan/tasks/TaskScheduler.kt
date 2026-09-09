@@ -5,8 +5,12 @@ import com.helltar.vusan.agent.AgentRunner
 import com.helltar.vusan.budget.TokenBudget
 import com.helltar.vusan.common.rethrowIfCancellation
 import com.helltar.vusan.i18n.Messages
+import com.helltar.vusan.request.AccessPolicy
 import com.helltar.vusan.request.ChatProfile
+import com.helltar.vusan.request.ChatRef
 import com.helltar.vusan.telegram.ChatProfiles
+import com.helltar.vusan.telegram.telegramChatId
+import com.helltar.vusan.telegram.telegramUserId
 import com.helltar.vusan.telegram.delivery.ScheduledAttribution
 import com.helltar.vusan.telegram.delivery.TelegramDelivery
 import io.github.oshai.kotlinlogging.KotlinLogging
@@ -25,7 +29,7 @@ class TaskScheduler(
     private val maxLateness: Duration,
     private val chatProfiles: ChatProfiles,
     private val tokenBudget: TokenBudget = TokenBudget(),
-    private val bannedIds: Set<Long> = emptySet()
+    private val accessPolicy: AccessPolicy = AccessPolicy()
 ) {
 
     private enum class FireOutcome { Delivered, RunFailed, ChatUnreachable }
@@ -78,8 +82,8 @@ class TaskScheduler(
     private suspend fun processOne(task: ScheduledTask, now: Instant) {
         // a banned owner's tasks keep their schedule but never run, and never report themselves as missed
         // either; lifting the ban resumes them instead of resurrecting a backlog of skipped fires.
-        if (task.userId in bannedIds || task.chatId in bannedIds) {
-            log.info { "task id=${task.id} skipped: user=${task.userId} chat=${task.chatId} is banned" }
+        if (accessPolicy.bans(task.scope.chat, task.scope.user)) {
+            log.info { "task id=${task.id} skipped: ${task.scope} is banned" }
             rescheduleAfterFire(task, now)
             return
         }
@@ -94,7 +98,7 @@ class TaskScheduler(
         // no tokens for this task's owner: skip the run and move the recurrence on, the way an offline window
         // is skipped. spending the retry attempts here would only burn the next day's budget on a stale task,
         // and a notice per due task would fill the chat for as long as the budget stays out.
-        tokenBudget.stopFor(task.userId)?.let { stop ->
+        tokenBudget.stopFor(task.scope.user)?.let { stop ->
             log.warn {
                 "task id=${task.id} skipped: token budget stop reason=${stop::class.simpleName} " +
                         "resetsIn=${stop.untilReset}"
@@ -115,7 +119,7 @@ class TaskScheduler(
                 }
 
         if (chatUnreachable) {
-            parkTasksOfUnreachableChat(task.chatId)
+            parkTasksOfUnreachableChat(task.scope.chat)
             return
         }
 
@@ -140,7 +144,7 @@ class TaskScheduler(
         // the notice costs one API call and the run costs a whole agent turn, so a chat that refuses
         // even the notice is caught here rather than on the next on-time fire.
         if (!delivered) {
-            parkTasksOfUnreachableChat(task.chatId)
+            parkTasksOfUnreachableChat(task.scope.chat)
             return
         }
 
@@ -176,17 +180,17 @@ class TaskScheduler(
     // the bot cannot post into this chat any more: it was removed from the group, the user blocked it,
     // or an admin took its right to write away. every task scheduled there would run the whole agent and
     // only then fail at the send, so the whole chat is parked at once instead of once per task per fire.
-    private suspend fun parkTasksOfUnreachableChat(chatId: Long) {
-        val paused = repo.pauseAllInChat(chatId)
+    private suspend fun parkTasksOfUnreachableChat(chat: ChatRef) {
+        val paused = repo.pauseAllInChat(chat)
 
-        log.warn { "chat=$chatId is unreachable; paused $paused scheduled task(s) there" }
+        log.warn { "chat=[$chat] is unreachable; paused $paused scheduled task(s) there" }
     }
 
     // one full run of the task. `RunFailed` means the run itself failed with nothing delivered, so it is
     // safe to repeat; a failed delivery is not retried, since part of the answer may already be in the chat.
     private suspend fun runAttempt(task: ScheduledTask, attempt: Int): FireOutcome {
         log.info {
-            "firing task id=${task.id} user=${task.userId} chat=${task.chatId} " +
+            "firing task id=${task.id} ${task.scope} " +
                     "recurrence=[${task.recurrence.display}] attempt=$attempt/$MAX_ATTEMPTS"
         }
 
@@ -209,7 +213,7 @@ class TaskScheduler(
                 delivery.sendScheduled(
                     result = result,
                     target = task.chatTarget,
-                    userId = task.userId,
+                    userId = task.scope.user.telegramUserId,
                     messages = Messages.of(task.language),
                     attribution = attributionFor(task)
                 )
@@ -227,7 +231,7 @@ class TaskScheduler(
     // a task is the case this matters most for: nobody is waiting to be told the chat refused the
     // answer, and the whole agent run is spent before the first send would say so.
     private suspend fun chatProfileFor(task: ScheduledTask): ChatProfile =
-        if (task.chatIsPrivate) ChatProfile.NONE else chatProfiles.of(task.chatId)
+        if (task.chatIsPrivate) ChatProfile.NONE else chatProfiles.of(task.scope.chat.telegramChatId)
 
     private suspend fun rescheduleAfterFire(task: ScheduledTask, now: Instant) {
         val nextFire = task.recurrence.catchUpAfter(task.nextFireAt, task.timezone, now)
@@ -244,8 +248,10 @@ class TaskScheduler(
         val mention =
             when {
                 task.creatorUsername != null -> "@${task.creatorUsername}"
-                task.creatorDisplayName != null -> "[${task.creatorDisplayName}](tg://user?id=${task.userId})"
-                else -> "user ${task.userId}"
+                task.creatorDisplayName != null ->
+                    "[${task.creatorDisplayName}](tg://user?id=${task.scope.user.id})"
+
+                else -> "user ${task.scope.user.id}"
             }
 
         val messages = Messages.of(task.language)

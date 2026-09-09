@@ -2,7 +2,9 @@ package com.helltar.vusan.tools.choice
 
 import com.helltar.vusan.outbox.BotOutbox
 import com.helltar.vusan.outbox.BotOutput
+import com.helltar.vusan.request.ConversationScope
 import com.helltar.vusan.request.requestContext
+import com.helltar.vusan.request.testScope
 import com.helltar.vusan.tools.toolFailure
 import kotlin.test.Test
 import kotlin.test.assertEquals
@@ -17,12 +19,10 @@ class InlineChoiceToolsTest {
     @Test
     fun `askWithButtons stores a normalized owner-bound choice`() = runBlocking {
         val outbox = BotOutbox()
-        var revisionOwnerId: Long? = null
-        var revisionChatId: Long? = null
+        var revisionScope: ConversationScope? = null
         val tools =
-            InlineChoiceTools(requestContext(chatId = 7L, userId = 42L, messageId = 9L), outbox) { userId, chatId ->
-                revisionOwnerId = userId
-                revisionChatId = chatId
+            InlineChoiceTools(requestContext(chatId = 7L, userId = 42L, messageId = 9L), outbox) { scope ->
+                revisionScope = scope
                 7L
             }
 
@@ -41,14 +41,14 @@ class InlineChoiceToolsTest {
             BotOutput.InlineChoice(
                 question = "Which format do you want?",
                 options = listOf("PDF", "DOCX"),
-                ownerId = 42L,
+                ownerId = "42",
                 historyRevision = 7L,
                 originMessageId = 9L
             ),
             outbox.pending.single().output
         )
-        assertEquals(42L, revisionOwnerId)
-        assertEquals(7L, revisionChatId, "a button is invalidated by the history of this chat, not of every chat")
+        // a button is invalidated by the history of this chat, not of every chat this person writes in.
+        assertEquals(testScope(userId = 42, chatId = 7), revisionScope)
     }
 
     // the question is what the answer will be tied back to, so a turn with no message of its own —
@@ -56,7 +56,7 @@ class InlineChoiceToolsTest {
     @Test
     fun `a question asked by a turn without a message carries no origin`() = runBlocking {
         val outbox = BotOutbox()
-        val tools = InlineChoiceTools(requestContext(chatId = 7L, userId = 42L, messageId = null), outbox) { _, _ -> 1L }
+        val tools = InlineChoiceTools(requestContext(chatId = 7L, userId = 42L, messageId = null), outbox) { _ -> 1L }
 
         tools.askWithButtons("Which format do you want?", listOf("PDF", "DOCX"))
 
@@ -67,7 +67,7 @@ class InlineChoiceToolsTest {
     @Test
     fun `askWithButtons rejects duplicate options`() = runBlocking {
         val outbox = BotOutbox()
-        val tools = InlineChoiceTools(requestContext(chatId = 7L, userId = 42L, messageId = 9L), outbox) { _, _ -> 0L }
+        val tools = InlineChoiceTools(requestContext(chatId = 7L, userId = 42L, messageId = 9L), outbox) { _ -> 0L }
 
         val message = toolFailure { tools.askWithButtons("Continue?", listOf("Yes", "yes")) }
 
@@ -85,7 +85,7 @@ class InlineChoiceToolsTest {
         }
 
         outbox.useDirectMessages()
-        val tools = InlineChoiceTools(requestContext(chatId = -7L, userId = 42L, messageId = 9L), outbox) { _, _ -> 0L }
+        val tools = InlineChoiceTools(requestContext(chatId = -7L, userId = 42L, messageId = 9L), outbox) { _ -> 0L }
         tools.askWithButtons("Continue in private?", listOf("Yes", "No"))
 
         val choice = outbox.pending.last()

@@ -8,7 +8,8 @@ import org.jetbrains.exposed.v1.javatime.timestamp
 // holds just the turns the bot took part in.
 object GroupLogTable : LongIdTable("group_log") {
 
-    val chatId = long("chat_id")
+    val platform = platformColumn()
+    val chatId = externalId("chat_id")
 
     // null for the bot's own messages: delivery does not carry the sent message id back.
     val messageId = long("message_id").nullable()
@@ -16,7 +17,7 @@ object GroupLogTable : LongIdTable("group_log") {
     val threadId = long("thread_id").nullable()
 
     // null for anonymous admins and for posts forwarded in by a linked channel.
-    val senderId = long("sender_id").nullable()
+    val senderId = externalId("sender_id").nullable()
 
     val senderUsername = varchar("sender_username", 64).nullable()
     val senderName = varchar("sender_name", 200).nullable()
@@ -34,10 +35,10 @@ object GroupLogTable : LongIdTable("group_log") {
     val sentAt = timestamp("sent_at")
 
     init {
-        index(false, chatId, sentAt)
+        index(false, platform, chatId, sentAt)
 
         // an update redelivered after a crash must not duplicate a row. SQLite treats NULLs as
         // distinct here, so the bot's own rows never collide with each other.
-        uniqueIndex(chatId, messageId)
+        uniqueIndex(platform, chatId, messageId)
     }
 }

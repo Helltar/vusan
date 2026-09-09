@@ -6,8 +6,9 @@ import java.time.Instant
 
 object ScheduledTasksTable : LongIdTable("scheduled_tasks") {
 
-    val userId = long("user_id")
-    val chatId = long("chat_id")
+    val platform = platformColumn()
+    val userId = externalId("user_id")
+    val chatId = externalId("chat_id")
     val title = varchar("title", 200).nullable()
     val prompt = text("prompt")
     val recurrence = varchar("recurrence", 100)
@@ -26,7 +27,7 @@ object ScheduledTasksTable : LongIdTable("scheduled_tasks") {
     val creatorDisplayName = varchar("creator_display_name", 200).nullable()
 
     init {
-        index(false, userId, enabled)
+        index(false, platform, userId, enabled)
         index(false, enabled, paused, nextFireAt)
     }
 }

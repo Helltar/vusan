@@ -10,6 +10,9 @@ import com.helltar.vusan.tasks.TasksRepository
 import com.helltar.vusan.tasks.formatFire
 import com.helltar.vusan.tasks.nextFireAfterResume
 import com.helltar.vusan.telegram.delivery.ChatTarget
+import com.helltar.vusan.telegram.telegramChat
+import com.helltar.vusan.telegram.telegramUser
+import com.helltar.vusan.telegram.telegramUserId
 import com.helltar.vusan.telegram.delivery.answerCallbackQuery
 import com.helltar.vusan.telegram.delivery.editTextMessage
 import com.helltar.vusan.telegram.delivery.isMessageNotModified
@@ -98,7 +101,7 @@ internal class TaskMenuHandler(
                 is TaskMenuAction.Back -> editMenu(chatId, messageId, userId, chatIsPrivate, messages)
 
                 is TaskMenuAction.Pause -> {
-                    if (!tasks.pauseForUser(userId, action.taskId, scopedChatId)) {
+                    if (!tasks.pauseForUser(telegramUser(userId), action.taskId, scopedChatId?.let(::telegramChat))) {
                         editMenu(chatId, messageId, userId, chatIsPrivate, messages)
                         return answerUnavailable(callbackQueryId, messages)
                     }
@@ -107,7 +110,7 @@ internal class TaskMenuHandler(
                 }
 
                 is TaskMenuAction.Resume -> {
-                    val task = tasks.findEnabledForUser(userId, action.taskId, scopedChatId)
+                    val task = tasks.findEnabledForUser(telegramUser(userId), action.taskId, scopedChatId?.let(::telegramChat))
 
                     if (task == null) {
                         editMenu(chatId, messageId, userId, chatIsPrivate, messages)
@@ -126,7 +129,7 @@ internal class TaskMenuHandler(
                         return
                     }
 
-                    if (!tasks.resumeForUser(userId, action.taskId, nextFireAt, scopedChatId)) {
+                    if (!tasks.resumeForUser(telegramUser(userId), action.taskId, nextFireAt, scopedChatId?.let(::telegramChat))) {
                         editMenu(chatId, messageId, userId, chatIsPrivate, messages)
                         return answerUnavailable(callbackQueryId, messages)
                     }
@@ -135,7 +138,7 @@ internal class TaskMenuHandler(
                 }
 
                 is TaskMenuAction.ConfirmDelete -> {
-                    val task = tasks.findEnabledForUser(userId, action.taskId, scopedChatId)
+                    val task = tasks.findEnabledForUser(telegramUser(userId), action.taskId, scopedChatId?.let(::telegramChat))
 
                     if (task == null) {
                         editMenu(chatId, messageId, userId, chatIsPrivate, messages)
@@ -146,7 +149,7 @@ internal class TaskMenuHandler(
                 }
 
                 is TaskMenuAction.Delete -> {
-                    if (!tasks.deleteEnabledForUser(userId, action.taskId, scopedChatId)) {
+                    if (!tasks.deleteEnabledForUser(telegramUser(userId), action.taskId, scopedChatId?.let(::telegramChat))) {
                         editMenu(chatId, messageId, userId, chatIsPrivate, messages)
                         return answerUnavailable(callbackQueryId, messages)
                     }
@@ -205,11 +208,11 @@ internal class TaskMenuHandler(
                         InlineKeyboardRow(
                             callbackButton(
                                 messages.taskMenuDeleteButton,
-                                TaskMenuAction.Delete(task.userId, task.id).serialize()
+                                TaskMenuAction.Delete(task.scope.user.telegramUserId, task.id).serialize()
                             ),
                             callbackButton(
                                 messages.taskMenuBackButton,
-                                TaskMenuAction.Back(task.userId).serialize()
+                                TaskMenuAction.Back(task.scope.user.telegramUserId).serialize()
                             )
                         )
                     )
@@ -231,10 +234,10 @@ internal class TaskMenuHandler(
         messages: Messages
     ): TaskMenu {
         val currentChatOnly = !chatIsPrivate
-        val listedTasks = tasks.listEnabledByUser(userId, chatId.takeIf { currentChatOnly })
+        val listedTasks = tasks.listEnabledByUser(telegramUser(userId), chatId.takeIf { currentChatOnly }?.let(::telegramChat))
         // the capacity line is paired with MAX_TASKS_PER_USER, so it counts what that limit governs. the
         // bot's own follow-ups are listed below it but have their own separate limit.
-        val totalTasks = tasks.countEnabledByUser(userId, selfInitiated = false)
+        val totalTasks = tasks.countEnabledByUser(telegramUser(userId), selfInitiated = false)
 
         val shownTasks = listedTasks.fittingInMenu(messages)
         val hiddenTasks = listedTasks.size - shownTasks.size

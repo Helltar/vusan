@@ -8,7 +8,7 @@ import com.helltar.vusan.agent.grouplog.withoutExchangesWith
 import com.helltar.vusan.agent.conversation.*
 import com.helltar.vusan.agent.memory.MemoryEntry
 import com.helltar.vusan.agent.memory.MemoryRepository
-import com.helltar.vusan.agent.memory.MemoryScope
+import com.helltar.vusan.agent.memory.memoryOwner
 import com.helltar.vusan.budget.BudgetOwner
 import com.helltar.vusan.budget.TokenBudget
 import com.helltar.vusan.budget.TokenBudgetStop
@@ -26,7 +26,10 @@ import com.helltar.vusan.i18n.Messages
 import com.helltar.vusan.outbox.BotOutbox
 import com.helltar.vusan.outbox.BotOutput
 import com.helltar.vusan.outbox.OutboxItem
+import com.helltar.vusan.request.ChatRef
+import com.helltar.vusan.request.ConversationScope
 import com.helltar.vusan.request.RequestContext
+import com.helltar.vusan.request.UserRef
 import com.helltar.vusan.tools.choice.InlineChoiceTools
 import com.helltar.vusan.tools.message.MessageTools
 import com.helltar.vusan.tools.sticker.StickerCatalog
@@ -94,8 +97,8 @@ class AgentRunner(
         val log = KotlinLogging.logger {}
     }
 
-    private val conversationLocks = HashMap<ConversationKey, ConversationLock>()
-    private val running = RunningTurns<ConversationKey>()
+    private val conversationLocks = HashMap<ConversationScope, ConversationLock>()
+    private val running = RunningTurns<ConversationScope>()
 
     suspend fun handle(
         request: AgentRequest,
@@ -103,7 +106,7 @@ class AgentRunner(
         narrator: TurnNarrator? = null
     ): AgentResult {
         val context = request.context
-        val key = ConversationKey(context.sender.id, context.chat.id)
+        val key = context.scope
         val lock = retainLock(key)
 
         try {
@@ -127,8 +130,8 @@ class AgentRunner(
      * are children of the same job. A workspace command outlives it on its own machine, bounded by its own
      * timeout, and the model can list and cancel those separately.
      */
-    fun stop(userId: Long, chatId: Long): Boolean =
-        running.cancel(ConversationKey(userId, chatId))
+    fun stop(scope: ConversationScope): Boolean =
+        running.cancel(scope)
 
     suspend fun handleScheduled(request: AgentRequest): AgentResult =
         handleQueued(request)
@@ -139,7 +142,7 @@ class AgentRunner(
         narrator: TurnNarrator? = null
     ): AgentResult {
         val context = request.context
-        val key = ConversationKey(context.sender.id, context.chat.id)
+        val key = context.scope
         val lock = retainLock(key)
 
         try {
@@ -154,14 +157,13 @@ class AgentRunner(
     // the lock is keyed by what it guards, one conversation, so the same person writing in two chats is
     // served in both instead of being told the bot is busy.
     // `clearConversation` runs inside a turn and must keep using the repository directly.
-    suspend fun clearConversation(userId: Long, chatId: Long) {
-        val key = ConversationKey(userId, chatId)
-        val lock = retainLock(key)
+    suspend fun clearConversation(scope: ConversationScope) {
+        val lock = retainLock(scope)
 
         try {
-            lock.withLock { conversation.clear(userId, chatId) }
+            lock.withLock { conversation.clear(scope) }
         } finally {
-            releaseLock(key)
+            releaseLock(scope)
         }
     }
 
@@ -172,7 +174,7 @@ class AgentRunner(
     ): AgentResult {
         val context = request.context
 
-        tokenBudget.stopFor(context.sender.id)?.let { stop ->
+        tokenBudget.stopFor(context.user)?.let { stop ->
             log.warn {
                 "token budget stop before the turn: chat=${context.chat.id} user=${context.sender.id} " +
                         "reason=${stop::class.simpleName} resetsIn=${stop.untilReset}"
@@ -183,7 +185,7 @@ class AgentRunner(
 
         // the turn spends tokens in places that never see the request — a history recap, a vision tool —
         // so its author rides along in the coroutine context and every one of those calls is charged to them.
-        return withContext(BudgetOwner(context.sender.id)) { runTurn(request, onToolStarting, narrator) }
+        return withContext(BudgetOwner(context.user)) { runTurn(request, onToolStarting, narrator) }
     }
 
     private suspend fun runTurn(
@@ -192,15 +194,15 @@ class AgentRunner(
         narrator: TurnNarrator?
     ): AgentResult {
         val context = request.context
-        val userMemory = if (context.sender.isPerson) memory.load(MemoryScope.USER, context.sender.id) else emptyList()
-        val chatMemory = if (context.chat.isPrivate) emptyList() else memory.load(MemoryScope.CHAT, context.chat.id)
+        val userMemory = if (context.sender.isPerson) memory.load(context.user.memoryOwner) else emptyList()
+        val chatMemory = if (context.chat.isPrivate) emptyList() else memory.load(context.chatRef.memoryOwner)
 
         val currentTurn =
             currentTurnPrompt(
                 userInput = request.prompt,
                 context = context,
                 // the turn is stored only after the run, so this still points at the previous exchange.
-                previousExchangeAt = conversation.lastInteractionAt(context.sender.id, context.chat.id),
+                previousExchangeAt = conversation.lastInteractionAt(context.scope),
                 userMemory = userMemory,
                 chatMemory = chatMemory,
                 recentChat = recentChatFor(context),
@@ -217,7 +219,7 @@ class AgentRunner(
             )
 
         val conversationPlan =
-            conversationPlanForPrompt(context.sender.id, context.chat.id, preparation.tokenBudget.conversationTokens)
+            conversationPlanForPrompt(context.scope, preparation.tokenBudget.conversationTokens)
         val plannedInputTokens = preparation.tokenBudget.fixedPromptTokens + conversationPlan.estimatedTokens
 
         log.info {
@@ -250,7 +252,7 @@ class AgentRunner(
         val answer =
             try {
                 runAgentWithConversation(
-                    userId = context.sender.id,
+                    scope = context.scope,
                     currentTurn = currentTurn,
                     conversation = conversationPlan.prompt,
                     preparation = preparation,
@@ -312,13 +314,12 @@ class AgentRunner(
         }
 
         if (turns.isNotEmpty()) {
-            conversation.appendInteraction(context.sender.id, context.chat.id, turns)
+            conversation.appendInteraction(context.scope, turns)
         }
 
         val pruned =
             conversation.pruneCompacted(
-                userId = context.sender.id,
-                chatId = context.chat.id,
+                scope = context.scope,
                 maxStoredInteractions = conversationConfig.maxStoredInteractions,
                 rawRetentionCutoff = Instant.now().minus(conversationConfig.retentionDays.toLong(), ChronoUnit.DAYS)
             )
@@ -336,7 +337,7 @@ class AgentRunner(
     private suspend fun stickerCatalogFor(context: RequestContext): String? =
         stickers
             ?.takeIf { context.chat.capabilities.stickersAndAnimations }
-            ?.indexBlockFor(context.chat.id)
+            ?.indexBlockFor(context.chatRef)
 
     // what the group was saying just before this turn. in a group the bot only ever sees the messages
     // addressed to it, so without this a question like "and what do you think?" arrives with no subject.
@@ -347,7 +348,7 @@ class AgentRunner(
         val entries =
             try {
                 repository.recent(
-                    chatId = context.chat.id,
+                    chat = context.chatRef,
                     // over-fetch: dropping this user's own exchanges below must not thin the slice out.
                     limit = groupLogConfig.recentMessages * RECENT_CHAT_OVERFETCH,
                     since = Instant.now().minus(groupLogConfig.recentMinutes.toLong(), ChronoUnit.MINUTES),
@@ -371,8 +372,8 @@ class AgentRunner(
 
     // at most one recap per turn: it is an extra LLM round trip in front of the user's reply. whatever
     // is still over budget stays out of this prompt and gets its own recap on a later turn.
-    private suspend fun conversationPlanForPrompt(userId: Long, chatId: Long, tokenBudget: Int): ConversationPlan {
-        val snapshot = conversation.load(userId, chatId)
+    private suspend fun conversationPlanForPrompt(scope: ConversationScope, tokenBudget: Int): ConversationPlan {
+        val snapshot = conversation.load(scope)
         val plan = planFor(snapshot, tokenBudget)
 
         if (plan.compactablePrefix.isEmpty()) return plan
@@ -383,7 +384,7 @@ class AgentRunner(
             } catch (e: Throwable) {
                 e.rethrowIfCancellation()
                 log.warn {
-                    "history recap failed for user=$userId chat=$chatId: " +
+                    "history recap failed for $scope: " +
                             e.message?.collapseWhitespaceAndCap(PROVIDER_ERROR_LOG_MAX_CHARS).orEmpty()
                 }
                 return plan
@@ -391,8 +392,7 @@ class AgentRunner(
 
         val stored =
             conversation.storeSummary(
-                userId = userId,
-                chatId = chatId,
+                scope = scope,
                 expectedThroughMessageId = snapshot.summarizedThroughMessageId,
                 throughMessageId = compacted.throughMessageId,
                 content = compacted.summary
@@ -400,17 +400,17 @@ class AgentRunner(
 
         if (!stored) {
             log.warn {
-                "history recap checkpoint changed before store for user=$userId chat=$chatId; keeping the raw history"
+                "history recap checkpoint changed before store for $scope; keeping the raw history"
             }
             return plan
         }
 
         log.info {
-            "history recap stored: user=$userId chat=$chatId interactions=${compacted.interactionCount} " +
+            "history recap stored: $scope interactions=${compacted.interactionCount} " +
                     "throughMessage=${compacted.throughMessageId} chars=${compacted.summary.length}"
         }
 
-        return planFor(conversation.load(userId, chatId), tokenBudget)
+        return planFor(conversation.load(scope), tokenBudget)
     }
 
     private fun planFor(snapshot: ConversationSnapshot, tokenBudget: Int): ConversationPlan =
@@ -421,7 +421,7 @@ class AgentRunner(
         )
 
     private suspend fun runAgentWithConversation(
-        userId: Long,
+        scope: ConversationScope,
         currentTurn: String,
         conversation: PromptConversation,
         preparation: AgentPromptPreparation,
@@ -433,7 +433,7 @@ class AgentRunner(
         suspend fun run(prompt: PromptConversation): String =
             agentFactory
                 .build(
-                    userId = userId,
+                    scope = scope,
                     conversation = prompt,
                     preparation = preparation,
                     outbox = outbox,
@@ -461,7 +461,7 @@ class AgentRunner(
 
             if (!safeToRetry) throw e
 
-            log.warn { "context limit exceeded for user=$userId; retrying once with recap only" }
+            log.warn { "context limit exceeded for $scope; retrying once with recap only" }
             run(emergencyConversation)
         }
     }
@@ -508,19 +508,17 @@ class AgentRunner(
         return messages.providerErrorReply(providerError)
     }
 
-    private fun retainLock(key: ConversationKey): Mutex =
+    private fun retainLock(key: ConversationScope): Mutex =
         synchronized(conversationLocks) {
             conversationLocks.getOrPut(key) { ConversationLock() }.also { it.refCount++ }.mutex
         }
 
-    private fun releaseLock(key: ConversationKey) {
+    private fun releaseLock(key: ConversationScope) {
         synchronized(conversationLocks) {
             val entry = conversationLocks[key] ?: return
             if (--entry.refCount <= 0) conversationLocks.remove(key)
         }
     }
-
-    private data class ConversationKey(val userId: Long, val chatId: Long)
 
     private class ConversationLock(val mutex: Mutex = Mutex(), var refCount: Int = 0)
 }

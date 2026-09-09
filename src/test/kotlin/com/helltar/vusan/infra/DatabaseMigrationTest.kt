@@ -5,6 +5,7 @@ import com.helltar.vusan.config.HostedLlmProvider
 import com.helltar.vusan.config.LlmProviderConfig
 import java.nio.file.Files
 import java.sql.DriverManager
+import com.helltar.vusan.request.AccessPolicy
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertTrue
@@ -50,7 +51,7 @@ class DatabaseMigrationTest {
 
             val indexed = scheduledTaskIndexColumns(dbPath.toString())
             assertTrue(listOf("enabled", "paused", "next_fire_at") in indexed, "indices were $indexed")
-            assertTrue(listOf("user_id", "enabled") in indexed, "indices were $indexed")
+            assertTrue(listOf("platform", "user_id", "enabled") in indexed, "indices were $indexed")
         } finally {
             runBlocking { Db.disconnect() }
             tempDir.toFile().deleteRecursively()
@@ -81,6 +82,9 @@ class DatabaseMigrationTest {
         }
     }
 
+    // an older database of the current identity shape: the columns and indices added since are what
+    // `connect` still reconciles. A schema change that has to rewrite a key is not reconciled at all —
+    // the database is moved by hand — so nothing here stands in for one.
     private fun createLegacyScheduledTasksTable(dbPath: String) {
         DriverManager.getConnection("jdbc:sqlite:$dbPath").use { connection ->
             connection.createStatement().use { statement ->
@@ -88,8 +92,9 @@ class DatabaseMigrationTest {
                     """
                     CREATE TABLE scheduled_tasks (
                         id INTEGER PRIMARY KEY AUTOINCREMENT,
-                        user_id BIGINT NOT NULL,
-                        chat_id BIGINT NOT NULL,
+                        platform VARCHAR(16) NOT NULL,
+                        user_id VARCHAR(64) NOT NULL,
+                        chat_id VARCHAR(64) NOT NULL,
                         title VARCHAR(200),
                         prompt TEXT NOT NULL,
                         recurrence VARCHAR(100) NOT NULL,
@@ -221,7 +226,7 @@ class DatabaseMigrationTest {
     private fun testConfig(dbPath: String) =
         AppConfig(
             agentMaxIterations = 70,
-            allowedIds = emptySet(),
+            accessPolicy = AccessPolicy(),
             appearance = null,
             databasePath = dbPath,
             elevenLabsApiKey = null,

@@ -26,6 +26,7 @@ import com.helltar.vusan.common.collapseWhitespaceAndCap
 import com.helltar.vusan.common.limitTo
 import com.helltar.vusan.common.xmlBlock
 import com.helltar.vusan.outbox.BotOutbox
+import com.helltar.vusan.request.ConversationScope
 import com.helltar.vusan.request.RequestContext
 import com.helltar.vusan.tools.ToolRegistryFactory
 import io.github.oshai.kotlinlogging.KotlinLogging
@@ -100,7 +101,7 @@ class AgentFactory(
     }
 
     fun build(
-        userId: Long,
+        scope: ConversationScope,
         conversation: PromptConversation,
         preparation: AgentPromptPreparation,
         outbox: BotOutbox,
@@ -109,7 +110,7 @@ class AgentFactory(
         onToolStarting: (activity: ToolActivity?) -> Unit = {}
     ): AIAgent<String, String> {
         val seededPrompt =
-            prompt(id = "vusan-user-$userId", params = chatParams) {
+            prompt(id = "vusan-turn-$scope", params = chatParams) {
                 system(preparation.systemPrompt)
                 // the recap is written from quoted events, so it can carry a delimiter out of them.
                 conversation.summary?.let { user(xmlBlock("conversation_recap", it.neutralizePromptBlocks())) }
@@ -147,9 +148,9 @@ class AgentFactory(
         return AIAgent(
             promptExecutor = promptExecutor,
             agentConfig = agentConfig,
-            strategy = vusanSingleRunStrategy(outbox, preparation.liveToolResultMaxTokens, maxIterations, userId),
+            strategy = vusanSingleRunStrategy(outbox, preparation.liveToolResultMaxTokens, maxIterations, scope),
             toolRegistry = preparation.toolRegistry,
-            id = "vusan-user-$userId"
+            id = "vusan-turn-$scope"
         ) {
             install(EventHandler) {
                 var seq = 0
@@ -235,7 +236,7 @@ private fun vusanSingleRunStrategy(
     outbox: BotOutbox,
     liveToolResultMaxTokens: Int,
     maxIterations: Int,
-    userId: Long
+    scope: ConversationScope
 ): AIAgentGraphStrategy<String, String> =
     strategy<String, String>("single_run") {
         var nudged = false
@@ -278,7 +279,7 @@ private fun vusanSingleRunStrategy(
         // at all, so the model cannot spend the reserve on one more search, and its text becomes the reply.
         val nodeWrapUp by node<ReceivedToolResults, String>("wrapUpWithoutTools") { results ->
             strategyLog.warn {
-                "tool budget spent for user=$userId (limit $maxIterations iterations); " +
+                "tool budget spent for $scope (limit $maxIterations iterations); " +
                         "answering with what the turn already gathered"
             }
 
@@ -295,7 +296,7 @@ private fun vusanSingleRunStrategy(
             // queue it rather than leave it as the run's trailing text: a turn that already reacted or sent a
             // message has that text dropped as duplicate chatter, and here it is the whole answer.
             if (answer.isNotBlank() && !outbox.enqueueText(answer)) {
-                strategyLog.warn { "no room left in the outbox for the wrap-up answer for user=$userId" }
+                strategyLog.warn { "no room left in the outbox for the wrap-up answer for $scope" }
             }
 
             answer

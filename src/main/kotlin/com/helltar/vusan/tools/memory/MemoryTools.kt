@@ -4,7 +4,7 @@ import ai.koog.agents.core.tools.annotations.LLMDescription
 import ai.koog.agents.core.tools.annotations.Tool
 import ai.koog.agents.core.tools.reflect.ToolSet
 import com.helltar.vusan.agent.memory.MemoryRepository
-import com.helltar.vusan.agent.memory.MemoryScope
+import com.helltar.vusan.agent.memory.memoryOwner
 import com.helltar.vusan.common.collapseWhitespaceAndCap
 import com.helltar.vusan.request.RequestContext
 import com.helltar.vusan.tools.suspendToolGuard
@@ -25,10 +25,8 @@ class MemoryTools(private val memory: MemoryRepository, private val context: Req
     ): String = suspendToolGuard {
         if (!context.sender.isPerson) return@suspendToolGuard NO_PERSONAL_MEMORY
 
-        val userId = context.sender.id
-
         detail.collapseWhitespaceAndCap(MAX_MEMORY_CHARS)?.let { clean ->
-            val id = memory.add(MemoryScope.USER, userId, clean)
+            val id = memory.add(context.user.memoryOwner, clean)
             "Saved to your personal memory (#$id): $clean"
         }
             ?: "Nothing to remember — the detail was empty."
@@ -43,10 +41,8 @@ class MemoryTools(private val memory: MemoryRepository, private val context: Req
         if (context.chat.isPrivate)
             return@suspendToolGuard "No shared group memory in a private chat — use rememberAboutMe for personal details."
 
-        val chatId = context.chat.id
-
         detail.collapseWhitespaceAndCap(MAX_MEMORY_CHARS)?.let { clean ->
-            val id = memory.add(MemoryScope.CHAT, chatId, clean)
+            val id = memory.add(context.chatRef.memoryOwner, clean)
             "Saved to this group's memory (#$id): $clean"
         }
             ?: "Nothing to remember — the detail was empty."
@@ -58,7 +54,7 @@ class MemoryTools(private val memory: MemoryRepository, private val context: Req
         @LLMDescription(MemoryToolDescriptions.FORGET_MEMORY_ID)
         id: Long
     ): String = suspendToolGuard {
-        if (memory.forget(id, context.sender.id, context.chat.id))
+        if (memory.forget(id, context.user, context.chatRef))
             "Forgot memory #$id."
         else
             "No memory #$id found in your memory or this chat's memory."
@@ -69,8 +65,7 @@ class MemoryTools(private val memory: MemoryRepository, private val context: Req
     suspend fun forgetEverythingAboutMe(): String = suspendToolGuard {
         if (!context.sender.isPerson) return@suspendToolGuard NO_PERSONAL_MEMORY
 
-        val userId = context.sender.id
-        val removed = memory.clearScope(MemoryScope.USER, userId)
+        val removed = memory.clearScope(context.user.memoryOwner)
         "Cleared your personal memory ($removed item(s) removed). Chat history and group memory are untouched."
     }
 }

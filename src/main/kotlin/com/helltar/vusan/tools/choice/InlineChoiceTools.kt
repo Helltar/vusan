@@ -5,6 +5,7 @@ import ai.koog.agents.core.tools.annotations.Tool
 import ai.koog.agents.core.tools.reflect.ToolSet
 import com.helltar.vusan.outbox.BotOutbox
 import com.helltar.vusan.outbox.BotOutput
+import com.helltar.vusan.request.ConversationScope
 import com.helltar.vusan.request.RequestContext
 import com.helltar.vusan.tools.suspendToolGuard
 
@@ -12,7 +13,7 @@ import com.helltar.vusan.tools.suspendToolGuard
 class InlineChoiceTools(
     private val context: RequestContext,
     private val outbox: BotOutbox,
-    private val currentHistoryRevision: suspend (userId: Long, chatId: Long) -> Long
+    private val currentHistoryRevision: suspend (scope: ConversationScope) -> Long
 ) : ToolSet {
 
     @Tool
@@ -29,7 +30,7 @@ class InlineChoiceTools(
                 question = question.trim(),
                 options = options.map { it.trim() },
                 ownerId = ownerId,
-                historyRevision = currentHistoryRevision(ownerId, context.chat.id),
+                historyRevision = currentHistoryRevision(context.scope),
                 originMessageId = context.messageId
             )
 

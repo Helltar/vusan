@@ -10,6 +10,7 @@ import com.helltar.vusan.i18n.Messages
 import com.helltar.vusan.outbox.BotOutput
 import com.helltar.vusan.request.AttachedFile
 import com.helltar.vusan.request.ChatProfile
+import com.helltar.vusan.request.Platform
 import com.helltar.vusan.request.RequestContext
 import com.helltar.vusan.telegram.callback.InlineChoiceHandler
 import com.helltar.vusan.telegram.callback.InlineChoiceSelection
@@ -118,6 +119,7 @@ internal class AgentTurns(
             AgentRequest(
                 context =
                     RequestContext(
+                        platform = Platform.TELEGRAM,
                         chat = message.toChatContext(chatProfile(message)),
                         sender = sender.toSenderContext(),
                         messageId = message.messageIdLong,
@@ -153,6 +155,7 @@ internal class AgentTurns(
             AgentRequest(
                 context =
                     RequestContext(
+                        platform = Platform.TELEGRAM,
                         chat = message.toChatContext(chatProfile(message)),
                         sender = user.toSenderContext(),
                         messageId = selection.originMessageId,
@@ -216,8 +219,8 @@ internal class AgentTurns(
             // a question with buttons ends the turn without answering, so whatever it was asked about has
             // to outlive it; any other turn clears the slot instead of leaving a stale file behind.
             inlineChoices.parkAttachment(
-                chatId = context.chat.id,
-                userId = context.sender.id,
+                chatId = context.chatRef.telegramChatId,
+                userId = context.user.telegramUserId,
                 file = context.attachedFile?.takeIf { result.outputs.any { it.output is BotOutput.InlineChoice } }
             )
 

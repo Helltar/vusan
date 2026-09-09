@@ -3,8 +3,9 @@ package com.helltar.vusan.telegram.callback
 import com.helltar.vusan.i18n.Messages
 import com.helltar.vusan.telegram.AgentTurns
 import com.helltar.vusan.telegram.delivery.answerCallbackQuery
-import com.helltar.vusan.telegram.denialReason
-import com.helltar.vusan.telegram.isIdAllowed
+import com.helltar.vusan.request.AccessPolicy
+import com.helltar.vusan.telegram.telegramChat
+import com.helltar.vusan.telegram.telegramUser
 import io.github.oshai.kotlinlogging.KotlinLogging
 import org.telegram.telegrambots.meta.api.objects.CallbackQuery
 import org.telegram.telegrambots.meta.api.objects.message.Message
@@ -22,8 +23,7 @@ internal class CallbackRouter(
     private val inlineChoices: InlineChoiceHandler,
     private val turnStop: TurnStopHandler,
     private val turns: AgentTurns,
-    private val allowedIds: Set<Long>,
-    private val bannedIds: Set<Long>
+    private val accessPolicy: AccessPolicy
 ) {
 
     private companion object {
@@ -53,7 +53,7 @@ internal class CallbackRouter(
         val userId = callback.from.id
 
         if (!isAllowed(chatId, userId)) {
-            log.warn { "denied callback (${denialReason(chatId, userId, bannedIds)}): chat=$chatId user=$userId" }
+            log.warn { "denied callback (${accessPolicy.denialReason(telegramChat(chatId), userId?.let(::telegramUser))}): chat=$chatId user=$userId" }
             taskMenu.answerUnavailable(callback.id, messages)
             return
         }
@@ -83,7 +83,7 @@ internal class CallbackRouter(
 
         if (!isAllowed(chatId, userId)) {
             log.warn {
-                "denied inline choice callback (${denialReason(chatId, userId, bannedIds)}): " +
+                "denied inline choice callback (${accessPolicy.denialReason(telegramChat(chatId), userId?.let(::telegramUser))}): " +
                         "chat=$chatId user=$userId"
             }
 
@@ -114,7 +114,7 @@ internal class CallbackRouter(
         val userId = callback.from.id
 
         if (!isAllowed(chatId, userId)) {
-            log.warn { "denied stop callback (${denialReason(chatId, userId, bannedIds)}): chat=$chatId user=$userId" }
+            log.warn { "denied stop callback (${accessPolicy.denialReason(telegramChat(chatId), userId?.let(::telegramUser))}): chat=$chatId user=$userId" }
             answerCallbackQuery(client, callback.id, messages.turnStopNotOwnerAlert, showAlert = true)
             return
         }
@@ -133,5 +133,6 @@ internal class CallbackRouter(
         answerCallbackQuery(client, callback.id)
     }
 
-    private fun isAllowed(chatId: Long, userId: Long?): Boolean = isIdAllowed(chatId, userId, allowedIds, bannedIds)
+    private fun isAllowed(chatId: Long, userId: Long?): Boolean =
+        accessPolicy.allows(telegramChat(chatId), userId?.let(::telegramUser))
 }

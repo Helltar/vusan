@@ -13,6 +13,7 @@ import ai.koog.prompt.message.ResponseMetaInfo
 import ai.koog.prompt.streaming.StreamFrame
 import ai.koog.prompt.structure.json.generator.BasicJsonSchemaGenerator
 import ai.koog.prompt.structure.json.generator.StandardJsonSchemaGenerator
+import com.helltar.vusan.request.UserRef
 import kotlinx.coroutines.flow.Flow
 
 /**
@@ -90,12 +91,12 @@ internal class BudgetedPromptExecutor(
     }
 
     // whose share this call comes out of, once the budget agrees it may happen at all.
-    private suspend fun checkedOwner(): Long? {
+    private suspend fun checkedOwner(): UserRef? {
         val owner = currentBudgetOwner()
         budget.stopFor(owner)?.let { throw TokenBudgetExhaustedException(it) }
         return owner
     }
 }
 
-private suspend fun TokenBudget.record(userId: Long?, meta: ResponseMetaInfo) =
-    record(userId, meta.inputTokensCount, meta.outputTokensCount)
+private suspend fun TokenBudget.record(user: UserRef?, meta: ResponseMetaInfo) =
+    record(user, meta.inputTokensCount, meta.outputTokensCount)

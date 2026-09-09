@@ -91,7 +91,7 @@ internal suspend fun <T> TelegramClient.withLiveProgress(
                     while (currentCoroutineContext().isActive) {
                         runCatching {
                             indicateChatAction(
-                                ChatTarget(request.context.chat.id, request.context.chat.threadId),
+                                ChatTarget(request.context.chatRef.telegramChatId, request.context.chat.threadId),
                                 chatActionFor(current)
                             )
                         }
@@ -136,8 +136,8 @@ internal suspend fun <T> TelegramClient.withLiveProgress(
 private fun TelegramClient.statusFor(request: AgentRequest): TurnStatus =
     TurnStatus(
         client = this,
-        target = ChatTarget(request.context.chat.id, request.context.chat.threadId),
-        ownerId = request.context.sender.id,
+        target = ChatTarget(request.context.chatRef.telegramChatId, request.context.chat.threadId),
+        ownerId = request.context.user.telegramUserId,
         replyToMessageId = request.context.messageId,
         messages = Messages.of(request.context.language),
         activityOpensIt = request.context.chat.capabilities.slowModeSeconds == 0

@@ -10,10 +10,11 @@ object TokenUserSpendTable : Table("token_user_spend") {
     // local date as `yyyy-MM-dd` in the budget timezone, matching TokenUsageTable.
     val day = varchar("day", 10)
 
-    val userId = long("user_id")
+    val platform = platformColumn()
+    val userId = externalId("user_id")
     val inputTokens = long("input_tokens")
     val outputTokens = long("output_tokens")
     val updatedAt = timestamp("updated_at")
 
-    override val primaryKey = PrimaryKey(day, userId)
+    override val primaryKey = PrimaryKey(day, platform, userId)
 }

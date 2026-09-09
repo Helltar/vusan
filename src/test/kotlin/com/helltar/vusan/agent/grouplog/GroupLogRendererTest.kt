@@ -2,6 +2,7 @@ package com.helltar.vusan.agent.grouplog
 
 import java.time.Instant
 import java.time.ZoneId
+import com.helltar.vusan.request.testChat
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFalse
@@ -108,12 +109,12 @@ class GroupLogRendererTest {
     fun `the asking user's own exchange with the bot is dropped as already in their history`() {
         val entries =
             listOf(
-                entry(text = "has anyone seen the release?", username = "olena", senderId = 2L, messageId = 10L),
-                entry(text = "@vusanbot hello", username = "helltar", senderId = 1L, messageId = 11L),
+                entry(text = "has anyone seen the release?", username = "olena", senderId = "2", messageId = 10L),
+                entry(text = "@vusanbot hello", username = "helltar", senderId = "1", messageId = 11L),
                 botEntry(text = "Hi! How can I help?", answering = 11L, messageId = null)
             )
 
-        val kept = entries.withoutExchangesWith(userId = 1L)
+        val kept = entries.withoutExchangesWith(userId = "1")
 
         assertEquals(listOf("has anyone seen the release?"), kept.map { it.text })
     }
@@ -122,12 +123,12 @@ class GroupLogRendererTest {
     fun `a bot reply to somebody else survives, because it is in nobody else's history`() {
         val entries =
             listOf(
-                entry(text = "@vusanbot what about 2.3?", username = "olena", senderId = 2L, messageId = 10L),
+                entry(text = "@vusanbot what about 2.3?", username = "olena", senderId = "2", messageId = 10L),
                 botEntry(text = "It is stable now", answering = 10L, messageId = null),
-                entry(text = "@vusanbot will this break anything?", username = "serhii", senderId = 3L, messageId = 12L)
+                entry(text = "@vusanbot will this break anything?", username = "serhii", senderId = "3", messageId = 12L)
             )
 
-        val kept = entries.withoutExchangesWith(userId = 3L)
+        val kept = entries.withoutExchangesWith(userId = "3")
 
         assertEquals(3, kept.size, "serhii has none of this in his own history")
     }
@@ -136,20 +137,20 @@ class GroupLogRendererTest {
     fun `an unanchored bot reply is left alone`() {
         val entries =
             listOf(
-                entry(text = "@vusanbot hello", username = "helltar", senderId = 1L, messageId = 11L),
+                entry(text = "@vusanbot hello", username = "helltar", senderId = "1", messageId = 11L),
                 botEntry(text = "exam reminder", answering = null, messageId = null)
             )
 
-        val kept = entries.withoutExchangesWith(userId = 1L)
+        val kept = entries.withoutExchangesWith(userId = "1")
 
         assertEquals(2, kept.size, "with no anchor there is nothing proving a duplicate")
     }
 
     @Test
     fun `dropping exchanges leaves an unrelated log untouched`() {
-        val entries = listOf(entry(text = "talking to herself", username = "olena", senderId = 2L, messageId = 10L))
+        val entries = listOf(entry(text = "talking to herself", username = "olena", senderId = "2", messageId = 10L))
 
-        assertEquals(entries, entries.withoutExchangesWith(userId = 1L))
+        assertEquals(entries, entries.withoutExchangesWith(userId = "1"))
     }
 
     // the transcript is shown ahead of the request, so a line of it must not be able to open a block.
@@ -189,11 +190,11 @@ class GroupLogRendererTest {
         forwardFrom: String? = null,
         username: String? = "olena",
         name: String? = "Olena Petrenko",
-        senderId: Long? = 2L,
+        senderId: String? = "2",
         messageId: Long? = 1L
     ) =
         GroupLogEntry(
-            chatId = -100L,
+            chat = testChat(-100),
             messageId = messageId,
             kind = kind,
             sentAt = at,
@@ -207,7 +208,7 @@ class GroupLogRendererTest {
 
     private fun botEntry(text: String, answering: Long?, messageId: Long?, at: Instant = noon) =
         GroupLogEntry(
-            chatId = -100L,
+            chat = testChat(-100),
             messageId = messageId,
             kind = GroupLogEntry.BOT_KIND,
             sentAt = at,

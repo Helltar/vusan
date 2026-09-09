@@ -1,5 +1,6 @@
 package com.helltar.vusan.agent.grouplog
 
+import com.helltar.vusan.request.ChatRef
 import java.time.Instant
 
 /**
@@ -7,12 +8,12 @@ import java.time.Instant
  * the file itself is never stored, and neither are the Telegram file ids that would let it be fetched.
  */
 data class GroupLogEntry(
-    val chatId: Long,
+    val chat: ChatRef,
     val messageId: Long?,
     val kind: String,
     val sentAt: Instant,
     val threadId: Long? = null,
-    val senderId: Long? = null,
+    val senderId: String? = null,
     val senderUsername: String? = null,
     val senderName: String? = null,
     val text: String? = null,

@@ -13,13 +13,14 @@ sealed class BotOutput {
     data class InlineChoice(
         val question: String,
         val options: List<String>,
-        val ownerId: Long,
+        // the external id of the person the buttons are for; only they may press one.
+        val ownerId: String,
         val historyRevision: Long,
         val originMessageId: Long? = null
     ) : BotOutput() {
         init {
             validateQuestionAndOptions("Inline choice", question, options)
-            require(ownerId > 0L) { "Inline choice owner id must be positive" }
+            require(ownerId.isNotBlank()) { "Inline choice owner id must not be blank" }
             require(historyRevision >= 0L) { "Inline choice history revision must not be negative" }
             require(originMessageId == null || originMessageId > 0L) {
                 "Inline choice origin message id must be positive"

@@ -11,6 +11,7 @@ import com.helltar.vusan.config.AppConfig
 import com.helltar.vusan.config.VisionRuntime
 import com.helltar.vusan.outbox.BotOutbox
 import com.helltar.vusan.request.ChatContext
+import com.helltar.vusan.request.Platform
 import com.helltar.vusan.request.RequestContext
 import com.helltar.vusan.request.SenderContext
 import com.helltar.vusan.request.personKeyOrNull
@@ -90,7 +91,11 @@ class ToolRegistryFactory(
         // this deployment can do. A sender that is not one person withholds exactly the tools whose
         // configuration an operator most wants confirmed.
         val TOOL_NAME_PROBE_CONTEXT =
-            RequestContext(chat = ChatContext(id = 1L, isPrivate = true), sender = SenderContext(id = 1L))
+            RequestContext(
+                platform = Platform.TELEGRAM,
+                chat = ChatContext(id = "1", isPrivate = true),
+                sender = SenderContext(id = "1")
+            )
         val log = KotlinLogging.logger {}
     }
 

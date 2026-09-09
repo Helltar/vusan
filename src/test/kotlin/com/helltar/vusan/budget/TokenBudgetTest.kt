@@ -14,6 +14,9 @@ import java.time.ZoneId
 import java.time.temporal.ChronoUnit
 import kotlin.test.AfterTest
 import kotlin.test.BeforeTest
+import com.helltar.vusan.request.AccessPolicy
+import com.helltar.vusan.request.Platform
+import com.helltar.vusan.request.testUser
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertIs
@@ -22,8 +25,8 @@ import kotlin.test.assertNull
 import kotlin.time.Duration.Companion.hours
 import kotlin.time.Duration.Companion.seconds
 
-private const val ALICE = 1L
-private const val BOB = 2L
+private val ALICE = testUser(1)
+private val BOB = testUser(2)
 
 class TokenBudgetTest {
 
@@ -152,7 +155,7 @@ class TokenBudgetTest {
         val config = limitOf(1_000)
 
         // four people used the bot yesterday, so today is shared four ways even before they show up.
-        (1L..4L).forEach { TokenBudget(config, clock).record(it, inputTokens = 10, outputTokens = 0) }
+        (1L..4L).forEach { TokenBudget(config, clock).record(testUser(it), inputTokens = 10, outputTokens = 0) }
 
         clock.now = NOON_UTC.plus(1, ChronoUnit.DAYS)
         val budget = TokenBudget(config, clock)
@@ -184,14 +187,28 @@ class TokenBudgetTest {
 
         // the sticker worker and the group digest run outside any turn: they spend the day's budget, but
         // there is no share to hold them to, and they never take one away from a person either.
-        budget.record(userId = null, inputTokens = 800, outputTokens = 0)
+        budget.record(user = null, inputTokens = 800, outputTokens = 0)
 
         assertNull(budget.stopFor(null))
         assertNull(budget.stopFor(ALICE), "a person with a clean sheet is not blocked by background work")
 
-        budget.record(userId = null, inputTokens = 200, outputTokens = 0)
+        budget.record(user = null, inputTokens = 200, outputTokens = 0)
 
         assertIs<TokenBudgetStop.DayBudget>(budget.stopFor(null))
+    }
+
+    // the share is per person, and two platforms issue the same numbers: an unqualified id would let
+    // one person's spending lock somebody else out.
+    @Test
+    fun `a share belongs to one platform's user`() = runBlocking {
+        val budget = TokenBudget(limitOf(1_000), clockAt(NOON_UTC))
+        val aliceElsewhere = testUser(1, Platform.DISCORD)
+
+        budget.record(ALICE, inputTokens = 700, outputTokens = 0)
+        budget.record(BOB, inputTokens = 10, outputTokens = 0)
+
+        assertIs<TokenBudgetStop.UserShare>(budget.stopFor(ALICE))
+        assertNull(budget.stopFor(aliceElsewhere), "a different platform's user has spent nothing")
     }
 
     private fun limitOf(dailyTokens: Long) = TokenBudgetConfig(dailyTokens = dailyTokens)
@@ -207,7 +224,7 @@ class TokenBudgetTest {
     private fun testConfig(dbPath: String) =
         AppConfig(
             agentMaxIterations = 70,
-            allowedIds = emptySet(),
+            accessPolicy = AccessPolicy(),
             appearance = null,
             databasePath = dbPath,
             elevenLabsApiKey = null,

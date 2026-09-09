@@ -32,7 +32,7 @@ internal data class RenderedGroupLog(val text: String, val includedCount: Int)
  * message it answered. An unanchored reply (a scheduled task, or a reply whose anchor Telegram
  * rejected) keeps no link and is left in place, because there is nothing to prove it duplicates.
  */
-internal fun List<GroupLogEntry>.withoutExchangesWith(userId: Long): List<GroupLogEntry> {
+internal fun List<GroupLogEntry>.withoutExchangesWith(userId: String): List<GroupLogEntry> {
     val ownMessageIds = mapNotNullTo(mutableSetOf()) { it.messageId.takeIf { _ -> it.senderId == userId } }
 
     val answeredIds =

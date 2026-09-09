@@ -5,6 +5,9 @@ import com.helltar.vusan.common.xmlBlock
 import com.helltar.vusan.i18n.Messages
 import com.helltar.vusan.outbox.BotOutput
 import com.helltar.vusan.request.AttachedFile
+import com.helltar.vusan.request.ConversationScope
+import com.helltar.vusan.telegram.telegramChat
+import com.helltar.vusan.telegram.telegramUser
 import com.helltar.vusan.telegram.delivery.answerCallbackQuery
 import com.helltar.vusan.telegram.delivery.editTextMessage
 import com.helltar.vusan.telegram.delivery.isMessageNotModified
@@ -31,7 +34,7 @@ internal data class InlineChoiceSelection(
 
 internal class InlineChoiceHandler(
     private val client: TelegramClient,
-    private val currentHistoryRevision: suspend (userId: Long, chatId: Long) -> Long
+    private val currentHistoryRevision: suspend (scope: ConversationScope) -> Long
 ) {
 
     private companion object {
@@ -89,7 +92,7 @@ internal class InlineChoiceHandler(
             InlineChoiceAction.parse(callbackData)
                 ?: return unavailable(callbackQueryId, messages)
 
-        if (action.ownerId != userId) {
+        if (action.ownerId != userId.toString()) {
             answerCallbackQuery(
                 client,
                 callbackQueryId,
@@ -99,7 +102,7 @@ internal class InlineChoiceHandler(
             return null
         }
 
-        if (action.historyRevision != currentHistoryRevision(userId, chatId))
+        if (action.historyRevision != currentHistoryRevision(ConversationScope(telegramUser(userId), telegramChat(chatId))))
             return unavailable(callbackQueryId, messages)
 
         val normalizedQuestion =
@@ -237,7 +240,7 @@ private fun emptyInlineKeyboard(): InlineKeyboardMarkup =
         .build()
 
 private data class InlineChoiceAction(
-    val ownerId: Long,
+    val ownerId: String,
     val historyRevision: Long,
     val optionIndex: Int,
     val originMessageId: Long
@@ -252,7 +255,7 @@ private data class InlineChoiceAction(
             val parts = raw.removePrefix(INLINE_CHOICE_CALLBACK_PREFIX).split(':')
             if (parts.size != 4) return null
 
-            val ownerId = parts[0].toLongOrNull()?.takeIf { it > 0L } ?: return null
+            val ownerId = parts[0].takeIf { it.isNotEmpty() } ?: return null
             val historyRevision = parts[1].toLongOrNull()?.takeIf { it >= 0L } ?: return null
             val optionIndex = parts[2].toIntOrNull()?.takeIf { it in 0..9 } ?: return null
             val originMessageId = parts[3].toLongOrNull()?.takeIf { it >= NO_ORIGIN_MESSAGE } ?: return null

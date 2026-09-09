@@ -13,7 +13,7 @@ class ConversationTools(private val history: ConversationRepository, private val
     @Tool
     @LLMDescription(ConversationToolDescriptions.CLEAR_CONVERSATION)
     suspend fun clearConversation(): String = suspendToolGuard {
-        history.clear(context.sender.id, context.chat.id)
+        history.clear(context.scope)
         "Cleared this user's conversation history for this chat. Their history in other chats is untouched."
     }
 }

@@ -28,7 +28,7 @@ class InlineChoiceHandlerTest {
     @Test
     fun `owner selection removes buttons and returns the selected option`() = runBlocking {
         val client = RecordingClient()
-        val handler = InlineChoiceHandler(client.proxy) { _, _ -> 3L }
+        val handler = InlineChoiceHandler(client.proxy) { _ -> 3L }
         val keyboard = inlineChoiceKeyboard(choice())
 
         val selection =
@@ -58,7 +58,7 @@ class InlineChoiceHandlerTest {
     @Test
     fun `a question asked without a message of its own carries no origin`() = runBlocking {
         val client = RecordingClient()
-        val handler = InlineChoiceHandler(client.proxy) { _, _ -> 3L }
+        val handler = InlineChoiceHandler(client.proxy) { _ -> 3L }
         val keyboard = inlineChoiceKeyboard(choice(originMessageId = null))
 
         val selection =
@@ -79,7 +79,7 @@ class InlineChoiceHandlerTest {
     @Test
     fun `same choice message can only be consumed once`() = runBlocking {
         val client = RecordingClient()
-        val handler = InlineChoiceHandler(client.proxy) { _, _ -> 3L }
+        val handler = InlineChoiceHandler(client.proxy) { _ -> 3L }
         val keyboard = inlineChoiceKeyboard(choice())
 
         val first =
@@ -100,7 +100,7 @@ class InlineChoiceHandlerTest {
     @Test
     fun `another user cannot answer the choice`() = runBlocking {
         val client = RecordingClient()
-        val handler = InlineChoiceHandler(client.proxy) { _, _ -> 3L }
+        val handler = InlineChoiceHandler(client.proxy) { _ -> 3L }
 
         val selection =
             handler.handleCallback(
@@ -125,7 +125,7 @@ class InlineChoiceHandlerTest {
     fun `choice from a cleared history is unavailable`() = runBlocking {
         val client = RecordingClient()
         var currentRevision = 3L
-        val handler = InlineChoiceHandler(client.proxy) { _, _ -> currentRevision }
+        val handler = InlineChoiceHandler(client.proxy) { _ -> currentRevision }
         val keyboard = inlineChoiceKeyboard(choice())
         currentRevision = 4L
 
@@ -158,7 +158,7 @@ class InlineChoiceHandlerTest {
                 BotOutput.InlineChoice(
                     question = "Which format?",
                     options = List(10) { "option $it" },
-                    ownerId = 4_503_599_627_370_495L,
+                    ownerId = "4503599627370495",
                     historyRevision = 999_999_999L,
                     originMessageId = Int.MAX_VALUE.toLong()
                 )
@@ -189,7 +189,7 @@ class InlineChoiceHandlerTest {
     // reaches it through the parked slot.
     @Test
     fun `an attachment parked with a question survives until the selection`() {
-        val handler = InlineChoiceHandler(RecordingClient().proxy) { _, _ -> 3L }
+        val handler = InlineChoiceHandler(RecordingClient().proxy) { _ -> 3L }
 
         handler.parkAttachment(chatId = -7L, userId = 42L, file = photo())
 
@@ -200,7 +200,7 @@ class InlineChoiceHandlerTest {
 
     @Test
     fun `a turn without a question clears the parked attachment`() {
-        val handler = InlineChoiceHandler(RecordingClient().proxy) { _, _ -> 3L }
+        val handler = InlineChoiceHandler(RecordingClient().proxy) { _ -> 3L }
 
         handler.parkAttachment(chatId = -7L, userId = 42L, file = photo())
         handler.parkAttachment(chatId = -7L, userId = 42L, file = null)
@@ -221,7 +221,7 @@ class InlineChoiceHandlerTest {
         BotOutput.InlineChoice(
             question = "Which format?",
             options = listOf("PDF", "DOCX"),
-            ownerId = 42L,
+            ownerId = "42",
             historyRevision = 3L,
             originMessageId = originMessageId
         )

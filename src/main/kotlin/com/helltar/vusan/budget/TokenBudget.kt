@@ -6,9 +6,11 @@ import com.helltar.vusan.config.TokenBudgetConfig
 import com.helltar.vusan.infra.Db.dbTransaction
 import com.helltar.vusan.infra.tables.TokenUsageTable
 import com.helltar.vusan.infra.tables.TokenUserSpendTable
+import com.helltar.vusan.request.UserRef
 import io.github.oshai.kotlinlogging.KotlinLogging
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
+import org.jetbrains.exposed.v1.core.and
 import org.jetbrains.exposed.v1.core.eq
 import org.jetbrains.exposed.v1.core.greaterEq
 import org.jetbrains.exposed.v1.core.less
@@ -56,7 +58,7 @@ class TokenBudget(
     private val mutex = Mutex()
     private var day: LocalDate? = null
     private var spent = DailySpend()
-    private var spentByUser = mutableMapOf<Long, DailySpend>()
+    private var spentByUser = mutableMapOf<UserRef, DailySpend>()
 
     // how many people the day is split between: everyone seen in the last ACTIVE_WINDOW_DAYS.
     private var shares = 1
@@ -66,11 +68,11 @@ class TokenBudget(
         if (config.dailyTokens == null) executor else BudgetedPromptExecutor(executor, this)
 
     /**
-     * Why [userId] cannot spend right now, or `null` when they can. A `null` user is the bot's own
+     * Why [user] cannot spend right now, or `null` when they can. A `null` user is the bot's own
      * background work (describing stickers, digesting a group day): it belongs to nobody's share and
      * answers to the day's ceiling alone.
      */
-    suspend fun stopFor(userId: Long?): TokenBudgetStop? {
+    suspend fun stopFor(user: UserRef?): TokenBudgetStop? {
         val limit = config.dailyTokens ?: return null
         val now = clock.instant()
 
@@ -79,18 +81,18 @@ class TokenBudget(
 
             when {
                 spent.totalTokens >= limit -> TokenBudgetStop.DayBudget(untilReset(now))
-                userId == null || spent.totalTokens < sharingStartsAt(limit) -> null
-                (spentByUser[userId]?.totalTokens ?: 0L) >= fairShare(limit) -> TokenBudgetStop.UserShare(untilReset(now))
+                user == null || spent.totalTokens < sharingStartsAt(limit) -> null
+                (spentByUser[user]?.totalTokens ?: 0L) >= fairShare(limit) -> TokenBudgetStop.UserShare(untilReset(now))
                 else -> null
             }
         }
     }
 
     /**
-     * Adds one completed LLM call to today's spend, and to [userId]'s share of it. Unknown token counts
+     * Adds one completed LLM call to today's spend, and to [user]'s share of it. Unknown token counts
      * (`null`) count as zero.
      */
-    suspend fun record(userId: Long?, inputTokens: Int?, outputTokens: Int?) {
+    suspend fun record(user: UserRef?, inputTokens: Int?, outputTokens: Int?) {
         val limit = config.dailyTokens ?: return
         val call = DailySpend((inputTokens ?: 0).toLong(), (outputTokens ?: 0).toLong())
         if (call.totalTokens <= 0) return
@@ -106,10 +108,10 @@ class TokenBudget(
             spent += call
             store(today, spent, now)
 
-            if (userId != null) {
-                val updated = spentByUser.getOrElse(userId) { DailySpend() } + call
-                spentByUser[userId] = updated
-                storeUser(today, userId, updated, now)
+            if (user != null) {
+                val updated = spentByUser.getOrElse(user) { DailySpend() } + call
+                spentByUser[user] = updated
+                storeUser(today, user, updated, now)
 
                 // someone new today is one more person to split the day with, without waiting for a reload.
                 shares = maxOf(shares, spentByUser.size)
@@ -165,13 +167,13 @@ class TokenBudget(
                 ?: DailySpend()
         }
 
-    private suspend fun loadUsers(day: LocalDate): MutableMap<Long, DailySpend> =
+    private suspend fun loadUsers(day: LocalDate): MutableMap<UserRef, DailySpend> =
         readOrElse("today's per-user token spend for day=$day", mutableMapOf()) {
             TokenUserSpendTable
                 .selectAll()
                 .where { TokenUserSpendTable.day eq day.toString() }
                 .associateTo(mutableMapOf()) {
-                    it[TokenUserSpendTable.userId] to
+                    UserRef(it[TokenUserSpendTable.platform], it[TokenUserSpendTable.userId]) to
                             DailySpend(it[TokenUserSpendTable.inputTokens], it[TokenUserSpendTable.outputTokens])
                 }
         }
@@ -184,7 +186,7 @@ class TokenBudget(
             val since = today.minusDays(ACTIVE_WINDOW_DAYS - 1).toString()
 
             TokenUserSpendTable
-                .select(TokenUserSpendTable.userId)
+                .select(TokenUserSpendTable.platform, TokenUserSpendTable.userId)
                 .where { TokenUserSpendTable.day greaterEq since }
                 .withDistinct()
                 .count()
@@ -204,11 +206,16 @@ class TokenBudget(
         }
     }
 
-    private suspend fun storeUser(day: LocalDate, userId: Long, spend: DailySpend, now: Instant) {
-        write("the token spend of user=$userId for day=$day") {
-            TokenUserSpendTable.upsert(TokenUserSpendTable.day, TokenUserSpendTable.userId) {
+    private suspend fun storeUser(day: LocalDate, user: UserRef, spend: DailySpend, now: Instant) {
+        write("the token spend of user=[$user] for day=$day") {
+            TokenUserSpendTable.upsert(
+                TokenUserSpendTable.day,
+                TokenUserSpendTable.platform,
+                TokenUserSpendTable.userId
+            ) {
                 it[TokenUserSpendTable.day] = day.toString()
-                it[TokenUserSpendTable.userId] = userId
+                it[TokenUserSpendTable.platform] = user.platform
+                it[TokenUserSpendTable.userId] = user.id
                 it[TokenUserSpendTable.inputTokens] = spend.inputTokens
                 it[TokenUserSpendTable.outputTokens] = spend.outputTokens
                 it[TokenUserSpendTable.updatedAt] = now

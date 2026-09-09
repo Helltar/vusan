@@ -1,6 +1,9 @@
 package com.helltar.vusan.telegram.callback
 
 import com.helltar.vusan.agent.AgentRunner
+import com.helltar.vusan.request.ConversationScope
+import com.helltar.vusan.telegram.telegramChat
+import com.helltar.vusan.telegram.telegramUser
 import com.helltar.vusan.i18n.Messages
 import com.helltar.vusan.telegram.delivery.answerCallbackQuery
 import io.github.oshai.kotlinlogging.KotlinLogging
@@ -51,7 +54,7 @@ internal class TurnStopHandler(
             return
         }
 
-        if (agent.stop(userId, chatId)) {
+        if (agent.stop(ConversationScope(telegramUser(userId), telegramChat(chatId)))) {
             log.info { "stopped the running turn from the status button: chat=$chatId user=$userId" }
             // the stopped turn reports itself in the chat, so the toast would only repeat it.
             answerCallbackQuery(client, callbackQueryId)

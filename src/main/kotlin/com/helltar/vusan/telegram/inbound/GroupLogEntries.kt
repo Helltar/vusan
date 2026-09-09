@@ -1,5 +1,7 @@
 package com.helltar.vusan.telegram.inbound
 
+import com.helltar.vusan.telegram.telegramChat
+
 import com.helltar.vusan.agent.grouplog.GroupLogEntry
 import com.helltar.vusan.common.collapseWhitespaceAndCap
 import com.helltar.vusan.telegram.SentPoll
@@ -35,14 +37,14 @@ internal fun Message.toGroupLogEntry(): GroupLogEntry? {
     if (text == null && descriptor == null && kind == "unknown") return null
 
     return GroupLogEntry(
-        chatId = chatIdLong,
+        chat = telegramChat(chatIdLong),
         messageId = messageIdLong,
         kind = kind,
         // telegram's own send time: a digest keyed on local days must not drift when the bot is
         // catching up on a backlog of updates.
         sentAt = date?.let { Instant.ofEpochSecond(it.toLong()) } ?: Instant.now(),
         threadId = messageThreadId?.toLong(),
-        senderId = senderIdOrNull(),
+        senderId = senderIdOrNull()?.toString(),
         senderUsername = senderUsernameOrNull(),
         senderName = senderDisplayNameOrNull(),
         text = text,
@@ -72,12 +74,12 @@ internal fun PollAnswer.toGroupLogEntry(poll: SentPoll): GroupLogEntry? {
         }.orEmpty()
 
     return GroupLogEntry(
-        chatId = poll.chatId,
+        chat = telegramChat(poll.chatId),
         // an answer is not a message, so it has no id of its own and nothing can reply to it.
         messageId = null,
         kind = POLL_ANSWER_KIND,
         sentAt = Instant.now(),
-        senderId = voter.id,
+        senderId = voter.id.toString(),
         senderUsername = voter.userName,
         senderName = displayName(voter.firstName, voter.lastName),
         text = "answered: ${chosen.joinToString(", ")}$verdict".collapseWhitespaceAndCap(MAX_TEXT_CHARS)

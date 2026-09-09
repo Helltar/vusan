@@ -40,11 +40,11 @@ Telegram ──► telegram/ ──► agent/ ──► tools/ ──► externa
   layer appends or clears turns behind a running turn's back; `AgentFactory` builds the `AIAgent` (system prompt +
   history + tools) and budgets its model context; `SystemPrompt` keeps the deployment's customizable personality and the
   fixed delivery/tool contract in separate XML-delimited blocks. `agent/conversation/` groups turns into complete
-  interactions, persists raw history, and maintains its semantic recap, all keyed by the `(userId, chatId)` pair — one
+  interactions, persists raw history, and maintains its semantic recap, all keyed by a `ConversationScope` — one
   person in one chat, so a private exchange can never be replayed as that person's own words inside a group, and what
-  travels between chats is durable memory rather than raw turns; `agent/memory/` stores that memory (user or group
-  scope), which survives a history clear and is injected as `<user_memory>`/`<group_memory>`; `agent/grouplog/` is the
-  group transcript, keyed by chat alone, holding every message the bot saw in a group rather than only the turns it took
+  travels between chats is durable memory rather than raw turns; `agent/memory/` stores that memory under a
+  `MemoryOwner` (one person, or one group), which survives a history clear and is injected as
+  `<user_memory>`/`<group_memory>`; `agent/grouplog/` is the group transcript, keyed by chat alone, holding every message the bot saw in a group rather than only the turns it took
   part in. `GroupLogReader` answers a window from it under a character budget, falling back to cached per-day recaps
   produced by `GroupLogDigester` when the window is too wide to quote.
 - **`tools/`** — agent-callable tools, one subpackage per capability (search, voice, vision, scheduled tasks, …).
@@ -73,7 +73,11 @@ Telegram ──► telegram/ ──► agent/ ──► tools/ ──► externa
   the `PromptExecutor` wrapper that does the counting, so one place covers every LLM call the bot makes; `BudgetOwner`
   is the coroutine-context element that says whose share a nested call comes out of. Inert unless
   `LLM_DAILY_TOKEN_BUDGET` is set.
-- **`infra/`** — cross-cutting infrastructure: the SQLite/Exposed `Db` singleton and the Ktor `Http` client.
+- **`infra/`** — cross-cutting infrastructure: the SQLite/Exposed `Db` singleton and the Ktor `Http` client. Every
+  table that holds state belonging to somebody carries a `platform` column beside the external id, so two messengers
+  issuing the same number never read each other's rows. `Db.connect` reconciles the schema declaratively — it creates
+  what is missing and adds columns and indices, and never rewrites a key. A change that does rewrite one is applied by
+  moving the database by hand rather than by a migration in the code.
 - **`config/`** — `env/vusan.env` parsing (`AppConfig`), LLM provider/model resolution (`LlmRuntime`), and the ChatGPT
   subscription credentials the Codex CLI writes (`CodexAuth`). `VisionRuntime` resolves separately which model looks at
   images: the `OPENAI_VISION_*` model when configured, the chat model when it accepts images, and nothing at all
@@ -671,7 +675,7 @@ A symptom-to-source map for finding the right file fast. Paths are under
 | Symptom | Start here |
 |---|---|
 | The same message is answered twice, or editing one to add the mention does nothing | `TelegramBotRunner.startsTurnOnEdit` (what an edit must pass to start a turn) + `TelegramBotRunner.isAccepted`/`AnsweredMessages` (one turn per message, per-process, empty after a restart) |
-| Vusan ignores a message entirely | `TelegramBotRunner.passesAllowlist`/`isIdAllowed` (the `ALLOWED_IDS` allowlist and the `BANNED_IDS` ban list, applied on the polling loop), then `telegram/inbound/MessageFilter.kt` (`shouldHandle` — group reply/mention rules) |
+| Vusan ignores a message entirely | `TelegramBotRunner.passesAllowlist` and `request/AccessPolicy.kt` (the `ALLOWED_IDS` allowlist and the `BANNED_IDS` ban list, both platform-qualified, applied on the polling loop), then `telegram/inbound/MessageFilter.kt` (`shouldHandle` — group reply/mention rules) |
 | Container says `Up` but the bot answers nothing | `infra/Heartbeat.kt` (the `/tmp/health` freshness signal, and the `ERROR` logged once when polling stalls) + `TelegramBotRunner.start` (the `getUpdates` generator hook that feeds it) |
 | Reply says "still working on your previous request" | `agent/AgentRunner.kt` — the per-conversation `Mutex` rejects a second concurrent turn in the same chat |
 | A message goes unanswered after a restart or deploy, or one is answered twice | `telegram/UpdateSpool.kt` (what is kept, what is replayed, and `SPOOL_RETENTION`) + `telegram/TelegramBotRunner.kt` (the blocking spool write in the poll callback, and `settle` on pickup) + `telegram/AnsweredMessages.kt` (the one-turn-per-message claim) |

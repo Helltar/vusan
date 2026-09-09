@@ -1,8 +1,10 @@
 package com.helltar.vusan.config
 
+import com.helltar.vusan.request.AccessPolicy
 import kotlin.test.Test
 import kotlin.test.assertContains
 import kotlin.test.assertEquals
+import kotlin.test.assertNotEquals
 import kotlin.test.assertFailsWith
 import kotlin.test.assertNull
 import kotlin.test.assertTrue
@@ -62,9 +64,25 @@ class AppConfigTest {
 
     @Test
     fun `an id list accepts every separator it documents`() {
-        assertEquals(setOf(1L, 2L, 3L, 4L), parseIdSetEnv("ALLOWED_IDS", "1, 2;3\n4"))
-        assertEquals(setOf(-100_500L, 7L), parseIdSetEnv("ALLOWED_IDS", "-100500  7"))
-        assertEquals(setOf(5L), parseIdSetEnv("ALLOWED_IDS", "5,,  ,5"))
+        assertEquals(
+            setOf("telegram:1", "telegram:2", "telegram:3", "telegram:4"),
+            parseIdSetEnv("ALLOWED_IDS", "1, 2;3\n4")
+        )
+
+        assertEquals(setOf("telegram:-100500", "telegram:7"), parseIdSetEnv("ALLOWED_IDS", "-100500  7"))
+        assertEquals(setOf("telegram:5"), parseIdSetEnv("ALLOWED_IDS", "5,,  ,5"))
+    }
+
+    // a bare number is what every existing deployment has written, so it keeps meaning Telegram; a
+    // second messenger's ids have to name themselves rather than land in the same set as numbers.
+    @Test
+    fun `an id names its platform, or is read as a telegram one`() {
+        assertEquals(setOf("discord:99"), parseIdSetEnv("ALLOWED_IDS", "discord:99"))
+        assertEquals(setOf("telegram:99"), parseIdSetEnv("ALLOWED_IDS", "TELEGRAM:99"))
+        assertNotEquals(parseIdSetEnv("ALLOWED_IDS", "discord:99"), parseIdSetEnv("ALLOWED_IDS", "99"))
+
+        val failure = assertFailsWith<IllegalStateException> { parseIdSetEnv("ALLOWED_IDS", "matrix:@ann") }
+        assertContains(failure.message.orEmpty(), "matrix:@ann")
     }
 
     @Test
@@ -99,7 +117,7 @@ class AppConfigTest {
     ): AppConfig =
         AppConfig(
             agentMaxIterations = agentMaxIterations,
-            allowedIds = setOf(1L),
+            accessPolicy = AccessPolicy(allowed = setOf("telegram:1")),
             appearance = null,
             databasePath = "data/db/vusan.db",
             elevenLabsApiKey = null,

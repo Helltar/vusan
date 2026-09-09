@@ -74,7 +74,7 @@ private val SHARED_SENDER_IDS = setOf(1_087_968_824L, 136_817_688L)
 
 internal fun Message.toChatContext(profile: ChatProfile): ChatContext =
     ChatContext(
-        id = chatIdLong,
+        id = chatIdLong.toString(),
         isPrivate = isPrivateChat,
         type = promptChatType(),
         threadId = forumTopicIdOrNull,
@@ -86,7 +86,7 @@ internal fun Message.toChatContext(profile: ChatProfile): ChatContext =
 
 internal fun User.toSenderContext(): SenderContext =
     SenderContext(
-        id = id,
+        id = id.toString(),
         displayName = displayName(firstName, lastName),
         username = userName,
         languageCode = languageCode,

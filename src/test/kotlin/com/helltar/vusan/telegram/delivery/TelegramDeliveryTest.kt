@@ -36,7 +36,7 @@ class TelegramDeliveryTest {
                 BotOutput.InlineChoice(
                     question = "Choose",
                     options = listOf("A", "B"),
-                    ownerId = 1L,
+                    ownerId = "1",
                     historyRevision = 0L
                 )
             )

@@ -1,5 +1,6 @@
 package com.helltar.vusan.budget
 
+import com.helltar.vusan.request.UserRef
 import kotlin.coroutines.AbstractCoroutineContextElement
 import kotlin.coroutines.CoroutineContext
 import kotlin.coroutines.coroutineContext
@@ -40,8 +41,8 @@ fun Throwable.tokenBudgetStop(): TokenBudgetStop? =
  * every one of those call sites having to pass a user id it has no other use for. Work started outside a
  * turn — the sticker description worker — carries no owner and answers to the day's ceiling alone.
  */
-class BudgetOwner(val userId: Long) : AbstractCoroutineContextElement(BudgetOwner) {
+class BudgetOwner(val user: UserRef) : AbstractCoroutineContextElement(BudgetOwner) {
     companion object Key : CoroutineContext.Key<BudgetOwner>
 }
 
-internal suspend fun currentBudgetOwner(): Long? = coroutineContext[BudgetOwner]?.userId
+internal suspend fun currentBudgetOwner(): UserRef? = coroutineContext[BudgetOwner]?.user

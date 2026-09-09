@@ -2,6 +2,9 @@ package com.helltar.vusan.agent.memory
 
 import com.helltar.vusan.infra.Db.dbTransaction
 import com.helltar.vusan.infra.tables.MemoryTable
+import com.helltar.vusan.request.ChatRef
+import com.helltar.vusan.request.UserRef
+import org.jetbrains.exposed.v1.core.Op
 import org.jetbrains.exposed.v1.core.SortOrder
 import org.jetbrains.exposed.v1.core.and
 import org.jetbrains.exposed.v1.core.eq
@@ -14,15 +17,15 @@ import org.jetbrains.exposed.v1.jdbc.selectAll
 
 /**
  * Durable memory, separate from the conversation history ([com.helltar.vusan.agent.conversation]).
- * Entries survive a history wipe; [MemoryScope] decides whether a row is personal ([MemoryScope.USER],
- * keyed by `userId`) or shared by a group ([MemoryScope.CHAT], keyed by `chatId`).
+ * Entries survive a history wipe; a [MemoryOwner] says whether a row is one person's or one group's,
+ * and on which platform.
  */
 class MemoryRepository(private val maxEntriesPerScope: Int = 10) {
 
-    suspend fun load(scope: MemoryScope, ownerId: Long): List<MemoryEntry> = dbTransaction {
+    suspend fun load(owner: MemoryOwner): List<MemoryEntry> = dbTransaction {
         MemoryTable
             .selectAll()
-            .where { (MemoryTable.scope eq scope) and (MemoryTable.ownerId eq ownerId) }
+            .where { ownedBy(owner) }
             .orderBy(MemoryTable.id to SortOrder.ASC)
             .map {
                 MemoryEntry(
@@ -33,54 +36,55 @@ class MemoryRepository(private val maxEntriesPerScope: Int = 10) {
             }
     }
 
-    suspend fun add(scope: MemoryScope, ownerId: Long, content: String): Long = dbTransaction {
+    suspend fun add(owner: MemoryOwner, content: String): Long = dbTransaction {
         require(content.isNotBlank()) { "Memory content must not be blank" }
 
         val id =
             MemoryTable.insertAndGetId {
-                it[MemoryTable.scope] = scope
-                it[MemoryTable.ownerId] = ownerId
+                it[MemoryTable.platform] = owner.platform
+                it[MemoryTable.scope] = owner.scope
+                it[MemoryTable.ownerId] = owner.id
                 it[MemoryTable.content] = content
             }.value
 
-        trim(scope, ownerId)
+        trim(owner)
         id
     }
 
     /**
-     * Deletes the entry with [id], but only if it belongs to the caller's own user memory ([userId])
-     * or to the current chat's group memory ([chatId]). The ownership check lives in the query, so a
-     * caller can never delete another user's memory or another chat's memory. Returns whether a row was removed.
+     * Deletes the entry with [id], but only if it belongs to [user]'s own memory or to [chat]'s shared
+     * memory. The ownership check lives in the query, so a caller can never delete another person's
+     * memory or another chat's. Returns whether a row was removed.
      */
-    suspend fun forget(id: Long, userId: Long, chatId: Long): Boolean = dbTransaction {
+    suspend fun forget(id: Long, user: UserRef, chat: ChatRef): Boolean = dbTransaction {
         val deleted =
             MemoryTable.deleteWhere {
-                (MemoryTable.id eq id) and (
-                        ((MemoryTable.scope eq MemoryScope.USER) and (MemoryTable.ownerId eq userId)) or
-                                ((MemoryTable.scope eq MemoryScope.CHAT) and (MemoryTable.ownerId eq chatId))
-                        )
+                (MemoryTable.id eq id) and (ownedBy(user.memoryOwner) or ownedBy(chat.memoryOwner))
             }
 
         deleted > 0
     }
 
-    suspend fun clearScope(scope: MemoryScope, ownerId: Long): Int = dbTransaction {
-        MemoryTable.deleteWhere { (MemoryTable.scope eq scope) and (MemoryTable.ownerId eq ownerId) }
+    suspend fun clearScope(owner: MemoryOwner): Int = dbTransaction {
+        MemoryTable.deleteWhere { ownedBy(owner) }
     }
 
-    private fun trim(scope: MemoryScope, ownerId: Long) {
+    private fun trim(owner: MemoryOwner) {
         val keepMinId =
             MemoryTable
                 .select(MemoryTable.id)
-                .where { (MemoryTable.scope eq scope) and (MemoryTable.ownerId eq ownerId) }
+                .where { ownedBy(owner) }
                 .orderBy(MemoryTable.id to SortOrder.DESC)
                 .limit(1)
                 .offset((maxEntriesPerScope - 1).toLong())
                 .map { it[MemoryTable.id].value }
                 .firstOrNull() ?: return
 
-        MemoryTable.deleteWhere {
-            (MemoryTable.scope eq scope) and (MemoryTable.ownerId eq ownerId) and (MemoryTable.id less keepMinId)
-        }
+        MemoryTable.deleteWhere { ownedBy(owner) and (MemoryTable.id less keepMinId) }
     }
 }
+
+private fun ownedBy(owner: MemoryOwner): Op<Boolean> =
+    (MemoryTable.platform eq owner.platform) and
+            (MemoryTable.scope eq owner.scope) and
+            (MemoryTable.ownerId eq owner.id)

@@ -13,6 +13,8 @@ import java.time.ZoneId
 import java.time.temporal.ChronoUnit
 import kotlin.test.AfterTest
 import kotlin.test.BeforeTest
+import com.helltar.vusan.request.AccessPolicy
+import com.helltar.vusan.request.testChat
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFalse
@@ -81,7 +83,7 @@ class GroupLogRepositoryTest {
         repeat(3) {
             repository.record(
                 GroupLogEntry(
-                    chatId = CHAT,
+                    chat = CHAT,
                     messageId = null,
                     kind = GroupLogEntry.BOT_KIND,
                     sentAt = now,
@@ -245,24 +247,24 @@ class GroupLogRepositoryTest {
         name: String? = "Olena Petrenko"
     ) =
         GroupLogEntry(
-            chatId = CHAT,
+            chat = CHAT,
             messageId = messageId,
             kind = "text",
             sentAt = at,
-            senderId = 1L,
+            senderId = "1",
             senderUsername = username,
             senderName = name,
             text = text
         )
 
     private companion object {
-        const val CHAT = -100L
+        val CHAT = testChat(-100)
     }
 
     private fun testConfig(dbPath: String) =
         AppConfig(
             agentMaxIterations = 70,
-            allowedIds = emptySet(),
+            accessPolicy = AccessPolicy(),
             appearance = null,
             databasePath = dbPath,
             elevenLabsApiKey = null,

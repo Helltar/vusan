@@ -1,6 +1,7 @@
 package com.helltar.vusan.agent.grouplog
 
 import com.helltar.vusan.common.rethrowIfCancellation
+import com.helltar.vusan.request.ChatRef
 import io.github.oshai.kotlinlogging.KotlinLogging
 import java.time.Instant
 import java.time.LocalDate
@@ -47,18 +48,18 @@ class GroupLogReader(
     }
 
     suspend fun read(
-        chatId: Long,
+        chat: ChatRef,
         window: Duration,
         author: String? = null,
         now: Instant = Instant.now()
     ): String {
         val from = now.minusSeconds(window.inWholeSeconds)
-        val total = repository.countInWindow(chatId, from, now, author)
+        val total = repository.countInWindow(chat, from, now, author)
 
         if (total == 0L) return emptyResult(author, from, now)
 
         val rowLimit = (budgetChars / MIN_LINE_COST).coerceIn(1, MAX_ROWS)
-        val entries = repository.readWindow(chatId, from, now, limit = rowLimit, author = author)
+        val entries = repository.readWindow(chat, from, now, limit = rowLimit, author = author)
         val rendered = renderGroupLog(entries, zone, MAX_LINE_TEXT_CHARS, budgetChars)
 
         if (rendered.includedCount.toLong() >= total) {
@@ -72,13 +73,13 @@ class GroupLogReader(
             return truncatedResult(rendered, from, now, total, author)
         }
 
-        return digestedResult(chatId, from, now)
+        return digestedResult(chat, from, now)
     }
 
     private fun reachesAClosedDay(from: Instant, now: Instant): Boolean =
         LocalDate.ofInstant(from, zone) < LocalDate.ofInstant(now, zone)
 
-    private suspend fun digestedResult(chatId: Long, from: Instant, now: Instant): String {
+    private suspend fun digestedResult(chat: ChatRef, from: Instant, now: Instant): String {
         val today = LocalDate.ofInstant(now, zone)
 
         // snapping to a day boundary makes every past day in the window whole, which is what makes
@@ -89,17 +90,17 @@ class GroupLogReader(
 
         // snapping widened the window, so the caller's count over the narrower one would contradict
         // the window this header prints.
-        val total = repository.countInWindow(chatId, windowStart, now, author = null)
+        val total = repository.countInWindow(chat, windowStart, now, author = null)
 
         val todayStart = today.startOfDay()
-        val todayTotal = repository.countInWindow(chatId, todayStart, now, author = null)
+        val todayTotal = repository.countInWindow(chat, todayStart, now, author = null)
 
         val todayBudget = (budgetChars * TODAY_BUDGET_SHARE).toInt()
-        val todayEntries = repository.readWindow(chatId, todayStart, now, limit = MAX_ROWS, author = null)
+        val todayEntries = repository.readWindow(chat, todayStart, now, limit = MAX_ROWS, author = null)
         val todayRendered = renderGroupLog(todayEntries, zone, MAX_LINE_TEXT_CHARS, todayBudget)
 
         val digestBudget = budgetChars - todayRendered.text.length
-        val digests = collectDigests(chatId, closedDays, digestBudget)
+        val digests = collectDigests(chat, closedDays, digestBudget)
 
         return buildString {
             append(header(windowStart, now, total, author = null))
@@ -134,12 +135,12 @@ class GroupLogReader(
 
     // newest days first so the ones that survive a tight budget are the recent ones, then flipped
     // back into reading order.
-    private suspend fun collectDigests(chatId: Long, closedDays: List<LocalDate>, budget: Int): List<String> {
+    private suspend fun collectDigests(chat: ChatRef, closedDays: List<LocalDate>, budget: Int): List<String> {
         val blocks = ArrayDeque<String>()
         var used = 0
 
         for (day in closedDays.asReversed()) {
-            val digest = digestOf(chatId, day) ?: continue
+            val digest = digestOf(chat, day) ?: continue
             val rendered = block("day date=\"$day\"", digest, closingTag = "day")
 
             if (blocks.isNotEmpty() && used + rendered.length > budget) break
@@ -151,12 +152,12 @@ class GroupLogReader(
         return blocks.toList()
     }
 
-    private suspend fun digestOf(chatId: Long, day: LocalDate): String? {
-        repository.digestFor(chatId, day)?.let { return it }
+    private suspend fun digestOf(chat: ChatRef, day: LocalDate): String? {
+        repository.digestFor(chat, day)?.let { return it }
 
         val compactor = digester ?: return null
         val dayEnd = day.plusDays(1).startOfDay().minusMillis(1)
-        val entries = repository.readWindow(chatId, day.startOfDay(), dayEnd, limit = MAX_ROWS_PER_DAY)
+        val entries = repository.readWindow(chat, day.startOfDay(), dayEnd, limit = MAX_ROWS_PER_DAY)
 
         if (entries.isEmpty()) return null
 
@@ -167,14 +168,14 @@ class GroupLogReader(
                 compactor.digest(day, source.text)
             } catch (e: Throwable) {
                 e.rethrowIfCancellation()
-                log.warn(e) { "chat log digest failed for chat=$chatId day=$day" }
+                log.warn(e) { "chat log digest failed for chat=[$chat] day=$day" }
                 null
             } ?: return null
 
-        runCatching { repository.storeDigest(chatId, day, entries.size, digest) }
+        runCatching { repository.storeDigest(chat, day, entries.size, digest) }
             .onFailure {
                 it.rethrowIfCancellation()
-                log.warn(it) { "failed to cache chat log digest for chat=$chatId day=$day" }
+                log.warn(it) { "failed to cache chat log digest for chat=[$chat] day=$day" }
             }
 
         return digest

@@ -18,6 +18,7 @@ import com.helltar.vusan.infra.tables.StickerSetsTable
 import com.helltar.vusan.infra.tables.StickersTable
 import com.helltar.vusan.outbox.BotOutbox
 import com.helltar.vusan.request.requestContext
+import com.helltar.vusan.request.testChat
 import com.helltar.vusan.tools.vision.FakePromptExecutor
 import com.helltar.vusan.tools.vision.ImageVisionClient
 import com.helltar.vusan.tools.vision.TEST_MODEL
@@ -50,6 +51,7 @@ import java.time.temporal.ChronoUnit
 import java.util.concurrent.CompletableFuture
 import kotlin.test.AfterTest
 import kotlin.test.BeforeTest
+import com.helltar.vusan.request.AccessPolicy
 import kotlin.test.Test
 import kotlin.test.assertContains
 import kotlin.test.assertEquals
@@ -90,7 +92,7 @@ class StickerCatalogTest {
         catalog.learn(sticker("a"))
         awaitDescriptionPass(catalog)
 
-        val index = assertNotNull(catalog.indexBlockFor(CHAT))
+        val index = assertNotNull(catalog.indexBlockFor(testChat(CHAT)))
         assertTrue(index.startsWith("<sticker_catalog>"), index)
         assertContains(index, "cat shrugging, unbothered")
         assertContains(index, "😂")
@@ -105,7 +107,7 @@ class StickerCatalogTest {
         catalog.learn(sticker("a"))
         awaitDescriptionPass(catalog)
 
-        assertNull(catalog.indexBlockFor(CHAT))
+        assertNull(catalog.indexBlockFor(testChat(CHAT)))
 
         val row = assertNotNull(storedStickers().singleOrNull())
         assertNull(row.description)
@@ -138,8 +140,8 @@ class StickerCatalogTest {
         catalog.learn(sticker("a"))
         awaitDescriptionPass(catalog)
 
-        assertNotNull(catalog.indexBlockFor(CHAT))
-        assertNull(catalog.indexBlockFor(OTHER_CHAT))
+        assertNotNull(catalog.indexBlockFor(testChat(CHAT)))
+        assertNull(catalog.indexBlockFor(testChat(OTHER_CHAT)))
     }
 
     @Test
@@ -150,7 +152,7 @@ class StickerCatalogTest {
         catalog.observe(CHAT, sticker("a", type = "custom_emoji"))
 
         assertTrue(storedStickers().isEmpty())
-        assertNull(catalog.indexBlockFor(CHAT))
+        assertNull(catalog.indexBlockFor(testChat(CHAT)))
     }
 
     @Test
@@ -160,13 +162,13 @@ class StickerCatalogTest {
 
         catalog.learn(sticker("a"))
         awaitDescriptionPass(catalog)
-        assertNotNull(catalog.indexBlockFor(CHAT))
+        assertNotNull(catalog.indexBlockFor(testChat(CHAT)))
 
         client.setGone = true
         backdateSetRefresh()
         awaitWorker(catalog) { storedStickers().isEmpty() }
 
-        assertNull(catalog.indexBlockFor(CHAT))
+        assertNull(catalog.indexBlockFor(testChat(CHAT)))
     }
 
     @Test
@@ -183,7 +185,7 @@ class StickerCatalogTest {
         awaitWorker(catalog) { storedStickers().size == 1 }
 
         // the survivor keeps the description already paid for
-        val index = assertNotNull(catalog.indexBlockFor(CHAT))
+        val index = assertNotNull(catalog.indexBlockFor(testChat(CHAT)))
         assertEquals(1, index.lines().count { it.startsWith("#") })
         assertContains(index, "penguin waving")
     }
@@ -201,7 +203,7 @@ class StickerCatalogTest {
         awaitWorker(catalog) { setRefreshedAt().isAfter(Instant.now().minusSeconds(3_600)) }
 
         assertEquals(1, storedStickers().size)
-        assertContains(assertNotNull(catalog.indexBlockFor(CHAT)), "penguin waving")
+        assertContains(assertNotNull(catalog.indexBlockFor(testChat(CHAT))), "penguin waving")
     }
 
     @Test
@@ -217,7 +219,7 @@ class StickerCatalogTest {
 
         awaitDescriptionPass(catalog)
 
-        val index = assertNotNull(catalog.indexBlockFor(CHAT))
+        val index = assertNotNull(catalog.indexBlockFor(testChat(CHAT)))
         val shown = shownIds(index).map { setNameOf(it) }.toSet()
 
         // how the index is shared once it overflows is pinned by RoundRobinTest, which does not
@@ -242,7 +244,7 @@ class StickerCatalogTest {
             }
         }
 
-        val index = assertNotNull(catalog.indexBlockFor(CHAT))
+        val index = assertNotNull(catalog.indexBlockFor(testChat(CHAT)))
         val shown = shownIds(index)
 
         assertEquals(16, shown.size)
@@ -261,7 +263,7 @@ class StickerCatalogTest {
         }
 
         val hiddenId = stickerId(stickers.last().fileUniqueId)
-        assertTrue(hiddenId !in shownIds(assertNotNull(catalog.indexBlockFor(CHAT))))
+        assertTrue(hiddenId !in shownIds(assertNotNull(catalog.indexBlockFor(testChat(CHAT)))))
 
         val tools = StickerTools(catalog, requestContext(chatId = CHAT), BotOutbox())
         val result = tools.searchStickers("sleepy fox")
@@ -296,7 +298,7 @@ class StickerCatalogTest {
 
         // a passing sticker from a set nobody reaches for again must not cost 60 vision calls
         assertTrue(storedStickers().isEmpty())
-        assertNull(catalog.indexBlockFor(CHAT))
+        assertNull(catalog.indexBlockFor(testChat(CHAT)))
     }
 
     @Test
@@ -331,7 +333,7 @@ class StickerCatalogTest {
         catalog.observe(OTHER_CHAT, sticker("a"))
 
         // no fetch happens at all, so the set being unreachable now cannot matter
-        assertContains(assertNotNull(catalog.indexBlockFor(OTHER_CHAT)), "penguin waving")
+        assertContains(assertNotNull(catalog.indexBlockFor(testChat(OTHER_CHAT))), "penguin waving")
     }
 
     private fun shownIds(index: String): List<Long> =
@@ -354,7 +356,7 @@ class StickerCatalogTest {
         catalog.recheckSetOf(id)
         awaitWorker(catalog) { storedStickers().isEmpty() }
 
-        assertNull(catalog.indexBlockFor(CHAT))
+        assertNull(catalog.indexBlockFor(testChat(CHAT)))
     }
 
     // a set is only pulled in once the chat has reached for it more than once
@@ -527,7 +529,7 @@ class StickerCatalogTest {
     private fun testConfig(dbPath: String) =
         AppConfig(
             agentMaxIterations = 70,
-            allowedIds = setOf(1L),
+            accessPolicy = AccessPolicy(allowed = setOf("telegram:1")),
             appearance = null,
             databasePath = dbPath,
             elevenLabsApiKey = null,

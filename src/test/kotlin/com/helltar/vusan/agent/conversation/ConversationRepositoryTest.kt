@@ -9,6 +9,9 @@ import java.nio.file.Path
 import java.time.Instant
 import kotlin.test.AfterTest
 import kotlin.test.BeforeTest
+import com.helltar.vusan.request.AccessPolicy
+import com.helltar.vusan.request.Platform
+import com.helltar.vusan.request.testScope
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFalse
@@ -36,10 +39,10 @@ class ConversationRepositoryTest {
     @Test
     fun `append and load preserve whole interactions`() = runBlocking {
         val history = ConversationRepository()
-        history.appendInteraction(USER, DM, exchange("first", "one"))
-        history.appendInteraction(USER, DM, exchange("second", "two"))
+        history.appendInteraction(DM, exchange("first", "one"))
+        history.appendInteraction(DM, exchange("second", "two"))
 
-        val snapshot = history.load(USER, DM)
+        val snapshot = history.load(DM)
 
         assertEquals(2, snapshot.interactions.size)
         assertEquals(listOf("first", "one"), snapshot.interactions[0].turns.map { it.content })
@@ -51,10 +54,10 @@ class ConversationRepositoryTest {
     @Test
     fun `the same user keeps one history per chat`() = runBlocking {
         val history = ConversationRepository()
-        history.appendInteraction(USER, DM, exchange("something private", "kept between us"))
-        history.appendInteraction(USER, GROUP, exchange("hi everyone", "hello"))
+        history.appendInteraction(DM, exchange("something private", "kept between us"))
+        history.appendInteraction(GROUP, exchange("hi everyone", "hello"))
 
-        val inGroup = history.load(USER, GROUP)
+        val inGroup = history.load(GROUP)
 
         assertEquals(1, inGroup.interactions.size)
         assertEquals(listOf("hi everyone", "hello"), inGroup.interactions.single().turns.map { it.content })
@@ -62,48 +65,46 @@ class ConversationRepositoryTest {
             inGroup.interactions.any { interaction -> interaction.turns.any { "private" in it.content } },
             "a private exchange must never be replayable as this user's own words in a group"
         )
-        assertEquals(1, history.load(USER, DM).stats.storedInteractions)
+        assertEquals(1, history.load(DM).stats.storedInteractions)
     }
 
     @Test
     fun `a recap checkpoint cannot point at a message from another chat`() = runBlocking {
         val history = ConversationRepository()
-        history.appendInteraction(USER, DM, exchange("first", "one"))
-        val inDm = history.load(USER, DM).interactions.single()
+        history.appendInteraction(DM, exchange("first", "one"))
+        val inDm = history.load(DM).interactions.single()
 
         assertFalse(
             history.storeSummary(
-                userId = USER,
-                chatId = GROUP,
+                scope = GROUP,
                 expectedThroughMessageId = 0L,
                 throughMessageId = inDm.lastMessageId,
                 content = "a recap of messages this chat never had"
             )
         )
 
-        assertEquals(null, history.load(USER, GROUP).summary)
+        assertEquals(null, history.load(GROUP).summary)
     }
 
     @Test
     fun `summary checkpoint hides compacted interactions without deleting their raw rows`() = runBlocking {
         val history = ConversationRepository()
-        history.appendInteraction(USER, DM, exchange("first", "one"))
-        history.appendInteraction(USER, DM, exchange("second", "two"))
+        history.appendInteraction(DM, exchange("first", "one"))
+        history.appendInteraction(DM, exchange("second", "two"))
 
-        val before = history.load(USER, DM)
+        val before = history.load(DM)
         val first = before.interactions.first()
 
         assertTrue(
             history.storeSummary(
-                userId = USER,
-                chatId = DM,
+                scope = DM,
                 expectedThroughMessageId = 0L,
                 throughMessageId = first.lastMessageId,
                 content = "The user said first; the assistant replied one."
             )
         )
 
-        val after = history.load(USER, DM)
+        val after = history.load(DM)
 
         assertEquals("The user said first; the assistant replied one.", after.summary)
         assertEquals(listOf("second", "two"), after.interactions.single().turns.map { it.content })
@@ -114,22 +115,21 @@ class ConversationRepositoryTest {
     @Test
     fun `raw retention removes only complete interactions covered by the summary`() = runBlocking {
         val history = ConversationRepository()
-        history.appendInteraction(USER, DM, exchange("first", "one"))
-        history.appendInteraction(USER, DM, exchange("second", "two"))
+        history.appendInteraction(DM, exchange("first", "one"))
+        history.appendInteraction(DM, exchange("second", "two"))
 
-        val before = history.load(USER, DM)
+        val before = history.load(DM)
         val first = before.interactions.first()
-        history.storeSummary(USER, DM, 0L, first.lastMessageId, "first exchange recap")
+        history.storeSummary(DM, 0L, first.lastMessageId, "first exchange recap")
 
         val pruned =
             history.pruneCompacted(
-                userId = USER,
-                chatId = DM,
+                scope = DM,
                 maxStoredInteractions = 1,
                 rawRetentionCutoff = Instant.EPOCH
             )
 
-        val after = history.load(USER, DM)
+        val after = history.load(DM)
         assertEquals(1, pruned)
         assertEquals(1, after.stats.storedInteractions)
         assertEquals(listOf("second", "two"), after.interactions.single().turns.map { it.content })
@@ -138,63 +138,88 @@ class ConversationRepositoryTest {
     @Test
     fun `retention prunes one conversation without touching the same user elsewhere`() = runBlocking {
         val history = ConversationRepository()
-        history.appendInteraction(USER, DM, exchange("first", "one"))
-        history.appendInteraction(USER, DM, exchange("second", "two"))
-        history.appendInteraction(USER, GROUP, exchange("in the group", "answered"))
+        history.appendInteraction(DM, exchange("first", "one"))
+        history.appendInteraction(DM, exchange("second", "two"))
+        history.appendInteraction(GROUP, exchange("in the group", "answered"))
 
-        val first = history.load(USER, DM).interactions.first()
-        history.storeSummary(USER, DM, 0L, first.lastMessageId, "first exchange recap")
+        val first = history.load(DM).interactions.first()
+        history.storeSummary(DM, 0L, first.lastMessageId, "first exchange recap")
 
-        history.pruneCompacted(USER, DM, maxStoredInteractions = 1, rawRetentionCutoff = Instant.EPOCH)
+        history.pruneCompacted(DM, maxStoredInteractions = 1, rawRetentionCutoff = Instant.EPOCH)
 
-        assertEquals(1, history.load(USER, GROUP).stats.storedInteractions)
+        assertEquals(1, history.load(GROUP).stats.storedInteractions)
     }
 
     @Test
     fun `clear advances the revision of one conversation and leaves the others alone`() = runBlocking {
         val history = ConversationRepository()
-        history.appendInteraction(USER, DM, exchange("first", "one"))
-        history.appendInteraction(USER, GROUP, exchange("in the group", "answered"))
-        history.appendInteraction(OTHER_USER, GROUP, exchange("other", "answer"))
-        val first = history.load(USER, DM).interactions.single()
-        history.storeSummary(USER, DM, 0L, first.lastMessageId, "recap")
+        history.appendInteraction(DM, exchange("first", "one"))
+        history.appendInteraction(GROUP, exchange("in the group", "answered"))
+        history.appendInteraction(OTHER_USER_IN_GROUP, exchange("other", "answer"))
+        val first = history.load(DM).interactions.single()
+        history.storeSummary(DM, 0L, first.lastMessageId, "recap")
 
-        assertEquals(0L, history.revision(USER, DM))
+        assertEquals(0L, history.revision(DM))
 
-        history.clear(USER, DM)
+        history.clear(DM)
 
-        val cleared = history.load(USER, DM)
-        assertEquals(1L, history.revision(USER, DM))
+        val cleared = history.load(DM)
+        assertEquals(1L, history.revision(DM))
         assertTrue(cleared.interactions.isEmpty())
         assertEquals(null, cleared.summary)
 
         // the same person in another chat, and another person in the same chat, both untouched.
         assertEquals(
             listOf("in the group", "answered"),
-            history.load(USER, GROUP).interactions.single().turns.map { it.content }
+            history.load(GROUP).interactions.single().turns.map { it.content }
         )
-        assertEquals(0L, history.revision(USER, GROUP))
+        assertEquals(0L, history.revision(GROUP))
         assertEquals(
             listOf("other", "answer"),
-            history.load(OTHER_USER, GROUP).interactions.single().turns.map { it.content }
+            history.load(OTHER_USER_IN_GROUP).interactions.single().turns.map { it.content }
         )
 
-        history.clear(USER, DM)
+        history.clear(DM)
 
-        assertEquals(2L, history.revision(USER, DM))
+        assertEquals(2L, history.revision(DM))
     }
 
     @Test
     fun `the last exchange is the one in this chat, not the users latest anywhere`() = runBlocking {
         val history = ConversationRepository()
-        history.appendInteraction(USER, GROUP, exchange("in the group", "answered"))
-        val groupExchangeAt = history.lastInteractionAt(USER, GROUP)
+        history.appendInteraction(GROUP, exchange("in the group", "answered"))
+        val groupExchangeAt = history.lastInteractionAt(GROUP)
 
-        history.appendInteraction(USER, DM, exchange("later, in private", "sure"))
+        history.appendInteraction(DM, exchange("later, in private", "sure"))
 
         assertNotNull(groupExchangeAt)
-        assertEquals(groupExchangeAt, history.lastInteractionAt(USER, GROUP))
-        assertEquals(null, history.lastInteractionAt(OTHER_USER, GROUP))
+        assertEquals(groupExchangeAt, history.lastInteractionAt(GROUP))
+        assertEquals(null, history.lastInteractionAt(OTHER_USER_IN_GROUP))
+    }
+
+    // telegram and discord both issue plain numbers, so the same pair of ids names two different people
+    // in two different chats. sharing a history between them would replay one person's words as another's.
+    @Test
+    fun `the same ids on two platforms are two conversations`() = runBlocking {
+        val history = ConversationRepository()
+        history.appendInteraction(DM, exchange("my bank pin is 1234", "noted"))
+        history.appendInteraction(DM_ON_DISCORD, exchange("hello", "hi"))
+
+        assertEquals(
+            listOf("my bank pin is 1234", "noted"),
+            history.load(DM).interactions.single().turns.map { it.content }
+        )
+
+        assertEquals(
+            listOf("hello", "hi"),
+            history.load(DM_ON_DISCORD).interactions.single().turns.map { it.content }
+        )
+
+        history.clear(DM)
+
+        assertEquals(1L, history.revision(DM))
+        assertEquals(0L, history.revision(DM_ON_DISCORD))
+        assertEquals(1, history.load(DM_ON_DISCORD).interactions.size)
     }
 
     private fun exchange(user: String, assistant: String): List<ChatTurn> =
@@ -204,18 +229,18 @@ class ConversationRepositoryTest {
         )
 
     private companion object {
-        const val USER = 42L
-        const val OTHER_USER = 99L
+        val DM_ON_DISCORD = testScope(userId = 42, chatId = 42, platform = Platform.DISCORD)
+        val OTHER_USER_IN_GROUP = testScope(userId = 99, chatId = -100)
 
         // in telegram a private chat carries the user's own id, so the DM conversation is (42, 42).
-        const val DM = 42L
-        const val GROUP = -100L
+        val DM = testScope(userId = 42, chatId = 42)
+        val GROUP = testScope(userId = 42, chatId = -100)
     }
 
     private fun testConfig(dbPath: String) =
         AppConfig(
             agentMaxIterations = 70,
-            allowedIds = emptySet(),
+            accessPolicy = AccessPolicy(),
             appearance = null,
             databasePath = dbPath,
             elevenLabsApiKey = null,

@@ -12,7 +12,9 @@ import com.helltar.vusan.infra.tables.StickerSetsTable
 import com.helltar.vusan.infra.tables.StickersTable
 import com.helltar.vusan.request.AttachedFile
 import com.helltar.vusan.request.AttachedFileKind
+import com.helltar.vusan.request.ChatRef
 import com.helltar.vusan.telegram.api
+import com.helltar.vusan.telegram.telegramChatId
 import com.helltar.vusan.telegram.delivery.isStickerSetGone
 import com.helltar.vusan.telegram.downloadFileBytes
 import com.helltar.vusan.tools.vision.EMPTY_VISION_DESCRIPTION
@@ -199,7 +201,16 @@ class StickerCatalog(
      * The sticker index for this chat's turn, or `null` when nothing is described yet —
      * which is the normal state of a fresh deployment and of a chat where nobody uses stickers.
      */
-    suspend fun indexBlockFor(chatId: Long): String? {
+    /**
+     * The shortlist a turn in [chat] is shown, or `null` when there is nothing worth showing.
+     *
+     * Stickers are Telegram's own model — a set is learned and resent by `file_id` — so the catalog is
+     * keyed by the Telegram chat id and takes the qualified reference only to convert it here, at the
+     * one place a shared caller reaches in.
+     */
+    suspend fun indexBlockFor(chat: ChatRef): String? = indexBlockFor(chat.telegramChatId)
+
+    private suspend fun indexBlockFor(chatId: Long): String? {
         val entries = describedEntriesFor(chatId)
         if (entries.isEmpty()) return null
 
@@ -210,7 +221,10 @@ class StickerCatalog(
     }
 
     /** Find described stickers from every set this chat has used, ranked by textual meaning. */
-    internal suspend fun search(chatId: Long, query: String, limit: Int): List<StickerEntry> {
+    internal suspend fun search(chat: ChatRef, query: String, limit: Int): List<StickerEntry> =
+        searchIn(chat.telegramChatId, query, limit)
+
+    private suspend fun searchIn(chatId: Long, query: String, limit: Int): List<StickerEntry> {
         require(limit >= 0) { "limit must not be negative" }
 
         val normalizedQuery = query.trim().lowercase(Locale.ROOT).replace(SEARCH_WHITESPACE_REGEX, " ")
@@ -241,7 +255,9 @@ class StickerCatalog(
             .map { it.entry }
     }
 
-    suspend fun fileIdFor(chatId: Long, id: Long): String? = dbTransaction {
+    suspend fun fileIdFor(chat: ChatRef, id: Long): String? = fileIdFor(chat.telegramChatId, id)
+
+    private suspend fun fileIdFor(chatId: Long, id: Long): String? = dbTransaction {
         val setNames = chatSetNames(chatId)
         if (setNames.isEmpty()) return@dbTransaction null
 

@@ -11,6 +11,7 @@ import com.helltar.vusan.outbox.BotOutput
 import com.helltar.vusan.outbox.OutboxItem
 import com.helltar.vusan.telegram.PollRegistry
 import com.helltar.vusan.telegram.api
+import com.helltar.vusan.telegram.telegramChat
 import com.helltar.vusan.telegram.inbound.chatIdLong
 import com.helltar.vusan.telegram.inbound.forumTopicIdOrNull
 import com.helltar.vusan.telegram.inbound.messageIdLong
@@ -434,7 +435,7 @@ class TelegramDelivery(
         runCatching {
             repository.record(
                 GroupLogEntry(
-                    chatId = chatId,
+                    chat = telegramChat(chatId),
                     messageId = null,
                     kind = GroupLogEntry.BOT_KIND,
                     sentAt = Instant.now(),

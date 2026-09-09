@@ -3,6 +3,7 @@ package com.helltar.vusan.tasks
 import com.helltar.vusan.i18n.Language
 import com.helltar.vusan.request.ChatContext
 import com.helltar.vusan.request.ChatProfile
+import com.helltar.vusan.request.ConversationScope
 import com.helltar.vusan.request.RequestContext
 import com.helltar.vusan.request.SenderContext
 import com.helltar.vusan.telegram.delivery.ChatTarget
@@ -13,8 +14,9 @@ import java.time.format.DateTimeFormatter
 
 data class ScheduledTask(
     val id: Long,
-    val userId: Long,
-    val chatId: Long,
+    // whose task it is and where it fires, qualified: two platforms may issue the same ids, and a task
+    // is both an owner's quota and somebody else's chat.
+    val scope: ConversationScope,
     val prompt: String,
     val title: String?,
     val recurrence: Recurrence,
@@ -36,8 +38,7 @@ data class ScheduledTask(
 )
 
 data class NewScheduledTask(
-    val userId: Long,
-    val chatId: Long,
+    val scope: ConversationScope,
     val prompt: String,
     val title: String?,
     val recurrence: Recurrence,
@@ -68,9 +69,10 @@ internal fun formatFire(instant: Instant, tz: ZoneId): String =
  */
 internal fun ScheduledTask.toRequestContext(profile: ChatProfile = ChatProfile.NONE): RequestContext =
     RequestContext(
+        platform = scope.platform,
         chat =
             ChatContext(
-                id = chatId,
+                id = scope.chat.id,
                 isPrivate = chatIsPrivate,
                 // the turn runs in the topic the task was created in, so a follow-up it schedules is
                 // anchored there too rather than in the forum's General.
@@ -80,7 +82,7 @@ internal fun ScheduledTask.toRequestContext(profile: ChatProfile = ChatProfile.N
             ),
         sender =
             SenderContext(
-                id = userId,
+                id = scope.user.id,
                 displayName = creatorDisplayName,
                 username = creatorUsername,
                 languageCode = language.codes.firstOrNull()
@@ -90,7 +92,7 @@ internal fun ScheduledTask.toRequestContext(profile: ChatProfile = ChatProfile.N
 
 /** Where this task's fire, and every notice about it, belongs. */
 internal val ScheduledTask.chatTarget: ChatTarget
-    get() = ChatTarget(chatId, creatorThreadId)
+    get() = ChatTarget(scope.chat.id.toLong(), creatorThreadId)
 
 /** Keeps a future slot, or advances a recurring task past every elapsed slot. */
 internal fun ScheduledTask.nextFireAfterResume(now: Instant): Instant? =

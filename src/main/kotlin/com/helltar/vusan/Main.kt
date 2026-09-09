@@ -136,13 +136,13 @@ suspend fun main() = coroutineScope {
         val scheduler =
             TaskScheduler(
                 tasks, agentRunner, delivery, config.taskMaxLatenessMinutes.minutes, chatProfiles, tokenBudget,
-                config.bannedIds
+                config.accessPolicy
             )
 
         val botRunner =
             TelegramBotRunner(
                 telegramClient, config.telegramBotToken, delivery, agentRunner, taskMenu, inlineChoices, tasks,
-                chatProfiles, config.allowedIds, config.bannedIds, voiceTranscriber, botProfile, stickerCatalog,
+                chatProfiles, config.accessPolicy, voiceTranscriber, botProfile, stickerCatalog,
                 groupLog, polls
             )
 

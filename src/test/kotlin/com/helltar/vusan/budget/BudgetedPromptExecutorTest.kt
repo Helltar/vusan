@@ -22,6 +22,8 @@ import java.nio.file.Files
 import java.nio.file.Path
 import kotlin.test.AfterTest
 import kotlin.test.BeforeTest
+import com.helltar.vusan.request.AccessPolicy
+import com.helltar.vusan.request.testUser
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFailsWith
@@ -30,8 +32,8 @@ import kotlin.test.assertNull
 import kotlin.test.assertSame
 import kotlin.time.Duration.Companion.seconds
 
-private const val ALICE = 1L
-private const val BOB = 2L
+private val ALICE = testUser(1)
+private val BOB = testUser(2)
 
 class BudgetedPromptExecutorTest {
 
@@ -148,7 +150,7 @@ class BudgetedPromptExecutorTest {
     private fun testConfig(dbPath: String) =
         AppConfig(
             agentMaxIterations = 70,
-            allowedIds = emptySet(),
+            accessPolicy = AccessPolicy(),
             appearance = null,
             databasePath = dbPath,
             elevenLabsApiKey = null,

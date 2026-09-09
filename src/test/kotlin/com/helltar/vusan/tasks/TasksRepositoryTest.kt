@@ -11,6 +11,14 @@ import java.time.Instant
 import java.time.ZoneId
 import kotlin.test.AfterTest
 import kotlin.test.BeforeTest
+import com.helltar.vusan.request.AccessPolicy
+import com.helltar.vusan.request.ConversationScope
+import com.helltar.vusan.request.Platform
+import com.helltar.vusan.request.testChat
+import com.helltar.vusan.request.testScope
+import com.helltar.vusan.request.testUser
+import kotlin.test.assertFalse
+import kotlin.test.assertNull
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertNotNull
@@ -42,23 +50,23 @@ class TasksRepositoryTest {
 
         assertEquals(listOf(id), repo.findDue(Instant.parse("2026-07-28T09:00:00Z")).map { it.id })
 
-        assertTrue(repo.pauseForUser(100L, id))
+        assertTrue(repo.pauseForUser(testUser(100), id))
 
         assertTrue(repo.findDue(Instant.parse("2026-07-28T09:00:00Z")).isEmpty())
-        assertEquals(1, repo.countEnabledByUser(100L))
-        assertEquals(listOf(id), repo.listEnabledByUser(100L).map { it.id })
+        assertEquals(1, repo.countEnabledByUser(testUser(100)))
+        assertEquals(listOf(id), repo.listEnabledByUser(testUser(100)).map { it.id })
     }
 
     @Test
     fun `editing a title does not overwrite a concurrent reschedule`() = runBlocking {
         val id = createTask(Instant.parse("2026-07-28T08:00:00Z"))
-        val original = assertNotNull(repo.findEnabledForUser(100L, id))
+        val original = assertNotNull(repo.findEnabledForUser(testUser(100), id))
         val schedulerNextFire = Instant.parse("2026-07-29T08:00:00Z")
 
         repo.reschedule(id, schedulerNextFire)
-        assertTrue(repo.editEnabledForUser(100L, original, original.copy(title = "renamed")))
+        assertTrue(repo.editEnabledForUser(testUser(100), original, original.copy(title = "renamed")))
 
-        val stored = assertNotNull(repo.findEnabledForUser(100L, id))
+        val stored = assertNotNull(repo.findEnabledForUser(testUser(100), id))
         assertEquals("renamed", stored.title)
         assertEquals(schedulerNextFire, stored.nextFireAt)
     }
@@ -72,21 +80,60 @@ class TasksRepositoryTest {
         val second = createTask(Instant.parse("2026-07-28T08:30:00Z"), chatId = lostChat)
         val elsewhere = createTask(Instant.parse("2026-07-28T08:45:00Z"), chatId = -600L)
 
-        assertEquals(2, repo.pauseAllInChat(lostChat))
+        assertEquals(2, repo.pauseAllInChat(testChat(lostChat)))
         assertEquals(listOf(elsewhere), repo.findDue(due).map { it.id })
 
         // parked, not deleted: they stay listed so their owner can resume them if the bot gets back in.
-        assertTrue(repo.listEnabledByUser(100L).map { it.id }.containsAll(listOf(first, second)))
+        assertTrue(repo.listEnabledByUser(testUser(100)).map { it.id }.containsAll(listOf(first, second)))
 
         // a second removal notice for the same chat must not re-park what is already parked.
-        assertEquals(0, repo.pauseAllInChat(lostChat))
+        assertEquals(0, repo.pauseAllInChat(testChat(lostChat)))
     }
+
+    // a task is both an owner's quota and somebody else's chat, so an unqualified id would let one
+    // platform's owner pause, edit and delete another's tasks.
+    @Test
+    fun `a task belongs to one platform's owner and chat`() = runBlocking {
+        val repo = TasksRepository()
+        val onTelegram = testScope(userId = 100, chatId = -200, platform = Platform.TELEGRAM)
+        val onDiscord = testScope(userId = 100, chatId = -200, platform = Platform.DISCORD)
+
+        val id = repo.create(newTask(onTelegram, "telegram digest"))
+        repo.create(newTask(onDiscord, "discord digest"))
+
+        assertNull(repo.findEnabledForUser(onDiscord.user, id))
+        assertFalse(repo.pauseForUser(onDiscord.user, id))
+        assertFalse(repo.deleteEnabledForUser(onDiscord.user, id))
+        assertNotNull(repo.findEnabledForUser(onTelegram.user, id))
+
+        assertEquals(listOf("telegram digest"), repo.listEnabledByUser(onTelegram.user).map { it.title })
+        assertEquals(listOf("discord digest"), repo.listEnabledByUser(onDiscord.user).map { it.title })
+
+        // the same chat number on the other platform is a different room, and parking it leaves this one running
+        assertEquals(1, repo.pauseAllInChat(onDiscord.chat))
+        assertFalse(assertNotNull(repo.findEnabledForUser(onTelegram.user, id)).paused)
+    }
+
+    private fun newTask(scope: ConversationScope, title: String) =
+        NewScheduledTask(
+            scope = scope,
+            prompt = "run $title",
+            title = title,
+            recurrence = Recurrence.Once,
+            timezone = ZoneId.of("UTC"),
+            nextFireAt = Instant.parse("2026-07-28T12:00:00Z"),
+            creatorMessageId = 1L,
+            creatorThreadId = null,
+            creatorUsername = "tester",
+            creatorDisplayName = "Test User",
+            chatIsPrivate = false,
+            language = Language.ENGLISH
+        )
 
     private suspend fun createTask(nextFireAt: Instant, chatId: Long = 100L): Long =
         repo.create(
             NewScheduledTask(
-                userId = 100L,
-                chatId = chatId,
+                scope = testScope(userId = 100, chatId = chatId),
                 prompt = "send reminder",
                 title = "reminder",
                 recurrence = Recurrence.Once,
@@ -104,7 +151,7 @@ class TasksRepositoryTest {
     private fun testConfig(dbPath: String) =
         AppConfig(
             agentMaxIterations = 70,
-            allowedIds = emptySet(),
+            accessPolicy = AccessPolicy(),
             appearance = null,
             databasePath = dbPath,
             elevenLabsApiKey = null,
