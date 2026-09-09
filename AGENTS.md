@@ -12,6 +12,14 @@ Read [`docs/architecture.md`](docs/architecture.md) before changing request flow
 delivery, tools, storage, scheduling or startup wiring, and use its
 [symptom map](docs/architecture.md#where-to-look-when) before broad searching.
 
+## Local notes
+
+A checkout may carry `notes/` — local, gitignored prose on *why* things are the
+way they are: decisions and the reasoning behind them, live constraints, traps.
+It is not part of the repository and never reaches GitHub. If the directory
+exists, read `notes/README.md` first, then open only the notes the task needs.
+Whatever a note settles belongs there, not here.
+
 ## Commands and Verification
 
 - `./gradlew test`, `./gradlew detekt` (`maxIssues: 0`), `./gradlew build`
