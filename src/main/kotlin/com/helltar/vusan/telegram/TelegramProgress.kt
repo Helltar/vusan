@@ -4,6 +4,7 @@ import com.helltar.vusan.agent.AgentRequest
 import com.helltar.vusan.agent.ToolActivity
 import com.helltar.vusan.common.rethrowIfCancellation
 import com.helltar.vusan.i18n.Messages
+import com.helltar.vusan.telegram.delivery.ChatTarget
 import com.helltar.vusan.telegram.delivery.chatActionFor
 import kotlin.time.Duration
 import kotlin.time.Duration.Companion.seconds
@@ -88,7 +89,12 @@ internal suspend fun <T> TelegramClient.withLiveProgress(
                     // collectLatest cancels this block's own child job on a new activity, which the
                     // outer launch's isActive would not reflect.
                     while (currentCoroutineContext().isActive) {
-                        runCatching { indicateChatAction(request.chatId, chatActionFor(current)) }
+                        runCatching {
+                            indicateChatAction(
+                                ChatTarget(request.chatId, request.messageThreadId),
+                                chatActionFor(current)
+                            )
+                        }
                             .onFailure { it.rethrowIfCancellation() }
 
                         delay(ACTION_REFRESH)
@@ -130,15 +136,21 @@ internal suspend fun <T> TelegramClient.withLiveProgress(
 private fun TelegramClient.statusFor(request: AgentRequest): TurnStatus =
     TurnStatus(
         client = this,
-        chatId = request.chatId,
+        target = ChatTarget(request.chatId, request.messageThreadId),
         ownerId = request.userId,
         replyToMessageId = request.messageId,
         messages = Messages.of(request.language),
         activityOpensIt = (request.messageContext?.chatCapabilities?.slowModeSeconds ?: 0) == 0
     )
 
-private suspend fun TelegramClient.indicateChatAction(chatId: Long, action: ActionType) {
+private suspend fun TelegramClient.indicateChatAction(target: ChatTarget, action: ActionType) {
     api {
-        executeAsync(SendChatAction.builder().chatId(chatId).action(action.toString()).build())
+        executeAsync(
+            SendChatAction.builder()
+                .chatId(target.chatId)
+                .messageThreadId(target.messageThreadId)
+                .action(action.toString())
+                .build()
+        )
     }
 }

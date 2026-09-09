@@ -7,6 +7,8 @@ data class RequestContext(
     val userId: Long,
     val messageId: Long,
     val replyToMessageId: Long? = null,
+    /** The forum topic this request came from; a task scheduled here fires back into it. */
+    val messageThreadId: Int? = null,
     val senderUsername: String? = null,
     val senderDisplayName: String? = null,
     val chatIsPrivate: Boolean = true,

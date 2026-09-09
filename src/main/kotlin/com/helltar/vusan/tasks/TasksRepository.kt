@@ -25,6 +25,7 @@ class TasksRepository {
                 it[timezone] = task.timezone.id
                 it[nextFireAt] = task.nextFireAt
                 it[creatorMessageId] = task.creatorMessageId
+                it[creatorThreadId] = task.creatorThreadId
                 it[creatorUsername] = task.creatorUsername
                 it[creatorDisplayName] = task.creatorDisplayName
                 it[chatIsPrivate] = task.chatIsPrivate
@@ -170,6 +171,7 @@ class TasksRepository {
             recurrence = Recurrence.parse(this[ScheduledTasksTable.recurrence]) ?: Recurrence.Once,
             timezone = tz,
             creatorMessageId = this[ScheduledTasksTable.creatorMessageId],
+            creatorThreadId = this[ScheduledTasksTable.creatorThreadId],
             creatorUsername = this[ScheduledTasksTable.creatorUsername],
             creatorDisplayName = this[ScheduledTasksTable.creatorDisplayName],
             chatIsPrivate = this[ScheduledTasksTable.chatIsPrivate],

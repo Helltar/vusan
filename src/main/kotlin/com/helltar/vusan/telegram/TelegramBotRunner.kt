@@ -15,6 +15,7 @@ import com.helltar.vusan.telegram.callback.InlineChoiceHandler
 import com.helltar.vusan.telegram.callback.TaskMenuHandler
 import com.helltar.vusan.telegram.callback.TurnStopHandler
 import com.helltar.vusan.telegram.delivery.TelegramDelivery
+import com.helltar.vusan.telegram.delivery.chatTarget
 import com.helltar.vusan.telegram.inbound.AudioInput
 import com.helltar.vusan.telegram.inbound.BotCommand
 import com.helltar.vusan.telegram.inbound.MessageText
@@ -382,7 +383,7 @@ internal class TelegramBotRunner(
         // fallback chain — without this the user would see nothing at all when the send is rejected.
         runCatching {
             taskMenu.sendMenu(
-                chatId = message.chatIdLong,
+                target = message.chatTarget,
                 userId = userId,
                 replyToMessageId = message.messageIdLong,
                 chatIsPrivate = message.isPrivateChat,

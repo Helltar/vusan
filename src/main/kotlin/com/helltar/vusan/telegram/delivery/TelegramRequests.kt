@@ -22,9 +22,19 @@ import org.telegram.telegrambots.meta.generics.TelegramClient
 // the raw Bot API calls shared by the send policy in TelegramOutputSender and the rejection
 // handling in TelegramSendFallbacks. nothing here decides what to try or what to do on failure.
 
+/**
+ * Where a message goes: the chat, and the forum topic inside it when the chat has topics.
+ *
+ * The two travel together because naming only the chat is not a smaller instruction, it is a
+ * different one — the message lands in the group's General topic instead of the conversation it
+ * belongs to. [messageThreadId] is a topic id only, never the thread id Telegram also puts on
+ * replies in ordinary supergroups; see `Message.forumTopicIdOrNull`.
+ */
+data class ChatTarget(val chatId: Long, val messageThreadId: Int? = null)
+
 internal suspend fun sendTextMessage(
     client: TelegramClient,
-    chatId: Long,
+    target: ChatTarget,
     text: String,
     parseMode: String?,
     replyParameters: ReplyParameters?,
@@ -33,7 +43,8 @@ internal suspend fun sendTextMessage(
     client.api {
         executeAsync(
             SendMessage.builder()
-                .chatId(chatId)
+                .chatId(target.chatId)
+                .messageThreadId(target.messageThreadId)
                 .text(text)
                 .parseMode(parseMode)
                 .replyParameters(replyParameters)
@@ -70,7 +81,7 @@ internal suspend fun editTextMessage(
 // later edit and its removal address it.
 internal suspend fun sendStatusMessage(
     client: TelegramClient,
-    chatId: Long,
+    target: ChatTarget,
     text: String,
     parseMode: String?,
     replyParameters: ReplyParameters?,
@@ -79,7 +90,8 @@ internal suspend fun sendStatusMessage(
     client.api {
         executeAsync(
             SendMessage.builder()
-                .chatId(chatId)
+                .chatId(target.chatId)
+                .messageThreadId(target.messageThreadId)
                 .text(text)
                 .parseMode(parseMode)
                 .replyParameters(replyParameters)
@@ -119,7 +131,7 @@ internal suspend fun answerCallbackQuery(
 
 internal suspend fun sendDocumentFile(
     client: TelegramClient,
-    chatId: Long,
+    target: ChatTarget,
     bytes: ByteArray,
     filename: String,
     caption: String?,
@@ -129,7 +141,8 @@ internal suspend fun sendDocumentFile(
     client.api {
         executeAsync(
             SendDocument.builder()
-                .chatId(chatId)
+                .chatId(target.chatId)
+                .messageThreadId(target.messageThreadId)
                 .document(bytes.asInputFile(filename))
                 .caption(caption)
                 .parseMode(parseMode)
@@ -141,7 +154,7 @@ internal suspend fun sendDocumentFile(
 
 internal suspend fun sendAnimationFile(
     client: TelegramClient,
-    chatId: Long,
+    target: ChatTarget,
     animation: InputFile,
     caption: String?,
     parseMode: String?,
@@ -150,7 +163,8 @@ internal suspend fun sendAnimationFile(
     client.api {
         executeAsync(
             SendAnimation.builder()
-                .chatId(chatId)
+                .chatId(target.chatId)
+                .messageThreadId(target.messageThreadId)
                 .animation(animation)
                 .caption(caption)
                 .parseMode(parseMode)
@@ -163,14 +177,15 @@ internal suspend fun sendAnimationFile(
 // stickers are always resent by file_id from the catalog, and the Bot API takes no caption on one.
 internal suspend fun sendStickerFile(
     client: TelegramClient,
-    chatId: Long,
+    target: ChatTarget,
     fileId: String,
     replyParameters: ReplyParameters?
 ) {
     client.api {
         executeAsync(
             SendSticker.builder()
-                .chatId(chatId)
+                .chatId(target.chatId)
+                .messageThreadId(target.messageThreadId)
                 .sticker(InputFile(fileId))
                 .replyParameters(replyParameters)
                 .build()
@@ -180,14 +195,15 @@ internal suspend fun sendStickerFile(
 
 internal suspend fun sendMediaGroup(
     client: TelegramClient,
-    chatId: Long,
+    target: ChatTarget,
     media: List<InputMedia>,
     replyParameters: ReplyParameters?
 ) {
     client.api {
         executeAsync(
             SendMediaGroup.builder()
-                .chatId(chatId)
+                .chatId(target.chatId)
+                .messageThreadId(target.messageThreadId)
                 .medias(media)
                 .replyParameters(replyParameters)
                 .build()
@@ -196,12 +212,13 @@ internal suspend fun sendMediaGroup(
 }
 
 internal fun richMessageRequest(
-    chatId: Long,
+    target: ChatTarget,
     markdown: String,
     replyParameters: ReplyParameters?
 ): SendRichMessage =
     SendRichMessage.builder()
-        .chatId(chatId)
+        .chatId(target.chatId)
+        .messageThreadId(target.messageThreadId)
         .richMessage(InputRichMessage.builder().markdown(markdown).build())
         .replyParameters(replyParameters)
         .build()

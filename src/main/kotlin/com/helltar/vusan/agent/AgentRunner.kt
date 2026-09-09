@@ -64,6 +64,9 @@ data class AgentRequest(
     val userId: Long,
     val messageId: Long,
     val replyToMessageId: Long? = null,
+    // the forum topic the turn is happening in, so everything it sends without a reply anchor —
+    // the live status bubble, a task it schedules — lands there rather than in the chat's General.
+    val messageThreadId: Int? = null,
     val prompt: String,
     val conversationEntry: String,
     val messageContext: MessageContext? = null,
@@ -202,6 +205,7 @@ class AgentRunner(
                 userId = request.userId,
                 messageId = request.messageId,
                 replyToMessageId = request.replyToMessageId,
+                messageThreadId = request.messageThreadId,
                 senderUsername = request.messageContext?.userUsername,
                 senderDisplayName = request.messageContext?.userDisplayName,
                 chatIsPrivate = request.messageContext?.isPrivate ?: request.chatIsPrivate,

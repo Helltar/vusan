@@ -247,7 +247,19 @@ A normal user message travels:
       A refusal of one output kind ("not enough rights to send photos", or `VOICE_MESSAGES_FORBIDDEN` from a recipient
       who takes voice and video messages only from contacts) is deliberately *not* this, and keeps its normal fallback —
       which is why `isForbidden` matches only a leading `Forbidden:` and not the word wherever it appears.
-    - **Rate limits** — consecutive sends are paced (`INTER_MESSAGE_DELAY`) to stay under Telegram's per-chat limit.
+    - **Forum topics** — every send names the topic it belongs to (`ChatTarget`, carried through the sender and the
+      raw builders). A reply anchored to a message would land in the right topic on its own, but nothing else would: a
+      scheduled fire, a notice, an item sent after the anchor turned out to be gone, and the live status bubble all
+      address the chat directly. The id comes from `Message.forumTopicIdOrNull`, which is `message_thread_id` *only*
+      when `is_topic_message` is set — outside a forum the same field identifies a reply chain, and sending with one of
+      those is rejected. `ScheduledTasksTable.creatorThreadId` is what lets a task keep firing into its topic after the
+      message that created it is gone.
+    - **Rate limits** — consecutive sends are paced (`INTER_MESSAGE_DELAY`) to stay under Telegram's per-chat limit, and
+      a send that trips the limit anyway waits the number of seconds Telegram names in `parameters.retry_after` and goes
+      again, once (`withFloodWaitRetry`, capped at `MAX_FLOOD_WAIT`). The fallbacks rethrow a 429 rather than degrading
+      the payload, the same way they do for an unreachable chat: flood control says nothing about the content, so a
+      photo turned into a document would only spend a second rejected request. The retry repeats the whole send because
+      each attempt rebuilds its payload — the byte streams the first one consumed cannot be sent twice.
       Upstream, `BotOutbox` coalesces consecutive `sendMessage` text into the trailing bubble while it fits
       (`MAX_TEXT_MESSAGE_CHARS`), so a model that splits one answer into many messages produces few real sends, and caps
       the resulting bubbles (`MAX_TEXT_MESSAGES`) so a looping model cannot flood the chat. Consecutive tracks are
@@ -637,7 +649,8 @@ A symptom-to-source map for finding the right file fast. Paths are under
 | Reply says "still working on your previous request" | `agent/AgentRunner.kt` — the per-conversation `Mutex` rejects a second concurrent turn in the same chat |
 | Reply lands in the wrong chat, loses its reply anchor, or DM redirect misbehaves | `telegram/delivery/TelegramDelivery.kt` (routing/anchor/private-redirect *policy*) |
 | Formatting renders wrong, message rejected, or media falls back to document/text | `agent/SystemPrompt.kt` (allowed HTML tags the agent emits), `telegram/delivery/TelegramOutputSender.kt` (which call and which fallback each output kind gets), `telegram/delivery/TelegramSendFallbacks.kt` (the fallback *mechanism* itself), `telegram/delivery/TelegramErrors.kt` (which provider errors trigger a fallback) |
-| Vusan floods a chat or stalls on Telegram 429 over a long multi-message reply | `outbox/BotOutbox.kt` (text and album coalescing + `MAX_TEXT_MESSAGES` cap) + `telegram/delivery/TelegramDelivery.kt` (`INTER_MESSAGE_DELAY` pacing) |
+| Vusan floods a chat or stalls on Telegram 429 over a long multi-message reply | `outbox/BotOutbox.kt` (text and album coalescing + `MAX_TEXT_MESSAGES` cap) + `telegram/delivery/TelegramDelivery.kt` (`INTER_MESSAGE_DELAY` pacing) + `telegram/delivery/TelegramSendFallbacks.kt` (`withFloodWaitRetry`, and the `MAX_FLOOD_WAIT` ceiling on what a turn will sit through) |
+| A reply, a notice or a scheduled fire lands in a forum's General instead of the topic it belongs to | `telegram/delivery/TelegramRequests.kt` (`ChatTarget`, and which builders name the topic) + `telegram/inbound/MessageMetadata.kt` (`forumTopicIdOrNull`, and why `is_topic_message` decides) + `tasks/ScheduledTask.kt` (`creatorThreadId`) |
 | A specific tool misbehaves | `tools/<feature>/<Feature>Tools.kt` for the tool surface, plus its `<Feature>Client.kt` for the external call |
 | Vusan will not hand a file from the chat back, or sends it under the wrong name | `tools/files/FileTools.sendChatFile` (the `file_id` path and `chatFilename`) + `telegram/TelegramApi.downloadFileById` (`getFile`, and the 20 MB limit on what Telegram serves a bot) |
 | A command times out, says the workspace is busy, or its output is cut short | `tools/workspace/WorkspaceClient.kt` (HTTP errors and job polling), then `workspace/jobs.ts` (admission, timeouts, retention), `container.ts` (whole-container cleanup) and `output.ts` (bounded logs and control-code cleanup) |

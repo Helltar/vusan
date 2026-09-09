@@ -36,7 +36,7 @@ class TelegramOutputSenderTest {
                 historyRevision = 7L,
                 originMessageId = 5L
             ),
-            chatId = 1L,
+            target = ChatTarget(1L),
             replyParameters = null,
             caption = null,
             formattingFileNotice = "notice"
@@ -61,7 +61,7 @@ class TelegramOutputSenderTest {
         TelegramOutputSender.send(
             client = client.proxy,
             item = BotOutput.Sticker("sticker-file-id", catalogId = 7L),
-            chatId = 1L,
+            target = ChatTarget(1L),
             replyParameters = null,
             caption = "this caption has nowhere to go",
             formattingFileNotice = "notice"
@@ -78,7 +78,7 @@ class TelegramOutputSenderTest {
         TelegramOutputSender.send(
             client = client.proxy,
             item = BotOutput.Photo(byteArrayOf(1, 2, 3), "chart.bmp"),
-            chatId = 1L,
+            target = ChatTarget(1L),
             replyParameters = null,
             caption = null,
             formattingFileNotice = "notice"
@@ -94,7 +94,7 @@ class TelegramOutputSenderTest {
         TelegramOutputSender.send(
             client = client.proxy,
             item = BotOutput.Photo(byteArrayOf(1, 2, 3), "chart.png"),
-            chatId = 1L,
+            target = ChatTarget(1L),
             replyParameters = null,
             caption = "<b>broken",
             formattingFileNotice = "notice"
@@ -109,7 +109,7 @@ class TelegramOutputSenderTest {
 
         TelegramOutputSender.sendReplyText(
             client = client.proxy,
-            chatId = 1L,
+            target = ChatTarget(1L),
             text = "<b>broken",
             replyParameters = null,
             formattingFileNotice = "notice"
@@ -124,7 +124,7 @@ class TelegramOutputSenderTest {
 
         TelegramOutputSender.sendReplyText(
             client = client.proxy,
-            chatId = 1L,
+            target = ChatTarget(1L),
             text = "one<br>two<br/>three<br />four</br>five<BR/>six",
             replyParameters = null,
             formattingFileNotice = "notice"
@@ -141,7 +141,7 @@ class TelegramOutputSenderTest {
         TelegramOutputSender.send(
             client = client.proxy,
             item = BotOutput.Photo(byteArrayOf(1, 2, 3), "chart.png"),
-            chatId = 1L,
+            target = ChatTarget(1L),
             replyParameters = null,
             caption = "first line<br/>second line",
             formattingFileNotice = "notice"
@@ -162,7 +162,7 @@ class TelegramOutputSenderTest {
                 filename = "video.mp4",
                 thumbnail = byteArrayOf(4, 5, 6)
             ),
-            chatId = 1L,
+            target = ChatTarget(1L),
             replyParameters = null,
             caption = null,
             formattingFileNotice = "notice"
@@ -181,7 +181,7 @@ class TelegramOutputSenderTest {
         TelegramOutputSender.send(
             client = client.proxy,
             item = BotOutput.VideoNote(bytes = byteArrayOf(1, 2, 3), durationSeconds = 7, size = 384),
-            chatId = 1L,
+            target = ChatTarget(1L),
             replyParameters = null,
             caption = null,
             formattingFileNotice = "notice"
@@ -203,7 +203,7 @@ class TelegramOutputSenderTest {
         TelegramOutputSender.send(
             client = client.proxy,
             item = BotOutput.RichMessage("# Title\n\n- one\n- two"),
-            chatId = 1L,
+            target = ChatTarget(1L),
             replyParameters = null,
             caption = null,
             formattingFileNotice = "notice"
@@ -220,7 +220,7 @@ class TelegramOutputSenderTest {
         TelegramOutputSender.send(
             client = client.proxy,
             item = BotOutput.RichMessage("# Title"),
-            chatId = 1L,
+            target = ChatTarget(1L),
             replyParameters = null,
             caption = null,
             formattingFileNotice = "notice"
@@ -237,7 +237,7 @@ class TelegramOutputSenderTest {
         TelegramOutputSender.send(
             client = client.proxy,
             item = BotOutput.RichMessage("# Title"),
-            chatId = 1L,
+            target = ChatTarget(1L),
             replyParameters = null,
             caption = null,
             formattingFileNotice = "notice"

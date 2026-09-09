@@ -233,6 +233,7 @@ class TaskToolsTest {
                 timezone = ZoneId.of("UTC"),
                 nextFireAt = nextFireAt,
                 creatorMessageId = 1L,
+                creatorThreadId = null,
                 creatorUsername = "tester",
                 creatorDisplayName = "Test User",
                 chatIsPrivate = chatId > 0L,

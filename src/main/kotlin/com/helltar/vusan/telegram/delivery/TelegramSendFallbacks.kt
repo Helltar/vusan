@@ -81,7 +81,7 @@ internal suspend fun sendWithHtmlFallback(send: suspend (parseMode: String?) -> 
 // same as [TelegramOutputSender.sendReplyText].
 internal suspend fun sendWithCaptionHtmlFallback(
     client: TelegramClient,
-    chatId: Long,
+    target: ChatTarget,
     caption: String?,
     replyParameters: ReplyParameters?,
     formattingFileNotice: String,
@@ -99,7 +99,7 @@ internal suspend fun sendWithCaptionHtmlFallback(
             if (e.isEntityParseError()) {
                 log.warn { "Telegram rejected caption HTML, sending the caption as a $FALLBACK_DOCUMENT_FILENAME file" }
                 send(null, null)
-                sendTextAsDocument(client, chatId, html, formattingFileNotice, replyParameters)
+                sendTextAsDocument(client, target, html, formattingFileNotice, replyParameters)
             } else throw e
         }
         .getOrThrow()
@@ -107,7 +107,7 @@ internal suspend fun sendWithCaptionHtmlFallback(
 
 internal suspend fun sendMediaWithDocumentFallback(
     client: TelegramClient,
-    chatId: Long,
+    target: ChatTarget,
     replyParameters: ReplyParameters?,
     mediaLabel: String,
     bytes: ByteArray,
@@ -123,21 +123,21 @@ internal suspend fun sendMediaWithDocumentFallback(
             rethrowIfReplyNotFound(e, replyParameters)
             rethrowIfRateLimited(e)
             rethrowIfChatUnreachable(e)
-            log.warn(e) { "$mediaLabel failed for chat=$chatId, retrying as document" }
-            sendDocumentWithCaptionFallback(client, chatId, bytes, filename, caption, replyParameters, formattingFileNotice)
+            log.warn(e) { "$mediaLabel failed for chat=${target.chatId}, retrying as document" }
+            sendDocumentWithCaptionFallback(client, target, bytes, filename, caption, replyParameters, formattingFileNotice)
         }
         .onFailure { e ->
             e.rethrowIfCancellation()
             rethrowIfReplyNotFound(e, replyParameters)
             rethrowIfRateLimited(e)
             rethrowIfChatUnreachable(e)
-            log.warn(e) { "$mediaLabel document fallback failed for chat=$chatId, falling back to text" }
+            log.warn(e) { "$mediaLabel document fallback failed for chat=${target.chatId}, falling back to text" }
             onTextFallback()
         }
 }
 
 internal suspend fun sendOrFallback(
-    chatId: Long,
+    target: ChatTarget,
     replyParameters: ReplyParameters?,
     failureMessage: String,
     send: suspend () -> Unit,
@@ -148,28 +148,28 @@ internal suspend fun sendOrFallback(
         rethrowIfReplyNotFound(e, replyParameters)
         rethrowIfRateLimited(e)
         rethrowIfChatUnreachable(e)
-        log.warn(e) { "$failureMessage chat=$chatId" }
+        log.warn(e) { "$failureMessage chat=${target.chatId}" }
         onFallback()
     }
 }
 
 internal suspend fun sendDocumentWithCaptionFallback(
     client: TelegramClient,
-    chatId: Long,
+    target: ChatTarget,
     bytes: ByteArray,
     filename: String,
     caption: String?,
     replyParameters: ReplyParameters?,
     formattingFileNotice: String
 ) {
-    sendWithCaptionHtmlFallback(client, chatId, caption, replyParameters, formattingFileNotice) { text, parseMode ->
-        sendDocumentFile(client, chatId, bytes, filename, text, parseMode, replyParameters)
+    sendWithCaptionHtmlFallback(client, target, caption, replyParameters, formattingFileNotice) { text, parseMode ->
+        sendDocumentFile(client, target, bytes, filename, text, parseMode, replyParameters)
     }
 }
 
 internal suspend fun sendTextAsDocument(
     client: TelegramClient,
-    chatId: Long,
+    target: ChatTarget,
     text: String,
     notice: String,
     replyParameters: ReplyParameters?
@@ -177,7 +177,7 @@ internal suspend fun sendTextAsDocument(
     runCatching {
         sendDocumentFile(
             client,
-            chatId,
+            target,
             htmlReplyDocument(text).encodeToByteArray(),
             FALLBACK_DOCUMENT_FILENAME,
             caption = notice,
@@ -188,21 +188,21 @@ internal suspend fun sendTextAsDocument(
         e.rethrowIfCancellation()
         rethrowIfRateLimited(e)
         rethrowIfChatUnreachable(e)
-        log.warn(e) { "Document fallback failed for chat=$chatId, sending plain text" }
-        sendTextMessage(client, chatId, text, parseMode = null, replyParameters = replyParameters)
+        log.warn(e) { "Document fallback failed for chat=${target.chatId}, sending plain text" }
+        sendTextMessage(client, target, text, parseMode = null, replyParameters = replyParameters)
     }.getOrThrow()
 }
 
 internal suspend fun sendMarkdownDocument(
     client: TelegramClient,
-    chatId: Long,
+    target: ChatTarget,
     markdown: String,
     replyParameters: ReplyParameters?
 ) {
     runCatching {
         sendDocumentFile(
             client,
-            chatId,
+            target,
             markdown.encodeToByteArray(),
             MARKDOWN_DOCUMENT_FILENAME,
             caption = null,
@@ -213,7 +213,7 @@ internal suspend fun sendMarkdownDocument(
         e.rethrowIfCancellation()
         rethrowIfRateLimited(e)
         rethrowIfChatUnreachable(e)
-        log.warn(e) { "Markdown document fallback failed for chat=$chatId, sending plain text" }
-        sendTextMessage(client, chatId, markdown, parseMode = null, replyParameters = replyParameters)
+        log.warn(e) { "Markdown document fallback failed for chat=${target.chatId}, sending plain text" }
+        sendTextMessage(client, target, markdown, parseMode = null, replyParameters = replyParameters)
     }.getOrThrow()
 }

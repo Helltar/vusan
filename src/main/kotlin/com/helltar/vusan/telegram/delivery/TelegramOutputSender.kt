@@ -41,41 +41,41 @@ internal object TelegramOutputSender {
     suspend fun send(
         client: TelegramClient,
         item: BotOutput,
-        chatId: Long,
+        target: ChatTarget,
         replyParameters: ReplyParameters?,
         caption: String?,
         formattingFileNotice: String
     ) {
         when (item) {
-            is BotOutput.Text -> sendReplyText(client, chatId, item.text, replyParameters, formattingFileNotice)
-            is BotOutput.InlineChoice -> sendInlineChoice(client, chatId, item, replyParameters)
-            is BotOutput.RichMessage -> sendRichMessage(client, chatId, item.markdown, replyParameters)
-            is BotOutput.Animation -> sendAnimation(client, chatId, replyParameters, item, caption, formattingFileNotice)
-            is BotOutput.Photo -> sendPhoto(client, chatId, replyParameters, item, caption, formattingFileNotice)
-            is BotOutput.PhotoGroup -> sendPhotoGroup(client, chatId, replyParameters, item, formattingFileNotice)
-            is BotOutput.Document -> sendDocument(client, chatId, replyParameters, item, caption, formattingFileNotice)
-            is BotOutput.DocumentGroup -> sendDocumentGroup(client, chatId, replyParameters, item, formattingFileNotice)
-            is BotOutput.Audio -> sendAudio(client, chatId, replyParameters, item, caption, formattingFileNotice)
-            is BotOutput.AudioGroup -> sendAudioGroup(client, chatId, replyParameters, item, formattingFileNotice)
-            is BotOutput.Voice -> sendVoice(client, chatId, replyParameters, item, caption, formattingFileNotice)
-            is BotOutput.Video -> sendVideo(client, chatId, replyParameters, item, caption, formattingFileNotice)
-            is BotOutput.VideoNote -> sendVideoNote(client, chatId, replyParameters, item, formattingFileNotice)
-            is BotOutput.Sticker -> sendStickerFile(client, chatId, item.fileId, replyParameters)
-            is BotOutput.Quiz -> sendQuiz(client, chatId, replyParameters, item)
-            is BotOutput.Poll -> sendPoll(client, chatId, replyParameters, item)
-            is BotOutput.Reaction -> sendReaction(client, chatId, item)
+            is BotOutput.Text -> sendReplyText(client, target, item.text, replyParameters, formattingFileNotice)
+            is BotOutput.InlineChoice -> sendInlineChoice(client, target, item, replyParameters)
+            is BotOutput.RichMessage -> sendRichMessage(client, target, item.markdown, replyParameters)
+            is BotOutput.Animation -> sendAnimation(client, target, replyParameters, item, caption, formattingFileNotice)
+            is BotOutput.Photo -> sendPhoto(client, target, replyParameters, item, caption, formattingFileNotice)
+            is BotOutput.PhotoGroup -> sendPhotoGroup(client, target, replyParameters, item, formattingFileNotice)
+            is BotOutput.Document -> sendDocument(client, target, replyParameters, item, caption, formattingFileNotice)
+            is BotOutput.DocumentGroup -> sendDocumentGroup(client, target, replyParameters, item, formattingFileNotice)
+            is BotOutput.Audio -> sendAudio(client, target, replyParameters, item, caption, formattingFileNotice)
+            is BotOutput.AudioGroup -> sendAudioGroup(client, target, replyParameters, item, formattingFileNotice)
+            is BotOutput.Voice -> sendVoice(client, target, replyParameters, item, caption, formattingFileNotice)
+            is BotOutput.Video -> sendVideo(client, target, replyParameters, item, caption, formattingFileNotice)
+            is BotOutput.VideoNote -> sendVideoNote(client, target, replyParameters, item, formattingFileNotice)
+            is BotOutput.Sticker -> sendStickerFile(client, target, item.fileId, replyParameters)
+            is BotOutput.Quiz -> sendQuiz(client, target, replyParameters, item)
+            is BotOutput.Poll -> sendPoll(client, target, replyParameters, item)
+            is BotOutput.Reaction -> sendReaction(client, target, item)
         }
     }
 
     private suspend fun sendInlineChoice(
         client: TelegramClient,
-        chatId: Long,
+        target: ChatTarget,
         choice: BotOutput.InlineChoice,
         replyParameters: ReplyParameters?
     ) {
         sendTextMessage(
             client = client,
-            chatId = chatId,
+            target = target,
             text = choice.question,
             parseMode = null,
             replyParameters = replyParameters,
@@ -85,14 +85,14 @@ internal object TelegramOutputSender {
 
     suspend fun sendText(
         client: TelegramClient,
-        chatId: Long,
+        target: ChatTarget,
         text: String,
         replyParameters: ReplyParameters?
     ) {
         val html = text.withBrTagsAsNewlines()
 
         sendWithHtmlFallback { parseMode ->
-            sendTextMessage(client, chatId, html, parseMode, replyParameters)
+            sendTextMessage(client, target, html, parseMode, replyParameters)
         }
     }
 
@@ -101,7 +101,7 @@ internal object TelegramOutputSender {
     // still gets the intended structure. a bot-authored notice goes through plain [sendText] instead.
     suspend fun sendReplyText(
         client: TelegramClient,
-        chatId: Long,
+        target: ChatTarget,
         text: String,
         replyParameters: ReplyParameters?,
         formattingFileNotice: String
@@ -109,11 +109,11 @@ internal object TelegramOutputSender {
         val html = text.withBrTagsAsNewlines()
 
         runCatching {
-            sendTextMessage(client, chatId, html, ParseMode.HTML, replyParameters)
+            sendTextMessage(client, target, html, ParseMode.HTML, replyParameters)
         }.recoverCatching { e ->
             if (e.isEntityParseError()) {
                 log.warn { "Telegram rejected HTML, sending the reply as a $FALLBACK_DOCUMENT_FILENAME file" }
-                sendTextAsDocument(client, chatId, html, formattingFileNotice, replyParameters)
+                sendTextAsDocument(client, target, html, formattingFileNotice, replyParameters)
             } else throw e
         }.getOrThrow()
     }
@@ -123,33 +123,33 @@ internal object TelegramOutputSender {
     // text limit. reply-not-found propagates so the caller can retry without the anchor.
     private suspend fun sendRichMessage(
         client: TelegramClient,
-        chatId: Long,
+        target: ChatTarget,
         markdown: String,
         replyParameters: ReplyParameters?
     ) {
         runCatching {
             client.api {
-                executeAsync(richMessageRequest(chatId, markdown, replyParameters))
+                executeAsync(richMessageRequest(target, markdown, replyParameters))
             }
         }.recoverCatching { e ->
             e.rethrowIfCancellation()
             rethrowIfReplyNotFound(e, replyParameters)
             rethrowIfRateLimited(e)
-            log.warn(e) { "sendRichMessage failed for chat=$chatId, resending as a $MARKDOWN_DOCUMENT_FILENAME file" }
-            sendMarkdownDocument(client, chatId, markdown, replyParameters)
+            log.warn(e) { "sendRichMessage failed for chat=${target.chatId}, resending as a $MARKDOWN_DOCUMENT_FILENAME file" }
+            sendMarkdownDocument(client, target, markdown, replyParameters)
         }.getOrThrow()
     }
 
     private suspend fun sendReaction(
         client: TelegramClient,
-        chatId: Long,
+        target: ChatTarget,
         reaction: BotOutput.Reaction
     ) {
         runCatching {
             client.api {
                 executeAsync(
                     SetMessageReaction.builder()
-                        .chatId(chatId.toString())
+                        .chatId(target.chatId.toString())
                         .messageId(reaction.messageId.toInt())
                         .reactionTypes(listOf(ReactionTypeEmoji.builder().emoji(reaction.emoji).build()))
                         .build()
@@ -162,26 +162,26 @@ internal object TelegramOutputSender {
             rethrowIfRateLimited(e)
             rethrowIfChatUnreachable(e)
             log.warn(e) {
-                "setMessageReaction failed chat=$chatId message=${reaction.messageId} emoji=[${reaction.emoji}]"
+                "setMessageReaction failed chat=${target.chatId} message=${reaction.messageId} emoji=[${reaction.emoji}]"
             }
         }
     }
 
     private suspend fun sendDocument(
         client: TelegramClient,
-        chatId: Long,
+        target: ChatTarget,
         replyParameters: ReplyParameters?,
         document: BotOutput.Document,
         caption: String?,
         formattingFileNotice: String
     ) = sendOrFallback(
-        chatId = chatId,
+        target = target,
         replyParameters = replyParameters,
         failureMessage = "sendDocument failed, falling back to text",
         send = {
             sendDocumentWithCaptionFallback(
                 client,
-                chatId,
+                target,
                 document.bytes,
                 document.filename,
                 caption,
@@ -189,12 +189,12 @@ internal object TelegramOutputSender {
                 formattingFileNotice
             )
         },
-        onFallback = captionTextFallback(client, chatId, caption, replyParameters)
+        onFallback = captionTextFallback(client, target, caption, replyParameters)
     )
 
     private suspend fun sendAnimation(
         client: TelegramClient,
-        chatId: Long,
+        target: ChatTarget,
         replyParameters: ReplyParameters?,
         animation: BotOutput.Animation,
         caption: String?,
@@ -206,17 +206,17 @@ internal object TelegramOutputSender {
         if (bytes != null) {
             sendMediaWithDocumentFallback(
                 client = client,
-                chatId = chatId,
+                target = target,
                 replyParameters = replyParameters,
                 mediaLabel = "sendAnimation",
                 bytes = bytes,
                 filename = animation.filename,
                 caption = caption,
                 formattingFileNotice = formattingFileNotice,
-                onTextFallback = captionTextFallback(client, chatId, caption, replyParameters),
+                onTextFallback = captionTextFallback(client, target, caption, replyParameters),
                 send = {
-                    sendWithCaptionHtmlFallback(client, chatId, caption, replyParameters, formattingFileNotice) { text, parseMode ->
-                        sendAnimationFile(client, chatId, bytes.asInputFile(animation.filename), text, parseMode, replyParameters)
+                    sendWithCaptionHtmlFallback(client, target, caption, replyParameters, formattingFileNotice) { text, parseMode ->
+                        sendAnimationFile(client, target, bytes.asInputFile(animation.filename), text, parseMode, replyParameters)
                     }
                 }
             )
@@ -228,21 +228,21 @@ internal object TelegramOutputSender {
         val url = requireNotNull(animation.url)
 
         sendOrFallback(
-            chatId = chatId,
+            target = target,
             replyParameters = replyParameters,
             failureMessage = "sendAnimation failed, falling back to text",
             send = {
-                sendWithCaptionHtmlFallback(client, chatId, caption, replyParameters, formattingFileNotice) { text, parseMode ->
-                    sendAnimationFile(client, chatId, InputFile(url), text, parseMode, replyParameters)
+                sendWithCaptionHtmlFallback(client, target, caption, replyParameters, formattingFileNotice) { text, parseMode ->
+                    sendAnimationFile(client, target, InputFile(url), text, parseMode, replyParameters)
                 }
             },
-            onFallback = captionTextFallback(client, chatId, caption, replyParameters)
+            onFallback = captionTextFallback(client, target, caption, replyParameters)
         )
     }
 
     private suspend fun sendPhoto(
         client: TelegramClient,
-        chatId: Long,
+        target: ChatTarget,
         replyParameters: ReplyParameters?,
         photo: BotOutput.Photo,
         caption: String?,
@@ -250,11 +250,12 @@ internal object TelegramOutputSender {
     ) {
         val send =
             suspend {
-                sendWithCaptionHtmlFallback(client, chatId, caption, replyParameters, formattingFileNotice) { text, parseMode ->
+                sendWithCaptionHtmlFallback(client, target, caption, replyParameters, formattingFileNotice) { text, parseMode ->
                     client.api<Message> {
                         executeAsync(
                             SendPhoto.builder()
-                                .chatId(chatId)
+                                .chatId(target.chatId)
+                                .messageThreadId(target.messageThreadId)
                                 .photo(photo.bytes.asInputFile(photo.filename))
                                 .caption(text)
                                 .parseMode(parseMode)
@@ -267,40 +268,40 @@ internal object TelegramOutputSender {
 
         sendMediaWithDocumentFallback(
             client = client,
-            chatId = chatId,
+            target = target,
             replyParameters = replyParameters,
             mediaLabel = "sendPhoto",
             bytes = photo.bytes,
             filename = photo.filename,
             caption = caption,
             formattingFileNotice = formattingFileNotice,
-            onTextFallback = captionTextFallback(client, chatId, caption, replyParameters),
+            onTextFallback = captionTextFallback(client, target, caption, replyParameters),
             send = send
         )
     }
 
     private suspend fun sendPhotoGroup(
         client: TelegramClient,
-        chatId: Long,
+        target: ChatTarget,
         replyParameters: ReplyParameters?,
         group: BotOutput.PhotoGroup,
         formattingFileNotice: String
     ) = sendOrFallback(
-        chatId = chatId,
+        target = target,
         replyParameters = replyParameters,
         failureMessage = "sendPhotoGroup failed, falling back to individual photos",
         send = {
             val media = group.photos.map {
                 InputMediaPhoto.builder().media(ByteArrayInputStream(it.bytes), it.filename).build()
             }
-            sendMediaGroup(client, chatId, media, replyParameters)
+            sendMediaGroup(client, target, media, replyParameters)
         },
         onFallback = {
             group.photos.forEach { photo ->
-                runCatching { sendPhoto(client, chatId, replyParameters, photo, caption = null, formattingFileNotice) }
+                runCatching { sendPhoto(client, target, replyParameters, photo, caption = null, formattingFileNotice) }
                     .onFailure { ie ->
                         ie.rethrowIfCancellation()
-                        log.warn(ie) { "Fallback sendPhoto failed for chat=$chatId" }
+                        log.warn(ie) { "Fallback sendPhoto failed for chat=${target.chatId}" }
                     }
             }
         }
@@ -308,26 +309,26 @@ internal object TelegramOutputSender {
 
     private suspend fun sendDocumentGroup(
         client: TelegramClient,
-        chatId: Long,
+        target: ChatTarget,
         replyParameters: ReplyParameters?,
         group: BotOutput.DocumentGroup,
         formattingFileNotice: String
     ) = sendOrFallback(
-        chatId = chatId,
+        target = target,
         replyParameters = replyParameters,
         failureMessage = "sendDocumentGroup failed, falling back to individual documents",
         send = {
             val media = group.documents.map {
                 InputMediaDocument.builder().media(ByteArrayInputStream(it.bytes), it.filename).build()
             }
-            sendMediaGroup(client, chatId, media, replyParameters)
+            sendMediaGroup(client, target, media, replyParameters)
         },
         onFallback = {
             group.documents.forEach { document ->
-                runCatching { sendDocument(client, chatId, replyParameters, document, caption = null, formattingFileNotice) }
+                runCatching { sendDocument(client, target, replyParameters, document, caption = null, formattingFileNotice) }
                     .onFailure { ie ->
                         ie.rethrowIfCancellation()
-                        log.warn(ie) { "Fallback sendDocument failed for chat=$chatId" }
+                        log.warn(ie) { "Fallback sendDocument failed for chat=${target.chatId}" }
                     }
             }
         }
@@ -335,12 +336,12 @@ internal object TelegramOutputSender {
 
     private suspend fun sendAudioGroup(
         client: TelegramClient,
-        chatId: Long,
+        target: ChatTarget,
         replyParameters: ReplyParameters?,
         group: BotOutput.AudioGroup,
         formattingFileNotice: String
     ) = sendOrFallback(
-        chatId = chatId,
+        target = target,
         replyParameters = replyParameters,
         failureMessage = "sendAudioGroup failed, falling back to individual tracks",
         send = {
@@ -357,14 +358,14 @@ internal object TelegramOutputSender {
                     .build()
             }
 
-            sendMediaGroup(client, chatId, media, replyParameters)
+            sendMediaGroup(client, target, media, replyParameters)
         },
         onFallback = {
             group.audios.forEach { audio ->
-                runCatching { sendAudio(client, chatId, replyParameters, audio, caption = null, formattingFileNotice) }
+                runCatching { sendAudio(client, target, replyParameters, audio, caption = null, formattingFileNotice) }
                     .onFailure { ie ->
                         ie.rethrowIfCancellation()
-                        log.warn(ie) { "Fallback sendAudio failed for chat=$chatId" }
+                        log.warn(ie) { "Fallback sendAudio failed for chat=${target.chatId}" }
                     }
             }
         }
@@ -372,7 +373,7 @@ internal object TelegramOutputSender {
 
     private suspend fun sendAudio(
         client: TelegramClient,
-        chatId: Long,
+        target: ChatTarget,
         replyParameters: ReplyParameters?,
         audio: BotOutput.Audio,
         caption: String?,
@@ -381,15 +382,16 @@ internal object TelegramOutputSender {
         val fullCaption = captionWithSourceLink(caption, audio.trackUrl)
 
         sendOrFallback(
-            chatId = chatId,
+            target = target,
             replyParameters = replyParameters,
             failureMessage = "sendAudio failed, falling back to text",
             send = {
-                sendWithCaptionHtmlFallback(client, chatId, fullCaption, replyParameters, formattingFileNotice) { text, parseMode ->
+                sendWithCaptionHtmlFallback(client, target, fullCaption, replyParameters, formattingFileNotice) { text, parseMode ->
                     client.api<Message> {
                         executeAsync(
                             SendAudio.builder()
-                                .chatId(chatId)
+                                .chatId(target.chatId)
+                                .messageThreadId(target.messageThreadId)
                                 .audio(audio.bytes.asInputFile(audio.filename))
                                 .title(audio.title)
                                 .performer(audio.performer)
@@ -404,29 +406,30 @@ internal object TelegramOutputSender {
             },
             onFallback = {
                 val fallback = listOfNotNull(fullCaption, "${audio.title} — ${audio.performer}").joinToString("\n")
-                sendText(client, chatId, fallback, replyParameters)
+                sendText(client, target, fallback, replyParameters)
             }
         )
     }
 
     private suspend fun sendVoice(
         client: TelegramClient,
-        chatId: Long,
+        target: ChatTarget,
         replyParameters: ReplyParameters?,
         voice: BotOutput.Voice,
         caption: String?,
         formattingFileNotice: String
     ) {
         sendOrFallback(
-            chatId = chatId,
+            target = target,
             replyParameters = replyParameters,
             failureMessage = "sendVoice failed, falling back to text",
             send = {
-                sendWithCaptionHtmlFallback(client, chatId, caption, replyParameters, formattingFileNotice) { text, parseMode ->
+                sendWithCaptionHtmlFallback(client, target, caption, replyParameters, formattingFileNotice) { text, parseMode ->
                     client.api<Message> {
                         executeAsync(
                             SendVoice.builder()
-                                .chatId(chatId)
+                                .chatId(target.chatId)
+                                .messageThreadId(target.messageThreadId)
                                 .voice(voice.bytes.asInputFile("voice.mp3"))
                                 .duration(voice.durationSeconds)
                                 .caption(text)
@@ -437,13 +440,13 @@ internal object TelegramOutputSender {
                     }
                 }
             },
-            onFallback = captionTextFallback(client, chatId, caption, replyParameters)
+            onFallback = captionTextFallback(client, target, caption, replyParameters)
         )
     }
 
     private suspend fun sendVideo(
         client: TelegramClient,
-        chatId: Long,
+        target: ChatTarget,
         replyParameters: ReplyParameters?,
         video: BotOutput.Video,
         caption: String?,
@@ -454,20 +457,21 @@ internal object TelegramOutputSender {
 
         sendMediaWithDocumentFallback(
             client = client,
-            chatId = chatId,
+            target = target,
             replyParameters = replyParameters,
             mediaLabel = "sendVideo",
             bytes = video.bytes,
             filename = video.filename,
             caption = fullCaption,
             formattingFileNotice = formattingFileNotice,
-            onTextFallback = captionTextFallback(client, chatId, fullCaption, replyParameters),
+            onTextFallback = captionTextFallback(client, target, fullCaption, replyParameters),
             send = {
-                sendWithCaptionHtmlFallback(client, chatId, fullCaption, replyParameters, formattingFileNotice) { text, parseMode ->
+                sendWithCaptionHtmlFallback(client, target, fullCaption, replyParameters, formattingFileNotice) { text, parseMode ->
                     client.api<Message> {
                         executeAsync(
                             SendVideo.builder()
-                                .chatId(chatId)
+                                .chatId(target.chatId)
+                                .messageThreadId(target.messageThreadId)
                                 .video(video.bytes.asInputFile(video.filename))
                                 .thumbnail(thumbnail?.asInputFile(VIDEO_THUMBNAIL_FILENAME))
                                 .cover(thumbnail?.asInputFile(VIDEO_COVER_FILENAME))
@@ -488,7 +492,7 @@ internal object TelegramOutputSender {
 
     private suspend fun sendVideoNote(
         client: TelegramClient,
-        chatId: Long,
+        target: ChatTarget,
         replyParameters: ReplyParameters?,
         videoNote: BotOutput.VideoNote,
         formattingFileNotice: String
@@ -497,7 +501,8 @@ internal object TelegramOutputSender {
             client.api<Message> {
                 executeAsync(
                     SendVideoNote.builder()
-                        .chatId(chatId)
+                        .chatId(target.chatId)
+                        .messageThreadId(target.messageThreadId)
                         .videoNote(videoNote.bytes.asInputFile(VIDEO_NOTE_FILENAME))
                         .duration(videoNote.durationSeconds)
                         .length(videoNote.size)
@@ -513,8 +518,8 @@ internal object TelegramOutputSender {
             // a recipient can refuse voice and video messages from anyone outside their contacts, which
             // comes back as `VOICE_MESSAGES_FORBIDDEN`. the same mp4 is still allowed as an ordinary
             // video, and one that plays in the chat beats the document the generic fallback would attach.
-            log.warn(e) { "sendVideoNote rejected for chat=$chatId, sending the same mp4 as a video" }
-            sendVideo(client, chatId, replyParameters, videoNote.asVideo(), caption = null, formattingFileNotice)
+            log.warn(e) { "sendVideoNote rejected for chat=${target.chatId}, sending the same mp4 as a video" }
+            sendVideo(client, target, replyParameters, videoNote.asVideo(), caption = null, formattingFileNotice)
         }.getOrThrow()
     }
 
@@ -529,18 +534,19 @@ internal object TelegramOutputSender {
 
     private suspend fun sendQuiz(
         client: TelegramClient,
-        chatId: Long,
+        target: ChatTarget,
         replyParameters: ReplyParameters?,
         quiz: BotOutput.Quiz
     ) = sendOrFallback(
-        chatId = chatId,
+        target = target,
         replyParameters = replyParameters,
         failureMessage = "sendQuiz failed",
         send = {
             client.api<Message> {
                 executeAsync(
                     SendPoll.builder()
-                        .chatId(chatId)
+                        .chatId(target.chatId)
+                        .messageThreadId(target.messageThreadId)
                         .question(quiz.question)
                         .options(quiz.options.map(::InputPollOption))
                         .type("quiz")
@@ -556,18 +562,19 @@ internal object TelegramOutputSender {
 
     private suspend fun sendPoll(
         client: TelegramClient,
-        chatId: Long,
+        target: ChatTarget,
         replyParameters: ReplyParameters?,
         poll: BotOutput.Poll
     ) = sendOrFallback(
-        chatId = chatId,
+        target = target,
         replyParameters = replyParameters,
         failureMessage = "sendPoll failed",
         send = {
             client.api<Message> {
                 executeAsync(
                     SendPoll.builder()
-                        .chatId(chatId)
+                        .chatId(target.chatId)
+                        .messageThreadId(target.messageThreadId)
                         .question(poll.question)
                         .options(poll.options.map(::InputPollOption))
                         .type("regular")
@@ -583,11 +590,11 @@ internal object TelegramOutputSender {
     // deliver the caption as a plain message when the media itself could not be sent at all.
     private fun captionTextFallback(
         client: TelegramClient,
-        chatId: Long,
+        target: ChatTarget,
         caption: String?,
         replyParameters: ReplyParameters?
     ): suspend () -> Unit =
-        { caption?.let { sendText(client, chatId, it, replyParameters) } }
+        { caption?.let { sendText(client, target, it, replyParameters) } }
 }
 
 /** Appends an HTML source link (e.g. `<a href="url">YouTube</a>`) to the caption; `null` when both are empty. */

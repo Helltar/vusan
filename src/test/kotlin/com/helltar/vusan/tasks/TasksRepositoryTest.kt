@@ -92,6 +92,7 @@ class TasksRepositoryTest {
                 recurrence = Recurrence.Once,
                 timezone = ZoneId.of("UTC"),
                 nextFireAt = nextFireAt,
+                creatorThreadId = null,
                 creatorMessageId = 1L,
                 creatorUsername = "tester",
                 creatorDisplayName = "Test User",

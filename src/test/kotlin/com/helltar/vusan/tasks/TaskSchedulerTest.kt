@@ -24,6 +24,7 @@ class TaskSchedulerTest {
             createdAt = Instant.parse("2026-07-27T08:00:00Z"),
             enabled = true,
             paused = false,
+            creatorThreadId = null,
             creatorMessageId = null,
             creatorUsername = null,
             creatorDisplayName = null,

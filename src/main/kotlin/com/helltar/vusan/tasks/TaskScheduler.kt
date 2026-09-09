@@ -133,7 +133,7 @@ class TaskScheduler(
         val delivered =
             delivery
                 .sendNotice(
-                    task.chatId,
+                    task.chatTarget,
                     Messages.of(task.language).taskMissedNotice(task.id, task.title, scheduledLabel)
                 )
 
@@ -170,7 +170,7 @@ class TaskScheduler(
 
         log.error { "task id=${task.id} failed on all $MAX_ATTEMPTS attempts; nothing was delivered" }
 
-        return !delivery.sendNotice(task.chatId, Messages.of(task.language).taskFailedNotice(task.id, task.title))
+        return !delivery.sendNotice(task.chatTarget, Messages.of(task.language).taskFailedNotice(task.id, task.title))
     }
 
     // the bot cannot post into this chat any more: it was removed from the group, the user blocked it,
@@ -219,7 +219,7 @@ class TaskScheduler(
             runCatching {
                 delivery.sendScheduled(
                     result = result,
-                    chatId = task.chatId,
+                    target = task.chatTarget,
                     userId = task.userId,
                     messages = Messages.of(task.language),
                     attribution = attributionFor(task)

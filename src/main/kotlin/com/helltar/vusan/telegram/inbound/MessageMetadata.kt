@@ -27,6 +27,20 @@ internal val Message.chatIdLong: Long
 internal val Message.messageIdLong: Long
     get() = messageId.toLong()
 
+/**
+ * The forum topic this message is in, or `null` when it is not in one.
+ *
+ * `message_thread_id` alone does not mean a topic: Telegram also puts it on replies in ordinary
+ * supergroups, where it identifies a reply chain instead. Sending with one of those as a topic id
+ * fails, since the send parameter only exists for forums — so `is_topic_message` is what decides,
+ * and it is the only form of the id delivery may echo back.
+ *
+ * `isTopicMessage()` carries its parentheses on purpose: the library has both a nullable field and a
+ * null-safe accessor of that name, and the bare property reference is ambiguous between them.
+ */
+internal val Message.forumTopicIdOrNull: Int?
+    get() = messageThreadId?.takeIf { isTopicMessage() }
+
 internal val Message.canLoadChatDescription: Boolean
     get() = chat.isGroupChat || chat.isSuperGroupChat || chat.isChannelChat
 

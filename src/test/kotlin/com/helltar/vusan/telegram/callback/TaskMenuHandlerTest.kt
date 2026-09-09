@@ -6,6 +6,7 @@ import com.helltar.vusan.config.LlmProviderConfig
 import com.helltar.vusan.i18n.Language
 import com.helltar.vusan.i18n.Messages
 import com.helltar.vusan.infra.Db
+import com.helltar.vusan.telegram.delivery.ChatTarget
 import com.helltar.vusan.tasks.NewScheduledTask
 import com.helltar.vusan.tasks.Recurrence
 import com.helltar.vusan.tasks.TasksRepository
@@ -74,7 +75,7 @@ class TaskMenuHandlerTest {
         createTask(userId = 200L, chatId = -200L, title = "other user's report")
 
         handler.sendMenu(
-            chatId = -200L,
+            target = ChatTarget(-200L),
             userId = 100L,
             replyToMessageId = 55L,
             chatIsPrivate = false,
@@ -105,7 +106,7 @@ class TaskMenuHandlerTest {
     @Test
     fun `empty menus show task count and limit without a fraction`() = runBlocking {
         handler.sendMenu(
-            chatId = 100L,
+            target = ChatTarget(100L),
             userId = 100L,
             replyToMessageId = 55L,
             chatIsPrivate = true,
@@ -121,7 +122,7 @@ class TaskMenuHandlerTest {
         client.requests.clear()
 
         handler.sendMenu(
-            chatId = -200L,
+            target = ChatTarget(-200L),
             userId = 100L,
             replyToMessageId = 55L,
             chatIsPrivate = false,
@@ -151,7 +152,7 @@ class TaskMenuHandlerTest {
         }
 
         roomyHandler.sendMenu(
-            chatId = 100L,
+            target = ChatTarget(100L),
             userId = 100L,
             replyToMessageId = 55L,
             chatIsPrivate = true,
@@ -344,7 +345,8 @@ class TaskMenuHandlerTest {
                 recurrence = recurrence,
                 timezone = ZoneId.of("UTC"),
                 nextFireAt = nextFireAt,
-                creatorMessageId = 1L,
+                creatorThreadId = null,
+            creatorMessageId = 1L,
                 creatorUsername = "tester",
                 creatorDisplayName = "Test User",
                 chatIsPrivate = chatId > 0L,

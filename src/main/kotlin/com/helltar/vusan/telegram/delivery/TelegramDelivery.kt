@@ -11,6 +11,7 @@ import com.helltar.vusan.outbox.BotOutput
 import com.helltar.vusan.outbox.OutboxItem
 import com.helltar.vusan.telegram.api
 import com.helltar.vusan.telegram.inbound.chatIdLong
+import com.helltar.vusan.telegram.inbound.forumTopicIdOrNull
 import com.helltar.vusan.telegram.inbound.messageIdLong
 import com.helltar.vusan.telegram.inbound.senderIdOrNull
 import com.helltar.vusan.telegram.inbound.senderLanguageCodeOrNull
@@ -26,6 +27,12 @@ import java.time.Instant
 
 internal fun replyParameters(replyToMessageId: Long?): ReplyParameters? =
     replyToMessageId?.let { ReplyParameters.builder().messageId(it.toInt()).build() }
+
+// where an answer to this message belongs. an anchored reply would land in the right topic on its
+// own, but everything sent without one — a notice, a scheduled fire, an item after the anchor is
+// gone — needs the topic named, or it arrives in the forum's General instead.
+internal val Message.chatTarget: ChatTarget
+    get() = ChatTarget(chatIdLong, forumTopicIdOrNull)
 
 // the chat action shown just before an item is delivered, so the user sees "sending photo",
 // "recording audio", etc. matching what is about to arrive. reactions are instant and get none.
@@ -114,7 +121,12 @@ class TelegramDelivery(
         val log = KotlinLogging.logger {}
     }
 
-    private data class DeliveryTarget(val chatId: Long, val replyToMessageId: Long? = null) {
+    private data class DeliveryTarget(val chat: ChatTarget, val replyToMessageId: Long? = null) {
+
+        constructor(chatId: Long) : this(ChatTarget(chatId))
+
+        val chatId: Long
+            get() = chat.chatId
 
         fun withoutReply(): DeliveryTarget =
             if (replyToMessageId == null)
@@ -130,8 +142,8 @@ class TelegramDelivery(
     suspend fun send(message: Message, result: AgentResult) {
         dispatch(
             result = result,
-            originTarget = DeliveryTarget(chatId = message.chatIdLong, replyToMessageId = message.messageIdLong),
-            currentChatTarget = DeliveryTarget(message.chatIdLong),
+            originTarget = DeliveryTarget(message.chatTarget, replyToMessageId = message.messageIdLong),
+            currentChatTarget = DeliveryTarget(message.chatTarget),
             senderPrivateChatId = message.senderIdOrNull(),
             messages = Messages.forCode(message.senderLanguageCodeOrNull())
         )
@@ -140,27 +152,27 @@ class TelegramDelivery(
     /** Returns `true` when the chat turned out to be unreachable, so the caller can stop firing into it. */
     suspend fun sendScheduled(
         result: AgentResult,
-        chatId: Long,
+        target: ChatTarget,
         userId: Long,
         messages: Messages,
         attribution: ScheduledAttribution? = null
     ): Boolean {
-        val plainTarget = DeliveryTarget(chatId = chatId)
+        val plainTarget = DeliveryTarget(target)
 
         if (attribution?.creatorMessageId == null) {
-            attribution?.let { sendNotice(chatId, it.headerText) }
+            attribution?.let { sendNotice(target, it.headerText) }
 
             return dispatch(result, plainTarget, plainTarget, senderPrivateChatId = userId, messages = messages)
                 .chatUnreachable
         }
 
-        val anchorTarget = DeliveryTarget(chatId, replyToMessageId = attribution.creatorMessageId)
+        val anchorTarget = DeliveryTarget(target, replyToMessageId = attribution.creatorMessageId)
 
         val outcome =
             dispatch(result, anchorTarget, plainTarget, senderPrivateChatId = userId, messages = messages)
 
         if (outcome.replyUnavailable && !outcome.chatUnreachable) {
-            sendNotice(chatId, attribution.headerText)
+            sendNotice(target, attribution.headerText)
         }
 
         return outcome.chatUnreachable
@@ -179,7 +191,7 @@ class TelegramDelivery(
         messages: Messages
     ) {
         val originTarget =
-            DeliveryTarget(message.chatIdLong, replyToMessageId = originMessageId ?: message.messageIdLong)
+            DeliveryTarget(message.chatTarget, replyToMessageId = originMessageId ?: message.messageIdLong)
 
         dispatch(
             result = result,
@@ -201,7 +213,7 @@ class TelegramDelivery(
         withFloodWaitRetry(message.chatIdLong) {
             TelegramOutputSender.sendText(
                 client = client,
-                chatId = message.chatIdLong,
+                target = message.chatTarget,
                 text = text,
                 replyParameters = replyParameters(replyToMessageId ?: message.messageIdLong)
             )
@@ -213,15 +225,15 @@ class TelegramDelivery(
      * Returns `false` only when the chat itself is unreachable; any other failure is logged and reported
      * as sent, since it says nothing about whether the next message would arrive.
      */
-    suspend fun sendNotice(chatId: Long, text: String): Boolean =
+    suspend fun sendNotice(target: ChatTarget, text: String): Boolean =
         runCatching {
-            withFloodWaitRetry(chatId) {
-                TelegramOutputSender.sendText(client, chatId, text, replyParameters = null)
+            withFloodWaitRetry(target.chatId) {
+                TelegramOutputSender.sendText(client, target, text, replyParameters = null)
             }
             true
         }.getOrElse { error ->
             error.rethrowIfCancellation()
-            log.warn(error) { "failed to send notice to chat=$chatId" }
+            log.warn(error) { "failed to send notice to chat=${target.chatId}" }
             !error.isChatUnreachable()
         }
 
@@ -283,12 +295,12 @@ class TelegramDelivery(
             sentAnything = true
 
             val caption = comment?.takeIf { index == captionIndex }
-            val privateTarget = senderPrivateChatId?.takeIf { item.toPrivate }?.let(::DeliveryTarget)
+            val privateTarget = senderPrivateChatId?.takeIf { item.toPrivate }?.let { DeliveryTarget(it) }
             val routedToPrivate = privateTarget != null
             val target = privateTarget ?: if (replyUnavailable) currentChatTarget else originTarget
             val deliveryTarget = if (routedToPrivate || replyUnavailable) target.withoutReply() else target
 
-            indicateAction(deliveryTarget.chatId, botActionFor(item.output))
+            indicateAction(deliveryTarget.chat, botActionFor(item.output))
 
             when (deliverItem(item.output, deliveryTarget, caption, routedToPrivate, currentChatTarget, messages)) {
                 ItemDeliveryOutcome.Ok ->
@@ -444,7 +456,7 @@ class TelegramDelivery(
         senderPrivateChatId: Long?,
         messages: Messages
     ): ItemDeliveryOutcome {
-        val privateTarget = senderPrivateChatId?.takeIf { toPrivate }?.let(::DeliveryTarget)
+        val privateTarget = senderPrivateChatId?.takeIf { toPrivate }?.let { DeliveryTarget(it) }
         val routedToPrivate = privateTarget != null
         val deliveryTarget = privateTarget ?: originTarget
 
@@ -459,7 +471,7 @@ class TelegramDelivery(
             )
 
         try {
-            indicateAction(deliveryTarget.chatId, ActionType.TYPING)
+            indicateAction(deliveryTarget.chat, ActionType.TYPING)
             sendReplyText(deliveryTarget, text, messages)
             record()
             return ItemDeliveryOutcome.Ok
@@ -489,11 +501,17 @@ class TelegramDelivery(
     }
 
     // best-effort: the indicator is cosmetic, so a failed action must never abort the delivery it precedes.
-    private suspend fun indicateAction(chatId: Long, action: ActionType?) {
+    private suspend fun indicateAction(target: ChatTarget, action: ActionType?) {
         action ?: return
         runCatching {
             client.api {
-                executeAsync(SendChatAction.builder().chatId(chatId).action(action.toString()).build())
+                executeAsync(
+                    SendChatAction.builder()
+                        .chatId(target.chatId)
+                        .messageThreadId(target.messageThreadId)
+                        .action(action.toString())
+                        .build()
+                )
             }
         }.onFailure { it.rethrowIfCancellation() }
     }
@@ -508,7 +526,7 @@ class TelegramDelivery(
             TelegramOutputSender
                 .sendText(
                     client,
-                    target.chatId,
+                    target.chat,
                     text,
                     replyParameters(target.replyToMessageId)
                 )
@@ -520,7 +538,7 @@ class TelegramDelivery(
             TelegramOutputSender
                 .sendReplyText(
                     client,
-                    target.chatId,
+                    target.chat,
                     text,
                     replyParameters(target.replyToMessageId),
                     messages.formattingAsFileNotice
@@ -534,7 +552,7 @@ class TelegramDelivery(
                 .send(
                     client,
                     item,
-                    target.chatId,
+                    target.chat,
                     replyParameters(target.replyToMessageId),
                     caption,
                     messages.formattingAsFileNotice

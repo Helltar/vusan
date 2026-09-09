@@ -326,6 +326,7 @@ class TaskTools(
         timezone = timezone,
         nextFireAt = nextFireAt,
         creatorMessageId = context.messageId.takeIf { it > 0L },
+        creatorThreadId = context.messageThreadId,
         creatorUsername = context.senderUsername,
         creatorDisplayName = context.senderDisplayName,
         chatIsPrivate = context.chatIsPrivate,

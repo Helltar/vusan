@@ -18,6 +18,7 @@ import com.helltar.vusan.telegram.inbound.attachedFileContextBlock
 import com.helltar.vusan.telegram.inbound.canLoadChatDescription
 import com.helltar.vusan.telegram.inbound.chatIdLong
 import com.helltar.vusan.telegram.inbound.formatAgentInput
+import com.helltar.vusan.telegram.inbound.forumTopicIdOrNull
 import com.helltar.vusan.telegram.inbound.formatConversationInput
 import com.helltar.vusan.telegram.inbound.isReplyToOtherUser
 import com.helltar.vusan.telegram.inbound.language
@@ -120,6 +121,7 @@ internal class AgentTurns(
                 userId = userId,
                 messageId = message.messageIdLong,
                 replyToMessageId = replyToMessageId,
+                messageThreadId = message.forumTopicIdOrNull,
                 prompt = agentInput,
                 conversationEntry = conversationInput,
                 messageContext = message.toMessageContext(chatProfile(message)),
@@ -153,6 +155,7 @@ internal class AgentTurns(
                 chatId = message.chatIdLong,
                 userId = user.id,
                 messageId = selection.originMessageId ?: 0L,
+                messageThreadId = message.forumTopicIdOrNull,
                 prompt = attachedFile?.let { "${attachedFileContextBlock(it)}\n\n$input" } ?: input,
                 conversationEntry = input,
                 messageContext = message.toMessageContext(user, chatProfile(message)),

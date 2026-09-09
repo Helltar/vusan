@@ -91,7 +91,7 @@ class TelegramDeliveryTest {
         val unreachable =
             TelegramDelivery(client.proxy).sendScheduled(
                 result = AgentResult(outputs = emptyList(), comment = "The weekly summary is ready."),
-                chatId = -1L,
+                target = ChatTarget(-1L),
                 userId = 2L,
                 messages = Messages.of(Language.ENGLISH)
             )
@@ -106,7 +106,7 @@ class TelegramDeliveryTest {
         val unreachable =
             TelegramDelivery(client.proxy).sendScheduled(
                 result = AgentResult(outputs = emptyList(), comment = "The weekly summary is ready."),
-                chatId = -1L,
+                target = ChatTarget(-1L),
                 userId = 2L,
                 messages = Messages.of(Language.ENGLISH)
             )
@@ -127,7 +127,7 @@ class TelegramDeliveryTest {
         val unreachable =
             TelegramDelivery(client.proxy).sendScheduled(
                 result = AgentResult(outputs = outbox.pending, comment = null),
-                chatId = -1L,
+                target = ChatTarget(-1L),
                 userId = 2L,
                 messages = Messages.of(Language.ENGLISH)
             )
@@ -188,16 +188,85 @@ class TelegramDeliveryTest {
         assertEquals(listOf("here it is"), client.sentTexts)
     }
 
+    // a task fired in a forum has no message to anchor to once the one that created it is gone, so the
+    // topic is the only thing keeping the answer out of the group's General.
+    @Test
+    fun `a scheduled fire names the topic it was set up in`() = runBlocking {
+        val client = RecordingClient()
+
+        TelegramDelivery(client.proxy).sendScheduled(
+            result = AgentResult(outputs = emptyList(), comment = "The weekly summary is ready."),
+            target = ChatTarget(-7L, messageThreadId = 42),
+            userId = 2L,
+            messages = Messages.of(Language.ENGLISH)
+        )
+
+        assertEquals(listOf<Int?>(42), client.threadIds)
+    }
+
+    @Test
+    fun `a fire in a chat without topics names none`() = runBlocking {
+        val client = RecordingClient()
+
+        TelegramDelivery(client.proxy).sendScheduled(
+            result = AgentResult(outputs = emptyList(), comment = "The weekly summary is ready."),
+            target = ChatTarget(-7L),
+            userId = 2L,
+            messages = Messages.of(Language.ENGLISH)
+        )
+
+        assertEquals(listOf<Int?>(null), client.threadIds)
+    }
+
+    @Test
+    fun `an answer in a forum topic stays in it`() = runBlocking {
+        val client = RecordingClient()
+        val outbox = BotOutbox().apply { enqueueText("here it is") }
+
+        TelegramDelivery(client.proxy).send(
+            message = topicMessage(),
+            result = AgentResult(outputs = outbox.pending, comment = null)
+        )
+
+        assertEquals(listOf<Int?>(42), client.threadIds)
+    }
+
+    // outside a forum the same field identifies a reply chain, and sending with it is rejected — so the
+    // answer must name no topic at all.
+    @Test
+    fun `a reply thread in an ordinary supergroup is not treated as a topic`() = runBlocking {
+        val client = RecordingClient()
+        val outbox = BotOutbox().apply { enqueueText("here it is") }
+
+        TelegramDelivery(client.proxy).send(
+            message = topicMessage(isTopic = false),
+            result = AgentResult(outputs = outbox.pending, comment = null)
+        )
+
+        assertEquals(listOf<Int?>(null), client.threadIds)
+    }
+
     private fun choiceMessage() =
         Message().apply {
             messageId = 77
             chat = Chat.builder().id(-7L).type("supergroup").build()
         }
 
+    // built rather than mutated: `isTopicMessage` is ambiguous as a property, since the library carries
+    // both a nullable field and a null-safe accessor of that name.
+    private fun topicMessage(isTopic: Boolean = true): Message =
+        Message.builder()
+            .messageId(77)
+            .messageThreadId(42)
+            .isTopicMessage(isTopic)
+            .chat(Chat.builder().id(-7L).type("supergroup").build())
+            .build()
+
     private class RecordingClient {
 
         val replyTargets = mutableListOf<Int?>()
         val sentTexts = mutableListOf<String>()
+        val threadIds = mutableListOf<Int?>()
 
         val proxy: TelegramClient =
             Proxy.newProxyInstance(
@@ -213,6 +282,7 @@ class TelegramDeliveryTest {
                 is SendMessage -> {
                     replyTargets += request.replyParameters?.messageId
                     sentTexts += request.text
+                    threadIds += request.messageThreadId
                     CompletableFuture.completedFuture(Message())
                 }
 
@@ -225,7 +295,7 @@ class TelegramDeliveryTest {
 
         delivery.sendScheduled(
             result = AgentResult(outputs = outbox.pending, comment = null),
-            chatId = 1L,
+            target = ChatTarget(1L),
             userId = 2L,
             messages = Messages.of(Language.ENGLISH)
         )

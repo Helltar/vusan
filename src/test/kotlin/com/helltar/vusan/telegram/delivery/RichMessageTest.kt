@@ -22,7 +22,7 @@ class RichMessageTest {
 
     @Test
     fun `serializes to the sendRichMessage wire format`() {
-        val method = richMessageRequest(42, "# Title\n\n- one", ReplyParameters.builder().messageId(7).build())
+        val method = richMessageRequest(ChatTarget(42), "# Title\n\n- one", ReplyParameters.builder().messageId(7).build())
 
         val json = mapper.readTree(mapper.writeValueAsString(method))
 
@@ -36,7 +36,7 @@ class RichMessageTest {
     // omitted rather than serialized as null.
     @Test
     fun `sends only the markdown field and omits absent optionals`() {
-        val json = mapper.readTree(mapper.writeValueAsString(richMessageRequest(42, "hi", null)))
+        val json = mapper.readTree(mapper.writeValueAsString(richMessageRequest(ChatTarget(42), "hi", null)))
 
         assertEquals(setOf("markdown"), json["rich_message"].fieldNames().asSequence().toSet())
         assertFalse(json.has("reply_parameters"))
@@ -51,7 +51,7 @@ class RichMessageTest {
             "rich_message":{"blocks":[{"type":"paragraph","text":"hello"}]}}}
             """.trimIndent()
 
-        val message = richMessageRequest(42, "hello", null).deserializeResponse(response)
+        val message = richMessageRequest(ChatTarget(42), "hello", null).deserializeResponse(response)
 
         val paragraph = message.richMessage.blocks.single() as RichBlockParagraph
         assertEquals("hello", (paragraph.text as RichTextPlain).text)

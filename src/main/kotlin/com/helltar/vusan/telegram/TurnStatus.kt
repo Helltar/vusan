@@ -5,6 +5,7 @@ import com.helltar.vusan.agent.TurnNarrator
 import com.helltar.vusan.common.rethrowIfCancellation
 import com.helltar.vusan.i18n.Messages
 import com.helltar.vusan.telegram.callback.turnStopCallbackData
+import com.helltar.vusan.telegram.delivery.ChatTarget
 import com.helltar.vusan.telegram.delivery.deleteChatMessage
 import com.helltar.vusan.telegram.delivery.editTextMessage
 import com.helltar.vusan.telegram.delivery.isEntityParseError
@@ -82,7 +83,7 @@ internal fun activityStatusLabel(activity: ToolActivity, messages: Messages): St
  */
 internal class TurnStatus(
     private val client: TelegramClient,
-    private val chatId: Long,
+    private val target: ChatTarget,
     private val ownerId: Long,
     replyToMessageId: Long?,
     private val messages: Messages,
@@ -140,16 +141,16 @@ internal class TurnStatus(
 
             runCatching {
                 if (plan == null)
-                    deleteChatMessage(client, chatId, id)
+                    deleteChatMessage(client, target.chatId, id)
                 else
-                    editTextMessage(client, chatId, id, plan, replyMarkup = null, parseMode = parseMode)
+                    editTextMessage(client, target.chatId, id, plan, replyMarkup = null, parseMode = parseMode)
             }.onFailure { error ->
                 error.rethrowIfCancellation()
 
                 // a plan that never got a running line under it is already the text this edit writes.
                 if (error.isMessageNotModified()) return
 
-                log.warn { "live status could not be closed in chat=$chatId: ${error.message}" }
+                log.warn { "live status could not be closed in chat=${target.chatId}: ${error.message}" }
             }
         }
     }
@@ -195,7 +196,7 @@ internal class TurnStatus(
                     return true
                 }
 
-                log.warn { "live status rejected in chat=$chatId: ${error.message}" }
+                log.warn { "live status rejected in chat=${target.chatId}: ${error.message}" }
 
                 // a message somebody deleted is not coming back and every further write would fail the
                 // same way. anything else may be transient, so the next change tries again.
@@ -218,7 +219,7 @@ internal class TurnStatus(
                 messageId =
                     sendStatusMessage(
                         client = client,
-                        chatId = chatId,
+                        target = target,
                         text = text,
                         parseMode = parseMode,
                         replyParameters = replyParameters(anchor),
@@ -227,7 +228,7 @@ internal class TurnStatus(
             } else {
                 editTextMessage(
                     client = client,
-                    chatId = chatId,
+                    chatId = target.chatId,
                     messageId = id,
                     text = text,
                     replyMarkup = stopKeyboard(),

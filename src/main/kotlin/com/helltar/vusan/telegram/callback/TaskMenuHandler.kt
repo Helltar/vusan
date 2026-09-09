@@ -9,6 +9,7 @@ import com.helltar.vusan.tasks.ScheduledTask
 import com.helltar.vusan.tasks.TasksRepository
 import com.helltar.vusan.tasks.formatFire
 import com.helltar.vusan.tasks.nextFireAfterResume
+import com.helltar.vusan.telegram.delivery.ChatTarget
 import com.helltar.vusan.telegram.delivery.answerCallbackQuery
 import com.helltar.vusan.telegram.delivery.editTextMessage
 import com.helltar.vusan.telegram.delivery.isMessageNotModified
@@ -43,17 +44,17 @@ internal class TaskMenuHandler(
         callbackData?.startsWith(CALLBACK_PREFIX) == true
 
     suspend fun sendMenu(
-        chatId: Long,
+        target: ChatTarget,
         userId: Long,
         replyToMessageId: Long,
         chatIsPrivate: Boolean,
         messages: Messages
     ) {
-        val menu = buildMenu(userId, chatId, chatIsPrivate, messages)
+        val menu = buildMenu(userId, target.chatId, chatIsPrivate, messages)
 
         sendTextMessage(
             client = client,
-            chatId = chatId,
+            target = target,
             text = menu.text,
             parseMode = ParseMode.HTML,
             replyParameters = replyParameters(replyToMessageId),
