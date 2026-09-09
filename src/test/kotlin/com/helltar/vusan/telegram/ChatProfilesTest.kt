@@ -12,7 +12,7 @@ import org.telegram.telegrambots.meta.api.objects.chatmember.ChatMemberAdministr
 import org.telegram.telegrambots.meta.api.objects.chatmember.ChatMemberMember
 import org.telegram.telegrambots.meta.api.objects.chatmember.ChatMemberRestricted
 
-class ChatProfileTest {
+class ChatProfilesTest {
 
     private val botUser: User = User.builder().id(42L).isBot(true).firstName("Vusan").build()
 

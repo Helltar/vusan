@@ -9,6 +9,8 @@ import com.helltar.vusan.i18n.Language
 import com.helltar.vusan.i18n.Messages
 import com.helltar.vusan.outbox.BotOutput
 import com.helltar.vusan.request.AttachedFile
+import com.helltar.vusan.request.ChatProfile
+import com.helltar.vusan.request.RequestContext
 import com.helltar.vusan.telegram.callback.InlineChoiceHandler
 import com.helltar.vusan.telegram.callback.InlineChoiceSelection
 import com.helltar.vusan.telegram.callback.inlineChoiceAgentInput
@@ -28,8 +30,8 @@ import com.helltar.vusan.telegram.inbound.repliedAttachedFileOrNull
 import com.helltar.vusan.telegram.inbound.replyAuthorIdOrNull
 import com.helltar.vusan.telegram.inbound.replySummaryOrNull
 import com.helltar.vusan.telegram.inbound.replyToMessageIdOrNull
-import com.helltar.vusan.telegram.inbound.senderIdOrNull
-import com.helltar.vusan.telegram.inbound.toMessageContext
+import com.helltar.vusan.telegram.inbound.toChatContext
+import com.helltar.vusan.telegram.inbound.toSenderContext
 import io.github.oshai.kotlinlogging.KotlinLogging
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.NonCancellable
@@ -106,27 +108,25 @@ internal class AgentTurns(
         replyToMessageId: Long?,
         inputKind: String
     ) {
-        val chatId = message.chatIdLong
-
-        val userId =
-            message.senderIdOrNull() ?: run {
-                log.warn { "skipping $inputKind message without sender user (chat=$chatId)" }
+        val sender =
+            message.from ?: run {
+                log.warn { "skipping $inputKind message without sender user (chat=${message.chatIdLong})" }
                 return
             }
 
-        val language = message.language
         val request =
             AgentRequest(
-                chatId = chatId,
-                userId = userId,
-                messageId = message.messageIdLong,
-                replyToMessageId = replyToMessageId,
-                messageThreadId = message.forumTopicIdOrNull,
+                context =
+                    RequestContext(
+                        chat = message.toChatContext(chatProfile(message)),
+                        sender = sender.toSenderContext(),
+                        messageId = message.messageIdLong,
+                        replyToMessageId = replyToMessageId,
+                        attachedFiles = attachedFiles,
+                        language = message.language
+                    ),
                 prompt = agentInput,
-                conversationEntry = conversationInput,
-                messageContext = message.toMessageContext(chatProfile(message)),
-                attachedFiles = attachedFiles,
-                language = language
+                conversationEntry = conversationInput
             )
 
         runAgentTurn(
@@ -145,22 +145,22 @@ internal class AgentTurns(
         messages: Messages
     ) {
         val input = inlineChoiceAgentInput(selection)
-        val language = Language.fromCode(user.languageCode)
         val attachedFile = inlineChoices.parkedAttachment(message.chatIdLong, user.id)
 
         // the selection continues the exchange the user started, so the turn runs as if it came from that
         // message: it is what a reaction lands on, and what a task scheduled here is anchored to later.
         val request =
             AgentRequest(
-                chatId = message.chatIdLong,
-                userId = user.id,
-                messageId = selection.originMessageId ?: 0L,
-                messageThreadId = message.forumTopicIdOrNull,
+                context =
+                    RequestContext(
+                        chat = message.toChatContext(chatProfile(message)),
+                        sender = user.toSenderContext(),
+                        messageId = selection.originMessageId,
+                        attachedFiles = listOfNotNull(attachedFile),
+                        language = Language.fromCode(user.languageCode)
+                    ),
                 prompt = attachedFile?.let { "${attachedFileContextBlock(it)}\n\n$input" } ?: input,
-                conversationEntry = input,
-                messageContext = message.toMessageContext(user, chatProfile(message)),
-                attachedFiles = listOfNotNull(attachedFile),
-                language = language
+                conversationEntry = input
             )
 
         runAgentTurn(
@@ -187,13 +187,16 @@ internal class AgentTurns(
         deliver: suspend (AgentResult) -> Unit,
         reply: suspend (text: String) -> Unit
     ) {
+        val context = request.context
+
         log.info {
             buildString {
-                append("incoming $inputKind: chat=${request.chatId} user=${request.userId} msg=${request.messageId}")
-                request.messageContext?.userUsername?.let { append(" username=[$it]") }
-                request.messageContext?.userDisplayName?.let { append(" name=[$it]") }
-                request.replyToMessageId?.let { append(" replyTo=$it") }
-                request.attachedFile?.let { append(" attachedFile=[${it.name}]") }
+                append("incoming $inputKind: chat=${context.chat.id} user=${context.sender.id}")
+                context.messageId?.let { append(" msg=$it") }
+                context.sender.username?.let { append(" username=[$it]") }
+                context.sender.displayName?.let { append(" name=[$it]") }
+                context.replyToMessageId?.let { append(" replyTo=$it") }
+                context.attachedFile?.let { append(" attachedFile=[${it.name}]") }
                 append(" text=[${request.prompt.collapseWhitespaceAndCap(LOG_PROMPT_MAX_CHARS).orEmpty()}]")
             }
         }
@@ -213,9 +216,9 @@ internal class AgentTurns(
             // a question with buttons ends the turn without answering, so whatever it was asked about has
             // to outlive it; any other turn clears the slot instead of leaving a stale file behind.
             inlineChoices.parkAttachment(
-                chatId = request.chatId,
-                userId = request.userId,
-                file = request.attachedFile?.takeIf { result.outputs.any { it.output is BotOutput.InlineChoice } }
+                chatId = context.chat.id,
+                userId = context.sender.id,
+                file = context.attachedFile?.takeIf { result.outputs.any { it.output is BotOutput.InlineChoice } }
             )
 
             deliver(result)
@@ -224,14 +227,14 @@ internal class AgentTurns(
             // out, so all that is left is to say so in the chat — under NonCancellable, because the
             // coroutine is already leaving.
             if (error is CancellationException) {
-                val messages = Messages.of(request.language)
+                val messages = Messages.of(context.language)
 
                 withContext(NonCancellable) {
                     runCatching {
                         reply(messages.turnStoppedNotice)
                     }.onFailure { stopError ->
                         log.warn(stopError) {
-                            "failed to report a stopped turn for chat=${request.chatId} user=${request.userId}"
+                            "failed to report a stopped turn for chat=${context.chat.id} user=${context.sender.id}"
                         }
                     }
                 }
@@ -240,14 +243,14 @@ internal class AgentTurns(
             }
 
             log.error(error) {
-                "telegram $inputKind handling failed for chat=${request.chatId} user=${request.userId}"
+                "telegram $inputKind handling failed for chat=${context.chat.id} user=${context.sender.id}"
             }
 
-            runCatching { reply(Messages.of(request.language).fallbackErrorReply) }
+            runCatching { reply(Messages.of(context.language).fallbackErrorReply) }
                 .onFailure { replyError ->
                     replyError.rethrowIfCancellation()
                     log.warn(replyError) {
-                        "failed to send fallback error reply for chat=${request.chatId} user=${request.userId}"
+                        "failed to send fallback error reply for chat=${context.chat.id} user=${context.sender.id}"
                     }
                 }
         }

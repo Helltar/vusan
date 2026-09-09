@@ -1,8 +1,10 @@
 package com.helltar.vusan.tasks
 
-import com.helltar.vusan.agent.MessageContext
 import com.helltar.vusan.i18n.Language
-import com.helltar.vusan.telegram.ChatProfile
+import com.helltar.vusan.request.ChatContext
+import com.helltar.vusan.request.ChatProfile
+import com.helltar.vusan.request.RequestContext
+import com.helltar.vusan.request.SenderContext
 import com.helltar.vusan.telegram.delivery.ChatTarget
 import java.time.Instant
 import java.time.ZoneId
@@ -57,22 +59,33 @@ internal fun formatFire(instant: Instant, tz: ZoneId): String =
     "${FIRE_DISPLAY.format(ZonedDateTime.ofInstant(instant, tz))} ${tz.id}"
 
 /**
- * The Telegram metadata a fired task can still name. A task runs with no incoming message behind it,
- * so the live chat flavor is gone; what survives is who set it up and where, which is what the turn
- * needs to address the person by name instead of nobody. The chat's description and what it lets the
- * bot post are read fresh, since neither was worth storing at the time the task was created.
+ * Where a fired task runs, rebuilt from what was stored when it was created.
+ *
+ * A task has no incoming message behind it, so there is no live chat flavor to read and no message to
+ * answer. What survives is who set it up and where, which is what the turn needs to address the person
+ * by name instead of nobody. The chat's description and what it lets the bot post are read fresh,
+ * since neither was worth storing at the time.
  */
-internal fun ScheduledTask.toMessageContext(profile: ChatProfile = ChatProfile.NONE): MessageContext =
-    MessageContext(
-        chatId = chatId,
-        chatType = if (chatIsPrivate) "private" else "group",
-        isPrivate = chatIsPrivate,
-        chatDescription = profile.description,
-        userId = userId,
-        userDisplayName = creatorDisplayName,
-        userUsername = creatorUsername,
-        userLanguageCode = language.codes.firstOrNull(),
-        chatCapabilities = profile.capabilities
+internal fun ScheduledTask.toRequestContext(profile: ChatProfile = ChatProfile.NONE): RequestContext =
+    RequestContext(
+        chat =
+            ChatContext(
+                id = chatId,
+                isPrivate = chatIsPrivate,
+                // the turn runs in the topic the task was created in, so a follow-up it schedules is
+                // anchored there too rather than in the forum's General.
+                threadId = creatorThreadId,
+                description = profile.description,
+                capabilities = profile.capabilities
+            ),
+        sender =
+            SenderContext(
+                id = userId,
+                displayName = creatorDisplayName,
+                username = creatorUsername,
+                languageCode = language.codes.firstOrNull()
+            ),
+        language = language
     )
 
 /** Where this task's fire, and every notice about it, belongs. */

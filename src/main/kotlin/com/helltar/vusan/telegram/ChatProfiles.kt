@@ -2,6 +2,7 @@ package com.helltar.vusan.telegram
 
 import com.helltar.vusan.common.rethrowIfCancellation
 import com.helltar.vusan.request.ChatCapabilities
+import com.helltar.vusan.request.ChatProfile
 import io.github.oshai.kotlinlogging.KotlinLogging
 import java.time.Instant
 import java.util.concurrent.ConcurrentHashMap
@@ -17,19 +18,7 @@ import org.telegram.telegrambots.meta.api.objects.chatmember.ChatMemberOwner
 import org.telegram.telegrambots.meta.api.objects.chatmember.ChatMemberRestricted
 import org.telegram.telegrambots.meta.generics.TelegramClient
 
-private val log = KotlinLogging.logger("ChatProfile")
-
-/** What a turn needs to know about the chat it answers in, beyond the message that triggered it. */
-data class ChatProfile(
-    val description: String? = null,
-    val capabilities: ChatCapabilities = ChatCapabilities.UNRESTRICTED
-) {
-
-    companion object {
-        /** Nothing known and nothing restricted — a private chat, or a lookup that was skipped. */
-        val NONE = ChatProfile()
-    }
-}
+private val log = KotlinLogging.logger("ChatProfiles")
 
 /**
  * Reads and caches the chat facts a turn cannot get from the message itself. Both callers need them

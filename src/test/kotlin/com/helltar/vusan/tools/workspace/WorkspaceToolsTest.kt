@@ -5,7 +5,7 @@ import com.helltar.vusan.outbox.BotOutbox
 import com.helltar.vusan.outbox.BotOutput
 import com.helltar.vusan.request.AttachedFile
 import com.helltar.vusan.request.AttachedFileKind
-import com.helltar.vusan.request.RequestContext
+import com.helltar.vusan.request.requestContext
 import com.helltar.vusan.request.personKeyOrNull
 import com.helltar.vusan.tools.toolFailure
 import io.ktor.client.engine.mock.*
@@ -20,7 +20,7 @@ import kotlin.test.assertTrue
 import kotlin.time.Duration.Companion.seconds
 
 class WorkspaceToolsTest {
-    private val context = RequestContext(chatId = 55L, userId = 55L, messageId = 1L, chatIsPrivate = true)
+    private val context = requestContext(chatId = 55L, userId = 55L)
     private val deletions = mutableListOf<String>()
     private var resets = 0
     private val writes = mutableListOf<Pair<String, ByteArray>>()

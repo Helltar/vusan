@@ -7,8 +7,11 @@ import kotlin.test.assertNull
 
 class PersonKeyTest {
 
-    private fun key(userId: Long, chatId: Long, private: Boolean) =
-        RequestContext(chatId = chatId, userId = userId, messageId = 1L, chatIsPrivate = private).personKeyOrNull
+    private fun key(userId: Long, chatId: Long, private: Boolean, isPerson: Boolean = true) =
+        RequestContext(
+            chat = ChatContext(id = chatId, isPrivate = private),
+            sender = SenderContext(id = userId, isPerson = isPerson)
+        ).personKeyOrNull
 
     @Test
     fun `a private chat is keyed by the person alone`() {
@@ -26,9 +29,8 @@ class PersonKeyTest {
     }
 
     @Test
-    fun `senders telegram delivers under a shared bot account get no key of their own`() {
-        assertNull(key(1_087_968_824, -1002, private = false))
-        assertNull(key(136_817_688, -1002, private = false))
+    fun `a sender the platform shares between people gets no key of their own`() {
+        assertNull(key(1_087_968_824, -1002, private = false, isPerson = false))
     }
 
     @Test

@@ -2,7 +2,7 @@ package com.helltar.vusan.tools.reaction
 
 import com.helltar.vusan.outbox.BotOutbox
 import com.helltar.vusan.outbox.BotOutput
-import com.helltar.vusan.request.RequestContext
+import com.helltar.vusan.request.requestContext
 import com.helltar.vusan.tools.toolFailure
 import kotlin.test.Test
 import kotlin.test.assertEquals
@@ -13,7 +13,7 @@ import kotlinx.coroutines.runBlocking
 class ReactionToolsTest {
 
     private fun ctx(messageId: Long = 100L, replyToMessageId: Long? = null) =
-        RequestContext(chatId = 42L, userId = 7L, messageId = messageId, replyToMessageId = replyToMessageId)
+        requestContext(chatId = 42L, userId = 7L, messageId = messageId, replyToMessageId = replyToMessageId)
 
     @Test
     fun `setReaction defaults to current message id when no reply context`() = runBlocking {

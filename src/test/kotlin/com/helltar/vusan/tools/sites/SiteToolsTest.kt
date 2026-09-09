@@ -1,7 +1,7 @@
 package com.helltar.vusan.tools.sites
 
 import com.helltar.vusan.infra.Http
-import com.helltar.vusan.request.RequestContext
+import com.helltar.vusan.request.requestContext
 import com.helltar.vusan.request.personKeyOrNull
 import com.helltar.vusan.tools.toolFailure
 import com.helltar.vusan.tools.workspace.WorkspaceClient
@@ -21,7 +21,7 @@ private const val LIMITS = """{"files":1000,"fileBytes":26214400,"totalBytes":10
 private const val UPLOAD = "3f0b2e1c4d5a6b7c8d9e0f1a2b3c4d5e"
 
 class SiteToolsTest {
-    private val context = RequestContext(chatId = 55L, userId = 55L, messageId = 1L, chatIsPrivate = true)
+    private val context = requestContext(chatId = 55L, userId = 55L)
     private val uploaded = mutableListOf<Pair<String, ByteArray>>()
     private var commits = 0
     private var discards = 0

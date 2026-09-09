@@ -5,7 +5,7 @@ import com.helltar.vusan.agent.AgentRunner
 import com.helltar.vusan.budget.TokenBudget
 import com.helltar.vusan.common.rethrowIfCancellation
 import com.helltar.vusan.i18n.Messages
-import com.helltar.vusan.telegram.ChatProfile
+import com.helltar.vusan.request.ChatProfile
 import com.helltar.vusan.telegram.ChatProfiles
 import com.helltar.vusan.telegram.delivery.ScheduledAttribution
 import com.helltar.vusan.telegram.delivery.TelegramDelivery
@@ -270,18 +270,9 @@ private const val RETRY_HINT =
 /** The turn a due task runs, with no incoming message behind it. */
 internal fun scheduledAgentRequest(task: ScheduledTask, attempt: Int, chatProfile: ChatProfile): AgentRequest =
     AgentRequest(
-        chatId = task.chatId,
-        userId = task.userId,
-        messageId = 0L,
-        replyToMessageId = null,
-        // the turn runs in the topic the task was created in, so a follow-up it schedules is anchored
-        // there too rather than in the forum's General.
-        messageThreadId = task.creatorThreadId,
+        context = task.toRequestContext(chatProfile),
         prompt = scheduledTaskPrompt(task, attempt),
-        conversationEntry = conversationEntry(task),
-        messageContext = task.toMessageContext(chatProfile),
-        chatIsPrivate = task.chatIsPrivate,
-        language = task.language
+        conversationEntry = conversationEntry(task)
     )
 
 // the retry is not stored: history keeps the task as the user wrote it, without the retry hint.

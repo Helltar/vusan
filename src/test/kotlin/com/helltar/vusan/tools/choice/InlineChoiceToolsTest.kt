@@ -2,7 +2,7 @@ package com.helltar.vusan.tools.choice
 
 import com.helltar.vusan.outbox.BotOutbox
 import com.helltar.vusan.outbox.BotOutput
-import com.helltar.vusan.request.RequestContext
+import com.helltar.vusan.request.requestContext
 import com.helltar.vusan.tools.toolFailure
 import kotlin.test.Test
 import kotlin.test.assertEquals
@@ -20,7 +20,7 @@ class InlineChoiceToolsTest {
         var revisionOwnerId: Long? = null
         var revisionChatId: Long? = null
         val tools =
-            InlineChoiceTools(RequestContext(chatId = 7L, userId = 42L, messageId = 9L), outbox) { userId, chatId ->
+            InlineChoiceTools(requestContext(chatId = 7L, userId = 42L, messageId = 9L), outbox) { userId, chatId ->
                 revisionOwnerId = userId
                 revisionChatId = chatId
                 7L
@@ -56,7 +56,7 @@ class InlineChoiceToolsTest {
     @Test
     fun `a question asked by a turn without a message carries no origin`() = runBlocking {
         val outbox = BotOutbox()
-        val tools = InlineChoiceTools(RequestContext(chatId = 7L, userId = 42L, messageId = 0L), outbox) { _, _ -> 1L }
+        val tools = InlineChoiceTools(requestContext(chatId = 7L, userId = 42L, messageId = null), outbox) { _, _ -> 1L }
 
         tools.askWithButtons("Which format do you want?", listOf("PDF", "DOCX"))
 
@@ -67,7 +67,7 @@ class InlineChoiceToolsTest {
     @Test
     fun `askWithButtons rejects duplicate options`() = runBlocking {
         val outbox = BotOutbox()
-        val tools = InlineChoiceTools(RequestContext(chatId = 7L, userId = 42L, messageId = 9L), outbox) { _, _ -> 0L }
+        val tools = InlineChoiceTools(requestContext(chatId = 7L, userId = 42L, messageId = 9L), outbox) { _, _ -> 0L }
 
         val message = toolFailure { tools.askWithButtons("Continue?", listOf("Yes", "yes")) }
 
@@ -85,7 +85,7 @@ class InlineChoiceToolsTest {
         }
 
         outbox.useDirectMessages()
-        val tools = InlineChoiceTools(RequestContext(chatId = -7L, userId = 42L, messageId = 9L), outbox) { _, _ -> 0L }
+        val tools = InlineChoiceTools(requestContext(chatId = -7L, userId = 42L, messageId = 9L), outbox) { _, _ -> 0L }
         tools.askWithButtons("Continue in private?", listOf("Yes", "No"))
 
         val choice = outbox.pending.last()

@@ -45,8 +45,6 @@ class PlatformBoundaryTest {
                     "loads the bot's avatar through the Bot API instead of taking bytes from startup",
             "src/main/kotlin/com/helltar/vusan/tools/sticker/StickerCatalog.kt" to
                     "sticker sets are learned and resent by file_id, which is Telegram's own model",
-            "src/test/kotlin/com/helltar/vusan/tasks/TaskSchedulerTest.kt" to
-                    "fakes a TelegramDelivery and ChatProfiles",
             "src/test/kotlin/com/helltar/vusan/tools/files/FileToolsTest.kt" to
                     "drives sendChatFile against a fake TelegramClient",
             "src/test/kotlin/com/helltar/vusan/tools/sticker/StickerCatalogTest.kt" to

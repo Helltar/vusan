@@ -101,7 +101,7 @@ internal class TurnStatus(
     private val edits = Mutex()
 
     // an inline choice starts a turn with no message behind it, and Telegram takes no reply to id 0.
-    private var anchor: Long? = replyToMessageId?.takeIf { it > 0 }
+    private var anchor: Long? = replyToMessageId
     private var messageId: Int? = null
     private var announcement: String? = null
     private var label: String? = null

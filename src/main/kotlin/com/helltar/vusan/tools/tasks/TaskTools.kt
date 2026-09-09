@@ -4,8 +4,6 @@ import ai.koog.agents.core.tools.annotations.LLMDescription
 import ai.koog.agents.core.tools.annotations.Tool
 import ai.koog.agents.core.tools.reflect.ToolSet
 import com.helltar.vusan.request.RequestContext
-import com.helltar.vusan.request.requireChatId
-import com.helltar.vusan.request.requireUserId
 import com.helltar.vusan.tasks.*
 import com.helltar.vusan.tools.requireToolText
 import com.helltar.vusan.tools.suspendToolGuard
@@ -35,8 +33,8 @@ class TaskTools(
         @LLMDescription(TaskToolDescriptions.SCHEDULE_TITLE)
         title: String? = null
     ): String = suspendToolGuard {
-        val userId = context.requireUserId()
-        val chatId = context.requireChatId()
+        val userId = context.sender.id
+        val chatId = context.chat.id
 
         val trimmedPrompt = prompt.requireToolText("Task prompt", MAX_PROMPT_CHARS)
 
@@ -92,8 +90,8 @@ class TaskTools(
         @LLMDescription(TaskToolDescriptions.FOLLOW_UP_TITLE)
         title: String? = null
     ): String = suspendToolGuard {
-        val userId = context.requireUserId()
-        val chatId = context.requireChatId()
+        val userId = context.sender.id
+        val chatId = context.chat.id
 
         val trimmedPrompt = prompt.requireToolText("Follow-up prompt", MAX_PROMPT_CHARS)
         val trimmedTitle = title?.trim()?.takeIf { it.isNotEmpty() }
@@ -141,7 +139,7 @@ class TaskTools(
     @Tool
     @LLMDescription(TaskToolDescriptions.LIST_TASKS)
     suspend fun listTasks(): String = suspendToolGuard {
-        val userId = context.requireUserId()
+        val userId = context.sender.id
         val scopedChatId = scopedChatId()
 
         val tasks = repo.listEnabledByUser(userId, scopedChatId)
@@ -169,7 +167,7 @@ class TaskTools(
         @LLMDescription(TaskToolDescriptions.EDIT_TITLE)
         title: String? = null
     ): String = suspendToolGuard {
-        val userId = context.requireUserId()
+        val userId = context.sender.id
         val scopedChatId = scopedChatId()
 
         if (listOf(prompt, schedule, timezone, title).all { it == null })
@@ -246,7 +244,7 @@ class TaskTools(
         @LLMDescription(TaskToolDescriptions.PAUSE_ID)
         id: Long
     ): String = suspendToolGuard {
-        val userId = context.requireUserId()
+        val userId = context.sender.id
         val scopedChatId = scopedChatId()
 
         val existing =
@@ -268,7 +266,7 @@ class TaskTools(
         @LLMDescription(TaskToolDescriptions.RESUME_ID)
         id: Long
     ): String = suspendToolGuard {
-        val userId = context.requireUserId()
+        val userId = context.sender.id
         val scopedChatId = scopedChatId()
 
         val existing =
@@ -295,7 +293,7 @@ class TaskTools(
         @LLMDescription(TaskToolDescriptions.CANCEL_ID)
         id: Long
     ): String = suspendToolGuard {
-        val userId = context.requireUserId()
+        val userId = context.sender.id
         val scopedChatId = scopedChatId()
 
         val existing =
@@ -325,11 +323,11 @@ class TaskTools(
         recurrence = recurrence,
         timezone = timezone,
         nextFireAt = nextFireAt,
-        creatorMessageId = context.messageId.takeIf { it > 0L },
-        creatorThreadId = context.messageThreadId,
-        creatorUsername = context.senderUsername,
-        creatorDisplayName = context.senderDisplayName,
-        chatIsPrivate = context.chatIsPrivate,
+        creatorMessageId = context.messageId,
+        creatorThreadId = context.chat.threadId,
+        creatorUsername = context.sender.username,
+        creatorDisplayName = context.sender.displayName,
+        chatIsPrivate = context.chat.isPrivate,
         language = context.language,
         selfInitiated = selfInitiated
     )
@@ -340,7 +338,7 @@ class TaskTools(
     }
 
     private fun scopedChatId(): Long? =
-        context.requireChatId().takeUnless { context.chatIsPrivate }
+        context.chat.id.takeUnless { context.chat.isPrivate }
 
     private fun taskNotFound(id: Long, scopedChatId: Long?): String =
         if (scopedChatId == null)

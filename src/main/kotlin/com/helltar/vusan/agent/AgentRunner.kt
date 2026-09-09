@@ -26,9 +26,6 @@ import com.helltar.vusan.i18n.Messages
 import com.helltar.vusan.outbox.BotOutbox
 import com.helltar.vusan.outbox.BotOutput
 import com.helltar.vusan.outbox.OutboxItem
-import com.helltar.vusan.request.AttachedFile
-import com.helltar.vusan.request.ChatCapabilities
-import com.helltar.vusan.request.identifiesOnePerson
 import com.helltar.vusan.request.RequestContext
 import com.helltar.vusan.tools.choice.InlineChoiceTools
 import com.helltar.vusan.tools.message.MessageTools
@@ -59,26 +56,17 @@ private const val EMERGENCY_SUMMARY_MAX_CHARS = 1_500
 private const val LOG_REPLY_MAX_CHARS = 300
 private const val PROVIDER_ERROR_LOG_MAX_CHARS = 300
 
+/**
+ * One turn to run: where it came from, and the two texts it is made of.
+ *
+ * [prompt] is what the model is shown and [conversationEntry] what history keeps, which are not the
+ * same string — a turn's prompt carries context the stored exchange has no reason to repeat.
+ */
 data class AgentRequest(
-    val chatId: Long,
-    val userId: Long,
-    val messageId: Long,
-    val replyToMessageId: Long? = null,
-    // the forum topic the turn is happening in, so everything it sends without a reply anchor —
-    // the live status bubble, a task it schedules — lands there rather than in the chat's General.
-    val messageThreadId: Int? = null,
+    val context: RequestContext,
     val prompt: String,
-    val conversationEntry: String,
-    val messageContext: MessageContext? = null,
-    val chatIsPrivate: Boolean = false,
-    val attachedFiles: List<AttachedFile> = emptyList(),
-    val language: Language = Language.DEFAULT
-) {
-
-    /** The attachment for the tools that can only take one; see `RequestContext.attachedFile`. */
-    val attachedFile: AttachedFile?
-        get() = attachedFiles.firstOrNull()
-}
+    val conversationEntry: String
+)
 
 data class AgentResult(
     val outputs: List<OutboxItem>,
@@ -114,12 +102,13 @@ class AgentRunner(
         onToolStarting: (activity: ToolActivity?) -> Unit = {},
         narrator: TurnNarrator? = null
     ): AgentResult {
-        val key = ConversationKey(request.userId, request.chatId)
+        val context = request.context
+        val key = ConversationKey(context.sender.id, context.chat.id)
         val lock = retainLock(key)
 
         try {
             if (!lock.tryLock()) {
-                return AgentResult(outputs = emptyList(), comment = Messages.of(request.language).busyReply)
+                return AgentResult(outputs = emptyList(), comment = Messages.of(context.language).busyReply)
             }
 
             try {
@@ -149,7 +138,8 @@ class AgentRunner(
         onToolStarting: (activity: ToolActivity?) -> Unit = {},
         narrator: TurnNarrator? = null
     ): AgentResult {
-        val key = ConversationKey(request.userId, request.chatId)
+        val context = request.context
+        val key = ConversationKey(context.sender.id, context.chat.id)
         val lock = retainLock(key)
 
         try {
@@ -180,18 +170,20 @@ class AgentRunner(
         onToolStarting: (activity: ToolActivity?) -> Unit,
         narrator: TurnNarrator?
     ): AgentResult {
-        tokenBudget.stopFor(request.userId)?.let { stop ->
+        val context = request.context
+
+        tokenBudget.stopFor(context.sender.id)?.let { stop ->
             log.warn {
-                "token budget stop before the turn: chat=${request.chatId} user=${request.userId} " +
+                "token budget stop before the turn: chat=${context.chat.id} user=${context.sender.id} " +
                         "reason=${stop::class.simpleName} resetsIn=${stop.untilReset}"
             }
 
-            return AgentResult(outputs = emptyList(), comment = Messages.of(request.language).replyFor(stop))
+            return AgentResult(outputs = emptyList(), comment = Messages.of(context.language).replyFor(stop))
         }
 
         // the turn spends tokens in places that never see the request — a history recap, a vision tool —
         // so its author rides along in the coroutine context and every one of those calls is charged to them.
-        return withContext(BudgetOwner(request.userId)) { runTurn(request, onToolStarting, narrator) }
+        return withContext(BudgetOwner(context.sender.id)) { runTurn(request, onToolStarting, narrator) }
     }
 
     private suspend fun runTurn(
@@ -199,34 +191,16 @@ class AgentRunner(
         onToolStarting: (activity: ToolActivity?) -> Unit,
         narrator: TurnNarrator?
     ): AgentResult {
-        val context =
-            RequestContext(
-                chatId = request.chatId,
-                userId = request.userId,
-                messageId = request.messageId,
-                replyToMessageId = request.replyToMessageId,
-                messageThreadId = request.messageThreadId,
-                senderUsername = request.messageContext?.userUsername,
-                senderDisplayName = request.messageContext?.userDisplayName,
-                chatIsPrivate = request.messageContext?.isPrivate ?: request.chatIsPrivate,
-                attachedFiles = request.attachedFiles,
-                language = request.language,
-                chatCapabilities = request.messageContext?.chatCapabilities ?: ChatCapabilities.UNRESTRICTED
-            )
-
-        val userMemory = if (context.identifiesOnePerson) memory.load(MemoryScope.USER, request.userId) else emptyList()
-        val chatMemory = if (context.chatIsPrivate) emptyList() else memory.load(MemoryScope.CHAT, request.chatId)
-
-        // the turn is stored only after the run, so this still points at the previous exchange.
-        val messageContext =
-            request.messageContext?.copy(
-                previousExchangeAt = conversation.lastInteractionAt(request.userId, request.chatId)
-            )
+        val context = request.context
+        val userMemory = if (context.sender.isPerson) memory.load(MemoryScope.USER, context.sender.id) else emptyList()
+        val chatMemory = if (context.chat.isPrivate) emptyList() else memory.load(MemoryScope.CHAT, context.chat.id)
 
         val currentTurn =
             currentTurnPrompt(
                 userInput = request.prompt,
-                messageContext = messageContext,
+                context = context,
+                // the turn is stored only after the run, so this still points at the previous exchange.
+                previousExchangeAt = conversation.lastInteractionAt(context.sender.id, context.chat.id),
                 userMemory = userMemory,
                 chatMemory = chatMemory,
                 recentChat = recentChatFor(context),
@@ -243,22 +217,22 @@ class AgentRunner(
             )
 
         val conversationPlan =
-            conversationPlanForPrompt(request.userId, request.chatId, preparation.tokenBudget.conversationTokens)
+            conversationPlanForPrompt(context.sender.id, context.chat.id, preparation.tokenBudget.conversationTokens)
         val plannedInputTokens = preparation.tokenBudget.fixedPromptTokens + conversationPlan.estimatedTokens
 
         log.info {
-            "prompt history loaded: user=${request.userId} chat=${request.chatId} " +
+            "prompt history loaded: user=${context.sender.id} chat=${context.chat.id} " +
                     "storedInteractions=${conversationPlan.stats.storedInteractions} storedMessages=${conversationPlan.stats.storedMessages} " +
                     "storedChars=${conversationPlan.stats.storedChars} unsummarized=${conversationPlan.stats.unsummarizedInteractions} " +
                     "includedInteractions=${conversationPlan.includedInteractions} turns=${conversationPlan.prompt.turns.size} " +
                     "summaryChars=${conversationPlan.prompt.summary?.length ?: 0} exactToolInteractions=${conversationPlan.exactToolInteractions} " +
                     "userMemory=${userMemory.size} chatMemory=${chatMemory.size} " +
                     "promptChars=${request.prompt.length} historyChars=${request.conversationEntry.length} " +
-                    "attachedFiles=${request.attachedFiles.size}"
+                    "attachedFiles=${context.attachedFiles.size}"
         }
 
         log.info {
-            "prompt context plan: user=${request.userId} chat=${request.chatId} " +
+            "prompt context plan: user=${context.sender.id} chat=${context.chat.id} " +
                     "contextTokens=${preparation.tokenBudget.contextWindowTokens} " +
                     "fixedTokens=${preparation.tokenBudget.fixedPromptTokens} " +
                     "historyBudget=${preparation.tokenBudget.conversationTokens} " +
@@ -276,7 +250,7 @@ class AgentRunner(
         val answer =
             try {
                 runAgentWithConversation(
-                    userId = request.userId,
+                    userId = context.sender.id,
                     currentTurn = currentTurn,
                     conversation = conversationPlan.prompt,
                     preparation = preparation,
@@ -287,10 +261,10 @@ class AgentRunner(
                 )
             } catch (e: Throwable) {
                 e.rethrowIfCancellation()
-                budgetStopReply(request, e)?.let { return AgentResult(outputs = emptyList(), comment = it) }
+                budgetStopReply(context, e)?.let { return AgentResult(outputs = emptyList(), comment = it) }
 
                 // logs the cause either way; the reply itself is only used when nothing was delivered.
-                val failureReply = replyForAgentFailure(request, e)
+                val failureReply = replyForAgentFailure(context, e)
 
                 // an announced plan is a promise, not an answer, so a turn holding nothing else owes the
                 // user the reason it stopped. Without this the chat sees "building it now…" and then
@@ -303,7 +277,7 @@ class AgentRunner(
                 // canned failure, and let the turn finish normally so the work reaches the history — a
                 // scheduled task then counts the attempt as delivered rather than paying for it all again.
                 log.warn {
-                    "agent.run failed after partial delivery for chat=${request.chatId} user=${request.userId}; " +
+                    "agent.run failed after partial delivery for chat=${context.chat.id} user=${context.sender.id}; " +
                             "sending ${outbox.pending.size} queued output(s)"
                 }
 
@@ -311,14 +285,14 @@ class AgentRunner(
             }
 
         log.info {
-            "token usage: chat=${request.chatId} user=${request.userId} ${tokenUsageLogSummary(tokenUsages)}"
+            "token usage: chat=${context.chat.id} user=${context.sender.id} ${tokenUsageLogSummary(tokenUsages)}"
         }
 
         val outputs = outbox.pending
         val comment = extractFinalComment(answer, outputs)
 
         if (outputs.isEmpty() && comment.isNullOrBlank()) {
-            log.info { "agent produced no output for chat=${request.chatId} user=${request.userId}; staying silent" }
+            log.info { "agent produced no output for chat=${context.chat.id} user=${context.sender.id}; staying silent" }
             return AgentResult(outputs = emptyList(), comment = null)
         }
 
@@ -332,25 +306,25 @@ class AgentRunner(
             )
 
         log.info {
-            "agent reply: chat=${request.chatId} user=${request.userId} " +
+            "agent reply: chat=${context.chat.id} user=${context.sender.id} " +
                     "outputs=[${outputsLogSummary(outputs)}] " +
                     "text=[${assistantText?.collapseWhitespaceAndCap(LOG_REPLY_MAX_CHARS).orEmpty()}]"
         }
 
         if (turns.isNotEmpty()) {
-            conversation.appendInteraction(request.userId, request.chatId, turns)
+            conversation.appendInteraction(context.sender.id, context.chat.id, turns)
         }
 
         val pruned =
             conversation.pruneCompacted(
-                userId = request.userId,
-                chatId = request.chatId,
+                userId = context.sender.id,
+                chatId = context.chat.id,
                 maxStoredInteractions = conversationConfig.maxStoredInteractions,
                 rawRetentionCutoff = Instant.now().minus(conversationConfig.retentionDays.toLong(), ChronoUnit.DAYS)
             )
 
         if (pruned > 0) {
-            log.info { "history raw retention pruned: user=${request.userId} interactions=$pruned" }
+            log.info { "history raw retention pruned: user=${context.sender.id} interactions=$pruned" }
         }
 
         return AgentResult(outputs, comment, outbox.redirectToPrivate)
@@ -361,19 +335,19 @@ class AgentRunner(
     // shortlist it has no tool to send.
     private suspend fun stickerCatalogFor(context: RequestContext): String? =
         stickers
-            ?.takeIf { context.chatCapabilities.stickersAndAnimations }
-            ?.indexBlockFor(context.chatId)
+            ?.takeIf { context.chat.capabilities.stickersAndAnimations }
+            ?.indexBlockFor(context.chat.id)
 
     // what the group was saying just before this turn. in a group the bot only ever sees the messages
     // addressed to it, so without this a question like "and what do you think?" arrives with no subject.
     // the triggering message is left out — the model is already being shown it as the request itself.
     private suspend fun recentChatFor(context: RequestContext): String? {
-        val repository = groupLog?.takeIf { groupLogConfig.recentChatEnabled && !context.chatIsPrivate } ?: return null
+        val repository = groupLog?.takeIf { groupLogConfig.recentChatEnabled && !context.chat.isPrivate } ?: return null
 
         val entries =
             try {
                 repository.recent(
-                    chatId = context.chatId,
+                    chatId = context.chat.id,
                     // over-fetch: dropping this user's own exchanges below must not thin the slice out.
                     limit = groupLogConfig.recentMessages * RECENT_CHAT_OVERFETCH,
                     since = Instant.now().minus(groupLogConfig.recentMinutes.toLong(), ChronoUnit.MINUTES),
@@ -381,13 +355,13 @@ class AgentRunner(
                 )
             } catch (e: Throwable) {
                 e.rethrowIfCancellation()
-                log.warn(e) { "failed to load the recent chat slice for chat=${context.chatId}" }
+                log.warn(e) { "failed to load the recent chat slice for chat=${context.chat.id}" }
                 return null
             }
 
         val recent =
             entries
-                .withoutExchangesWith(context.userId)
+                .withoutExchangesWith(context.sender.id)
                 .takeLast(groupLogConfig.recentMessages)
 
         return renderGroupLog(recent, ZoneId.systemDefault(), RECENT_CHAT_LINE_CHARS, RECENT_CHAT_MAX_CHARS)
@@ -494,40 +468,40 @@ class AgentRunner(
 
     // the budget ran out with the turn already in flight. that is not a failure to retry — the turn is over
     // until the budget resets — so it gets the same "come back later" reply as a turn that never started.
-    private fun budgetStopReply(request: AgentRequest, e: Throwable): String? =
+    private fun budgetStopReply(context: RequestContext, e: Throwable): String? =
         e.tokenBudgetStop()
             ?.let { stop ->
                 log.warn {
-                    "token budget stop mid-turn: chat=${request.chatId} user=${request.userId} " +
+                    "token budget stop mid-turn: chat=${context.chat.id} user=${context.sender.id} " +
                             "reason=${stop::class.simpleName} resetsIn=${stop.untilReset}"
                 }
 
-                Messages.of(request.language).replyFor(stop)
+                Messages.of(context.language).replyFor(stop)
             }
 
     // pick the user-facing reply and log accordingly. LLM provider errors arrive as a large JSON body, so
     // they get a single capped WARN line; a transient overload (429/503) gets a friendly "try again" reply,
     // any other provider error and genuine unexpected failures get the generic fallback (the latter with a
     // full stack trace, since it points at a real bug).
-    private fun replyForAgentFailure(request: AgentRequest, e: Throwable): String {
-        val messages = Messages.of(request.language)
+    private fun replyForAgentFailure(context: RequestContext, e: Throwable): String {
+        val messages = Messages.of(context.language)
 
         // the ChatGPT session died mid-turn (expired, revoked, or reused refresh token). nothing the
         // user can do, and nothing to retry — say so plainly instead of the generic failure reply.
         generateSequence(e) { it.cause }.filterIsInstance<CodexAuthException>().firstOrNull()?.let { authError ->
-            log.error { "codex auth failed for chat=${request.chatId} user=${request.userId}: ${authError.message}" }
+            log.error { "codex auth failed for chat=${context.chat.id} user=${context.sender.id}: ${authError.message}" }
             return messages.signInRequiredReply
         }
 
         val providerError = e.providerErrorMessage()
 
         if (providerError == null) {
-            log.error(e) { "agent.run failed for chat=${request.chatId} user=${request.userId}" }
+            log.error(e) { "agent.run failed for chat=${context.chat.id} user=${context.sender.id}" }
             return messages.fallbackErrorReply
         }
 
         log.warn {
-            "agent.run provider error for chat=${request.chatId} user=${request.userId}: " +
+            "agent.run provider error for chat=${context.chat.id} user=${context.sender.id}: " +
                     providerError.collapseWhitespaceAndCap(PROVIDER_ERROR_LOG_MAX_CHARS)
         }
 
@@ -561,7 +535,8 @@ class AgentRunner(
  */
 internal fun currentTurnPrompt(
     userInput: String,
-    messageContext: MessageContext?,
+    context: RequestContext,
+    previousExchangeAt: Instant? = null,
     userMemory: List<MemoryEntry>,
     chatMemory: List<MemoryEntry>,
     recentChat: String? = null,
@@ -569,7 +544,7 @@ internal fun currentTurnPrompt(
 ): String =
     buildList {
         add(currentTimeBlock())
-        messageContext?.toPromptBlock()?.let(::add)
+        add(context.toPromptBlock(previousExchangeAt))
         memoryBlock("user_memory", userMemory)?.let(::add)
         memoryBlock("group_memory", chatMemory)?.let(::add)
         stickerCatalog?.takeIf { it.isNotBlank() }?.let(::add)

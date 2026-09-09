@@ -6,7 +6,6 @@ import ai.koog.agents.core.tools.reflect.ToolSet
 import com.helltar.vusan.agent.grouplog.GroupLogReader
 import com.helltar.vusan.agent.grouplog.GroupLogRepository
 import com.helltar.vusan.request.RequestContext
-import com.helltar.vusan.request.requireChatId
 import com.helltar.vusan.tasks.Recurrence
 import com.helltar.vusan.tools.suspendToolGuard
 import kotlin.time.Duration.Companion.days
@@ -26,7 +25,7 @@ class GroupLogTools(
         @LLMDescription(GroupLogToolDescriptions.READ_GROUP_LOG_WINDOW) window: String,
         @LLMDescription(GroupLogToolDescriptions.READ_GROUP_LOG_AUTHOR) author: String? = null
     ): String = suspendToolGuard {
-        if (context.chatIsPrivate)
+        if (context.chat.isPrivate)
             return@suspendToolGuard "No group chat log in a private chat — this conversation is already your history."
 
         val parsed =
@@ -37,7 +36,7 @@ class GroupLogTools(
             return@suspendToolGuard "Window `$window` is too long. The chat log only reaches back `90d`."
 
         reader.read(
-            chatId = context.requireChatId(),
+            chatId = context.chat.id,
             window = parsed,
             author = author?.trim()?.takeIf { it.isNotEmpty() }
         )
@@ -46,10 +45,10 @@ class GroupLogTools(
     @Tool
     @LLMDescription(GroupLogToolDescriptions.CLEAR_GROUP_LOG)
     suspend fun clearGroupLog(): String = suspendToolGuard {
-        if (context.chatIsPrivate)
+        if (context.chat.isPrivate)
             return@suspendToolGuard "No group chat log in a private chat — use `/clear` to wipe this conversation."
 
-        val removed = repository.clear(context.requireChatId())
+        val removed = repository.clear(context.chat.id)
 
         "Deleted this group's recorded messages ($removed) and every cached daily recap."
     }

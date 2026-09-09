@@ -1,9 +1,10 @@
 package com.helltar.vusan.telegram.inbound
 
-import com.helltar.vusan.agent.MessageContext
 import com.helltar.vusan.common.collapseWhitespaceAndCap
 import com.helltar.vusan.i18n.Language
-import com.helltar.vusan.telegram.ChatProfile
+import com.helltar.vusan.request.ChatContext
+import com.helltar.vusan.request.ChatProfile
+import com.helltar.vusan.request.SenderContext
 import org.telegram.telegrambots.meta.api.objects.*
 import org.telegram.telegrambots.meta.api.objects.chat.Chat
 import org.telegram.telegrambots.meta.api.objects.games.Animation
@@ -66,24 +67,30 @@ internal fun Message.replyAuthorIdOrNull(): Long? = replyToMessage?.from?.id
 
 internal fun Message.replyToMessageIdOrNull(): Long? = replyToMessage?.messageId?.toLong()
 
-internal fun Message.toMessageContext(profile: ChatProfile): MessageContext? {
-    val sender = from ?: return null
-    return toMessageContext(sender, profile)
-}
+// telegram delivers anonymous group admins as GroupAnonymousBot and linked-channel posts as
+// Channel_Bot: one account id standing in for many different senders in many chats. recognizing them
+// is ingress's job, so the core is handed the identity fact rather than a list of magic ids.
+private val SHARED_SENDER_IDS = setOf(1_087_968_824L, 136_817_688L)
 
-internal fun Message.toMessageContext(sender: User, profile: ChatProfile): MessageContext =
-    MessageContext(
-        chatId = chatIdLong,
-        chatType = promptChatType(),
+internal fun Message.toChatContext(profile: ChatProfile): ChatContext =
+    ChatContext(
+        id = chatIdLong,
         isPrivate = isPrivateChat,
-        chatTitle = chat.titleOrDisplayName(),
-        chatUsername = chat.userName,
-        chatDescription = profile.description,
-        userId = sender.id,
-        userDisplayName = displayName(sender.firstName, sender.lastName),
-        userUsername = sender.userName,
-        userLanguageCode = sender.languageCode,
-        chatCapabilities = profile.capabilities
+        type = promptChatType(),
+        threadId = forumTopicIdOrNull,
+        title = chat.titleOrDisplayName(),
+        username = chat.userName,
+        description = profile.description,
+        capabilities = profile.capabilities
+    )
+
+internal fun User.toSenderContext(): SenderContext =
+    SenderContext(
+        id = id,
+        displayName = displayName(firstName, lastName),
+        username = userName,
+        languageCode = languageCode,
+        isPerson = id !in SHARED_SENDER_IDS
     )
 
 // the bot api models chat flavors as flags on `Chat` and `Message` rather than distinct types,

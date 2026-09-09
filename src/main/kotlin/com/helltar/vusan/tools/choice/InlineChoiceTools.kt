@@ -6,8 +6,6 @@ import ai.koog.agents.core.tools.reflect.ToolSet
 import com.helltar.vusan.outbox.BotOutbox
 import com.helltar.vusan.outbox.BotOutput
 import com.helltar.vusan.request.RequestContext
-import com.helltar.vusan.request.requireChatId
-import com.helltar.vusan.request.requireUserId
 import com.helltar.vusan.tools.suspendToolGuard
 
 @Suppress("unused")
@@ -25,14 +23,14 @@ class InlineChoiceTools(
         @LLMDescription(InlineChoiceToolDescriptions.OPTIONS)
         options: List<String>
     ): String = suspendToolGuard {
-        val ownerId = context.requireUserId()
+        val ownerId = context.sender.id
         val choice =
             BotOutput.InlineChoice(
                 question = question.trim(),
                 options = options.map { it.trim() },
                 ownerId = ownerId,
-                historyRevision = currentHistoryRevision(ownerId, context.requireChatId()),
-                originMessageId = context.messageId.takeIf { it > 0L }
+                historyRevision = currentHistoryRevision(ownerId, context.chat.id),
+                originMessageId = context.messageId
             )
 
         if (outbox.enqueueInlineChoice(choice)) {

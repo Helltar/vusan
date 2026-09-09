@@ -1,11 +1,15 @@
 package com.helltar.vusan.telegram.inbound
 
 import com.fasterxml.jackson.databind.ObjectMapper
+import com.helltar.vusan.request.ChatCapabilities
+import com.helltar.vusan.request.ChatProfile
 import kotlin.test.Test
 import kotlin.test.assertEquals
+import kotlin.test.assertFalse
 import kotlin.test.assertNull
 import kotlin.test.assertTrue
 import org.telegram.telegrambots.meta.api.objects.ExternalReplyInfo
+import org.telegram.telegrambots.meta.api.objects.User
 import org.telegram.telegrambots.meta.api.objects.message.Message
 import org.telegram.telegrambots.meta.api.objects.stickers.Sticker
 
@@ -251,6 +255,43 @@ class MessageMetadataTest {
             }}""",
             ExternalReplyInfo::class.java
         )
+
+    @Test
+    fun `an ordinary sender identifies one person`() {
+        assertTrue(sender("""{"id": 4242, "is_bot": false, "first_name": "Ann"}""").toSenderContext().isPerson)
+    }
+
+    @Test
+    fun `the accounts telegram shares between senders do not`() {
+        assertFalse(
+            sender("""{"id": 1087968824, "is_bot": true, "first_name": "Group"}""").toSenderContext().isPerson,
+            "GroupAnonymousBot"
+        )
+
+        assertFalse(
+            sender("""{"id": 136817688, "is_bot": true, "first_name": "Channel"}""").toSenderContext().isPerson,
+            "Channel_Bot"
+        )
+    }
+
+    @Test
+    fun `a chat context carries the topic and what the lookup found`() {
+        val profile = ChatProfile(description = "the rules", capabilities = ChatCapabilities(polls = false))
+        val context =
+            message(
+                """"message_thread_id": 77, "is_topic_message": true""",
+                chat = """{"id": -100, "type": "supergroup", "is_forum": true, "title": "Crew"}"""
+            ).toChatContext(profile)
+
+        assertEquals(-100L, context.id)
+        assertEquals("supergroup_forum", context.type)
+        assertEquals(77, context.threadId)
+        assertEquals("Crew", context.title)
+        assertEquals("the rules", context.description)
+        assertFalse(context.capabilities.polls)
+    }
+
+    private fun sender(json: String): User = mapper.readValue(json, User::class.java)
 
     private fun messageIn(chat: String): Message = message(chat = chat)
 

@@ -63,7 +63,11 @@ class ReactionTools(private val context: RequestContext, private val outbox: Bot
                             "react to the user's own message instead."
                 }
 
-                else -> context.messageId
+                // a turn nothing sent — a scheduled task firing — has no message of its own to react to.
+                else -> requireNotNull(context.messageId) {
+                    "No message in scope to react to. Pass the `messageId` of the message you mean, " +
+                            "or answer with text instead."
+                }
             }
 
         require(targetId > 0L) { "Reaction target message id must be positive" }

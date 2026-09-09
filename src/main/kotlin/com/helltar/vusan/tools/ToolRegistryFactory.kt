@@ -10,7 +10,9 @@ import com.helltar.vusan.agent.memory.MemoryRepository
 import com.helltar.vusan.config.AppConfig
 import com.helltar.vusan.config.VisionRuntime
 import com.helltar.vusan.outbox.BotOutbox
+import com.helltar.vusan.request.ChatContext
 import com.helltar.vusan.request.RequestContext
+import com.helltar.vusan.request.SenderContext
 import com.helltar.vusan.request.personKeyOrNull
 import com.helltar.vusan.stt.OpenAiWhisperClient
 import com.helltar.vusan.tasks.TasksRepository
@@ -85,9 +87,10 @@ class ToolRegistryFactory(
 
     private companion object {
         // an ordinary person in an ordinary chat, because that is what the startup list is read as: what
-        // this deployment can do. A context identifying nobody — `userId = 0` — is treated as a shared bot
-        // account, which withholds exactly the tools whose configuration an operator most wants confirmed.
-        val TOOL_NAME_PROBE_CONTEXT = RequestContext(chatId = 1L, userId = 1L, messageId = 1L)
+        // this deployment can do. A sender that is not one person withholds exactly the tools whose
+        // configuration an operator most wants confirmed.
+        val TOOL_NAME_PROBE_CONTEXT =
+            RequestContext(chat = ChatContext(id = 1L, isPrivate = true), sender = SenderContext(id = 1L))
         val log = KotlinLogging.logger {}
     }
 
@@ -193,7 +196,7 @@ class ToolRegistryFactory(
      * chat bans pictures — they still answer, just without the extras.
      */
     fun buildRegistry(context: RequestContext, outbox: BotOutbox, narrator: TurnNarrator? = null): ToolRegistry {
-        val chat = context.chatCapabilities
+        val chat = context.chat.capabilities
 
         return ToolRegistry {
             tools(MessageTools(outbox, narrator))

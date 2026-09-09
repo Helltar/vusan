@@ -6,6 +6,7 @@ import com.helltar.vusan.config.LlmProviderConfig
 import com.helltar.vusan.i18n.Language
 import com.helltar.vusan.infra.Db
 import com.helltar.vusan.request.RequestContext
+import com.helltar.vusan.request.requestContext
 import com.helltar.vusan.tasks.NewScheduledTask
 import com.helltar.vusan.tasks.Recurrence
 import com.helltar.vusan.tasks.TasksRepository
@@ -49,7 +50,7 @@ class TaskToolsTest {
     fun `pause and resume tools use the same persisted task state as the menu`() = runBlocking {
         val future = Instant.now().plusSeconds(3_600)
         val id = createTask(chatId = 100L, title = "hydrate", nextFireAt = future)
-        val tools = tools(RequestContext(chatId = 100L, userId = 100L, messageId = 1L))
+        val tools = tools(requestContext(chatId = 100L, userId = 100L))
 
         assertContains(tools.pauseTask(id), "Paused task id=$id")
         assertTrue(assertNotNull(repo.findEnabledForUser(100L, id)).paused)
@@ -71,7 +72,7 @@ class TaskToolsTest {
                 nextFireAt = future
             )
         repo.pauseForUser(100L, id)
-        val tools = tools(RequestContext(chatId = 100L, userId = 100L, messageId = 1L))
+        val tools = tools(requestContext(chatId = 100L, userId = 100L))
 
         val result =
             tools.editTask(
@@ -93,7 +94,7 @@ class TaskToolsTest {
     fun `edit tool replaces schedule and timezone`() = runBlocking {
         val beforeEdit = Instant.now()
         val id = createTask(chatId = 100L, title = "morning report")
-        val tools = tools(RequestContext(chatId = 100L, userId = 100L, messageId = 1L))
+        val tools = tools(requestContext(chatId = 100L, userId = 100L))
 
         val result =
             tools.editTask(
@@ -121,7 +122,7 @@ class TaskToolsTest {
                 nextFireAt = beforeResume.minusSeconds(10_800)
             )
         repo.pauseForUser(100L, id)
-        val tools = tools(RequestContext(chatId = 100L, userId = 100L, messageId = 1L))
+        val tools = tools(requestContext(chatId = 100L, userId = 100L))
 
         assertContains(tools.resumeTask(id), "Resumed task id=$id")
 
@@ -139,7 +140,7 @@ class TaskToolsTest {
                 nextFireAt = Instant.now().minusSeconds(60)
             )
         repo.pauseForUser(100L, id)
-        val tools = tools(RequestContext(chatId = 100L, userId = 100L, messageId = 1L))
+        val tools = tools(requestContext(chatId = 100L, userId = 100L))
 
         val result = tools.resumeTask(id)
 
@@ -153,12 +154,7 @@ class TaskToolsTest {
         val otherId = createTask(chatId = -300L, title = "other group report")
         val tools =
             tools(
-                RequestContext(
-                    chatId = -200L,
-                    userId = 100L,
-                    messageId = 1L,
-                    chatIsPrivate = false
-                )
+                requestContext(chatId = -200L, userId = 100L, isPrivate = false)
             )
 
         val listed = tools.listTasks()
@@ -181,7 +177,7 @@ class TaskToolsTest {
 
     @Test
     fun `follow-up is stored as a one-time task the bot set for itself`() = runBlocking {
-        val tools = tools(RequestContext(chatId = 100L, userId = 100L, messageId = 7L))
+        val tools = tools(requestContext(chatId = 100L, userId = 100L, messageId = 7L))
         val at = Instant.now().atZone(ZoneId.systemDefault()).plusDays(1).toLocalDateTime().truncatedTo(ChronoUnit.MINUTES)
 
         assertContains(tools.scheduleFollowUp("ask how the exam went", at.toString()), "Follow-up id=")
@@ -194,7 +190,7 @@ class TaskToolsTest {
 
     @Test
     fun `follow-ups and user-requested tasks are capped separately`() = runBlocking {
-        val tools = tools(RequestContext(chatId = 100L, userId = 100L, messageId = 1L))
+        val tools = tools(requestContext(chatId = 100L, userId = 100L))
         val at = Instant.now().atZone(ZoneId.systemDefault()).plusDays(1).toLocalDateTime().truncatedTo(ChronoUnit.MINUTES)
 
         repeat(3) { assertContains(tools.scheduleFollowUp("check in $it", at.plusMinutes(it.toLong()).toString()), "Follow-up id=") }
@@ -207,7 +203,7 @@ class TaskToolsTest {
 
     @Test
     fun `follow-up in the past is rejected`() = runBlocking {
-        val tools = tools(RequestContext(chatId = 100L, userId = 100L, messageId = 1L))
+        val tools = tools(requestContext(chatId = 100L, userId = 100L))
         val past = Instant.now().atZone(ZoneId.systemDefault()).minusDays(1).toLocalDateTime().truncatedTo(ChronoUnit.MINUTES)
 
         assertContains(tools.scheduleFollowUp("too late", past.toString()), "in the past")

@@ -17,7 +17,7 @@ import com.helltar.vusan.infra.tables.ChatStickersTable
 import com.helltar.vusan.infra.tables.StickerSetsTable
 import com.helltar.vusan.infra.tables.StickersTable
 import com.helltar.vusan.outbox.BotOutbox
-import com.helltar.vusan.request.RequestContext
+import com.helltar.vusan.request.requestContext
 import com.helltar.vusan.tools.vision.FakePromptExecutor
 import com.helltar.vusan.tools.vision.ImageVisionClient
 import com.helltar.vusan.tools.vision.TEST_MODEL
@@ -263,13 +263,13 @@ class StickerCatalogTest {
         val hiddenId = stickerId(stickers.last().fileUniqueId)
         assertTrue(hiddenId !in shownIds(assertNotNull(catalog.indexBlockFor(CHAT))))
 
-        val tools = StickerTools(catalog, RequestContext(CHAT, userId = 1L, messageId = 1L), BotOutbox())
+        val tools = StickerTools(catalog, requestContext(chatId = CHAT), BotOutbox())
         val result = tools.searchStickers("sleepy fox")
 
         assertContains(result, "#$hiddenId")
         assertContains(result, "sleepy fox refusing to wake up")
 
-        val otherChatTools = StickerTools(catalog, RequestContext(OTHER_CHAT, userId = 1L, messageId = 1L), BotOutbox())
+        val otherChatTools = StickerTools(catalog, requestContext(chatId = OTHER_CHAT), BotOutbox())
         assertContains(otherChatTools.searchStickers("sleepy fox"), "No stickers matched")
     }
 
@@ -281,7 +281,7 @@ class StickerCatalogTest {
         catalog.learn(sticker("a"))
         val id = storedStickerIds().single()
         val outbox = BotOutbox()
-        val tools = StickerTools(catalog, RequestContext(OTHER_CHAT, userId = 1L, messageId = 1L), outbox)
+        val tools = StickerTools(catalog, requestContext(chatId = OTHER_CHAT), outbox)
 
         assertContains(tools.sendSticker(id), "this chat's catalog")
         assertTrue(outbox.pending.isEmpty())
