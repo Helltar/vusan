@@ -18,6 +18,12 @@ import kotlin.test.fail
  * `telegram/` and fails on one, carrying today's offenders as a list that may only shrink.
  *
  * The list is the progress report for the platform work: nothing else records how far it has got.
+ *
+ * **What this does not catch.** It reads imports, so a shared file can still depend on a messenger
+ * *through another type* and pass: `AgentRunner` held a `StickerCatalog`, which holds a
+ * `TelegramClient`, while importing nothing from `telegram/` itself. Three such dependencies were
+ * found by reading the code, not by this test. A green run means no shared file names Telegram — not
+ * that none reaches it. When adding a messenger, check what the constructors actually take.
  */
 class PlatformBoundaryTest {
 
