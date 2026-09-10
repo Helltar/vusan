@@ -23,8 +23,8 @@ import org.jetbrains.exposed.v1.core.Table
  * Nothing is reconciled by comparing declarations, and nothing is migrated in code. Reconciling could add
  * a column but never rebuild a key, so two installations running the same code could hold different
  * schemas; migrations are not worth writing before 1.0, when a change may rewrite anything. So a database
- * is moved by hand — `docs/database.md` carries the recipe — and this number is how the code can tell that
- * it has been: a database whose version this build does not know is not opened at all.
+ * is moved by hand instead, and this number is how the code can tell that it has been: a database whose
+ * version this build does not know is not opened at all.
  */
 internal object Schema {
 

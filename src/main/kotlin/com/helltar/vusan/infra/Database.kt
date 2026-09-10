@@ -82,7 +82,7 @@ object Db {
      * and hands back as `0` until something stamps it. Anything else — `0` with tables in it, or a
      * version this build does not know — is a database of another shape, and nothing here reshapes it:
      * it is left untouched and named in the error, because a schema half made of one version and half
-     * of another is how rows go missing quietly. `docs/database.md` says how it is moved by hand.
+     * of another is how rows go missing quietly. Such a database is moved by hand into a fresh one.
      */
     private fun JdbcTransaction.prepareSchema(path: Path) {
         val found = userVersion()
@@ -91,7 +91,7 @@ object Db {
 
         check(found == 0 && isEmpty()) {
             "Database at $path is schema version $found, not the $SCHEMA_LABEL this build expects. " +
-                    "Move it across by hand (docs/database.md) and stamp it with " +
+                    "Move it across by hand into a fresh database and stamp it with " +
                     "`PRAGMA user_version = ${Schema.VERSION}`, or run the build that matches it."
         }
 

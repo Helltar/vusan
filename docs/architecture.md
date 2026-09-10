@@ -97,8 +97,7 @@ that is who owns writing them, not because only `agent/` reads them. No other ar
   issuing the same number never read each other's rows. `Db.connect` creates a fresh database whole and stamps the version
   declared in `infra/Schema.kt` into SQLite's own `PRAGMA user_version`. Nothing is inferred by comparing declarations
   to what is there, and nothing is migrated in code: a database of any other version — from before versions existed, or
-  from a newer build — stops startup instead of being reshaped, and is moved by hand. [`docs/database.md`](database.md) covers changing the schema and moving a database across
-  by hand.
+  from a newer build — stops startup instead of being reshaped, and is moved by hand.
 - **`config/`** — `env/vusan.env` parsing (`AppConfig`), LLM provider/model resolution (`LlmRuntime`), and the ChatGPT
   subscription credentials the Codex CLI writes (`CodexAuth`). `VisionRuntime` resolves separately which model looks at
   images: the `OPENAI_VISION_*` model when configured, the chat model when it accepts images, and nothing at all
