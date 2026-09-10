@@ -349,7 +349,8 @@ A normal user message travels:
   ahead of the lateness check, so losing access produces no "missed" notices either. Recurrence math lives in `tasks/Recurrence.kt`.
 - **Daily token budget** — with `LLM_DAILY_TOKEN_BUDGET` set, `budget/BudgetedPromptExecutor` wraps the executor every
   LLM caller shares, adds each completed call's input plus output tokens to the day's total in `token_usage` and to its
-  author's row in `token_user_spend`, and refuses to start a call the budget has no room for. A vision model of its own
+  author's row in `token_user_spend` — both in one transaction, so a restart never resumes a day that nobody spent —
+  and refuses to start a call the budget has no room for. A vision model of its own
   (`OPENAI_VISION_API_KEY`) is wrapped separately in `Main`, since the ceiling counts what the bot spends rather than
   what one provider bills for; work with no user behind it (the sticker worker, a group-log digest) answers to the
   day's total alone. `TokenBudget` reloads the

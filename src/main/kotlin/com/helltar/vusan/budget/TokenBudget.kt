@@ -106,16 +106,20 @@ class TokenBudget(
             val before = spent.totalTokens
 
             spent += call
-            store(today, spent, now)
 
-            if (user != null) {
-                val updated = spentByUser.getOrElse(user) { DailySpend() } + call
-                spentByUser[user] = updated
-                storeUser(today, user, updated, now)
+            val updated =
+                user?.let {
+                    val share = spentByUser.getOrElse(it) { DailySpend() } + call
+                    spentByUser[it] = share
 
-                // someone new today is one more person to split the day with, without waiting for a reload.
-                shares = maxOf(shares, spentByUser.size)
-            }
+                    // someone new today is one more person to split the day with, without a reload.
+                    shares = maxOf(shares, spentByUser.size)
+                    share
+                }
+
+            // the day's total and the share it is split into are one fact: written apart, a crash between
+            // them would come back with a day that has been spent by nobody.
+            store(today, spent, user, updated, now)
 
             if (before < limit && spent.totalTokens >= limit) {
                 log.warn {
@@ -193,9 +197,16 @@ class TokenBudget(
                 .toInt()
         }
 
-    // the running total is written in full rather than incremented: this process owns it, so a lost write
-    // costs at most the calls since the last successful one, and never leaves the row double-counted.
-    private suspend fun store(day: LocalDate, spend: DailySpend, now: Instant) {
+    // the running totals are written in full rather than incremented: this process owns them, so a lost
+    // write costs at most the calls since the last successful one, and never leaves a row double-counted.
+    // [user] is null for the bot's own background work, which belongs to the day but to nobody's share.
+    private suspend fun store(
+        day: LocalDate,
+        spend: DailySpend,
+        user: UserRef?,
+        userSpend: DailySpend?,
+        now: Instant
+    ) {
         write("the token budget for day=$day") {
             TokenUsageTable.upsert(TokenUsageTable.day) {
                 it[TokenUsageTable.day] = day.toString()
@@ -203,11 +214,9 @@ class TokenBudget(
                 it[TokenUsageTable.outputTokens] = spend.outputTokens
                 it[TokenUsageTable.updatedAt] = now
             }
-        }
-    }
 
-    private suspend fun storeUser(day: LocalDate, user: UserRef, spend: DailySpend, now: Instant) {
-        write("the token spend of user=[$user] for day=$day") {
+            if (user == null || userSpend == null) return@write
+
             TokenUserSpendTable.upsert(
                 TokenUserSpendTable.day,
                 TokenUserSpendTable.platform,
@@ -216,8 +225,8 @@ class TokenBudget(
                 it[TokenUserSpendTable.day] = day.toString()
                 it[TokenUserSpendTable.platform] = user.platform
                 it[TokenUserSpendTable.userId] = user.id
-                it[TokenUserSpendTable.inputTokens] = spend.inputTokens
-                it[TokenUserSpendTable.outputTokens] = spend.outputTokens
+                it[TokenUserSpendTable.inputTokens] = userSpend.inputTokens
+                it[TokenUserSpendTable.outputTokens] = userSpend.outputTokens
                 it[TokenUserSpendTable.updatedAt] = now
             }
         }
