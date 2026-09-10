@@ -33,6 +33,9 @@ interface Upload {
   files: Set<string>;
   bytes: number;
   touchedAt: number;
+  // one writer per upload: two transfers of the same site would otherwise both measure the room left
+  // before either of them had taken any, and both find it free.
+  queue: Promise<unknown>;
 }
 
 function suffix(): string {
@@ -101,71 +104,94 @@ export class Sites {
     const id = suffix() + suffix();
     const dir = `${this.staging}/${id}`;
     await Deno.mkdir(dir, { mode: DIR_MODE });
-    this.uploads.set(id, { owner, label, dir, files: new Set(), bytes: 0, touchedAt: Date.now() });
+    this.uploads.set(id, {
+      owner,
+      label,
+      dir,
+      files: new Set(),
+      bytes: 0,
+      touchedAt: Date.now(),
+      queue: Promise.resolve(),
+    });
     return id;
   }
 
   async put(id: string, rawPath: string, body: ReadableStream<Uint8Array> | null, declared: number | null) {
     const upload = this.open(id);
     const path = sitePath(rawPath, this.config.maxDepth);
-    const fileCap = this.config.maxFileMb * 1024 * 1024;
-    const remaining = this.config.maxMb * 1024 * 1024 - upload.bytes;
-    if (upload.files.has(path)) throw new RequestError(`\`${path}\` was already uploaded`, 409);
-    if (upload.files.size >= this.config.maxFiles) {
-      throw new RequestError(`A site may hold at most ${this.config.maxFiles} files`, 413);
-    }
-    const cap = Math.min(fileCap, remaining);
-    if (declared !== null && declared > cap) {
-      throw new RequestError(
-        remaining < fileCap
-          ? `The site would exceed its ${this.config.maxMb} MB limit`
-          : `A file may be at most ${this.config.maxFileMb} MB`,
-        413,
-      );
-    }
-    if (this.transfers >= 2) throw new RequestError("Transfer capacity reached; try again shortly", 409);
-    if (upload.files.size % 32 === 0) await this.guardWrites();
-    this.transfers++;
-    try {
-      const target = `${upload.dir}/${path}`;
-      const parent = target.slice(0, target.lastIndexOf("/"));
-      await Deno.mkdir(parent, { recursive: true, mode: DIR_MODE });
-      const bytes = await this.write(target, body, cap);
-      upload.files.add(path);
-      upload.bytes += bytes;
-      upload.touchedAt = Date.now();
-      return { path, bytes };
-    } finally {
-      this.transfers--;
-    }
+    // what the file is allowed to be is decided against the room the transfers before it have taken,
+    // which is only known once they have finished: the queue is what makes the caps hold.
+    return await this.queued(upload, async () => {
+      this.open(id, upload);
+      const fileCap = this.config.maxFileMb * 1024 * 1024;
+      const remaining = this.config.maxMb * 1024 * 1024 - upload.bytes;
+      if (upload.files.has(path)) throw new RequestError(`\`${path}\` was already uploaded`, 409);
+      if (upload.files.size >= this.config.maxFiles) {
+        throw new RequestError(`A site may hold at most ${this.config.maxFiles} files`, 413);
+      }
+      const cap = Math.min(fileCap, remaining);
+      if (declared !== null && declared > cap) {
+        throw new RequestError(
+          remaining < fileCap
+            ? `The site would exceed its ${this.config.maxMb} MB limit`
+            : `A file may be at most ${this.config.maxFileMb} MB`,
+          413,
+        );
+      }
+      if (this.transfers >= 2) throw new RequestError("Transfer capacity reached; try again shortly", 409);
+      if (upload.files.size % 32 === 0) await this.guardWrites();
+      this.transfers++;
+      try {
+        const target = `${upload.dir}/${path}`;
+        const parent = target.slice(0, target.lastIndexOf("/"));
+        await Deno.mkdir(parent, { recursive: true, mode: DIR_MODE });
+        const bytes = await this.write(target, body, cap);
+        upload.files.add(path);
+        upload.bytes += bytes;
+        upload.touchedAt = Date.now();
+        return { path, bytes };
+      } finally {
+        this.transfers--;
+      }
+    });
   }
 
   async commit(id: string): Promise<SiteRecord> {
     const upload = this.open(id);
-    if (!upload.files.size) throw new RequestError("Nothing was uploaded", 400);
-    await this.guardWrites();
-    this.uploads.delete(id);
-    const previous = await this.record(upload.label);
-    await this.swap(upload.label, upload.dir);
-    const now = Date.now();
-    const record: SiteRecord = {
-      owner: upload.owner,
-      label: upload.label,
-      files: upload.files.size,
-      bytes: upload.bytes,
-      createdAt: previous?.createdAt ?? now,
-      updatedAt: now,
-    };
-    await this.writeRecord(record);
-    this.commits.set(upload.owner, [...(this.commits.get(upload.owner) ?? []), now]);
-    return record;
+    // behind the queue: a transfer still running is part of the site being published, and its bytes
+    // are what the record is written from.
+    return await this.queued(upload, async () => {
+      this.open(id, upload);
+      if (!upload.files.size) throw new RequestError("Nothing was uploaded", 400);
+      await this.guardWrites();
+      const previous = await this.record(upload.label);
+      try {
+        await this.swap(upload.label, upload.dir);
+      } finally {
+        this.uploads.delete(id);
+      }
+      const now = Date.now();
+      const record: SiteRecord = {
+        owner: upload.owner,
+        label: upload.label,
+        files: upload.files.size,
+        bytes: upload.bytes,
+        createdAt: previous?.createdAt ?? now,
+        updatedAt: now,
+      };
+      await this.writeRecord(record);
+      this.commits.set(upload.owner, [...(this.commits.get(upload.owner) ?? []), now]);
+      return record;
+    });
   }
 
   async discard(id: string): Promise<void> {
     const upload = this.uploads.get(id);
     if (!upload) return;
+    // unregistered first, so a transfer waiting its turn is refused rather than writing into a
+    // directory that is about to go; then removed behind whatever is still running.
     this.uploads.delete(id);
-    await Deno.remove(upload.dir, { recursive: true }).catch(() => {});
+    await this.queued(upload, () => Deno.remove(upload.dir, { recursive: true }).catch(() => {}));
   }
 
   async status(owner: string): Promise<SiteRecord | null> {
@@ -249,10 +275,20 @@ export class Sites {
     }
   }
 
-  private open(id: string): Upload {
+  // [expected] is passed by whatever waited in an upload's queue: the upload it started out with may
+  // have been committed or discarded while it waited, and that one no longer takes files.
+  private open(id: string, expected?: Upload): Upload {
     const upload = this.uploads.get(id);
-    if (!upload) throw new RequestError("Unknown upload; start a new one", 404);
+    if (!upload || (expected !== undefined && upload !== expected)) {
+      throw new RequestError("Unknown upload; start a new one", 404);
+    }
     return upload;
+  }
+
+  private queued<T>(upload: Upload, work: () => Promise<T>): Promise<T> {
+    const done = upload.queue.then(work, work);
+    upload.queue = done.catch(() => {});
+    return done;
   }
 
   private rateLimit(owner: string): void {

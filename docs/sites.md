@@ -90,7 +90,8 @@ Two zone settings are worth checking:
 The agent zips the finished files in the workspace and calls `publishSite`. The bot reads that one
 archive, checks every path in it, and uploads the files one at a time; the host stages them and swaps
 the new tree in by rename when the last one arrives. A visitor sees either the previous site or the new
-one, never a half-written mix.
+one, never a half-written mix. One upload has one writer, so the size and file caps hold however many
+transfers arrive at once.
 
 Paths that escape the site, absolute paths and dotfiles are refused — `.git` and `.env` reach a build
 directory far more often than anyone means to publish them. A zip entry that was a symlink becomes an

@@ -175,3 +175,20 @@ Deno.test("a publish loop is rate limited per person", async () => {
     await Deno.remove(root, { recursive: true });
   }
 });
+
+Deno.test("two transfers of one upload cannot both take the last file slot", async () => {
+  const { root, sites } = await fresh({ maxFiles: 1 });
+  try {
+    const id = await sites.begin("u42");
+    const outcomes = await Promise.allSettled([
+      sites.put(id, "index.html", body("<h1>one</h1>"), null),
+      sites.put(id, "second.html", body("<h1>two</h1>"), null),
+    ]);
+
+    deepStrictEqual(outcomes.map((outcome) => outcome.status), ["fulfilled", "rejected"]);
+    strictEqual((await sites.commit(id)).files, 1);
+    deepStrictEqual(await names(`${root}/sites/42`), ["index.html"]);
+  } finally {
+    await Deno.remove(root, { recursive: true });
+  }
+});
