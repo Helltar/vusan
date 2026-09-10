@@ -134,6 +134,23 @@ class GroupLogRepositoryTest {
         assertEquals(listOf("earlier"), entries.map { it.text })
     }
 
+    // the bot's own rows carry no message id at all, and `!=` is null rather than true for those in
+    // SQL: without the null arm, dropping the triggering message dropped every reply the bot had made.
+    @Test
+    fun `recent keeps the bot's own messages while dropping the triggering one`() = runBlocking {
+        val repository = GroupLogRepository(GroupLogConfig())
+
+        repository.record(entry("1", "earlier", now.minusSeconds(120)))
+        repository.record(botEntry("that one is a keeper", now.minusSeconds(60), answering = "1"))
+        repository.record(entry("2", "the question", now))
+
+        val entries = repository.recent(CHAT, limit = 10, since = now.minusSeconds(600), excludeMessageId = "2")
+
+        assertEquals(listOf("earlier", "that one is a keeper"), entries.map { it.text })
+        // the anchor is what tells the renderer this exchange is already in that user's own history
+        assertEquals(listOf(null, "1"), entries.map { it.replyToMessageId })
+    }
+
     @Test
     fun `clear removes the transcript and the cached digests`() = runBlocking {
         val repository = GroupLogRepository(GroupLogConfig())
@@ -272,6 +289,17 @@ class GroupLogRepositoryTest {
             senderUsername = username,
             senderName = name,
             text = text
+        )
+
+    private fun botEntry(text: String, at: Instant, answering: String? = null) =
+        GroupLogEntry(
+            chat = CHAT,
+            // delivery does not carry the id of what it sent back, so the bot's own rows have none
+            messageId = null,
+            kind = GroupLogEntry.BOT_KIND,
+            sentAt = at,
+            text = text,
+            replyToMessageId = answering
         )
 
     private companion object {

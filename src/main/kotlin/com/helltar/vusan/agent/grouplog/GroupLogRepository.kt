@@ -13,6 +13,7 @@ import org.jetbrains.exposed.v1.core.SortOrder
 import org.jetbrains.exposed.v1.core.and
 import org.jetbrains.exposed.v1.core.eq
 import org.jetbrains.exposed.v1.core.greaterEq
+import org.jetbrains.exposed.v1.core.isNull
 import org.jetbrains.exposed.v1.core.less
 import org.jetbrains.exposed.v1.core.lessEq
 import org.jetbrains.exposed.v1.core.like
@@ -146,7 +147,13 @@ class GroupLogRepository(private val config: GroupLogConfig) {
             .selectAll()
             .where {
                 var condition = inChat(chat) and (GroupLogTable.sentAt greaterEq since)
-                excludeMessageId?.let { condition = condition and (GroupLogTable.messageId neq it) }
+
+                excludeMessageId?.let {
+                    // the bot's own rows carry no message id, and `!=` is null in SQL rather than true:
+                    // without the null arm every reply the bot made would leave with the excluded message.
+                    condition = condition and ((GroupLogTable.messageId neq it) or GroupLogTable.messageId.isNull())
+                }
+
                 condition
             }
             .orderBy(GroupLogTable.sentAt to SortOrder.DESC, GroupLogTable.id to SortOrder.DESC)
