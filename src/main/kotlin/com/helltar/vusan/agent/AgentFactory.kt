@@ -24,6 +24,7 @@ import com.helltar.vusan.agent.conversation.ChatRole
 import com.helltar.vusan.agent.conversation.PromptConversation
 import com.helltar.vusan.agent.conversation.toolCallArgsForStorage
 import com.helltar.vusan.common.collapseWhitespaceAndCap
+import com.helltar.vusan.config.forConversation
 import com.helltar.vusan.common.limitTo
 import com.helltar.vusan.common.xmlBlock
 import com.helltar.vusan.outbox.BotOutbox
@@ -105,7 +106,7 @@ class AgentFactory(
         onToolStarting: (activity: ToolActivity?) -> Unit = {}
     ): AIAgent<String, String> {
         val seededPrompt =
-            prompt(id = "vusan-turn-$scope", params = chatParams) {
+            prompt(id = "vusan-turn-$scope", params = chatParams.forConversation(scope.toString())) {
                 system(preparation.systemPrompt)
                 // the recap is written from quoted events, so it can carry a delimiter out of them.
                 conversation.summary?.let { user(xmlBlock("conversation_recap", it.neutralizePromptBlocks())) }

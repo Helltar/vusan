@@ -511,11 +511,14 @@ A normal user message travels:
   Ollama, …), with a configurable context size. Its endpoint capability and params type are declared as a pair
   (`OpenAIChatParams` → `/v1/chat/completions`, `OpenAIResponsesParams` → `/v1/responses`), because the Koog client
   reads the route off the params type and rejects params the model does not declare an endpoint for. Direct OpenAI
-  requests share a stable `prompt_cache_key`, and history recaps get their own so their tool-free prefix does not dilute
-  the chat one; for GPT-5.6 and later, `config/OpenAiPromptCaching` marks the first stable system/developer content
-  block as the only explicit cache breakpoint. This keeps the system prompt and tool schemas reusable while excluding
-  timestamps, history, memory, Telegram metadata, user input, and tool results from billable cache writes. The adapter
-  exists because Koog 1.2.0 cannot represent OpenAI's explicit breakpoint fields itself.
+  requests carry a `prompt_cache_key` of their own conversation, since reads match the prefixes most recently written
+  under a key and one key for the whole deployment would let busy chats evict each other; history recaps keep a single
+  shared key, their tool-free prefix being identical everywhere. For GPT-5.6 and later, `config/OpenAiPromptCaching`
+  marks two explicit breakpoints — the stable system/developer block, and the last user message when the request
+  carries tools — which keeps the system prompt and tool schemas reusable while leaving history, memory and tool
+  results out of billable cache writes. The adapter exists because Koog 1.2.0 cannot represent OpenAI's explicit
+  breakpoint fields itself. Anthropic caches nothing implicitly, so its chat params ask for request-level
+  `cache_control` and let the API place the breakpoint; the recap asks for none.
 - **ChatGPT subscription (`codex`)** — the same Koog OpenAI client pointed at the Codex backend's Responses API, with no
   API key. `config/CodexAuth.CodexAuthStore` owns the credentials `codex login` writes to `~/.codex/auth.json` (or
   `$CODEX_HOME`). `AppConfig` resolves that path into the Codex provider config, and the store rereads the file per

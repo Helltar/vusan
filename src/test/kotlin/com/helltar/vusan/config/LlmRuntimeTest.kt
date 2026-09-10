@@ -1,6 +1,8 @@
 package com.helltar.vusan.config
 
+import ai.koog.prompt.executor.clients.anthropic.AnthropicCacheControl
 import ai.koog.prompt.executor.clients.anthropic.AnthropicModels
+import ai.koog.prompt.executor.clients.anthropic.AnthropicParams
 import ai.koog.prompt.executor.clients.openai.OpenAIChatParams
 import ai.koog.prompt.executor.clients.openai.OpenAIModels
 import ai.koog.prompt.executor.clients.openai.OpenAIResponsesParams
@@ -100,18 +102,51 @@ class LlmRuntimeTest {
 
     @Test
     fun `hosted anthropic provider uses the native client and provider`() {
-        val runtime =
-            resolveLlmRuntime(
-                LlmProviderConfig.Hosted(
-                    provider = HostedLlmProvider.ANTHROPIC,
-                    apiKey = "key",
-                    model = "claude-sonnet-4-5",
-                    requestTimeout = 120.seconds
-                )
-            )
+        val runtime = anthropic()
 
         assertEquals(LLMProvider.Anthropic, runtime.model.provider)
         assertEquals("claude-sonnet-4-5", runtime.model.id)
+    }
+
+    // Anthropic caches nothing implicitly, so without this every step of a turn is billed in full.
+    @Test
+    fun `anthropic chat prompts ask for caching and the recap does not`() {
+        val runtime = anthropic()
+
+        assertEquals(AnthropicCacheControl.Default, assertIs<AnthropicParams>(runtime.chatParams).cacheControl)
+        assertNull(assertIs<AnthropicParams>(runtime.compactionParams).cacheControl)
+    }
+
+    @Test
+    fun `each conversation gets a prompt cache key of its own`() {
+        val base = openAiCompatible(baseUrl = "https://api.openai.com").chatParams
+
+        val one = assertIs<OpenAIChatParams>(base.forConversation("telegram:1@-100")).promptCacheKey
+        val again = assertIs<OpenAIChatParams>(base.forConversation("telegram:1@-100")).promptCacheKey
+        val other = assertIs<OpenAIChatParams>(base.forConversation("telegram:2@-100")).promptCacheKey
+
+        assertEquals(one, again)
+        assertTrue(one != other)
+        assertTrue(one.orEmpty().startsWith("vusan-"))
+    }
+
+    // the key is an OpenAI extension: a server that was not given one must not be handed one now
+    @Test
+    fun `a conversation key is not invented for a provider without one`() {
+        val params = openAiCompatible().chatParams
+
+        assertNull(assertIs<OpenAIChatParams>(params.forConversation("telegram:1@-100")).promptCacheKey)
+    }
+
+    @Test
+    fun `the responses endpoint scopes its cache key the same way`() {
+        val base =
+            openAiCompatible(baseUrl = "https://api.openai.com", endpoint = OpenAiEndpoint.RESPONSES).chatParams
+
+        val scoped = assertIs<OpenAIResponsesParams>(base.forConversation("telegram:1@-100"))
+
+        assertTrue(scoped.promptCacheKey.orEmpty().startsWith("vusan-"))
+        assertTrue(scoped.promptCacheKey != "vusan")
     }
 
     @Test
@@ -277,6 +312,16 @@ class LlmRuntimeTest {
             codexRoutingHint("gpt-5.6-terra", ServiceTier.PRIORITY)
         )
     }
+
+    private fun anthropic(): LlmRuntime =
+        resolveLlmRuntime(
+            LlmProviderConfig.Hosted(
+                provider = HostedLlmProvider.ANTHROPIC,
+                apiKey = "key",
+                model = "claude-sonnet-4-5",
+                requestTimeout = 120.seconds
+            )
+        )
 
     private fun codex(
         contextWindowTokens: Long? = null,

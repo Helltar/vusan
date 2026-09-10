@@ -4,6 +4,7 @@ import ai.koog.http.client.HttpClientFactoryResolver
 import ai.koog.prompt.executor.clients.ConnectionTimeoutConfig
 import ai.koog.prompt.executor.clients.LLMClient
 import ai.koog.prompt.executor.clients.LLModelDefinitions
+import ai.koog.prompt.executor.clients.anthropic.AnthropicCacheControl
 import ai.koog.prompt.executor.clients.anthropic.AnthropicClientSettings
 import ai.koog.prompt.executor.clients.anthropic.AnthropicLLMClient
 import ai.koog.prompt.executor.clients.anthropic.AnthropicModels
@@ -36,6 +37,7 @@ import kotlin.time.Duration
 private const val OPENAI_API_BASE_URL = "https://api.openai.com"
 private const val OPENAI_PROMPT_CACHE_KEY = "vusan"
 private const val OPENAI_COMPACTION_CACHE_KEY = "vusan-recap"
+private const val HEX_RADIX = 16
 
 data class LlmRuntime(
     val providerLabel: String,
@@ -46,6 +48,28 @@ data class LlmRuntime(
     // instead of diluting the chat prefix OpenAI keeps warm for every turn.
     val compactionParams: LLMParams = chatParams
 )
+
+/**
+ * The same params with a prompt cache key of this conversation's own.
+ *
+ * Cache reads match the most recently written prefixes under a key, so one key for the whole
+ * deployment means busy chats evict each other; a key per conversation gives each its own window and
+ * is what the Codex CLI does with its thread id. The conversation is hashed rather than named: the
+ * key only routes a request, a collision costs nothing because a read still needs an exact prefix
+ * match, and there is no reason to hand a provider a messenger's user id.
+ *
+ * A provider that was given no key keeps none — `prompt_cache_key` is an OpenAI extension, and a
+ * third-party compatible server has no business receiving it.
+ */
+fun LLMParams.forConversation(conversation: String): LLMParams =
+    when (this) {
+        is OpenAIChatParams -> promptCacheKey?.let { copy(promptCacheKey = it.scoped(conversation)) } ?: this
+        is OpenAIResponsesParams -> promptCacheKey?.let { copy(promptCacheKey = it.scoped(conversation)) } ?: this
+        else -> this
+    }
+
+private fun String.scoped(conversation: String): String =
+    "$this-${conversation.hashCode().toUInt().toString(HEX_RADIX)}"
 
 // the effort only ever reaches the model through the request params, so read it back from there
 // instead of carrying the provider config around just to report it.
@@ -238,7 +262,13 @@ private fun resolveHostedRuntime(config: LlmProviderConfig.Hosted, timeoutConfig
                 providerLabel = "Anthropic",
                 client = AnthropicLLMClient(config.apiKey, AnthropicClientSettings(timeoutConfig = timeoutConfig)),
                 model = resolveModel(AnthropicModels, "Anthropic", config.model).withContextOverride(config.contextWindowTokens),
-                chatParams = AnthropicParams()
+                // Anthropic caches nothing on its own: without a control every step of a turn re-reads the
+                // whole prompt at full price. The request-level one lets the API place the breakpoint on the
+                // last cacheable block, which is what an agent loop wants — each iteration appends and reads
+                // back everything before it. The recap keeps none: its body never repeats, so the write
+                // would buy a read nobody makes.
+                chatParams = AnthropicParams(cacheControl = AnthropicCacheControl.Default),
+                compactionParams = AnthropicParams()
             )
 
         HostedLlmProvider.GOOGLE ->
