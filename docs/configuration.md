@@ -53,7 +53,8 @@ is actually deployed instead of a guess.
 
 `ALLOWED_IDS` accepts commas, whitespace or semicolons as separators. Positive IDs are users,
 negative IDs are groups, and an allowlisted group admits everyone in it. Empty or unset means Vusan
-answers nobody.
+answers nobody. Scheduled tasks are held to the same list: one whose owner and chat are both outside
+it stays in place but never fires, and fires again once either is back.
 
 A plain number is a Telegram ID. An entry may also name the messenger it belongs to —
 `telegram:123456789` — which is how the same number stays two different people once Vusan runs on

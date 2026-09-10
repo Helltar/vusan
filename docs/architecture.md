@@ -147,8 +147,10 @@ A normal user message travels:
    itself: an update from a chat and user it does not name is dropped there, before the transcript, the sticker catalog,
    album buffering or a dispatch coroutine can cost anything, and only a message actually aimed at the bot is logged as
    denied. `BANNED_IDS` is checked first and wins over the allowlist, so a banned user is denied inside a chat that is
-   otherwise open; `TaskScheduler` skips their scheduled tasks the same way, moving each fire on without running or
-   announcing it. Two sinks then run on every allowlisted message, *before* the addressing check, because what they
+   otherwise open. `TaskScheduler` puts the same question to the same `AccessPolicy` before every fire — a task runs on
+   nobody's behalf but its owner's, so losing access stops the work that goes on without them too — and skips the fire
+   without running or announcing it, moving the recurrence on. The schedule is kept either way: being allowed back
+   resumes the task instead of resurrecting the fires it missed. Two sinks then run on every allowlisted message, *before* the addressing check, because what they
    collect is precisely what nobody addressed to the bot: `recordGroupLog` writes the group transcript row, and
    `learnSticker` teaches the catalog which sets the chat uses. Both sit ahead of album buffering too, so each part of a
    gallery is seen individually. `MessageFilter.shouldHandle` then drops messages the bot shouldn't answer (in groups:
@@ -343,8 +345,8 @@ A normal user message travels:
   owners can resume them if the bot gets back in. Paused tasks remain stored and count toward the per-user task limit,
   but the due-task query skips them. A due task is also skipped, silently and without retries, while the daily token
   budget is spent — the same treatment an offline window gets, minus the notice, which would otherwise repeat for every
-  task due until the budget resets. A task whose owner or chat is in `BANNED_IDS` is skipped the same way, ahead of the
-  lateness check, so a ban produces no "missed" notices either. Recurrence math lives in `tasks/Recurrence.kt`.
+  task due until the budget resets. A task whose owner and chat are outside `ALLOWED_IDS`, or on `BANNED_IDS`, is skipped the same way,
+  ahead of the lateness check, so losing access produces no "missed" notices either. Recurrence math lives in `tasks/Recurrence.kt`.
 - **Daily token budget** — with `LLM_DAILY_TOKEN_BUDGET` set, `budget/BudgetedPromptExecutor` wraps the executor every
   LLM caller shares, adds each completed call's input plus output tokens to the day's total in `token_usage` and to its
   author's row in `token_user_spend`, and refuses to start a call the budget has no room for. `TokenBudget` reloads the

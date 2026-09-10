@@ -28,7 +28,9 @@ class TaskScheduler(
     private val maxLateness: Duration,
     private val chatProfiles: ChatProfileLookup,
     private val tokenBudget: TokenBudget = TokenBudget(),
-    private val accessPolicy: AccessPolicy = AccessPolicy()
+    // no default: an empty policy allows nobody, and a scheduler that silently fires nothing is worse
+    // than one that will not be built without being told who may use it.
+    private val accessPolicy: AccessPolicy
 ) {
 
     private enum class FireOutcome { Delivered, RunFailed, ChatUnreachable, Stopped }
@@ -87,10 +89,14 @@ class TaskScheduler(
                 return
             }
 
-        // a banned owner's tasks keep their schedule but never run, and never report themselves as missed
-        // either; lifting the ban resumes them instead of resurrecting a backlog of skipped fires.
-        if (accessPolicy.bans(task.scope.chat, task.scope.user)) {
-            log.info { "task id=${task.id} skipped: ${task.scope} is banned" }
+        // the allowlist is what may use this deployment, and a task fires on nobody's behalf but its
+        // owner's: losing access has to stop the work that goes on without them, not only their messages.
+        // the schedule is kept and never reports itself as missed, so being allowed back resumes the task
+        // instead of resurrecting a backlog of skipped fires.
+        if (!accessPolicy.allows(task.scope.chat, task.scope.user)) {
+            val reason = accessPolicy.denialReason(task.scope.chat, task.scope.user)
+
+            log.info { "task id=${task.id} skipped: ${task.scope} is $reason" }
             rescheduleAfterFire(task, now)
             return
         }
