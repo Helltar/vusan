@@ -17,7 +17,7 @@ symptom to the file that owns it, and beats searching the tree.
 ## Layers
 
 ```
-Telegram ──► telegram/ ──► agent/ ──► tools/ ──► external services
+Telegram ──► telegram/ ──► agent/ ◄──► tools/ ──► external services
                 │            │           │
                 │            │           └─ writes outputs into ─► outbox/
                 │            ├─ reads/stores the dialogue via ─► agent/conversation/ ─► infra/
@@ -25,6 +25,12 @@ Telegram ──► telegram/ ──► agent/ ──► tools/ ──► externa
                 ├─ records every group message into ─► agent/grouplog/ ─► infra/
                 └─ delivers outbox back to Telegram
 ```
+
+`agent/` and `tools/` point both ways, and are one layer rather than two: the runner has to name the tool sets it
+recognizes (`ToolActivity` maps a tool's own method reference to what the chat is shown while it runs, so a rename
+cannot silently break the mapping), and a tool reads the store its capability is about — `MemoryTools` the memory
+repository, `GroupLogTools` the transcript, `ConversationTools` the dialogue. Those stores sit under `agent/` because
+that is who owns writing them, not because only `agent/` reads them. No other arrow here is bidirectional.
 
 - **`telegram/`** — Telegram I/O, split by direction. `TelegramBotRunner` at the root receives updates (text, voice,
   audio, sticker, photo, video, video note, GIF, document, album, callback query), filters them by allowlist and ban
