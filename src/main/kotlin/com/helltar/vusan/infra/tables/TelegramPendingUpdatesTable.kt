@@ -11,7 +11,7 @@ import java.time.Instant
  * higher offset on its *next* request, so an update the bot is still working on is already forgotten
  * upstream: without this table a restart in the middle loses it with nothing to replay.
  */
-object PendingUpdatesTable : Table("pending_updates") {
+object TelegramPendingUpdatesTable : Table("telegram_pending_updates") {
 
     /** Telegram's own update id, which is what makes a replay and a redelivery the same row. */
     val updateId = long("update_id")

@@ -13,9 +13,9 @@ import com.helltar.vusan.config.AppConfig
 import com.helltar.vusan.config.HostedLlmProvider
 import com.helltar.vusan.config.LlmProviderConfig
 import com.helltar.vusan.infra.Db
-import com.helltar.vusan.infra.tables.ChatStickersTable
-import com.helltar.vusan.infra.tables.StickerSetsTable
-import com.helltar.vusan.infra.tables.StickersTable
+import com.helltar.vusan.infra.tables.TelegramChatStickersTable
+import com.helltar.vusan.infra.tables.TelegramStickerSetsTable
+import com.helltar.vusan.infra.tables.TelegramStickersTable
 import com.helltar.vusan.outbox.BotOutbox
 import com.helltar.vusan.request.requestContext
 import com.helltar.vusan.request.testChat
@@ -238,7 +238,7 @@ class StickerCatalogTest {
         describeStored { uniqueId -> "description for $uniqueId" }
 
         Db.dbTransaction {
-            ChatStickersTable.update({ ChatStickersTable.fileUniqueId eq stickers.last().fileUniqueId }) {
+            TelegramChatStickersTable.update({ TelegramChatStickersTable.fileUniqueId eq stickers.last().fileUniqueId }) {
                 it[seenCount] = 50
                 it[lastSeenAt] = Instant.EPOCH
             }
@@ -384,54 +384,54 @@ class StickerCatalogTest {
     }
 
     private suspend fun backdateSetRefresh() = Db.dbTransaction {
-        StickerSetsTable.update({ StickerSetsTable.name eq SET_NAME }) {
+        TelegramStickerSetsTable.update({ TelegramStickerSetsTable.name eq SET_NAME }) {
             it[refreshedAt] = Instant.now().minus(2, ChronoUnit.DAYS)
         }
         Unit
     }
 
     private suspend fun setRefreshedAt(): Instant = Db.dbTransaction {
-        StickerSetsTable
-            .select(StickerSetsTable.refreshedAt)
-            .where { StickerSetsTable.name eq SET_NAME }
-            .single()[StickerSetsTable.refreshedAt]
+        TelegramStickerSetsTable
+            .select(TelegramStickerSetsTable.refreshedAt)
+            .where { TelegramStickerSetsTable.name eq SET_NAME }
+            .single()[TelegramStickerSetsTable.refreshedAt]
     }
 
     private data class StoredSticker(val description: String?, val describeAttempts: Int)
 
     private suspend fun storedStickerIds(): List<Long> =
-        Db.dbTransaction { StickersTable.selectAll().map { it[StickersTable.id].value } }
+        Db.dbTransaction { TelegramStickersTable.selectAll().map { it[TelegramStickersTable.id].value } }
 
     private suspend fun storedStickers(): List<StoredSticker> =
         Db.dbTransaction {
-            StickersTable.selectAll().map {
-                StoredSticker(it[StickersTable.description], it[StickersTable.describeAttempts])
+            TelegramStickersTable.selectAll().map {
+                StoredSticker(it[TelegramStickersTable.description], it[TelegramStickersTable.describeAttempts])
             }
         }
 
     private suspend fun describeStored(description: (String) -> String) = Db.dbTransaction {
-        StickersTable.selectAll().forEach { row ->
-            StickersTable.update({ StickersTable.id eq row[StickersTable.id] }) {
-                it[StickersTable.description] = description(row[StickersTable.fileUniqueId])
+        TelegramStickersTable.selectAll().forEach { row ->
+            TelegramStickersTable.update({ TelegramStickersTable.id eq row[TelegramStickersTable.id] }) {
+                it[TelegramStickersTable.description] = description(row[TelegramStickersTable.fileUniqueId])
             }
         }
     }
 
     private suspend fun stickerId(fileUniqueId: String): Long =
         Db.dbTransaction {
-            StickersTable
-                .select(StickersTable.id)
-                .where { StickersTable.fileUniqueId eq fileUniqueId }
-                .single()[StickersTable.id]
+            TelegramStickersTable
+                .select(TelegramStickersTable.id)
+                .where { TelegramStickersTable.fileUniqueId eq fileUniqueId }
+                .single()[TelegramStickersTable.id]
                 .value
         }
 
     private suspend fun setNameOf(stickerId: Long): String =
         Db.dbTransaction {
-            StickersTable
-                .select(StickersTable.setName)
-                .where { StickersTable.id eq stickerId }
-                .single()[StickersTable.setName]
+            TelegramStickersTable
+                .select(TelegramStickersTable.setName)
+                .where { TelegramStickersTable.id eq stickerId }
+                .single()[TelegramStickersTable.setName]
         }
 
     private fun sticker(id: String, type: String = "regular", set: String = SET_NAME): Sticker =

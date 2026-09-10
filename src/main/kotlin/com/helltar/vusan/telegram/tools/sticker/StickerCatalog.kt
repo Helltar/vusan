@@ -6,10 +6,10 @@ import com.helltar.vusan.common.collapseWhitespaceAndCap
 import com.helltar.vusan.common.rethrowIfCancellation
 import com.helltar.vusan.common.xmlBlock
 import com.helltar.vusan.infra.Db.dbTransaction
-import com.helltar.vusan.infra.tables.ChatStickerSetsTable
-import com.helltar.vusan.infra.tables.ChatStickersTable
-import com.helltar.vusan.infra.tables.StickerSetsTable
-import com.helltar.vusan.infra.tables.StickersTable
+import com.helltar.vusan.infra.tables.TelegramChatStickerSetsTable
+import com.helltar.vusan.infra.tables.TelegramChatStickersTable
+import com.helltar.vusan.infra.tables.TelegramStickerSetsTable
+import com.helltar.vusan.infra.tables.TelegramStickersTable
 import com.helltar.vusan.request.AttachedFile
 import com.helltar.vusan.request.AttachedFileKind
 import com.helltar.vusan.request.ChatRef
@@ -261,15 +261,15 @@ class StickerCatalog(
         val setNames = chatSetNames(chatId)
         if (setNames.isEmpty()) return@dbTransaction null
 
-        StickersTable
-            .select(StickersTable.fileId)
+        TelegramStickersTable
+            .select(TelegramStickersTable.fileId)
             .where {
-                (StickersTable.id eq id) and
-                        (StickersTable.setName inList setNames) and
-                        StickersTable.description.isNotNull()
+                (TelegramStickersTable.id eq id) and
+                        (TelegramStickersTable.setName inList setNames) and
+                        TelegramStickersTable.description.isNotNull()
             }
             .firstOrNull()
-            ?.get(StickersTable.fileId)
+            ?.get(TelegramStickersTable.fileId)
     }
 
     /**
@@ -279,14 +279,14 @@ class StickerCatalog(
      */
     suspend fun recheckSetOf(stickerId: Long) = dbTransaction {
         val setName =
-            StickersTable
-                .select(StickersTable.setName)
-                .where { StickersTable.id eq stickerId }
+            TelegramStickersTable
+                .select(TelegramStickersTable.setName)
+                .where { TelegramStickersTable.id eq stickerId }
                 .firstOrNull()
-                ?.get(StickersTable.setName)
+                ?.get(TelegramStickersTable.setName)
                 ?: return@dbTransaction
 
-        StickerSetsTable.update({ StickerSetsTable.name eq setName }) {
+        TelegramStickerSetsTable.update({ TelegramStickerSetsTable.name eq setName }) {
             it[refreshedAt] = Instant.EPOCH
         }
 
@@ -431,20 +431,20 @@ class StickerCatalog(
         val liveByUniqueId = live.associateBy { it.fileUniqueId }
 
         val stored =
-            StickersTable
+            TelegramStickersTable
                 .selectAll()
-                .where { StickersTable.setName eq setName }
+                .where { TelegramStickersTable.setName eq setName }
                 .associate {
-                    it[StickersTable.fileUniqueId] to
-                            StoredHandles(it[StickersTable.fileId], it[StickersTable.thumbnailFileId])
+                    it[TelegramStickersTable.fileUniqueId] to
+                            StoredHandles(it[TelegramStickersTable.fileId], it[TelegramStickersTable.thumbnailFileId])
                 }
 
         val gone = stored.keys - liveByUniqueId.keys
 
         if (gone.isNotEmpty()) {
-            ChatStickersTable.deleteWhere { ChatStickersTable.fileUniqueId inList gone }
-            StickersTable.deleteWhere {
-                (StickersTable.setName eq setName) and (StickersTable.fileUniqueId inList gone)
+            TelegramChatStickersTable.deleteWhere { TelegramChatStickersTable.fileUniqueId inList gone }
+            TelegramStickersTable.deleteWhere {
+                (TelegramStickersTable.setName eq setName) and (TelegramStickersTable.fileUniqueId inList gone)
             }
 
             log.info { "dropped ${gone.size} sticker(s) removed from set=[$setName]" }
@@ -454,7 +454,7 @@ class StickerCatalog(
             val handles = stored[uniqueId] ?: return@forEach
             if (handles.fileId == sticker.fileId && handles.thumbnailFileId == sticker.thumbnail?.fileId) return@forEach
 
-            StickersTable.update({ StickersTable.fileUniqueId eq uniqueId }) {
+            TelegramStickersTable.update({ TelegramStickersTable.fileUniqueId eq uniqueId }) {
                 it[fileId] = sticker.fileId
                 it[thumbnailFileId] = sticker.thumbnail?.fileId
             }
@@ -463,12 +463,12 @@ class StickerCatalog(
         val fresh = live.take(MAX_STICKERS_PER_SET).filter { it.fileUniqueId !in stored }
 
         if (fresh.isNotEmpty()) {
-            StickersTable.batchInsert(fresh) { sticker ->
-                this[StickersTable.fileUniqueId] = sticker.fileUniqueId
-                this[StickersTable.fileId] = sticker.fileId
-                this[StickersTable.setName] = setName
-                this[StickersTable.emoji] = sticker.emoji
-                this[StickersTable.thumbnailFileId] = sticker.thumbnail?.fileId
+            TelegramStickersTable.batchInsert(fresh) { sticker ->
+                this[TelegramStickersTable.fileUniqueId] = sticker.fileUniqueId
+                this[TelegramStickersTable.fileId] = sticker.fileId
+                this[TelegramStickersTable.setName] = setName
+                this[TelegramStickersTable.emoji] = sticker.emoji
+                this[TelegramStickersTable.thumbnailFileId] = sticker.thumbnail?.fileId
             }
         }
 
@@ -477,18 +477,18 @@ class StickerCatalog(
 
     private suspend fun forgetSet(setName: String) = dbTransaction {
         val fileUniqueIds =
-            StickersTable
-                .select(StickersTable.fileUniqueId)
-                .where { StickersTable.setName eq setName }
-                .map { it[StickersTable.fileUniqueId] }
+            TelegramStickersTable
+                .select(TelegramStickersTable.fileUniqueId)
+                .where { TelegramStickersTable.setName eq setName }
+                .map { it[TelegramStickersTable.fileUniqueId] }
 
         if (fileUniqueIds.isNotEmpty()) {
-            ChatStickersTable.deleteWhere { ChatStickersTable.fileUniqueId inList fileUniqueIds }
+            TelegramChatStickersTable.deleteWhere { TelegramChatStickersTable.fileUniqueId inList fileUniqueIds }
         }
 
-        StickersTable.deleteWhere { StickersTable.setName eq setName }
-        ChatStickerSetsTable.deleteWhere { ChatStickerSetsTable.setName eq setName }
-        StickerSetsTable.deleteWhere { StickerSetsTable.name eq setName }
+        TelegramStickersTable.deleteWhere { TelegramStickersTable.setName eq setName }
+        TelegramChatStickerSetsTable.deleteWhere { TelegramChatStickerSetsTable.setName eq setName }
+        TelegramStickerSetsTable.deleteWhere { TelegramStickerSetsTable.name eq setName }
         Unit
     }
 
@@ -498,12 +498,12 @@ class StickerCatalog(
         val now = Instant.now()
 
         val updated =
-            StickerSetsTable.update({ StickerSetsTable.name eq setName }) {
+            TelegramStickerSetsTable.update({ TelegramStickerSetsTable.name eq setName }) {
                 it[refreshedAt] = now
             }
 
         if (updated == 0) {
-            StickerSetsTable.insert {
+            TelegramStickerSetsTable.insert {
                 it[name] = setName
                 it[refreshedAt] = now
             }
@@ -511,18 +511,18 @@ class StickerCatalog(
     }
 
     private suspend fun staleSetNames(): List<String> = dbTransaction {
-        StickerSetsTable
-            .select(StickerSetsTable.name)
-            .where { StickerSetsTable.refreshedAt less Instant.now().minusSeconds(SET_REFRESH_INTERVAL.inWholeSeconds) }
-            .orderBy(StickerSetsTable.refreshedAt to SortOrder.ASC)
+        TelegramStickerSetsTable
+            .select(TelegramStickerSetsTable.name)
+            .where { TelegramStickerSetsTable.refreshedAt less Instant.now().minusSeconds(SET_REFRESH_INTERVAL.inWholeSeconds) }
+            .orderBy(TelegramStickerSetsTable.refreshedAt to SortOrder.ASC)
             .limit(SETS_PER_REFRESH_PASS)
-            .map { it[StickerSetsTable.name] }
+            .map { it[TelegramStickerSetsTable.name] }
     }
 
     private suspend fun isSetStored(setName: String): Boolean = dbTransaction {
-        StickerSetsTable
-            .select(StickerSetsTable.name)
-            .where { StickerSetsTable.name eq setName }
+        TelegramStickerSetsTable
+            .select(TelegramStickerSetsTable.name)
+            .where { TelegramStickerSetsTable.name eq setName }
             .limit(1)
             .any()
     }
@@ -539,17 +539,17 @@ class StickerCatalog(
         val now = Instant.now()
 
         val updated =
-            ChatStickersTable.update({
-                (ChatStickersTable.chatId eq chatId) and (ChatStickersTable.fileUniqueId eq fileUniqueId)
+            TelegramChatStickersTable.update({
+                (TelegramChatStickersTable.chatId eq chatId) and (TelegramChatStickersTable.fileUniqueId eq fileUniqueId)
             }) {
-                it[seenCount] = ChatStickersTable.seenCount + 1
+                it[seenCount] = TelegramChatStickersTable.seenCount + 1
                 it[lastSeenAt] = now
             }
 
         if (updated == 0) {
-            ChatStickersTable.insert {
-                it[ChatStickersTable.chatId] = chatId
-                it[ChatStickersTable.fileUniqueId] = fileUniqueId
+            TelegramChatStickersTable.insert {
+                it[TelegramChatStickersTable.chatId] = chatId
+                it[TelegramChatStickersTable.fileUniqueId] = fileUniqueId
                 it[seenCount] = 1
                 it[lastSeenAt] = now
             }
@@ -563,17 +563,17 @@ class StickerCatalog(
         val now = Instant.now()
 
         val updated =
-            ChatStickerSetsTable.update({
-                (ChatStickerSetsTable.chatId eq chatId) and (ChatStickerSetsTable.setName eq setName)
+            TelegramChatStickerSetsTable.update({
+                (TelegramChatStickerSetsTable.chatId eq chatId) and (TelegramChatStickerSetsTable.setName eq setName)
             }) {
-                it[seenCount] = ChatStickerSetsTable.seenCount + 1
+                it[seenCount] = TelegramChatStickerSetsTable.seenCount + 1
                 it[lastSeenAt] = now
             }
 
         if (updated == 0) {
-            ChatStickerSetsTable.insert {
-                it[ChatStickerSetsTable.chatId] = chatId
-                it[ChatStickerSetsTable.setName] = setName
+            TelegramChatStickerSetsTable.insert {
+                it[TelegramChatStickerSetsTable.chatId] = chatId
+                it[TelegramChatStickerSetsTable.setName] = setName
                 it[seenCount] = 1
                 it[lastSeenAt] = now
             }
@@ -581,26 +581,26 @@ class StickerCatalog(
             return@dbTransaction 1
         }
 
-        ChatStickerSetsTable
-            .select(ChatStickerSetsTable.seenCount)
-            .where { (ChatStickerSetsTable.chatId eq chatId) and (ChatStickerSetsTable.setName eq setName) }
-            .single()[ChatStickerSetsTable.seenCount]
+        TelegramChatStickerSetsTable
+            .select(TelegramChatStickerSetsTable.seenCount)
+            .where { (TelegramChatStickerSetsTable.chatId eq chatId) and (TelegramChatStickerSetsTable.setName eq setName) }
+            .single()[TelegramChatStickerSetsTable.seenCount]
     }
 
     private suspend fun setsLearnedRecentlyIn(chatId: Long): Int = dbTransaction {
-        ChatStickerSetsTable
+        TelegramChatStickerSetsTable
             .selectAll()
             .where {
-                (ChatStickerSetsTable.chatId eq chatId) and
-                        (ChatStickerSetsTable.learnedAt greater Instant.now().minusSeconds(NEW_SET_BUDGET_WINDOW.inWholeSeconds))
+                (TelegramChatStickerSetsTable.chatId eq chatId) and
+                        (TelegramChatStickerSetsTable.learnedAt greater Instant.now().minusSeconds(NEW_SET_BUDGET_WINDOW.inWholeSeconds))
             }
             .count()
             .toInt()
     }
 
     private suspend fun markLearnedIn(chatId: Long, setName: String) = dbTransaction {
-        ChatStickerSetsTable.update({
-            (ChatStickerSetsTable.chatId eq chatId) and (ChatStickerSetsTable.setName eq setName)
+        TelegramChatStickerSetsTable.update({
+            (TelegramChatStickerSetsTable.chatId eq chatId) and (TelegramChatStickerSetsTable.setName eq setName)
         }) {
             it[learnedAt] = Instant.now()
         }
@@ -648,77 +648,77 @@ class StickerCatalog(
         if (setNames.isEmpty()) return@dbTransaction DescribedCatalog(emptyList(), emptyList())
 
         val stickers =
-            StickersTable
+            TelegramStickersTable
                 .selectAll()
-                .where { (StickersTable.setName inList setNames) and StickersTable.description.isNotNull() }
-                .orderBy(StickersTable.id to SortOrder.ASC)
+                .where { (TelegramStickersTable.setName inList setNames) and TelegramStickersTable.description.isNotNull() }
+                .orderBy(TelegramStickersTable.id to SortOrder.ASC)
                 .mapNotNull { row -> row.toKnownStickerOrNull() }
 
         DescribedCatalog(setNames, stickers)
     }
 
     private fun chatSetNames(chatId: Long): List<String> =
-        ChatStickerSetsTable
-            .select(ChatStickerSetsTable.setName)
-            .where { ChatStickerSetsTable.chatId eq chatId }
-            .orderBy(ChatStickerSetsTable.lastSeenAt to SortOrder.DESC)
-            .map { it[ChatStickerSetsTable.setName] }
+        TelegramChatStickerSetsTable
+            .select(TelegramChatStickerSetsTable.setName)
+            .where { TelegramChatStickerSetsTable.chatId eq chatId }
+            .orderBy(TelegramChatStickerSetsTable.lastSeenAt to SortOrder.DESC)
+            .map { it[TelegramChatStickerSetsTable.setName] }
 
     private suspend fun stickerUsageFor(chatId: Long): List<StickerUsage> = dbTransaction {
-        ChatStickersTable
+        TelegramChatStickersTable
             .selectAll()
-            .where { ChatStickersTable.chatId eq chatId }
+            .where { TelegramChatStickersTable.chatId eq chatId }
             .map { row ->
                 StickerUsage(
-                    fileUniqueId = row[ChatStickersTable.fileUniqueId],
-                    seenCount = row[ChatStickersTable.seenCount],
-                    lastSeenAt = row[ChatStickersTable.lastSeenAt]
+                    fileUniqueId = row[TelegramChatStickersTable.fileUniqueId],
+                    seenCount = row[TelegramChatStickersTable.seenCount],
+                    lastSeenAt = row[TelegramChatStickersTable.lastSeenAt]
                 )
             }
     }
 
     private fun ResultRow.toKnownStickerOrNull(): KnownSticker? =
-        this[StickersTable.description]?.let { description ->
+        this[TelegramStickersTable.description]?.let { description ->
             KnownSticker(
-                fileUniqueId = this[StickersTable.fileUniqueId],
+                fileUniqueId = this[TelegramStickersTable.fileUniqueId],
                 entry =
                     StickerEntry(
-                        id = this[StickersTable.id].value,
-                        setName = this[StickersTable.setName],
-                        emoji = this[StickersTable.emoji],
+                        id = this[TelegramStickersTable.id].value,
+                        setName = this[TelegramStickersTable.setName],
+                        emoji = this[TelegramStickersTable.emoji],
                         description = description
                     )
             )
         }
 
     private suspend fun pendingDescriptions(): List<PendingSticker> = dbTransaction {
-        StickersTable
+        TelegramStickersTable
             .selectAll()
             .where {
-                StickersTable.description.isNull() and
-                        (StickersTable.describeAttempts less MAX_DESCRIBE_ATTEMPTS)
+                TelegramStickersTable.description.isNull() and
+                        (TelegramStickersTable.describeAttempts less MAX_DESCRIBE_ATTEMPTS)
             }
-            .orderBy(StickersTable.id to SortOrder.ASC)
+            .orderBy(TelegramStickersTable.id to SortOrder.ASC)
             .limit(DESCRIPTIONS_PER_PASS)
             .map { row ->
                 PendingSticker(
-                    id = row[StickersTable.id].value,
-                    fileId = row[StickersTable.fileId],
-                    thumbnailFileId = row[StickersTable.thumbnailFileId],
-                    describeAttempts = row[StickersTable.describeAttempts]
+                    id = row[TelegramStickersTable.id].value,
+                    fileId = row[TelegramStickersTable.fileId],
+                    thumbnailFileId = row[TelegramStickersTable.thumbnailFileId],
+                    describeAttempts = row[TelegramStickersTable.describeAttempts]
                 )
             }
     }
 
     private suspend fun storeDescription(id: Long, description: String) = dbTransaction {
-        StickersTable.update({ StickersTable.id eq id }) {
-            it[StickersTable.description] = description
+        TelegramStickersTable.update({ TelegramStickersTable.id eq id }) {
+            it[TelegramStickersTable.description] = description
         }
     }
 
     private suspend fun countFailedAttempt(id: Long, attempts: Int) {
         dbTransaction {
-            StickersTable.update({ StickersTable.id eq id }) {
+            TelegramStickersTable.update({ TelegramStickersTable.id eq id }) {
                 it[describeAttempts] = attempts + 1
             }
         }
@@ -729,7 +729,7 @@ class StickerCatalog(
     }
 
     private suspend fun giveUpOnDescribing(id: Long) = dbTransaction {
-        StickersTable.update({ StickersTable.id eq id }) {
+        TelegramStickersTable.update({ TelegramStickersTable.id eq id }) {
             it[describeAttempts] = MAX_DESCRIBE_ATTEMPTS
         }
     }

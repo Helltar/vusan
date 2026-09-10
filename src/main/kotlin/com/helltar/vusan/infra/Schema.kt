@@ -1,19 +1,19 @@
 package com.helltar.vusan.infra
 
-import com.helltar.vusan.infra.tables.ChatStickerSetsTable
-import com.helltar.vusan.infra.tables.ChatStickersTable
+import com.helltar.vusan.infra.tables.TelegramChatStickerSetsTable
+import com.helltar.vusan.infra.tables.TelegramChatStickersTable
 import com.helltar.vusan.infra.tables.ConversationMessagesTable
 import com.helltar.vusan.infra.tables.ConversationsTable
 import com.helltar.vusan.infra.tables.GroupLogDigestsTable
 import com.helltar.vusan.infra.tables.GroupLogTable
 import com.helltar.vusan.infra.tables.MemoryTable
-import com.helltar.vusan.infra.tables.PendingUpdatesTable
-import com.helltar.vusan.infra.tables.PollsTable
+import com.helltar.vusan.infra.tables.TelegramPendingUpdatesTable
+import com.helltar.vusan.infra.tables.TelegramPollsTable
 import com.helltar.vusan.infra.tables.ScheduledTasksTable
-import com.helltar.vusan.infra.tables.StickerSetsTable
-import com.helltar.vusan.infra.tables.StickersTable
+import com.helltar.vusan.infra.tables.TelegramStickerSetsTable
+import com.helltar.vusan.infra.tables.TelegramStickersTable
 import com.helltar.vusan.infra.tables.TokenUsageTable
-import com.helltar.vusan.infra.tables.TokenUserSpendTable
+import com.helltar.vusan.infra.tables.TokenUsageByUserTable
 import org.jetbrains.exposed.v1.core.Table
 
 /**
@@ -39,13 +39,13 @@ internal object Schema {
             GroupLogDigestsTable,
             ScheduledTasksTable,
             MemoryTable,
-            StickersTable,
-            StickerSetsTable,
-            ChatStickerSetsTable,
-            ChatStickersTable,
+            TelegramStickersTable,
+            TelegramStickerSetsTable,
+            TelegramChatStickerSetsTable,
+            TelegramChatStickersTable,
             TokenUsageTable,
-            TokenUserSpendTable,
-            PendingUpdatesTable,
-            PollsTable
+            TokenUsageByUserTable,
+            TelegramPendingUpdatesTable,
+            TelegramPollsTable
         )
 }

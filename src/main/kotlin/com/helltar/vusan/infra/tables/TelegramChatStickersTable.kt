@@ -10,7 +10,7 @@ import java.time.Instant
 // Telegram-owned like the rest of the sticker tables, so `chat_id` carries no `platform` beside it: a
 // sticker is reached by `file_id` and lives only in `telegram/tools/sticker/`. What keeps two messengers
 // out of one row here is that no other one can write it, not a column.
-object ChatStickersTable : Table("chat_stickers") {
+object TelegramChatStickersTable : Table("telegram_chat_stickers") {
 
     val chatId = long("chat_id")
     val fileUniqueId = varchar("file_unique_id", 128)

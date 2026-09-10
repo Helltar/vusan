@@ -2,7 +2,7 @@ package com.helltar.vusan.telegram
 
 import com.helltar.vusan.common.rethrowIfCancellation
 import com.helltar.vusan.infra.Db.dbTransaction
-import com.helltar.vusan.infra.tables.PollsTable
+import com.helltar.vusan.infra.tables.TelegramPollsTable
 import com.helltar.vusan.outbox.BotOutput
 import io.github.oshai.kotlinlogging.KotlinLogging
 import org.jetbrains.exposed.v1.core.eq
@@ -55,11 +55,11 @@ class PollRegistry(private val retention: Duration = DEFAULT_RETENTION) {
 
         runCatching {
             dbTransaction {
-                PollsTable.insertIgnore {
-                    it[PollsTable.pollId] = pollId
-                    it[PollsTable.chatId] = chatId
-                    it[PollsTable.optionList] = options.joinToString(OPTION_SEPARATOR)
-                    it[PollsTable.correctOptionIndex] = correctOptionIndex
+                TelegramPollsTable.insertIgnore {
+                    it[TelegramPollsTable.pollId] = pollId
+                    it[TelegramPollsTable.chatId] = chatId
+                    it[TelegramPollsTable.optionList] = options.joinToString(OPTION_SEPARATOR)
+                    it[TelegramPollsTable.correctOptionIndex] = correctOptionIndex
                 }
             }
         }.onFailure {
@@ -73,23 +73,23 @@ class PollRegistry(private val retention: Duration = DEFAULT_RETENTION) {
      * answer to one arrives while people are still looking at it, and the row only feeds the transcript.
      */
     suspend fun pruneExpired(): Int = dbTransaction {
-        PollsTable.deleteWhere {
-            PollsTable.createdAt less Instant.now().minusMillis(retention.inWholeMilliseconds)
+        TelegramPollsTable.deleteWhere {
+            TelegramPollsTable.createdAt less Instant.now().minusMillis(retention.inWholeMilliseconds)
         }
     }
 
     suspend fun find(pollId: String): SentPoll? =
         runCatching {
             dbTransaction {
-                PollsTable
-                    .select(PollsTable.chatId, PollsTable.optionList, PollsTable.correctOptionIndex)
-                    .where { PollsTable.pollId eq pollId }
+                TelegramPollsTable
+                    .select(TelegramPollsTable.chatId, TelegramPollsTable.optionList, TelegramPollsTable.correctOptionIndex)
+                    .where { TelegramPollsTable.pollId eq pollId }
                     .singleOrNull()
                     ?.let {
                         SentPoll(
-                            chatId = it[PollsTable.chatId],
-                            options = it[PollsTable.optionList].split(OPTION_SEPARATOR),
-                            correctOptionIndex = it[PollsTable.correctOptionIndex]
+                            chatId = it[TelegramPollsTable.chatId],
+                            options = it[TelegramPollsTable.optionList].split(OPTION_SEPARATOR),
+                            correctOptionIndex = it[TelegramPollsTable.correctOptionIndex]
                         )
                     }
             }

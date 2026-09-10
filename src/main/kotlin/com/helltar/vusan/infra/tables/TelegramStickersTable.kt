@@ -6,7 +6,7 @@ import java.time.Instant
 
 // one row per known sticker, shared by every chat. `file_unique_id` is stable across bots and time,
 // so it is the identity; `file_id` is only a handle for this bot and is refreshed with the set.
-object StickersTable : LongIdTable("stickers") {
+object TelegramStickersTable : LongIdTable("telegram_stickers") {
 
     val fileUniqueId = varchar("file_unique_id", 128).uniqueIndex()
     val fileId = text("file_id")

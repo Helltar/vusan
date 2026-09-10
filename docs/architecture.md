@@ -361,7 +361,7 @@ A normal user message travels:
   know that. Per-user token spend is not here: `TokenBudget` prunes it as the budget day rolls over.
 - **Daily token budget** — with `LLM_DAILY_TOKEN_BUDGET` set, `budget/BudgetedPromptExecutor` wraps the executor every
   LLM caller shares, adds each completed call's input plus output tokens to the day's total in `token_usage` and to its
-  author's row in `token_user_spend` — both in one transaction, so a restart never resumes a day that nobody spent —
+  author's row in `token_usage_by_user` — both in one transaction, so a restart never resumes a day that nobody spent —
   and refuses to start a call the budget has no room for. A vision model of its own
   (`OPENAI_VISION_API_KEY`) is wrapped separately in `Main`, since the ceiling counts what the bot spends rather than
   what one provider bills for; work with no user behind it (the sticker worker, a group-log digest) answers to the
@@ -371,7 +371,7 @@ A normal user message travels:
   turn. A turn that runs out mid-way ends with the same "come back later" reply as one that never started, and is not
   counted as a failure to retry. Past `LLM_TOKEN_BUDGET_FAIR_SHARE_AT_PERCENT` of the day, a second rule joins the
   ceiling: a person over `budget ÷ users active in the last week` is turned away while everyone below their share keeps
-  working, so one heavy user cannot take the end of the day from the rest. The divisor comes from `token_user_spend`
+  working, so one heavy user cannot take the end of the day from the rest. The divisor comes from `token_usage_by_user`
   rather than the allowlist — only people who actually used the bot count, so idle members reserve nothing. Attribution
   rides on the `BudgetOwner` coroutine-context element that `AgentRunner` installs around a turn, which is how a history
   recap or a vision call inside that turn lands on the same person; work started outside a turn (the sticker description

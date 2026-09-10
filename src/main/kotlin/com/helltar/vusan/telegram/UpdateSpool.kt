@@ -3,7 +3,7 @@ package com.helltar.vusan.telegram
 import com.fasterxml.jackson.databind.ObjectMapper
 import com.helltar.vusan.common.rethrowIfCancellation
 import com.helltar.vusan.infra.Db.dbTransaction
-import com.helltar.vusan.infra.tables.PendingUpdatesTable
+import com.helltar.vusan.infra.tables.TelegramPendingUpdatesTable
 import io.github.oshai.kotlinlogging.KotlinLogging
 import org.jetbrains.exposed.v1.core.SortOrder
 import org.jetbrains.exposed.v1.core.eq
@@ -51,9 +51,9 @@ internal class UpdateSpool(private val retention: Duration) {
             dbTransaction {
                 // a replay racing Telegram's own redelivery of the same update would collide here, and
                 // the row already on disk is the same update either way.
-                PendingUpdatesTable.batchInsert(rows, ignore = true) { (id, json) ->
-                    this[PendingUpdatesTable.updateId] = id
-                    this[PendingUpdatesTable.payload] = json
+                TelegramPendingUpdatesTable.batchInsert(rows, ignore = true) { (id, json) ->
+                    this[TelegramPendingUpdatesTable.updateId] = id
+                    this[TelegramPendingUpdatesTable.payload] = json
                 }
             }
         }.onFailure {
@@ -66,7 +66,7 @@ internal class UpdateSpool(private val retention: Duration) {
     suspend fun settle(updateId: Int) {
         runCatching {
             dbTransaction {
-                PendingUpdatesTable.deleteWhere { PendingUpdatesTable.updateId eq updateId.toLong() }
+                TelegramPendingUpdatesTable.deleteWhere { TelegramPendingUpdatesTable.updateId eq updateId.toLong() }
             }
         }.onFailure {
             it.rethrowIfCancellation()
@@ -86,17 +86,17 @@ internal class UpdateSpool(private val retention: Duration) {
 
             val stale =
                 dbTransaction {
-                    PendingUpdatesTable.deleteWhere { PendingUpdatesTable.receivedAt less cutoff }
+                    TelegramPendingUpdatesTable.deleteWhere { TelegramPendingUpdatesTable.receivedAt less cutoff }
                 }
 
             if (stale > 0) log.warn { "dropped $stale update(s) older than $retention instead of answering late" }
 
             val pending =
                 dbTransaction {
-                    PendingUpdatesTable
+                    TelegramPendingUpdatesTable
                         .selectAll()
-                        .orderBy(PendingUpdatesTable.updateId to SortOrder.ASC)
-                        .map { it[PendingUpdatesTable.updateId] to it[PendingUpdatesTable.payload] }
+                        .orderBy(TelegramPendingUpdatesTable.updateId to SortOrder.ASC)
+                        .map { it[TelegramPendingUpdatesTable.updateId] to it[TelegramPendingUpdatesTable.payload] }
                 }
 
             pending.mapNotNull { (id, json) ->

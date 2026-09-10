@@ -14,7 +14,7 @@ import java.time.Instant
  * table, a poll id is Telegram's own, and another messenger reporting answers at all would need its own
  * mechanism rather than a share of this one.
  */
-object PollsTable : Table("polls") {
+object TelegramPollsTable : Table("telegram_polls") {
 
     /** Telegram's poll id, which is what a `poll_answer` update arrives carrying. */
     val pollId = varchar("poll_id", 64)

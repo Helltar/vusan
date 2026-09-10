@@ -7,8 +7,8 @@ import java.time.Instant
 // which sticker sets a chat actually uses, and how recently. the catalog is global but the index
 // offered to the model is per chat, so a group is only shown the stickers its own people throw around.
 //
-// Telegram-owned; `chat_id` carries no `platform` for the reason given in ChatStickersTable.
-object ChatStickerSetsTable : Table("chat_sticker_sets") {
+// Telegram-owned; `chat_id` carries no `platform` for the reason given in TelegramChatStickersTable.
+object TelegramChatStickerSetsTable : Table("telegram_chat_sticker_sets") {
 
     val chatId = long("chat_id")
     val setName = varchar("set_name", 64)

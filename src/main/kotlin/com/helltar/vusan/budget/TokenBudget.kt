@@ -5,7 +5,7 @@ import com.helltar.vusan.common.rethrowIfCancellation
 import com.helltar.vusan.config.TokenBudgetConfig
 import com.helltar.vusan.infra.Db.dbTransaction
 import com.helltar.vusan.infra.tables.TokenUsageTable
-import com.helltar.vusan.infra.tables.TokenUserSpendTable
+import com.helltar.vusan.infra.tables.TokenUsageByUserTable
 import com.helltar.vusan.request.UserRef
 import io.github.oshai.kotlinlogging.KotlinLogging
 import kotlinx.coroutines.sync.Mutex
@@ -173,12 +173,12 @@ class TokenBudget(
 
     private suspend fun loadUsers(day: LocalDate): MutableMap<UserRef, DailySpend> =
         readOrElse("today's per-user token spend for day=$day", mutableMapOf()) {
-            TokenUserSpendTable
+            TokenUsageByUserTable
                 .selectAll()
-                .where { TokenUserSpendTable.day eq day.toString() }
+                .where { TokenUsageByUserTable.day eq day.toString() }
                 .associateTo(mutableMapOf()) {
-                    UserRef(it[TokenUserSpendTable.platform], it[TokenUserSpendTable.userId]) to
-                            DailySpend(it[TokenUserSpendTable.inputTokens], it[TokenUserSpendTable.outputTokens])
+                    UserRef(it[TokenUsageByUserTable.platform], it[TokenUsageByUserTable.userId]) to
+                            DailySpend(it[TokenUsageByUserTable.inputTokens], it[TokenUsageByUserTable.outputTokens])
                 }
         }
 
@@ -189,9 +189,9 @@ class TokenBudget(
         readOrElse("the recently active users for day=$today", 1) {
             val since = today.minusDays(ACTIVE_WINDOW_DAYS - 1).toString()
 
-            TokenUserSpendTable
-                .select(TokenUserSpendTable.platform, TokenUserSpendTable.userId)
-                .where { TokenUserSpendTable.day greaterEq since }
+            TokenUsageByUserTable
+                .select(TokenUsageByUserTable.platform, TokenUsageByUserTable.userId)
+                .where { TokenUsageByUserTable.day greaterEq since }
                 .withDistinct()
                 .count()
                 .toInt()
@@ -217,25 +217,25 @@ class TokenBudget(
 
             if (user == null || userSpend == null) return@write
 
-            TokenUserSpendTable.upsert(
-                TokenUserSpendTable.day,
-                TokenUserSpendTable.platform,
-                TokenUserSpendTable.userId
+            TokenUsageByUserTable.upsert(
+                TokenUsageByUserTable.day,
+                TokenUsageByUserTable.platform,
+                TokenUsageByUserTable.userId
             ) {
-                it[TokenUserSpendTable.day] = day.toString()
-                it[TokenUserSpendTable.platform] = user.platform
-                it[TokenUserSpendTable.userId] = user.id
-                it[TokenUserSpendTable.inputTokens] = userSpend.inputTokens
-                it[TokenUserSpendTable.outputTokens] = userSpend.outputTokens
-                it[TokenUserSpendTable.updatedAt] = now
+                it[TokenUsageByUserTable.day] = day.toString()
+                it[TokenUsageByUserTable.platform] = user.platform
+                it[TokenUsageByUserTable.userId] = user.id
+                it[TokenUsageByUserTable.inputTokens] = userSpend.inputTokens
+                it[TokenUsageByUserTable.outputTokens] = userSpend.outputTokens
+                it[TokenUsageByUserTable.updatedAt] = now
             }
         }
     }
 
     private suspend fun pruneOldUserSpend(today: LocalDate) {
         write("the expired per-user token spend") {
-            TokenUserSpendTable.deleteWhere {
-                TokenUserSpendTable.day less today.minusDays(USER_SPEND_RETENTION_DAYS).toString()
+            TokenUsageByUserTable.deleteWhere {
+                TokenUsageByUserTable.day less today.minusDays(USER_SPEND_RETENTION_DAYS).toString()
             }
         }
     }

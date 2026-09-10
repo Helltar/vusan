@@ -5,7 +5,7 @@ import org.jetbrains.exposed.v1.javatime.timestamp
 
 // what each person spent on a budget day. kept for a few weeks past the sharing window, since the number of
 // people the day is split between is read from the recent days rather than from the allowlist.
-object TokenUserSpendTable : Table("token_user_spend") {
+object TokenUsageByUserTable : Table("token_usage_by_user") {
 
     // local date as `yyyy-MM-dd` in the budget timezone, matching TokenUsageTable.
     val day = varchar("day", 10)
