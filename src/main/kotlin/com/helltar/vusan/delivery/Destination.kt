@@ -1,6 +1,7 @@
 package com.helltar.vusan.delivery
 
 import com.helltar.vusan.request.ChatRef
+import com.helltar.vusan.request.UserRef
 
 /**
  * Where an answer belongs.
@@ -25,10 +26,25 @@ data class Destination(
 /**
  * The line naming who a scheduled answer belongs to, and where it hangs.
  *
- * The wording is decided by `tasks/` — it is task policy, and it is localized — while whether the
- * anchor still exists, and what to do when it does not, is the adapter's to find out.
+ * Why a chat is being written to unprompted is task policy — a standing order somebody set up reads
+ * differently from the bot returning to a conversation — but how the person is named is not: a
+ * mention is the platform's own syntax, so the adapter is told who it is talking about and writes
+ * the line itself. Whether the anchor still exists is likewise the adapter's to find out.
  */
 data class Attribution(
     val anchorMessageId: Long?,
-    val headerText: String
+    val person: UserRef,
+    val displayName: String? = null,
+    val username: String? = null,
+    val reason: AttributionReason
 )
+
+/** Why an answer nobody just asked for is arriving. */
+enum class AttributionReason {
+
+    /** A task its owner set up fired. */
+    SCHEDULED,
+
+    /** The bot set itself a follow-up in this conversation. */
+    FOLLOW_UP
+}

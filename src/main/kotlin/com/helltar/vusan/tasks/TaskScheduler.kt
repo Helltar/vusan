@@ -5,7 +5,6 @@ import com.helltar.vusan.agent.AgentRunner
 import com.helltar.vusan.budget.TokenBudget
 import com.helltar.vusan.common.rethrowIfCancellation
 import com.helltar.vusan.i18n.Messages
-import com.helltar.vusan.delivery.Attribution
 import com.helltar.vusan.delivery.OutputDelivery
 import com.helltar.vusan.delivery.TurnDelivery
 import com.helltar.vusan.request.AccessPolicy
@@ -216,7 +215,7 @@ class TaskScheduler(
                         destination = task.destination,
                         recipient = task.scope.user,
                         language = task.language,
-                        attribution = attributionFor(task)
+                        attribution = task.attribution
                     )
                 ).isUnreachable
             }.getOrElse {
@@ -242,30 +241,6 @@ class TaskScheduler(
             repo.disable(task.id)
         else
             repo.reschedule(task.id, nextFire)
-    }
-
-    private fun attributionFor(task: ScheduledTask): Attribution? {
-        if (task.chatIsPrivate) return null
-
-        val mention =
-            when {
-                task.creatorUsername != null -> "@${task.creatorUsername}"
-                task.creatorDisplayName != null ->
-                    "[${task.creatorDisplayName}](tg://user?id=${task.scope.user.id})"
-
-                else -> "user ${task.scope.user.id}"
-            }
-
-        val messages = Messages.of(task.language)
-
-        return Attribution(
-            anchorMessageId = task.creatorMessageId,
-            headerText =
-                if (task.selfInitiated)
-                    messages.taskFollowUpNotice(mention)
-                else
-                    messages.taskScheduledByNotice(mention)
-        )
     }
 }
 

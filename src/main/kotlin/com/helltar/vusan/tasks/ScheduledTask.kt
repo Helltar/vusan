@@ -1,5 +1,7 @@
 package com.helltar.vusan.tasks
 
+import com.helltar.vusan.delivery.Attribution
+import com.helltar.vusan.delivery.AttributionReason
 import com.helltar.vusan.delivery.Destination
 import com.helltar.vusan.i18n.Language
 import com.helltar.vusan.request.ChatContext
@@ -93,6 +95,26 @@ internal fun ScheduledTask.toRequestContext(profile: ChatProfile = ChatProfile.N
 /** Where this task's fire, and every notice about it, belongs. */
 internal val ScheduledTask.destination: Destination
     get() = Destination(scope.chat, threadId = creatorThreadId)
+
+/**
+ * Whose fire this is, for the line the chat sees above it.
+ *
+ * A private chat gets none: its only other member is the person the task belongs to, and naming them
+ * to themselves says nothing. What is passed on is who they are, not how to write them — the mention
+ * is the messenger's own syntax.
+ */
+internal val ScheduledTask.attribution: Attribution?
+    get() =
+        if (chatIsPrivate)
+            null
+        else
+            Attribution(
+                anchorMessageId = creatorMessageId,
+                person = scope.user,
+                displayName = creatorDisplayName,
+                username = creatorUsername,
+                reason = if (selfInitiated) AttributionReason.FOLLOW_UP else AttributionReason.SCHEDULED
+            )
 
 /** Keeps a future slot, or advances a recurring task past every elapsed slot. */
 internal fun ScheduledTask.nextFireAfterResume(now: Instant): Instant? =

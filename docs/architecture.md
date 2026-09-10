@@ -67,8 +67,9 @@ Telegram ──► telegram/ ──► agent/ ──► tools/ ──► externa
   (`IMAGE`/`VIDEO`/`OTHER`) decides which of those tools accepts it; a video also carries its duration and a loader for
   Telegram's own thumbnail.
 - **`delivery/`** — the shared output address and port: a `Destination` (chat, optional thread, optional reply
-  anchor), the `Attribution` line naming who a scheduled answer belongs to, and `OutputDelivery`, which an adapter
-  implements so nothing outside one needs a messenger client to deliver a turn.
+  anchor), the `Attribution` saying who a scheduled answer belongs to and why the chat is hearing from the bot at all
+  (`AttributionReason`) — the adapter writes the mention itself, since naming a person is platform syntax — and
+  `OutputDelivery`, which an adapter implements so nothing outside one needs a messenger client to deliver a turn.
 - **`tasks/`** — scheduled-task subsystem: storage, persisted pause state, recurrence math, and the background
   `TaskScheduler`. It knows no messenger: it delivers through `OutputDelivery` and reads chat facts through
   `ChatProfileLookup`.

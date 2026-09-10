@@ -5,7 +5,10 @@ import com.helltar.vusan.agent.ToolActivity
 import com.helltar.vusan.agent.grouplog.GroupLogEntry
 import com.helltar.vusan.agent.grouplog.GroupLogRepository
 import com.helltar.vusan.common.collapseWhitespaceAndCap
+import com.helltar.vusan.common.escapeHtml
 import com.helltar.vusan.common.rethrowIfCancellation
+import com.helltar.vusan.delivery.Attribution
+import com.helltar.vusan.delivery.AttributionReason
 import com.helltar.vusan.delivery.Destination
 import com.helltar.vusan.delivery.DeliveryOutcome
 import com.helltar.vusan.delivery.OutputDelivery
@@ -104,6 +107,23 @@ internal fun chatActionFor(activity: ToolActivity?): ActionType = when (activity
 private val Destination.chatTarget: ChatTarget
     get() = ChatTarget(chat.telegramChatId, telegramThreadId(threadId))
 
+// how Telegram names a person: a public @username where there is one, otherwise a link that opens the
+// account behind their display name. it is written as HTML because that is what a notice is parsed as
+// — markdown would arrive as its own punctuation — and the name is somebody's own text, so it is
+// escaped like any other.
+private val Attribution.mention: String
+    get() =
+        username?.let { "@$it" }
+            ?: """<a href="tg://user?id=${person.telegramUserId}">${(displayName ?: person.id).escapeHtml()}</a>"""
+
+// which of the two lines to write follows from the reason the task gave; only the mention inside it
+// is Telegram's.
+private fun Attribution.headerText(messages: Messages): String =
+    when (reason) {
+        AttributionReason.SCHEDULED -> messages.taskScheduledByNotice(mention)
+        AttributionReason.FOLLOW_UP -> messages.taskFollowUpNotice(mention)
+    }
+
 /**
  * [onStickerRejected] is told the catalog id of a sticker Telegram would not accept. It is a hint, not
  * a verdict: the catalog schedules an early re-read of that set rather than deleting anything here,
@@ -173,7 +193,7 @@ class TelegramDelivery(
         val attribution = delivery.attribution
 
         if (attribution?.anchorMessageId == null) {
-            attribution?.let { notify(delivery.destination, it.headerText) }
+            attribution?.let { notify(delivery.destination, it.headerText(messages)) }
 
             return dispatch(delivery.result, plainTarget, plainTarget, recipient, messages).asOutcome()
         }
@@ -184,7 +204,7 @@ class TelegramDelivery(
         // the message the task was set up from is gone, so the answer arrived unanchored and the line
         // saying whose it is has to be sent on its own.
         if (outcome.replyUnavailable && !outcome.chatUnreachable) {
-            notify(delivery.destination, attribution.headerText)
+            notify(delivery.destination, attribution.headerText(messages))
         }
 
         return outcome.asOutcome()

@@ -10,6 +10,7 @@ import java.io.Serializable
 import java.lang.reflect.Proxy
 import java.util.concurrent.CompletableFuture
 import com.helltar.vusan.delivery.Attribution
+import com.helltar.vusan.delivery.AttributionReason
 import com.helltar.vusan.delivery.Destination
 import com.helltar.vusan.delivery.TurnDelivery
 import com.helltar.vusan.request.testChat
@@ -199,6 +200,47 @@ class TelegramDeliveryTest {
         assertEquals(listOf("here it is"), client.sentTexts)
     }
 
+    @Test
+    fun `a scheduled fire names its owner by username`() = runBlocking {
+        val client = RecordingClient()
+
+        deliverScheduled(
+            client,
+            Attribution(
+                anchorMessageId = null,
+                person = testUser(100),
+                displayName = "Helltar",
+                username = "helltar",
+                reason = AttributionReason.SCHEDULED
+            )
+        )
+
+        assertEquals("⏰ Scheduled by @helltar", client.sentTexts.first())
+    }
+
+    // a notice is parsed as HTML, so the link has to be written as HTML: markdown would arrive as
+    // literal brackets, and a display name is the person's own text.
+    @Test
+    fun `an owner without a username is linked by their account`() = runBlocking {
+        val client = RecordingClient()
+
+        deliverScheduled(
+            client,
+            Attribution(
+                anchorMessageId = null,
+                person = testUser(100),
+                displayName = "Ann & <b>Bob</b>",
+                username = null,
+                reason = AttributionReason.FOLLOW_UP
+            )
+        )
+
+        assertEquals(
+            """💬 Following up with <a href="tg://user?id=100">Ann &amp; &lt;b&gt;Bob&lt;/b&gt;</a>""",
+            client.sentTexts.first()
+        )
+    }
+
     // a task fired in a forum has no message to anchor to once the one that created it is gone, so the
     // topic is the only thing keeping the answer out of the group's General.
     @Test
@@ -303,6 +345,18 @@ class TelegramDeliveryTest {
 
                 else -> CompletableFuture.completedFuture(true)
             }
+    }
+
+    private suspend fun deliverScheduled(client: RecordingClient, attribution: Attribution) {
+        TelegramDelivery(client.proxy).deliver(
+            TurnDelivery(
+                result = AgentResult(outputs = emptyList(), comment = "The weekly summary is ready."),
+                destination = Destination(testChat(-7)),
+                recipient = testUser(100),
+                language = Language.ENGLISH,
+                attribution = attribution
+            )
+        )
     }
 
     private suspend fun deliverSticker(delivery: TelegramDelivery) {
