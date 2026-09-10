@@ -8,6 +8,7 @@ ENV NGINX_ENVSUBST_FILTER=SITES_
 
 COPY default.conf.template /etc/nginx/templates/default.conf.template
 COPY 18-site-domain-regex.envsh /docker-entrypoint.d/18-site-domain-regex.envsh
-RUN chmod 0755 /docker-entrypoint.d/18-site-domain-regex.envsh
+COPY 19-origin-pulls.sh /docker-entrypoint.d/19-origin-pulls.sh
+RUN chmod 0755 /docker-entrypoint.d/18-site-domain-regex.envsh /docker-entrypoint.d/19-origin-pulls.sh
 
 EXPOSE 443

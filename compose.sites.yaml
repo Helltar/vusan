@@ -44,12 +44,16 @@ services:
 
   vusan-sites-nginx:
     image: "${SITES_NGINX_IMAGE:-ghcr.io/helltar/vusan-sites-nginx:latest}"
+    build:
+      context: ./sites/nginx
     container_name: vusan-sites-nginx-container
     restart: unless-stopped
     init: true
     depends_on: [vusan-sites]
     environment:
       SITES_DOMAIN: "${SITES_DOMAIN:?the domain sites are served under, such as example.com}"
+      # `off` only where Cloudflare is not in front: nothing else can present the certificate it asks for.
+      SITES_ORIGIN_PULLS: "${SITES_ORIGIN_PULLS:-on}"
     ports:
       # address-qualified on purpose: a bare `443:443` also binds `[::]`, and Cloudflare reaches this
       # origin over IPv4 only. An unused v6 listener is a direct-to-origin path serving nobody.

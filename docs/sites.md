@@ -85,6 +85,42 @@ Two zone settings are worth checking:
 - **Bot Fight Mode** challenges automated requests and would break publishing on `api.` with no useful
   error.
 
+### Without Cloudflare
+
+Two things change, and neither touches this host's design: nginx reads its certificate out of
+`certs/` and does not care who put it there.
+
+**Turn origin pulls off.** Authenticated Origin Pulls asks every caller for Cloudflare's own client
+certificate, which nothing else can present, so with anything else in front — another CDN, or
+nothing at all — nginx would refuse every request:
+
+```dotenv
+SITES_ORIGIN_PULLS=off
+```
+
+It is `on` by default and stays that way unless you set this, so an existing deployment cannot lose
+the check by accident. With it off, `origin-pull-ca.pem` is no longer needed, and what keeps
+strangers off the origin is whatever fronts it; the publishing API is still behind its bearer token,
+and an unknown server name is still refused at the handshake.
+
+**Bring a wildcard certificate.** Any ACME client that can do a DNS-01 challenge will issue one —
+`*.example.com` cannot be validated over HTTP. Point it at `certs/` and reload nginx afterwards:
+
+```bash
+lego --dns <your provider> --domains '*.example.com' --email you@example.com run
+cp .lego/certificates/_.example.com.crt  ~/vusan/certs/site.pem
+cp .lego/certificates/_.example.com.key  ~/vusan/certs/site.key
+docker compose --env-file env/sites.env -f compose.sites.yaml exec vusan-sites-nginx nginx -s reload
+```
+
+That is a cron job, not a service, which is why nothing here ships one: the certificate is a file on
+disk and renewing it is copying two files and reloading. The credential that renewal needs is a DNS
+API token, and this is the machine serving the least trusted content in the deployment — so scope it
+to this zone, or delegate `_acme-challenge` by `CNAME` to something like `acme-dns` and let the
+token reach nothing but challenge records.
+
+A commercial wildcard works the same way and needs no token on the machine at all.
+
 ## What publishing does
 
 The agent zips the finished files in the workspace and calls `publishSite`. The bot reads that one
@@ -119,6 +155,7 @@ one here needs no matching change in the bot.
 | `SITES_TOKEN_FILE`          | —       | A file holding that secret instead. An explicit token wins.         |
 | `SITES_HOST_DIR`            | `./data` | Where published sites live on this machine.                        |
 | `SITES_CERT_DIR`            | `./certs` | The certificate, its key and the origin-pull CA.                   |
+| `SITES_ORIGIN_PULLS`        | `on`    | Require Cloudflare's client certificate. `off` with anything else in front. |
 | `SITES_IMAGE`               | `ghcr.io/helltar/vusan-sites:latest` | The service image.                 |
 | `SITES_NGINX_IMAGE`         | `ghcr.io/helltar/vusan-sites-nginx:latest` | The nginx image; keep both on one tag. |
 | `SITES_MAX_MB`              | `100`   | The largest a single site may be.                                   |

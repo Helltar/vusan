@@ -2,13 +2,13 @@
 # not (NGINX_ENVSUBST_FILTER). `SITES_DOMAIN_RE` is the domain with its dots escaped, built by
 # 18-site-domain-regex.envsh, because the site vhost matches its host with a regex.
 
-# Cloudflare terminates TLS at the edge and reaches this origin with its client certificate; without a
-# matching one, nothing gets past the handshake. The certificate is Cloudflare's Origin CA, trusted by
-# Cloudflare alone, which is why the DNS records in front of this must stay proxied.
+# Behind Cloudflare, TLS terminates at the edge and this origin is reached with Cloudflare's client
+# certificate; without a matching one, nothing gets past the handshake. That check is what
+# `origin-pull.conf` carries, written by 19-origin-pulls.sh from SITES_ORIGIN_PULLS, and it is on
+# unless an operator who is not behind Cloudflare turns it off.
 ssl_certificate         /etc/nginx/certs/site.pem;
 ssl_certificate_key     /etc/nginx/certs/site.key;
-ssl_client_certificate  /etc/nginx/certs/origin-pull-ca.pem;
-ssl_verify_client       on;
+include                 /etc/nginx/origin-pull.conf;
 ssl_protocols           TLSv1.2 TLSv1.3;
 ssl_session_cache       shared:SSL:2m;
 ssl_session_timeout     1h;
