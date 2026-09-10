@@ -1,5 +1,5 @@
 import { deepStrictEqual, rejects, strictEqual, throws } from "node:assert/strict";
-import { integer, jobId, readBounded, RequestError, workspaceId } from "./protocol.ts";
+import { integer, jobId, readBounded, RequestError, workspaceId } from "../protocol.ts";
 
 Deno.test("identifiers cannot inject paths or Docker names", () => {
   strictEqual(workspaceId("u42"), "u42");

@@ -1,5 +1,5 @@
 import { strictEqual, throws } from "node:assert/strict";
-import { readConfig } from "./config.ts";
+import { readConfig } from "../config.ts";
 
 Deno.test("configuration fails closed on unsupported networking and invalid limits", () => {
   const settings = [

@@ -1,6 +1,6 @@
-import { readConfig } from "./config.ts";
+import { readConfig } from "../config.ts";
 import { strictEqual, throws } from "node:assert/strict";
-import { accumulateBurn, workspaceCapacity } from "./container.ts";
+import { accumulateBurn, workspaceCapacity } from "../container.ts";
 
 Deno.test("unattended cpu accumulates only between a workspace's own commands", () => {
   const second = 1_000_000;

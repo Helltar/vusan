@@ -221,7 +221,7 @@ chat capabilities. Nothing under `tools/` may name a messenger, and
   its environment, no host mounts, no production resources, no reachable local
   network. Its policy filters by destination IP, never hostname, and lives on the
   Docker host where nothing inside a workspace can reach it. Anything weakening
-  it must fail closed, as `workspace/netpolicy.sh` and the `container.ts` startup
+  it must fail closed, as `workspace/scripts/netpolicy.sh` and the `container.ts` startup
   probe do: a policy that cannot be installed, or that a throwaway workspace is
   shown to escape, stops the service instead of degrading it.
 - Untrusted public URLs use `FileDownloadClient` with `createPublicHttpClient`,

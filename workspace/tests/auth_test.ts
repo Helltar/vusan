@@ -1,5 +1,5 @@
 import { ok, rejects, strictEqual, throws } from "node:assert/strict";
-import { authorized, loadToken, validateToken } from "./auth.ts";
+import { authorized, loadToken, validateToken } from "../auth.ts";
 
 const secret = "synthetic-workspace-token-123456789";
 

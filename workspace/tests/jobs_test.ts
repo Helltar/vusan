@@ -1,7 +1,7 @@
 import { rejects, strictEqual } from "node:assert/strict";
-import { readConfig } from "./config.ts";
-import { Containers } from "./container.ts";
-import { Jobs } from "./jobs.ts";
+import { readConfig } from "../config.ts";
+import { Containers } from "../container.ts";
+import { Jobs } from "../jobs.ts";
 
 Deno.test("recovery marks running jobs interrupted without losing output or touching other statuses", async () => {
   const root = await Deno.makeTempDir();

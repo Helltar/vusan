@@ -90,7 +90,7 @@ jobs:
         working-directory: workspace
         env:
           WORKSPACE_TEST_IMAGE: vusan-workspace:ci
-        run: deno test --allow-env --allow-net --allow-run=docker integration_test.ts
+        run: deno test --allow-env --allow-net --allow-run=docker tests/integration_test.ts
 
   publish:
     if: github.event_name == 'release'

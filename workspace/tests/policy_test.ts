@@ -1,8 +1,8 @@
 import { ok, strictEqual } from "node:assert/strict";
-import { readConfig } from "./config.ts";
-import type { Containers } from "./container.ts";
-import type { Jobs } from "./jobs.ts";
-import { PolicyGuard } from "./policy.ts";
+import { readConfig } from "../config.ts";
+import type { Containers } from "../container.ts";
+import type { Jobs } from "../jobs.ts";
+import { PolicyGuard } from "../policy.ts";
 
 Deno.test("a policy that disappears is reinstalled, and a workspace waits only if it cannot be", async () => {
   const config = { ...readConfig(), policyCheckSeconds: 0 };

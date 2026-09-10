@@ -1,5 +1,5 @@
 import { strictEqual } from "node:assert/strict";
-import { clean, completeUtf8Prefix, JobLog } from "./output.ts";
+import { clean, completeUtf8Prefix, JobLog } from "../output.ts";
 
 const encode = (s: string) => new TextEncoder().encode(s);
 

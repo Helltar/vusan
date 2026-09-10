@@ -1,9 +1,9 @@
 import { rejects, strictEqual, throws } from "node:assert/strict";
 import { statfs } from "node:fs/promises";
-import { readConfig } from "./config.ts";
-import { Containers } from "./container.ts";
-import { Jobs } from "./jobs.ts";
-import { DiskGuard } from "./storage.ts";
+import { readConfig } from "../config.ts";
+import { Containers } from "../container.ts";
+import { Jobs } from "../jobs.ts";
+import { DiskGuard } from "../storage.ts";
 
 Deno.test("the storage guard latches on pressure and clears itself once space returns", async () => {
   const root = await Deno.makeTempDir();

@@ -1,6 +1,6 @@
 import { rejects, strictEqual } from "node:assert/strict";
-import { deleteWorkspacePath, resolveFile } from "./files.ts";
-import { RequestError } from "./protocol.ts";
+import { deleteWorkspacePath, resolveFile } from "../files.ts";
+import { RequestError } from "../protocol.ts";
 
 Deno.test("file paths refuse traversal and symlinks before creating parents", async () => {
   const root = await Deno.makeTempDir();

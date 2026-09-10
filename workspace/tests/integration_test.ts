@@ -1,5 +1,5 @@
 import { deepStrictEqual, ok, strictEqual } from "node:assert/strict";
-import { docker, dockerText } from "./docker.ts";
+import { docker, dockerText } from "../docker.ts";
 
 const image = Deno.env.get("WORKSPACE_TEST_IMAGE");
 

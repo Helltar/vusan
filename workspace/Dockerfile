@@ -40,9 +40,9 @@ RUN groupadd --gid 1000 workspace \
 
 WORKDIR /app
 COPY deno.json *.ts ./
-COPY entrypoint.sh netpolicy.sh home-disk.sh /usr/local/bin/
-COPY profile.sh /etc/profile.d/vusan-workspace.sh
-COPY chromium-flags.sh /etc/chromium.d/vusan
+COPY scripts/entrypoint.sh scripts/netpolicy.sh scripts/home-disk.sh /usr/local/bin/
+COPY scripts/profile.sh /etc/profile.d/vusan-workspace.sh
+COPY scripts/chromium-flags.sh /etc/chromium.d/vusan
 
 RUN deno check main.ts && chmod +x /usr/local/bin/entrypoint.sh /usr/local/bin/netpolicy.sh /usr/local/bin/home-disk.sh
 
