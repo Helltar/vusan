@@ -14,7 +14,9 @@ object ScheduledTasksTable : LongIdTable("scheduled_tasks") {
     val recurrence = varchar("recurrence", 100)
     val timezone = varchar("timezone", 64)
     val nextFireAt = timestamp("next_fire_at")
-    val enabled = bool("enabled").default(true)
+
+    // a task is paused by its owner, or by the bot losing the right to post where it fires. one that
+    // has fired for the last time is deleted instead: nothing reads a task that will never run again.
     val paused = bool("paused").default(false)
     val createdAt = timestamp("created_at").clientDefault { Instant.now() }
 
@@ -27,7 +29,7 @@ object ScheduledTasksTable : LongIdTable("scheduled_tasks") {
     val creatorDisplayName = varchar("creator_display_name", 200).nullable()
 
     init {
-        index(false, platform, userId, enabled)
-        index(false, enabled, paused, nextFireAt)
+        index(false, platform, userId)
+        index(false, paused, nextFireAt)
     }
 }

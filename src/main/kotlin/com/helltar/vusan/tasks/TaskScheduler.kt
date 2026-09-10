@@ -273,7 +273,7 @@ class TaskScheduler(
 
         val moved =
             if (nextFire == null)
-                repo.disable(task.id, task.nextFireAt)
+                repo.deleteFinished(task.id, task.nextFireAt)
             else
                 repo.reschedule(task.id, task.nextFireAt, nextFire)
 

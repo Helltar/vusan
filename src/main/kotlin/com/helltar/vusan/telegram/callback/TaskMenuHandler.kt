@@ -110,7 +110,7 @@ internal class TaskMenuHandler(
                 }
 
                 is TaskMenuAction.Resume -> {
-                    val task = tasks.findEnabledForUser(telegramUser(userId), action.taskId, scopedChatId?.let(::telegramChat))
+                    val task = tasks.findForUser(telegramUser(userId), action.taskId, scopedChatId?.let(::telegramChat))
 
                     if (task == null) {
                         editMenu(chatId, messageId, userId, chatIsPrivate, messages)
@@ -138,7 +138,7 @@ internal class TaskMenuHandler(
                 }
 
                 is TaskMenuAction.ConfirmDelete -> {
-                    val task = tasks.findEnabledForUser(telegramUser(userId), action.taskId, scopedChatId?.let(::telegramChat))
+                    val task = tasks.findForUser(telegramUser(userId), action.taskId, scopedChatId?.let(::telegramChat))
 
                     if (task == null) {
                         editMenu(chatId, messageId, userId, chatIsPrivate, messages)
@@ -149,7 +149,7 @@ internal class TaskMenuHandler(
                 }
 
                 is TaskMenuAction.Delete -> {
-                    if (!tasks.deleteEnabledForUser(telegramUser(userId), action.taskId, scopedChatId?.let(::telegramChat))) {
+                    if (!tasks.deleteForUser(telegramUser(userId), action.taskId, scopedChatId?.let(::telegramChat))) {
                         editMenu(chatId, messageId, userId, chatIsPrivate, messages)
                         return answerUnavailable(callbackQueryId, messages)
                     }
@@ -234,10 +234,10 @@ internal class TaskMenuHandler(
         messages: Messages
     ): TaskMenu {
         val currentChatOnly = !chatIsPrivate
-        val listedTasks = tasks.listEnabledByUser(telegramUser(userId), chatId.takeIf { currentChatOnly }?.let(::telegramChat))
+        val listedTasks = tasks.listForUser(telegramUser(userId), chatId.takeIf { currentChatOnly }?.let(::telegramChat))
         // the capacity line is paired with MAX_TASKS_PER_USER, so it counts what that limit governs. the
         // bot's own follow-ups are listed below it but have their own separate limit.
-        val totalTasks = tasks.countEnabledByUser(telegramUser(userId), selfInitiated = false)
+        val totalTasks = tasks.countForUser(telegramUser(userId), selfInitiated = false)
 
         val shownTasks = listedTasks.fittingInMenu(messages)
         val hiddenTasks = listedTasks.size - shownTasks.size

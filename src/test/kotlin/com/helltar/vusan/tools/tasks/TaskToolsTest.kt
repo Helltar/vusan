@@ -56,10 +56,10 @@ class TaskToolsTest {
         val tools = tools(requestContext(chatId = 100L, userId = 100L))
 
         assertContains(tools.pauseTask(id), "Paused task id=$id")
-        assertTrue(assertNotNull(repo.findEnabledForUser(testUser(100), id)).paused)
+        assertTrue(assertNotNull(repo.findForUser(testUser(100), id)).paused)
 
         assertContains(tools.resumeTask(id), "Resumed task id=$id")
-        val resumed = assertNotNull(repo.findEnabledForUser(testUser(100), id))
+        val resumed = assertNotNull(repo.findForUser(testUser(100), id))
         assertFalse(resumed.paused)
         assertEquals(future.toEpochMilli(), resumed.nextFireAt.toEpochMilli())
     }
@@ -85,7 +85,7 @@ class TaskToolsTest {
             )
 
         assertContains(result, "Updated task id=$id")
-        val edited = assertNotNull(repo.findEnabledForUser(testUser(100), id))
+        val edited = assertNotNull(repo.findForUser(testUser(100), id))
         assertEquals("send the revised report", edited.prompt)
         assertEquals(null, edited.title)
         assertEquals(Recurrence.Every(1.hours), edited.recurrence)
@@ -107,7 +107,7 @@ class TaskToolsTest {
             )
 
         assertContains(result, "Updated task id=$id")
-        val edited = assertNotNull(repo.findEnabledForUser(testUser(100), id))
+        val edited = assertNotNull(repo.findForUser(testUser(100), id))
         assertEquals("Europe/Kyiv", edited.timezone.id)
         assertEquals("30 8 * * *", assertIs<Recurrence.Cron>(edited.recurrence).expression)
         assertTrue(edited.nextFireAt.isAfter(beforeEdit))
@@ -129,7 +129,7 @@ class TaskToolsTest {
 
         assertContains(tools.resumeTask(id), "Resumed task id=$id")
 
-        val resumed = assertNotNull(repo.findEnabledForUser(testUser(100), id))
+        val resumed = assertNotNull(repo.findForUser(testUser(100), id))
         assertFalse(resumed.paused)
         assertTrue(resumed.nextFireAt.isAfter(beforeResume))
     }
@@ -148,7 +148,7 @@ class TaskToolsTest {
         val result = tools.resumeTask(id)
 
         assertContains(result, "cannot be resumed")
-        assertTrue(assertNotNull(repo.findEnabledForUser(testUser(100), id)).paused)
+        assertTrue(assertNotNull(repo.findForUser(testUser(100), id)).paused)
     }
 
     @Test
@@ -165,16 +165,16 @@ class TaskToolsTest {
         assertFalse(listed.contains("other group report"))
 
         assertContains(tools.pauseTask(otherId), "in this chat")
-        assertFalse(assertNotNull(repo.findEnabledForUser(testUser(100), otherId)).paused)
+        assertFalse(assertNotNull(repo.findForUser(testUser(100), otherId)).paused)
 
         assertContains(tools.editTask(otherId, title = "leaked title"), "in this chat")
-        assertEquals("other group report", assertNotNull(repo.findEnabledForUser(testUser(100), otherId)).title)
+        assertEquals("other group report", assertNotNull(repo.findForUser(testUser(100), otherId)).title)
 
         assertContains(tools.pauseTask(currentId), "Paused task id=$currentId")
-        assertTrue(assertNotNull(repo.findEnabledForUser(testUser(100), currentId)).paused)
+        assertTrue(assertNotNull(repo.findForUser(testUser(100), currentId)).paused)
 
         assertContains(tools.cancelTask(otherId), "in this chat")
-        assertNotNull(repo.findEnabledForUser(testUser(100), otherId))
+        assertNotNull(repo.findForUser(testUser(100), otherId))
         Unit
     }
 
@@ -185,7 +185,7 @@ class TaskToolsTest {
 
         assertContains(tools.scheduleFollowUp("ask how the exam went", at.toString()), "Follow-up id=")
 
-        val stored = assertNotNull(repo.listEnabledByUser(testUser(100)).singleOrNull())
+        val stored = assertNotNull(repo.listForUser(testUser(100)).singleOrNull())
         assertTrue(stored.selfInitiated)
         assertIs<Recurrence.Once>(stored.recurrence)
         assertEquals("7", stored.creatorMessageId)
@@ -210,7 +210,7 @@ class TaskToolsTest {
         val past = Instant.now().atZone(ZoneId.systemDefault()).minusDays(1).toLocalDateTime().truncatedTo(ChronoUnit.MINUTES)
 
         assertContains(tools.scheduleFollowUp("too late", past.toString()), "in the past")
-        assertTrue(repo.listEnabledByUser(testUser(100)).isEmpty())
+        assertTrue(repo.listForUser(testUser(100)).isEmpty())
     }
 
     private fun tools(context: RequestContext) =

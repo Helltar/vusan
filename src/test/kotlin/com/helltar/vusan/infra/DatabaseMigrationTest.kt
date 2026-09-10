@@ -59,8 +59,8 @@ class DatabaseMigrationTest {
             }
 
             val indexed = scheduledTaskIndexColumns(dbPath.toString())
-            assertTrue(listOf("enabled", "paused", "next_fire_at") in indexed, "indices were $indexed")
-            assertTrue(listOf("platform", "user_id", "enabled") in indexed, "indices were $indexed")
+            assertTrue(listOf("paused", "next_fire_at") in indexed, "indices were $indexed")
+            assertTrue(listOf("platform", "user_id") in indexed, "indices were $indexed")
         } finally {
             runBlocking { Db.disconnect() }
             tempDir.toFile().deleteRecursively()
@@ -182,7 +182,7 @@ class DatabaseMigrationTest {
                         )
                     )
 
-                val stored = assertNotNull(repo.listEnabledByUser(testUser(100)).singleOrNull { it.id == id })
+                val stored = assertNotNull(repo.listForUser(testUser(100)).singleOrNull { it.id == id })
 
                 assertEquals("9007199254740993", stored.creatorMessageId)
 

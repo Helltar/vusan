@@ -56,7 +56,7 @@ class TaskTools(
                 is ScheduleParse.Ok -> parsed
             }
 
-        val enabledCount = repo.countEnabledByUser(owner, selfInitiated = false)
+        val enabledCount = repo.countForUser(owner, selfInitiated = false)
 
         if (enabledCount >= maxTasksPerUser) {
             return@suspendToolGuard "You already have $enabledCount scheduled tasks (limit $maxTasksPerUser). " +
@@ -113,7 +113,7 @@ class TaskTools(
                 is ScheduleParse.Ok -> parsed
             }
 
-        val pendingCount = repo.countEnabledByUser(owner, selfInitiated = true)
+        val pendingCount = repo.countForUser(owner, selfInitiated = true)
 
         if (pendingCount >= maxFollowUpsPerUser) {
             return@suspendToolGuard "You already owe this user $pendingCount follow-ups (limit $maxFollowUpsPerUser). " +
@@ -142,7 +142,7 @@ class TaskTools(
         val owner = context.user
         val scopedChat = scopedChat()
 
-        val tasks = repo.listEnabledByUser(owner, scopedChat)
+        val tasks = repo.listForUser(owner, scopedChat)
 
         if (tasks.isEmpty())
             return@suspendToolGuard "No scheduled tasks."
@@ -174,7 +174,7 @@ class TaskTools(
             return@suspendToolGuard "No changes provided for task id=$id."
 
         val existing =
-            repo.findEnabledForUser(owner, id, scopedChat)
+            repo.findForUser(owner, id, scopedChat)
                 ?: return@suspendToolGuard taskNotFound(id, scopedChat)
 
         val editedPrompt =
@@ -231,7 +231,7 @@ class TaskTools(
         if (edited == existing)
             return@suspendToolGuard "Task id=$id already has the requested values."
 
-        if (!repo.editEnabledForUser(owner, existing, edited, scopedChat))
+        if (!repo.editForUser(owner, existing, edited, scopedChat))
             return@suspendToolGuard "Task id=$id is no longer available."
 
         "Updated task id=$id (next=${formatFire(edited.nextFireAt, edited.timezone)}, " +
@@ -248,7 +248,7 @@ class TaskTools(
         val scopedChat = scopedChat()
 
         val existing =
-            repo.findEnabledForUser(owner, id, scopedChat)
+            repo.findForUser(owner, id, scopedChat)
                 ?: return@suspendToolGuard taskNotFound(id, scopedChat)
 
         if (existing.paused)
@@ -270,7 +270,7 @@ class TaskTools(
         val scopedChat = scopedChat()
 
         val existing =
-            repo.findEnabledForUser(owner, id, scopedChat)
+            repo.findForUser(owner, id, scopedChat)
                 ?: return@suspendToolGuard taskNotFound(id, scopedChat)
 
         if (!existing.paused)
@@ -297,10 +297,10 @@ class TaskTools(
         val scopedChat = scopedChat()
 
         val existing =
-            repo.findEnabledForUser(owner, id, scopedChat)
+            repo.findForUser(owner, id, scopedChat)
                 ?: return@suspendToolGuard taskNotFound(id, scopedChat)
 
-        if (!repo.deleteEnabledForUser(owner, id, scopedChat))
+        if (!repo.deleteForUser(owner, id, scopedChat))
             return@suspendToolGuard "Task id=$id is no longer available."
 
         "Cancelled task id=$id (${formatFire(existing.nextFireAt, existing.timezone)}, ${existing.recurrence.display})."

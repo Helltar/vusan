@@ -28,7 +28,6 @@ class TaskSchedulerTest {
             timezone = ZoneId.of("Europe/Kyiv"),
             nextFireAt = Instant.parse("2026-07-28T08:00:00Z"),
             createdAt = Instant.parse("2026-07-27T08:00:00Z"),
-            enabled = true,
             paused = false,
             creatorThreadId = null,
             creatorMessageId = null,

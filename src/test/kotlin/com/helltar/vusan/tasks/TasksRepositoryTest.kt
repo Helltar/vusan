@@ -53,20 +53,20 @@ class TasksRepositoryTest {
         assertTrue(repo.pauseForUser(testUser(100), id))
 
         assertTrue(repo.findDue(Instant.parse("2026-07-28T09:00:00Z")).isEmpty())
-        assertEquals(1, repo.countEnabledByUser(testUser(100)))
-        assertEquals(listOf(id), repo.listEnabledByUser(testUser(100)).map { it.id })
+        assertEquals(1, repo.countForUser(testUser(100)))
+        assertEquals(listOf(id), repo.listForUser(testUser(100)).map { it.id })
     }
 
     @Test
     fun `editing a title does not overwrite a concurrent reschedule`() = runBlocking {
         val id = createTask(Instant.parse("2026-07-28T08:00:00Z"))
-        val original = assertNotNull(repo.findEnabledForUser(testUser(100), id))
+        val original = assertNotNull(repo.findForUser(testUser(100), id))
         val schedulerNextFire = Instant.parse("2026-07-29T08:00:00Z")
 
         assertTrue(repo.reschedule(id, firedAt = original.nextFireAt, nextFireAt = schedulerNextFire))
-        assertTrue(repo.editEnabledForUser(testUser(100), original, original.copy(title = "renamed")))
+        assertTrue(repo.editForUser(testUser(100), original, original.copy(title = "renamed")))
 
-        val stored = assertNotNull(repo.findEnabledForUser(testUser(100), id))
+        val stored = assertNotNull(repo.findForUser(testUser(100), id))
         assertEquals("renamed", stored.title)
         assertEquals(schedulerNextFire, stored.nextFireAt)
     }
@@ -77,16 +77,28 @@ class TasksRepositoryTest {
     fun `a fire does not move a task its owner retimed while it ran`() = runBlocking {
         val firedAt = Instant.parse("2026-07-28T08:00:00Z")
         val id = createTask(firedAt)
-        val original = assertNotNull(repo.findEnabledForUser(testUser(100), id))
+        val original = assertNotNull(repo.findForUser(testUser(100), id))
         val chosenByUser = Instant.parse("2026-08-01T06:00:00Z")
 
-        assertTrue(repo.editEnabledForUser(testUser(100), original, original.copy(nextFireAt = chosenByUser)))
+        assertTrue(repo.editForUser(testUser(100), original, original.copy(nextFireAt = chosenByUser)))
 
         assertFalse(repo.reschedule(id, firedAt = firedAt, nextFireAt = Instant.parse("2026-07-29T08:00:00Z")))
-        assertFalse(repo.disable(id, firedAt = firedAt))
+        assertFalse(repo.deleteFinished(id, firedAt = firedAt))
 
-        val stored = assertNotNull(repo.findEnabledForUser(testUser(100), id))
+        val stored = assertNotNull(repo.findForUser(testUser(100), id))
         assertEquals(chosenByUser, stored.nextFireAt)
+    }
+
+    @Test
+    fun `a task that has fired for the last time is gone, not switched off`() = runBlocking {
+        val firedAt = Instant.parse("2026-07-28T08:00:00Z")
+        val id = createTask(firedAt)
+
+        assertTrue(repo.deleteFinished(id, firedAt = firedAt))
+
+        assertEquals(emptyList(), repo.listForUser(testUser(100)).map { it.id })
+        assertEquals(0, repo.countForUser(testUser(100)))
+        assertNull(repo.findDue(id, firedAt.plusSeconds(60)))
     }
 
     @Test
@@ -103,7 +115,7 @@ class TasksRepositoryTest {
         assertTrue(repo.resumeForUser(testUser(100), id, nextFireAt = now.plusSeconds(3600)))
         assertNull(repo.findDue(id, now))
 
-        assertTrue(repo.deleteEnabledForUser(testUser(100), id))
+        assertTrue(repo.deleteForUser(testUser(100), id))
         assertNull(repo.findDue(id, now))
     }
 
@@ -120,7 +132,7 @@ class TasksRepositoryTest {
         assertEquals(listOf(elsewhere), repo.findDue(due).map { it.id })
 
         // parked, not deleted: they stay listed so their owner can resume them if the bot gets back in.
-        assertTrue(repo.listEnabledByUser(testUser(100)).map { it.id }.containsAll(listOf(first, second)))
+        assertTrue(repo.listForUser(testUser(100)).map { it.id }.containsAll(listOf(first, second)))
 
         // a second removal notice for the same chat must not re-park what is already parked.
         assertEquals(0, repo.pauseAllInChat(testChat(lostChat)))
@@ -137,17 +149,17 @@ class TasksRepositoryTest {
         val id = repo.create(newTask(onTelegram, "telegram digest"))
         repo.create(newTask(onDiscord, "discord digest"))
 
-        assertNull(repo.findEnabledForUser(onDiscord.user, id))
+        assertNull(repo.findForUser(onDiscord.user, id))
         assertFalse(repo.pauseForUser(onDiscord.user, id))
-        assertFalse(repo.deleteEnabledForUser(onDiscord.user, id))
-        assertNotNull(repo.findEnabledForUser(onTelegram.user, id))
+        assertFalse(repo.deleteForUser(onDiscord.user, id))
+        assertNotNull(repo.findForUser(onTelegram.user, id))
 
-        assertEquals(listOf("telegram digest"), repo.listEnabledByUser(onTelegram.user).map { it.title })
-        assertEquals(listOf("discord digest"), repo.listEnabledByUser(onDiscord.user).map { it.title })
+        assertEquals(listOf("telegram digest"), repo.listForUser(onTelegram.user).map { it.title })
+        assertEquals(listOf("discord digest"), repo.listForUser(onDiscord.user).map { it.title })
 
         // the same chat number on the other platform is a different room, and parking it leaves this one running
         assertEquals(1, repo.pauseAllInChat(onDiscord.chat))
-        assertFalse(assertNotNull(repo.findEnabledForUser(onTelegram.user, id)).paused)
+        assertFalse(assertNotNull(repo.findForUser(onTelegram.user, id)).paused)
     }
 
     private fun newTask(scope: ConversationScope, title: String) =

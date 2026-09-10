@@ -187,7 +187,7 @@ class TaskMenuHandlerTest {
             messages = Messages.of(Language.ENGLISH)
         )
 
-        assertTrue(assertNotNull(repo.findEnabledForUser(testUser(100), id)).paused)
+        assertTrue(assertNotNull(repo.findForUser(testUser(100), id)).paused)
         val pausedEdit = assertIs<EditMessageText>(client.requests.first())
         assertEquals(ParseMode.HTML, pausedEdit.parseMode)
         assertContains(pausedEdit.text, "<i>Tasks: 1 · limit: 5</i>")
@@ -208,7 +208,7 @@ class TaskMenuHandlerTest {
             messages = Messages.of(Language.ENGLISH)
         )
 
-        assertFalse(assertNotNull(repo.findEnabledForUser(testUser(100), id)).paused)
+        assertFalse(assertNotNull(repo.findForUser(testUser(100), id)).paused)
         val resumedEdit = assertIs<EditMessageText>(client.requests.first())
         val resumedKeyboard = assertIs<InlineKeyboardMarkup>(resumedEdit.replyMarkup)
         assertEquals("tasks:100:pause:$id", resumedKeyboard.keyboard.first()[0].callbackData)
@@ -238,7 +238,7 @@ class TaskMenuHandlerTest {
             messages = Messages.of(Language.ENGLISH)
         )
 
-        val task = assertNotNull(repo.findEnabledForUser(testUser(100), id))
+        val task = assertNotNull(repo.findForUser(testUser(100), id))
         assertFalse(task.paused)
         assertEquals(Instant.parse("2026-07-28T11:00:00Z"), task.nextFireAt)
     }
@@ -265,7 +265,7 @@ class TaskMenuHandlerTest {
             messages = Messages.of(Language.ENGLISH)
         )
 
-        assertTrue(assertNotNull(repo.findEnabledForUser(testUser(100), id)).paused)
+        assertTrue(assertNotNull(repo.findForUser(testUser(100), id)).paused)
         val answer = assertIs<AnswerCallbackQuery>(client.requests.single())
         assertEquals(true, answer.showAlert)
         assertContains(assertNotNull(answer.text), "can't be resumed")
@@ -285,7 +285,7 @@ class TaskMenuHandlerTest {
             messages = Messages.of(Language.ENGLISH)
         )
 
-        assertFalse(assertNotNull(repo.findEnabledForUser(testUser(100), id)).paused)
+        assertFalse(assertNotNull(repo.findForUser(testUser(100), id)).paused)
         val answer = assertIs<AnswerCallbackQuery>(client.requests.single())
         assertEquals(true, answer.showAlert)
         assertContains(assertNotNull(answer.text), "someone else")
@@ -305,7 +305,7 @@ class TaskMenuHandlerTest {
             messages = Messages.of(Language.ENGLISH)
         )
 
-        assertNotNull(repo.findEnabledForUser(testUser(100), id))
+        assertNotNull(repo.findForUser(testUser(100), id))
         val confirmation = assertIs<EditMessageText>(client.requests.first())
         assertEquals(ParseMode.HTML, confirmation.parseMode)
         assertContains(confirmation.text, "<b>Delete task #$id · weekly &lt;cleanup&gt;?</b>")
@@ -326,7 +326,7 @@ class TaskMenuHandlerTest {
             messages = Messages.of(Language.ENGLISH)
         )
 
-        assertNull(repo.findEnabledForUser(testUser(100), id))
+        assertNull(repo.findForUser(testUser(100), id))
         assertIs<EditMessageText>(client.requests.first())
         assertIs<AnswerCallbackQuery>(client.requests.last())
         Unit
