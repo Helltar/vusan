@@ -211,7 +211,8 @@ class AgentRunner(
         val chatMemory = if (context.chat.isPrivate) emptyList() else memory.load(context.chatRef.memoryOwner)
 
         val outbox = BotOutbox(context.chat.capabilities)
-        val toolCatalog = toolRegistryFactory.buildCatalog(context, outbox, narrator)
+        val toolBudget = TurnToolBudget(agentFactory.liveToolResultMaxTokens)
+        val toolCatalog = toolRegistryFactory.buildCatalog(context, outbox, toolBudget, narrator)
 
         val currentTurn =
             currentTurnPrompt(
@@ -267,6 +268,7 @@ class AgentRunner(
                     conversation = conversationPlan.prompt,
                     preparation = preparation,
                     outbox = outbox,
+                    toolBudget = toolBudget,
                     toolEvents = toolEvents,
                     tokenUsages = tokenUsages,
                     onToolStarting = onToolStarting
@@ -436,6 +438,7 @@ class AgentRunner(
         conversation: PromptConversation,
         preparation: AgentPromptPreparation,
         outbox: BotOutbox,
+        toolBudget: TurnToolBudget,
         toolEvents: MutableList<ToolEvent>,
         tokenUsages: MutableList<TokenUsage>,
         onToolStarting: (activity: ToolActivity?) -> Unit
@@ -447,6 +450,7 @@ class AgentRunner(
                     conversation = prompt,
                     preparation = preparation,
                     outbox = outbox,
+                    toolBudget = toolBudget,
                     toolEvents = toolEvents::add,
                     tokenUsage = tokenUsages::add,
                     onToolStarting = onToolStarting

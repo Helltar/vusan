@@ -5,6 +5,7 @@ import com.helltar.vusan.agent.grouplog.GroupLogReader
 import com.helltar.vusan.agent.grouplog.GroupLogRepository
 import com.helltar.vusan.agent.conversation.ConversationRepository
 import com.helltar.vusan.agent.TurnNarrator
+import com.helltar.vusan.agent.TurnToolBudget
 import com.helltar.vusan.agent.memory.MemoryRepository
 import com.helltar.vusan.config.AppConfig
 import com.helltar.vusan.config.VisionRuntime
@@ -24,6 +25,7 @@ import com.helltar.vusan.tools.files.FileTools
 import com.helltar.vusan.tools.giphy.GiphyClient
 import com.helltar.vusan.tools.giphy.GiphyTools
 import com.helltar.vusan.tools.grouplog.GroupLogTools
+import com.helltar.vusan.tools.context.ContextTools
 import com.helltar.vusan.tools.conversation.ConversationTools
 import com.helltar.vusan.tools.imagegen.ImageGenTools
 import com.helltar.vusan.config.CodexAuthStore
@@ -100,7 +102,7 @@ class ToolRegistryFactory(
     private val loadedGroups = LoadedToolGroups()
 
     val availableToolNames: List<String> by lazy {
-        buildCatalog(TOOL_NAME_PROBE_CONTEXT, BotOutbox()).registry.tools.map { it.name }.sorted()
+        buildCatalog(TOOL_NAME_PROBE_CONTEXT, BotOutbox(), TurnToolBudget(0)).registry.tools.map { it.name }.sorted()
     }
 
     // one chat log read may not eat the whole run's tool budget: the model still has to fit its own
@@ -204,7 +206,12 @@ class ToolRegistryFactory(
      * schemas ride along in every request or wait for `loadTools`. Group what a turn rarely needs, and
      * leave visible what one may need without being asked for it by name.
      */
-    fun buildCatalog(context: RequestContext, outbox: BotOutbox, narrator: TurnNarrator? = null): ToolCatalog {
+    fun buildCatalog(
+        context: RequestContext,
+        outbox: BotOutbox,
+        toolBudget: TurnToolBudget,
+        narrator: TurnNarrator? = null
+    ): ToolCatalog {
         val chat = context.chat.capabilities
 
         return toolCatalog(
@@ -212,6 +219,7 @@ class ToolRegistryFactory(
             onLoad = { groups -> loadedGroups.remember(context.scope, groups) }
         ) {
             tools(MessageTools(outbox, narrator))
+            tools(ContextTools(toolBudget))
             tools(InlineChoiceTools(context, outbox, conversation::revision))
             tools(ConversationTools(conversation, context))
             tools(MemoryTools(memory, context))

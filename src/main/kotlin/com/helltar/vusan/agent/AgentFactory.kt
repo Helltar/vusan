@@ -52,8 +52,7 @@ data class TokenUsage(
 data class AgentPromptPreparation(
     val toolCatalog: ToolCatalog,
     val systemPrompt: String,
-    val tokenBudget: ContextTokenBudget,
-    val liveToolResultMaxTokens: Int
+    val tokenBudget: ContextTokenBudget
 )
 
 class AgentFactory(
@@ -91,16 +90,20 @@ class AgentFactory(
                     systemPrompt = systemPrompt,
                     currentTurn = currentTurn,
                     tools = toolCatalog.visibleDescriptors()
-                ),
-            liveToolResultMaxTokens = contextWindowPolicy.liveToolResultMaxTokens
+                )
         )
     }
+
+    /** The reserve one run may spend on tool results, from which the runner opens its [TurnToolBudget]. */
+    val liveToolResultMaxTokens: Int
+        get() = contextWindowPolicy.liveToolResultMaxTokens
 
     fun build(
         scope: ConversationScope,
         conversation: PromptConversation,
         preparation: AgentPromptPreparation,
         outbox: BotOutbox,
+        toolBudget: TurnToolBudget,
         toolEvents: (ToolEvent) -> Unit,
         tokenUsage: (TokenUsage) -> Unit,
         onToolStarting: (activity: ToolActivity?) -> Unit = {}
@@ -145,13 +148,7 @@ class AgentFactory(
             promptExecutor = promptExecutor,
             agentConfig = agentConfig,
             strategy =
-                vusanSingleRunStrategy(
-                    outbox,
-                    preparation.toolCatalog,
-                    preparation.liveToolResultMaxTokens,
-                    maxIterations,
-                    scope
-                ),
+                vusanSingleRunStrategy(outbox, preparation.toolCatalog, toolBudget, maxIterations, scope),
             toolRegistry = preparation.toolCatalog.registry,
             id = "vusan-turn-$scope"
         ) {
@@ -238,13 +235,12 @@ internal fun JSONObject.toToolArgsJson(): String = toKotlinxJsonObject().toStrin
 private fun vusanSingleRunStrategy(
     outbox: BotOutbox,
     catalog: ToolCatalog,
-    liveToolResultMaxTokens: Int,
+    toolBudget: TurnToolBudget,
     maxIterations: Int,
     scope: ConversationScope
 ): AIAgentGraphStrategy<String, String> =
     strategy<String, String>("single_run") {
         var nudged = false
-        var remainingToolResultTokens = liveToolResultMaxTokens
         var toolBudgetSpent = false
         var sentToolRevision = -1
 
@@ -281,9 +277,8 @@ private fun vusanSingleRunStrategy(
                     val missing = call.missingRequiredArgs(llm.toolRegistry)
 
                     if (missing.isEmpty()) {
-                        val result = environment.executeTool(call).boundedForLiveContext(remainingToolResultTokens)
-                        remainingToolResultTokens =
-                            (remainingToolResultTokens - result.liveContextTokens).coerceAtLeast(0)
+                        val result = environment.executeTool(call).boundedForLiveContext(toolBudget.remainingTokens)
+                        toolBudget.spend(result.liveContextTokens)
                         result
                     } else {
                         garbledToolCallResult(call, missing)

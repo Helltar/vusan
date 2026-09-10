@@ -223,7 +223,9 @@ A normal user message travels:
    overrides stale model metadata.
 5. **Act** — during the agent loop, tools run and push results into the request's `BotOutbox`; tool calls/results are
    recorded for history. Live textual tool results share a cumulative bound derived from the reserved agent-growth
-   budget before later LLM calls. The custom `single_run` strategy (`AgentFactory`) guards against flaky models in two
+   budget before later LLM calls; the runner opens that bound as a `TurnToolBudget` the strategy spends and the
+   `checkContextBudget` tool reports, so a turn can narrow a long read instead of discovering the ceiling by getting an
+   empty result back. The custom `single_run` strategy (`AgentFactory`) guards against flaky models in two
    ways:
     - a tool call that arrives with no arguments at all for a tool that takes them (flaky models emit empty-arg siblings
       when they try to call tools in parallel) is short-circuited into a `ValidationError` result instead of being
@@ -504,7 +506,9 @@ A normal user message travels:
 - **Live tool-result budget** — `ContextWindowPolicy.liveToolResultMaxChars` caps everything the tools return during one
   run, converting the agent reserve back to characters at the same ratio `estimateHistoryTokens` reads them. It scales
   with the window on purpose: a fixed ceiling starves a large-window model, since a single full-length YouTube
-  transcript would consume the whole run and leave later tool results with nothing.
+  transcript would consume the whole run and leave later tool results with nothing. What is left of it during a run
+  lives in `agent/TurnToolBudget.kt`: the strategy charges each result against it, and `checkContextBudget`
+  (`tools/context/`) is how the model reads it before deciding how much to ask for.
 - **LLM provider resolution** — `config/LlmRuntime.resolveLlmRuntime` turns `AppConfig.llmProvider` into a Koog
   client/model/params triple. Native clients cover OpenAI, Anthropic, Google, and DeepSeek — models are matched against
   each client's predefined catalog. `openai-compatible` keeps a hand-declared model for any other server (llama.cpp,
@@ -784,6 +788,7 @@ A symptom-to-source map for finding the right file fast. Paths are under
 | A chat's tasks all went paused on their own, or one keeps firing into a chat the bot was removed from | `telegram/BotMembership.kt` (the `my_chat_member` path) + `telegram/delivery/TelegramErrors.kt` (`isChatUnreachable`) + `tasks/TaskScheduler.kt` (`parkTasksOfUnreachableChat`) |
 | A tool is missing in one group but present elsewhere, or a chat restriction is stale | `telegram/ChatProfiles.kt` (`capabilitiesOf`, the cache and its `forget`) + `tools/ToolRegistryFactory.buildCatalog` (which capability gates which tool) + `telegram/tools/TelegramToolSets.kt` (the same gate for Telegram's own tools) |
 | The model answers that it cannot draw, speak, schedule or publish something it has tools for | `tools/ToolCatalog.kt` (which groups are deferred, and the `loadTools` menu) + `agent/TurnPrompt.kt` (`<tool_groups>`, the menu it reads) + `agent/SystemPrompt.kt` (the rule that sends it to `loadTools`) + `agent/AgentFactory.kt` (`sendVisibleTools`, which re-sends the tool list after a group is loaded) |
+| Tool results come back truncated or empty part-way through a turn | `agent/ContextWindowPolicy.kt` (how large the reserve is for this model) + `agent/TurnToolBudget.kt` (what is left of it) + `agent/AgentFactory.kt` (`boundedForLiveContext`, which truncates and then omits) |
 | A conversation loads the same group on every turn, or keeps offering one it no longer uses | `tools/LoadedToolGroups.kt` (per-scope memory, its cap and its LRU order) — it is process memory, so a restart empties it |
 | `/tasks` or a plain-language task pause/resume/cancel fails | `telegram/callback/TaskMenuHandler.kt` (rendering, ownership, callbacks) + `tools/tasks/TaskTools.kt` (agent path) + `tasks/TasksRepository.kt` (shared scoped state changes) |
 | `/stop` does not stop anything, or a turn leaves its status message on screen | `agent/RunningTurns.kt` (what is registered and cancelled) + `agent/AgentRunner.kt` (`stop`, and the lock the command must not take) + `telegram/AgentTurns.kt` (the notice on cancellation) + `telegram/TelegramProgress.kt` (closing the status on the way out) + `telegram/callback/TurnStopHandler.kt` (the button and whose turn it may stop) |
