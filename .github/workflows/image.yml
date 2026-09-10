@@ -6,15 +6,16 @@ on:
     paths:
       - .dockerignore
       - .env.example
-      - env/*.env.example
+      - sites/.env.example
+      - workspace/.env.example
       - .github/compose-check.sh
       - .github/workflows/image.yml
       - Dockerfile
       - build.gradle.kts
-      - compose.all.yaml
-      - compose.sites.yaml
-      - compose.workspace.yaml
+      - compose.override.yaml
       - compose.yaml
+      - sites/compose.yaml
+      - workspace/compose.yaml
       - gradle/**
       - gradle.properties
       - settings.gradle.kts
@@ -23,15 +24,16 @@ on:
     paths:
       - .dockerignore
       - .env.example
-      - env/*.env.example
+      - sites/.env.example
+      - workspace/.env.example
       - .github/compose-check.sh
       - .github/workflows/image.yml
       - Dockerfile
       - build.gradle.kts
-      - compose.all.yaml
-      - compose.sites.yaml
-      - compose.workspace.yaml
+      - compose.override.yaml
       - compose.yaml
+      - sites/compose.yaml
+      - workspace/compose.yaml
       - gradle/**
       - gradle.properties
       - settings.gradle.kts
