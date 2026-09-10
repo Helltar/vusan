@@ -20,7 +20,8 @@ import kotlinx.coroutines.flow.Flow
  * Counts every completed LLM call against [budget] and refuses to start one the budget has no room for.
  *
  * It wraps the executor rather than the agent so that one place covers every call the bot makes: agent turns,
- * history recaps, group-log digests, and vision when it rides the chat model. Koog resolves a model before
+ * history recaps, group-log digests, and vision — on the chat model or on a model of its own, since the
+ * ceiling counts what the bot spends rather than what one provider bills for. Koog resolves a model before
  * executing, so both the [LLModel] and the [ResolvedModel] overloads are counted — each one delegates
  * outward, never to its sibling here, so a call is never counted twice.
  */

@@ -77,10 +77,19 @@ suspend fun main() = coroutineScope {
         // history recaps, group-log digests, vision on the chat model — is counted against one daily budget.
         val tokenBudget = TokenBudget(config.tokenBudget)
         val chatExecutor = tokenBudget.meter(executor)
-        val vision = resolveVisionRuntime(config.openAiVision, llm, chatExecutor, config.llmProvider.requestTimeout)
+        val visionRuntime =
+            resolveVisionRuntime(config.openAiVision, llm, chatExecutor, config.llmProvider.requestTimeout)
 
         // a vision model of its own comes with a second executor to close; otherwise vision rides on the chat one
-        visionExecutor = vision?.executor?.takeIf { it !== chatExecutor }
+        visionExecutor = visionRuntime?.executor?.takeIf { it !== chatExecutor }
+
+        // and it is metered like everything else: the day's ceiling counts what the bot spends, not what
+        // one provider bills for. only an executor of vision's own is wrapped — metering the chat one twice
+        // would count its calls twice — and what closes it is the executor underneath, held above.
+        val vision =
+            visionRuntime?.let {
+                if (it.executor === chatExecutor) it else it.copy(executor = tokenBudget.meter(it.executor))
+            }
 
         val telegramClient = OkHttpTelegramClient(config.telegramBotToken)
 
