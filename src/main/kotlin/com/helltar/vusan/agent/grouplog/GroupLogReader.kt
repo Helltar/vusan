@@ -156,12 +156,7 @@ class GroupLogReader(
         repository.digestFor(chat, day)?.let { return it }
 
         val compactor = digester ?: return null
-        val dayEnd = day.plusDays(1).startOfDay().minusMillis(1)
-        val entries = repository.readWindow(chat, day.startOfDay(), dayEnd, limit = MAX_ROWS_PER_DAY)
-
-        if (entries.isEmpty()) return null
-
-        val source = renderGroupLog(entries, zone, MAX_LINE_TEXT_CHARS, DIGEST_SOURCE_CHARS)
+        val source = sourceOf(chat, day) ?: return null
 
         val digest =
             try {
@@ -172,13 +167,32 @@ class GroupLogReader(
                 null
             } ?: return null
 
-        runCatching { repository.storeDigest(chat, day, entries.size, digest) }
+        // the model runs for long enough that the day can be edited under it, and the invalidation an
+        // edit does costs nothing while the row it would delete is still being written. so the day is
+        // read again: a recap of text that has since been replaced is answered but never cached.
+        if (sourceOf(chat, day)?.text != source.text) {
+            log.info { "chat log digest not cached for chat=[$chat] day=$day: the day changed while it was made" }
+            return digest
+        }
+
+        runCatching { repository.storeDigest(chat, day, source.includedCount, digest) }
             .onFailure {
                 it.rethrowIfCancellation()
                 log.warn(it) { "failed to cache chat log digest for chat=[$chat] day=$day" }
             }
 
         return digest
+    }
+
+    // what a day's recap is made of: the transcript of that local day, cut to what one digest prompt
+    // may cost. `null` when the day holds nothing to summarize.
+    private suspend fun sourceOf(chat: ChatRef, day: LocalDate): RenderedGroupLog? {
+        val dayEnd = day.plusDays(1).startOfDay().minusMillis(1)
+
+        return repository
+            .readWindow(chat, day.startOfDay(), dayEnd, limit = MAX_ROWS_PER_DAY)
+            .takeIf { it.isNotEmpty() }
+            ?.let { renderGroupLog(it, zone, MAX_LINE_TEXT_CHARS, DIGEST_SOURCE_CHARS) }
     }
 
     private fun truncatedResult(

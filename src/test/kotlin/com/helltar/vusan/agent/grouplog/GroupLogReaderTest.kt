@@ -225,6 +225,27 @@ class GroupLogReaderTest {
         assertFalse(result.contains("<day "), "a failed digest must not produce an empty day block")
     }
 
+    // an edit invalidates the cached recap of its day, but while the model is working there is no row
+    // to invalidate yet: the recap of the text the edit replaced must not be stored behind it.
+    @Test
+    fun `a day edited while its recap is made is answered but not cached`() = runBlocking {
+        val edited = instantAt(2026, 8, 3, 10)
+        record(1L, "the original wording", edited)
+        repeat(80) { record(3_000L + it, "today $it", instantAt(2026, 8, 4, 11)) }
+
+        val digester =
+            EditingDigester {
+                repository.recordEdit(
+                    GroupLogEntry(chat = CHAT, messageId = "1", kind = "text", sentAt = edited, text = "rewritten")
+                )
+            }
+
+        val result = GroupLogReader(repository, digester, budgetChars = 1_200, zone = zone).read(CHAT, 2.days, now = now)
+
+        assertContains(result, "recap of 2026-08-03")
+        assertEquals(null, repository.digestFor(CHAT, LocalDate.of(2026, 8, 3)), "a stale recap was cached")
+    }
+
     private fun reader(digester: GroupLogDigester? = null) =
         GroupLogReader(repository, digester, budgetChars = 10_000, zone = zone)
 
@@ -254,6 +275,14 @@ class GroupLogReaderTest {
 
         override suspend fun digest(day: LocalDate, transcript: String): String {
             days += day
+            return "recap of $day"
+        }
+    }
+
+    // the day changes under the digester, the way an edit lands while the model is answering
+    private class EditingDigester(private val edit: suspend () -> Unit) : GroupLogDigester {
+        override suspend fun digest(day: LocalDate, transcript: String): String {
+            edit()
             return "recap of $day"
         }
     }
