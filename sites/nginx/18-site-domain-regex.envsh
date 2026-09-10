@@ -1,5 +1,13 @@
 #!/bin/sh
 # The site vhost matches its host with a regex, so the domain's dots must be literal dots. Sourced by
 # the nginx entrypoint before it renders the templates, which is why this is `.envsh` and not `.sh`.
+# an empty domain renders a `server_name` that matches nothing and an `api.` vhost that is just a
+# dot, so nginx would come up serving no one. Refuse instead: this used to be caught by Compose,
+# which cannot see a value that arrives through env_file.
+if [ -z "${SITES_DOMAIN}" ]; then
+    echo "SITES_DOMAIN is required: the domain sites are served under, such as example.com" >&2
+    exit 1
+fi
+
 SITES_DOMAIN_RE=$(printf '%s' "${SITES_DOMAIN}" | sed 's/[.]/\\./g')
 export SITES_DOMAIN_RE
