@@ -45,8 +45,16 @@ data class ToolLoadResult(
  * The registry holds everything from the first step: koog resolves a call against it and not against
  * the descriptors the request carried, so a tool the model names before loading its group still runs.
  * Only what [visibleDescriptors] returns is sent, and it widens as [load] is called.
+ *
+ * [preloaded] is what this conversation asked for on an earlier turn, offered again from the first
+ * request — see [LoadedToolGroups] for why. A group that is no longer registered at all, because the
+ * chat or the deployment lost it, is dropped rather than remembered.
  */
-class ToolCatalog internal constructor(entries: List<CatalogEntry>) {
+class ToolCatalog internal constructor(
+    entries: List<CatalogEntry>,
+    preloaded: Set<ToolGroup> = emptySet(),
+    private val onLoad: (List<ToolGroup>) -> Unit = {}
+) {
 
     private val alwaysVisible: List<ToolBase<*, *>> = entries.filter { it.group == null }.flatMap { it.tools }
 
@@ -55,13 +63,15 @@ class ToolCatalog internal constructor(entries: List<CatalogEntry>) {
             .groupBy({ checkNotNull(it.group) }, { it.tools })
             .mapValues { (_, sets) -> sets.flatten() }
 
+    private val loaded: MutableSet<ToolGroup> = deferred.keys.filterTo(mutableSetOf()) { it in preloaded }
+
     // the loader has nothing to offer when every group this turn registered is gone with the optional
-    // service or chat capability behind it, and an empty menu is one more schema for nothing.
+    // service or chat capability behind it, or is already loaded — and an empty menu is one more
+    // schema for nothing.
     private val loader: List<ToolBase<*, *>> =
-        if (deferred.isEmpty()) emptyList() else CatalogTools(this).let { it::class.asTools(it) }
+        if (deferred.keys.all { it in loaded }) emptyList() else CatalogTools(this).let { it::class.asTools(it) }
 
     private val byGroupName: Map<String, ToolGroup> = deferred.keys.associateBy { it.groupName }
-    private val loaded = mutableSetOf<ToolGroup>()
 
     val registry: ToolRegistry =
         ToolRegistry { tools(alwaysVisible + deferred.values.flatten() + loader) }
@@ -75,9 +85,9 @@ class ToolCatalog internal constructor(entries: List<CatalogEntry>) {
     fun visibleDescriptors(): List<ToolDescriptor> =
         (alwaysVisible + loader + deferred.filterKeys { it in loaded }.values.flatten()).map { it.descriptor }
 
-    /** The group menu for the system prompt, or null when this turn deferred nothing. */
+    /** The menu of what is still loadable, or null when this turn has nothing left to offer. */
     fun menu(): String? =
-        deferred.keys
+        loadableGroups()
             .takeIf { it.isNotEmpty() }
             ?.joinToString("\n") { "- `${it.groupName}` — ${it.summary}" }
 
@@ -86,6 +96,7 @@ class ToolCatalog internal constructor(entries: List<CatalogEntry>) {
         val groups = requested.mapNotNull { byGroupName[it] }
 
         if (loaded.addAll(groups)) revision++
+        if (groups.isNotEmpty()) onLoad(groups)
 
         return ToolLoadResult(
             groups = groups,
@@ -94,8 +105,10 @@ class ToolCatalog internal constructor(entries: List<CatalogEntry>) {
         )
     }
 
-    /** Every group this turn registered, in menu order, for a message that has to name them all. */
-    fun groupNames(): List<String> = byGroupName.keys.toList()
+    /** Everything still to load, in menu order, for a message that has to name them all. */
+    fun groupNames(): List<String> = loadableGroups().map { it.groupName }
+
+    private fun loadableGroups(): List<ToolGroup> = deferred.keys.filterNot { it in loaded }
 }
 
 /** One registered tool set and the group, if any, the model has to load before it is offered. */
@@ -115,9 +128,14 @@ class ToolCatalogBuilder internal constructor() {
         entries += CatalogEntry(group, set.toolList())
     }
 
-    internal fun build(): ToolCatalog = ToolCatalog(entries)
+    internal fun build(preloaded: Set<ToolGroup>, onLoad: (List<ToolGroup>) -> Unit): ToolCatalog =
+        ToolCatalog(entries, preloaded, onLoad)
 }
 
-fun toolCatalog(build: ToolCatalogBuilder.() -> Unit): ToolCatalog = ToolCatalogBuilder().apply(build).build()
+fun toolCatalog(
+    preloaded: Set<ToolGroup> = emptySet(),
+    onLoad: (List<ToolGroup>) -> Unit = {},
+    build: ToolCatalogBuilder.() -> Unit
+): ToolCatalog = ToolCatalogBuilder().apply(build).build(preloaded, onLoad)
 
 private fun ToolSet.toolList(): List<ToolBase<*, *>> = this::class.asTools(this)

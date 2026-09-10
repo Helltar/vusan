@@ -35,22 +35,15 @@ class SystemPromptTest {
         assertFalse("Vusan" in prompt.substringAfter("</personality>"))
     }
 
+    // the rule is fixed, the menu it points at is not: `<tool_groups>` changes with what the
+    // conversation already loaded, and this block is the one prefix every request shares.
     @Test
-    fun `system prompt carries the tool group menu and the rule that sends the model to it`() {
-        val prompt = systemPromptFor("Custom personality", MODEL_ID, toolGroups = "- `gifs` — find and send a GIF")
-
-        assertContains(prompt, "# Loading more tools")
-        assertContains(prompt, "<tool_groups>\n- `gifs` — find and send a GIF\n</tool_groups>")
-        assertContains(prompt, "call `loadTools` with the group names")
-    }
-
-    // the section points at a block, so it may not appear when this turn deferred nothing
-    @Test
-    fun `system prompt says nothing about loading tools when nothing is deferred`() {
+    fun `system prompt states the loading rule without carrying the menu itself`() {
         val prompt = systemPromptFor("Custom personality", MODEL_ID)
 
-        assertFalse("Loading more tools" in prompt)
-        assertFalse("tool_groups" in prompt)
+        assertContains(prompt, "# Loading more tools")
+        assertContains(prompt, "call `loadTools` with the group names")
+        assertFalse("</tool_groups>" in prompt)
     }
 
     @Test

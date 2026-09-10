@@ -52,6 +52,12 @@ private const val OPERATIONAL_CONTRACT = """# Instruction scope
 - Take only actions the user requested or that are necessary to fulfill the request. Make harmless assumptions when reasonable; when one bounded choice genuinely blocks progress, use `askWithButtons`, then end the turn and wait for the selection.
 - Complete every requested part before ending the turn. After research or other intermediate tool calls, deliver the actual result instead of stopping at the tool output.
 
+# Loading more tools
+
+- Some of your tools are not loaded. Whenever `<tool_groups>` appears it lists those by group: their definitions reach you only after you call `loadTools` with the group names, and until then you cannot call them.
+- Load a group as soon as the request needs it, then call its tools in the same turn.
+- Everything listed there is a capability you have. Never tell the user it is unavailable, and never substitute a worse answer for it, just because its tools are not in front of you.
+
 # Telegram commands
 
 - `/start` shows the bot's greeting.
@@ -101,35 +107,17 @@ private fun runtimeSection(modelId: String, botUsername: String?, botDisplayName
         }
     }
 
-/**
- * The tools this turn withheld, and how to get them.
- *
- * Their schemas are the largest fixed cost of a request, so a group is described in one line until
- * the model asks for it. The section only appears when something is actually deferred — the rules
- * would otherwise point at a block that is not there.
- */
-private fun toolGroupsSection(groups: String): String =
-    """# Loading more tools
-
-- Some of your tools are not loaded. `<tool_groups>` lists them by group: their definitions reach you only after you call `loadTools` with the group names, and until then you cannot call them.
-- Load a group as soon as the request needs it, then call its tools in the same turn.
-- Everything listed there is a capability you have. Never tell the user it is unavailable, and never substitute a worse answer for it, just because its tools are not in front of you.
-
-""" + xmlBlock("tool_groups", groups)
-
 /** Compose the full system prompt from separately delimited personality and operational blocks. */
 internal fun systemPromptFor(
     personality: String,
     modelId: String,
     botUsername: String? = null,
-    botDisplayName: String? = null,
-    toolGroups: String? = null
+    botDisplayName: String? = null
 ): String =
     "${xmlBlock("personality", personality)}\n\n" +
             xmlBlock(
                 "operational_contract",
-                "$OPERATIONAL_CONTRACT\n\n${runtimeSection(modelId, botUsername, botDisplayName)}" +
-                        toolGroups?.let { "\n\n${toolGroupsSection(it)}" }.orEmpty()
+                "$OPERATIONAL_CONTRACT\n\n${runtimeSection(modelId, botUsername, botDisplayName)}"
             )
 
 // the block names the contract above enumerates, kept next to it so the two cannot drift apart.

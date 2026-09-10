@@ -28,9 +28,7 @@ import com.helltar.vusan.common.limitTo
 import com.helltar.vusan.common.xmlBlock
 import com.helltar.vusan.outbox.BotOutbox
 import com.helltar.vusan.request.ConversationScope
-import com.helltar.vusan.request.RequestContext
 import com.helltar.vusan.tools.ToolCatalog
-import com.helltar.vusan.tools.ToolRegistryFactory
 import io.github.oshai.kotlinlogging.KotlinLogging
 
 // the strategy is built outside the class, so it cannot reach AgentFactory's own logger
@@ -59,7 +57,6 @@ data class AgentPromptPreparation(
 
 class AgentFactory(
     private val promptExecutor: PromptExecutor,
-    private val toolRegistryFactory: ToolRegistryFactory,
     private val model: LLModel,
     private val chatParams: LLMParams = LLMParams(),
     private val personality: String? = null,
@@ -79,21 +76,11 @@ class AgentFactory(
         val log = KotlinLogging.logger {}
     }
 
-    fun prepare(
-        context: RequestContext,
-        outbox: BotOutbox,
-        currentTurn: String,
-        narrator: TurnNarrator? = null
-    ): AgentPromptPreparation {
-        val toolCatalog = toolRegistryFactory.buildCatalog(context, outbox, narrator)
+    // the catalog is built before the turn text, not here: what it defers goes into that text as
+    // `<tool_groups>`, and the budget below has to weigh the finished prompt.
+    fun prepare(toolCatalog: ToolCatalog, currentTurn: String): AgentPromptPreparation {
         val systemPrompt =
-            systemPromptFor(
-                personality ?: DEFAULT_PERSONALITY,
-                model.id,
-                botUsername,
-                botDisplayName,
-                toolCatalog.menu()
-            )
+            systemPromptFor(personality ?: DEFAULT_PERSONALITY, model.id, botUsername, botDisplayName)
 
         return AgentPromptPreparation(
             toolCatalog = toolCatalog,

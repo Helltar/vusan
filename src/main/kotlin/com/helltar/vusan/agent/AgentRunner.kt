@@ -23,6 +23,7 @@ import com.helltar.vusan.outbox.OutboxItem
 import com.helltar.vusan.request.ChatRef
 import com.helltar.vusan.request.ConversationScope
 import com.helltar.vusan.request.RequestContext
+import com.helltar.vusan.tools.ToolRegistryFactory
 import io.github.oshai.kotlinlogging.KotlinLogging
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
@@ -65,6 +66,7 @@ data class AgentResult(
 
 class AgentRunner(
     private val agentFactory: AgentFactory,
+    private val toolRegistryFactory: ToolRegistryFactory,
     private val conversation: ConversationRepository,
     private val memory: MemoryRepository,
     private val conversationCompactor: ConversationCompactor,
@@ -208,6 +210,9 @@ class AgentRunner(
         val userMemory = if (context.sender.isPerson) memory.load(context.user.memoryOwner) else emptyList()
         val chatMemory = if (context.chat.isPrivate) emptyList() else memory.load(context.chatRef.memoryOwner)
 
+        val outbox = BotOutbox(context.chat.capabilities)
+        val toolCatalog = toolRegistryFactory.buildCatalog(context, outbox, narrator)
+
         val currentTurn =
             currentTurnPrompt(
                 userInput = request.prompt,
@@ -217,17 +222,11 @@ class AgentRunner(
                 userMemory = userMemory,
                 chatMemory = chatMemory,
                 recentChat = recentChatFor(context),
-                stickerCatalog = stickerCatalogFor(context)
+                stickerCatalog = stickerCatalogFor(context),
+                toolGroups = toolCatalog.menu()
             )
 
-        val outbox = BotOutbox(context.chat.capabilities)
-        val preparation =
-            agentFactory.prepare(
-                context = context,
-                outbox = outbox,
-                currentTurn = currentTurn,
-                narrator = narrator
-            )
+        val preparation = agentFactory.prepare(toolCatalog, currentTurn)
 
         val conversationPlan =
             conversationPlanForPrompt(context.scope, preparation.tokenBudget.conversationTokens)

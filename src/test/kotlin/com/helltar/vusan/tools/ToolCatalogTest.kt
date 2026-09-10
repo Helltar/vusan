@@ -126,6 +126,63 @@ class ToolCatalogTest {
         assertEquals(listOf("sendTestMessage"), catalog.registry.tools.map { it.name })
     }
 
+    // what the conversation loaded last time is offered again from the first request: a tool array
+    // that changes mid-turn rebuilds the whole cached prompt prefix.
+    @Test
+    fun `a preloaded group is offered from the start and drops out of the menu`() {
+        val catalog =
+            toolCatalog(preloaded = setOf(ToolGroup.IMAGE_GENERATION)) {
+                tools(CoreTestTools())
+                tools(ToolGroup.IMAGE_GENERATION, DrawTestTools())
+                tools(ToolGroup.VOICE_REPLIES, SpeakTestTools())
+            }
+
+        assertContains(catalog.visibleNames(), "drawTestPicture")
+        assertEquals(listOf("voice_replies"), catalog.groupNames())
+        assertFalse("image_generation" in catalog.menu().orEmpty())
+    }
+
+    // a group the chat no longer has must not be resurrected by what an earlier turn remembered
+    @Test
+    fun `a preloaded group that is not registered this turn is ignored`() {
+        val catalog =
+            toolCatalog(preloaded = setOf(ToolGroup.YOUTUBE)) {
+                tools(CoreTestTools())
+                tools(ToolGroup.IMAGE_GENERATION, DrawTestTools())
+            }
+
+        assertEquals(listOf("sendTestMessage", "loadTools"), catalog.visibleNames())
+        assertEquals(listOf("image_generation"), catalog.groupNames())
+    }
+
+    @Test
+    fun `loading reports the groups so the next turn can offer them again`() {
+        val loaded = mutableListOf<ToolGroup>()
+        val catalog =
+            toolCatalog(onLoad = { loaded += it }) {
+                tools(CoreTestTools())
+                tools(ToolGroup.IMAGE_GENERATION, DrawTestTools())
+            }
+
+        catalog.load(listOf("image_generation"))
+        catalog.load(listOf("teleportation"))
+
+        assertEquals(listOf(ToolGroup.IMAGE_GENERATION), loaded)
+    }
+
+    @Test
+    fun `a catalog whose every group is preloaded offers no loader`() {
+        val catalog =
+            toolCatalog(preloaded = setOf(ToolGroup.IMAGE_GENERATION)) {
+                tools(CoreTestTools())
+                tools(ToolGroup.IMAGE_GENERATION, DrawTestTools())
+            }
+
+        assertNull(catalog.menu())
+        assertEquals(listOf("sendTestMessage", "drawTestPicture"), catalog.visibleNames())
+        assertFalse("loadTools" in catalog.registry.tools.map { it.name })
+    }
+
     @Test
     fun `group names are the lowercase spelling the model is told to use`() {
         assertEquals(

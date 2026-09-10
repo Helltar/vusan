@@ -36,12 +36,28 @@ class TurnPromptTest {
     }
 
     @Test
+    fun `current turn carries the tool group menu ahead of the request`() {
+        val prompt =
+            currentTurnPrompt(
+                "draw me a cat",
+                context(),
+                userMemory = emptyList(),
+                chatMemory = emptyList(),
+                toolGroups = "- `image_generation` — draw a picture"
+            )
+
+        assertContains(prompt, "<tool_groups>\n- `image_generation` — draw a picture\n</tool_groups>")
+        assertTrue(prompt.indexOf("<tool_groups>") < prompt.indexOf("draw me a cat"))
+    }
+
+    @Test
     fun `current turn omits empty optional context`() {
         val prompt = currentTurnPrompt("hello", context(), userMemory = emptyList(), chatMemory = emptyList())
 
         assertFalse("<user_memory>" in prompt)
         assertFalse("<group_memory>" in prompt)
         assertFalse("<sticker_catalog>" in prompt)
+        assertFalse("<tool_groups>" in prompt)
         assertTrue(prompt.endsWith("hello"))
     }
 

@@ -94,6 +94,11 @@ class ToolRegistryFactory(
         val log = KotlinLogging.logger {}
     }
 
+    // what each conversation already loaded, so its next turn opens with the same tool array: that
+    // array is part of the cached prompt prefix, and rebuilding it every turn costs more than the
+    // schemas the catalog saves. See notes/tool-catalog.md.
+    private val loadedGroups = LoadedToolGroups()
+
     val availableToolNames: List<String> by lazy {
         buildCatalog(TOOL_NAME_PROBE_CONTEXT, BotOutbox()).registry.tools.map { it.name }.sorted()
     }
@@ -202,7 +207,10 @@ class ToolRegistryFactory(
     fun buildCatalog(context: RequestContext, outbox: BotOutbox, narrator: TurnNarrator? = null): ToolCatalog {
         val chat = context.chat.capabilities
 
-        return toolCatalog {
+        return toolCatalog(
+            preloaded = loadedGroups.of(context.scope),
+            onLoad = { groups -> loadedGroups.remember(context.scope, groups) }
+        ) {
             tools(MessageTools(outbox, narrator))
             tools(InlineChoiceTools(context, outbox, conversation::revision))
             tools(ConversationTools(conversation, context))

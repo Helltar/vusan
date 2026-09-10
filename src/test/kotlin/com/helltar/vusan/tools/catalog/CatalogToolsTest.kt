@@ -57,7 +57,7 @@ class CatalogToolsTest {
 
         assertContains(result, "drawTestPicture")
         assertContains(result, "no such group: teleportation")
-        assertContains(result, "image_generation, voice_replies")
+        assertContains(result, "The groups are: voice_replies")
     }
 
     @Test

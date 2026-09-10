@@ -129,7 +129,7 @@ suspend fun main() = coroutineScope {
 
         val agentFactory =
             AgentFactory(
-                chatExecutor, toolRegistryFactory, llm.model, llm.chatParams,
+                chatExecutor, llm.model, llm.chatParams,
                 config.personality, botProfile.username, botProfile.displayName,
                 maxIterations = config.agentMaxIterations,
                 contextWindowPolicy = contextWindowPolicy
@@ -140,7 +140,7 @@ suspend fun main() = coroutineScope {
 
         val agentRunner =
             AgentRunner(
-                agentFactory, conversation, memory, conversationCompactor,
+                agentFactory, toolRegistryFactory, conversation, memory, conversationCompactor,
                 config.chatHistory, stickerCatalog?.let { catalog -> catalog::indexBlockFor },
                 groupLog, config.groupLog, tokenBudget, config.maxConcurrentTurns
             )

@@ -63,9 +63,11 @@ that is who owns writing them, not because only `agent/` reads them. No other ar
   messenger can implement lives in that adapter, so the factory never names one. The catalog splits what is registered
   from what the request carries: a set registered under a `ToolGroup` is in the registry from the first step, but its
   schemas are withheld until the model calls `loadTools` (`tools/catalog/`), which the `<tool_groups>` menu in the
-  system prompt tells it about. Deferring is what keeps the schemas of a dozen rarely-used capabilities out of the
+  turn prompt tells it about. Deferring is what keeps the schemas of a dozen rarely-used capabilities out of the
   conversation budget; koog resolves a call against the registry, so a tool named before its group is loaded still
-  runs. See the Features section of the [README](../README.md). `tools/images/` is not a tool surface
+  runs. `LoadedToolGroups` then keeps the last few groups a conversation loaded and offers them again from its next
+  first request: the tool array is part of the prompt prefix providers cache, so a set that changes every turn would
+  cost more than the schemas it saved. See the Features section of the [README](../README.md). `tools/images/` is not a tool surface
   but the pipeline every image search shares: download a provider's candidates, drop what Telegram would refuse, and
   queue the survivors.
 - **`outbox/`** — the output model. `BotOutput` is the immutable sealed set of Telegram outputs (text, inline choice,
@@ -208,7 +210,8 @@ A normal user message travels:
    it was asked for), and those tools report the refusal to the model rather than claiming a send nobody will see —
    image search checks first and never queries its provider at all; and `<message_context>` names the rest so the agent
    knows why and answers in one message under slow mode. Anything the lookup could not answer counts as unrestricted, since guessing "forbidden" would strip
-   real abilities. `AgentFactory.prepare` builds the per-request tool catalog and estimates the fixed
+   real abilities. The runner builds the per-request tool catalog before the turn text, because what the catalog
+   defers goes into that text as `<tool_groups>`; `AgentFactory.prepare` then estimates the fixed
    system/tool/current-turn cost — from the visible tools alone, so a group loaded later is spent from the agent
    reserve rather than from the history budget. The history planner reserves room for output, future tool calls, and estimation error,
    then admits only complete interactions. If an older prefix no longer fits or exceeds the configured recent count,
@@ -777,7 +780,8 @@ A symptom-to-source map for finding the right file fast. Paths are under
 | Scheduled task fires late, not at all, or reports "missed"/"failed" | `tasks/TaskScheduler.kt` (polling, lateness, retries) + `tasks/Recurrence.kt` (next-run math) |
 | A chat's tasks all went paused on their own, or one keeps firing into a chat the bot was removed from | `telegram/BotMembership.kt` (the `my_chat_member` path) + `telegram/delivery/TelegramErrors.kt` (`isChatUnreachable`) + `tasks/TaskScheduler.kt` (`parkTasksOfUnreachableChat`) |
 | A tool is missing in one group but present elsewhere, or a chat restriction is stale | `telegram/ChatProfiles.kt` (`capabilitiesOf`, the cache and its `forget`) + `tools/ToolRegistryFactory.buildCatalog` (which capability gates which tool) + `telegram/tools/TelegramToolSets.kt` (the same gate for Telegram's own tools) |
-| The model answers that it cannot draw, speak, schedule or publish something it has tools for | `tools/ToolCatalog.kt` (which groups are deferred, and the `loadTools` menu) + `agent/SystemPrompt.kt` (`toolGroupsSection`, the rule that sends it to `loadTools`) + `agent/AgentFactory.kt` (`sendVisibleTools`, which re-sends the tool list after a group is loaded) |
+| The model answers that it cannot draw, speak, schedule or publish something it has tools for | `tools/ToolCatalog.kt` (which groups are deferred, and the `loadTools` menu) + `agent/TurnPrompt.kt` (`<tool_groups>`, the menu it reads) + `agent/SystemPrompt.kt` (the rule that sends it to `loadTools`) + `agent/AgentFactory.kt` (`sendVisibleTools`, which re-sends the tool list after a group is loaded) |
+| A conversation loads the same group on every turn, or keeps offering one it no longer uses | `tools/LoadedToolGroups.kt` (per-scope memory, its cap and its LRU order) — it is process memory, so a restart empties it |
 | `/tasks` or a plain-language task pause/resume/cancel fails | `telegram/callback/TaskMenuHandler.kt` (rendering, ownership, callbacks) + `tools/tasks/TaskTools.kt` (agent path) + `tasks/TasksRepository.kt` (shared scoped state changes) |
 | `/stop` does not stop anything, or a turn leaves its status message on screen | `agent/RunningTurns.kt` (what is registered and cancelled) + `agent/AgentRunner.kt` (`stop`, and the lock the command must not take) + `telegram/AgentTurns.kt` (the notice on cancellation) + `telegram/TelegramProgress.kt` (closing the status on the way out) + `telegram/callback/TurnStopHandler.kt` (the button and whose turn it may stop) |
 | `/clear` reports success but history survives | `agent/AgentRunner.kt` (`clearConversation` and the turn lock that also guards the append) + `tools/conversation/ConversationTools.kt` (agent path) + `agent/conversation/ConversationRepository.kt` (shared storage operation) |
