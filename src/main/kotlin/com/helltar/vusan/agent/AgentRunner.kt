@@ -99,17 +99,23 @@ class AgentRunner(
         val context = request.context
         val key = context.scope
         val messages = Messages.of(context.language)
+        val busy = AgentResult(outputs = emptyList(), comment = messages.busyReply)
+        val lock = retainLock(key)
 
-        // a place first, then the conversation's own lock — always that order. taken the other way round,
-        // a turn holding a lock while it waits for a place and a queued turn holding a place while it
-        // waits for that lock would wait for each other.
-        val result =
-            admission.admit {
-                val lock = retainLock(key)
+        try {
+            // a look at the lock before queueing rather than after. the answer is the same one `tryLock`
+            // gives below, and racing it costs nothing — but waiting for a place only to find this
+            // conversation busy would spend a queue slot on somebody the bot cannot serve anyway, and
+            // one person writing repeatedly would take those slots from everybody else.
+            if (lock.isLocked) return busy
 
-                try {
+            // a place first, then the lock — always that order. taken the other way round, a turn holding
+            // a lock while it waits for a place and a queued turn holding a place while it waits for that
+            // lock would wait for each other.
+            val result =
+                admission.admit {
                     if (!lock.tryLock()) {
-                        return@admit AgentResult(outputs = emptyList(), comment = messages.busyReply)
+                        return@admit busy
                     }
 
                     try {
@@ -117,12 +123,12 @@ class AgentRunner(
                     } finally {
                         lock.unlock()
                     }
-                } finally {
-                    releaseLock(key)
                 }
-            }
 
-        return result ?: AgentResult(outputs = emptyList(), comment = messages.overloadedReply)
+            return result ?: AgentResult(outputs = emptyList(), comment = messages.overloadedReply)
+        } finally {
+            releaseLock(key)
+        }
     }
 
     /**
