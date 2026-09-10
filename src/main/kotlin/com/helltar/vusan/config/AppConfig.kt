@@ -68,7 +68,7 @@ data class AppConfig(
 
         // turns run in parallel across conversations; the limit is what the LLM provider will take at
         // once, not what the machine can hold.
-        private const val DEFAULT_MAX_CONCURRENT_TURNS = 4
+        private const val DEFAULT_MAX_CONCURRENT_TURNS = 8
         private const val DEFAULT_TASK_MAX_LATENESS_MINUTES = 60L
         private const val DEFAULT_WORKSPACE_MAX_TIMEOUT_SECONDS = 600L
 

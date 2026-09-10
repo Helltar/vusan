@@ -249,7 +249,7 @@ mid-reply, so the day's last request can go slightly over it instead of being cu
 
 | Variable               | Default | Description                                        |
 |------------------------|---------|----------------------------------------------------|
-| `MAX_CONCURRENT_TURNS` | `4`     | Requests Vusan works on at the same time.          |
+| `MAX_CONCURRENT_TURNS` | `8`     | Requests Vusan works on at the same time.          |
 
 One person cannot start two requests in the same chat — the second is told to wait for the first.
 This is the other half: how many *different* people Vusan serves at once. Every request is a model
