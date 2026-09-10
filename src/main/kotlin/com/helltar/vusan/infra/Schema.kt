@@ -15,23 +15,20 @@ import com.helltar.vusan.infra.tables.StickersTable
 import com.helltar.vusan.infra.tables.TokenUsageTable
 import com.helltar.vusan.infra.tables.TokenUserSpendTable
 import org.jetbrains.exposed.v1.core.Table
-import org.jetbrains.exposed.v1.jdbc.JdbcTransaction
-
-/** One step of the schema's history: what turns the version before [to] into [to]. */
-internal class Migration(val to: Int, val apply: JdbcTransaction.() -> Unit)
 
 /**
  * The shape the code expects, and the number the database carries in its own `PRAGMA user_version` to
  * say it has that shape.
  *
- * Nothing is reconciled by comparing declarations any more. Adding a column that way worked; changing a
- * key, a type or a table's name never did, and the two databases would then differ while the code they
- * ran was the same. A change is a [Migration] instead, and a database whose version this build does not
- * know is not opened at all. `docs/database.md` says how one is moved across a change by hand.
+ * Nothing is reconciled by comparing declarations, and nothing is migrated in code. Reconciling could add
+ * a column but never rebuild a key, so two installations running the same code could hold different
+ * schemas; migrations are not worth writing before 1.0, when a change may rewrite anything. So a database
+ * is moved by hand — `docs/database.md` carries the recipe — and this number is how the code can tell that
+ * it has been: a database whose version this build does not know is not opened at all.
  */
 internal object Schema {
 
-    /** Raise this by one for every schema change, and add the [Migration] that reaches it. */
+    /** Raise this by one for every schema change, and move deployed databases by hand to match. */
     const val VERSION = 1
 
     val tables: List<Table> =
@@ -51,13 +48,4 @@ internal object Schema {
             PendingUpdatesTable,
             PollsTable
         )
-
-    /**
-     * A step per version above the first, applied in order. They run inside the connect transaction, so
-     * a step that throws leaves the database at the version it had.
-     *
-     * Version 1 is the baseline: it is created whole from [tables], and a database written before there
-     * were versions at all is moved by hand rather than guessed at.
-     */
-    val migrations: List<Migration> = emptyList()
 }

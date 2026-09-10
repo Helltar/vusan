@@ -76,46 +76,28 @@ object Db {
     }
 
     /**
-     * Brings the connected database to [Schema.VERSION], or refuses to work with it.
+     * Creates an empty database at [Schema.VERSION], accepts one already at it, and refuses the rest.
      *
      * A database says what shape it has in `PRAGMA user_version`, which SQLite keeps in the file header
-     * and hands back as `0` until something stamps it. So `0` with tables already in it is a database
-     * from before this was versioned at all: it is left untouched and named in the error, because
-     * guessing at a schema is how rows go missing quietly.
+     * and hands back as `0` until something stamps it. Anything else — `0` with tables in it, or a
+     * version this build does not know — is a database of another shape, and nothing here reshapes it:
+     * it is left untouched and named in the error, because a schema half made of one version and half
+     * of another is how rows go missing quietly. `docs/database.md` says how it is moved by hand.
      */
     private fun JdbcTransaction.prepareSchema(path: Path) {
         val found = userVersion()
 
-        check(found <= Schema.VERSION) {
-            "Database at $path is schema version $found, newer than the " +
-                    "$SCHEMA_LABEL this build knows. Run the build that wrote it."
-        }
-
         if (found == Schema.VERSION) return
 
-        if (found == 0) {
-            check(isEmpty()) {
-                "Database at $path predates versioned schemas and cannot be " +
-                        "reconciled from the declarations. Move it across by hand (docs/database.md), " +
-                        "then stamp it with `PRAGMA user_version = ${Schema.VERSION}`."
-            }
-
-            SchemaUtils.create(tables = Schema.tables.toTypedArray())
-            stampUserVersion(Schema.VERSION)
-            log.info { "created a fresh database at $SCHEMA_LABEL" }
-            return
+        check(found == 0 && isEmpty()) {
+            "Database at $path is schema version $found, not the $SCHEMA_LABEL this build expects. " +
+                    "Move it across by hand (docs/database.md) and stamp it with " +
+                    "`PRAGMA user_version = ${Schema.VERSION}`, or run the build that matches it."
         }
 
-        for (version in (found + 1)..Schema.VERSION) {
-            val migration =
-                checkNotNull(Schema.migrations.singleOrNull { it.to == version }) {
-                    "No migration to schema version $version; this build cannot open a database at $found"
-                }
-
-            migration.apply(this)
-            stampUserVersion(version)
-            log.info { "migrated the database to schema version $version" }
-        }
+        SchemaUtils.create(tables = Schema.tables.toTypedArray())
+        stampUserVersion(Schema.VERSION)
+        log.info { "created a fresh database at $SCHEMA_LABEL" }
     }
 
     // the version pragmas go through the transaction's own connection rather than `exec`: sqlite takes a

@@ -52,7 +52,7 @@ class DatabaseMigrationTest {
     }
 
     @Test
-    fun `a database written by a newer build is refused`() = withTempDb { dbPath ->
+    fun `a database of another version is refused, whichever way it differs`() = withTempDb { dbPath ->
         runBlocking {
             Db.connect(testConfig(dbPath))
             Db.disconnect()
@@ -62,7 +62,7 @@ class DatabaseMigrationTest {
 
         val failure = assertFailsWith<IllegalStateException> { runBlocking { Db.connect(testConfig(dbPath)) } }
 
-        assertContains(failure.message.orEmpty(), "newer")
+        assertContains(failure.message.orEmpty(), "by hand")
         assertEquals(Schema.VERSION + 1, userVersion(dbPath))
     }
 
@@ -80,14 +80,6 @@ class DatabaseMigrationTest {
         }
 
         assertEquals(Schema.VERSION, userVersion(dbPath))
-    }
-
-    // a schema change is a migration now, so every version above the baseline has to have one to reach.
-    @Test
-    fun `every version above the first is reachable by a migration`() {
-        val steps = Schema.migrations.map { it.to }
-
-        assertEquals((2..Schema.VERSION).toList(), steps.sorted())
     }
 
     private fun newTask() =

@@ -7,34 +7,31 @@ that opens it, and application code reaches it through `Db.dbTransaction { … }
 ## Schema versions
 
 The shape the code expects lives in
-[`infra/Schema.kt`](../src/main/kotlin/com/helltar/vusan/infra/Schema.kt): the tables, the current
-`VERSION`, and a `Migration` per version above the first. The database carries the version it actually
-has in SQLite's own `PRAGMA user_version`, which starts at `0` and is stamped as part of the same
-transaction that changes the schema.
+[`infra/Schema.kt`](../src/main/kotlin/com/helltar/vusan/infra/Schema.kt): the tables and the current
+`VERSION`. The database carries the version it actually has in SQLite's own `PRAGMA user_version`, which
+starts at `0` and is stamped when the tables are created.
 
-`Db.connect` reads that number and does one of four things:
+`Db.connect` reads that number and does one of three things:
 
 | `user_version` | What happens |
 |---|---|
 | equal to `Schema.VERSION` | nothing — the database already has this shape |
 | `0`, no tables | every table is created and the version stamped |
-| `0`, tables present | **startup fails**: this is a database from before versions, see below |
-| below `VERSION` | each missing `Migration` runs in order, stamping as it goes |
-| above `VERSION` | **startup fails**: an older build must not write a newer schema |
+| anything else | **startup fails**, and the database is left exactly as it was |
 
-Nothing is inferred by comparing declarations to what is there. Adding a column that way worked;
-changing a key, a type or a table's name never did, and two installations running the same code could
-end up with different physical schemas.
+Nothing is reconciled by comparing declarations to what is there, and nothing is migrated in code.
+Reconciling could add a table, a column or an index and could never rebuild a key, so two installations
+running the same code could hold different schemas. Migrations are not worth writing before 1.0 either,
+when a change may rewrite anything: a deployed database is moved by hand instead, and the version number
+is how the code can tell that it has been.
 
 ## Changing the schema
 
 1. Change the table objects under `infra/tables/`.
 2. Raise `Schema.VERSION` by one.
-3. Add the `Migration` that reaches it — the SQL that turns the previous shape into the new one, applied
-   to a database that already holds someone's data.
-4. Cover both paths in `DatabaseMigrationTest`: a fresh database, and one at the previous version.
-
-A migration runs inside the connect transaction: if it throws, the database keeps the version it had.
+3. Move every deployed database by hand, the way the section below does it, and stamp the new version.
+4. Cover the fresh path in `DatabaseMigrationTest`, which also pins that a database of any other version
+   is refused rather than reshaped.
 
 ## Retention
 

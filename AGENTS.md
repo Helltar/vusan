@@ -67,9 +67,9 @@ Preserve the package boundaries in [`docs/architecture.md`](docs/architecture.md
   is the single DB initialization point and application access goes through
   `Db.dbTransaction { ... }`; never call Exposed `transaction {}` or
   `suspendTransaction(...)` outside that file. A schema change is a table edit plus a
-  raised `Schema.VERSION` and the `Migration` that reaches it, in
-  [`infra/Schema.kt`](src/main/kotlin/com/helltar/vusan/infra/Schema.kt) — nothing is
-  reconciled by comparing declarations. See [`docs/database.md`](docs/database.md).
+  raised `Schema.VERSION` in [`infra/Schema.kt`](src/main/kotlin/com/helltar/vusan/infra/Schema.kt),
+  and deployed databases moved by hand to match — nothing is reconciled by comparing
+  declarations and no migration runs in code. See [`docs/database.md`](docs/database.md).
 - Env vars are parsed in `AppConfig.Companion` via private `readEnv` (optional,
   with a fallback or `null`) and `requireEnv` (required). Never call
   `System.getenv` directly.
@@ -118,9 +118,8 @@ what they describe:
   delivery policy, scheduler behavior, startup wiring, or core orchestrators
   (`AgentRunner`, `AgentFactory`, `ToolRegistryFactory`, `TelegramDelivery`,
   `TelegramOutputSender`, `TaskScheduler`).
-- [`docs/database.md`](docs/database.md): tables, keys, retention, the schema version
-  and the migration that reaches it. Keep the hand-migration recipe there able to move a
-  real database across the change.
+- [`docs/database.md`](docs/database.md): tables, keys, retention, the schema version.
+  Keep the hand-move recipe there able to carry a real database across the change.
 - [`docs/configuration.md`](docs/configuration.md) and
   [`env/vusan.env.example`](env/vusan.env.example): env var additions, removals,
   renames, default or semantics changes.
