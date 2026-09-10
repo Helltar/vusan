@@ -91,7 +91,9 @@ The agent zips the finished files in the workspace and calls `publishSite`. The 
 archive, checks every path in it, and uploads the files one at a time; the host stages them and swaps
 the new tree in by rename when the last one arrives. A visitor sees either the previous site or the new
 one, never a half-written mix. One upload has one writer, so the size and file caps hold however many
-transfers arrive at once.
+transfers arrive at once, and a publish killed between its two renames is put back the way it was: the
+next sweep restores the previous version rather than collecting both copies, and the metadata still
+describes the site that came back. The republish that failed is the caller's to retry.
 
 Paths that escape the site, absolute paths and dotfiles are refused — `.git` and `.env` reach a build
 directory far more often than anyone means to publish them. A zip entry that was a symlink becomes an

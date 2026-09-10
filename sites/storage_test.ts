@@ -176,6 +176,47 @@ Deno.test("a publish loop is rate limited per person", async () => {
   }
 });
 
+Deno.test("a publish interrupted between its renames leaves the previous site standing", async () => {
+  const { root, config, sites } = await fresh();
+  try {
+    await publish(sites, "u42", { "index.html": "<h1>published</h1>" });
+
+    // exactly what a swap holds when it is stopped after retiring the old tree and before the new one
+    // is in place: the site exists, but only under names nothing serves.
+    await Deno.mkdir(`${root}/sites/.publishing-42-abcd`);
+    await Deno.writeTextFile(`${root}/sites/.publishing-42-abcd/index.html`, "<h1>half published</h1>");
+    await Deno.rename(`${root}/sites/42`, `${root}/sites/.retired-42-ef01`);
+
+    // a restart is what usually finds this
+    const restarted = new Sites(config);
+    await restarted.initialize();
+
+    strictEqual(await Deno.readTextFile(`${root}/sites/42/index.html`), "<h1>published</h1>");
+    deepStrictEqual(await names(`${root}/sites`), ["42"]);
+    // the site the metadata describes is the one that came back
+    strictEqual((await restarted.status("u42"))?.files, 1);
+  } finally {
+    await Deno.remove(root, { recursive: true });
+  }
+});
+
+Deno.test("a swap that finished leaves its own directories to be collected", async () => {
+  const { root, config, sites } = await fresh();
+  try {
+    await publish(sites, "u42", { "index.html": "<h1>published</h1>" });
+
+    await Deno.mkdir(`${root}/sites/.retired-42-ef01`);
+    await Deno.mkdir(`${root}/sites/.publishing-42-abcd`);
+
+    await new Sites(config).initialize();
+
+    strictEqual(await Deno.readTextFile(`${root}/sites/42/index.html`), "<h1>published</h1>");
+    deepStrictEqual(await names(`${root}/sites`), ["42"]);
+  } finally {
+    await Deno.remove(root, { recursive: true });
+  }
+});
+
 Deno.test("two transfers of one upload cannot both take the last file slot", async () => {
   const { root, sites } = await fresh({ maxFiles: 1 });
   try {

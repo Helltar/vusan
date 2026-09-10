@@ -57,6 +57,9 @@ export class Sites {
   private readonly blockedFile: string;
   private readonly uploads = new Map<string, Upload>();
   private readonly commits = new Map<string, number[]>();
+  // labels whose directories a rename sequence owns right now: the sweep runs on its own timer, and
+  // between two renames a site lives under names that look exactly like what a crash left behind.
+  private readonly moving = new Set<string>();
   private spaceFailure: string | null = null;
   private transfers = 0;
 
@@ -246,14 +249,13 @@ export class Sites {
       const path = `${this.staging}/${entry.name}`;
       if (!live.has(path)) await Deno.remove(path, { recursive: true }).catch(() => {});
     }
+    await this.recoverSwaps();
     const blocked = await this.blocked();
     const retain = this.config.retainDays === null ? null : this.config.retainDays * 24 * HOUR_MS;
     const labels = new Set<string>();
     for await (const entry of Deno.readDir(this.root)) {
-      if (entry.name.startsWith(INCOMING) || entry.name.startsWith(RETIRED)) {
-        await Deno.remove(`${this.root}/${entry.name}`, { recursive: true }).catch(() => {});
-        continue;
-      }
+      // the leftovers of a swap are the recovery pass's to keep or remove, and it has just run
+      if (entry.name.startsWith(INCOMING) || entry.name.startsWith(RETIRED)) continue;
       if (!isLabel(entry.name)) continue;
       labels.add(entry.name);
       if (blocked.has(entry.name)) {
@@ -272,6 +274,44 @@ export class Sites {
     for await (const entry of Deno.readDir(this.metaDir)) {
       const label = entry.name.replace(/\.json$/, "");
       if (!labels.has(label)) await Deno.remove(`${this.metaDir}/${entry.name}`).catch(() => {});
+    }
+  }
+
+  /**
+   * What an interrupted swap left in the root. A publish renames the new tree in, the old one out, then
+   * the new one into place: stopped between the last two, the site exists only under those names, and
+   * removing them both is what would actually lose it.
+   *
+   * The previous version is the one restored. Its files and the metadata still describing them agree,
+   * and the publish that was replacing it never reported success — so a retry has something to replace,
+   * rather than a site that is gone. Everything else here belongs to a swap that already finished.
+   */
+  private async recoverSwaps(): Promise<void> {
+    const leftovers: { path: string; label: string; retired: boolean }[] = [];
+    for await (const entry of Deno.readDir(this.root)) {
+      const prefix = entry.name.startsWith(RETIRED)
+        ? RETIRED
+        : entry.name.startsWith(INCOMING)
+        ? INCOMING
+        : null;
+      if (prefix === null) continue;
+      const rest = entry.name.slice(prefix.length);
+      const label = rest.slice(0, rest.lastIndexOf("-"));
+      // a rename sequence running right now owns its own directories until it is done with them
+      if (this.moving.has(label)) continue;
+      leftovers.push({ path: `${this.root}/${entry.name}`, label, retired: prefix === RETIRED });
+    }
+    // the retired copy is the one a site can come back from, so it is offered the empty label first
+    leftovers.sort((a, b) => Number(b.retired) - Number(a.retired));
+    for (const leftover of leftovers) {
+      const live = `${this.root}/${leftover.label}`;
+      const lost = leftover.retired && isLabel(leftover.label) &&
+        !await Deno.stat(live).then(() => true, () => false);
+      if (lost && await Deno.rename(leftover.path, live).then(() => true, () => false)) {
+        console.log(`site=[${leftover.label}] restored: a publish was interrupted while swapping it in`);
+        continue;
+      }
+      await Deno.remove(leftover.path, { recursive: true }).catch(() => {});
     }
   }
 
@@ -327,30 +367,41 @@ export class Sites {
     const live = `${this.root}/${label}`;
     const incoming = `${this.root}/${INCOMING}${label}-${suffix()}`;
     const retired = `${this.root}/${RETIRED}${label}-${suffix()}`;
-    await Deno.rename(from, incoming);
-    const replaced = await Deno.rename(live, retired).then(() => true).catch((e) => {
-      if (e instanceof Deno.errors.NotFound) return false;
-      throw e;
-    });
+    this.moving.add(label);
     try {
-      await Deno.rename(incoming, live);
-    } catch (e) {
-      if (replaced) await Deno.rename(retired, live).catch(() => {});
-      await Deno.remove(incoming, { recursive: true }).catch(() => {});
-      throw e;
+      await Deno.rename(from, incoming);
+      const replaced = await Deno.rename(live, retired).then(() => true).catch((e) => {
+        if (e instanceof Deno.errors.NotFound) return false;
+        throw e;
+      });
+      try {
+        await Deno.rename(incoming, live);
+      } catch (e) {
+        if (replaced) await Deno.rename(retired, live).catch(() => {});
+        await Deno.remove(incoming, { recursive: true }).catch(() => {});
+        throw e;
+      }
+      if (replaced) await Deno.remove(retired, { recursive: true }).catch(() => {});
+    } finally {
+      this.moving.delete(label);
     }
-    if (replaced) await Deno.remove(retired, { recursive: true }).catch(() => {});
   }
 
   private async drop(label: string): Promise<boolean> {
     const retired = `${this.root}/${RETIRED}${label}-${suffix()}`;
-    const removed = await Deno.rename(`${this.root}/${label}`, retired).then(() => true).catch((e) => {
-      if (e instanceof Deno.errors.NotFound) return false;
-      throw e;
-    });
-    if (removed) await Deno.remove(retired, { recursive: true }).catch(() => {});
-    await Deno.remove(`${this.metaDir}/${label}.json`).catch(() => {});
-    return removed;
+    this.moving.add(label);
+    try {
+      const removed = await Deno.rename(`${this.root}/${label}`, retired).then(() => true).catch((e) => {
+        if (e instanceof Deno.errors.NotFound) return false;
+        throw e;
+      });
+      // the recovery pass must not read this as a publish that lost its site and put it back
+      if (removed) await Deno.remove(retired, { recursive: true }).catch(() => {});
+      await Deno.remove(`${this.metaDir}/${label}.json`).catch(() => {});
+      return removed;
+    } finally {
+      this.moving.delete(label);
+    }
   }
 
   private async record(label: string): Promise<SiteRecord | null> {
