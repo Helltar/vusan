@@ -4,6 +4,7 @@ import com.helltar.vusan.agent.AgentRequest
 import com.helltar.vusan.agent.AgentRunner
 import com.helltar.vusan.budget.TokenBudget
 import com.helltar.vusan.common.rethrowIfCancellation
+import com.helltar.vusan.common.runInOwnJob
 import com.helltar.vusan.i18n.Messages
 import com.helltar.vusan.delivery.OutputDelivery
 import com.helltar.vusan.delivery.TurnDelivery
@@ -30,7 +31,7 @@ class TaskScheduler(
     private val accessPolicy: AccessPolicy = AccessPolicy()
 ) {
 
-    private enum class FireOutcome { Delivered, RunFailed, ChatUnreachable }
+    private enum class FireOutcome { Delivered, RunFailed, ChatUnreachable, Stopped }
 
     private companion object {
         val log = KotlinLogging.logger {}
@@ -154,6 +155,7 @@ class TaskScheduler(
             when (runAttempt(task, attempt)) {
                 FireOutcome.Delivered -> return false
                 FireOutcome.ChatUnreachable -> return true
+                FireOutcome.Stopped -> return reportStopped(task)
                 FireOutcome.RunFailed -> Unit
             }
 
@@ -195,6 +197,13 @@ class TaskScheduler(
 
         val request = scheduledAgentRequest(task, attempt, chatProfileFor(task))
 
+        // `/stop` ends a turn by naming its conversation, and a fire runs under the same name as the
+        // user's own turns there. without a job of its own to be cancelled, the coroutine the stop
+        // reaches is the scheduler's loop, and every later task with it.
+        return runInOwnJob { deliverTurn(task, request) } ?: FireOutcome.Stopped
+    }
+
+    private suspend fun deliverTurn(task: ScheduledTask, request: AgentRequest): FireOutcome {
         // the agent answers its own failures with a canned reply instead of throwing, so the flag is the
         // only thing separating "the task did not run" from a real answer.
         val result =
@@ -233,6 +242,17 @@ class TaskScheduler(
     // answer, and the whole agent run is spent before the first send would say so.
     private suspend fun chatProfileFor(task: ScheduledTask): ChatProfile =
         if (task.chatIsPrivate) ChatProfile.NONE else chatProfiles.of(task.scope.chat)
+
+    // a fire the user ended themselves is not a failure and is not retried: the recurrence moves on as
+    // it would after a delivered one. `/stop` says nothing when it stops a turn — the turn does — so the
+    // notice is left to the fire it stopped.
+    private suspend fun reportStopped(task: ScheduledTask): Boolean {
+        log.info { "task id=${task.id} was stopped by its owner" }
+
+        return delivery
+            .notify(task.destination, Messages.of(task.language).turnStoppedNotice)
+            .isUnreachable
+    }
 
     private suspend fun rescheduleAfterFire(task: ScheduledTask, now: Instant) {
         val nextFire = task.recurrence.catchUpAfter(task.nextFireAt, task.timezone, now)

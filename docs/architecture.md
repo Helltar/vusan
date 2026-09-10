@@ -316,7 +316,11 @@ A normal user message travels:
 ## Background and side flows
 
 - **Task scheduler** — `TaskScheduler.launchIn` polls the task store every 30 seconds. Due tasks run through
-  `AgentRunner.handleScheduled` (waits for the user lock instead of bailing) and are delivered through the
+  `AgentRunner.handleScheduled` (waits for the user lock instead of bailing), each fire in a job of its own
+  (`common/runInOwnJob`): a fire is registered in `RunningTurns` under the conversation it belongs to, so `/stop` and
+  the stop button reach it like any turn, and without a job to be cancelled the one they would end is the scheduler's
+  own loop. A stopped fire is not a failure — it is not retried, the chat gets the same "stopped" notice a stopped
+  turn does, and the recurrence moves on. Fires are delivered through the
   `delivery/OutputDelivery` port, which is what keeps `tasks/` free of any messenger: it addresses a `Destination`
   (chat and optional thread), names the `UserRef` a DM-routed item belongs to, and answers a
   `DeliveryOutcome`. Chat facts come the same way, through `request/ChatProfileLookup`. A task runs with no incoming message behind it, so its `<message_context>` is
