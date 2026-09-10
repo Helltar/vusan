@@ -38,9 +38,11 @@ Telegram ──► telegram/ ──► agent/ ──► tools/ ──► externa
   pressed button and picks its flow, `TaskMenuHandler` runs the deterministic `/tasks` UI, and `InlineChoiceHandler` the
   agent-created choice buttons, whose selection becomes an agent input.
 - **`agent/`** — agent orchestration on top of Koog. `AgentRunner` serializes the turns of one conversation, assembles
-  the current user turn (Telegram metadata + durable memory + request), and owns every history write for it, so no other
-  layer appends or clears turns behind a running turn's back; `AgentFactory` builds the `AIAgent` (system prompt +
-  history + tools) and budgets its model context; `SystemPrompt` keeps the deployment's customizable personality and the
+  the current user turn (chat metadata + durable memory + request), and owns every history write for it, so no other
+  layer appends or clears turns behind a running turn's back. What it orchestrates sits beside it, one file per concern:
+  `TurnPrompt` renders the blocks the model is shown for this turn, `TurnHistory` decides what the finished turn leaves
+  behind, and `ProviderErrors` reads a provider's refusal out of the message koog wrapped it in and picks the reply it
+  earns. `AgentFactory` builds the `AIAgent` (system prompt + history + tools) and budgets its model context; `SystemPrompt` keeps the deployment's customizable personality and the
   fixed delivery/tool contract in separate XML-delimited blocks. `agent/conversation/` groups turns into complete
   interactions, persists raw history, and maintains its semantic recap, all keyed by a `ConversationScope` — one
   person in one chat, so a private exchange can never be replayed as that person's own words inside a group, and what

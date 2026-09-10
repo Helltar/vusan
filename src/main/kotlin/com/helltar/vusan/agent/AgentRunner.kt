@@ -1,12 +1,9 @@
 package com.helltar.vusan.agent
 
-import ai.koog.http.client.KoogHttpClientException
-import ai.koog.prompt.executor.clients.LLMClientException
 import com.helltar.vusan.agent.grouplog.GroupLogRepository
 import com.helltar.vusan.agent.grouplog.renderGroupLog
 import com.helltar.vusan.agent.grouplog.withoutExchangesWith
 import com.helltar.vusan.agent.conversation.*
-import com.helltar.vusan.agent.memory.MemoryEntry
 import com.helltar.vusan.agent.memory.MemoryRepository
 import com.helltar.vusan.agent.memory.memoryOwner
 import com.helltar.vusan.budget.BudgetOwner
@@ -14,14 +11,11 @@ import com.helltar.vusan.budget.TokenBudget
 import com.helltar.vusan.budget.TokenBudgetStop
 import com.helltar.vusan.budget.tokenBudgetStop
 import com.helltar.vusan.common.collapseWhitespaceAndCap
-import com.helltar.vusan.common.isEffectivelyBlank
 import com.helltar.vusan.common.limitTo
 import com.helltar.vusan.common.rethrowIfCancellation
-import com.helltar.vusan.common.xmlBlock
 import com.helltar.vusan.config.CodexAuthException
 import com.helltar.vusan.config.ConversationConfig
 import com.helltar.vusan.config.GroupLogConfig
-import com.helltar.vusan.i18n.Language
 import com.helltar.vusan.i18n.Messages
 import com.helltar.vusan.outbox.BotOutbox
 import com.helltar.vusan.outbox.BotOutput
@@ -29,21 +23,13 @@ import com.helltar.vusan.outbox.OutboxItem
 import com.helltar.vusan.request.ChatRef
 import com.helltar.vusan.request.ConversationScope
 import com.helltar.vusan.request.RequestContext
-import com.helltar.vusan.request.UserRef
-import com.helltar.vusan.tools.choice.InlineChoiceTools
-import com.helltar.vusan.tools.message.MessageTools
 import io.github.oshai.kotlinlogging.KotlinLogging
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
 import java.time.Instant
 import java.time.ZoneId
-import java.time.ZonedDateTime
-import java.time.format.DateTimeFormatter
 import java.time.temporal.ChronoUnit
-import kotlin.time.Duration
-import kotlin.time.Duration.Companion.days
-import kotlin.time.Duration.Companion.seconds
 
 // `<recent_chat>` rides along on every group turn, so it is budgeted for cheapness, not for detail:
 // enough to know what is being talked about, never enough to answer a recap question on its own.
@@ -51,9 +37,6 @@ private const val RECENT_CHAT_MAX_CHARS = 1_000
 private const val RECENT_CHAT_LINE_CHARS = 120
 private const val RECENT_CHAT_OVERFETCH = 3
 
-private const val TOOL_OUTPUT_MAX_CHARS = 4_000
-private const val TOOL_EVENTS_MAX_COUNT = 8
-private const val TOOL_EVENTS_MAX_CHARS = 12_000
 private const val EMERGENCY_SUMMARY_MAX_CHARS = 1_500
 private const val LOG_REPLY_MAX_CHARS = 300
 private const val PROVIDER_ERROR_LOG_MAX_CHARS = 300
@@ -525,136 +508,6 @@ class AgentRunner(
     private class ConversationLock(val mutex: Mutex = Mutex(), var refCount: Int = 0)
 }
 
-/**
- * Everything the model is shown for this turn, request last.
- *
- * All of it rides in one user-role message, including the clock and the sticker index. A second
- * system message would read as a higher-priority instruction — wrong for context assembled out of
- * what people sent — and koog's Anthropic and Google clients hoist every system message into the
- * top-level system field anyway, so a block placed here would not stay here on those providers.
- */
-internal fun currentTurnPrompt(
-    userInput: String,
-    context: RequestContext,
-    previousExchangeAt: Instant? = null,
-    userMemory: List<MemoryEntry>,
-    chatMemory: List<MemoryEntry>,
-    recentChat: String? = null,
-    stickerCatalog: String? = null
-): String =
-    buildList {
-        add(currentTimeBlock())
-        add(context.toPromptBlock(previousExchangeAt))
-        memoryBlock("user_memory", userMemory)?.let(::add)
-        memoryBlock("group_memory", chatMemory)?.let(::add)
-        stickerCatalog?.takeIf { it.isNotBlank() }?.let(::add)
-        recentChat?.takeIf { it.isNotBlank() }?.let { add(xmlBlock("recent_chat", it)) }
-        add(userInput)
-    }.joinToString("\n\n")
-
-private val LOCAL_DATE_TIME = DateTimeFormatter.ofPattern("yyyy-MM-dd'T'HH:mm:ss")
-private val DAY_OF_WEEK = DateTimeFormatter.ofPattern("EEEE")
-
-private fun currentTimeBlock(): String {
-    val timezone = ZoneId.systemDefault()
-    val now = ZonedDateTime.now(timezone)
-
-    return xmlBlock("current_time", "${LOCAL_DATE_TIME.format(now)} ${timezone.id} (${DAY_OF_WEEK.format(now)})")
-}
-
-// renders memory as `#id content` lines so the model can reference an id when calling `forgetMemory`.
-// an entry is written from what somebody said, and `group_memory` is editable by every member of the
-// chat, so it is quoted text and gets the same defusing.
-private fun memoryBlock(
-    tag: String,
-    entries: List<MemoryEntry>
-): String? =
-    entries
-        .takeIf { it.isNotEmpty() }
-        ?.joinToString("\n") { "#${it.id} ${it.content.neutralizePromptBlocks()}" }
-        ?.let { xmlBlock(tag, it) }
-
-// the provider's HTTP status is embedded in the client exception message ("Status code: 429").
-// 429 (rate limit / quota) and 503 (service overloaded) are transient — the provider asks us to back off.
-private val TRANSIENT_STATUS_REGEX = Regex("""Status code:\s*(429|503)""")
-private val CONTEXT_OVERFLOW_REGEX =
-    Regex(
-        "context[_ ]length|context window|maximum context|too many (input )?tokens|" +
-                "prompt is too long|input is too long",
-        RegexOption.IGNORE_CASE
-    )
-
-// a subscription that has run out of Codex usage reports it in the error body rather than by status:
-// a plain 429 is an ordinary rate limit that retrying fixes, while these mean "come back later".
-private val SUBSCRIPTION_LIMIT_REGEX =
-    Regex(
-        "usage_limit_reached|usage limit reached|usage_not_included|quota_exceeded|" +
-                "insufficient_quota|exceeded your current quota",
-        RegexOption.IGNORE_CASE
-    )
-
-private val UNAUTHORIZED_REGEX =
-    Regex(
-        "\\b401\\b|missing_authorization_header|token_expired|invalid_api_key|unauthorized",
-        RegexOption.IGNORE_CASE
-    )
-
-// the provider refused the request itself over its content policy, and reports it in the error body:
-// the status is whatever the endpoint felt like, a flagged streaming call even comes back as 200. there
-// is nothing to wait out and nothing to retry — only a differently worded request gets through.
-private val CONTENT_POLICY_REGEX =
-    Regex(
-        "cyber_policy|content[_ ]policy|content[_ ]filter|moderation|invalid_prompt|" +
-                "prohibited_content|safety system|safety filter|was flagged",
-        RegexOption.IGNORE_CASE
-    )
-
-/**
- * The provider failure inside [this], as the message koog built for it.
- *
- * Koog raises one of two types depending on which layer refused the call — the client wrapper, or the
- * raw HTTP/SSE path the Codex bridge streams over — and both fold the status code and the error body
- * into their message.
- */
-internal fun Throwable.providerErrorMessage(): String? =
-    generateSequence(this) { it.cause }
-        .firstOrNull { it is LLMClientException || it is KoogHttpClientException }
-        ?.message
-
-/** Which canned reply a provider error earns, from the status and the error body koog embedded in it. */
-internal fun Messages.providerErrorReply(providerError: String, now: Instant = Instant.now()): String =
-    when {
-        CONTENT_POLICY_REGEX.containsMatchIn(providerError) -> contentPolicyReply
-
-        SUBSCRIPTION_LIMIT_REGEX.containsMatchIn(providerError) ->
-            subscriptionLimitReply(usageLimitResetIn(providerError, now))
-
-        UNAUTHORIZED_REGEX.containsMatchIn(providerError) -> signInRequiredReply
-        TRANSIENT_STATUS_REGEX.containsMatchIn(providerError) -> overloadedReply
-        else -> fallbackErrorReply
-    }
-
-// an exhausted subscription says when it lifts, as a countdown or as an epoch-second deadline. the body
-// is JSON on some endpoints and flattened `key=value` lines on others, so match both spellings.
-private val RESETS_IN_REGEX = Regex(""""?resets_in_seconds"?\s*[:=]\s*"?(\d+)""")
-private val RESETS_AT_REGEX = Regex(""""?resets_at"?\s*[:=]\s*"?(\d+)""")
-
-// no real subscription window is longer than this, so a larger value is a malformed deadline (seconds
-// misread from milliseconds, say) and the reply falls back to "later" rather than quoting a fake wait.
-private val MAX_USAGE_LIMIT_RESET = 7.days
-
-/** How long until the exhausted subscription lifts, or `null` when the error body does not say. */
-internal fun usageLimitResetIn(providerError: String, now: Instant = Instant.now()): Duration? =
-    (RESETS_IN_REGEX.longIn(providerError)?.seconds
-        ?: RESETS_AT_REGEX.longIn(providerError)?.let { (it - now.epochSecond).seconds })
-        ?.takeIf { it.isPositive() && it <= MAX_USAGE_LIMIT_RESET }
-
-private fun Regex.longIn(text: String): Long? =
-    find(text)?.groupValues?.get(1)?.toLongOrNull()
-
-private fun Throwable.isContextOverflow(): Boolean =
-    providerErrorMessage()?.let(CONTEXT_OVERFLOW_REGEX::containsMatchIn) == true
-
 private fun Messages.replyFor(stop: TokenBudgetStop): String =
     when (stop) {
         is TokenBudgetStop.DayBudget -> tokenBudgetExhaustedReply(stop.untilReset)
@@ -686,106 +539,3 @@ private fun outputsLogSummary(outputs: List<OutboxItem>): String =
             else -> output::class.simpleName ?: "?"
         }
     }
-
-// trailing assistant text after a delivery tool is duplicate chatter and is dropped — but an
-// announcement is not the answer, so it must not silence the closing text that is.
-internal fun extractFinalComment(answer: String, outputs: List<OutboxItem>): String? =
-    answer.trim()
-        .takeUnless { it.isEffectivelyBlank() }
-        ?.takeUnless {
-            outputs.filterNot { item -> item.delivered }.any {
-                it.output is BotOutput.Voice ||
-                        it.output is BotOutput.VideoNote ||
-                        it.output is BotOutput.Text ||
-                        it.output is BotOutput.RichMessage ||
-                        it.output is BotOutput.InlineChoice ||
-                        it.output is BotOutput.Reaction
-            }
-        }
-
-internal fun assistantTextForHistory(outputs: List<OutboxItem>, comment: String?): String? {
-    val parts =
-        buildList {
-            addAll(
-                outputs.mapNotNull {
-                    when (val output = it.output) {
-                        is BotOutput.Text -> output.text
-                        is BotOutput.InlineChoice -> output.historyText()
-                        is BotOutput.RichMessage -> output.markdown
-                        else -> null
-                    }
-                }
-            )
-            comment?.let(::add)
-        }
-
-    return parts.takeIf { it.isNotEmpty() }?.joinToString("\n\n")
-}
-
-// tools whose payload is fully duplicated by the assistant text row. skipping their
-// matching TOOL_CALL/TOOL_RESULT pair avoids storing (and replaying) the same content twice.
-// the Koog runtime registers each tool under its function name (no tool here sets @Tool(customName)),
-// so a function reference stays in sync with the registered name across renames.
-private val TEXT_DUPLICATING_TOOLS =
-    setOf(
-        MessageTools::sendMessage.name,
-        MessageTools::sendRichMessage.name,
-        MessageTools::announcePlan.name,
-        InlineChoiceTools::askWithButtons.name
-    )
-
-private fun BotOutput.InlineChoice.historyText(): String =
-    question + "\n\n" + options.joinToString("\n") { "• $it" }
-
-internal fun buildTurns(userEntry: String, toolEvents: List<ToolEvent>, assistantText: String?): List<ChatTurn> =
-    buildList {
-        add(ChatTurn(role = ChatRole.USER, content = userEntry))
-
-        for (event in toolEvents.forHistory()) {
-
-            add(
-                ChatTurn(
-                    role = ChatRole.TOOL_CALL,
-                    content = toolCallArgsForStorage(event.args),
-                    toolCallId = event.toolCallId,
-                    toolName = event.toolName
-                )
-            )
-
-            add(
-                ChatTurn(
-                    role = ChatRole.TOOL_RESULT,
-                    content = event.output.collapseWhitespaceAndCap(TOOL_OUTPUT_MAX_CHARS).orEmpty(),
-                    toolCallId = event.toolCallId,
-                    toolName = event.toolName,
-                    toolIsError = event.isError
-                )
-            )
-        }
-
-        if (!assistantText.isNullOrBlank()) {
-            add(ChatTurn(role = ChatRole.ASSISTANT, content = assistantText))
-        }
-    }
-
-private fun List<ToolEvent>.forHistory(): List<ToolEvent> {
-    val selected = ArrayDeque<ToolEvent>()
-    var usedChars = 0
-
-    for (event in asReversed()) {
-        if (event.toolName in TEXT_DUPLICATING_TOOLS) continue
-
-        val args = toolCallArgsForStorage(event.args)
-        val output = event.output.collapseWhitespaceAndCap(TOOL_OUTPUT_MAX_CHARS).orEmpty()
-        val cost = args.length + output.length
-
-        if (selected.isNotEmpty() && (selected.size >= TOOL_EVENTS_MAX_COUNT || usedChars + cost > TOOL_EVENTS_MAX_CHARS)) {
-            continue
-        }
-
-        selected.addFirst(event)
-        usedChars += cost
-    }
-
-    return selected.toList()
-}

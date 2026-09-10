@@ -11,7 +11,7 @@ import kotlin.test.assertContains
 import kotlin.test.assertFalse
 import kotlin.test.assertTrue
 
-class AgentRunnerPromptTest {
+class TurnPromptTest {
 
     @Test
     fun `current turn keeps metadata and memory next to the current request`() {
