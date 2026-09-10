@@ -184,6 +184,21 @@ class ConversationRepositoryTest {
         assertEquals(2L, history.revision(DM))
     }
 
+    // the recap and the count of wipes share one row now, so storing one must not disturb the other.
+    @Test
+    fun `a recap stored after a clear keeps the revision`() = runBlocking {
+        val history = ConversationRepository()
+        history.appendInteraction(DM, exchange("first", "one"))
+        history.clear(DM)
+        history.appendInteraction(DM, exchange("second", "two"))
+        val interaction = history.load(DM).interactions.single()
+
+        assertTrue(history.storeSummary(DM, 0L, interaction.lastMessageId, "recap"))
+
+        assertEquals(1L, history.revision(DM))
+        assertEquals("recap", history.load(DM).summary)
+    }
+
     @Test
     fun `the last exchange is the one in this chat, not the users latest anywhere`() = runBlocking {
         val history = ConversationRepository()

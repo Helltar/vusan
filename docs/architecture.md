@@ -456,7 +456,7 @@ A normal user message travels:
 - **Agent-created inline choices** — `askWithButtons` enqueues a plain-text question plus two to ten answer buttons.
   Callback data carries the intended user id, history revision, option index, and the id of the user message the
   question was asked about; the labels remain in Telegram's message keyboard, while the current revision lives in
-  `conversation_state`, so an unanswered choice survives a bot restart but becomes unavailable after the conversation it
+  `conversations`, so an unanswered choice survives a bot restart but becomes unavailable after the conversation it
   was asked in is cleared — a clear in another chat leaves it usable. `InlineChoiceHandler` verifies ownership and the
   revision, atomically claims the message, replaces its keyboard with the selected label, answers the callback, and
   wraps the question/selection as `<inline_choice>` for a queued `AgentRunner` turn. The question and its options are

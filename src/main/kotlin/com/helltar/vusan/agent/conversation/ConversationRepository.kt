@@ -1,9 +1,8 @@
 package com.helltar.vusan.agent.conversation
 
 import com.helltar.vusan.infra.Db.dbTransaction
-import com.helltar.vusan.infra.tables.ConversationStateTable
-import com.helltar.vusan.infra.tables.ConversationSummariesTable
 import com.helltar.vusan.infra.tables.ConversationMessagesTable
+import com.helltar.vusan.infra.tables.ConversationsTable
 import com.helltar.vusan.request.ConversationScope
 import org.jetbrains.exposed.v1.core.Op
 import org.jetbrains.exposed.v1.core.SortOrder
@@ -124,19 +123,23 @@ class ConversationRepository {
         if (!checkpointExists) return@dbTransaction false
 
         val now = Instant.now()
-        ConversationSummariesTable.upsert(
+
+        // the row may not exist yet: a conversation that has never been cleared has nothing to say
+        // until its first recap, and the revision it starts at is the one a clear counts up from.
+        ConversationsTable.upsert(
             onUpdate = {
-                it[ConversationSummariesTable.content] = content
-                it[ConversationSummariesTable.throughMessageId] = throughMessageId
-                it[ConversationSummariesTable.updatedAt] = now
+                it[ConversationsTable.summary] = content
+                it[ConversationsTable.summarizedThroughMessageId] = throughMessageId
+                it[ConversationsTable.summarizedAt] = now
             }
         ) {
-            it[ConversationSummariesTable.platform] = scope.platform
-            it[ConversationSummariesTable.userId] = scope.user.id
-            it[ConversationSummariesTable.chatId] = scope.chat.id
-            it[ConversationSummariesTable.content] = content
-            it[ConversationSummariesTable.throughMessageId] = throughMessageId
-            it[ConversationSummariesTable.updatedAt] = now
+            it[ConversationsTable.platform] = scope.platform
+            it[ConversationsTable.userId] = scope.user.id
+            it[ConversationsTable.chatId] = scope.chat.id
+            it[ConversationsTable.revision] = 0L
+            it[ConversationsTable.summary] = content
+            it[ConversationsTable.summarizedThroughMessageId] = throughMessageId
+            it[ConversationsTable.summarizedAt] = now
         }
 
         true
@@ -192,28 +195,32 @@ class ConversationRepository {
     }
 
     suspend fun revision(scope: ConversationScope): Long = dbTransaction {
-        ConversationStateTable
-            .select(ConversationStateTable.revision)
-            .where { stateIs(scope) }
+        ConversationsTable
+            .select(ConversationsTable.revision)
+            .where { conversationRowIs(scope) }
             .singleOrNull()
-            ?.get(ConversationStateTable.revision)
+            ?.get(ConversationsTable.revision)
             ?: 0L
     }
 
     suspend fun clear(scope: ConversationScope) {
         dbTransaction {
             ConversationMessagesTable.deleteWhere { conversationIs(scope) }
-            ConversationSummariesTable.deleteWhere { summaryIs(scope) }
 
-            ConversationStateTable.upsert(
+            // the recap goes with the turns it recapped, and the revision counts the wipe: both in one
+            // write, so nothing can come back to a summary of messages that are no longer there.
+            ConversationsTable.upsert(
                 onUpdate = {
-                    it[ConversationStateTable.revision] = ConversationStateTable.revision + 1L
+                    it[ConversationsTable.revision] = ConversationsTable.revision + 1L
+                    it[ConversationsTable.summary] = null
+                    it[ConversationsTable.summarizedThroughMessageId] = 0L
+                    it[ConversationsTable.summarizedAt] = null
                 }
             ) {
-                it[ConversationStateTable.platform] = scope.platform
-                it[ConversationStateTable.userId] = scope.user.id
-                it[ConversationStateTable.chatId] = scope.chat.id
-                it[ConversationStateTable.revision] = 1L
+                it[ConversationsTable.platform] = scope.platform
+                it[ConversationsTable.userId] = scope.user.id
+                it[ConversationsTable.chatId] = scope.chat.id
+                it[ConversationsTable.revision] = 1L
             }
         }
     }
@@ -241,14 +248,14 @@ class ConversationRepository {
             .toList()
 
     private fun loadSummary(scope: ConversationScope): StoredSummary =
-        ConversationSummariesTable
-            .select(ConversationSummariesTable.content, ConversationSummariesTable.throughMessageId)
-            .where { summaryIs(scope) }
+        ConversationsTable
+            .select(ConversationsTable.summary, ConversationsTable.summarizedThroughMessageId)
+            .where { conversationRowIs(scope) }
             .singleOrNull()
             ?.let {
                 StoredSummary(
-                    content = it[ConversationSummariesTable.content],
-                    throughMessageId = it[ConversationSummariesTable.throughMessageId]
+                    content = it[ConversationsTable.summary],
+                    throughMessageId = it[ConversationsTable.summarizedThroughMessageId]
                 )
             }
             ?: StoredSummary(content = null, throughMessageId = 0L)
@@ -260,15 +267,10 @@ private fun conversationIs(scope: ConversationScope): Op<Boolean> =
             (ConversationMessagesTable.userId eq scope.user.id) and
             (ConversationMessagesTable.chatId eq scope.chat.id)
 
-private fun summaryIs(scope: ConversationScope): Op<Boolean> =
-    (ConversationSummariesTable.platform eq scope.platform) and
-            (ConversationSummariesTable.userId eq scope.user.id) and
-            (ConversationSummariesTable.chatId eq scope.chat.id)
-
-private fun stateIs(scope: ConversationScope): Op<Boolean> =
-    (ConversationStateTable.platform eq scope.platform) and
-            (ConversationStateTable.userId eq scope.user.id) and
-            (ConversationStateTable.chatId eq scope.chat.id)
+private fun conversationRowIs(scope: ConversationScope): Op<Boolean> =
+    (ConversationsTable.platform eq scope.platform) and
+            (ConversationsTable.userId eq scope.user.id) and
+            (ConversationsTable.chatId eq scope.chat.id)
 
 private data class StoredRow(
     val messageId: Long,

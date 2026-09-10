@@ -1,11 +1,10 @@
 package com.helltar.vusan.infra
 
 import com.helltar.vusan.config.AppConfig
-import com.helltar.vusan.infra.tables.ConversationStateTable
-import com.helltar.vusan.infra.tables.ConversationSummariesTable
 import com.helltar.vusan.infra.tables.GroupLogDigestsTable
 import com.helltar.vusan.infra.tables.GroupLogTable
 import com.helltar.vusan.infra.tables.ConversationMessagesTable
+import com.helltar.vusan.infra.tables.ConversationsTable
 import com.helltar.vusan.infra.tables.ChatStickerSetsTable
 import com.helltar.vusan.infra.tables.ChatStickersTable
 import com.helltar.vusan.infra.tables.MemoryTable
@@ -80,8 +79,7 @@ object Db {
             val tables =
                 listOf(
                     ConversationMessagesTable,
-                    ConversationStateTable,
-                    ConversationSummariesTable,
+                    ConversationsTable,
                     GroupLogTable,
                     GroupLogDigestsTable,
                     ScheduledTasksTable,

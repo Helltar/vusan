@@ -82,8 +82,7 @@ class DatabaseMigrationTest {
 
             val tables = tableNames(dbPath.toString())
             assertTrue("conversation_messages" in tables, "tables were $tables")
-            assertTrue("conversation_summaries" in tables, "tables were $tables")
-            assertTrue("conversation_state" in tables, "tables were $tables")
+            assertTrue("conversations" in tables, "tables were $tables")
             assertTrue("interaction_id" in tableColumns(dbPath.toString(), "conversation_messages"))
         } finally {
             runBlocking { Db.disconnect() }
