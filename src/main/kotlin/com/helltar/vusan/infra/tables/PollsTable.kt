@@ -9,6 +9,10 @@ import java.time.Instant
  *
  * A `poll_answer` update names the poll and the option numbers and nothing else — not the question,
  * not what the options said, not the chat. Without this row an answer is an integer nobody can place.
+ *
+ * Telegram-owned, so [chatId] carries no `platform` beside it: only `telegram/` reads or writes this
+ * table, a poll id is Telegram's own, and another messenger reporting answers at all would need its own
+ * mechanism rather than a share of this one.
  */
 object PollsTable : Table("polls") {
 

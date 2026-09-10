@@ -6,6 +6,10 @@ import java.time.Instant
 
 // which individual stickers a chat actually uses. `file_unique_id` is recorded before a set is
 // learned, then joins the usage back to the shared sticker row once vision has described it.
+//
+// Telegram-owned like the rest of the sticker tables, so `chat_id` carries no `platform` beside it: a
+// sticker is reached by `file_id` and lives only in `telegram/tools/sticker/`. What keeps two messengers
+// out of one row here is that no other one can write it, not a column.
 object ChatStickersTable : LongIdTable("chat_stickers") {
 
     val chatId = long("chat_id")
