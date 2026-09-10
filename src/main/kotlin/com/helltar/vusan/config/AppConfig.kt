@@ -25,6 +25,7 @@ data class AppConfig(
     val elevenLabsTts: ElevenLabsTtsConfig?,
     val giphyApiKey: String?,
     val llmProvider: LlmProviderConfig,
+    val maxConcurrentTurns: Int,
     val maxFollowUpsPerUser: Int,
     val maxMemoryPerScope: Int,
     val maxTasksPerUser: Int,
@@ -48,6 +49,7 @@ data class AppConfig(
 ) {
     init {
         require(agentMaxIterations > 0) { "AGENT_MAX_ITERATIONS must be positive" }
+        require(maxConcurrentTurns > 0) { "MAX_CONCURRENT_TURNS must be positive" }
         require(maxFollowUpsPerUser >= 0) { "MAX_FOLLOW_UPS_PER_USER must not be negative" }
         require(maxMemoryPerScope >= 0) { "MAX_MEMORY_PER_SCOPE must not be negative" }
         require(maxTasksPerUser >= 0) { "MAX_TASKS_PER_USER must not be negative" }
@@ -63,6 +65,10 @@ data class AppConfig(
         private const val DEFAULT_MAX_FOLLOW_UPS_PER_USER = 3
         private const val DEFAULT_MAX_MEMORY_PER_SCOPE = 10
         private const val DEFAULT_MAX_TASKS_PER_USER = 5
+
+        // turns run in parallel across conversations; the limit is what the LLM provider will take at
+        // once, not what the machine can hold.
+        private const val DEFAULT_MAX_CONCURRENT_TURNS = 4
         private const val DEFAULT_TASK_MAX_LATENESS_MINUTES = 60L
         private const val DEFAULT_WORKSPACE_MAX_TIMEOUT_SECONDS = 600L
 
@@ -96,6 +102,7 @@ data class AppConfig(
                 elevenLabsApiKey = elevenLabsKey,
                 giphyApiKey = readEnv("GIPHY_API_KEY"),
                 llmProvider = llmProvider,
+                maxConcurrentTurns = readIntEnv("MAX_CONCURRENT_TURNS") ?: DEFAULT_MAX_CONCURRENT_TURNS,
                 maxFollowUpsPerUser = readIntEnv("MAX_FOLLOW_UPS_PER_USER") ?: DEFAULT_MAX_FOLLOW_UPS_PER_USER,
                 maxMemoryPerScope = readIntEnv("MAX_MEMORY_PER_SCOPE") ?: DEFAULT_MAX_MEMORY_PER_SCOPE,
                 maxTasksPerUser = readIntEnv("MAX_TASKS_PER_USER") ?: DEFAULT_MAX_TASKS_PER_USER,

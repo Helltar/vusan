@@ -130,6 +130,7 @@ class AppConfigTest {
                     model = "gpt-5.4-mini",
                     requestTimeout = 120.seconds
                 ),
+            maxConcurrentTurns = 4,
             maxFollowUpsPerUser = maxFollowUpsPerUser,
             maxMemoryPerScope = maxMemoryPerScope,
             maxTasksPerUser = maxTasksPerUser,

@@ -75,8 +75,14 @@ class AgentRunner(
     private val stickerCatalog: (suspend (ChatRef) -> String?)? = null,
     private val groupLog: GroupLogRepository? = null,
     private val groupLogConfig: GroupLogConfig = GroupLogConfig(),
-    private val tokenBudget: TokenBudget = TokenBudget()
+    private val tokenBudget: TokenBudget = TokenBudget(),
+    // the ceiling every conversation shares: one person's lock says nothing about how many people may
+    // be served at once, and each turn is an LLM call with its tools behind it. no default — a runner
+    // quietly serving one turn at a time is not something to discover under load.
+    maxConcurrentTurns: Int
 ) {
+
+    private val admission = TurnAdmission(maxConcurrentTurns)
 
     private companion object {
         val log = KotlinLogging.logger {}
@@ -92,21 +98,31 @@ class AgentRunner(
     ): AgentResult {
         val context = request.context
         val key = context.scope
-        val lock = retainLock(key)
+        val messages = Messages.of(context.language)
 
-        try {
-            if (!lock.tryLock()) {
-                return AgentResult(outputs = emptyList(), comment = Messages.of(context.language).busyReply)
+        // a place first, then the conversation's own lock — always that order. taken the other way round,
+        // a turn holding a lock while it waits for a place and a queued turn holding a place while it
+        // waits for that lock would wait for each other.
+        val result =
+            admission.admit {
+                val lock = retainLock(key)
+
+                try {
+                    if (!lock.tryLock()) {
+                        return@admit AgentResult(outputs = emptyList(), comment = messages.busyReply)
+                    }
+
+                    try {
+                        running.track(key) { runAgent(request, onToolStarting, narrator) }
+                    } finally {
+                        lock.unlock()
+                    }
+                } finally {
+                    releaseLock(key)
+                }
             }
 
-            try {
-                return running.track(key) { runAgent(request, onToolStarting, narrator) }
-            } finally {
-                lock.unlock()
-            }
-        } finally {
-            releaseLock(key)
-        }
+        return result ?: AgentResult(outputs = emptyList(), comment = messages.overloadedReply)
     }
 
     /**
@@ -126,14 +142,18 @@ class AgentRunner(
         onToolStarting: (activity: ToolActivity?) -> Unit = {},
         narrator: TurnNarrator? = null
     ): AgentResult {
-        val context = request.context
-        val key = context.scope
-        val lock = retainLock(key)
+        val key = request.context.scope
 
-        try {
-            return lock.withLock { running.track(key) { runAgent(request, onToolStarting, narrator) } }
-        } finally {
-            releaseLock(key)
+        // a queued turn waits for its place rather than being turned away, and takes it before the
+        // conversation lock for the same reason `handle` does.
+        return admission.admitQueued {
+            val lock = retainLock(key)
+
+            try {
+                lock.withLock { running.track(key) { runAgent(request, onToolStarting, narrator) } }
+            } finally {
+                releaseLock(key)
+            }
         }
     }
 

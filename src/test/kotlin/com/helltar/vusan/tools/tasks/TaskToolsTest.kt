@@ -254,6 +254,7 @@ class TaskToolsTest {
                 model = "test",
                 requestTimeout = 60.seconds
             ),
+            maxConcurrentTurns = 4,
             maxFollowUpsPerUser = 3,
             maxMemoryPerScope = 10,
             maxTasksPerUser = 5,

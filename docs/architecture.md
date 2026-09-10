@@ -175,7 +175,12 @@ A normal user message travels:
    no one's text can end a block early or open one of its own. `xmlBlock` escapes only a closing tag of its own name,
    which is what keeps nesting working, so this is the step that stops a group member forging a block in somebody else's
    turn. `AgentTurns.dispatchToAgent` assembles the agent input and the shorter history input.
-4. **Run** — `AgentRunner.handle` takes the conversation lock (or returns "busy"), turns the request away with a "come
+4. **Run** — `AgentRunner.handle` takes a place from `agent/TurnAdmission` and then the conversation lock (or returns
+   "busy"). Admission is the ceiling every conversation shares — `MAX_CONCURRENT_TURNS` turns at once, the rest waiting
+   with their typing indicator, and only a queue several times that long answered "overloaded" instead of queued; a
+   queued turn (a scheduled fire, a spooled message) always waits rather than being refused. The place is taken
+   **before** the lock in both paths, because a turn holding a lock while waiting for a place and a queued turn holding
+   a place while waiting for that lock would wait for each other. It then turns the request away with a "come
    back later" reply when the day's token budget is already spent, loads durable memory (`agent/memory/MemoryRepository`
    — the sender's user memory always, plus the group's memory in non-private chats), and places it with
    `<message_context>` immediately before the current request in one user-role turn. That metadata also carries

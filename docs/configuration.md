@@ -236,14 +236,30 @@ API inputs and outputs — and works just as well as a plain daily spending cap.
 Leaving `LLM_DAILY_TOKEN_BUDGET` unset means no ceiling and no bookkeeping at all. Match the
 timezone to your provider's reset — OpenAI's is `UTC`.
 
-Everything Vusan asks the chat model counts: replies, its own history recaps, group-chat digests,
-and reading images when vision runs on the chat model. A separate `OPENAI_VISION_API_KEY` model has
-its own key and quota and is not counted here.
+Everything Vusan asks a model counts: replies, its own history recaps, group-chat digests, and
+reading images — including through a separate `OPENAI_VISION_API_KEY` model, since the ceiling is
+what Vusan spends rather than what one provider bills for.
 
 Once the day's budget is gone, Vusan answers every request with "come back in about N hours" instead
 of thinking, and scheduled tasks that come due are skipped and moved to their next run rather than
 retried. The count survives a restart, and the ceiling is checked before each request rather than
 mid-reply, so the day's last request can go slightly over it instead of being cut off in the middle.
+
+## How many requests at once
+
+| Variable               | Default | Description                                        |
+|------------------------|---------|----------------------------------------------------|
+| `MAX_CONCURRENT_TURNS` | `4`     | Requests Vusan works on at the same time.          |
+
+One person cannot start two requests in the same chat — the second is told to wait for the first.
+This is the other half: how many *different* people Vusan serves at once. Every request is a model
+call with whatever tools it decides to run, so the number to match is what your provider accepts at
+once, not what the machine could hold.
+
+Beyond that number people wait their turn, with the usual typing indicator, and the answer simply
+arrives a little later. Only when the queue is already several times the limit does Vusan say it is
+overloaded instead of queueing further. Scheduled tasks always wait rather than being turned away —
+nobody is watching one arrive, and refusing it would mean skipping the run.
 
 **Sharing it out.** Nobody gets a personal quota up front: splitting the day equally between
 everyone on the allowlist would freeze tokens for the members who never use the bot, while the few
