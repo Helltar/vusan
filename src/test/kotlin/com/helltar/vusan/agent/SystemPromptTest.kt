@@ -36,6 +36,24 @@ class SystemPromptTest {
     }
 
     @Test
+    fun `system prompt carries the tool group menu and the rule that sends the model to it`() {
+        val prompt = systemPromptFor("Custom personality", MODEL_ID, toolGroups = "- `gifs` — find and send a GIF")
+
+        assertContains(prompt, "# Loading more tools")
+        assertContains(prompt, "<tool_groups>\n- `gifs` — find and send a GIF\n</tool_groups>")
+        assertContains(prompt, "call `loadTools` with the group names")
+    }
+
+    // the section points at a block, so it may not appear when this turn deferred nothing
+    @Test
+    fun `system prompt says nothing about loading tools when nothing is deferred`() {
+        val prompt = systemPromptFor("Custom personality", MODEL_ID)
+
+        assertFalse("Loading more tools" in prompt)
+        assertFalse("tool_groups" in prompt)
+    }
+
+    @Test
     fun `system prompt separates personality from the operational contract`() {
         val prompt = systemPromptFor("  Custom personality  ", MODEL_ID)
 

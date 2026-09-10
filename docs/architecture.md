@@ -58,9 +58,14 @@ that is who owns writing them, not because only `agent/` reads them. No other ar
   part in. `GroupLogReader` answers a window from it under a character budget, falling back to cached per-day recaps
   produced by `GroupLogDigester` when the window is too wide to quote.
 - **`tools/`** — agent-callable tools, one subpackage per capability (search, voice, vision, scheduled tasks, …).
-  `ToolRegistryFactory` owns clients and builds a per-request registry from required tools, optional tools whose
+  `ToolRegistryFactory` owns clients and builds a per-request `ToolCatalog` from required tools, optional tools whose
   env/config is present, and whatever the turn's messenger adds through the `PlatformToolSets` port — a tool only one
-  messenger can implement lives in that adapter, so the factory never names one. See the Features section of the [README](../README.md). `tools/images/` is not a tool surface
+  messenger can implement lives in that adapter, so the factory never names one. The catalog splits what is registered
+  from what the request carries: a set registered under a `ToolGroup` is in the registry from the first step, but its
+  schemas are withheld until the model calls `loadTools` (`tools/catalog/`), which the `<tool_groups>` menu in the
+  system prompt tells it about. Deferring is what keeps the schemas of a dozen rarely-used capabilities out of the
+  conversation budget; koog resolves a call against the registry, so a tool named before its group is loaded still
+  runs. See the Features section of the [README](../README.md). `tools/images/` is not a tool surface
   but the pipeline every image search shares: download a provider's candidates, drop what Telegram would refuse, and
   queue the survivors.
 - **`outbox/`** — the output model. `BotOutput` is the immutable sealed set of Telegram outputs (text, inline choice,
@@ -203,8 +208,9 @@ A normal user message travels:
    it was asked for), and those tools report the refusal to the model rather than claiming a send nobody will see —
    image search checks first and never queries its provider at all; and `<message_context>` names the rest so the agent
    knows why and answers in one message under slow mode. Anything the lookup could not answer counts as unrestricted, since guessing "forbidden" would strip
-   real abilities. `AgentFactory.prepare` builds the per-request tool registry and estimates the fixed
-   system/tool/current-turn cost. The history planner reserves room for output, future tool calls, and estimation error,
+   real abilities. `AgentFactory.prepare` builds the per-request tool catalog and estimates the fixed
+   system/tool/current-turn cost — from the visible tools alone, so a group loaded later is spent from the agent
+   reserve rather than from the history budget. The history planner reserves room for output, future tool calls, and estimation error,
    then admits only complete interactions. If an older prefix no longer fits or exceeds the configured recent count,
    `LlmConversationCompactor` merges it into the persisted `<conversation_recap>` before `AgentFactory.build` creates
    the Koog `AIAgent`. Every turn is capped on the way into that recap prompt, and a user turn budgets its
@@ -770,7 +776,8 @@ A symptom-to-source map for finding the right file fast. Paths are under
 | A rich message reads as empty, `unknown`, or loses its structure | `telegram/inbound/RichMessageText.kt` (block tree → rich markdown), then `MessageMetadata.contentTypeName`/`textSnippetOrNull` and `ReplyContext.repliedTextOrNull` |
 | Scheduled task fires late, not at all, or reports "missed"/"failed" | `tasks/TaskScheduler.kt` (polling, lateness, retries) + `tasks/Recurrence.kt` (next-run math) |
 | A chat's tasks all went paused on their own, or one keeps firing into a chat the bot was removed from | `telegram/BotMembership.kt` (the `my_chat_member` path) + `telegram/delivery/TelegramErrors.kt` (`isChatUnreachable`) + `tasks/TaskScheduler.kt` (`parkTasksOfUnreachableChat`) |
-| A tool is missing in one group but present elsewhere, or a chat restriction is stale | `telegram/ChatProfiles.kt` (`capabilitiesOf`, the cache and its `forget`) + `tools/ToolRegistryFactory.buildRegistry` (which capability gates which tool) + `telegram/tools/TelegramToolSets.kt` (the same gate for Telegram's own tools) |
+| A tool is missing in one group but present elsewhere, or a chat restriction is stale | `telegram/ChatProfiles.kt` (`capabilitiesOf`, the cache and its `forget`) + `tools/ToolRegistryFactory.buildCatalog` (which capability gates which tool) + `telegram/tools/TelegramToolSets.kt` (the same gate for Telegram's own tools) |
+| The model answers that it cannot draw, speak, schedule or publish something it has tools for | `tools/ToolCatalog.kt` (which groups are deferred, and the `loadTools` menu) + `agent/SystemPrompt.kt` (`toolGroupsSection`, the rule that sends it to `loadTools`) + `agent/AgentFactory.kt` (`sendVisibleTools`, which re-sends the tool list after a group is loaded) |
 | `/tasks` or a plain-language task pause/resume/cancel fails | `telegram/callback/TaskMenuHandler.kt` (rendering, ownership, callbacks) + `tools/tasks/TaskTools.kt` (agent path) + `tasks/TasksRepository.kt` (shared scoped state changes) |
 | `/stop` does not stop anything, or a turn leaves its status message on screen | `agent/RunningTurns.kt` (what is registered and cancelled) + `agent/AgentRunner.kt` (`stop`, and the lock the command must not take) + `telegram/AgentTurns.kt` (the notice on cancellation) + `telegram/TelegramProgress.kt` (closing the status on the way out) + `telegram/callback/TurnStopHandler.kt` (the button and whose turn it may stop) |
 | `/clear` reports success but history survives | `agent/AgentRunner.kt` (`clearConversation` and the turn lock that also guards the append) + `tools/conversation/ConversationTools.kt` (agent path) + `agent/conversation/ConversationRepository.kt` (shared storage operation) |
@@ -791,8 +798,10 @@ A new agent tool typically touches these, in order:
 2. **`tools/<feature>/<Feature>ToolDescriptions.kt`** — an `internal object` of `const val` descriptions referenced by
    the `@LLMDescription` annotations (see the convention in `AGENTS.md`).
 3. *(optional)* **`<Feature>Client.kt`** / **`<Feature>Models.kt`** — the external I/O and its DTOs.
-4. **`tools/ToolRegistryFactory.kt`** — register it in `buildRegistry`; wrap construction in the `optional(...)` helper
-   when it depends on an API key that may be unset. A tool only one messenger can implement goes to that adapter's
+4. **`tools/ToolRegistryFactory.kt`** — register it in `buildCatalog`; wrap construction in the `optional(...)` helper
+   when it depends on an API key that may be unset. Register it under a `ToolGroup` when a turn rarely needs it, and
+   leave it visible when the model may need it without being asked for it by name; a new group also needs its one-line
+   summary in `tools/ToolCatalog.kt`, since that line is all the model reads before loading it. A tool only one messenger can implement goes to that adapter's
    `PlatformToolSets` instead (`telegram/tools/TelegramToolSets.kt`), gated there on the same chat capability.
 5. **Docs** — add the capability to the Features section of the [README](../README.md); document setup requirements and
    implicit dependencies in [`configuration.md`](configuration.md), and add any new env vars to both that file and

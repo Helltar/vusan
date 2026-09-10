@@ -1,6 +1,6 @@
 package com.helltar.vusan.agent
 
-import ai.koog.agents.core.tools.ToolRegistry
+import ai.koog.agents.core.tools.ToolDescriptor
 import ai.koog.prompt.llm.LLModel
 import kotlin.math.ceil
 
@@ -64,13 +64,17 @@ class ContextWindowPolicy(model: LLModel) {
     // as well as latin.
     val liveToolResultMaxChars: Int = agentReserveTokens * ESTIMATED_BYTES_PER_TOKEN / ESTIMATED_BYTES_PER_CHAR
 
-    fun budget(systemPrompt: String, currentTurn: String, toolRegistry: ToolRegistry): ContextTokenBudget {
-        val tools = toolRegistry.tools.joinToString("\n") { it.descriptor.toString() }
+    // [tools] is what the request actually carries, which on a `ToolCatalog` is less than the registry
+    // holds: a group loaded mid-run widens it, and that widening is spent from the agent reserve like any
+    // other thing a run piles up. Counting every deferred schema here instead would give the history a
+    // budget it never gets back.
+    fun budget(systemPrompt: String, currentTurn: String, tools: List<ToolDescriptor>): ContextTokenBudget {
+        val toolText = tools.joinToString("\n") { it.toString() }
         val fixedPromptTokens =
             estimateTokens(systemPrompt) +
                     estimateTokens(currentTurn) +
-                    estimateTokens(tools) +
-                    toolRegistry.tools.size * TOOL_SCHEMA_OVERHEAD_TOKENS +
+                    estimateTokens(toolText) +
+                    tools.size * TOOL_SCHEMA_OVERHEAD_TOKENS +
                     FIXED_MESSAGE_OVERHEAD_TOKENS
 
         val responseReserve = (contextWindowTokens / 8).coerceIn(512, 8_192)

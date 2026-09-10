@@ -1,6 +1,5 @@
 package com.helltar.vusan.tools
 
-import ai.koog.agents.core.tools.ToolRegistry
 import com.helltar.vusan.agent.grouplog.GroupLogDigester
 import com.helltar.vusan.agent.grouplog.GroupLogReader
 import com.helltar.vusan.agent.grouplog.GroupLogRepository
@@ -96,7 +95,7 @@ class ToolRegistryFactory(
     }
 
     val availableToolNames: List<String> by lazy {
-        buildRegistry(TOOL_NAME_PROBE_CONTEXT, BotOutbox()).tools.map { it.name }.sorted()
+        buildCatalog(TOOL_NAME_PROBE_CONTEXT, BotOutbox()).registry.tools.map { it.name }.sorted()
     }
 
     // one chat log read may not eat the whole run's tool budget: the model still has to fit its own
@@ -195,28 +194,36 @@ class ToolRegistryFactory(
      * its output costs a download, an image generation, or a speech synthesis first, and the model cannot
      * spend any of that on a tool it was never offered. Text-first tools stay registered even when the
      * chat bans pictures — they still answer, just without the extras.
+     *
+     * A set registered with a [ToolGroup] is registered all the same; the group only decides whether its
+     * schemas ride along in every request or wait for `loadTools`. Group what a turn rarely needs, and
+     * leave visible what one may need without being asked for it by name.
      */
-    fun buildRegistry(context: RequestContext, outbox: BotOutbox, narrator: TurnNarrator? = null): ToolRegistry {
+    fun buildCatalog(context: RequestContext, outbox: BotOutbox, narrator: TurnNarrator? = null): ToolCatalog {
         val chat = context.chat.capabilities
 
-        return ToolRegistry {
+        return toolCatalog {
             tools(MessageTools(outbox, narrator))
             tools(InlineChoiceTools(context, outbox, conversation::revision))
-            tools(currency)
-            tools(telegramChannel)
-            tools(youTubeTranscript)
             tools(ConversationTools(conversation, context))
             tools(MemoryTools(memory, context))
-            tools(TaskTools(repo = tasks, context, config.maxTasksPerUser, config.maxFollowUpsPerUser))
+            tools(ToolGroup.CURRENCY, currency)
+            tools(ToolGroup.TELEGRAM_CHANNELS, telegramChannel)
+            tools(ToolGroup.YOUTUBE, youTubeTranscript)
+
+            tools(
+                ToolGroup.SCHEDULED_TASKS,
+                TaskTools(repo = tasks, context, config.maxTasksPerUser, config.maxFollowUpsPerUser)
+            )
 
             if (chat.reactions) tools(ReactionTools(context, outbox))
-            if (chat.audios) tools(YouTubeMusicTools(ytDlpClient, outbox))
-            if (chat.videos) tools(YouTubeVideoTools(ytDlpClient, outbox))
-            if (chat.documents) tools(FileTools(fileDownloadClient, outbox))
+            if (chat.audios) tools(ToolGroup.YOUTUBE, YouTubeMusicTools(ytDlpClient, outbox))
+            if (chat.videos) tools(ToolGroup.YOUTUBE, YouTubeVideoTools(ytDlpClient, outbox))
+            if (chat.documents) tools(ToolGroup.FILE_TRANSFERS, FileTools(fileDownloadClient, outbox))
 
             if (chat.polls) {
-                tools(QuizTools(outbox))
-                tools(PollTools(outbox))
+                tools(ToolGroup.POLLS, QuizTools(outbox))
+                tools(ToolGroup.POLLS, PollTools(outbox))
             }
 
             tavilyClient?.let { tools(TavilyTools(it, imageDownloadClient, outbox)) }
@@ -224,11 +231,11 @@ class ToolRegistryFactory(
             workspaceClient?.let { client ->
                 context.personKeyOrNull?.let { person ->
                     tools(WorkspaceTools(client, person, outbox, context.attachedFile))
-                    siteClient?.let { tools(SiteTools(it, client, person)) }
+                    siteClient?.let { tools(ToolGroup.WEB_PUBLISHING, SiteTools(it, client, person)) }
                 }
             }
 
-            if (chat.stickersAndAnimations) giphyClient?.let { tools(GiphyTools(it, outbox)) }
+            if (chat.stickersAndAnimations) giphyClient?.let { tools(ToolGroup.GIFS, GiphyTools(it, outbox)) }
 
             if (groupLog != null && groupLogReader != null) {
                 tools(GroupLogTools(groupLog, groupLogReader, context))
@@ -239,14 +246,20 @@ class ToolRegistryFactory(
             }
 
             if (elevenLabsTtsClient != null && elevenLabsTts != null) {
-                if (chat.voiceNotes) tools(VoiceTools(elevenLabsTtsClient, elevenLabsTts, outbox))
+                if (chat.voiceNotes) tools(ToolGroup.VOICE_REPLIES, VoiceTools(elevenLabsTtsClient, elevenLabsTts, outbox))
 
                 if (chat.videoNotes && selfPortrait != null)
-                    tools(VideoNoteTools(elevenLabsTtsClient, elevenLabsTts, selfPortrait, outbox))
+                    tools(
+                        ToolGroup.VOICE_REPLIES,
+                        VideoNoteTools(elevenLabsTtsClient, elevenLabsTts, selfPortrait, outbox)
+                    )
             }
 
             if (chat.photos && openAiImageClient != null && openAiImage != null) {
-                tools(ImageGenTools(openAiImageClient, openAiImage, outbox, context.attachedFiles, selfImage))
+                tools(
+                    ToolGroup.IMAGE_GENERATION,
+                    ImageGenTools(openAiImageClient, openAiImage, outbox, context.attachedFiles, selfImage)
+                )
             }
 
             platformTools.of(context, outbox).forEach { tools(it) }

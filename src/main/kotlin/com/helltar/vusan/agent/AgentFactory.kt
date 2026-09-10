@@ -3,6 +3,7 @@ package com.helltar.vusan.agent
 import ai.koog.agents.core.agent.AIAgent
 import ai.koog.agents.core.agent.config.AIAgentConfig
 import ai.koog.agents.core.agent.entity.AIAgentGraphStrategy
+import ai.koog.agents.core.agent.context.AIAgentGraphContextBase
 import ai.koog.agents.core.agent.entity.AIAgentNodeBase
 import ai.koog.agents.core.dsl.builder.node
 import ai.koog.agents.core.dsl.builder.strategy
@@ -28,6 +29,7 @@ import com.helltar.vusan.common.xmlBlock
 import com.helltar.vusan.outbox.BotOutbox
 import com.helltar.vusan.request.ConversationScope
 import com.helltar.vusan.request.RequestContext
+import com.helltar.vusan.tools.ToolCatalog
 import com.helltar.vusan.tools.ToolRegistryFactory
 import io.github.oshai.kotlinlogging.KotlinLogging
 
@@ -49,7 +51,7 @@ data class TokenUsage(
 )
 
 data class AgentPromptPreparation(
-    val toolRegistry: ToolRegistry,
+    val toolCatalog: ToolCatalog,
     val systemPrompt: String,
     val tokenBudget: ContextTokenBudget,
     val liveToolResultMaxTokens: Int
@@ -83,18 +85,24 @@ class AgentFactory(
         currentTurn: String,
         narrator: TurnNarrator? = null
     ): AgentPromptPreparation {
-        val toolRegistry = toolRegistryFactory.buildRegistry(context, outbox, narrator)
+        val toolCatalog = toolRegistryFactory.buildCatalog(context, outbox, narrator)
         val systemPrompt =
-            systemPromptFor(personality ?: DEFAULT_PERSONALITY, model.id, botUsername, botDisplayName)
+            systemPromptFor(
+                personality ?: DEFAULT_PERSONALITY,
+                model.id,
+                botUsername,
+                botDisplayName,
+                toolCatalog.menu()
+            )
 
         return AgentPromptPreparation(
-            toolRegistry = toolRegistry,
+            toolCatalog = toolCatalog,
             systemPrompt = systemPrompt,
             tokenBudget =
                 contextWindowPolicy.budget(
                     systemPrompt = systemPrompt,
                     currentTurn = currentTurn,
-                    toolRegistry = toolRegistry
+                    tools = toolCatalog.visibleDescriptors()
                 ),
             liveToolResultMaxTokens = contextWindowPolicy.liveToolResultMaxTokens
         )
@@ -148,8 +156,15 @@ class AgentFactory(
         return AIAgent(
             promptExecutor = promptExecutor,
             agentConfig = agentConfig,
-            strategy = vusanSingleRunStrategy(outbox, preparation.liveToolResultMaxTokens, maxIterations, scope),
-            toolRegistry = preparation.toolRegistry,
+            strategy =
+                vusanSingleRunStrategy(
+                    outbox,
+                    preparation.toolCatalog,
+                    preparation.liveToolResultMaxTokens,
+                    maxIterations,
+                    scope
+                ),
+            toolRegistry = preparation.toolCatalog.registry,
             id = "vusan-turn-$scope"
         ) {
             install(EventHandler) {
@@ -234,6 +249,7 @@ internal fun JSONObject.toToolArgsJson(): String = toKotlinxJsonObject().toStrin
 // dies with every search it paid for still unanswered.
 private fun vusanSingleRunStrategy(
     outbox: BotOutbox,
+    catalog: ToolCatalog,
     liveToolResultMaxTokens: Int,
     maxIterations: Int,
     scope: ConversationScope
@@ -242,6 +258,16 @@ private fun vusanSingleRunStrategy(
         var nudged = false
         var remainingToolResultTokens = liveToolResultMaxTokens
         var toolBudgetSpent = false
+        var sentToolRevision = -1
+
+        // koog seeds the run with every descriptor in the registry, and a deferred group's schemas would
+        // ride along in every request from there on. narrowing is a session write, so it happens once per
+        // widening rather than per request: before the first call, and after a batch that loaded a group.
+        suspend fun AIAgentGraphContextBase.sendVisibleTools() {
+            if (sentToolRevision == catalog.revision) return
+            sentToolRevision = catalog.revision
+            llm.writeSession { tools = catalog.visibleDescriptors() }
+        }
 
         // the model ended its turn without putting anything in front of the user: it delivered
         // nothing (no tool call to execute, no caption text) and the outbox holds nothing to send. an
@@ -250,6 +276,11 @@ private fun vusanSingleRunStrategy(
         fun undelivered(msg: Message.Assistant): Boolean =
             !nudged && msg.deliveredNothing() && !outbox.hasQueuedOutput
 
+        val nodeNarrowTools by node<String, String>("narrowVisibleTools") { message ->
+            sendVisibleTools()
+            message
+        }
+
         val nodeCallLLM by nodeLLMRequest()
 
         val nodeExecuteTool by node<ToolCalls, ReceivedToolResults>("executeValidToolCalls") { toolCalls ->
@@ -257,7 +288,7 @@ private fun vusanSingleRunStrategy(
             // the budget is this thin the results go to the wrap-up instead of buying another tool round.
             toolBudgetSpent = stateManager.withStateLock { outOfToolBudget(it.iterations, maxIterations) }
 
-            ReceivedToolResults(
+            val results =
                 toolCalls.toolCalls.map { call ->
                     val missing = call.missingRequiredArgs(llm.toolRegistry)
 
@@ -270,7 +301,11 @@ private fun vusanSingleRunStrategy(
                         garbledToolCallResult(call, missing)
                     }
                 }
-            )
+
+            // a `loadTools` call in this batch widened what the model may call; the next request carries it
+            sendVisibleTools()
+
+            ReceivedToolResults(results)
         }
 
         val nodeSendToolResult by nodeLLMSendToolResults()
@@ -320,7 +355,8 @@ private fun vusanSingleRunStrategy(
             )
         }
 
-        edge(nodeStart forwardTo nodeCallLLM)
+        edge(nodeStart forwardTo nodeNarrowTools)
+        edge(nodeNarrowTools forwardTo nodeCallLLM)
         edge(nodeCallLLM forwardTo nodeExecuteTool onToolCalls { true })
         edge(nodeCallLLM forwardTo nodeNudgeDeliver onCondition { undelivered(it) })
         finishWhenNoToolCalls(nodeCallLLM)

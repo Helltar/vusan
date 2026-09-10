@@ -101,17 +101,35 @@ private fun runtimeSection(modelId: String, botUsername: String?, botDisplayName
         }
     }
 
+/**
+ * The tools this turn withheld, and how to get them.
+ *
+ * Their schemas are the largest fixed cost of a request, so a group is described in one line until
+ * the model asks for it. The section only appears when something is actually deferred — the rules
+ * would otherwise point at a block that is not there.
+ */
+private fun toolGroupsSection(groups: String): String =
+    """# Loading more tools
+
+- Some of your tools are not loaded. `<tool_groups>` lists them by group: their definitions reach you only after you call `loadTools` with the group names, and until then you cannot call them.
+- Load a group as soon as the request needs it, then call its tools in the same turn.
+- Everything listed there is a capability you have. Never tell the user it is unavailable, and never substitute a worse answer for it, just because its tools are not in front of you.
+
+""" + xmlBlock("tool_groups", groups)
+
 /** Compose the full system prompt from separately delimited personality and operational blocks. */
 internal fun systemPromptFor(
     personality: String,
     modelId: String,
     botUsername: String? = null,
-    botDisplayName: String? = null
+    botDisplayName: String? = null,
+    toolGroups: String? = null
 ): String =
     "${xmlBlock("personality", personality)}\n\n" +
             xmlBlock(
                 "operational_contract",
-                "$OPERATIONAL_CONTRACT\n\n${runtimeSection(modelId, botUsername, botDisplayName)}"
+                "$OPERATIONAL_CONTRACT\n\n${runtimeSection(modelId, botUsername, botDisplayName)}" +
+                        toolGroups?.let { "\n\n${toolGroupsSection(it)}" }.orEmpty()
             )
 
 // the block names the contract above enumerates, kept next to it so the two cannot drift apart.
@@ -124,7 +142,7 @@ private val PROMPT_BLOCK_TAG =
     Regex(
         "</?(?:album|attached_file|audio_transcript|conversation_recap|current_time|group_memory|" +
                 "inline_choice|message_context|operational_contract|personality|quoted_fragment|recent_chat|" +
-                "reply_context|rich_message|scheduled_task|selected_option|sticker_catalog|text_caption|" +
+                "reply_context|rich_message|scheduled_task|selected_option|sticker_catalog|text_caption|tool_groups|" +
                 "user_memory|user_message)(?:\\s[^<>\\n]*)?>",
         RegexOption.IGNORE_CASE
     )

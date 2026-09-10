@@ -181,7 +181,11 @@ Layout: `tools/<feature>/<Feature>Tools.kt` (the `ToolSet` surface),
 `<Feature>ToolDescriptions.kt` (a local `internal object *ToolDescriptions`), optional
 client/model files for external I/O, registration in
 [`ToolRegistryFactory`](src/main/kotlin/com/helltar/vusan/tools/ToolRegistryFactory.kt),
-then docs per the triggers above. A tool needing an optional key is registered
+then docs per the triggers above. Registration also decides whether the tool's schemas ride
+in every request or wait for `loadTools`: a set registered under a `ToolGroup` in
+[`ToolCatalog`](src/main/kotlin/com/helltar/vusan/tools/ToolCatalog.kt) is registered all
+the same, only offered later. Group what a turn rarely needs; leave visible what the model
+may need without being asked for it by name. A tool needing an optional key is registered
 through `ToolRegistryFactory.optional(...)`, which disables it with a warning
 rather than failing startup.
 

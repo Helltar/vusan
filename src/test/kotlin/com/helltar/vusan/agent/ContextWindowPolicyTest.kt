@@ -1,6 +1,5 @@
 package com.helltar.vusan.agent
 
-import ai.koog.agents.core.tools.ToolRegistry
 import ai.koog.prompt.llm.LLMProvider
 import ai.koog.prompt.llm.LLModel
 import kotlin.test.Test
@@ -17,7 +16,7 @@ class ContextWindowPolicyTest {
             policy.budget(
                 systemPrompt = "system",
                 currentTurn = "current request",
-                toolRegistry = ToolRegistry.EMPTY
+                tools = emptyList()
             )
 
         assertEquals(8_192, budget.contextWindowTokens)
@@ -63,7 +62,7 @@ class ContextWindowPolicyTest {
             policy.budget(
                 systemPrompt = "system",
                 currentTurn = "current request",
-                toolRegistry = ToolRegistry.EMPTY
+                tools = emptyList()
             )
 
         assertEquals(budget.agentReserveTokens, policy.liveToolResultMaxTokens)
