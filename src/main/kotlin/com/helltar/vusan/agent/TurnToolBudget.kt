@@ -13,6 +13,11 @@ package com.helltar.vusan.agent
  */
 class TurnToolBudget(val totalTokens: Int) {
 
+    private companion object {
+        // below this the next long read is the one that starts losing its own tail
+        const val LOW_PERCENT = 25
+    }
+
     @Volatile
     var remainingTokens: Int = totalTokens
         private set
@@ -20,7 +25,33 @@ class TurnToolBudget(val totalTokens: Int) {
     val percentLeft: Int
         get() = if (totalTokens <= 0) 0 else (remainingTokens.toLong() * 100 / totalTokens).toInt()
 
+    val isLow: Boolean
+        get() = percentLeft <= LOW_PERCENT
+
     fun spend(tokens: Int) {
         remainingTokens = (remainingTokens - tokens).coerceAtLeast(0)
     }
 }
+
+/**
+ * The figures and what to do about them, in one wording for both surfaces that state them: the
+ * `checkContextBudget` tool when the model asks, and the run's own notice when it does not.
+ */
+internal fun TurnToolBudget.report(): String =
+    buildString {
+        append("$remainingTokens of $totalTokens tokens left for tool results in this turn ($percentLeft%). ")
+
+        when {
+            remainingTokens <= 0 ->
+                append("Further results arrive empty — answer now from what you already have.")
+
+            isLow ->
+                append(
+                    "Narrow what you read from here on — a range, a page, a shorter window — and deliver your " +
+                            "answer soon: past the budget results arrive truncated, then empty."
+                )
+
+            else ->
+                append("There is room for a long read; anything past the budget arrives truncated.")
+        }
+    }

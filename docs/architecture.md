@@ -225,7 +225,8 @@ A normal user message travels:
    recorded for history. Live textual tool results share a cumulative bound derived from the reserved agent-growth
    budget before later LLM calls; the runner opens that bound as a `TurnToolBudget` the strategy spends and the
    `checkContextBudget` tool reports, so a turn can narrow a long read instead of discovering the ceiling by getting an
-   empty result back. The custom `single_run` strategy (`AgentFactory`) guards against flaky models in two
+   empty result back. Once a quarter of the reserve is left the run states it without being asked, once, in a note that
+   follows the batch of tool results — nothing may come between an assistant's tool call and that call's result. The custom `single_run` strategy (`AgentFactory`) guards against flaky models in two
    ways:
     - a tool call that arrives with no arguments at all for a tool that takes them (flaky models emit empty-arg siblings
       when they try to call tools in parallel) is short-circuited into a `ValidationError` result instead of being
@@ -507,8 +508,9 @@ A normal user message travels:
   run, converting the agent reserve back to characters at the same ratio `estimateHistoryTokens` reads them. It scales
   with the window on purpose: a fixed ceiling starves a large-window model, since a single full-length YouTube
   transcript would consume the whole run and leave later tool results with nothing. What is left of it during a run
-  lives in `agent/TurnToolBudget.kt`: the strategy charges each result against it, and `checkContextBudget`
-  (`tools/context/`) is how the model reads it before deciding how much to ask for.
+  lives in `agent/TurnToolBudget.kt`: the strategy charges each result against it, `checkContextBudget`
+  (`tools/context/`) is how the model reads it before deciding how much to ask for, and `TurnToolBudget.report()` is the
+  single wording both that tool and the run's own low-reserve notice state it in.
 - **LLM provider resolution** — `config/LlmRuntime.resolveLlmRuntime` turns `AppConfig.llmProvider` into a Koog
   client/model/params triple. Native clients cover OpenAI, Anthropic, Google, and DeepSeek — models are matched against
   each client's predefined catalog. `openai-compatible` keeps a hand-declared model for any other server (llama.cpp,

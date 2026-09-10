@@ -242,6 +242,8 @@ private fun vusanSingleRunStrategy(
     strategy<String, String>("single_run") {
         var nudged = false
         var toolBudgetSpent = false
+        var lowBudgetNoticeDue = false
+        var lowBudgetWarned = false
         var sentToolRevision = -1
 
         // koog seeds the run with every descriptor in the registry, and a deferred group's schemas would
@@ -288,10 +290,35 @@ private fun vusanSingleRunStrategy(
             // a `loadTools` call in this batch widened what the model may call; the next request carries it
             sendVisibleTools()
 
+            // the model has to hear that the reserve is running out without asking, or it spends the rest
+            // of the turn on reads that come back cut in half. once per run: repeating the notice would
+            // spend the very budget it is warning about.
+            lowBudgetNoticeDue = !lowBudgetWarned && toolBudget.isLow
+            if (lowBudgetNoticeDue) lowBudgetWarned = true
+
             ReceivedToolResults(results)
         }
 
         val nodeSendToolResult by nodeLLMSendToolResults()
+
+        // what nodeSendToolResult does, plus the budget notice — which has to follow the results rather
+        // than precede them, since nothing may come between an assistant's tool call and that call's result.
+        val nodeSendToolResultLowBudget by
+            node<ReceivedToolResults, Message.Assistant>("sendToolResultsWithBudgetNotice") { results ->
+                strategyLog.info {
+                    "tool result budget low for $scope: ${toolBudget.remainingTokens} of " +
+                            "${toolBudget.totalTokens} tokens left"
+                }
+
+                llm.writeSession {
+                    appendPrompt {
+                        user { results.toolResults.forEach { result -> toolResult(result.toMessagePart()) } }
+                        user(toolBudget.report())
+                    }
+
+                    requestLLM()
+                }
+            }
 
         // the turn is out of iterations: answer from what it already gathered. the request carries no tools
         // at all, so the model cannot spend the reserve on one more search, and its text becomes the reply.
@@ -345,10 +372,15 @@ private fun vusanSingleRunStrategy(
         finishWhenNoToolCalls(nodeCallLLM)
 
         edge(nodeExecuteTool forwardTo nodeWrapUp onCondition { toolBudgetSpent })
+        edge(nodeExecuteTool forwardTo nodeSendToolResultLowBudget onCondition { lowBudgetNoticeDue })
         edge(nodeExecuteTool forwardTo nodeSendToolResult)
         edge(nodeSendToolResult forwardTo nodeExecuteTool onToolCalls { true })
         edge(nodeSendToolResult forwardTo nodeNudgeDeliver onCondition { undelivered(it) })
         finishWhenNoToolCalls(nodeSendToolResult)
+
+        edge(nodeSendToolResultLowBudget forwardTo nodeExecuteTool onToolCalls { true })
+        edge(nodeSendToolResultLowBudget forwardTo nodeNudgeDeliver onCondition { undelivered(it) })
+        finishWhenNoToolCalls(nodeSendToolResultLowBudget)
 
         edge(nodeWrapUp forwardTo nodeFinish)
 
