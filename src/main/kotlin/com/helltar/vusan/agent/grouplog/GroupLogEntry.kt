@@ -12,7 +12,6 @@ data class GroupLogEntry(
     val messageId: String?,
     val kind: String,
     val sentAt: Instant,
-    val threadId: String? = null,
     val senderId: String? = null,
     val senderUsername: String? = null,
     val senderName: String? = null,

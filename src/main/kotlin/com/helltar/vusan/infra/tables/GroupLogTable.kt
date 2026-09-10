@@ -14,8 +14,6 @@ object GroupLogTable : LongIdTable("group_log") {
     // null for the bot's own messages: delivery does not carry the sent message id back.
     val messageId = externalId("message_id").nullable()
 
-    val threadId = externalId("thread_id").nullable()
-
     // null for anonymous admins and for posts forwarded in by a linked channel.
     val senderId = externalId("sender_id").nullable()
 

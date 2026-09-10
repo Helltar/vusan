@@ -24,4 +24,4 @@ val UserRef.memoryOwner: MemoryOwner
 val ChatRef.memoryOwner: MemoryOwner
     get() = MemoryOwner(platform, MemoryScope.CHAT, id)
 
-data class MemoryEntry(val id: Long, val content: String, val createdAt: Instant)
+data class MemoryEntry(val id: Long, val content: String)

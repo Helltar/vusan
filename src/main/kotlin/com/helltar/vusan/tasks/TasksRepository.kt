@@ -202,7 +202,6 @@ class TasksRepository {
             chatIsPrivate = this[ScheduledTasksTable.chatIsPrivate],
             selfInitiated = this[ScheduledTasksTable.selfInitiated],
             nextFireAt = this[ScheduledTasksTable.nextFireAt],
-            createdAt = this[ScheduledTasksTable.createdAt],
             paused = this[ScheduledTasksTable.paused],
             language =
                 this[ScheduledTasksTable.language]?.let { runCatching { Language.valueOf(it) }.getOrNull() }

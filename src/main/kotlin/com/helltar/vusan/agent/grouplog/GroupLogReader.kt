@@ -175,7 +175,7 @@ class GroupLogReader(
             return digest
         }
 
-        runCatching { repository.storeDigest(chat, day, source.includedCount, digest) }
+        runCatching { repository.storeDigest(chat, day, digest) }
             .onFailure {
                 it.rethrowIfCancellation()
                 log.warn(it) { "failed to cache chat log digest for chat=[$chat] day=$day" }

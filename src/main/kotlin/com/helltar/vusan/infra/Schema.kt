@@ -29,7 +29,7 @@ import org.jetbrains.exposed.v1.core.Table
 internal object Schema {
 
     /** Raise this by one for every schema change, and move deployed databases by hand to match. */
-    const val VERSION = 1
+    const val VERSION = 2
 
     val tables: List<Table> =
         listOf(

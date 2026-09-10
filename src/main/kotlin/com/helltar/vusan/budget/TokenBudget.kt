@@ -119,7 +119,7 @@ class TokenBudget(
 
             // the day's total and the share it is split into are one fact: written apart, a crash between
             // them would come back with a day that has been spent by nobody.
-            store(today, spent, user, updated, now)
+            store(today, spent, user, updated)
 
             if (before < limit && spent.totalTokens >= limit) {
                 log.warn {
@@ -200,19 +200,12 @@ class TokenBudget(
     // the running totals are written in full rather than incremented: this process owns them, so a lost
     // write costs at most the calls since the last successful one, and never leaves a row double-counted.
     // [user] is null for the bot's own background work, which belongs to the day but to nobody's share.
-    private suspend fun store(
-        day: LocalDate,
-        spend: DailySpend,
-        user: UserRef?,
-        userSpend: DailySpend?,
-        now: Instant
-    ) {
+    private suspend fun store(day: LocalDate, spend: DailySpend, user: UserRef?, userSpend: DailySpend?) {
         write("the token budget for day=$day") {
             TokenUsageTable.upsert(TokenUsageTable.day) {
                 it[TokenUsageTable.day] = day.toString()
                 it[TokenUsageTable.inputTokens] = spend.inputTokens
                 it[TokenUsageTable.outputTokens] = spend.outputTokens
-                it[TokenUsageTable.updatedAt] = now
             }
 
             if (user == null || userSpend == null) return@write
@@ -227,7 +220,6 @@ class TokenBudget(
                 it[TokenUsageByUserTable.userId] = user.id
                 it[TokenUsageByUserTable.inputTokens] = userSpend.inputTokens
                 it[TokenUsageByUserTable.outputTokens] = userSpend.outputTokens
-                it[TokenUsageByUserTable.updatedAt] = now
             }
         }
     }

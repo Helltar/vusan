@@ -125,15 +125,12 @@ class ConversationRepository {
 
         if (!checkpointExists) return@dbTransaction false
 
-        val now = Instant.now()
-
         // the row may not exist yet: a conversation that has never been cleared has nothing to say
         // until its first recap, and the revision it starts at is the one a clear counts up from.
         ConversationsTable.upsert(
             onUpdate = {
                 it[ConversationsTable.summary] = content
                 it[ConversationsTable.summarizedThroughMessageId] = throughMessageId
-                it[ConversationsTable.summarizedAt] = now
             }
         ) {
             it[ConversationsTable.platform] = scope.platform
@@ -142,7 +139,6 @@ class ConversationRepository {
             it[ConversationsTable.revision] = 0L
             it[ConversationsTable.summary] = content
             it[ConversationsTable.summarizedThroughMessageId] = throughMessageId
-            it[ConversationsTable.summarizedAt] = now
         }
 
         true
@@ -253,7 +249,6 @@ class ConversationRepository {
                     it[ConversationsTable.revision] = ConversationsTable.revision + 1L
                     it[ConversationsTable.summary] = null
                     it[ConversationsTable.summarizedThroughMessageId] = 0L
-                    it[ConversationsTable.summarizedAt] = null
                 }
             ) {
                 it[ConversationsTable.platform] = scope.platform

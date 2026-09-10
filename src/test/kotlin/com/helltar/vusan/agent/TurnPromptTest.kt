@@ -80,7 +80,7 @@ class TurnPromptTest {
     }
 
     private fun memory(id: Long, content: String): MemoryEntry =
-        MemoryEntry(id, content, Instant.EPOCH)
+        MemoryEntry(id, content)
 
     private fun context(): RequestContext =
         RequestContext(

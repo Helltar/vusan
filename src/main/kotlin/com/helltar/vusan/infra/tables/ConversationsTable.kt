@@ -1,7 +1,6 @@
 package com.helltar.vusan.infra.tables
 
 import org.jetbrains.exposed.v1.core.Table
-import org.jetbrains.exposed.v1.javatime.timestamp
 
 // what is known about one person's conversation in one chat besides the messages themselves, keyed
 // exactly like `conversation_messages` and one row for both: a conversation is cleared and compacted
@@ -24,8 +23,6 @@ object ConversationsTable : Table("conversations") {
     // the last message the summary covers, `0` when there is none. a watermark rather than a foreign
     // key: the message it names is pruned away once the summary stands in for it.
     val summarizedThroughMessageId = long("summarized_through_message_id").default(0)
-
-    val summarizedAt = timestamp("summarized_at").nullable()
 
     override val primaryKey = PrimaryKey(platform, userId, chatId)
 }

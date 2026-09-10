@@ -155,13 +155,6 @@ class GroupLogEntriesTest {
     }
 
     @Test
-    fun `a forum topic id is captured`() {
-        val entry = assertNotNull(message(""""text": "x", "message_thread_id": 55""").toGroupLogEntry())
-
-        assertEquals("55", entry.threadId)
-    }
-
-    @Test
     fun `a reply records what it answers`() {
         val entry =
             assertNotNull(

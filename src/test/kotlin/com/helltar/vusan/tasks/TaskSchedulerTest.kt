@@ -27,7 +27,6 @@ class TaskSchedulerTest {
             recurrence = Recurrence.Every(6.hours),
             timezone = ZoneId.of("Europe/Kyiv"),
             nextFireAt = Instant.parse("2026-07-28T08:00:00Z"),
-            createdAt = Instant.parse("2026-07-27T08:00:00Z"),
             paused = false,
             creatorThreadId = null,
             creatorMessageId = null,

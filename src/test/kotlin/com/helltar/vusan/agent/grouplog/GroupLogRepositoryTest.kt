@@ -156,7 +156,7 @@ class GroupLogRepositoryTest {
         val repository = GroupLogRepository(GroupLogConfig())
 
         repository.record(entry("1", "gone", now))
-        repository.storeDigest(CHAT, LocalDate.of(2026, 8, 3), messageCount = 4, content = "a recap")
+        repository.storeDigest(CHAT, LocalDate.of(2026, 8, 3), content = "a recap")
 
         repository.clear(CHAT)
 
@@ -217,10 +217,10 @@ class GroupLogRepositoryTest {
         val repository = GroupLogRepository(GroupLogConfig())
         val day = LocalDate.of(2026, 8, 3)
 
-        repository.storeDigest(CHAT, day, messageCount = 10, content = "first take")
+        repository.storeDigest(CHAT, day, content = "first take")
         assertEquals("first take", repository.digestFor(CHAT, day))
 
-        repository.storeDigest(CHAT, day, messageCount = 12, content = "second take")
+        repository.storeDigest(CHAT, day, content = "second take")
         assertEquals("second take", repository.digestFor(CHAT, day))
     }
 
@@ -245,7 +245,7 @@ class GroupLogRepositoryTest {
         val day = LocalDate.ofInstant(sentAt, ZoneId.systemDefault())
 
         repository.record(entry(messageId = "1", text = "before", at = sentAt))
-        repository.storeDigest(CHAT, day, messageCount = 4, content = "a recap quoting before")
+        repository.storeDigest(CHAT, day, content = "a recap quoting before")
 
         repository.recordEdit(entry(messageId = "1", text = "after", at = sentAt))
 

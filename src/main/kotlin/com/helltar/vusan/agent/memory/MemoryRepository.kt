@@ -31,7 +31,6 @@ class MemoryRepository(private val maxEntriesPerScope: Int = 10) {
                 MemoryEntry(
                     id = it[MemoryTable.id].value,
                     content = it[MemoryTable.content],
-                    createdAt = it[MemoryTable.createdAt]
                 )
             }
     }

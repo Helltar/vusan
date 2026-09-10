@@ -1,8 +1,6 @@
 package com.helltar.vusan.infra.tables
 
 import org.jetbrains.exposed.v1.core.dao.id.LongIdTable
-import org.jetbrains.exposed.v1.javatime.timestamp
-import java.time.Instant
 
 // one row per known sticker, shared by every chat. `file_unique_id` is stable across bots and time,
 // so it is the identity; `file_id` is only a handle for this bot and is refreshed with the set.
@@ -24,5 +22,4 @@ object TelegramStickersTable : LongIdTable("telegram_stickers") {
     // download or call simply fails. without this counter those rows stay at the head of the
     // description queue forever and starve every sticker behind them.
     val describeAttempts = integer("describe_attempts").default(0)
-    val createdAt = timestamp("created_at").clientDefault { Instant.now() }
 }

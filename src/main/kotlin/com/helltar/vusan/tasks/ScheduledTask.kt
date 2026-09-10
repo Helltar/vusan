@@ -24,7 +24,6 @@ data class ScheduledTask(
     val recurrence: Recurrence,
     val timezone: ZoneId,
     val nextFireAt: Instant,
-    val createdAt: Instant,
     val paused: Boolean,
     val creatorMessageId: String?,
     // the forum topic the task was set up in. the creator message anchors a fire into the right topic

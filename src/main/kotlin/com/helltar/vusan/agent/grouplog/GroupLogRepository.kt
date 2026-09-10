@@ -47,7 +47,6 @@ class GroupLogRepository(private val config: GroupLogConfig) {
                 it[platform] = entry.chat.platform
                 it[chatId] = entry.chat.id
                 it[messageId] = entry.messageId
-                it[threadId] = entry.threadId
                 it[senderId] = entry.senderId
                 it[senderUsername] = entry.senderUsername.fitColumn(USERNAME_COLUMN_CHARS)
                 it[senderName] = entry.senderName.fitColumn(NAME_COLUMN_CHARS)
@@ -159,22 +158,17 @@ class GroupLogRepository(private val config: GroupLogConfig) {
             ?.get(GroupLogDigestsTable.content)
     }
 
-    suspend fun storeDigest(chat: ChatRef, day: LocalDate, messageCount: Int, content: String) {
+    suspend fun storeDigest(chat: ChatRef, day: LocalDate, content: String) {
         require(content.isNotBlank()) { "Chat log digest must not be blank" }
 
         dbTransaction {
             // the key names the day of one chat, so a second recap of the same day replaces the first
             GroupLogDigestsTable.upsert(
-                onUpdate = {
-                    it[GroupLogDigestsTable.messageCount] = messageCount
-                    it[GroupLogDigestsTable.content] = content
-                    it[GroupLogDigestsTable.createdAt] = Instant.now()
-                }
+                onUpdate = { it[GroupLogDigestsTable.content] = content }
             ) {
                 it[GroupLogDigestsTable.platform] = chat.platform
                 it[GroupLogDigestsTable.chatId] = chat.id
                 it[GroupLogDigestsTable.day] = day.toString()
-                it[GroupLogDigestsTable.messageCount] = messageCount
                 it[GroupLogDigestsTable.content] = content
             }
         }
@@ -298,7 +292,6 @@ private fun ResultRow.toEntry(): GroupLogEntry =
         messageId = this[GroupLogTable.messageId],
         kind = this[GroupLogTable.kind],
         sentAt = this[GroupLogTable.sentAt],
-        threadId = this[GroupLogTable.threadId],
         senderId = this[GroupLogTable.senderId],
         senderUsername = this[GroupLogTable.senderUsername],
         senderName = this[GroupLogTable.senderName],

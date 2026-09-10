@@ -2,7 +2,6 @@ package com.helltar.vusan.infra.tables
 
 import org.jetbrains.exposed.v1.core.dao.id.LongIdTable
 import org.jetbrains.exposed.v1.javatime.timestamp
-import java.time.Instant
 
 object ScheduledTasksTable : LongIdTable("scheduled_tasks") {
 
@@ -18,7 +17,6 @@ object ScheduledTasksTable : LongIdTable("scheduled_tasks") {
     // a task is paused by its owner, or by the bot losing the right to post where it fires. one that
     // has fired for the last time is deleted instead: nothing reads a task that will never run again.
     val paused = bool("paused").default(false)
-    val createdAt = timestamp("created_at").clientDefault { Instant.now() }
 
     val selfInitiated = bool("self_initiated").default(false)
     val chatIsPrivate = bool("chat_is_private").default(true)
