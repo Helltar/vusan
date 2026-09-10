@@ -1,0 +1,43 @@
+# Everything on one machine: the bot, the workspace shell and the site host together.
+#
+# A machine of its own stays the recommendation for the workspace and for the site host — see
+# docs/workspace.md and docs/sites.md for why. This file is for the personal deployment where one
+# box is the sensible answer, and it is an override, never a replacement: the three deployment
+# files above it still define every service, and this one only puts them on separate networks.
+#
+# Copy .env.example to .env and it is the whole invocation:
+#   docker compose up -d
+#
+# .env names all four files in COMPOSE_FILE and carries the values Compose substitutes. The three
+# env/*.env files stay separate and keep doing exactly what they do on separate machines: the
+# process holding the Docker socket never sees the bot's token, its model key or its database path.
+
+name: vusan
+
+# Three networks, because one flat one would put the container that faces the internet on the same
+# bridge as the controller that holds /var/run/docker.sock.
+networks:
+  # the bot's way out: Telegram, the model API, everything it fetches.
+  vusan-egress:
+
+  # `internal` because the controller only ever drives the Docker socket, and the daemon that pulls
+  # its images runs on the host rather than in here. Nothing else on the machine can route to it.
+  vusan-workspace-link:
+    internal: true
+
+  # nginx publishes 443 off this one, so it cannot be `internal`: that blocks inbound as well as
+  # outbound, and a published port on an internal network is simply unreachable.
+  vusan-sites-link:
+
+services:
+  vusan:
+    networks: [vusan-egress, vusan-workspace-link, vusan-sites-link]
+
+  vusan-workspace:
+    networks: [vusan-workspace-link]
+
+  vusan-sites:
+    networks: [vusan-sites-link]
+
+  vusan-sites-nginx:
+    networks: [vusan-sites-link]

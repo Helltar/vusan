@@ -480,14 +480,17 @@ These are the bot's side of it, and belong in `env/vusan.env`:
 | `WORKSPACE_MAX_TIMEOUT_SECONDS` | `600`   | Longest command timeout the bot will ask for; keep it equal to the controller's. |
 
 Both `WORKSPACE_URL` and a secret must be present, or the workspace tools are not registered and the
-bot never mentions them.
+bot never mentions them. On one machine `WORKSPACE_URL` is the service name — `http://vusan-workspace:8080`
+— and `.env.example` is the whole setup; see
+[Both on one machine](workspace.md#both-on-one-machine).
 
 ## Site host
 
 Vusan can put a finished page, game or small web app on the public internet, one address **per person**
 at `<their Telegram id>.<your domain>`. Like the workspace it is **off by default and deploys on its
 own**, on a machine with a public address; the bot only connects out to it, so a bot behind CGNAT can
-publish to a VPS. What it serves, its limits, DNS and certificates, and how to deploy it are in
+publish to a VPS. Beside the bot works too, with `SITES_URL` pointing straight at the service —
+`http://vusan-sites:8090`, skipping nginx, whose origin-pull check only Cloudflare can satisfy. What it serves, its limits, DNS and certificates, and how to deploy it are in
 [the site guide](sites.md).
 
 These are the bot's side of it, and belong in `env/vusan.env`:
@@ -641,6 +644,27 @@ Where the database lives, and the one external binary that needs a credential of
 |-----------------------|--------------------|----------------------------------------------------|
 | `DB_FILE`             | `data/db/vusan.db` | SQLite path. Parent dirs are created on first run. |
 | `YT_DLP_COOKIES_FILE` | —                  | Cookies for YouTube videos that ask for a login.   |
+
+In Docker that directory is `data/` beside the compose file, and `VUSAN_HOST_DIR` in `.env` moves
+it. It is a plain directory rather than a named volume for the same reason the published site tree
+is: everything in it is yours to handle. The database is a file you can copy for a backup, and
+`SELF_IMAGE_FILE`, `APPEARANCE_FILE` and `YT_DLP_COOKIES_FILE` are files you put there. Create it
+before the first start — `mkdir -p data` — because a bind mount Docker creates comes out owned by
+`root` while the bot runs as uid 1000, the same on all three services.
+
+**Upgrading a deployment that used the `vusan-data` volume.** Earlier versions kept this in a named
+volume. If `docker volume ls` shows `vusan_vusan-data`, copy it out once, with the bot stopped, or
+it will start on an empty database and quietly build a new one:
+
+```bash
+docker compose down
+mkdir -p data
+docker run --rm -v vusan_vusan-data:/from -v "$PWD/data":/to alpine sh -c 'cp -a /from/. /to/'
+sudo chown -R 1000:1000 data      # only if your login user is not uid 1000
+docker compose up -d
+```
+
+Remove the old volume once the bot is up and its history is there.
 
 `YT_DLP_COOKIES_FILE` must point to a Netscape-format `cookies.txt`; see the
 [yt-dlp wiki](https://github.com/yt-dlp/yt-dlp/wiki/Extractors#exporting-youtube-cookies).

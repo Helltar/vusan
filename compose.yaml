@@ -1,16 +1,27 @@
+# the bot alone. The workspace shell and the site host are separate deployments with a compose file
+# each, and a machine of their own is the recommendation for both. To run everything on one machine,
+# copy .env.example to .env: it adds compose.all.yaml, which puts the services on separate networks.
+name: vusan
+
 services:
   vusan:
-    image: ghcr.io/helltar/vusan:latest
+    image: "${VUSAN_IMAGE:-ghcr.io/helltar/vusan:latest}"
+    # only used by `docker compose build` / `up --build`, from a checkout. A deployment that pulls
+    # its image never looks at this path, so a missing one costs nothing.
+    build:
+      context: .
     container_name: vusan-container
     restart: unless-stopped
     env_file: env/vusan.env
     volumes:
-      - vusan-data:/app/data
+      # a directory beside this file, not a named volume: the database is yours to back up and the
+      # avatar, personality and cookie files are yours to put there. Create it before the first
+      # start — `mkdir -p data` — because a bind mount Docker creates comes out owned by root while
+      # the bot runs as uid 1000.
+      - "${VUSAN_HOST_DIR:-./data}:/app/data"
     logging:
       driver: json-file
       options:
         max-size: "10m"
         max-file: "3"
 
-volumes:
-  vusan-data:

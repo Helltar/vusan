@@ -17,9 +17,15 @@
 # `env/sites.env` is the whole configuration: Compose reads it for the values substituted below and
 # hands the same file to the service. Every command needs it, hence --env-file.
 
+name: vusan-sites
+
 services:
   vusan-sites:
     image: "${SITES_IMAGE:-ghcr.io/helltar/vusan-sites:latest}"
+    # only used by `docker compose build` / `up --build`, from a checkout. A deployment that pulls
+    # its images never looks at these paths, so missing ones cost nothing.
+    build:
+      context: ./sites
     container_name: vusan-sites-container
     restart: unless-stopped
     init: true

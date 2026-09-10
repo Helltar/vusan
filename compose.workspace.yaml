@@ -8,9 +8,15 @@
 # `env/workspace.env` is the whole configuration: Compose reads it for the values substituted below and
 # hands the same file to the container. Every command needs it, hence --env-file.
 
+name: vusan-workspace
+
 services:
   vusan-workspace:
     image: "${WORKSPACE_IMAGE:-ghcr.io/helltar/vusan-workspace:latest}"
+    # only used by `docker compose build` / `up --build`, from a checkout. A deployment that pulls
+    # its image never looks at this path, so a missing one costs nothing.
+    build:
+      context: ./workspace
     container_name: vusan-workspace-container
     restart: unless-stopped
     init: true

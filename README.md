@@ -23,7 +23,11 @@ Clone the repo and copy the env template:
 git clone https://github.com/Helltar/vusan.git
 cd vusan
 cp env/vusan.env.example env/vusan.env
+mkdir -p data
 ```
+
+`data/` holds the database and anything you hand the bot — an avatar, a personality file, cookies.
+Make it yourself: a bind mount Docker creates comes out owned by `root`, and the bot runs as uid 1000.
 
 Only these values are required to start; everything else is optional and covered in
 [configuration.md](docs/configuration.md):
@@ -49,12 +53,16 @@ docker compose up -d
 Or build from source:
 
 ```bash
-docker compose -f compose.yaml -f compose.local.yaml up --build -d
+docker compose up --build -d
 ```
 
-That starts the bot by itself. The workspace shell — the Linux home directory below — is a separate,
-optional service that runs model-authored commands, so it stays off until you deploy it, on this
-machine or one of its own: see [the workspace guide](docs/workspace.md).
+That starts the bot by itself. Two optional services ship beside it and stay off until you deploy
+them: the [workspace shell](docs/workspace.md), which runs model-authored commands, and the
+[site host](docs/sites.md), which serves the pages people publish. Each has a machine of its own as
+the recommendation, and each is one compose file plus one env file.
+
+To run everything on one machine instead, `cp .env.example .env`, fill it in, and `docker compose
+up -d` covers all three.
 
 ### Local JVM
 

@@ -7,13 +7,15 @@ link works for anyone the person sends it to. Publishing again replaces the whol
 It is a **separate deployment**, and off until you make it. `compose.yaml` starts the bot alone; this
 service comes up on its own with `compose.sites.yaml`, on a machine with a public address. The bot only
 ever connects out to it, so the machine running Vusan needs no inbound address of its own — a home
-server behind CGNAT publishes to a VPS perfectly well.
+server behind CGNAT publishes to a VPS perfectly well. Running it beside the bot works too, and is
+covered in [Both on one machine](#both-on-one-machine).
 
 Everything served is static: HTML, CSS, JavaScript, WebAssembly, images, audio, fonts. There is no
 server-side code, no database and no build step on the host — whatever needs one is built in the
 workspace first, and only the result is published.
 
-- **Deploying it** — [Setting it up](#setting-it-up) · [DNS and certificates](#dns-and-certificates)
+- **Deploying it** — [Setting it up](#setting-it-up) · [Both on one machine](#both-on-one-machine) ·
+  [DNS and certificates](#dns-and-certificates)
 - **What it does** — [What publishing does](#what-publishing-does) · [Limits](#limits)
 - **Running it** — [Taking a page down](#taking-a-page-down) · [Storage and updates](#storage-and-updates)
 
@@ -57,7 +59,61 @@ tools are not registered and the log says so at startup.
 Only nginx publishes a port, and only `443/tcp`. The service itself is reachable solely over the compose
 network — never publish its port: a published Docker port bypasses `ufw` without saying so.
 
+## Both on one machine
+
+A machine with a public address is the recommendation, because this host serves model-authored pages
+to the internet and holds nothing else worth reaching. But running it beside the bot is supported, and
+for a personal deployment it is often the sensible answer.
+
+```bash
+cp .env.example .env          # fill in SITES_DOMAIN
+cp env/sites.env.example env/sites.env
+
+sed -i "s/^SITES_TOKEN=.*/SITES_TOKEN=$(openssl rand -hex 32)/" env/sites.env
+mkdir -p sites-data certs
+
+docker compose up -d
+```
+
+Two things differ from a machine of its own, and `.env.example` already carries both.
+
+The published tree is `./sites-data`, not the default `./data`. That default is right for a dedicated
+deployment, where the directory holds nothing else; beside a checkout it would be the bot's own
+directory, holding its database, its cookies and its model credentials — and published pages are the
+least trusted content in the deployment.
+
+The bot talks to the service directly, over a Compose network:
+
+```dotenv
+SITES_URL=http://vusan-sites:8090
+SITES_TOKEN=<the same value>
+```
+
+It does **not** go through nginx here. Origin pulls require Cloudflare's client certificate on every
+request, which only Cloudflare has, so a co-located bot reaching `https://api.<domain>` would have to
+leave the machine and come back through the edge — paying its latency and its 100 MB body limit to
+publish to a service one bridge away. Going straight to the service skips all of it. nginx keeps
+serving the sites to the internet exactly as before, and `compose.all.yaml` keeps the workspace
+controller off this network entirely, so nothing that faces the internet can reach the process
+holding `/var/run/docker.sock`.
+
+Publishing still needs a workspace, so that has to be configured too — see
+[the workspace docs](workspace.md#both-on-one-machine).
+
 ## DNS and certificates
+
+The host needs one certificate covering `*.<your domain>` and two names pointing at it. Cloudflare is
+the shortest way there and what this deployment was built against, so it is written out first;
+[Without Cloudflare](#without-cloudflare) covers the rest.
+
+A wildcard is not an optimisation here, it is the only shape that works. A certificate per person
+would mean one issuance for every site and a renewal for each of them every sixty days, which no
+free CA's rate limits survive past a few hundred people — and it would publish every one of those
+Telegram ids into the public Certificate Transparency logs, permanently. One wildcard publishes one
+name and renews once. Note that a wildcard covers exactly one level, which is what `<id>.<domain>`
+is.
+
+### With Cloudflare
 
 Two records, both **proxied** through Cloudflare, both pointing at this machine:
 

@@ -25,10 +25,18 @@ every home is a real filesystem on a loop device, which a rootless daemon has no
 
 ## Setting it up
 
-On the workspace machine, from a checkout of this repository:
+The deployment is a directory holding two things and no checkout, because the image comes from the
+registry:
+
+```
+~/vusan/compose.workspace.yaml
+       /env/workspace.env
+```
 
 ```bash
-cp env/workspace.env.example env/workspace.env
+mkdir -p ~/vusan/env && cd ~/vusan
+curl -fsSLO https://raw.githubusercontent.com/Helltar/vusan/master/compose.workspace.yaml
+curl -fsSL  https://raw.githubusercontent.com/Helltar/vusan/master/env/workspace.env.example -o env/workspace.env
 
 # write a fresh shared secret into it
 sed -i "s/^WORKSPACE_TOKEN=.*/WORKSPACE_TOKEN=$(openssl rand -hex 32)/" env/workspace.env
@@ -99,32 +107,41 @@ where the bot's token and database already are; on a machine of its own it lands
 nothing on it. That is the whole of the difference, and it is why a machine of its own stays the
 recommendation for a public or less-trusted deployment.
 
-Use the Docker bridge gateway as the bind address. Containers can reach it and nothing outside the
-host can; `127.0.0.1` does not work, because a container cannot reach the host's loopback.
+Everything runs from one directory with one command:
 
 ```bash
+cp .env.example .env
 cp env/workspace.env.example env/workspace.env
 
-# bind to the bridge gateway, and write a fresh shared secret
-sed -i "s/^WORKSPACE_BIND=.*/WORKSPACE_BIND=172.17.0.1/;
-        s/^WORKSPACE_TOKEN=.*/WORKSPACE_TOKEN=$(openssl rand -hex 32)/" env/workspace.env
+# the shared secret, in the workspace's own file
+sed -i "s/^WORKSPACE_TOKEN=.*/WORKSPACE_TOKEN=$(openssl rand -hex 32)/" env/workspace.env
 
-docker compose --env-file env/workspace.env -f compose.workspace.yaml up -d
+docker compose up -d
 ```
 
-The two services keep one environment file each even here, and that is the point: the process
-holding the Docker socket never sees the bot's token, its model key or its database path.
+`.env` names the deployment files in `COMPOSE_FILE` and carries the values Compose substitutes into
+them; `env/workspace.env` stays the controller's own environment. Each service reads only its own
+file, which is the point: the process holding the Docker socket never sees the bot's token, its
+model key or its database path. If you are not running the [site host](sites.md) as well, drop it
+from `COMPOSE_FILE`.
 
 Then in `env/vusan.env`, with the same secret:
 
 ```dotenv
-WORKSPACE_URL=http://172.17.0.1:8080
+WORKSPACE_URL=http://vusan-workspace:8080
 WORKSPACE_TOKEN=<the same secret>
 ```
 
-and `docker compose up -d`. These stay two separate Compose projects on one host: they share no
-network and no volume, `down` on either leaves the other running, and each is pulled and updated on
-its own.
+The bot reaches the controller by service name over a Compose network, so no host address is
+involved. `WORKSPACE_BIND` still publishes a port and `.env` puts it on `127.0.0.1`, where it is
+good for your own `curl` and reachable from nowhere else. On separate machines that address would
+be wrong — a container cannot reach the host's loopback — but here nothing needs it to.
+
+`compose.all.yaml` is what makes this one deployment, and all it does is put the services on three
+networks. That matters for one reason: on a single flat network the container facing the internet
+would share a bridge with the one holding `/var/run/docker.sock`. The controller sits on an
+`internal` network instead, so the site service and its nginx cannot open a connection to it at
+all, while the bot — which is on all three — still can.
 
 Resources are the part that does want a decision from you, since the service cannot see what else
 the machine is running:
