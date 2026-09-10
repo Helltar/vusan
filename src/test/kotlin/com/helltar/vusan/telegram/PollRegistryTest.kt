@@ -75,14 +75,16 @@ class PollRegistryTest {
     }
 
     @Test
-    fun `a poll old enough to be forgotten is dropped by the next one`() = runBlocking {
-        val forgetful = PollRegistry(1.milliseconds)
+    fun `a poll old enough to be forgotten is dropped by the maintenance pass`() = runBlocking {
+        val forgetful = PollRegistry(20.milliseconds)
 
         forgetful.remember("p1", chatId = -100L, output = quiz)
-        // the prune runs on the way in, so a second poll is what clears the first — and it has to be
-        // old enough by then, which is what the wait buys.
-        delay(20)
+        // retention no longer rides on the next poll: a chat that asked one question and stopped would
+        // have kept it forever.
+        delay(40)
         forgetful.remember("p2", chatId = -100L, output = quiz)
+
+        assertEquals(1, forgetful.pruneExpired())
 
         assertNull(forgetful.find("p1"))
         assertNotNull(forgetful.find("p2"))

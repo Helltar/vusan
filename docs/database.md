@@ -36,6 +36,25 @@ end up with different physical schemas.
 
 A migration runs inside the connect transaction: if it throws, the database keeps the version it had.
 
+## Retention
+
+Nothing here grows without a limit, and nothing is cleaned up only by the person who happens to write
+next. Every table with a retention rule is pruned where it is written **and** by the maintenance pass in
+`infra/Maintenance`, which runs at startup and every six hours after it:
+
+| Rows | Kept until | Pruned by |
+|---|---|---|
+| `conversation_messages` | summarized, then past `CONVERSATION_RETENTION_DAYS` or over `CONVERSATION_MAX_STORED_INTERACTIONS` | the turn that writes to that conversation, and the pass |
+| `group_log`, `group_log_digests` | past `GROUP_LOG_RETENTION_DAYS`, or over `GROUP_LOG_MAX_MESSAGES_PER_CHAT` | the pass |
+| `polls` | 30 days | the pass |
+| `token_user_spend` | 30 days | `TokenBudget`, as the budget day rolls over |
+| `scheduled_tasks` | until its last fire, or until deleted | `TaskScheduler`, when the recurrence runs out |
+| `pending_updates` | until the update is taken up | `UpdateSpool`, on acknowledgement |
+| `conversations`, `memories`, `stickers`, `sticker_sets`, `chat_stickers`, `chat_sticker_sets`, `token_usage` | until the owner clears them | `/clear`, `forget`, an operator |
+
+A pass bounds its own work — a hundred conversations or chats a round — so a database left alone for a
+long time is caught up over several rounds rather than in one transaction holding the write lock.
+
 ## Moving a pre-versioning database across
 
 Databases written before this existed have `user_version = 0` and cannot be reshaped automatically, so

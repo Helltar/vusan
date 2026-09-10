@@ -3,13 +3,16 @@ package com.helltar.vusan.agent.conversation
 import com.helltar.vusan.infra.Db.dbTransaction
 import com.helltar.vusan.infra.tables.ConversationMessagesTable
 import com.helltar.vusan.infra.tables.ConversationsTable
+import com.helltar.vusan.request.ChatRef
 import com.helltar.vusan.request.ConversationScope
+import com.helltar.vusan.request.UserRef
 import org.jetbrains.exposed.v1.core.Op
 import org.jetbrains.exposed.v1.core.SortOrder
 import org.jetbrains.exposed.v1.core.and
 import org.jetbrains.exposed.v1.core.eq
 import org.jetbrains.exposed.v1.core.inList
 import org.jetbrains.exposed.v1.core.isNull
+import org.jetbrains.exposed.v1.core.less
 import org.jetbrains.exposed.v1.core.plus
 import org.jetbrains.exposed.v1.jdbc.batchInsert
 import org.jetbrains.exposed.v1.jdbc.deleteWhere
@@ -179,6 +182,42 @@ class ConversationRepository {
         }
 
         removableIds.size
+    }
+
+    /**
+     * The retention pass of [pruneCompacted] for conversations nobody has come back to. A turn prunes
+     * its own conversation on the way out, so what is left for this is people who stopped writing —
+     * their rows would otherwise sit past retention for as long as they stayed away.
+     *
+     * At most [maxConversations] of them per pass; whatever is still expired is taken by the next one.
+     */
+    suspend fun pruneExpired(
+        maxStoredInteractions: Int,
+        rawRetentionCutoff: Instant,
+        maxConversations: Int
+    ): Int {
+        val expired =
+            dbTransaction {
+                ConversationMessagesTable
+                    .select(
+                        ConversationMessagesTable.platform,
+                        ConversationMessagesTable.userId,
+                        ConversationMessagesTable.chatId
+                    )
+                    .where { ConversationMessagesTable.createdAt less rawRetentionCutoff }
+                    .withDistinct()
+                    .limit(maxConversations)
+                    .map {
+                        val platform = it[ConversationMessagesTable.platform]
+
+                        ConversationScope(
+                            user = UserRef(platform, it[ConversationMessagesTable.userId]),
+                            chat = ChatRef(platform, it[ConversationMessagesTable.chatId])
+                        )
+                    }
+            }
+
+        return expired.sumOf { pruneCompacted(it, maxStoredInteractions, rawRetentionCutoff) }
     }
 
     // when this user last exchanged anything with the bot in this chat. rows are inserted in turn

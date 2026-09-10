@@ -150,6 +150,48 @@ class ConversationRepositoryTest {
         assertEquals(1, history.load(GROUP).stats.storedInteractions)
     }
 
+    // a turn prunes its own conversation, so what is left over is the person who stopped writing.
+    @Test
+    fun `the retention pass reaches conversations nobody came back to`() = runBlocking {
+        val history = ConversationRepository()
+        history.appendInteraction(DM, exchange("first", "one"))
+        history.appendInteraction(DM, exchange("second", "two"))
+        history.appendInteraction(GROUP, exchange("in the group", "answered"))
+
+        val first = history.load(DM).interactions.first()
+        history.storeSummary(DM, 0L, first.lastMessageId, "first exchange recap")
+
+        val pruned =
+            history.pruneExpired(
+                maxStoredInteractions = 1,
+                rawRetentionCutoff = Instant.now(),
+                maxConversations = 10
+            )
+
+        assertEquals(1, pruned)
+        // only what the recap already covers goes; the group conversation has no recap and keeps everything
+        assertEquals(listOf("second", "two"), history.load(DM).interactions.single().turns.map { it.content })
+        assertEquals(1, history.load(GROUP).stats.storedInteractions)
+    }
+
+    @Test
+    fun `the retention pass leaves conversations inside their retention alone`() = runBlocking {
+        val history = ConversationRepository()
+        history.appendInteraction(DM, exchange("first", "one"))
+        val first = history.load(DM).interactions.single()
+        history.storeSummary(DM, 0L, first.lastMessageId, "recap")
+
+        val pruned =
+            history.pruneExpired(
+                maxStoredInteractions = 100,
+                rawRetentionCutoff = Instant.EPOCH,
+                maxConversations = 10
+            )
+
+        assertEquals(0, pruned)
+        assertEquals(1, history.load(DM).stats.storedInteractions)
+    }
+
     @Test
     fun `clear advances the revision of one conversation and leaves the others alone`() = runBlocking {
         val history = ConversationRepository()

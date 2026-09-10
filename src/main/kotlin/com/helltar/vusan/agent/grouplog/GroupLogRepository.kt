@@ -11,6 +11,8 @@ import org.jetbrains.exposed.v1.core.Op
 import org.jetbrains.exposed.v1.core.ResultRow
 import org.jetbrains.exposed.v1.core.SortOrder
 import org.jetbrains.exposed.v1.core.and
+import org.jetbrains.exposed.v1.core.count
+import org.jetbrains.exposed.v1.core.greater
 import org.jetbrains.exposed.v1.core.eq
 import org.jetbrains.exposed.v1.core.greaterEq
 import org.jetbrains.exposed.v1.core.isNull
@@ -29,8 +31,6 @@ import org.jetbrains.exposed.v1.jdbc.upsert
 import java.time.Instant
 import java.time.LocalDate
 import java.time.ZoneId
-import java.util.concurrent.ConcurrentHashMap
-import java.util.concurrent.atomic.AtomicInteger
 
 /**
  * The running transcript of a group chat: every message, not only the ones addressed to the bot.
@@ -38,14 +38,6 @@ import java.util.concurrent.atomic.AtomicInteger
  * holds turns the bot took part in.
  */
 class GroupLogRepository(private val config: GroupLogConfig) {
-
-    private companion object {
-        // pruning scans the whole chat, so it is amortized over inserts instead of running on each
-        // one. the row cap is a ceiling, not a precise limit, and overshooting it briefly is fine.
-        const val PRUNE_EVERY_INSERTS = 500
-    }
-
-    private val insertsSincePrune = ConcurrentHashMap<ChatRef, AtomicInteger>()
 
     suspend fun record(entry: GroupLogEntry) {
         // exposed rejects a value longer than the column instead of truncating it, and every field
@@ -68,9 +60,6 @@ class GroupLogRepository(private val config: GroupLogConfig) {
             }
         }
 
-        if (shouldPrune(entry.chat)) {
-            prune(entry.chat)
-        }
     }
 
     /**
@@ -197,17 +186,49 @@ class GroupLogRepository(private val config: GroupLogConfig) {
         GroupLogTable.deleteWhere { inChat(chat) }
     }
 
-    private fun shouldPrune(chat: ChatRef): Boolean {
-        val counter = insertsSincePrune.computeIfAbsent(chat) { AtomicInteger() }
+    /**
+     * Retention for the chats that have one: everything past [GroupLogConfig.retentionDays], and the
+     * oldest rows of a chat that holds more than [GroupLogConfig.maxMessagesPerChat].
+     *
+     * At most [maxChats] chats per pass, oldest row first, so a quiet chat is not left behind a busy
+     * one. The row cap is a ceiling rather than a precise limit: overshooting it between passes is fine.
+     */
+    suspend fun pruneExpired(maxChats: Int): Int {
+        val cutoff = retentionCutoff()
 
-        if (counter.incrementAndGet() < PRUNE_EVERY_INSERTS) return false
+        val chats =
+            dbTransaction {
+                val expired =
+                    GroupLogTable
+                        .select(GroupLogTable.platform, GroupLogTable.chatId)
+                        .where { GroupLogTable.sentAt less cutoff }
+                        .withDistinct()
+                        .limit(maxChats)
+                        .map { ChatRef(it[GroupLogTable.platform], it[GroupLogTable.chatId]) }
 
-        counter.set(0)
-        return true
+                // a chat can also be over the row cap without holding anything old enough to expire,
+                // which is the busy one rather than the abandoned one.
+                val overCap =
+                    GroupLogTable
+                        .select(GroupLogTable.platform, GroupLogTable.chatId)
+                        .groupBy(GroupLogTable.platform, GroupLogTable.chatId)
+                        .having { GroupLogTable.id.count() greater config.maxMessagesPerChat.toLong() }
+                        .limit(maxChats)
+                        .map { ChatRef(it[GroupLogTable.platform], it[GroupLogTable.chatId]) }
+
+                (expired + overCap).distinct()
+            }
+
+        chats.forEach { prune(it) }
+
+        return chats.size
     }
 
+    private fun retentionCutoff(): Instant =
+        Instant.now().minusSeconds(config.retentionDays.toLong() * SECONDS_PER_DAY)
+
     private suspend fun prune(chat: ChatRef) {
-        val cutoff = Instant.now().minusSeconds(config.retentionDays.toLong() * SECONDS_PER_DAY)
+        val cutoff = retentionCutoff()
 
         dbTransaction {
             GroupLogTable.deleteWhere { inChat(chat) and (GroupLogTable.sentAt less cutoff) }

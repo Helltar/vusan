@@ -172,20 +172,36 @@ class GroupLogRepositoryTest {
         repeat(60) { repository.record(entry(messageId = "${it + 1}", text = "old$it", at = stale)) }
 
         val fresh = Instant.now()
+        repeat(5) { repository.record(entry(messageId = "${1_000 + it}", text = "new$it", at = fresh)) }
 
-        // pruning is amortized over inserts, so it takes a run of them to trigger.
-        repeat(500) { repository.record(entry(messageId = "${1_000 + it}", text = "new$it", at = fresh)) }
+        // retention is a pass of its own: nothing a chat writes prunes it any more, which is what left
+        // a chat that went quiet holding everything it had.
+        assertEquals(1, repository.pruneExpired(maxChats = 10))
 
         assertEquals(0L, repository.countInWindow(CHAT, stale.minusSeconds(60), stale.plusSeconds(60)))
-        assertEquals(500L, repository.countInWindow(CHAT, fresh.minusSeconds(60), fresh.plusSeconds(60)))
+        assertEquals(5L, repository.countInWindow(CHAT, fresh.minusSeconds(60), fresh.plusSeconds(60)))
+    }
+
+    @Test
+    fun `retention leaves a chat whose rows are all inside the window alone`() = runBlocking {
+        val repository = GroupLogRepository(GroupLogConfig(retentionDays = 1))
+        val fresh = Instant.now()
+
+        repeat(3) { repository.record(entry(messageId = "${it + 1}", text = "recent$it", at = fresh)) }
+
+        assertEquals(0, repository.pruneExpired(maxChats = 10))
+        assertEquals(3L, repository.countInWindow(CHAT, fresh.minusSeconds(60), fresh.plusSeconds(60)))
     }
 
     @Test
     fun `the per-chat row cap trims the oldest rows`() = runBlocking {
-        val repository = GroupLogRepository(GroupLogConfig(maxMessagesPerChat = 100))
+        // nothing here is old enough to expire: a busy chat is held to the cap on its own.
+        val repository = GroupLogRepository(GroupLogConfig(maxMessagesPerChat = 100, retentionDays = 365))
         val base = Instant.now().minusSeconds(1_000)
 
         repeat(500) { repository.record(entry(messageId = "${it + 1}", text = "m$it", at = base.plusSeconds(it.toLong()))) }
+
+        assertEquals(1, repository.pruneExpired(maxChats = 10))
 
         val remaining = repository.countInWindow(CHAT, base.minusSeconds(60), Instant.now())
 

@@ -504,7 +504,8 @@ them, each with its own recap and its own retention.
 | `CONVERSATION_RETENTION_DAYS`          | `90`    | Days summarized raw interactions remain in SQLite.         |
 
 How many of those recent interactions actually fit is decided by the context window. Cleanup runs
-when that thread completes a turn. `/clear` removes the raw transcript and its recap for the chat it
+when that thread completes a turn, and again in the maintenance pass every six hours, which is what
+reaches a conversation nobody has come back to. `/clear` removes the raw transcript and its recap for the chat it
 was sent from, leaving the caller's other chats and everyone else's history alone; durable memory
 and scheduled tasks remain.
 

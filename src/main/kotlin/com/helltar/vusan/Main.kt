@@ -13,6 +13,7 @@ import com.helltar.vusan.budget.TokenBudget
 import com.helltar.vusan.config.*
 import com.helltar.vusan.infra.Db
 import com.helltar.vusan.infra.Http
+import com.helltar.vusan.infra.Maintenance
 import com.helltar.vusan.infra.createPublicHttpClient
 import com.helltar.vusan.stt.OpenAiWhisperClient
 import com.helltar.vusan.tasks.TaskScheduler
@@ -35,10 +36,16 @@ import io.github.oshai.kotlinlogging.KotlinLogging
 import io.ktor.client.*
 import kotlinx.coroutines.cancelAndJoin
 import kotlinx.coroutines.coroutineScope
+import java.time.Instant
+import java.time.temporal.ChronoUnit
 import org.telegram.telegrambots.client.okhttp.OkHttpTelegramClient
 import kotlin.time.Duration.Companion.minutes
 
 private val log = KotlinLogging.logger {}
+
+// how much one maintenance pass takes on: enough that a neglected database catches up over a few
+// rounds, small enough that a pass never holds the write lock against the turns being served.
+private const val MAINTENANCE_BATCH = 100
 
 suspend fun main() = coroutineScope {
     log.info { "Starting Vusan ${appVersion()}" }
@@ -161,15 +168,36 @@ suspend fun main() = coroutineScope {
                 groupLog, polls
             )
 
+        // retention runs on a clock of its own rather than on whoever happens to write next: what needs
+        // clearing out most is exactly what nobody is writing to any more. the steps are wired here
+        // because one of them belongs to a messenger, and nothing under `infra/` may know that.
+        val maintenance =
+            Maintenance(
+                listOfNotNull(
+                    Maintenance.Step("conversation retention") {
+                        conversation.pruneExpired(
+                            maxStoredInteractions = config.chatHistory.maxStoredInteractions,
+                            rawRetentionCutoff =
+                                Instant.now().minus(config.chatHistory.retentionDays.toLong(), ChronoUnit.DAYS),
+                            maxConversations = MAINTENANCE_BATCH
+                        )
+                    },
+                    groupLog?.let { Maintenance.Step("group log retention") { it.pruneExpired(MAINTENANCE_BATCH) } },
+                    polls?.let { Maintenance.Step("expired polls") { it.pruneExpired() } }
+                )
+            )
+
         logStartup(config, llm, vision, toolRegistryFactory.availableToolNames)
 
         val botJob = botRunner.start(this)
         val schedulerJob = scheduler.launchIn(this)
         val stickerJob = stickerCatalog?.launchDescriptionWorker(this)
+        val maintenanceJob = maintenance.launchIn(this)
 
         try {
             botJob.join()
         } finally {
+            maintenanceJob.cancelAndJoin()
             stickerJob?.cancelAndJoin()
             schedulerJob.cancelAndJoin()
         }

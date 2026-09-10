@@ -55,10 +55,6 @@ class PollRegistry(private val retention: Duration = DEFAULT_RETENTION) {
 
         runCatching {
             dbTransaction {
-                PollsTable.deleteWhere {
-                    PollsTable.createdAt less Instant.now().minusMillis(retention.inWholeMilliseconds)
-                }
-
                 PollsTable.insertIgnore {
                     it[PollsTable.pollId] = pollId
                     it[PollsTable.chatId] = chatId
@@ -69,6 +65,16 @@ class PollRegistry(private val retention: Duration = DEFAULT_RETENTION) {
         }.onFailure {
             it.rethrowIfCancellation()
             log.warn(it) { "failed to remember poll id=[$pollId] in chat=$chatId; answers to it will not be recorded" }
+        }
+    }
+
+    /**
+     * Drops the polls past [retention], and answers how many. Nothing waits for a poll that old: an
+     * answer to one arrives while people are still looking at it, and the row only feeds the transcript.
+     */
+    suspend fun pruneExpired(): Int = dbTransaction {
+        PollsTable.deleteWhere {
+            PollsTable.createdAt less Instant.now().minusMillis(retention.inWholeMilliseconds)
         }
     }
 

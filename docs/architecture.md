@@ -352,6 +352,14 @@ A normal user message travels:
   budget is spent — the same treatment an offline window gets, minus the notice, which would otherwise repeat for every
   task due until the budget resets. A task whose owner and chat are outside `ALLOWED_IDS`, or on `BANNED_IDS`, is skipped the same way,
   ahead of the lateness check, so losing access produces no "missed" notices either. Recurrence math lives in `tasks/Recurrence.kt`.
+- **Maintenance** — `infra/Maintenance` runs a pass of bounded deletes on the way up and every six hours after
+  that: conversations past `CONVERSATION_RETENTION_DAYS`, group transcripts past `GROUP_LOG_RETENTION_DAYS` or over
+  their row cap, and polls past their retention. Each of these is also pruned where it is written, and that is enough
+  for as long as somebody keeps writing — the pass exists for what nobody writes to any more: a conversation the person
+  left, a chat the bot still sits in, a poll never followed by another. Every step bounds its own work (a hundred
+  conversations or chats a round, the next round taking the rest) and reports what it removed, and a step that throws
+  leaves the others to run. `Main` wires the steps, because one of them belongs to a messenger and `infra/` may not
+  know that. Per-user token spend is not here: `TokenBudget` prunes it as the budget day rolls over.
 - **Daily token budget** — with `LLM_DAILY_TOKEN_BUDGET` set, `budget/BudgetedPromptExecutor` wraps the executor every
   LLM caller shares, adds each completed call's input plus output tokens to the day's total in `token_usage` and to its
   author's row in `token_user_spend` — both in one transaction, so a restart never resumes a day that nobody spent —
@@ -379,9 +387,9 @@ A normal user message travels:
   `TelegramBotRunner.recordGroupLog`, a detached write that runs before the mention filter and outside private chats;
   the bot's own group messages are recorded from `TelegramDelivery.dispatch` after a send succeeds, skipping anything
   redirected to a DM. Text is collapsed and capped on write (harder for a forwarded post), media is reduced to a short
-  label, and no file id is kept. Retention is amortized over inserts rather than scheduled: every few hundred rows in a
-  chat, `GroupLogRepository` drops what is past `GROUP_LOG_RETENTION_DAYS` and trims to
-  `GROUP_LOG_MAX_MESSAGES_PER_CHAT`. On read, `GroupLogReader` quotes the window when it fits the budget derived from
+  label, and no file id is kept. Retention belongs to the maintenance pass below: it drops what is past
+  `GROUP_LOG_RETENTION_DAYS` and trims a chat to `GROUP_LOG_MAX_MESSAGES_PER_CHAT`, taking the chats that have
+  something to remove rather than the chats that happen to be busy. On read, `GroupLogReader` quotes the window when it fits the budget derived from
   `liveToolResultMaxChars`; when it does not and the window reaches back into a closed day, it splits by local day,
   replaces each **closed** day with a `GroupLogDigester` recap cached in `group_log_digests`, and leaves the current day
   quoted. A window lying inside today has no closed day to summarize, so it is truncated to its newest entries rather
