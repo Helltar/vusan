@@ -94,9 +94,12 @@ that is who owns writing them, not because only `agent/` reads them. No other ar
   `LLM_DAILY_TOKEN_BUDGET` is set.
 - **`infra/`** — cross-cutting infrastructure: the SQLite/Exposed `Db` singleton and the Ktor `Http` client. Every
   table that holds state belonging to somebody carries a `platform` column beside the external id, so two messengers
-  issuing the same number never read each other's rows. `Db.connect` reconciles the schema declaratively — it creates
-  what is missing and adds columns and indices, and never rewrites a key. A change that does rewrite one is applied by
-  moving the database by hand rather than by a migration in the code.
+  issuing the same number never read each other's rows. `Db.connect` brings the file to the version declared in
+  `infra/Schema.kt`: it creates a fresh database whole, stamps that version in SQLite's own `PRAGMA user_version`, and
+  runs the registered `Migration`s to catch an older one up. Nothing is inferred by comparing declarations to what is
+  there, and a database the build does not recognize — newer than it, or from before versions existed — stops startup
+  instead of being reshaped. [`docs/database.md`](database.md) covers changing the schema and moving a database across
+  by hand.
 - **`config/`** — `env/vusan.env` parsing (`AppConfig`), LLM provider/model resolution (`LlmRuntime`), and the ChatGPT
   subscription credentials the Codex CLI writes (`CodexAuth`). `VisionRuntime` resolves separately which model looks at
   images: the `OPENAI_VISION_*` model when configured, the chat model when it accepts images, and nothing at all

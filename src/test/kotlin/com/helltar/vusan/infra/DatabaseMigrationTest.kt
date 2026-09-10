@@ -3,8 +3,6 @@ package com.helltar.vusan.infra
 import com.helltar.vusan.config.AppConfig
 import com.helltar.vusan.config.HostedLlmProvider
 import com.helltar.vusan.config.LlmProviderConfig
-import java.nio.file.Files
-import java.sql.DriverManager
 import com.helltar.vusan.i18n.Language
 import com.helltar.vusan.request.AccessPolicy
 import com.helltar.vusan.request.testScope
@@ -12,11 +10,14 @@ import com.helltar.vusan.request.testUser
 import com.helltar.vusan.tasks.NewScheduledTask
 import com.helltar.vusan.tasks.Recurrence
 import com.helltar.vusan.tasks.TasksRepository
+import java.nio.file.Files
+import java.sql.DriverManager
 import java.time.Instant
 import java.time.ZoneId
 import kotlin.test.Test
+import kotlin.test.assertContains
 import kotlin.test.assertEquals
-import kotlin.test.assertNotNull
+import kotlin.test.assertFailsWith
 import kotlin.test.assertTrue
 import kotlin.time.Duration.Companion.seconds
 import kotlinx.coroutines.runBlocking
@@ -24,71 +25,114 @@ import kotlinx.coroutines.runBlocking
 class DatabaseMigrationTest {
 
     @Test
-    fun `connect adds paused state to an existing scheduled tasks table`() {
-        val tempDir = Files.createTempDirectory("vusan-database-migration-test")
-        val dbPath = tempDir.resolve("vusan.db")
-
-        try {
-            createLegacyScheduledTasksTable(dbPath.toString())
-
-            runBlocking {
-                Db.connect(testConfig(dbPath.toString()))
-                Db.disconnect()
-            }
-
-            val columns = scheduledTaskColumnDefaults(dbPath.toString())
-            assertTrue("paused" in columns)
-            assertEquals("0", columns["paused"])
-        } finally {
-            runBlocking { Db.disconnect() }
-            tempDir.toFile().deleteRecursively()
+    fun `a fresh database is created at the current schema version`() = withTempDb { dbPath ->
+        runBlocking {
+            Db.connect(testConfig(dbPath))
+            Db.disconnect()
         }
+
+        assertEquals(Schema.VERSION, userVersion(dbPath))
+
+        val tables = tableNames(dbPath)
+        Schema.tables.forEach { assertTrue(it.tableName in tables, "tables were $tables") }
+        assertTrue("summarized_through_message_id" in tableColumns(dbPath, "conversations"))
+    }
+
+    // the shape that has no version of its own: everything this project wrote before there were any.
+    @Test
+    fun `a database from before versioned schemas is refused, not reshaped`() = withTempDb { dbPath ->
+        createLegacyScheduledTasksTable(dbPath)
+
+        val failure = assertFailsWith<IllegalStateException> { runBlocking { Db.connect(testConfig(dbPath)) } }
+
+        assertContains(failure.message.orEmpty(), "by hand")
+        assertEquals(0, userVersion(dbPath))
+        // nothing was created beside it, so the database is still exactly what the operator has to move
+        assertEquals(setOf("scheduled_tasks"), tableNames(dbPath).filterNot { it.startsWith("sqlite_") }.toSet())
     }
 
     @Test
-    fun `connect adds indices missing from an existing scheduled tasks table`() {
-        val tempDir = Files.createTempDirectory("vusan-database-index-migration-test")
-        val dbPath = tempDir.resolve("vusan.db")
-
-        try {
-            createLegacyScheduledTasksTable(dbPath.toString())
-
-            runBlocking {
-                Db.connect(testConfig(dbPath.toString()))
-                Db.disconnect()
-            }
-
-            val indexed = scheduledTaskIndexColumns(dbPath.toString())
-            assertTrue(listOf("paused", "next_fire_at") in indexed, "indices were $indexed")
-            assertTrue(listOf("platform", "user_id") in indexed, "indices were $indexed")
-        } finally {
-            runBlocking { Db.disconnect() }
-            tempDir.toFile().deleteRecursively()
+    fun `a database written by a newer build is refused`() = withTempDb { dbPath ->
+        runBlocking {
+            Db.connect(testConfig(dbPath))
+            Db.disconnect()
         }
+
+        stampUserVersion(dbPath, Schema.VERSION + 1)
+
+        val failure = assertFailsWith<IllegalStateException> { runBlocking { Db.connect(testConfig(dbPath)) } }
+
+        assertContains(failure.message.orEmpty(), "newer")
+        assertEquals(Schema.VERSION + 1, userVersion(dbPath))
     }
 
     @Test
-    fun `connect creates the conversation tables on a database that predates them`() {
-        val tempDir = Files.createTempDirectory("vusan-conversation-migration-test")
-        val dbPath = tempDir.resolve("vusan.db")
+    fun `a database already at this version is opened as it stands`() = withTempDb { dbPath ->
+        runBlocking {
+            Db.connect(testConfig(dbPath))
+            val tasks = TasksRepository()
+            tasks.create(newTask())
+            Db.disconnect()
+
+            Db.connect(testConfig(dbPath))
+            assertEquals(1, tasks.countForUser(testUser(100)))
+            Db.disconnect()
+        }
+
+        assertEquals(Schema.VERSION, userVersion(dbPath))
+    }
+
+    // a schema change is a migration now, so every version above the baseline has to have one to reach.
+    @Test
+    fun `every version above the first is reachable by a migration`() {
+        val steps = Schema.migrations.map { it.to }
+
+        assertEquals((2..Schema.VERSION).toList(), steps.sorted())
+    }
+
+    private fun newTask() =
+        NewScheduledTask(
+            scope = testScope(userId = 100, chatId = -200),
+            prompt = "post the digest",
+            title = "digest",
+            recurrence = Recurrence.Once,
+            timezone = ZoneId.of("UTC"),
+            nextFireAt = Instant.parse("2026-07-28T08:00:00Z"),
+            creatorThreadId = null,
+            creatorMessageId = "9007199254740993",
+            creatorUsername = "tester",
+            creatorDisplayName = "Test User",
+            chatIsPrivate = false,
+            language = Language.ENGLISH
+        )
+
+    private fun withTempDb(block: (dbPath: String) -> Unit) {
+        val tempDir = Files.createTempDirectory("vusan-database-schema-test")
 
         try {
-            createLegacyScheduledTasksTable(dbPath.toString())
-
-            runBlocking {
-                Db.connect(testConfig(dbPath.toString()))
-                Db.disconnect()
-            }
-
-            val tables = tableNames(dbPath.toString())
-            assertTrue("conversation_messages" in tables, "tables were $tables")
-            assertTrue("conversations" in tables, "tables were $tables")
-            assertTrue("interaction_id" in tableColumns(dbPath.toString(), "conversation_messages"))
+            block(tempDir.resolve("vusan.db").toString())
         } finally {
             runBlocking { Db.disconnect() }
             tempDir.toFile().deleteRecursively()
         }
     }
+
+    private fun userVersion(dbPath: String): Int =
+        readPragma(dbPath, "user_version")
+
+    private fun stampUserVersion(dbPath: String, version: Int) {
+        withStatement(dbPath) { it.execute("PRAGMA user_version = $version") }
+    }
+
+    private fun readPragma(dbPath: String, pragma: String): Int =
+        withStatement(dbPath) { statement ->
+            statement.executeQuery("PRAGMA $pragma").use { if (it.next()) it.getInt(1) else 0 }
+        }
+
+    private fun <T> withStatement(dbPath: String, block: (java.sql.Statement) -> T): T =
+        DriverManager.getConnection("jdbc:sqlite:$dbPath").use { connection ->
+            connection.createStatement().use(block)
+        }
 
     // an older database of the current identity shape: the columns and indices added since are what
     // `connect` still reconciles. A schema change that has to rewrite a key is not reconciled at all —
@@ -121,138 +165,6 @@ class DatabaseMigrationTest {
             }
         }
     }
-
-    @Test
-    fun `connect creates the chat log tables on a database that predates them`() {
-        val tempDir = Files.createTempDirectory("vusan-chat-log-migration-test")
-        val dbPath = tempDir.resolve("vusan.db")
-
-        try {
-            createLegacyScheduledTasksTable(dbPath.toString())
-
-            runBlocking {
-                Db.connect(testConfig(dbPath.toString()))
-                Db.disconnect()
-            }
-
-            val tables = tableNames(dbPath.toString())
-            assertTrue("group_log" in tables, "tables were $tables")
-            assertTrue("group_log_digests" in tables, "tables were $tables")
-
-            val columns = tableColumns(dbPath.toString(), "group_log")
-            assertTrue("forward_from" in columns, "columns were $columns")
-            assertTrue("sent_at" in columns, "columns were $columns")
-            assertTrue("thread_id" in columns, "columns were $columns")
-        } finally {
-            runBlocking { Db.disconnect() }
-            tempDir.toFile().deleteRecursively()
-        }
-    }
-
-    // a message reference is opaque text now, but the column holding one was declared numeric before
-    // that and `connect` cannot rewrite a column. SQLite's affinity is what makes the change free: the
-    // old column still takes the reference and hands it back as it was written.
-    @Test
-    fun `a reference stored in a column that used to be numeric comes back as text`() {
-        val tempDir = Files.createTempDirectory("vusan-message-reference-migration-test")
-        val dbPath = tempDir.resolve("vusan.db")
-
-        try {
-            createLegacyScheduledTasksTable(dbPath.toString())
-
-            runBlocking {
-                Db.connect(testConfig(dbPath.toString()))
-
-                val repo = TasksRepository()
-                val id =
-                    repo.create(
-                        NewScheduledTask(
-                            scope = testScope(userId = 100, chatId = -200),
-                            prompt = "post the digest",
-                            title = "digest",
-                            recurrence = Recurrence.Once,
-                            timezone = ZoneId.of("UTC"),
-                            nextFireAt = Instant.parse("2026-07-28T08:00:00Z"),
-                            creatorThreadId = null,
-                            creatorMessageId = "9007199254740993",
-                            creatorUsername = "tester",
-                            creatorDisplayName = "Test User",
-                            chatIsPrivate = false,
-                            language = Language.ENGLISH
-                        )
-                    )
-
-                val stored = assertNotNull(repo.listForUser(testUser(100)).singleOrNull { it.id == id })
-
-                assertEquals("9007199254740993", stored.creatorMessageId)
-
-                Db.disconnect()
-            }
-        } finally {
-            runBlocking { Db.disconnect() }
-            tempDir.toFile().deleteRecursively()
-        }
-    }
-
-    @Test
-    fun `connect creates individual sticker usage on a database that predates it`() {
-        val tempDir = Files.createTempDirectory("vusan-sticker-usage-migration-test")
-        val dbPath = tempDir.resolve("vusan.db")
-
-        try {
-            createLegacyScheduledTasksTable(dbPath.toString())
-
-            runBlocking {
-                Db.connect(testConfig(dbPath.toString()))
-                Db.disconnect()
-            }
-
-            val tables = tableNames(dbPath.toString())
-            assertTrue("chat_stickers" in tables, "tables were $tables")
-
-            val columns = tableColumns(dbPath.toString(), "chat_stickers")
-            assertTrue("file_unique_id" in columns, "columns were $columns")
-            assertTrue("seen_count" in columns, "columns were $columns")
-            assertTrue("last_seen_at" in columns, "columns were $columns")
-        } finally {
-            runBlocking { Db.disconnect() }
-            tempDir.toFile().deleteRecursively()
-        }
-    }
-
-    private fun scheduledTaskColumnDefaults(dbPath: String): Map<String, String?> =
-        DriverManager.getConnection("jdbc:sqlite:$dbPath").use { connection ->
-            connection.createStatement().use { statement ->
-                statement.executeQuery("PRAGMA table_info(scheduled_tasks)").use { rows ->
-                    buildMap {
-                        while (rows.next())
-                            put(rows.getString("name"), rows.getString("dflt_value"))
-                    }
-                }
-            }
-        }
-
-    private fun scheduledTaskIndexColumns(dbPath: String): List<List<String>> =
-        DriverManager.getConnection("jdbc:sqlite:$dbPath").use { connection ->
-            connection.createStatement().use { statement ->
-                val indexNames =
-                    statement.executeQuery("PRAGMA index_list(scheduled_tasks)").use { rows ->
-                        buildList {
-                            while (rows.next())
-                                add(rows.getString("name"))
-                        }
-                    }
-
-                indexNames.map { name ->
-                    statement.executeQuery("PRAGMA index_info(`$name`)").use { rows ->
-                        buildList {
-                            while (rows.next())
-                                add(rows.getString("name"))
-                        }
-                    }
-                }
-            }
-        }
 
     private fun tableColumns(dbPath: String, table: String): Set<String> =
         DriverManager.getConnection("jdbc:sqlite:$dbPath").use { connection ->
