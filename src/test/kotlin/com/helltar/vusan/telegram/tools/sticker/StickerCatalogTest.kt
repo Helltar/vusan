@@ -1,4 +1,4 @@
-package com.helltar.vusan.tools.sticker
+package com.helltar.vusan.telegram.tools.sticker
 
 import ai.koog.agents.core.tools.ToolDescriptor
 import ai.koog.prompt.Prompt

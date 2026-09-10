@@ -45,7 +45,7 @@ import com.helltar.vusan.telegram.inbound.toAudioInput
 import com.helltar.vusan.telegram.inbound.toGroupLogEntry
 import com.helltar.vusan.telegram.inbound.toRichMarkdown
 import com.helltar.vusan.telegram.inbound.wrapAudioTranscript
-import com.helltar.vusan.tools.sticker.StickerCatalog
+import com.helltar.vusan.telegram.tools.sticker.StickerCatalog
 import io.github.oshai.kotlinlogging.KotlinLogging
 import kotlinx.coroutines.*
 import kotlinx.coroutines.channels.Channel

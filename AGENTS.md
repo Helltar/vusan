@@ -37,8 +37,9 @@ Whatever a note settles belongs there, not here.
 Preserve the package boundaries in [`docs/architecture.md`](docs/architecture.md#layers).
 
 - Inside `telegram/`: `inbound/` turns an update into agent input, `delivery/`
-  sends everything back out, `callback/` owns the inline-button flows; the
-  runner, `AgentTurns` and the raw client helpers stay at the package root.
+  sends everything back out, `callback/` owns the inline-button flows, `tools/`
+  holds the tools no other messenger could implement; the runner, `AgentTurns`
+  and the raw client helpers stay at the package root.
 - `TelegramBotRunner` normalizes inbound updates into a prompt; `AgentTurns`
   builds the `AgentRequest` from there and owns the turn up to its delivery.
   Tools consume `RequestContext`/`AttachedFile`, never Telegram message objects.
@@ -178,6 +179,12 @@ client/model files for external I/O, registration in
 then docs per the triggers above. A tool needing an optional key is registered
 through `ToolRegistryFactory.optional(...)`, which disables it with a warning
 rather than failing startup.
+
+A tool only one messenger can implement — Telegram's `file_id`, its sticker sets —
+is not registered there at all: it lives in that adapter (`telegram/tools/`) and
+reaches the registry through the `PlatformToolSets` port, gated there on the same
+chat capabilities. Nothing under `tools/` may name a messenger, and
+`PlatformBoundaryTest`'s allowlist is empty — keep it that way.
 
 - Every Koog tool method returning `String` is wrapped in `suspendToolGuard { ... }`
   from [`tools/ToolGuard.kt`](src/main/kotlin/com/helltar/vusan/tools/ToolGuard.kt);

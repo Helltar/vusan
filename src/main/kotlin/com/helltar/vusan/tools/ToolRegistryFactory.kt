@@ -21,7 +21,6 @@ import com.helltar.vusan.tools.choice.InlineChoiceTools
 import com.helltar.vusan.tools.currency.CurrencyTools
 import com.helltar.vusan.tools.currency.ExchangeRateClient
 import com.helltar.vusan.tools.files.FileDownloadClient
-import com.helltar.vusan.tools.files.ChatFileTools
 import com.helltar.vusan.tools.files.FileTools
 import com.helltar.vusan.tools.giphy.GiphyClient
 import com.helltar.vusan.tools.giphy.GiphyTools
@@ -41,8 +40,6 @@ import com.helltar.vusan.tools.quiz.QuizTools
 import com.helltar.vusan.tools.reaction.ReactionTools
 import com.helltar.vusan.tools.searxng.SearxngClient
 import com.helltar.vusan.tools.searxng.SearxngTools
-import com.helltar.vusan.tools.sticker.StickerCatalog
-import com.helltar.vusan.tools.sticker.StickerTools
 import com.helltar.vusan.tools.tasks.TaskTools
 import com.helltar.vusan.tools.tavily.TavilyClient
 import com.helltar.vusan.tools.tavily.TavilyTools
@@ -65,18 +62,16 @@ import com.helltar.vusan.tools.youtube.*
 import io.github.oshai.kotlinlogging.KotlinLogging
 import io.ktor.client.*
 import kotlin.time.Duration.Companion.seconds
-import org.telegram.telegrambots.meta.generics.TelegramClient
 
 class ToolRegistryFactory(
     http: HttpClient,
     publicHttp: HttpClient,
-    // the bot's own client: the only way to reach a file telegram already stores, by `file_id`
-    private val telegramClient: TelegramClient,
+    // whatever the messenger this turn came from adds to the shared tools, built per turn
+    private val platformTools: PlatformToolSets,
     private val config: AppConfig,
     private val conversation: ConversationRepository,
     private val memory: MemoryRepository,
     private val tasks: TasksRepository,
-    private val stickers: StickerCatalog?,
     vision: VisionRuntime?,
     private val groupLog: GroupLogRepository?,
     groupLogDigester: GroupLogDigester?,
@@ -217,10 +212,7 @@ class ToolRegistryFactory(
             if (chat.reactions) tools(ReactionTools(context, outbox))
             if (chat.audios) tools(YouTubeMusicTools(ytDlpClient, outbox))
             if (chat.videos) tools(YouTubeVideoTools(ytDlpClient, outbox))
-            if (chat.documents) {
-                tools(FileTools(fileDownloadClient, outbox))
-                tools(ChatFileTools(telegramClient, outbox))
-            }
+            if (chat.documents) tools(FileTools(fileDownloadClient, outbox))
 
             if (chat.polls) {
                 tools(QuizTools(outbox))
@@ -236,10 +228,7 @@ class ToolRegistryFactory(
                 }
             }
 
-            if (chat.stickersAndAnimations) {
-                giphyClient?.let { tools(GiphyTools(it, outbox)) }
-                stickers?.let { tools(StickerTools(it, context, outbox)) }
-            }
+            if (chat.stickersAndAnimations) giphyClient?.let { tools(GiphyTools(it, outbox)) }
 
             if (groupLog != null && groupLogReader != null) {
                 tools(GroupLogTools(groupLog, groupLogReader, context))
@@ -259,6 +248,8 @@ class ToolRegistryFactory(
             if (chat.photos && openAiImageClient != null && openAiImage != null) {
                 tools(ImageGenTools(openAiImageClient, openAiImage, outbox, context.attachedFiles, selfImage))
             }
+
+            platformTools.of(context, outbox).forEach { tools(it) }
         }
     }
 

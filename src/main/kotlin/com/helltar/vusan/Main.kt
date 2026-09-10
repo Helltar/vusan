@@ -28,7 +28,8 @@ import com.helltar.vusan.telegram.delivery.TelegramDelivery
 import com.helltar.vusan.telegram.inbound.VoiceTranscriber
 import com.helltar.vusan.tools.ToolRegistryFactory
 import com.helltar.vusan.tools.imagegen.resolveSelfImage
-import com.helltar.vusan.tools.sticker.StickerCatalog
+import com.helltar.vusan.telegram.tools.TelegramToolSets
+import com.helltar.vusan.telegram.tools.sticker.StickerCatalog
 import com.helltar.vusan.tools.vision.ImageVisionClient
 import io.github.oshai.kotlinlogging.KotlinLogging
 import io.ktor.client.*
@@ -105,8 +106,9 @@ suspend fun main() = coroutineScope {
 
         val toolRegistryFactory =
             ToolRegistryFactory(
-                http, publicHttp, telegramClient, config, conversation, memory, tasks, stickerCatalog, vision,
-                groupLog, groupLogDigester, contextWindowPolicy.liveToolResultMaxChars, codexAuth, selfImage
+                http, publicHttp, TelegramToolSets(telegramClient, stickerCatalog), config, conversation, memory,
+                tasks, vision, groupLog, groupLogDigester, contextWindowPolicy.liveToolResultMaxChars, codexAuth,
+                selfImage
             )
 
         val agentFactory =

@@ -15,9 +15,11 @@ import kotlin.test.fail
  *
  * A second messenger stays cheap only while the shared core is unaware of the first one. No import is
  * not proof of neutrality, but a new import is proof of regrowth — so this walks every package outside
- * `telegram/` and fails on one, carrying today's offenders as a list that may only shrink.
+ * `telegram/` and fails on one.
  *
- * The list is the progress report for the platform work: nothing else records how far it has got.
+ * The exception list is empty, and that is the state to hold. What is left of the platform work is not
+ * measured here any more: it is the semantics — Telegram's formatting, its limits, its numeric message
+ * references — that no import test can see.
  *
  * **What this does not catch.** It reads imports, so a shared file can still depend on a messenger
  * *through another type* and pass: `AgentRunner` held a `StickerCatalog`, which holds a
@@ -35,25 +37,16 @@ class PlatformBoundaryTest {
         val COMPOSITION_ROOT = setOf("src/main/kotlin/com/helltar/vusan/Main.kt")
 
         /**
-         * Shared files that still reach into Telegram, and what each is waiting for. Removing an entry is
-         * the point; adding one means the boundary moved the wrong way and needs a deliberate decision.
+         * Shared files that still reach into Telegram, and what each is waiting for. It is empty, which is
+         * the state to hold: adding an entry means the boundary moved the wrong way and needs a deliberate
+         * decision, not a line here. A tool that only one messenger can implement belongs in its adapter
+         * and reaches the registry through `PlatformToolSets`.
          */
-        val ALLOWED = mapOf(
-            "src/main/kotlin/com/helltar/vusan/tools/ToolRegistryFactory.kt" to
-                    "holds the bot's TelegramClient so file-id tools can be built",
-            "src/main/kotlin/com/helltar/vusan/tools/files/ChatFileTools.kt" to
-                    "resends a file by Telegram's own file_id, which no other messenger has",
-            "src/main/kotlin/com/helltar/vusan/tools/sticker/StickerCatalog.kt" to
-                    "sticker sets are learned and resent by file_id, which is Telegram's own model",
-            "src/test/kotlin/com/helltar/vusan/tools/files/ChatFileToolsTest.kt" to
-                    "drives sendChatFile against a fake TelegramClient",
-            "src/test/kotlin/com/helltar/vusan/tools/sticker/StickerCatalogTest.kt" to
-                    "drives the catalog against a fake TelegramClient"
-        )
+        val ALLOWED = emptyMap<String, String>()
     }
 
     @Test
-    fun `only the listed shared files know about Telegram`() {
+    fun `nothing outside the telegram adapter knows about Telegram`() {
         val root = projectRoot()
         val offenders =
             sequenceOf("src/main/kotlin", "src/test/kotlin")

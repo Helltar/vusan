@@ -1,4 +1,4 @@
-package com.helltar.vusan.tools.sticker
+package com.helltar.vusan.telegram.tools.sticker
 
 import com.helltar.vusan.agent.neutralizePromptBlocks
 import com.helltar.vusan.budget.tokenBudgetStop

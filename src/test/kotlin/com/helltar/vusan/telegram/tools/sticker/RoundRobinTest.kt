@@ -1,4 +1,4 @@
-package com.helltar.vusan.tools.sticker
+package com.helltar.vusan.telegram.tools.sticker
 
 import kotlin.test.Test
 import kotlin.test.assertEquals

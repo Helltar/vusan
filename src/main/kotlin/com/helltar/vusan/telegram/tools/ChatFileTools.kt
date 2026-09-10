@@ -1,4 +1,4 @@
-package com.helltar.vusan.tools.files
+package com.helltar.vusan.telegram.tools
 
 import ai.koog.agents.core.tools.annotations.LLMDescription
 import ai.koog.agents.core.tools.annotations.Tool
@@ -10,6 +10,9 @@ import com.helltar.vusan.outbox.BotOutput
 import com.helltar.vusan.telegram.delivery.isFileTooBig
 import com.helltar.vusan.telegram.delivery.isWrongFileIdentifier
 import com.helltar.vusan.telegram.downloadFileById
+import com.helltar.vusan.tools.files.FileTools
+import com.helltar.vusan.tools.files.asFileSize
+import com.helltar.vusan.tools.files.hasFileExtension
 import com.helltar.vusan.tools.requireToolText
 import com.helltar.vusan.tools.suspendToolGuard
 import org.telegram.telegrambots.meta.generics.TelegramClient
@@ -34,11 +37,11 @@ class ChatFileTools(
 ) : ToolSet {
 
     @Tool
-    @LLMDescription(FileToolDescriptions.SEND_CHAT_FILE)
+    @LLMDescription(ChatFileToolDescriptions.SEND_CHAT_FILE)
     suspend fun sendChatFile(
-        @LLMDescription(FileToolDescriptions.CHAT_FILE_ID)
+        @LLMDescription(ChatFileToolDescriptions.CHAT_FILE_ID)
         fileId: String,
-        @LLMDescription(FileToolDescriptions.CHAT_FILENAME)
+        @LLMDescription(ChatFileToolDescriptions.CHAT_FILENAME)
         filename: String = ""
     ): String = suspendToolGuard {
         val id = fileId.requireToolText("File id", MAX_FILE_ID_CHARS)

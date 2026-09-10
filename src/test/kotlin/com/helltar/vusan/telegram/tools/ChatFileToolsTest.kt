@@ -1,4 +1,4 @@
-package com.helltar.vusan.tools.files
+package com.helltar.vusan.telegram.tools
 
 import com.helltar.vusan.outbox.BotOutbox
 import com.helltar.vusan.outbox.BotOutput

@@ -30,7 +30,9 @@ Telegram ──► telegram/ ──► agent/ ──► tools/ ──► externa
   audio, sticker, photo, video, video note, GIF, document, album, callback query), filters them by allowlist and ban
   list, and works out what each one says; `AgentTurns`, also at the root, takes it from there — the reply context, the
   `AgentRequest`, the progress indicator, the delivery and its fallback — so a turn started by a message and one started
-  by a button follow the same path; `telegram/inbound/` normalizes an update into agent input; `telegram/delivery/`
+  by a button follow the same path; `telegram/tools/` holds the tools only Telegram can implement — resending by
+  `file_id`, and the sticker catalog — which reach the registry through the shared `PlatformToolSets` port rather than
+  being registered centrally; `telegram/inbound/` normalizes an update into agent input; `telegram/delivery/`
   sends agent results back, including HTML-formatting, opt-in rich-message, reply-anchor, media/document, media-group,
   and private-message fallbacks; `telegram/callback/` owns the inline-button flows — `CallbackRouter` validates a
   pressed button and picks its flow, `TaskMenuHandler` runs the deterministic `/tasks` UI, and `InlineChoiceHandler` the
@@ -48,8 +50,9 @@ Telegram ──► telegram/ ──► agent/ ──► tools/ ──► externa
   part in. `GroupLogReader` answers a window from it under a character budget, falling back to cached per-day recaps
   produced by `GroupLogDigester` when the window is too wide to quote.
 - **`tools/`** — agent-callable tools, one subpackage per capability (search, voice, vision, scheduled tasks, …).
-  `ToolRegistryFactory` owns clients and builds a per-request registry from required tools plus optional tools whose
-  env/config is present. See the Features section of the [README](../README.md). `tools/images/` is not a tool surface
+  `ToolRegistryFactory` owns clients and builds a per-request registry from required tools, optional tools whose
+  env/config is present, and whatever the turn's messenger adds through the `PlatformToolSets` port — a tool only one
+  messenger can implement lives in that adapter, so the factory never names one. See the Features section of the [README](../README.md). `tools/images/` is not a tool surface
   but the pipeline every image search shares: download a provider's candidates, drop what Telegram would refuse, and
   queue the survivors.
 - **`outbox/`** — the output model. `BotOutput` is the immutable sealed set of Telegram outputs (text, inline choice,
@@ -369,7 +372,7 @@ A normal user message travels:
   Only a **non-anonymous** poll produces these updates at all. `sendQuiz` is non-anonymous by default and reports its
   answers; `sendPoll` is anonymous by default and reports none unless the user asked for a public poll, which is the
   right way round — anonymity is usually the point of an ordinary poll.
-- **Sticker catalog** — `tools/sticker/StickerCatalog` learns which sticker sets a chat uses. The Bot API has no sticker
+- **Sticker catalog** — `telegram/tools/sticker/StickerCatalog` learns which sticker sets a chat uses. The Bot API has no sticker
   search, so a sticker can only be sent from a set known by name: `TelegramBotRunner` taps every sticker in an
   allowlisted chat — including ones the bot is not addressed in, which in a group is its only view of what people
   actually use — records the set and the individual sticker, and pulls the set in whole through `getStickerSet`. No
@@ -517,7 +520,7 @@ generation or `ELEVENLABS_API_KEY` is configured, the two things that use it) `r
 (`tools/imagegen/SelfImage.kt`), which reads the reference photo self-portraits and round video messages are drawn from:
 `SELF_IMAGE_FILE` when set, otherwise whatever avatar loader startup hands it — for Telegram, one
 `getUserProfilePhotos` on the bot's own id (`telegram/BotAvatar.kt`), and a failure there is a warning rather than a
-failed startup → (only with a vision runtime) the `StickerCatalog`,
+failed startup → (only with a vision runtime) the `StickerCatalog`, then `TelegramToolSets` over it and the client,
 `ToolRegistryFactory`, `AgentFactory`, `AgentRunner` → create `TaskMenuHandler` and `InlineChoiceHandler`, and
 optionally enable voice transcription → start `TelegramBotRunner`, which builds its own `AgentTurns` and
 `CallbackRouter` over those, and launch `TaskScheduler` and the sticker description worker, then block on the runner job
@@ -698,7 +701,7 @@ A symptom-to-source map for finding the right file fast. Paths are under
 | Vusan floods a chat or stalls on Telegram 429 over a long multi-message reply | `outbox/BotOutbox.kt` (text and album coalescing + `MAX_TEXT_MESSAGES` cap) + `telegram/delivery/TelegramDelivery.kt` (`INTER_MESSAGE_DELAY` pacing) + `telegram/delivery/TelegramSendFallbacks.kt` (`withFloodWaitRetry`, and the `MAX_FLOOD_WAIT` ceiling on what a turn will sit through) |
 | A reply, a notice or a scheduled fire lands in a forum's General instead of the topic it belongs to | `telegram/delivery/TelegramRequests.kt` (`ChatTarget`, and which builders name the topic) + `telegram/inbound/MessageMetadata.kt` (`forumTopicIdOrNull`, and why `is_topic_message` decides) + `tasks/ScheduledTask.kt` (`creatorThreadId`) |
 | A specific tool misbehaves | `tools/<feature>/<Feature>Tools.kt` for the tool surface, plus its `<Feature>Client.kt` for the external call |
-| Vusan will not hand a file from the chat back, or sends it under the wrong name | `tools/files/ChatFileTools.sendChatFile` (the `file_id` path and `chatFilename`) + `telegram/TelegramApi.downloadFileById` (`getFile`, and the 20 MB limit on what Telegram serves a bot) |
+| Vusan will not hand a file from the chat back, or sends it under the wrong name | `telegram/tools/ChatFileTools.sendChatFile` (the `file_id` path and `chatFilename`) + `telegram/TelegramApi.downloadFileById` (`getFile`, and the 20 MB limit on what Telegram serves a bot) |
 | A command times out, says the workspace is busy, or its output is cut short | `tools/workspace/WorkspaceClient.kt` (HTTP errors and job polling), then `workspace/jobs.ts` (admission, timeouts, retention), `container.ts` (whole-container cleanup) and `output.ts` (bounded logs and control-code cleanup) |
 | A workspace cannot reach the internet, or reaches something it should not | `workspace/netpolicy.sh` (the rules, installed on the host from a helper), then `workspace/container.ts` (the pool's own network and the startup probe) and `workspace/policy.ts` (the guard that re-reads and repairs them) |
 | A workspace loses files, or someone sees another person's | `request/RequestContext.personKeyOrNull` (the sender key both services use) and `telegram/inbound/MessageMetadata.toSenderContext` (the shared accounts that get nothing of their own), then `workspace/container.ts` and `workspace/homes.ts` (one bounded home disk per person) and `workspace/files.ts` (unprivileged, scoped transfers) |
@@ -726,7 +729,7 @@ A symptom-to-source map for finding the right file fast. Paths are under
 | A rich message reads as empty, `unknown`, or loses its structure | `telegram/inbound/RichMessageText.kt` (block tree → rich markdown), then `MessageMetadata.contentTypeName`/`textSnippetOrNull` and `ReplyContext.repliedTextOrNull` |
 | Scheduled task fires late, not at all, or reports "missed"/"failed" | `tasks/TaskScheduler.kt` (polling, lateness, retries) + `tasks/Recurrence.kt` (next-run math) |
 | A chat's tasks all went paused on their own, or one keeps firing into a chat the bot was removed from | `telegram/BotMembership.kt` (the `my_chat_member` path) + `telegram/delivery/TelegramErrors.kt` (`isChatUnreachable`) + `tasks/TaskScheduler.kt` (`parkTasksOfUnreachableChat`) |
-| A tool is missing in one group but present elsewhere, or a chat restriction is stale | `telegram/ChatProfiles.kt` (`capabilitiesOf`, the cache and its `forget`) + `tools/ToolRegistryFactory.buildRegistry` (which capability gates which tool) |
+| A tool is missing in one group but present elsewhere, or a chat restriction is stale | `telegram/ChatProfiles.kt` (`capabilitiesOf`, the cache and its `forget`) + `tools/ToolRegistryFactory.buildRegistry` (which capability gates which tool) + `telegram/tools/TelegramToolSets.kt` (the same gate for Telegram's own tools) |
 | `/tasks` or a plain-language task pause/resume/cancel fails | `telegram/callback/TaskMenuHandler.kt` (rendering, ownership, callbacks) + `tools/tasks/TaskTools.kt` (agent path) + `tasks/TasksRepository.kt` (shared scoped state changes) |
 | `/stop` does not stop anything, or a turn leaves its status message on screen | `agent/RunningTurns.kt` (what is registered and cancelled) + `agent/AgentRunner.kt` (`stop`, and the lock the command must not take) + `telegram/AgentTurns.kt` (the notice on cancellation) + `telegram/TelegramProgress.kt` (closing the status on the way out) + `telegram/callback/TurnStopHandler.kt` (the button and whose turn it may stop) |
 | `/clear` reports success but history survives | `agent/AgentRunner.kt` (`clearConversation` and the turn lock that also guards the append) + `tools/conversation/ConversationTools.kt` (agent path) + `agent/conversation/ConversationRepository.kt` (shared storage operation) |
@@ -748,7 +751,8 @@ A new agent tool typically touches these, in order:
    the `@LLMDescription` annotations (see the convention in `AGENTS.md`).
 3. *(optional)* **`<Feature>Client.kt`** / **`<Feature>Models.kt`** — the external I/O and its DTOs.
 4. **`tools/ToolRegistryFactory.kt`** — register it in `buildRegistry`; wrap construction in the `optional(...)` helper
-   when it depends on an API key that may be unset.
+   when it depends on an API key that may be unset. A tool only one messenger can implement goes to that adapter's
+   `PlatformToolSets` instead (`telegram/tools/TelegramToolSets.kt`), gated there on the same chat capability.
 5. **Docs** — add the capability to the Features section of the [README](../README.md); document setup requirements and
    implicit dependencies in [`configuration.md`](configuration.md), and add any new env vars to both that file and
    [`env/vusan.env.example`](../env/vusan.env.example).
