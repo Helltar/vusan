@@ -73,12 +73,12 @@ class TaskSchedulerTest {
     // `tasks/` is who the person is and why the chat is hearing from the bot at all.
     @Test
     fun `a fire in a group carries who it belongs to, not how to write them`() {
-        val attribution = task.copy(creatorUsername = "helltar", creatorMessageId = 12L).attribution
+        val attribution = task.copy(creatorUsername = "helltar", creatorMessageId = "12").attribution
 
         assertNotNull(attribution)
         assertEquals(testUser(100), attribution.person)
         assertEquals("helltar", attribution.username)
-        assertEquals(12L, attribution.anchorMessageId)
+        assertEquals("12", attribution.anchorMessageId)
         assertEquals(AttributionReason.SCHEDULED, attribution.reason)
     }
 

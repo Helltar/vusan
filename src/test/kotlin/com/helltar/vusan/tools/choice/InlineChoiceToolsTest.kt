@@ -21,7 +21,7 @@ class InlineChoiceToolsTest {
         val outbox = BotOutbox()
         var revisionScope: ConversationScope? = null
         val tools =
-            InlineChoiceTools(requestContext(chatId = 7L, userId = 42L, messageId = 9L), outbox) { scope ->
+            InlineChoiceTools(requestContext(chatId = 7L, userId = 42L, messageId = "9"), outbox) { scope ->
                 revisionScope = scope
                 7L
             }
@@ -43,7 +43,7 @@ class InlineChoiceToolsTest {
                 options = listOf("PDF", "DOCX"),
                 ownerId = "42",
                 historyRevision = 7L,
-                originMessageId = 9L
+                originMessageId = "9"
             ),
             outbox.pending.single().output
         )
@@ -67,7 +67,7 @@ class InlineChoiceToolsTest {
     @Test
     fun `askWithButtons rejects duplicate options`() = runBlocking {
         val outbox = BotOutbox()
-        val tools = InlineChoiceTools(requestContext(chatId = 7L, userId = 42L, messageId = 9L), outbox) { _ -> 0L }
+        val tools = InlineChoiceTools(requestContext(chatId = 7L, userId = 42L, messageId = "9"), outbox) { _ -> 0L }
 
         val message = toolFailure { tools.askWithButtons("Continue?", listOf("Yes", "yes")) }
 
@@ -85,7 +85,7 @@ class InlineChoiceToolsTest {
         }
 
         outbox.useDirectMessages()
-        val tools = InlineChoiceTools(requestContext(chatId = -7L, userId = 42L, messageId = 9L), outbox) { _ -> 0L }
+        val tools = InlineChoiceTools(requestContext(chatId = -7L, userId = 42L, messageId = "9"), outbox) { _ -> 0L }
         tools.askWithButtons("Continue in private?", listOf("Yes", "No"))
 
         val choice = outbox.pending.last()

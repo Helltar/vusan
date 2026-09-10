@@ -45,8 +45,10 @@ Preserve the package boundaries in [`docs/architecture.md`](docs/architecture.md
   Tools consume `RequestContext`/`AttachedFile`, never Telegram message objects.
 - One `RequestContext` is built at ingress and read unchanged from there on:
   identity (`UserRef`/`ChatRef`/`ConversationScope`) is platform-qualified, and
-  an external id is opaque text. Convert to a messenger's own width only inside
-  that adapter — for Telegram, `telegram/TelegramIds.kt` and nowhere else.
+  every external reference is opaque text — a message, a topic or a reply anchor
+  as much as a person or a chat, in a stored row as much as in memory. Convert to
+  a messenger's own width only inside that adapter — for Telegram,
+  `telegram/TelegramIds.kt` and nowhere else.
 - Outside an adapter, deliver through the `delivery/OutputDelivery` port and
   read chat facts through `request/ChatProfileLookup`. `tasks/` and everything
   else shared must stay free of a messenger client; `PlatformBoundaryTest`

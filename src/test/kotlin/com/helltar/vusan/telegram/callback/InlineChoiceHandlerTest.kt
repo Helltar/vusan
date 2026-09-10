@@ -160,7 +160,7 @@ class InlineChoiceHandlerTest {
                     options = List(10) { "option $it" },
                     ownerId = "4503599627370495",
                     historyRevision = 999_999_999L,
-                    originMessageId = Int.MAX_VALUE.toLong()
+                    originMessageId = Int.MAX_VALUE.toString()
                 )
             )
 
@@ -217,7 +217,7 @@ class InlineChoiceHandlerTest {
             loadBytes = { error("bytes are never read here") }
         )
 
-    private fun choice(originMessageId: Long? = 5L) =
+    private fun choice(originMessageId: String? = "5") =
         BotOutput.InlineChoice(
             question = "Which format?",
             options = listOf("PDF", "DOCX"),

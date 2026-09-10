@@ -25,7 +25,7 @@ class GroupLogEntriesTest {
             )
 
         assertEquals(testChat(-100), entry.chat)
-        assertEquals(1L, entry.messageId)
+        assertEquals("1", entry.messageId)
         assertEquals("text", entry.kind)
         assertEquals("hello everyone", entry.text)
         assertEquals("7", entry.senderId)
@@ -158,7 +158,7 @@ class GroupLogEntriesTest {
     fun `a forum topic id is captured`() {
         val entry = assertNotNull(message(""""text": "x", "message_thread_id": 55""").toGroupLogEntry())
 
-        assertEquals(55L, entry.threadId)
+        assertEquals("55", entry.threadId)
     }
 
     @Test
@@ -171,7 +171,7 @@ class GroupLogEntriesTest {
                 ).toGroupLogEntry()
             )
 
-        assertEquals(40L, entry.replyToMessageId)
+        assertEquals("40", entry.replyToMessageId)
     }
 
     @Test

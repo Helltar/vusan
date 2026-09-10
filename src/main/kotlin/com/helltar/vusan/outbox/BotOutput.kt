@@ -16,14 +16,14 @@ sealed class BotOutput {
         // the external id of the person the buttons are for; only they may press one.
         val ownerId: String,
         val historyRevision: Long,
-        val originMessageId: Long? = null
+        val originMessageId: String? = null
     ) : BotOutput() {
         init {
             validateQuestionAndOptions("Inline choice", question, options)
             require(ownerId.isNotBlank()) { "Inline choice owner id must not be blank" }
             require(historyRevision >= 0L) { "Inline choice history revision must not be negative" }
-            require(originMessageId == null || originMessageId > 0L) {
-                "Inline choice origin message id must be positive"
+            require(originMessageId == null || originMessageId.isNotBlank()) {
+                "Inline choice origin message id must not be blank"
             }
         }
     }
@@ -161,8 +161,9 @@ sealed class BotOutput {
         }
     }
 
-    data class Reaction(val messageId: Long, val emoji: String) : BotOutput() {
+    data class Reaction(val messageId: String, val emoji: String) : BotOutput() {
         init {
+            require(messageId.isNotBlank()) { "Reaction message id must not be blank" }
             require(emoji.isNotBlank()) { "Reaction emoji must not be blank" }
         }
     }

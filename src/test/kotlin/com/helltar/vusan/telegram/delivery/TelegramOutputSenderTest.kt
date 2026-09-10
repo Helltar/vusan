@@ -34,7 +34,7 @@ class TelegramOutputSenderTest {
                 options = listOf("PDF", "DOCX", "Plain text"),
                 ownerId = "42",
                 historyRevision = 7L,
-                originMessageId = 5L
+                originMessageId = "5"
             ),
             target = ChatTarget(1L),
             replyParameters = null,

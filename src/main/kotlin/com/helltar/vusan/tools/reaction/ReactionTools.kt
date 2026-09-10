@@ -39,7 +39,7 @@ class ReactionTools(private val context: RequestContext, private val outbox: Bot
         @LLMDescription(ReactionToolDescriptions.TARGET_REPLIED_MESSAGE)
         targetRepliedMessage: Boolean = false,
         @LLMDescription(ReactionToolDescriptions.MESSAGE_ID)
-        messageId: Long? = null
+        messageId: String? = null
     ): String = suspendToolGuard {
         val trimmedEmoji = emoji?.trim()
 
@@ -56,7 +56,7 @@ class ReactionTools(private val context: RequestContext, private val outbox: Bot
 
         val targetId =
             when {
-                messageId != null -> messageId
+                !messageId.isNullOrBlank() -> messageId
 
                 targetRepliedMessage -> requireNotNull(context.replyToMessageId) {
                     "No replied-to message in scope — drop `targetRepliedMessage` or " +
@@ -69,8 +69,6 @@ class ReactionTools(private val context: RequestContext, private val outbox: Bot
                             "or answer with text instead."
                 }
             }
-
-        require(targetId > 0L) { "Reaction target message id must be positive" }
 
         outbox.enqueue(BotOutput.Reaction(messageId = targetId, emoji = normalized))
 

@@ -11,8 +11,8 @@ import com.helltar.vusan.i18n.Language
 internal fun requestContext(
     chatId: Long = 1L,
     userId: Long = 1L,
-    messageId: Long? = 1L,
-    replyToMessageId: Long? = null,
+    messageId: String? = "1",
+    replyToMessageId: String? = null,
     isPrivate: Boolean = true,
     attachedFiles: List<AttachedFile> = emptyList(),
     language: Language = Language.DEFAULT,

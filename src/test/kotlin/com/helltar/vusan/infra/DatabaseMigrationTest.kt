@@ -5,9 +5,18 @@ import com.helltar.vusan.config.HostedLlmProvider
 import com.helltar.vusan.config.LlmProviderConfig
 import java.nio.file.Files
 import java.sql.DriverManager
+import com.helltar.vusan.i18n.Language
 import com.helltar.vusan.request.AccessPolicy
+import com.helltar.vusan.request.testScope
+import com.helltar.vusan.request.testUser
+import com.helltar.vusan.tasks.NewScheduledTask
+import com.helltar.vusan.tasks.Recurrence
+import com.helltar.vusan.tasks.TasksRepository
+import java.time.Instant
+import java.time.ZoneId
 import kotlin.test.Test
 import kotlin.test.assertEquals
+import kotlin.test.assertNotNull
 import kotlin.test.assertTrue
 import kotlin.time.Duration.Companion.seconds
 import kotlinx.coroutines.runBlocking
@@ -135,6 +144,51 @@ class DatabaseMigrationTest {
             assertTrue("forward_from" in columns, "columns were $columns")
             assertTrue("sent_at" in columns, "columns were $columns")
             assertTrue("thread_id" in columns, "columns were $columns")
+        } finally {
+            runBlocking { Db.disconnect() }
+            tempDir.toFile().deleteRecursively()
+        }
+    }
+
+    // a message reference is opaque text now, but the column holding one was declared numeric before
+    // that and `connect` cannot rewrite a column. SQLite's affinity is what makes the change free: the
+    // old column still takes the reference and hands it back as it was written.
+    @Test
+    fun `a reference stored in a column that used to be numeric comes back as text`() {
+        val tempDir = Files.createTempDirectory("vusan-message-reference-migration-test")
+        val dbPath = tempDir.resolve("vusan.db")
+
+        try {
+            createLegacyScheduledTasksTable(dbPath.toString())
+
+            runBlocking {
+                Db.connect(testConfig(dbPath.toString()))
+
+                val repo = TasksRepository()
+                val id =
+                    repo.create(
+                        NewScheduledTask(
+                            scope = testScope(userId = 100, chatId = -200),
+                            prompt = "post the digest",
+                            title = "digest",
+                            recurrence = Recurrence.Once,
+                            timezone = ZoneId.of("UTC"),
+                            nextFireAt = Instant.parse("2026-07-28T08:00:00Z"),
+                            creatorThreadId = null,
+                            creatorMessageId = "9007199254740993",
+                            creatorUsername = "tester",
+                            creatorDisplayName = "Test User",
+                            chatIsPrivate = false,
+                            language = Language.ENGLISH
+                        )
+                    )
+
+                val stored = assertNotNull(repo.listEnabledByUser(testUser(100)).singleOrNull { it.id == id })
+
+                assertEquals("9007199254740993", stored.creatorMessageId)
+
+                Db.disconnect()
+            }
         } finally {
             runBlocking { Db.disconnect() }
             tempDir.toFile().deleteRecursively()

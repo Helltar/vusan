@@ -5,7 +5,8 @@ import org.jetbrains.exposed.v1.core.Column
 import org.jetbrains.exposed.v1.core.Table
 
 // an external id is opaque text the platform issued, wide enough for every id shape in use — a
-// numeric Telegram or Discord id, a Slack-style handle — without widening the keys it sits in.
+// numeric Telegram or Discord id, a Slack-style handle — without widening the keys it sits in. it
+// holds a reference the platform issued as well as an owner: a message, a topic, a reply anchor.
 private const val EXTERNAL_ID_CHARS = 64
 private const val PLATFORM_NAME_CHARS = 16
 

@@ -27,7 +27,7 @@ data class ScheduledTask(
     val createdAt: Instant,
     val enabled: Boolean,
     val paused: Boolean,
-    val creatorMessageId: Long?,
+    val creatorMessageId: String?,
     // the forum topic the task was set up in. the creator message anchors a fire into the right topic
     // on its own, but the notices around it, and every fire after that message is gone, need this.
     val creatorThreadId: String?,
@@ -46,7 +46,7 @@ data class NewScheduledTask(
     val recurrence: Recurrence,
     val timezone: ZoneId,
     val nextFireAt: Instant,
-    val creatorMessageId: Long?,
+    val creatorMessageId: String?,
     val creatorThreadId: String?,
     val creatorUsername: String?,
     val creatorDisplayName: String?,

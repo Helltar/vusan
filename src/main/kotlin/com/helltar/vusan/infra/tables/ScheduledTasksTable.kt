@@ -21,7 +21,7 @@ object ScheduledTasksTable : LongIdTable("scheduled_tasks") {
     val selfInitiated = bool("self_initiated").default(false)
     val chatIsPrivate = bool("chat_is_private").default(true)
     val language = varchar("language", 16).nullable()
-    val creatorMessageId = long("creator_message_id").nullable()
+    val creatorMessageId = externalId("creator_message_id").nullable()
     val creatorThreadId = externalId("creator_thread_id").nullable()
     val creatorUsername = varchar("creator_username", 64).nullable()
     val creatorDisplayName = varchar("creator_display_name", 200).nullable()

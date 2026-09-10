@@ -235,7 +235,7 @@ class GroupLogReaderTest {
         repository.record(
             GroupLogEntry(
                 chat = CHAT,
-                messageId = messageId,
+                messageId = messageId.toString(),
                 kind = "text",
                 sentAt = at,
                 senderId = "1",

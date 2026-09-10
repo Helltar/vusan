@@ -143,7 +143,7 @@ private fun TelegramClient.statusFor(request: AgentRequest): TurnStatus =
         client = this,
         target = request.context.chatTarget,
         ownerId = request.context.user.telegramUserId,
-        replyToMessageId = request.context.messageId,
+        replyToMessageId = request.context.messageId?.telegramMessageId,
         messages = Messages.of(request.context.language),
         activityOpensIt = request.context.chat.capabilities.slowModeSeconds == 0
     )

@@ -38,19 +38,19 @@ internal fun Message.toGroupLogEntry(): GroupLogEntry? {
 
     return GroupLogEntry(
         chat = telegramChat(chatIdLong),
-        messageId = messageIdLong,
+        messageId = messageIdLong.toString(),
         kind = kind,
         // telegram's own send time: a digest keyed on local days must not drift when the bot is
         // catching up on a backlog of updates.
         sentAt = date?.let { Instant.ofEpochSecond(it.toLong()) } ?: Instant.now(),
-        threadId = messageThreadId?.toLong(),
+        threadId = messageThreadId?.toString(),
         senderId = senderIdOrNull()?.toString(),
         senderUsername = senderUsernameOrNull(),
         senderName = senderDisplayNameOrNull(),
         text = text,
         descriptor = descriptor,
         forwardFrom = forwardFrom,
-        replyToMessageId = replyToMessageIdOrNull()
+        replyToMessageId = replyToMessageIdOrNull()?.toString()
     )
 }
 

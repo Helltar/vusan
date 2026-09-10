@@ -96,7 +96,8 @@ internal class AgentTurns(
             // a reaction may only land on somebody else's message, so this stays narrower than the context above.
             replyToMessageId =
                 message.replyToMessageIdOrNull()
-                    ?.takeIf { isReplyToOtherUser(message.replyAuthorIdOrNull(), botProfile.userId) },
+                    ?.takeIf { isReplyToOtherUser(message.replyAuthorIdOrNull(), botProfile.userId) }
+                    ?.toString(),
             inputKind = inputKind
         )
     }
@@ -106,7 +107,7 @@ internal class AgentTurns(
         agentInput: String,
         conversationInput: String,
         attachedFiles: List<AttachedFile>,
-        replyToMessageId: Long?,
+        replyToMessageId: String?,
         inputKind: String
     ) {
         val sender =
@@ -122,7 +123,7 @@ internal class AgentTurns(
                         platform = Platform.TELEGRAM,
                         chat = message.toChatContext(chatProfile(message)),
                         sender = sender.toSenderContext(),
-                        messageId = message.messageIdLong,
+                        messageId = message.messageIdLong.toString(),
                         replyToMessageId = replyToMessageId,
                         attachedFiles = attachedFiles,
                         language = message.language
@@ -158,7 +159,7 @@ internal class AgentTurns(
                         platform = Platform.TELEGRAM,
                         chat = message.toChatContext(chatProfile(message)),
                         sender = user.toSenderContext(),
-                        messageId = selection.originMessageId,
+                        messageId = selection.originMessageId?.toString(),
                         attachedFiles = listOfNotNull(attachedFile),
                         language = Language.fromCode(user.languageCode)
                     ),

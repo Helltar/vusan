@@ -109,9 +109,9 @@ class GroupLogRendererTest {
     fun `the asking user's own exchange with the bot is dropped as already in their history`() {
         val entries =
             listOf(
-                entry(text = "has anyone seen the release?", username = "olena", senderId = "2", messageId = 10L),
-                entry(text = "@vusanbot hello", username = "helltar", senderId = "1", messageId = 11L),
-                botEntry(text = "Hi! How can I help?", answering = 11L, messageId = null)
+                entry(text = "has anyone seen the release?", username = "olena", senderId = "2", messageId = "10"),
+                entry(text = "@vusanbot hello", username = "helltar", senderId = "1", messageId = "11"),
+                botEntry(text = "Hi! How can I help?", answering = "11", messageId = null)
             )
 
         val kept = entries.withoutExchangesWith(userId = "1")
@@ -123,9 +123,9 @@ class GroupLogRendererTest {
     fun `a bot reply to somebody else survives, because it is in nobody else's history`() {
         val entries =
             listOf(
-                entry(text = "@vusanbot what about 2.3?", username = "olena", senderId = "2", messageId = 10L),
-                botEntry(text = "It is stable now", answering = 10L, messageId = null),
-                entry(text = "@vusanbot will this break anything?", username = "serhii", senderId = "3", messageId = 12L)
+                entry(text = "@vusanbot what about 2.3?", username = "olena", senderId = "2", messageId = "10"),
+                botEntry(text = "It is stable now", answering = "10", messageId = null),
+                entry(text = "@vusanbot will this break anything?", username = "serhii", senderId = "3", messageId = "12")
             )
 
         val kept = entries.withoutExchangesWith(userId = "3")
@@ -137,7 +137,7 @@ class GroupLogRendererTest {
     fun `an unanchored bot reply is left alone`() {
         val entries =
             listOf(
-                entry(text = "@vusanbot hello", username = "helltar", senderId = "1", messageId = 11L),
+                entry(text = "@vusanbot hello", username = "helltar", senderId = "1", messageId = "11"),
                 botEntry(text = "exam reminder", answering = null, messageId = null)
             )
 
@@ -148,7 +148,7 @@ class GroupLogRendererTest {
 
     @Test
     fun `dropping exchanges leaves an unrelated log untouched`() {
-        val entries = listOf(entry(text = "talking to herself", username = "olena", senderId = "2", messageId = 10L))
+        val entries = listOf(entry(text = "talking to herself", username = "olena", senderId = "2", messageId = "10"))
 
         assertEquals(entries, entries.withoutExchangesWith(userId = "1"))
     }
@@ -191,7 +191,7 @@ class GroupLogRendererTest {
         username: String? = "olena",
         name: String? = "Olena Petrenko",
         senderId: String? = "2",
-        messageId: Long? = 1L
+        messageId: String? = "1"
     ) =
         GroupLogEntry(
             chat = testChat(-100),
@@ -206,7 +206,7 @@ class GroupLogRendererTest {
             forwardFrom = forwardFrom
         )
 
-    private fun botEntry(text: String, answering: Long?, messageId: Long?, at: Instant = noon) =
+    private fun botEntry(text: String, answering: String?, messageId: String?, at: Instant = noon) =
         GroupLogEntry(
             chat = testChat(-100),
             messageId = messageId,

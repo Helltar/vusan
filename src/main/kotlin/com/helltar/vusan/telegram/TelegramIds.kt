@@ -6,7 +6,8 @@ import com.helltar.vusan.request.UserRef
 
 /**
  * Telegram issues numeric ids and the Bot API takes them back as numbers, while the shared core treats
- * an external id as opaque text — a messenger whose ids are not numbers at all has to fit there too.
+ * every external reference — a person, a chat, a topic, a message — as opaque text, because a messenger
+ * whose ids are not numbers at all has to fit there too.
  *
  * Both conversions live here, so nothing outside the adapter has to know Telegram's width, and a
  * reference from somewhere else cannot be silently read as a Telegram one.
@@ -20,6 +21,10 @@ internal val ChatRef.telegramChatId: Long
 
 internal val UserRef.telegramUserId: Long
     get() = numericId("user")
+
+/** A message the shared model carried, back in the width the Bot API names it by. */
+internal val String.telegramMessageId: Long
+    get() = requireNotNull(toLongOrNull()) { "Telegram message id is not numeric: [$this]" }
 
 /** A forum topic id, which the Bot API takes as an `Int` while the shared model keeps it opaque. */
 internal fun telegramThreadId(threadId: String?): Int? =

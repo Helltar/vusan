@@ -20,6 +20,7 @@ import com.helltar.vusan.telegram.PollRegistry
 import com.helltar.vusan.telegram.api
 import com.helltar.vusan.telegram.telegramChatId
 import com.helltar.vusan.telegram.telegramThreadId
+import com.helltar.vusan.telegram.telegramMessageId
 import com.helltar.vusan.telegram.telegramUserId
 import com.helltar.vusan.telegram.telegramChat
 import com.helltar.vusan.telegram.inbound.chatIdLong
@@ -198,7 +199,7 @@ class TelegramDelivery(
             return dispatch(delivery.result, plainTarget, plainTarget, recipient, messages).asOutcome()
         }
 
-        val anchorTarget = DeliveryTarget(target, replyToMessageId = attribution.anchorMessageId)
+        val anchorTarget = DeliveryTarget(target, replyToMessageId = attribution.anchorMessageId.telegramMessageId)
         val outcome = dispatch(delivery.result, anchorTarget, plainTarget, recipient, messages)
 
         // the message the task was set up from is gone, so the answer arrived unanchored and the line
@@ -477,7 +478,7 @@ class TelegramDelivery(
                     descriptor = descriptor,
                     // the anchor is what ties this reply to the message it answers, which is how the
                     // recent-chat slice knows this exchange is already in that user's own history.
-                    replyToMessageId = answering
+                    replyToMessageId = answering?.toString()
                 )
             )
         }.onFailure {

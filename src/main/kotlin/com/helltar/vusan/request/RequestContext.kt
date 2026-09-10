@@ -53,9 +53,14 @@ data class RequestContext(
     val platform: Platform,
     val chat: ChatContext,
     val sender: SenderContext,
-    /** The message being answered; `null` when nothing sent one, as when a scheduled task fires. */
-    val messageId: Long? = null,
-    val replyToMessageId: Long? = null,
+    /**
+     * The message being answered; `null` when nothing sent one, as when a scheduled task fires.
+     *
+     * A message reference is opaque text, like every other external id: a messenger issues it and only
+     * that adapter reads it back. Nothing shared compares two of them or expects a number.
+     */
+    val messageId: String? = null,
+    val replyToMessageId: String? = null,
     val attachedFiles: List<AttachedFile> = emptyList(),
     val language: Language = Language.DEFAULT
 ) {

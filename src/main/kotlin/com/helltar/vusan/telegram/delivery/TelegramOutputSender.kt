@@ -5,6 +5,7 @@ import com.helltar.vusan.common.rethrowIfCancellation
 import com.helltar.vusan.outbox.BotOutput
 import com.helltar.vusan.telegram.api
 import com.helltar.vusan.telegram.callback.inlineChoiceKeyboard
+import com.helltar.vusan.telegram.telegramMessageId
 import io.github.oshai.kotlinlogging.KotlinLogging
 import java.io.ByteArrayInputStream
 import org.telegram.telegrambots.meta.api.methods.ParseMode
@@ -153,7 +154,7 @@ internal object TelegramOutputSender {
                 executeAsync(
                     SetMessageReaction.builder()
                         .chatId(target.chatId.toString())
-                        .messageId(reaction.messageId.toInt())
+                        .messageId(reaction.messageId.telegramMessageId.toInt())
                         .reactionTypes(listOf(ReactionTypeEmoji.builder().emoji(reaction.emoji).build()))
                         .build()
                 )

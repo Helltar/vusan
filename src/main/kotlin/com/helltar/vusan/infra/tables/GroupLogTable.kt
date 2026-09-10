@@ -12,9 +12,9 @@ object GroupLogTable : LongIdTable("group_log") {
     val chatId = externalId("chat_id")
 
     // null for the bot's own messages: delivery does not carry the sent message id back.
-    val messageId = long("message_id").nullable()
+    val messageId = externalId("message_id").nullable()
 
-    val threadId = long("thread_id").nullable()
+    val threadId = externalId("thread_id").nullable()
 
     // null for anonymous admins and for posts forwarded in by a linked channel.
     val senderId = externalId("sender_id").nullable()
@@ -28,7 +28,7 @@ object GroupLogTable : LongIdTable("group_log") {
     val descriptor = varchar("descriptor", 200).nullable()
 
     val forwardFrom = varchar("forward_from", 128).nullable()
-    val replyToMessageId = long("reply_to_message_id").nullable()
+    val replyToMessageId = externalId("reply_to_message_id").nullable()
 
     // telegram's own send time, not the moment the row was written: a digest keyed on local days
     // must not drift when the bot lags behind the update stream.

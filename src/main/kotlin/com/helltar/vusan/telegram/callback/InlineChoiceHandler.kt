@@ -1,5 +1,6 @@
 package com.helltar.vusan.telegram.callback
 
+import com.helltar.vusan.telegram.telegramMessageId
 import com.helltar.vusan.common.rethrowIfCancellation
 import com.helltar.vusan.common.xmlBlock
 import com.helltar.vusan.i18n.Messages
@@ -208,7 +209,7 @@ internal fun inlineChoiceKeyboard(choice: BotOutput.InlineChoice): InlineKeyboar
                         ownerId = choice.ownerId,
                         historyRevision = choice.historyRevision,
                         optionIndex = index,
-                        originMessageId = choice.originMessageId ?: NO_ORIGIN_MESSAGE
+                        originMessageId = choice.originMessageId?.telegramMessageId ?: NO_ORIGIN_MESSAGE
                     ).serialize()
                 )
                 .build()

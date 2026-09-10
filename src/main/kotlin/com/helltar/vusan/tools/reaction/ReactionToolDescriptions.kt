@@ -8,7 +8,7 @@ internal object ReactionToolDescriptions {
                 "Always pass the `emoji` argument — there is no default emoji and the call fails without it. " +
                 "Target resolution: by default the reaction goes on the user's own current message. " +
                 """Set `targetRepliedMessage` to `true` when the user is replying to someone and wants that earlier message reacted to (e.g. the user replies to someone's joke and writes "react to it"). """ +
-                "Pass `messageId` explicitly only when the user gives you a specific numeric id to react to (it overrides `targetRepliedMessage`). " +
+                "Pass `messageId` explicitly only when the user gives you the id of a specific message to react to (it overrides `targetRepliedMessage`). " +
                 "Use sparingly — do not stack a reaction on top of a substantive textual reply unless the user clearly asks for both. " +
                 "Allowed emoji (Telegram free reaction set): " +
                 "`👍`, `👎`, `❤`, `🔥`, `🥰`, `👏`, `😁`, `🤔`, `🤯`, `😱`, `🤬`, `😢`, `🎉`, `🤩`, `🤮`, `💩`, `🙏`, `👌`, `🕊`, " +
@@ -30,7 +30,7 @@ internal object ReactionToolDescriptions {
                 "Fails if there is no `<reply_context>` in the current turn, so do not set it when the user is not replying to anything."
 
     const val MESSAGE_ID =
-        "Optional explicit Telegram message id to react to. " +
-                "Pass a positive integer only when the user explicitly tells you which message to react to. " +
+        "Optional explicit message id to react to. " +
+                "Pass it exactly as it appears in the message metadata, and only when the user tells you which message to react to. " +
                 "Overrides `targetRepliedMessage` and the default user-message target."
 }

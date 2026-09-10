@@ -348,7 +348,7 @@ class TaskMenuHandlerTest {
                 timezone = ZoneId.of("UTC"),
                 nextFireAt = nextFireAt,
                 creatorThreadId = null,
-                creatorMessageId = 1L,
+                creatorMessageId = "1",
                 creatorUsername = "tester",
                 creatorDisplayName = "Test User",
                 chatIsPrivate = chatId > 0L,

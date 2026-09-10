@@ -180,7 +180,7 @@ class TaskToolsTest {
 
     @Test
     fun `follow-up is stored as a one-time task the bot set for itself`() = runBlocking {
-        val tools = tools(requestContext(chatId = 100L, userId = 100L, messageId = 7L))
+        val tools = tools(requestContext(chatId = 100L, userId = 100L, messageId = "7"))
         val at = Instant.now().atZone(ZoneId.systemDefault()).plusDays(1).toLocalDateTime().truncatedTo(ChronoUnit.MINUTES)
 
         assertContains(tools.scheduleFollowUp("ask how the exam went", at.toString()), "Follow-up id=")
@@ -188,7 +188,7 @@ class TaskToolsTest {
         val stored = assertNotNull(repo.listEnabledByUser(testUser(100)).singleOrNull())
         assertTrue(stored.selfInitiated)
         assertIs<Recurrence.Once>(stored.recurrence)
-        assertEquals(7L, stored.creatorMessageId)
+        assertEquals("7", stored.creatorMessageId)
     }
 
     @Test
@@ -230,7 +230,7 @@ class TaskToolsTest {
                 recurrence = recurrence,
                 timezone = ZoneId.of("UTC"),
                 nextFireAt = nextFireAt,
-                creatorMessageId = 1L,
+                creatorMessageId = "1",
                 creatorThreadId = null,
                 creatorUsername = "tester",
                 creatorDisplayName = "Test User",

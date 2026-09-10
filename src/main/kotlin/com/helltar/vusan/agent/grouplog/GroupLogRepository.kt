@@ -140,7 +140,7 @@ class GroupLogRepository(private val config: GroupLogConfig) {
         chat: ChatRef,
         limit: Int,
         since: Instant,
-        excludeMessageId: Long? = null
+        excludeMessageId: String? = null
     ): List<GroupLogEntry> = dbTransaction {
         GroupLogTable
             .selectAll()

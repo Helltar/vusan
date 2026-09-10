@@ -62,15 +62,18 @@ Telegram ──► telegram/ ──► agent/ ──► tools/ ──► externa
   adapter builds at ingress and the runner and every tool then read: a `ChatContext` (where the turn is — id, flavor,
   sub-conversation, title, description and what the chat allows), a `SenderContext` (who sent it, and whether that
   sender is one person at all rather than a shared account the platform posts under), the message being answered — or
-  `null` when nothing sent one — its reply anchor, the attachments and the language. Beside it: `ChatProfile` (what an
+  `null` when nothing sent one — its reply anchor, the attachments and the language. Every reference in it is opaque
+  text, a message and a topic as much as a person or a chat: `telegram/TelegramIds.kt` is the only place that reads one
+  back as a number. Beside it: `ChatProfile` (what an
   adapter has to look the chat up for), `ChatCapabilities` (what the chat lets the bot post, and its slow mode —
   defaulting to unrestricted so a failed lookup never removes an ability), and `AttachedFile` (photo, video, or document, from the
   current message or a replied-to message, that vision (`describeImage`, `describeVideo`) and the workspace
   (`runCommand` or `writeWorkspaceFile`, which copies it into a unique `inbox/` path) can lazily download). Its `kind`
   (`IMAGE`/`VIDEO`/`OTHER`) decides which of those tools accepts it; a video also carries its duration and a loader for
   Telegram's own thumbnail.
-- **`delivery/`** — the shared output address and port: a `Destination` (chat, optional thread, optional reply
-  anchor), the `Attribution` saying who a scheduled answer belongs to and why the chat is hearing from the bot at all
+- **`delivery/`** — the shared output address and port: a `Destination` (chat plus optional thread — an anchor is not
+  part of an address), the `Attribution` saying who a scheduled answer belongs to, where it hangs, and why the chat is
+  hearing from the bot at all
   (`AttributionReason`) — the adapter writes the mention itself, since naming a person is platform syntax — and
   `OutputDelivery`, which an adapter implements so nothing outside one needs a messenger client to deliver a turn.
 - **`tasks/`** — scheduled-task subsystem: storage, persisted pause state, recurrence math, and the background
@@ -307,7 +310,7 @@ A normal user message travels:
 - **Task scheduler** — `TaskScheduler.launchIn` polls the task store every 30 seconds. Due tasks run through
   `AgentRunner.handleScheduled` (waits for the user lock instead of bailing) and are delivered through the
   `delivery/OutputDelivery` port, which is what keeps `tasks/` free of any messenger: it addresses a `Destination`
-  (chat, optional thread, optional anchor), names the `UserRef` a DM-routed item belongs to, and answers a
+  (chat and optional thread), names the `UserRef` a DM-routed item belongs to, and answers a
   `DeliveryOutcome`. Chat facts come the same way, through `request/ChatProfileLookup`. A task runs with no incoming message behind it, so its `<message_context>` is
   rebuilt from what the task stored — the chat, and who set it up — instead of the live chat flavor, title, and
   description a normal turn carries. Tasks overdue beyond `TASK_MAX_LATENESS_MINUTES` (e.g. after downtime) get a

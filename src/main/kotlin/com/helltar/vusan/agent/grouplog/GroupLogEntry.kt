@@ -9,17 +9,17 @@ import java.time.Instant
  */
 data class GroupLogEntry(
     val chat: ChatRef,
-    val messageId: Long?,
+    val messageId: String?,
     val kind: String,
     val sentAt: Instant,
-    val threadId: Long? = null,
+    val threadId: String? = null,
     val senderId: String? = null,
     val senderUsername: String? = null,
     val senderName: String? = null,
     val text: String? = null,
     val descriptor: String? = null,
     val forwardFrom: String? = null,
-    val replyToMessageId: Long? = null
+    val replyToMessageId: String? = null
 ) {
     init {
         require(kind.isNotBlank()) { "Chat log entry kind must not be blank" }

@@ -5,6 +5,7 @@ import com.helltar.vusan.outbox.BotOutput
 import com.helltar.vusan.request.requestContext
 import com.helltar.vusan.tools.toolFailure
 import kotlin.test.Test
+import kotlin.test.assertContains
 import kotlin.test.assertEquals
 import kotlin.test.assertFalse
 import kotlin.test.assertTrue
@@ -12,7 +13,7 @@ import kotlinx.coroutines.runBlocking
 
 class ReactionToolsTest {
 
-    private fun ctx(messageId: Long = 100L, replyToMessageId: Long? = null) =
+    private fun ctx(messageId: String? = "100", replyToMessageId: String? = null) =
         requestContext(chatId = 42L, userId = 7L, messageId = messageId, replyToMessageId = replyToMessageId)
 
     @Test
@@ -22,7 +23,7 @@ class ReactionToolsTest {
 
         val result = tools.setReaction(emoji = "❤")
 
-        assertEquals(BotOutput.Reaction(messageId = 100L, emoji = "❤"), outbox.pending.single().output)
+        assertEquals(BotOutput.Reaction(messageId = "100", emoji = "❤"), outbox.pending.single().output)
         assertTrue("❤" in result)
         assertTrue("100" in result)
     }
@@ -30,21 +31,21 @@ class ReactionToolsTest {
     @Test
     fun `setReaction defaults to user's own message even when a reply target is in scope`() = runBlocking {
         val outbox = BotOutbox()
-        val tools = ReactionTools(ctx(replyToMessageId = 55L), outbox)
+        val tools = ReactionTools(ctx(replyToMessageId = "55"), outbox)
 
         tools.setReaction(emoji = "🔥")
 
-        assertEquals(BotOutput.Reaction(messageId = 100L, emoji = "🔥"), outbox.pending.single().output)
+        assertEquals(BotOutput.Reaction(messageId = "100", emoji = "🔥"), outbox.pending.single().output)
     }
 
     @Test
     fun `setReaction targets the replied-to message when targetRepliedMessage is true`() = runBlocking {
         val outbox = BotOutbox()
-        val tools = ReactionTools(ctx(replyToMessageId = 55L), outbox)
+        val tools = ReactionTools(ctx(replyToMessageId = "55"), outbox)
 
         tools.setReaction(emoji = "🔥", targetRepliedMessage = true)
 
-        assertEquals(BotOutput.Reaction(messageId = 55L, emoji = "🔥"), outbox.pending.single().output)
+        assertEquals(BotOutput.Reaction(messageId = "55", emoji = "🔥"), outbox.pending.single().output)
     }
 
     @Test
@@ -61,21 +62,21 @@ class ReactionToolsTest {
     @Test
     fun `setReaction lets explicit messageId override targetRepliedMessage`() = runBlocking {
         val outbox = BotOutbox()
-        val tools = ReactionTools(ctx(replyToMessageId = 55L), outbox)
+        val tools = ReactionTools(ctx(replyToMessageId = "55"), outbox)
 
-        tools.setReaction(emoji = "👍", targetRepliedMessage = true, messageId = 999L)
+        tools.setReaction(emoji = "👍", targetRepliedMessage = true, messageId = "999")
 
-        assertEquals(BotOutput.Reaction(messageId = 999L, emoji = "👍"), outbox.pending.single().output)
+        assertEquals(BotOutput.Reaction(messageId = "999", emoji = "👍"), outbox.pending.single().output)
     }
 
     @Test
     fun `setReaction honors explicit messageId over defaults`() = runBlocking {
         val outbox = BotOutbox()
-        val tools = ReactionTools(ctx(replyToMessageId = 55L), outbox)
+        val tools = ReactionTools(ctx(replyToMessageId = "55"), outbox)
 
-        tools.setReaction(emoji = "👍", messageId = 999L)
+        tools.setReaction(emoji = "👍", messageId = "999")
 
-        assertEquals(BotOutput.Reaction(messageId = 999L, emoji = "👍"), outbox.pending.single().output)
+        assertEquals(BotOutput.Reaction(messageId = "999", emoji = "👍"), outbox.pending.single().output)
     }
 
     @Test
@@ -110,14 +111,15 @@ class ReactionToolsTest {
         assertTrue(outbox.pending.isEmpty())
     }
 
+    // a scheduled task fires with nothing behind it, so there is no message of its own to react to.
     @Test
     fun `setReaction fails when no valid target is available`() = runBlocking {
         val outbox = BotOutbox()
-        val tools = ReactionTools(ctx(messageId = 0L), outbox)
+        val tools = ReactionTools(ctx(messageId = null), outbox)
 
         val message = toolFailure { tools.setReaction(emoji = "❤") }
 
-        assertEquals("Tool failed: Reaction target message id must be positive", message)
+        assertContains(message, "No message in scope to react to")
         assertTrue(outbox.pending.isEmpty())
     }
 

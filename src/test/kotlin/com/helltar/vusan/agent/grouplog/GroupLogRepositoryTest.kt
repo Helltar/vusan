@@ -45,9 +45,9 @@ class GroupLogRepositoryTest {
     fun `window read returns entries oldest first`() = runBlocking {
         val repository = GroupLogRepository(GroupLogConfig())
 
-        repository.record(entry(messageId = 1L, text = "first", at = now.minusSeconds(300)))
-        repository.record(entry(messageId = 2L, text = "second", at = now.minusSeconds(200)))
-        repository.record(entry(messageId = 3L, text = "third", at = now.minusSeconds(100)))
+        repository.record(entry(messageId = "1", text = "first", at = now.minusSeconds(300)))
+        repository.record(entry(messageId = "2", text = "second", at = now.minusSeconds(200)))
+        repository.record(entry(messageId = "3", text = "third", at = now.minusSeconds(100)))
 
         val entries = repository.readWindow(CHAT, now.minusSeconds(600), now, limit = 10)
 
@@ -58,7 +58,7 @@ class GroupLogRepositoryTest {
     fun `window read keeps the newest entries when the limit bites`() = runBlocking {
         val repository = GroupLogRepository(GroupLogConfig())
 
-        repeat(5) { repository.record(entry(messageId = it + 1L, text = "m$it", at = now.minusSeconds(500L - it * 10))) }
+        repeat(5) { repository.record(entry(messageId = "${it + 1}", text = "m$it", at = now.minusSeconds(500L - it * 10))) }
 
         val entries = repository.readWindow(CHAT, now.minusSeconds(600), now, limit = 2)
 
@@ -70,8 +70,8 @@ class GroupLogRepositoryTest {
     fun `a redelivered update does not duplicate its row`() = runBlocking {
         val repository = GroupLogRepository(GroupLogConfig())
 
-        repository.record(entry(messageId = 7L, text = "once", at = now))
-        repository.record(entry(messageId = 7L, text = "once", at = now))
+        repository.record(entry(messageId = "7", text = "once", at = now))
+        repository.record(entry(messageId = "7", text = "once", at = now))
 
         assertEquals(1L, repository.countInWindow(CHAT, now.minusSeconds(60), now))
     }
@@ -99,8 +99,8 @@ class GroupLogRepositoryTest {
     fun `author filter matches a username exactly and a display name by substring`() = runBlocking {
         val repository = GroupLogRepository(GroupLogConfig())
 
-        repository.record(entry(1L, "hers", now, username = "Olena", name = "Olena Petrenko"))
-        repository.record(entry(2L, "his", now, username = "serhii", name = "Serhii Koval"))
+        repository.record(entry("1", "hers", now, username = "Olena", name = "Olena Petrenko"))
+        repository.record(entry("2", "his", now, username = "serhii", name = "Serhii Koval"))
 
         val from = now.minusSeconds(60)
 
@@ -114,7 +114,7 @@ class GroupLogRepositoryTest {
     fun `a value longer than its column is truncated instead of rejected`() = runBlocking {
         val repository = GroupLogRepository(GroupLogConfig())
 
-        repository.record(entry(1L, "hi", now, username = "u".repeat(200), name = "n".repeat(500)))
+        repository.record(entry("1", "hi", now, username = "u".repeat(200), name = "n".repeat(500)))
 
         val stored = repository.readWindow(CHAT, now.minusSeconds(60), now, limit = 10).single()
 
@@ -126,10 +126,10 @@ class GroupLogRepositoryTest {
     fun `recent drops the message that triggered the turn`() = runBlocking {
         val repository = GroupLogRepository(GroupLogConfig())
 
-        repository.record(entry(1L, "earlier", now.minusSeconds(120)))
-        repository.record(entry(2L, "the question", now))
+        repository.record(entry("1", "earlier", now.minusSeconds(120)))
+        repository.record(entry("2", "the question", now))
 
-        val entries = repository.recent(CHAT, limit = 10, since = now.minusSeconds(600), excludeMessageId = 2L)
+        val entries = repository.recent(CHAT, limit = 10, since = now.minusSeconds(600), excludeMessageId = "2")
 
         assertEquals(listOf("earlier"), entries.map { it.text })
     }
@@ -138,7 +138,7 @@ class GroupLogRepositoryTest {
     fun `clear removes the transcript and the cached digests`() = runBlocking {
         val repository = GroupLogRepository(GroupLogConfig())
 
-        repository.record(entry(1L, "gone", now))
+        repository.record(entry("1", "gone", now))
         repository.storeDigest(CHAT, LocalDate.of(2026, 8, 3), messageCount = 4, content = "a recap")
 
         repository.clear(CHAT)
@@ -152,12 +152,12 @@ class GroupLogRepositoryTest {
         val repository = GroupLogRepository(GroupLogConfig(retentionDays = 1))
         val stale = Instant.now().minus(10, ChronoUnit.DAYS)
 
-        repeat(60) { repository.record(entry(messageId = it + 1L, text = "old$it", at = stale)) }
+        repeat(60) { repository.record(entry(messageId = "${it + 1}", text = "old$it", at = stale)) }
 
         val fresh = Instant.now()
 
         // pruning is amortized over inserts, so it takes a run of them to trigger.
-        repeat(500) { repository.record(entry(messageId = 1_000L + it, text = "new$it", at = fresh)) }
+        repeat(500) { repository.record(entry(messageId = "${1_000 + it}", text = "new$it", at = fresh)) }
 
         assertEquals(0L, repository.countInWindow(CHAT, stale.minusSeconds(60), stale.plusSeconds(60)))
         assertEquals(500L, repository.countInWindow(CHAT, fresh.minusSeconds(60), fresh.plusSeconds(60)))
@@ -168,7 +168,7 @@ class GroupLogRepositoryTest {
         val repository = GroupLogRepository(GroupLogConfig(maxMessagesPerChat = 100))
         val base = Instant.now().minusSeconds(1_000)
 
-        repeat(500) { repository.record(entry(messageId = it + 1L, text = "m$it", at = base.plusSeconds(it.toLong()))) }
+        repeat(500) { repository.record(entry(messageId = "${it + 1}", text = "m$it", at = base.plusSeconds(it.toLong()))) }
 
         val remaining = repository.countInWindow(CHAT, base.minusSeconds(60), Instant.now())
 
@@ -195,9 +195,9 @@ class GroupLogRepositoryTest {
     fun `an edit rewrites what the transcript quotes`() = runBlocking {
         val repository = GroupLogRepository(GroupLogConfig())
 
-        repository.record(entry(messageId = 1L, text = "wehter in kyiv", at = now.minusSeconds(100)))
+        repository.record(entry(messageId = "1", text = "wehter in kyiv", at = now.minusSeconds(100)))
 
-        assertTrue(repository.recordEdit(entry(messageId = 1L, text = "weather in kyiv", at = now.minusSeconds(100))))
+        assertTrue(repository.recordEdit(entry(messageId = "1", text = "weather in kyiv", at = now.minusSeconds(100))))
 
         val entries = repository.readWindow(CHAT, now.minusSeconds(600), now, limit = 10)
 
@@ -211,19 +211,36 @@ class GroupLogRepositoryTest {
         val sentAt = now.minusSeconds(100)
         val day = LocalDate.ofInstant(sentAt, ZoneId.systemDefault())
 
-        repository.record(entry(messageId = 1L, text = "before", at = sentAt))
+        repository.record(entry(messageId = "1", text = "before", at = sentAt))
         repository.storeDigest(CHAT, day, messageCount = 4, content = "a recap quoting before")
 
-        repository.recordEdit(entry(messageId = 1L, text = "after", at = sentAt))
+        repository.recordEdit(entry(messageId = "1", text = "after", at = sentAt))
 
         assertNull(repository.digestFor(CHAT, day))
+    }
+
+    // the reference a messenger issues is opaque text, and a chat log has to hold whatever shape that
+    // is: it is part of the row's uniqueness and it is what an edit is looked up by.
+    @Test
+    fun `a message reference that is not a number survives storage and lookup`() = runBlocking {
+        val repository = GroupLogRepository(GroupLogConfig())
+        val reference = "1774000000.001500"
+
+        repository.record(entry(messageId = reference, text = "wehter in kyiv", at = now.minusSeconds(100)))
+
+        assertTrue(repository.recordEdit(entry(messageId = reference, text = "weather in kyiv", at = now.minusSeconds(100))))
+
+        val stored = repository.readWindow(CHAT, now.minusSeconds(600), now, limit = 10).single()
+
+        assertEquals(reference, stored.messageId)
+        assertEquals("weather in kyiv", stored.text)
     }
 
     @Test
     fun `an edit of a message the log never saw is not backfilled`() = runBlocking {
         val repository = GroupLogRepository(GroupLogConfig())
 
-        assertFalse(repository.recordEdit(entry(messageId = 7L, text = "never recorded", at = now)))
+        assertFalse(repository.recordEdit(entry(messageId = "7", text = "never recorded", at = now)))
         assertEquals(0L, repository.countInWindow(CHAT, now.minusSeconds(600), now))
     }
 
@@ -233,14 +250,14 @@ class GroupLogRepositoryTest {
         val repository = GroupLogRepository(GroupLogConfig())
         val sentAt = now.minusSeconds(500)
 
-        repository.record(entry(messageId = 1L, text = "before", at = sentAt))
-        repository.recordEdit(entry(messageId = 1L, text = "after", at = now))
+        repository.record(entry(messageId = "1", text = "before", at = sentAt))
+        repository.recordEdit(entry(messageId = "1", text = "after", at = now))
 
         assertEquals(1L, repository.countInWindow(CHAT, sentAt.minusSeconds(1), sentAt.plusSeconds(1)))
     }
 
     private fun entry(
-        messageId: Long,
+        messageId: String,
         text: String,
         at: Instant,
         username: String? = "olena",

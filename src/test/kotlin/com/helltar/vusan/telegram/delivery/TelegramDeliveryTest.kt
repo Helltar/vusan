@@ -65,7 +65,7 @@ class TelegramDeliveryTest {
 
     @Test
     fun `reactions get no chat action`() {
-        assertNull(botActionFor(BotOutput.Reaction(messageId = 1, emoji = "👍")))
+        assertNull(botActionFor(BotOutput.Reaction(messageId = "1", emoji = "👍")))
     }
 
     @Test
