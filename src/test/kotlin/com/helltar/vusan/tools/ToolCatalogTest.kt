@@ -81,6 +81,19 @@ class ToolCatalogTest {
         assertEquals(revision, catalog.revision)
     }
 
+    // the tool array is part of the cached prefix, so it may not depend on the order groups were loaded
+    @Test
+    fun `the visible order follows registration, not the order the groups were loaded`() {
+        val loadedInMenuOrder = catalog().apply { load(listOf("image_generation", "voice_replies")) }
+        val loadedInReverse = catalog().apply { load(listOf("voice_replies", "image_generation")) }
+
+        assertEquals(
+            listOf("sendTestMessage", "loadTools", "drawTestPicture", "speakTestText"),
+            loadedInMenuOrder.visibleNames()
+        )
+        assertEquals(loadedInMenuOrder.visibleNames(), loadedInReverse.visibleNames())
+    }
+
     @Test
     fun `an unknown group is reported and changes nothing`() {
         val catalog = catalog()

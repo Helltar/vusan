@@ -70,8 +70,10 @@ class ToolCatalog internal constructor(entries: List<CatalogEntry>) {
     var revision: Int = 0
         private set
 
+    // registration order, not load order: the tool array is part of the cached prefix on every provider,
+    // so two turns that loaded the same groups in a different order must still produce the same request.
     fun visibleDescriptors(): List<ToolDescriptor> =
-        (alwaysVisible + loader + loaded.flatMap { deferred[it].orEmpty() }).map { it.descriptor }
+        (alwaysVisible + loader + deferred.filterKeys { it in loaded }.values.flatten()).map { it.descriptor }
 
     /** The group menu for the system prompt, or null when this turn deferred nothing. */
     fun menu(): String? =
