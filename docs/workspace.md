@@ -423,6 +423,24 @@ container-removal command is needed. Files remain in their volumes; processes do
 the current layout cannot open — one left by an older build, say — is refused rather than opened
 unbounded, and `resetWorkspace` replaces it with an empty bounded one in a single call.
 
+**Upgrading a deployment made before the state volume was named.** The controller's state used to
+be a project-scoped volume, so its name moved whenever the Compose project did. It is pinned to
+`vusan-workspace-state` now. If `docker volume ls` still shows `vusan_vusan-workspace-state`, copy
+it across once, with the service stopped:
+
+```bash
+docker compose --env-file env/workspace.env -f compose.workspace.yaml down
+docker volume create vusan-workspace-state
+docker run --rm -v vusan_vusan-workspace-state:/from -v vusan-workspace-state:/to \
+    alpine sh -c 'cp -a /from/. /to/'
+docker compose --env-file env/workspace.env -f compose.workspace.yaml up -d
+```
+
+Skipping it costs job records and the marks that date a workspace for retention — never anyone's
+files, which live in volumes of their own and are not project-scoped. A home that cannot be dated is
+left alone rather than deleted, so the worst case is that retention waits until the workspace is
+used again. Remove the old volume once the service is up and healthy.
+
 Keep `WORKSPACE_NAMESPACE` stable. It is recorded in the state volume and cannot be changed there in
 place. Each controller on a Docker host needs a unique namespace and its own state volume. The
 shipped Compose files also have fixed service container names, so multiple complete deployments

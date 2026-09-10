@@ -20,7 +20,6 @@ services:
     environment:
       # compose resolved the tag for `image:` above; the controller needs the same one for its children.
       WORKSPACE_IMAGE: "${WORKSPACE_IMAGE:-ghcr.io/helltar/vusan-workspace:latest}"
-      WORKSPACE_TOKEN: "${WORKSPACE_TOKEN:?generate one with: openssl rand -hex 32}"
     # IDEA's compose inspection reads a mapping literally, before compose substitutes anything, so no
     # spelling of an interpolated bind address satisfies it.
     #noinspection ComposeUnknownValues
@@ -46,3 +45,4 @@ services:
 
 volumes:
   vusan-workspace-state:
+    name: vusan-workspace-state
