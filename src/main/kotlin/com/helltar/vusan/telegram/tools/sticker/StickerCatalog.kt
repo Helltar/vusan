@@ -521,7 +521,7 @@ class StickerCatalog(
 
     private suspend fun isSetStored(setName: String): Boolean = dbTransaction {
         StickerSetsTable
-            .select(StickerSetsTable.id)
+            .select(StickerSetsTable.name)
             .where { StickerSetsTable.name eq setName }
             .limit(1)
             .any()

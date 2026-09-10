@@ -174,12 +174,8 @@ class GroupLogRepository(private val config: GroupLogConfig) {
         require(content.isNotBlank()) { "Chat log digest must not be blank" }
 
         dbTransaction {
-            // the conflict target has to be named: on a LongIdTable, upsert would otherwise aim at the
-            // surrogate id, which never collides, and the insert would break on the unique index instead.
+            // the key names the day of one chat, so a second recap of the same day replaces the first
             GroupLogDigestsTable.upsert(
-                GroupLogDigestsTable.platform,
-                GroupLogDigestsTable.chatId,
-                GroupLogDigestsTable.day,
                 onUpdate = {
                     it[GroupLogDigestsTable.messageCount] = messageCount
                     it[GroupLogDigestsTable.content] = content

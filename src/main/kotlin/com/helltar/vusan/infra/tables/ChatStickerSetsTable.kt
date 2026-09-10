@@ -1,6 +1,6 @@
 package com.helltar.vusan.infra.tables
 
-import org.jetbrains.exposed.v1.core.dao.id.LongIdTable
+import org.jetbrains.exposed.v1.core.Table
 import org.jetbrains.exposed.v1.javatime.timestamp
 import java.time.Instant
 
@@ -8,7 +8,7 @@ import java.time.Instant
 // offered to the model is per chat, so a group is only shown the stickers its own people throw around.
 //
 // Telegram-owned; `chat_id` carries no `platform` for the reason given in ChatStickersTable.
-object ChatStickerSetsTable : LongIdTable("chat_sticker_sets") {
+object ChatStickerSetsTable : Table("chat_sticker_sets") {
 
     val chatId = long("chat_id")
     val setName = varchar("set_name", 64)
@@ -19,7 +19,5 @@ object ChatStickerSetsTable : LongIdTable("chat_sticker_sets") {
     // null for a set that was already known from elsewhere, or that has not earned its keep yet.
     val learnedAt = timestamp("learned_at").nullable()
 
-    init {
-        uniqueIndex(chatId, setName)
-    }
+    override val primaryKey = PrimaryKey(chatId, setName)
 }
