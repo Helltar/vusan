@@ -60,13 +60,22 @@ class TasksRepository {
     suspend fun findDue(now: Instant): List<ScheduledTask> = dbTransaction {
         ScheduledTasksTable
             .selectAll()
-            .where {
-                (ScheduledTasksTable.enabled eq true) and
-                        (ScheduledTasksTable.paused eq false) and
-                        (ScheduledTasksTable.nextFireAt lessEq now)
-            }
+            .where { dueCondition(now) }
             .orderBy(ScheduledTasksTable.nextFireAt to SortOrder.ASC)
             .map { it.toScheduledTask() }
+    }
+
+    /**
+     * One task as it stands, and only while it is still due. A tick reads every due task at once and
+     * fires them one after another, so the owner of a task waiting behind a long fire has time to pause,
+     * retime or delete it before it starts.
+     */
+    suspend fun findDue(id: Long, now: Instant): ScheduledTask? = dbTransaction {
+        ScheduledTasksTable
+            .selectAll()
+            .where { (ScheduledTasksTable.id eq id) and dueCondition(now) }
+            .firstOrNull()
+            ?.toScheduledTask()
     }
 
     suspend fun findEnabledForUser(owner: UserRef, id: Long, chat: ChatRef? = null): ScheduledTask? = dbTransaction {
@@ -143,23 +152,38 @@ class TasksRepository {
             }
     }
 
-    suspend fun reschedule(id: Long, nextFireAt: Instant) = dbTransaction {
+    /**
+     * Moves a fired task on to [nextFireAt] and answers whether it was still the task that fired.
+     * [firedAt] is the fire time the run started from: a whole agent turn happens in between, and an
+     * owner who retimed the task during it means that, so their schedule is not overwritten with the
+     * one this fire computed.
+     */
+    suspend fun reschedule(id: Long, firedAt: Instant, nextFireAt: Instant): Boolean = dbTransaction {
         ScheduledTasksTable
-            .update({ ScheduledTasksTable.id eq id }) {
+            .update({ firedTaskCondition(id, firedAt) }) {
                 it[ScheduledTasksTable.nextFireAt] = nextFireAt
-            }
+            } > 0
     }
 
-    suspend fun disable(id: Long) = dbTransaction {
+    /** Ends a task with no fire left, under the same condition as [reschedule]. */
+    suspend fun disable(id: Long, firedAt: Instant): Boolean = dbTransaction {
         ScheduledTasksTable
-            .update({ ScheduledTasksTable.id eq id }) {
+            .update({ firedTaskCondition(id, firedAt) }) {
                 it[enabled] = false
-            }
+            } > 0
     }
 
     suspend fun deleteEnabledForUser(owner: UserRef, id: Long, chat: ChatRef? = null): Boolean = dbTransaction {
         ScheduledTasksTable.deleteWhere { enabledTaskCondition(owner, id, chat) } > 0
     }
+
+    private fun dueCondition(now: Instant): Op<Boolean> =
+        (ScheduledTasksTable.enabled eq true) and
+                (ScheduledTasksTable.paused eq false) and
+                (ScheduledTasksTable.nextFireAt lessEq now)
+
+    private fun firedTaskCondition(id: Long, firedAt: Instant): Op<Boolean> =
+        (ScheduledTasksTable.id eq id) and (ScheduledTasksTable.nextFireAt eq firedAt)
 
     private fun ResultRow.toScheduledTask(): ScheduledTask {
         val tzRaw = this[ScheduledTasksTable.timezone]

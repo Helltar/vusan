@@ -63,12 +63,48 @@ class TasksRepositoryTest {
         val original = assertNotNull(repo.findEnabledForUser(testUser(100), id))
         val schedulerNextFire = Instant.parse("2026-07-29T08:00:00Z")
 
-        repo.reschedule(id, schedulerNextFire)
+        assertTrue(repo.reschedule(id, firedAt = original.nextFireAt, nextFireAt = schedulerNextFire))
         assertTrue(repo.editEnabledForUser(testUser(100), original, original.copy(title = "renamed")))
 
         val stored = assertNotNull(repo.findEnabledForUser(testUser(100), id))
         assertEquals("renamed", stored.title)
         assertEquals(schedulerNextFire, stored.nextFireAt)
+    }
+
+    // the other half of the same race: the fire takes a whole agent turn, and the schedule it started
+    // from is not the one to write back if its owner retimed it meanwhile.
+    @Test
+    fun `a fire does not move a task its owner retimed while it ran`() = runBlocking {
+        val firedAt = Instant.parse("2026-07-28T08:00:00Z")
+        val id = createTask(firedAt)
+        val original = assertNotNull(repo.findEnabledForUser(testUser(100), id))
+        val chosenByUser = Instant.parse("2026-08-01T06:00:00Z")
+
+        assertTrue(repo.editEnabledForUser(testUser(100), original, original.copy(nextFireAt = chosenByUser)))
+
+        assertFalse(repo.reschedule(id, firedAt = firedAt, nextFireAt = Instant.parse("2026-07-29T08:00:00Z")))
+        assertFalse(repo.disable(id, firedAt = firedAt))
+
+        val stored = assertNotNull(repo.findEnabledForUser(testUser(100), id))
+        assertEquals(chosenByUser, stored.nextFireAt)
+    }
+
+    @Test
+    fun `a task read again before it fires is gone once it is no longer due`() = runBlocking {
+        val now = Instant.parse("2026-07-28T09:00:00Z")
+        val id = createTask(Instant.parse("2026-07-28T08:00:00Z"))
+
+        assertNotNull(repo.findDue(id, now))
+
+        // whatever its owner did while the tasks ahead of it fired: paused, retimed, deleted
+        assertTrue(repo.pauseForUser(testUser(100), id))
+        assertNull(repo.findDue(id, now))
+
+        assertTrue(repo.resumeForUser(testUser(100), id, nextFireAt = now.plusSeconds(3600)))
+        assertNull(repo.findDue(id, now))
+
+        assertTrue(repo.deleteEnabledForUser(testUser(100), id))
+        assertNull(repo.findDue(id, now))
     }
 
     @Test

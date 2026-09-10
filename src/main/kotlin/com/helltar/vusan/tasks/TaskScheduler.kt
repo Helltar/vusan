@@ -70,7 +70,7 @@ class TaskScheduler(
         if (due.isEmpty()) return
 
         for (task in due) {
-            runCatching { processOne(task, now) }
+            runCatching { processOne(task.id, now) }
                 .onFailure {
                     it.rethrowIfCancellation()
                     log.error(it) { "failed to process task id=${task.id}" }
@@ -78,7 +78,15 @@ class TaskScheduler(
         }
     }
 
-    private suspend fun processOne(task: ScheduledTask, now: Instant) {
+    // the whole tick was read before the first fire, and a fire is a whole agent turn: what this one
+    // does is decided by the row as it stands now, not by the copy the tick started from.
+    private suspend fun processOne(id: Long, now: Instant) {
+        val task =
+            repo.findDue(id, now) ?: run {
+                log.info { "task id=$id skipped: it is no longer due" }
+                return
+            }
+
         // a banned owner's tasks keep their schedule but never run, and never report themselves as missed
         // either; lifting the ban resumes them instead of resurrecting a backlog of skipped fires.
         if (accessPolicy.bans(task.scope.chat, task.scope.user)) {
@@ -257,10 +265,15 @@ class TaskScheduler(
     private suspend fun rescheduleAfterFire(task: ScheduledTask, now: Instant) {
         val nextFire = task.recurrence.catchUpAfter(task.nextFireAt, task.timezone, now)
 
-        if (nextFire == null)
-            repo.disable(task.id)
-        else
-            repo.reschedule(task.id, nextFire)
+        val moved =
+            if (nextFire == null)
+                repo.disable(task.id, task.nextFireAt)
+            else
+                repo.reschedule(task.id, task.nextFireAt, nextFire)
+
+        if (!moved) {
+            log.info { "task id=${task.id} was retimed or removed while it fired; its own schedule stands" }
+        }
     }
 }
 

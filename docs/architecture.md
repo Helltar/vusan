@@ -330,7 +330,11 @@ A normal user message travels:
   delivers nothing, so it is repeated up to `MAX_ATTEMPTS` times with a short backoff, the retry prompt telling the
   agent that the earlier attempt delivered nothing; a failed *delivery* is never repeated, since part of the answer may
   already be in the chat. Once the attempts are spent the chat gets a "failed" notice. Either way the task is
-  advanced/disabled afterwards, so a persistent error cannot re-fire it on every poll tick. A chat the bot cannot write
+  advanced/disabled afterwards, so a persistent error cannot re-fire it on every poll tick. A tick reads every due task
+  at once and fires them one after another, which leaves the owner of a task waiting behind a long fire time to pause,
+  retime or delete it: each task is read again (`TasksRepository.findDue(id, now)`) at the moment it would fire and
+  skipped if it is no longer due, and the advance afterwards is conditional on the fire time the run started from, so a
+  schedule its owner changed meanwhile is not overwritten. A chat the bot cannot write
   to at all is the exception to that advance: rather than rescheduling one task, `TasksRepository.pauseAllInChat` pauses
   every task in that chat at once, because otherwise each of them would run a full agent turn on every fire and only
   discover at delivery that nothing can arrive. It is reached from either end — the delivery port reporting the fire
