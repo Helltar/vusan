@@ -1,7 +1,7 @@
 import { deepStrictEqual, rejects, strictEqual } from "node:assert/strict";
 import { statfs } from "node:fs/promises";
-import { type Config, readConfig } from "./config.ts";
-import { Sites } from "./storage.ts";
+import { type Config, readConfig } from "../config.ts";
+import { Sites } from "../storage.ts";
 
 Deno.env.set("SITES_DOMAIN", "example.com");
 

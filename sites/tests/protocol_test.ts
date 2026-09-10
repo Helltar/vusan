@@ -1,5 +1,5 @@
 import { match, strictEqual, throws } from "node:assert/strict";
-import { ownerId, RequestError, siteLabel, sitePath, uploadId } from "./protocol.ts";
+import { ownerId, RequestError, siteLabel, sitePath, uploadId } from "../protocol.ts";
 
 Deno.test("a site path cannot escape the site or publish a dotfile", () => {
   strictEqual(sitePath("index.html", 10), "index.html");
