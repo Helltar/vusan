@@ -5,7 +5,7 @@ a game or a small web app in that person's [workspace](workspace.md), zips it, a
 link works for anyone the person sends it to. Publishing again replaces the whole site.
 
 It is a **separate deployment**, and off until you make it. `compose.yaml` starts the bot alone; this
-service comes up on its own with `compose.sites.yaml`, on a machine with a public address. The bot only
+service comes up on its own with `sites/compose.yaml`, on a machine with a public address. The bot only
 ever connects out to it, so the machine running Vusan needs no inbound address of its own — a home
 server behind CGNAT publishes to a VPS perfectly well. Running it beside the bot works too, and is
 covered in [Both on one machine](#both-on-one-machine).
@@ -21,32 +21,38 @@ workspace first, and only the result is published.
 
 ## Setting it up
 
-The deployment is a directory holding four things and no checkout, because both images come from the
-registry:
+The deployment is one directory holding four things and no checkout, because both images come from
+the registry:
 
 ```
-~/vusan/compose.sites.yaml
-       /env/sites.env
-       /certs/{site.pem,site.key,origin-pull-ca.pem}
-       /data/
+~/vusan-sites/compose.yaml
+             /.env
+             /certs/{site.pem,site.key,origin-pull-ca.pem}
+             /data/
 ```
 
 ```bash
-mkdir -p ~/vusan/env ~/vusan/certs ~/vusan/data && cd ~/vusan
-curl -fsSLO https://raw.githubusercontent.com/Helltar/vusan/master/compose.sites.yaml
-curl -fsSL  https://raw.githubusercontent.com/Helltar/vusan/master/env/sites.env.example -o env/sites.env
+mkdir -p ~/vusan-sites/certs ~/vusan-sites/data && cd ~/vusan-sites
+curl -fsSLO https://raw.githubusercontent.com/Helltar/vusan/master/sites/compose.yaml
+curl -fsSL  https://raw.githubusercontent.com/Helltar/vusan/master/sites/.env.example -o .env
 
 # fill in SITES_DOMAIN, and write a fresh shared secret
-sed -i "s/^SITES_TOKEN=.*/SITES_TOKEN=$(openssl rand -hex 32)/" env/sites.env
+sed -i "s/^SITES_TOKEN=.*/SITES_TOKEN=$(openssl rand -hex 32)/" .env
+```
 
-docker compose --env-file env/sites.env -f compose.sites.yaml up -d
+Every command in this guide runs from that directory and needs no flags: Compose reads `.env` on
+its own, both for the values it substitutes and as the containers' environment. Set `SITES_DOMAIN`
+in it and complete [DNS and certificates](#dns-and-certificates) below before starting:
+
+```bash
+docker compose up -d
 ```
 
 `data/` must exist before the first start and belong to the user running compose: a bind mount Docker
 creates for you comes out owned by `root`, while the service runs as uid 1000. On a machine whose login
 user is uid 1000 — the usual case on a fresh VPS — there is nothing else to set.
 
-The bot gets the same secret in its own `env/vusan.env`, along with the address of the API:
+The bot gets the same secret in its own `.env`, along with the address of the API:
 
 ```
 SITES_URL=https://api.example.com
@@ -61,44 +67,29 @@ network — never publish its port: a published Docker port bypasses `ufw` witho
 
 ## Both on one machine
 
-A machine with a public address is the recommendation, because this host serves model-authored pages
-to the internet and holds nothing else worth reaching. But running it beside the bot is supported, and
-for a personal deployment it is often the sensible answer.
+Follow [Add sites in the README](../README.md#add-sites), after setting up workspace.
+The start command is `docker compose --profile workspace --profile sites up -d`.
+Prepare DNS and certificates below before running it.
 
-```bash
-cp .env.example .env          # fill in SITES_DOMAIN
-cp env/sites.env.example env/sites.env
+Both site containers read `sites/.env`: set `SITES_DOMAIN` and `SITES_ORIGIN_PULLS` there,
+alongside the publishing token and service limits. nginx receives empty overrides for
+`SITES_TOKEN` and `SITES_TOKEN_FILE`, so the container facing the internet holds no publishing
+credential. Docker settings — `SITES_HOST_DIR`, `SITES_CERT_DIR`, image tags — go in the root
+`.env`, which is the only file Compose substitutes from.
 
-sed -i "s/^SITES_TOKEN=.*/SITES_TOKEN=$(openssl rand -hex 32)/" env/sites.env
-mkdir -p sites-data certs
+Directories work by one rule everywhere: each service mounts what sits **beside its own compose
+file**. So the published tree is `sites/data/` and the certificates `sites/certs/`, both of which
+you create before the first start, exactly as a machine of its own would have them beside its
+`compose.yaml`. The bot's own `data/` sits at the root beside its compose file, and the two never meet.
 
-docker compose up -d
-```
+The bot reaches `http://vusan-sites:8090` directly over the Compose network. nginx serves the
+public sites on port 443; neither the publishing service nor the workspace controller publishes a
+port, and `compose.override.yaml` keeps the workspace controller on a separate internal network so
+nothing facing the internet can reach the process holding the Docker socket.
 
-Two things differ from a machine of its own, and `.env.example` already carries both.
-
-The published tree is `./sites-data`, not the default `./data`. That default is right for a dedicated
-deployment, where the directory holds nothing else; beside a checkout it would be the bot's own
-directory, holding its database, its cookies and its model credentials — and published pages are the
-least trusted content in the deployment.
-
-The bot talks to the service directly, over a Compose network:
-
-```dotenv
-SITES_URL=http://vusan-sites:8090
-SITES_TOKEN=<the same value>
-```
-
-It does **not** go through nginx here. Origin pulls require Cloudflare's client certificate on every
-request, which only Cloudflare has, so a co-located bot reaching `https://api.<domain>` would have to
-leave the machine and come back through the edge — paying its latency and its 100 MB body limit to
-publish to a service one bridge away. Going straight to the service skips all of it. nginx keeps
-serving the sites to the internet exactly as before, and `compose.all.yaml` keeps the workspace
-controller off this network entirely, so nothing that faces the internet can reach the process
-holding `/var/run/docker.sock`.
-
-Publishing still needs a workspace, so that has to be configured too — see
-[the workspace docs](workspace.md#both-on-one-machine).
+For later commands, keep both profile flags or set `COMPOSE_PROFILES=workspace,sites` in `.env`.
+Every command further down this page is written for a machine of its own and runs from the
+deployment directory; on one machine, run it from the repository root with those profiles instead.
 
 ## DNS and certificates
 
@@ -166,7 +157,7 @@ and an unknown server name is still refused at the handshake.
 lego --dns <your provider> --domains '*.example.com' --email you@example.com run
 cp .lego/certificates/_.example.com.crt  ~/vusan/certs/site.pem
 cp .lego/certificates/_.example.com.key  ~/vusan/certs/site.key
-docker compose --env-file env/sites.env -f compose.sites.yaml exec vusan-sites-nginx nginx -s reload
+docker compose exec vusan-sites-nginx nginx -s reload
 ```
 
 That is a cron job, not a service, which is why nothing here ships one: the certificate is a file on
@@ -209,8 +200,8 @@ one here needs no matching change in the bot.
 | `SITES_DOMAIN`              | —       | Required. The domain sites are served under.                        |
 | `SITES_TOKEN`               | —       | Required. The shared API secret, the same value the bot is given.   |
 | `SITES_TOKEN_FILE`          | —       | A file holding that secret instead. An explicit token wins.         |
-| `SITES_HOST_DIR`            | `./data` | Where published sites live on this machine.                        |
-| `SITES_CERT_DIR`            | `./certs` | The certificate, its key and the origin-pull CA.                   |
+| `SITES_HOST_DIR`            | `../data` | Where published sites live on this machine.                        |
+| `SITES_CERT_DIR`            | `../certs` | The certificate, its key and the origin-pull CA.                   |
 | `SITES_ORIGIN_PULLS`        | `on`    | Require Cloudflare's client certificate. `off` with anything else in front. |
 | `SITES_IMAGE`               | `ghcr.io/helltar/vusan-sites:latest` | The service image.                 |
 | `SITES_NGINX_IMAGE`         | `ghcr.io/helltar/vusan-sites-nginx:latest` | The nginx image; keep both on one tag. |
@@ -254,8 +245,8 @@ the shell — so the usual outcome of an expired site is that republishing it is
 Updating is a pull and a restart, both images together:
 
 ```bash
-cd ~/vusan && docker compose --env-file env/sites.env -f compose.sites.yaml pull \
-  && docker compose --env-file env/sites.env -f compose.sites.yaml up -d
+cd ~/vusan && docker compose pull \
+  && docker compose up -d
 ```
 
 Published sites survive it — they are files on the host, not container state.

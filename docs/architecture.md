@@ -105,7 +105,7 @@ that is who owns writing them, not because only `agent/` reads them. No other ar
   declared in `infra/Schema.kt` into SQLite's own `PRAGMA user_version`. Nothing is inferred by comparing declarations
   to what is there, and nothing is migrated in code: a database of any other version — from before versions existed, or
   from a newer build — stops startup instead of being reshaped, and is moved by hand.
-- **`config/`** — `env/vusan.env` parsing (`AppConfig`), LLM provider/model resolution (`LlmRuntime`), and the ChatGPT
+- **`config/`** — `.env` parsing (`AppConfig`), LLM provider/model resolution (`LlmRuntime`), and the ChatGPT
   subscription credentials the Codex CLI writes (`CodexAuth`). `VisionRuntime` resolves separately which model looks at
   images: the `OPENAI_VISION_*` model when configured, the chat model when it accepts images, and nothing at all
   otherwise — which leaves the vision tools and sticker catalog unavailable.
@@ -796,7 +796,7 @@ A symptom-to-source map for finding the right file fast. Paths are under
 | `/stop` does not stop anything, or a turn leaves its status message on screen | `agent/RunningTurns.kt` (what is registered and cancelled) + `agent/AgentRunner.kt` (`stop`, and the lock the command must not take) + `telegram/AgentTurns.kt` (the notice on cancellation) + `telegram/TelegramProgress.kt` (closing the status on the way out) + `telegram/callback/TurnStopHandler.kt` (the button and whose turn it may stop) |
 | `/clear` reports success but history survives | `agent/AgentRunner.kt` (`clearConversation` and the turn lock that also guards the append) + `tools/conversation/ConversationTools.kt` (agent path) + `agent/conversation/ConversationRepository.kt` (shared storage operation) |
 | An agent choice button does nothing, repeats, reaches the wrong user, loses the photo, or its answer replies to the bot's own question | `tools/choice/InlineChoiceTools.kt` (tool contract) + `telegram/callback/InlineChoiceHandler.kt` (callback ownership/consumption, origin message id, parked attachment) + `telegram/AgentTurns.kt` (the follow-up turn and its reply anchor) |
-| An env var has no effect | `config/AppConfig.kt` (parsing) — and check it is documented in [`configuration.md`](configuration.md) + [`env/vusan.env.example`](../env/vusan.env.example) |
+| An env var has no effect | `config/AppConfig.kt` (parsing) — and check it is documented in [`configuration.md`](configuration.md) + [`.env.example`](../.env.example) |
 | Model / provider / request-timeout selection or OpenAI prompt-cache misses | `config/LlmRuntime.kt` (provider → client/model/params) + `config/OpenAiPromptCaching.kt` (GPT-5.6+ explicit cache breakpoints on the system prefix and the current turn) |
 | "Sign in again" replies, ChatGPT-subscription auth, or a rejected `LLM_MODEL` on `codex` | `config/CodexAuth.kt` (token load/refresh/persist) + `config/CodexCatalog.kt` (which models the plan offers) + `config/CodexHttpClient.kt` (per-request bearer and account headers) |
 | `describeImage`/`describeVideo` missing from the tool list | `config/VisionRuntime.kt` (chat model vs `OPENAI_VISION_API_KEY`), then `tools/ToolRegistryFactory.kt` (registration is skipped when there is no vision runtime) |
@@ -819,9 +819,35 @@ A new agent tool typically touches these, in order:
    `PlatformToolSets` instead (`telegram/tools/TelegramToolSets.kt`), gated there on the same chat capability.
 5. **Docs** — add the capability to the Features section of the [README](../README.md); document setup requirements and
    implicit dependencies in [`configuration.md`](configuration.md), and add any new env vars to both that file and
-   [`env/vusan.env.example`](../env/vusan.env.example).
+   [`.env.example`](../.env.example).
 
 ## Conventions
 
 Coding conventions (logger placement, error handling, tool structure, DB/config access) are documented in
 [`AGENTS.md`](../AGENTS.md) at the repo root.
+
+### Compose profiles
+
+`compose.yaml` defines the bot. Compose automatically loads `compose.override.yaml`, whose
+`workspace` and `sites` profiles add optional services on the same host. With neither profile
+selected, only the bot starts. Each service receives only its own env file; files may be absent while their profiles are disabled. Compose rejects a missing env file
+for an enabled profile; services validate the values at startup. The controller uses an internal network separate from the public site containers,
+and neither API publishes a host port. Each service mounts what sits beside its own compose file,
+so published content defaults to `sites/data` and never meets the bot's `data`. Both site
+containers read `sites/.env`; nginx clears publishing credentials with empty environment overrides,
+which `.github/compose-check.sh` enforces against anything added to that file later.
+
+`workspace/compose.yaml` and `sites/compose.yaml` own the service definitions and remain standalone
+deployments, each a directory holding that file and its `.env` — run from inside it, Compose needs
+no arguments at all. The override imports services
+with `extends` and changes only profiles and networks; `ports: !reset []`
+removes the workspace's standalone port. Compose 2.24.4 or newer is required for the same-host
+layout. Named volumes are declared in both entry points because `extends` does not import them.
+
+Compose interpolates imported files before selecting profiles. The standalone workspace bind
+therefore defaults to loopback instead of requiring a variable even for an inactive profile.
+The domain and TLS mode are read through `env_file` by both site containers in either layout.
+
+Standalone build and env paths are relative to each service directory: `context: .` and
+`env_file: ../env/<service>.env`. Compose rebases those paths when extending the services from
+the root. The profile override keeps site storage and certificate overrides relative to the root.

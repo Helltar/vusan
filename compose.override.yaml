@@ -1,0 +1,38 @@
+# optional services on the same machine; compose loads this file automatically.
+# service definitions live in the standalone deployment files.
+services:
+  vusan:
+    networks: [vusan-egress, vusan-workspace-link, vusan-sites-link]
+
+  vusan-workspace:
+    extends:
+      file: workspace/compose.yaml
+      service: vusan-workspace
+    profiles: [workspace]
+    networks: [vusan-workspace-link]
+    ports: !reset []
+
+  vusan-sites:
+    extends:
+      file: sites/compose.yaml
+      service: vusan-sites
+    profiles: [sites]
+    networks: [vusan-sites-link]
+
+  vusan-sites-nginx:
+    extends:
+      file: sites/compose.yaml
+      service: vusan-sites-nginx
+    profiles: [sites]
+    networks: [vusan-sites-link]
+
+networks:
+  vusan-egress:
+  vusan-workspace-link:
+    internal: true
+  vusan-sites-link:
+
+# extends imports services, so their named volumes must also be declared here.
+volumes:
+  vusan-workspace-state:
+    name: vusan-workspace-state

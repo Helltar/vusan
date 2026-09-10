@@ -15,9 +15,6 @@ notes/
 CLAUDE.local.md
 deno.lock
 !sandbox/deno.lock
-.env
-env/*
-!env/*.example
 
 # claude code sandbox masks home dotfiles with /dev/null stubs, visible only inside its sandboxed commands
 .bash_profile
@@ -30,3 +27,11 @@ env/*
 .vscode
 .zprofile
 .zshrc
+
+# each service keeps its environment beside its own compose file; only the examples are tracked
+.env
+!.env.example
+
+# runtime directories, each beside the compose file that mounts it
+sites/data/
+sites/certs/

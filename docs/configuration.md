@@ -1,7 +1,10 @@
 # Configuration
 
-Everything the bot reads from `env/vusan.env`. Copy
-[`env/vusan.env.example`](../env/vusan.env.example) and fill it in; blank values count as missing.
+Everything the bot reads from `.env`. Copy
+[`.env.example`](../.env.example) and fill it in; blank values count as missing.
+
+For Docker on one machine, follow the [three setup options](../README.md#docker).
+`.env` holds Compose settings; each service still receives its own `env/*.env` file.
 
 The optional [workspace service](#workspace) has a file and a guide of its own. That split is a
 boundary rather than tidiness: the workspace process holds the Docker socket, so it is never handed
@@ -161,7 +164,7 @@ in again.
 
 **Where the credentials live.** `codex login` writes `~/.codex/auth.json` in the home of whoever ran
 it, so a bot under its own user already has its own session. `CODEX_HOME` points both the CLI and
-Vusan somewhere else; set it in `env/vusan.env` and pass the same value to `codex login`:
+Vusan somewhere else; set it in `.env` and pass the same value to `codex login`:
 
 ```dotenv
 CODEX_HOME=/home/vusan/.codex-vusan
@@ -470,7 +473,7 @@ the model writes, so it deploys on its own. Beside the bot is a supported arrang
 its own is the recommendation for anything public. What it can do, its limits, its network policy,
 every setting and how to deploy it are in [the workspace guide](workspace.md).
 
-These are the bot's side of it, and belong in `env/vusan.env`:
+These are the bot's side of it, and belong in `.env`:
 
 | Variable                        | Default | Description                                                                      |
 |---------------------------------|---------|----------------------------------------------------------------------------------|
@@ -493,7 +496,7 @@ publish to a VPS. Beside the bot works too, with `SITES_URL` pointing straight a
 `http://vusan-sites:8090`, skipping nginx, whose origin-pull check only Cloudflare can satisfy. What it serves, its limits, DNS and certificates, and how to deploy it are in
 [the site guide](sites.md).
 
-These are the bot's side of it, and belong in `env/vusan.env`:
+These are the bot's side of it, and belong in `.env`:
 
 | Variable           | Default | Description                                                          |
 |--------------------|---------|----------------------------------------------------------------------|
@@ -679,7 +682,7 @@ Two levels, and one deployment quirk in how they are read.
 | `PROMPT_DUMP_LEVEL` | `OFF`   | `DEBUG` prints every request sent to the model, in full. |
 
 Both levels are read by logback at startup rather than by `AppConfig`, and that is the one place
-where writing them into `env/vusan.env` is not enough: logback looks at the process environment,
+where writing them into `.env` is not enough: logback looks at the process environment,
 while that file reaches the application through dotenv and nowhere else. In the compose deployment
 they work from it anyway, because `env_file` turns it into real environment variables. A local run
 does not, so set them where that run gets its environment — the IDE run configuration, or the

@@ -1,5 +1,5 @@
 # The workspace shell, deployed on its own:
-#   docker compose --env-file env/workspace.env -f compose.workspace.yaml up -d
+#   docker compose --env-file env/workspace.env -f workspace/compose.yaml up -d
 #
 # This is a separate deployment, not an addition to compose.yaml: it holds the Docker socket and runs
 # model-authored shell. One machine is supported; a machine of its own is the recommendation for a
@@ -16,13 +16,13 @@ services:
     # only used by `docker compose build` / `up --build`, from a checkout. A deployment that pulls
     # its image never looks at this path, so a missing one costs nothing.
     build:
-      context: ./workspace
+      context: .
     container_name: vusan-workspace-container
     restart: unless-stopped
     init: true
     stop_grace_period: 45s
     # never the bot's file: this process holds the Docker socket and must not see an application secret.
-    env_file: env/workspace.env
+    env_file: .env
     environment:
       # compose resolved the tag for `image:` above; the controller needs the same one for its children.
       WORKSPACE_IMAGE: "${WORKSPACE_IMAGE:-ghcr.io/helltar/vusan-workspace:latest}"
@@ -30,7 +30,7 @@ services:
     # spelling of an interpolated bind address satisfies it.
     #noinspection ComposeUnknownValues
     ports:
-      - "${WORKSPACE_BIND:?set an address only the bot can reach}:8080:8080"
+      - "${WORKSPACE_BIND:-127.0.0.1}:8080:8080"
     volumes:
       # only this trusted controller can reach docker; workspace containers receive just their own home.
       - /var/run/docker.sock:/var/run/docker.sock

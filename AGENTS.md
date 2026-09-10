@@ -23,7 +23,7 @@ Whatever a note settles belongs there, not here.
 ## Commands and Verification
 
 - `./gradlew test`, `./gradlew detekt` (`maxIssues: 0`), `./gradlew build`
-  (compile + test + package), `./gradlew run` (local bot on `env/vusan.env`).
+  (compile + test + package), `./gradlew run` (local bot on `.env`).
   While iterating: `./gradlew test --tests "*AgentFactoryTest*"`.
 - Run Gradle itself on JDK 21: the build uses `jvmToolchain(21)`, and detekt
   1.23.x crashes on JDK 25+.
@@ -87,7 +87,7 @@ Preserve the package boundaries in [`docs/architecture.md`](docs/architecture.md
   workspace as UID 1000, with no capabilities and no privileged phase at any
   point. Do not reintroduce shared-process runners.
 - It is an optional, separate deployment — `compose.yaml` is the bot alone,
-  `compose.workspace.yaml` the service, running beside the bot or on a machine
+  `workspace/compose.yaml` the service, running beside the bot or on a machine
   of its own. Do not fold it into the default Compose file or make the bot
   depend on it; `WORKSPACE_URL` plus `WORKSPACE_TOKEN` is the whole switch.
 
@@ -105,7 +105,7 @@ Preserve the package boundaries in [`docs/architecture.md`](docs/architecture.md
   path is checked in `SiteArchive.kt` before an upload and again by the service,
   which does not trust its caller.
 - It is an optional, separate deployment on a machine with a public address —
-  `compose.sites.yaml`, with `SITES_URL` plus `SITES_TOKEN` the whole switch on
+  `sites/compose.yaml`, with `SITES_URL` plus `SITES_TOKEN` the whole switch on
   the bot's side. It also needs a workspace to publish from; with one missing the
   tools are not registered.
 
@@ -119,15 +119,15 @@ what they describe:
   (`AgentRunner`, `AgentFactory`, `ToolRegistryFactory`, `TelegramDelivery`,
   `TelegramOutputSender`, `TaskScheduler`).
 - [`docs/configuration.md`](docs/configuration.md) and
-  [`env/vusan.env.example`](env/vusan.env.example): env var additions, removals,
+  [`.env.example`](.env.example): env var additions, removals,
   renames, default or semantics changes.
 - [`docs/sites.md`](docs/sites.md) and
-  [`env/sites.env.example`](env/sites.env.example): what a published site may
+  [`sites/.env.example`](sites/.env.example): what a published site may
   contain, its limits, DNS and certificates, and how the host is deployed. Every
   knob in `sites/config.ts` lands in both, the [limits
   table](docs/sites.md#limits) being the tuning reference.
 - [`docs/workspace.md`](docs/workspace.md) and
-  [`env/workspace.env.example`](env/workspace.env.example): what a workspace can
+  [`workspace/.env.example`](workspace/.env.example): what a workspace can
   do, its limits, isolation and deployment. Every knob in `workspace/config.ts`
   lands in both, the [limits table](docs/workspace.md#limits-and-tuning) being
   the tuning reference. Keep the base image toolchain small and documented there

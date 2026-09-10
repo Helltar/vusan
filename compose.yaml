@@ -1,6 +1,4 @@
-# the bot alone. The workspace shell and the site host are separate deployments with a compose file
-# each, and a machine of their own is the recommendation for both. To run everything on one machine,
-# copy .env.example to .env: it adds compose.all.yaml, which puts the services on separate networks.
+# the bot alone; compose.override.yaml adds optional workspace and sites profiles.
 name: vusan
 
 services:
@@ -12,7 +10,7 @@ services:
       context: .
     container_name: vusan-container
     restart: unless-stopped
-    env_file: env/vusan.env
+    env_file: .env
     volumes:
       # a directory beside this file, not a named volume: the database is yours to back up and the
       # avatar, personality and cookie files are yours to put there. Create it before the first
@@ -24,4 +22,3 @@ services:
       options:
         max-size: "10m"
         max-file: "3"
-
