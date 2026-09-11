@@ -201,8 +201,8 @@ one here needs no matching change in the bot.
 | `SITES_DOMAIN`              | —       | Required. The domain sites are served under.                        |
 | `SITES_TOKEN`               | —       | Required. The shared API secret, the same value the bot is given.   |
 | `SITES_TOKEN_FILE`          | —       | A file holding that secret instead. An explicit token wins.         |
-| `SITES_HOST_DIR`            | `../data` | Where published sites live on this machine.                        |
-| `SITES_CERT_DIR`            | `../certs` | The certificate, its key and the origin-pull CA.                   |
+| `SITES_HOST_DIR`            | `./data`  | Where published sites live on this machine.                        |
+| `SITES_CERT_DIR`            | `./certs` | The certificate, its key and the origin-pull CA.                   |
 | `SITES_ORIGIN_PULLS`        | `on`    | Require Cloudflare's client certificate. `off` with anything else in front. |
 | `SITES_IMAGE`               | `ghcr.io/helltar/vusan-sites:latest` | The service image.                 |
 | `SITES_NGINX_IMAGE`         | `ghcr.io/helltar/vusan-sites-nginx:latest` | The nginx image; keep both on one tag. |

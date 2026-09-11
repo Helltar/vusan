@@ -1,21 +1,21 @@
-# The public site host, deployed on a machine with a real address:
-#   docker compose --env-file env/sites.env -f services/sites/compose.yaml up -d
+# The public site host, deployed on a machine with a real address, from the directory holding this file:
+#   docker compose up -d
 #
 # This is a separate deployment, not an addition to compose.yaml: it serves model-authored pages to the
 # internet and holds nothing else of the bot's. The bot reaches it outbound over HTTPS, so the machine
 # running Vusan needs no inbound address at all. See docs/sites.md.
 #
-# Both images come from the registry, so the whole deployment is a directory holding this file,
-# `env/sites.env`, the certificates and the published tree — no checkout on the machine, the same shape
-# the workspace service is deployed in:
+# Both images come from the registry, so the whole deployment is a directory holding this file, its
+# `.env`, the certificates and the published tree — no checkout on the machine, the same shape the
+# workspace service is deployed in:
 #
-#   ~/vusan/sites/compose.yaml
-#          /env/sites.env
-#          /certs/{site.pem,site.key,origin-pull-ca.pem}
-#          /data/    created before the first start, owned by the user running compose
+#   ~/vusan-sites/compose.yaml
+#                /.env
+#                /certs/{site.pem,site.key,origin-pull-ca.pem}
+#                /data/    created before the first start, owned by the user running compose
 #
-# `env/sites.env` is the whole configuration: Compose reads it for the values substituted below and
-# hands the same file to the service. Every command needs it, hence --env-file.
+# The `.env` beside this file is the whole configuration: Compose reads it for the values substituted
+# below and hands the same file to the service.
 
 name: vusan-sites
 

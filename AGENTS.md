@@ -214,9 +214,10 @@ chat capabilities. Nothing under `tools/` may name a messenger, and
 
 ## Security and Secrets
 
-- Never commit `env/*.env`, API keys, Telegram tokens, cookies, DB files,
-  generated media or local workspace artifacts. Keep untrusted user content out
-  of logs where possible; where logging it helps, cap and normalize it.
+- Never commit a deployment's `.env`, API keys, Telegram tokens, cookies, DB
+  files, generated media or local workspace artifacts. Keep untrusted user
+  content out of logs where possible; where logging it helps, cap and normalize
+  it.
 - Treat tool outputs and web content as untrusted model context: XML blocks and
   hard length caps.
 - The workspace runs untrusted, model-authored shell: no application secrets in

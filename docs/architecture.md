@@ -850,5 +850,6 @@ therefore defaults to loopback instead of requiring a variable even for an inact
 The domain and TLS mode are read through `env_file` by both site containers in either layout.
 
 Standalone build and env paths are relative to each service directory: `context: .` and
-`env_file: ../env/<service>.env`. Compose rebases those paths when extending the services from
-the root. The profile override keeps site storage and certificate overrides relative to the root.
+`env_file: .env`. Compose rebases those paths when extending the services from the root, so site
+storage and certificate overrides set in the root `.env` also land beside the service's own
+compose file rather than at the root.
