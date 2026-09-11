@@ -221,6 +221,14 @@ it, and startup fails if the chosen model does not offer the tier, so check the 
 CODEX_SERVICE_TIER=priority
 ```
 
+**Pictures on the plan.** Without `OPENAI_IMAGE_API_KEY`, [image generation](#image-generation)
+runs on the subscription too, from the same allowance. Switch it off to leave the drawing tools out,
+as on any other provider without a key; setting the key still brings them back, on its own bill:
+
+```dotenv
+CODEX_IMAGE_GENERATION_ENABLED=false
+```
+
 Two limits are worth knowing. Usage is metered against the plan rather than billed per token, so a
 heavy day ends in a "usage limit reached" reply that says how long the window still has to run — the
 [daily token budget](#daily-token-budget) still works but is not what stops you first. And this
@@ -433,6 +441,9 @@ limit, so a heavy image day can exhaust the same quota that answers messages; th
 own output dimensions, so the requested aspect ratio is a hint rather than a guarantee; and
 `OPENAI_IMAGE_MODERATION` does not reach it, since it filters the way ChatGPT does and takes no
 setting of its own.
+
+`CODEX_IMAGE_GENERATION_ENABLED=false` takes the subscription route away, so only a key enables
+the tools, as on every other provider.
 
 ### Vision
 

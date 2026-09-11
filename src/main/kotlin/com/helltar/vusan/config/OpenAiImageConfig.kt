@@ -13,12 +13,14 @@ enum class ImageRoute {
  * Which route image generation takes, or `null` when it is unavailable and the tools stay disabled.
  *
  * A paid image key wins whenever both are configured: it bills separately, while the Codex route
- * spends the same subscription quota the chat turns already run on.
+ * spends the same subscription quota the chat turns already run on. The Codex route is the only one
+ * that needs no key of its own, so it is also the only one with an off switch; with it off, a Codex
+ * deployment is back to what every other provider has — image generation exactly when a key is set.
  */
 internal fun resolveImageRoute(hasImageApiKey: Boolean, provider: LlmProviderConfig): ImageRoute? =
     when {
         hasImageApiKey -> ImageRoute.PLATFORM
-        provider is LlmProviderConfig.Codex -> ImageRoute.CODEX
+        provider is LlmProviderConfig.Codex && provider.imageGeneration -> ImageRoute.CODEX
         else -> null
     }
 

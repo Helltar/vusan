@@ -29,6 +29,16 @@ class ImageRouteTest {
     }
 
     @Test
+    fun `the subscription route can be switched off`() {
+        val switchedOff = codex.copy(imageGeneration = false)
+
+        // without a key that leaves image generation off, as on any other provider
+        assertNull(resolveImageRoute(hasImageApiKey = false, provider = switchedOff))
+        // and a key still brings it back, on its own bill
+        assertEquals(ImageRoute.PLATFORM, resolveImageRoute(hasImageApiKey = true, provider = switchedOff))
+    }
+
+    @Test
     fun `without a key or a codex session the tools stay disabled`() {
         assertNull(resolveImageRoute(hasImageApiKey = false, provider = apiKeyProvider))
     }

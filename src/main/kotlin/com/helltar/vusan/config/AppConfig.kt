@@ -259,6 +259,7 @@ data class AppConfig(
                     model = requireEnv("LLM_MODEL"),
                     reasoningEffort = resolveReasoningEffort(),
                     serviceTier = resolveCodexServiceTier(),
+                    imageGeneration = readBooleanEnv("CODEX_IMAGE_GENERATION_ENABLED") ?: true,
                     clientVersion = resolveCodexClientVersion(),
                     authFile = defaultCodexAuthFile(readEnv("CODEX_HOME")),
                     requestTimeout = requestTimeout,

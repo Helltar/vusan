@@ -557,7 +557,8 @@ A normal user message travels:
 
   The same session also covers image generation. `resolveImageRoute` picks `PLATFORM` whenever `OPENAI_IMAGE_API_KEY`
   is set and `CODEX` otherwise, so a paid key keeps billing separately instead of spending the conversation's own
-  subscription allowance. `OpenAiImageClient` takes an `ImageAuth` telling it which: the generation call differs only
+  subscription allowance; `CODEX_IMAGE_GENERATION_ENABLED=false` drops the `CODEX` route, leaving only the key, as
+  on every other provider. `OpenAiImageClient` takes an `ImageAuth` telling it which: the generation call differs only
   by URL and credentials, but the edit call genuinely forks — the Platform endpoint takes a multipart upload while the
   Codex one takes JSON with the source inlined as a data URL and infers the output size from it. The fork extends to
   what each request may carry: only the Platform one sends `OPENAI_IMAGE_MODERATION`, jpeg output, and high

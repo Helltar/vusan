@@ -74,6 +74,9 @@ sealed interface LlmProviderConfig {
         // the plan's faster serving tier. it is not free: the same allowance is spent quicker, so it stays
         // off unless the operator asks for it.
         val serviceTier: ServiceTier? = null,
+        // whether image generation may run on the plan when no OPENAI_IMAGE_API_KEY is set. every other
+        // route waits for its key, so this is the one that has to be switched off rather than left unset.
+        val imageGeneration: Boolean = true,
         val supportsVision: Boolean = true,
         // the Codex CLI version reported to the backend, which decides how much of the model catalog it
         // answers with. `null` leaves that to the installed CLI, or to this build's floor without one.
