@@ -193,7 +193,10 @@ private fun resolveCodexRuntime(
                         timeoutConfig = timeoutConfig,
                         responsesAPIPath = "responses"
                     ),
-                httpClientFactory = codexHttpClientFactory(auth, codexRoutingHint(config.model, config.serviceTier))
+                httpClientFactory =
+                    LenientDecodingHttpClientFactory(
+                        codexHttpClientFactory(auth, codexRoutingHint(config.model, config.serviceTier))
+                    )
             ),
         model = codexModel(config),
         chatParams = codexParams(config, OPENAI_PROMPT_CACHE_KEY),
@@ -319,12 +322,15 @@ private fun openAiClient(
     settings: OpenAIClientSettings,
     explicitPromptCaching: Boolean
 ): OpenAILLMClient {
-    if (!explicitPromptCaching) return OpenAILLMClient(apiKey, settings)
+    val transport = HttpClientFactoryResolver.resolve()
 
     return OpenAILLMClient(
         apiKey = apiKey,
         settings = settings,
-        httpClientFactory = OpenAiPromptCachingHttpClientFactory(HttpClientFactoryResolver.resolve())
+        httpClientFactory =
+            LenientDecodingHttpClientFactory(
+                if (explicitPromptCaching) OpenAiPromptCachingHttpClientFactory(transport) else transport
+            )
     )
 }
 

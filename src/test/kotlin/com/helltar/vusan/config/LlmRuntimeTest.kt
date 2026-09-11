@@ -1,5 +1,6 @@
 package com.helltar.vusan.config
 
+import ai.koog.prompt.Prompt
 import ai.koog.prompt.executor.clients.anthropic.AnthropicCacheControl
 import ai.koog.prompt.executor.clients.anthropic.AnthropicModels
 import ai.koog.prompt.executor.clients.anthropic.AnthropicParams
@@ -11,10 +12,14 @@ import ai.koog.prompt.executor.clients.openai.models.OpenAIInclude
 import ai.koog.prompt.llm.LLMCapability
 import ai.koog.prompt.llm.LLMProvider
 import com.helltar.vusan.infra.Http
+import com.sun.net.httpserver.HttpServer
 import io.ktor.client.engine.mock.*
 import kotlinx.coroutines.runBlocking
+import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.jsonPrimitive
+import java.net.InetSocketAddress
+import java.util.concurrent.atomic.AtomicReference
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFailsWith
@@ -179,8 +184,9 @@ class LlmRuntimeTest {
 
     // koog's own effort enum stops at `high`, so a higher effort travels outside it, and only koog's
     // serializer decides whether it lands in the body; so the body is read where it leaves the client.
+    // the harness replies the way real servers do, repeating the effort, so the reply is read back too.
     @Test
-    fun `an effort above high reaches the wire on every endpoint`() = runBlocking {
+    fun `an effort above high survives the round trip on every endpoint`() = runBlocking {
         val completions = sentOpenAiRequest(openAiCompatible(reasoningEffort = ReasoningEffort.MAX))
 
         val responses =
@@ -193,6 +199,44 @@ class LlmRuntimeTest {
         assertEquals("max", completions.getValue("reasoning_effort").jsonPrimitive.content)
         assertEquals("xhigh", responses.getValue("reasoning").jsonObject.getValue("effort").jsonPrimitive.content)
         assertEquals("xhigh", subscription.getValue("reasoning").jsonObject.getValue("effort").jsonPrimitive.content)
+    }
+
+    // the harness mirrors the runtime's transport; this sends the runtime's own client to a local server
+    // instead, so a runtime that stops decoding leniently fails here even where the harness would not.
+    @Test
+    fun `the runtime client reads back a reply that repeats an effort above high`() = runBlocking {
+        val sent = AtomicReference<String>()
+        val server = HttpServer.create(InetSocketAddress("127.0.0.1", 0), 0)
+
+        server.createContext("/") { exchange ->
+            val body = exchange.requestBody.readBytes().decodeToString().also(sent::set)
+            val reply = openAiReplyTo(body, responses = true).toByteArray()
+
+            exchange.responseHeaders.add("Content-Type", "application/json")
+            exchange.sendResponseHeaders(200, reply.size.toLong())
+            exchange.responseBody.use { it.write(reply) }
+        }
+
+        server.start()
+
+        try {
+            val runtime =
+                openAiCompatible(
+                    baseUrl = "http://127.0.0.1:${server.address.port}",
+                    endpoint = OpenAiEndpoint.RESPONSES,
+                    reasoningEffort = ReasoningEffort.MAX
+                )
+
+            val prompt = Prompt.build("echo", params = runtime.chatParams) { user("current request") }
+
+            runtime.client.execute(prompt, runtime.model, emptyList())
+        } finally {
+            server.stop(0)
+        }
+
+        val request = Json.parseToJsonElement(assertNotNull(sent.get(), "nothing reached the server")).jsonObject
+
+        assertEquals("max", request.getValue("reasoning").jsonObject.getValue("effort").jsonPrimitive.content)
     }
 
     @Test

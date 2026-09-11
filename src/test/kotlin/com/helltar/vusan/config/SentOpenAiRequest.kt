@@ -16,30 +16,36 @@ import kotlin.test.assertNotNull
 
 /**
  * The body koog's own OpenAI client sends for [runtime]'s model and chat params, read off the HTTP
- * engine — after every serializer, and after [transport], which wraps the client factory the way
- * `LlmRuntime` does for the destination under test.
+ * engine — after every serializer, after [transport], which wraps the client factory the way
+ * `LlmRuntime` does for the destination under test, and inside the lenient decoding every runtime
+ * client has.
  *
  * Params alone cannot show what koog drops or merges on the way out, and that is where both the
- * prompt-cache rewrite and the reasoning effort live.
+ * prompt-cache rewrite and the reasoning effort live. The reply comes back the way real servers send
+ * it, see [openAiReplyTo], so a request that goes out fine but cannot be read back fails here too.
  */
 internal suspend fun sentOpenAiRequest(
     runtime: LlmRuntime,
     transport: (KoogHttpClient.Factory) -> KoogHttpClient.Factory = { it }
 ): JsonObject {
     var sent: String? = null
-    val reply = if (runtime.chatParams is OpenAIResponsesParams) RESPONSES_REPLY else CHAT_COMPLETION_REPLY
+    val responses = runtime.chatParams is OpenAIResponsesParams
 
     val engine =
         MockEngine { request ->
-            sent = request.body.toByteArray().decodeToString()
-            respond(reply, headers = headersOf(HttpHeaders.ContentType, ContentType.Application.Json.toString()))
+            val body = request.body.toByteArray().decodeToString().also { sent = it }
+
+            respond(
+                openAiReplyTo(body, responses),
+                headers = headersOf(HttpHeaders.ContentType, ContentType.Application.Json.toString())
+            )
         }
 
     val client =
         OpenAILLMClient(
             apiKey = "key",
             settings = OpenAIClientSettings(baseUrl = "https://api.openai.com"),
-            httpClientFactory = transport(KtorKoogHttpClient.Factory(HttpClient(engine)))
+            httpClientFactory = LenientDecodingHttpClientFactory(transport(KtorKoogHttpClient.Factory(HttpClient(engine))))
         )
 
     val prompt =
@@ -51,6 +57,19 @@ internal suspend fun sentOpenAiRequest(
     client.execute(prompt, runtime.model, emptyList())
 
     return Json.parseToJsonElement(assertNotNull(sent, "nothing reached the wire")).jsonObject
+}
+
+/**
+ * A minimal successful reply to [requestBody]. A Responses reply repeats the reasoning config it was
+ * sent, as OpenAI and the Codex backend both do, and koog parses that echo — a reply without it would
+ * hide the one failure those servers actually produce.
+ */
+internal fun openAiReplyTo(requestBody: String, responses: Boolean): String {
+    if (!responses) return CHAT_COMPLETION_REPLY
+
+    val reasoning = Json.parseToJsonElement(requestBody).jsonObject["reasoning"] ?: return RESPONSES_REPLY
+
+    return JsonObject(Json.parseToJsonElement(RESPONSES_REPLY).jsonObject + ("reasoning" to reasoning)).toString()
 }
 
 private const val CHAT_COMPLETION_REPLY =
