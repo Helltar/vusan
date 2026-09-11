@@ -1,12 +1,13 @@
-# The workspace shell, deployed on its own, from the directory holding this file:
+# the workspace shell, deployed on its own from the directory holding this file:
 #   docker compose up -d
 #
-# This is a separate deployment, not an addition to compose.yaml: it holds the Docker socket and runs
-# model-authored shell. One machine is supported; a machine of its own is the recommendation for a
-# public deployment. See docs/workspace.md.
+# a separate deployment rather than part of compose.yaml: it holds the docker socket and runs
+# model-authored shell. a machine of its own is the recommendation for a public deployment; beside the
+# bot, the repository's compose.override.yaml includes this file with compose.beside-bot.yaml. see
+# docs/workspace.md.
 #
-# The `.env` beside this file is the whole configuration: Compose reads it for the values substituted
-# below and hands the same file to the container.
+# the `.env` beside this file is the whole configuration, in either layout: compose reads it for the
+# values substituted below and hands the same file to the container.
 
 name: vusan-workspace
 

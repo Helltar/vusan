@@ -54,7 +54,7 @@ user is uid 1000 — the usual case on a fresh VPS — there is nothing else to 
 
 The bot gets the same secret in its own `.env`, along with the address of the API:
 
-```
+```dotenv
 SITES_URL=https://api.example.com
 SITES_TOKEN=<the same value>
 ```
@@ -63,49 +63,44 @@ Publishing needs a workspace to build in, so `WORKSPACE_URL` must be configured 
 tools are not registered and the log says so at startup.
 
 Only nginx publishes a port, and only `443/tcp`. The service itself is reachable solely over the compose
-network — never publish its port: a published Docker port bypasses `ufw` without saying so.
+network — never publish its port: a published Docker port bypasses `ufw` without saying so. Both
+containers read `.env`, and nginx, the one facing the internet, gets the publishing secret blanked out.
 
 ## Both on one machine
 
-Set the workspace up first — publishing builds there — then, from the repository root:
+Set the workspace up first — publishing builds there. Then, from the repository root, create the
+same directory a machine of its own would hold, under `services/sites/`:
 
 ```bash
-cp services/sites/.env.example services/sites/.env
 mkdir -p services/sites/data services/sites/certs
-openssl rand -hex 32
+cp services/sites/.env.example services/sites/.env
+sed -i "s/^SITES_TOKEN=.*/SITES_TOKEN=$(openssl rand -hex 32)/" services/sites/.env
 ```
 
-Set `SITES_DOMAIN` in `services/sites/.env` — the service refuses to start without it — put the new
-secret in `SITES_TOKEN` in **both** that file and the bot's `.env`, and add
-`SITES_URL=http://vusan-sites:8090` to the bot's file. Complete
-[DNS and certificates](#dns-and-certificates) below, with the certificate files in
-`services/sites/certs/`, **before starting**:
+Set `SITES_DOMAIN` in that file — the service refuses to start without it — and copy its
+`SITES_TOKEN` line into the bot's `.env`, together with:
 
-```bash
-docker compose --profile workspace --profile sites up -d
+```dotenv
+SITES_URL=http://vusan-sites:8090
+COMPOSE_PROFILES=workspace,sites
 ```
 
-Both site containers read `services/sites/.env`: set `SITES_DOMAIN` and `SITES_ORIGIN_PULLS` there,
-alongside the publishing token and service limits. nginx receives empty overrides for
-`SITES_TOKEN` and `SITES_TOKEN_FILE`, so the container facing the internet holds no publishing
-credential. Docker settings — `SITES_HOST_DIR`, `SITES_CERT_DIR`, image tags — go in the root
-`.env`, which is the only file Compose substitutes from.
+The bot talks to the service by name rather than through nginx, whose origin-pull check only
+Cloudflare can satisfy. Complete [DNS and certificates](#dns-and-certificates) below, with the files in
+`services/sites/certs/`, **before** `docker compose up -d`.
 
-Directories work by one rule everywhere: each service mounts what sits **beside its own compose
-file**. So the published tree is `services/sites/data/` and the certificates `services/sites/certs/`,
-both of which you create before the first start, exactly as a machine of its own would have them
-beside its `compose.yaml`. The bot's own `data/` sits at the root beside its compose file, and the
-two never meet. Everything here writes as uid 1000, so hand that uid the two directories if your
-login user is another.
+`services/sites/.env` configures the host exactly as it would on a machine of its own — the domain,
+origin pulls, the limits, the image tags. `SITES_HOST_DIR` and `SITES_CERT_DIR` resolve beside
+`services/sites/compose.yaml`, so their defaults are the two directories above, and the bot's own
+`data/` at the root never meets them. Everything here writes as uid 1000, so hand that uid both
+directories if your login user is another.
 
-The bot reaches `http://vusan-sites:8090` directly over the Compose network. nginx serves the
-public sites on port 443; neither the publishing service nor the workspace controller publishes a
-port, and `compose.override.yaml` keeps the workspace controller on a separate internal network so
-nothing facing the internet can reach the process holding the Docker socket.
+nginx publishes 443 as it would anywhere. Neither the publishing service nor the workspace controller
+publishes a port, and the controller sits on a network of its own, so nothing facing the internet can
+reach the process holding the Docker socket.
 
-For later commands, keep both profile flags or set `COMPOSE_PROFILES=workspace,sites` in `.env`.
-Every command further down this page is written for a machine of its own and runs from the
-deployment directory; on one machine, run it from the repository root with those profiles instead.
+Every command further down this page is written for a machine of its own and runs from the deployment
+directory; on one machine, run it from the repository root instead, where it also covers the bot.
 
 ## DNS and certificates
 
@@ -124,10 +119,10 @@ is.
 
 Two records, both **proxied** through Cloudflare, both pointing at this machine:
 
-| Name           | Purpose                                        |
-|----------------|------------------------------------------------|
-| `*.example.com` | Every person's site, at `<id>.example.com`     |
-| `api.example.com` | The publishing API the bot talks to          |
+| Name              | Purpose                                    |
+|-------------------|--------------------------------------------|
+| `*.example.com`   | Every person's site, at `<id>.example.com` |
+| `api.example.com` | The publishing API the bot talks to        |
 
 The wildcard must be proxied: the certificate below is a **Cloudflare Origin CA** certificate, trusted
 by Cloudflare and by nobody else, so a grey-clouded record would show visitors an untrusted one. A
@@ -171,8 +166,8 @@ and an unknown server name is still refused at the handshake.
 
 ```bash
 lego --dns <your provider> --domains '*.example.com' --email you@example.com run
-cp .lego/certificates/_.example.com.crt  ~/vusan/certs/site.pem
-cp .lego/certificates/_.example.com.key  ~/vusan/certs/site.key
+cp .lego/certificates/_.example.com.crt  certs/site.pem
+cp .lego/certificates/_.example.com.key  certs/site.key
 docker compose exec vusan-sites-nginx nginx -s reload
 ```
 
@@ -211,24 +206,24 @@ carry a short cache lifetime.
 The host is the authority on all of these and states them to the bot when an upload starts, so raising
 one here needs no matching change in the bot.
 
-| Variable                    | Default | Description                                                         |
-|-----------------------------|---------|---------------------------------------------------------------------|
-| `SITES_DOMAIN`              | —       | Required. The domain sites are served under.                        |
-| `SITES_TOKEN`               | —       | Required. The shared API secret, the same value the bot is given.   |
-| `SITES_TOKEN_FILE`          | —       | A file holding that secret instead. An explicit token wins.         |
-| `SITES_HOST_DIR`            | `./data`  | Where published sites live on this machine.                        |
-| `SITES_CERT_DIR`            | `./certs` | The certificate, its key and the origin-pull CA.                   |
-| `SITES_ORIGIN_PULLS`        | `on`    | Require Cloudflare's client certificate. `off` with anything else in front. |
-| `SITES_IMAGE`               | `ghcr.io/helltar/vusan-sites:latest` | The service image.                 |
-| `SITES_NGINX_IMAGE`         | `ghcr.io/helltar/vusan-sites-nginx:latest` | The nginx image; keep both on one tag. |
-| `SITES_MAX_MB`              | `100`   | The largest a single site may be.                                   |
-| `SITES_MAX_FILE_MB`         | `25`    | The largest one file may be. Above 32 needs nginx's body cap raised. |
-| `SITES_MAX_FILES`           | `1000`  | How many files one site may hold.                                   |
-| `SITES_MAX_DEPTH`           | `10`    | How deep a path inside a site may go.                               |
-| `SITES_RETAIN_DAYS`         | never   | Days after which a site nobody republishes is deleted. Unset or `never` keeps sites indefinitely. |
-| `SITES_MIN_FREE_MB`         | `2048`  | Publishing pauses below this much free disk and resumes on its own.  |
-| `SITES_PUBLISHES_PER_HOUR`  | `20`    | How often one person may publish.                                   |
-| `SITES_UPLOAD_IDLE_MINUTES` | `15`    | An unfinished upload is discarded after this long.                  |
+| Variable                    | Default                                    | Description                                                                                       |
+|-----------------------------|--------------------------------------------|---------------------------------------------------------------------------------------------------|
+| `SITES_DOMAIN`              | —                                          | Required. The domain sites are served under.                                                      |
+| `SITES_TOKEN`               | —                                          | Required. The shared API secret, the same value the bot is given.                                 |
+| `SITES_TOKEN_FILE`          | —                                          | A file holding that secret instead. An explicit token wins.                                       |
+| `SITES_HOST_DIR`            | `./data`                                   | Where published sites live, relative to the compose file.                                         |
+| `SITES_CERT_DIR`            | `./certs`                                  | Where the certificate, its key and the origin-pull CA live.                                       |
+| `SITES_ORIGIN_PULLS`        | `on`                                       | Require Cloudflare's client certificate. `off` with anything else in front.                       |
+| `SITES_IMAGE`               | `ghcr.io/helltar/vusan-sites:latest`       | The service image.                                                                                |
+| `SITES_NGINX_IMAGE`         | `ghcr.io/helltar/vusan-sites-nginx:latest` | The nginx image; keep both on one tag.                                                            |
+| `SITES_MAX_MB`              | `100`                                      | The largest a single site may be.                                                                 |
+| `SITES_MAX_FILE_MB`         | `25`                                       | The largest one file may be. Above 32 needs nginx's body cap raised.                              |
+| `SITES_MAX_FILES`           | `1000`                                     | How many files one site may hold.                                                                 |
+| `SITES_MAX_DEPTH`           | `10`                                       | How deep a path inside a site may go.                                                             |
+| `SITES_RETAIN_DAYS`         | never                                      | Days after which a site nobody republishes is deleted. Unset or `never` keeps sites indefinitely. |
+| `SITES_MIN_FREE_MB`         | `2048`                                     | Publishing pauses below this much free disk and resumes on its own.                               |
+| `SITES_PUBLISHES_PER_HOUR`  | `20`                                       | How often one person may publish.                                                                 |
+| `SITES_UPLOAD_IDLE_MINUTES` | `15`                                       | An unfinished upload is discarded after this long.                                                |
 
 ## Taking a page down
 
@@ -236,8 +231,8 @@ Whoever published it can ask the agent to, which calls `unpublishSite` and leave
 alone. As the operator you never depend on the bot being up:
 
 ```bash
-rm -rf ~/vusan/data/sites/<id>          # gone at the next request
-echo "<id>" >> ~/vusan/data/blocked     # and it cannot be published again
+rm -rf data/sites/<id>          # gone at the next request
+echo "<id>" >> data/blocked     # and it cannot be published again
 ```
 
 The block list is read on every publish and on every sweep, so a blocked site is removed even if it was
@@ -261,8 +256,7 @@ the shell — so the usual outcome of an expired site is that republishing it is
 Updating is a pull and a restart, both images together:
 
 ```bash
-cd ~/vusan && docker compose pull \
-  && docker compose up -d
+docker compose pull && docker compose up -d
 ```
 
 Published sites survive it — they are files on the host, not container state.

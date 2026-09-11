@@ -11,7 +11,7 @@ symptom to the file that owns it, and beats searching the tree.
 
 - **Orientation** — [Layers](#layers) · [Request lifecycle](#request-lifecycle) ·
   [Background and side flows](#background-and-side-flows) · [Startup](#startup) ·
-  [Workspace service](#workspace-service)
+  [Workspace service](#workspace-service) · [Site host](#site-host)
 - **Reference** — [Where to look when…](#where-to-look-when) · [Adding a tool](#adding-a-tool) ·
   [Conventions](#conventions)
 
@@ -718,8 +718,8 @@ cannot change in place. See [the workspace guide](workspace.md) for behaviour, d
 
 The publishing service is Deno/TypeScript under [`services/sites/`](../services/sites/), fronted by an nginx image built
 from [`services/sites/nginx/`](../services/sites/nginx/) that carries its own configuration. Kotlin reaches it only through
-`tools/sites/SiteClient.kt`. It is a separate deployment on a machine with a public address, and the bot
-only ever connects out to it — nothing reaches back.
+`tools/sites/SiteClient.kt`. It is a separate deployment, normally on a machine with a public address, and the bot
+only ever connects out to it — nothing reaches back; see [Deployment layouts](#deployment-layouts).
 
 One person has one site, keyed by the same `personKeyOrNull` the workspace uses and served at
 `<userId>.<domain>`. A numeric label is asserted on both sides: it can never shadow `api` or `www`, and
@@ -739,10 +739,11 @@ never names a directory outside the tree.
 - **`services/sites/storage.ts`** — staging, the atomic swap, per-site and per-person caps, the disk floor that
   refuses writes and clears itself, the retention sweep, and the operator's `blocked` list. Published
   sites are ordinary files, so an operator with a shell can read or delete them without the bot.
-- **nginx** — terminates TLS with a Cloudflare Origin CA certificate and requires Cloudflare's client
-  certificate, so anything reaching the machine directly is refused at the handshake. It resolves the
-  service through a variable upstream, which keeps every published site being served while the API behind
-  it is restarting.
+- **nginx** — terminates TLS with a wildcard certificate (a Cloudflare Origin CA one behind Cloudflare)
+  and by default requires Cloudflare's client certificate, so anything reaching the machine directly is
+  refused at the handshake; `SITES_ORIGIN_PULLS=off` drops that check where something else fronts it. It
+  resolves the service through a variable upstream, which keeps every published site being served while
+  the API behind it is restarting.
 
 ## Where to look when…
 
@@ -827,29 +828,34 @@ A new agent tool typically touches these, in order:
 Coding conventions (logger placement, error handling, tool structure, DB/config access) are documented in
 [`AGENTS.md`](../AGENTS.md) at the repo root.
 
-### Compose profiles
+### Deployment layouts
 
-`compose.yaml` defines the bot. Compose automatically loads `compose.override.yaml`, whose
-`workspace` and `sites` profiles add optional services on the same host. With neither profile
-selected, only the bot starts. Each service receives only its own env file; files may be absent while their profiles are disabled. Compose rejects a missing env file
-for an enabled profile; services validate the values at startup. The controller uses an internal network separate from the public site containers,
-and neither API publishes a host port. Each service mounts what sits beside its own compose file,
-so published content defaults to `services/sites/data` and never meets the bot's `data`. Both site
-containers read `services/sites/.env`; nginx clears publishing credentials with empty environment overrides,
-which `.github/compose-check.sh` enforces against anything added to that file later.
+Three deployments ship, each a directory holding a compose file and the `.env` beside it: the bot at the
+root, the workspace service in `services/workspace/`, the site host in `services/sites/`. Each stands alone
+on a machine of its own, where Compose needs no arguments, and each is configured by its own `.env` alone —
+the bot's file never reaches a service's containers, which keeps application secrets away from both the
+process holding the Docker socket and the one facing the internet.
 
-`services/workspace/compose.yaml` and `services/sites/compose.yaml` own the service definitions and remain standalone
-deployments, each a directory holding that file and its `.env` — run from inside it, Compose needs
-no arguments at all. The override imports services
-with `extends` and changes only profiles and networks; `ports: !reset []`
-removes the workspace's standalone port. Compose 2.24.4 or newer is required for the same-host
-layout. Named volumes are declared in both entry points because `extends` does not import them.
+On one machine, `compose.override.yaml`, which Compose loads beside `compose.yaml` on its own, brings the
+services into the bot's project with `include`: each service's `compose.yaml` merged with the
+`compose.beside-bot.yaml` beside it. That second file is the whole difference between the layouts — a
+profile (`workspace`, `sites`) so nothing starts until `COMPOSE_PROFILES` asks for it, the service's
+network, and `ports: !reset []`, which takes the controller's API off the host. `include` rather than
+`extends` is load-bearing: an included file is interpolated from the `.env` in its own directory and
+resolves its paths there, so `services/sites/.env` means the same thing in both layouts, while `extends`
+interpolates every imported file from the root `.env` — a `WORKSPACE_IMAGE` set in the service's own file
+would be dropped without a word. The root `.env` and the shell still win over a service's file, as they do
+for any Compose variable, so a service setting never belongs in them. Named volumes come along with the
+include. A service's compose file is parsed even while its profile is off, so every variable it
+substitutes needs a default, and its `.env` may be missing until the profile is turned on.
 
-Compose interpolates imported files before selecting profiles. The standalone workspace bind
-therefore defaults to loopback instead of requiring a variable even for an inactive profile.
-The domain and TLS mode are read through `env_file` by both site containers in either layout.
+Three networks: `vusan-egress` is the bot's way out; `vusan-workspace-link` joins it to the controller and
+is `internal`, since the controller has no outbound traffic of its own; `vusan-sites-link` joins it to the
+site service and nginx, which publishes 443 through it. On one flat network the container facing the
+internet would share a bridge with the one holding the Docker socket. Both site containers read
+`services/sites/.env`, and nginx has the publishing credentials blanked with empty `environment` overrides.
 
-Standalone build and env paths are relative to each service directory: `context: .` and
-`env_file: .env`. Compose rebases those paths when extending the services from the root, so site
-storage and certificate overrides set in the root `.env` also land beside the service's own
-compose file rather than at the root.
+`.github/compose-check.sh` resolves every layout in CI and asserts what this section promises: the bot
+alone from a bare checkout, distinct project names, service settings read from the service's own file on
+one machine, no port or network shared between the controller and the site host, and no credential
+reaching nginx. The one-machine layout needs Compose 2.24.4 or newer.

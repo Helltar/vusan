@@ -1,38 +1,16 @@
-# optional services on the same machine; compose loads this file automatically.
-# service definitions live in the standalone deployment files.
+# the optional services, run beside the bot on one machine; compose loads this file automatically.
+# each is its own standalone deployment, brought in with the compose.beside-bot.yaml beside it and
+# configured by the .env in its own directory, exactly as on a machine of its own. `include` rather
+# than `extends` on purpose: an included file is interpolated from that .env, where `extends` would
+# read the root one and silently ignore the service's.
+include:
+  - path: [services/workspace/compose.yaml, services/workspace/compose.beside-bot.yaml]
+  - path: [services/sites/compose.yaml, services/sites/compose.beside-bot.yaml]
+
 services:
   vusan:
+    # its own way out, and one link to each service. the services never share a network.
     networks: [vusan-egress, vusan-workspace-link, vusan-sites-link]
-
-  vusan-workspace:
-    extends:
-      file: services/workspace/compose.yaml
-      service: vusan-workspace
-    profiles: [workspace]
-    networks: [vusan-workspace-link]
-    ports: !reset []
-
-  vusan-sites:
-    extends:
-      file: services/sites/compose.yaml
-      service: vusan-sites
-    profiles: [sites]
-    networks: [vusan-sites-link]
-
-  vusan-sites-nginx:
-    extends:
-      file: services/sites/compose.yaml
-      service: vusan-sites-nginx
-    profiles: [sites]
-    networks: [vusan-sites-link]
 
 networks:
   vusan-egress:
-  vusan-workspace-link:
-    internal: true
-  vusan-sites-link:
-
-# extends imports services, so their named volumes must also be declared here.
-volumes:
-  vusan-workspace-state:
-    name: vusan-workspace-state

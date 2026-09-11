@@ -78,12 +78,12 @@ At the host or infrastructure firewall, allow API access only from the bot;
 installs its own network policy on the machine regardless, and refuses to serve if it cannot prove
 that policy is in effect.
 
-To build the image from source instead of pulling it:
+To run an image built from source instead, build it on this machine from a checkout of the
+repository, set `WORKSPACE_IMAGE=vusan-workspace:local` in `.env`, and run `docker compose up -d`
+again; the controller starts every workspace from that image too:
 
 ```bash
-docker build -t vusan-workspace:local ./workspace
-WORKSPACE_IMAGE=vusan-workspace:local \
-  docker compose up -d
+docker build -t vusan-workspace:local services/workspace    # in the checkout
 ```
 
 ## Both on one machine
@@ -106,36 +106,33 @@ where the bot's token and database already are; on a machine of its own it lands
 nothing on it. That is the whole of the difference, and it is why a machine of its own stays the
 recommendation for a public or less-trusted deployment.
 
-Setting it up adds one file to the bot's own [setup](../README.md#docker). From the repository
-root:
+Setting it up adds one file to the bot's own [setup](../README.md#docker), and it is the same file a
+machine of its own would have: `services/workspace/.env` configures the service in either layout.
+From the repository root:
 
 ```bash
 cp services/workspace/.env.example services/workspace/.env
-openssl rand -hex 32
+sed -i "s/^WORKSPACE_TOKEN=.*/WORKSPACE_TOKEN=$(openssl rand -hex 32)/" services/workspace/.env
 ```
 
-Put that secret in `WORKSPACE_TOKEN` in **both** `services/workspace/.env` and the bot's `.env`, add
-`WORKSPACE_URL=http://vusan-workspace:8080` to the bot's file, and start:
+Copy the `WORKSPACE_TOKEN` line it wrote into the bot's `.env`, add these two beside it, and start with
+`docker compose up -d`:
 
-```bash
-docker compose --profile workspace up -d
+```dotenv
+WORKSPACE_URL=http://vusan-workspace:8080
+COMPOSE_PROFILES=workspace
 ```
 
-The profile loads the optional service from `compose.override.yaml`; no sites configuration is
-needed, and no domain either. The controller has no published port: the bot reaches
-`http://vusan-workspace:8080` over a dedicated internal network, and `WORKSPACE_BIND` is used only
-by the standalone deployment.
+`COMPOSE_PROFILES` is what brings the service up with the bot, and because it sits in `.env`, every
+later command picks it up without a flag; with the [site host](sites.md#both-on-one-machine) as well,
+it reads `workspace,sites`. No domain or sites configuration is needed for this one.
 
-The bot, controller and sites keep separate environment files. The controller is on
-`vusan-workspace-link`, while the site service and nginx are on `vusan-sites-link`.
-Only the bot joins both networks, with `vusan-egress` providing its internet access.
+The controller publishes no port here, so `WORKSPACE_BIND` goes unused: the bot reaches it by name
+over a network only the two of them share, with no way out to the internet and nothing on it that
+serves the internet.
 
-Use the same profile flags for subsequent Compose commands, or set
-`COMPOSE_PROFILES=workspace` in `.env` to remember the selection. If sites is also enabled,
-use `COMPOSE_PROFILES=workspace,sites`. Commands below using
-`docker compose` are for standalone hosts;
-on one machine, use `docker compose --profile workspace` instead (adding `--profile sites`
-when enabled).
+Every other command in this guide is written for a machine of its own. On one machine, run it from
+the repository root instead, where it also covers the bot.
 
 Resources are the part that does want a decision from you, since the service cannot see what else
 the machine is running:
@@ -322,8 +319,8 @@ disable proxies, validate every redirect, and bound the response while reading i
 
 ## Limits and tuning
 
-Everything here lives in the `.env` beside the compose file on the workspace machine, the same file
-that carries the bind address and the secret; Compose reads it on its own.
+Everything here lives in the service's own `.env` — beside its compose file on a machine of its own,
+`services/workspace/.env` beside the bot — the same file that carries the secret.
 `WORKSPACE_MAX_TIMEOUT_SECONDS` is the one value the bot reads as well, from its own file: keep the
 two equal.
 
@@ -410,8 +407,7 @@ chat and every group.
 The user container receives only the mounted home, owned by UID 1000. A short-lived trusted storage
 helper receives the backing volume and loop-device access; it never runs user commands. Controller
 job metadata and bounded logs live separately in Compose's `vusan-workspace-state` volume. The API
-secret is configuration, not state: it lives in `services/workspace/.env` here and in the bot's own file
-there.
+secret is configuration, not state: it lives in the service's `.env` and in the bot's own.
 
 **Back up the `-disk` volumes and controller state.** Stop the controller first for a consistent
 copy; normal shutdown removes the user containers and mount wrappers and detaches their loop
@@ -470,12 +466,10 @@ RUN apt-get update \
 ```
 
 Build it on the workspace machine as `vusan-workspace:custom`, set
-`WORKSPACE_IMAGE=vusan-workspace:custom` in `services/workspace/.env` — on one machine, in the bot's
-`.env` at the repository root instead, the only file Compose substitutes from — and bring the service
-up again.
-Both the controller and its workspace containers then use it. Rebuild custom images when their base
-is updated. For the source-build override, edit `services/workspace/Dockerfile` and use the source-build
-command above instead.
+`WORKSPACE_IMAGE=vusan-workspace:custom` in the service's `.env`, and bring the service up again. Both
+the controller and its workspace containers then use it. Rebuild custom images when their base is
+updated. To change the shipped image itself instead, edit `services/workspace/Dockerfile` and
+[build it from source](#setting-it-up).
 
 Installing Java on the host with `sudo apt install` does not put Java inside a workspace. Do not
 make manual changes inside a running user container the source of its dependencies.
@@ -493,7 +487,10 @@ docker network rm vusan-workspaces
 ```
 
 That leaves every home exactly where it was, which is the point: this is also what an update or a
-host reboot looks like. **To delete people's files as well**, and only then:
+host reboot looks like. On one machine `docker compose down` would stop the bot as well, so take
+`workspace` out of `COMPOSE_PROFILES` and `WORKSPACE_URL` out of the bot's `.env` first, replace that
+first line with `docker compose rm -sf vusan-workspace`, and finish with `docker compose up -d`, which
+brings the bot back without the tools. **To delete people's files as well**, and only then:
 
 ```bash
 docker volume ls -q --filter label=com.helltar.vusan.workspace=vusan | xargs -r docker volume rm

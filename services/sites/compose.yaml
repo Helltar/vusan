@@ -1,11 +1,12 @@
-# The public site host, deployed on a machine with a real address, from the directory holding this file:
+# the public site host, deployed on a machine with a real address from the directory holding this file:
 #   docker compose up -d
 #
-# This is a separate deployment, not an addition to compose.yaml: it serves model-authored pages to the
-# internet and holds nothing else of the bot's. The bot reaches it outbound over HTTPS, so the machine
-# running Vusan needs no inbound address at all. See docs/sites.md.
+# a separate deployment rather than part of compose.yaml: it serves model-authored pages to the
+# internet and holds nothing else of the bot's. the bot reaches it outbound over HTTPS, so the machine
+# running vusan needs no inbound address at all. beside the bot, the repository's compose.override.yaml
+# includes this file with compose.beside-bot.yaml. see docs/sites.md.
 #
-# Both images come from the registry, so the whole deployment is a directory holding this file, its
+# both images come from the registry, so the whole deployment is a directory holding this file, its
 # `.env`, the certificates and the published tree — no checkout on the machine, the same shape the
 # workspace service is deployed in:
 #
@@ -14,8 +15,8 @@
 #                /certs/{site.pem,site.key,origin-pull-ca.pem}
 #                /data/    created before the first start, owned by the user running compose
 #
-# The `.env` beside this file is the whole configuration: Compose reads it for the values substituted
-# below and hands the same file to the service.
+# the `.env` beside this file is the whole configuration, in either layout: compose reads it for the
+# values substituted below and hands the same file to both containers.
 
 name: vusan-sites
 

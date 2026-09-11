@@ -1,0 +1,13 @@
+# how the workspace service joins the bot's project on one machine: the repository's
+# compose.override.yaml merges this over compose.yaml. never deployed on its own.
+services:
+  vusan-workspace:
+    profiles: [workspace]
+    networks: [vusan-workspace-link]
+    # the bot reaches the API by name, so nothing is published on the host and WORKSPACE_BIND goes unused.
+    ports: !reset []
+
+networks:
+  # internal: the controller has no traffic of its own, and nothing that serves the internet is on it.
+  vusan-workspace-link:
+    internal: true

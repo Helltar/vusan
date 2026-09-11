@@ -105,10 +105,22 @@ Preserve the package boundaries in [`docs/architecture.md`](docs/architecture.md
   written into a live site, and nothing is served out of a workspace home. Every
   path is checked in `SiteArchive.kt` before an upload and again by the service,
   which does not trust its caller.
-- It is an optional, separate deployment on a machine with a public address —
-  `services/sites/compose.yaml`, with `SITES_URL` plus `SITES_TOKEN` the whole
-  switch on the bot's side. It also needs a workspace to publish from; with one
-  missing the tools are not registered.
+- It is an optional, separate deployment, normally on a machine with a public
+  address — `services/sites/compose.yaml`, with `SITES_URL` plus `SITES_TOKEN`
+  the whole switch on the bot's side. It also needs a workspace to publish from;
+  with one missing the tools are not registered.
+
+### Deployment layouts
+
+- A deployment is a directory holding its compose file and the `.env` beside
+  it — the bot at the root, each service under `services/<name>/` — and that
+  `.env` configures it wherever it runs. The root `.env` is the bot's; never
+  make a service read a setting from it.
+- On one machine `compose.override.yaml` brings each service in with `include`,
+  merged with the `compose.beside-bot.yaml` beside it: its profile, its network,
+  no published API port. Keep it `include` — `extends` interpolates from the
+  root `.env` and silently ignores the service's own. `.github/compose-check.sh`
+  resolves both layouts in CI and asserts this.
 
 ## Documentation Triggers
 

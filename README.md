@@ -61,7 +61,7 @@ them: the [workspace shell](docs/workspace.md), which runs model-authored comman
 [site host](docs/sites.md), which serves the pages people publish. Each has a machine of its own as
 the recommendation, and each is one compose file plus one env file.
 
-To run both beside the bot instead, each guide has a section of its own:
+To run either or both beside the bot instead, each guide has a section of its own:
 [workspace](docs/workspace.md#both-on-one-machine) and [sites](docs/sites.md#both-on-one-machine).
 
 ### Local JVM
@@ -136,6 +136,7 @@ Prerequisites: JDK 21, plus `ffmpeg` and `yt-dlp` on `PATH`.
 
 - [Configuration](docs/configuration.md) — every setting, from the required five onward.
 - [The workspace shell](docs/workspace.md) — what the persistent home does, and how to deploy it.
+- [The site host](docs/sites.md) — where published pages live, and how to deploy it.
 - [Architecture](docs/architecture.md) — the layers, and how a message flows through them.
 
 ## Stack

@@ -1,0 +1,13 @@
+# how the site host joins the bot's project on one machine: the repository's compose.override.yaml
+# merges this over compose.yaml. never deployed on its own.
+services:
+  vusan-sites:
+    profiles: [sites]
+    networks: [vusan-sites-link]
+  vusan-sites-nginx:
+    profiles: [sites]
+    networks: [vusan-sites-link]
+
+networks:
+  # not internal, unlike the workspace's link: nginx publishes 443 through it.
+  vusan-sites-link:

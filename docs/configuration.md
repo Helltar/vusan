@@ -3,22 +3,23 @@
 Everything the bot reads from `.env`. Copy
 [`.env.example`](../.env.example) and fill it in; blank values count as missing.
 
-For Docker, follow the [quick start](../README.md#docker); running the optional services beside the
-bot is covered in [workspace](workspace.md#both-on-one-machine) and
-[sites](sites.md#both-on-one-machine). `.env` holds Compose settings; each service still receives
-the `.env` beside its own compose file.
+For Docker, follow the [quick start](../README.md#docker). The same `.env` also carries the few
+Compose settings of the bot's own deployment, listed at the bottom of `.env.example`.
 
-The optional [workspace service](#workspace) has a file and a guide of its own. That split is a
-boundary rather than tidiness: the workspace process holds the Docker socket, so it is never handed
-the bot's secrets. Do not merge the two, even when one machine runs both.
+The two optional services — the [workspace](#workspace) and the [site host](#site-host) — have a file
+and a guide each, and each runs beside the bot or on a machine of its own, whatever the other does.
+That split is a boundary rather than tidiness: the workspace process holds the Docker socket and the
+site host faces the internet, so neither is ever handed the bot's secrets. Do not merge the files,
+even when one machine runs all three.
 
 - **Getting started** — [Minimum setup](#minimum-setup) · [Who Vusan answers](#who-vusan-answers)
 - **The model** — [LLM provider](#llm-provider) · [ChatGPT subscription](#chatgpt-subscription) ·
-  [Daily token budget](#daily-token-budget)
+  [Daily token budget](#daily-token-budget) · [Requests at once](#how-many-requests-at-once)
 - **Who it is** — [Personality](#personality) · [Appearance](#appearance)
 - **Tools** — [Optional tools](#optional-tools) · [Web search](#web-search) ·
   [Voice output](#voice-output) · [Voice input](#voice-input) ·
-  [Image generation](#image-generation) · [Vision](#vision) · [Workspace](#workspace)
+  [Image generation](#image-generation) · [Vision](#vision) · [Workspace](#workspace) ·
+  [Site host](#site-host)
 - **What it remembers** — [Conversation](#conversation) · [Memory](#memory) ·
   [Group log](#group-log) · [Scheduled tasks](#scheduled-tasks)
 - **In Telegram** — [Rights in a group](#rights-in-a-group) · [Command menu](#command-menu)
@@ -485,25 +486,25 @@ These are the bot's side of it, and belong in `.env`:
 | `WORKSPACE_MAX_TIMEOUT_SECONDS` | `600`   | Longest command timeout the bot will ask for; keep it equal to the controller's. |
 
 Both `WORKSPACE_URL` and a secret must be present, or the workspace tools are not registered and the
-bot never mentions them. On one machine `WORKSPACE_URL` is the service name — `http://vusan-workspace:8080`
-— and `.env.example` is the whole setup; see
-[Both on one machine](workspace.md#both-on-one-machine).
+bot never mentions them. On one machine `WORKSPACE_URL` is the service's name,
+`http://vusan-workspace:8080`; see [Both on one machine](workspace.md#both-on-one-machine).
 
 ## Site host
 
-Vusan can put a finished page, game or small web app on the public internet, one address **per person**
-at `<their Telegram id>.<your domain>`. Like the workspace it is **off by default and deploys on its
-own**, on a machine with a public address; the bot only connects out to it, so a bot behind CGNAT can
-publish to a VPS. Beside the bot works too, with `SITES_URL` pointing straight at the service —
-`http://vusan-sites:8090`, skipping nginx, whose origin-pull check only Cloudflare can satisfy. What it serves, its limits, DNS and certificates, and how to deploy it are in
+Vusan can put a finished page, game or small web app on the public internet, one address **per
+person** at `<their Telegram id>.<your domain>`. Like the workspace it is **off by default and
+deploys on its own**, on a machine with a public address; the bot only connects out to it, so a bot
+behind CGNAT can publish to a VPS. Beside the bot works too, with `SITES_URL` pointing straight at
+the service, `http://vusan-sites:8090`, rather than at nginx, whose origin-pull check only
+Cloudflare can satisfy. What it serves, its limits, DNS and certificates, and how to deploy it are in
 [the site guide](sites.md).
 
 These are the bot's side of it, and belong in `.env`:
 
-| Variable           | Default | Description                                                          |
-|--------------------|---------|----------------------------------------------------------------------|
-| `SITES_URL`        | —       | Address of the publishing API. Unset means the tools do not exist.   |
-| `SITES_TOKEN`      | —       | The shared API secret, the same value the host is given.             |
+| Variable           | Default | Description                                                             |
+|--------------------|---------|-------------------------------------------------------------------------|
+| `SITES_URL`        | —       | Address of the publishing API. Unset means the tools do not exist.      |
+| `SITES_TOKEN`      | —       | The shared API secret, the same value the host is given.                |
 | `SITES_TOKEN_FILE` | —       | A file holding that secret instead. An explicit token takes precedence. |
 
 Publishing is a snapshot of files the person built somewhere, so it needs the workspace: with
