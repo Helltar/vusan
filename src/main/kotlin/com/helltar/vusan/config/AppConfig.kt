@@ -2,35 +2,34 @@ package com.helltar.vusan.config
 
 import ai.koog.prompt.executor.clients.openai.base.models.ReasoningEffort
 import ai.koog.prompt.executor.clients.openai.base.models.ServiceTier
-import io.github.cdimascio.dotenv.dotenv
-import io.github.oshai.kotlinlogging.KotlinLogging
-import java.time.ZoneId
 import com.helltar.vusan.request.AccessPolicy
 import com.helltar.vusan.request.Platform
 import com.helltar.vusan.request.UserRef
+import io.github.cdimascio.dotenv.dotenv
+import io.github.oshai.kotlinlogging.KotlinLogging
+import java.time.ZoneId
 import kotlin.io.path.Path
 import kotlin.io.path.isReadable
 import kotlin.io.path.readText
 import kotlin.time.Duration.Companion.seconds
 
 data class AppConfig(
-    val agentMaxIterations: Int,
     val accessPolicy: AccessPolicy,
+    val agentMaxIterations: Int,
     val appearance: String?,
-
     val chatHistory: ConversationConfig = ConversationConfig(),
-    val groupLog: GroupLogConfig = GroupLogConfig(),
     val databasePath: String,
     val elevenLabsApiKey: String?,
     val elevenLabsTts: ElevenLabsTtsConfig?,
     val giphyApiKey: String?,
+    val groupLog: GroupLogConfig = GroupLogConfig(),
     val llmProvider: LlmProviderConfig,
     val maxConcurrentTurns: Int,
     val maxFollowUpsPerUser: Int,
     val maxMemoryPerScope: Int,
     val maxTasksPerUser: Int,
-    val openAiImageApiKey: String?,
     val openAiImage: OpenAiImageConfig?,
+    val openAiImageApiKey: String?,
     val openAiStt: OpenAiSttConfig?,
     val openAiVision: OpenAiVisionConfig?,
     val personality: String?,
@@ -41,10 +40,10 @@ data class AppConfig(
     val taskMaxLatenessMinutes: Long,
     val tavilyApiKey: String?,
     val telegramBotToken: String,
+    val tokenBudget: TokenBudgetConfig = TokenBudgetConfig(),
     val workspaceMaxTimeoutSeconds: Long,
     val workspaceToken: String?,
     val workspaceUrl: String?,
-    val tokenBudget: TokenBudgetConfig = TokenBudgetConfig(),
     val ytDlpCookiesFile: String?
 ) {
     init {
@@ -53,22 +52,19 @@ data class AppConfig(
         require(maxFollowUpsPerUser >= 0) { "MAX_FOLLOW_UPS_PER_USER must not be negative" }
         require(maxMemoryPerScope >= 0) { "MAX_MEMORY_PER_SCOPE must not be negative" }
         require(maxTasksPerUser >= 0) { "MAX_TASKS_PER_USER must not be negative" }
-        require(workspaceMaxTimeoutSeconds > 0) { "WORKSPACE_MAX_TIMEOUT_SECONDS must be positive" }
-        require(workspaceUrl == null || !workspaceToken.isNullOrBlank()) { "Workspace API authentication is required" }
         require(sitesUrl == null || !sitesToken.isNullOrBlank()) { "Site API authentication is required" }
         require(taskMaxLatenessMinutes >= 0) { "TASK_MAX_LATENESS_MINUTES must not be negative" }
+        require(workspaceMaxTimeoutSeconds > 0) { "WORKSPACE_MAX_TIMEOUT_SECONDS must be positive" }
+        require(workspaceUrl == null || !workspaceToken.isNullOrBlank()) { "Workspace API authentication is required" }
     }
 
     companion object {
         private const val DEFAULT_AGENT_MAX_ITERATIONS = 70
         private const val DEFAULT_LLM_REQUEST_TIMEOUT_SECONDS = 120L
+        private const val DEFAULT_MAX_CONCURRENT_TURNS = 8
         private const val DEFAULT_MAX_FOLLOW_UPS_PER_USER = 3
         private const val DEFAULT_MAX_MEMORY_PER_SCOPE = 10
         private const val DEFAULT_MAX_TASKS_PER_USER = 5
-
-        // turns run in parallel across conversations; the limit is what the LLM provider will take at
-        // once, not what the machine can hold.
-        private const val DEFAULT_MAX_CONCURRENT_TURNS = 8
         private const val DEFAULT_TASK_MAX_LATENESS_MINUTES = 60L
         private const val DEFAULT_WORKSPACE_MAX_TIMEOUT_SECONDS = 600L
 
@@ -80,18 +76,13 @@ data class AppConfig(
             val elevenLabsKey = readEnv("ELEVENLABS_API_KEY")
             val openAiImageKey = readEnv("OPENAI_IMAGE_API_KEY")
             val llmProvider = resolveLlmProvider()
-            val workspaceUrl = readEnv("WORKSPACE_URL")
-            val sitesUrl = readEnv("SITES_URL")
-
             val imageRoute = resolveImageRoute(openAiImageKey != null, llmProvider)
+            val sitesUrl = readEnv("SITES_URL")
+            val workspaceUrl = readEnv("WORKSPACE_URL")
 
             return AppConfig(
+                accessPolicy = AccessPolicy(allowed = readIdSetEnv("ALLOWED_IDS"), banned = readIdSetEnv("BANNED_IDS")),
                 agentMaxIterations = readIntEnv("AGENT_MAX_ITERATIONS") ?: DEFAULT_AGENT_MAX_ITERATIONS,
-                accessPolicy =
-                    AccessPolicy(
-                        allowed = readIdSetEnv("ALLOWED_IDS"),
-                        banned = readIdSetEnv("BANNED_IDS")
-                    ),
                 appearance = resolveAppearance(),
                 databasePath = readEnv("DB_FILE") ?: "data/db/vusan.db",
                 elevenLabsApiKey = elevenLabsKey,
@@ -112,13 +103,10 @@ data class AppConfig(
                 taskMaxLatenessMinutes = readLongEnv("TASK_MAX_LATENESS_MINUTES") ?: DEFAULT_TASK_MAX_LATENESS_MINUTES,
                 tavilyApiKey = readEnv("TAVILY_API_KEY"),
                 telegramBotToken = requireEnv("TELEGRAM_BOT_TOKEN"),
-                workspaceMaxTimeoutSeconds =
-                    readLongEnv("WORKSPACE_MAX_TIMEOUT_SECONDS") ?: DEFAULT_WORKSPACE_MAX_TIMEOUT_SECONDS,
-                workspaceToken = workspaceUrl?.let {
-                    readServiceToken("WORKSPACE", readEnv("WORKSPACE_TOKEN"), readEnv("WORKSPACE_TOKEN_FILE"))
-                },
-                workspaceUrl = workspaceUrl,
                 tokenBudget = resolveTokenBudget(),
+                workspaceMaxTimeoutSeconds = readLongEnv("WORKSPACE_MAX_TIMEOUT_SECONDS") ?: DEFAULT_WORKSPACE_MAX_TIMEOUT_SECONDS,
+                workspaceToken = workspaceUrl?.let { readServiceToken("WORKSPACE", readEnv("WORKSPACE_TOKEN"), readEnv("WORKSPACE_TOKEN_FILE")) },
+                workspaceUrl = workspaceUrl,
                 ytDlpCookiesFile = readEnv("YT_DLP_COOKIES_FILE"),
 
                 chatHistory =
@@ -126,9 +114,11 @@ data class AppConfig(
                         maxRecentInteractions =
                             readIntEnv("CONVERSATION_MAX_RECENT_INTERACTIONS")
                                 ?: ConversationConfig.DEFAULT_MAX_RECENT_INTERACTIONS,
+
                         maxStoredInteractions =
                             readIntEnv("CONVERSATION_MAX_STORED_INTERACTIONS")
                                 ?: ConversationConfig.DEFAULT_MAX_STORED_INTERACTIONS,
+
                         retentionDays =
                             readIntEnv("CONVERSATION_RETENTION_DAYS")
                                 ?: ConversationConfig.DEFAULT_RETENTION_DAYS
@@ -137,15 +127,19 @@ data class AppConfig(
                 groupLog =
                     GroupLogConfig(
                         enabled = readBooleanEnv("GROUP_LOG_ENABLED") ?: true,
+
                         retentionDays =
                             readIntEnv("GROUP_LOG_RETENTION_DAYS")
                                 ?: GroupLogConfig.DEFAULT_RETENTION_DAYS,
+
                         maxMessagesPerChat =
                             readIntEnv("GROUP_LOG_MAX_MESSAGES_PER_CHAT")
                                 ?: GroupLogConfig.DEFAULT_MAX_MESSAGES_PER_CHAT,
+
                         recentMessages =
                             readIntEnv("GROUP_LOG_RECENT_MESSAGES")
                                 ?: GroupLogConfig.DEFAULT_RECENT_MESSAGES,
+
                         recentMinutes =
                             readIntEnv("GROUP_LOG_RECENT_MINUTES")
                                 ?: GroupLogConfig.DEFAULT_RECENT_MINUTES
