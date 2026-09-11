@@ -1,5 +1,5 @@
 # The workspace shell, deployed on its own:
-#   docker compose --env-file env/workspace.env -f workspace/compose.yaml up -d
+#   docker compose --env-file env/workspace.env -f services/workspace/compose.yaml up -d
 #
 # This is a separate deployment, not an addition to compose.yaml: it holds the Docker socket and runs
 # model-authored shell. One machine is supported; a machine of its own is the recommendation for a

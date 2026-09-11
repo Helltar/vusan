@@ -7,7 +7,7 @@ have separate homes, and the same person uses the same files in private chat and
 while conversation history stays separate per chat.
 
 It is a **separate deployment**, and off until you make it. `compose.yaml` starts the bot alone;
-this service comes up on its own with `workspace/compose.yaml`, and the bot grows the shell tools
+this service comes up on its own with `services/workspace/compose.yaml`, and the bot grows the shell tools
 only once it can reach it. Either layout works: beside the bot is a supported arrangement and a
 sound one for a personal deployment, covered in [Both on one machine](#both-on-one-machine). A
 machine of its own — a small VM or a cheap VPS — is the recommendation for anything public or less
@@ -35,8 +35,8 @@ registry:
 
 ```bash
 mkdir -p ~/vusan-workspace && cd ~/vusan-workspace
-curl -fsSLO https://raw.githubusercontent.com/Helltar/vusan/master/workspace/compose.yaml
-curl -fsSL  https://raw.githubusercontent.com/Helltar/vusan/master/workspace/.env.example -o .env
+curl -fsSLO https://raw.githubusercontent.com/Helltar/vusan/master/services/workspace/compose.yaml
+curl -fsSL  https://raw.githubusercontent.com/Helltar/vusan/master/services/workspace/.env.example -o .env
 
 # write a fresh shared secret into it
 sed -i "s/^WORKSPACE_TOKEN=.*/WORKSPACE_TOKEN=$(openssl rand -hex 32)/" .env
@@ -396,7 +396,7 @@ chat and every group.
 The user container receives only the mounted home, owned by UID 1000. A short-lived trusted storage
 helper receives the backing volume and loop-device access; it never runs user commands. Controller
 job metadata and bounded logs live separately in Compose's `vusan-workspace-state` volume. The API
-secret is configuration, not state: it lives in `workspace/.env` here and in the bot's own file
+secret is configuration, not state: it lives in `services/workspace/.env` here and in the bot's own file
 there.
 
 **Back up the `-disk` volumes and controller state.** Stop the controller first for a consistent
@@ -456,9 +456,9 @@ RUN apt-get update \
 ```
 
 Build it on the workspace machine as `vusan-workspace:custom`, set
-`WORKSPACE_IMAGE=vusan-workspace:custom` in `workspace/.env`, and bring the service up again.
+`WORKSPACE_IMAGE=vusan-workspace:custom` in `services/workspace/.env`, and bring the service up again.
 Both the controller and its workspace containers then use it. Rebuild custom images when their base
-is updated. For the source-build override, edit `workspace/Dockerfile` and use the source-build
+is updated. For the source-build override, edit `services/workspace/Dockerfile` and use the source-build
 command above instead.
 
 Installing Java on the host with `sudo apt install` does not put Java inside a workspace. Do not

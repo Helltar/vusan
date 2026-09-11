@@ -1,5 +1,5 @@
 # The public site host, deployed on a machine with a real address:
-#   docker compose --env-file env/sites.env -f sites/compose.yaml up -d
+#   docker compose --env-file env/sites.env -f services/sites/compose.yaml up -d
 #
 # This is a separate deployment, not an addition to compose.yaml: it serves model-authored pages to the
 # internet and holds nothing else of the bot's. The bot reaches it outbound over HTTPS, so the machine

@@ -33,5 +33,5 @@ deno.lock
 !.env.example
 
 # runtime directories, each beside the compose file that mounts it
-sites/data/
-sites/certs/
+services/sites/data/
+services/sites/certs/

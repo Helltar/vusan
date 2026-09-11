@@ -5,11 +5,11 @@ on:
     branches: [master]
     paths:
       - .github/workflows/sites.yml
-      - sites/**
+      - services/sites/**
   pull_request:
     paths:
       - .github/workflows/sites.yml
-      - sites/**
+      - services/sites/**
   release:
     types: [published]
   workflow_dispatch:
@@ -34,12 +34,12 @@ jobs:
     timeout-minutes: 15
     defaults:
       run:
-        working-directory: sites
+        working-directory: services/sites
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - uses: denoland/setup-deno@22d081ff2d3a40755e97629de92e3bcbfa7cf2ed # v2.0.5
         with:
-          # keep in step with the deno image in sites/Dockerfile: dependabot bumps
+          # keep in step with the deno image in services/sites/Dockerfile: dependabot bumps
           # that tag, never this input
           deno-version: v2.9.6
           cache: true
@@ -51,16 +51,16 @@ jobs:
           installed=$(deno --version | head -1 | cut -d' ' -f2)
 
           if [ -z "$image" ]; then
-            echo "::error::cannot read the deno version out of sites/Dockerfile"
+            echo "::error::cannot read the deno version out of services/sites/Dockerfile"
             exit 1
           fi
 
           if [ "$image" != "$installed" ]; then
-            echo "::error::deno drift: sites/Dockerfile runs $image, this workflow checks the code with $installed. Set deno-version to v$image in .github/workflows/sites.yml"
+            echo "::error::deno drift: services/sites/Dockerfile runs $image, this workflow checks the code with $installed. Set deno-version to v$image in .github/workflows/sites.yml"
             exit 1
           fi
 
-          echo "deno $installed matches sites/Dockerfile"
+          echo "deno $installed matches services/sites/Dockerfile"
       - run: deno ci
       - run: deno fmt --check *.ts deno.json
       - run: deno lint *.ts
@@ -76,8 +76,8 @@ jobs:
       - uses: docker/setup-buildx-action@37fe631027851001ddb9b187196cc803df7f5f0e # v4
       - uses: docker/build-push-action@53b7df96c91f9c12dcc8a07bcb9ccacbed38856a # v7
         with:
-          context: ./sites
-          file: ./sites/Dockerfile
+          context: ./services/sites
+          file: ./services/sites/Dockerfile
           platforms: linux/amd64
           push: false
           load: true
@@ -86,8 +86,8 @@ jobs:
           cache-to: type=gha,mode=max,scope=vusan-sites
       - uses: docker/build-push-action@53b7df96c91f9c12dcc8a07bcb9ccacbed38856a # v7
         with:
-          context: ./sites/nginx
-          file: ./sites/nginx/Dockerfile
+          context: ./services/sites/nginx
+          file: ./services/sites/nginx/Dockerfile
           platforms: linux/amd64
           push: false
           load: true
@@ -146,8 +146,8 @@ jobs:
       - id: push
         uses: docker/build-push-action@53b7df96c91f9c12dcc8a07bcb9ccacbed38856a # v7
         with:
-          context: ./sites
-          file: ./sites/Dockerfile
+          context: ./services/sites
+          file: ./services/sites/Dockerfile
           platforms: linux/amd64
           push: true
           tags: ${{ steps.metadata.outputs.tags }}
@@ -171,8 +171,8 @@ jobs:
       - id: push-nginx
         uses: docker/build-push-action@53b7df96c91f9c12dcc8a07bcb9ccacbed38856a # v7
         with:
-          context: ./sites/nginx
-          file: ./sites/nginx/Dockerfile
+          context: ./services/sites/nginx
+          file: ./services/sites/nginx/Dockerfile
           platforms: linux/amd64
           push: true
           tags: ${{ steps.nginx-metadata.outputs.tags }}

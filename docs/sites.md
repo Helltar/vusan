@@ -5,7 +5,7 @@ a game or a small web app in that person's [workspace](workspace.md), zips it, a
 link works for anyone the person sends it to. Publishing again replaces the whole site.
 
 It is a **separate deployment**, and off until you make it. `compose.yaml` starts the bot alone; this
-service comes up on its own with `sites/compose.yaml`, on a machine with a public address. The bot only
+service comes up on its own with `services/sites/compose.yaml`, on a machine with a public address. The bot only
 ever connects out to it, so the machine running Vusan needs no inbound address of its own — a home
 server behind CGNAT publishes to a VPS perfectly well. Running it beside the bot works too, and is
 covered in [Both on one machine](#both-on-one-machine).
@@ -33,8 +33,8 @@ the registry:
 
 ```bash
 mkdir -p ~/vusan-sites/certs ~/vusan-sites/data && cd ~/vusan-sites
-curl -fsSLO https://raw.githubusercontent.com/Helltar/vusan/master/sites/compose.yaml
-curl -fsSL  https://raw.githubusercontent.com/Helltar/vusan/master/sites/.env.example -o .env
+curl -fsSLO https://raw.githubusercontent.com/Helltar/vusan/master/services/sites/compose.yaml
+curl -fsSL  https://raw.githubusercontent.com/Helltar/vusan/master/services/sites/.env.example -o .env
 
 # fill in SITES_DOMAIN, and write a fresh shared secret
 sed -i "s/^SITES_TOKEN=.*/SITES_TOKEN=$(openssl rand -hex 32)/" .env
@@ -71,16 +71,17 @@ Follow [Add sites in the README](../README.md#add-sites), after setting up works
 The start command is `docker compose --profile workspace --profile sites up -d`.
 Prepare DNS and certificates below before running it.
 
-Both site containers read `sites/.env`: set `SITES_DOMAIN` and `SITES_ORIGIN_PULLS` there,
+Both site containers read `services/sites/.env`: set `SITES_DOMAIN` and `SITES_ORIGIN_PULLS` there,
 alongside the publishing token and service limits. nginx receives empty overrides for
 `SITES_TOKEN` and `SITES_TOKEN_FILE`, so the container facing the internet holds no publishing
 credential. Docker settings — `SITES_HOST_DIR`, `SITES_CERT_DIR`, image tags — go in the root
 `.env`, which is the only file Compose substitutes from.
 
 Directories work by one rule everywhere: each service mounts what sits **beside its own compose
-file**. So the published tree is `sites/data/` and the certificates `sites/certs/`, both of which
-you create before the first start, exactly as a machine of its own would have them beside its
-`compose.yaml`. The bot's own `data/` sits at the root beside its compose file, and the two never meet.
+file**. So the published tree is `services/sites/data/` and the certificates `services/sites/certs/`,
+both of which you create before the first start, exactly as a machine of its own would have them
+beside its `compose.yaml`. The bot's own `data/` sits at the root beside its compose file, and the
+two never meet.
 
 The bot reaches `http://vusan-sites:8090` directly over the Compose network. nginx serves the
 public sites on port 443; neither the publishing service nor the workspace controller publishes a

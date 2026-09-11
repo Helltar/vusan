@@ -2,8 +2,9 @@
 
 This document is the orientation map for the codebase: the layers, how a message flows through them, and the background
 flows that run alongside. The main application is Kotlin under
-[`src/main/kotlin/com/helltar/vusan/`](../src/main/kotlin/com/helltar/vusan/); the shell workspace is a separate Deno
-service under [`workspace/`](../workspace/), see [Workspace service](#workspace-service).
+[`src/main/kotlin/com/helltar/vusan/`](../src/main/kotlin/com/helltar/vusan/); the two optional services are Deno under
+[`services/`](../services/) — the shell workspace, see [Workspace service](#workspace-service), and the site host, see
+[Site host](#site-host).
 
 Chasing a symptom rather than reading for orientation? Start at [Where to look when…](#where-to-look-when) — it maps a
 symptom to the file that owns it, and beats searching the tree.
@@ -614,7 +615,7 @@ backoff decays to a 15-minute retry interval and a restart becomes the thing tha
 
 ## Workspace service
 
-The shell service is Deno/TypeScript under [`workspace/`](../workspace/). Kotlin reaches it only through
+The shell service is Deno/TypeScript under [`services/workspace/`](../services/workspace/). Kotlin reaches it only through
 `tools/workspace/WorkspaceClient.kt`; Docker details never enter the bot's request flow.
 
 Each `userId` maps to a readable ID `u<userId>` in every chat. Conversation history still uses `(userId, chatId)`; only
@@ -715,8 +716,8 @@ cannot change in place. See [the workspace guide](workspace.md) for behaviour, d
 
 ## Site host
 
-The publishing service is Deno/TypeScript under [`sites/`](../sites/), fronted by an nginx image built
-from [`sites/nginx/`](../sites/nginx/) that carries its own configuration. Kotlin reaches it only through
+The publishing service is Deno/TypeScript under [`services/sites/`](../services/sites/), fronted by an nginx image built
+from [`services/sites/nginx/`](../services/sites/nginx/) that carries its own configuration. Kotlin reaches it only through
 `tools/sites/SiteClient.kt`. It is a separate deployment on a machine with a public address, and the bot
 only ever connects out to it — nothing reaches back.
 
@@ -729,13 +730,13 @@ never names a directory outside the tree.
   publish to start against the last one's files. `SiteArchive.kt` is the pure half: it checks every path,
   refuses traversal, absolute paths and dotfiles, enforces the caps and reports whether the archive has an
   `index.html` at its root, streaming one entry at a time so nothing larger than a single file is held.
-- **`sites/main.ts`** — `POST /uploads?owner=` opens a staging directory and answers with the caps this
+- **`services/sites/main.ts`** — `POST /uploads?owner=` opens a staging directory and answers with the caps this
   upload will be held to, so the limits live only on the side that enforces them. `PUT /uploads/<id>?path=`
   streams one file to disk, `POST /uploads/<id>/commit` swaps the tree in by rename, `DELETE /uploads/<id>`
   abandons it. `GET /site?owner=` reports a site and walks it for a capped list of the files it actually
   holds, so "what is published" is answered from the site rather than from whoever remembers uploading
   it; `DELETE /site?owner=` removes one. `GET /health` is the only unauthenticated route.
-- **`sites/storage.ts`** — staging, the atomic swap, per-site and per-person caps, the disk floor that
+- **`services/sites/storage.ts`** — staging, the atomic swap, per-site and per-person caps, the disk floor that
   refuses writes and clears itself, the retention sweep, and the operator's `blocked` list. Published
   sites are ordinary files, so an operator with a shell can read or delete them without the bot.
 - **nginx** — terminates TLS with a Cloudflare Origin CA certificate and requires Cloudflare's client
@@ -761,11 +762,11 @@ A symptom-to-source map for finding the right file fast. Paths are under
 | A reply, a notice or a scheduled fire lands in a forum's General instead of the topic it belongs to | `telegram/delivery/TelegramRequests.kt` (`ChatTarget`, and which builders name the topic) + `telegram/inbound/MessageMetadata.kt` (`forumTopicIdOrNull`, and why `is_topic_message` decides) + `tasks/ScheduledTask.kt` (`creatorThreadId`) |
 | A specific tool misbehaves | `tools/<feature>/<Feature>Tools.kt` for the tool surface, plus its `<Feature>Client.kt` for the external call |
 | Vusan will not hand a file from the chat back, or sends it under the wrong name | `telegram/tools/ChatFileTools.sendChatFile` (the `file_id` path and `chatFilename`) + `telegram/TelegramApi.downloadFileById` (`getFile`, and the 20 MB limit on what Telegram serves a bot) |
-| A command times out, says the workspace is busy, or its output is cut short | `tools/workspace/WorkspaceClient.kt` (HTTP errors and job polling), then `workspace/jobs.ts` (admission, timeouts, retention), `container.ts` (whole-container cleanup) and `output.ts` (bounded logs and control-code cleanup) |
-| A workspace cannot reach the internet, or reaches something it should not | `workspace/scripts/netpolicy.sh` (the rules, installed on the host from a helper), then `workspace/container.ts` (the pool's own network and the startup probe) and `workspace/policy.ts` (the guard that re-reads and repairs them) |
-| A workspace loses files, or someone sees another person's | `request/RequestContext.personKeyOrNull` (the sender key both services use) and `telegram/inbound/MessageMetadata.toSenderContext` (the shared accounts that get nothing of their own), then `workspace/container.ts` and `workspace/homes.ts` (one bounded home disk per person) and `workspace/files.ts` (unprivileged, scoped transfers) |
-| Publishing a site fails, or the link shows nothing | `tools/sites/SiteArchive.kt` (every path checked before a byte is uploaded, and the missing `index.html` warning), then `tools/sites/SiteClient.kt` (stage, upload, commit) and `sites/storage.ts` (the caps it is held to, and the rename that swaps a site in) |
-| A published page still serves its old files, or a site nobody wants is still up | the zone's Browser Cache TTL, which overrides what this host sends (see [the site guide](sites.md#dns-and-certificates)), then `sites/storage.ts` (`blocked`, retention) — and `data/sites/<id>` on the host, which an operator can delete with the bot down |
+| A command times out, says the workspace is busy, or its output is cut short | `tools/workspace/WorkspaceClient.kt` (HTTP errors and job polling), then `services/workspace/jobs.ts` (admission, timeouts, retention), `container.ts` (whole-container cleanup) and `output.ts` (bounded logs and control-code cleanup) |
+| A workspace cannot reach the internet, or reaches something it should not | `services/workspace/scripts/netpolicy.sh` (the rules, installed on the host from a helper), then `services/workspace/container.ts` (the pool's own network and the startup probe) and `services/workspace/policy.ts` (the guard that re-reads and repairs them) |
+| A workspace loses files, or someone sees another person's | `request/RequestContext.personKeyOrNull` (the sender key both services use) and `telegram/inbound/MessageMetadata.toSenderContext` (the shared accounts that get nothing of their own), then `services/workspace/container.ts` and `services/workspace/homes.ts` (one bounded home disk per person) and `services/workspace/files.ts` (unprivileged, scoped transfers) |
+| Publishing a site fails, or the link shows nothing | `tools/sites/SiteArchive.kt` (every path checked before a byte is uploaded, and the missing `index.html` warning), then `tools/sites/SiteClient.kt` (stage, upload, commit) and `services/sites/storage.ts` (the caps it is held to, and the rename that swaps a site in) |
+| A published page still serves its old files, or a site nobody wants is still up | the zone's Browser Cache TTL, which overrides what this host sends (see [the site guide](sites.md#dns-and-certificates)), then `services/sites/storage.ts` (`blocked`, retention) — and `data/sites/<id>` on the host, which an operator can delete with the bot down |
 | Wrong language in a canned reply (busy/error/voice/start/task menu) | `i18n/Language.kt` (language selection) + `i18n/Messages.kt` (the strings) |
 | A turn's plan reaches the chat only after the work it announced, or arrives twice | `tools/message/MessageTools.announcePlan` (the tool and its one-per-turn rule) + `telegram/TurnStatus.kt` (`say`, and what survives `finish`) + `outbox/BotOutbox.kt` (`recordDelivered`, `hasDelivered`) + `telegram/delivery/TelegramDelivery.dispatch` (skipping an item already in the chat) |
 | The typing indicator or the turn's status message is wrong, stale, or missing | `telegram/TelegramProgress.kt` (both tickers, and `statusGraceFor`, the per-activity gate deciding which turns get a message at all) + `telegram/TurnStatus.kt` (the message itself, the emoji beside each activity, its stop button, and how it ends) + `agent/ToolActivity.kt` (which tool means what) + `i18n/Messages.progressLabel` (the words) + `telegram/delivery/TelegramDelivery.chatActionFor` (the action) |
@@ -833,11 +834,11 @@ Coding conventions (logger placement, error handling, tool structure, DB/config 
 selected, only the bot starts. Each service receives only its own env file; files may be absent while their profiles are disabled. Compose rejects a missing env file
 for an enabled profile; services validate the values at startup. The controller uses an internal network separate from the public site containers,
 and neither API publishes a host port. Each service mounts what sits beside its own compose file,
-so published content defaults to `sites/data` and never meets the bot's `data`. Both site
-containers read `sites/.env`; nginx clears publishing credentials with empty environment overrides,
+so published content defaults to `services/sites/data` and never meets the bot's `data`. Both site
+containers read `services/sites/.env`; nginx clears publishing credentials with empty environment overrides,
 which `.github/compose-check.sh` enforces against anything added to that file later.
 
-`workspace/compose.yaml` and `sites/compose.yaml` own the service definitions and remain standalone
+`services/workspace/compose.yaml` and `services/sites/compose.yaml` own the service definitions and remain standalone
 deployments, each a directory holding that file and its `.env` — run from inside it, Compose needs
 no arguments at all. The override imports services
 with `extends` and changes only profiles and networks; `ports: !reset []`

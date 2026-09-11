@@ -6,7 +6,7 @@ services:
 
   vusan-workspace:
     extends:
-      file: workspace/compose.yaml
+      file: services/workspace/compose.yaml
       service: vusan-workspace
     profiles: [workspace]
     networks: [vusan-workspace-link]
@@ -14,14 +14,14 @@ services:
 
   vusan-sites:
     extends:
-      file: sites/compose.yaml
+      file: services/sites/compose.yaml
       service: vusan-sites
     profiles: [sites]
     networks: [vusan-sites-link]
 
   vusan-sites-nginx:
     extends:
-      file: sites/compose.yaml
+      file: services/sites/compose.yaml
       service: vusan-sites-nginx
     profiles: [sites]
     networks: [vusan-sites-link]
