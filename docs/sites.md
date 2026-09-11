@@ -67,9 +67,23 @@ network — never publish its port: a published Docker port bypasses `ufw` witho
 
 ## Both on one machine
 
-Follow [Add sites in the README](../README.md#add-sites), after setting up workspace.
-The start command is `docker compose --profile workspace --profile sites up -d`.
-Prepare DNS and certificates below before running it.
+Set the workspace up first — publishing builds there — then, from the repository root:
+
+```bash
+cp services/sites/.env.example services/sites/.env
+mkdir -p services/sites/data services/sites/certs
+openssl rand -hex 32
+```
+
+Set `SITES_DOMAIN` in `services/sites/.env` — the service refuses to start without it — put the new
+secret in `SITES_TOKEN` in **both** that file and the bot's `.env`, and add
+`SITES_URL=http://vusan-sites:8090` to the bot's file. Complete
+[DNS and certificates](#dns-and-certificates) below, with the certificate files in
+`services/sites/certs/`, **before starting**:
+
+```bash
+docker compose --profile workspace --profile sites up -d
+```
 
 Both site containers read `services/sites/.env`: set `SITES_DOMAIN` and `SITES_ORIGIN_PULLS` there,
 alongside the publishing token and service limits. nginx receives empty overrides for
@@ -81,7 +95,8 @@ Directories work by one rule everywhere: each service mounts what sits **beside 
 file**. So the published tree is `services/sites/data/` and the certificates `services/sites/certs/`,
 both of which you create before the first start, exactly as a machine of its own would have them
 beside its `compose.yaml`. The bot's own `data/` sits at the root beside its compose file, and the
-two never meet.
+two never meet. Everything here writes as uid 1000, so hand that uid the two directories if your
+login user is another.
 
 The bot reaches `http://vusan-sites:8090` directly over the Compose network. nginx serves the
 public sites on port 443; neither the publishing service nor the workspace controller publishes a

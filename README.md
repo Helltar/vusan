@@ -22,7 +22,7 @@ Clone the repo and copy the env template:
 ```bash
 git clone https://github.com/Helltar/vusan.git
 cd vusan
-cp env/vusan.env.example env/vusan.env
+cp .env.example .env
 mkdir -p data
 ```
 
@@ -61,8 +61,8 @@ them: the [workspace shell](docs/workspace.md), which runs model-authored comman
 [site host](docs/sites.md), which serves the pages people publish. Each has a machine of its own as
 the recommendation, and each is one compose file plus one env file.
 
-To run everything on one machine instead, `cp .env.example .env`, fill it in, and `docker compose
-up -d` covers all three.
+To run both beside the bot instead, each guide has a section of its own:
+[workspace](docs/workspace.md#both-on-one-machine) and [sites](docs/sites.md#both-on-one-machine).
 
 ### Local JVM
 

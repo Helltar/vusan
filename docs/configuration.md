@@ -3,8 +3,10 @@
 Everything the bot reads from `.env`. Copy
 [`.env.example`](../.env.example) and fill it in; blank values count as missing.
 
-For Docker on one machine, follow the [three setup options](../README.md#docker).
-`.env` holds Compose settings; each service still receives the `.env` beside its own compose file.
+For Docker, follow the [quick start](../README.md#docker); running the optional services beside the
+bot is covered in [workspace](workspace.md#both-on-one-machine) and
+[sites](sites.md#both-on-one-machine). `.env` holds Compose settings; each service still receives
+the `.env` beside its own compose file.
 
 The optional [workspace service](#workspace) has a file and a guide of its own. That split is a
 boundary rather than tidiness: the workspace process holds the Docker socket, so it is never handed

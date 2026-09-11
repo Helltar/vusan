@@ -106,11 +106,25 @@ where the bot's token and database already are; on a machine of its own it lands
 nothing on it. That is the whole of the difference, and it is why a machine of its own stays the
 recommendation for a public or less-trusted deployment.
 
-Follow [Add workspace in the README](../README.md#add-workspace) for the complete setup.
-`docker compose --profile workspace up -d` loads the optional service from
-`compose.override.yaml`; no sites configuration is needed. The controller has no published port:
-the bot reaches `http://vusan-workspace:8080` over a dedicated internal network.
-`WORKSPACE_BIND` is used only by the standalone deployment.
+Setting it up adds one file to the bot's own [setup](../README.md#docker). From the repository
+root:
+
+```bash
+cp services/workspace/.env.example services/workspace/.env
+openssl rand -hex 32
+```
+
+Put that secret in `WORKSPACE_TOKEN` in **both** `services/workspace/.env` and the bot's `.env`, add
+`WORKSPACE_URL=http://vusan-workspace:8080` to the bot's file, and start:
+
+```bash
+docker compose --profile workspace up -d
+```
+
+The profile loads the optional service from `compose.override.yaml`; no sites configuration is
+needed, and no domain either. The controller has no published port: the bot reaches
+`http://vusan-workspace:8080` over a dedicated internal network, and `WORKSPACE_BIND` is used only
+by the standalone deployment.
 
 The bot, controller and sites keep separate environment files. The controller is on
 `vusan-workspace-link`, while the site service and nginx are on `vusan-sites-link`.
