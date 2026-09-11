@@ -1,6 +1,5 @@
 package com.helltar.vusan.config
 
-import ai.koog.prompt.executor.clients.openai.base.models.ReasoningEffort
 import ai.koog.prompt.executor.clients.openai.base.models.ServiceTier
 import com.helltar.vusan.infra.Http
 import io.ktor.client.engine.mock.*
@@ -59,6 +58,27 @@ class CodexCatalogTest {
         assertTrue(models.single().supportsVision)
         assertNull(models.single().supportedReasoningEfforts)
         assertNull(models.single().supportedServiceTiers)
+    }
+
+    // the CLI never sends `ultra` as spelled: it swaps in another effort before building the request, so
+    // a catalog listing it does not make it a value the backend is known to take.
+    @Test
+    fun `the catalog keeps efforts above high but not the ultra alias`() = runBlocking {
+        val models = fetchCodexModels(
+            catalogClient(
+                """
+                {"models":[{"slug":"gpt-5.6-sol","supported_reasoning_levels":[
+                  {"effort":"low"},{"effort":"high"},{"effort":"xhigh"},{"effort":"max"},{"effort":"ultra"}
+                ]}]}
+                """.trimIndent()
+            ),
+            store()
+        )
+
+        assertEquals(
+            setOf(ReasoningEffort.LOW, ReasoningEffort.HIGH, ReasoningEffort.XHIGH, ReasoningEffort.MAX),
+            models.single().supportedReasoningEfforts
+        )
     }
 
     @Test

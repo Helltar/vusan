@@ -1,6 +1,5 @@
 package com.helltar.vusan.config
 
-import ai.koog.prompt.executor.clients.openai.base.models.ReasoningEffort
 import ai.koog.prompt.executor.clients.openai.base.models.ServiceTier
 import java.nio.file.Path
 import kotlin.time.Duration
@@ -16,6 +15,28 @@ enum class HostedLlmProvider {
 enum class OpenAiEndpoint {
     COMPLETIONS,
     RESPONSES
+}
+
+/**
+ * How hard a reasoning model thinks before it answers, named the way the API spells it.
+ *
+ * Vusan's own rather than koog's, whose enum stops at `high` while the API already takes `xhigh` and
+ * `max`. Which of these a model accepts is up to the model. The Codex CLI's `ultra` and `persistent`
+ * are left out on purpose: the CLI turns both into other values before it builds a request, so neither
+ * reaches a backend as it is spelled.
+ */
+enum class ReasoningEffort {
+    NONE,
+    MINIMAL,
+    LOW,
+    MEDIUM,
+    HIGH,
+    XHIGH,
+    MAX;
+
+    /** The value a request carries, which is also how the Codex model catalog lists it. */
+    val requestValue: String
+        get() = name.lowercase()
 }
 
 sealed interface LlmProviderConfig {

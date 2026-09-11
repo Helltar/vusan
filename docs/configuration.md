@@ -96,17 +96,18 @@ banned, and startup says so in the log.
 - **`codex`** — a ChatGPT subscription instead of an API key; see
   [ChatGPT subscription](#chatgpt-subscription).
 
-| Variable                      | Default                   | Description                                                                    |
-|-------------------------------|---------------------------|--------------------------------------------------------------------------------|
-| `LLM_BASE_URL`                | —                         | Server address. Required by `openai-compatible`, unused by the others.         |
-| `LLM_OPENAI_ENDPOINT`         | `completions`             | Which OpenAI API to call: `completions` or `responses`.                        |
-| `LLM_REASONING_EFFORT`        | model default             | Reasoning depth: `none`, `minimal`, `low`, `medium`, or `high`.                |
-| `LLM_REQUEST_TIMEOUT_SECONDS` | `120`                     | Seconds one LLM call may hang before Vusan gives up and replies with an error. |
-| `LLM_CONTEXT_WINDOW_TOKENS`   | model metadata or `16384` | Context size override.                                                         |
+| Variable                      | Default                   | Description                                                                     |
+|-------------------------------|---------------------------|---------------------------------------------------------------------------------|
+| `LLM_BASE_URL`                | —                         | Server address. Required by `openai-compatible`, unused by the others.          |
+| `LLM_OPENAI_ENDPOINT`         | `completions`             | Which OpenAI API to call: `completions` or `responses`.                         |
+| `LLM_REASONING_EFFORT`        | model default             | Reasoning depth: `none`, `minimal`, `low`, `medium`, `high`, `xhigh`, or `max`. |
+| `LLM_REQUEST_TIMEOUT_SECONDS` | `120`                     | Seconds one LLM call may hang before Vusan gives up and replies with an error.  |
+| `LLM_CONTEXT_WINDOW_TOKENS`   | model metadata or `16384` | Context size override.                                                          |
 
 `LLM_OPENAI_ENDPOINT` applies to `openai-compatible` only, `LLM_REASONING_EFFORT` to
-`openai-compatible` and `codex`. Give `LLM_BASE_URL` no `/v1` — the API path is appended for you.
-Raise the timeout for slow local servers and heavy reasoning models.
+`openai-compatible` and `codex`. Which efforts work depends on the model, and only `codex` checks
+yours at startup. Give `LLM_BASE_URL` no `/v1` — the API path is appended for you. Raise the timeout
+for slow local servers and heavy reasoning models.
 
 Set `LLM_CONTEXT_WINDOW_TOKENS` whenever an `openai-compatible` model has a different window. Vusan
 reserves part of that window for the response, tool results and estimation error, then fits only

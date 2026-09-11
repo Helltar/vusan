@@ -1,6 +1,5 @@
 package com.helltar.vusan.config
 
-import ai.koog.prompt.executor.clients.openai.base.models.ReasoningEffort
 import ai.koog.prompt.executor.clients.openai.base.models.ServiceTier
 import io.github.oshai.kotlinlogging.KotlinLogging
 import io.ktor.client.*
@@ -201,9 +200,9 @@ internal fun applyCodexModelMetadata(
 
     if (configuredEffort != null && supportedEfforts != null) {
         require(configuredEffort in supportedEfforts) {
-            "LLM_REASONING_EFFORT=[${configuredEffort.name.lowercase()}] is not supported by " +
+            "LLM_REASONING_EFFORT=[${configuredEffort.requestValue}] is not supported by " +
                     "LLM_MODEL=[${model.id}]. Supported values: " +
-                    supportedEfforts.map { it.name.lowercase() }.sorted().joinToString()
+                    supportedEfforts.sorted().joinToString { it.requestValue }
         }
     }
 

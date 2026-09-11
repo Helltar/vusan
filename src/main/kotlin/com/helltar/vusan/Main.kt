@@ -262,7 +262,7 @@ private fun logStartup(
 ) {
     log.info {
         "LLM: provider=[${llm.providerLabel}] model=[${llm.model.id}]" +
-                llm.reasoningEffort?.let { " reasoningEffort=[${it.name.lowercase()}]" }.orEmpty() +
+                llm.reasoningEffort?.let { " reasoningEffort=[$it]" }.orEmpty() +
                 llm.serviceTier?.let { " serviceTier=[${it.requestValue}]" }.orEmpty()
     }
 

@@ -1,6 +1,5 @@
 package com.helltar.vusan.config
 
-import ai.koog.prompt.executor.clients.openai.base.models.ReasoningEffort
 import ai.koog.prompt.executor.clients.openai.base.models.ServiceTier
 import com.helltar.vusan.request.AccessPolicy
 import com.helltar.vusan.request.Platform

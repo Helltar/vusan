@@ -6,13 +6,15 @@ import ai.koog.prompt.executor.clients.anthropic.AnthropicParams
 import ai.koog.prompt.executor.clients.openai.OpenAIChatParams
 import ai.koog.prompt.executor.clients.openai.OpenAIModels
 import ai.koog.prompt.executor.clients.openai.OpenAIResponsesParams
-import ai.koog.prompt.executor.clients.openai.base.models.ReasoningEffort
 import ai.koog.prompt.executor.clients.openai.base.models.ServiceTier
 import ai.koog.prompt.executor.clients.openai.models.OpenAIInclude
 import ai.koog.prompt.llm.LLMCapability
 import ai.koog.prompt.llm.LLMProvider
 import com.helltar.vusan.infra.Http
 import io.ktor.client.engine.mock.*
+import kotlinx.coroutines.runBlocking
+import kotlinx.serialization.json.jsonObject
+import kotlinx.serialization.json.jsonPrimitive
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFailsWith
@@ -175,26 +177,32 @@ class LlmRuntimeTest {
         assertTrue(runtime.model.supports(LLMCapability.Thinking))
     }
 
+    // koog's own effort enum stops at `high`, so a higher effort travels outside it, and only koog's
+    // serializer decides whether it lands in the body; so the body is read where it leaves the client.
     @Test
-    fun `openai-compatible provider passes the reasoning effort to each endpoint`() {
-        val completions =
-            openAiCompatible(reasoningEffort = ReasoningEffort.NONE).let { assertIs<OpenAIChatParams>(it.chatParams) }
+    fun `an effort above high reaches the wire on every endpoint`() = runBlocking {
+        val completions = sentOpenAiRequest(openAiCompatible(reasoningEffort = ReasoningEffort.MAX))
 
         val responses =
-            openAiCompatible(endpoint = OpenAiEndpoint.RESPONSES, reasoningEffort = ReasoningEffort.LOW)
-                .let { assertIs<OpenAIResponsesParams>(it.chatParams) }
+            sentOpenAiRequest(
+                openAiCompatible(endpoint = OpenAiEndpoint.RESPONSES, reasoningEffort = ReasoningEffort.XHIGH)
+            )
 
-        assertEquals(ReasoningEffort.NONE, completions.reasoningEffort)
-        assertEquals(ReasoningEffort.LOW, responses.reasoning?.effort)
+        val subscription = sentOpenAiRequest(codex(reasoningEffort = ReasoningEffort.XHIGH))
+
+        assertEquals("max", completions.getValue("reasoning_effort").jsonPrimitive.content)
+        assertEquals("xhigh", responses.getValue("reasoning").jsonObject.getValue("effort").jsonPrimitive.content)
+        assertEquals("xhigh", subscription.getValue("reasoning").jsonObject.getValue("effort").jsonPrimitive.content)
     }
 
     @Test
     fun `runtime reports the reasoning effort of either endpoint`() {
-        assertEquals(ReasoningEffort.NONE, openAiCompatible(reasoningEffort = ReasoningEffort.NONE).reasoningEffort)
+        assertEquals("none", openAiCompatible(reasoningEffort = ReasoningEffort.NONE).reasoningEffort)
         assertEquals(
-            ReasoningEffort.HIGH,
+            "high",
             openAiCompatible(endpoint = OpenAiEndpoint.RESPONSES, reasoningEffort = ReasoningEffort.HIGH).reasoningEffort
         )
+        assertEquals("max", codex(reasoningEffort = ReasoningEffort.MAX).reasoningEffort)
         assertNull(openAiCompatible().reasoningEffort)
     }
 
@@ -217,14 +225,6 @@ class LlmRuntimeTest {
         val params = openAiCompatible().let { assertIs<OpenAIChatParams>(it.chatParams) }
 
         assertNull(params.promptCacheKey)
-    }
-
-    @Test
-    fun `openai-compatible provider declares thinking when a reasoning effort is set`() {
-        // the client silently drops the effort for a model without the capability.
-        val runtime = openAiCompatible(reasoningEffort = ReasoningEffort.NONE)
-
-        assertTrue(runtime.model.supports(LLMCapability.Thinking))
     }
 
     @Test
@@ -326,11 +326,13 @@ class LlmRuntimeTest {
     private fun codex(
         contextWindowTokens: Long? = null,
         supportsVision: Boolean = true,
+        reasoningEffort: ReasoningEffort? = null,
         serviceTier: ServiceTier? = null
     ): LlmRuntime =
         resolveLlmRuntime(
             LlmProviderConfig.Codex(
                 model = "gpt-5.6-terra",
+                reasoningEffort = reasoningEffort,
                 requestTimeout = 120.seconds,
                 contextWindowTokens = contextWindowTokens,
                 supportsVision = supportsVision,

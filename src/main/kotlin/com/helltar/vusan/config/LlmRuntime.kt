@@ -22,14 +22,18 @@ import ai.koog.prompt.executor.clients.openai.OpenAIClientSettings
 import ai.koog.prompt.executor.clients.openai.OpenAILLMClient
 import ai.koog.prompt.executor.clients.openai.OpenAIModels
 import ai.koog.prompt.executor.clients.openai.OpenAIResponsesParams
-import ai.koog.prompt.executor.clients.openai.base.models.ReasoningEffort
 import ai.koog.prompt.executor.clients.openai.base.models.ServiceTier
 import ai.koog.prompt.executor.clients.openai.models.OpenAIInclude
-import ai.koog.prompt.executor.clients.openai.models.ReasoningConfig
 import ai.koog.prompt.llm.LLMCapability
 import ai.koog.prompt.llm.LLMProvider
 import ai.koog.prompt.llm.LLModel
 import ai.koog.prompt.params.LLMParams
+import kotlinx.serialization.json.JsonElement
+import kotlinx.serialization.json.JsonObject
+import kotlinx.serialization.json.JsonPrimitive
+import kotlinx.serialization.json.buildJsonObject
+import kotlinx.serialization.json.contentOrNull
+import kotlinx.serialization.json.put
 import kotlin.reflect.full.memberProperties
 import kotlin.reflect.jvm.javaField
 import kotlin.time.Duration
@@ -37,6 +41,9 @@ import kotlin.time.Duration
 private const val OPENAI_API_BASE_URL = "https://api.openai.com"
 private const val OPENAI_PROMPT_CACHE_KEY = "vusan"
 private const val OPENAI_COMPACTION_CACHE_KEY = "vusan-recap"
+private const val COMPLETIONS_REASONING_EFFORT = "reasoning_effort"
+private const val RESPONSES_REASONING = "reasoning"
+private const val RESPONSES_REASONING_EFFORT = "effort"
 private const val HEX_RADIX = 16
 
 data class LlmRuntime(
@@ -73,13 +80,19 @@ private fun String.scoped(conversation: String): String =
 
 // the effort only ever reaches the model through the request params, so read it back from there
 // instead of carrying the provider config around just to report it.
-val LlmRuntime.reasoningEffort: ReasoningEffort?
-    get() =
-        when (val params = chatParams) {
-            is OpenAIChatParams -> params.reasoningEffort
-            is OpenAIResponsesParams -> params.reasoning?.effort
-            else -> null
-        }
+val LlmRuntime.reasoningEffort: String?
+    get() {
+        val extra = chatParams.additionalProperties ?: return null
+
+        val effort =
+            when (chatParams) {
+                is OpenAIChatParams -> extra[COMPLETIONS_REASONING_EFFORT]
+                is OpenAIResponsesParams -> (extra[RESPONSES_REASONING] as? JsonObject)?.get(RESPONSES_REASONING_EFFORT)
+                else -> null
+            }
+
+        return (effort as? JsonPrimitive)?.contentOrNull
+    }
 
 // same as the effort above: the tier reaches the model through the request params and nowhere else.
 val LlmRuntime.serviceTier: ServiceTier?
@@ -130,13 +143,14 @@ private fun openAiCompatibleModel(config: LlmProviderConfig.OpenAiCompatible): L
 
                 when (config.endpoint) {
                     OpenAiEndpoint.COMPLETIONS -> add(LLMCapability.OpenAIEndpoint.Completions)
-                    OpenAiEndpoint.RESPONSES -> add(LLMCapability.OpenAIEndpoint.Responses)
-                }
 
-                // without Thinking the client drops both the reasoning effort and the reasoning items the
-                // model returns, so a reasoning model would re-derive its thinking on every tool result.
-                if (config.endpoint == OpenAiEndpoint.RESPONSES || config.reasoningEffort != null)
-                    add(LLMCapability.Thinking)
+                    OpenAiEndpoint.RESPONSES -> {
+                        add(LLMCapability.OpenAIEndpoint.Responses)
+                        // without Thinking the client drops the reasoning items the model returns, so a
+                        // reasoning model would re-derive its thinking on every tool result.
+                        add(LLMCapability.Thinking)
+                    }
+                }
             }
     )
 
@@ -146,16 +160,16 @@ private fun openAiCompatibleParams(config: LlmProviderConfig.OpenAiCompatible, p
     when (config.endpoint) {
         OpenAiEndpoint.COMPLETIONS ->
             OpenAIChatParams(
+                additionalProperties = completionsReasoning(config.reasoningEffort),
                 parallelToolCalls = false,
-                promptCacheKey = promptCacheKey,
-                reasoningEffort = config.reasoningEffort
+                promptCacheKey = promptCacheKey
             )
 
         OpenAiEndpoint.RESPONSES ->
             OpenAIResponsesParams(
+                additionalProperties = responsesReasoning(config.reasoningEffort),
                 parallelToolCalls = false,
-                promptCacheKey = promptCacheKey,
-                reasoning = config.reasoningEffort?.let { ReasoningConfig(effort = it) }
+                promptCacheKey = promptCacheKey
             )
     }
 
@@ -207,12 +221,24 @@ private fun codexModel(config: LlmProviderConfig.Codex): LLModel =
 
 private fun codexParams(config: LlmProviderConfig.Codex, promptCacheKey: String): LLMParams =
     OpenAIResponsesParams(
+        additionalProperties = responsesReasoning(config.reasoningEffort),
         include = listOf(OpenAIInclude.REASONING_ENCRYPTED_CONTENT),
         parallelToolCalls = false,
         promptCacheKey = promptCacheKey,
-        reasoning = config.reasoningEffort?.let { ReasoningConfig(effort = it) },
         serviceTier = config.serviceTier
     )
+
+// koog's typed effort fields hold only its own enum, which stops at `high`, so the effort rides in the
+// params' additional properties instead: koog merges those into the request body, and unlike the typed
+// fields they are not gated on `LLMCapability.Thinking`. the merge only fills a key koog left empty, so
+// setting its typed `reasoningEffort` or `reasoning` as well would drop this value without a word.
+private fun completionsReasoning(effort: ReasoningEffort?): Map<String, JsonElement>? =
+    effort?.let { mapOf(COMPLETIONS_REASONING_EFFORT to JsonPrimitive(it.requestValue)) }
+
+private fun responsesReasoning(effort: ReasoningEffort?): Map<String, JsonElement>? =
+    effort?.let { value ->
+        mapOf(RESPONSES_REASONING to buildJsonObject { put(RESPONSES_REASONING_EFFORT, value.requestValue) })
+    }
 
 // prompt_cache_key is an openai extension, so do not leak it to arbitrary compatible servers that may
 // reject unknown fields.
