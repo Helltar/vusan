@@ -657,6 +657,9 @@ is: everything in it is yours to handle. The database is a file you can copy for
 before the first start — `mkdir -p data` — because a bind mount Docker creates comes out owned by
 `root` while the bot runs as uid 1000, the same on all three services.
 
+`VUSAN_IMAGE` in the same file picks the image the bot runs, `ghcr.io/helltar/vusan:latest` when
+unset — set it to pin a release tag or to run a build of your own.
+
 **Upgrading a deployment that used the `vusan-data` volume.** Earlier versions kept this in a named
 volume. If `docker volume ls` shows `vusan_vusan-data`, copy it out once, with the bot stopped, or
 it will start on an empty database and quietly build a new one:

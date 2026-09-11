@@ -470,7 +470,9 @@ RUN apt-get update \
 ```
 
 Build it on the workspace machine as `vusan-workspace:custom`, set
-`WORKSPACE_IMAGE=vusan-workspace:custom` in `services/workspace/.env`, and bring the service up again.
+`WORKSPACE_IMAGE=vusan-workspace:custom` in `services/workspace/.env` — on one machine, in the bot's
+`.env` at the repository root instead, the only file Compose substitutes from — and bring the service
+up again.
 Both the controller and its workspace containers then use it. Rebuild custom images when their base
 is updated. For the source-build override, edit `services/workspace/Dockerfile` and use the source-build
 command above instead.
