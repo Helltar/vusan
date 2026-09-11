@@ -14,7 +14,6 @@ notes/
 
 CLAUDE.local.md
 deno.lock
-!sandbox/deno.lock
 
 # claude code sandbox masks home dotfiles with /dev/null stubs, visible only inside its sandboxed commands
 .bash_profile
