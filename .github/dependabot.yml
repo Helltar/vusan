@@ -55,24 +55,7 @@ updates:
         patterns:
           - "*"
 
-  - package-ecosystem: docker
-    directory: /services/workspace
-    schedule:
-      interval: weekly
-    open-pull-requests-limit: 5
-    commit-message:
-      prefix: workspace
-    labels:
-      - dependencies
-      - workspace
-    groups:
-      workspace:
-        patterns:
-          - "*"
-
-  # the site host is two images and one deployment, so both directories ride in a single entry. its
-  # deno base is meant to match the workspace service's: when the two land in separate pull requests,
-  # merge them together rather than leaving the pair split.
+  # the site host is two images and one deployment, so both directories ride in a single entry.
   - package-ecosystem: docker
     directories:
       - /services/sites
