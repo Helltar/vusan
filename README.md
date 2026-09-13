@@ -56,12 +56,10 @@ Or build from source:
 docker compose up --build -d
 ```
 
-That starts the bot by itself. Two capabilities stay off until you deploy what they need: the
-[workspace shell](docs/workspace.md), which runs model-authored commands on a Regolith server — a
-separate project, with a machine of its own as the recommendation — and the
-[site host](docs/sites.md), which serves the pages people publish and ships here as one compose file
-plus one env file. To run the site host beside the bot, its guide has a section of its
-own: [sites](docs/sites.md#both-on-one-machine).
+That starts the bot, which is the whole deployment. Two capabilities stay off until it can reach a
+[Regolith](docs/workspace.md) server: the workspace shell, which runs model-authored commands, and
+[publishing to the web](docs/sites.md), which puts what was built there at a public address. Both come
+from that one server, which is a separate project with a machine of its own as the recommendation.
 
 ### Local JVM
 
@@ -135,7 +133,7 @@ Prerequisites: JDK 21, plus `ffmpeg` and `yt-dlp` on `PATH`.
 
 - [Configuration](docs/configuration.md) — every setting, from the required five onward.
 - [The workspace shell](docs/workspace.md) — what the persistent home does, and how to deploy it.
-- [The site host](docs/sites.md) — where published pages live, and how to deploy it.
+- [Publishing to the web](docs/sites.md) — how a page built in the workspace gets an address.
 - [Architecture](docs/architecture.md) — the layers, and how a message flows through them.
 
 ## Stack

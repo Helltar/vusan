@@ -2,16 +2,16 @@
 
 This document is the orientation map for the codebase: the layers, how a message flows through them, and the background
 flows that run alongside. The main application is Kotlin under
-[`src/main/kotlin/com/helltar/vusan/`](../src/main/kotlin/com/helltar/vusan/). Two things run outside it: the workspace,
-which is a Regolith server this bot is a client of, see [Workspace](#workspace), and the site host, a Deno service under
-[`services/sites/`](../services/sites/), see [Site host](#site-host).
+[`src/main/kotlin/com/helltar/vusan/`](../src/main/kotlin/com/helltar/vusan/), and it is the whole deployment. One thing
+runs outside it: the workspace, a Regolith server this bot is a client of, which also publishes the pages people build —
+see [Workspace](#workspace) and [Publishing to the web](#publishing-to-the-web).
 
 Chasing a symptom rather than reading for orientation? Start at [Where to look when…](#where-to-look-when) — it maps a
 symptom to the file that owns it, and beats searching the tree.
 
 - **Orientation** — [Layers](#layers) · [Request lifecycle](#request-lifecycle) ·
   [Background and side flows](#background-and-side-flows) · [Startup](#startup) ·
-  [Workspace](#workspace) · [Site host](#site-host)
+  [Workspace](#workspace) · [Publishing to the web](#publishing-to-the-web)
 - **Reference** — [Where to look when…](#where-to-look-when) · [Adding a tool](#adding-a-tool) ·
   [Conventions](#conventions)
 
@@ -642,36 +642,21 @@ Each `userId` maps to a sandbox named `u<userId>`, the same in every chat. Conve
 
 See [the workspace guide](workspace.md) for behaviour, setup and limits.
 
-## Site host
+## Publishing to the web
 
-The publishing service is Deno/TypeScript under [`services/sites/`](../services/sites/), fronted by an nginx image built
-from [`services/sites/nginx/`](../services/sites/nginx/) that carries its own configuration. Kotlin reaches it only through
-`tools/sites/SiteClient.kt`. It is a separate deployment, normally on a machine with a public address, and the bot
-only ever connects out to it — nothing reaches back; see [Deployment layouts](#deployment-layouts).
+A person's site is published by the same Regolith server that holds their workspace — this repository holds no site host.
+[`tools/sites/SiteTools.kt`](../src/main/kotlin/com/helltar/vusan/tools/sites/SiteTools.kt) is the whole of it: `publishSite`
+sends one directory's path, the server snapshots it out of the sandbox and answers with the address, and `siteStatus` and
+`unpublishSite` read and remove it.
 
-One person has one site, keyed by the same `personKeyOrNull` the workspace uses and served at
-`<userId>.<domain>`. A numeric label is asserted on both sides: it can never shadow `api` or `www`, and
-never names a directory outside the tree.
-
-- **`tools/sites/SiteTools.kt`** — reads one zip out of the person's workspace, uploads its files and
-  commits. On any failure before the commit it discards the staged upload rather than leaving the next
-  publish to start against the last one's files. `SiteArchive.kt` is the pure half: it checks every path,
-  refuses traversal, absolute paths and dotfiles, enforces the caps and reports whether the archive has an
-  `index.html` at its root, streaming one entry at a time so nothing larger than a single file is held.
-- **`services/sites/main.ts`** — `POST /uploads?owner=` opens a staging directory and answers with the caps this
-  upload will be held to, so the limits live only on the side that enforces them. `PUT /uploads/<id>?path=`
-  streams one file to disk, `POST /uploads/<id>/commit` swaps the tree in by rename, `DELETE /uploads/<id>`
-  abandons it. `GET /site?owner=` reports a site and walks it for a capped list of the files it actually
-  holds, so "what is published" is answered from the site rather than from whoever remembers uploading
-  it; `DELETE /site?owner=` removes one. `GET /health` is the only unauthenticated route.
-- **`services/sites/storage.ts`** — staging, the atomic swap, per-site and per-person caps, the disk floor that
-  refuses writes and clears itself, the retention sweep, and the operator's `blocked` list. Published
-  sites are ordinary files, so an operator with a shell can read or delete them without the bot.
-- **nginx** — terminates TLS with a wildcard certificate (a Cloudflare Origin CA one behind Cloudflare)
-  and by default requires Cloudflare's client certificate, so anything reaching the machine directly is
-  refused at the handshake; `SITES_ORIGIN_PULLS=off` drops that check where something else fronts it. It
-  resolves the service through a variable upstream, which keeps every published site being served while
-  the API behind it is restarting.
+- **One site per person**, keyed by the same `personKeyOrNull` the workspace uses, so the files and the site they become
+  belong to the same identity across every chat.
+- **The bot never builds the URL.** It comes back from the publish call, so the naming scheme and the domain can change on
+  the server without touching the bot.
+- **The one check worth making locally**: a directory with no `index.html` at its top publishes fine and its link then
+  opens nothing, so the tool lists the directory first and says so rather than handing over a dead link.
+- **Whether publishing exists at all** is the server's answer, not a setting here: `GET /v1/info` reports it, and a server
+  without a public role refuses the call in its own words.
 
 ## Where to look when…
 
@@ -693,9 +678,9 @@ A symptom-to-source map for finding the right file fast. Paths are under
 | Vusan will not hand a file from the chat back, or sends it under the wrong name | `telegram/tools/ChatFileTools.sendChatFile` (the `file_id` path and `chatFilename`) + `telegram/TelegramApi.downloadFileById` (`getFile`, and the 20 MB limit on what Telegram serves a bot) |
 | A command times out, says the workspace is busy, or its output is cut short | `tools/workspace/WorkspaceClient.kt` (the API calls, the problem documents they turn into, and the output paging), then `tools/workspace/WorkspaceTools.kt` (what the model is told); anything below that is the Regolith server's own log |
 | A workspace cannot reach the internet, reaches something it should not, or loses a background process | The Regolith server: its network policy and its guards. Nothing here configures either — the bot only names the sandbox |
-| A workspace loses files, or someone sees another person's | `request/RequestContext.personKeyOrNull` (the sender key that names the sandbox, and that the site host uses too) and `telegram/inbound/MessageMetadata.toSenderContext` (the shared accounts that get nothing of their own) |
-| Publishing a site fails, or the link shows nothing | `tools/sites/SiteArchive.kt` (every path checked before a byte is uploaded, and the missing `index.html` warning), then `tools/sites/SiteClient.kt` (stage, upload, commit) and `services/sites/storage.ts` (the caps it is held to, and the rename that swaps a site in) |
-| A published page still serves its old files, or a site nobody wants is still up | the zone's Browser Cache TTL, which overrides what this host sends (see [the site guide](sites.md#dns-and-certificates)), then `services/sites/storage.ts` (`blocked`, retention) — and `data/sites/<id>` on the host, which an operator can delete with the bot down |
+| A workspace loses files, or someone sees another person's | `request/RequestContext.personKeyOrNull` (the sender key that names the sandbox, and the site it publishes) and `telegram/inbound/MessageMetadata.toSenderContext` (the shared accounts that get nothing of their own) |
+| Publishing a site fails, or the link shows nothing | `tools/sites/SiteTools.kt` (the missing `index.html` warning and what the model is told), then the workspace server's own log: it owns the snapshot, the caps and the serving |
+| A published page still serves its old files, or a site nobody wants is still up | the workspace server owns the site: its releases, its caching and its takedown. `tools/sites/SiteTools.kt` only asks |
 | Wrong language in a canned reply (busy/error/voice/start/task menu) | `i18n/Language.kt` (language selection) + `i18n/Messages.kt` (the strings) |
 | A turn's plan reaches the chat only after the work it announced, or arrives twice | `tools/message/MessageTools.announcePlan` (the tool and its one-per-turn rule) + `telegram/TurnStatus.kt` (`say`, and what survives `finish`) + `outbox/BotOutbox.kt` (`recordDelivered`, `hasDelivered`) + `telegram/delivery/TelegramDelivery.dispatch` (skipping an item already in the chat) |
 | The typing indicator or the turn's status message is wrong, stale, or missing | `telegram/TelegramProgress.kt` (both tickers, and `statusGraceFor`, the per-activity gate deciding which turns get a message at all) + `telegram/TurnStatus.kt` (the message itself, the emoji beside each activity, its stop button, and how it ends) + `agent/ToolActivity.kt` (which tool means what) + `i18n/Messages.progressLabel` (the words) + `telegram/delivery/TelegramDelivery.chatActionFor` (the action) |
@@ -758,31 +743,12 @@ Coding conventions (logger placement, error handling, tool structure, DB/config 
 
 ### Deployment layouts
 
-Two deployments ship from this repository, each a directory holding a compose file and the `.env` beside
-it: the bot at the root and the site host in `services/sites/`. Each stands alone on a machine of its own,
-where Compose needs no arguments, and each is configured by its own `.env` alone — the bot's file never
-reaches the service's containers, which keeps application secrets away from the process facing the
-internet. The workspace is a third deployment with none of its files here: a Regolith server, wherever the
-operator runs it.
+One deployment ships from this repository: the bot, a compose file and the `.env` beside it. Everything else it talks to is
+somebody else's deployment — the Regolith server that runs workspaces and publishes sites, wherever the operator put it,
+reached with one URL and one token.
 
-On one machine, `compose.override.yaml`, which Compose loads beside `compose.yaml` on its own, brings the
-site host into the bot's project with `include`: its `compose.yaml` merged with the
-`compose.beside-bot.yaml` beside it. That second file is the whole difference between the layouts — a
-profile (`sites`) so nothing starts until `COMPOSE_PROFILES` asks for it, the service's network, and
-`ports: !reset []`, which takes its API off the host. `include` rather than `extends` is load-bearing: an
-included file is interpolated from the `.env` in its own directory and resolves its paths there, so
-`services/sites/.env` means the same thing in both layouts, while `extends` interpolates every imported
-file from the root `.env` — a `SITES_HOST_DIR` set in the service's own file would be dropped without a
-word. The root `.env` and the shell still win over a service's file, as they do
-for any Compose variable, so a service setting never belongs in them. Named volumes come along with the
-include. A service's compose file is parsed even while its profile is off, so every variable it
-substitutes needs a default, and its `.env` may be missing until the profile is turned on.
+`vusan-egress` is the bot's only network. It connects out and nothing connects in, so the bot runs behind CGNAT as happily
+as on a public machine.
 
-Two networks: `vusan-egress` is the bot's way out, and `vusan-sites-link` joins it to the site service and
-nginx, which publishes 443 through it — so the container facing the internet shares no bridge with
-anything else. Both site containers read `services/sites/.env`, and nginx has the publishing credentials
-blanked with empty `environment` overrides.
-
-`.github/compose-check.sh` resolves every layout in CI and asserts what this section promises: the bot
-alone from a bare checkout, distinct project names, service settings read from the service's own file on
-one machine, and no credential reaching nginx. The one-machine layout needs Compose 2.24.4 or newer.
+In CI the deployment has to resolve from the example file a reader starts with: `.github/workflows/image.yml` copies
+`.env.example` to `.env` and runs `docker compose config`.

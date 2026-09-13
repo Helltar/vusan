@@ -6,11 +6,10 @@ Everything the bot reads from `.env`. Copy
 For Docker, follow the [quick start](../README.md#docker). The same `.env` also carries the few
 Compose settings of the bot's own deployment, listed at the bottom of `.env.example`.
 
-Two things sit outside this file: the [workspace](#workspace), which is a Regolith server with its own
-deployment and its own configuration, and the [site host](#site-host), which has a file and a guide of
-its own. That split is a boundary rather than tidiness: the workspace runs commands the model writes
-and holds a Docker socket to do it, and the site host faces the internet, so neither is ever handed
-the bot's secrets. Do not merge the files, even when one machine runs all three.
+One thing sits outside this file: the [workspace](#workspace), a Regolith server with its own deployment
+and its own configuration, which also publishes the pages people build. That split is a boundary rather
+than tidiness: it runs commands the model writes and holds a Docker socket to do it, and what it
+publishes faces the internet, so it is never handed the bot's secrets.
 
 - **Getting started** — [Minimum setup](#minimum-setup) · [Who Vusan answers](#who-vusan-answers)
 - **The model** — [LLM provider](#llm-provider) · [ChatGPT subscription](#chatgpt-subscription) ·
@@ -18,8 +17,7 @@ the bot's secrets. Do not merge the files, even when one machine runs all three.
 - **Who it is** — [Personality](#personality) · [Appearance](#appearance)
 - **Tools** — [Optional tools](#optional-tools) · [Web search](#web-search) ·
   [Voice output](#voice-output) · [Voice input](#voice-input) ·
-  [Image generation](#image-generation) · [Vision](#vision) · [Workspace](#workspace) ·
-  [Site host](#site-host)
+  [Image generation](#image-generation) · [Vision](#vision) · [Workspace](#workspace)
 - **What it remembers** — [Conversation](#conversation) · [Memory](#memory) ·
   [Group log](#group-log) · [Scheduled tasks](#scheduled-tasks)
 - **In Telegram** — [Rights in a group](#rights-in-a-group) · [Command menu](#command-menu)
@@ -339,7 +337,6 @@ with a `WARN` log and Vusan keeps running.
 | `OPENAI_IMAGE_API_KEY`  | Image generation                          | Reuse your OpenAI key; optional on `codex` |
 | `OPENAI_VISION_API_KEY` | Vision on a chat model that cannot see    | See [Vision](#vision)                      |
 | `REGOLITH_URL`          | Shell workspace                           | See [Workspace](#workspace)                |
-| `SITES_URL`             | Publishing pages to the web               | See [Site host](#site-host)                |
 
 ### Web search
 
@@ -500,28 +497,12 @@ Both a URL and a token must be present, or the workspace tools are not registere
 mentions them. Everything else — the sandbox image, memory, home size, timeouts, retention and network
 policy — is configured on the server, and the bot reads its limits from it.
 
-## Site host
+## Publishing to the web
 
-Vusan can put a finished page, game or small web app on the public internet, one address **per
-person** at `<their Telegram id>.<your domain>`. Like the workspace it is **off by default and
-deploys on its own**, on a machine with a public address; the bot only connects out to it, so a bot
-behind CGNAT can publish to a VPS. Beside the bot works too, with `SITES_URL` pointing straight at
-the service, `http://vusan-sites:8090`, rather than at nginx, whose origin-pull check only
-Cloudflare can satisfy. What it serves, its limits, DNS and certificates, and how to deploy it are in
-[the site guide](sites.md).
-
-These are the bot's side of it, and belong in `.env`:
-
-| Variable           | Default | Description                                                             |
-|--------------------|---------|-------------------------------------------------------------------------|
-| `SITES_URL`        | —       | Address of the publishing API. Unset means the tools do not exist.      |
-| `SITES_TOKEN`      | —       | The shared API secret, the same value the host is given.                |
-| `SITES_TOKEN_FILE` | —       | A file holding that secret instead. An explicit token takes precedence. |
-
-Publishing is a snapshot of files the person built somewhere, so it needs the workspace: with
-`SITES_URL` set but `REGOLITH_URL` missing the tools are not registered and the log says why. The
-service is authoritative about how large a site may be and how many files it may hold, and tells the bot
-those numbers when an upload starts — there is nothing to keep in step by hand.
+Vusan can put a finished page, game or small web app on the public internet at one address per person.
+There is nothing to configure here: it is the workspace server's doing, so a workspace that can publish
+brings the tools with it and one that cannot says so to the model. What a site may hold, where it is
+served and how long it is kept belong to that server; see [the site guide](sites.md).
 
 ## Conversation
 

@@ -90,37 +90,32 @@ Preserve the package boundaries in [`docs/architecture.md`](docs/architecture.md
   Vusan sends no sandbox settings when it creates one: the server's defaults are
   the deployment's business.
 - It is optional — `REGOLITH_URL` plus `REGOLITH_TOKEN` is the whole switch, and
-  without it the shell tools and site publishing are not registered.
+  without it neither the shell tools nor publishing are registered.
 
-### The site host
+### Publishing to the web
 
-- `services/sites/` is a second Deno service and `services/sites/nginx/` the
-  image that fronts it. Kotlin reaches it only over HTTP through
-  `tools/sites/SiteClient.kt`, and never builds a site's URL — the service
-  returns it, so the naming scheme can change without touching the bot.
-- The service is authoritative about how large a site may be and how many files
-  it may hold, and states those caps when an upload starts. Do not keep a second
-  copy of them in Kotlin.
-- Publishing is a snapshot: files are staged and swapped in by rename, never
-  written into a live site, and nothing is served out of a workspace home. Every
-  path is checked in `SiteArchive.kt` before an upload and again by the service,
-  which does not trust its caller.
-- It is an optional, separate deployment, normally on a machine with a public
-  address — `services/sites/compose.yaml`, with `SITES_URL` plus `SITES_TOKEN`
-  the whole switch on the bot's side. It also needs a workspace to publish from;
-  with one missing the tools are not registered.
+- A site is published by the workspace server, not from here: one call sends a
+  directory's path and gets the address back. Never build a site's URL in Kotlin
+  — the server returns it, so its naming scheme can change without touching the
+  bot.
+- The server is authoritative about what a site may hold, where it is served and
+  how long it is kept. Do not keep a copy of any of it here, and do not add a
+  setting for whether publishing exists: `GET /v1/info` says so.
+- Publishing is a snapshot of a directory, and the tools say so to the model.
+  Nothing is served out of a live workspace home, which is reclaimed when its
+  session stops.
+- The one check worth doing on this side is the missing `index.html`, because a
+  directory without one publishes fine and its link opens nothing.
 
 ### Deployment layouts
 
-- A deployment is a directory holding its compose file and the `.env` beside
-  it — the bot at the root, each service under `services/<name>/` — and that
-  `.env` configures it wherever it runs. The root `.env` is the bot's; never
-  make a service read a setting from it.
-- On one machine `compose.override.yaml` brings each service in with `include`,
-  merged with the `compose.beside-bot.yaml` beside it: its profile, its network,
-  no published API port. Keep it `include` — `extends` interpolates from the
-  root `.env` and silently ignores the service's own. `.github/compose-check.sh`
-  resolves both layouts in CI and asserts this.
+- One deployment ships from this repository: the bot, its `compose.yaml` and the
+  `.env` beside it. Nothing else belongs in it — the workspace and the sites it
+  publishes are a Regolith server's, deployed separately and reached with one URL
+  and one token.
+- The bot only ever connects out. Never add an inbound port or a service that
+  expects to reach it, so a deployment behind CGNAT stays as ordinary as one on a
+  public machine.
 
 ## Documentation Triggers
 
@@ -134,11 +129,9 @@ what they describe:
 - [`docs/configuration.md`](docs/configuration.md) and
   [`.env.example`](.env.example): env var additions, removals,
   renames, default or semantics changes.
-- [`docs/sites.md`](docs/sites.md) and
-  [`services/sites/.env.example`](services/sites/.env.example): what a published
-  site may contain, its limits, DNS and certificates, and how the host is
-  deployed. Every knob in `services/sites/config.ts` lands in both, the
-  [limits table](docs/sites.md#limits) being the tuning reference.
+- [`docs/sites.md`](docs/sites.md): what publishing does for a person and what
+  the bot expects of the server that serves it. Limits, addresses and retention
+  are the server's to document, not this repository's.
 - [`docs/workspace.md`](docs/workspace.md): what the workspace can do, what the
   bot expects of a Regolith server, and which side owns each limit — the [limits
   table](docs/workspace.md#limits) lists only the bounds this repository

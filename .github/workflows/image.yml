@@ -6,15 +6,10 @@ on:
     paths:
       - .dockerignore
       - .env.example
-      - services/sites/.env.example
-      - .github/compose-check.sh
       - .github/workflows/image.yml
       - Dockerfile
       - build.gradle.kts
-      - compose.override.yaml
       - compose.yaml
-      - services/sites/compose.yaml
-      - services/sites/compose.beside-bot.yaml
       - gradle/**
       - gradle.properties
       - settings.gradle.kts
@@ -23,15 +18,10 @@ on:
     paths:
       - .dockerignore
       - .env.example
-      - services/sites/.env.example
-      - .github/compose-check.sh
       - .github/workflows/image.yml
       - Dockerfile
       - build.gradle.kts
-      - compose.override.yaml
       - compose.yaml
-      - services/sites/compose.yaml
-      - services/sites/compose.beside-bot.yaml
       - gradle/**
       - gradle.properties
       - settings.gradle.kts
@@ -60,7 +50,8 @@ jobs:
     timeout-minutes: 30
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-      - run: ./.github/compose-check.sh
+      # the deployment has to resolve from the example file a reader starts with
+      - run: cp .env.example .env && docker compose config --quiet
       - uses: docker/setup-buildx-action@37fe631027851001ddb9b187196cc803df7f5f0e # v4
       - uses: docker/build-push-action@53b7df96c91f9c12dcc8a07bcb9ccacbed38856a # v7
         with:
@@ -82,7 +73,8 @@ jobs:
       packages: write
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-      - run: ./.github/compose-check.sh
+      # the deployment has to resolve from the example file a reader starts with
+      - run: cp .env.example .env && docker compose config --quiet
       - uses: docker/setup-buildx-action@37fe631027851001ddb9b187196cc803df7f5f0e # v4
       - uses: docker/login-action@dbcb813823bdd20940b903addbd779551569679f # v4
         with:

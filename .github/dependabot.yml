@@ -54,21 +54,3 @@ updates:
       docker:
         patterns:
           - "*"
-
-  # the site host is two images and one deployment, so both directories ride in a single entry.
-  - package-ecosystem: docker
-    directories:
-      - /services/sites
-      - /services/sites/nginx
-    schedule:
-      interval: weekly
-    open-pull-requests-limit: 5
-    commit-message:
-      prefix: sites
-    labels:
-      - dependencies
-      - sites
-    groups:
-      sites:
-        patterns:
-          - "*"

@@ -1,4 +1,5 @@
-# the bot alone; compose.override.yaml adds optional workspace and sites profiles.
+# the whole deployment: the bot. its workspace and the sites it publishes belong to a regolith
+# server, deployed on its own — see docs/workspace.md.
 name: vusan
 
 services:
