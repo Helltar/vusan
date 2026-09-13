@@ -75,13 +75,17 @@ class SiteToolsTest {
             }
         }
         val workspaceEngine = MockEngine { request ->
-            assertEquals("/files", request.url.encodedPath)
+            assertEquals("/v1/sandboxes/u55/files/content", request.url.encodedPath)
             archive?.let { respond(it, HttpStatusCode.OK) }
-                ?: respond("""{"error":"No such path"}""", HttpStatusCode.BadRequest, headersOf(HttpHeaders.ContentType, "application/json"))
+                ?: respond(
+                    """{"code":"not_found","detail":"No such path","title":"Not found","status":404}""",
+                    HttpStatusCode.NotFound,
+                    headersOf(HttpHeaders.ContentType, "application/problem+json")
+                )
         }
         return SiteTools(
             SiteClient(Http.createClient(siteEngine), "http://sites:8090", "synthetic-site-secret-1234567890abc"),
-            WorkspaceClient(Http.createClient(workspaceEngine), "http://workspace:8080", 600.seconds, "synthetic-workspace-secret-123456"),
+            WorkspaceClient(Http.createClient(workspaceEngine), "http://regolith:8080", "synthetic-workspace-secret-123456"),
             requireNotNull(context.personKeyOrNull)
         )
     }

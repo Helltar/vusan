@@ -173,8 +173,8 @@ class ToolRegistryFactory(
         }
 
     private val workspaceClient =
-        optional("WORKSPACE_URL", config.workspaceUrl, "workspace shell tools") {
-            WorkspaceClient(http, it, config.workspaceMaxTimeoutSeconds.seconds, requireNotNull(config.workspaceToken))
+        optional("REGOLITH_URL", config.regolithUrl, "workspace shell tools") {
+            WorkspaceClient(http, it, requireNotNull(config.regolithToken))
         }
 
     // publishing means taking a snapshot of files the person built somewhere; without a workspace there
@@ -182,7 +182,7 @@ class ToolRegistryFactory(
     private val siteClient =
         optional("SITES_URL", config.sitesUrl, "site publishing tools") { url ->
             workspaceClient?.let { SiteClient(http, url, requireNotNull(config.sitesToken)) }
-                ?: null.also { log.warn { "WORKSPACE_URL not set — site publishing has nothing to publish; tools disabled" } }
+                ?: null.also { log.warn { "REGOLITH_URL not set — site publishing has nothing to publish; tools disabled" } }
         }
 
     // the key that enables voice transcription also hands a video's sound to the vision tool

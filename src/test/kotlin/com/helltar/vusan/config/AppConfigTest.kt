@@ -15,7 +15,7 @@ class AppConfigTest {
     @Test
     fun `an unset value stays unset so the caller can pick its default`() {
         assertNull(parseIntEnv("MAX_TASKS_PER_USER", null))
-        assertNull(parseLongEnv("WORKSPACE_MAX_TIMEOUT_SECONDS", null))
+        assertNull(parseLongEnv("TASK_MAX_LATENESS_MINUTES", null))
         assertNull(parseBooleanEnv("GROUP_LOG_ENABLED", null))
         assertEquals(emptySet(), parseIdSetEnv("ALLOWED_IDS", null))
     }
@@ -24,7 +24,7 @@ class AppConfigTest {
     fun `numbers are read, with surrounding whitespace tolerated`() {
         assertEquals(9, parseIntEnv("MAX_TASKS_PER_USER", "9"))
         assertEquals(9, parseIntEnv("MAX_TASKS_PER_USER", " 9 "))
-        assertEquals(300L, parseLongEnv("WORKSPACE_MAX_TIMEOUT_SECONDS", "300"))
+        assertEquals(300L, parseLongEnv("TASK_MAX_LATENESS_MINUTES", "300"))
         assertEquals(-1, parseIntEnv("MAX_TASKS_PER_USER", "-1"))
     }
 
@@ -37,8 +37,8 @@ class AppConfigTest {
         assertContains(failure.message.orEmpty(), "7O")
 
         assertFailsWith<IllegalStateException> { parseIntEnv("MAX_TASKS_PER_USER", "many") }
-        assertFailsWith<IllegalStateException> { parseLongEnv("WORKSPACE_MAX_TIMEOUT_SECONDS", "120s") }
-        assertFailsWith<IllegalStateException> { parseLongEnv("WORKSPACE_MAX_TIMEOUT_SECONDS", "1.5") }
+        assertFailsWith<IllegalStateException> { parseLongEnv("TASK_MAX_LATENESS_MINUTES", "120s") }
+        assertFailsWith<IllegalStateException> { parseLongEnv("TASK_MAX_LATENESS_MINUTES", "1.5") }
     }
 
     @Test
@@ -97,9 +97,14 @@ class AppConfigTest {
     @Test
     fun `a number that parses but cannot work is rejected too`() {
         assertFailsWith<IllegalArgumentException> { config(agentMaxIterations = 0) }
-        assertFailsWith<IllegalArgumentException> { config(workspaceMaxTimeoutSeconds = 0) }
         assertFailsWith<IllegalArgumentException> { config(maxTasksPerUser = -1) }
         assertFailsWith<IllegalArgumentException> { config(taskMaxLatenessMinutes = -1) }
+    }
+
+    // a service reached without its secret is a misconfiguration, never a service reached anonymously
+    @Test
+    fun `a workspace url without a token stops the startup`() {
+        assertFailsWith<IllegalArgumentException> { config(regolithUrl = "http://regolith:8080") }
     }
 
     @Test
@@ -112,7 +117,7 @@ class AppConfigTest {
         maxFollowUpsPerUser: Int = 3,
         maxMemoryPerScope: Int = 10,
         maxTasksPerUser: Int = 5,
-        workspaceMaxTimeoutSeconds: Long = 600,
+        regolithUrl: String? = null,
         taskMaxLatenessMinutes: Long = 60
     ): AppConfig =
         AppConfig(
@@ -139,9 +144,8 @@ class AppConfigTest {
             openAiStt = null,
             openAiVision = null,
             personality = null,
-            workspaceMaxTimeoutSeconds = workspaceMaxTimeoutSeconds,
-            workspaceToken = null,
-            workspaceUrl = null,
+            regolithToken = null,
+            regolithUrl = regolithUrl,
             sitesToken = null,
             sitesUrl = null,
             searxngUrl = null,

@@ -98,7 +98,7 @@ class WorkspaceTools(
     ): String = suspendToolGuard {
         val target = path.requireToolText("Path", MAX_PATH_CHARS)
         client.deleteFile(id, target)
-        "Deleted `$target`. Other files were kept; background processes were stopped."
+        "Deleted `$target`. Everything else was kept, and running commands were left alone."
     }
 
     @Tool
@@ -187,9 +187,11 @@ class WorkspaceTools(
     }
 }
 
+private val JOB_ID = Regex("[0-9a-f]{32}")
+
 private fun checkedJobId(value: String): String {
-    val id = value.requireToolText("Job ID", 36)
-    require(UUID.fromString(id).toString() == id) { "Invalid job ID" }
+    val id = value.requireToolText("Job ID", 32)
+    require(JOB_ID.matches(id)) { "Invalid job ID" }
     return id
 }
 
@@ -197,15 +199,22 @@ private fun describeCommand(result: CommandResult): String = buildString {
     appendLine("Job ${result.jobId}: ${result.status.name.lowercase()}.")
     result.output.takeIf { it.isNotBlank() }?.let { appendLine(xmlBlock("command_output", it)) }
     result.exitCode?.let { appendLine("Exit code $it.") }
-    result.error?.let { appendLine(it) }
+    when (result.limit) {
+        CommandLimit.OUT_OF_MEMORY ->
+            appendLine("The workspace ran out of memory and a process was killed. Work on less at once — smaller inputs, one step at a time.")
+        CommandLimit.TOO_MANY_PROCESSES ->
+            appendLine("The workspace reached its process limit. Run fewer things at once, for example `make -j2` or fewer workers.")
+        null -> Unit
+    }
     when (result.status) {
         CommandStatus.RUNNING -> appendLine("The command is still running. Read it again with readWorkspaceCommand.")
-        CommandStatus.TIMED_OUT, CommandStatus.CANCELLED -> appendLine("All processes in this workspace were stopped; files were kept.")
-        CommandStatus.INTERRUPTED -> appendLine("The service restarted; files were kept. Check the project before retrying.")
+        CommandStatus.TIMED_OUT -> appendLine("It ran past its time limit and was stopped; files were kept.")
+        CommandStatus.CANCELLED -> appendLine("It was cancelled with every process it started; files were kept.")
+        CommandStatus.INTERRUPTED ->
+            appendLine("The workspace stopped under it (${result.reason ?: "reason unknown"}); files were kept. Check the project before retrying.")
         else -> Unit
     }
-    if (result.hasMore || result.status == CommandStatus.RUNNING) appendLine("Continue reading with offset=${result.nextOffset}.")
-    if (result.truncated) appendLine("The command reached the stored log limit; later output was discarded.")
-    if (result.diskWarning) appendLine("Workspace disk use is above the warning threshold. Clean up files that are no longer needed.")
+    if (result.hasMore) appendLine("Continue reading with offset=${result.nextOffset}.")
+    if (result.truncated) appendLine("The command reached the stored log limit; part of the output was dropped.")
     if (result.elapsedMs >= 1000) appendLine("Elapsed: ${"%.1f".format(Locale.ROOT, result.elapsedMs / 1000.0)}s.")
 }.trim()
