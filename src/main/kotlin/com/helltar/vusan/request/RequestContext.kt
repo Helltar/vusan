@@ -93,11 +93,11 @@ data class RequestContext(
  * gets neither: one shared account would be one home and one site that every anonymous admin and every
  * linked channel writes into.
  *
- * The workspace and site protocols accept `u` plus digits and nothing else, and a site's public
- * address is built from that number, so this cannot simply become [UserRef.key]. Until those services
- * are given a qualified key of their own, only Telegram gets a person key at all — a second platform
- * silently reusing `u<id>` would hand somebody else's home and published site to whoever matched the
- * number. See notes/second-platform.md.
+ * The site protocol accepts `u` plus digits and nothing else, and a site's public address is built
+ * from that number, so this cannot simply become [UserRef.key]. Until those services are given a
+ * qualified key of their own, only Telegram gets a person key at all — a second platform silently
+ * reusing `u<id>` would hand somebody else's home and published site to whoever matched the number.
+ * See notes/second-platform.md.
  */
 val RequestContext.personKeyOrNull: String?
     get() = sender.takeIf { it.isPerson && platform == Platform.TELEGRAM }?.let { "u${it.id}" }

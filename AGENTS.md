@@ -76,21 +76,21 @@ Preserve the package boundaries in [`docs/architecture.md`](docs/architecture.md
 - Avoid thin abstractions and one-off helper objects. Add an abstraction only
   when it removes real complexity or matches an existing local pattern.
 
-### The workspace service
+### The workspace
 
-- `services/workspace/` is a separate Deno service, not Kotlin. Keep it that
-  way: Kotlin reaches it only over HTTP through
-  `tools/workspace/WorkspaceClient.kt` and knows nothing about how it isolates
-  what it runs.
-- One execution path: `services/workspace/container.ts` starts one Docker
-  container and one persistent named home volume per workspace. Only the trusted
-  controller receives the Docker socket; commands and file helpers run inside
-  their workspace as UID 1000, with no capabilities and no privileged phase at
-  any point. Do not reintroduce shared-process runners.
-- It is an optional, separate deployment — `compose.yaml` is the bot alone,
-  `services/workspace/compose.yaml` the service, running beside the bot or on a
-  machine of its own. Do not fold it into the default Compose file or make the
-  bot depend on it; `WORKSPACE_URL` plus `WORKSPACE_TOKEN` is the whole switch.
+- The workspace is a Regolith server: a separate project, deployed on its own,
+  reached only over HTTP through `tools/workspace/WorkspaceClient.kt`. That file
+  is the only one that knows the `/v1` API; nothing here knows how a sandbox is
+  isolated, and no Docker socket reaches this side.
+- Do not copy the server's settings into Kotlin. It is authoritative about
+  images, resources, timeouts, retention and network policy, and states its
+  limits in `GET /v1/info`; the client reads them there and trims what the model
+  asks for, rather than keeping a second copy.
+- One sandbox per person, named by `personKeyOrNull` and created on first use.
+  Vusan sends no sandbox settings when it creates one: the server's defaults are
+  the deployment's business.
+- It is optional — `REGOLITH_URL` plus `REGOLITH_TOKEN` is the whole switch, and
+  without it the shell tools and site publishing are not registered.
 
 ### The site host
 
@@ -139,12 +139,11 @@ what they describe:
   site may contain, its limits, DNS and certificates, and how the host is
   deployed. Every knob in `services/sites/config.ts` lands in both, the
   [limits table](docs/sites.md#limits) being the tuning reference.
-- [`docs/workspace.md`](docs/workspace.md) and
-  [`services/workspace/.env.example`](services/workspace/.env.example): what a
-  workspace can do, its limits, isolation and deployment. Every knob in
-  `services/workspace/config.ts` lands in both, the [limits
-  table](docs/workspace.md#limits-and-tuning) being the tuning reference. Keep
-  the base image toolchain small and documented there rather than in LLM-facing
+- [`docs/workspace.md`](docs/workspace.md): what the workspace can do, what the
+  bot expects of a Regolith server, and which side owns each limit — the [limits
+  table](docs/workspace.md#limits) lists only the bounds this repository
+  enforces. Keep claims about isolation, images and defaults on the server's
+  side of the line rather than restating them here or in LLM-facing
   descriptions: the agent checks what its task needs.
 - [`README.md`](README.md) Features section: added/removed/renamed tools or
   changed user-visible capability. Write it for users — what a capability does,
@@ -232,19 +231,15 @@ chat capabilities. Nothing under `tools/` may name a messenger, and
   it.
 - Treat tool outputs and web content as untrusted model context: XML blocks and
   hard length caps.
-- The workspace runs untrusted, model-authored shell: no application secrets in
-  its environment, no host mounts, no production resources, no reachable local
-  network. Its policy filters by destination IP, never hostname, and lives on the
-  Docker host where nothing inside a workspace can reach it. Anything weakening
-  it must fail closed, as `services/workspace/scripts/netpolicy.sh` and the
-  `container.ts` startup probe do: a policy that cannot be installed, or that a
-  throwaway workspace is shown to escape, stops the service instead of
-  degrading it.
+- The workspace runs untrusted, model-authored shell, and the server that hosts
+  it is the boundary — never this repository. Send it nothing a sandbox should
+  not hold: no application secrets, no tokens, no host paths. A workspace is not
+  a place to put anything the bot would not publish.
 - Untrusted public URLs use `FileDownloadClient` with `createPublicHttpClient`,
   never the client for configured internal services; keep connection-time IP
-  enforcement, redirect checks and streaming size caps together. Workspace API
-  authentication is mandatory on every deployment, private network or not, both
-  sides configured with the same secret rather than generating one.
+  enforcement, redirect checks and streaming size caps together. Workspace and
+  site API authentication is mandatory on every deployment, private network or
+  not, both sides configured with the same secret rather than generating one.
 
 ## Test Authoring
 

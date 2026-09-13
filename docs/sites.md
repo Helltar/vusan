@@ -59,7 +59,7 @@ SITES_URL=https://api.example.com
 SITES_TOKEN=<the same value>
 ```
 
-Publishing needs a workspace to build in, so `WORKSPACE_URL` must be configured too. Without it the
+Publishing needs a workspace to build in, so `REGOLITH_URL` must be configured too. Without it the
 tools are not registered and the log says so at startup.
 
 Only nginx publishes a port, and only `443/tcp`. The service itself is reachable solely over the compose
@@ -68,8 +68,8 @@ containers read `.env`, and nginx, the one facing the internet, gets the publish
 
 ## Both on one machine
 
-Set the workspace up first — publishing builds there. Then, from the repository root, create the
-same directory a machine of its own would hold, under `services/sites/`:
+Set the workspace up first — publishing builds there, on a Regolith server of its own. Then, from the
+repository root, create the same directory a machine of its own would hold, under `services/sites/`:
 
 ```bash
 mkdir -p services/sites/data services/sites/certs
@@ -82,7 +82,7 @@ Set `SITES_DOMAIN` in that file — the service refuses to start without it — 
 
 ```dotenv
 SITES_URL=http://vusan-sites:8090
-COMPOSE_PROFILES=workspace,sites
+COMPOSE_PROFILES=sites
 ```
 
 The bot talks to the service by name rather than through nginx, whose origin-pull check only
@@ -95,9 +95,8 @@ origin pulls, the limits, the image tags. `SITES_HOST_DIR` and `SITES_CERT_DIR` 
 `data/` at the root never meets them. Everything here writes as uid 1000, so hand that uid both
 directories if your login user is another.
 
-nginx publishes 443 as it would anywhere. Neither the publishing service nor the workspace controller
-publishes a port, and the controller sits on a network of its own, so nothing facing the internet can
-reach the process holding the Docker socket.
+nginx publishes 443 as it would anywhere; the publishing service itself never does, so nothing facing
+the internet reaches it except through nginx.
 
 Every command further down this page is written for a machine of its own and runs from the deployment
 directory; on one machine, run it from the repository root instead, where it also covers the bot.

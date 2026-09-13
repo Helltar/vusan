@@ -56,13 +56,12 @@ Or build from source:
 docker compose up --build -d
 ```
 
-That starts the bot by itself. Two optional services ship beside it and stay off until you deploy
-them: the [workspace shell](docs/workspace.md), which runs model-authored commands, and the
-[site host](docs/sites.md), which serves the pages people publish. Each has a machine of its own as
-the recommendation, and each is one compose file plus one env file.
-
-To run either or both beside the bot instead, each guide has a section of its own:
-[workspace](docs/workspace.md#both-on-one-machine) and [sites](docs/sites.md#both-on-one-machine).
+That starts the bot by itself. Two capabilities stay off until you deploy what they need: the
+[workspace shell](docs/workspace.md), which runs model-authored commands on a Regolith server — a
+separate project, with a machine of its own as the recommendation — and the
+[site host](docs/sites.md), which serves the pages people publish and ships here as one compose file
+plus one env file. To run the site host beside the bot, its guide has a section of its
+own: [sites](docs/sites.md#both-on-one-machine).
 
 ### Local JVM
 

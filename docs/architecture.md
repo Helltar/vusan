@@ -2,16 +2,16 @@
 
 This document is the orientation map for the codebase: the layers, how a message flows through them, and the background
 flows that run alongside. The main application is Kotlin under
-[`src/main/kotlin/com/helltar/vusan/`](../src/main/kotlin/com/helltar/vusan/); the two optional services are Deno under
-[`services/`](../services/) — the shell workspace, see [Workspace service](#workspace-service), and the site host, see
-[Site host](#site-host).
+[`src/main/kotlin/com/helltar/vusan/`](../src/main/kotlin/com/helltar/vusan/). Two things run outside it: the workspace,
+which is a Regolith server this bot is a client of, see [Workspace](#workspace), and the site host, a Deno service under
+[`services/sites/`](../services/sites/), see [Site host](#site-host).
 
 Chasing a symptom rather than reading for orientation? Start at [Where to look when…](#where-to-look-when) — it maps a
 symptom to the file that owns it, and beats searching the tree.
 
 - **Orientation** — [Layers](#layers) · [Request lifecycle](#request-lifecycle) ·
   [Background and side flows](#background-and-side-flows) · [Startup](#startup) ·
-  [Workspace service](#workspace-service) · [Site host](#site-host)
+  [Workspace](#workspace) · [Site host](#site-host)
 - **Reference** — [Where to look when…](#where-to-look-when) · [Adding a tool](#adding-a-tool) ·
   [Conventions](#conventions)
 
@@ -614,106 +614,33 @@ does not mark every bot unhealthy over something a restart cannot fix — while 
 backoff decays to a 15-minute retry interval and a restart becomes the thing that clears it. See
 [Health check](configuration.md#health-check).
 
-## Workspace service
+## Workspace
 
-The shell service is Deno/TypeScript under [`services/workspace/`](../services/workspace/). Kotlin reaches it only through
-`tools/workspace/WorkspaceClient.kt`; Docker details never enter the bot's request flow.
+The workspace is a [Regolith](workspace.md) server: a separate project with its own deployment, which
+runs the commands and confines them. This repository holds only the client —
+[`tools/workspace/WorkspaceClient.kt`](../src/main/kotlin/com/helltar/vusan/tools/workspace/WorkspaceClient.kt), the one
+file that knows the `/v1` API. Docker, homes and network policy never enter the bot's request flow.
 
-Each `userId` maps to a readable ID `u<userId>` in every chat. Conversation history still uses `(userId, chatId)`; only
-the files and workspace jobs are shared. `container.ts` gives the user one Docker container and a bounded ext4
-filesystem mounted as `HOME=/work`. Its preallocated image is kept in a separate named backing volume that the user
-container cannot access. All commands and file transfers run inside that container as UID 1000. There is no UID pool,
-shared runner, engine selection or runtime selection. The same image serves controller and workspace roles.
+Each `userId` maps to a sandbox named `u<userId>`, the same in every chat. Conversation history still uses
+`(userId, chatId)`; only the files and the commands running in them are shared.
 
-- **`main.ts`** — validates/authenticates HTTP requests, limits concurrent file transfers, owns the state lock, startup
-  recovery, shutdown and idle-sweep timer. `POST /jobs?id=...` starts a command; `GET /jobs?id=...` lists recent ones;
-  `GET`/`DELETE /jobs/<jobId>?id=...` reads/cancels one. `PUT`/`GET /files?id=...&path=...` streams a bounded file in
-  either direction, never buffering one whole. `DELETE /files?id=...&path=...` removes one exact path through isolated
-  cleanup, and `DELETE /workspace?id=...` discards the home entirely. `GET /health` reports protocol version 5, and is
-  red while either guard has admission closed. Busy/capacity responses use `409`; invalid input, authentication and
-  missing jobs have explicit HTTP errors. The Kotlin client parses error bodies instead of relying on the shared
-  client's `expectSuccess` default.
-- **`auth.ts`** — validates mandatory API secrets and constant-time bearer comparisons. The operator configures both
-  sides with the same secret, directly or through a file; nothing is generated, since the two services no longer share a
-  machine by default. No empty-token mode exists. Only `/health` is unauthenticated. The Kotlin workspace client refuses
-  redirects.
-- **`jobs.ts`** — reserves the per-workspace and global command slots before awaiting anything. Commands initially wait
-  at most ten seconds, then return a running ID; reads can wait up to twenty seconds and continue from a byte offset.
-  Job records/logs live under the controller's `/state`, not the user-editable home. Atomic metadata replacement
-  supports interrupted-command recovery; only the latest 20 jobs and at most 8 MiB of output per job are retained. An
-  hourly sweep deletes a workspace nobody has touched for `WORKSPACE_RETAIN_DAYS` outright — records, home and backing
-  disk — dating each one by the newest of its use mark, its last command and the day its home appeared, and leaving
-  alone any it cannot date. A flattened, capped command preview, workspace/job IDs, status, exit code and duration go to
-  the service log.
-- **`container.ts`** — serialized lifecycle operations create, reuse and remove workspace containers. It resolves the
-  image to an ID on startup, sets per-container CPU/memory/PID limits and the per-file size rlimit every command
-  inherits, throttles reads/writes to its loop device, and mounts only that person's bounded home. Startup requires
-  cgroup v2 resource controls and derives a container pool ceiling from the host's memory/CPU capacity. It gives the
-  pool a Docker network of its own with inter-container traffic disabled, has the policy installed on the host, and
-  proves it from a throwaway container before serving anything, and `policy.ts` keeps checking that it is still there. A
-  workspace container itself runs as UID 1000 with `sleep` for an entrypoint and an empty capability set: nothing in it
-  is ever privileged, not even for the instant before dropping. Workspaces run at a low CPU weight, and the idle sweep
-  also measures the processor time each one spent with no command of its own running, removing a workspace that goes
-  past its unattended budget. Cancelling or timing out removes the entire container, so `setsid` cannot evade cleanup.
-  Idle removal never deletes the home. Startup removes only containers carrying this controller's namespace label;
-  shutdown removes live containers too. Commands and file transfers hold leases; at capacity, the oldest unleased
-  container can be removed without deleting its home. A user's different chats cannot reserve multiple containers.
-- **`homes.ts` / `home-disk.sh`** — provision and release bounded home storage. A fixed trusted helper without
-  networking receives the backing volume, `SYS_ADMIN`/`MKNOD`, loop-device permissions and `/dev`. It reserves the full
-  disk size while preserving host free-space reserve, formats ext4 without discard, sets root ownership to UID/GID 1000,
-  and attaches the image to a loop device. An ordinary Docker local volume mounts that filesystem into the user
-  container with `nosuid,nodev,nodiscard`. Only the trusted helper sees the raw image or loop devices. Stop/idle
-  eviction removes the mount wrapper and detaches the loop; the backing volume persists. Startup reconciles attachments
-  after an interrupted shutdown. A volume that is not a bounded home is refused rather than opened, and there is no
-  unbounded fallback. `resetWorkspace` (and reclamation) drops the wrapper, the backing volume and the loop attachment
-  together, which is also the only way past a home the current layout cannot open.
-- **`docker.ts`** — bounded Docker CLI calls, including stdin/stdout draining and operation deadlines. A command's
-  execution deadline is enforced by the controller, outside the untrusted workspace.
-- **`env.ts`** — constructs a secret-free, noninteractive command environment. Each invocation starts `bash -lc` in
-  `/work`; only files and still-live background processes persist between invocations.
-- **`output.ts`** — drains stdout/stderr even after the retained-log cap, strips terminal/control sequences on reads and
-  marks binary or truncated output. There is no promise of an unlimited log.
-- **`files.ts`** — a helper executed inside the workspace with Deno filesystem permissions restricted to `/work`. It
-  rejects traversal and symlink components, bounds reads/writes and atomically replaces uploaded files. Deletion first
-  replaces the container, preserving only the home, then runs the helper offline with no user shell profiles or other
-  user processes. It restores permissions on inaccessible owned directories and removes final symlinks without following
-  them; parent symlinks and the home root are rejected. Container lifecycle serialization keeps other operations out
-  until cleanup finishes. The controller never follows user filesystem paths or changes their ownership. It pipes
-  request and response bodies straight through the helper's stdio; because the helper validates before it emits a byte,
-  one peek at stdout still separates a clean rejection from a started transfer.
-- **`entrypoint.sh` / `netpolicy.sh`** — `entrypoint.sh` starts the controller and nothing else, with Deno permissions
-  scoped to its own state, the port it serves and the `docker` binary. `netpolicy.sh` runs from a short-lived helper in
-  the host's network namespace, the one place a workspace cannot reach: it rebuilds two chains per namespace, refusing
-  private space, this pool's own subnet, the operator's extra ranges, outbound SMTP and non-public DNS, dropping every
-  connection opened toward a workspace or toward the machine itself, and metering new connections and packets per
-  workspace address. A bandwidth cap, when asked for, is the pool's total on the shared bridge. Any failure stops
-  startup, and so does a probe that finds the policy is not actually in effect.
-- **`policy.ts`** — the network policy guard. The rules sit on a host the service does not administer, so a slow cadence
-  re-reads them from the host's own tables rather than inferring anything from behaviour: an address nobody answers
-  looks identical whether it is blocked or merely absent. Drift is reinstalled and re-proved in place, invisibly; only a
-  policy that cannot be restored closes admission, stops the workspaces that were running without it and turns the
-  health check red.
-- **`storage.ts`** — the host reserve guard. A one-second tick reads free bytes and inodes on the state filesystem.
-  Directory walks run independently, triggered after 256 MiB of host-space loss or a minute, and use allocated blocks. A
-  failed home measurement evicts that workspace. Host pressure or an unreadable state filesystem blocks
-  commands/uploads, closes container and shell admission, and retries evicting live containers on every tick. Exact-path
-  deletion remains available without untrusted code. Admission reopens when the reserve returns; deleting files inside a
-  preallocated home does not reclaim host space, so host pressure requires administrator cleanup.
+- **`WorkspaceClient`** — creates the person's sandbox on first use and remembers it, so later calls cost one
+  request. A command is an exec: it is started, then its recorded output is read from a byte offset until the
+  command ends or the call's ten seconds are up, and the model continues from `nextOffset`. Errors arrive as
+  RFC 9457 problem documents, and their `code` decides what the model is told — capacity and availability read
+  as "try again", everything else as the server's own sentence. A `not_found` forgets the sandbox, so the next
+  call creates it again rather than failing forever after retention deleted it.
+- **`WorkspaceTools`** — the model-facing surface: run, read, cancel, write, delete, reset, send. It copies the
+  turn's attachment into `inbox/<unique-id>/<name>` before the first command that might want it, once per turn,
+  and renders a command as text the model can act on — the exit code, and the session limit that explains it
+  when the memory or process cap is what killed it.
+- **What the bot does not decide** — the sandbox image, memory, home size, idle stop, retention and network
+  policy all belong to the server. The bot reads `GET /v1/info` for the limits it must respect, and trims a
+  requested timeout to that ceiling instead of keeping a copy of the number.
+- **What a person keeps** — their home, until the server's retention window passes or `resetWorkspace` deletes
+  the sandbox. Processes do not outlive an idle stop; files do.
 
-Only the controller receives the Docker socket and its metadata volume. Workspaces sit on a network of their own, hold
-no capabilities, and receive no application environment or host bind mounts. Their own loopback works for local servers,
-and no other container reaches them from outside it; private networks, cloud metadata, the machine hosting them and
-outbound SMTP are equally out of reach. The root filesystem is read-only, writable temporary mounts are bounded,
-`no-new-privileges` is set, and an init process reaps orphans. All of that holds wherever the service runs, so
-co-hosting it with the bot changes none of it. Docker's host kernel remains the isolation boundary; there is no gVisor
-layer, which is why a machine of its own is the recommendation for a public deployment.
-
-Fixed home disks enforce byte and inode capacity in the kernel, including for open-but-deleted files, small-file
-metadata and fast preallocation. The per-file rlimit remains an extra bound. Backing volumes use Docker's ordinary local
-storage and survive idle cleanup and `docker compose down`; the temporary mount volumes and loop attachments do not.
-What they do not survive is the retention window: a workspace nobody has used for `WORKSPACE_RETAIN_DAYS` is deleted
-with its disk. Keep backing volumes and controller state on the same storage filesystem. The namespace is persisted and
-cannot change in place. See [the workspace guide](workspace.md) for behaviour, defaults, setup and backups.
+See [the workspace guide](workspace.md) for behaviour, setup and limits.
 
 ## Site host
 
@@ -764,9 +691,9 @@ A symptom-to-source map for finding the right file fast. Paths are under
 | A reply, a notice or a scheduled fire lands in a forum's General instead of the topic it belongs to | `telegram/delivery/TelegramRequests.kt` (`ChatTarget`, and which builders name the topic) + `telegram/inbound/MessageMetadata.kt` (`forumTopicIdOrNull`, and why `is_topic_message` decides) + `tasks/ScheduledTask.kt` (`creatorThreadId`) |
 | A specific tool misbehaves | `tools/<feature>/<Feature>Tools.kt` for the tool surface, plus its `<Feature>Client.kt` for the external call |
 | Vusan will not hand a file from the chat back, or sends it under the wrong name | `telegram/tools/ChatFileTools.sendChatFile` (the `file_id` path and `chatFilename`) + `telegram/TelegramApi.downloadFileById` (`getFile`, and the 20 MB limit on what Telegram serves a bot) |
-| A command times out, says the workspace is busy, or its output is cut short | `tools/workspace/WorkspaceClient.kt` (HTTP errors and job polling), then `services/workspace/jobs.ts` (admission, timeouts, retention), `container.ts` (whole-container cleanup) and `output.ts` (bounded logs and control-code cleanup) |
-| A workspace cannot reach the internet, or reaches something it should not | `services/workspace/scripts/netpolicy.sh` (the rules, installed on the host from a helper), then `services/workspace/container.ts` (the pool's own network and the startup probe) and `services/workspace/policy.ts` (the guard that re-reads and repairs them) |
-| A workspace loses files, or someone sees another person's | `request/RequestContext.personKeyOrNull` (the sender key both services use) and `telegram/inbound/MessageMetadata.toSenderContext` (the shared accounts that get nothing of their own), then `services/workspace/container.ts` and `services/workspace/homes.ts` (one bounded home disk per person) and `services/workspace/files.ts` (unprivileged, scoped transfers) |
+| A command times out, says the workspace is busy, or its output is cut short | `tools/workspace/WorkspaceClient.kt` (the API calls, the problem documents they turn into, and the output paging), then `tools/workspace/WorkspaceTools.kt` (what the model is told); anything below that is the Regolith server's own log |
+| A workspace cannot reach the internet, reaches something it should not, or loses a background process | The Regolith server: its network policy and its guards. Nothing here configures either — the bot only names the sandbox |
+| A workspace loses files, or someone sees another person's | `request/RequestContext.personKeyOrNull` (the sender key that names the sandbox, and that the site host uses too) and `telegram/inbound/MessageMetadata.toSenderContext` (the shared accounts that get nothing of their own) |
 | Publishing a site fails, or the link shows nothing | `tools/sites/SiteArchive.kt` (every path checked before a byte is uploaded, and the missing `index.html` warning), then `tools/sites/SiteClient.kt` (stage, upload, commit) and `services/sites/storage.ts` (the caps it is held to, and the rename that swaps a site in) |
 | A published page still serves its old files, or a site nobody wants is still up | the zone's Browser Cache TTL, which overrides what this host sends (see [the site guide](sites.md#dns-and-certificates)), then `services/sites/storage.ts` (`blocked`, retention) — and `data/sites/<id>` on the host, which an operator can delete with the bot down |
 | Wrong language in a canned reply (busy/error/voice/start/task menu) | `i18n/Language.kt` (language selection) + `i18n/Messages.kt` (the strings) |
@@ -831,32 +758,31 @@ Coding conventions (logger placement, error handling, tool structure, DB/config 
 
 ### Deployment layouts
 
-Three deployments ship, each a directory holding a compose file and the `.env` beside it: the bot at the
-root, the workspace service in `services/workspace/`, the site host in `services/sites/`. Each stands alone
-on a machine of its own, where Compose needs no arguments, and each is configured by its own `.env` alone —
-the bot's file never reaches a service's containers, which keeps application secrets away from both the
-process holding the Docker socket and the one facing the internet.
+Two deployments ship from this repository, each a directory holding a compose file and the `.env` beside
+it: the bot at the root and the site host in `services/sites/`. Each stands alone on a machine of its own,
+where Compose needs no arguments, and each is configured by its own `.env` alone — the bot's file never
+reaches the service's containers, which keeps application secrets away from the process facing the
+internet. The workspace is a third deployment with none of its files here: a Regolith server, wherever the
+operator runs it.
 
 On one machine, `compose.override.yaml`, which Compose loads beside `compose.yaml` on its own, brings the
-services into the bot's project with `include`: each service's `compose.yaml` merged with the
+site host into the bot's project with `include`: its `compose.yaml` merged with the
 `compose.beside-bot.yaml` beside it. That second file is the whole difference between the layouts — a
-profile (`workspace`, `sites`) so nothing starts until `COMPOSE_PROFILES` asks for it, the service's
-network, and `ports: !reset []`, which takes the controller's API off the host. `include` rather than
-`extends` is load-bearing: an included file is interpolated from the `.env` in its own directory and
-resolves its paths there, so `services/sites/.env` means the same thing in both layouts, while `extends`
-interpolates every imported file from the root `.env` — a `WORKSPACE_IMAGE` set in the service's own file
-would be dropped without a word. The root `.env` and the shell still win over a service's file, as they do
+profile (`sites`) so nothing starts until `COMPOSE_PROFILES` asks for it, the service's network, and
+`ports: !reset []`, which takes its API off the host. `include` rather than `extends` is load-bearing: an
+included file is interpolated from the `.env` in its own directory and resolves its paths there, so
+`services/sites/.env` means the same thing in both layouts, while `extends` interpolates every imported
+file from the root `.env` — a `SITES_HOST_DIR` set in the service's own file would be dropped without a
+word. The root `.env` and the shell still win over a service's file, as they do
 for any Compose variable, so a service setting never belongs in them. Named volumes come along with the
 include. A service's compose file is parsed even while its profile is off, so every variable it
 substitutes needs a default, and its `.env` may be missing until the profile is turned on.
 
-Three networks: `vusan-egress` is the bot's way out; `vusan-workspace-link` joins it to the controller and
-is `internal`, since the controller has no outbound traffic of its own; `vusan-sites-link` joins it to the
-site service and nginx, which publishes 443 through it. On one flat network the container facing the
-internet would share a bridge with the one holding the Docker socket. Both site containers read
-`services/sites/.env`, and nginx has the publishing credentials blanked with empty `environment` overrides.
+Two networks: `vusan-egress` is the bot's way out, and `vusan-sites-link` joins it to the site service and
+nginx, which publishes 443 through it — so the container facing the internet shares no bridge with
+anything else. Both site containers read `services/sites/.env`, and nginx has the publishing credentials
+blanked with empty `environment` overrides.
 
 `.github/compose-check.sh` resolves every layout in CI and asserts what this section promises: the bot
 alone from a bare checkout, distinct project names, service settings read from the service's own file on
-one machine, no port or network shared between the controller and the site host, and no credential
-reaching nginx. The one-machine layout needs Compose 2.24.4 or newer.
+one machine, and no credential reaching nginx. The one-machine layout needs Compose 2.24.4 or newer.

@@ -6,11 +6,11 @@ Everything the bot reads from `.env`. Copy
 For Docker, follow the [quick start](../README.md#docker). The same `.env` also carries the few
 Compose settings of the bot's own deployment, listed at the bottom of `.env.example`.
 
-The two optional services — the [workspace](#workspace) and the [site host](#site-host) — have a file
-and a guide each, and each runs beside the bot or on a machine of its own, whatever the other does.
-That split is a boundary rather than tidiness: the workspace process holds the Docker socket and the
-site host faces the internet, so neither is ever handed the bot's secrets. Do not merge the files,
-even when one machine runs all three.
+Two things sit outside this file: the [workspace](#workspace), which is a Regolith server with its own
+deployment and its own configuration, and the [site host](#site-host), which has a file and a guide of
+its own. That split is a boundary rather than tidiness: the workspace runs commands the model writes
+and holds a Docker socket to do it, and the site host faces the internet, so neither is ever handed
+the bot's secrets. Do not merge the files, even when one machine runs all three.
 
 - **Getting started** — [Minimum setup](#minimum-setup) · [Who Vusan answers](#who-vusan-answers)
 - **The model** — [LLM provider](#llm-provider) · [ChatGPT subscription](#chatgpt-subscription) ·
@@ -338,7 +338,7 @@ with a `WARN` log and Vusan keeps running.
 | `OPENAI_STT_API_KEY`    | Voice input, sound of a video             | Reuse your OpenAI key                      |
 | `OPENAI_IMAGE_API_KEY`  | Image generation                          | Reuse your OpenAI key; optional on `codex` |
 | `OPENAI_VISION_API_KEY` | Vision on a chat model that cannot see    | See [Vision](#vision)                      |
-| `WORKSPACE_URL`         | Shell workspace                           | See [Workspace](#workspace)                |
+| `REGOLITH_URL`          | Shell workspace                           | See [Workspace](#workspace)                |
 | `SITES_URL`             | Publishing pages to the web               | See [Site host](#site-host)                |
 
 ### Web search
@@ -481,25 +481,24 @@ calls share the `LLM_REQUEST_TIMEOUT_SECONDS` budget.
 
 ## Workspace
 
-Vusan can keep one persistent Linux home directory **per person, across all chats** — a real shell
-for projects, media, documents and data, with files that survive new messages, `/clear` and
-restarts. It is **off by default and not part of `docker compose up -d`**: the shell runs commands
-the model writes, so it deploys on its own. Beside the bot is a supported arrangement; a machine of
-its own is the recommendation for anything public. What it can do, its limits, its network policy,
-every setting and how to deploy it are in [the workspace guide](workspace.md).
+Vusan can keep one persistent Linux home **per person, across all chats** — a real shell for projects,
+media, documents and data, with files that survive new messages, `/clear` and restarts. The workspace
+is a **Regolith server**: a separate project with its own deployment, which runs the commands and
+confines them. It is **off by default**, and the bot grows the shell tools only once it can reach one.
+What the model can do with it, what the bot expects of the server and where its limits come from are
+in [the workspace guide](workspace.md).
 
 These are the bot's side of it, and belong in `.env`:
 
-| Variable                        | Default | Description                                                                      |
-|---------------------------------|---------|----------------------------------------------------------------------------------|
-| `WORKSPACE_URL`                 | —       | Address of the workspace controller. Unset means the tools do not exist.         |
-| `WORKSPACE_TOKEN`               | —       | The shared API secret, the same value the controller is given.                   |
-| `WORKSPACE_TOKEN_FILE`          | —       | A file holding that secret instead. An explicit token takes precedence.          |
-| `WORKSPACE_MAX_TIMEOUT_SECONDS` | `600`   | Longest command timeout the bot will ask for; keep it equal to the controller's. |
+| Variable               | Default | Description                                                             |
+|------------------------|---------|-------------------------------------------------------------------------|
+| `REGOLITH_URL`         | —       | Address of the Regolith server. Unset means the tools do not exist.     |
+| `REGOLITH_TOKEN`       | —       | Its API token, the same value the server was started with.              |
+| `REGOLITH_TOKEN_FILE`  | —       | A file holding that token instead. An explicit token takes precedence.  |
 
-Both `WORKSPACE_URL` and a secret must be present, or the workspace tools are not registered and the
-bot never mentions them. On one machine `WORKSPACE_URL` is the service's name,
-`http://vusan-workspace:8080`; see [Both on one machine](workspace.md#both-on-one-machine).
+Both a URL and a token must be present, or the workspace tools are not registered and the bot never
+mentions them. Everything else — the sandbox image, memory, home size, timeouts, retention and network
+policy — is configured on the server, and the bot reads its limits from it.
 
 ## Site host
 
@@ -520,7 +519,7 @@ These are the bot's side of it, and belong in `.env`:
 | `SITES_TOKEN_FILE` | —       | A file holding that secret instead. An explicit token takes precedence. |
 
 Publishing is a snapshot of files the person built somewhere, so it needs the workspace: with
-`SITES_URL` set but `WORKSPACE_URL` missing the tools are not registered and the log says why. The
+`SITES_URL` set but `REGOLITH_URL` missing the tools are not registered and the log says why. The
 service is authoritative about how large a site may be and how many files it may hold, and tells the bot
 those numbers when an upload starts — there is nothing to keep in step by hand.
 
