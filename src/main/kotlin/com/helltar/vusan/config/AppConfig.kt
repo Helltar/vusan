@@ -36,8 +36,6 @@ data class AppConfig(
     val regolithUrl: String?,
     val searxngUrl: String?,
     val selfImageFile: String?,
-    val sitesToken: String?,
-    val sitesUrl: String?,
     val taskMaxLatenessMinutes: Long,
     val tavilyApiKey: String?,
     val telegramBotToken: String,
@@ -51,7 +49,6 @@ data class AppConfig(
         require(maxMemoryPerScope >= 0) { "MAX_MEMORY_PER_SCOPE must not be negative" }
         require(maxTasksPerUser >= 0) { "MAX_TASKS_PER_USER must not be negative" }
         require(regolithUrl == null || !regolithToken.isNullOrBlank()) { "Workspace API authentication is required" }
-        require(sitesUrl == null || !sitesToken.isNullOrBlank()) { "Site API authentication is required" }
         require(taskMaxLatenessMinutes >= 0) { "TASK_MAX_LATENESS_MINUTES must not be negative" }
     }
 
@@ -74,7 +71,6 @@ data class AppConfig(
             val llmProvider = resolveLlmProvider()
             val imageRoute = resolveImageRoute(openAiImageKey != null, llmProvider)
             val regolithUrl = readEnv("REGOLITH_URL")
-            val sitesUrl = readEnv("SITES_URL")
 
             return AppConfig(
                 accessPolicy = AccessPolicy(allowed = readIdSetEnv("ALLOWED_IDS"), banned = readIdSetEnv("BANNED_IDS")),
@@ -96,8 +92,6 @@ data class AppConfig(
                 regolithUrl = regolithUrl,
                 searxngUrl = readEnv("SEARXNG_URL"),
                 selfImageFile = readEnv("SELF_IMAGE_FILE"),
-                sitesToken = sitesUrl?.let { readServiceToken("SITES", readEnv("SITES_TOKEN"), readEnv("SITES_TOKEN_FILE")) },
-                sitesUrl = sitesUrl,
                 taskMaxLatenessMinutes = readLongEnv("TASK_MAX_LATENESS_MINUTES") ?: DEFAULT_TASK_MAX_LATENESS_MINUTES,
                 tavilyApiKey = readEnv("TAVILY_API_KEY"),
                 telegramBotToken = requireEnv("TELEGRAM_BOT_TOKEN"),

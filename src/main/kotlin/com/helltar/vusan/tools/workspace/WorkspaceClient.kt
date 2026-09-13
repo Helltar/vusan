@@ -45,7 +45,7 @@ class WorkspaceClient(
     private val created = ConcurrentHashMap.newKeySet<String>()
 
     @Volatile
-    private var limits: ServerLimits? = null
+    private var server: ServerInfo? = null
 
     suspend fun exec(workspaceId: String, command: String, timeoutSeconds: Int?): CommandResult {
         create(workspaceId)
@@ -97,6 +97,41 @@ class WorkspaceClient(
                 parameter("recursive", true)
             }.requireSuccess(workspaceId)
         }
+    }
+
+    /** Publishes a directory of the workspace to the web and returns the address it is served at. */
+    suspend fun publishSite(workspaceId: String, path: String): PublishedSite {
+        create(workspaceId)
+        return reachable {
+            http.post("${sandbox(workspaceId)}/publish") {
+                workspaceRequest()
+                contentType(ContentType.Application.Json)
+                setBody(PublishRequest(path))
+            }.requireSuccess(workspaceId).body()
+        }
+    }
+
+    /** What is published for this person, or null when nothing is. */
+    suspend fun publishedSite(workspaceId: String): PublishedSite? = reachable {
+        val response = http.get("${sandbox(workspaceId)}/site") { workspaceRequest() }
+        if (response.status == HttpStatusCode.NotFound) null else response.requireSuccess(workspaceId).body()
+    }
+
+    /** Takes the site down; false when there was nothing to take down. The workspace keeps its files. */
+    suspend fun unpublishSite(workspaceId: String): Boolean = reachable {
+        val response = http.delete("${sandbox(workspaceId)}/site") { workspaceRequest() }
+        if (response.status == HttpStatusCode.NotFound) false else true.also { response.requireSuccess(workspaceId) }
+    }
+
+    /** Whether this server publishes at all; it says so in its own info rather than the bot guessing. */
+    suspend fun publishes(): Boolean = info()?.publishing ?: false
+
+    /** The names in one directory of the workspace, for a check before something is published. */
+    suspend fun entries(workspaceId: String, path: String): List<String> = reachable {
+        http.get("${sandbox(workspaceId)}/files/entries") {
+            workspaceRequest()
+            parameter("path", path)
+        }.requireSuccess(workspaceId).body<DirectoryListing>().entries.map { it.name }
     }
 
     /** Deletes the sandbox with its home; the next use creates an empty one under the same name. */
@@ -189,11 +224,16 @@ class WorkspaceClient(
     /** The server owns its limits; a timeout above the ceiling would be refused instead of trimmed. */
     private suspend fun clamped(timeoutSeconds: Int?): Int? {
         if (timeoutSeconds == null) return null
-        val known = limits ?: runCatching {
-            reachable { http.get("$base/v1/info") { workspaceRequest() }.requireSuccess(null).body<ServerInfo>().limits }
-        }.onFailure { it.rethrowIfCancellation() }.getOrNull()?.also { limits = it }
-        val ceiling = known?.maxExecTimeoutSeconds ?: 0
+        val ceiling = info()?.limits?.maxExecTimeoutSeconds ?: 0
         return if (ceiling > 0) minOf(timeoutSeconds, ceiling) else timeoutSeconds
+    }
+
+    /** What the server says about itself, read once: its limits and whether it can publish. */
+    private suspend fun info(): ServerInfo? {
+        server?.let { return it }
+        return runCatching {
+            reachable { http.get("$base/v1/info") { workspaceRequest() }.requireSuccess(null).body<ServerInfo>() }
+        }.onFailure { it.rethrowIfCancellation() }.getOrNull()?.also { server = it }
     }
 
     private fun sandbox(workspaceId: String) = "$base/v1/sandboxes/$workspaceId"

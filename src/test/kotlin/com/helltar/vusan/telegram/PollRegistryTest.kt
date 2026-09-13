@@ -130,8 +130,6 @@ class PollRegistryTest {
             openAiVision = null,
             regolithToken = null,
             regolithUrl = null,
-            sitesToken = null,
-            sitesUrl = null,
             searxngUrl = null,
             selfImageFile = null,
             personality = null,

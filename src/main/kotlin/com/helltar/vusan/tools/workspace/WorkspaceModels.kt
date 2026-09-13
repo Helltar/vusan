@@ -37,7 +37,27 @@ internal data class OutputPage(
 )
 
 @Serializable
-internal data class ServerInfo(val limits: ServerLimits)
+internal data class ServerInfo(val limits: ServerLimits, val publishing: Boolean = false)
+
+@Serializable
+internal data class PublishRequest(val path: String)
+
+/** A published site, as the workspace server reports it. */
+@Serializable
+data class PublishedSite(
+    val site: String,
+    val url: String,
+    val release: String,
+    val files: Int = 0,
+    val bytes: Long = 0,
+    val publishedAt: String? = null
+)
+
+@Serializable
+internal data class DirectoryListing(val entries: List<DirectoryEntry> = emptyList())
+
+@Serializable
+internal data class DirectoryEntry(val name: String, val type: String)
 
 @Serializable
 internal data class ServerLimits(val maxExecTimeoutSeconds: Int = 0)

@@ -1,168 +1,105 @@
 package com.helltar.vusan.tools.sites
 
 import com.helltar.vusan.infra.Http
-import com.helltar.vusan.request.requestContext
 import com.helltar.vusan.request.personKeyOrNull
+import com.helltar.vusan.request.requestContext
 import com.helltar.vusan.tools.toolFailure
 import com.helltar.vusan.tools.workspace.WorkspaceClient
 import io.ktor.client.engine.mock.*
 import io.ktor.http.*
-import java.io.ByteArrayOutputStream
-import java.util.zip.ZipEntry
-import java.util.zip.ZipOutputStream
-import kotlinx.coroutines.runBlocking
 import kotlin.test.Test
 import kotlin.test.assertContains
 import kotlin.test.assertEquals
+import kotlin.test.assertFalse
 import kotlin.test.assertTrue
-import kotlin.time.Duration.Companion.seconds
+import kotlinx.coroutines.runBlocking
 
-private const val LIMITS = """{"files":1000,"fileBytes":26214400,"totalBytes":104857600,"pathDepth":10}"""
-private const val UPLOAD = "3f0b2e1c4d5a6b7c8d9e0f1a2b3c4d5e"
+private const val PUBLISHED =
+    """{"site":"u55","url":"https://u55.example.test","release":"0f1e2d3c4b5a69788796a5b4c3d2e1f0","files":3,"bytes":2048,"publishedAt":"2026-09-13T12:00:00Z"}"""
 
 class SiteToolsTest {
     private val context = requestContext(chatId = 55L, userId = 55L)
-    private val uploaded = mutableListOf<Pair<String, ByteArray>>()
-    private var commits = 0
-    private var discards = 0
-
-    private fun zip(vararg entries: Pair<String, String>): ByteArray {
-        val bytes = ByteArrayOutputStream()
-        ZipOutputStream(bytes).use { zip ->
-            entries.forEach { (name, content) ->
-                zip.putNextEntry(ZipEntry(name))
-                zip.write(content.toByteArray())
-                zip.closeEntry()
-            }
-        }
-        return bytes.toByteArray()
-    }
-
-    private fun MockRequestHandleScope.json(body: String) =
-        respond(body, HttpStatusCode.OK, headersOf(HttpHeaders.ContentType, "application/json"))
+    private val requests = mutableListOf<String>()
+    private var publishedPath: String? = null
 
     private fun tools(
-        archive: ByteArray? = null,
-        site: String = """{"published":false}""",
-        commitStatus: HttpStatusCode = HttpStatusCode.OK
+        entries: List<String> = listOf("index.html", "assets"),
+        site: String? = PUBLISHED,
+        publish: Pair<HttpStatusCode, String> = HttpStatusCode.OK to PUBLISHED
     ): SiteTools {
-        val siteEngine = MockEngine { request ->
+        val engine = MockEngine { request ->
             val path = request.url.encodedPath
+            requests += "${request.method.value} $path"
+            assertTrue(path.startsWith("/v1/sandboxes/u55"), "a request left this person's sandbox: $path")
             when {
-                path == "/uploads" && request.method == HttpMethod.Post -> {
-                    assertEquals("u55", request.url.parameters["owner"])
-                    json("""{"uploadId":"$UPLOAD","expiresInMinutes":15,"limits":$LIMITS}""")
+                path.endsWith("/publish") -> {
+                    publishedPath = Regex(""""path":"([^"]*)"""").find(request.body.toByteArray().decodeToString())?.groupValues?.get(1)
+                    respond(publish.second, publish.first, headersOf(HttpHeaders.ContentType, "application/problem+json"))
                 }
-                path == "/uploads/$UPLOAD" && request.method == HttpMethod.Put -> {
-                    uploaded += request.url.parameters["path"].orEmpty() to request.body.toByteArray()
-                    json("""{"path":"x","bytes":1}""")
-                }
-                path == "/uploads/$UPLOAD/commit" -> {
-                    commits++
-                    if (commitStatus.isSuccess()) {
-                        json("""{"owner":"u55","label":"55","url":"https://55.example.com/","files":2,"bytes":9}""")
-                    } else {
-                        respond("""{"error":"Too many publishes in the last hour"}""", commitStatus, headersOf(HttpHeaders.ContentType, "application/json"))
-                    }
-                }
-                path == "/uploads/$UPLOAD" && request.method == HttpMethod.Delete -> {
-                    discards++
-                    json("""{"uploadId":"$UPLOAD","discarded":true}""")
-                }
-                path == "/site" && request.method == HttpMethod.Delete -> json("""{"owner":"u55","removed":true}""")
-                path == "/site" -> json(site)
-                else -> error("Unexpected site request: $path")
+
+                path.endsWith("/files/entries") ->
+                    respond(
+                        """{"path":"x","entries":[${entries.joinToString(",") { """{"name":"$it","type":"file"}""" }}]}""",
+                        HttpStatusCode.OK,
+                        headersOf(HttpHeaders.ContentType, "application/json"),
+                    )
+
+                path.endsWith("/site") && request.method == HttpMethod.Delete ->
+                    if (site == null) notFound() else respond("", HttpStatusCode.NoContent)
+
+                path.endsWith("/site") ->
+                    if (site == null) notFound() else respond(site, HttpStatusCode.OK, headersOf(HttpHeaders.ContentType, "application/json"))
+
+                else -> respond("""{"name":"u55"}""", HttpStatusCode.OK, headersOf(HttpHeaders.ContentType, "application/json"))
             }
         }
-        val workspaceEngine = MockEngine { request ->
-            assertEquals("/v1/sandboxes/u55/files/content", request.url.encodedPath)
-            archive?.let { respond(it, HttpStatusCode.OK) }
-                ?: respond(
-                    """{"code":"not_found","detail":"No such path","title":"Not found","status":404}""",
-                    HttpStatusCode.NotFound,
-                    headersOf(HttpHeaders.ContentType, "application/problem+json")
-                )
-        }
         return SiteTools(
-            SiteClient(Http.createClient(siteEngine), "http://sites:8090", "synthetic-site-secret-1234567890abc"),
-            WorkspaceClient(Http.createClient(workspaceEngine), "http://regolith:8080", "synthetic-workspace-secret-123456"),
-            requireNotNull(context.personKeyOrNull)
+            WorkspaceClient(Http.createClient(engine), "http://regolith:8080", "test-token"),
+            requireNotNull(context.personKeyOrNull),
         )
     }
 
     @Test
-    fun `publishing uploads every file and hands back the link`() = runBlocking {
-        val result = tools(zip("index.html" to "<h1>hi</h1>", "assets/app.js" to "run()"))
-            .publishSite("site.zip")
+    fun `publishing hands back the link and the size`() = runBlocking {
+        val result = tools().publishSite("site")
+        assertEquals("site", publishedPath)
+        assertContains(result, "https://u55.example.test")
+        assertContains(result, "3 file(s)")
+        assertContains(result, "2 KB")
+    }
 
-        assertEquals(listOf("index.html", "assets/app.js"), uploaded.map { it.first })
-        assertEquals("<h1>hi</h1>", uploaded.first().second.decodeToString())
-        assertEquals(1, commits)
-        assertEquals(0, discards)
-        assertContains(result, "https://55.example.com/")
-        assertContains(result, "Give the user that link")
+    // a directory with no index.html publishes fine and its link then opens nothing, which the result
+    // alone never shows
+    @Test
+    fun `a directory with no index page is published with a warning`() = runBlocking {
+        val result = tools(entries = listOf("main.js", "style.css")).publishSite("dist")
+        assertContains(result, "https://u55.example.test")
+        assertContains(result, "no `index.html`")
     }
 
     @Test
-    fun `an archive of the wrong shape publishes but says the link will show nothing`() = runBlocking {
-        val result = tools(zip("site/index.html" to "page")).publishSite("site.zip")
-        assertContains(result, "no `index.html` at the top")
+    fun `a server that cannot publish says so in its own words`() = runBlocking {
+        val refusal = """{"type":"urn:regolith:error:not_implemented","title":"Not implemented","status":501,"detail":"This server publishes nothing: no pages role is configured","code":"not_implemented"}"""
+        val workspace = tools(publish = HttpStatusCode.NotImplemented to refusal)
+        assertContains(toolFailure { workspace.publishSite("site") }, "publishes nothing")
     }
 
     @Test
-    fun `a rejected archive is not left staged on the service`() = runBlocking {
-        toolFailure { tools(zip("../escape.html" to "x")).publishSite("site.zip") }
-        assertTrue(uploaded.isEmpty())
-        assertEquals(0, commits)
-        assertEquals(1, discards)
+    fun `status reads the site rather than the workspace`() = runBlocking {
+        assertContains(tools().siteStatus(), "Published at https://u55.example.test")
+        assertContains(tools(site = null).siteStatus(), "Nothing is published")
     }
 
     @Test
-    fun `a refused commit is reported and the staged upload is dropped`() = runBlocking {
-        val failure = toolFailure {
-            tools(zip("index.html" to "hi"), commitStatus = HttpStatusCode.TooManyRequests).publishSite("site.zip")
-        }
-        assertContains(failure, "Too many publishes")
-        assertEquals(1, discards)
-    }
-
-    @Test
-    fun `a missing archive fails before anything is staged`() = runBlocking {
-        toolFailure { tools(archive = null).publishSite("site.zip") }
-        assertEquals(0, commits)
-    }
-
-    @Test
-    fun `status reads the published site rather than guessing`() = runBlocking {
-        assertContains(tools().siteStatus(), "Nothing is published")
-
-        val listing = """[{"path":"index.html","bytes":400},{"path":"assets/app.js","bytes":2048}]"""
-        val status = tools(
-            site = """{"published":true,"url":"https://55.example.com/","files":2,"bytes":2448,""" +
-                """"updatedAt":${System.currentTimeMillis()},"listing":$listing,"truncated":false}"""
-        ).siteStatus()
-
-        assertContains(status, "https://55.example.com/")
-        assertContains(status, "2 file(s)")
-        assertContains(status, "<site_files>")
-        assertContains(status, "index.html")
-        assertContains(status, "assets/app.js")
-    }
-
-    @Test
-    fun `a listing the service had to cut short says so`() = runBlocking {
-        val listing = (1..3).joinToString(",") { """{"path":"page$it.html","bytes":10}""" }
-        val status = tools(
-            site = """{"published":true,"url":"https://55.example.com/","files":900,"bytes":2048,""" +
-                """"updatedAt":${System.currentTimeMillis()},"listing":[$listing],"truncated":true}"""
-        ).siteStatus()
-
-        assertContains(status, "900 file(s)")
-        assertContains(status, "Only the first 3 files are listed")
-    }
-
-    @Test
-    fun `taking a site down says the workspace files are kept`() = runBlocking {
+    fun `taking a site down leaves the workspace files alone`() = runBlocking {
         assertContains(tools().unpublishSite(), "workspace files were kept")
+        assertContains(tools(site = null).unpublishSite(), "nothing published")
+        assertFalse(requests.any { it.startsWith("DELETE /v1/sandboxes/u55/files") })
     }
 }
+
+private fun MockRequestHandleScope.notFound() = respond(
+    """{"type":"urn:regolith:error:not_found","title":"Not found","status":404,"detail":"Nothing is published","code":"not_found"}""",
+    HttpStatusCode.NotFound,
+    headersOf(HttpHeaders.ContentType, "application/problem+json"),
+)

@@ -247,8 +247,6 @@ class TokenBudgetTest {
             personality = null,
             regolithToken = null,
             regolithUrl = null,
-            sitesToken = null,
-            sitesUrl = null,
             searxngUrl = null,
             selfImageFile = null,
             taskMaxLatenessMinutes = 60L,

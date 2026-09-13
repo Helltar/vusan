@@ -146,8 +146,6 @@ class AppConfigTest {
             personality = null,
             regolithToken = null,
             regolithUrl = regolithUrl,
-            sitesToken = null,
-            sitesUrl = null,
             searxngUrl = null,
             selfImageFile = null,
             taskMaxLatenessMinutes = taskMaxLatenessMinutes,
