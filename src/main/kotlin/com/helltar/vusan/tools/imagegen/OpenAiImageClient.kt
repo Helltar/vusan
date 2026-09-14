@@ -192,6 +192,7 @@ class OpenAiImageClient(private val http: HttpClient, private val auth: ImageAut
     private fun <T> platformOnly(value: T): T? = value.takeIf { auth is ImageAuth.ApiKey }
 
     private fun baseUrl(): String =
+
         when (auth) {
             is ImageAuth.ApiKey -> PLATFORM_BASE_URL
             is ImageAuth.Codex -> CODEX_BASE_URL

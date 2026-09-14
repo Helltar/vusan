@@ -217,6 +217,7 @@ private fun markLastTextBlock(content: JsonElement?, textBlockType: String): Jso
     if (index < 0) return null
 
     val block = blocks[index] as? JsonObject ?: return null
+
     return JsonArray(
         blocks.mapIndexed { blockIndex, value ->
             if (blockIndex == index) markedTextBlock(block) else value

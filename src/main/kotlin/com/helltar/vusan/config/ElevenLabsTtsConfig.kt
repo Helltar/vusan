@@ -4,6 +4,7 @@ data class ElevenLabsTtsConfig(
     val model: String,
     val voiceId: String
 ) {
+
     init {
         require(model.isNotBlank()) { "ElevenLabs TTS model must not be blank" }
         require(voiceId.isNotBlank()) { "ElevenLabs TTS voice ID must not be blank" }

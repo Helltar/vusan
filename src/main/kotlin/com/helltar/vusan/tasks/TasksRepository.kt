@@ -218,6 +218,7 @@ class TasksRepository {
 
         id?.let { condition = condition and (ScheduledTasksTable.id eq it) }
         chat?.let { condition = condition and inChat(it) }
+
         return condition
     }
 }

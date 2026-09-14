@@ -240,6 +240,7 @@ class InlineChoiceHandlerTest {
 
         private fun handle(request: Any): CompletableFuture<Any> {
             requests += request
+
             return CompletableFuture.completedFuture(if (request is AnswerCallbackQuery) true else Message())
         }
     }

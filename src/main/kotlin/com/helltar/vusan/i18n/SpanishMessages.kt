@@ -139,11 +139,13 @@ internal object SpanishMessages : Messages {
 
     override fun taskMissedNotice(id: Long, title: String?, scheduledFor: String): String {
         val label = title?.let { " «$it»" } ?: ""
+
         return "⏰ Me salté la tarea #$id$label programada para $scheduledFor — estaba sin conexión."
     }
 
     override fun taskFailedNotice(id: Long, title: String?): String {
         val label = title?.let { " «$it»" } ?: ""
+
         return "⚠️ La tarea #$id$label no llegó a nada — no pude terminarla ni tras varios intentos."
     }
 
@@ -152,6 +154,7 @@ internal object SpanishMessages : Messages {
     override fun taskFollowUpNotice(mention: String) = "💬 Retomando la conversación con $mention"
 
     override fun progressLabel(activity: ToolActivity): String =
+
         when (activity) {
             ToolActivity.WRITING -> "Escribiendo la respuesta"
             ToolActivity.SEARCHING_WEB -> "Buscando en la web"

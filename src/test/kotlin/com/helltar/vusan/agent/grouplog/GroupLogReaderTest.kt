@@ -275,6 +275,7 @@ class GroupLogReaderTest {
 
         override suspend fun digest(day: LocalDate, transcript: String): String {
             days += day
+
             return "recap of $day"
         }
     }
@@ -283,6 +284,7 @@ class GroupLogReaderTest {
     private class EditingDigester(private val edit: suspend () -> Unit) : GroupLogDigester {
         override suspend fun digest(day: LocalDate, transcript: String): String {
             edit()
+
             return "recap of $day"
         }
     }

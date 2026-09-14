@@ -53,6 +53,7 @@ internal suspend fun Message.replySummaryOrNull(
 ): RepliedMessageSummary? {
     val base = toReplySummary(botUserId) ?: return null
     val transcript = transcribeRepliedAudioOrNull(client, voiceTranscriber)
+
     return transcript?.let { base.copy(transcript = it) } ?: base
 }
 
@@ -233,6 +234,7 @@ private val VIDEO_EXTENSIONS =
     setOf("mp4", "m4v", "mov", "mkv", "webm", "avi", "wmv", "flv", "mpeg", "mpg", "3gp", "ogv")
 
 private fun formatFileSize(bytes: Long): String =
+
     when {
         bytes >= 1024 * 1024 -> "%.1f MB".format(Locale.ROOT, bytes / (1024.0 * 1024))
         bytes >= 1024 -> "%.0f KB".format(Locale.ROOT, bytes / 1024.0)

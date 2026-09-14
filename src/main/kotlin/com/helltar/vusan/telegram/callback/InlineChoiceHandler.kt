@@ -179,6 +179,7 @@ internal class InlineChoiceHandler(
 
     private suspend fun unavailable(callbackQueryId: String, messages: Messages): InlineChoiceSelection? {
         answerUnavailable(callbackQueryId, messages)
+
         return null
     }
 
@@ -246,6 +247,7 @@ private data class InlineChoiceAction(
     val optionIndex: Int,
     val originMessageId: Long
 ) {
+
     fun serialize(): String =
         "$INLINE_CHOICE_CALLBACK_PREFIX$ownerId:$historyRevision:$optionIndex:$originMessageId"
 
@@ -260,6 +262,7 @@ private data class InlineChoiceAction(
             val historyRevision = parts[1].toLongOrNull()?.takeIf { it >= 0L } ?: return null
             val optionIndex = parts[2].toIntOrNull()?.takeIf { it in 0..9 } ?: return null
             val originMessageId = parts[3].toLongOrNull()?.takeIf { it >= NO_ORIGIN_MESSAGE } ?: return null
+
             return InlineChoiceAction(ownerId, historyRevision, optionIndex, originMessageId)
         }
     }

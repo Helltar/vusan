@@ -36,6 +36,7 @@ data class OpenAiImageConfig(
     val moderation: String = DEFAULT_MODERATION,
     val route: ImageRoute = ImageRoute.PLATFORM
 ) {
+
     init {
         require(model.isNotBlank()) { "OPENAI_IMAGE_MODEL must not be blank" }
         require(quality in ALLOWED_QUALITIES) { "OPENAI_IMAGE_QUALITY must be one of $ALLOWED_QUALITIES" }

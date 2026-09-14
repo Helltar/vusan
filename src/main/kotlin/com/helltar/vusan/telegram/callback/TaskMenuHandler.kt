@@ -350,10 +350,12 @@ internal class TaskMenuHandler(
     private fun ScheduledTask.menuFireHtml(): String {
         val fire = formatFire(nextFireAt, timezone)
         val localTime = fire.substringBeforeLast(' ').replace('T', ' ')
+
         return "$localTime · ${timezone.id.escapeHtml()}"
     }
 
     private fun Recurrence.menuHtml(): String =
+
         when (this) {
             Recurrence.Once -> "once"
             is Recurrence.Every -> "every ${interval.toString().escapeHtml()}"

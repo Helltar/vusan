@@ -32,6 +32,7 @@ class WorkspaceClient(
     baseUrl: String,
     private val token: String
 ) {
+
     init {
         require(token.isNotBlank()) { "Workspace API authentication is required" }
     }
@@ -56,6 +57,7 @@ class WorkspaceClient(
                 setBody(ExecRequest(command, clamped(timeoutSeconds)))
             }.requireSuccess(workspaceId).body()
         }
+
         return collect(workspaceId, started.id, offset = 0, waitSeconds = FIRST_WAIT_SECONDS)
     }
 
@@ -68,6 +70,7 @@ class WorkspaceClient(
                 workspaceRequest()
             }.requireSuccess(workspaceId).body()
         }
+
         return info.result(output = "", nextOffset = 0, hasMore = false)
     }
 
@@ -102,6 +105,7 @@ class WorkspaceClient(
     /** Publishes a directory of the workspace to the web and returns the address it is served at. */
     suspend fun publishSite(workspaceId: String, path: String): PublishedSite {
         create(workspaceId)
+
         return reachable {
             http.post("${sandbox(workspaceId)}/publish") {
                 workspaceRequest()
@@ -198,6 +202,7 @@ class WorkspaceClient(
             http.get("${sandbox(workspaceId)}/execs/$jobId") { workspaceRequest() }
                 .requireSuccess(workspaceId).body()
         }
+
         return info.result(output.toString(), next, hasMore = !complete, dropped = dropped)
     }
 
@@ -213,6 +218,7 @@ class WorkspaceClient(
     /** Creates the person's sandbox, or leaves the existing one exactly as it is. */
     private suspend fun create(workspaceId: String) {
         if (!created.add(workspaceId)) return
+
         try {
             reachable { http.put(sandbox(workspaceId)) { workspaceRequest() }.requireSuccess(workspaceId) }
         } catch (e: Throwable) {
@@ -225,12 +231,14 @@ class WorkspaceClient(
     private suspend fun clamped(timeoutSeconds: Int?): Int? {
         if (timeoutSeconds == null) return null
         val ceiling = info()?.limits?.maxExecTimeoutSeconds ?: 0
+
         return if (ceiling > 0) minOf(timeoutSeconds, ceiling) else timeoutSeconds
     }
 
     /** What the server says about itself, read once: its limits and whether it can publish. */
     private suspend fun info(): ServerInfo? {
         server?.let { return it }
+
         return runCatching {
             reachable { http.get("$base/v1/info") { workspaceRequest() }.requireSuccess(null).body<ServerInfo>() }
         }.onFailure { it.rethrowIfCancellation() }.getOrNull()?.also { server = it }
@@ -289,6 +297,7 @@ private fun ProblemDetails.explain(): String = when (code) {
 private fun ExecInfo.result(output: String, nextOffset: Long, hasMore: Boolean, dropped: Boolean = false): CommandResult {
     val reason = outcome?.reason
     val status = commandStatus()
+
     return CommandResult(
         jobId = id,
         status = status,
@@ -320,5 +329,6 @@ private fun ExecInfo.commandStatus(): CommandStatus = when {
 private fun ExecInfo.elapsedMs(): Long {
     val start = startedAt?.let { runCatching { Instant.parse(it) }.getOrNull() } ?: return 0
     val end = finishedAt?.let { runCatching { Instant.parse(it) }.getOrNull() } ?: Instant.now()
+
     return (end.toEpochMilli() - start.toEpochMilli()).coerceAtLeast(0)
 }

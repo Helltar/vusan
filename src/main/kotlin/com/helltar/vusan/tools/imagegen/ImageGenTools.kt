@@ -212,6 +212,7 @@ private fun AttachedFile.editContentTypeOrNull(): String? {
 
 /** The image types both edit routes accept, read off a filename when nothing else declares one. */
 internal fun imageContentTypeOrNull(filename: String): String? =
+
     when (filename.substringAfterLast('.', "").lowercase()) {
         "png" -> "image/png"
         "jpg", "jpeg" -> "image/jpeg"
@@ -242,6 +243,7 @@ private fun String.toImageSize(model: String): String {
 // telegram shows a photo whatever it is called, but the name follows the file when someone saves or
 // forwards it, and the route decides the format: the platform asks for jpeg, codex sends what it likes.
 private fun imageFilename(bytes: ByteArray): String =
+
     when {
         bytes.size >= 3 && bytes[0] == 0xFF.toByte() && bytes[1] == 0xD8.toByte() && bytes[2] == 0xFF.toByte() ->
             "image.jpg"

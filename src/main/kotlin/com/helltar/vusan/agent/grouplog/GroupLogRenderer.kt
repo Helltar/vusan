@@ -96,6 +96,7 @@ private fun GroupLogEntry.authorLabel(): String =
     if (kind == GroupLogEntry.BOT_KIND) BOT_LABEL else senderUsername ?: senderName ?: ANONYMOUS_LABEL
 
 private fun GroupLogEntry.mediaMarker(): String? =
+
     when {
         kind in TEXTUAL_KINDS -> null
         // a bot row names its own content in the descriptor, so prefixing it with `bot` would stutter.

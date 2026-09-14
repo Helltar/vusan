@@ -66,6 +66,7 @@ class ImageGenToolsTest {
                     )
                 }
             )
+
         return ImageGenTools(OpenAiImageClient(http, ImageAuth.ApiKey("sk-test")), config, outbox)
     }
 
@@ -110,6 +111,7 @@ class ImageGenToolsTest {
                     )
                 }
             )
+
         return ImageGenTools(
             OpenAiImageClient(http, ImageAuth.ApiKey("sk-test")), config, outbox, attached.toList(), selfImage
         )

@@ -27,6 +27,7 @@ data class ContextTokenBudget(
     val safetyReserveTokens: Int,
     val conversationTokens: Int
 ) {
+
     /** Share of the window a turn occupies once its history actually costs [conversationTokens]. */
     fun contextPercentFor(conversationTokens: Int): Int =
         (((fixedPromptTokens + conversationTokens).toLong() * 100L) / contextWindowTokens).toInt().coerceIn(0, 100)

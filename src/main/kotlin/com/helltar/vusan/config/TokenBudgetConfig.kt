@@ -18,6 +18,7 @@ data class TokenBudgetConfig(
     val zone: ZoneId = DEFAULT_ZONE,
     val fairSharePercent: Int = DEFAULT_FAIR_SHARE_PERCENT
 ) {
+
     init {
         require(dailyTokens == null || dailyTokens > 0) { "LLM_DAILY_TOKEN_BUDGET must be positive" }
 

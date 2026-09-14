@@ -5,6 +5,7 @@ data class OpenAiSttConfig(
     val model: String,
     val maxDurationSeconds: Long
 ) {
+
     init {
         require(apiKey.isNotBlank()) { "OPENAI_STT_API_KEY must not be blank" }
         require(model.isNotBlank()) { "OPENAI_STT_MODEL must not be blank" }

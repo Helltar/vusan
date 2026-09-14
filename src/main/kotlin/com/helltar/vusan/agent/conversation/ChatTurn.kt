@@ -16,6 +16,7 @@ data class ChatTurn(
     val toolName: String? = null,
     val toolIsError: Boolean? = null
 ) {
+
     init {
         when (role) {
             ChatRole.TOOL_CALL ->

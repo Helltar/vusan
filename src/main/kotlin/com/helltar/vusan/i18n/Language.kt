@@ -12,6 +12,7 @@ enum class Language(val codes: Set<String>) {
 
         fun fromCode(code: String?): Language {
             val primary = code?.substringBefore('-')?.trim()?.lowercase()?.takeIf { it.isNotEmpty() } ?: return DEFAULT
+
             return entries.firstOrNull { primary in it.codes } ?: DEFAULT
         }
     }

@@ -7,6 +7,7 @@ data class GroupLogConfig(
     val recentMessages: Int = DEFAULT_RECENT_MESSAGES,
     val recentMinutes: Int = DEFAULT_RECENT_MINUTES
 ) {
+
     init {
         require(retentionDays > 0) { "GROUP_LOG_RETENTION_DAYS must be positive" }
         require(maxMessagesPerChat > 0) { "GROUP_LOG_MAX_MESSAGES_PER_CHAT must be positive" }

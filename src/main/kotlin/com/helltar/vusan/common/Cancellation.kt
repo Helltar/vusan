@@ -19,6 +19,7 @@ internal fun Throwable.rethrowIfCancellation() {
  * The caller's own cancellation still wins: a service shutting down is not a stopped turn.
  */
 internal suspend fun <T> runInOwnJob(block: suspend () -> T): T? =
+
     try {
         coroutineScope { async { block() }.await() }
     } catch (stopped: CancellationException) {

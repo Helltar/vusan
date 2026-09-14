@@ -53,6 +53,7 @@ class SiteToolsTest {
                 else -> respond("""{"name":"u55"}""", HttpStatusCode.OK, headersOf(HttpHeaders.ContentType, "application/json"))
             }
         }
+
         return SiteTools(
             WorkspaceClient(Http.createClient(engine), "http://regolith:8080", "test-token"),
             requireNotNull(context.personKeyOrNull),

@@ -29,6 +29,7 @@ data class ConversationInteraction(
     val createdAt: Instant,
     val turns: List<ChatTurn>
 ) {
+
     init {
         require(id.isNotBlank()) { "Chat interaction id must not be blank" }
         require(lastMessageId > 0L) { "Chat interaction last message id must be positive" }

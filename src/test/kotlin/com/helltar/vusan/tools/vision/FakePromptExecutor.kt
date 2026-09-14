@@ -35,6 +35,7 @@ internal class FakePromptExecutor(private val response: String = "description") 
     override suspend fun execute(prompt: Prompt, model: LLModel, tools: List<ToolDescriptor>): Message.Assistant {
         callCount++
         receivedPrompt = prompt
+
         return Message.Assistant(content = response, metaInfo = ResponseMetaInfo.Empty)
     }
 

@@ -54,6 +54,7 @@ class TelegramVideoThumbnailTest {
     ): ByteArray {
         val output = ByteArrayOutputStream()
         ImageIO.write(BufferedImage(width, height, type), format, output)
+
         return output.toByteArray()
     }
 

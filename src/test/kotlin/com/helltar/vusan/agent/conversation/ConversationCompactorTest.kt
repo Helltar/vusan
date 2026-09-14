@@ -93,6 +93,7 @@ class ConversationCompactorTest {
             tools: List<ToolDescriptor>
         ): Message.Assistant {
             lastPrompt = prompt
+
             return Message.Assistant(
                 parts = listOf(MessagePart.Text(answer)),
                 metaInfo = ResponseMetaInfo.create(KoogClock.System)

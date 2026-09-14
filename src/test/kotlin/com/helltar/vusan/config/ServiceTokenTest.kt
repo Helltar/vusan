@@ -21,6 +21,7 @@ class ServiceTokenTest {
     @Test
     fun `compose generated token is read from a file while an explicit token takes precedence`() {
         val path = Files.createTempFile("workspace-auth-test", ".txt")
+
         try {
             path.writeText("$secret\n")
             assertEquals(secret, readServiceToken("WORKSPACE", null, path.toString()))

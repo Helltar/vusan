@@ -18,6 +18,7 @@ internal fun Throwable.isEntityParseError(): Boolean =
 // still takes everything else.
 internal fun Throwable.isForbidden(): Boolean {
     val description = telegramDescription?.lowercase() ?: return false
+
     return description.startsWith("forbidden:") || "chat not found" in description
 }
 
@@ -38,6 +39,7 @@ internal fun Throwable.isChatUnreachable(): Boolean {
 // telegram has used both wordings for a missing reply target, so match either.
 internal fun Throwable.isReplyMessageNotFound(): Boolean {
     val description = telegramDescription?.lowercase() ?: return false
+
     return "reply message not found" in description || "message to be replied not found" in description
 }
 
@@ -61,6 +63,7 @@ internal fun Throwable.isMessageGone(): Boolean {
 // positive costs one extra `getStickerSet` call.
 internal fun Throwable.isWrongFileIdentifier(): Boolean {
     val description = telegramDescription?.lowercase() ?: return false
+
     return "wrong file identifier" in description ||
         "wrong remote file identifier" in description ||
         "invalid file_id" in description
@@ -75,6 +78,7 @@ internal fun Throwable.isFileTooBig(): Boolean =
 // failure is transient and must not be taken as permission to drop what was learned from it.
 internal fun Throwable.isStickerSetGone(): Boolean {
     val description = telegramDescription?.lowercase() ?: return false
+
     return "stickerset_invalid" in description || "sticker set not found" in description
 }
 

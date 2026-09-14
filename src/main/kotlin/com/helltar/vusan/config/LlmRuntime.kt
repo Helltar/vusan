@@ -157,6 +157,7 @@ private fun openAiCompatibleModel(config: LlmProviderConfig.OpenAiCompatible): L
 // parallel tool calls stay off on both endpoints: third-party models garble the sibling calls of a batch,
 // and the agent executes tool calls sequentially anyway.
 private fun openAiCompatibleParams(config: LlmProviderConfig.OpenAiCompatible, promptCacheKey: String?): LLMParams =
+
     when (config.endpoint) {
         OpenAiEndpoint.COMPLETIONS ->
             OpenAIChatParams(
@@ -268,6 +269,7 @@ internal fun openAiHostedParams(model: LLModel, promptCacheKey: String): LLMPara
         OpenAIResponsesParams(promptCacheKey = promptCacheKey)
 
 private fun resolveHostedRuntime(config: LlmProviderConfig.Hosted, timeoutConfig: ConnectionTimeoutConfig): LlmRuntime =
+
     when (config.provider) {
         HostedLlmProvider.OPENAI -> {
             val model = resolveOpenAiModel(config.model).withContextOverride(config.contextWindowTokens)

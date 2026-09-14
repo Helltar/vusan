@@ -90,9 +90,11 @@ class CodexAuthTest {
                         )
             ).toString()
         )
+
         if (Files.getFileAttributeView(file, PosixFileAttributeView::class.java) != null) {
             Files.setPosixFilePermissions(file, setOf(PosixFilePermission.OWNER_READ, PosixFilePermission.OWNER_WRITE))
         }
+
         var refreshCalls = 0
 
         val http =
@@ -123,6 +125,7 @@ class CodexAuthTest {
         val root = Json.parseToJsonElement(file.readText()).jsonObject
         assertEquals("chatgpt", root["auth_mode"]?.jsonPrimitive?.content)
         assertEquals("keep-me", root["tokens"]?.jsonObject?.get("future_token_field")?.jsonPrimitive?.content)
+
         if (Files.getFileAttributeView(file, PosixFileAttributeView::class.java) != null) {
             assertEquals(
                 setOf(PosixFilePermission.OWNER_READ, PosixFilePermission.OWNER_WRITE),

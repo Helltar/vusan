@@ -91,6 +91,7 @@ class TelegramChannelReader(
     }
 
     private fun postLimit(maxPosts: Int, window: Duration?): Int =
+
         when {
             maxPosts > 0 -> maxPosts.coerceAtMost(MAX_POSTS)
             window != null -> MAX_POSTS
@@ -318,6 +319,7 @@ class TelegramChannelReader(
         now: Instant,
         walk: Walk
     ): String =
+
         when {
             query.isNotBlank() ->
                 "No posts matching `$query` in @${reference.username}."

@@ -19,6 +19,7 @@ internal fun String.collapseWhitespaceAndCap(maxLength: Int): String? {
 
 /** Truncates to [maxChars] (appending an ellipsis when truncated) while preserving inner whitespace. */
 fun String.limitTo(maxChars: Int): String =
+
     when {
         maxChars <= 0 -> ""
         length <= maxChars -> this
@@ -44,6 +45,7 @@ internal fun String.isEffectivelyBlank(): Boolean =
  */
 internal fun xmlBlock(tag: String, content: String): String {
     val closing = Regex("</\\s*${Regex.escape(tag)}", RegexOption.IGNORE_CASE)
+
     return "<$tag>\n${closing.replace(content.trim()) { "&lt;${it.value.removePrefix("<")}" }}\n</$tag>"
 }
 

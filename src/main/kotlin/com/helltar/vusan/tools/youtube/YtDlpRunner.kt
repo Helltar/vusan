@@ -96,6 +96,7 @@ class YtDlpRunner(
 
     fun authDiagnostics(): String {
         cookiesFile?.takeUnless { it.isBlank() }?.let { return cookieFileDiagnostics(it) }
+
         return "auth=none"
     }
 
@@ -158,6 +159,7 @@ class YtDlpRunner(
 
     internal fun parseInfoJson(stdout: String): YtDlpInfo? {
         val firstLine = stdout.lineSequence().firstOrNull { it.trimStart().startsWith("{") } ?: return null
+
         return runCatching { json.decodeFromString<YtDlpInfo>(firstLine) }.getOrNull()
     }
 
@@ -201,6 +203,7 @@ class YtDlpRunner(
         }
 
     private suspend fun Deferred<String>.awaitWithin(timeout: Duration): String =
+
         try {
             withTimeout(timeout) { await() }
         } catch (_: TimeoutCancellationException) {

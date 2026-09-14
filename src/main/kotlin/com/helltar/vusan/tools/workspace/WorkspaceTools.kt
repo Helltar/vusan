@@ -29,6 +29,7 @@ class WorkspaceTools(
     private val outbox: BotOutbox,
     private val attachedFile: AttachedFile? = null
 ) : ToolSet {
+
     private var attachmentHandled = false
 
     @Tool
@@ -58,6 +59,7 @@ class WorkspaceTools(
     ): String = suspendToolGuard {
         require(offset >= 0) { "Offset must not be negative" }
         require(waitSeconds in 0..20) { "Wait must be between 0 and 20 seconds" }
+
         if (jobId.isBlank()) {
             client.listCommands(id).joinToString("\n") { "${it.jobId}: ${it.status.name.lowercase()}" }
                 .ifBlank { "No recent commands in this workspace." }
@@ -174,6 +176,7 @@ class WorkspaceTools(
         val file = attachedFile ?: return null
         val name = file.name.sanitizeFilename().ifBlank { "attachment" }
         if ((file.fileSizeBytes ?: 0) > MAX_ATTACHMENT_BYTES) return "The attached file `$name` exceeds the 20 MB input limit."
+
         return runCatching {
             val bytes = file.loadBytes()
             require(bytes.size <= MAX_ATTACHMENT_BYTES) { "Attachment exceeds the 20 MB input limit" }
@@ -192,6 +195,7 @@ private val JOB_ID = Regex("[0-9a-f]{32}")
 private fun checkedJobId(value: String): String {
     val id = value.requireToolText("Job ID", 32)
     require(JOB_ID.matches(id)) { "Invalid job ID" }
+
     return id
 }
 
@@ -199,6 +203,7 @@ private fun describeCommand(result: CommandResult): String = buildString {
     appendLine("Job ${result.jobId}: ${result.status.name.lowercase()}.")
     result.output.takeIf { it.isNotBlank() }?.let { appendLine(xmlBlock("command_output", it)) }
     result.exitCode?.let { appendLine("Exit code $it.") }
+
     when (result.limit) {
         CommandLimit.OUT_OF_MEMORY ->
             appendLine("The workspace ran out of memory and a process was killed. Work on less at once — smaller inputs, one step at a time.")
@@ -206,6 +211,7 @@ private fun describeCommand(result: CommandResult): String = buildString {
             appendLine("The workspace reached its process limit. Run fewer things at once, for example `make -j2` or fewer workers.")
         null -> Unit
     }
+
     when (result.status) {
         CommandStatus.RUNNING -> appendLine("The command is still running. Read it again with readWorkspaceCommand.")
         CommandStatus.TIMED_OUT -> appendLine("It ran past its time limit and was stopped; files were kept.")
@@ -214,6 +220,7 @@ private fun describeCommand(result: CommandResult): String = buildString {
             appendLine("The workspace stopped under it (${result.reason ?: "reason unknown"}); files were kept. Check the project before retrying.")
         else -> Unit
     }
+
     if (result.hasMore) appendLine("Continue reading with offset=${result.nextOffset}.")
     if (result.truncated) appendLine("The command reached the stored log limit; part of the output was dropped.")
     if (result.elapsedMs >= 1000) appendLine("Elapsed: ${"%.1f".format(Locale.ROOT, result.elapsedMs / 1000.0)}s.")

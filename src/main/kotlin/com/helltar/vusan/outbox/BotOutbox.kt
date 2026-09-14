@@ -72,7 +72,6 @@ class BotOutbox(val capabilities: ChatCapabilities = ChatCapabilities.UNRESTRICT
         return true
     }
 
-
     // a track is fetched one tool call at a time, so seven of them would otherwise arrive as seven
     // messages, each repeating the reply quote. consecutive ones become one album instead — the
     // moment anything else is queued between them, the run of tracks is over and a new album starts.

@@ -54,6 +54,7 @@ class PublicHttpTest {
             exchange.close()
         }
         server.start()
+
         try {
             createPublicHttpClient().use { http ->
                 for (host in listOf("127.0.0.1", "localhost", "[::ffff:127.0.0.1]")) {

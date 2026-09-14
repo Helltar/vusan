@@ -281,6 +281,7 @@ class TelegramOutputSenderTest {
         }
 
         private fun failureDescriptionFor(method: String): String? =
+
             when {
                 // the first sendPhoto carries the html caption; the captionless retry succeeds.
                 failHtmlCaptionOnce && method == "sendPhoto" -> {

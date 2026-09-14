@@ -120,6 +120,7 @@ private val Attribution.mention: String
 // which of the two lines to write follows from the reason the task gave; only the mention inside it
 // is Telegram's.
 private fun Attribution.headerText(messages: Messages): String =
+
     when (reason) {
         AttributionReason.SCHEDULED -> messages.taskScheduledByNotice(mention)
         AttributionReason.FOLLOW_UP -> messages.taskFollowUpNotice(mention)
@@ -399,6 +400,7 @@ class TelegramDelivery(
             return -1
         }
         val captionables = pending.filter { it.value.output.acceptsCaption }
+
         return if (captionables.size == 1) captionables.single().index else -1
     }
 

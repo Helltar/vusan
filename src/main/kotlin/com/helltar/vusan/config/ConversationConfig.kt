@@ -5,6 +5,7 @@ data class ConversationConfig(
     val maxStoredInteractions: Int = DEFAULT_MAX_STORED_INTERACTIONS,
     val retentionDays: Int = DEFAULT_RETENTION_DAYS
 ) {
+
     init {
         require(maxRecentInteractions > 0) { "CONVERSATION_MAX_RECENT_INTERACTIONS must be positive" }
         require(maxStoredInteractions >= maxRecentInteractions) {

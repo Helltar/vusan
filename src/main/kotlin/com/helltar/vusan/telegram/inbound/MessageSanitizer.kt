@@ -12,6 +12,7 @@ internal data class MessageText(val text: String, val entities: List<MessageEnti
 internal fun MessageText.entitySpan(entity: MessageEntity): String {
     val start = entity.offset.coerceIn(0, text.length)
     val end = (entity.offset + entity.length).coerceIn(start, text.length)
+
     return text.substring(start, end)
 }
 
@@ -42,6 +43,7 @@ internal fun sanitizeUserText(content: MessageText, botUserId: Long, botUsername
 }
 
 private fun MessageText.isBotMention(entity: MessageEntity, botUserId: Long, expectedUsername: String?): Boolean =
+
     when (entity.type) {
         EntityType.MENTION -> expectedUsername != null && normalizeUsername(entitySpan(entity)) == expectedUsername
         EntityType.TEXTMENTION -> entity.user?.id == botUserId

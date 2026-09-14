@@ -432,6 +432,7 @@ private fun JsonPrimitive.contentOrNullSafe(): String? =
 /** Resolves `auth.json` from the configured `CODEX_HOME`, with the CLI default as fallback. */
 internal fun defaultCodexAuthFile(codexHome: String? = null): Path {
     val home = codexHome?.trim()?.takeIf { it.isNotBlank() }
+
     return if (home != null) Path(home, "auth.json") else Path(System.getProperty("user.home"), ".codex", "auth.json")
 }
 
@@ -439,12 +440,14 @@ internal fun defaultCodexAuthFile(codexHome: String? = null): Path {
 // what lets us refresh ahead of a 401 instead of failing a user's turn to discover the token died.
 internal fun String.expiresWithin(window: kotlin.time.Duration): Boolean {
     val exp = jwtClaims()?.get("exp")?.jsonPrimitive?.longOrNull ?: return true
+
     return Instant.ofEpochSecond(exp).isBefore(Instant.now().plusSeconds(window.inWholeSeconds))
 }
 
 internal fun String.claimString(name: String): String? {
     val claims = jwtClaims() ?: return null
     val auth = claims["https://api.openai.com/auth"] as? JsonObject ?: return null
+
     return auth[name]?.jsonPrimitive?.contentOrNullSafe()?.takeIf { it.isNotBlank() }
 }
 
@@ -456,6 +459,7 @@ private fun String.jwtClaims(): JsonObject? =
     }.getOrNull()
 
 private fun String.padBase64(): String =
+
     when (length % 4) {
         2 -> "$this=="
         3 -> "$this="

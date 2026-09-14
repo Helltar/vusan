@@ -33,6 +33,7 @@ private fun outputPage(text: String, complete: Boolean, offset: Long): String {
     val fresh = if (offset == 0L) text else ""
     val end = offset + fresh.length
     val frames = if (fresh.isEmpty()) "[]" else """[{"kind":"stdout","text":"$fresh","end":$end}]"""
+
     return """{"frames":$frames,"nextOffset":$end,"complete":$complete}"""
 }
 
@@ -99,6 +100,7 @@ class WorkspaceToolsTest {
                 else -> error("Unexpected request: ${request.method.value} $path")
             }
         }
+
         return WorkspaceTools(
             WorkspaceClient(Http.createClient(engine), "http://regolith:8080", "test-token"),
             requireNotNull(context.personKeyOrNull),

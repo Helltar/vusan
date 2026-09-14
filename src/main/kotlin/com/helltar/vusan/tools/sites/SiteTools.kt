@@ -87,6 +87,7 @@ private fun Long.asMegabytes(): String =
 private fun String.asAgeDescription(): String {
     val at = runCatching { Instant.parse(this) }.getOrNull() ?: return "at an unknown time"
     val elapsed = Duration.between(at, Instant.now())
+
     return when {
         elapsed.isNegative || elapsed.toMinutes() < 1 -> "just now"
         elapsed.toHours() < 1 -> "${elapsed.toMinutes()} minute(s) ago"

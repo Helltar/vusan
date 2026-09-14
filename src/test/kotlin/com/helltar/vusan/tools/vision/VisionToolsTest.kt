@@ -292,11 +292,13 @@ class VisionToolsTest {
 
         override suspend fun sampleFrames(video: ByteArray, durationSeconds: Int?, maxFrames: Int): List<ByteArray> {
             receivedDurationSeconds = durationSeconds
+
             return frames
         }
 
         override suspend fun extractAudio(video: ByteArray): ByteArray? {
             audioRequested = true
+
             return audio
         }
     }

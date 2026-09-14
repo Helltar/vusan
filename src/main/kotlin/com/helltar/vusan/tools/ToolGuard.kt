@@ -34,5 +34,6 @@ fun String.requireToolText(label: String, maxChars: Int): String {
     val trimmed = trim()
     require(trimmed.isNotEmpty()) { "$label must not be empty" }
     require(trimmed.length <= maxChars) { "$label must be at most $maxChars characters" }
+
     return trimmed
 }

@@ -21,6 +21,7 @@ private data class DbConnectionSpec(val url: String, val absolutePath: Path) {
     companion object {
         fun fromConfig(config: AppConfig): DbConnectionSpec {
             val absolutePath = Path.of(config.databasePath).toAbsolutePath().normalize()
+
             return DbConnectionSpec(url = "jdbc:sqlite:$absolutePath", absolutePath = absolutePath)
         }
     }
@@ -137,6 +138,7 @@ object Db {
     // long-polling or agent coroutines.
     suspend fun <T> dbTransaction(block: suspend JdbcTransaction.() -> T): T {
         val currentDatabase = checkNotNull(database) { "Database is not connected" }
+
         return withContext(Dispatchers.IO) { suspendTransaction(currentDatabase) { block() } }
     }
 }

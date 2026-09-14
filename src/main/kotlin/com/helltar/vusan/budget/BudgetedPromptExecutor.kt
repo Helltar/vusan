@@ -83,11 +83,13 @@ internal class BudgetedPromptExecutor(
 
     private suspend fun metered(call: suspend () -> Message.Assistant): Message.Assistant {
         val owner = checkedOwner()
+
         return call().also { budget.record(owner, it.metaInfo) }
     }
 
     private suspend fun meteredChoices(call: suspend () -> LLMChoice): LLMChoice {
         val owner = checkedOwner()
+
         return call().also { choices -> choices.forEach { budget.record(owner, it.metaInfo) } }
     }
 
@@ -95,6 +97,7 @@ internal class BudgetedPromptExecutor(
     private suspend fun checkedOwner(): UserRef? {
         val owner = currentBudgetOwner()
         budget.stopFor(owner)?.let { throw TokenBudgetExhaustedException(it) }
+
         return owner
     }
 }

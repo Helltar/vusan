@@ -8,11 +8,6 @@ import kotlin.time.Duration.Companion.minutes
 
 class TelegramBotRunnerTest {
 
-
-
-
-
-
     @Test
     fun `an edit starts a turn only when it is what addressed the message to the bot`() {
         assertTrue(edit())

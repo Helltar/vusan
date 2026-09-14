@@ -194,6 +194,7 @@ internal fun List<PhotoSize>.biggestOrNull(): PhotoSize? =
     maxByOrNull { (it.width ?: 0) * (it.height ?: 0) }
 
 internal fun Sticker.readableFormat(): String =
+
     when {
         isAnimated == true -> "animated"
         isVideo == true -> "video"
@@ -230,6 +231,7 @@ private fun ExternalReplyInfo.mediaAttachment(): MediaAttachment =
 // animation is checked before photo/document because telegram sets both `animation` and
 // `document` on gif messages.
 private fun MediaAttachment.typeNameOrNull(): String? =
+
     when {
         sticker != null -> "sticker"
         animation != null -> "animation"
@@ -243,6 +245,7 @@ private fun MediaAttachment.typeNameOrNull(): String? =
     }
 
 private fun MediaAttachment.metadataLines(): List<String> =
+
     when {
         sticker != null -> sticker.metadataLines()
 

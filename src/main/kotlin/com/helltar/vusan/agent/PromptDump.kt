@@ -25,6 +25,7 @@ internal fun renderPromptDump(prompt: Prompt, model: String, tools: List<String>
     }
 
 private fun renderPart(part: MessagePart): String =
+
     when (part) {
         is MessagePart.Text -> part.text
         is MessagePart.Reasoning -> "[reasoning] ${part.content.joinToString("\n")}"

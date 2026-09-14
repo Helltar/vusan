@@ -22,6 +22,7 @@ internal class AnsweredMessages(private val retention: Duration) {
      */
     fun markAnswered(chatId: Long, messageId: Long, now: Instant): Boolean {
         answeredAt.values.removeIf { it.hasAgedOut(now) }
+
         return answeredAt.putIfAbsent(key(chatId, messageId), now) == null
     }
 

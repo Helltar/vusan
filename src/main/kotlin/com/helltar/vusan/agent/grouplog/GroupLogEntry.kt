@@ -20,6 +20,7 @@ data class GroupLogEntry(
     val forwardFrom: String? = null,
     val replyToMessageId: String? = null
 ) {
+
     init {
         require(kind.isNotBlank()) { "Chat log entry kind must not be blank" }
     }

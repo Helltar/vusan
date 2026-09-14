@@ -33,6 +33,7 @@ internal class RunningTurns<K : Any> {
     fun cancel(key: K): Boolean {
         val turn = synchronized(turns) { turns[key] } ?: return false
         turn.cancel(CancellationException("stopped by the user"))
+
         return true
     }
 }

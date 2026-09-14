@@ -161,6 +161,7 @@ private class CodexHttpClient(
         val completed = collectStreamedResponse(lines.toList(), json, clientName)
 
         @Suppress("UNCHECKED_CAST")
+
         return json.decodeFromString(serializer(responseType.createType()), completed.toString()) as R
     }
 

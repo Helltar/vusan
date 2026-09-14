@@ -82,6 +82,7 @@ private fun RichBlockTable.renderTable(): String {
 }
 
 private fun RichText?.render(): String =
+
     when (this) {
         null -> ""
         is RichTextPlain -> text

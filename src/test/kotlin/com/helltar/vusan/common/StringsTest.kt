@@ -17,6 +17,7 @@ class StringsTest {
     fun `limitTo never leaves a dangling surrogate when cut falls inside an emoji`() {
         // 7 emoji = 14 chars; every cap from 0..14 must stay valid UTF-16.
         val text = emoji.repeat(7)
+
         for (cap in 0..text.length + 2) {
             val result = text.limitTo(cap)
             assertTrue(result.isValidUtf16(), "limitTo($cap) produced malformed UTF-16: $result")
@@ -27,6 +28,7 @@ class StringsTest {
     @Test
     fun `collapseWhitespaceAndCap never leaves a dangling surrogate`() {
         val text = emoji.repeat(10)
+
         for (cap in 1..text.length + 2) {
             val result = text.collapseWhitespaceAndCap(cap)
             assertTrue(result == null || result.isValidUtf16(), "collapseWhitespaceAndCap($cap) produced malformed UTF-16")
@@ -36,6 +38,7 @@ class StringsTest {
     @Test
     fun `collapseWhitespaceAndCap never exceeds the requested length`() {
         val text = "word ".repeat(50).trim()
+
         for (cap in 4..text.length + 2) {
             val result = text.collapseWhitespaceAndCap(cap)
             assertTrue((result?.length ?: 0) <= cap, "collapseWhitespaceAndCap($cap) returned ${result?.length} chars")

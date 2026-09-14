@@ -54,6 +54,7 @@ class TelegramChannelClient(private val downloader: FileDownloadClient) {
     }
 
     private fun guessMimeType(url: String): String =
+
         when (url.substringBefore('?').substringAfterLast('.', "").lowercase()) {
             "png" -> "image/png"
             "webp" -> "image/webp"

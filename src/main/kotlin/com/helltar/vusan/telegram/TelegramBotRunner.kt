@@ -567,6 +567,7 @@ internal class TelegramBotRunner(
     private fun buildTranscribedPrompt(caption: String, transcript: String): String {
         val wrapped = wrapAudioTranscript(transcript)
         val trimmedCaption = caption.trim()
+
         return if (trimmedCaption.isEmpty()) wrapped else "$trimmedCaption\n\n$wrapped"
     }
 

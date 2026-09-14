@@ -16,5 +16,6 @@ internal fun readServiceToken(prefix: String, token: String?, file: String?): St
     require(resolved.length in 32..256 && resolved.all { it.code in 0x21..0x7e }) {
         "$prefix token must contain 32 to 256 printable non-whitespace ASCII characters"
     }
+
     return resolved
 }

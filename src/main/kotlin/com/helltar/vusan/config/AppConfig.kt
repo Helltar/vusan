@@ -42,6 +42,7 @@ data class AppConfig(
     val tokenBudget: TokenBudgetConfig = TokenBudgetConfig(),
     val ytDlpCookiesFile: String?
 ) {
+
     init {
         require(agentMaxIterations > 0) { "AGENT_MAX_ITERATIONS must be positive" }
         require(maxConcurrentTurns > 0) { "MAX_CONCURRENT_TURNS must be positive" }
@@ -387,5 +388,6 @@ private fun parsePolicyId(env: String, entry: String): String {
             ?: error("$env contains [$entry], whose platform is not one of ${Platform.entries}")
 
     require(id.isNotEmpty()) { "$env contains [$entry], which names a platform but no id" }
+
     return UserRef(known, id).key
 }

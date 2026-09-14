@@ -613,6 +613,7 @@ internal object TelegramOutputSender {
 /** Appends an HTML source link (e.g. `<a href="url">YouTube</a>`) to the caption; `null` when both are empty. */
 private fun captionWithSourceLink(caption: String?, sourceUrl: String?): String? {
     val link = sourceUrl?.let { """<a href="${it.escapeHtml()}">${trackLinkLabel(it)}</a>""" }
+
     return listOfNotNull(caption, link).joinToString("\n").ifBlank { null }
 }
 

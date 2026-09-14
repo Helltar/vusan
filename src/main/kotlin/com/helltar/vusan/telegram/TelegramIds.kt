@@ -36,5 +36,6 @@ private fun UserRef.numericId(label: String): Long = numeric(platform, id, label
 
 private fun numeric(platform: Platform, id: String, label: String): Long {
     require(platform == Platform.TELEGRAM) { "Not a Telegram $label: [$platform:$id]" }
+
     return requireNotNull(id.toLongOrNull()) { "Telegram $label id is not numeric: [$id]" }
 }

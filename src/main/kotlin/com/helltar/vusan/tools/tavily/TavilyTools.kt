@@ -155,6 +155,7 @@ class TavilyTools(
 
     private fun isExcludedImageHost(url: String): Boolean {
         val host = runCatching { Url(url).host }.getOrNull()?.lowercase()?.takeIf { it.isNotBlank() } ?: return false
+
         return imageExcludedDomains.any { host == it || host.endsWith(".$it") }
     }
 }
