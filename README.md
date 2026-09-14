@@ -20,8 +20,8 @@ Try it live in the [Vusan Playground](https://t.me/+56qi5dDwsNszZWFi) Telegram g
 The bot runs from its published image, so it needs only the compose file and the env template:
 
 ```bash
-mkdir -p vusan/data && cd vusan && \
-  curl -fsSLO "https://raw.githubusercontent.com/Helltar/vusan/master/{compose.yaml,.env.example}" && \
+mkdir -p vusan/data && cd vusan && curl -fsSLO \
+  "https://github.com/Helltar/vusan/raw/master/{compose.yaml,.env.example}" && \
   mv .env.example .env
 ```
 
