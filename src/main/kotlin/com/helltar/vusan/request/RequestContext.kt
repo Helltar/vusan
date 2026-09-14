@@ -28,7 +28,7 @@ data class ChatContext(
  * [isPerson] is the adapter's verdict rather than a guess made here: every messenger has actors that
  * are not one human — an anonymous group admin, a channel posting under its own account, a webhook —
  * and each of those is one account id standing in for many senders. Anything that follows somebody
- * between conversations, their personal memory and their workspace files, is keyed on a sender that
+ * between conversations, their personal memory and their sandbox files, is keyed on a sender that
  * passes this and on nothing else. Chat-scoped state is safe either way, since a shared account still
  * cannot reach out of the chat it wrote in.
  */
@@ -88,7 +88,7 @@ data class RequestContext(
 }
 
 /**
- * The key for the services that hold a person's own things — their workspace home, their published
+ * The key for the services that hold a person's own things — their sandbox home, their published
  * site. Both are keyed on the person rather than the chat, and a sender without a personal identity
  * gets neither: one shared account would be one home and one site that every anonymous admin and every
  * linked channel writes into.

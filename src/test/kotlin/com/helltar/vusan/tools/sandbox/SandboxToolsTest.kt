@@ -1,4 +1,4 @@
-package com.helltar.vusan.tools.workspace
+package com.helltar.vusan.tools.sandbox
 
 import com.helltar.vusan.infra.Http
 import com.helltar.vusan.outbox.BotOutbox
@@ -43,7 +43,7 @@ private fun MockRequestHandleScope.json(body: String) =
 private fun MockRequestHandleScope.problem(status: HttpStatusCode, body: String) =
     respond(body, status, headersOf(HttpHeaders.ContentType, "application/problem+json"))
 
-class WorkspaceToolsTest {
+class SandboxToolsTest {
     private val context = requestContext(chatId = 55L, userId = 55L)
     private val deletions = mutableListOf<String>()
     private val writes = mutableListOf<Pair<String, ByteArray>>()
@@ -59,7 +59,7 @@ class WorkspaceToolsTest {
         files: Map<String, ByteArray> = emptyMap(),
         attached: AttachedFile? = null,
         outbox: BotOutbox = BotOutbox(),
-    ): WorkspaceTools {
+    ): SandboxTools {
         val engine = MockEngine { request ->
             val path = request.url.encodedPath
             val wanted = request.url.parameters["path"].orEmpty()
@@ -101,8 +101,8 @@ class WorkspaceToolsTest {
             }
         }
 
-        return WorkspaceTools(
-            WorkspaceClient(Http.createClient(engine), "http://regolith:8080", "test-token"),
+        return SandboxTools(
+            SandboxClient(Http.createClient(engine), "http://regolith:8080", "test-token"),
             requireNotNull(context.personKeyOrNull),
             outbox,
             attached,
@@ -123,7 +123,7 @@ class WorkspaceToolsTest {
         val result = tools(info = execInfo(status = "running", outcome = null), output = "building", complete = false)
             .runCommand("make")
         assertContains(result, JOB)
-        assertContains(result, "readWorkspaceCommand")
+        assertContains(result, "readSandboxCommand")
         assertContains(result, "offset=8")
     }
 
@@ -147,7 +147,7 @@ class WorkspaceToolsTest {
     }
 
     @Test
-    fun `an interrupted command names why the workspace stopped`() = runBlocking {
+    fun `an interrupted command names why the sandbox stopped`() = runBlocking {
         val result = tools(info = execInfo(outcome = """{"type":"interrupted","reason":"server_restarted"}"""))
             .runCommand("make")
         assertContains(result, "server_restarted")
@@ -162,11 +162,11 @@ class WorkspaceToolsTest {
 
     @Test
     fun `capacity refusal reaches the model`() = runBlocking {
-        val workspace = tools(
+        val sandbox = tools(
             failure = HttpStatusCode.ServiceUnavailable to
                 """{"type":"urn:regolith:error:capacity_exhausted","title":"No session capacity","status":503,"detail":"busy","code":"capacity_exhausted"}""",
         )
-        assertContains(toolFailure { workspace.runCommand("ls") }, "at capacity")
+        assertContains(toolFailure { sandbox.runCommand("ls") }, "at capacity")
     }
 
     @Test
@@ -182,7 +182,7 @@ class WorkspaceToolsTest {
         assertContains(result, firstPath)
         firstTurn.runCommand("ls inbox")
         assertEquals(1, writes.size)
-        tools(attached = attached).writeWorkspaceFile("notes.txt", "review the totals")
+        tools(attached = attached).writeSandboxFile("notes.txt", "review the totals")
         assertNotEquals(firstPath, writes[1].first)
     }
 
@@ -192,7 +192,7 @@ class WorkspaceToolsTest {
             name = "table.csv", fileSizeBytes = 1, mimeType = "text/csv", kind = AttachedFileKind.OTHER,
             loadBytes = { byteArrayOf(1) },
         )
-        val result = tools(attached = attached).writeWorkspaceFile("script.py", "print(1)")
+        val result = tools(attached = attached).writeSandboxFile("script.py", "print(1)")
         assertContains(result, writes.first().first)
     }
 
@@ -200,7 +200,7 @@ class WorkspaceToolsTest {
     fun `sending picks media kinds and reports missing files`() = runBlocking {
         val outbox = BotOutbox()
         val result = tools(files = mapOf("cover.png" to byteArrayOf(1), "project.zip" to byteArrayOf(2)), outbox = outbox)
-            .sendFromWorkspace(listOf("cover.png", "project.zip", "missing.txt"))
+            .sendFromSandbox(listOf("cover.png", "project.zip", "missing.txt"))
         val queued = outbox.pending.map { it.output }
         assertIs<BotOutput.Photo>(queued.first { it is BotOutput.Photo })
         assertEquals("project.zip", queued.filterIsInstance<BotOutput.Document>().single().filename)
@@ -214,7 +214,7 @@ class WorkspaceToolsTest {
     fun `a file kind the chat refuses is named rather than reported as sent`() = runBlocking {
         val outbox = BotOutbox(ChatCapabilities(photos = false))
         val result = tools(files = mapOf("cover.png" to byteArrayOf(1), "notes.txt" to byteArrayOf(2)), outbox = outbox)
-            .sendFromWorkspace(listOf("cover.png", "notes.txt"))
+            .sendFromSandbox(listOf("cover.png", "notes.txt"))
 
         assertEquals("notes.txt", assertIs<BotOutput.Document>(outbox.pending.single().output).filename)
         assertContains(result, "does not accept these")
@@ -228,7 +228,7 @@ class WorkspaceToolsTest {
             name = "unused.csv", fileSizeBytes = 1, mimeType = "text/csv", kind = AttachedFileKind.OTHER,
             loadBytes = { error("Cleanup must not download attachments") },
         )
-        val result = tools(attached = attached).deleteWorkspaceFile("project/build output")
+        val result = tools(attached = attached).deleteSandboxFile("project/build output")
         assertEquals(listOf("project/build output"), deletions)
         assertTrue(writes.isEmpty())
         assertContains(result, "Deleted")
@@ -236,12 +236,12 @@ class WorkspaceToolsTest {
     }
 
     @Test
-    fun `a reset empties the workspace without touching single paths`() = runBlocking {
+    fun `a reset empties the sandbox without touching single paths`() = runBlocking {
         val attached = AttachedFile(
             name = "unused.csv", fileSizeBytes = 1, mimeType = "text/csv", kind = AttachedFileKind.OTHER,
             loadBytes = { error("A reset must not download attachments") },
         )
-        val result = tools(attached = attached).resetWorkspace()
+        val result = tools(attached = attached).resetSandbox()
         assertEquals(1, resets)
         assertTrue(deletions.isEmpty() && writes.isEmpty())
         assertContains(result, "empty again")
@@ -250,15 +250,15 @@ class WorkspaceToolsTest {
     @Test
     fun `recent commands can be rediscovered after a conversation is cleared`() = runBlocking {
         val page = """{"execs":[${execInfo(outcome = """{"type":"interrupted","reason":"server_restarted"}""")}]}"""
-        val result = tools(execs = page).readWorkspaceCommand()
+        val result = tools(execs = page).readSandboxCommand()
         assertContains(result, "$JOB: interrupted")
     }
 
     @Test
     fun `the sandbox is created before the first command and not again`() = runBlocking {
-        val workspace = tools()
-        workspace.runCommand("ls")
-        workspace.writeWorkspaceFile("notes.txt", "hello")
+        val sandbox = tools()
+        sandbox.runCommand("ls")
+        sandbox.writeSandboxFile("notes.txt", "hello")
         assertEquals(1, creations)
     }
 }

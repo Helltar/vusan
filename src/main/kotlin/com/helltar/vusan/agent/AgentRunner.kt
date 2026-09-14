@@ -132,7 +132,7 @@ class AgentRunner(
     /**
      * Cancels the turn this conversation is running, and reports whether there was one. What it happened
      * to be doing does not matter: the model call, the tool it is inside and everything that tool started
-     * are children of the same job. A workspace command outlives it on its own machine, bounded by its own
+     * are children of the same job. A sandbox command outlives it on its own machine, bounded by its own
      * timeout, and the model can list and cancel those separately.
      */
     fun stop(scope: ConversationScope): Boolean =

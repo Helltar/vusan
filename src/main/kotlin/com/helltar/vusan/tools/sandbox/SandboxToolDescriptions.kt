@@ -1,6 +1,6 @@
-package com.helltar.vusan.tools.workspace
+package com.helltar.vusan.tools.sandbox
 
-internal object WorkspaceToolDescriptions {
+internal object SandboxToolDescriptions {
 
     const val RUN_COMMAND =
         "Runs `bash` on this person's own persistent Linux machine: a real shell, with a home directory that keeps everything between messages, days and chats. " +
@@ -10,22 +10,22 @@ internal object WorkspaceToolDescriptions {
                 "There is no `sudo` and the system image is read-only, so a missing system package is something to report rather than work around. " +
                 "The home is a fixed-size disk: `No space left on device` means it is full, and the fix is to delete what is no longer needed. " +
                 "The machine reaches the public internet for downloads and package installs, and nothing private. " +
-                "Each command starts at the workspace root in a fresh shell; use `cd project && ...` explicitly, and `~/.profile` for setup that must survive. " +
-                "A long command returns a job ID and keeps running; collect it with `readWorkspaceCommand` rather than waiting. " +
+                "Each command starts at the sandbox root in a fresh shell; use `cd project && ...` explicitly, and `~/.profile` for setup that must survive. " +
+                "A long command returns a job ID and keeps running; collect it with `readSandboxCommand` rather than waiting. " +
                 "Attached files are copied into `inbox/` before the command; the tool result gives their exact paths. " +
-                "Use `sendFromWorkspace` to deliver finished files to the user."
+                "Use `sendFromSandbox` to deliver finished files to the user."
 
     const val COMMAND =
-        "The command interpreted by `bash`; use `writeWorkspaceFile` for substantial file contents."
+        "The command interpreted by `bash`; use `writeSandboxFile` for substantial file contents."
 
     const val TIMEOUT_SECONDS =
         "Execution time limit in seconds; omit it for the default."
 
     const val READ_COMMAND =
-        "Reads a workspace command's status and the next part of its combined stdout and stderr. " +
+        "Reads a sandbox command's status and the next part of its combined stdout and stderr. " +
                 "Use after `runCommand` returns a running job, or to retrieve output that did not fit. " +
                 "Use the returned `nextOffset` for the next read to avoid repeating output. " +
-                "An empty `jobId` lists recent commands in this workspace."
+                "An empty `jobId` lists recent commands in this sandbox."
 
     const val READ_JOB_ID =
         "The job ID to read, or an empty string to list recent commands."
@@ -37,46 +37,46 @@ internal object WorkspaceToolDescriptions {
         "Seconds to wait for a running command, from `0` to `20`; defaults to `10`."
 
     const val CANCEL_COMMAND =
-        "Stops a running workspace command and every process it started, background servers included. " +
-                "Files remain intact, and other commands in the workspace keep running. " +
+        "Stops a running sandbox command and every process it started, background servers included. " +
+                "Files remain intact, and other commands in the sandbox keep running. " +
                 "Use when work should be abandoned or a process is stuck."
 
     const val JOB_ID =
-        "The job ID returned by a workspace tool."
+        "The job ID returned by a sandbox tool."
 
     const val WRITE_FILE =
-        "Writes a complete UTF-8 text file in the workspace, creating missing parent directories. " +
+        "Writes a complete UTF-8 text file in the sandbox, creating missing parent directories. " +
                 "Use for source code, configuration, and documents; an existing file is replaced. " +
-                "Files are not delivered to the user until `sendFromWorkspace` is called."
+                "Files are not delivered to the user until `sendFromSandbox` is called."
 
     const val WRITE_PATH =
-        "Path relative to the workspace root, for example `project/main.py`."
+        "Path relative to the sandbox root, for example `project/main.py`."
 
     const val WRITE_CONTENT =
         "The complete file contents, not a patch or fragment."
 
     const val DELETE_FILE =
-        "Deletes one exact file or directory from this person's workspace; directories are removed recursively. " +
+        "Deletes one exact file or directory from this person's sandbox; directories are removed recursively. " +
                 "Use to remove unwanted files, and to free space when the home disk is full. " +
                 "Running commands are left alone. " +
                 "Deletion is permanent, so select only paths the user wants removed."
 
     const val DELETE_PATH =
-        "An exact path relative to the workspace root, such as `project/build`; no globs or workspace root."
+        "An exact path relative to the sandbox root, such as `project/build`; no globs or sandbox root."
 
-    const val RESET_WORKSPACE =
-        "Empties this person's workspace completely and starts it over as a new, empty home. " +
-                "Use when the user asks to wipe or reset their workspace, or when its home is beyond saving. " +
+    const val RESET_SANDBOX =
+        "Empties this person's sandbox completely and starts it over as a new, empty home. " +
+                "Use when the user asks to wipe or reset their sandbox, or when its home is beyond saving. " +
                 "Anything still running in it is stopped. " +
                 "Every file, project and installed dependency is removed permanently and cannot be recovered afterwards. " +
-                "Use `deleteWorkspaceFile` instead when only some files should go."
+                "Use `deleteSandboxFile` instead when only some files should go."
 
     const val SEND_FILES =
-        "Sends finished files from the workspace to the chat: images as photos, videos as videos, and other files as documents. " +
+        "Sends finished files from the sandbox to the chat: images as photos, videos as videos, and other files as documents. " +
                 "Files may come from this person's other chats; send only files requested for the current chat. " +
                 "For a multi-file project, create and send an archive. " +
                 "At most 10 files and 50 MB total per call."
 
     const val SEND_PATHS =
-        "Paths relative to the workspace root, for example `project/result.zip`."
+        "Paths relative to the sandbox root, for example `project/result.zip`."
 }

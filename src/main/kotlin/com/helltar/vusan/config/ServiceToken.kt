@@ -6,7 +6,7 @@ import kotlin.io.path.readText
 /**
  * The shared secret for one of the services the bot calls out to. Both sides are configured with the
  * same value and nothing is generated here, so a missing or weak one is a configuration error rather
- * than something to paper over: the workspace runs model-authored shell and the site host publishes to
+ * than something to paper over: the sandbox runs model-authored shell and the site host publishes to
  * the internet.
  */
 internal fun readServiceToken(prefix: String, token: String?, file: String?): String {

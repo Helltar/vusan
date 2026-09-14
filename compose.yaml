@@ -1,5 +1,5 @@
-# the whole deployment: the bot. its workspace and the sites it publishes belong to a regolith
-# server, deployed on its own — see docs/workspace.md.
+# the whole deployment: the bot. its sandbox and the sites it publishes belong to a regolith
+# server, deployed on its own — see docs/sandbox.md.
 name: vusan
 
 services:

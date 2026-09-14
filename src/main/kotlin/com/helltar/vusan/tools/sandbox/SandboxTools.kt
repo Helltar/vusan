@@ -1,4 +1,4 @@
-package com.helltar.vusan.tools.workspace
+package com.helltar.vusan.tools.sandbox
 
 import ai.koog.agents.core.tools.annotations.LLMDescription
 import ai.koog.agents.core.tools.annotations.Tool
@@ -23,8 +23,8 @@ private val IMAGE_EXTENSIONS = setOf("png", "jpg", "jpeg", "webp", "bmp")
 private val VIDEO_EXTENSIONS = setOf("mp4", "mov", "m4v", "webm")
 
 @Suppress("unused")
-class WorkspaceTools(
-    private val client: WorkspaceClient,
+class SandboxTools(
+    private val client: SandboxClient,
     private val id: String,
     private val outbox: BotOutbox,
     private val attachedFile: AttachedFile? = null,
@@ -33,11 +33,11 @@ class WorkspaceTools(
     private var attachmentHandled = false
 
     @Tool
-    @LLMDescription(WorkspaceToolDescriptions.RUN_COMMAND)
+    @LLMDescription(SandboxToolDescriptions.RUN_COMMAND)
     suspend fun runCommand(
-        @LLMDescription(WorkspaceToolDescriptions.COMMAND)
+        @LLMDescription(SandboxToolDescriptions.COMMAND)
         command: String,
-        @LLMDescription(WorkspaceToolDescriptions.TIMEOUT_SECONDS)
+        @LLMDescription(SandboxToolDescriptions.TIMEOUT_SECONDS)
         timeoutSeconds: Int = 0,
     ): String = suspendToolGuard {
         val script = command.requireToolText("Command", MAX_COMMAND_CHARS)
@@ -48,13 +48,13 @@ class WorkspaceTools(
     }
 
     @Tool
-    @LLMDescription(WorkspaceToolDescriptions.READ_COMMAND)
-    suspend fun readWorkspaceCommand(
-        @LLMDescription(WorkspaceToolDescriptions.READ_JOB_ID)
+    @LLMDescription(SandboxToolDescriptions.READ_COMMAND)
+    suspend fun readSandboxCommand(
+        @LLMDescription(SandboxToolDescriptions.READ_JOB_ID)
         jobId: String = "",
-        @LLMDescription(WorkspaceToolDescriptions.OFFSET)
+        @LLMDescription(SandboxToolDescriptions.OFFSET)
         offset: Long = 0,
-        @LLMDescription(WorkspaceToolDescriptions.WAIT_SECONDS)
+        @LLMDescription(SandboxToolDescriptions.WAIT_SECONDS)
         waitSeconds: Int = 10,
     ): String = suspendToolGuard {
         require(offset >= 0) { "Offset must not be negative" }
@@ -62,40 +62,40 @@ class WorkspaceTools(
 
         if (jobId.isBlank()) {
             client.listCommands(id).joinToString("\n") { "${it.jobId}: ${it.status.name.lowercase()}" }
-                .ifBlank { "No recent commands in this workspace." }
+                .ifBlank { "No recent commands in this sandbox." }
         } else {
             describeCommand(client.readCommand(id, checkedJobId(jobId), offset, waitSeconds))
         }
     }
 
     @Tool
-    @LLMDescription(WorkspaceToolDescriptions.CANCEL_COMMAND)
-    suspend fun cancelWorkspaceCommand(
-        @LLMDescription(WorkspaceToolDescriptions.JOB_ID)
+    @LLMDescription(SandboxToolDescriptions.CANCEL_COMMAND)
+    suspend fun cancelSandboxCommand(
+        @LLMDescription(SandboxToolDescriptions.JOB_ID)
         jobId: String,
     ): String = suspendToolGuard {
         describeCommand(client.cancelCommand(id, checkedJobId(jobId)))
     }
 
     @Tool
-    @LLMDescription(WorkspaceToolDescriptions.WRITE_FILE)
-    suspend fun writeWorkspaceFile(
-        @LLMDescription(WorkspaceToolDescriptions.WRITE_PATH)
+    @LLMDescription(SandboxToolDescriptions.WRITE_FILE)
+    suspend fun writeSandboxFile(
+        @LLMDescription(SandboxToolDescriptions.WRITE_PATH)
         path: String,
-        @LLMDescription(WorkspaceToolDescriptions.WRITE_CONTENT)
+        @LLMDescription(SandboxToolDescriptions.WRITE_CONTENT)
         content: String,
     ): String = suspendToolGuard {
         val target = path.requireToolText("Path", MAX_PATH_CHARS)
         require(content.length <= MAX_CONTENT_CHARS) { "File content must be at most $MAX_CONTENT_CHARS characters" }
         val note = placeAttachment()
         client.writeFile(id, target, content.toByteArray(Charsets.UTF_8))
-        listOfNotNull(note, "Wrote `$target` (${content.length} chars). Use sendFromWorkspace to deliver it.").joinToString("\n")
+        listOfNotNull(note, "Wrote `$target` (${content.length} chars). Use sendFromSandbox to deliver it.").joinToString("\n")
     }
 
     @Tool
-    @LLMDescription(WorkspaceToolDescriptions.DELETE_FILE)
-    suspend fun deleteWorkspaceFile(
-        @LLMDescription(WorkspaceToolDescriptions.DELETE_PATH)
+    @LLMDescription(SandboxToolDescriptions.DELETE_FILE)
+    suspend fun deleteSandboxFile(
+        @LLMDescription(SandboxToolDescriptions.DELETE_PATH)
         path: String,
     ): String = suspendToolGuard {
         val target = path.requireToolText("Path", MAX_PATH_CHARS)
@@ -104,16 +104,16 @@ class WorkspaceTools(
     }
 
     @Tool
-    @LLMDescription(WorkspaceToolDescriptions.RESET_WORKSPACE)
-    suspend fun resetWorkspace(): String = suspendToolGuard {
-        client.resetWorkspace(id)
-        "The workspace is empty again. Every file and installed dependency is gone; the next command starts in a new home."
+    @LLMDescription(SandboxToolDescriptions.RESET_SANDBOX)
+    suspend fun resetSandbox(): String = suspendToolGuard {
+        client.resetSandbox(id)
+        "The sandbox is empty again. Every file and installed dependency is gone; the next command starts in a new home."
     }
 
     @Tool
-    @LLMDescription(WorkspaceToolDescriptions.SEND_FILES)
-    suspend fun sendFromWorkspace(
-        @LLMDescription(WorkspaceToolDescriptions.SEND_PATHS)
+    @LLMDescription(SandboxToolDescriptions.SEND_FILES)
+    suspend fun sendFromSandbox(
+        @LLMDescription(SandboxToolDescriptions.SEND_PATHS)
         paths: List<String>,
     ): String = suspendToolGuard {
         require(paths.isNotEmpty()) { "At least one path is required" }
@@ -123,7 +123,7 @@ class WorkspaceTools(
         val others = mutableListOf<Pair<BotOutput, String>>()
         val sent = mutableListOf<String>()
         val failed = mutableListOf<String>()
-        var remainingBytes = WORKSPACE_FILE_LIMIT
+        var remainingBytes = SANDBOX_FILE_LIMIT
 
         wanted.forEach { path ->
             val bytes = runCatching {
@@ -182,10 +182,10 @@ class WorkspaceTools(
             require(bytes.size <= MAX_ATTACHMENT_BYTES) { "Attachment exceeds the 20 MB input limit" }
             val path = "inbox/${UUID.randomUUID()}/$name"
             client.writeFile(id, path, bytes)
-            "The attached file is in the workspace at `$path`."
+            "The attached file is in the sandbox at `$path`."
         }.getOrElse {
             it.rethrowIfCancellation()
-            "The attached file `$name` could not be placed in the workspace: ${it.message}."
+            "The attached file `$name` could not be placed in the sandbox: ${it.message}."
         }
     }
 }
@@ -206,18 +206,18 @@ private fun describeCommand(result: CommandResult): String = buildString {
 
     when (result.limit) {
         CommandLimit.OUT_OF_MEMORY ->
-            appendLine("The workspace ran out of memory and a process was killed. Work on less at once — smaller inputs, one step at a time.")
+            appendLine("The sandbox ran out of memory and a process was killed. Work on less at once — smaller inputs, one step at a time.")
         CommandLimit.TOO_MANY_PROCESSES ->
-            appendLine("The workspace reached its process limit. Run fewer things at once, for example `make -j2` or fewer workers.")
+            appendLine("The sandbox reached its process limit. Run fewer things at once, for example `make -j2` or fewer workers.")
         null -> Unit
     }
 
     when (result.status) {
-        CommandStatus.RUNNING -> appendLine("The command is still running. Read it again with readWorkspaceCommand.")
+        CommandStatus.RUNNING -> appendLine("The command is still running. Read it again with readSandboxCommand.")
         CommandStatus.TIMED_OUT -> appendLine("It ran past its time limit and was stopped; files were kept.")
         CommandStatus.CANCELLED -> appendLine("It was cancelled with every process it started; files were kept.")
         CommandStatus.INTERRUPTED ->
-            appendLine("The workspace stopped under it (${result.reason ?: "reason unknown"}); files were kept. Check the project before retrying.")
+            appendLine("The sandbox stopped under it (${result.reason ?: "reason unknown"}); files were kept. Check the project before retrying.")
         else -> Unit
     }
 

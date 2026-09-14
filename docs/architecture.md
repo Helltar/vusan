@@ -3,15 +3,15 @@
 This document is the orientation map for the codebase: the layers, how a message flows through them, and the background
 flows that run alongside. The main application is Kotlin under
 [`src/main/kotlin/com/helltar/vusan/`](../src/main/kotlin/com/helltar/vusan/), and it is the whole deployment. One thing
-runs outside it: the workspace, a Regolith server this bot is a client of, which also publishes the pages people build —
-see [Workspace](#workspace) and [Publishing to the web](#publishing-to-the-web).
+runs outside it: the sandbox, a Regolith server this bot is a client of, which also publishes the pages people build —
+see [Sandbox](#sandbox) and [Publishing to the web](#publishing-to-the-web).
 
 Chasing a symptom rather than reading for orientation? Start at [Where to look when…](#where-to-look-when) — it maps a
 symptom to the file that owns it, and beats searching the tree.
 
 - **Orientation** — [Layers](#layers) · [Request lifecycle](#request-lifecycle) ·
   [Background and side flows](#background-and-side-flows) · [Startup](#startup) ·
-  [Workspace](#workspace) · [Publishing to the web](#publishing-to-the-web)
+  [Sandbox](#sandbox) · [Publishing to the web](#publishing-to-the-web)
 - **Reference** — [Where to look when…](#where-to-look-when) · [Adding a tool](#adding-a-tool) ·
   [Conventions](#conventions)
 
@@ -83,8 +83,8 @@ that is who owns writing them, not because only `agent/` reads them. No other ar
   back as a number. Beside it: `ChatProfile` (what an
   adapter has to look the chat up for), `ChatCapabilities` (what the chat lets the bot post, and its slow mode —
   defaulting to unrestricted so a failed lookup never removes an ability), and `AttachedFile` (photo, video, or document, from the
-  current message or a replied-to message, that vision (`describeImage`, `describeVideo`) and the workspace
-  (`runCommand` or `writeWorkspaceFile`, which copies it into a unique `inbox/` path) can lazily download). Its `kind`
+  current message or a replied-to message, that vision (`describeImage`, `describeVideo`) and the sandbox
+  (`runCommand` or `writeSandboxFile`, which copies it into a unique `inbox/` path) can lazily download). Its `kind`
   (`IMAGE`/`VIDEO`/`OTHER`) decides which of those tools accepts it; a video also carries its duration and a loader for
   Telegram's own thumbnail.
 - **`delivery/`** — the shared output address and port: a `Destination` (chat plus optional thread — an anchor is not
@@ -207,7 +207,7 @@ A normal user message travels:
    slow-mode delay. `ChatCapabilities` travels in `RequestContext.chat` and reaches three places — `ToolRegistryFactory` leaves
    out the tools whose output the chat would refuse, so the model cannot spend an image generation or a download on
    something undeliverable; `BotOutbox` refuses a queued output the chat does not accept, because registry gating alone
-   proves nothing about the *mixed-output* paths (a text-first search queues photos, the workspace sends whatever files
+   proves nothing about the *mixed-output* paths (a text-first search queues photos, the sandbox sends whatever files
    it was asked for), and those tools report the refusal to the model rather than claiming a send nobody will see —
    image search checks first and never queries its provider at all; and `<message_context>` names the rest so the agent
    knows why and answers in one message under slow mode. Anything the lookup could not answer counts as unrestricted, since guessing "forbidden" would strip
@@ -471,8 +471,8 @@ A normal user message travels:
   running. The button reaches the same `AgentRunner.stop` through `CallbackRouter` and `TurnStopHandler`, and exists
   because in a group the typed command has to be addressed (`/stop@bot`) to be seen at all — it sits on a message
   anyone in the chat can press, so the turn's owner travels in the callback data and a press by anyone else is refused.
-  Work outside the process outlives the cancellation — a workspace command keeps going on its own machine until its
-  timeout, and the model can list and cancel those through the workspace tools.
+  Work outside the process outlives the cancellation — a sandbox command keeps going on its own machine until its
+  timeout, and the model can list and cancel those through the sandbox tools.
 - **Direct history clear** — `/clear` bypasses the LLM, deletes the caller's conversation history **in the chat the
   command was sent from**, and sends a localized confirmation. Their history in other chats, and everyone else's in this
   one, are untouched: the wipe is as narrow as the conversation it belongs to, which is what keeps `/clear` in a group
@@ -529,7 +529,7 @@ A normal user message travels:
 - **ChatGPT subscription (`codex`)** — the same Koog OpenAI client pointed at the Codex backend's Responses API, with no
   API key. `config/CodexAuth.CodexAuthStore` owns the credentials `codex login` writes to `~/.codex/auth.json` (or
   `$CODEX_HOME`). `AppConfig` resolves that path into the Codex provider config, and the store rereads the file per
-  request so an external login, logout, workspace switch, or CLI refresh takes effect without a restart. It refreshes
+  request so an external login, logout, sandbox switch, or CLI refresh takes effect without a restart. It refreshes
   OAuth sessions a few minutes before expiry and replaces the file atomically through an owner-only temporary file,
   preserving CLI-owned fields and refusing to overwrite a version that changed during refresh. A mutex keeps concurrent
   bot turns from spending the same single-use refresh token. Because Koog bakes the `Authorization` header into the
@@ -614,42 +614,42 @@ does not mark every bot unhealthy over something a restart cannot fix — while 
 backoff decays to a 15-minute retry interval and a restart becomes the thing that clears it. See
 [Health check](configuration.md#health-check).
 
-## Workspace
+## Sandbox
 
-The workspace is a [Regolith](workspace.md) server: a separate project with its own deployment, which
+The sandbox is a [Regolith](sandbox.md) server: a separate project with its own deployment, which
 runs the commands and confines them. This repository holds only the client —
-[`tools/workspace/WorkspaceClient.kt`](../src/main/kotlin/com/helltar/vusan/tools/workspace/WorkspaceClient.kt), the one
+[`tools/sandbox/SandboxClient.kt`](../src/main/kotlin/com/helltar/vusan/tools/sandbox/SandboxClient.kt), the one
 file that knows the `/v1` API. Docker, homes and network policy never enter the bot's request flow.
 
 Each `userId` maps to a sandbox named `u<userId>`, the same in every chat. Conversation history still uses
 `(userId, chatId)`; only the files and the commands running in them are shared.
 
-- **`WorkspaceClient`** — creates the person's sandbox on first use and remembers it, so later calls cost one
+- **`SandboxClient`** — creates the person's sandbox on first use and remembers it, so later calls cost one
   request. A command is an exec: it is started, then its recorded output is read from a byte offset until the
   command ends or the call's ten seconds are up, and the model continues from `nextOffset`. Errors arrive as
   RFC 9457 problem documents, and their `code` decides what the model is told — capacity and availability read
   as "try again", everything else as the server's own sentence. A `not_found` forgets the sandbox, so the next
   call creates it again rather than failing forever after retention deleted it.
-- **`WorkspaceTools`** — the model-facing surface: run, read, cancel, write, delete, reset, send. It copies the
+- **`SandboxTools`** — the model-facing surface: run, read, cancel, write, delete, reset, send. It copies the
   turn's attachment into `inbox/<unique-id>/<name>` before the first command that might want it, once per turn,
   and renders a command as text the model can act on — the exit code, and the session limit that explains it
   when the memory or process cap is what killed it.
 - **What the bot does not decide** — the sandbox image, memory, home size, idle stop, retention and network
   policy all belong to the server. The bot reads `GET /v1/info` for the limits it must respect, and trims a
   requested timeout to that ceiling instead of keeping a copy of the number.
-- **What a person keeps** — their home, until the server's retention window passes or `resetWorkspace` deletes
+- **What a person keeps** — their home, until the server's retention window passes or `resetSandbox` deletes
   the sandbox. Processes do not outlive an idle stop; files do.
 
-See [the workspace guide](workspace.md) for behaviour, setup and limits.
+See [the sandbox guide](sandbox.md) for behaviour, setup and limits.
 
 ## Publishing to the web
 
-A person's site is published by the same Regolith server that holds their workspace — this repository holds no site host.
+A person's site is published by the same Regolith server that holds their sandbox — this repository holds no site host.
 [`tools/sites/SiteTools.kt`](../src/main/kotlin/com/helltar/vusan/tools/sites/SiteTools.kt) is the whole of it: `publishSite`
 sends one directory's path, the server snapshots it out of the sandbox and answers with the address, and `siteStatus` and
 `unpublishSite` read and remove it.
 
-- **One site per person**, keyed by the same `personKeyOrNull` the workspace uses, so the files and the site they become
+- **One site per person**, keyed by the same `personKeyOrNull` the sandbox uses, so the files and the site they become
   belong to the same identity across every chat.
 - **The bot never builds the URL.** It comes back from the publish call, so the naming scheme and the domain can change on
   the server without touching the bot.
@@ -676,11 +676,11 @@ A symptom-to-source map for finding the right file fast. Paths are under
 | A reply, a notice or a scheduled fire lands in a forum's General instead of the topic it belongs to | `telegram/delivery/TelegramRequests.kt` (`ChatTarget`, and which builders name the topic) + `telegram/inbound/MessageMetadata.kt` (`forumTopicIdOrNull`, and why `is_topic_message` decides) + `tasks/ScheduledTask.kt` (`creatorThreadId`) |
 | A specific tool misbehaves | `tools/<feature>/<Feature>Tools.kt` for the tool surface, plus its `<Feature>Client.kt` for the external call |
 | Vusan will not hand a file from the chat back, or sends it under the wrong name | `telegram/tools/ChatFileTools.sendChatFile` (the `file_id` path and `chatFilename`) + `telegram/TelegramApi.downloadFileById` (`getFile`, and the 20 MB limit on what Telegram serves a bot) |
-| A command times out, says the workspace is busy, or its output is cut short | `tools/workspace/WorkspaceClient.kt` (the API calls, the problem documents they turn into, and the output paging), then `tools/workspace/WorkspaceTools.kt` (what the model is told); anything below that is the Regolith server's own log |
-| A workspace cannot reach the internet, reaches something it should not, or loses a background process | The Regolith server: its network policy and its guards. Nothing here configures either — the bot only names the sandbox |
-| A workspace loses files, or someone sees another person's | `request/RequestContext.personKeyOrNull` (the sender key that names the sandbox, and the site it publishes) and `telegram/inbound/MessageMetadata.toSenderContext` (the shared accounts that get nothing of their own) |
-| Publishing a site fails, or the link shows nothing | `tools/sites/SiteTools.kt` (the missing `index.html` warning and what the model is told), then the workspace server's own log: it owns the snapshot, the caps and the serving |
-| A published page still serves its old files, or a site nobody wants is still up | the workspace server owns the site: its releases, its caching and its takedown. `tools/sites/SiteTools.kt` only asks |
+| A command times out, says the sandbox is busy, or its output is cut short | `tools/sandbox/SandboxClient.kt` (the API calls, the problem documents they turn into, and the output paging), then `tools/sandbox/SandboxTools.kt` (what the model is told); anything below that is the Regolith server's own log |
+| A sandbox cannot reach the internet, reaches something it should not, or loses a background process | The Regolith server: its network policy and its guards. Nothing here configures either — the bot only names the sandbox |
+| A sandbox loses files, or someone sees another person's | `request/RequestContext.personKeyOrNull` (the sender key that names the sandbox, and the site it publishes) and `telegram/inbound/MessageMetadata.toSenderContext` (the shared accounts that get nothing of their own) |
+| Publishing a site fails, or the link shows nothing | `tools/sites/SiteTools.kt` (the missing `index.html` warning and what the model is told), then the Regolith server's own log: it owns the snapshot, the caps and the serving |
+| A published page still serves its old files, or a site nobody wants is still up | the Regolith server owns the site: its releases, its caching and its takedown. `tools/sites/SiteTools.kt` only asks |
 | Wrong language in a canned reply (busy/error/voice/start/task menu) | `i18n/Language.kt` (language selection) + `i18n/Messages.kt` (the strings) |
 | A turn's plan reaches the chat only after the work it announced, or arrives twice | `tools/message/MessageTools.announcePlan` (the tool and its one-per-turn rule) + `telegram/TurnStatus.kt` (`say`, and what survives `finish`) + `outbox/BotOutbox.kt` (`recordDelivered`, `hasDelivered`) + `telegram/delivery/TelegramDelivery.dispatch` (skipping an item already in the chat) |
 | The typing indicator or the turn's status message is wrong, stale, or missing | `telegram/TelegramProgress.kt` (both tickers, and `statusGraceFor`, the per-activity gate deciding which turns get a message at all) + `telegram/TurnStatus.kt` (the message itself, the emoji beside each activity, its stop button, and how it ends) + `agent/ToolActivity.kt` (which tool means what) + `i18n/Messages.progressLabel` (the words) + `telegram/delivery/TelegramDelivery.chatActionFor` (the action) |
@@ -744,7 +744,7 @@ Coding conventions (logger placement, error handling, tool structure, DB/config 
 ### Deployment layouts
 
 One deployment ships from this repository: the bot, a compose file and the `.env` beside it. Everything else it talks to is
-somebody else's deployment — the Regolith server that runs workspaces and publishes sites, wherever the operator put it,
+somebody else's deployment — the Regolith server that runs sandboxes and publishes sites, wherever the operator put it,
 reached with one URL and one token.
 
 `vusan-egress` is the bot's only network. It connects out and nothing connects in, so the bot runs behind CGNAT as happily

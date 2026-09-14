@@ -34,7 +34,7 @@ class PersonKeyTest {
         assertNull(key(1_087_968_824, -1002, private = false, isPerson = false))
     }
 
-    // the workspace and site protocols take `u` plus digits, and a site's public address is built from
+    // the sandbox and site protocols take `u` plus digits, and a site's public address is built from
     // that number, so a second platform reusing the same shape would hand over somebody else's home.
     @Test
     fun `only telegram has a person key while the services take one id shape`() {

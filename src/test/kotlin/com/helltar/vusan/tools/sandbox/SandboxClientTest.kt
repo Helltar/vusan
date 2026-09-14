@@ -1,4 +1,4 @@
-package com.helltar.vusan.tools.workspace
+package com.helltar.vusan.tools.sandbox
 
 import com.helltar.vusan.infra.Http
 import io.ktor.client.engine.mock.*
@@ -21,14 +21,14 @@ private const val FINISHED =
 private fun MockRequestHandleScope.json(body: String) =
     respond(body, HttpStatusCode.OK, headersOf(HttpHeaders.ContentType, "application/json"))
 
-class WorkspaceClientTest {
+class SandboxClientTest {
 
     @Test
     fun `API redirects are refused without forwarding the bearer secret`() = runBlocking {
         var requests = 0
         Http.createClient(MockEngine { request ->
             requests++
-            assertEquals("workspace", request.url.host)
+            assertEquals("sandbox", request.url.host)
             respond(
                 """{"code":"not_found","detail":"Unexpected API redirect"}""", HttpStatusCode.Found,
                 headersOf(
@@ -37,7 +37,7 @@ class WorkspaceClientTest {
                 ),
             )
         }).use { http ->
-            val client = WorkspaceClient(http, "http://workspace", "test-token")
+            val client = SandboxClient(http, "http://sandbox", "test-token")
             assertFailsWith<IllegalStateException> { client.listCommands("u42") }
         }
         assertEquals(1, requests)
@@ -46,7 +46,7 @@ class WorkspaceClientTest {
     @Test
     fun `file size is bounded even without content length`() = runBlocking {
         val http = Http.createClient(MockEngine { respond(byteArrayOf(1, 2, 3, 4, 5), HttpStatusCode.OK) })
-        val client = WorkspaceClient(http, "http://workspace", "test-token")
+        val client = SandboxClient(http, "http://sandbox", "test-token")
         val error = assertFailsWith<IllegalStateException> { client.readFile("u1", "sample.bin", 4) }
         assertContains(error.message.orEmpty(), "transfer limit")
     }
@@ -56,7 +56,7 @@ class WorkspaceClientTest {
         val http = Http.createClient(MockEngine {
             respond(byteArrayOf(1), HttpStatusCode.OK, headersOf(HttpHeaders.ContentLength, "100"))
         })
-        val client = WorkspaceClient(http, "http://workspace", "test-token")
+        val client = SandboxClient(http, "http://sandbox", "test-token")
         val error = assertFailsWith<IllegalArgumentException> { client.readFile("u1", "sample.bin", 4) }
         assertContains(error.message.orEmpty(), "transfer limit")
     }
@@ -74,7 +74,7 @@ class WorkspaceClientTest {
                 else -> json(FINISHED)
             }
         })
-        val client = WorkspaceClient(http, "http://workspace", "test-token")
+        val client = SandboxClient(http, "http://sandbox", "test-token")
 
         val first = client.exec("u42", "echo hello", 30)
         client.exec("u42", "echo hello", 30)
@@ -98,7 +98,7 @@ class WorkspaceClientTest {
                 json("""{"id":"$JOB","status":"running","startedAt":"2026-09-13T12:00:00Z","outputEnd":16384,"outputTruncated":false,"stdinOpen":false}""")
             }
         })
-        val client = WorkspaceClient(http, "http://workspace", "test-token")
+        val client = SandboxClient(http, "http://sandbox", "test-token")
 
         val result = client.readCommand("u42", JOB, offset = 16384, waitSeconds = 20)
 
@@ -116,7 +116,7 @@ class WorkspaceClientTest {
                 headersOf(HttpHeaders.ContentType, "application/problem+json"),
             )
         })
-        val client = WorkspaceClient(http, "http://workspace", "test-token")
+        val client = SandboxClient(http, "http://sandbox", "test-token")
         val error = assertFailsWith<IllegalStateException> { client.exec("u42", "ls", null) }
         assertContains(error.message.orEmpty(), "at capacity")
     }
@@ -125,7 +125,7 @@ class WorkspaceClientTest {
     fun `an unreachable service is reported as temporary, not as a bug`() = runBlocking {
         for (failure in listOf(ConnectException("refused"), UnresolvedAddressException())) {
             val http = Http.createClient(MockEngine { throw failure })
-            val client = WorkspaceClient(http, "http://workspace", "test-token")
+            val client = SandboxClient(http, "http://sandbox", "test-token")
             val error = assertFailsWith<IllegalStateException> { client.listCommands("u42") }
             assertContains(error.message.orEmpty(), "temporarily unavailable")
         }

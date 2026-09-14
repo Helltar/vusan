@@ -57,7 +57,7 @@ docker compose up --build -d
 ```
 
 That starts the bot, which is the whole deployment. Two capabilities stay off until it can reach a
-[Regolith](docs/workspace.md) server: the workspace shell, which runs model-authored commands, and
+[Regolith](docs/sandbox.md) server: the sandbox shell, which runs model-authored commands, and
 [publishing to the web](docs/sites.md), which puts what was built there at a public address. Both come
 from that one server, which is a separate project with a machine of its own as the recommendation.
 
@@ -89,7 +89,7 @@ Prerequisites: JDK 21, plus `ffmpeg` and `yt-dlp` on `PATH`.
 
 ### Creates
 
-- **Its own workspace** — runs code, builds projects, converts media and analyzes data, then sends
+- **Its own sandbox** — runs code, builds projects, converts media and analyzes data, then sends
   the results. Each person gets a private Linux home that persists across chats.
 - **Web pages** — puts a page, game or small app it built on the internet at your own address, and
   hands you the link.
@@ -132,8 +132,8 @@ Prerequisites: JDK 21, plus `ffmpeg` and `yt-dlp` on `PATH`.
 ## Documentation
 
 - [Configuration](docs/configuration.md) — every setting, from the required five onward.
-- [The workspace shell](docs/workspace.md) — what the persistent home does, and how to deploy it.
-- [Publishing to the web](docs/sites.md) — how a page built in the workspace gets an address.
+- [The sandbox shell](docs/sandbox.md) — what the persistent home does, and how to deploy it.
+- [Publishing to the web](docs/sites.md) — how a page built in the sandbox gets an address.
 - [Architecture](docs/architecture.md) — the layers, and how a message flows through them.
 
 ## Stack

@@ -1,4 +1,4 @@
-package com.helltar.vusan.tools.workspace
+package com.helltar.vusan.tools.sandbox
 
 import kotlinx.serialization.Serializable
 
@@ -42,7 +42,7 @@ internal data class ServerInfo(val limits: ServerLimits, val publishing: Boolean
 @Serializable
 internal data class PublishRequest(val path: String)
 
-/** A published site, as the workspace server reports it. */
+/** A published site, as the Regolith server reports it. */
 @Serializable
 data class PublishedSite(
     val site: String,

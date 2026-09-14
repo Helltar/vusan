@@ -103,7 +103,7 @@ class AppConfigTest {
 
     // a service reached without its secret is a misconfiguration, never a service reached anonymously
     @Test
-    fun `a workspace url without a token stops the startup`() {
+    fun `a sandbox url without a token stops the startup`() {
         assertFailsWith<IllegalArgumentException> { config(regolithUrl = "http://regolith:8080") }
     }
 

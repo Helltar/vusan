@@ -31,7 +31,7 @@ internal object MessageToolDescriptions {
 
     const val ANNOUNCE_PLAN =
         "Tells the user what you are about to do, before you start doing it. " +
-                "Everything else you send reaches the chat only when your whole turn is over, so on work that will take a while — a workspace build, a long download, a series of searches — this is the only way to say anything while it is still worth saying. " +
+                "Everything else you send reaches the chat only when your whole turn is over, so on work that will take a while — a sandbox build, a long download, a series of searches — this is the only way to say anything while it is still worth saying. " +
                 "Call it once, before the first slow tool call, and only when the work ahead is genuinely long: a quick answer needs no announcement. " +
                 "One or two sentences in the user's language, saying what you are going to make, not how you will do it. " +
                 "Format with Telegram HTML tags only (`<b>`, `<i>`, `<code>`, ...), never Markdown. " +

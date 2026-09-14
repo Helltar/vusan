@@ -6,7 +6,7 @@ Everything the bot reads from `.env`. Copy
 For Docker, follow the [quick start](../README.md#docker). The same `.env` also carries the few
 Compose settings of the bot's own deployment, listed at the bottom of `.env.example`.
 
-One thing sits outside this file: the [workspace](#workspace), a Regolith server with its own deployment
+One thing sits outside this file: the [sandbox](#sandbox), a Regolith server with its own deployment
 and its own configuration, which also publishes the pages people build. That split is a boundary rather
 than tidiness: it runs commands the model writes and holds a Docker socket to do it, and what it
 publishes faces the internet, so it is never handed the bot's secrets.
@@ -17,7 +17,7 @@ publishes faces the internet, so it is never handed the bot's secrets.
 - **Who it is** — [Personality](#personality) · [Appearance](#appearance)
 - **Tools** — [Optional tools](#optional-tools) · [Web search](#web-search) ·
   [Voice output](#voice-output) · [Voice input](#voice-input) ·
-  [Image generation](#image-generation) · [Vision](#vision) · [Workspace](#workspace)
+  [Image generation](#image-generation) · [Vision](#vision) · [Sandbox](#sandbox)
 - **What it remembers** — [Conversation](#conversation) · [Memory](#memory) ·
   [Group log](#group-log) · [Scheduled tasks](#scheduled-tasks)
 - **In Telegram** — [Rights in a group](#rights-in-a-group) · [Command menu](#command-menu)
@@ -177,7 +177,7 @@ keyring storage, put `cli_auth_credentials_store = "file"` back in that director
 Treat the file like a password, because it holds live access and refresh tokens, and in a container
 mount its directory read-write.
 
-It is reread before every request, so a later CLI login, logout, workspace switch or token rotation
+It is reread before every request, so a later CLI login, logout, sandbox switch or token rotation
 takes effect without restarting the bot. Sharing one file with an interactive CLI is fine — a
 refresh from either side keeps the other working, and the newer version wins. A ChatGPT access token
 lives ten days; Vusan rotates it about a day before expiry and writes it back atomically with
@@ -336,7 +336,7 @@ with a `WARN` log and Vusan keeps running.
 | `OPENAI_STT_API_KEY`    | Voice input, sound of a video             | Reuse your OpenAI key                      |
 | `OPENAI_IMAGE_API_KEY`  | Image generation                          | Reuse your OpenAI key; optional on `codex` |
 | `OPENAI_VISION_API_KEY` | Vision on a chat model that cannot see    | See [Vision](#vision)                      |
-| `REGOLITH_URL`          | Shell workspace                           | See [Workspace](#workspace)                |
+| `REGOLITH_URL`          | Shell sandbox                           | See [Sandbox](#sandbox)                |
 
 ### Web search
 
@@ -476,14 +476,14 @@ is available and stays off without it. With no vision at all, a startup `WARN` s
 answers without looking at attachments; Telegram channel posts still come back, as text only. Vision
 calls share the `LLM_REQUEST_TIMEOUT_SECONDS` budget.
 
-## Workspace
+## Sandbox
 
 Vusan can keep one persistent Linux home **per person, across all chats** — a real shell for projects,
-media, documents and data, with files that survive new messages, `/clear` and restarts. The workspace
+media, documents and data, with files that survive new messages, `/clear` and restarts. The sandbox
 is a **Regolith server**: a separate project with its own deployment, which runs the commands and
 confines them. It is **off by default**, and the bot grows the shell tools only once it can reach one.
 What the model can do with it, what the bot expects of the server and where its limits come from are
-in [the workspace guide](workspace.md).
+in [the sandbox guide](sandbox.md).
 
 These are the bot's side of it, and belong in `.env`:
 
@@ -493,14 +493,14 @@ These are the bot's side of it, and belong in `.env`:
 | `REGOLITH_TOKEN`       | —       | Its API token, the same value the server was started with.              |
 | `REGOLITH_TOKEN_FILE`  | —       | A file holding that token instead. An explicit token takes precedence.  |
 
-Both a URL and a token must be present, or the workspace tools are not registered and the bot never
+Both a URL and a token must be present, or the sandbox tools are not registered and the bot never
 mentions them. Everything else — the sandbox image, memory, home size, timeouts, retention and network
 policy — is configured on the server, and the bot reads its limits from it.
 
 ## Publishing to the web
 
 Vusan can put a finished page, game or small web app on the public internet at one address per person.
-There is nothing to configure here: it is the workspace server's doing, so a workspace that can publish
+There is nothing to configure here: it is the Regolith server's doing, so a sandbox that can publish
 brings the tools with it and one that cannot says so to the model. What a site may hold, where it is
 served and how long it is kept belong to that server; see [the site guide](sites.md).
 
@@ -536,7 +536,7 @@ chat. Built in; no env variable is required to enable it.
 |------------------------|---------|---------------------------------------------------------------------------|
 | `MAX_MEMORY_PER_SCOPE` | `10`    | Max durable memory entries per user and per chat; the oldest are evicted. |
 
-Personal memory follows a person between chats, and their workspace files are shared too. The
+Personal memory follows a person between chats, and their sandbox files are shared too. The
 history is not: what someone told the bot in a DM is not replayed inside a group, and two groups
 never see each other's exchanges — so ask the bot to remember something if it should follow you
 everywhere. Both need to know who you are, so neither is offered to a sender Telegram delivers under

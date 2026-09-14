@@ -10,7 +10,7 @@ import kotlin.test.assertTrue
 class BotOutboxTest {
 
     // registry gating keeps a refused tool out of the turn, but a text-first search queues photos and
-    // the workspace sends whatever it was asked for, both through paths no capability gates.
+    // the sandbox sends whatever it was asked for, both through paths no capability gates.
     @Test
     fun `a chat that refuses a kind never queues one`() {
         val outbox = BotOutbox(ChatCapabilities(photos = false, documents = false))

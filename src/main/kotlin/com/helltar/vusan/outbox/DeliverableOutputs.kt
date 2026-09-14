@@ -7,7 +7,7 @@ import com.helltar.vusan.request.ChatCapabilities
  *
  * `ToolRegistryFactory` already keeps a tool the chat would refuse out of the registry, but that is
  * not proof every queued output is deliverable: a text-first search tool queues photos, and the
- * workspace sends whatever files it was asked for, both through paths no capability gates. This is
+ * sandbox sends whatever files it was asked for, both through paths no capability gates. This is
  * the check that covers those, and any path written later.
  */
 internal fun ChatCapabilities.allows(output: BotOutput): Boolean = when (output) {

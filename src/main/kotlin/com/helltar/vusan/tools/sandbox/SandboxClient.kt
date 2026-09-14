@@ -1,4 +1,4 @@
-package com.helltar.vusan.tools.workspace
+package com.helltar.vusan.tools.sandbox
 
 import com.helltar.vusan.common.rethrowIfCancellation
 import io.ktor.client.*
@@ -17,24 +17,24 @@ import java.util.concurrent.ConcurrentHashMap
 import kotlin.time.Duration.Companion.seconds
 import kotlin.time.TimeSource
 
-internal const val WORKSPACE_FILE_LIMIT = 50 * 1024 * 1024
+internal const val SANDBOX_FILE_LIMIT = 50 * 1024 * 1024
 
 /**
- * The bot's side of a Regolith sandbox server: one named sandbox per person, holding their home.
+ * The bot's side of a Regolith server: one named sandbox per person, holding their home.
  *
  * This is the only file that knows the `/v1` API. It carries its own client rather than Regolith's
- * Kotlin SDK, which is not published yet; [WorkspaceModels] holds the wire types it needs. A sandbox
+ * Kotlin SDK, which is not published yet; [SandboxModels] holds the wire types it needs. A sandbox
  * is created on first use and returned unchanged after that, so no state is kept here beyond
  * remembering which ones this process has already asked for.
  */
-class WorkspaceClient(
+class SandboxClient(
     http: HttpClient,
     baseUrl: String,
     private val token: String,
 ) {
 
     init {
-        require(token.isNotBlank()) { "Workspace API authentication is required" }
+        require(token.isNotBlank()) { "Sandbox API authentication is required" }
     }
 
     // the configured API has no redirect contract; never relay its bearer secret to another origin.
@@ -48,111 +48,111 @@ class WorkspaceClient(
     @Volatile
     private var server: ServerInfo? = null
 
-    suspend fun exec(workspaceId: String, command: String, timeoutSeconds: Int?): CommandResult {
-        create(workspaceId)
+    suspend fun exec(sandboxId: String, command: String, timeoutSeconds: Int?): CommandResult {
+        create(sandboxId)
         val started: ExecInfo = reachable {
-            http.post("${sandbox(workspaceId)}/execs") {
-                workspaceRequest()
+            http.post("${sandbox(sandboxId)}/execs") {
+                sandboxRequest()
                 contentType(ContentType.Application.Json)
                 setBody(ExecRequest(command, clamped(timeoutSeconds)))
-            }.requireSuccess(workspaceId).body()
+            }.requireSuccess(sandboxId).body()
         }
 
-        return collect(workspaceId, started.id, offset = 0, waitSeconds = FIRST_WAIT_SECONDS)
+        return collect(sandboxId, started.id, offset = 0, waitSeconds = FIRST_WAIT_SECONDS)
     }
 
-    suspend fun readCommand(workspaceId: String, jobId: String, offset: Long, waitSeconds: Int): CommandResult =
-        collect(workspaceId, jobId, offset, waitSeconds)
+    suspend fun readCommand(sandboxId: String, jobId: String, offset: Long, waitSeconds: Int): CommandResult =
+        collect(sandboxId, jobId, offset, waitSeconds)
 
-    suspend fun cancelCommand(workspaceId: String, jobId: String): CommandResult {
+    suspend fun cancelCommand(sandboxId: String, jobId: String): CommandResult {
         val info: ExecInfo = reachable {
-            http.post("${sandbox(workspaceId)}/execs/$jobId/cancel") {
-                workspaceRequest()
-            }.requireSuccess(workspaceId).body()
+            http.post("${sandbox(sandboxId)}/execs/$jobId/cancel") {
+                sandboxRequest()
+            }.requireSuccess(sandboxId).body()
         }
 
         return info.result(output = "", nextOffset = 0, hasMore = false)
     }
 
-    suspend fun listCommands(workspaceId: String): List<CommandResult> = reachable {
-        http.get("${sandbox(workspaceId)}/execs") { workspaceRequest() }
-            .requireSuccess(workspaceId).body<ExecPage>().execs
+    suspend fun listCommands(sandboxId: String): List<CommandResult> = reachable {
+        http.get("${sandbox(sandboxId)}/execs") { sandboxRequest() }
+            .requireSuccess(sandboxId).body<ExecPage>().execs
             .map { it.result(output = "", nextOffset = 0, hasMore = false) }
     }
 
-    suspend fun writeFile(workspaceId: String, path: String, bytes: ByteArray) {
-        require(bytes.size <= WORKSPACE_FILE_LIMIT) { "File exceeds the 50 MB transfer limit" }
-        create(workspaceId)
+    suspend fun writeFile(sandboxId: String, path: String, bytes: ByteArray) {
+        require(bytes.size <= SANDBOX_FILE_LIMIT) { "File exceeds the 50 MB transfer limit" }
+        create(sandboxId)
         reachable {
-            http.put("${sandbox(workspaceId)}/files/content") {
-                workspaceRequest()
+            http.put("${sandbox(sandboxId)}/files/content") {
+                sandboxRequest()
                 parameter("path", path)
                 setBody(bytes)
-            }.requireSuccess(workspaceId)
+            }.requireSuccess(sandboxId)
         }
     }
 
-    suspend fun deleteFile(workspaceId: String, path: String) {
+    suspend fun deleteFile(sandboxId: String, path: String) {
         reachable {
-            http.delete("${sandbox(workspaceId)}/files") {
-                workspaceRequest()
+            http.delete("${sandbox(sandboxId)}/files") {
+                sandboxRequest()
                 parameter("path", path)
                 parameter("recursive", true)
-            }.requireSuccess(workspaceId)
+            }.requireSuccess(sandboxId)
         }
     }
 
-    /** Publishes a directory of the workspace to the web and returns the address it is served at. */
-    suspend fun publishSite(workspaceId: String, path: String): PublishedSite {
-        create(workspaceId)
+    /** Publishes a directory of the sandbox to the web and returns the address it is served at. */
+    suspend fun publishSite(sandboxId: String, path: String): PublishedSite {
+        create(sandboxId)
 
         return reachable {
-            http.post("${sandbox(workspaceId)}/publish") {
-                workspaceRequest()
+            http.post("${sandbox(sandboxId)}/publish") {
+                sandboxRequest()
                 contentType(ContentType.Application.Json)
                 setBody(PublishRequest(path))
-            }.requireSuccess(workspaceId).body()
+            }.requireSuccess(sandboxId).body()
         }
     }
 
     /** What is published for this person, or null when nothing is. */
-    suspend fun publishedSite(workspaceId: String): PublishedSite? = reachable {
-        val response = http.get("${sandbox(workspaceId)}/site") { workspaceRequest() }
-        if (response.status == HttpStatusCode.NotFound) null else response.requireSuccess(workspaceId).body()
+    suspend fun publishedSite(sandboxId: String): PublishedSite? = reachable {
+        val response = http.get("${sandbox(sandboxId)}/site") { sandboxRequest() }
+        if (response.status == HttpStatusCode.NotFound) null else response.requireSuccess(sandboxId).body()
     }
 
-    /** Takes the site down; false when there was nothing to take down. The workspace keeps its files. */
-    suspend fun unpublishSite(workspaceId: String): Boolean = reachable {
-        val response = http.delete("${sandbox(workspaceId)}/site") { workspaceRequest() }
-        if (response.status == HttpStatusCode.NotFound) false else true.also { response.requireSuccess(workspaceId) }
+    /** Takes the site down; false when there was nothing to take down. The sandbox keeps its files. */
+    suspend fun unpublishSite(sandboxId: String): Boolean = reachable {
+        val response = http.delete("${sandbox(sandboxId)}/site") { sandboxRequest() }
+        if (response.status == HttpStatusCode.NotFound) false else true.also { response.requireSuccess(sandboxId) }
     }
 
     /** Whether this server publishes at all; it says so in its own info rather than the bot guessing. */
     suspend fun publishes(): Boolean = info()?.publishing ?: false
 
-    /** The names in one directory of the workspace, for a check before something is published. */
-    suspend fun entries(workspaceId: String, path: String): List<String> = reachable {
-        http.get("${sandbox(workspaceId)}/files/entries") {
-            workspaceRequest()
+    /** The names in one directory of the sandbox, for a check before something is published. */
+    suspend fun entries(sandboxId: String, path: String): List<String> = reachable {
+        http.get("${sandbox(sandboxId)}/files/entries") {
+            sandboxRequest()
             parameter("path", path)
-        }.requireSuccess(workspaceId).body<DirectoryListing>().entries.map { it.name }
+        }.requireSuccess(sandboxId).body<DirectoryListing>().entries.map { it.name }
     }
 
     /** Deletes the sandbox with its home; the next use creates an empty one under the same name. */
-    suspend fun resetWorkspace(workspaceId: String) {
+    suspend fun resetSandbox(sandboxId: String) {
         reachable {
-            http.delete(sandbox(workspaceId)) { workspaceRequest() }.requireSuccess(workspaceId)
+            http.delete(sandbox(sandboxId)) { sandboxRequest() }.requireSuccess(sandboxId)
         }
-        created -= workspaceId
+        created -= sandboxId
     }
 
-    suspend fun readFile(workspaceId: String, path: String, maxBytes: Int = WORKSPACE_FILE_LIMIT): ByteArray = reachable {
-        require(maxBytes in 1..WORKSPACE_FILE_LIMIT) { "Invalid file transfer budget" }
-        http.prepareGet("${sandbox(workspaceId)}/files/content") {
-            workspaceRequest()
+    suspend fun readFile(sandboxId: String, path: String, maxBytes: Int = SANDBOX_FILE_LIMIT): ByteArray = reachable {
+        require(maxBytes in 1..SANDBOX_FILE_LIMIT) { "Invalid file transfer budget" }
+        http.prepareGet("${sandbox(sandboxId)}/files/content") {
+            sandboxRequest()
             parameter("path", path)
         }.execute { response ->
-            response.requireSuccess(workspaceId)
+            response.requireSuccess(sandboxId)
             val declared = response.contentLength()
             require(declared == null || declared <= maxBytes) { "File exceeds the remaining transfer limit" }
             val channel = response.bodyAsChannel()
@@ -176,7 +176,7 @@ class WorkspaceClient(
      * page limit is reached, then reports the command as it now stands. Output is kept on the server,
      * so what does not fit is read by the next call from [CommandResult.nextOffset].
      */
-    private suspend fun collect(workspaceId: String, jobId: String, offset: Long, waitSeconds: Int): CommandResult {
+    private suspend fun collect(sandboxId: String, jobId: String, offset: Long, waitSeconds: Int): CommandResult {
         val started = TimeSource.Monotonic.markNow()
         val output = StringBuilder()
         var next = offset
@@ -185,7 +185,7 @@ class WorkspaceClient(
 
         while (true) {
             val remaining = (waitSeconds.seconds - started.elapsedNow()).inWholeSeconds.toInt().coerceAtLeast(0)
-            val page = outputPage(workspaceId, jobId, next, remaining)
+            val page = outputPage(sandboxId, jobId, next, remaining)
             page.frames.forEach { frame ->
                 if (frame.kind == GAP_FRAME) dropped = true else output.append(frame.text)
             }
@@ -199,30 +199,30 @@ class WorkspaceClient(
         }
 
         val info: ExecInfo = reachable {
-            http.get("${sandbox(workspaceId)}/execs/$jobId") { workspaceRequest() }
-                .requireSuccess(workspaceId).body()
+            http.get("${sandbox(sandboxId)}/execs/$jobId") { sandboxRequest() }
+                .requireSuccess(sandboxId).body()
         }
 
         return info.result(output.toString(), next, hasMore = !complete, dropped = dropped)
     }
 
-    private suspend fun outputPage(workspaceId: String, jobId: String, offset: Long, waitSeconds: Int): OutputPage = reachable {
-        http.get("${sandbox(workspaceId)}/execs/$jobId/output") {
-            workspaceRequest()
+    private suspend fun outputPage(sandboxId: String, jobId: String, offset: Long, waitSeconds: Int): OutputPage = reachable {
+        http.get("${sandbox(sandboxId)}/execs/$jobId/output") {
+            sandboxRequest()
             parameter("offset", offset)
             parameter("waitSeconds", waitSeconds)
             parameter("maxBytes", OUTPUT_CHARS)
-        }.requireSuccess(workspaceId).body()
+        }.requireSuccess(sandboxId).body()
     }
 
     /** Creates the person's sandbox, or leaves the existing one exactly as it is. */
-    private suspend fun create(workspaceId: String) {
-        if (!created.add(workspaceId)) return
+    private suspend fun create(sandboxId: String) {
+        if (!created.add(sandboxId)) return
 
         try {
-            reachable { http.put(sandbox(workspaceId)) { workspaceRequest() }.requireSuccess(workspaceId) }
+            reachable { http.put(sandbox(sandboxId)) { sandboxRequest() }.requireSuccess(sandboxId) }
         } catch (e: Throwable) {
-            created -= workspaceId
+            created -= sandboxId
             throw e
         }
     }
@@ -240,13 +240,13 @@ class WorkspaceClient(
         server?.let { return it }
 
         return runCatching {
-            reachable { http.get("$base/v1/info") { workspaceRequest() }.requireSuccess(null).body<ServerInfo>() }
+            reachable { http.get("$base/v1/info") { sandboxRequest() }.requireSuccess(null).body<ServerInfo>() }
         }.onFailure { it.rethrowIfCancellation() }.getOrNull()?.also { server = it }
     }
 
-    private fun sandbox(workspaceId: String) = "$base/v1/sandboxes/$workspaceId"
+    private fun sandbox(sandboxId: String) = "$base/v1/sandboxes/$sandboxId"
 
-    private fun HttpRequestBuilder.workspaceRequest() {
+    private fun HttpRequestBuilder.sandboxRequest() {
         bearerAuth(token)
         accept(ContentType.Application.Json)
         expectSuccess = false
@@ -256,13 +256,13 @@ class WorkspaceClient(
         }
     }
 
-    private suspend fun HttpResponse.requireSuccess(workspaceId: String?): HttpResponse {
+    private suspend fun HttpResponse.requireSuccess(sandboxId: String?): HttpResponse {
         if (status.isSuccess()) return this
         val body = runCatching { bodyAsText() }.getOrDefault("")
         val problem = runCatching { problems.decodeFromString(ProblemDetails.serializer(), body) }.getOrNull()
         // the sandbox may have been deleted by retention or by hand: forget it, so the next call recreates it.
-        if (problem?.code == NOT_FOUND_CODE && workspaceId != null) created -= workspaceId
-        error(problem?.explain() ?: "The workspace API answered ${status.value}")
+        if (problem?.code == NOT_FOUND_CODE && sandboxId != null) created -= sandboxId
+        error(problem?.explain() ?: "The sandbox API answered ${status.value}")
     }
 
     private suspend fun <T> reachable(block: suspend () -> T): T =
@@ -270,7 +270,7 @@ class WorkspaceClient(
             e.rethrowIfCancellation()
             when (e) {
                 is ConnectException, is UnresolvedAddressException ->
-                    error("The workspace is temporarily unavailable. Tell the user; do not retry immediately.")
+                    error("The sandbox is temporarily unavailable. Tell the user; do not retry immediately.")
                 else -> throw e
             }
         }
@@ -289,9 +289,9 @@ class WorkspaceClient(
 
 private fun ProblemDetails.explain(): String = when (code) {
     "capacity_exhausted", "unavailable" ->
-        "The workspace host is at capacity right now. Tell the user and try again in a minute."
-    "busy" -> "This workspace already runs as many commands as it may; wait for one to finish."
-    else -> detail.ifBlank { title }.ifBlank { "The workspace refused the request" }
+        "The sandbox host is at capacity right now. Tell the user and try again in a minute."
+    "busy" -> "This sandbox already runs as many commands as it may; wait for one to finish."
+    else -> detail.ifBlank { title }.ifBlank { "The sandbox refused the request" }
 }
 
 private fun ExecInfo.result(output: String, nextOffset: Long, hasMore: Boolean, dropped: Boolean = false): CommandResult {

@@ -53,8 +53,8 @@ import com.helltar.vusan.tools.vision.VideoVisionClient
 import com.helltar.vusan.tools.vision.VisionTools
 import com.helltar.vusan.tools.vision.WhisperVideoAudioTranscriber
 import com.helltar.vusan.tools.sites.SiteTools
-import com.helltar.vusan.tools.workspace.WorkspaceClient
-import com.helltar.vusan.tools.workspace.WorkspaceTools
+import com.helltar.vusan.tools.sandbox.SandboxClient
+import com.helltar.vusan.tools.sandbox.SandboxTools
 import com.helltar.vusan.tools.voice.ElevenLabsTtsClient
 import com.helltar.vusan.tools.voice.VideoNoteTools
 import com.helltar.vusan.tools.voice.VoiceTools
@@ -158,9 +158,9 @@ class ToolRegistryFactory(
                 }
         }
 
-    private val workspaceClient =
-        optional("REGOLITH_URL", config.regolithUrl, "workspace shell tools") {
-            WorkspaceClient(http, it, requireNotNull(config.regolithToken))
+    private val sandboxClient =
+        optional("REGOLITH_URL", config.regolithUrl, "sandbox shell tools") {
+            SandboxClient(http, it, requireNotNull(config.regolithToken))
         }
 
     // the key that enables voice transcription also hands a video's sound to the vision tool
@@ -222,9 +222,9 @@ class ToolRegistryFactory(
 
             tavilyClient?.let { tools(TavilyTools(it, imageDownloadClient, outbox)) }
             searxngClient?.let { tools(SearxngTools(it, imageDownloadClient, outbox)) }
-            workspaceClient?.let { client ->
+            sandboxClient?.let { client ->
                 context.personKeyOrNull?.let { person ->
-                    tools(WorkspaceTools(client, person, outbox, context.attachedFile))
+                    tools(SandboxTools(client, person, outbox, context.attachedFile))
                     // publishing belongs to the same server: it answers `not_implemented` when it has
                     // no public role, and says so to the model rather than the tool being missing.
                     tools(ToolGroup.WEB_PUBLISHING, SiteTools(client, person))

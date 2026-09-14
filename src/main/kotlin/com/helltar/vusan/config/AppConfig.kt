@@ -49,7 +49,7 @@ data class AppConfig(
         require(maxFollowUpsPerUser >= 0) { "MAX_FOLLOW_UPS_PER_USER must not be negative" }
         require(maxMemoryPerScope >= 0) { "MAX_MEMORY_PER_SCOPE must not be negative" }
         require(maxTasksPerUser >= 0) { "MAX_TASKS_PER_USER must not be negative" }
-        require(regolithUrl == null || !regolithToken.isNullOrBlank()) { "Workspace API authentication is required" }
+        require(regolithUrl == null || !regolithToken.isNullOrBlank()) { "Sandbox API authentication is required" }
         require(taskMaxLatenessMinutes >= 0) { "TASK_MAX_LATENESS_MINUTES must not be negative" }
     }
 

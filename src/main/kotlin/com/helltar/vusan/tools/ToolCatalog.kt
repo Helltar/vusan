@@ -22,7 +22,7 @@ enum class ToolGroup(val summary: String) {
     VOICE_REPLIES("answer out loud with a voice message, or with a round video message of the bot's own face"),
     YOUTUBE("find a video by name or link, send the video or its audio track, or answer from its subtitles"),
     SCHEDULED_TASKS("run something later, once or on a repeating schedule, check back after an event, and list, pause, edit or cancel what is scheduled"),
-    WEB_PUBLISHING("put a page, game or small app built in the workspace on the internet at its own address"),
+    WEB_PUBLISHING("put a page, game or small app built in the sandbox on the internet at its own address"),
     POLLS("create a poll or a quiz in the chat and follow who answered what"),
     GIFS("find and send an animated GIF"),
     TELEGRAM_CHANNELS("recap a public channel by day or week, search its posts, and read the pictures in them"),

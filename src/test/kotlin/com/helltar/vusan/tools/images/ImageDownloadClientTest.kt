@@ -27,7 +27,7 @@ class ImageDownloadClientTest {
     }
 
     @Test
-    fun `image redirects cannot read a private workspace file`() = runBlocking {
+    fun `image redirects cannot read a private sandbox file`() = runBlocking {
         var requests = 0
         Http.createClient(MockEngine {
             requests++

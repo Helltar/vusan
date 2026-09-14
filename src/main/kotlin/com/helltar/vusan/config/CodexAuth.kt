@@ -73,7 +73,7 @@ private val authJson =
 
 /**
  * A signed-in ChatGPT session, as far as the LLM client is concerned: the bearer token and the
- * workspace it belongs to. Both go on every request; the account id is what routes a workspace
+ * sandbox it belongs to. Both go on every request; the account id is what routes a sandbox
  * subscription to the right entitlement.
  */
 data class CodexCredentials(
@@ -212,7 +212,7 @@ class CodexAuthStore(
     suspend fun planType(): String? =
         mutex.withLock { currentTokens().tokens.idToken.claimString("chatgpt_plan_type") }
 
-    // reread the file on every request so `codex login`, `codex logout`, workspace changes and a CLI
+    // reread the file on every request so `codex login`, `codex logout`, sandbox changes and a CLI
     // refresh become visible without restarting vusan. the cached entry only carries a token we refreshed
     // in memory when writing it back failed; it remains usable while the on-disk source is unchanged.
     private fun currentTokens(): CodexAuthSnapshot {
@@ -393,7 +393,7 @@ private fun refreshFailureMessage(status: HttpStatusCode, body: String?): String
         "refresh_token_expired", "token_expired" -> "The ChatGPT session has expired. $reLogin"
         "refresh_token_reused" -> "The ChatGPT refresh token was already used. $reLogin"
         "refresh_token_invalidated" -> "The ChatGPT session was revoked. $reLogin"
-        "refresh_token_account_mismatch" -> "The ChatGPT session belongs to another workspace. $reLogin"
+        "refresh_token_account_mismatch" -> "The ChatGPT session belongs to another sandbox. $reLogin"
         "invalid_grant", "invalid_refresh_token" -> "The ChatGPT refresh token was rejected as invalid. $reLogin"
         // a rejected credential comes back as 401. anything else means the request itself was refused —
         // too soon after the previous refresh, most likely — and signing in again would not help.

@@ -76,10 +76,10 @@ Preserve the package boundaries in [`docs/architecture.md`](docs/architecture.md
 - Avoid thin abstractions and one-off helper objects. Add an abstraction only
   when it removes real complexity or matches an existing local pattern.
 
-### The workspace
+### The sandbox
 
-- The workspace is a Regolith server: a separate project, deployed on its own,
-  reached only over HTTP through `tools/workspace/WorkspaceClient.kt`. That file
+- The sandbox is a Regolith server: a separate project, deployed on its own,
+  reached only over HTTP through `tools/sandbox/SandboxClient.kt`. That file
   is the only one that knows the `/v1` API; nothing here knows how a sandbox is
   isolated, and no Docker socket reaches this side.
 - Do not copy the server's settings into Kotlin. It is authoritative about
@@ -94,7 +94,7 @@ Preserve the package boundaries in [`docs/architecture.md`](docs/architecture.md
 
 ### Publishing to the web
 
-- A site is published by the workspace server, not from here: one call sends a
+- A site is published by the Regolith server, not from here: one call sends a
   directory's path and gets the address back. Never build a site's URL in Kotlin
   — the server returns it, so its naming scheme can change without touching the
   bot.
@@ -102,7 +102,7 @@ Preserve the package boundaries in [`docs/architecture.md`](docs/architecture.md
   how long it is kept. Do not keep a copy of any of it here, and do not add a
   setting for whether publishing exists: `GET /v1/info` says so.
 - Publishing is a snapshot of a directory, and the tools say so to the model.
-  Nothing is served out of a live workspace home, which is reclaimed when its
+  Nothing is served out of a live sandbox home, which is reclaimed when its
   session stops.
 - The one check worth doing on this side is the missing `index.html`, because a
   directory without one publishes fine and its link opens nothing.
@@ -110,7 +110,7 @@ Preserve the package boundaries in [`docs/architecture.md`](docs/architecture.md
 ### Deployment layouts
 
 - One deployment ships from this repository: the bot, its `compose.yaml` and the
-  `.env` beside it. Nothing else belongs in it — the workspace and the sites it
+  `.env` beside it. Nothing else belongs in it — the sandbox and the sites it
   publishes are a Regolith server's, deployed separately and reached with one URL
   and one token.
 - The bot only ever connects out. Never add an inbound port or a service that
@@ -132,9 +132,9 @@ what they describe:
 - [`docs/sites.md`](docs/sites.md): what publishing does for a person and what
   the bot expects of the server that serves it. Limits, addresses and retention
   are the server's to document, not this repository's.
-- [`docs/workspace.md`](docs/workspace.md): what the workspace can do, what the
+- [`docs/sandbox.md`](docs/sandbox.md): what the sandbox can do, what the
   bot expects of a Regolith server, and which side owns each limit — the [limits
-  table](docs/workspace.md#limits) lists only the bounds this repository
+  table](docs/sandbox.md#limits) lists only the bounds this repository
   enforces. Keep claims about isolation, images and defaults on the server's
   side of the line rather than restating them here or in LLM-facing
   descriptions: the agent checks what its task needs.
@@ -229,18 +229,18 @@ chat capabilities. Nothing under `tools/` may name a messenger, and
 ## Security and Secrets
 
 - Never commit a deployment's `.env`, API keys, Telegram tokens, cookies, DB
-  files, generated media or local workspace artifacts. Keep untrusted user
+  files, generated media or local sandbox artifacts. Keep untrusted user
   content out of logs where possible; where logging it helps, cap and normalize
   it.
 - Treat tool outputs and web content as untrusted model context: XML blocks and
   hard length caps.
-- The workspace runs untrusted, model-authored shell, and the server that hosts
+- The sandbox runs untrusted, model-authored shell, and the server that hosts
   it is the boundary — never this repository. Send it nothing a sandbox should
-  not hold: no application secrets, no tokens, no host paths. A workspace is not
+  not hold: no application secrets, no tokens, no host paths. A sandbox is not
   a place to put anything the bot would not publish.
 - Untrusted public URLs use `FileDownloadClient` with `createPublicHttpClient`,
   never the client for configured internal services; keep connection-time IP
-  enforcement, redirect checks and streaming size caps together. Workspace and
+  enforcement, redirect checks and streaming size caps together. Sandbox and
   site API authentication is mandatory on every deployment, private network or
   not, both sides configured with the same secret rather than generating one.
 
@@ -258,9 +258,9 @@ chat capabilities. Nothing under `tools/` may name a messenger, and
 ## Commit Instructions
 
 - Subject format: `scope: imperative lowercase phrase`, no trailing period, at
-  most ~65 characters, e.g. `workspace: cap output while draining the pipe`.
+  most ~65 characters, e.g. `sandbox: cap output while draining the pipe`.
 - Scope is the affected package or area: `telegram`, `agent`, `tools`, `outbox`,
-  `tasks`, `infra`, `config`, `workspace`, `docs`, `style`, `build` for Gradle and
+  `tasks`, `infra`, `config`, `sandbox`, `docs`, `style`, `build` for Gradle and
   dependency bumps, `ci` for workflows; one tool feature may use its own package
   name (`youtube`, `files`). Omit it only for repo-wide changes.
 - Describe what the commit does, not what you did: `handle photo albums`, never

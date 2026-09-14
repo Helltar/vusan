@@ -406,7 +406,7 @@ class ReplyContextTest {
     }
 
     @Test
-    fun `attachedFileContextBlock points a video at describeVideo and at the workspace`() {
+    fun `attachedFileContextBlock points a video at describeVideo and at the sandbox`() {
         val message =
             message(
                 """

@@ -1,4 +1,4 @@
-# The workspace shell
+# The sandbox shell
 
 One persistent Linux home **per person, across all chats**. It runs Bash, works on projects, converts
 documents and media, installs user-local dependencies and sends the results back; files survive new
@@ -6,10 +6,11 @@ messages, `/clear`, a stopped container and a restarted service. Different peopl
 and the same person uses the same files in private chat and in every group, while conversation history
 stays separate per chat.
 
-The workspace itself is **[Regolith](#the-server)**, a self-hosted sandbox server that is its own
-project and its own deployment. This bot is one of its clients: it asks for a sandbox named after the
-person and then runs commands, moves files and reads output over HTTP. Nothing about Docker, homes or
-network policy lives here — see Regolith's own documentation for how it confines what it runs.
+It runs on **[Regolith](https://github.com/reified-io/regolith)**, a self-hosted sandbox server that
+is its own project, its own deployment and its own documentation. This bot is one of its clients: it
+asks for a sandbox named after the person, then runs commands, moves files and reads output over HTTP.
+How a sandbox is confined, what image it runs and what it may reach are that server's business and are
+documented there, not here.
 
 - **Setting it up** — [The server](#the-server) · [Pointing the bot at it](#pointing-the-bot-at-it)
 - **What the model can do** — [Files](#files) · [Commands](#commands) · [Sending results](#sending-results)
@@ -18,16 +19,15 @@ network policy lives here — see Regolith's own documentation for how it confin
 
 ## The server
 
-Regolith runs on an ordinary Linux Docker host, beside the bot or on a machine of its own. A machine
-of its own is the recommendation for anything public or less trusted: it runs commands the model
-writes, and holds the Docker socket to do it. Install it, generate its token, and check the host with
-its own `doctor` command before the first start.
+Regolith runs on an ordinary Linux Docker host, beside the bot or on a machine of its own — a machine
+of its own for anything public or less trusted, since it runs commands the model wrote and holds the
+Docker socket to do it. Installing it, generating its token and checking the host before the first
+start are [its own documentation](https://github.com/reified-io/regolith).
 
-The **sandbox image** is chosen there, not here. Its default image is deliberately small — Python,
-Node, Git, curl, jq and the usual shell tools — so a deployment that wants Pandoc, FFmpeg, ImageMagick
-or a browser builds an image with them and points the server at it. The model is told to check what a
-task needs rather than assume, and to report a missing system package instead of working around it:
-there is no `sudo` in a sandbox.
+The **sandbox image** is chosen there, not here, and the bot assumes only two things about it: there
+is no `sudo`, and nothing in particular is installed. The model is told to check what a task needs and
+to report a missing system package rather than work around it, so a deployment that wants Pandoc,
+FFmpeg, ImageMagick or a browser points the server at an image carrying them.
 
 ## Pointing the bot at it
 
@@ -40,7 +40,7 @@ REGOLITH_TOKEN=the-same-token-the-server-was-started-with
 
 `REGOLITH_TOKEN_FILE` holds the token in a file instead. Both a URL and a token must be present, or
 the tools are not registered and the bot never mentions them — see
-[configuration](configuration.md#workspace). The bot never reaches the sandbox host any other way: one
+[configuration](configuration.md#sandbox). The bot never reaches the sandbox host any other way: one
 token, one HTTPS or private address, no Docker socket on this side.
 
 Each person gets a sandbox named by their person key (`u<telegram id>`), created on first use with the
@@ -52,10 +52,10 @@ rather than keeping a copy.
 
 - **Attachments** — copied to `inbox/<unique-id>/<filename>` before the first command that might want
   them, and the tool result names the exact path. Repeated filenames never overwrite.
-- **Paths** — relative to the home, `/home/sandbox`. `writeWorkspaceFile` replaces a file atomically
-  and creates parent directories; `deleteWorkspaceFile` removes one exact path, recursively for a
+- **Paths** — relative to the home, `/home/sandbox`. `writeSandboxFile` replaces a file atomically
+  and creates parent directories; `deleteSandboxFile` removes one exact path, recursively for a
   directory, and leaves running commands alone.
-- **`resetWorkspace`** — deletes the sandbox with its home; the next command starts in an empty one.
+- **`resetSandbox`** — deletes the sandbox with its home; the next command starts in an empty one.
   For a home too full, too broken or too tangled to repair file by file.
 - **Privacy** — what a command creates stays in the sandbox until the agent sends it. One home per
   person: a request in a group reaches the same files as private chat. Sharing files across chats is
@@ -80,7 +80,7 @@ Every command is a fresh shell starting at the home.
 
 ## Sending results
 
-`sendFromWorkspace` delivers finished files to the chat: images as photos, videos as videos, anything
+`sendFromSandbox` delivers finished files to the chat: images as photos, videos as videos, anything
 else as a document. At most 10 files and 50 MB per call, and a file kind the chat refuses is named in
 the result rather than reported as sent.
 
@@ -95,8 +95,8 @@ own side:
 | Output per read | 16 KB, then the model continues from the offset it was given |
 | Command text | 16 000 characters |
 | File write through a tool | 400 000 characters of text |
-| Files out of the workspace | 10 files and 50 MB per call |
-| Attachment into the workspace | 20 MB |
+| Files out of the sandbox | 10 files and 50 MB per call |
+| Attachment into the sandbox | 20 MB |
 | Home size, memory, CPU, processes | The server's per-sandbox settings |
 
 A home is a fixed-size disk: when it fills, commands fail with `No space left on device` and the fix
@@ -108,12 +108,12 @@ is to delete what is no longer needed.
   so a background server started by an earlier command is gone by the next message.
 - **Retention** — a sandbox nobody has used for the server's retention window is deleted with its
   home. The next command creates an empty one.
-- **Reset** — `resetWorkspace`, immediately and permanently.
+- **Reset** — `resetSandbox`, immediately and permanently.
 
 Backups are the server's business, not the bot's.
 
 ## Removing it
 
 Unset `REGOLITH_URL` and restart the bot: the shell tools disappear, and with them site publishing,
-which has nothing to publish without a workspace. The sandboxes stay on the server until deleted
+which has nothing to publish without a sandbox. The sandboxes stay on the server until deleted
 there.
