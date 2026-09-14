@@ -168,6 +168,16 @@ what they describe:
   live in a `private companion object`. A top-level `private val log` or constant
   belongs only in a file without classes, in a named utility logger such as
   `ToolGuard`, or where a top-level helper uses it.
+- Member order is the one the Kotlin conventions give: properties and
+  initializer blocks, secondary constructors, methods, and the companion object
+  last.
+- Blank lines carry meaning, and code is read more often than written. A wrapped
+  class header is followed by one. A `return` that ends a function body has one
+  above it whenever there is work above it, while a `return` inside a small block
+  stays where it is. A multi-line `if`, `when`, `try`, `for` or `while` at the top
+  of a function body is separated from what surrounds it. Never two in a row.
+- A parameter or argument list that wraps over several lines ends with a trailing
+  comma, which is what the conventions encourage at the declaration site.
 
 ## Prompt and Text Handling
 
