@@ -6,11 +6,11 @@ messages, `/clear`, a stopped container and a restarted service. Different peopl
 and the same person uses the same files in private chat and in every group, while conversation history
 stays separate per chat.
 
-It runs on **[Regolith](https://github.com/reified-io/regolith)**, a self-hosted sandbox server that
-is its own project, its own deployment and its own documentation. This bot is one of its clients: it
-asks for a sandbox named after the person, then runs commands, moves files and reads output over HTTP.
-How a sandbox is confined, what image it runs and what it may reach are that server's business and are
-documented there, not here.
+It runs on **[Regolith](https://github.com/reified-io/regolith)**, a self-hosted sandbox server with
+its own deployment and documentation. This bot is one of its clients: it asks for a sandbox named
+after the person, then runs commands, moves files and reads output over HTTP. How a sandbox is
+isolated, which image it runs and what it can reach are set on the server, and Regolith's
+documentation covers them.
 
 - **Setting it up** — [The server](#the-server) · [Pointing the bot at it](#pointing-the-bot-at-it)
 - **What the model can do** — [Files](#files) · [Commands](#commands) · [Sending results](#sending-results)
@@ -22,9 +22,9 @@ documented there, not here.
 Regolith runs on an ordinary Linux Docker host, beside the bot or on a machine of its own — a machine
 of its own for anything public or less trusted, since it runs commands the model wrote and holds the
 Docker socket to do it. Installing it, generating its token and checking the host before the first
-start are [its own documentation](https://github.com/reified-io/regolith).
+start are covered in [Regolith's documentation](https://github.com/reified-io/regolith).
 
-The **sandbox image** is chosen there, not here, and the bot assumes only two things about it: there
+The **sandbox image** is set on the server, and the bot assumes only two things about it: there
 is no `sudo`, and nothing in particular is installed. The model is told to check what a task needs and
 to report a missing system package rather than work around it, so a deployment that wants Pandoc,
 FFmpeg, ImageMagick or a browser points the server at an image carrying them.
@@ -45,8 +45,8 @@ token, one HTTPS or private address, no Docker socket on this side.
 
 Each person gets a sandbox named by their person key (`u<telegram id>`), created on first use with the
 server's own defaults. Everything else — image, memory, home size, idle stop, retention, network
-policy — is the server's to decide, and the bot asks `GET /v1/info` for the limits it must respect
-rather than keeping a copy.
+policy — is configured on the server, and the bot reads the limits it has to respect from
+`GET /v1/info` instead of keeping its own copy.
 
 ## Files
 
@@ -86,8 +86,8 @@ the result rather than reported as sent.
 
 ## Limits
 
-The server owns them and states them in `GET /v1/info`; the bot adds only what it must enforce on its
-own side:
+The server sets them and reports them in `GET /v1/info`; on top of that, the bot enforces a few of its
+own:
 
 | Bound | Where it comes from |
 |---|---|
@@ -110,7 +110,7 @@ is to delete what is no longer needed.
   home. The next command creates an empty one.
 - **Reset** — `resetSandbox`, immediately and permanently.
 
-Backups are the server's business, not the bot's.
+Backups are made on the Regolith server; the bot keeps no copy of a home.
 
 ## Removing it
 

@@ -23,11 +23,9 @@ Clone the repo and copy the env template:
 git clone https://github.com/Helltar/vusan.git
 cd vusan
 cp .env.example .env
+# for the database and bot files; if docker creates it, the bot can't write to it
 mkdir -p data
 ```
-
-`data/` holds the database and anything you hand the bot — an avatar, a personality file, cookies.
-Make it yourself: a bind mount Docker creates comes out owned by `root`, and the bot runs as uid 1000.
 
 Only these values are required to start; everything else is optional and covered in
 [configuration.md](docs/configuration.md):

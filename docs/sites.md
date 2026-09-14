@@ -2,19 +2,19 @@
 
 Vusan can put a finished page, game or small web app on the public internet at **one address per
 person**, and hand them the link. The files come from that person's [sandbox](sandbox.md), and the
-publishing is the Regolith server's own doing: this repository holds no site host, no storage and no
-certificates.
+Regolith server does the publishing itself, so the bot needs no web hosting, storage or certificates
+of its own.
 
 ## What it needs
 
 Nothing beyond a sandbox. If the Regolith server the bot talks to has a public role configured, it
-says so in its own `GET /v1/info` and the publishing tools work; if it does not, the model is told that
-this server publishes nothing, in the server's own words.
+reports that in `GET /v1/info` and the publishing tools work; if not, the model gets the server's own
+message saying that sites are unavailable.
 
-The address is the server's to decide — normally `<person>.<the server's site domain>` — and the bot
-never builds it: the URL comes back from the publish call. Limits, retention and what a site may hold
-belong to that server too, and are documented with
-[it](https://github.com/reified-io/regolith).
+The address is set by the server — normally `<person>.<the server's site domain>` — and the bot never
+builds it: the URL comes back from the publish call. Limits, retention and what a site may hold are
+configured on the server as well, and
+[Regolith's documentation](https://github.com/reified-io/regolith) describes them.
 
 ## What the model does
 
@@ -40,6 +40,6 @@ so a page served from there would disappear with it.
 
 ## What is public
 
-Everything in the published directory, to anyone with the link. The model is told to say so before
-publishing anything personal, and the address is not secret — a link is a link. Nothing else of the
+Everything in the published directory, to anyone with the link. The address is not secret, so the
+model is told to mention this before publishing anything personal. Nothing else of the
 sandbox is reachable: only the directory that was published, as it was at that moment.
