@@ -57,7 +57,7 @@ class VisionRuntimeTest {
                 config = OpenAiVisionConfig(apiKey = "key", model = OpenAiVisionConfig.DEFAULT_MODEL),
                 chat = chat,
                 chatExecutor = chatExecutor,
-                requestTimeout = TIMEOUT
+                requestTimeout = TIMEOUT,
             )
 
         assertEquals(OpenAiVisionConfig.DEFAULT_MODEL, vision?.model?.id)
@@ -74,8 +74,8 @@ class VisionRuntimeTest {
                     baseUrl = "https://example.test/v1",
                     apiKey = "key",
                     model = "gpt-5.4-mini",
-                    requestTimeout = TIMEOUT
-                )
+                    requestTimeout = TIMEOUT,
+                ),
             )
 
         assertNull(resolveVisionRuntime(config = null, chat = chat, chatExecutor = chatExecutor, requestTimeout = TIMEOUT))
@@ -88,7 +88,7 @@ class VisionRuntimeTest {
                 config = OpenAiVisionConfig(apiKey = "key", model = "gpt-unknown"),
                 chat = hostedChat(HostedLlmProvider.OPENAI, "gpt-5.4-mini"),
                 chatExecutor = chatExecutor,
-                requestTimeout = TIMEOUT
+                requestTimeout = TIMEOUT,
             )
         }
     }
@@ -99,8 +99,8 @@ class VisionRuntimeTest {
                 provider = provider,
                 apiKey = "key",
                 model = model,
-                requestTimeout = TIMEOUT
-            )
+                requestTimeout = TIMEOUT,
+            ),
         )
 
     private fun codexChat(supportsVision: Boolean = true): LlmRuntime =
@@ -108,9 +108,9 @@ class VisionRuntimeTest {
             LlmProviderConfig.Codex(
                 model = "gpt-5.6-terra",
                 supportsVision = supportsVision,
-                requestTimeout = TIMEOUT
+                requestTimeout = TIMEOUT,
             ),
-            codexAuth = CodexAuthStore(Http.createClient(MockEngine { error("no calls expected") }))
+            codexAuth = CodexAuthStore(Http.createClient(MockEngine { error("no calls expected") })),
         )
 
     private companion object {

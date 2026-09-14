@@ -22,7 +22,7 @@ class QuizTools(private val outbox: BotOutbox) : ToolSet {
         @LLMDescription(QuizToolDescriptions.EXPLANATION)
         explanation: String? = null,
         @LLMDescription(QuizToolDescriptions.IS_ANONYMOUS)
-        isAnonymous: Boolean = false
+        isAnonymous: Boolean = false,
     ): String = suspendToolGuard {
         val quiz =
             BotOutput.Quiz(
@@ -30,7 +30,7 @@ class QuizTools(private val outbox: BotOutbox) : ToolSet {
                 options = options.map { it.trim() },
                 correctOptionIndex = correctOptionIndex,
                 explanation = explanation?.trim()?.takeIf { it.isNotEmpty() },
-                isAnonymous = isAnonymous
+                isAnonymous = isAnonymous,
             )
 
         outbox.enqueue(quiz)

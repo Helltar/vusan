@@ -26,7 +26,7 @@ import kotlin.test.assertNotNull
  */
 internal suspend fun sentOpenAiRequest(
     runtime: LlmRuntime,
-    transport: (KoogHttpClient.Factory) -> KoogHttpClient.Factory = { it }
+    transport: (KoogHttpClient.Factory) -> KoogHttpClient.Factory = { it },
 ): JsonObject {
     var sent: String? = null
     val responses = runtime.chatParams is OpenAIResponsesParams
@@ -37,7 +37,7 @@ internal suspend fun sentOpenAiRequest(
 
             respond(
                 openAiReplyTo(body, responses),
-                headers = headersOf(HttpHeaders.ContentType, ContentType.Application.Json.toString())
+                headers = headersOf(HttpHeaders.ContentType, ContentType.Application.Json.toString()),
             )
         }
 
@@ -45,7 +45,7 @@ internal suspend fun sentOpenAiRequest(
         OpenAILLMClient(
             apiKey = "key",
             settings = OpenAIClientSettings(baseUrl = "https://api.openai.com"),
-            httpClientFactory = LenientDecodingHttpClientFactory(transport(KtorKoogHttpClient.Factory(HttpClient(engine))))
+            httpClientFactory = LenientDecodingHttpClientFactory(transport(KtorKoogHttpClient.Factory(HttpClient(engine)))),
         )
 
     val prompt =

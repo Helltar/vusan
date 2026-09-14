@@ -38,7 +38,7 @@ object Http {
                     throw HttpStatusException(
                         cause.response.status.value,
                         request.url.host,
-                        cause.response.bodyAsTextSafe()
+                        cause.response.bodyAsTextSafe(),
                     )
                 }
             }

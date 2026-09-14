@@ -72,7 +72,7 @@ class TaskToolsTest {
                 chatId = 100L,
                 title = "old title",
                 recurrence = Recurrence.Every(1.hours),
-                nextFireAt = future
+                nextFireAt = future,
             )
         repo.pauseForUser(testUser(100), id)
         val tools = tools(requestContext(chatId = 100L, userId = 100L))
@@ -81,7 +81,7 @@ class TaskToolsTest {
             tools.editTask(
                 id = id,
                 prompt = "send the revised report",
-                title = ""
+                title = "",
             )
 
         assertContains(result, "Updated task id=$id")
@@ -103,7 +103,7 @@ class TaskToolsTest {
             tools.editTask(
                 id = id,
                 schedule = "cron 30 8 * * *",
-                timezone = "Europe/Kyiv"
+                timezone = "Europe/Kyiv",
             )
 
         assertContains(result, "Updated task id=$id")
@@ -122,7 +122,7 @@ class TaskToolsTest {
                 chatId = 100L,
                 title = "hourly report",
                 recurrence = Recurrence.Every(1.hours),
-                nextFireAt = beforeResume.minusSeconds(10_800)
+                nextFireAt = beforeResume.minusSeconds(10_800),
             )
         repo.pauseForUser(testUser(100), id)
         val tools = tools(requestContext(chatId = 100L, userId = 100L))
@@ -140,7 +140,7 @@ class TaskToolsTest {
             createTask(
                 chatId = 100L,
                 title = "old reminder",
-                nextFireAt = Instant.now().minusSeconds(60)
+                nextFireAt = Instant.now().minusSeconds(60),
             )
         repo.pauseForUser(testUser(100), id)
         val tools = tools(requestContext(chatId = 100L, userId = 100L))
@@ -157,7 +157,7 @@ class TaskToolsTest {
         val otherId = createTask(chatId = -300L, title = "other group report")
         val tools =
             tools(
-                requestContext(chatId = -200L, userId = 100L, isPrivate = false)
+                requestContext(chatId = -200L, userId = 100L, isPrivate = false),
             )
 
         val listed = tools.listTasks()
@@ -220,7 +220,7 @@ class TaskToolsTest {
         chatId: Long,
         title: String,
         recurrence: Recurrence = Recurrence.Once,
-        nextFireAt: Instant = Instant.now().plusSeconds(3_600)
+        nextFireAt: Instant = Instant.now().plusSeconds(3_600),
     ): Long =
         repo.create(
             NewScheduledTask(
@@ -235,8 +235,8 @@ class TaskToolsTest {
                 creatorUsername = "tester",
                 creatorDisplayName = "Test User",
                 chatIsPrivate = chatId > 0L,
-                language = Language.ENGLISH
-            )
+                language = Language.ENGLISH,
+            ),
         )
 
     private fun testConfig(dbPath: String) =
@@ -252,7 +252,7 @@ class TaskToolsTest {
                 provider = HostedLlmProvider.OPENAI,
                 apiKey = "test",
                 model = "test",
-                requestTimeout = 60.seconds
+                requestTimeout = 60.seconds,
             ),
             maxConcurrentTurns = 4,
             maxFollowUpsPerUser = 3,
@@ -270,6 +270,6 @@ class TaskToolsTest {
             taskMaxLatenessMinutes = 60L,
             tavilyApiKey = null,
             telegramBotToken = "test",
-            ytDlpCookiesFile = null
+            ytDlpCookiesFile = null,
         )
 }

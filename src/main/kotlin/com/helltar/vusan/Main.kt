@@ -124,7 +124,7 @@ suspend fun main() = coroutineScope {
             ToolRegistryFactory(
                 http, publicHttp, TelegramToolSets(telegramClient, stickerCatalog), config, conversation, memory,
                 tasks, vision, groupLog, groupLogDigester, contextWindowPolicy.liveToolResultMaxChars, codexAuth,
-                selfImage
+                selfImage,
             )
 
         val agentFactory =
@@ -132,7 +132,7 @@ suspend fun main() = coroutineScope {
                 chatExecutor, llm.model, llm.chatParams,
                 config.personality, botProfile.username, botProfile.displayName,
                 maxIterations = config.agentMaxIterations,
-                contextWindowPolicy = contextWindowPolicy
+                contextWindowPolicy = contextWindowPolicy,
             )
 
         val conversationCompactor =
@@ -142,7 +142,7 @@ suspend fun main() = coroutineScope {
             AgentRunner(
                 agentFactory, toolRegistryFactory, conversation, memory, conversationCompactor,
                 config.chatHistory, stickerCatalog?.let { catalog -> catalog::indexBlockFor },
-                groupLog, config.groupLog, tokenBudget, config.maxConcurrentTurns
+                groupLog, config.groupLog, tokenBudget, config.maxConcurrentTurns,
             )
 
         // answers to a poll are read back through the group transcript, so without one there is
@@ -158,14 +158,14 @@ suspend fun main() = coroutineScope {
         val scheduler =
             TaskScheduler(
                 tasks, agentRunner, delivery, config.taskMaxLatenessMinutes.minutes, chatProfiles, tokenBudget,
-                config.accessPolicy
+                config.accessPolicy,
             )
 
         val botRunner =
             TelegramBotRunner(
                 telegramClient, config.telegramBotToken, delivery, agentRunner, taskMenu, inlineChoices, tasks,
                 chatProfiles, config.accessPolicy, voiceTranscriber, botProfile, stickerCatalog,
-                groupLog, polls
+                groupLog, polls,
             )
 
         // retention runs on a clock of its own rather than on whoever happens to write next: what needs
@@ -179,12 +179,12 @@ suspend fun main() = coroutineScope {
                             maxStoredInteractions = config.chatHistory.maxStoredInteractions,
                             rawRetentionCutoff =
                                 Instant.now().minus(config.chatHistory.retentionDays.toLong(), ChronoUnit.DAYS),
-                            maxConversations = MAINTENANCE_BATCH
+                            maxConversations = MAINTENANCE_BATCH,
                         )
                     },
                     groupLog?.let { Maintenance.Step("group log retention") { it.pruneExpired(MAINTENANCE_BATCH) } },
-                    polls?.let { Maintenance.Step("expired polls") { it.pruneExpired() } }
-                )
+                    polls?.let { Maintenance.Step("expired polls") { it.pruneExpired() } },
+                ),
             )
 
         logStartup(config, llm, vision, toolRegistryFactory.availableToolNames)
@@ -235,7 +235,7 @@ private fun createVoiceTranscriber(http: HttpClient, config: AppConfig): VoiceTr
 private suspend fun codexPreflight(
     config: LlmProviderConfig,
     http: HttpClient,
-    auth: CodexAuthStore?
+    auth: CodexAuthStore?,
 ): LlmProviderConfig {
     if (auth == null || config !is LlmProviderConfig.Codex) return config
 
@@ -258,7 +258,7 @@ private fun logStartup(
     config: AppConfig,
     llm: LlmRuntime,
     vision: VisionRuntime?,
-    toolNames: List<String>
+    toolNames: List<String>,
 ) {
     log.info {
         "LLM: provider=[${llm.providerLabel}] model=[${llm.model.id}]" +

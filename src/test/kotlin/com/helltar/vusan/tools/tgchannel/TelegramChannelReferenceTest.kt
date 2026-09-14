@@ -22,7 +22,7 @@ class TelegramChannelReferenceTest {
         assertEquals("https://t.me/s/example_channel?before=517", reference.webPreviewUrl(before = 517))
         assertEquals(
             "https://t.me/s/example_channel?q=release%20notes&before=517",
-            reference.webPreviewUrl(before = 517, query = "release notes")
+            reference.webPreviewUrl(before = 517, query = "release notes"),
         )
     }
 

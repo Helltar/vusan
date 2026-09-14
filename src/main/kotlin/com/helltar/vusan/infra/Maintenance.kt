@@ -22,7 +22,7 @@ import kotlin.time.Duration.Companion.hours
  */
 class Maintenance(
     private val steps: List<Step>,
-    private val interval: Duration = DEFAULT_INTERVAL
+    private val interval: Duration = DEFAULT_INTERVAL,
 ) {
 
     /** One thing to clean up, and what it removed: rows, chats, conversations — whatever it counts. */

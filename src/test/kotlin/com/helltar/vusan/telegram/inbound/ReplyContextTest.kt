@@ -21,7 +21,7 @@ class ReplyContextTest {
             formatAgentInput(
                 currentMessageText = "summarize this article",
                 repliedMessage = RepliedMessageSummary(type = "text", textOrCaption = "https://example.com/article/4034"),
-                quotedFragment = null
+                quotedFragment = null,
             )
 
         assertTrue(prompt.contains("<reply_context>"))
@@ -41,9 +41,9 @@ class ReplyContextTest {
                 repliedMessage = RepliedMessageSummary(
                     type = "photo",
                     textOrCaption = null,
-                    metadata = listOf("file_id: abc123", "width: 1280", "height: 720")
+                    metadata = listOf("file_id: abc123", "width: 1280", "height: 720"),
                 ),
-                quotedFragment = null
+                quotedFragment = null,
             )
 
         assertTrue(prompt.contains("- type: photo"))
@@ -67,9 +67,9 @@ class ReplyContextTest {
                 repliedMessage = RepliedMessageSummary(
                     type = "text",
                     textOrCaption = "https://example.com/article/4034",
-                    metadata = listOf("file_id: file-1")
+                    metadata = listOf("file_id: file-1"),
                 ),
-                quotedFragment = null
+                quotedFragment = null,
             )
 
         assertTrue(historyText.contains("<reply_context>"))
@@ -91,9 +91,9 @@ class ReplyContextTest {
                 currentMessageText = "answer & continue",
                 repliedMessage = RepliedMessageSummary(
                     type = "text",
-                    textOrCaption = "quoted & content"
+                    textOrCaption = "quoted & content",
                 ),
-                quotedFragment = null
+                quotedFragment = null,
             )
 
         assertTrue(prompt.contains("<text_caption>\nquoted & content\n</text_caption>"))
@@ -129,7 +129,7 @@ class ReplyContextTest {
             formatAgentInput(
                 currentMessageText = "what is this",
                 repliedMessage = null,
-                quotedFragment = "the second engine stage"
+                quotedFragment = "the second engine stage",
             )
 
         assertFalse(prompt.contains("<reply_context>"))
@@ -143,7 +143,7 @@ class ReplyContextTest {
             formatAgentInput(
                 currentMessageText = "what does this mean?",
                 repliedMessage = RepliedMessageSummary(type = "text", textOrCaption = "one two three four"),
-                quotedFragment = "three"
+                quotedFragment = "three",
             )
 
         assertTrue(prompt.contains("<text_caption>\none two three four\n</text_caption>"))
@@ -157,7 +157,7 @@ class ReplyContextTest {
             formatAgentInput(
                 currentMessageText = "what does this mean?",
                 repliedMessage = RepliedMessageSummary(type = "text", textOrCaption = "one two three"),
-                quotedFragment = "one two three"
+                quotedFragment = "one two three",
             )
 
         assertFalse(prompt.contains("<quoted_fragment>"))
@@ -175,7 +175,7 @@ class ReplyContextTest {
             formatConversationInput(
                 currentMessageText = "what is this",
                 repliedMessage = null,
-                quotedFragment = "the second engine stage"
+                quotedFragment = "the second engine stage",
             )
 
         assertTrue(historyText.contains("<quoted_fragment>\nthe second engine stage\n</quoted_fragment>"))
@@ -440,6 +440,6 @@ class ReplyContextTest {
     private fun message(fields: String): Message =
         mapper.readValue(
             """{"message_id": 1, "date": 1774000000, "chat": {"id": 10, "type": "private"}, ${fields.trim()}}""",
-            Message::class.java
+            Message::class.java,
         )
 }

@@ -7,5 +7,5 @@ import kotlinx.serialization.SerialName
 internal data class ElevenLabsSpeechRequest(
     val text: String,
     @SerialName("model_id")
-    val modelId: String
+    val modelId: String,
 )

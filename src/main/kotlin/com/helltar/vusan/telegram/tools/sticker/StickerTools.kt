@@ -13,7 +13,7 @@ import com.helltar.vusan.tools.suspendToolGuard
 class StickerTools(
     private val catalog: StickerCatalog,
     private val context: RequestContext,
-    private val outbox: BotOutbox
+    private val outbox: BotOutbox,
 ) : ToolSet {
 
     @Tool
@@ -22,7 +22,7 @@ class StickerTools(
         @LLMDescription(StickerToolDescriptions.SEARCH_QUERY)
         query: String,
         @LLMDescription(StickerToolDescriptions.MAX_RESULTS)
-        maxResults: Int = DEFAULT_SEARCH_RESULTS
+        maxResults: Int = DEFAULT_SEARCH_RESULTS,
     ): String = suspendToolGuard {
         val cleanedQuery = query.requireToolText("query", MAX_QUERY_CHARS)
         val matches = catalog.search(context.chatRef, cleanedQuery, maxResults.coerceIn(1, MAX_SEARCH_RESULTS))
@@ -40,7 +40,7 @@ class StickerTools(
     @LLMDescription(StickerToolDescriptions.SEND_STICKER)
     suspend fun sendSticker(
         @LLMDescription(StickerToolDescriptions.STICKER_ID)
-        id: Long
+        id: Long,
     ): String = suspendToolGuard {
         val fileId =
             catalog.fileIdFor(context.chatRef, id)

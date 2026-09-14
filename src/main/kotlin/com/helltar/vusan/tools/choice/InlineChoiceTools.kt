@@ -13,7 +13,7 @@ import com.helltar.vusan.tools.suspendToolGuard
 class InlineChoiceTools(
     private val context: RequestContext,
     private val outbox: BotOutbox,
-    private val currentHistoryRevision: suspend (scope: ConversationScope) -> Long
+    private val currentHistoryRevision: suspend (scope: ConversationScope) -> Long,
 ) : ToolSet {
 
     @Tool
@@ -22,7 +22,7 @@ class InlineChoiceTools(
         @LLMDescription(InlineChoiceToolDescriptions.QUESTION)
         question: String,
         @LLMDescription(InlineChoiceToolDescriptions.OPTIONS)
-        options: List<String>
+        options: List<String>,
     ): String = suspendToolGuard {
         val ownerId = context.sender.id
         val choice =
@@ -31,7 +31,7 @@ class InlineChoiceTools(
                 options = options.map { it.trim() },
                 ownerId = ownerId,
                 historyRevision = currentHistoryRevision(context.scope),
-                originMessageId = context.messageId
+                originMessageId = context.messageId,
             )
 
         if (outbox.enqueueInlineChoice(choice)) {

@@ -17,7 +17,7 @@ fun interface VideoAudioTranscriber {
 
 class WhisperVideoAudioTranscriber(
     private val whisper: OpenAiWhisperClient,
-    private val config: OpenAiSttConfig
+    private val config: OpenAiSttConfig,
 ) : VideoAudioTranscriber {
 
     override suspend fun transcribeOrNull(audio: ByteArray, durationSeconds: Int?): String? {

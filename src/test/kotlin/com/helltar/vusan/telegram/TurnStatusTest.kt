@@ -14,7 +14,7 @@ class TurnStatusTest {
     fun `the running line sits under the plan and carries its own ellipsis`() {
         assertEquals(
             "I will build the game\n\nRunning code…",
-            statusMessageText(plan = "I will build the game", label = "Running code")
+            statusMessageText(plan = "I will build the game", label = "Running code"),
         )
     }
 

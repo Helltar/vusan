@@ -49,7 +49,7 @@ class ConversationPlanTest {
             planConversation(
                 snapshot(interactions),
                 tokenBudget = latestTokens + 1,
-                maxRecentInteractions = 12
+                maxRecentInteractions = 12,
             )
 
         assertEquals(listOf("i-1", "i-2"), result.compactablePrefix.map { it.id })
@@ -67,8 +67,8 @@ class ConversationPlanTest {
                     listOf(
                         ChatTurn(ChatRole.USER, "hello"),
                         ChatTurn(ChatRole.TOOL_RESULT, "orphan", "call", "search"),
-                        ChatTurn(ChatRole.ASSISTANT, "answer")
-                    )
+                        ChatTurn(ChatRole.ASSISTANT, "answer"),
+                    ),
             )
 
         val result = planConversation(snapshot(listOf(interaction)), 10_000, 12)
@@ -81,7 +81,7 @@ class ConversationPlanTest {
             id = "i-$id",
             lastMessageId = id,
             createdAt = Instant.EPOCH,
-            turns = listOf(ChatTurn(ChatRole.USER, user), ChatTurn(ChatRole.ASSISTANT, assistant))
+            turns = listOf(ChatTurn(ChatRole.USER, user), ChatTurn(ChatRole.ASSISTANT, assistant)),
         )
 
     private fun toolExchange(id: Long): ConversationInteraction =
@@ -94,8 +94,8 @@ class ConversationPlanTest {
                     ChatTurn(ChatRole.USER, "user-$id"),
                     ChatTurn(ChatRole.TOOL_CALL, "{}", "call-$id", "search"),
                     ChatTurn(ChatRole.TOOL_RESULT, "result-$id", "call-$id", "search"),
-                    ChatTurn(ChatRole.ASSISTANT, "assistant-$id")
-                )
+                    ChatTurn(ChatRole.ASSISTANT, "assistant-$id"),
+                ),
         )
 
     private fun snapshot(interactions: List<ConversationInteraction>): ConversationSnapshot =
@@ -109,7 +109,7 @@ class ConversationPlanTest {
                     storedMessages = interactions.sumOf { it.turns.size },
                     storedChars = interactions.sumOf { interaction -> interaction.turns.sumOf { it.content.length.toLong() } },
                     unsummarizedInteractions = interactions.size,
-                    unsummarizedMessages = interactions.sumOf { it.turns.size }
-                )
+                    unsummarizedMessages = interactions.sumOf { it.turns.size },
+                ),
         )
 }

@@ -470,7 +470,7 @@ class StickerCatalogTest {
     private class FakeStickerClient(
         var setOf: List<Sticker>,
         var setGone: Boolean = false,
-        var failSet: Boolean = false
+        var failSet: Boolean = false,
     ) {
 
         val proxy: TelegramClient =
@@ -499,7 +499,7 @@ class StickerCatalogTest {
                                     title = "Vusan test set"
                                     stickerType = "regular"
                                     stickers = setOf
-                                }
+                                },
                             )
                     }
 
@@ -509,7 +509,7 @@ class StickerCatalogTest {
                             fileId = request.fileId
                             fileUniqueId = "u"
                             filePath = "path"
-                        }
+                        },
                     )
 
                 else -> error("unexpected request: ${request.javaClass.simpleName}")
@@ -522,7 +522,7 @@ class StickerCatalogTest {
                     .ok(false)
                     .errorCode(400)
                     .errorDescription(description)
-                    .build()
+                    .build(),
             )
     }
 
@@ -540,7 +540,7 @@ class StickerCatalogTest {
                     provider = HostedLlmProvider.OPENAI,
                     apiKey = "test",
                     model = "test",
-                    requestTimeout = 60.seconds
+                    requestTimeout = 60.seconds,
                 ),
             maxConcurrentTurns = 4,
             maxFollowUpsPerUser = 3,
@@ -558,6 +558,6 @@ class StickerCatalogTest {
             taskMaxLatenessMinutes = 60L,
             tavilyApiKey = null,
             telegramBotToken = "test",
-            ytDlpCookiesFile = null
+            ytDlpCookiesFile = null,
         )
 }

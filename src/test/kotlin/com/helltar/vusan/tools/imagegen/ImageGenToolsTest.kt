@@ -51,7 +51,7 @@ class ImageGenToolsTest {
     private fun tools(
         outbox: BotOutbox,
         probe: SizeProbe = SizeProbe(),
-        config: OpenAiImageConfig = this.config
+        config: OpenAiImageConfig = this.config,
     ): ImageGenTools {
         val encoded = Base64.getEncoder().encodeToString(imageBytes)
         val http =
@@ -62,9 +62,9 @@ class ImageGenToolsTest {
                     respond(
                         content = """{"data":[{"b64_json":"$encoded"}]}""",
                         status = HttpStatusCode.OK,
-                        headers = headersOf(HttpHeaders.ContentType, ContentType.Application.Json.toString())
+                        headers = headersOf(HttpHeaders.ContentType, ContentType.Application.Json.toString()),
                     )
-                }
+                },
             )
 
         return ImageGenTools(OpenAiImageClient(http, ImageAuth.ApiKey("sk-test")), config, outbox)
@@ -80,13 +80,13 @@ class ImageGenToolsTest {
                     respond(
                         content = """{"data":[{"b64_json":"$encoded"}]}""",
                         status = HttpStatusCode.OK,
-                        headers = headersOf(HttpHeaders.ContentType, ContentType.Application.Json.toString())
+                        headers = headersOf(HttpHeaders.ContentType, ContentType.Application.Json.toString()),
                     )
-                }
+                },
             )
 
         return ImageGenTools(
-            OpenAiImageClient(http, ImageAuth.ApiKey("sk-test")), config, outbox, selfImage = selfImage
+            OpenAiImageClient(http, ImageAuth.ApiKey("sk-test")), config, outbox, selfImage = selfImage,
         )
     }
 
@@ -96,7 +96,7 @@ class ImageGenToolsTest {
         outbox: BotOutbox,
         vararg attached: AttachedFile,
         selfImage: SelfImage? = null,
-        probe: EditProbe = EditProbe()
+        probe: EditProbe = EditProbe(),
     ): ImageGenTools {
         val encoded = Base64.getEncoder().encodeToString(imageBytes)
         val http =
@@ -107,13 +107,13 @@ class ImageGenToolsTest {
                     respond(
                         content = """{"data":[{"b64_json":"$encoded"}]}""",
                         status = HttpStatusCode.OK,
-                        headers = headersOf(HttpHeaders.ContentType, ContentType.Application.Json.toString())
+                        headers = headersOf(HttpHeaders.ContentType, ContentType.Application.Json.toString()),
                     )
-                }
+                },
             )
 
         return ImageGenTools(
-            OpenAiImageClient(http, ImageAuth.ApiKey("sk-test")), config, outbox, attached.toList(), selfImage
+            OpenAiImageClient(http, ImageAuth.ApiKey("sk-test")), config, outbox, attached.toList(), selfImage,
         )
     }
 
@@ -122,13 +122,13 @@ class ImageGenToolsTest {
         mimeType: String? = "image/jpeg",
         kind: AttachedFileKind = AttachedFileKind.IMAGE,
         fileSizeBytes: Long? = null,
-        bytes: ByteArray = byteArrayOf(7, 7, 7)
+        bytes: ByteArray = byteArrayOf(7, 7, 7),
     ) = AttachedFile(
         name = name,
         fileSizeBytes = fileSizeBytes,
         mimeType = mimeType,
         kind = kind,
-        loadBytes = { bytes }
+        loadBytes = { bytes },
     )
 
     @Test
@@ -297,9 +297,9 @@ class ImageGenToolsTest {
                         content = """{"error":{"code":"moderation_blocked","message":"rejected",""" +
                                 """"moderation_details":{"moderation_stage":"input","categories":["violence"]}}}""",
                         status = HttpStatusCode.BadRequest,
-                        headers = headersOf(HttpHeaders.ContentType, ContentType.Application.Json.toString())
+                        headers = headersOf(HttpHeaders.ContentType, ContentType.Application.Json.toString()),
                     )
-                }
+                },
             )
         val tools = ImageGenTools(OpenAiImageClient(http, ImageAuth.ApiKey("sk-test")), config, outbox)
 
@@ -346,7 +346,7 @@ class ImageGenToolsTest {
                 outbox,
                 imageAttachment(name = "room.jpg"),
                 selfImage = SelfImage(reference(), appearance = null),
-                probe = probe
+                probe = probe,
             )
 
         tools.editImage("standing by the window", withYourself = true)

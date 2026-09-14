@@ -14,7 +14,7 @@ data class OutboxItem(
     val output: BotOutput,
     val toPrivate: Boolean,
     val delivered: Boolean = false,
-    val announcement: Boolean = false
+    val announcement: Boolean = false,
 )
 
 /**

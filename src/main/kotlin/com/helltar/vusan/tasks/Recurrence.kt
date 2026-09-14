@@ -116,7 +116,7 @@ fun parseSchedule(raw: String, now: Instant, timezone: ZoneId): ScheduleParse {
         else -> ScheduleParse.Err(
             "Unknown schedule=`$raw`. Use `once <ISO datetime>` (e.g. `once 2026-05-30T09:00`), " +
                     "`every <interval>` (e.g. `every 90m`, `every 2h`), " +
-                    "or `cron <expr>` (UNIX 5-field, e.g. `cron 0 18 * * 1-5`)."
+                    "or `cron <expr>` (UNIX 5-field, e.g. `cron 0 18 * * 1-5`).",
         )
     }
 }
@@ -128,7 +128,7 @@ private fun parseOnce(rest: String, now: Instant, timezone: ZoneId): SchedulePar
         runCatching { LocalDateTime.parse(rest, SCHEDULE_LOCAL_DATE_TIME) }.getOrNull()
             ?: return ScheduleParse.Err(
                 "Cannot parse once datetime=`$rest`. " +
-                        "Use ISO local datetime like `2026-05-30T09:00`."
+                        "Use ISO local datetime like `2026-05-30T09:00`.",
             )
 
     val fireAt = local.atZone(timezone).toInstant()
@@ -154,7 +154,7 @@ private fun parseCron(rest: String, now: Instant, timezone: ZoneId): SchedulePar
     if (Recurrence.validateCron(rest).isFailure) {
         return ScheduleParse.Err(
             "Invalid cron=`$rest`. Use UNIX 5-field `minute hour day-of-month month day-of-week`, " +
-                    "e.g. `0 9 * * *` (daily 09:00), `0 18 * * 1-5` (weekdays 18:00), `0 0 1,15 * *` (1st & 15th)."
+                    "e.g. `0 9 * * *` (daily 09:00), `0 18 * * 1-5` (weekdays 18:00), `0 0 1,15 * *` (1st & 15th).",
         )
     }
 

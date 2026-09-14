@@ -51,7 +51,7 @@ private const val PROVIDER_ERROR_LOG_MAX_CHARS = 300
 data class AgentRequest(
     val context: RequestContext,
     val prompt: String,
-    val conversationEntry: String
+    val conversationEntry: String,
 )
 
 data class AgentResult(
@@ -61,7 +61,7 @@ data class AgentResult(
     // the run ended in an error and produced no answer: `comment` is the canned failure reply. `outputs`
     // may still hold what the turn put in the chat before it broke, which delivery records without
     // sending again.
-    val failed: Boolean = false
+    val failed: Boolean = false,
 )
 
 class AgentRunner(
@@ -81,7 +81,7 @@ class AgentRunner(
     // the ceiling every conversation shares: one person's lock says nothing about how many people may
     // be served at once, and each turn is an LLM call with its tools behind it. no default — a runner
     // quietly serving one turn at a time is not something to discover under load.
-    maxConcurrentTurns: Int
+    maxConcurrentTurns: Int,
 ) {
 
     private val admission = TurnAdmission(maxConcurrentTurns)
@@ -92,7 +92,7 @@ class AgentRunner(
     suspend fun handle(
         request: AgentRequest,
         onToolStarting: (activity: ToolActivity?) -> Unit = {},
-        narrator: TurnNarrator? = null
+        narrator: TurnNarrator? = null,
     ): AgentResult {
         val context = request.context
         val key = context.scope
@@ -144,7 +144,7 @@ class AgentRunner(
     suspend fun handleQueued(
         request: AgentRequest,
         onToolStarting: (activity: ToolActivity?) -> Unit = {},
-        narrator: TurnNarrator? = null
+        narrator: TurnNarrator? = null,
     ): AgentResult {
         val key = request.context.scope
 
@@ -179,7 +179,7 @@ class AgentRunner(
     private suspend fun runAgent(
         request: AgentRequest,
         onToolStarting: (activity: ToolActivity?) -> Unit,
-        narrator: TurnNarrator?
+        narrator: TurnNarrator?,
     ): AgentResult {
         val context = request.context
 
@@ -200,7 +200,7 @@ class AgentRunner(
     private suspend fun runTurn(
         request: AgentRequest,
         onToolStarting: (activity: ToolActivity?) -> Unit,
-        narrator: TurnNarrator?
+        narrator: TurnNarrator?,
     ): AgentResult {
         val context = request.context
         val userMemory = if (context.sender.isPerson) memory.load(context.user.memoryOwner) else emptyList()
@@ -220,7 +220,7 @@ class AgentRunner(
                 chatMemory = chatMemory,
                 recentChat = recentChatFor(context),
                 stickerCatalog = stickerCatalogFor(context),
-                toolGroups = toolCatalog.menu()
+                toolGroups = toolCatalog.menu(),
             )
 
         val preparation = agentFactory.prepare(toolCatalog, currentTurn)
@@ -267,7 +267,7 @@ class AgentRunner(
                     toolBudget = toolBudget,
                     toolEvents = toolEvents,
                     tokenUsages = tokenUsages,
-                    onToolStarting = onToolStarting
+                    onToolStarting = onToolStarting,
                 )
             } catch (e: Throwable) {
                 e.rethrowIfCancellation()
@@ -312,7 +312,7 @@ class AgentRunner(
             buildTurns(
                 userEntry = request.conversationEntry,
                 toolEvents = toolEvents,
-                assistantText = assistantText
+                assistantText = assistantText,
             )
 
         log.info {
@@ -329,7 +329,7 @@ class AgentRunner(
             conversation.pruneCompacted(
                 scope = context.scope,
                 maxStoredInteractions = conversationConfig.maxStoredInteractions,
-                rawRetentionCutoff = Instant.now().minus(conversationConfig.retentionDays.toLong(), ChronoUnit.DAYS)
+                rawRetentionCutoff = Instant.now().minus(conversationConfig.retentionDays.toLong(), ChronoUnit.DAYS),
             )
 
         if (pruned > 0) {
@@ -360,7 +360,7 @@ class AgentRunner(
                     // over-fetch: dropping this user's own exchanges below must not thin the slice out.
                     limit = groupLogConfig.recentMessages * RECENT_CHAT_OVERFETCH,
                     since = Instant.now().minus(groupLogConfig.recentMinutes.toLong(), ChronoUnit.MINUTES),
-                    excludeMessageId = context.messageId
+                    excludeMessageId = context.messageId,
                 )
             } catch (e: Throwable) {
                 e.rethrowIfCancellation()
@@ -403,7 +403,7 @@ class AgentRunner(
                 scope = scope,
                 expectedThroughMessageId = snapshot.summarizedThroughMessageId,
                 throughMessageId = compacted.throughMessageId,
-                content = compacted.summary
+                content = compacted.summary,
             )
 
         if (!stored) {
@@ -425,7 +425,7 @@ class AgentRunner(
         planConversation(
             snapshot = snapshot,
             tokenBudget = tokenBudget,
-            maxRecentInteractions = conversationConfig.maxRecentInteractions
+            maxRecentInteractions = conversationConfig.maxRecentInteractions,
         )
 
     private suspend fun runAgentWithConversation(
@@ -437,7 +437,7 @@ class AgentRunner(
         toolBudget: TurnToolBudget,
         toolEvents: MutableList<ToolEvent>,
         tokenUsages: MutableList<TokenUsage>,
-        onToolStarting: (activity: ToolActivity?) -> Unit
+        onToolStarting: (activity: ToolActivity?) -> Unit,
     ): String {
         suspend fun run(prompt: PromptConversation): String =
             agentFactory
@@ -449,7 +449,7 @@ class AgentRunner(
                     toolBudget = toolBudget,
                     toolEvents = toolEvents::add,
                     tokenUsage = tokenUsages::add,
-                    onToolStarting = onToolStarting
+                    onToolStarting = onToolStarting,
                 )
                 .run(currentTurn)
 
@@ -461,7 +461,7 @@ class AgentRunner(
             val emergencyConversation =
                 PromptConversation(
                     summary = conversation.summary?.limitTo(EMERGENCY_SUMMARY_MAX_CHARS),
-                    turns = emptyList()
+                    turns = emptyList(),
                 )
             val safeToRetry =
                 e.isContextOverflow() &&

@@ -13,14 +13,14 @@ import io.github.oshai.kotlinlogging.KotlinLogging
 class VisionTools(
     private val client: ImageVisionClient,
     private val videoClient: VideoVisionClient,
-    private val attachedFile: AttachedFile?
+    private val attachedFile: AttachedFile?,
 ) : ToolSet {
 
     @Tool
     @LLMDescription(VisionToolDescriptions.DESCRIBE_IMAGE)
     suspend fun describeImage(
         @LLMDescription(VisionToolDescriptions.FOCUS)
-        focus: String = ""
+        focus: String = "",
     ): String = suspendToolGuard {
         val image = attachedFile ?: return@suspendToolGuard "No image is attached in this turn."
 
@@ -44,7 +44,7 @@ class VisionTools(
     @LLMDescription(VisionToolDescriptions.DESCRIBE_VIDEO)
     suspend fun describeVideo(
         @LLMDescription(VisionToolDescriptions.VIDEO_FOCUS)
-        focus: String = ""
+        focus: String = "",
     ): String = suspendToolGuard {
         val video = attachedFile ?: return@suspendToolGuard "No video is attached in this turn."
 

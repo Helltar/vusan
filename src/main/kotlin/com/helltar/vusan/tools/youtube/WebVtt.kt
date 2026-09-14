@@ -11,7 +11,7 @@ private val HTML_ENTITIES =
         "&gt;" to ">",
         "&quot;" to "\"",
         "&#39;" to "'",
-        "&nbsp;" to " "
+        "&nbsp;" to " ",
     )
 
 /**

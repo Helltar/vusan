@@ -33,7 +33,7 @@ class TelegramToolSetsTest {
     fun `an unrestricted chat gets both of telegram's own tool sets`() {
         assertEquals(
             listOf(ChatFileTools::class, StickerTools::class),
-            toolSetsFor(ChatCapabilities.UNRESTRICTED).map { it::class }
+            toolSetsFor(ChatCapabilities.UNRESTRICTED).map { it::class },
         )
     }
 
@@ -41,7 +41,7 @@ class TelegramToolSetsTest {
     fun `a chat that forbids documents is not offered resending by file id`() {
         assertEquals(
             listOf(StickerTools::class),
-            toolSetsFor(ChatCapabilities(documents = false)).map { it::class }
+            toolSetsFor(ChatCapabilities(documents = false)).map { it::class },
         )
     }
 
@@ -49,7 +49,7 @@ class TelegramToolSetsTest {
     fun `a chat that forbids stickers is not offered the catalog`() {
         assertEquals(
             listOf(ChatFileTools::class),
-            toolSetsFor(ChatCapabilities(stickersAndAnimations = false)).map { it::class }
+            toolSetsFor(ChatCapabilities(stickersAndAnimations = false)).map { it::class },
         )
     }
 
@@ -64,7 +64,7 @@ class TelegramToolSetsTest {
     @Test
     fun `a chat that allows neither gets nothing`() {
         assertTrue(
-            toolSetsFor(ChatCapabilities(documents = false, stickersAndAnimations = false)).isEmpty()
+            toolSetsFor(ChatCapabilities(documents = false, stickersAndAnimations = false)).isEmpty(),
         )
     }
 

@@ -46,7 +46,7 @@ class CodexAuthTest {
             authFile(
                 accessToken = jwt(expiresInMinutes = 60),
                 idToken = jwt(expiresInMinutes = 60, accountId = "acct-from-claim"),
-                accountId = null
+                accountId = null,
             )
         val store = CodexAuthStore(Http.createClient(MockEngine { error("no refresh expected") }), file)
 
@@ -58,7 +58,7 @@ class CodexAuthTest {
         val store =
             CodexAuthStore(
                 Http.createClient(MockEngine { error("unreachable") }),
-                Files.createTempDirectory("codex").resolve("auth.json")
+                Files.createTempDirectory("codex").resolve("auth.json"),
             )
 
         val error = assertFailsWith<CodexAuthException> { store.credentials() }
@@ -86,9 +86,9 @@ class CodexAuthTest {
                 original +
                         mapOf(
                             "auth_mode" to JsonPrimitive("chatgpt"),
-                            "tokens" to JsonObject(tokens + ("future_token_field" to JsonPrimitive("keep-me")))
-                        )
-            ).toString()
+                            "tokens" to JsonObject(tokens + ("future_token_field" to JsonPrimitive("keep-me"))),
+                        ),
+            ).toString(),
         )
 
         if (Files.getFileAttributeView(file, PosixFileAttributeView::class.java) != null) {
@@ -107,12 +107,12 @@ class CodexAuthTest {
                     respond(
                         content =
                             ByteReadChannel(
-                                """{"access_token":"${jwt(expiresInMinutes = FRESH_MINUTES)}","refresh_token":"refresh-new"}"""
+                                """{"access_token":"${jwt(expiresInMinutes = FRESH_MINUTES)}","refresh_token":"refresh-new"}""",
                             ),
                         status = HttpStatusCode.OK,
-                        headers = headersOf(HttpHeaders.ContentType, ContentType.Application.Json.toString())
+                        headers = headersOf(HttpHeaders.ContentType, ContentType.Application.Json.toString()),
                     )
-                }
+                },
             )
 
         CodexAuthStore(http, file).credentials()
@@ -129,7 +129,7 @@ class CodexAuthTest {
         if (Files.getFileAttributeView(file, PosixFileAttributeView::class.java) != null) {
             assertEquals(
                 setOf(PosixFilePermission.OWNER_READ, PosixFilePermission.OWNER_WRITE),
-                Files.getPosixFilePermissions(file)
+                Files.getPosixFilePermissions(file),
             )
         }
     }
@@ -202,9 +202,9 @@ class CodexAuthTest {
                     respond(
                         content = ByteReadChannel("""{"access_token":"$refreshedToken","refresh_token":"refresh-new"}"""),
                         status = HttpStatusCode.OK,
-                        headers = headersOf(HttpHeaders.ContentType, ContentType.Application.Json.toString())
+                        headers = headersOf(HttpHeaders.ContentType, ContentType.Application.Json.toString()),
                     )
-                }
+                },
             )
         val store = CodexAuthStore(http, file)
 
@@ -224,9 +224,9 @@ class CodexAuthTest {
                     respond(
                         content = ByteReadChannel("""{"error":"refresh_token_expired"}"""),
                         status = HttpStatusCode.BadRequest,
-                        headers = headersOf(HttpHeaders.ContentType, ContentType.Application.Json.toString())
+                        headers = headersOf(HttpHeaders.ContentType, ContentType.Application.Json.toString()),
                     )
-                }
+                },
             )
 
         val error = assertFailsWith<CodexAuthException> { CodexAuthStore(http, file).credentials() }
@@ -245,9 +245,9 @@ class CodexAuthTest {
                     respond(
                         content = ByteReadChannel("""{"error":"refresh_token_invalidated"}"""),
                         status = HttpStatusCode.Unauthorized,
-                        headers = headersOf(HttpHeaders.ContentType, ContentType.Application.Json.toString())
+                        headers = headersOf(HttpHeaders.ContentType, ContentType.Application.Json.toString()),
                     )
-                }
+                },
             )
 
         val error = assertFailsWith<CodexAuthException> { CodexAuthStore(http, file).credentials() }
@@ -266,9 +266,9 @@ class CodexAuthTest {
                     respond(
                         content = ByteReadChannel("""{"error":{"code":"too_soon"}}"""),
                         status = HttpStatusCode.BadRequest,
-                        headers = headersOf(HttpHeaders.ContentType, ContentType.Application.Json.toString())
+                        headers = headersOf(HttpHeaders.ContentType, ContentType.Application.Json.toString()),
                     )
-                }
+                },
             )
         val store = CodexAuthStore(http, file)
 
@@ -289,9 +289,9 @@ class CodexAuthTest {
                     respond(
                         content = ByteReadChannel("""{"error":{"code":"too_soon","message":"try later"}}"""),
                         status = HttpStatusCode.BadRequest,
-                        headers = headersOf(HttpHeaders.ContentType, ContentType.Application.Json.toString())
+                        headers = headersOf(HttpHeaders.ContentType, ContentType.Application.Json.toString()),
                     )
-                }
+                },
             )
 
         val error = assertFailsWith<CodexAuthException> { CodexAuthStore(http, file).credentials() }
@@ -310,12 +310,12 @@ class CodexAuthTest {
                     respond(
                         content =
                             ByteReadChannel(
-                                """{"error":{"code":"invalid_grant","message":"token no longer accepted"}}"""
+                                """{"error":{"code":"invalid_grant","message":"token no longer accepted"}}""",
                             ),
                         status = HttpStatusCode.BadRequest,
-                        headers = headersOf(HttpHeaders.ContentType, ContentType.Application.Json.toString())
+                        headers = headersOf(HttpHeaders.ContentType, ContentType.Application.Json.toString()),
                     )
-                }
+                },
             )
 
         val error = assertFailsWith<CodexAuthException> { CodexAuthStore(http, file).credentials() }
@@ -337,9 +337,9 @@ class CodexAuthTest {
                     respond(
                         content = ByteReadChannel("""{"access_token":"${jwt(expiresInMinutes = FRESH_MINUTES)}"}"""),
                         status = HttpStatusCode.OK,
-                        headers = headersOf(HttpHeaders.ContentType, ContentType.Application.Json.toString())
+                        headers = headersOf(HttpHeaders.ContentType, ContentType.Application.Json.toString()),
                     )
-                }
+                },
             )
 
         CodexAuthStore(http, file).credentials()
@@ -366,9 +366,9 @@ class CodexAuthTest {
                     respond(
                         content = ByteReadChannel("""{"access_token":"${jwt(expiresInMinutes = FRESH_MINUTES)}"}"""),
                         status = HttpStatusCode.OK,
-                        headers = headersOf(HttpHeaders.ContentType, ContentType.Application.Json.toString())
+                        headers = headersOf(HttpHeaders.ContentType, ContentType.Application.Json.toString()),
                     )
-                }
+                },
             )
 
         CodexAuthStore(http, file).credentials()
@@ -387,9 +387,9 @@ class CodexAuthTest {
                     respond(
                         content = ByteReadChannel("<html>\n  edge said no\n</html>"),
                         status = HttpStatusCode.BadRequest,
-                        headers = headersOf(HttpHeaders.ContentType, ContentType.Text.Html.toString())
+                        headers = headersOf(HttpHeaders.ContentType, ContentType.Text.Html.toString()),
                     )
-                }
+                },
             )
 
         val error = assertFailsWith<CodexAuthException> { CodexAuthStore(http, file).credentials() }
@@ -426,7 +426,7 @@ private fun authFile(
     accessToken: String,
     idToken: String = accessToken,
     refreshToken: String? = "refresh-token",
-    accountId: String? = "acct-1"
+    accountId: String? = "acct-1",
 ): Path {
     val file = Files.createTempDirectory("codex").resolve("auth.json")
     file.writeText(authJson(accessToken, idToken, refreshToken, accountId))
@@ -438,7 +438,7 @@ private fun authJson(
     accessToken: String,
     idToken: String = accessToken,
     refreshToken: String? = "refresh-token",
-    accountId: String? = "acct-1"
+    accountId: String? = "acct-1",
 ): String {
     val refresh = refreshToken?.let { ""","refresh_token":"$it"""" }.orEmpty()
     val account = accountId?.let { ""","account_id":"$it"""" }.orEmpty()

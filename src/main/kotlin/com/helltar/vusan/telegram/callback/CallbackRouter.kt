@@ -23,7 +23,7 @@ internal class CallbackRouter(
     private val inlineChoices: InlineChoiceHandler,
     private val turnStop: TurnStopHandler,
     private val turns: AgentTurns,
-    private val accessPolicy: AccessPolicy
+    private val accessPolicy: AccessPolicy,
 ) {
 
     suspend fun route(callback: CallbackQuery) {
@@ -61,7 +61,7 @@ internal class CallbackRouter(
             chatId = chatId,
             messageId = message.messageId,
             chatIsPrivate = message.chat.isUserChat,
-            messages = messages
+            messages = messages,
         )
     }
 
@@ -96,7 +96,7 @@ internal class CallbackRouter(
                 messageId = message.messageId,
                 question = message.text,
                 keyboard = message.replyMarkup,
-                messages = messages
+                messages = messages,
             ) ?: return
 
         turns.dispatchSelection(message, user, selection, messages)
@@ -120,7 +120,7 @@ internal class CallbackRouter(
             callbackData = callback.data,
             userId = userId,
             chatId = chatId,
-            messages = messages
+            messages = messages,
         )
     }
 

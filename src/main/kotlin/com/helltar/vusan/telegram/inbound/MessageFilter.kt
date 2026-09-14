@@ -9,7 +9,7 @@ internal fun shouldHandle(
     message: Message,
     botUserId: Long,
     botUsername: String?,
-    captionSource: Message = message
+    captionSource: Message = message,
 ): Boolean {
     if (message.isPrivateChat) return true
 
@@ -45,7 +45,7 @@ internal fun MessageText.leadingBotCommandOrNull(): BotCommand? {
 
     return BotCommand(
         command = span.substringBefore('@').lowercase(),
-        targetUsername = span.substringAfter('@', "").ifEmpty { null }
+        targetUsername = span.substringAfter('@', "").ifEmpty { null },
     )
 }
 

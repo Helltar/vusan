@@ -2,7 +2,7 @@ package com.helltar.vusan.config
 
 data class OpenAiVisionConfig(
     val apiKey: String,
-    val model: String
+    val model: String,
 ) {
 
     init {

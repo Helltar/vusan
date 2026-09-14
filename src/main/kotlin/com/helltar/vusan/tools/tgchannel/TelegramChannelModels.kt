@@ -20,7 +20,7 @@ data class TelegramChannelPage(
      * False when t.me redirected away from `/s/`, meaning the username is not a channel with a
      * public web preview. Distinguishes "nothing to read" from "cannot be read at all".
      */
-    val previewAvailable: Boolean = true
+    val previewAvailable: Boolean = true,
 )
 
 data class TelegramChannelPost(
@@ -41,7 +41,7 @@ data class TelegramChannelPost(
     val linkPreview: String?,
     val mediaKinds: List<String>,
     val imageUrls: List<String>,
-    val links: List<String>
+    val links: List<String>,
 ) {
     val hasMedia: Boolean get() = mediaKinds.isNotEmpty()
 }
@@ -50,5 +50,5 @@ class TelegramChannelImage(
     val url: String,
     val bytes: ByteArray,
     val mimeType: String,
-    val filename: String
+    val filename: String,
 )

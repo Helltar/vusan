@@ -19,7 +19,7 @@ class OpenAiWhisperClientTest {
     private val config = OpenAiSttConfig(
         apiKey = "sk-test",
         model = "whisper-1",
-        maxDurationSeconds = 600
+        maxDurationSeconds = 600,
     )
 
     @Test
@@ -38,9 +38,9 @@ class OpenAiWhisperClientTest {
                     respond(
                         content = ByteReadChannel("""{"text":"hello world"}"""),
                         status = HttpStatusCode.OK,
-                        headers = headersOf(HttpHeaders.ContentType, ContentType.Application.Json.toString())
+                        headers = headersOf(HttpHeaders.ContentType, ContentType.Application.Json.toString()),
                     )
-                }
+                },
             )
         val client = OpenAiWhisperClient(http, config)
 
@@ -58,9 +58,9 @@ class OpenAiWhisperClientTest {
                     respond(
                         content = """{"error":{"message":"invalid file"}}""",
                         status = HttpStatusCode.BadRequest,
-                        headers = headersOf(HttpHeaders.ContentType, ContentType.Application.Json.toString())
+                        headers = headersOf(HttpHeaders.ContentType, ContentType.Application.Json.toString()),
                     )
-                }
+                },
             )
         val client = OpenAiWhisperClient(http, config)
 

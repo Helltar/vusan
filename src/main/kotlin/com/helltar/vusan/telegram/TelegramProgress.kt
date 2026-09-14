@@ -77,7 +77,7 @@ internal fun statusGraceFor(activity: ToolActivity): Duration =
  */
 internal suspend fun <T> TelegramClient.withLiveProgress(
     request: AgentRequest,
-    block: suspend (setActivity: (ToolActivity?) -> Unit, status: TurnStatus) -> T
+    block: suspend (setActivity: (ToolActivity?) -> Unit, status: TurnStatus) -> T,
 ): T =
     coroutineScope {
         val activity = MutableStateFlow<ToolActivity?>(null)
@@ -93,7 +93,7 @@ internal suspend fun <T> TelegramClient.withLiveProgress(
                         runCatching {
                             indicateChatAction(
                                 request.context.chatTarget,
-                                chatActionFor(current)
+                                chatActionFor(current),
                             )
                         }
                             .onFailure { it.rethrowIfCancellation() }
@@ -145,7 +145,7 @@ private fun TelegramClient.statusFor(request: AgentRequest): TurnStatus =
         ownerId = request.context.user.telegramUserId,
         replyToMessageId = request.context.messageId?.telegramMessageId,
         messages = Messages.of(request.context.language),
-        activityOpensIt = request.context.chat.capabilities.slowModeSeconds == 0
+        activityOpensIt = request.context.chat.capabilities.slowModeSeconds == 0,
     )
 
 private suspend fun TelegramClient.indicateChatAction(target: ChatTarget, action: ActionType) {
@@ -155,7 +155,7 @@ private suspend fun TelegramClient.indicateChatAction(target: ChatTarget, action
                 .chatId(target.chatId)
                 .messageThreadId(target.messageThreadId)
                 .action(action.toString())
-                .build()
+                .build(),
         )
     }
 }

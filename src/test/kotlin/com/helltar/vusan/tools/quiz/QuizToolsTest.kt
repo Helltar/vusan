@@ -20,7 +20,7 @@ class QuizToolsTest {
                 question = "  What has keys but cannot open doors?  ",
                 options = listOf("  Piano  ", "Lock", "Lantern"),
                 correctOptionIndex = 0,
-                explanation = " Because a piano has keys, not door keys. "
+                explanation = " Because a piano has keys, not door keys. ",
             )
 
         assertEquals("Quiz \"What has keys but cannot open doors?\" ready with 3 options and will be sent.", result)
@@ -30,9 +30,9 @@ class QuizToolsTest {
                 options = listOf("Piano", "Lock", "Lantern"),
                 correctOptionIndex = 0,
                 explanation = "Because a piano has keys, not door keys.",
-                isAnonymous = false
+                isAnonymous = false,
             ),
-            outbox.pending.single().output
+            outbox.pending.single().output,
         )
     }
 
@@ -46,7 +46,7 @@ class QuizToolsTest {
                 tools.createQuiz(
                     question = "Pick the correct answer",
                     options = listOf("Yes"),
-                    correctOptionIndex = 0
+                    correctOptionIndex = 0,
                 )
             }
 
@@ -64,7 +64,7 @@ class QuizToolsTest {
                 tools.createQuiz(
                     question = "Choose a fruit",
                     options = listOf("Apple", "apple", "Pear"),
-                    correctOptionIndex = 1
+                    correctOptionIndex = 1,
                 )
             }
 

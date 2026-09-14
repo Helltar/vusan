@@ -102,7 +102,7 @@ class VisionToolsTest {
                 executor = executor,
                 attachedFile = videoAttachment(),
                 sampler = sampler,
-                transcriber = { _, _ -> "look at him go" }
+                transcriber = { _, _ -> "look at him go" },
             )
 
         val result = tools.describeVideo("what happens")
@@ -138,7 +138,7 @@ class VisionToolsTest {
                 executor = executor,
                 attachedFile = videoAttachment(isAnimation = true),
                 sampler = sampler,
-                transcriber = { _, _ -> error("transcription must not run for a gif") }
+                transcriber = { _, _ -> error("transcription must not run for a gif") },
             )
 
         tools.describeVideo("")
@@ -194,7 +194,7 @@ class VisionToolsTest {
                 loadBytes = {
                     videoLoaded = true
                     byteArrayOf(1)
-                }
+                },
             )
 
         val result = visionTools(executor, video, sampler).describeVideo("")
@@ -224,7 +224,7 @@ class VisionToolsTest {
         val video =
             videoAttachment(
                 loadThumbnailBytes = { byteArrayOf(9) },
-                loadBytes = { error("Bad Request: file is too big") }
+                loadBytes = { error("Bad Request: file is too big") },
             )
 
         val result = visionTools(executor, video, FakeVideoSampler(frames = listOf(byteArrayOf(1)))).describeVideo("")
@@ -237,19 +237,19 @@ class VisionToolsTest {
         executor: FakePromptExecutor,
         attachedFile: AttachedFile?,
         sampler: VideoSampler = FakeVideoSampler(),
-        transcriber: VideoAudioTranscriber? = null
+        transcriber: VideoAudioTranscriber? = null,
     ): VisionTools =
         VisionTools(
             client = ImageVisionClient(executor, TEST_MODEL),
             videoClient = VideoVisionClient(executor, TEST_MODEL, sampler, transcriber),
-            attachedFile = attachedFile
+            attachedFile = attachedFile,
         )
 
     private fun attachedFile(
         fileSizeBytes: Long? = null,
         kind: AttachedFileKind = AttachedFileKind.IMAGE,
         name: String = "photo.jpg",
-        loadBytes: suspend () -> ByteArray
+        loadBytes: suspend () -> ByteArray,
     ): AttachedFile =
         AttachedFile(
             name = name,
@@ -257,7 +257,7 @@ class VisionToolsTest {
             mimeType = "image/jpeg",
             kind = kind,
             caption = "caption",
-            loadBytes = loadBytes
+            loadBytes = loadBytes,
         )
 
     private fun videoAttachment(
@@ -265,7 +265,7 @@ class VisionToolsTest {
         durationSeconds: Int? = 12,
         loadThumbnailBytes: (suspend () -> ByteArray)? = null,
         isAnimation: Boolean = false,
-        loadBytes: suspend () -> ByteArray = { byteArrayOf(1, 2, 3) }
+        loadBytes: suspend () -> ByteArray = { byteArrayOf(1, 2, 3) },
     ): AttachedFile =
         AttachedFile(
             name = "clip.mp4",
@@ -276,12 +276,12 @@ class VisionToolsTest {
             durationSeconds = durationSeconds,
             loadThumbnailBytes = loadThumbnailBytes,
             isAnimation = isAnimation,
-            loadBytes = loadBytes
+            loadBytes = loadBytes,
         )
 
     private class FakeVideoSampler(
         private val frames: List<ByteArray> = listOf(byteArrayOf(1)),
-        private val audio: ByteArray? = byteArrayOf(5)
+        private val audio: ByteArray? = byteArrayOf(5),
     ) : VideoSampler {
 
         var receivedDurationSeconds: Int? = null

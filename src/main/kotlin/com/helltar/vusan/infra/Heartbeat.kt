@@ -30,7 +30,7 @@ import kotlin.time.Duration.Companion.seconds
 internal class Heartbeat(
     private val file: Path = Path.of(HEARTBEAT_FILE),
     private val staleAfter: Duration = STALE_AFTER,
-    private val interval: Duration = WRITE_INTERVAL
+    private val interval: Duration = WRITE_INTERVAL,
 ) {
 
     // set from the polling thread, read from the heartbeat coroutine

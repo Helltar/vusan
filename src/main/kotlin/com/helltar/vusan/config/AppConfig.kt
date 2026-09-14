@@ -40,7 +40,7 @@ data class AppConfig(
     val tavilyApiKey: String?,
     val telegramBotToken: String,
     val tokenBudget: TokenBudgetConfig = TokenBudgetConfig(),
-    val ytDlpCookiesFile: String?
+    val ytDlpCookiesFile: String?,
 ) {
 
     init {
@@ -111,7 +111,7 @@ data class AppConfig(
 
                         retentionDays =
                             readIntEnv("CONVERSATION_RETENTION_DAYS")
-                                ?: ConversationConfig.DEFAULT_RETENTION_DAYS
+                                ?: ConversationConfig.DEFAULT_RETENTION_DAYS,
                     ),
 
                 groupLog =
@@ -132,14 +132,14 @@ data class AppConfig(
 
                         recentMinutes =
                             readIntEnv("GROUP_LOG_RECENT_MINUTES")
-                                ?: GroupLogConfig.DEFAULT_RECENT_MINUTES
+                                ?: GroupLogConfig.DEFAULT_RECENT_MINUTES,
                     ),
 
                 elevenLabsTts =
                     elevenLabsKey?.let {
                         ElevenLabsTtsConfig(
                             model = readEnv("ELEVENLABS_TTS_MODEL") ?: ElevenLabsTtsConfig.DEFAULT_MODEL,
-                            voiceId = readEnv("ELEVENLABS_VOICE_ID") ?: ElevenLabsTtsConfig.DEFAULT_VOICE_ID
+                            voiceId = readEnv("ELEVENLABS_VOICE_ID") ?: ElevenLabsTtsConfig.DEFAULT_VOICE_ID,
                         )
                     },
 
@@ -149,9 +149,9 @@ data class AppConfig(
                             model = readEnv("OPENAI_IMAGE_MODEL") ?: defaultImageModel(route),
                             quality = readEnv("OPENAI_IMAGE_QUALITY") ?: OpenAiImageConfig.DEFAULT_QUALITY,
                             moderation = readEnv("OPENAI_IMAGE_MODERATION") ?: OpenAiImageConfig.DEFAULT_MODERATION,
-                            route = route
+                            route = route,
                         )
-                    }
+                    },
             )
         }
 
@@ -211,7 +211,7 @@ data class AppConfig(
                 zone = zone,
                 fairSharePercent =
                     readIntEnv("LLM_TOKEN_BUDGET_FAIR_SHARE_AT_PERCENT")
-                        ?: TokenBudgetConfig.DEFAULT_FAIR_SHARE_PERCENT
+                        ?: TokenBudgetConfig.DEFAULT_FAIR_SHARE_PERCENT,
             )
         }
 
@@ -222,7 +222,7 @@ data class AppConfig(
                 apiKey = key,
                 model = readEnv("OPENAI_STT_MODEL") ?: OpenAiSttConfig.DEFAULT_MODEL,
                 maxDurationSeconds =
-                    readLongEnv("OPENAI_STT_MAX_DURATION_SECONDS") ?: OpenAiSttConfig.DEFAULT_MAX_DURATION_SECONDS
+                    readLongEnv("OPENAI_STT_MAX_DURATION_SECONDS") ?: OpenAiSttConfig.DEFAULT_MAX_DURATION_SECONDS,
             )
         }
 
@@ -231,7 +231,7 @@ data class AppConfig(
 
             return OpenAiVisionConfig(
                 apiKey = key,
-                model = readEnv("OPENAI_VISION_MODEL") ?: OpenAiVisionConfig.DEFAULT_MODEL
+                model = readEnv("OPENAI_VISION_MODEL") ?: OpenAiVisionConfig.DEFAULT_MODEL,
             )
         }
 
@@ -254,7 +254,7 @@ data class AppConfig(
                     clientVersion = resolveCodexClientVersion(),
                     authFile = defaultCodexAuthFile(readEnv("CODEX_HOME")),
                     requestTimeout = requestTimeout,
-                    contextWindowTokens = contextWindowTokens
+                    contextWindowTokens = contextWindowTokens,
                 )
             }
 
@@ -266,7 +266,7 @@ data class AppConfig(
                     endpoint = resolveOpenAiEndpoint(),
                     reasoningEffort = resolveReasoningEffort(),
                     requestTimeout = requestTimeout,
-                    contextWindowTokens = contextWindowTokens
+                    contextWindowTokens = contextWindowTokens,
                 )
             }
 
@@ -274,7 +274,7 @@ data class AppConfig(
                 runCatching { HostedLlmProvider.valueOf(provider.uppercase()) }.getOrNull()
                     ?: error(
                         "Unsupported LLM_PROVIDER=[$provider]. " +
-                                "Supported values: openai, anthropic, google, deepseek, openai-compatible, codex"
+                                "Supported values: openai, anthropic, google, deepseek, openai-compatible, codex",
                     )
 
             return LlmProviderConfig.Hosted(
@@ -282,7 +282,7 @@ data class AppConfig(
                 apiKey = requireEnv("LLM_API_KEY"),
                 model = requireEnv("LLM_MODEL"),
                 requestTimeout = requestTimeout,
-                contextWindowTokens = contextWindowTokens
+                contextWindowTokens = contextWindowTokens,
             )
         }
 

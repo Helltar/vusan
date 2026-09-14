@@ -5,7 +5,7 @@ data class GroupLogConfig(
     val retentionDays: Int = DEFAULT_RETENTION_DAYS,
     val maxMessagesPerChat: Int = DEFAULT_MAX_MESSAGES_PER_CHAT,
     val recentMessages: Int = DEFAULT_RECENT_MESSAGES,
-    val recentMinutes: Int = DEFAULT_RECENT_MINUTES
+    val recentMinutes: Int = DEFAULT_RECENT_MINUTES,
 ) {
 
     init {

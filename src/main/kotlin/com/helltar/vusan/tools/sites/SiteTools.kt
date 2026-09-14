@@ -24,14 +24,14 @@ private const val INDEX = "index.html"
 class SiteTools(
     private val workspace: WorkspaceClient,
     // the workspace the files come from and the site they are served at belong to the same person
-    private val personKey: String
+    private val personKey: String,
 ) : ToolSet {
 
     @Tool
     @LLMDescription(SiteToolDescriptions.PUBLISH_SITE)
     suspend fun publishSite(
         @LLMDescription(SiteToolDescriptions.DIRECTORY)
-        directory: String
+        directory: String,
     ): String = suspendToolGuard {
         val path = directory.requireToolText("Directory", MAX_PATH_CHARS)
         val warning = missingIndex(path)

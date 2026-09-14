@@ -43,14 +43,14 @@ class TelegramDeliveryTest {
                     question = "Choose",
                     options = listOf("A", "B"),
                     ownerId = "1",
-                    historyRevision = 0L
-                )
-            )
+                    historyRevision = 0L,
+                ),
+            ),
         )
         assertEquals(ActionType.UPLOAD_PHOTO, botActionFor(BotOutput.Photo(oneByte, "p.png")))
         assertEquals(
             ActionType.UPLOAD_PHOTO,
-            botActionFor(BotOutput.PhotoGroup(listOf(BotOutput.Photo(oneByte, "a.png"), BotOutput.Photo(oneByte, "b.png"))))
+            botActionFor(BotOutput.PhotoGroup(listOf(BotOutput.Photo(oneByte, "a.png"), BotOutput.Photo(oneByte, "b.png")))),
         )
         assertEquals(ActionType.UPLOAD_DOCUMENT, botActionFor(BotOutput.Document(oneByte, "d.txt")))
         assertEquals(ActionType.UPLOAD_VIDEO, botActionFor(BotOutput.Video(oneByte, "v.mp4")))
@@ -59,7 +59,7 @@ class TelegramDeliveryTest {
         assertEquals(ActionType.RECORD_VOICE, botActionFor(BotOutput.Voice(oneByte)))
         assertEquals(
             ActionType.UPLOAD_DOCUMENT,
-            botActionFor(BotOutput.Audio(oneByte, "s.mp3", title = "t", performer = "p"))
+            botActionFor(BotOutput.Audio(oneByte, "s.mp3", title = "t", performer = "p")),
         )
     }
 
@@ -100,8 +100,8 @@ class TelegramDeliveryTest {
                     result = AgentResult(outputs = emptyList(), comment = "The weekly summary is ready."),
                     destination = Destination(testChat(-1)),
                     recipient = testUser(2),
-                    language = Language.ENGLISH
-                )
+                    language = Language.ENGLISH,
+                ),
             )
 
         assertTrue(outcome.isUnreachable, "a kicked bot must not keep firing tasks into that chat")
@@ -117,8 +117,8 @@ class TelegramDeliveryTest {
                     result = AgentResult(outputs = emptyList(), comment = "The weekly summary is ready."),
                     destination = Destination(testChat(-1)),
                     recipient = testUser(2),
-                    language = Language.ENGLISH
-                )
+                    language = Language.ENGLISH,
+                ),
             )
 
         assertFalse(outcome.isUnreachable, "one rejected message must not park the chat's tasks")
@@ -140,8 +140,8 @@ class TelegramDeliveryTest {
                     result = AgentResult(outputs = outbox.pending, comment = null),
                     destination = Destination(testChat(-1)),
                     recipient = testUser(2),
-                    language = Language.ENGLISH
-                )
+                    language = Language.ENGLISH,
+                ),
             )
 
         assertTrue(outcome.isUnreachable)
@@ -160,7 +160,7 @@ class TelegramDeliveryTest {
             message = choiceMessage(),
             originMessageId = 11L,
             userId = 2L,
-            messages = Messages.of(Language.ENGLISH)
+            messages = Messages.of(Language.ENGLISH),
         )
 
         assertEquals(11, client.replyTargets.single())
@@ -175,7 +175,7 @@ class TelegramDeliveryTest {
             message = choiceMessage(),
             originMessageId = null,
             userId = 2L,
-            messages = Messages.of(Language.ENGLISH)
+            messages = Messages.of(Language.ENGLISH),
         )
 
         assertEquals(77, client.replyTargets.single())
@@ -194,7 +194,7 @@ class TelegramDeliveryTest {
 
         TelegramDelivery(client.proxy).send(
             message = choiceMessage(),
-            result = AgentResult(outputs = outbox.pending, comment = null)
+            result = AgentResult(outputs = outbox.pending, comment = null),
         )
 
         assertEquals(listOf("here it is"), client.sentTexts)
@@ -211,8 +211,8 @@ class TelegramDeliveryTest {
                 person = testUser(100),
                 displayName = "Helltar",
                 username = "helltar",
-                reason = AttributionReason.SCHEDULED
-            )
+                reason = AttributionReason.SCHEDULED,
+            ),
         )
 
         assertEquals("⏰ Scheduled by @helltar", client.sentTexts.first())
@@ -231,13 +231,13 @@ class TelegramDeliveryTest {
                 person = testUser(100),
                 displayName = "Ann & <b>Bob</b>",
                 username = null,
-                reason = AttributionReason.FOLLOW_UP
-            )
+                reason = AttributionReason.FOLLOW_UP,
+            ),
         )
 
         assertEquals(
             """💬 Following up with <a href="tg://user?id=100">Ann &amp; &lt;b&gt;Bob&lt;/b&gt;</a>""",
-            client.sentTexts.first()
+            client.sentTexts.first(),
         )
     }
 
@@ -252,8 +252,8 @@ class TelegramDeliveryTest {
                 result = AgentResult(outputs = emptyList(), comment = "The weekly summary is ready."),
                 destination = Destination(testChat(-7), threadId = "42"),
                 recipient = testUser(2),
-                language = Language.ENGLISH
-            )
+                language = Language.ENGLISH,
+            ),
         )
 
         assertEquals(listOf<Int?>(42), client.threadIds)
@@ -268,8 +268,8 @@ class TelegramDeliveryTest {
                 result = AgentResult(outputs = emptyList(), comment = "The weekly summary is ready."),
                 destination = Destination(testChat(-7)),
                 recipient = testUser(2),
-                language = Language.ENGLISH
-            )
+                language = Language.ENGLISH,
+            ),
             )
 
         assertEquals(listOf<Int?>(null), client.threadIds)
@@ -282,7 +282,7 @@ class TelegramDeliveryTest {
 
         TelegramDelivery(client.proxy).send(
             message = topicMessage(),
-            result = AgentResult(outputs = outbox.pending, comment = null)
+            result = AgentResult(outputs = outbox.pending, comment = null),
         )
 
         assertEquals(listOf<Int?>(42), client.threadIds)
@@ -297,7 +297,7 @@ class TelegramDeliveryTest {
 
         TelegramDelivery(client.proxy).send(
             message = topicMessage(isTopic = false),
-            result = AgentResult(outputs = outbox.pending, comment = null)
+            result = AgentResult(outputs = outbox.pending, comment = null),
         )
 
         assertEquals(listOf<Int?>(null), client.threadIds)
@@ -354,8 +354,8 @@ class TelegramDeliveryTest {
                 destination = Destination(testChat(-7)),
                 recipient = testUser(100),
                 language = Language.ENGLISH,
-                attribution = attribution
-            )
+                attribution = attribution,
+            ),
         )
     }
 
@@ -367,8 +367,8 @@ class TelegramDeliveryTest {
             result = AgentResult(outputs = outbox.pending, comment = null),
             destination = Destination(testChat(1)),
             recipient = testUser(2),
-            language = Language.ENGLISH
-                )
+            language = Language.ENGLISH,
+                ),
             )
     }
 
@@ -392,8 +392,8 @@ class TelegramDeliveryTest {
                             .ok(false)
                             .errorCode(400)
                             .errorDescription(description)
-                            .build()
-                    )
+                            .build(),
+                    ),
                 )
             } as TelegramClient
     }

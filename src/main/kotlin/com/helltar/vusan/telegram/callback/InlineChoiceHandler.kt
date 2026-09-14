@@ -30,12 +30,12 @@ internal data class InlineChoiceSelection(
     val question: String,
     val option: String,
     // the user message the question was asked about, when the button still carries it.
-    val originMessageId: Long? = null
+    val originMessageId: Long? = null,
 )
 
 internal class InlineChoiceHandler(
     private val client: TelegramClient,
-    private val currentHistoryRevision: suspend (scope: ConversationScope) -> Long
+    private val currentHistoryRevision: suspend (scope: ConversationScope) -> Long,
 ) {
 
     private data class MessageKey(val chatId: Long, val messageId: Int)
@@ -80,7 +80,7 @@ internal class InlineChoiceHandler(
         messageId: Int,
         question: String?,
         keyboard: InlineKeyboardMarkup?,
-        messages: Messages
+        messages: Messages,
     ): InlineChoiceSelection? {
         val action =
             InlineChoiceAction.parse(callbackData)
@@ -91,7 +91,7 @@ internal class InlineChoiceHandler(
                 client,
                 callbackQueryId,
                 messages.inlineChoiceNotOwnerAlert,
-                showAlert = true
+                showAlert = true,
             )
             return null
         }
@@ -128,7 +128,7 @@ internal class InlineChoiceHandler(
                 chatId = chatId,
                 messageId = messageId,
                 text = selectedText,
-                replyMarkup = emptyInlineKeyboard()
+                replyMarkup = emptyInlineKeyboard(),
             )
         } catch (error: Throwable) {
             error.rethrowIfCancellation()
@@ -145,7 +145,7 @@ internal class InlineChoiceHandler(
                     client,
                     callbackQueryId,
                     messages.inlineChoiceErrorAlert,
-                    showAlert = true
+                    showAlert = true,
                 )
             }.onFailure { it.rethrowIfCancellation() }
 
@@ -166,7 +166,7 @@ internal class InlineChoiceHandler(
             client,
             callbackQueryId,
             messages.inlineChoiceUnavailableAlert,
-            showAlert = true
+            showAlert = true,
         )
     }
 
@@ -210,8 +210,8 @@ internal fun inlineChoiceKeyboard(choice: BotOutput.InlineChoice): InlineKeyboar
                         ownerId = choice.ownerId,
                         historyRevision = choice.historyRevision,
                         optionIndex = index,
-                        originMessageId = choice.originMessageId?.telegramMessageId ?: NO_ORIGIN_MESSAGE
-                    ).serialize()
+                        originMessageId = choice.originMessageId?.telegramMessageId ?: NO_ORIGIN_MESSAGE,
+                    ).serialize(),
                 )
                 .build()
         }
@@ -233,7 +233,7 @@ internal fun inlineChoiceAgentInput(selection: InlineChoiceSelection): String =
         buildString {
             appendLine(xmlBlock("question", selection.question))
             append(xmlBlock("selected_option", selection.option))
-        }
+        },
     )
 
 private fun emptyInlineKeyboard(): InlineKeyboardMarkup =
@@ -245,7 +245,7 @@ private data class InlineChoiceAction(
     val ownerId: String,
     val historyRevision: Long,
     val optionIndex: Int,
-    val originMessageId: Long
+    val originMessageId: Long,
 ) {
 
     fun serialize(): String =

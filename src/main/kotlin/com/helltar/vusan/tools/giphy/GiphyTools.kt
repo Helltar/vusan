@@ -16,7 +16,7 @@ class GiphyTools(private val client: GiphyClient, private val outbox: BotOutbox)
         @LLMDescription(GiphyToolDescriptions.QUERY)
         query: String,
         @LLMDescription(GiphyToolDescriptions.RATING)
-        rating: String = "g"
+        rating: String = "g",
     ): String = suspendToolGuard {
         val response = client.search(query = query, rating = rating)
         val gif = response.data.firstOrNull() ?: return@suspendToolGuard """No GIF found for "$query"."""

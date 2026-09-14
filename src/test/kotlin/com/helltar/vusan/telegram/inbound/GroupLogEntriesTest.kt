@@ -21,7 +21,7 @@ class GroupLogEntriesTest {
                 message(
                     """"text": "hello everyone",
                     "from": {"id": 7, "is_bot": false, "first_name": "Olena", "last_name": "Petrenko", "username": "olena"}"""
-                ).toGroupLogEntry()
+                ).toGroupLogEntry(),
             )
 
         assertEquals(testChat(-100), entry.chat)
@@ -43,7 +43,7 @@ class GroupLogEntriesTest {
                     """"text": "$long",
                     "forward_origin": {"type": "channel", "date": 1774000000,
                         "chat": {"id": -1001, "type": "channel", "title": "BBC News"}, "message_id": 5}"""
-                ).toGroupLogEntry()
+                ).toGroupLogEntry(),
             )
 
         assertEquals("BBC News", entry.forwardFrom)
@@ -57,7 +57,7 @@ class GroupLogEntriesTest {
             message(
                 """"text": "x", "forward_origin": {"type": "channel", "date": 1, "message_id": 5,
                 "chat": {"id": -1001, "type": "channel", "title": "BBC News"}}"""
-            ).forwardOriginLabel()
+            ).forwardOriginLabel(),
         )
 
         assertEquals(
@@ -65,7 +65,7 @@ class GroupLogEntriesTest {
             message(
                 """"text": "x", "forward_origin": {"type": "chat", "date": 1,
                 "sender_chat": {"id": -1002, "type": "supergroup", "title": "Some Group"}}"""
-            ).forwardOriginLabel()
+            ).forwardOriginLabel(),
         )
 
         assertEquals(
@@ -73,14 +73,14 @@ class GroupLogEntriesTest {
             message(
                 """"text": "x", "forward_origin": {"type": "user", "date": 1,
                 "sender_user": {"id": 9, "is_bot": false, "first_name": "Serhii", "last_name": "Koval"}}"""
-            ).forwardOriginLabel()
+            ).forwardOriginLabel(),
         )
 
         assertEquals(
             "Anonymous",
             message(
-                """"text": "x", "forward_origin": {"type": "hidden_user", "date": 1, "sender_user_name": "Anonymous"}"""
-            ).forwardOriginLabel()
+                """"text": "x", "forward_origin": {"type": "hidden_user", "date": 1, "sender_user_name": "Anonymous"}""",
+            ).forwardOriginLabel(),
         )
     }
 
@@ -97,7 +97,7 @@ class GroupLogEntriesTest {
                     """"sticker": {"file_id": "abc", "file_unique_id": "u", "type": "regular",
                     "width": 512, "height": 512, "is_animated": false, "is_video": false,
                     "emoji": "😂", "set_name": "HotCat"}"""
-                ).toGroupLogEntry()
+                ).toGroupLogEntry(),
             )
 
         assertEquals("sticker", sticker.kind)
@@ -106,7 +106,7 @@ class GroupLogEntriesTest {
 
         val voice =
             assertNotNull(
-                message(""""voice": {"file_id": "abc", "file_unique_id": "u", "duration": 74}""").toGroupLogEntry()
+                message(""""voice": {"file_id": "abc", "file_unique_id": "u", "duration": 74}""").toGroupLogEntry(),
             )
 
         assertEquals("voice", voice.kind)
@@ -115,8 +115,8 @@ class GroupLogEntriesTest {
         val document =
             assertNotNull(
                 message(
-                    """"document": {"file_id": "abc", "file_unique_id": "u", "file_name": "report.pdf"}"""
-                ).toGroupLogEntry()
+                    """"document": {"file_id": "abc", "file_unique_id": "u", "file_name": "report.pdf"}""",
+                ).toGroupLogEntry(),
             )
 
         assertEquals("document", document.kind)
@@ -124,7 +124,7 @@ class GroupLogEntriesTest {
 
         assertTrue(
             listOf(sticker, voice, document).none { it.descriptor?.contains("abc") == true },
-            "file ids must never reach the transcript"
+            "file ids must never reach the transcript",
         )
     }
 
@@ -135,7 +135,7 @@ class GroupLogEntriesTest {
                 message(
                     """"caption": "there it is",
                     "photo": [{"file_id": "abc", "file_unique_id": "u", "width": 90, "height": 60}]"""
-                ).toGroupLogEntry()
+                ).toGroupLogEntry(),
             )
 
         assertEquals("photo", entry.kind)
@@ -147,8 +147,8 @@ class GroupLogEntriesTest {
         val entry =
             assertNotNull(
                 message(
-                    """"audio": {"file_id": "abc", "file_unique_id": "u", "duration": 3723}"""
-                ).toGroupLogEntry()
+                    """"audio": {"file_id": "abc", "file_unique_id": "u", "duration": 3723}""",
+                ).toGroupLogEntry(),
             )
 
         assertEquals("1:02:03", entry.descriptor)
@@ -161,7 +161,7 @@ class GroupLogEntriesTest {
                 message(
                     """"text": "agreed", "reply_to_message": {"message_id": 40, "date": 1774000000,
                     "chat": {"id": -100, "type": "supergroup"}}"""
-                ).toGroupLogEntry()
+                ).toGroupLogEntry(),
             )
 
         assertEquals("40", entry.replyToMessageId)
@@ -179,7 +179,7 @@ class GroupLogEntriesTest {
     fun `a vote on a quiz says who answered what, and whether it was right`() {
         val entry =
             assertNotNull(
-                pollAnswer(""""option_ids": [1]""").toGroupLogEntry(quiz)
+                pollAnswer(""""option_ids": [1]""").toGroupLogEntry(quiz),
             )
 
         assertEquals(testChat(-100), entry.chat)
@@ -227,7 +227,7 @@ class GroupLogEntriesTest {
         val answer =
             mapper.readValue(
                 """{"poll_id": "p1", "option_ids": [1], "voter_chat": {"id": -100, "type": "supergroup"}}""",
-                PollAnswer::class.java
+                PollAnswer::class.java,
             )
 
         assertNull(answer.toGroupLogEntry(quiz))
@@ -238,12 +238,12 @@ class GroupLogEntriesTest {
     private fun pollAnswer(fields: String): PollAnswer =
         mapper.readValue(
             """{"poll_id": "p1", "user": {"id": 7, "is_bot": false, "first_name": "Olena", "last_name": "Petrenko", "username": "olena"}, ${fields.trim()}}""",
-            PollAnswer::class.java
+            PollAnswer::class.java,
         )
 
     private fun message(fields: String): Message =
         mapper.readValue(
             """{"message_id": 1, "date": 1774000000, "chat": {"id": -100, "type": "supergroup"}, ${fields.trim()}}""",
-            Message::class.java
+            Message::class.java,
         )
 }

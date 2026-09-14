@@ -89,7 +89,7 @@ internal class TurnStatus(
     private val messages: Messages,
     // in a slow-mode group the bot's messages are rationed, so a bubble is spent only on words the model
     // chose to send; naming a running tool is never worth one of those slots.
-    private val activityOpensIt: Boolean
+    private val activityOpensIt: Boolean,
 ) : TurnNarrator {
 
     // a turn writes from two places — the tool that narrates, and the collector following the activity —
@@ -219,7 +219,7 @@ internal class TurnStatus(
                         text = text,
                         parseMode = parseMode,
                         replyParameters = replyParameters(anchor),
-                        replyMarkup = stopKeyboard()
+                        replyMarkup = stopKeyboard(),
                     )
             } else {
                 editTextMessage(
@@ -228,7 +228,7 @@ internal class TurnStatus(
                     messageId = id,
                     text = text,
                     replyMarkup = stopKeyboard(),
-                    parseMode = parseMode
+                    parseMode = parseMode,
                 )
             }
 
@@ -243,9 +243,9 @@ internal class TurnStatus(
                         InlineKeyboardButton.builder()
                             .text(messages.turnStopButton)
                             .callbackData(turnStopCallbackData(ownerId))
-                            .build()
-                    )
-                )
+                            .build(),
+                    ),
+                ),
             )
             .build()
 

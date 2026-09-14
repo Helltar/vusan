@@ -16,7 +16,7 @@ class VideoVisionClient(
     private val promptExecutor: PromptExecutor,
     private val model: LLModel,
     private val sampler: VideoSampler = FfmpegVideoSampler(),
-    private val transcriber: VideoAudioTranscriber? = null
+    private val transcriber: VideoAudioTranscriber? = null,
 ) {
 
     suspend fun describe(video: AttachedFile, bytes: ByteArray, focus: String): String {
@@ -50,7 +50,7 @@ class VideoVisionClient(
                 "The image below is only the preview frame of a video that is too large to download, not the video itself. " +
                         "Describe what that one frame shows and say plainly that the rest of the video was not seen.",
             transcript = null,
-            focus = focus
+            focus = focus,
         )
 
     private suspend fun execute(
@@ -58,7 +58,7 @@ class VideoVisionClient(
         frames: List<ByteArray>,
         samplingNote: String,
         transcript: String?,
-        focus: String
+        focus: String,
     ): String {
         val description =
             promptExecutor.execute(buildPrompt(video, frames, samplingNote, transcript, focus), model)
@@ -73,13 +73,13 @@ class VideoVisionClient(
         frames: List<ByteArray>,
         samplingNote: String,
         transcript: String?,
-        focus: String
+        focus: String,
     ) =
         prompt("vusan-video-vision") {
             system(
                 "You describe videos for a chat assistant, working from still frames taken out of one. " +
                         "Be concise, factual, and avoid guessing identities. " +
-                        "Mention visible text if any. Reply in the user's language when clear."
+                        "Mention visible text if any. Reply in the user's language when clear.",
             )
             user {
                 text(
@@ -115,7 +115,7 @@ class VideoVisionClient(
                             appendLine()
                             appendLine(xmlBlock("audio_transcript", it))
                         }
-                    }
+                    },
                 )
 
                 frames.forEachIndexed { index, frame ->
@@ -124,8 +124,8 @@ class VideoVisionClient(
                             content = AttachmentContent.Binary.Bytes(frame),
                             format = "jpeg",
                             mimeType = "image/jpeg",
-                            fileName = "frame-${index + 1}.jpg"
-                        )
+                            fileName = "frame-${index + 1}.jpg",
+                        ),
                     )
                 }
             }

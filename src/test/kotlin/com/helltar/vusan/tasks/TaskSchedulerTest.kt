@@ -33,7 +33,7 @@ class TaskSchedulerTest {
             creatorUsername = null,
             creatorDisplayName = null,
             chatIsPrivate = false,
-            language = Language.ENGLISH
+            language = Language.ENGLISH,
         )
 
     @Test
@@ -84,7 +84,7 @@ class TaskSchedulerTest {
     fun `a follow-up the bot set itself says so`() {
         assertEquals(
             AttributionReason.FOLLOW_UP,
-            task.copy(selfInitiated = true).attribution?.reason
+            task.copy(selfInitiated = true).attribution?.reason,
         )
     }
 

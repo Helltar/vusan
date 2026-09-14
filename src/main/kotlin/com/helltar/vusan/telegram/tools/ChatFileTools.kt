@@ -33,7 +33,7 @@ internal const val MAX_TELEGRAM_FILE_MB = 20
 @Suppress("unused")
 class ChatFileTools(
     private val telegram: TelegramClient,
-    private val outbox: BotOutbox
+    private val outbox: BotOutbox,
 ) : ToolSet {
 
     @Tool
@@ -42,7 +42,7 @@ class ChatFileTools(
         @LLMDescription(ChatFileToolDescriptions.CHAT_FILE_ID)
         fileId: String,
         @LLMDescription(ChatFileToolDescriptions.CHAT_FILENAME)
-        filename: String = ""
+        filename: String = "",
     ): String = suspendToolGuard {
         val id = fileId.requireToolText("File id", MAX_FILE_ID_CHARS)
 

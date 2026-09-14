@@ -58,7 +58,7 @@ class WorkspaceToolsTest {
         failure: Pair<HttpStatusCode, String>? = null,
         files: Map<String, ByteArray> = emptyMap(),
         attached: AttachedFile? = null,
-        outbox: BotOutbox = BotOutbox()
+        outbox: BotOutbox = BotOutbox(),
     ): WorkspaceTools {
         val engine = MockEngine { request ->
             val path = request.url.encodedPath
@@ -105,7 +105,7 @@ class WorkspaceToolsTest {
             WorkspaceClient(Http.createClient(engine), "http://regolith:8080", "test-token"),
             requireNotNull(context.personKeyOrNull),
             outbox,
-            attached
+            attached,
         )
     }
 
@@ -164,7 +164,7 @@ class WorkspaceToolsTest {
     fun `capacity refusal reaches the model`() = runBlocking {
         val workspace = tools(
             failure = HttpStatusCode.ServiceUnavailable to
-                """{"type":"urn:regolith:error:capacity_exhausted","title":"No session capacity","status":503,"detail":"busy","code":"capacity_exhausted"}"""
+                """{"type":"urn:regolith:error:capacity_exhausted","title":"No session capacity","status":503,"detail":"busy","code":"capacity_exhausted"}""",
         )
         assertContains(toolFailure { workspace.runCommand("ls") }, "at capacity")
     }
@@ -173,7 +173,7 @@ class WorkspaceToolsTest {
     fun `attachments get unique paths and are copied once per turn`() = runBlocking {
         val attached = AttachedFile(
             name = "orders.csv", fileSizeBytes = 9, mimeType = "text/csv", kind = AttachedFileKind.OTHER,
-            loadBytes = { "id,total\n".toByteArray() }
+            loadBytes = { "id,total\n".toByteArray() },
         )
         val firstTurn = tools(attached = attached)
         val result = firstTurn.runCommand("ls inbox")
@@ -190,7 +190,7 @@ class WorkspaceToolsTest {
     fun `file writing reports the imported attachment path`() = runBlocking {
         val attached = AttachedFile(
             name = "table.csv", fileSizeBytes = 1, mimeType = "text/csv", kind = AttachedFileKind.OTHER,
-            loadBytes = { byteArrayOf(1) }
+            loadBytes = { byteArrayOf(1) },
         )
         val result = tools(attached = attached).writeWorkspaceFile("script.py", "print(1)")
         assertContains(result, writes.first().first)
@@ -226,7 +226,7 @@ class WorkspaceToolsTest {
     fun `cleanup deletes one exact path without uploading attachments`() = runBlocking {
         val attached = AttachedFile(
             name = "unused.csv", fileSizeBytes = 1, mimeType = "text/csv", kind = AttachedFileKind.OTHER,
-            loadBytes = { error("Cleanup must not download attachments") }
+            loadBytes = { error("Cleanup must not download attachments") },
         )
         val result = tools(attached = attached).deleteWorkspaceFile("project/build output")
         assertEquals(listOf("project/build output"), deletions)
@@ -239,7 +239,7 @@ class WorkspaceToolsTest {
     fun `a reset empties the workspace without touching single paths`() = runBlocking {
         val attached = AttachedFile(
             name = "unused.csv", fileSizeBytes = 1, mimeType = "text/csv", kind = AttachedFileKind.OTHER,
-            loadBytes = { error("A reset must not download attachments") }
+            loadBytes = { error("A reset must not download attachments") },
         )
         val result = tools(attached = attached).resetWorkspace()
         assertEquals(1, resets)

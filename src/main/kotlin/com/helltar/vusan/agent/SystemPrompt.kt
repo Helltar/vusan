@@ -112,12 +112,12 @@ internal fun systemPromptFor(
     personality: String,
     modelId: String,
     botUsername: String? = null,
-    botDisplayName: String? = null
+    botDisplayName: String? = null,
 ): String =
     "${xmlBlock("personality", personality)}\n\n" +
             xmlBlock(
                 "operational_contract",
-                "$OPERATIONAL_CONTRACT\n\n${runtimeSection(modelId, botUsername, botDisplayName)}"
+                "$OPERATIONAL_CONTRACT\n\n${runtimeSection(modelId, botUsername, botDisplayName)}",
             )
 
 // the block names the contract above enumerates, kept next to it so the two cannot drift apart.
@@ -132,7 +132,7 @@ private val PROMPT_BLOCK_TAG =
                 "inline_choice|message_context|operational_contract|personality|quoted_fragment|recent_chat|" +
                 "reply_context|rich_message|scheduled_task|selected_option|sticker_catalog|text_caption|tool_groups|" +
                 "user_memory|user_message)(?:\\s[^<>\\n]*)?>",
-        RegexOption.IGNORE_CASE
+        RegexOption.IGNORE_CASE,
     )
 
 /**

@@ -109,7 +109,7 @@ class MessageToolsTest {
         assertTrue(overflow.startsWith("Message limit reached"))
         assertEquals(
             BotOutbox.MAX_TEXT_MESSAGES,
-            outbox.pending.count { it.output is BotOutput.Text }
+            outbox.pending.count { it.output is BotOutput.Text },
         )
     }
 

@@ -48,7 +48,7 @@ internal fun pinCodexClientVersion(version: String?) {
 
 internal fun detectCodexClientVersion(
     command: List<String> = listOf("codex", "--version"),
-    timeout: Duration = 5.seconds
+    timeout: Duration = 5.seconds,
 ): String? =
     runCatching {
         require(command.isNotEmpty()) { "Codex version command must not be empty" }
@@ -91,7 +91,7 @@ internal fun codexUserAgent(): String = "$CODEX_ORIGINATOR/${codexClientVersion(
 internal fun codexCloudflareHeaders(): Map<String, String> =
     mapOf(
         "originator" to CODEX_ORIGINATOR,
-        "User-Agent" to codexUserAgent()
+        "User-Agent" to codexUserAgent(),
     )
 
 /** Everything a plain HTTP call to the Codex backend needs: the token plus the Cloudflare headers. */
@@ -115,7 +115,7 @@ data class CodexModel(
     val supportedReasoningEfforts: Set<ReasoningEffort>?,
     // the serving tiers this model offers beyond the standard one, by their request value. an empty set
     // means the catalog says none; `null` means it did not say.
-    val supportedServiceTiers: Set<String>?
+    val supportedServiceTiers: Set<String>?,
 )
 
 @Serializable
@@ -130,7 +130,7 @@ private data class CodexModelInfo(
     @SerialName("input_modalities") val inputModalities: List<String>? = null,
     @SerialName("supported_reasoning_efforts") val supportedReasoningEfforts: JsonElement? = null,
     @SerialName("supported_reasoning_levels") val supportedReasoningLevels: JsonElement? = null,
-    @SerialName("service_tiers") val serviceTiers: List<CodexServiceTierInfo>? = null
+    @SerialName("service_tiers") val serviceTiers: List<CodexServiceTierInfo>? = null,
 )
 
 @Serializable
@@ -165,7 +165,7 @@ suspend fun fetchCodexModels(http: HttpClient, auth: CodexAuthStore): List<Codex
                 supportedReasoningEfforts =
                     (it.supportedReasoningEfforts ?: it.supportedReasoningLevels).reasoningEfforts(),
                 supportedServiceTiers =
-                    it.serviceTiers?.mapNotNull { tier -> tier.id.takeIf(String::isNotBlank) }?.toSet()
+                    it.serviceTiers?.mapNotNull { tier -> tier.id.takeIf(String::isNotBlank) }?.toSet(),
             )
         }
 }
@@ -193,7 +193,7 @@ private fun JsonElement?.reasoningEfforts(): Set<ReasoningEffort>? {
 
 internal fun applyCodexModelMetadata(
     config: LlmProviderConfig.Codex,
-    model: CodexModel
+    model: CodexModel,
 ): LlmProviderConfig.Codex {
     val configuredEffort = config.reasoningEffort
     val supportedEfforts = model.supportedReasoningEfforts
@@ -219,7 +219,7 @@ internal fun applyCodexModelMetadata(
 
     return config.copy(
         contextWindowTokens = config.contextWindowTokens ?: model.contextWindowTokens,
-        supportsVision = model.supportsVision
+        supportsVision = model.supportsVision,
     )
 }
 

@@ -98,7 +98,7 @@ class ProviderErrorReplyTest {
     fun `a moderation refusal on any provider reads the same`() {
         assertEquals(
             EnglishMessages.contentPolicyReply,
-            EnglishMessages.providerErrorReply("Status code: 400\ncontent_policy_violation", now)
+            EnglishMessages.providerErrorReply("Status code: 400\ncontent_policy_violation", now),
         )
     }
 
@@ -113,7 +113,7 @@ class ProviderErrorReplyTest {
     fun `an unrecognized provider error falls back`() {
         assertEquals(
             EnglishMessages.fallbackErrorReply,
-            EnglishMessages.providerErrorReply("Status code: 500\nserver_error", now)
+            EnglishMessages.providerErrorReply("Status code: 500\nserver_error", now),
         )
     }
 

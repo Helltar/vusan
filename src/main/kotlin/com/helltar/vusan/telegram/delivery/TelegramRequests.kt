@@ -38,7 +38,7 @@ internal suspend fun sendTextMessage(
     text: String,
     parseMode: String?,
     replyParameters: ReplyParameters?,
-    replyMarkup: InlineKeyboardMarkup? = null
+    replyMarkup: InlineKeyboardMarkup? = null,
 ) {
     client.api {
         executeAsync(
@@ -49,7 +49,7 @@ internal suspend fun sendTextMessage(
                 .parseMode(parseMode)
                 .replyParameters(replyParameters)
                 .replyMarkup(replyMarkup)
-                .build()
+                .build(),
         )
     }
 }
@@ -62,7 +62,7 @@ internal suspend fun editTextMessage(
     messageId: Int,
     text: String,
     replyMarkup: InlineKeyboardMarkup?,
-    parseMode: String? = null
+    parseMode: String? = null,
 ) {
     client.api {
         executeAsync(
@@ -72,7 +72,7 @@ internal suspend fun editTextMessage(
                 .text(text)
                 .parseMode(parseMode)
                 .replyMarkup(replyMarkup)
-                .build()
+                .build(),
         )
     }
 }
@@ -85,7 +85,7 @@ internal suspend fun sendStatusMessage(
     text: String,
     parseMode: String?,
     replyParameters: ReplyParameters?,
-    replyMarkup: InlineKeyboardMarkup?
+    replyMarkup: InlineKeyboardMarkup?,
 ): Int =
     client.api {
         executeAsync(
@@ -97,7 +97,7 @@ internal suspend fun sendStatusMessage(
                 .replyParameters(replyParameters)
                 .replyMarkup(replyMarkup)
                 .disableNotification(true)
-                .build()
+                .build(),
         )
     }.messageId
 
@@ -107,7 +107,7 @@ internal suspend fun deleteChatMessage(client: TelegramClient, chatId: Long, mes
             DeleteMessage.builder()
                 .chatId(chatId)
                 .messageId(messageId)
-                .build()
+                .build(),
         )
     }
 }
@@ -116,7 +116,7 @@ internal suspend fun answerCallbackQuery(
     client: TelegramClient,
     callbackQueryId: String,
     text: String? = null,
-    showAlert: Boolean = false
+    showAlert: Boolean = false,
 ) {
     client.api {
         executeAsync(
@@ -124,7 +124,7 @@ internal suspend fun answerCallbackQuery(
                 .callbackQueryId(callbackQueryId)
                 .text(text)
                 .showAlert(showAlert)
-                .build()
+                .build(),
         )
     }
 }
@@ -136,7 +136,7 @@ internal suspend fun sendDocumentFile(
     filename: String,
     caption: String?,
     parseMode: String?,
-    replyParameters: ReplyParameters?
+    replyParameters: ReplyParameters?,
 ) {
     client.api {
         executeAsync(
@@ -147,7 +147,7 @@ internal suspend fun sendDocumentFile(
                 .caption(caption)
                 .parseMode(parseMode)
                 .replyParameters(replyParameters)
-                .build()
+                .build(),
         )
     }
 }
@@ -158,7 +158,7 @@ internal suspend fun sendAnimationFile(
     animation: InputFile,
     caption: String?,
     parseMode: String?,
-    replyParameters: ReplyParameters?
+    replyParameters: ReplyParameters?,
 ) {
     client.api {
         executeAsync(
@@ -169,7 +169,7 @@ internal suspend fun sendAnimationFile(
                 .caption(caption)
                 .parseMode(parseMode)
                 .replyParameters(replyParameters)
-                .build()
+                .build(),
         )
     }
 }
@@ -179,7 +179,7 @@ internal suspend fun sendStickerFile(
     client: TelegramClient,
     target: ChatTarget,
     fileId: String,
-    replyParameters: ReplyParameters?
+    replyParameters: ReplyParameters?,
 ) {
     client.api {
         executeAsync(
@@ -188,7 +188,7 @@ internal suspend fun sendStickerFile(
                 .messageThreadId(target.messageThreadId)
                 .sticker(InputFile(fileId))
                 .replyParameters(replyParameters)
-                .build()
+                .build(),
         )
     }
 }
@@ -197,7 +197,7 @@ internal suspend fun sendMediaGroup(
     client: TelegramClient,
     target: ChatTarget,
     media: List<InputMedia>,
-    replyParameters: ReplyParameters?
+    replyParameters: ReplyParameters?,
 ) {
     client.api {
         executeAsync(
@@ -206,7 +206,7 @@ internal suspend fun sendMediaGroup(
                 .messageThreadId(target.messageThreadId)
                 .medias(media)
                 .replyParameters(replyParameters)
-                .build()
+                .build(),
         )
     }
 }
@@ -214,7 +214,7 @@ internal suspend fun sendMediaGroup(
 internal fun richMessageRequest(
     target: ChatTarget,
     markdown: String,
-    replyParameters: ReplyParameters?
+    replyParameters: ReplyParameters?,
 ): SendRichMessage =
     SendRichMessage.builder()
         .chatId(target.chatId)

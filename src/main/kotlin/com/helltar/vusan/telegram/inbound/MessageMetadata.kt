@@ -81,7 +81,7 @@ internal fun Message.toChatContext(profile: ChatProfile): ChatContext =
         title = chat.titleOrDisplayName(),
         username = chat.userName,
         description = profile.description,
-        capabilities = profile.capabilities
+        capabilities = profile.capabilities,
     )
 
 internal fun User.toSenderContext(): SenderContext =
@@ -90,7 +90,7 @@ internal fun User.toSenderContext(): SenderContext =
         displayName = displayName(firstName, lastName),
         username = userName,
         languageCode = languageCode,
-        isPerson = id !in SHARED_SENDER_IDS
+        isPerson = id !in SHARED_SENDER_IDS,
     )
 
 // the bot api models chat flavors as flags on `Chat` and `Message` rather than distinct types,
@@ -219,7 +219,7 @@ private class MediaAttachment(
     val videoNote: VideoNote?,
     val voice: Voice?,
     val audio: Audio?,
-    val document: Document?
+    val document: Document?,
 )
 
 private fun Message.mediaAttachment(): MediaAttachment =
@@ -253,7 +253,7 @@ private fun MediaAttachment.metadataLines(): List<String> =
             fileMetadataLines(
                 it.fileId, it.fileUniqueId, it.fileSize,
                 width = it.width, height = it.height, durationSeconds = it.duration,
-                mimeType = it.mimeType, fileName = it.fileName
+                mimeType = it.mimeType, fileName = it.fileName,
             )
         }
 
@@ -263,7 +263,7 @@ private fun MediaAttachment.metadataLines(): List<String> =
             fileMetadataLines(
                 it.fileId, it.fileUniqueId, it.fileSize,
                 width = it.width, height = it.height, durationSeconds = it.duration,
-                mimeType = it.mimeType, fileName = it.fileName
+                mimeType = it.mimeType, fileName = it.fileName,
             )
         }
 
@@ -278,7 +278,7 @@ private fun MediaAttachment.metadataLines(): List<String> =
         audio != null -> audio.let {
             fileMetadataLines(
                 it.fileId, it.fileUniqueId, it.fileSize,
-                durationSeconds = it.duration, mimeType = it.mimeType, fileName = it.fileName
+                durationSeconds = it.duration, mimeType = it.mimeType, fileName = it.fileName,
             )
         }
 
@@ -323,7 +323,7 @@ private fun fileMetadataLines(
     height: Int? = null,
     durationSeconds: Int? = null,
     mimeType: String? = null,
-    fileName: String? = null
+    fileName: String? = null,
 ): List<String> =
     buildList {
         addMetadata("file_id", fileId)

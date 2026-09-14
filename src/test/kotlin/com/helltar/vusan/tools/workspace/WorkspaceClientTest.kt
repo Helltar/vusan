@@ -33,8 +33,8 @@ class WorkspaceClientTest {
                 """{"code":"not_found","detail":"Unexpected API redirect"}""", HttpStatusCode.Found,
                 headersOf(
                     HttpHeaders.Location to listOf("http://another-service/v1/sandboxes/u42/execs"),
-                    HttpHeaders.ContentType to listOf("application/problem+json")
-                )
+                    HttpHeaders.ContentType to listOf("application/problem+json"),
+                ),
             )
         }).use { http ->
             val client = WorkspaceClient(http, "http://workspace", "test-token")
@@ -113,7 +113,7 @@ class WorkspaceClientTest {
             respond(
                 """{"type":"urn:regolith:error:capacity_exhausted","title":"No session capacity","status":503,"detail":"Every session slot is busy","code":"capacity_exhausted"}""",
                 HttpStatusCode.ServiceUnavailable,
-                headersOf(HttpHeaders.ContentType, "application/problem+json")
+                headersOf(HttpHeaders.ContentType, "application/problem+json"),
             )
         })
         val client = WorkspaceClient(http, "http://workspace", "test-token")

@@ -40,10 +40,10 @@ class CodexStreamBridgeTest {
                     """data: {"type":"response.output_item.done","item":{"type":"reasoning","id":"rs_1"}}""",
                     """data: {"type":"response.output_item.done","item":{"type":"function_call","name":"sendMessage"}}""",
                     """data: {"type":"response.completed","response":{"id":"r","status":"completed","output":[]}}""",
-                    "data: [DONE]"
+                    "data: [DONE]",
                 ),
                 json,
-                "codex"
+                "codex",
             )
 
         // the codex backend ships an empty output on the completed event, so the items are spliced back in
@@ -63,10 +63,10 @@ class CodexStreamBridgeTest {
                     "event: response.created",
                     "data: {oops",
                     "",
-                    """data: {"type":"response.completed","response":{"id":"r"}}"""
+                    """data: {"type":"response.completed","response":{"id":"r"}}""",
                 ),
                 json,
-                "codex"
+                "codex",
             )
 
         assertEquals("r", response["id"]?.jsonPrimitive?.content)
@@ -78,10 +78,10 @@ class CodexStreamBridgeTest {
         val response =
             collectStreamedResponse(
                 listOf(
-                    """data: {"type":"response.completed","response":{"id":"r","output":[{"type":"message","id":"m"}]}}"""
+                    """data: {"type":"response.completed","response":{"id":"r","output":[{"type":"message","id":"m"}]}}""",
                 ),
                 json,
-                "codex"
+                "codex",
             )
 
         val output = checkNotNull(response["output"]).jsonArray
@@ -105,7 +105,7 @@ class CodexStreamBridgeTest {
             collectStreamedResponse(
                 listOf("""data: {"type":"response.failed","response":{"error":{"message":"usage_limit_reached"}}}"""),
                 json,
-                "codex"
+                "codex",
             )
         }.also { assertTrue("usage_limit_reached" in it.message.orEmpty(), it.message.orEmpty()) }
     }
@@ -117,7 +117,7 @@ class CodexStreamBridgeTest {
                 collectStreamedResponse(
                     listOf("""data: {"type":"$type","response":{"status":"$type"}}"""),
                     json,
-                    "codex"
+                    "codex",
                 )
             }.also { assertTrue(type in it.message.orEmpty(), it.message.orEmpty()) }
         }
@@ -129,10 +129,10 @@ class CodexStreamBridgeTest {
             collectStreamedResponse(
                 listOf(
                     """data: {"type":"response.completed","response":{"id":"r","model":"gpt-5.6-terra",""" +
-                            """"usage":{"input_tokens":17,"output_tokens":5,"total_tokens":22}}}"""
+                            """"usage":{"input_tokens":17,"output_tokens":5,"total_tokens":22}}}""",
                 ),
                 json,
-                "codex"
+                "codex",
             )
 
         assertEquals("gpt-5.6-terra", response["model"]?.jsonPrimitive?.content)

@@ -51,7 +51,7 @@ sealed interface LlmProviderConfig {
         val apiKey: String,
         val model: String,
         override val requestTimeout: Duration,
-        override val contextWindowTokens: Long? = null
+        override val contextWindowTokens: Long? = null,
     ) : LlmProviderConfig {
         init {
             require(apiKey.isNotBlank()) { "LLM_API_KEY must not be blank" }
@@ -83,7 +83,7 @@ sealed interface LlmProviderConfig {
         val clientVersion: String? = null,
         val authFile: Path = defaultCodexAuthFile(),
         override val requestTimeout: Duration,
-        override val contextWindowTokens: Long? = null
+        override val contextWindowTokens: Long? = null,
     ) : LlmProviderConfig {
         init {
             require(model.isNotBlank()) { "LLM_MODEL must not be blank" }
@@ -101,7 +101,7 @@ sealed interface LlmProviderConfig {
         val endpoint: OpenAiEndpoint = OpenAiEndpoint.COMPLETIONS,
         val reasoningEffort: ReasoningEffort? = null,
         override val requestTimeout: Duration,
-        override val contextWindowTokens: Long? = null
+        override val contextWindowTokens: Long? = null,
     ) : LlmProviderConfig {
         init {
             require(baseUrl.isNotBlank()) { "LLM_BASE_URL must not be blank" }

@@ -34,8 +34,8 @@ class ConversationCompactorTest {
                 turns =
                     listOf(
                         ChatTurn(ChatRole.USER, "I prefer tea"),
-                        ChatTurn(ChatRole.ASSISTANT, "got it")
-                    )
+                        ChatTurn(ChatRole.ASSISTANT, "got it"),
+                    ),
             )
 
         val result = compactor.compact("The user likes warm drinks.", listOf(interaction))
@@ -73,7 +73,7 @@ class ConversationCompactorTest {
                 id = "i-2",
                 lastMessageId = 11,
                 createdAt = Instant.EPOCH,
-                turns = listOf(ChatTurn(ChatRole.USER, storedEntry), ChatTurn(ChatRole.ASSISTANT, "done"))
+                turns = listOf(ChatTurn(ChatRole.USER, storedEntry), ChatTurn(ChatRole.ASSISTANT, "done")),
             )
 
         compactor.compact(null, listOf(interaction))
@@ -90,20 +90,20 @@ class ConversationCompactorTest {
         override suspend fun execute(
             prompt: Prompt,
             model: LLModel,
-            tools: List<ToolDescriptor>
+            tools: List<ToolDescriptor>,
         ): Message.Assistant {
             lastPrompt = prompt
 
             return Message.Assistant(
                 parts = listOf(MessagePart.Text(answer)),
-                metaInfo = ResponseMetaInfo.create(KoogClock.System)
+                metaInfo = ResponseMetaInfo.create(KoogClock.System),
             )
         }
 
         override fun executeStreaming(
             prompt: Prompt,
             model: LLModel,
-            tools: List<ToolDescriptor>
+            tools: List<ToolDescriptor>,
         ): Flow<StreamFrame> = emptyFlow()
 
         override suspend fun moderate(prompt: Prompt, model: LLModel): ModerationResult =

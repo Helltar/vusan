@@ -46,6 +46,6 @@ internal object Schema {
             TokenUsageTable,
             TokenUsageByUserTable,
             TelegramPendingUpdatesTable,
-            TelegramPollsTable
+            TelegramPollsTable,
         )
 }

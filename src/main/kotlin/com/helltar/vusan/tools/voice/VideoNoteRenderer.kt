@@ -22,7 +22,7 @@ fun interface VideoNoteRenderer {
 
 class FfmpegVideoNoteRenderer(
     private val ffmpegPath: String = "ffmpeg",
-    private val timeout: Duration = 120.seconds
+    private val timeout: Duration = 120.seconds,
 ) : VideoNoteRenderer {
 
     override suspend fun render(portrait: ByteArray, speech: ByteArray): ByteArray? = withContext(Dispatchers.IO) {
@@ -50,7 +50,7 @@ class FfmpegVideoNoteRenderer(
                     "-c:a", "aac", "-b:a", "96k",
                     "-shortest", "-t", MAX_SECONDS,
                     "-movflags", "+faststart",
-                    output.toString()
+                    output.toString(),
                 )
 
             if (!runFfmpeg(command, ffmpegPath, timeout))

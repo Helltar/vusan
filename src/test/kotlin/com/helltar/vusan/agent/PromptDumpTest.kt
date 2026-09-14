@@ -29,10 +29,10 @@ class PromptDumpTest {
                     promptOf(
                         Message.System("you are a parrot", requestMeta),
                         Message.User("<sticker_catalog>#7 a waving cat</sticker_catalog>\n\nsend one", requestMeta),
-                        Message.Assistant("here it is", responseMeta)
+                        Message.Assistant("here it is", responseMeta),
                     ),
                 model = "test-model",
-                tools = listOf("searchStickers", "sendSticker")
+                tools = listOf("searchStickers", "sendSticker"),
             )
 
         assertContains(dump, "model=[test-model] messages=3 tools=[searchStickers, sendSticker]")
@@ -53,10 +53,10 @@ class PromptDumpTest {
                 prompt =
                     promptOf(
                         Message.Assistant(parts = listOf(call), metaInfo = responseMeta),
-                        Message.User(parts = listOf(result), metaInfo = requestMeta)
+                        Message.User(parts = listOf(result), metaInfo = requestMeta),
                     ),
                 model = "test-model",
-                tools = emptyList()
+                tools = emptyList(),
             )
 
         assertContains(dump, """[tool call searchStickers id=c1] {"query":"cat"}""")
@@ -72,15 +72,15 @@ class PromptDumpTest {
                     content = AttachmentContent.Binary.Bytes(ByteArray(64) { 7 }),
                     format = "png",
                     mimeType = "image/png",
-                    fileName = "frame.png"
-                )
+                    fileName = "frame.png",
+                ),
             )
 
         val dump =
             renderPromptDump(
                 prompt = promptOf(Message.User(parts = listOf(attachment), metaInfo = requestMeta)),
                 model = "test-model",
-                tools = emptyList()
+                tools = emptyList(),
             )
 
         assertContains(dump, "[attachment image/png name=frame.png] 64 bytes")

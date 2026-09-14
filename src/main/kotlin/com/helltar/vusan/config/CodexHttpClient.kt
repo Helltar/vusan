@@ -65,7 +65,7 @@ internal fun codexHttpClientFactory(auth: CodexAuthStore, routingHint: String): 
                                     request.headers.remove(HttpHeaders.Authorization)
                                     request.headers.append(
                                         HttpHeaders.Authorization,
-                                        "Bearer ${credentials.accessToken}"
+                                        "Bearer ${credentials.accessToken}",
                                     )
                                     request.headers.append("originator", CODEX_ORIGINATOR)
                                     request.headers.append(CODEX_ROUTING_HINT_HEADER, routingHint)
@@ -77,14 +77,14 @@ internal fun codexHttpClientFactory(auth: CodexAuthStore, routingHint: String): 
 
                                     credentials.accountId?.let { request.headers.append("ChatGPT-Account-ID", it) }
                                 }
-                            }
+                            },
                         )
-                    }
-            )
+                    },
+            ),
     )
 
 private class CodexHttpClientFactory(
-    private val delegate: KoogHttpClient.Factory
+    private val delegate: KoogHttpClient.Factory,
 ) : KoogHttpClient.Factory {
 
     override fun create(
@@ -95,7 +95,7 @@ private class CodexHttpClientFactory(
         requestTimeoutMillis: Long,
         connectTimeoutMillis: Long,
         socketTimeoutMillis: Long,
-        json: Json
+        json: Json,
     ): KoogHttpClient =
         CodexHttpClient(
             delegate =
@@ -110,15 +110,15 @@ private class CodexHttpClientFactory(
                     requestTimeoutMillis = requestTimeoutMillis,
                     connectTimeoutMillis = connectTimeoutMillis,
                     socketTimeoutMillis = socketTimeoutMillis,
-                    json = json
+                    json = json,
                 ),
-            json = json
+            json = json,
         )
 }
 
 private class CodexHttpClient(
     private val delegate: KoogHttpClient,
-    private val json: Json
+    private val json: Json,
 ) : KoogHttpClient {
 
     override val clientName: String = delegate.clientName
@@ -127,7 +127,7 @@ private class CodexHttpClient(
         path: String,
         responseType: KClass<R>,
         parameters: Map<String, String>,
-        headers: Map<String, String>
+        headers: Map<String, String>,
     ): R = delegate.get(path, responseType, parameters, headers)
 
     /**
@@ -144,7 +144,7 @@ private class CodexHttpClient(
         requestBodyType: KClass<T>,
         responseType: KClass<R>,
         parameters: Map<String, String>,
-        headers: Map<String, String>
+        headers: Map<String, String>,
     ): R {
         if (requestBody !is String)
             return delegate.post(path, requestBody, requestBodyType, responseType, parameters, headers)
@@ -155,7 +155,7 @@ private class CodexHttpClient(
                 requestBody = forceStreamingRequest(requestBody, json),
                 requestBodyType = String::class,
                 parameters = parameters,
-                headers = headers + mapOf("Accept" to "text/event-stream")
+                headers = headers + mapOf("Accept" to "text/event-stream"),
             )
 
         val completed = collectStreamedResponse(lines.toList(), json, clientName)
@@ -173,7 +173,7 @@ private class CodexHttpClient(
         decodeStreamingResponse: (String) -> R,
         processStreamingChunk: (R) -> O?,
         parameters: Map<String, String>,
-        headers: Map<String, String>
+        headers: Map<String, String>,
     ): Flow<O> =
         flow {
             emitAll(
@@ -185,8 +185,8 @@ private class CodexHttpClient(
                     decodeStreamingResponse = decodeStreamingResponse,
                     processStreamingChunk = processStreamingChunk,
                     parameters = parameters,
-                    headers = headers
-                )
+                    headers = headers,
+                ),
             )
         }
 
@@ -195,7 +195,7 @@ private class CodexHttpClient(
         requestBody: T,
         requestBodyType: KClass<T>,
         parameters: Map<String, String>,
-        headers: Map<String, String>
+        headers: Map<String, String>,
     ): Flow<String> =
         flow {
             emitAll(
@@ -204,8 +204,8 @@ private class CodexHttpClient(
                     requestBody = streamingBodyOrOriginal(requestBody),
                     requestBodyType = requestBodyType,
                     parameters = parameters,
-                    headers = headers
-                )
+                    headers = headers,
+                ),
             )
         }
 
@@ -221,7 +221,7 @@ internal fun forceStreamingRequest(requestBody: String, json: Json = Json): Stri
     val root = runCatching { json.parseToJsonElement(requestBody) as? JsonObject }.getOrNull() ?: return requestBody
 
     return JsonObject(
-        root + mapOf("stream" to JsonPrimitive(true), "store" to JsonPrimitive(false))
+        root + mapOf("stream" to JsonPrimitive(true), "store" to JsonPrimitive(false)),
     ).toString()
 }
 

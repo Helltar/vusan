@@ -72,7 +72,7 @@ class TaskMenuHandlerTest {
                 userId = 100L,
                 chatId = -200L,
                 title = "group <report> & news",
-                recurrence = Recurrence.Cron("0 9 * * *")
+                recurrence = Recurrence.Cron("0 9 * * *"),
             )
         createTask(userId = 100L, chatId = -300L, title = "other group report")
         createTask(userId = 200L, chatId = -200L, title = "other user's report")
@@ -82,7 +82,7 @@ class TaskMenuHandlerTest {
             userId = 100L,
             replyToMessageId = 55L,
             chatIsPrivate = false,
-            messages = Messages.of(Language.ENGLISH)
+            messages = Messages.of(Language.ENGLISH),
         )
 
         val request = assertIs<SendMessage>(client.requests.single())
@@ -90,7 +90,7 @@ class TaskMenuHandlerTest {
         assertContains(
             request.text,
             "<b>🗓 Your scheduled tasks in this chat</b>\n\n" +
-                    "<i>In this chat: 1\nAcross all chats: 2 · limit: 5</i>"
+                    "<i>In this chat: 1\nAcross all chats: 2 · limit: 5</i>",
         )
         assertContains(request.text, "<b>#$visibleId · group &lt;report&gt; &amp; news</b>")
         assertFalse(request.text.contains("group <report> & news"))
@@ -113,13 +113,13 @@ class TaskMenuHandlerTest {
             userId = 100L,
             replyToMessageId = 55L,
             chatIsPrivate = true,
-            messages = Messages.of(Language.ENGLISH)
+            messages = Messages.of(Language.ENGLISH),
         )
 
         val privateMenu = assertIs<SendMessage>(client.requests.single())
         assertContains(
             privateMenu.text,
-            "<b>🗓 Your scheduled tasks</b>\n\n<i>Tasks: 0 · limit: 5</i>\n\n"
+            "<b>🗓 Your scheduled tasks</b>\n\n<i>Tasks: 0 · limit: 5</i>\n\n",
         )
 
         client.requests.clear()
@@ -129,14 +129,14 @@ class TaskMenuHandlerTest {
             userId = 100L,
             replyToMessageId = 55L,
             chatIsPrivate = false,
-            messages = Messages.of(Language.ENGLISH)
+            messages = Messages.of(Language.ENGLISH),
         )
 
         val groupMenu = assertIs<SendMessage>(client.requests.single())
         assertContains(
             groupMenu.text,
             "<b>🗓 Your scheduled tasks in this chat</b>\n\n" +
-                    "<i>In this chat: 0\nAcross all chats: 0 · limit: 5</i>\n\n"
+                    "<i>In this chat: 0\nAcross all chats: 0 · limit: 5</i>\n\n",
         )
     }
 
@@ -150,7 +150,7 @@ class TaskMenuHandlerTest {
                 userId = 100L,
                 chatId = 100L,
                 title = "long standing reminder number $index ".repeat(4),
-                recurrence = Recurrence.Cron("0 9 * * *")
+                recurrence = Recurrence.Cron("0 9 * * *"),
             )
         }
 
@@ -159,7 +159,7 @@ class TaskMenuHandlerTest {
             userId = 100L,
             replyToMessageId = 55L,
             chatIsPrivate = true,
-            messages = Messages.of(Language.ENGLISH)
+            messages = Messages.of(Language.ENGLISH),
         )
 
         val request = assertIs<SendMessage>(client.requests.single())
@@ -184,7 +184,7 @@ class TaskMenuHandlerTest {
             chatId = 100L,
             messageId = 9,
             chatIsPrivate = true,
-            messages = Messages.of(Language.ENGLISH)
+            messages = Messages.of(Language.ENGLISH),
         )
 
         assertTrue(assertNotNull(repo.findForUser(testUser(100), id)).paused)
@@ -205,7 +205,7 @@ class TaskMenuHandlerTest {
             chatId = 100L,
             messageId = 9,
             chatIsPrivate = true,
-            messages = Messages.of(Language.ENGLISH)
+            messages = Messages.of(Language.ENGLISH),
         )
 
         assertFalse(assertNotNull(repo.findForUser(testUser(100), id)).paused)
@@ -224,7 +224,7 @@ class TaskMenuHandlerTest {
                 chatId = 100L,
                 title = "hourly report",
                 recurrence = Recurrence.Every(1.hours),
-                nextFireAt = Instant.parse("2026-07-28T08:00:00Z")
+                nextFireAt = Instant.parse("2026-07-28T08:00:00Z"),
             )
         repo.pauseForUser(testUser(100), id)
 
@@ -235,7 +235,7 @@ class TaskMenuHandlerTest {
             chatId = 100L,
             messageId = 9,
             chatIsPrivate = true,
-            messages = Messages.of(Language.ENGLISH)
+            messages = Messages.of(Language.ENGLISH),
         )
 
         val task = assertNotNull(repo.findForUser(testUser(100), id))
@@ -250,7 +250,7 @@ class TaskMenuHandlerTest {
                 userId = 100L,
                 chatId = 100L,
                 title = "old reminder",
-                nextFireAt = Instant.parse("2026-07-28T08:00:00Z")
+                nextFireAt = Instant.parse("2026-07-28T08:00:00Z"),
             )
         repo.pauseForUser(testUser(100), id)
         client.requests.clear()
@@ -262,7 +262,7 @@ class TaskMenuHandlerTest {
             chatId = 100L,
             messageId = 9,
             chatIsPrivate = true,
-            messages = Messages.of(Language.ENGLISH)
+            messages = Messages.of(Language.ENGLISH),
         )
 
         assertTrue(assertNotNull(repo.findForUser(testUser(100), id)).paused)
@@ -282,7 +282,7 @@ class TaskMenuHandlerTest {
             chatId = -200L,
             messageId = 9,
             chatIsPrivate = false,
-            messages = Messages.of(Language.ENGLISH)
+            messages = Messages.of(Language.ENGLISH),
         )
 
         assertFalse(assertNotNull(repo.findForUser(testUser(100), id)).paused)
@@ -302,7 +302,7 @@ class TaskMenuHandlerTest {
             chatId = 100L,
             messageId = 9,
             chatIsPrivate = true,
-            messages = Messages.of(Language.ENGLISH)
+            messages = Messages.of(Language.ENGLISH),
         )
 
         assertNotNull(repo.findForUser(testUser(100), id))
@@ -323,7 +323,7 @@ class TaskMenuHandlerTest {
             chatId = 100L,
             messageId = 9,
             chatIsPrivate = true,
-            messages = Messages.of(Language.ENGLISH)
+            messages = Messages.of(Language.ENGLISH),
         )
 
         assertNull(repo.findForUser(testUser(100), id))
@@ -337,7 +337,7 @@ class TaskMenuHandlerTest {
         chatId: Long,
         title: String,
         recurrence: Recurrence = Recurrence.Once,
-        nextFireAt: Instant = Instant.parse("2026-07-28T12:00:00Z")
+        nextFireAt: Instant = Instant.parse("2026-07-28T12:00:00Z"),
     ): Long =
         repo.create(
             NewScheduledTask(
@@ -352,8 +352,8 @@ class TaskMenuHandlerTest {
                 creatorUsername = "tester",
                 creatorDisplayName = "Test User",
                 chatIsPrivate = chatId > 0L,
-                language = Language.ENGLISH
-            )
+                language = Language.ENGLISH,
+            ),
         )
 
     private class RecordingClient {
@@ -394,7 +394,7 @@ class TaskMenuHandlerTest {
                 provider = HostedLlmProvider.OPENAI,
                 apiKey = "test",
                 model = "test",
-                requestTimeout = 60.seconds
+                requestTimeout = 60.seconds,
             ),
             maxConcurrentTurns = 4,
             maxFollowUpsPerUser = 3,
@@ -412,6 +412,6 @@ class TaskMenuHandlerTest {
             taskMaxLatenessMinutes = 60L,
             tavilyApiKey = null,
             telegramBotToken = "test",
-            ytDlpCookiesFile = null
+            ytDlpCookiesFile = null,
         )
 }

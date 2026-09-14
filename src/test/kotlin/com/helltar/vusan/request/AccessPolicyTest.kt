@@ -45,7 +45,7 @@ class AccessPolicyTest {
 
         assertFalse(AccessPolicy(allowed = setOf(user.key), banned = setOf(user.key)).allows(ownChat, user))
         assertFalse(
-            AccessPolicy(allowed = setOf(group.key, user.key), banned = setOf(group.key)).allows(group, user)
+            AccessPolicy(allowed = setOf(group.key, user.key), banned = setOf(group.key)).allows(group, user),
         )
     }
 

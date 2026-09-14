@@ -26,9 +26,9 @@ class MaintenanceTest {
                         done += "last"
                         finished.complete(Unit)
                         0
-                    }
+                    },
                 ),
-                interval = 1.hours
+                interval = 1.hours,
             )
 
         val job = maintenance.launchIn(this)

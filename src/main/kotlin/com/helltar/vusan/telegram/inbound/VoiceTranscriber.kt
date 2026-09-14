@@ -23,7 +23,7 @@ internal data class AudioInput(
     val fileSizeBytes: Long?,
     val durationSeconds: Long?,
     val mimeType: String?,
-    val fileName: String
+    val fileName: String,
 )
 
 internal fun Voice.toAudioInput(): AudioInput =
@@ -32,7 +32,7 @@ internal fun Voice.toAudioInput(): AudioInput =
         fileSizeBytes = fileSize,
         durationSeconds = duration?.toLong(),
         mimeType = mimeType,
-        fileName = "voice-$fileUniqueId.${extensionFor(mimeType, default = "ogg")}"
+        fileName = "voice-$fileUniqueId.${extensionFor(mimeType, default = "ogg")}",
     )
 
 internal fun Audio.toAudioInput(): AudioInput =
@@ -43,7 +43,7 @@ internal fun Audio.toAudioInput(): AudioInput =
         mimeType = mimeType,
         fileName =
             fileName?.takeIf { it.isNotBlank() }
-                ?: "audio-$fileUniqueId.${extensionFor(mimeType, default = "mp3")}"
+                ?: "audio-$fileUniqueId.${extensionFor(mimeType, default = "mp3")}",
     )
 
 internal class VoiceTranscriber(private val whisper: OpenAiWhisperClient, private val config: OpenAiSttConfig) {

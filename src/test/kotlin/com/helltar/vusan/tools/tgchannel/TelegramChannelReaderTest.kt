@@ -30,18 +30,18 @@ class TelegramChannelReaderTest {
                         MockEngine { request ->
                             requested += request.url
                             respond(request.url)
-                        }
-                    )
-                )
+                        },
+                    ),
+                ),
             ),
             imageDescriber = null,
-            zone = ZoneId.of("UTC")
+            zone = ZoneId.of("UTC"),
         )
 
     private fun TelegramChannelReader.readChannel(
         window: Duration? = null,
         query: String = "",
-        maxPosts: Int = 0
+        maxPosts: Int = 0,
     ): String =
         runBlocking {
             read(
@@ -51,7 +51,7 @@ class TelegramChannelReaderTest {
                 maxPosts = maxPosts,
                 describeImages = false,
                 imageFocus = "",
-                now = NOW
+                now = NOW,
             )
         }
 
@@ -68,10 +68,10 @@ class TelegramChannelReaderTest {
                             channelPage(
                                 posts = listOf(
                                     channelPost(id = 40, text = "Second newest", at = "2026-03-04T10:00:00+00:00"),
-                                    channelPost(id = 41, text = "Newest of all", at = "2026-03-04T11:00:00+00:00")
+                                    channelPost(id = 41, text = "Newest of all", at = "2026-03-04T11:00:00+00:00"),
                                 ),
-                                moreBefore = 40
-                            )
+                                moreBefore = 40,
+                            ),
                         )
 
                     "40" ->
@@ -79,10 +79,10 @@ class TelegramChannelReaderTest {
                             channelPage(
                                 posts = listOf(
                                     channelPost(id = 38, text = "Older than the window", at = "2026-03-02T20:00:00+00:00"),
-                                    channelPost(id = 39, text = "Still inside the window", at = "2026-03-03T20:00:00+00:00")
+                                    channelPost(id = 39, text = "Still inside the window", at = "2026-03-03T20:00:00+00:00"),
                                 ),
-                                moreBefore = 38
-                            )
+                                moreBefore = 38,
+                            ),
                         )
 
                     else -> error("walked past the cutoff to before=${url.parameters["before"]}")
@@ -106,8 +106,8 @@ class TelegramChannelReaderTest {
                 html(
                     channelPage(
                         posts = (1..20).map { channelPost(id = it, text = "Post $it") },
-                        moreBefore = 1
-                    )
+                        moreBefore = 1,
+                    ),
                 )
             }
 
@@ -139,8 +139,8 @@ class TelegramChannelReaderTest {
                 html(
                     channelPage(
                         posts = ((first - 20) until first).map { channelPost(id = it, text = "Post ${'$'}it") },
-                        moreBefore = first - 20
-                    )
+                        moreBefore = first - 20,
+                    ),
                 )
             }
 
@@ -158,7 +158,7 @@ class TelegramChannelReaderTest {
                     respond(
                         "",
                         status = HttpStatusCode.Found,
-                        headers = headersOf(HttpHeaders.Location, "https://t.me/example_channel")
+                        headers = headersOf(HttpHeaders.Location, "https://t.me/example_channel"),
                     )
                 } else {
                     html("<html><body>Open in Telegram</body></html>")
@@ -176,8 +176,8 @@ class TelegramChannelReaderTest {
             reader {
                 html(
                     channelPage(
-                        posts = listOf(channelPost(id = 5, text = "Long ago", at = "2026-02-20T08:00:00+00:00"))
-                    )
+                        posts = listOf(channelPost(id = 5, text = "Long ago", at = "2026-02-20T08:00:00+00:00")),
+                    ),
                 )
             }
 
@@ -216,10 +216,10 @@ class TelegramChannelReaderTest {
                         posts = listOf(
                             channelPost(id = 70, text = "Third", at = "2026-03-04T09:00:00+00:00"),
                             channelPost(id = 71, text = "Second", at = "2026-03-04T10:00:00+00:00"),
-                            channelPost(id = 72, text = "First", at = "2026-03-04T11:00:00+00:00")
+                            channelPost(id = 72, text = "First", at = "2026-03-04T11:00:00+00:00"),
                         ),
-                        moreBefore = 70
-                    )
+                        moreBefore = 70,
+                    ),
                 )
             }
 
@@ -242,8 +242,8 @@ class TelegramChannelReaderTest {
                         posts = ((first - 20) until first).map {
                             channelPost(id = it, text = "$it $body", at = "2026-03-04T11:00:00+00:00")
                         },
-                        moreBefore = first - 20
-                    )
+                        moreBefore = first - 20,
+                    ),
                 )
             }
 

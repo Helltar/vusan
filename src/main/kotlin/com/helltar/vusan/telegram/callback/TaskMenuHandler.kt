@@ -29,7 +29,7 @@ internal class TaskMenuHandler(
     private val client: TelegramClient,
     private val tasks: TasksRepository,
     private val maxTasksPerUser: Int,
-    private val now: () -> Instant = Instant::now
+    private val now: () -> Instant = Instant::now,
 ) {
 
     fun handles(callbackData: String?): Boolean =
@@ -40,7 +40,7 @@ internal class TaskMenuHandler(
         userId: Long,
         replyToMessageId: Long,
         chatIsPrivate: Boolean,
-        messages: Messages
+        messages: Messages,
     ) {
         val menu = buildMenu(userId, target.chatId, chatIsPrivate, messages)
 
@@ -50,7 +50,7 @@ internal class TaskMenuHandler(
             text = menu.text,
             parseMode = ParseMode.HTML,
             replyParameters = replyParameters(replyToMessageId),
-            replyMarkup = menu.keyboard
+            replyMarkup = menu.keyboard,
         )
     }
 
@@ -61,7 +61,7 @@ internal class TaskMenuHandler(
         chatId: Long,
         messageId: Int,
         chatIsPrivate: Boolean,
-        messages: Messages
+        messages: Messages,
     ) {
         try {
             val action =
@@ -70,7 +70,7 @@ internal class TaskMenuHandler(
                         client,
                         callbackQueryId,
                         messages.taskMenuUnavailableAlert,
-                        showAlert = true
+                        showAlert = true,
                     )
 
             if (action.ownerId != userId) {
@@ -78,7 +78,7 @@ internal class TaskMenuHandler(
                     client,
                     callbackQueryId,
                     messages.taskMenuNotOwnerAlert,
-                    showAlert = true
+                    showAlert = true,
                 )
                 return
             }
@@ -113,7 +113,7 @@ internal class TaskMenuHandler(
                             client,
                             callbackQueryId,
                             messages.taskMenuPastOnceAlert,
-                            showAlert = true
+                            showAlert = true,
                         )
                         return
                     }
@@ -156,7 +156,7 @@ internal class TaskMenuHandler(
                     client,
                     callbackQueryId,
                     messages.taskMenuErrorAlert,
-                    showAlert = true
+                    showAlert = true,
                 )
             }.onFailure { it.rethrowIfCancellation() }
 
@@ -169,7 +169,7 @@ internal class TaskMenuHandler(
             client,
             callbackQueryId,
             messages.taskMenuUnavailableAlert,
-            showAlert = true
+            showAlert = true,
         )
     }
 
@@ -178,7 +178,7 @@ internal class TaskMenuHandler(
         messageId: Int,
         userId: Long,
         chatIsPrivate: Boolean,
-        messages: Messages
+        messages: Messages,
     ) {
         val menu = buildMenu(userId, chatId, chatIsPrivate, messages)
         editIgnoringUnchanged(chatId, messageId, menu.text, menu.keyboard)
@@ -188,7 +188,7 @@ internal class TaskMenuHandler(
         chatId: Long,
         messageId: Int,
         task: ScheduledTask,
-        messages: Messages
+        messages: Messages,
     ) {
         val keyboard =
             InlineKeyboardMarkup.builder()
@@ -197,14 +197,14 @@ internal class TaskMenuHandler(
                         InlineKeyboardRow(
                             callbackButton(
                                 messages.taskMenuDeleteButton,
-                                TaskMenuAction.Delete(task.scope.user.telegramUserId, task.id).serialize()
+                                TaskMenuAction.Delete(task.scope.user.telegramUserId, task.id).serialize(),
                             ),
                             callbackButton(
                                 messages.taskMenuBackButton,
-                                TaskMenuAction.Back(task.scope.user.telegramUserId).serialize()
-                            )
-                        )
-                    )
+                                TaskMenuAction.Back(task.scope.user.telegramUserId).serialize(),
+                            ),
+                        ),
+                    ),
                 )
                 .build()
 
@@ -212,7 +212,7 @@ internal class TaskMenuHandler(
             chatId,
             messageId,
             messages.taskMenuDeleteConfirmation(task.id, task.menuLabel().escapeHtml()),
-            keyboard
+            keyboard,
         )
     }
 
@@ -220,7 +220,7 @@ internal class TaskMenuHandler(
         userId: Long,
         chatId: Long,
         chatIsPrivate: Boolean,
-        messages: Messages
+        messages: Messages,
     ): TaskMenu {
         val currentChatOnly = !chatIsPrivate
         val listedTasks = tasks.listForUser(telegramUser(userId), chatId.takeIf { currentChatOnly }?.let(::telegramChat))
@@ -239,8 +239,8 @@ internal class TaskMenuHandler(
                         currentChatOnly = currentChatOnly,
                         listed = listedTasks.size,
                         total = totalTasks,
-                        limit = maxTasksPerUser
-                    )
+                        limit = maxTasksPerUser,
+                    ),
                 ).append(ITEM_SEPARATOR)
 
                 if (shownTasks.isEmpty())
@@ -263,25 +263,25 @@ internal class TaskMenuHandler(
                         if (task.paused)
                             TaskMenuAction.Resume(userId, task.id).serialize()
                         else
-                            TaskMenuAction.Pause(userId, task.id).serialize()
+                            TaskMenuAction.Pause(userId, task.id).serialize(),
                     ),
                     callbackButton(
                         messages.taskMenuCancelButton(task.id),
-                        TaskMenuAction.ConfirmDelete(userId, task.id).serialize()
-                    )
+                        TaskMenuAction.ConfirmDelete(userId, task.id).serialize(),
+                    ),
                 )
             } + listOf(
                 InlineKeyboardRow(
                     callbackButton(
                         messages.taskMenuRefreshButton,
-                        TaskMenuAction.Refresh(userId).serialize()
-                    )
-                )
+                        TaskMenuAction.Refresh(userId).serialize(),
+                    ),
+                ),
             )
 
         return TaskMenu(
             text = text,
-            keyboard = InlineKeyboardMarkup.builder().keyboard(rows).build()
+            keyboard = InlineKeyboardMarkup.builder().keyboard(rows).build(),
         )
     }
 
@@ -289,7 +289,7 @@ internal class TaskMenuHandler(
         chatId: Long,
         messageId: Int,
         text: String,
-        keyboard: InlineKeyboardMarkup
+        keyboard: InlineKeyboardMarkup,
     ) {
         runCatching {
             editTextMessage(client, chatId, messageId, text, keyboard, ParseMode.HTML)
@@ -315,8 +315,8 @@ internal class TaskMenuHandler(
                             label = task.menuLabel().escapeHtml(),
                             nextFire = task.menuFireHtml(),
                             recurrence = task.recurrence.menuHtml(),
-                            paused = task.paused
-                        )
+                            paused = task.paused,
+                        ),
                 )
 
             val cost = item.text.length + ITEM_SEPARATOR.length
@@ -359,12 +359,12 @@ internal class TaskMenuHandler(
 
     private data class MenuItem(
         val task: ScheduledTask,
-        val text: String
+        val text: String,
     )
 
     private data class TaskMenu(
         val text: String,
-        val keyboard: InlineKeyboardMarkup
+        val keyboard: InlineKeyboardMarkup,
     )
 
     private companion object {

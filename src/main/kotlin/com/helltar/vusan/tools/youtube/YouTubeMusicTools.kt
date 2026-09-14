@@ -15,7 +15,7 @@ class YouTubeMusicTools(private val client: YtDlpClient, private val outbox: Bot
     @LLMDescription(YouTubeMusicToolDescriptions.PLAY_FULL_TRACK)
     suspend fun playFullTrack(
         @LLMDescription(YouTubeMusicToolDescriptions.PLAY_FULL_TRACK_QUERY)
-        query: String
+        query: String,
     ): String = suspendToolGuard {
         when (val result = client.downloadTrack(query)) {
             is YtDlpResult.NotFound -> """No track found on YouTube for "$query"."""
@@ -39,8 +39,8 @@ class YouTubeMusicTools(private val client: YtDlpClient, private val outbox: Bot
                         title = track.title,
                         performer = track.performer,
                         durationSeconds = track.durationSeconds,
-                        trackUrl = track.sourceUrl
-                    )
+                        trackUrl = track.sourceUrl,
+                    ),
                 )
 
                 "Track ready: ${track.title} by ${track.performer}"

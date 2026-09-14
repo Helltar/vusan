@@ -53,7 +53,7 @@ data class LlmRuntime(
     val chatParams: LLMParams,
     // a history recap is a tool-free prompt with its own stable prefix, so it gets its own cache key
     // instead of diluting the chat prefix OpenAI keeps warm for every turn.
-    val compactionParams: LLMParams = chatParams
+    val compactionParams: LLMParams = chatParams,
 )
 
 /**
@@ -108,7 +108,7 @@ fun resolveLlmRuntime(config: LlmProviderConfig, codexAuth: CodexAuthStore? = nu
             resolveCodexRuntime(
                 config = config,
                 timeoutConfig = timeoutConfig,
-                auth = requireNotNull(codexAuth) { "LLM_PROVIDER=codex needs a CodexAuthStore" }
+                auth = requireNotNull(codexAuth) { "LLM_PROVIDER=codex needs a CodexAuthStore" },
             )
 
         is LlmProviderConfig.OpenAiCompatible ->
@@ -118,11 +118,11 @@ fun resolveLlmRuntime(config: LlmProviderConfig, codexAuth: CodexAuthStore? = nu
                     openAiClient(
                         apiKey = config.apiKey,
                         settings = OpenAIClientSettings(config.baseUrl, timeoutConfig),
-                        explicitPromptCaching = config.openAiCacheKey(OPENAI_PROMPT_CACHE_KEY) != null
+                        explicitPromptCaching = config.openAiCacheKey(OPENAI_PROMPT_CACHE_KEY) != null,
                     ),
                 model = openAiCompatibleModel(config),
                 chatParams = openAiCompatibleParams(config, config.openAiCacheKey(OPENAI_PROMPT_CACHE_KEY)),
-                compactionParams = openAiCompatibleParams(config, config.openAiCacheKey(OPENAI_COMPACTION_CACHE_KEY))
+                compactionParams = openAiCompatibleParams(config, config.openAiCacheKey(OPENAI_COMPACTION_CACHE_KEY)),
             )
     }
 }
@@ -151,7 +151,7 @@ private fun openAiCompatibleModel(config: LlmProviderConfig.OpenAiCompatible): L
                         add(LLMCapability.Thinking)
                     }
                 }
-            }
+            },
     )
 
 // parallel tool calls stay off on both endpoints: third-party models garble the sibling calls of a batch,
@@ -163,14 +163,14 @@ private fun openAiCompatibleParams(config: LlmProviderConfig.OpenAiCompatible, p
             OpenAIChatParams(
                 additionalProperties = completionsReasoning(config.reasoningEffort),
                 parallelToolCalls = false,
-                promptCacheKey = promptCacheKey
+                promptCacheKey = promptCacheKey,
             )
 
         OpenAiEndpoint.RESPONSES ->
             OpenAIResponsesParams(
                 additionalProperties = responsesReasoning(config.reasoningEffort),
                 parallelToolCalls = false,
-                promptCacheKey = promptCacheKey
+                promptCacheKey = promptCacheKey,
             )
     }
 
@@ -181,7 +181,7 @@ private fun openAiCompatibleParams(config: LlmProviderConfig.OpenAiCompatible, p
 private fun resolveCodexRuntime(
     config: LlmProviderConfig.Codex,
     timeoutConfig: ConnectionTimeoutConfig,
-    auth: CodexAuthStore
+    auth: CodexAuthStore,
 ): LlmRuntime =
     LlmRuntime(
         providerLabel = "ChatGPT subscription (Codex)",
@@ -192,16 +192,16 @@ private fun resolveCodexRuntime(
                     OpenAIClientSettings(
                         baseUrl = CODEX_BACKEND_BASE_URL,
                         timeoutConfig = timeoutConfig,
-                        responsesAPIPath = "responses"
+                        responsesAPIPath = "responses",
                     ),
                 httpClientFactory =
                     LenientDecodingHttpClientFactory(
-                        codexHttpClientFactory(auth, codexRoutingHint(config.model, config.serviceTier))
-                    )
+                        codexHttpClientFactory(auth, codexRoutingHint(config.model, config.serviceTier)),
+                    ),
             ),
         model = codexModel(config),
         chatParams = codexParams(config, OPENAI_PROMPT_CACHE_KEY),
-        compactionParams = codexParams(config, OPENAI_COMPACTION_CACHE_KEY)
+        compactionParams = codexParams(config, OPENAI_COMPACTION_CACHE_KEY),
     )
 
 private fun codexModel(config: LlmProviderConfig.Codex): LLModel =
@@ -220,7 +220,7 @@ private fun codexModel(config: LlmProviderConfig.Codex): LLModel =
                 // codex models are reasoning models, and without Thinking the client drops the reasoning
                 // items they echo back, so each tool result would re-derive the whole chain of thought.
                 add(LLMCapability.Thinking)
-            }
+            },
     )
 
 private fun codexParams(config: LlmProviderConfig.Codex, promptCacheKey: String): LLMParams =
@@ -229,7 +229,7 @@ private fun codexParams(config: LlmProviderConfig.Codex, promptCacheKey: String)
         include = listOf(OpenAIInclude.REASONING_ENCRYPTED_CONTENT),
         parallelToolCalls = false,
         promptCacheKey = promptCacheKey,
-        serviceTier = config.serviceTier
+        serviceTier = config.serviceTier,
     )
 
 // koog's typed effort fields hold only its own enum, which stops at `high`, so the effort rides in the
@@ -254,7 +254,7 @@ private fun LlmProviderConfig.OpenAiCompatible.openAiCacheKey(key: String): Stri
 internal fun connectionTimeouts(requestTimeout: Duration): ConnectionTimeoutConfig =
     ConnectionTimeoutConfig(
         requestTimeoutMillis = requestTimeout.inWholeMilliseconds,
-        socketTimeoutMillis = requestTimeout.inWholeMilliseconds
+        socketTimeoutMillis = requestTimeout.inWholeMilliseconds,
     )
 
 // the catalog carries models that speak only one of the two OpenAI endpoints — every `codex` and `pro`
@@ -280,11 +280,11 @@ private fun resolveHostedRuntime(config: LlmProviderConfig.Hosted, timeoutConfig
                     openAiClient(
                         apiKey = config.apiKey,
                         settings = OpenAIClientSettings(timeoutConfig = timeoutConfig),
-                        explicitPromptCaching = true
+                        explicitPromptCaching = true,
                     ),
                 model = model,
                 chatParams = openAiHostedParams(model, OPENAI_PROMPT_CACHE_KEY),
-                compactionParams = openAiHostedParams(model, OPENAI_COMPACTION_CACHE_KEY)
+                compactionParams = openAiHostedParams(model, OPENAI_COMPACTION_CACHE_KEY),
             )
         }
 
@@ -299,7 +299,7 @@ private fun resolveHostedRuntime(config: LlmProviderConfig.Hosted, timeoutConfig
                 // back everything before it. The recap keeps none: its body never repeats, so the write
                 // would buy a read nobody makes.
                 chatParams = AnthropicParams(cacheControl = AnthropicCacheControl.Default),
-                compactionParams = AnthropicParams()
+                compactionParams = AnthropicParams(),
             )
 
         HostedLlmProvider.GOOGLE ->
@@ -307,7 +307,7 @@ private fun resolveHostedRuntime(config: LlmProviderConfig.Hosted, timeoutConfig
                 providerLabel = "Google",
                 client = GoogleLLMClient(config.apiKey, GoogleClientSettings(timeoutConfig = timeoutConfig)),
                 model = resolveModel(GoogleModels, "Google", config.model).withContextOverride(config.contextWindowTokens),
-                chatParams = GoogleParams()
+                chatParams = GoogleParams(),
             )
 
         HostedLlmProvider.DEEPSEEK ->
@@ -315,14 +315,14 @@ private fun resolveHostedRuntime(config: LlmProviderConfig.Hosted, timeoutConfig
                 providerLabel = "DeepSeek",
                 client = DeepSeekLLMClient(config.apiKey, DeepSeekClientSettings(timeoutConfig = timeoutConfig)),
                 model = resolveModel(DeepSeekModels, "DeepSeek", config.model).withContextOverride(config.contextWindowTokens),
-                chatParams = DeepSeekParams()
+                chatParams = DeepSeekParams(),
             )
     }
 
 private fun openAiClient(
     apiKey: String,
     settings: OpenAIClientSettings,
-    explicitPromptCaching: Boolean
+    explicitPromptCaching: Boolean,
 ): OpenAILLMClient {
     val transport = HttpClientFactoryResolver.resolve()
 
@@ -331,8 +331,8 @@ private fun openAiClient(
         settings = settings,
         httpClientFactory =
             LenientDecodingHttpClientFactory(
-                if (explicitPromptCaching) OpenAiPromptCachingHttpClientFactory(transport) else transport
-            )
+                if (explicitPromptCaching) OpenAiPromptCachingHttpClientFactory(transport) else transport,
+            ),
     )
 }
 

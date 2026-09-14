@@ -5,7 +5,7 @@ internal fun channelPage(
     username: String = "example_channel",
     title: String = "Example Channel",
     posts: List<String>,
-    moreBefore: Int? = null
+    moreBefore: Int? = null,
 ): String =
     """
     <html>
@@ -30,7 +30,7 @@ internal fun channelPost(
     replyAuthor: String = "Example Channel",
     forwardedFrom: String? = null,
     linkPreview: Triple<String, String, String>? = null,
-    views: String? = null
+    views: String? = null,
 ): String =
     buildString {
         appendLine("""<div class="tgme_widget_message" data-post="$username/$id">""")
@@ -44,7 +44,7 @@ internal fun channelPost(
             appendLine(
                 """<a class="tgme_widget_message_reply" href="https://t.me/$username/${id - 1}">""" +
                         """<span class="tgme_widget_message_author_name">$replyAuthor</span>""" +
-                        """<div class="tgme_widget_message_text js-message_reply_text">$it</div></a>"""
+                        """<div class="tgme_widget_message_text js-message_reply_text">$it</div></a>""",
             )
         }
 
@@ -55,7 +55,7 @@ internal fun channelPost(
         videoThumb?.let {
             appendLine(
                 """<a class="tgme_widget_message_video_player js-message_video_player">""" +
-                        """<i class="tgme_widget_message_video_thumb" style="background-image:url('$it')"></i></a>"""
+                        """<i class="tgme_widget_message_video_thumb" style="background-image:url('$it')"></i></a>""",
             )
         }
 
@@ -68,7 +68,7 @@ internal fun channelPost(
                 """<a class="tgme_widget_message_link_preview">""" +
                         """<div class="tgme_widget_message_link_preview_site_name">$site</div>""" +
                         """<div class="tgme_widget_message_link_preview_title">$previewTitle</div>""" +
-                        """<div class="tgme_widget_message_link_preview_description">$description</div></a>"""
+                        """<div class="tgme_widget_message_link_preview_description">$description</div></a>""",
             )
         }
 
@@ -84,7 +84,7 @@ internal fun channelPost(
 
         appendLine(
             """<a class="tgme_widget_message_date" href="https://t.me/$username/$id">""" +
-                    """<time datetime="$at"></time></a>"""
+                    """<time datetime="$at"></time></a>""",
         )
         appendLine("</div>")
     }

@@ -56,7 +56,7 @@ class CodexImageClientTest {
                     assertFalse(payload.containsKey("moderation"))
 
                     respondJson("""{"data":[{"b64_json":"$encoded"}]}""")
-                }
+                },
             )
 
         val bytes = OpenAiImageClient(http, ImageAuth.Codex(store())).generate("a red panda", "1024x1024", config)
@@ -82,7 +82,7 @@ class CodexImageClientTest {
                     assertEquals(1, images.size)
                     assertEquals(
                         "data:image/png;base64,${Base64.getEncoder().encodeToString(source)}",
-                        images[0].jsonObject["image_url"]?.jsonPrimitive?.content
+                        images[0].jsonObject["image_url"]?.jsonPrimitive?.content,
                     )
                     assertEquals("make it blue", payload["prompt"]?.jsonPrimitive?.content)
                     assertEquals("gpt-image-2", payload["model"]?.jsonPrimitive?.content)
@@ -95,7 +95,7 @@ class CodexImageClientTest {
                     assertFalse(payload.containsKey("moderation"))
 
                     respondJson("""{"data":[{"b64_json":"$encoded"}]}""")
-                }
+                },
             )
 
         val bytes =
@@ -117,7 +117,7 @@ class CodexImageClientTest {
                     images = payload["images"].let { checkNotNull(it) }.jsonArray.size
 
                     respondJson("""{"data":[{"b64_json":"$encoded"}]}""")
-                }
+                },
             )
 
         OpenAiImageClient(http, ImageAuth.Codex(store()))
@@ -125,10 +125,10 @@ class CodexImageClientTest {
                 "put them together",
                 listOf(
                     SourceImage(byteArrayOf(1), "one.png", "image/png"),
-                    SourceImage(byteArrayOf(2), "two.png", "image/png")
+                    SourceImage(byteArrayOf(2), "two.png", "image/png"),
                 ),
                 "1024x1024",
-                config
+                config,
             )
 
         assertEquals(2, images)
@@ -142,9 +142,9 @@ class CodexImageClientTest {
                     respond(
                         content = """{"error":{"message":"Your request was rejected as a result of our safety system."}}""",
                         status = HttpStatusCode.BadRequest,
-                        headers = headersOf(HttpHeaders.ContentType, ContentType.Application.Json.toString())
+                        headers = headersOf(HttpHeaders.ContentType, ContentType.Application.Json.toString()),
                     )
-                }
+                },
             )
 
         val blocked = assertFailsWith<ImageModerationBlocked> {
@@ -160,7 +160,7 @@ private fun MockRequestHandleScope.respondJson(body: String) =
     respond(
         content = body,
         status = HttpStatusCode.OK,
-        headers = headersOf(HttpHeaders.ContentType, ContentType.Application.Json.toString())
+        headers = headersOf(HttpHeaders.ContentType, ContentType.Application.Json.toString()),
     )
 
 private fun store(): CodexAuthStore =
@@ -173,7 +173,7 @@ private fun signedInAuthFile(): Path {
 
     val file = Files.createTempDirectory("codex").resolve("auth.json")
     file.writeText(
-        """{"tokens":{"id_token":"$token","access_token":"$token","refresh_token":"r","account_id":"acct-1"}}"""
+        """{"tokens":{"id_token":"$token","access_token":"$token","refresh_token":"r","account_id":"acct-1"}}""",
     )
 
     return file

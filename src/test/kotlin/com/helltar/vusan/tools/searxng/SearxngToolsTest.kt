@@ -36,7 +36,7 @@ class SearxngToolsTest {
         body: String,
         outbox: BotOutbox = BotOutbox(),
         probe: SearchProbe = SearchProbe(),
-        image: ByteArray? = null
+        image: ByteArray? = null,
     ): SearxngTools {
         val http =
             Http.createClient(
@@ -49,7 +49,7 @@ class SearxngToolsTest {
 
                     probe.calls += request.url.parameters
                     respond(body, HttpStatusCode.OK, headersOf(HttpHeaders.ContentType, ContentType.Application.Json.toString()))
-                }
+                },
             )
 
         return SearxngTools(SearxngClient(http, BASE_URL), ImageDownloadClient(FileDownloadClient(http)), outbox)

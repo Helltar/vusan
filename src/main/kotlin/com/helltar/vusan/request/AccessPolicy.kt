@@ -11,7 +11,7 @@ package com.helltar.vusan.request
  */
 data class AccessPolicy(
     val allowed: Set<String> = emptySet(),
-    val banned: Set<String> = emptySet()
+    val banned: Set<String> = emptySet(),
 ) {
 
     fun allows(chat: ChatRef, user: UserRef?): Boolean =

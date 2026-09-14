@@ -15,7 +15,7 @@ import kotlin.time.Duration.Companion.seconds
 data class YtDlpCommandResult(
     val stdout: String,
     val exitCode: Int,
-    val timedOut: Boolean = false
+    val timedOut: Boolean = false,
 )
 
 internal data class YtDlpSearchCandidate(val url: String)
@@ -27,7 +27,7 @@ internal data class YtDlpSearchCandidate(val url: String)
  */
 class YtDlpRunner(
     private val cookiesFile: String? = null,
-    val timeoutSeconds: Long = 180
+    val timeoutSeconds: Long = 180,
 ) {
 
     private val diagnosticsMutex = Mutex()
@@ -85,7 +85,7 @@ class YtDlpRunner(
         listOf(
             "--remote-components", "ejs:github",
             "--extractor-args", PLAYER_CLIENTS,
-            "--user-agent", USER_AGENT
+            "--user-agent", USER_AGENT,
         )
 
     fun authDiagnostics(): String {
@@ -116,8 +116,8 @@ class YtDlpRunner(
                         "--dump-single-json",
                         "--flat-playlist",
                         "--playlist-end",
-                        SEARCH_RESULT_LIMIT.toString()
-                    )
+                        SEARCH_RESULT_LIMIT.toString(),
+                    ),
                 )
                 addAll(authArgs())
                 addAll(youtubeArgs())

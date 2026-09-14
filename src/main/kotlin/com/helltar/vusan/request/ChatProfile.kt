@@ -9,7 +9,7 @@ package com.helltar.vusan.request
  */
 data class ChatProfile(
     val description: String? = null,
-    val capabilities: ChatCapabilities = ChatCapabilities.UNRESTRICTED
+    val capabilities: ChatCapabilities = ChatCapabilities.UNRESTRICTED,
 ) {
 
     companion object {

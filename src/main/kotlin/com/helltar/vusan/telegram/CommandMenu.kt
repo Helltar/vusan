@@ -32,7 +32,7 @@ internal suspend fun TelegramClient.publishCommandMenu() {
             listOf(
                 BotCommand(TASKS_COMMAND, messages.tasksCommandDescription),
                 BotCommand(CLEAR_COMMAND, messages.clearCommandDescription),
-                BotCommand(STOP_COMMAND, messages.stopCommandDescription)
+                BotCommand(STOP_COMMAND, messages.stopCommandDescription),
             )
 
         // the list without a language answers everyone whose own language has no dedicated one

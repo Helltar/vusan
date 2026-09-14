@@ -20,7 +20,7 @@ class FileToolsTest {
 
     private fun tools(
         outbox: BotOutbox,
-        handler: MockRequestHandler = { respond("") }
+        handler: MockRequestHandler = { respond("") },
     ) = FileTools(FileDownloadClient(Http.createClient(MockEngine(handler))), outbox)
 
     @Test

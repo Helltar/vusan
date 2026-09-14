@@ -56,7 +56,7 @@ class FileDownloadClient(http: HttpClient) {
     suspend fun download(
         url: String,
         requestedFilename: String = "",
-        maxBytes: Long = MAX_DOWNLOAD_BYTES
+        maxBytes: Long = MAX_DOWNLOAD_BYTES,
     ): FileDownloadResult {
         require(maxBytes in 1..MAX_DOWNLOAD_BYTES) { "Invalid download size limit" }
         var target = parseDownloadUrl(url)
@@ -112,7 +112,7 @@ class FileDownloadClient(http: HttpClient) {
         response: HttpResponse,
         target: Url,
         requestedFilename: String,
-        maxBytes: Long
+        maxBytes: Long,
     ): FileDownloadResult {
         val declared = response.contentLength()
 
@@ -157,7 +157,7 @@ class FileDownloadClient(http: HttpClient) {
                 requested.sanitizeFilename(),
                 response.contentDispositionFilename(),
                 target.segments.lastOrNull().orEmpty().sanitizeFilename(),
-                target.host.replace('.', '-').sanitizeFilename()
+                target.host.replace('.', '-').sanitizeFilename(),
             )
 
         val name = candidates.firstOrNull { it.isNotBlank() } ?: DEFAULT_DOWNLOAD_NAME
@@ -228,7 +228,7 @@ private val EXTENSION_BY_MIME =
         "application/msword" to "doc",
         "application/vnd.openxmlformats-officedocument.wordprocessingml.document" to "docx",
         "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" to "xlsx",
-        "application/vnd.openxmlformats-officedocument.presentationml.presentation" to "pptx"
+        "application/vnd.openxmlformats-officedocument.presentationml.presentation" to "pptx",
     )
 
 private fun String.withExtensionFor(contentType: ContentType?): String {

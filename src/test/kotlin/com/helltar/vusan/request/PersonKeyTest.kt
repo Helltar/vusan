@@ -11,7 +11,7 @@ class PersonKeyTest {
         RequestContext(
             platform = Platform.TELEGRAM,
             chat = ChatContext(id = chatId.toString(), isPrivate = private),
-            sender = SenderContext(id = userId.toString(), isPerson = isPerson)
+            sender = SenderContext(id = userId.toString(), isPerson = isPerson),
         ).personKeyOrNull
 
     @Test
@@ -42,7 +42,7 @@ class PersonKeyTest {
             RequestContext(
                 platform = Platform.DISCORD,
                 chat = ChatContext(id = "4242", isPrivate = true),
-                sender = SenderContext(id = "4242")
+                sender = SenderContext(id = "4242"),
             )
 
         assertNull(onDiscord.personKeyOrNull)

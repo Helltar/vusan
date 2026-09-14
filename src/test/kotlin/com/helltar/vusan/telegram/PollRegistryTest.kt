@@ -102,7 +102,7 @@ class PollRegistryTest {
         BotOutput.Quiz(
             question = "Capital of Ukraine?",
             options = listOf("Lviv", "Kyiv", "Odesa"),
-            correctOptionIndex = 1
+            correctOptionIndex = 1,
         )
 
     private fun testConfig(dbPath: String) =
@@ -118,7 +118,7 @@ class PollRegistryTest {
                 provider = HostedLlmProvider.OPENAI,
                 apiKey = "test",
                 model = "test",
-                requestTimeout = 60.seconds
+                requestTimeout = 60.seconds,
             ),
             maxConcurrentTurns = 4,
             maxFollowUpsPerUser = 3,
@@ -136,6 +136,6 @@ class PollRegistryTest {
             taskMaxLatenessMinutes = 60L,
             tavilyApiKey = null,
             telegramBotToken = "test",
-            ytDlpCookiesFile = null
+            ytDlpCookiesFile = null,
         )
 }

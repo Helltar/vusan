@@ -79,7 +79,7 @@ class ChatFileToolsTest {
     private class FakeTelegramFiles(
         private val bytes: ByteArray = ByteArray(1024),
         private val path: String? = "stickers/file_15.webp",
-        private val failure: String? = null
+        private val failure: String? = null,
     ) {
 
         val proxy: TelegramClient =
@@ -101,7 +101,7 @@ class ChatFileToolsTest {
                         fileId = request.fileId
                         fileUniqueId = "u"
                         filePath = path
-                    }
+                    },
                 )
 
         private fun telegramError(description: String): TelegramApiRequestException =
@@ -111,7 +111,7 @@ class ChatFileToolsTest {
                     .ok(false)
                     .errorCode(400)
                     .errorDescription(description)
-                    .build()
+                    .build(),
             )
     }
 }

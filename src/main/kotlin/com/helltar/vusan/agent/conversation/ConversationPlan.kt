@@ -9,7 +9,7 @@ private const val MESSAGE_OVERHEAD_TOKENS = 12
 
 data class PromptConversation(
     val summary: String?,
-    val turns: List<ChatTurn>
+    val turns: List<ChatTurn>,
 )
 
 data class ConversationPlan(
@@ -18,13 +18,13 @@ data class ConversationPlan(
     val estimatedTokens: Int,
     val includedInteractions: Int,
     val exactToolInteractions: Int,
-    val stats: ConversationStats
+    val stats: ConversationStats,
 )
 
 fun planConversation(
     snapshot: ConversationSnapshot,
     tokenBudget: Int,
-    maxRecentInteractions: Int
+    maxRecentInteractions: Int,
 ): ConversationPlan {
     require(maxRecentInteractions > 0) { "maxRecentInteractions must be positive" }
 
@@ -82,7 +82,7 @@ fun planConversation(
         estimatedTokens = estimatedTokens,
         includedInteractions = includedCount,
         exactToolInteractions = exactToolInteractions,
-        stats = snapshot.stats
+        stats = snapshot.stats,
     )
 }
 

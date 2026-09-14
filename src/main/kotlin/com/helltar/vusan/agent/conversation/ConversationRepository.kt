@@ -27,7 +27,7 @@ data class ConversationInteraction(
     val id: String,
     val lastMessageId: Long,
     val createdAt: Instant,
-    val turns: List<ChatTurn>
+    val turns: List<ChatTurn>,
 ) {
 
     init {
@@ -41,7 +41,7 @@ data class ConversationSnapshot(
     val summary: String?,
     val summarizedThroughMessageId: Long,
     val interactions: List<ConversationInteraction>,
-    val stats: ConversationStats
+    val stats: ConversationStats,
 )
 
 data class ConversationStats(
@@ -49,7 +49,7 @@ data class ConversationStats(
     val storedMessages: Int,
     val storedChars: Long,
     val unsummarizedInteractions: Int,
-    val unsummarizedMessages: Int
+    val unsummarizedMessages: Int,
 )
 
 /**
@@ -80,8 +80,8 @@ class ConversationRepository {
                     storedMessages = rows.size,
                     storedChars = rows.sumOf { it.turn.content.length.toLong() },
                     unsummarizedInteractions = unsummarized.size,
-                    unsummarizedMessages = unsummarized.sumOf { it.turns.size }
-                )
+                    unsummarizedMessages = unsummarized.sumOf { it.turns.size },
+                ),
         )
     }
 
@@ -109,7 +109,7 @@ class ConversationRepository {
         scope: ConversationScope,
         expectedThroughMessageId: Long,
         throughMessageId: Long,
-        content: String
+        content: String,
     ): Boolean = dbTransaction {
         require(throughMessageId > expectedThroughMessageId) { "Summary checkpoint must advance" }
         require(content.isNotBlank()) { "Conversation summary must not be blank" }
@@ -132,7 +132,7 @@ class ConversationRepository {
             onUpdate = {
                 it[ConversationsTable.summary] = content
                 it[ConversationsTable.summarizedThroughMessageId] = throughMessageId
-            }
+            },
         ) {
             it[ConversationsTable.platform] = scope.platform
             it[ConversationsTable.userId] = scope.user.id
@@ -148,7 +148,7 @@ class ConversationRepository {
     suspend fun pruneCompacted(
         scope: ConversationScope,
         maxStoredInteractions: Int,
-        rawRetentionCutoff: Instant
+        rawRetentionCutoff: Instant,
     ): Int = dbTransaction {
         require(maxStoredInteractions > 0) { "maxStoredInteractions must be positive" }
 
@@ -191,7 +191,7 @@ class ConversationRepository {
     suspend fun pruneExpired(
         maxStoredInteractions: Int,
         rawRetentionCutoff: Instant,
-        maxConversations: Int
+        maxConversations: Int,
     ): Int {
         val expired =
             dbTransaction {
@@ -199,7 +199,7 @@ class ConversationRepository {
                     .select(
                         ConversationMessagesTable.platform,
                         ConversationMessagesTable.userId,
-                        ConversationMessagesTable.chatId
+                        ConversationMessagesTable.chatId,
                     )
                     .where { ConversationMessagesTable.createdAt less rawRetentionCutoff }
                     .withDistinct()
@@ -209,7 +209,7 @@ class ConversationRepository {
 
                         ConversationScope(
                             user = UserRef(platform, it[ConversationMessagesTable.userId]),
-                            chat = ChatRef(platform, it[ConversationMessagesTable.chatId])
+                            chat = ChatRef(platform, it[ConversationMessagesTable.chatId]),
                         )
                     }
             }
@@ -250,7 +250,7 @@ class ConversationRepository {
                     it[ConversationsTable.revision] = ConversationsTable.revision + 1L
                     it[ConversationsTable.summary] = null
                     it[ConversationsTable.summarizedThroughMessageId] = 0L
-                }
+                },
             ) {
                 it[ConversationsTable.platform] = scope.platform
                 it[ConversationsTable.userId] = scope.user.id
@@ -276,8 +276,8 @@ class ConversationRepository {
                             content = it[ConversationMessagesTable.content],
                             toolCallId = it[ConversationMessagesTable.toolCallId],
                             toolName = it[ConversationMessagesTable.toolName],
-                            toolIsError = it[ConversationMessagesTable.toolIsError]
-                        )
+                            toolIsError = it[ConversationMessagesTable.toolIsError],
+                        ),
                 )
             }
             .toList()
@@ -290,7 +290,7 @@ class ConversationRepository {
             ?.let {
                 StoredSummary(
                     content = it[ConversationsTable.summary],
-                    throughMessageId = it[ConversationsTable.summarizedThroughMessageId]
+                    throughMessageId = it[ConversationsTable.summarizedThroughMessageId],
                 )
             }
             ?: StoredSummary(content = null, throughMessageId = 0L)
@@ -311,7 +311,7 @@ private data class StoredRow(
     val messageId: Long,
     val interactionId: String,
     val createdAt: Instant,
-    val turn: ChatTurn
+    val turn: ChatTurn,
 )
 
 private data class StoredSummary(val content: String?, val throughMessageId: Long)
@@ -327,7 +327,7 @@ private fun List<StoredRow>.toInteractions(): List<ConversationInteraction> =
                 id = usableRows.first().interactionId,
                 lastMessageId = usableRows.maxOf { it.messageId },
                 createdAt = usableRows.minOf { it.createdAt },
-                turns = usableRows.map { it.turn }
+                turns = usableRows.map { it.turn },
             )
         }
         .sortedBy { it.lastMessageId }

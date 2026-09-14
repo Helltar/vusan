@@ -29,7 +29,7 @@ import kotlin.time.Duration
 class TelegramChannelReader(
     private val client: TelegramChannelClient,
     private val imageDescriber: TelegramChannelImageDescriber?,
-    private val zone: ZoneId = ZoneId.systemDefault()
+    private val zone: ZoneId = ZoneId.systemDefault(),
 ) {
 
     suspend fun read(
@@ -39,7 +39,7 @@ class TelegramChannelReader(
         maxPosts: Int,
         describeImages: Boolean,
         imageFocus: String,
-        now: Instant = Instant.now()
+        now: Instant = Instant.now(),
     ): String {
         val reference = TelegramChannelReference.parse(channel)
         val cutoff = window?.let { now.minusSeconds(it.inWholeSeconds) }
@@ -78,14 +78,14 @@ class TelegramChannelReader(
         val newestSeen: Instant?,
         val previewAvailable: Boolean,
         /** True when the walk stopped on a cap with the window not yet fully covered. */
-        val truncated: Boolean
+        val truncated: Boolean,
     )
 
     private suspend fun walk(
         reference: TelegramChannelReference,
         query: String,
         cutoff: Instant?,
-        limit: Int
+        limit: Int,
     ): Walk {
         val collected = mutableListOf<TelegramChannelPost>()
         var title = "@${reference.username}"
@@ -135,14 +135,14 @@ class TelegramChannelReader(
             previewAvailable = true,
             // the window is only fully covered once the walk saw a post older than it, or ran out of
             // channel; stopping on the page or post cap leaves an unread earlier part.
-            truncated = cutoff != null && !passedCutoff && !reachedStart
+            truncated = cutoff != null && !passedCutoff && !reachedStart,
         )
     }
 
     private suspend fun describePostImages(
         posts: List<TelegramChannelPost>,
         focus: String,
-        describer: TelegramChannelImageDescriber
+        describer: TelegramChannelImageDescriber,
     ): Map<String, List<String>> {
         val selected = selectPostsForVision(posts, MAX_IMAGES_TO_DESCRIBE)
 
@@ -167,7 +167,7 @@ class TelegramChannelReader(
         describer: TelegramChannelImageDescriber,
         post: TelegramChannelPost,
         imageUrl: String,
-        focus: String
+        focus: String,
     ): String =
         runCatching {
             describer.describe(client.downloadImage(imageUrl), post, focus).limitTo(MAX_IMAGE_DESCRIPTION_CHARS)
@@ -181,7 +181,7 @@ class TelegramChannelReader(
 
     private fun render(
         posts: List<TelegramChannelPost>,
-        descriptions: Map<String, List<String>>
+        descriptions: Map<String, List<String>>,
     ): Rendered {
         val body = StringBuilder()
         var shown = 0
@@ -244,7 +244,7 @@ class TelegramChannelReader(
         rendered: Rendered,
         query: String,
         cutoff: Instant?,
-        now: Instant
+        now: Instant,
     ): String =
         buildString {
             append("Telegram channel @${reference.username} — ${walk.title}")
@@ -291,7 +291,7 @@ class TelegramChannelReader(
         query: String,
         cutoff: Instant?,
         now: Instant,
-        walk: Walk
+        walk: Walk,
     ): String =
 
         when {
@@ -351,7 +351,7 @@ private const val TEXT_CARRIES_POST_CHARS = 120
  */
 internal fun selectPostsForVision(
     posts: List<TelegramChannelPost>,
-    allowance: Int
+    allowance: Int,
 ): List<TelegramChannelPost> {
     val candidates = posts.filter { it.imageUrls.isNotEmpty() }
 
@@ -360,7 +360,7 @@ internal fun selectPostsForVision(
     val ranked =
         candidates.sortedWith(
             compareBy<TelegramChannelPost> { it.text.length >= TEXT_CARRIES_POST_CHARS }
-                .thenByDescending { it.reactionCount }
+                .thenByDescending { it.reactionCount },
         )
 
     val taken = mutableSetOf<String>()

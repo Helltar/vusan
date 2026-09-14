@@ -27,7 +27,7 @@ import kotlinx.coroutines.flow.Flow
  */
 internal class BudgetedPromptExecutor(
     private val delegate: PromptExecutor,
-    private val budget: TokenBudget
+    private val budget: TokenBudget,
 ) : PromptExecutor() {
 
     override suspend fun execute(prompt: Prompt, model: LLModel, tools: List<ToolDescriptor>): Message.Assistant =
@@ -39,14 +39,14 @@ internal class BudgetedPromptExecutor(
     override suspend fun executeMultipleChoices(
         prompt: Prompt,
         model: LLModel,
-        tools: List<ToolDescriptor>
+        tools: List<ToolDescriptor>,
     ): LLMChoice =
         meteredChoices { delegate.executeMultipleChoices(prompt, model, tools) }
 
     override suspend fun executeMultipleChoices(
         prompt: Prompt,
         resolvedModel: ResolvedModel,
-        tools: List<ToolDescriptor>
+        tools: List<ToolDescriptor>,
     ): LLMChoice =
         meteredChoices { delegate.executeMultipleChoices(prompt, resolvedModel, tools) }
 
@@ -58,7 +58,7 @@ internal class BudgetedPromptExecutor(
     override fun executeStreaming(
         prompt: Prompt,
         resolvedModel: ResolvedModel,
-        tools: List<ToolDescriptor>
+        tools: List<ToolDescriptor>,
     ): Flow<StreamFrame> =
         delegate.executeStreaming(prompt, resolvedModel, tools)
 

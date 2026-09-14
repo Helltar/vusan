@@ -29,7 +29,7 @@ internal object TelegramChannelParser {
             "document" to ".tgme_widget_message_document",
             "sticker" to ".tgme_widget_message_sticker_wrap",
             "poll" to ".tgme_widget_message_poll",
-            "location" to ".tgme_widget_message_location"
+            "location" to ".tgme_widget_message_location",
         )
 
     fun parse(html: String, username: String, url: String, maxPosts: Int): TelegramChannelPage {
@@ -54,7 +54,7 @@ internal object TelegramChannelParser {
             title = title,
             url = url,
             posts = posts,
-            olderThanCursor = document.olderThanCursor()
+            olderThanCursor = document.olderThanCursor(),
         )
     }
 
@@ -97,7 +97,7 @@ internal object TelegramChannelParser {
             linkPreview = element.selectFirst(".tgme_widget_message_link_preview")?.parseLinkPreview(),
             mediaKinds = mediaKinds,
             imageUrls = element.extractImageUrls(),
-            links = textElement.extractLinks()
+            links = textElement.extractLinks(),
         )
     }
 
@@ -147,7 +147,7 @@ internal object TelegramChannelParser {
         listOf(
             ".tgme_widget_message_link_preview_site_name",
             ".tgme_widget_message_link_preview_title",
-            ".tgme_widget_message_link_preview_description"
+            ".tgme_widget_message_link_preview_description",
         )
             .mapNotNull { selectFirst(it)?.text()?.trim()?.takeIf { text -> text.isNotBlank() } }
             .joinToString(" — ")

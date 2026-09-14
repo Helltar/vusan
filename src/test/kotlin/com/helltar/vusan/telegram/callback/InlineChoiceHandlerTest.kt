@@ -40,7 +40,7 @@ class InlineChoiceHandlerTest {
                 messageId = 9,
                 question = "Which format?",
                 keyboard = keyboard,
-                messages = messages
+                messages = messages,
             )
 
         assertEquals(InlineChoiceSelection("Which format?", "DOCX", originMessageId = 5L), selection)
@@ -70,7 +70,7 @@ class InlineChoiceHandlerTest {
                 messageId = 9,
                 question = "Which format?",
                 keyboard = keyboard,
-                messages = messages
+                messages = messages,
             )
 
         assertEquals(InlineChoiceSelection("Which format?", "PDF"), selection)
@@ -111,7 +111,7 @@ class InlineChoiceHandlerTest {
                 messageId = 9,
                 question = "Which format?",
                 keyboard = inlineChoiceKeyboard(choice()),
-                messages = messages
+                messages = messages,
             )
 
         assertNull(selection)
@@ -138,7 +138,7 @@ class InlineChoiceHandlerTest {
                 messageId = 9,
                 question = "Which format?",
                 keyboard = keyboard,
-                messages = messages
+                messages = messages,
             )
 
         assertNull(selection)
@@ -160,8 +160,8 @@ class InlineChoiceHandlerTest {
                     options = List(10) { "option $it" },
                     ownerId = "4503599627370495",
                     historyRevision = 999_999_999L,
-                    originMessageId = Int.MAX_VALUE.toString()
-                )
+                    originMessageId = Int.MAX_VALUE.toString(),
+                ),
             )
 
         keyboard.keyboard.flatten().forEach {
@@ -176,8 +176,8 @@ class InlineChoiceHandlerTest {
             inlineChoiceAgentInput(
                 InlineChoiceSelection(
                     question = "Tea or coffee?",
-                    option = "Tea"
-                )
+                    option = "Tea",
+                ),
             )
 
         assertContains(input, "<inline_choice>")
@@ -214,7 +214,7 @@ class InlineChoiceHandlerTest {
             fileSizeBytes = 1000L,
             mimeType = "image/jpeg",
             kind = AttachedFileKind.IMAGE,
-            loadBytes = { error("bytes are never read here") }
+            loadBytes = { error("bytes are never read here") },
         )
 
     private fun choice(originMessageId: String? = "5") =
@@ -223,7 +223,7 @@ class InlineChoiceHandlerTest {
             options = listOf("PDF", "DOCX"),
             ownerId = "42",
             historyRevision = 3L,
-            originMessageId = originMessageId
+            originMessageId = originMessageId,
         )
 
     private class RecordingClient {

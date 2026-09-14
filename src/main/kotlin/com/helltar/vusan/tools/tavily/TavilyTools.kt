@@ -17,7 +17,7 @@ import io.ktor.http.*
 class TavilyTools(
     private val client: TavilyClient,
     private val imageDownloader: ImageDownloadClient,
-    private val outbox: BotOutbox
+    private val outbox: BotOutbox,
 ) : ToolSet {
 
     @Tool
@@ -30,14 +30,14 @@ class TavilyTools(
         @LLMDescription(TavilyToolDescriptions.WEB_SEARCH_TOPIC)
         topic: String = "general",
         @LLMDescription(TavilyToolDescriptions.WEB_SEARCH_TIME_RANGE)
-        timeRange: String = ""
+        timeRange: String = "",
     ): String = suspendToolGuard {
         val response =
             client.search(
                 query = query,
                 maxResults = maxResults,
                 topic = topic.takeIf { it in allowedTopics },
-                timeRange = timeRange.takeIf { it in allowedTimeRanges }
+                timeRange = timeRange.takeIf { it in allowedTimeRanges },
             )
 
         if (response.results.isEmpty()) {
@@ -75,7 +75,7 @@ class TavilyTools(
         @LLMDescription(TavilyToolDescriptions.SEARCH_IMAGES_QUERY)
         query: String,
         @LLMDescription(TavilyToolDescriptions.SEARCH_IMAGES_MAX_RESULTS)
-        maxResults: Int = 5
+        maxResults: Int = 5,
     ): String = suspendToolGuard {
         outbox.photosRefusedReply()?.let { return@suspendToolGuard it }
 
@@ -86,7 +86,7 @@ class TavilyTools(
                 query = query,
                 maxResults = capped,
                 includeImages = true,
-                excludeDomains = imageExcludedDomains
+                excludeDomains = imageExcludedDomains,
             )
 
         // `exclude_domains` filters Tavily's source pages, not the image CDN host, so a lookaside
@@ -100,7 +100,7 @@ class TavilyTools(
             query = query,
             candidates = candidates,
             limit = capped,
-            outbox = outbox
+            outbox = outbox,
         )
     }
 
@@ -108,7 +108,7 @@ class TavilyTools(
     @LLMDescription(TavilyToolDescriptions.EXTRACT_PAGE_CONTENT)
     suspend fun extractPageContent(
         @LLMDescription(TavilyToolDescriptions.EXTRACT_PAGE_URL)
-        url: String
+        url: String,
     ): String = suspendToolGuard {
         val response = client.extract(url)
         val result = response.results.firstOrNull()

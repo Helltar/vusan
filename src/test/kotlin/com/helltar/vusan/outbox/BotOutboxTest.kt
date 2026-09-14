@@ -125,7 +125,7 @@ class BotOutboxTest {
 
         assertEquals(
             listOf(full, "b"),
-            outbox.pending.map { assertIs<BotOutput.Text>(it.output).text }
+            outbox.pending.map { assertIs<BotOutput.Text>(it.output).text },
         )
     }
 
@@ -235,7 +235,7 @@ class BotOutboxTest {
                     is BotOutput.Text -> "text"
                     else -> "?"
                 }
-            }
+            },
         )
     }
 
@@ -267,6 +267,6 @@ class BotOutboxTest {
             bytes = ByteArray(4),
             filename = "$title.m4a",
             title = title,
-            performer = "an orchestra"
+            performer = "an orchestra",
         )
 }

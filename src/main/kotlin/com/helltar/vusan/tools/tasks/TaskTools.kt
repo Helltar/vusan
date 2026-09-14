@@ -20,7 +20,7 @@ class TaskTools(
     private val repo: TasksRepository,
     private val context: RequestContext,
     private val maxTasksPerUser: Int,
-    private val maxFollowUpsPerUser: Int
+    private val maxFollowUpsPerUser: Int,
 ) : ToolSet {
 
     @Tool
@@ -33,7 +33,7 @@ class TaskTools(
         @LLMDescription(TaskToolDescriptions.SCHEDULE_TIMEZONE)
         timezone: String? = null,
         @LLMDescription(TaskToolDescriptions.SCHEDULE_TITLE)
-        title: String? = null
+        title: String? = null,
     ): String = suspendToolGuard {
         val owner = context.user
         val chat = context.chatRef
@@ -72,8 +72,8 @@ class TaskTools(
                     recurrence = plan.recurrence,
                     timezone = tz,
                     nextFireAt = plan.firstFire,
-                    selfInitiated = false
-                )
+                    selfInitiated = false,
+                ),
             )
 
         "Scheduled task id=$id, fires=${formatFire(plan.firstFire, tz)} (${plan.recurrence.display})."
@@ -89,7 +89,7 @@ class TaskTools(
         @LLMDescription(TaskToolDescriptions.FOLLOW_UP_TIMEZONE)
         timezone: String? = null,
         @LLMDescription(TaskToolDescriptions.FOLLOW_UP_TITLE)
-        title: String? = null
+        title: String? = null,
     ): String = suspendToolGuard {
         val owner = context.user
         val chat = context.chatRef
@@ -129,8 +129,8 @@ class TaskTools(
                     recurrence = plan.recurrence,
                     timezone = tz,
                     nextFireAt = plan.firstFire,
-                    selfInitiated = true
-                )
+                    selfInitiated = true,
+                ),
             )
 
         "Follow-up id=$id set for ${formatFire(plan.firstFire, tz)}."
@@ -165,7 +165,7 @@ class TaskTools(
         @LLMDescription(TaskToolDescriptions.EDIT_TIMEZONE)
         timezone: String? = null,
         @LLMDescription(TaskToolDescriptions.EDIT_TITLE)
-        title: String? = null
+        title: String? = null,
     ): String = suspendToolGuard {
         val owner = context.user
         val scopedChat = scopedChat()
@@ -225,7 +225,7 @@ class TaskTools(
                 title = editedTitle,
                 recurrence = editedSchedule.recurrence,
                 timezone = editedTimezone,
-                nextFireAt = editedSchedule.firstFire
+                nextFireAt = editedSchedule.firstFire,
             )
 
         if (edited == existing)
@@ -242,7 +242,7 @@ class TaskTools(
     @LLMDescription(TaskToolDescriptions.PAUSE_TASK)
     suspend fun pauseTask(
         @LLMDescription(TaskToolDescriptions.PAUSE_ID)
-        id: Long
+        id: Long,
     ): String = suspendToolGuard {
         val owner = context.user
         val scopedChat = scopedChat()
@@ -264,7 +264,7 @@ class TaskTools(
     @LLMDescription(TaskToolDescriptions.RESUME_TASK)
     suspend fun resumeTask(
         @LLMDescription(TaskToolDescriptions.RESUME_ID)
-        id: Long
+        id: Long,
     ): String = suspendToolGuard {
         val owner = context.user
         val scopedChat = scopedChat()
@@ -291,7 +291,7 @@ class TaskTools(
     @LLMDescription(TaskToolDescriptions.CANCEL_TASK)
     suspend fun cancelTask(
         @LLMDescription(TaskToolDescriptions.CANCEL_ID)
-        id: Long
+        id: Long,
     ): String = suspendToolGuard {
         val owner = context.user
         val scopedChat = scopedChat()
@@ -313,7 +313,7 @@ class TaskTools(
         recurrence: Recurrence,
         timezone: ZoneId,
         nextFireAt: Instant,
-        selfInitiated: Boolean
+        selfInitiated: Boolean,
     ) = NewScheduledTask(
         scope = scope,
         prompt = prompt,
@@ -327,7 +327,7 @@ class TaskTools(
         creatorDisplayName = context.sender.displayName,
         chatIsPrivate = context.chat.isPrivate,
         language = context.language,
-        selfInitiated = selfInitiated
+        selfInitiated = selfInitiated,
     )
 
     private fun parseTimezone(raw: String?): ZoneId? {

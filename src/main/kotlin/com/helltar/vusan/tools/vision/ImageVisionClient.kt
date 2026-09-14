@@ -12,7 +12,7 @@ internal const val EMPTY_VISION_DESCRIPTION = "Vision returned an empty descript
 
 class ImageVisionClient(
     private val promptExecutor: PromptExecutor,
-    private val model: LLModel
+    private val model: LLModel,
 ) {
 
     suspend fun describe(image: AttachedFile, bytes: ByteArray, focus: String): String {
@@ -29,7 +29,7 @@ class ImageVisionClient(
             system(
                 "You describe images for a chat assistant. " +
                         "Be concise, factual, and avoid guessing identities. " +
-                        "Mention visible text if any. Reply in the user's language when clear."
+                        "Mention visible text if any. Reply in the user's language when clear.",
             )
             user {
                 text(
@@ -50,15 +50,15 @@ class ImageVisionClient(
                             appendLine("Caption:")
                             appendLine(it)
                         }
-                    }
+                    },
                 )
                 image(
                     AttachmentSource.Image(
                         content = AttachmentContent.Binary.Bytes(bytes),
                         format = image.mimeType?.substringAfter('/', "jpeg") ?: "jpeg",
                         mimeType = image.mimeType ?: "image/jpeg",
-                        fileName = image.name
-                    )
+                        fileName = image.name,
+                    ),
                 )
             }
         }

@@ -14,7 +14,7 @@ data class ChatTurn(
     val content: String,
     val toolCallId: String? = null,
     val toolName: String? = null,
-    val toolIsError: Boolean? = null
+    val toolIsError: Boolean? = null,
 ) {
 
     init {
@@ -50,7 +50,7 @@ fun toolCallArgsForStorage(rawArgs: String): String {
                     JsonPrimitive(text.take(TOOL_CALL_ARG_VALUE_MAX_CHARS) + TRUNCATION_MARKER)
                 else
                     value
-            }
+            },
         )
 
     val serialized = bounded.toString()
@@ -69,7 +69,7 @@ fun toolCallArgsForStorage(rawArgs: String): String {
 
                         else -> JsonPrimitive(value.toString().limitTo(valueLimit))
                     }
-                }
+                },
             ).toString()
 
         if (compact.length <= TOOL_CALL_ARGS_MAX_CHARS) return compact

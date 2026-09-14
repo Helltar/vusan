@@ -63,7 +63,7 @@ class ConversationRepositoryTest {
         assertEquals(listOf("hi everyone", "hello"), inGroup.interactions.single().turns.map { it.content })
         assertFalse(
             inGroup.interactions.any { interaction -> interaction.turns.any { "private" in it.content } },
-            "a private exchange must never be replayable as this user's own words in a group"
+            "a private exchange must never be replayable as this user's own words in a group",
         )
         assertEquals(1, history.load(DM).stats.storedInteractions)
     }
@@ -79,8 +79,8 @@ class ConversationRepositoryTest {
                 scope = GROUP,
                 expectedThroughMessageId = 0L,
                 throughMessageId = inDm.lastMessageId,
-                content = "a recap of messages this chat never had"
-            )
+                content = "a recap of messages this chat never had",
+            ),
         )
 
         assertEquals(null, history.load(GROUP).summary)
@@ -100,8 +100,8 @@ class ConversationRepositoryTest {
                 scope = DM,
                 expectedThroughMessageId = 0L,
                 throughMessageId = first.lastMessageId,
-                content = "The user said first; the assistant replied one."
-            )
+                content = "The user said first; the assistant replied one.",
+            ),
         )
 
         val after = history.load(DM)
@@ -126,7 +126,7 @@ class ConversationRepositoryTest {
             history.pruneCompacted(
                 scope = DM,
                 maxStoredInteractions = 1,
-                rawRetentionCutoff = Instant.EPOCH
+                rawRetentionCutoff = Instant.EPOCH,
             )
 
         val after = history.load(DM)
@@ -165,7 +165,7 @@ class ConversationRepositoryTest {
             history.pruneExpired(
                 maxStoredInteractions = 1,
                 rawRetentionCutoff = Instant.now(),
-                maxConversations = 10
+                maxConversations = 10,
             )
 
         assertEquals(1, pruned)
@@ -185,7 +185,7 @@ class ConversationRepositoryTest {
             history.pruneExpired(
                 maxStoredInteractions = 100,
                 rawRetentionCutoff = Instant.EPOCH,
-                maxConversations = 10
+                maxConversations = 10,
             )
 
         assertEquals(0, pruned)
@@ -213,12 +213,12 @@ class ConversationRepositoryTest {
         // the same person in another chat, and another person in the same chat, both untouched.
         assertEquals(
             listOf("in the group", "answered"),
-            history.load(GROUP).interactions.single().turns.map { it.content }
+            history.load(GROUP).interactions.single().turns.map { it.content },
         )
         assertEquals(0L, history.revision(GROUP))
         assertEquals(
             listOf("other", "answer"),
-            history.load(OTHER_USER_IN_GROUP).interactions.single().turns.map { it.content }
+            history.load(OTHER_USER_IN_GROUP).interactions.single().turns.map { it.content },
         )
 
         history.clear(DM)
@@ -264,12 +264,12 @@ class ConversationRepositoryTest {
 
         assertEquals(
             listOf("my bank pin is 1234", "noted"),
-            history.load(DM).interactions.single().turns.map { it.content }
+            history.load(DM).interactions.single().turns.map { it.content },
         )
 
         assertEquals(
             listOf("hello", "hi"),
-            history.load(DM_ON_DISCORD).interactions.single().turns.map { it.content }
+            history.load(DM_ON_DISCORD).interactions.single().turns.map { it.content },
         )
 
         history.clear(DM)
@@ -282,7 +282,7 @@ class ConversationRepositoryTest {
     private fun exchange(user: String, assistant: String): List<ChatTurn> =
         listOf(
             ChatTurn(ChatRole.USER, user),
-            ChatTurn(ChatRole.ASSISTANT, assistant)
+            ChatTurn(ChatRole.ASSISTANT, assistant),
         )
 
     private fun testConfig(dbPath: String) =
@@ -299,7 +299,7 @@ class ConversationRepositoryTest {
                     provider = HostedLlmProvider.OPENAI,
                     apiKey = "test",
                     model = "test",
-                    requestTimeout = 60.seconds
+                    requestTimeout = 60.seconds,
                 ),
             maxConcurrentTurns = 4,
             maxFollowUpsPerUser = 3,
@@ -317,7 +317,7 @@ class ConversationRepositoryTest {
             taskMaxLatenessMinutes = 60L,
             tavilyApiKey = null,
             telegramBotToken = "test",
-            ytDlpCookiesFile = null
+            ytDlpCookiesFile = null,
         )
 
     private companion object {

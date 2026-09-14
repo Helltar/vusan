@@ -30,7 +30,7 @@ class TaskScheduler(
     private val tokenBudget: TokenBudget = TokenBudget(),
     // no default: an empty policy allows nobody, and a scheduler that silently fires nothing is worse
     // than one that will not be built without being told who may use it.
-    private val accessPolicy: AccessPolicy
+    private val accessPolicy: AccessPolicy,
 ) {
 
     private enum class FireOutcome { Delivered, RunFailed, ChatUnreachable, Stopped }
@@ -136,7 +136,7 @@ class TaskScheduler(
         val outcome =
             delivery.notify(
                 task.destination,
-                Messages.of(task.language).taskMissedNotice(task.id, task.title, scheduledLabel)
+                Messages.of(task.language).taskMissedNotice(task.id, task.title, scheduledLabel),
             )
 
         // the notice costs one API call and the run costs a whole agent turn, so a chat that refuses
@@ -224,8 +224,8 @@ class TaskScheduler(
                         destination = task.destination,
                         recipient = task.scope.user,
                         language = task.language,
-                        attribution = task.attribution
-                    )
+                        attribution = task.attribution,
+                    ),
                 ).isUnreachable
             }.getOrElse {
                 it.rethrowIfCancellation()
@@ -294,7 +294,7 @@ internal fun scheduledAgentRequest(task: ScheduledTask, attempt: Int, chatProfil
     AgentRequest(
         context = task.toRequestContext(chatProfile),
         prompt = scheduledTaskPrompt(task, attempt),
-        conversationEntry = conversationEntry(task)
+        conversationEntry = conversationEntry(task),
     )
 
 // the retry is not stored: history keeps the task as the user wrote it, without the retry hint.

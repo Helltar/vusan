@@ -15,7 +15,7 @@ class YouTubeVideoTools(private val client: YtDlpClient, private val outbox: Bot
     @LLMDescription(YouTubeVideoToolDescriptions.DOWNLOAD_VIDEO)
     suspend fun downloadVideo(
         @LLMDescription(YouTubeVideoToolDescriptions.DOWNLOAD_VIDEO_QUERY)
-        query: String
+        query: String,
     ): String = suspendToolGuard {
         when (val result = client.downloadVideo(query)) {
             is YtDlpResult.NotFound -> """No video found on YouTube for "$query"."""
@@ -40,8 +40,8 @@ class YouTubeVideoTools(private val client: YtDlpClient, private val outbox: Bot
                         width = video.width,
                         height = video.height,
                         thumbnail = video.thumbnailBytes,
-                        sourceUrl = video.sourceUrl
-                    )
+                        sourceUrl = video.sourceUrl,
+                    ),
                 )
 
                 "Video ready: ${video.title}"

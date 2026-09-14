@@ -30,8 +30,8 @@ class ElevenLabsTtsClient(private val http: HttpClient, private val apiKey: Stri
                 setBody(
                     ElevenLabsSpeechRequest(
                         text = text,
-                        modelId = config.model
-                    )
+                        modelId = config.model,
+                    ),
                 )
             }
 

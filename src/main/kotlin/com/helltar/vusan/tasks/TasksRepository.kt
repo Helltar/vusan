@@ -97,7 +97,7 @@ class TasksRepository {
         owner: UserRef,
         id: Long,
         nextFireAt: Instant,
-        chat: ChatRef? = null
+        chat: ChatRef? = null,
     ): Boolean = dbTransaction {
         ScheduledTasksTable
             .update({ taskCondition(owner, id, chat) }) {
@@ -110,7 +110,7 @@ class TasksRepository {
         owner: UserRef,
         original: ScheduledTask,
         edited: ScheduledTask,
-        chat: ChatRef? = null
+        chat: ChatRef? = null,
     ): Boolean = dbTransaction {
         require(original.id == edited.id) { "original and edited task ids must match" }
 
@@ -189,7 +189,7 @@ class TasksRepository {
             scope =
                 ConversationScope(
                     user = UserRef(this[ScheduledTasksTable.platform], this[ScheduledTasksTable.userId]),
-                    chat = ChatRef(this[ScheduledTasksTable.platform], this[ScheduledTasksTable.chatId])
+                    chat = ChatRef(this[ScheduledTasksTable.platform], this[ScheduledTasksTable.chatId]),
                 ),
             prompt = this[ScheduledTasksTable.prompt],
             title = this[ScheduledTasksTable.title],
@@ -205,14 +205,14 @@ class TasksRepository {
             paused = this[ScheduledTasksTable.paused],
             language =
                 this[ScheduledTasksTable.language]?.let { runCatching { Language.valueOf(it) }.getOrNull() }
-                    ?: Language.DEFAULT
+                    ?: Language.DEFAULT,
         )
     }
 
     private fun taskCondition(
         owner: UserRef,
         id: Long? = null,
-        chat: ChatRef? = null
+        chat: ChatRef? = null,
     ): Op<Boolean> {
         var condition = ownedBy(owner)
 

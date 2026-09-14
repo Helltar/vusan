@@ -14,7 +14,7 @@ class CurrencyTools(private val client: ExchangeRateClient) : ToolSet {
         @LLMDescription(CurrencyToolDescriptions.BASE)
         base: String,
         @LLMDescription(CurrencyToolDescriptions.TARGET)
-        target: String
+        target: String,
     ): String = suspendToolGuard {
         val response = client.latest(base)
         val rate = response.rates[target.uppercase()] ?: return@suspendToolGuard "Unknown currency: $target"

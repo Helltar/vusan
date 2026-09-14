@@ -24,7 +24,7 @@ interface GroupLogDigester {
 class LlmGroupLogDigester(
     private val promptExecutor: PromptExecutor,
     private val model: LLModel,
-    private val chatParams: LLMParams = LLMParams()
+    private val chatParams: LLMParams = LLMParams(),
 ) : GroupLogDigester {
 
     override suspend fun digest(day: LocalDate, transcript: String): String? {
@@ -36,7 +36,7 @@ class LlmGroupLogDigester(
                     system(DIGEST_SYSTEM_PROMPT)
                     user("Day: $day\n\n${xmlBlock("chat_transcript", transcript)}")
                 },
-                model
+                model,
             )
 
         val digest =

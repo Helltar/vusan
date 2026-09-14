@@ -14,7 +14,7 @@ class TelegramChannelParserTest {
             html = html,
             username = "example_channel",
             url = "https://t.me/s/example_channel",
-            maxPosts = maxPosts
+            maxPosts = maxPosts,
         )
 
     @Test
@@ -24,10 +24,10 @@ class TelegramChannelParserTest {
                 posts = listOf(
                     channelPost(id = 100, text = "Oldest note", at = "2026-03-01T10:00:00+00:00"),
                     channelPost(id = 101, text = "Middle note", at = "2026-03-02T10:00:00+00:00"),
-                    channelPost(id = 102, text = "Newest note", at = "2026-03-03T10:00:00+00:00")
-                )
+                    channelPost(id = 102, text = "Newest note", at = "2026-03-03T10:00:00+00:00"),
+                ),
             ),
-            maxPosts = 2
+            maxPosts = 2,
         )
 
         assertEquals("Example Channel", page.title)
@@ -45,10 +45,10 @@ class TelegramChannelParserTest {
                     channelPost(
                         id = 200,
                         text = "Our own follow-up statement",
-                        replyQuote = "The earlier bulletin everyone is replying to"
-                    )
-                )
-            )
+                        replyQuote = "The earlier bulletin everyone is replying to",
+                    ),
+                ),
+            ),
         )
 
         val post = page.posts.single()
@@ -65,10 +65,10 @@ class TelegramChannelParserTest {
                     channelPost(
                         id = 300,
                         text = "Release notes",
-                        reactions = listOf("A" to "1.2K", "B" to "340", "C" to "1.5M", "D" to "7")
-                    )
-                )
-            )
+                        reactions = listOf("A" to "1.2K", "B" to "340", "C" to "1.5M", "D" to "7"),
+                    ),
+                ),
+            ),
         )
 
         val post = page.posts.single()
@@ -82,12 +82,12 @@ class TelegramChannelParserTest {
     fun `parse counts custom and paid reactions but shows only readable glyphs`() {
         val html =
             channelPage(
-                posts = listOf(channelPost(id = 310, text = "Announcement", reactions = listOf("A" to "40")))
+                posts = listOf(channelPost(id = 310, text = "Announcement", reactions = listOf("A" to "40"))),
             ).replace(
                 """<span class="tgme_reaction"><i class="emoji"><b>A</b></i>40</span>""",
                 """<span class="tgme_reaction"><i class="emoji"><b>A</b></i>40</span>""" +
                         """<span class="tgme_reaction"><tg-emoji emoji-id="123"></tg-emoji>1.5K</span>""" +
-                        """<span class="tgme_reaction tgme_reaction_paid"><i class="icon icon-telegram-stars"></i>7</span>"""
+                        """<span class="tgme_reaction tgme_reaction_paid"><i class="icon icon-telegram-stars"></i>7</span>""",
             )
 
         val post = parse(html).posts.single()
@@ -105,10 +105,10 @@ class TelegramChannelParserTest {
                         id = 400,
                         text = "Gallery of the week",
                         photos = listOf("https://cdn.example.com/a.jpg", "https://cdn.example.com/b.jpg"),
-                        videoThumb = "https://cdn.example.com/clip.jpg"
-                    )
-                )
-            )
+                        videoThumb = "https://cdn.example.com/clip.jpg",
+                    ),
+                ),
+            ),
         )
 
         val post = page.posts.single()
@@ -117,7 +117,7 @@ class TelegramChannelParserTest {
         assertTrue(post.hasMedia)
         assertEquals(
             listOf("https://cdn.example.com/a.jpg", "https://cdn.example.com/b.jpg", "https://cdn.example.com/clip.jpg"),
-            post.imageUrls
+            post.imageUrls,
         )
     }
 
@@ -130,10 +130,10 @@ class TelegramChannelParserTest {
                         id = 500,
                         text = "Worth a read",
                         forwardedFrom = "Partner Channel",
-                        linkPreview = Triple("example.com", "Quarterly Summary", "What changed since the last update.")
-                    )
-                )
-            )
+                        linkPreview = Triple("example.com", "Quarterly Summary", "What changed since the last update."),
+                    ),
+                ),
+            ),
         )
 
         val post = page.posts.single()
@@ -156,9 +156,9 @@ class TelegramChannelParserTest {
             channelPage(
                 posts = listOf(
                     channelPost(id = 700, photos = listOf("https://cdn.example.com/meme.jpg")),
-                    channelPost(id = 701)
-                )
-            )
+                    channelPost(id = 701),
+                ),
+            ),
         )
 
         assertEquals(listOf("700"), page.posts.map { it.id })
@@ -172,10 +172,10 @@ class TelegramChannelParserTest {
                 posts = listOf(
                     channelPost(
                         id = 800,
-                        text = """First line<br>second line with a <a href="https://example.com/plan">plan</a>"""
-                    )
-                )
-            )
+                        text = """First line<br>second line with a <a href="https://example.com/plan">plan</a>""",
+                    ),
+                ),
+            ),
         )
 
         val post = page.posts.single()

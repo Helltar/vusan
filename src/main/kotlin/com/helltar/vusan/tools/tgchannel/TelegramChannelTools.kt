@@ -26,7 +26,7 @@ class TelegramChannelTools(private val reader: TelegramChannelReader) : ToolSet 
         @LLMDescription(TelegramChannelToolDescriptions.DESCRIBE_IMAGES)
         describeImages: Boolean = true,
         @LLMDescription(TelegramChannelToolDescriptions.IMAGE_FOCUS)
-        imageFocus: String = ""
+        imageFocus: String = "",
     ): String = suspendToolGuard {
         val trimmedWindow = window.trim()
 
@@ -47,7 +47,7 @@ class TelegramChannelTools(private val reader: TelegramChannelReader) : ToolSet 
             query = query.trim(),
             maxPosts = maxPosts,
             describeImages = describeImages,
-            imageFocus = imageFocus.trim()
+            imageFocus = imageFocus.trim(),
         )
     }
 }

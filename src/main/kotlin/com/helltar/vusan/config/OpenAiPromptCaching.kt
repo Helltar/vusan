@@ -15,7 +15,7 @@ import kotlin.reflect.KClass
 // koog 1.2.0 exposes prompt_cache_key but not gpt-5.6 cache breakpoints, so rewrite only official
 // openai requests until the client can represent these fields itself.
 internal class OpenAiPromptCachingHttpClientFactory(
-    private val delegate: KoogHttpClient.Factory
+    private val delegate: KoogHttpClient.Factory,
 ) : KoogHttpClient.Factory {
 
     override fun create(
@@ -26,7 +26,7 @@ internal class OpenAiPromptCachingHttpClientFactory(
         requestTimeoutMillis: Long,
         connectTimeoutMillis: Long,
         socketTimeoutMillis: Long,
-        json: Json
+        json: Json,
     ): KoogHttpClient =
         OpenAiPromptCachingHttpClient(
             delegate =
@@ -38,15 +38,15 @@ internal class OpenAiPromptCachingHttpClientFactory(
                     requestTimeoutMillis = requestTimeoutMillis,
                     connectTimeoutMillis = connectTimeoutMillis,
                     socketTimeoutMillis = socketTimeoutMillis,
-                    json = json
+                    json = json,
                 ),
-            json = json
+            json = json,
         )
 }
 
 private class OpenAiPromptCachingHttpClient(
     private val delegate: KoogHttpClient,
-    private val json: Json
+    private val json: Json,
 ) : KoogHttpClient {
 
     override val clientName: String = delegate.clientName
@@ -55,7 +55,7 @@ private class OpenAiPromptCachingHttpClient(
         path: String,
         responseType: KClass<R>,
         parameters: Map<String, String>,
-        headers: Map<String, String>
+        headers: Map<String, String>,
     ): R = delegate.get(path, responseType, parameters, headers)
 
     override suspend fun <T : Any, R : Any> post(
@@ -64,7 +64,7 @@ private class OpenAiPromptCachingHttpClient(
         requestBodyType: KClass<T>,
         responseType: KClass<R>,
         parameters: Map<String, String>,
-        headers: Map<String, String>
+        headers: Map<String, String>,
     ): R =
         if (requestBody is String) {
             delegate.post(
@@ -73,7 +73,7 @@ private class OpenAiPromptCachingHttpClient(
                 requestBodyType = String::class,
                 responseType = responseType,
                 parameters = parameters,
-                headers = headers
+                headers = headers,
             )
         } else {
             delegate.post(path, requestBody, requestBodyType, responseType, parameters, headers)
@@ -87,7 +87,7 @@ private class OpenAiPromptCachingHttpClient(
         decodeStreamingResponse: (String) -> R,
         processStreamingChunk: (R) -> O?,
         parameters: Map<String, String>,
-        headers: Map<String, String>
+        headers: Map<String, String>,
     ): Flow<O> =
         if (requestBody is String) {
             delegate.sse(
@@ -98,7 +98,7 @@ private class OpenAiPromptCachingHttpClient(
                 decodeStreamingResponse = decodeStreamingResponse,
                 processStreamingChunk = processStreamingChunk,
                 parameters = parameters,
-                headers = headers
+                headers = headers,
             )
         } else {
             delegate.sse(
@@ -109,7 +109,7 @@ private class OpenAiPromptCachingHttpClient(
                 decodeStreamingResponse,
                 processStreamingChunk,
                 parameters,
-                headers
+                headers,
             )
         }
 
@@ -118,7 +118,7 @@ private class OpenAiPromptCachingHttpClient(
         requestBody: T,
         requestBodyType: KClass<T>,
         parameters: Map<String, String>,
-        headers: Map<String, String>
+        headers: Map<String, String>,
     ): Flow<String> =
         if (requestBody is String) {
             delegate.lines(
@@ -126,7 +126,7 @@ private class OpenAiPromptCachingHttpClient(
                 requestBody = addExplicitOpenAiPromptCacheBreakpoint(requestBody, json),
                 requestBodyType = String::class,
                 parameters = parameters,
-                headers = headers
+                headers = headers,
             )
         } else {
             delegate.lines(path, requestBody, requestBodyType, parameters, headers)
@@ -201,11 +201,11 @@ private fun markLastTextBlock(content: JsonElement?, textBlockType: String): Jso
                     JsonObject(
                         mapOf(
                             "type" to JsonPrimitive(textBlockType),
-                            "text" to content
-                        )
-                    )
-                )
-            )
+                            "text" to content,
+                        ),
+                    ),
+                ),
+            ),
         )
     }
 
@@ -221,7 +221,7 @@ private fun markLastTextBlock(content: JsonElement?, textBlockType: String): Jso
     return JsonArray(
         blocks.mapIndexed { blockIndex, value ->
             if (blockIndex == index) markedTextBlock(block) else value
-        }
+        },
     )
 }
 

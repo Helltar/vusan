@@ -25,7 +25,7 @@ class SiteToolsTest {
     private fun tools(
         entries: List<String> = listOf("index.html", "assets"),
         site: String? = PUBLISHED,
-        publish: Pair<HttpStatusCode, String> = HttpStatusCode.OK to PUBLISHED
+        publish: Pair<HttpStatusCode, String> = HttpStatusCode.OK to PUBLISHED,
     ): SiteTools {
         val engine = MockEngine { request ->
             val path = request.url.encodedPath

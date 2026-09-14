@@ -33,7 +33,7 @@ class TelegramErrorsTest {
         val error =
             TelegramApiException(
                 "Unable to execute sendMessage method",
-                telegramError("Bad Request: can't parse entities: Can't find end tag corresponding to start tag \"pre\"")
+                telegramError("Bad Request: can't parse entities: Can't find end tag corresponding to start tag \"pre\""),
             )
 
         assertTrue(error.isEntityParseError())
@@ -73,7 +73,7 @@ class TelegramErrorsTest {
                 "Forbidden: bot was blocked by the user",
                 "Forbidden: bot can't initiate conversation with a user",
                 "Forbidden: user is deactivated",
-                "Bad Request: chat not found"
+                "Bad Request: chat not found",
             )
 
         descriptions.forEach { description ->
@@ -108,7 +108,7 @@ class TelegramErrorsTest {
                 "Bad Request: chat not found",
                 "Bad Request: CHAT_WRITE_FORBIDDEN",
                 "Bad Request: not enough rights to send text messages to the chat",
-                "Bad Request: group chat was deactivated"
+                "Bad Request: group chat was deactivated",
             )
 
         descriptions.forEach { description ->
@@ -125,7 +125,7 @@ class TelegramErrorsTest {
                 "Bad Request: not enough rights to send photos to the chat",
                 "Bad Request: not enough rights to send stickers to the chat",
                 "Too Many Requests: retry after 30",
-                "Bad Request: message is too long"
+                "Bad Request: message is too long",
             )
 
         descriptions.forEach { description ->
@@ -159,7 +159,7 @@ class TelegramErrorsTest {
         val error =
             telegramError(
                 "Bad Request: message is not modified: specified new message content and reply markup " +
-                        "are exactly the same as the current content and reply markup"
+                        "are exactly the same as the current content and reply markup",
             )
 
         assertTrue(error.isMessageNotModified())
@@ -195,7 +195,7 @@ class TelegramErrorsTest {
                     .ok(false)
                     .errorCode(429)
                     .errorDescription("Too Many Requests: retry after 5")
-                    .build()
+                    .build(),
             )
 
         // the seconds are also in the description, but parsing prose to find them would guess where the
@@ -217,7 +217,7 @@ class TelegramErrorsTest {
                 .errorCode(429)
                 .errorDescription("Too Many Requests: retry after $retryAfter")
                 .parameters(ResponseParameters(null, retryAfter))
-                .build()
+                .build(),
         )
 
     private fun telegramError(description: String): TelegramApiRequestException =
@@ -227,6 +227,6 @@ class TelegramErrorsTest {
                 .ok(false)
                 .errorCode(400)
                 .errorDescription(description)
-                .build()
+                .build(),
         )
 }

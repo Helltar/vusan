@@ -48,7 +48,7 @@ private const val USER_SPEND_RETENTION_DAYS = 30L
  */
 class TokenBudget(
     private val config: TokenBudgetConfig = TokenBudgetConfig(),
-    private val clock: Clock = Clock.systemUTC()
+    private val clock: Clock = Clock.systemUTC(),
 ) {
 
     private val mutex = Mutex()
@@ -209,7 +209,7 @@ class TokenBudget(
             TokenUsageByUserTable.upsert(
                 TokenUsageByUserTable.day,
                 TokenUsageByUserTable.platform,
-                TokenUsageByUserTable.userId
+                TokenUsageByUserTable.userId,
             ) {
                 it[TokenUsageByUserTable.day] = day.toString()
                 it[TokenUsageByUserTable.platform] = user.platform

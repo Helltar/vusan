@@ -35,9 +35,9 @@ class OpenAiWhisperClient(private val http: HttpClient, private val config: Open
                         headers = Headers.build {
                             append(HttpHeaders.ContentType, contentType.toString())
                             append(HttpHeaders.ContentDisposition, """filename="$safeFileName"""")
-                        }
+                        },
                     )
-                }
+                },
             ) {
                 bearerAuth(config.apiKey)
                 timeout {

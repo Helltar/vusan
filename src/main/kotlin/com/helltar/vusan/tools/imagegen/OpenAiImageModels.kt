@@ -14,7 +14,7 @@ internal data class OpenAiImageRequest(
     val outputFormat: String? = null,
     @SerialName("output_compression")
     val outputCompression: Int? = null,
-    val n: Int = 1
+    val n: Int = 1,
 )
 
 @Serializable
@@ -23,30 +23,30 @@ internal data class CodexImageEditRequest(
     val prompt: String,
     val model: String,
     val quality: String,
-    val n: Int = 1
+    val n: Int = 1,
 )
 
 @Serializable
 internal data class CodexImageSource(
     @SerialName("image_url")
-    val imageUrl: String
+    val imageUrl: String,
 )
 
 @Serializable
 internal data class OpenAiImageResponse(
-    val data: List<OpenAiImageData> = emptyList()
+    val data: List<OpenAiImageData> = emptyList(),
 )
 
 @Serializable
 internal data class OpenAiImageData(
     @SerialName("b64_json")
-    val b64Json: String? = null
+    val b64Json: String? = null,
 )
 
 /** The error body a refused image request carries, cut down to what decides the answer. */
 @Serializable
 internal data class OpenAiImageErrorResponse(
-    val error: OpenAiImageError? = null
+    val error: OpenAiImageError? = null,
 )
 
 @Serializable
@@ -54,12 +54,12 @@ internal data class OpenAiImageError(
     val message: String? = null,
     val code: String? = null,
     @SerialName("moderation_details")
-    val moderationDetails: OpenAiModerationDetails? = null
+    val moderationDetails: OpenAiModerationDetails? = null,
 )
 
 @Serializable
 internal data class OpenAiModerationDetails(
     @SerialName("moderation_stage")
     val stage: String? = null,
-    val categories: List<String> = emptyList()
+    val categories: List<String> = emptyList(),
 )

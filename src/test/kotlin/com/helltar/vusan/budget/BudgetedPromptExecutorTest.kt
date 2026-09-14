@@ -119,7 +119,7 @@ class BudgetedPromptExecutorTest {
 
     private class CountingPromptExecutor(
         private val inputTokens: Int = 0,
-        private val outputTokens: Int = 0
+        private val outputTokens: Int = 0,
     ) : PromptExecutor() {
 
         var callCount = 0
@@ -133,8 +133,8 @@ class BudgetedPromptExecutorTest {
                 metaInfo =
                     ResponseMetaInfo.Empty.copy(
                         inputTokensCount = inputTokens,
-                        outputTokensCount = outputTokens
-                    )
+                        outputTokensCount = outputTokens,
+                    ),
             )
         }
 
@@ -160,7 +160,7 @@ class BudgetedPromptExecutorTest {
                 provider = HostedLlmProvider.OPENAI,
                 apiKey = "test",
                 model = "test",
-                requestTimeout = 60.seconds
+                requestTimeout = 60.seconds,
             ),
             maxConcurrentTurns = 4,
             maxFollowUpsPerUser = 3,
@@ -178,7 +178,7 @@ class BudgetedPromptExecutorTest {
             taskMaxLatenessMinutes = 60L,
             tavilyApiKey = null,
             telegramBotToken = "test",
-            ytDlpCookiesFile = null
+            ytDlpCookiesFile = null,
         )
 
     private companion object {

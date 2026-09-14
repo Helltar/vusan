@@ -25,7 +25,7 @@ data class ContextTokenBudget(
     val responseReserveTokens: Int,
     val agentReserveTokens: Int,
     val safetyReserveTokens: Int,
-    val conversationTokens: Int
+    val conversationTokens: Int,
 ) {
 
     /** Share of the window a turn occupies once its history actually costs [conversationTokens]. */
@@ -84,7 +84,7 @@ class ContextWindowPolicy(model: LLModel) {
             responseReserveTokens = responseReserve,
             agentReserveTokens = agentReserveTokens,
             safetyReserveTokens = safetyReserve,
-            conversationTokens = conversationTokens
+            conversationTokens = conversationTokens,
         )
     }
 

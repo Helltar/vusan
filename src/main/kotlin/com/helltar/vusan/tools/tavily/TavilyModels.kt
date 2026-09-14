@@ -12,13 +12,13 @@ data class SearchRequest(
     @SerialName("time_range") val timeRange: String? = null,
     @SerialName("include_images") val includeImages: Boolean = false,
     @SerialName("include_image_descriptions") val includeImageDescriptions: Boolean = false,
-    @SerialName("exclude_domains") val excludeDomains: List<String> = emptyList()
+    @SerialName("exclude_domains") val excludeDomains: List<String> = emptyList(),
 )
 
 @Serializable
 data class SearchResponse(
     val results: List<SearchResult> = emptyList(),
-    val images: List<TavilyImage> = emptyList()
+    val images: List<TavilyImage> = emptyList(),
 )
 
 @Serializable
@@ -29,7 +29,7 @@ data class SearchResult(
     val title: String,
     val url: String,
     val content: String,
-    @SerialName("published_date") val publishedDate: String? = null
+    @SerialName("published_date") val publishedDate: String? = null,
 )
 
 @Serializable
@@ -38,17 +38,17 @@ data class ExtractRequest(val urls: List<String>)
 @Serializable
 data class ExtractResponse(
     val results: List<ExtractResult> = emptyList(),
-    @SerialName("failed_results") val failedResults: List<FailedResult> = emptyList()
+    @SerialName("failed_results") val failedResults: List<FailedResult> = emptyList(),
 )
 
 @Serializable
 data class ExtractResult(
     val url: String,
-    @SerialName("raw_content") val rawContent: String
+    @SerialName("raw_content") val rawContent: String,
 )
 
 @Serializable
 data class FailedResult(
     val url: String,
-    val error: String
+    val error: String,
 )

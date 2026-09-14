@@ -46,7 +46,7 @@ internal fun assistantTextForHistory(outputs: List<OutboxItem>, comment: String?
                         is BotOutput.RichMessage -> output.markdown
                         else -> null
                     }
-                }
+                },
             )
             comment?.let(::add)
         }
@@ -63,7 +63,7 @@ private val TEXT_DUPLICATING_TOOLS =
         MessageTools::sendMessage.name,
         MessageTools::sendRichMessage.name,
         MessageTools::announcePlan.name,
-        InlineChoiceTools::askWithButtons.name
+        InlineChoiceTools::askWithButtons.name,
     )
 
 private fun BotOutput.InlineChoice.historyText(): String =
@@ -80,8 +80,8 @@ internal fun buildTurns(userEntry: String, toolEvents: List<ToolEvent>, assistan
                     role = ChatRole.TOOL_CALL,
                     content = toolCallArgsForStorage(event.args),
                     toolCallId = event.toolCallId,
-                    toolName = event.toolName
-                )
+                    toolName = event.toolName,
+                ),
             )
 
             add(
@@ -90,8 +90,8 @@ internal fun buildTurns(userEntry: String, toolEvents: List<ToolEvent>, assistan
                     content = event.output.collapseWhitespaceAndCap(TOOL_OUTPUT_MAX_CHARS).orEmpty(),
                     toolCallId = event.toolCallId,
                     toolName = event.toolName,
-                    toolIsError = event.isError
-                )
+                    toolIsError = event.isError,
+                ),
             )
         }
 

@@ -95,7 +95,7 @@ class DatabaseMigrationTest {
             creatorUsername = "tester",
             creatorDisplayName = "Test User",
             chatIsPrivate = false,
-            language = Language.ENGLISH
+            language = Language.ENGLISH,
         )
 
     private fun withTempDb(block: (dbPath: String) -> Unit) {
@@ -193,7 +193,7 @@ class DatabaseMigrationTest {
                 provider = HostedLlmProvider.OPENAI,
                 apiKey = "test",
                 model = "test",
-                requestTimeout = 60.seconds
+                requestTimeout = 60.seconds,
             ),
             maxConcurrentTurns = 4,
             maxFollowUpsPerUser = 3,
@@ -211,6 +211,6 @@ class DatabaseMigrationTest {
             taskMaxLatenessMinutes = 60L,
             tavilyApiKey = null,
             telegramBotToken = "test",
-            ytDlpCookiesFile = null
+            ytDlpCookiesFile = null,
         )
 }

@@ -12,7 +12,7 @@ import kotlinx.serialization.json.Json
  * the model had answered. Koog never reads the echo; it takes the output items and the usage.
  */
 internal class LenientDecodingHttpClientFactory(
-    private val delegate: KoogHttpClient.Factory
+    private val delegate: KoogHttpClient.Factory,
 ) : KoogHttpClient.Factory {
 
     override fun create(
@@ -23,7 +23,7 @@ internal class LenientDecodingHttpClientFactory(
         requestTimeoutMillis: Long,
         connectTimeoutMillis: Long,
         socketTimeoutMillis: Long,
-        json: Json
+        json: Json,
     ): KoogHttpClient =
         delegate.create(
             clientName = clientName,
@@ -33,6 +33,6 @@ internal class LenientDecodingHttpClientFactory(
             requestTimeoutMillis = requestTimeoutMillis,
             connectTimeoutMillis = connectTimeoutMillis,
             socketTimeoutMillis = socketTimeoutMillis,
-            json = Json(json) { coerceInputValues = true }
+            json = Json(json) { coerceInputValues = true },
         )
 }

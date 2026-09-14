@@ -11,7 +11,7 @@ private const val MAX_TELEGRAM_CHANNEL_IMAGE_BYTES = 8 * 1024 * 1024
 
 class TelegramChannelImageDescriber(
     private val promptExecutor: PromptExecutor,
-    private val model: LLModel
+    private val model: LLModel,
 ) {
 
     suspend fun describe(image: TelegramChannelImage, post: TelegramChannelPost, focus: String): String {
@@ -32,7 +32,7 @@ class TelegramChannelImageDescriber(
             system(
                 "You describe images embedded in public Telegram channel posts for a chat assistant. " +
                         "Be concise, factual, and avoid guessing identities. Mention visible text if any. " +
-                        "Reply in the user's language when clear."
+                        "Reply in the user's language when clear.",
             )
             user {
                 text(
@@ -58,15 +58,15 @@ class TelegramChannelImageDescriber(
                         appendLine("- image_url: ${image.url}")
                         appendLine("- mime_type: ${image.mimeType}")
                         appendLine("- filename: ${image.filename}")
-                    }
+                    },
                 )
                 image(
                     AttachmentSource.Image(
                         content = AttachmentContent.Binary.Bytes(image.bytes),
                         format = image.mimeType.substringAfter('/', "jpeg"),
                         mimeType = image.mimeType,
-                        fileName = image.filename
-                    )
+                        fileName = image.filename,
+                    ),
                 )
             }
         }

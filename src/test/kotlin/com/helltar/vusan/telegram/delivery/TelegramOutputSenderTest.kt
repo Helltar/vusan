@@ -34,12 +34,12 @@ class TelegramOutputSenderTest {
                 options = listOf("PDF", "DOCX", "Plain text"),
                 ownerId = "42",
                 historyRevision = 7L,
-                originMessageId = "5"
+                originMessageId = "5",
             ),
             target = ChatTarget(1L),
             replyParameters = null,
             caption = null,
-            formattingFileNotice = "notice"
+            formattingFileNotice = "notice",
         )
 
         val request = assertIs<SendMessage>(client.requests.single())
@@ -50,7 +50,7 @@ class TelegramOutputSenderTest {
         assertEquals(listOf(2, 1), keyboard.keyboard.map { it.size })
         assertEquals(
             listOf("choice:42:7:0:5", "choice:42:7:1:5", "choice:42:7:2:5"),
-            keyboard.keyboard.flatten().map { it.callbackData }
+            keyboard.keyboard.flatten().map { it.callbackData },
         )
     }
 
@@ -64,7 +64,7 @@ class TelegramOutputSenderTest {
             target = ChatTarget(1L),
             replyParameters = null,
             caption = "this caption has nowhere to go",
-            formattingFileNotice = "notice"
+            formattingFileNotice = "notice",
         )
 
         val request = assertIs<SendSticker>(client.requests.single())
@@ -81,7 +81,7 @@ class TelegramOutputSenderTest {
             target = ChatTarget(1L),
             replyParameters = null,
             caption = null,
-            formattingFileNotice = "notice"
+            formattingFileNotice = "notice",
         )
 
         assertEquals(listOf("sendPhoto", "sendDocument"), client.methods)
@@ -97,7 +97,7 @@ class TelegramOutputSenderTest {
             target = ChatTarget(1L),
             replyParameters = null,
             caption = "<b>broken",
-            formattingFileNotice = "notice"
+            formattingFileNotice = "notice",
         )
 
         assertEquals(listOf("sendPhoto", "sendPhoto", "sendDocument"), client.methods)
@@ -112,7 +112,7 @@ class TelegramOutputSenderTest {
             target = ChatTarget(1L),
             text = "<b>broken",
             replyParameters = null,
-            formattingFileNotice = "notice"
+            formattingFileNotice = "notice",
         )
 
         assertEquals(listOf("sendMessage", "sendDocument"), client.methods)
@@ -127,7 +127,7 @@ class TelegramOutputSenderTest {
             target = ChatTarget(1L),
             text = "one<br>two<br/>three<br />four</br>five<BR/>six",
             replyParameters = null,
-            formattingFileNotice = "notice"
+            formattingFileNotice = "notice",
         )
 
         assertEquals(listOf("sendMessage"), client.methods)
@@ -144,7 +144,7 @@ class TelegramOutputSenderTest {
             target = ChatTarget(1L),
             replyParameters = null,
             caption = "first line<br/>second line",
-            formattingFileNotice = "notice"
+            formattingFileNotice = "notice",
         )
 
         assertEquals(listOf("sendPhoto"), client.methods)
@@ -160,12 +160,12 @@ class TelegramOutputSenderTest {
             item = BotOutput.Video(
                 bytes = byteArrayOf(1, 2, 3),
                 filename = "video.mp4",
-                thumbnail = byteArrayOf(4, 5, 6)
+                thumbnail = byteArrayOf(4, 5, 6),
             ),
             target = ChatTarget(1L),
             replyParameters = null,
             caption = null,
-            formattingFileNotice = "notice"
+            formattingFileNotice = "notice",
         )
 
         val request = assertIs<SendVideo>(client.requests.single())
@@ -184,7 +184,7 @@ class TelegramOutputSenderTest {
             target = ChatTarget(1L),
             replyParameters = null,
             caption = null,
-            formattingFileNotice = "notice"
+            formattingFileNotice = "notice",
         )
 
         assertEquals(listOf("sendVideoNote", "sendVideo"), client.methods)
@@ -206,7 +206,7 @@ class TelegramOutputSenderTest {
             target = ChatTarget(1L),
             replyParameters = null,
             caption = null,
-            formattingFileNotice = "notice"
+            formattingFileNotice = "notice",
         )
 
         assertEquals(listOf("sendRichMessage"), client.methods)
@@ -223,7 +223,7 @@ class TelegramOutputSenderTest {
             target = ChatTarget(1L),
             replyParameters = null,
             caption = null,
-            formattingFileNotice = "notice"
+            formattingFileNotice = "notice",
         )
 
         assertEquals(listOf("sendRichMessage", "sendDocument"), client.methods)
@@ -240,7 +240,7 @@ class TelegramOutputSenderTest {
             target = ChatTarget(1L),
             replyParameters = null,
             caption = null,
-            formattingFileNotice = "notice"
+            formattingFileNotice = "notice",
         )
 
         assertEquals(listOf("sendRichMessage", "sendDocument", "sendMessage"), client.methods)
@@ -254,7 +254,7 @@ class TelegramOutputSenderTest {
         private var failHtmlCaptionOnce: Boolean = false,
         private val failRichMessage: Boolean = false,
         private val failDocument: Boolean = false,
-        private val failVideoNote: Boolean = false
+        private val failVideoNote: Boolean = false,
     ) {
         val methods = mutableListOf<String>()
         val requests = mutableListOf<Any>()
@@ -304,7 +304,7 @@ class TelegramOutputSenderTest {
                     .ok(false)
                     .errorCode(400)
                     .errorDescription(description)
-                    .build()
+                    .build(),
             )
     }
 }

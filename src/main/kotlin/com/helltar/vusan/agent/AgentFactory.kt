@@ -40,19 +40,19 @@ data class ToolEvent(
     val toolName: String,
     val args: String,
     val output: String,
-    val isError: Boolean
+    val isError: Boolean,
 )
 
 data class TokenUsage(
     val inputTokens: Int?,
     val outputTokens: Int?,
-    val totalTokens: Int?
+    val totalTokens: Int?,
 )
 
 data class AgentPromptPreparation(
     val toolCatalog: ToolCatalog,
     val systemPrompt: String,
-    val tokenBudget: ContextTokenBudget
+    val tokenBudget: ContextTokenBudget,
 )
 
 class AgentFactory(
@@ -68,7 +68,7 @@ class AgentFactory(
     // node, so the ceiling on tool calls is roughly half of this. the last few are spent landing a
     // turn that runs long (see `outOfToolBudget`) instead of crashing it.
     private val maxIterations: Int,
-    private val contextWindowPolicy: ContextWindowPolicy = ContextWindowPolicy(model)
+    private val contextWindowPolicy: ContextWindowPolicy = ContextWindowPolicy(model),
 ) {
 
     // the catalog is built before the turn text, not here: what it defers goes into that text as
@@ -84,8 +84,8 @@ class AgentFactory(
                 contextWindowPolicy.budget(
                     systemPrompt = systemPrompt,
                     currentTurn = currentTurn,
-                    tools = toolCatalog.visibleDescriptors()
-                )
+                    tools = toolCatalog.visibleDescriptors(),
+                ),
         )
     }
 
@@ -101,7 +101,7 @@ class AgentFactory(
         toolBudget: TurnToolBudget,
         toolEvents: (ToolEvent) -> Unit,
         tokenUsage: (TokenUsage) -> Unit,
-        onToolStarting: (activity: ToolActivity?) -> Unit = {}
+        onToolStarting: (activity: ToolActivity?) -> Unit = {},
     ): AIAgent<String, String> {
         val seededPrompt =
             prompt(id = "vusan-turn-$scope", params = chatParams.forConversation(scope.toString())) {
@@ -118,7 +118,7 @@ class AgentFactory(
                             toolCall(
                                 tool = checkNotNull(turn.toolName) { "TOOL_CALL row without toolName" },
                                 args = toolCallArgsForStorage(turn.content),
-                                id = checkNotNull(turn.toolCallId) { "TOOL_CALL row without toolCallId" }
+                                id = checkNotNull(turn.toolCallId) { "TOOL_CALL row without toolCallId" },
                             )
 
                         ChatRole.TOOL_RESULT ->
@@ -126,7 +126,7 @@ class AgentFactory(
                                 tool = checkNotNull(turn.toolName) { "TOOL_RESULT row without toolName" },
                                 output = turn.content,
                                 id = checkNotNull(turn.toolCallId) { "TOOL_RESULT row without toolCallId" },
-                                isError = turn.toolIsError ?: false
+                                isError = turn.toolIsError ?: false,
                             )
                     }
                 }
@@ -136,7 +136,7 @@ class AgentFactory(
             AIAgentConfig(
                 prompt = seededPrompt,
                 model = model,
-                maxAgentIterations = maxIterations
+                maxAgentIterations = maxIterations,
             )
 
         return AIAgent(
@@ -145,7 +145,7 @@ class AgentFactory(
             strategy =
                 vusanSingleRunStrategy(outbox, preparation.toolCatalog, toolBudget, maxIterations, scope),
             toolRegistry = preparation.toolCatalog.registry,
-            id = "vusan-turn-$scope"
+            id = "vusan-turn-$scope",
         ) {
             install(EventHandler) {
                 var seq = 0
@@ -166,8 +166,8 @@ class AgentFactory(
                             toolName = toolName,
                             args = args,
                             output = output,
-                            isError = isError
-                        )
+                            isError = isError,
+                        ),
                     )
                 }
 
@@ -237,7 +237,7 @@ private fun vusanSingleRunStrategy(
     catalog: ToolCatalog,
     toolBudget: TurnToolBudget,
     maxIterations: Int,
-    scope: ConversationScope
+    scope: ConversationScope,
 ): AIAgentGraphStrategy<String, String> =
     strategy<String, String>("single_run") {
         var nudged = false
@@ -361,7 +361,7 @@ private fun vusanSingleRunStrategy(
             edge(
                 node forwardTo nodeFinish
                         onCondition { msg -> msg.parts.none { it is MessagePart.Tool.Call } }
-                        transformed { msg -> msg.textContent() }
+                        transformed { msg -> msg.textContent() },
             )
         }
 
@@ -422,7 +422,7 @@ internal fun ReceivedToolResult.boundedForLiveContext(maxTokens: Int): ReceivedT
                 val text = part.text.boundedToolText(remaining)
                 remaining = (remaining - estimateTokens(text)).coerceAtLeast(0)
                 part.copy(text = text)
-            }
+            },
     )
 }
 
@@ -503,7 +503,7 @@ private fun garbledToolCallResult(call: MessagePart.Tool.Call, missing: List<Str
         output = "Tool `${call.tool}` was called with no arguments at all; it takes: $names. " +
                 "Reissue it as a single, complete call with its arguments.",
         resultKind = ToolResultKind.ValidationError(IllegalArgumentException("Missing required argument(s): $names")),
-        result = null
+        result = null,
     )
 }
 

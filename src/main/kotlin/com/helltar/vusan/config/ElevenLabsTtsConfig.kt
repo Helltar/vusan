@@ -2,7 +2,7 @@ package com.helltar.vusan.config
 
 data class ElevenLabsTtsConfig(
     val model: String,
-    val voiceId: String
+    val voiceId: String,
 ) {
 
     init {

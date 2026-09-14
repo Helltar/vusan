@@ -75,7 +75,7 @@ class CatalogToolsTest {
     fun `loadTools rejects an empty request`() = runBlocking {
         assertEquals(
             "Tool failed: Groups must not be empty",
-            toolFailure { CatalogTools(catalog()).loadTools("   ") }
+            toolFailure { CatalogTools(catalog()).loadTools("   ") },
         )
     }
 }

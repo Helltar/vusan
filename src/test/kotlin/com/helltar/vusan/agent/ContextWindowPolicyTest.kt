@@ -16,7 +16,7 @@ class ContextWindowPolicyTest {
             policy.budget(
                 systemPrompt = "system",
                 currentTurn = "current request",
-                tools = emptyList()
+                tools = emptyList(),
             )
 
         assertEquals(8_192, budget.contextWindowTokens)
@@ -28,7 +28,7 @@ class ContextWindowPolicyTest {
                     budget.conversationTokens +
                     budget.responseReserveTokens +
                     budget.agentReserveTokens +
-                    budget.safetyReserveTokens <= budget.contextWindowTokens
+                    budget.safetyReserveTokens <= budget.contextWindowTokens,
         )
     }
 
@@ -62,7 +62,7 @@ class ContextWindowPolicyTest {
             policy.budget(
                 systemPrompt = "system",
                 currentTurn = "current request",
-                tools = emptyList()
+                tools = emptyList(),
             )
 
         assertEquals(budget.agentReserveTokens, policy.liveToolResultMaxTokens)

@@ -17,14 +17,14 @@ class VideoNoteTools(
     private val config: ElevenLabsTtsConfig,
     private val portrait: ByteArray,
     private val outbox: BotOutbox,
-    private val renderer: VideoNoteRenderer = FfmpegVideoNoteRenderer()
+    private val renderer: VideoNoteRenderer = FfmpegVideoNoteRenderer(),
 ) : ToolSet {
 
     @Tool
     @LLMDescription(VideoNoteToolDescriptions.SPEAK_AS_VIDEO_NOTE)
     suspend fun speakAsVideoNote(
         @LLMDescription(VideoNoteToolDescriptions.TEXT)
-        text: String
+        text: String,
     ): String = suspendToolGuard {
         val trimmed = text.trim()
 

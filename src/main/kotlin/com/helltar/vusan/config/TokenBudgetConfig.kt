@@ -16,7 +16,7 @@ import java.time.ZoneId
 data class TokenBudgetConfig(
     val dailyTokens: Long? = null,
     val zone: ZoneId = DEFAULT_ZONE,
-    val fairSharePercent: Int = DEFAULT_FAIR_SHARE_PERCENT
+    val fairSharePercent: Int = DEFAULT_FAIR_SHARE_PERCENT,
 ) {
 
     init {

@@ -43,7 +43,7 @@ class TelegramBotRunnerTest {
         sentAt: Instant = now.minusSeconds(30),
         editedAt: Instant? = now.minusSeconds(10),
         isCommand: Boolean = false,
-        inAlbum: Boolean = false
+        inAlbum: Boolean = false,
     ): Boolean =
         startsTurnOnEdit(
             sentAt = sentAt,
@@ -51,7 +51,7 @@ class TelegramBotRunnerTest {
             now = now,
             window = 5.minutes,
             isCommand = isCommand,
-            inAlbum = inAlbum
+            inAlbum = inAlbum,
         )
 
 }

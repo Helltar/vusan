@@ -39,7 +39,7 @@ class ChatProfilesTest {
         val capabilities =
             capabilitiesOf(
                 ChatMemberAdministrator.builder().user(botUser).build(),
-                chat(permissions = ChatPermissions.builder().build(), slowModeDelay = 30)
+                chat(permissions = ChatPermissions.builder().build(), slowModeDelay = 30),
             )
 
         assertEquals(ChatCapabilities.UNRESTRICTED, capabilities)
@@ -102,7 +102,7 @@ class ChatProfilesTest {
         messages: Boolean = true,
         photos: Boolean = true,
         polls: Boolean = true,
-        reactions: Boolean? = true
+        reactions: Boolean? = true,
     ): ChatPermissions =
         ChatPermissions.builder()
             .canSendMessages(messages)

@@ -98,7 +98,7 @@ class TokenBudgetTest {
         afterRestart.record(ALICE, inputTokens = 1, outputTokens = 0)
         assertIs<TokenBudgetStop.DayBudget>(
             afterRestart.stopFor(ALICE),
-            "the restarted process resumed the same day's spend"
+            "the restarted process resumed the same day's spend",
         )
     }
 
@@ -234,7 +234,7 @@ class TokenBudgetTest {
                 provider = HostedLlmProvider.OPENAI,
                 apiKey = "test",
                 model = "test",
-                requestTimeout = 60.seconds
+                requestTimeout = 60.seconds,
             ),
             maxConcurrentTurns = 4,
             maxFollowUpsPerUser = 3,
@@ -252,7 +252,7 @@ class TokenBudgetTest {
             taskMaxLatenessMinutes = 60L,
             tavilyApiKey = null,
             telegramBotToken = "test",
-            ytDlpCookiesFile = null
+            ytDlpCookiesFile = null,
         )
 
     private companion object {

@@ -58,7 +58,7 @@ internal fun renderGroupLog(
     entries: List<GroupLogEntry>,
     zone: ZoneId,
     maxTextChars: Int,
-    budgetChars: Int
+    budgetChars: Int,
 ): RenderedGroupLog {
     val spansDays = entries.mapTo(mutableSetOf()) { LocalDate.ofInstant(it.sentAt, zone) }.size > 1
     val formatter = if (spansDays) DATE_AND_TIME else TIME_ONLY

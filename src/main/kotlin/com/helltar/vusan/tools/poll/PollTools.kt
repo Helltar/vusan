@@ -20,14 +20,14 @@ class PollTools(private val outbox: BotOutbox) : ToolSet {
         @LLMDescription(PollToolDescriptions.IS_ANONYMOUS)
         isAnonymous: Boolean = true,
         @LLMDescription(PollToolDescriptions.ALLOWS_MULTIPLE_ANSWERS)
-        allowsMultipleAnswers: Boolean = false
+        allowsMultipleAnswers: Boolean = false,
     ): String = suspendToolGuard {
         val poll =
             BotOutput.Poll(
                 question = question.trim(),
                 options = options.map { it.trim() },
                 isAnonymous = isAnonymous,
-                allowsMultipleAnswers = allowsMultipleAnswers
+                allowsMultipleAnswers = allowsMultipleAnswers,
             )
 
         outbox.enqueue(poll)

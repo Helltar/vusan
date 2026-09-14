@@ -19,7 +19,7 @@ class TelegramChannelVisionSelectionTest {
             linkPreview = null,
             mediaKinds = listOf("photo"),
             imageUrls = (1..images).map { "https://cdn.example.com/$id-$it.jpg" },
-            links = emptyList()
+            links = emptyList(),
         )
 
     private val longCaption = "A caption long enough to be carrying the post entirely on its own words. ".repeat(2)
@@ -44,7 +44,7 @@ class TelegramChannelVisionSelectionTest {
             listOf(
                 post("wordy", text = longCaption, reactions = 9_000),
                 post("bare", reactions = 5),
-                post("caption", text = "Short one", reactions = 10)
+                post("caption", text = "Short one", reactions = 10),
             )
 
         // "wordy" wins on reactions by far, but its own text already says what the post is about

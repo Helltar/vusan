@@ -47,7 +47,7 @@ suspend fun ImageDownloadClient.deliverImageResults(
     query: String,
     candidates: List<FoundImage>,
     limit: Int,
-    outbox: BotOutbox
+    outbox: BotOutbox,
 ): String {
     outbox.photosRefusedReply()?.let { return it }
 

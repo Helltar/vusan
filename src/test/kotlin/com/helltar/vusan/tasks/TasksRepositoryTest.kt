@@ -175,7 +175,7 @@ class TasksRepositoryTest {
             creatorUsername = "tester",
             creatorDisplayName = "Test User",
             chatIsPrivate = false,
-            language = Language.ENGLISH
+            language = Language.ENGLISH,
         )
 
     private suspend fun createTask(nextFireAt: Instant, chatId: Long = 100L): Long =
@@ -192,8 +192,8 @@ class TasksRepositoryTest {
                 creatorUsername = "tester",
                 creatorDisplayName = "Test User",
                 chatIsPrivate = true,
-                language = Language.ENGLISH
-            )
+                language = Language.ENGLISH,
+            ),
         )
 
     private fun testConfig(dbPath: String) =
@@ -209,7 +209,7 @@ class TasksRepositoryTest {
                 provider = HostedLlmProvider.OPENAI,
                 apiKey = "test",
                 model = "test",
-                requestTimeout = 60.seconds
+                requestTimeout = 60.seconds,
             ),
             maxConcurrentTurns = 4,
             maxFollowUpsPerUser = 3,
@@ -227,6 +227,6 @@ class TasksRepositoryTest {
             taskMaxLatenessMinutes = 60L,
             tavilyApiKey = null,
             telegramBotToken = "test",
-            ytDlpCookiesFile = null
+            ytDlpCookiesFile = null,
         )
 }

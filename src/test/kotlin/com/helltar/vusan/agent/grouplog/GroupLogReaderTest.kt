@@ -236,7 +236,7 @@ class GroupLogReaderTest {
         val digester =
             EditingDigester {
                 repository.recordEdit(
-                    GroupLogEntry(chat = CHAT, messageId = "1", kind = "text", sentAt = edited, text = "rewritten")
+                    GroupLogEntry(chat = CHAT, messageId = "1", kind = "text", sentAt = edited, text = "rewritten"),
                 )
             }
 
@@ -262,8 +262,8 @@ class GroupLogReaderTest {
                 senderId = "1",
                 senderUsername = username,
                 senderName = name,
-                text = text
-            )
+                text = text,
+            ),
         )
     }
 
@@ -307,7 +307,7 @@ class GroupLogReaderTest {
                     provider = HostedLlmProvider.OPENAI,
                     apiKey = "test",
                     model = "test",
-                    requestTimeout = 60.seconds
+                    requestTimeout = 60.seconds,
                 ),
             maxConcurrentTurns = 4,
             maxFollowUpsPerUser = 3,
@@ -325,7 +325,7 @@ class GroupLogReaderTest {
             taskMaxLatenessMinutes = 60L,
             tavilyApiKey = null,
             telegramBotToken = "test",
-            ytDlpCookiesFile = null
+            ytDlpCookiesFile = null,
         )
 
     private companion object {

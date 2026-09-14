@@ -49,14 +49,14 @@ class PlatformBoundaryTest {
                 "these files outside telegram/ started importing Telegram:\n" +
                         regrown.sorted().joinToString("\n") { "  $it" } +
                         "\n\nkeep the shared core unaware of one messenger, or add the file to " +
-                        "PlatformBoundaryTest.ALLOWED with the reason it cannot be."
+                        "PlatformBoundaryTest.ALLOWED with the reason it cannot be.",
             )
         }
 
         if (cleaned.isNotEmpty()) {
             fail(
                 "these files no longer import Telegram — drop them from PlatformBoundaryTest.ALLOWED:\n" +
-                        cleaned.sorted().joinToString("\n") { "  $it" }
+                        cleaned.sorted().joinToString("\n") { "  $it" },
             )
         }
     }

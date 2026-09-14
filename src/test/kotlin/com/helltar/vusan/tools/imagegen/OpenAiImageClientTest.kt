@@ -54,9 +54,9 @@ class OpenAiImageClientTest {
                     respond(
                         content = """{"data":[{"b64_json":"$encoded"}]}""",
                         status = HttpStatusCode.OK,
-                        headers = headersOf(HttpHeaders.ContentType, ContentType.Application.Json.toString())
+                        headers = headersOf(HttpHeaders.ContentType, ContentType.Application.Json.toString()),
                     )
-                }
+                },
             )
         val client = OpenAiImageClient(http, ImageAuth.ApiKey("sk-test"))
 
@@ -85,9 +85,9 @@ class OpenAiImageClientTest {
                     respond(
                         content = """{"data":[{"b64_json":"$encoded"}]}""",
                         status = HttpStatusCode.OK,
-                        headers = headersOf(HttpHeaders.ContentType, ContentType.Application.Json.toString())
+                        headers = headersOf(HttpHeaders.ContentType, ContentType.Application.Json.toString()),
                     )
-                }
+                },
             )
         val client = OpenAiImageClient(http, ImageAuth.ApiKey("sk-test"))
 
@@ -115,9 +115,9 @@ class OpenAiImageClientTest {
                     respond(
                         content = """{"error":{"message":"unsupported size"}}""",
                         status = HttpStatusCode.BadRequest,
-                        headers = headersOf(HttpHeaders.ContentType, ContentType.Application.Json.toString())
+                        headers = headersOf(HttpHeaders.ContentType, ContentType.Application.Json.toString()),
                     )
-                }
+                },
             )
         val client = OpenAiImageClient(http, ImageAuth.ApiKey("sk-test"))
 
@@ -127,7 +127,7 @@ class OpenAiImageClientTest {
 
         assertEquals(
             """HTTP 400 from api.openai.com: {"error":{"message":"unsupported size"}}""",
-            error.message
+            error.message,
         )
         http.close()
     }
@@ -140,9 +140,9 @@ class OpenAiImageClientTest {
                     respond(
                         content = """{"data":[]}""",
                         status = HttpStatusCode.OK,
-                        headers = headersOf(HttpHeaders.ContentType, ContentType.Application.Json.toString())
+                        headers = headersOf(HttpHeaders.ContentType, ContentType.Application.Json.toString()),
                     )
-                }
+                },
             )
         val client = OpenAiImageClient(http, ImageAuth.ApiKey("sk-test"))
 
@@ -169,7 +169,7 @@ class OpenAiImageClientTest {
         val form =
             editFormText(
                 config,
-                listOf(source("one.png", "image/png"), source("two.png", "image/png", byteArrayOf(8, 9)))
+                listOf(source("one.png", "image/png"), source("two.png", "image/png", byteArrayOf(8, 9))),
             )
 
         assertEquals(2, Regex("""name="image\[]"""").findAll(form).count())
@@ -187,9 +187,9 @@ class OpenAiImageClientTest {
                     respond(
                         content = """{"data":[{"b64_json":"${Base64.getEncoder().encodeToString(byteArrayOf(1))}"}]}""",
                         status = HttpStatusCode.OK,
-                        headers = headersOf(HttpHeaders.ContentType, ContentType.Application.Json.toString())
+                        headers = headersOf(HttpHeaders.ContentType, ContentType.Application.Json.toString()),
                     )
-                }
+                },
             )
 
         OpenAiImageClient(http, ImageAuth.ApiKey("sk-test")).generate("a red panda", "1024x1024", config)
@@ -210,9 +210,9 @@ class OpenAiImageClientTest {
                         content = """{"error":{"code":"moderation_blocked","message":"rejected",""" +
                                 """"moderation_details":{"moderation_stage":"output","categories":["violence"]}}}""",
                         status = HttpStatusCode.BadRequest,
-                        headers = headersOf(HttpHeaders.ContentType, ContentType.Application.Json.toString())
+                        headers = headersOf(HttpHeaders.ContentType, ContentType.Application.Json.toString()),
                     )
-                }
+                },
             )
         val client = OpenAiImageClient(http, ImageAuth.ApiKey("sk-test"))
 
@@ -227,7 +227,7 @@ class OpenAiImageClientTest {
 
     private suspend fun editFormText(
         config: OpenAiImageConfig,
-        images: List<SourceImage> = listOf(source("photo.png", "image/png"))
+        images: List<SourceImage> = listOf(source("photo.png", "image/png")),
     ): String {
         val encoded = Base64.getEncoder().encodeToString(byteArrayOf(1, 2))
         var form = ""
@@ -239,9 +239,9 @@ class OpenAiImageClientTest {
                     respond(
                         content = """{"data":[{"b64_json":"$encoded"}]}""",
                         status = HttpStatusCode.OK,
-                        headers = headersOf(HttpHeaders.ContentType, ContentType.Application.Json.toString())
+                        headers = headersOf(HttpHeaders.ContentType, ContentType.Application.Json.toString()),
                     )
-                }
+                },
             )
 
         OpenAiImageClient(http, ImageAuth.ApiKey("sk-test")).edit("add a hat", images, "auto", config)

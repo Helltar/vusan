@@ -22,7 +22,7 @@ private val ALLOWED_REACTION_EMOJI: Set<String> =
         "😴", "😭", "🤓", "👻", "👨‍💻", "👀", "🎃", "🙈", "😇", "😨",
         "🤝", "✍", "🤗", "🫡", "🎅", "🎄", "☃", "💅", "🤪", "🗿",
         "🆒", "💘", "🙉", "🦄", "😘", "💊", "🙊", "😎", "👾",
-        "🤷‍♂", "🤷", "🤷‍♀", "😡"
+        "🤷‍♂", "🤷", "🤷‍♀", "😡",
     )
 
 private fun normalizeReactionEmoji(raw: String): String =
@@ -39,7 +39,7 @@ class ReactionTools(private val context: RequestContext, private val outbox: Bot
         @LLMDescription(ReactionToolDescriptions.TARGET_REPLIED_MESSAGE)
         targetRepliedMessage: Boolean = false,
         @LLMDescription(ReactionToolDescriptions.MESSAGE_ID)
-        messageId: String? = null
+        messageId: String? = null,
     ): String = suspendToolGuard {
         val trimmedEmoji = emoji?.trim()
 

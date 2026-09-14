@@ -21,7 +21,7 @@ data class ChatCapabilities(
     val stickersAndAnimations: Boolean = true,
     val reactions: Boolean = true,
     /** Seconds a non-privileged member must wait between messages; `0` when slow mode is off. */
-    val slowModeSeconds: Int = 0
+    val slowModeSeconds: Int = 0,
 ) {
 
     /** The refused content kinds, named the way the agent-facing prompt and the logs both want them. */

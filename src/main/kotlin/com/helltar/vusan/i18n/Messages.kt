@@ -60,7 +60,7 @@ interface Messages {
         label: String,
         nextFire: String,
         recurrence: String,
-        paused: Boolean
+        paused: Boolean,
     ): String
 
     fun taskMenuPauseButton(id: Long): String

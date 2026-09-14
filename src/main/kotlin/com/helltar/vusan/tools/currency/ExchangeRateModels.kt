@@ -14,5 +14,5 @@ data class ExchangeRateResponse(
     @SerialName("time_last_update_utc")
     val timeLastUpdateUtc: String? = null,
 
-    val rates: Map<String, Double> = emptyMap()
+    val rates: Map<String, Double> = emptyMap(),
 )

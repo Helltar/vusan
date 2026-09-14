@@ -102,7 +102,7 @@ class GroupLogRepository(private val config: GroupLogConfig) {
         from: Instant,
         to: Instant,
         limit: Int,
-        author: String? = null
+        author: String? = null,
     ): List<GroupLogEntry> = dbTransaction {
         GroupLogTable
             .selectAll()
@@ -129,7 +129,7 @@ class GroupLogRepository(private val config: GroupLogConfig) {
         chat: ChatRef,
         limit: Int,
         since: Instant,
-        excludeMessageId: String? = null
+        excludeMessageId: String? = null,
     ): List<GroupLogEntry> = dbTransaction {
         GroupLogTable
             .selectAll()
@@ -164,7 +164,7 @@ class GroupLogRepository(private val config: GroupLogConfig) {
         dbTransaction {
             // the key names the day of one chat, so a second recap of the same day replaces the first
             GroupLogDigestsTable.upsert(
-                onUpdate = { it[GroupLogDigestsTable.content] = content }
+                onUpdate = { it[GroupLogDigestsTable.content] = content },
             ) {
                 it[GroupLogDigestsTable.platform] = chat.platform
                 it[GroupLogDigestsTable.chatId] = chat.id
@@ -298,5 +298,5 @@ private fun ResultRow.toEntry(): GroupLogEntry =
         text = this[GroupLogTable.text],
         descriptor = this[GroupLogTable.descriptor],
         forwardFrom = this[GroupLogTable.forwardFrom],
-        replyToMessageId = this[GroupLogTable.replyToMessageId]
+        replyToMessageId = this[GroupLogTable.replyToMessageId],
     )

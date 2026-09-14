@@ -18,7 +18,7 @@ import kotlin.time.Duration.Companion.days
 data class SentPoll(
     val chatId: Long,
     val options: List<String>,
-    val correctOptionIndex: Int?
+    val correctOptionIndex: Int?,
 )
 
 /**
@@ -77,7 +77,7 @@ class PollRegistry(private val retention: Duration = DEFAULT_RETENTION) {
                         SentPoll(
                             chatId = it[TelegramPollsTable.chatId],
                             options = it[TelegramPollsTable.optionList].split(OPTION_SEPARATOR),
-                            correctOptionIndex = it[TelegramPollsTable.correctOptionIndex]
+                            correctOptionIndex = it[TelegramPollsTable.correctOptionIndex],
                         )
                     }
             }

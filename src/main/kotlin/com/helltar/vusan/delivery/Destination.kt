@@ -15,7 +15,7 @@ import com.helltar.vusan.request.UserRef
  */
 data class Destination(
     val chat: ChatRef,
-    val threadId: String? = null
+    val threadId: String? = null,
 )
 
 /**
@@ -31,7 +31,7 @@ data class Attribution(
     val person: UserRef,
     val displayName: String? = null,
     val username: String? = null,
-    val reason: AttributionReason
+    val reason: AttributionReason,
 )
 
 /** Why an answer nobody just asked for is arriving. */

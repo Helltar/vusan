@@ -135,7 +135,7 @@ class TelegramDelivery(
     private val client: TelegramClient,
     private val onStickerRejected: (suspend (Long) -> Unit)? = null,
     private val groupLog: GroupLogRepository? = null,
-    private val polls: PollRegistry? = null
+    private val polls: PollRegistry? = null,
 ) : OutputDelivery {
 
     private data class DeliveryTarget(val chat: ChatTarget, val replyToMessageId: Long? = null) {
@@ -169,7 +169,7 @@ class TelegramDelivery(
             originTarget = DeliveryTarget(message.chatTarget, replyToMessageId = message.messageIdLong),
             currentChatTarget = DeliveryTarget(message.chatTarget),
             senderPrivateChatId = message.senderIdOrNull(),
-            messages = Messages.forCode(message.senderLanguageCodeOrNull())
+            messages = Messages.forCode(message.senderLanguageCodeOrNull()),
         )
     }
 
@@ -208,7 +208,7 @@ class TelegramDelivery(
         message: Message,
         originMessageId: Long?,
         userId: Long,
-        messages: Messages
+        messages: Messages,
     ) {
         val originTarget =
             DeliveryTarget(message.chatTarget, replyToMessageId = originMessageId ?: message.messageIdLong)
@@ -218,7 +218,7 @@ class TelegramDelivery(
             originTarget = originTarget,
             currentChatTarget = originTarget.withoutReply(),
             senderPrivateChatId = userId,
-            messages = messages
+            messages = messages,
         )
     }
 
@@ -235,7 +235,7 @@ class TelegramDelivery(
                 client = client,
                 target = message.chatTarget,
                 text = text,
-                replyParameters = replyParameters(replyToMessageId ?: message.messageIdLong)
+                replyParameters = replyParameters(replyToMessageId ?: message.messageIdLong),
             )
         }
     }
@@ -267,7 +267,7 @@ class TelegramDelivery(
         originTarget: DeliveryTarget,
         currentChatTarget: DeliveryTarget,
         senderPrivateChatId: Long?,
-        messages: Messages
+        messages: Messages,
     ): DispatchOutcome {
         val comment = result.comment?.takeIf { it.isNotBlank() }
         var replyUnavailable = false
@@ -282,7 +282,7 @@ class TelegramDelivery(
                     toPrivate = result.commentToPrivate,
                     originTarget = origin,
                     senderPrivateChatId = senderPrivateChatId,
-                    messages = messages
+                    messages = messages,
                 )
             ) {
                 ItemDeliveryOutcome.ReplyMissing -> replyUnavailable = true
@@ -309,7 +309,7 @@ class TelegramDelivery(
                     senderPrivateChatId = senderPrivateChatId,
                     text = item.output.groupLogText(),
                     descriptor = null,
-                    answering = originTarget.replyToMessageId
+                    answering = originTarget.replyToMessageId,
                 )
 
                 continue
@@ -334,7 +334,7 @@ class TelegramDelivery(
 
             when (
                 deliverItem(
-                    item.output, deliveryTarget, caption, routedToPrivate, currentChatTarget, messages, pollRegistry
+                    item.output, deliveryTarget, caption, routedToPrivate, currentChatTarget, messages, pollRegistry,
                 )
             ) {
                 ItemDeliveryOutcome.Ok ->
@@ -344,7 +344,7 @@ class TelegramDelivery(
                         senderPrivateChatId = senderPrivateChatId,
                         text = caption ?: item.output.groupLogText(),
                         descriptor = item.output.groupLogDescriptor(),
-                        answering = originTarget.replyToMessageId
+                        answering = originTarget.replyToMessageId,
                     )
 
                 ItemDeliveryOutcome.ReplyMissing -> replyUnavailable = true
@@ -397,7 +397,7 @@ class TelegramDelivery(
         routedToPrivate: Boolean,
         currentChatTarget: DeliveryTarget,
         messages: Messages,
-        pollRegistry: PollRegistry? = null
+        pollRegistry: PollRegistry? = null,
     ): ItemDeliveryOutcome {
         try {
             sendOutgoing(deliveryTarget, item, caption, messages, pollRegistry)
@@ -445,7 +445,7 @@ class TelegramDelivery(
         senderPrivateChatId: Long?,
         text: String?,
         descriptor: String?,
-        answering: Long?
+        answering: Long?,
     ) {
         val repository = groupLog ?: return
 
@@ -466,8 +466,8 @@ class TelegramDelivery(
                     descriptor = descriptor,
                     // the anchor is what ties this reply to the message it answers, which is how the
                     // recent-chat slice knows this exchange is already in that user's own history.
-                    replyToMessageId = answering?.toString()
-                )
+                    replyToMessageId = answering?.toString(),
+                ),
             )
         }.onFailure {
             it.rethrowIfCancellation()
@@ -490,7 +490,7 @@ class TelegramDelivery(
         toPrivate: Boolean,
         originTarget: DeliveryTarget,
         senderPrivateChatId: Long?,
-        messages: Messages
+        messages: Messages,
     ): ItemDeliveryOutcome {
         val privateTarget = senderPrivateChatId?.takeIf { toPrivate }?.let { DeliveryTarget(it) }
         val routedToPrivate = privateTarget != null
@@ -503,7 +503,7 @@ class TelegramDelivery(
                 senderPrivateChatId = senderPrivateChatId,
                 text = text,
                 descriptor = null,
-                answering = originTarget.replyToMessageId
+                answering = originTarget.replyToMessageId,
             )
 
         try {
@@ -546,7 +546,7 @@ class TelegramDelivery(
                         .chatId(target.chatId)
                         .messageThreadId(target.messageThreadId)
                         .action(action.toString())
-                        .build()
+                        .build(),
                 )
             }
         }.onFailure { it.rethrowIfCancellation() }
@@ -564,7 +564,7 @@ class TelegramDelivery(
                     client,
                     target.chat,
                     text,
-                    replyParameters(target.replyToMessageId)
+                    replyParameters(target.replyToMessageId),
                 )
         }
     }
@@ -577,7 +577,7 @@ class TelegramDelivery(
                     target.chat,
                     text,
                     replyParameters(target.replyToMessageId),
-                    messages.formattingAsFileNotice
+                    messages.formattingAsFileNotice,
                 )
         }
     }
@@ -587,7 +587,7 @@ class TelegramDelivery(
         item: BotOutput,
         caption: String?,
         messages: Messages,
-        pollRegistry: PollRegistry? = null
+        pollRegistry: PollRegistry? = null,
     ) {
         withFloodWaitRetry(target.chatId) {
             TelegramOutputSender
@@ -601,7 +601,7 @@ class TelegramDelivery(
                     onPollSent =
                         pollRegistry?.let { registry ->
                             { pollId -> registry.remember(pollId, target.chatId, item) }
-                        }
+                        },
                 )
         }
     }

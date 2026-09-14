@@ -66,7 +66,7 @@ object Db {
                         stmt.execute("PRAGMA busy_timeout=5000")
                         stmt.execute("PRAGMA synchronous=NORMAL")
                     }
-                }
+                },
             )
 
             suspendTransaction(newDatabase) { prepareSchema(requestedSpec.absolutePath) }

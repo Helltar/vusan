@@ -89,7 +89,7 @@ class ToolCatalogTest {
 
         assertEquals(
             listOf("sendTestMessage", "loadTools", "drawTestPicture", "speakTestText"),
-            loadedInMenuOrder.visibleNames()
+            loadedInMenuOrder.visibleNames(),
         )
         assertEquals(loadedInMenuOrder.visibleNames(), loadedInReverse.visibleNames())
     }
@@ -187,7 +187,7 @@ class ToolCatalogTest {
     fun `group names are the lowercase spelling the model is told to use`() {
         assertEquals(
             listOf("image_generation", "voice_replies"),
-            catalog().groupNames()
+            catalog().groupNames(),
         )
     }
 }

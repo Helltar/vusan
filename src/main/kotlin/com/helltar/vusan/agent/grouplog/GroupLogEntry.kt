@@ -18,7 +18,7 @@ data class GroupLogEntry(
     val text: String? = null,
     val descriptor: String? = null,
     val forwardFrom: String? = null,
-    val replyToMessageId: String? = null
+    val replyToMessageId: String? = null,
 ) {
 
     init {

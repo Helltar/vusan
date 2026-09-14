@@ -11,7 +11,7 @@ data class SearxngResponse(
 
     // pairs of engine name and the reason it dropped out; engines suspend themselves on rate limits
     // and CAPTCHAs, so this is the only way to tell an empty result set from a silently degraded one.
-    @SerialName("unresponsive_engines") val unresponsiveEngines: List<List<String>> = emptyList()
+    @SerialName("unresponsive_engines") val unresponsiveEngines: List<List<String>> = emptyList(),
 )
 
 @Serializable
@@ -21,7 +21,7 @@ data class SearxngResult(
     val content: String = "",
     val engine: String = "",
     val publishedDate: String? = null,
-    @SerialName("img_src") val imageUrl: String = ""
+    @SerialName("img_src") val imageUrl: String = "",
 )
 
 /** A direct answer an engine returned instead of a link; absent for most queries. */

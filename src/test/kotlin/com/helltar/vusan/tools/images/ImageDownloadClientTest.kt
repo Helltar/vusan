@@ -16,7 +16,7 @@ import kotlin.test.assertNull
 class ImageDownloadClientTest {
     private val publicUrl = "http://93.184.216.34/image.png"
     private val png = Base64.getDecoder().decode(
-        "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+aS9sAAAAASUVORK5CYII="
+        "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+aS9sAAAAASUVORK5CYII=",
     )
 
     @Test

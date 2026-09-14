@@ -51,7 +51,7 @@ class OpenAiPromptCachingTest {
         assertEquals("explicit", root["prompt_cache_options"]!!.jsonObject["mode"]!!.jsonPrimitive.content)
         assertEquals(
             "explicit",
-            stableBlock["prompt_cache_breakpoint"]!!.jsonObject["mode"]!!.jsonPrimitive.content
+            stableBlock["prompt_cache_breakpoint"]!!.jsonObject["mode"]!!.jsonPrimitive.content,
         )
         assertFalse("prompt_cache_breakpoint" in dynamicBlock)
     }
@@ -76,7 +76,7 @@ class OpenAiPromptCachingTest {
         assertEquals("stable instructions", block["text"]!!.jsonPrimitive.content)
         assertEquals(
             "explicit",
-            block["prompt_cache_breakpoint"]!!.jsonObject["mode"]!!.jsonPrimitive.content
+            block["prompt_cache_breakpoint"]!!.jsonObject["mode"]!!.jsonPrimitive.content,
         )
     }
 
@@ -182,10 +182,10 @@ class OpenAiPromptCachingTest {
                         endpoint = endpoint,
                         reasoningEffort = null,
                         requestTimeout = 120.seconds,
-                        contextWindowTokens = null
-                    )
+                        contextWindowTokens = null,
+                    ),
                 ),
-            transport = ::OpenAiPromptCachingHttpClientFactory
+            transport = ::OpenAiPromptCachingHttpClientFactory,
         )
 
     private fun assertExplicitlyCached(body: JsonObject, messagesKey: String) {

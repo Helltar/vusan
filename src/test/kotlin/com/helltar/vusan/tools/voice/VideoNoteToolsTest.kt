@@ -77,7 +77,7 @@ class VideoNoteToolsTest {
     private fun videoNoteTools(
         outbox: BotOutbox,
         onSynthesize: () -> Unit = {},
-        renderer: VideoNoteRenderer
+        renderer: VideoNoteRenderer,
     ): VideoNoteTools {
         val http =
             Http.createClient(
@@ -87,9 +87,9 @@ class VideoNoteToolsTest {
                     respond(
                         content = ByteReadChannel(speech),
                         status = HttpStatusCode.OK,
-                        headers = headersOf(HttpHeaders.ContentType, "audio/mpeg")
+                        headers = headersOf(HttpHeaders.ContentType, "audio/mpeg"),
                     )
-                }
+                },
             )
 
         return VideoNoteTools(ElevenLabsTtsClient(http, "sk-test"), config, portrait, outbox, renderer)

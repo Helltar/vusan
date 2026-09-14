@@ -14,7 +14,7 @@ class ImageRouteTest {
             provider = HostedLlmProvider.OPENAI,
             apiKey = "key",
             model = "gpt-5.4-mini",
-            requestTimeout = 120.seconds
+            requestTimeout = 120.seconds,
         )
 
     @Test

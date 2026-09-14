@@ -87,8 +87,8 @@ class GroupLogRepositoryTest {
                     messageId = null,
                     kind = GroupLogEntry.BOT_KIND,
                     sentAt = now,
-                    text = "reply $it"
-                )
+                    text = "reply $it",
+                ),
             )
         }
 
@@ -294,7 +294,7 @@ class GroupLogRepositoryTest {
         text: String,
         at: Instant,
         username: String? = "olena",
-        name: String? = "Olena Petrenko"
+        name: String? = "Olena Petrenko",
     ) =
         GroupLogEntry(
             chat = CHAT,
@@ -304,7 +304,7 @@ class GroupLogRepositoryTest {
             senderId = "1",
             senderUsername = username,
             senderName = name,
-            text = text
+            text = text,
         )
 
     private fun botEntry(text: String, at: Instant, answering: String? = null) =
@@ -315,7 +315,7 @@ class GroupLogRepositoryTest {
             kind = GroupLogEntry.BOT_KIND,
             sentAt = at,
             text = text,
-            replyToMessageId = answering
+            replyToMessageId = answering,
         )
 
     private fun testConfig(dbPath: String) =
@@ -332,7 +332,7 @@ class GroupLogRepositoryTest {
                     provider = HostedLlmProvider.OPENAI,
                     apiKey = "test",
                     model = "test",
-                    requestTimeout = 60.seconds
+                    requestTimeout = 60.seconds,
                 ),
             maxConcurrentTurns = 4,
             maxFollowUpsPerUser = 3,
@@ -350,7 +350,7 @@ class GroupLogRepositoryTest {
             taskMaxLatenessMinutes = 60L,
             tavilyApiKey = null,
             telegramBotToken = "test",
-            ytDlpCookiesFile = null
+            ytDlpCookiesFile = null,
         )
 
     private companion object {

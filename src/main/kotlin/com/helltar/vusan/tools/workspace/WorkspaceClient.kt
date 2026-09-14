@@ -30,7 +30,7 @@ internal const val WORKSPACE_FILE_LIMIT = 50 * 1024 * 1024
 class WorkspaceClient(
     http: HttpClient,
     baseUrl: String,
-    private val token: String
+    private val token: String,
 ) {
 
     init {
@@ -312,7 +312,7 @@ private fun ExecInfo.result(output: String, nextOffset: Long, hasMore: Boolean, 
             "pids_limited" -> CommandLimit.TOO_MANY_PROCESSES
             else -> null
         },
-        reason = reason.takeIf { status == CommandStatus.INTERRUPTED }
+        reason = reason.takeIf { status == CommandStatus.INTERRUPTED },
     )
 }
 

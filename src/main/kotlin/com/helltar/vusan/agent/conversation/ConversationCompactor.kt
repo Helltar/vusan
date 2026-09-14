@@ -23,7 +23,7 @@ Do not invent, diagnose, moralize, or describe the summarization process. Do not
 data class CompactedConversation(
     val summary: String,
     val throughMessageId: Long,
-    val interactionCount: Int
+    val interactionCount: Int,
 )
 
 interface ConversationCompactor {
@@ -34,12 +34,12 @@ class LlmConversationCompactor(
     private val promptExecutor: PromptExecutor,
     private val model: LLModel,
     private val chatParams: LLMParams = LLMParams(),
-    private val contextWindowPolicy: ContextWindowPolicy = ContextWindowPolicy(model)
+    private val contextWindowPolicy: ContextWindowPolicy = ContextWindowPolicy(model),
 ) : ConversationCompactor {
 
     override suspend fun compact(
         previousSummary: String?,
-        interactions: List<ConversationInteraction>
+        interactions: List<ConversationInteraction>,
     ): CompactedConversation? {
         if (interactions.isEmpty()) return null
 
@@ -59,7 +59,7 @@ class LlmConversationCompactor(
                     system(COMPACTION_SYSTEM_PROMPT)
                     user(request)
                 },
-                model
+                model,
             )
 
         val summary = response.textContent().trim().limitTo(MAX_SUMMARY_CHARS).takeIf { it.isNotBlank() } ?: return null
@@ -73,13 +73,13 @@ class LlmConversationCompactor(
         return CompactedConversation(
             summary = summary,
             throughMessageId = batch.last().lastMessageId,
-            interactionCount = batch.size
+            interactionCount = batch.size,
         )
     }
 
     private fun selectBatch(
         previousSummary: String?,
-        interactions: List<ConversationInteraction>
+        interactions: List<ConversationInteraction>,
     ): List<ConversationInteraction> {
         val tokenBudget =
             (contextWindowPolicy.contextWindowTokens / 3)

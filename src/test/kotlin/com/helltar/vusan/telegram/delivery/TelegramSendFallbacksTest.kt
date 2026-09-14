@@ -73,7 +73,7 @@ class TelegramSendFallbacksTest {
                 .errorCode(429)
                 .errorDescription("Too Many Requests: retry after $retryAfter")
                 .parameters(ResponseParameters(null, retryAfter))
-                .build()
+                .build(),
         )
 
     private companion object {

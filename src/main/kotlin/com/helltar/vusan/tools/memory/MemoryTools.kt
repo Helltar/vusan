@@ -21,7 +21,7 @@ class MemoryTools(private val memory: MemoryRepository, private val context: Req
     @LLMDescription(MemoryToolDescriptions.REMEMBER_ABOUT_ME)
     suspend fun rememberAboutMe(
         @LLMDescription(MemoryToolDescriptions.REMEMBER_ABOUT_ME_DETAIL)
-        detail: String
+        detail: String,
     ): String = suspendToolGuard {
         if (!context.sender.isPerson) return@suspendToolGuard NO_PERSONAL_MEMORY
 
@@ -36,7 +36,7 @@ class MemoryTools(private val memory: MemoryRepository, private val context: Req
     @LLMDescription(MemoryToolDescriptions.REMEMBER_ABOUT_GROUP)
     suspend fun rememberAboutGroup(
         @LLMDescription(MemoryToolDescriptions.REMEMBER_ABOUT_GROUP_DETAIL)
-        detail: String
+        detail: String,
     ): String = suspendToolGuard {
         if (context.chat.isPrivate)
             return@suspendToolGuard "No shared group memory in a private chat — use rememberAboutMe for personal details."
@@ -52,7 +52,7 @@ class MemoryTools(private val memory: MemoryRepository, private val context: Req
     @LLMDescription(MemoryToolDescriptions.FORGET_MEMORY)
     suspend fun forgetMemory(
         @LLMDescription(MemoryToolDescriptions.FORGET_MEMORY_ID)
-        id: Long
+        id: Long,
     ): String = suspendToolGuard {
         if (memory.forget(id, context.user, context.chatRef))
             "Forgot memory #$id."

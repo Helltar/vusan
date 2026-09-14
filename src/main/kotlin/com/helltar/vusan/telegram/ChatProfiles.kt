@@ -36,7 +36,7 @@ private val log = KotlinLogging.logger("ChatProfiles")
 class ChatProfiles(
     private val client: TelegramClient,
     private val botId: Long,
-    private val ttl: Duration = DEFAULT_TTL
+    private val ttl: Duration = DEFAULT_TTL,
 ) : ChatProfileLookup {
 
     override suspend fun of(chat: ChatRef): ChatProfile = of(chat.telegramChatId)
@@ -71,7 +71,7 @@ class ChatProfiles(
 
         return ChatProfile(
             description = chat?.description,
-            capabilities = capabilitiesOf(membership, chat)
+            capabilities = capabilitiesOf(membership, chat),
         )
     }
 
@@ -120,7 +120,7 @@ private fun ChatPermissions?.toCapabilities(slowModeSeconds: Int): ChatCapabilit
         stickersAndAnimations = canSendOtherMessages == true,
         // the Bot API defines an omitted `can_react_to_messages` as following `can_send_messages`.
         reactions = (canReactToMessages ?: canSendMessages) == true,
-        slowModeSeconds = slowModeSeconds
+        slowModeSeconds = slowModeSeconds,
     )
 }
 

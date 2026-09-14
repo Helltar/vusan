@@ -70,7 +70,7 @@ class RichMessageTextTest {
 
             the chart
             """.trimIndent(),
-            message.richMessage.toRichMarkdown()
+            message.richMessage.toRichMarkdown(),
         )
     }
 
@@ -98,7 +98,7 @@ class RichMessageTextTest {
 
             Press here
             """.trimIndent(),
-            message.richMessage.toRichMarkdown()
+            message.richMessage.toRichMarkdown(),
         )
     }
 
@@ -124,7 +124,7 @@ class RichMessageTextTest {
 
             Benchmarks
             """.trimIndent(),
-            message.richMessage.toRichMarkdown()
+            message.richMessage.toRichMarkdown(),
         )
     }
 
@@ -149,7 +149,7 @@ class RichMessageTextTest {
         val replied =
             richMessage(
                 """{"type":"heading","text":"Plan","size":1},{"type":"paragraph","text":"step one"}""",
-                extra = """"reply_to_message":{"message_id":9,"date":1,"chat":{"id":42,"type":"private"},"text":"x"},"""
+                extra = """"reply_to_message":{"message_id":9,"date":1,"chat":{"id":42,"type":"private"},"text":"x"},""",
             )
 
         // the rich message is the replied-to one, so it is nested under `reply_to_message`.

@@ -27,7 +27,7 @@ class WorkspaceTools(
     private val client: WorkspaceClient,
     private val id: String,
     private val outbox: BotOutbox,
-    private val attachedFile: AttachedFile? = null
+    private val attachedFile: AttachedFile? = null,
 ) : ToolSet {
 
     private var attachmentHandled = false
@@ -38,7 +38,7 @@ class WorkspaceTools(
         @LLMDescription(WorkspaceToolDescriptions.COMMAND)
         command: String,
         @LLMDescription(WorkspaceToolDescriptions.TIMEOUT_SECONDS)
-        timeoutSeconds: Int = 0
+        timeoutSeconds: Int = 0,
     ): String = suspendToolGuard {
         val script = command.requireToolText("Command", MAX_COMMAND_CHARS)
         require(timeoutSeconds >= 0) { "Timeout must not be negative" }
@@ -55,7 +55,7 @@ class WorkspaceTools(
         @LLMDescription(WorkspaceToolDescriptions.OFFSET)
         offset: Long = 0,
         @LLMDescription(WorkspaceToolDescriptions.WAIT_SECONDS)
-        waitSeconds: Int = 10
+        waitSeconds: Int = 10,
     ): String = suspendToolGuard {
         require(offset >= 0) { "Offset must not be negative" }
         require(waitSeconds in 0..20) { "Wait must be between 0 and 20 seconds" }
@@ -72,7 +72,7 @@ class WorkspaceTools(
     @LLMDescription(WorkspaceToolDescriptions.CANCEL_COMMAND)
     suspend fun cancelWorkspaceCommand(
         @LLMDescription(WorkspaceToolDescriptions.JOB_ID)
-        jobId: String
+        jobId: String,
     ): String = suspendToolGuard {
         describeCommand(client.cancelCommand(id, checkedJobId(jobId)))
     }
@@ -83,7 +83,7 @@ class WorkspaceTools(
         @LLMDescription(WorkspaceToolDescriptions.WRITE_PATH)
         path: String,
         @LLMDescription(WorkspaceToolDescriptions.WRITE_CONTENT)
-        content: String
+        content: String,
     ): String = suspendToolGuard {
         val target = path.requireToolText("Path", MAX_PATH_CHARS)
         require(content.length <= MAX_CONTENT_CHARS) { "File content must be at most $MAX_CONTENT_CHARS characters" }
@@ -96,7 +96,7 @@ class WorkspaceTools(
     @LLMDescription(WorkspaceToolDescriptions.DELETE_FILE)
     suspend fun deleteWorkspaceFile(
         @LLMDescription(WorkspaceToolDescriptions.DELETE_PATH)
-        path: String
+        path: String,
     ): String = suspendToolGuard {
         val target = path.requireToolText("Path", MAX_PATH_CHARS)
         client.deleteFile(id, target)
@@ -114,7 +114,7 @@ class WorkspaceTools(
     @LLMDescription(WorkspaceToolDescriptions.SEND_FILES)
     suspend fun sendFromWorkspace(
         @LLMDescription(WorkspaceToolDescriptions.SEND_PATHS)
-        paths: List<String>
+        paths: List<String>,
     ): String = suspendToolGuard {
         require(paths.isNotEmpty()) { "At least one path is required" }
         require(paths.size <= MAX_SEND_FILES) { "At most $MAX_SEND_FILES files per call" }

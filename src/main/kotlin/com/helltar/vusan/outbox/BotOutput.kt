@@ -16,7 +16,7 @@ sealed class BotOutput {
         // the external id of the person the buttons are for; only they may press one.
         val ownerId: String,
         val historyRevision: Long,
-        val originMessageId: String? = null
+        val originMessageId: String? = null,
     ) : BotOutput() {
         init {
             validateQuestionAndOptions("Inline choice", question, options)
@@ -65,7 +65,7 @@ sealed class BotOutput {
     class Animation(
         val url: String? = null,
         val bytes: ByteArray? = null,
-        val filename: String = "animation.gif"
+        val filename: String = "animation.gif",
     ) : BotOutput() {
         override val acceptsCaption: Boolean get() = true
 
@@ -88,13 +88,13 @@ sealed class BotOutput {
 
     class Voice(
         val bytes: ByteArray,
-        val durationSeconds: Int? = null
+        val durationSeconds: Int? = null,
     ) : BotOutput()
 
     class VideoNote(
         val bytes: ByteArray,
         val durationSeconds: Int? = null,
-        val size: Int? = null
+        val size: Int? = null,
     ) : BotOutput()
 
     class Video(
@@ -104,7 +104,7 @@ sealed class BotOutput {
         val width: Int? = null,
         val height: Int? = null,
         val thumbnail: ByteArray? = null,
-        val sourceUrl: String? = null
+        val sourceUrl: String? = null,
     ) : BotOutput() {
         override val acceptsCaption: Boolean get() = true
     }
@@ -115,7 +115,7 @@ sealed class BotOutput {
         val title: String,
         val performer: String,
         val durationSeconds: Int? = null,
-        val trackUrl: String? = null
+        val trackUrl: String? = null,
     ) : BotOutput() {
         override val acceptsCaption: Boolean get() = true
     }
@@ -133,7 +133,7 @@ sealed class BotOutput {
         val options: List<String>,
         val correctOptionIndex: Int,
         val explanation: String? = null,
-        val isAnonymous: Boolean = false
+        val isAnonymous: Boolean = false,
     ) : BotOutput() {
         init {
             validateQuestionAndOptions("Quiz", question, options)
@@ -154,7 +154,7 @@ sealed class BotOutput {
         val question: String,
         val options: List<String>,
         val isAnonymous: Boolean = true,
-        val allowsMultipleAnswers: Boolean = false
+        val allowsMultipleAnswers: Boolean = false,
     ) : BotOutput() {
         init {
             validateQuestionAndOptions("Poll", question, options)

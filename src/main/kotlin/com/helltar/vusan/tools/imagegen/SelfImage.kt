@@ -30,7 +30,7 @@ class SelfImage(val reference: SourceImage?, val appearance: String?)
 internal suspend fun resolveSelfImage(
     file: String?,
     appearance: String?,
-    loadAvatar: suspend () -> SourceImage? = { null }
+    loadAvatar: suspend () -> SourceImage? = { null },
 ): SelfImage? {
     val reference = file?.let { readReferenceFile(it) } ?: loadAvatar()
     val notes = appearance?.takeUnless { it.isEffectivelyBlank() }

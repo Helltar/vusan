@@ -164,7 +164,7 @@ class AgentFactoryTest {
     fun `a non-text part survives the cap untouched`() {
         val image =
             MessagePart.Attachment(
-                AttachmentSource.Image(AttachmentContent.URL("https://example.invalid/a.png"), format = "png")
+                AttachmentSource.Image(AttachmentContent.URL("https://example.invalid/a.png"), format = "png"),
             )
         val long = "x".repeat(5_000)
 
@@ -213,7 +213,7 @@ class AgentFactoryTest {
 
         assertEquals(
             listOf("question", "options", "isAnonymous", "allowsMultipleAnswers"),
-            call.missingRequiredArgs(pollRegistry)
+            call.missingRequiredArgs(pollRegistry),
         )
     }
 
@@ -225,7 +225,7 @@ class AgentFactoryTest {
             MessagePart.Tool.Call(
                 id = "c2",
                 tool = "createPoll",
-                args = """{"question":"Tea or coffee?","options":["tea","coffee"]}"""
+                args = """{"question":"Tea or coffee?","options":["tea","coffee"]}""",
             )
 
         assertEquals(emptyList(), call.missingRequiredArgs(pollRegistry))
@@ -249,6 +249,6 @@ class AgentFactoryTest {
             output = output,
             resultKind = ToolResultKind.Success,
             result = null,
-            parts = parts
+            parts = parts,
         )
 }

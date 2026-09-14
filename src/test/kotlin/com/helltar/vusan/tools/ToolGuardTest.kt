@@ -17,7 +17,7 @@ class ToolGuardTest {
     fun `reports a rejected argument as a failed tool call`() = runBlocking {
         assertEquals(
             "Tool failed: bad emoji",
-            toolFailure { suspendToolGuard { require(false) { "bad emoji" }; "" } }
+            toolFailure { suspendToolGuard { require(false) { "bad emoji" }; "" } },
         )
     }
 

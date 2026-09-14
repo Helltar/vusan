@@ -28,7 +28,7 @@ internal fun turnStopOwnerId(callbackData: String): Long? =
  */
 internal class TurnStopHandler(
     private val client: TelegramClient,
-    private val agent: AgentRunner
+    private val agent: AgentRunner,
 ) {
 
     fun handles(callbackData: String?): Boolean =
@@ -39,7 +39,7 @@ internal class TurnStopHandler(
         callbackData: String,
         userId: Long,
         chatId: Long,
-        messages: Messages
+        messages: Messages,
     ) {
         val ownerId = turnStopOwnerId(callbackData)
 

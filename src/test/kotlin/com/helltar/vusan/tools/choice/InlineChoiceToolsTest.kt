@@ -29,13 +29,13 @@ class InlineChoiceToolsTest {
         val result =
             tools.askWithButtons(
                 question = "  Which format do you want?  ",
-                options = listOf("  PDF  ", "DOCX")
+                options = listOf("  PDF  ", "DOCX"),
             )
 
         assertEquals(
             "Question queued with 2 buttons. " +
                     "End your turn now and wait for the user's selection; do not send the question again.",
-            result
+            result,
         )
         assertEquals(
             BotOutput.InlineChoice(
@@ -43,9 +43,9 @@ class InlineChoiceToolsTest {
                 options = listOf("PDF", "DOCX"),
                 ownerId = "42",
                 historyRevision = 7L,
-                originMessageId = "9"
+                originMessageId = "9",
             ),
-            outbox.pending.single().output
+            outbox.pending.single().output,
         )
         // a button is invalidated by the history of this chat, not of every chat this person writes in.
         assertEquals(testScope(userId = 42, chatId = 7), revisionScope)

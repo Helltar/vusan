@@ -66,7 +66,7 @@ class AppConfigTest {
     fun `an id list accepts every separator it documents`() {
         assertEquals(
             setOf("telegram:1", "telegram:2", "telegram:3", "telegram:4"),
-            parseIdSetEnv("ALLOWED_IDS", "1, 2;3\n4")
+            parseIdSetEnv("ALLOWED_IDS", "1, 2;3\n4"),
         )
 
         assertEquals(setOf("telegram:-100500", "telegram:7"), parseIdSetEnv("ALLOWED_IDS", "-100500  7"))
@@ -118,7 +118,7 @@ class AppConfigTest {
         maxMemoryPerScope: Int = 10,
         maxTasksPerUser: Int = 5,
         regolithUrl: String? = null,
-        taskMaxLatenessMinutes: Long = 60
+        taskMaxLatenessMinutes: Long = 60,
     ): AppConfig =
         AppConfig(
             agentMaxIterations = agentMaxIterations,
@@ -133,7 +133,7 @@ class AppConfigTest {
                     provider = HostedLlmProvider.OPENAI,
                     apiKey = "key",
                     model = "gpt-5.4-mini",
-                    requestTimeout = 120.seconds
+                    requestTimeout = 120.seconds,
                 ),
             maxConcurrentTurns = 4,
             maxFollowUpsPerUser = maxFollowUpsPerUser,
@@ -151,6 +151,6 @@ class AppConfigTest {
             taskMaxLatenessMinutes = taskMaxLatenessMinutes,
             tavilyApiKey = null,
             telegramBotToken = "token",
-            ytDlpCookiesFile = null
+            ytDlpCookiesFile = null,
         )
 }

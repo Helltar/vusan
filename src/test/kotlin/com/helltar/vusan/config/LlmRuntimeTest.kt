@@ -79,13 +79,13 @@ class LlmRuntimeTest {
                 is OpenAIChatParams ->
                     assertTrue(
                         model.supports(LLMCapability.OpenAIEndpoint.Completions),
-                        "${model.id} was given chat params but does not speak completions"
+                        "${model.id} was given chat params but does not speak completions",
                     )
 
                 is OpenAIResponsesParams ->
                     assertTrue(
                         model.supports(LLMCapability.OpenAIEndpoint.Responses),
-                        "${model.id} was given responses params but does not speak responses"
+                        "${model.id} was given responses params but does not speak responses",
                     )
 
                 else -> Unit
@@ -191,7 +191,7 @@ class LlmRuntimeTest {
 
         val responses =
             sentOpenAiRequest(
-                openAiCompatible(endpoint = OpenAiEndpoint.RESPONSES, reasoningEffort = ReasoningEffort.XHIGH)
+                openAiCompatible(endpoint = OpenAiEndpoint.RESPONSES, reasoningEffort = ReasoningEffort.XHIGH),
             )
 
         val subscription = sentOpenAiRequest(codex(reasoningEffort = ReasoningEffort.XHIGH))
@@ -224,7 +224,7 @@ class LlmRuntimeTest {
                 openAiCompatible(
                     baseUrl = "http://127.0.0.1:${server.address.port}",
                     endpoint = OpenAiEndpoint.RESPONSES,
-                    reasoningEffort = ReasoningEffort.MAX
+                    reasoningEffort = ReasoningEffort.MAX,
                 )
 
             val prompt = Prompt.build("echo", params = runtime.chatParams) { user("current request") }
@@ -244,7 +244,7 @@ class LlmRuntimeTest {
         assertEquals("none", openAiCompatible(reasoningEffort = ReasoningEffort.NONE).reasoningEffort)
         assertEquals(
             "high",
-            openAiCompatible(endpoint = OpenAiEndpoint.RESPONSES, reasoningEffort = ReasoningEffort.HIGH).reasoningEffort
+            openAiCompatible(endpoint = OpenAiEndpoint.RESPONSES, reasoningEffort = ReasoningEffort.HIGH).reasoningEffort,
         )
         assertEquals("max", codex(reasoningEffort = ReasoningEffort.MAX).reasoningEffort)
         assertNull(openAiCompatible().reasoningEffort)
@@ -281,8 +281,8 @@ class LlmRuntimeTest {
                     apiKey = "key",
                     model = "claude-sonnet-4-5",
                     requestTimeout = 120.seconds,
-                    contextWindowTokens = 65_536
-                )
+                    contextWindowTokens = 65_536,
+                ),
             )
 
         assertEquals(32_768L, compatible.model.contextLength)
@@ -328,7 +328,7 @@ class LlmRuntimeTest {
         assertFailsWith<IllegalArgumentException> {
             resolveLlmRuntime(
                 LlmProviderConfig.Codex(model = "gpt-5.6-terra", requestTimeout = 120.seconds),
-                codexAuth = null
+                codexAuth = null,
             )
         }
     }
@@ -353,7 +353,7 @@ class LlmRuntimeTest {
         assertEquals(ServiceTier.PRIORITY, assertIs<OpenAIResponsesParams>(runtime.compactionParams).serviceTier)
         assertEquals(
             "model=gpt-5.6-terra;tier=priority",
-            codexRoutingHint("gpt-5.6-terra", ServiceTier.PRIORITY)
+            codexRoutingHint("gpt-5.6-terra", ServiceTier.PRIORITY),
         )
     }
 
@@ -363,15 +363,15 @@ class LlmRuntimeTest {
                 provider = HostedLlmProvider.ANTHROPIC,
                 apiKey = "key",
                 model = "claude-sonnet-4-5",
-                requestTimeout = 120.seconds
-            )
+                requestTimeout = 120.seconds,
+            ),
         )
 
     private fun codex(
         contextWindowTokens: Long? = null,
         supportsVision: Boolean = true,
         reasoningEffort: ReasoningEffort? = null,
-        serviceTier: ServiceTier? = null
+        serviceTier: ServiceTier? = null,
     ): LlmRuntime =
         resolveLlmRuntime(
             LlmProviderConfig.Codex(
@@ -380,16 +380,16 @@ class LlmRuntimeTest {
                 requestTimeout = 120.seconds,
                 contextWindowTokens = contextWindowTokens,
                 supportsVision = supportsVision,
-                serviceTier = serviceTier
+                serviceTier = serviceTier,
             ),
-            codexAuth = CodexAuthStore(Http.createClient(MockEngine { error("no calls expected") }))
+            codexAuth = CodexAuthStore(Http.createClient(MockEngine { error("no calls expected") })),
         )
 
     private fun openAiCompatible(
         baseUrl: String = "https://example.test",
         endpoint: OpenAiEndpoint = OpenAiEndpoint.COMPLETIONS,
         reasoningEffort: ReasoningEffort? = null,
-        contextWindowTokens: Long? = null
+        contextWindowTokens: Long? = null,
     ): LlmRuntime =
         resolveLlmRuntime(
             LlmProviderConfig.OpenAiCompatible(
@@ -399,7 +399,7 @@ class LlmRuntimeTest {
                 endpoint = endpoint,
                 reasoningEffort = reasoningEffort,
                 requestTimeout = 120.seconds,
-                contextWindowTokens = contextWindowTokens
-            )
+                contextWindowTokens = contextWindowTokens,
+            ),
         )
 }

@@ -36,7 +36,7 @@ enum class ToolGroup(val summary: String) {
 data class ToolLoadResult(
     val groups: List<ToolGroup>,
     val toolNames: List<String>,
-    val unknown: List<String>
+    val unknown: List<String>,
 )
 
 /**
@@ -53,7 +53,7 @@ data class ToolLoadResult(
 class ToolCatalog internal constructor(
     entries: List<CatalogEntry>,
     preloaded: Set<ToolGroup> = emptySet(),
-    private val onLoad: (List<ToolGroup>) -> Unit = {}
+    private val onLoad: (List<ToolGroup>) -> Unit = {},
 ) {
 
     private val alwaysVisible: List<ToolBase<*, *>> = entries.filter { it.group == null }.flatMap { it.tools }
@@ -101,7 +101,7 @@ class ToolCatalog internal constructor(
         return ToolLoadResult(
             groups = groups,
             toolNames = groups.flatMap { group -> deferred[group].orEmpty().map { it.name } },
-            unknown = requested.filterNot { it in byGroupName }
+            unknown = requested.filterNot { it in byGroupName },
         )
     }
 
@@ -135,7 +135,7 @@ class ToolCatalogBuilder internal constructor() {
 fun toolCatalog(
     preloaded: Set<ToolGroup> = emptySet(),
     onLoad: (List<ToolGroup>) -> Unit = {},
-    build: ToolCatalogBuilder.() -> Unit
+    build: ToolCatalogBuilder.() -> Unit,
 ): ToolCatalog = ToolCatalogBuilder().apply(build).build(preloaded, onLoad)
 
 private fun ToolSet.toolList(): List<ToolBase<*, *>> = this::class.asTools(this)

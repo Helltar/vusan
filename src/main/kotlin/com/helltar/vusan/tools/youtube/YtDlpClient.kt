@@ -51,7 +51,7 @@ class YtDlpClient(private val runner: YtDlpRunner) {
             maxFileSizeMb = maxFileSizeMb,
             resolveCandidates = { runner.searchCandidates(query) },
             describeSuccess = { "title=[${it.title}] performer=[${it.performer}]" },
-            downloadCandidate = { attemptDir, url -> downloadAudioCandidate(attemptDir, url, query, maxFileSizeMb) }
+            downloadCandidate = { attemptDir, url -> downloadAudioCandidate(attemptDir, url, query, maxFileSizeMb) },
         )
 
     private suspend fun <T> downloadFromCandidates(
@@ -61,7 +61,7 @@ class YtDlpClient(private val runner: YtDlpRunner) {
         maxFileSizeMb: Int,
         resolveCandidates: suspend () -> List<YtDlpSearchCandidate>,
         describeSuccess: (T) -> String,
-        downloadCandidate: suspend (attemptDir: Path, url: String) -> DownloadAttempt<T>
+        downloadCandidate: suspend (attemptDir: Path, url: String) -> DownloadAttempt<T>,
     ): YtDlpResult<T> {
         val diagnostics = runner.runtimeDiagnostics()
 
@@ -116,7 +116,7 @@ class YtDlpClient(private val runner: YtDlpRunner) {
                     log.warn {
                         "yt-dlp $label failed retryable=${attempt.retryable} url=[${candidate.url}]: ${
                             result.reason.take(
-                                300
+                                300,
                             )
                         }"
                     }
@@ -133,7 +133,7 @@ class YtDlpClient(private val runner: YtDlpRunner) {
         if (allFormatUnavailable) {
             return YtDlpResult.Failure(
                 "yt-dlp found no available formats for any of ${candidates.size} " +
-                        "YouTube candidates on this server. Check the server yt-dlp version and YouTube cookies."
+                        "YouTube candidates on this server. Check the server yt-dlp version and YouTube cookies.",
             )
         }
 
@@ -146,7 +146,7 @@ class YtDlpClient(private val runner: YtDlpRunner) {
         url: String,
         query: String,
         maxFileSizeMb: Int,
-        buildPayload: (bytes: ByteArray, info: YtDlpInfo) -> T
+        buildPayload: (bytes: ByteArray, info: YtDlpInfo) -> T,
     ): DownloadAttempt<T> {
         val commandResult = runner.runCommand(command)
 
@@ -192,7 +192,7 @@ class YtDlpClient(private val runner: YtDlpRunner) {
         workDir: Path,
         url: String,
         query: String,
-        maxFileSizeMb: Int
+        maxFileSizeMb: Int,
     ): DownloadAttempt<YtDlpTrack> {
         val command =
             buildList {
@@ -205,8 +205,8 @@ class YtDlpClient(private val runner: YtDlpRunner) {
                 addAll(
                     listOf(
                         "--format",
-                        "ba[protocol^=m3u8]/b[protocol^=m3u8][height<=480]/b[protocol^=m3u8]/bestaudio/best"
-                    )
+                        "ba[protocol^=m3u8]/b[protocol^=m3u8][height<=480]/b[protocol^=m3u8]/bestaudio/best",
+                    ),
                 )
                 addAll(listOf("--format-sort", "proto:m3u8,res:360,acodec:m4a"))
                 addAll(listOf("--no-playlist", "--no-warnings"))
@@ -225,7 +225,7 @@ class YtDlpClient(private val runner: YtDlpRunner) {
                 title = info.track ?: info.title ?: "Unknown",
                 performer = info.artist ?: info.uploader ?: info.channel ?: "Unknown",
                 durationSeconds = info.duration?.toInt(),
-                sourceUrl = info.webpageUrl
+                sourceUrl = info.webpageUrl,
             )
         }
     }
@@ -238,14 +238,14 @@ class YtDlpClient(private val runner: YtDlpRunner) {
             maxFileSizeMb = maxFileSizeMb,
             resolveCandidates = { runner.videoCandidates(query) },
             describeSuccess = { "title=[${it.title}] height=${it.height}" },
-            downloadCandidate = { attemptDir, url -> downloadVideoCandidate(attemptDir, url, query, maxFileSizeMb) }
+            downloadCandidate = { attemptDir, url -> downloadVideoCandidate(attemptDir, url, query, maxFileSizeMb) },
         )
 
     private suspend fun downloadVideoCandidate(
         workDir: Path,
         url: String,
         query: String,
-        maxFileSizeMb: Int
+        maxFileSizeMb: Int,
     ): DownloadAttempt<YtDlpVideo> {
         var lastTooLarge: YtDlpResult.TooLarge? = null
 
@@ -275,7 +275,7 @@ class YtDlpClient(private val runner: YtDlpRunner) {
         url: String,
         query: String,
         maxFileSizeMb: Int,
-        heightCap: Int
+        heightCap: Int,
     ): DownloadAttempt<YtDlpVideo> {
         val command =
             buildList {
@@ -306,7 +306,7 @@ class YtDlpClient(private val runner: YtDlpRunner) {
                 width = info.width,
                 height = info.height,
                 thumbnailBytes = loadThumbnail(workDir.resolve("video.jpg"), url),
-                sourceUrl = info.webpageUrl
+                sourceUrl = info.webpageUrl,
             )
         }
     }
@@ -321,7 +321,7 @@ class YtDlpClient(private val runner: YtDlpRunner) {
         commandResult: YtDlpCommandResult,
         url: String,
         query: String,
-        maxFileSizeMb: Int
+        maxFileSizeMb: Int,
     ): DownloadAttempt<Nothing> {
         val output = commandResult.stdout
 
@@ -361,7 +361,7 @@ class YtDlpClient(private val runner: YtDlpRunner) {
 
                 DownloadAttempt(
                     YtDlpResult.Failure("yt-dlp exit ${commandResult.exitCode}: ${output.take(200)}"),
-                    retryable = retryable
+                    retryable = retryable,
                 )
             }
         }

@@ -85,7 +85,7 @@ internal suspend fun sendWithCaptionHtmlFallback(
     caption: String?,
     replyParameters: ReplyParameters?,
     formattingFileNotice: String,
-    send: suspend (caption: String?, parseMode: String?) -> Unit
+    send: suspend (caption: String?, parseMode: String?) -> Unit,
 ) {
     if (caption == null) {
         send(null, null)
@@ -115,7 +115,7 @@ internal suspend fun sendMediaWithDocumentFallback(
     caption: String?,
     formattingFileNotice: String,
     send: suspend () -> Unit,
-    onTextFallback: suspend () -> Unit = {}
+    onTextFallback: suspend () -> Unit = {},
 ) {
     runCatching { send() }
         .recoverCatching { e ->
@@ -141,7 +141,7 @@ internal suspend fun sendOrFallback(
     replyParameters: ReplyParameters?,
     failureMessage: String,
     send: suspend () -> Unit,
-    onFallback: suspend () -> Unit = {}
+    onFallback: suspend () -> Unit = {},
 ) {
     runCatching { send() }.onFailure { e ->
         e.rethrowIfCancellation()
@@ -160,7 +160,7 @@ internal suspend fun sendDocumentWithCaptionFallback(
     filename: String,
     caption: String?,
     replyParameters: ReplyParameters?,
-    formattingFileNotice: String
+    formattingFileNotice: String,
 ) {
     sendWithCaptionHtmlFallback(client, target, caption, replyParameters, formattingFileNotice) { text, parseMode ->
         sendDocumentFile(client, target, bytes, filename, text, parseMode, replyParameters)
@@ -172,7 +172,7 @@ internal suspend fun sendTextAsDocument(
     target: ChatTarget,
     text: String,
     notice: String,
-    replyParameters: ReplyParameters?
+    replyParameters: ReplyParameters?,
 ) {
     runCatching {
         sendDocumentFile(
@@ -182,7 +182,7 @@ internal suspend fun sendTextAsDocument(
             FALLBACK_DOCUMENT_FILENAME,
             caption = notice,
             parseMode = null,
-            replyParameters = replyParameters
+            replyParameters = replyParameters,
         )
     }.recoverCatching { e ->
         e.rethrowIfCancellation()
@@ -197,7 +197,7 @@ internal suspend fun sendMarkdownDocument(
     client: TelegramClient,
     target: ChatTarget,
     markdown: String,
-    replyParameters: ReplyParameters?
+    replyParameters: ReplyParameters?,
 ) {
     runCatching {
         sendDocumentFile(
@@ -207,7 +207,7 @@ internal suspend fun sendMarkdownDocument(
             MARKDOWN_DOCUMENT_FILENAME,
             caption = null,
             parseMode = null,
-            replyParameters = replyParameters
+            replyParameters = replyParameters,
         )
     }.recoverCatching { e ->
         e.rethrowIfCancellation()

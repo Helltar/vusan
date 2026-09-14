@@ -19,9 +19,9 @@ class HttpTest {
                     respond(
                         content = """{"error":"raw provider payload"}""",
                         status = HttpStatusCode.BadRequest,
-                        headers = headersOf(HttpHeaders.ContentType, ContentType.Application.Json.toString())
+                        headers = headersOf(HttpHeaders.ContentType, ContentType.Application.Json.toString()),
                     )
-                }
+                },
             )
 
         val error =

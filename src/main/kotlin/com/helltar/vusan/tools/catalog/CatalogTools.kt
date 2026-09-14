@@ -14,7 +14,7 @@ class CatalogTools(private val catalog: ToolCatalog) : ToolSet {
     @LLMDescription(CatalogToolDescriptions.LOAD_TOOLS)
     suspend fun loadTools(
         @LLMDescription(CatalogToolDescriptions.GROUPS)
-        groups: String
+        groups: String,
     ): String = suspendToolGuard {
         val result = catalog.load(groups.requireToolText("Groups", MAX_GROUPS_CHARS).split(","))
 

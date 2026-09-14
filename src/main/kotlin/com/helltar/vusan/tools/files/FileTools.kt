@@ -17,7 +17,7 @@ private const val BYTES_PER_MB = BYTES_PER_KB * 1024
 @Suppress("unused")
 class FileTools(
     private val downloads: FileDownloadClient,
-    private val outbox: BotOutbox
+    private val outbox: BotOutbox,
 ) : ToolSet {
 
     @Tool
@@ -26,7 +26,7 @@ class FileTools(
         @LLMDescription(FileToolDescriptions.CONTENT)
         content: String,
         @LLMDescription(FileToolDescriptions.FILENAME)
-        filename: String
+        filename: String,
     ): String = suspendToolGuard {
         require(content.isNotEmpty()) { "File content must not be empty" }
 
@@ -43,7 +43,7 @@ class FileTools(
         @LLMDescription(FileToolDescriptions.DOWNLOAD_URL)
         url: String,
         @LLMDescription(FileToolDescriptions.DOWNLOAD_FILENAME)
-        filename: String = ""
+        filename: String = "",
     ): String = suspendToolGuard {
         val target = url.requireToolText("Download URL", MAX_URL_CHARS)
 

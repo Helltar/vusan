@@ -20,7 +20,7 @@ class AttachedFile(
     // kind VIDEO; this only marks the two places where it is not one — it carries no audio, and it is
     // usually thrown into a chat as a reaction rather than as something to review.
     val isAnimation: Boolean = false,
-    val loadBytes: suspend () -> ByteArray
+    val loadBytes: suspend () -> ByteArray,
 ) {
     init {
         require(kind == AttachedFileKind.VIDEO || (durationSeconds == null && loadThumbnailBytes == null)) {

@@ -48,7 +48,7 @@ internal object TelegramOutputSender {
         formattingFileNotice: String,
         // told the id of a poll Telegram actually created. only a sent poll has one, and only then is
         // there anything for a later `poll_answer` update to be matched against.
-        onPollSent: (suspend (String) -> Unit)? = null
+        onPollSent: (suspend (String) -> Unit)? = null,
     ) {
         when (item) {
             is BotOutput.Text -> sendReplyText(client, target, item.text, replyParameters, formattingFileNotice)
@@ -75,7 +75,7 @@ internal object TelegramOutputSender {
         client: TelegramClient,
         target: ChatTarget,
         choice: BotOutput.InlineChoice,
-        replyParameters: ReplyParameters?
+        replyParameters: ReplyParameters?,
     ) {
         sendTextMessage(
             client = client,
@@ -83,7 +83,7 @@ internal object TelegramOutputSender {
             text = choice.question,
             parseMode = null,
             replyParameters = replyParameters,
-            replyMarkup = inlineChoiceKeyboard(choice)
+            replyMarkup = inlineChoiceKeyboard(choice),
         )
     }
 
@@ -91,7 +91,7 @@ internal object TelegramOutputSender {
         client: TelegramClient,
         target: ChatTarget,
         text: String,
-        replyParameters: ReplyParameters?
+        replyParameters: ReplyParameters?,
     ) {
         val html = text.withBrTagsAsNewlines()
 
@@ -108,7 +108,7 @@ internal object TelegramOutputSender {
         target: ChatTarget,
         text: String,
         replyParameters: ReplyParameters?,
-        formattingFileNotice: String
+        formattingFileNotice: String,
     ) {
         val html = text.withBrTagsAsNewlines()
 
@@ -129,7 +129,7 @@ internal object TelegramOutputSender {
         client: TelegramClient,
         target: ChatTarget,
         markdown: String,
-        replyParameters: ReplyParameters?
+        replyParameters: ReplyParameters?,
     ) {
         runCatching {
             client.api {
@@ -147,7 +147,7 @@ internal object TelegramOutputSender {
     private suspend fun sendReaction(
         client: TelegramClient,
         target: ChatTarget,
-        reaction: BotOutput.Reaction
+        reaction: BotOutput.Reaction,
     ) {
         runCatching {
             client.api {
@@ -156,7 +156,7 @@ internal object TelegramOutputSender {
                         .chatId(target.chatId.toString())
                         .messageId(reaction.messageId.telegramMessageId.toInt())
                         .reactionTypes(listOf(ReactionTypeEmoji.builder().emoji(reaction.emoji).build()))
-                        .build()
+                        .build(),
                 )
             }
         }.onFailure { e ->
@@ -177,7 +177,7 @@ internal object TelegramOutputSender {
         replyParameters: ReplyParameters?,
         document: BotOutput.Document,
         caption: String?,
-        formattingFileNotice: String
+        formattingFileNotice: String,
     ) = sendOrFallback(
         target = target,
         replyParameters = replyParameters,
@@ -190,10 +190,10 @@ internal object TelegramOutputSender {
                 document.filename,
                 caption,
                 replyParameters,
-                formattingFileNotice
+                formattingFileNotice,
             )
         },
-        onFallback = captionTextFallback(client, target, caption, replyParameters)
+        onFallback = captionTextFallback(client, target, caption, replyParameters),
     )
 
     private suspend fun sendAnimation(
@@ -202,7 +202,7 @@ internal object TelegramOutputSender {
         replyParameters: ReplyParameters?,
         animation: BotOutput.Animation,
         caption: String?,
-        formattingFileNotice: String
+        formattingFileNotice: String,
     ) {
         // generated GIF (bytes): fall back to document so the animation still arrives.
         val bytes = animation.bytes
@@ -222,7 +222,7 @@ internal object TelegramOutputSender {
                     sendWithCaptionHtmlFallback(client, target, caption, replyParameters, formattingFileNotice) { text, parseMode ->
                         sendAnimationFile(client, target, bytes.asInputFile(animation.filename), text, parseMode, replyParameters)
                     }
-                }
+                },
             )
 
             return
@@ -240,7 +240,7 @@ internal object TelegramOutputSender {
                     sendAnimationFile(client, target, InputFile(url), text, parseMode, replyParameters)
                 }
             },
-            onFallback = captionTextFallback(client, target, caption, replyParameters)
+            onFallback = captionTextFallback(client, target, caption, replyParameters),
         )
     }
 
@@ -250,7 +250,7 @@ internal object TelegramOutputSender {
         replyParameters: ReplyParameters?,
         photo: BotOutput.Photo,
         caption: String?,
-        formattingFileNotice: String
+        formattingFileNotice: String,
     ) {
         val send =
             suspend {
@@ -264,7 +264,7 @@ internal object TelegramOutputSender {
                                 .caption(text)
                                 .parseMode(parseMode)
                                 .replyParameters(replyParameters)
-                                .build()
+                                .build(),
                         )
                     }
                 }
@@ -280,7 +280,7 @@ internal object TelegramOutputSender {
             caption = caption,
             formattingFileNotice = formattingFileNotice,
             onTextFallback = captionTextFallback(client, target, caption, replyParameters),
-            send = send
+            send = send,
         )
     }
 
@@ -289,7 +289,7 @@ internal object TelegramOutputSender {
         target: ChatTarget,
         replyParameters: ReplyParameters?,
         group: BotOutput.PhotoGroup,
-        formattingFileNotice: String
+        formattingFileNotice: String,
     ) = sendOrFallback(
         target = target,
         replyParameters = replyParameters,
@@ -308,7 +308,7 @@ internal object TelegramOutputSender {
                         log.warn(ie) { "Fallback sendPhoto failed for chat=${target.chatId}" }
                     }
             }
-        }
+        },
     )
 
     private suspend fun sendDocumentGroup(
@@ -316,7 +316,7 @@ internal object TelegramOutputSender {
         target: ChatTarget,
         replyParameters: ReplyParameters?,
         group: BotOutput.DocumentGroup,
-        formattingFileNotice: String
+        formattingFileNotice: String,
     ) = sendOrFallback(
         target = target,
         replyParameters = replyParameters,
@@ -335,7 +335,7 @@ internal object TelegramOutputSender {
                         log.warn(ie) { "Fallback sendDocument failed for chat=${target.chatId}" }
                     }
             }
-        }
+        },
     )
 
     private suspend fun sendAudioGroup(
@@ -343,7 +343,7 @@ internal object TelegramOutputSender {
         target: ChatTarget,
         replyParameters: ReplyParameters?,
         group: BotOutput.AudioGroup,
-        formattingFileNotice: String
+        formattingFileNotice: String,
     ) = sendOrFallback(
         target = target,
         replyParameters = replyParameters,
@@ -372,7 +372,7 @@ internal object TelegramOutputSender {
                         log.warn(ie) { "Fallback sendAudio failed for chat=${target.chatId}" }
                     }
             }
-        }
+        },
     )
 
     private suspend fun sendAudio(
@@ -381,7 +381,7 @@ internal object TelegramOutputSender {
         replyParameters: ReplyParameters?,
         audio: BotOutput.Audio,
         caption: String?,
-        formattingFileNotice: String
+        formattingFileNotice: String,
     ) {
         val fullCaption = captionWithSourceLink(caption, audio.trackUrl)
 
@@ -403,7 +403,7 @@ internal object TelegramOutputSender {
                                 .caption(text)
                                 .parseMode(parseMode)
                                 .replyParameters(replyParameters)
-                                .build()
+                                .build(),
                         )
                     }
                 }
@@ -411,7 +411,7 @@ internal object TelegramOutputSender {
             onFallback = {
                 val fallback = listOfNotNull(fullCaption, "${audio.title} — ${audio.performer}").joinToString("\n")
                 sendText(client, target, fallback, replyParameters)
-            }
+            },
         )
     }
 
@@ -421,7 +421,7 @@ internal object TelegramOutputSender {
         replyParameters: ReplyParameters?,
         voice: BotOutput.Voice,
         caption: String?,
-        formattingFileNotice: String
+        formattingFileNotice: String,
     ) {
         sendOrFallback(
             target = target,
@@ -439,12 +439,12 @@ internal object TelegramOutputSender {
                                 .caption(text)
                                 .parseMode(parseMode)
                                 .replyParameters(replyParameters)
-                                .build()
+                                .build(),
                         )
                     }
                 }
             },
-            onFallback = captionTextFallback(client, target, caption, replyParameters)
+            onFallback = captionTextFallback(client, target, caption, replyParameters),
         )
     }
 
@@ -454,7 +454,7 @@ internal object TelegramOutputSender {
         replyParameters: ReplyParameters?,
         video: BotOutput.Video,
         caption: String?,
-        formattingFileNotice: String
+        formattingFileNotice: String,
     ) {
         val fullCaption = captionWithSourceLink(caption, video.sourceUrl)
         val thumbnail = video.thumbnail
@@ -486,11 +486,11 @@ internal object TelegramOutputSender {
                                 .height(video.height)
                                 .supportsStreaming(true)
                                 .replyParameters(replyParameters)
-                                .build()
+                                .build(),
                         )
                     }
                 }
-            }
+            },
         )
     }
 
@@ -499,7 +499,7 @@ internal object TelegramOutputSender {
         target: ChatTarget,
         replyParameters: ReplyParameters?,
         videoNote: BotOutput.VideoNote,
-        formattingFileNotice: String
+        formattingFileNotice: String,
     ) {
         runCatching {
             client.api<Message> {
@@ -511,7 +511,7 @@ internal object TelegramOutputSender {
                         .duration(videoNote.durationSeconds)
                         .length(videoNote.size)
                         .replyParameters(replyParameters)
-                        .build()
+                        .build(),
                 )
             }
         }.recoverCatching { e ->
@@ -533,7 +533,7 @@ internal object TelegramOutputSender {
             filename = VIDEO_NOTE_FILENAME,
             durationSeconds = durationSeconds,
             width = size,
-            height = size
+            height = size,
         )
 
     private suspend fun sendQuiz(
@@ -541,7 +541,7 @@ internal object TelegramOutputSender {
         target: ChatTarget,
         replyParameters: ReplyParameters?,
         quiz: BotOutput.Quiz,
-        onPollSent: (suspend (String) -> Unit)?
+        onPollSent: (suspend (String) -> Unit)?,
     ) = sendOrFallback(
         target = target,
         replyParameters = replyParameters,
@@ -559,10 +559,10 @@ internal object TelegramOutputSender {
                         .explanation(quiz.explanation)
                         .isAnonymous(quiz.isAnonymous)
                         .replyParameters(replyParameters)
-                        .build()
+                        .build(),
                 )
             }.reportPoll(onPollSent)
-        }
+        },
     )
 
     private suspend fun sendPoll(
@@ -570,7 +570,7 @@ internal object TelegramOutputSender {
         target: ChatTarget,
         replyParameters: ReplyParameters?,
         poll: BotOutput.Poll,
-        onPollSent: (suspend (String) -> Unit)?
+        onPollSent: (suspend (String) -> Unit)?,
     ) = sendOrFallback(
         target = target,
         replyParameters = replyParameters,
@@ -587,10 +587,10 @@ internal object TelegramOutputSender {
                         .isAnonymous(poll.isAnonymous)
                         .allowMultipleAnswers(poll.allowsMultipleAnswers)
                         .replyParameters(replyParameters)
-                        .build()
+                        .build(),
                 )
             }.reportPoll(onPollSent)
-        }
+        },
     )
 
     // the id lives on the poll inside the sent message, and only a send that really produced one has

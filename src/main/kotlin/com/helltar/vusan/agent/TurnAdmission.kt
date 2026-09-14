@@ -17,7 +17,7 @@ import java.util.concurrent.atomic.AtomicInteger
  */
 internal class TurnAdmission(
     private val maxConcurrent: Int,
-    private val maxWaiting: Int = maxConcurrent * WAITING_PER_TURN
+    private val maxWaiting: Int = maxConcurrent * WAITING_PER_TURN,
 ) {
 
     init {

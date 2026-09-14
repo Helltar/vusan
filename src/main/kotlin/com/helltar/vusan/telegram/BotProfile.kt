@@ -14,7 +14,7 @@ import org.telegram.telegrambots.meta.generics.TelegramClient
 internal data class BotProfile(
     val userId: Long,
     val username: String?,
-    val displayName: String?
+    val displayName: String?,
 )
 
 internal suspend fun TelegramClient.botProfile(): BotProfile =

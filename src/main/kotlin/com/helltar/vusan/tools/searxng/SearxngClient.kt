@@ -21,7 +21,7 @@ class SearxngClient(private val http: HttpClient, baseUrl: String) {
         categories: String? = null,
         engines: String? = null,
         timeRange: String? = null,
-        language: String? = null
+        language: String? = null,
     ): SearxngResponse {
         require(query.isNotBlank()) { "Query must not be blank" }
 

@@ -79,7 +79,7 @@ class ToolRegistryFactory(
     // present only on LLM_PROVIDER=codex; lets image generation ride the ChatGPT session
     // instead of needing a second paid key.
     codexAuth: CodexAuthStore? = null,
-    private val selfImage: SelfImage? = null
+    private val selfImage: SelfImage? = null,
 ) {
 
     // what each conversation already loaded, so its next turn opens with the same tool array: that
@@ -113,8 +113,8 @@ class ToolRegistryFactory(
         TelegramChannelTools(
             TelegramChannelReader(
                 telegramChannelClient,
-                vision?.let { TelegramChannelImageDescriber(it.executor, it.model) }
-            )
+                vision?.let { TelegramChannelImageDescriber(it.executor, it.model) },
+            ),
         )
 
     private val tavilyClient =
@@ -170,7 +170,7 @@ class ToolRegistryFactory(
                 promptExecutor = it.executor,
                 model = it.model,
                 transcriber =
-                    config.openAiStt?.let { stt -> WhisperVideoAudioTranscriber(OpenAiWhisperClient(http, stt), stt) }
+                    config.openAiStt?.let { stt -> WhisperVideoAudioTranscriber(OpenAiWhisperClient(http, stt), stt) },
             )
         }
 
@@ -188,13 +188,13 @@ class ToolRegistryFactory(
         context: RequestContext,
         outbox: BotOutbox,
         toolBudget: TurnToolBudget,
-        narrator: TurnNarrator? = null
+        narrator: TurnNarrator? = null,
     ): ToolCatalog {
         val chat = context.chat.capabilities
 
         return toolCatalog(
             preloaded = loadedGroups.of(context.scope),
-            onLoad = { groups -> loadedGroups.remember(context.scope, groups) }
+            onLoad = { groups -> loadedGroups.remember(context.scope, groups) },
         ) {
             tools(MessageTools(outbox, narrator))
             tools(ContextTools(toolBudget))
@@ -207,7 +207,7 @@ class ToolRegistryFactory(
 
             tools(
                 ToolGroup.SCHEDULED_TASKS,
-                TaskTools(repo = tasks, context, config.maxTasksPerUser, config.maxFollowUpsPerUser)
+                TaskTools(repo = tasks, context, config.maxTasksPerUser, config.maxFollowUpsPerUser),
             )
 
             if (chat.reactions) tools(ReactionTools(context, outbox))
@@ -247,14 +247,14 @@ class ToolRegistryFactory(
                 if (chat.videoNotes && selfPortrait != null)
                     tools(
                         ToolGroup.VOICE_REPLIES,
-                        VideoNoteTools(elevenLabsTtsClient, elevenLabsTts, selfPortrait, outbox)
+                        VideoNoteTools(elevenLabsTtsClient, elevenLabsTts, selfPortrait, outbox),
                     )
             }
 
             if (chat.photos && openAiImageClient != null && openAiImage != null) {
                 tools(
                     ToolGroup.IMAGE_GENERATION,
-                    ImageGenTools(openAiImageClient, openAiImage, outbox, context.attachedFiles, selfImage)
+                    ImageGenTools(openAiImageClient, openAiImage, outbox, context.attachedFiles, selfImage),
                 )
             }
 
@@ -279,7 +279,7 @@ class ToolRegistryFactory(
             RequestContext(
                 platform = Platform.TELEGRAM,
                 chat = ChatContext(id = "1", isPrivate = true),
-                sender = SenderContext(id = "1")
+                sender = SenderContext(id = "1"),
             )
         val log = KotlinLogging.logger {}
     }

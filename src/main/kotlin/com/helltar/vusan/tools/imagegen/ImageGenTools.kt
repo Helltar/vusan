@@ -18,7 +18,7 @@ class ImageGenTools(
     private val config: OpenAiImageConfig,
     private val outbox: BotOutbox,
     private val attachedFiles: List<AttachedFile> = emptyList(),
-    private val selfImage: SelfImage? = null
+    private val selfImage: SelfImage? = null,
 ) : ToolSet {
 
     @Tool
@@ -29,7 +29,7 @@ class ImageGenTools(
         @LLMDescription(ImageGenToolDescriptions.ORIENTATION)
         orientation: String = "square",
         @LLMDescription(ImageGenToolDescriptions.SELF_PORTRAIT)
-        selfPortrait: Boolean = false
+        selfPortrait: Boolean = false,
     ): String = suspendToolGuard {
         val trimmed = prompt.trim()
 
@@ -80,7 +80,7 @@ class ImageGenTools(
         @LLMDescription(ImageGenToolDescriptions.EDIT_ORIENTATION)
         orientation: String = "auto",
         @LLMDescription(ImageGenToolDescriptions.EDIT_WITH_YOURSELF)
-        withYourself: Boolean = false
+        withYourself: Boolean = false,
     ): String = suspendToolGuard {
         val trimmed = prompt.trim()
 

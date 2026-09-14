@@ -99,7 +99,7 @@ private val REFUSAL_REGEX =
     Regex(
         "^(i'?m sorry|i am sorry|sorry\\b|i can'?t|i cannot|i'?m unable|i am unable|unable to|" +
                 "i won'?t|i will not|cannot assist|can'?t assist|cannot help|can'?t help)",
-        RegexOption.IGNORE_CASE
+        RegexOption.IGNORE_CASE,
     )
 
 /**
@@ -152,7 +152,7 @@ private fun String.matchesSearchWord(queryWord: String): Boolean =
  */
 class StickerCatalog(
     private val client: TelegramClient,
-    private val vision: ImageVisionClient
+    private val vision: ImageVisionClient,
 ) {
 
     /** Record a sticker seen in a chat, pulling in its set once that set has earned it. */
@@ -212,7 +212,7 @@ class StickerCatalog(
 
         return xmlBlock(
             "sticker_catalog",
-            entries.joinToString("\n", transform = StickerEntry::catalogLine)
+            entries.joinToString("\n", transform = StickerEntry::catalogLine),
         )
     }
 
@@ -391,7 +391,7 @@ class StickerCatalog(
                 fileSizeBytes = bytes.size.toLong(),
                 mimeType = "image/webp",
                 kind = AttachedFileKind.IMAGE,
-                loadBytes = { bytes }
+                loadBytes = { bytes },
             )
 
         val answer =
@@ -668,7 +668,7 @@ class StickerCatalog(
                 StickerUsage(
                     fileUniqueId = row[TelegramChatStickersTable.fileUniqueId],
                     seenCount = row[TelegramChatStickersTable.seenCount],
-                    lastSeenAt = row[TelegramChatStickersTable.lastSeenAt]
+                    lastSeenAt = row[TelegramChatStickersTable.lastSeenAt],
                 )
             }
     }
@@ -682,8 +682,8 @@ class StickerCatalog(
                         id = this[TelegramStickersTable.id].value,
                         setName = this[TelegramStickersTable.setName],
                         emoji = this[TelegramStickersTable.emoji],
-                        description = description
-                    )
+                        description = description,
+                    ),
             )
         }
 
@@ -701,7 +701,7 @@ class StickerCatalog(
                     id = row[TelegramStickersTable.id].value,
                     fileId = row[TelegramStickersTable.fileId],
                     thumbnailFileId = row[TelegramStickersTable.thumbnailFileId],
-                    describeAttempts = row[TelegramStickersTable.describeAttempts]
+                    describeAttempts = row[TelegramStickersTable.describeAttempts],
                 )
             }
     }
@@ -734,7 +734,7 @@ class StickerCatalog(
         val id: Long,
         val fileId: String,
         val thumbnailFileId: String?,
-        val describeAttempts: Int
+        val describeAttempts: Int,
     )
 
     private sealed interface DescribeOutcome {

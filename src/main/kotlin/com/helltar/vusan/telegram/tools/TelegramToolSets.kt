@@ -17,7 +17,7 @@ import org.telegram.telegrambots.meta.generics.TelegramClient
  */
 class TelegramToolSets(
     private val client: TelegramClient,
-    private val stickers: StickerCatalog? = null
+    private val stickers: StickerCatalog? = null,
 ) : PlatformToolSets {
 
     override fun of(context: RequestContext, outbox: BotOutbox): List<ToolSet> {

@@ -8,7 +8,7 @@ class TelegramChannelClient(private val downloader: FileDownloadClient) {
         reference: TelegramChannelReference,
         before: Long? = null,
         query: String = "",
-        maxPosts: Int = POSTS_PER_PAGE
+        maxPosts: Int = POSTS_PER_PAGE,
     ): TelegramChannelPage {
         val url = reference.webPreviewUrl(before, query)
         val response = downloader.download(url, maxBytes = PAGE_LIMIT)
@@ -23,7 +23,7 @@ class TelegramChannelClient(private val downloader: FileDownloadClient) {
                 html = response.bytes.toString(Charsets.UTF_8),
                 username = reference.username,
                 url = url,
-                maxPosts = maxPosts
+                maxPosts = maxPosts,
             )
             .copy(previewAvailable = previewAvailable)
     }
@@ -44,7 +44,7 @@ class TelegramChannelClient(private val downloader: FileDownloadClient) {
             url = url,
             bytes = response.bytes,
             mimeType = contentType,
-            filename = filenameFromUrl(url, contentType)
+            filename = filenameFromUrl(url, contentType),
         )
     }
 

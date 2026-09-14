@@ -20,7 +20,7 @@ internal data class ExecInfo(
     val outcome: ExecOutcome? = null,
     val startedAt: String? = null,
     val finishedAt: String? = null,
-    val outputTruncated: Boolean = false
+    val outputTruncated: Boolean = false,
 )
 
 @Serializable
@@ -33,7 +33,7 @@ internal data class OutputFrame(val kind: String, val text: String = "", val end
 internal data class OutputPage(
     val frames: List<OutputFrame> = emptyList(),
     val nextOffset: Long = 0,
-    val complete: Boolean = false
+    val complete: Boolean = false,
 )
 
 @Serializable
@@ -50,7 +50,7 @@ data class PublishedSite(
     val release: String,
     val files: Int = 0,
     val bytes: Long = 0,
-    val publishedAt: String? = null
+    val publishedAt: String? = null,
 )
 
 @Serializable
@@ -87,5 +87,5 @@ data class CommandResult(
     val elapsedMs: Long = 0,
     val limit: CommandLimit? = null,
     /** Why a session ended under the command, as the server named it; only for [CommandStatus.INTERRUPTED]. */
-    val reason: String? = null
+    val reason: String? = null,
 )

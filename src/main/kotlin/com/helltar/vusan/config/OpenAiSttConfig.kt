@@ -3,7 +3,7 @@ package com.helltar.vusan.config
 data class OpenAiSttConfig(
     val apiKey: String,
     val model: String,
-    val maxDurationSeconds: Long
+    val maxDurationSeconds: Long,
 ) {
 
     init {

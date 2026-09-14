@@ -119,7 +119,7 @@ internal object SpanishMessages : Messages {
         label: String,
         nextFire: String,
         recurrence: String,
-        paused: Boolean
+        paused: Boolean,
     ): String =
         buildString {
             append("<b>#$id · $label</b>\n")

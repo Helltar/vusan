@@ -78,7 +78,7 @@ private val authJson =
  */
 data class CodexCredentials(
     val accessToken: String,
-    val accountId: String?
+    val accountId: String?,
 )
 
 /** Every failure that means "the operator has to do something", as opposed to a transient error. */
@@ -92,18 +92,18 @@ private data class CodexTokens(
     @SerialName("id_token") val idToken: String = "",
     @SerialName("access_token") val accessToken: String = "",
     @SerialName("refresh_token") val refreshToken: String? = null,
-    @SerialName("account_id") val accountId: String? = null
+    @SerialName("account_id") val accountId: String? = null,
 )
 
 private data class CodexAuthSnapshot(
     val root: JsonObject,
     val tokens: CodexTokens,
-    val fingerprint: String
+    val fingerprint: String,
 )
 
 private data class CachedCodexTokens(
     val tokens: CodexTokens,
-    val sourceFingerprint: String
+    val sourceFingerprint: String,
 )
 
 /**
@@ -115,7 +115,7 @@ private data class CachedCodexTokens(
 private data class CodexRefreshRequest(
     @SerialName("client_id") val clientId: String,
     @SerialName("grant_type") val grantType: String,
-    @SerialName("refresh_token") val refreshToken: String
+    @SerialName("refresh_token") val refreshToken: String,
 )
 
 @Serializable
@@ -125,7 +125,7 @@ private data class CodexRefreshResponse(
     @SerialName("refresh_token") val refreshToken: String? = null,
     // the endpoint reports when it will accept the next refresh and refuses anything sooner. logged
     // rather than honoured until a real value shows what shape it arrives in.
-    @SerialName("earliest_refresh_at") val earliestRefreshAt: JsonElement? = null
+    @SerialName("earliest_refresh_at") val earliestRefreshAt: JsonElement? = null,
 )
 
 /**
@@ -138,7 +138,7 @@ private data class CodexRefreshResponse(
  */
 class CodexAuthStore(
     private val http: HttpClient,
-    private val authFile: Path = defaultCodexAuthFile()
+    private val authFile: Path = defaultCodexAuthFile(),
 ) {
 
     private val mutex = Mutex()
@@ -157,7 +157,7 @@ class CodexAuthStore(
 
             CodexCredentials(
                 accessToken = fresh.accessToken,
-                accountId = fresh.accountId ?: fresh.idToken.claimString("chatgpt_account_id")
+                accountId = fresh.accountId ?: fresh.idToken.claimString("chatgpt_account_id"),
             )
         }
 
@@ -231,7 +231,7 @@ class CodexAuthStore(
             codexAuthError(
                 "Not signed in to ChatGPT: [$authFile] does not exist or is not readable. " +
                         "Run `codex login` on this host as the user that runs Vusan. If the CLI keeps its " +
-                        "credentials in the OS keyring, switch it back with `cli_auth_credentials_store = \"file\"`."
+                        "credentials in the OS keyring, switch it back with `cli_auth_credentials_store = \"file\"`.",
             )
 
         val content =
@@ -250,7 +250,7 @@ class CodexAuthStore(
                                 "Run `codex logout` then `codex login` to sign in with ChatGPT, " +
                                 "or set LLM_PROVIDER=openai with LLM_API_KEY to use the API key directly."
                     else
-                        "[$authFile] has no ChatGPT tokens. Run `codex login` on this host."
+                        "[$authFile] has no ChatGPT tokens. Run `codex login` on this host.",
                 )
 
         val tokens =
@@ -278,8 +278,8 @@ class CodexAuthStore(
                         CodexRefreshRequest(
                             clientId = CODEX_OAUTH_CLIENT_ID,
                             grantType = "refresh_token",
-                            refreshToken = refreshToken
-                        )
+                            refreshToken = refreshToken,
+                        ),
                     )
                 }
             }.getOrElse {
@@ -304,7 +304,7 @@ class CodexAuthStore(
                 idToken = body.idToken?.takeIf { it.isNotBlank() } ?: snapshot.tokens.idToken,
                 accessToken = accessToken,
                 // the endpoint rotates the refresh token; dropping the new one strands the next refresh
-                refreshToken = body.refreshToken?.takeIf { it.isNotBlank() } ?: refreshToken
+                refreshToken = body.refreshToken?.takeIf { it.isNotBlank() } ?: refreshToken,
             )
 
         val persistedFingerprint = persist(refreshed, snapshot.fingerprint)
@@ -336,10 +336,10 @@ class CodexAuthStore(
                                             currentTokenFields +
                                                     authJson
                                                         .encodeToJsonElement(CodexTokens.serializer(), tokens)
-                                                        .jsonObject
+                                                        .jsonObject,
                                         ),
-                                "last_refresh" to JsonPrimitive(Instant.now().toString())
-                            )
+                                "last_refresh" to JsonPrimitive(Instant.now().toString()),
+                            ),
                 )
             val content = authJson.encodeToString(JsonObject.serializer(), updated)
             val parent = authFile.toAbsolutePath().parent
@@ -403,7 +403,7 @@ private fun refreshFailureMessage(status: HttpStatusCode, body: String?): String
                     if (status == HttpStatusCode.Unauthorized)
                         "The ChatGPT session was rejected (HTTP 401). $reLogin"
                     else
-                        "The token endpoint refused the refresh (HTTP ${status.value})."
+                        "The token endpoint refused the refresh (HTTP ${status.value}).",
                 )
                 body?.collapseWhitespaceAndCap(REFRESH_ERROR_MAX_CHARS)?.let { append(" body=[$it]") }
             }

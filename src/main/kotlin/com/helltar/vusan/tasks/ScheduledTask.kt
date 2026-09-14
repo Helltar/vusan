@@ -34,7 +34,7 @@ data class ScheduledTask(
     val chatIsPrivate: Boolean,
     val language: Language,
     // the bot set this one up for itself as a follow-up, instead of the user asking for it.
-    val selfInitiated: Boolean = false
+    val selfInitiated: Boolean = false,
 )
 
 data class NewScheduledTask(
@@ -50,7 +50,7 @@ data class NewScheduledTask(
     val creatorDisplayName: String?,
     val chatIsPrivate: Boolean,
     val language: Language,
-    val selfInitiated: Boolean = false
+    val selfInitiated: Boolean = false,
 )
 
 private val FIRE_DISPLAY = DateTimeFormatter.ofPattern("yyyy-MM-dd'T'HH:mm")
@@ -78,16 +78,16 @@ internal fun ScheduledTask.toRequestContext(profile: ChatProfile = ChatProfile.N
                 // anchored there too rather than in the forum's General.
                 threadId = creatorThreadId,
                 description = profile.description,
-                capabilities = profile.capabilities
+                capabilities = profile.capabilities,
             ),
         sender =
             SenderContext(
                 id = scope.user.id,
                 displayName = creatorDisplayName,
                 username = creatorUsername,
-                languageCode = language.codes.firstOrNull()
+                languageCode = language.codes.firstOrNull(),
             ),
-        language = language
+        language = language,
     )
 
 /** Where this task's fire, and every notice about it, belongs. */
@@ -111,7 +111,7 @@ internal val ScheduledTask.attribution: Attribution?
                 person = scope.user,
                 displayName = creatorDisplayName,
                 username = creatorUsername,
-                reason = if (selfInitiated) AttributionReason.FOLLOW_UP else AttributionReason.SCHEDULED
+                reason = if (selfInitiated) AttributionReason.FOLLOW_UP else AttributionReason.SCHEDULED,
             )
 
 /** Keeps a future slot, or advances a recurring task past every elapsed slot. */

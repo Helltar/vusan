@@ -81,7 +81,7 @@ internal class TelegramBotRunner(
     private val profile: BotProfile,
     private val stickerCatalog: StickerCatalog? = null,
     private val groupLog: GroupLogRepository? = null,
-    private val polls: PollRegistry? = null
+    private val polls: PollRegistry? = null,
 ) {
 
     private val heartbeat = Heartbeat()
@@ -393,7 +393,7 @@ internal class TelegramBotRunner(
                 userId = userId,
                 replyToMessageId = message.messageIdLong,
                 chatIsPrivate = message.isPrivateChat,
-                messages = messages
+                messages = messages,
             )
         }.onFailure { error ->
             error.rethrowIfCancellation()
@@ -449,7 +449,7 @@ internal class TelegramBotRunner(
         message: Message,
         audioInput: AudioInput,
         botProfile: BotProfile,
-        inputKind: String
+        inputKind: String,
     ) {
         if (!message.isAccepted(botProfile)) return
 
@@ -463,7 +463,7 @@ internal class TelegramBotRunner(
             audioInput = audioInput,
             caption = caption,
             botProfile = botProfile,
-            inputKind = inputKind
+            inputKind = inputKind,
         )
     }
 
@@ -472,7 +472,7 @@ internal class TelegramBotRunner(
         audioInput: AudioInput,
         caption: String,
         botProfile: BotProfile,
-        inputKind: String
+        inputKind: String,
     ) {
         val transcriber = voiceTranscriber
 
@@ -532,7 +532,7 @@ internal class TelegramBotRunner(
             // flattened markdown never passes MessageSanitizer, which is where ordinary text is defused.
             xmlBlock("rich_message", markdown.neutralizePromptBlocks()),
             botProfile,
-            inputKind = "rich message"
+            inputKind = "rich message",
         )
     }
 
@@ -546,7 +546,7 @@ internal class TelegramBotRunner(
         message: Message,
         botProfile: BotProfile,
         inputKind: String,
-        noCaptionPrompt: String = MEDIA_ONLY_PROMPT
+        noCaptionPrompt: String = MEDIA_ONLY_PROMPT,
     ) {
         if (!message.isAccepted(botProfile)) return
 
@@ -561,7 +561,7 @@ internal class TelegramBotRunner(
             caption,
             botProfile,
             inputKind = inputKind,
-            attachedFiles = listOfNotNull(message.toAttachedFileOrNull(client))
+            attachedFiles = listOfNotNull(message.toAttachedFileOrNull(client)),
         )
     }
 
@@ -598,14 +598,14 @@ internal class TelegramBotRunner(
                             append(
                                 "All $attachedImages images are attached at once, and `editImage` works on them " +
                                         "together — combining them, putting one into another, building a collage. " +
-                                        "Every other tool sees only the first item; "
+                                        "Every other tool sees only the first item; ",
                             )
 
                         else -> append("Only the first item, `${attachedFiles.first().name}`, is attached; ")
                     }
 
                     append("mention this if the request depends on the other items.")
-                }
+                },
             )
 
         turns.dispatchToAgent(
@@ -613,7 +613,7 @@ internal class TelegramBotRunner(
             "$albumContext\n\n$caption",
             botProfile,
             inputKind = "gallery",
-            attachedFiles = attachedFiles
+            attachedFiles = attachedFiles,
         )
     }
 
@@ -659,7 +659,7 @@ internal class TelegramBotRunner(
             now = Instant.now(),
             window = EDIT_TURN_WINDOW,
             isCommand = messageTextOrNull()?.let(::isBotCommand) == true,
-            inAlbum = mediaGroupId != null
+            inAlbum = mediaGroupId != null,
         )
 
     private companion object {
@@ -727,7 +727,7 @@ internal fun startsTurnOnEdit(
     now: Instant,
     window: Duration,
     isCommand: Boolean,
-    inAlbum: Boolean
+    inAlbum: Boolean,
 ): Boolean {
     // without an edit_date telegram is not describing an edit at all, whatever else the update carries.
     if (editedAt == null) return false

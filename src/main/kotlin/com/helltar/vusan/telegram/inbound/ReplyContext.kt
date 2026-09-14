@@ -33,7 +33,7 @@ internal data class RepliedMessageSummary(
     // about it — this block is then all the model gets.
     val author: String? = null,
     val metadata: List<String> = emptyList(),
-    val transcript: String? = null
+    val transcript: String? = null,
 )
 
 internal fun isReplyToOtherUser(replyAuthorId: Long?, botUserId: Long): Boolean =
@@ -49,7 +49,7 @@ internal fun Message.quotedFragmentOrNull(): String? =
 internal suspend fun Message.replySummaryOrNull(
     client: TelegramClient,
     voiceTranscriber: VoiceTranscriber?,
-    botUserId: Long
+    botUserId: Long,
 ): RepliedMessageSummary? {
     val base = toReplySummary(botUserId) ?: return null
     val transcript = transcribeRepliedAudioOrNull(client, voiceTranscriber)
@@ -59,7 +59,7 @@ internal suspend fun Message.replySummaryOrNull(
 
 private suspend fun Message.transcribeRepliedAudioOrNull(
     client: TelegramClient,
-    voiceTranscriber: VoiceTranscriber?
+    voiceTranscriber: VoiceTranscriber?,
 ): String? {
     if (voiceTranscriber == null) return null
 
@@ -91,7 +91,7 @@ private fun PhotoSize.toAttachedFile(client: TelegramClient, caption: String?): 
         mimeType = "image/jpeg",
         kind = AttachedFileKind.IMAGE,
         caption = caption,
-        loadBytes = { client.downloadFileBytes(fileId) }
+        loadBytes = { client.downloadFileBytes(fileId) },
     )
 
 private fun Video.toAttachedFile(client: TelegramClient, caption: String?): AttachedFile =
@@ -103,7 +103,7 @@ private fun Video.toAttachedFile(client: TelegramClient, caption: String?): Atta
         fileSizeBytes = fileSize,
         mimeType = mimeType,
         durationSeconds = duration,
-        thumbnailFileId = thumbnail?.fileId
+        thumbnailFileId = thumbnail?.fileId,
     )
 
 private fun Animation.toAttachedFile(client: TelegramClient, caption: String?): AttachedFile =
@@ -116,7 +116,7 @@ private fun Animation.toAttachedFile(client: TelegramClient, caption: String?): 
         mimeType = mimeType,
         durationSeconds = duration,
         thumbnailFileId = thumbnail?.fileId,
-        isAnimation = true
+        isAnimation = true,
     )
 
 private fun VideoNote.toAttachedFile(client: TelegramClient, caption: String?): AttachedFile =
@@ -128,7 +128,7 @@ private fun VideoNote.toAttachedFile(client: TelegramClient, caption: String?): 
         fileSizeBytes = fileSize?.toLong(),
         mimeType = null,
         durationSeconds = duration,
-        thumbnailFileId = thumbnail?.fileId
+        thumbnailFileId = thumbnail?.fileId,
     )
 
 private fun Document.toAttachedFile(client: TelegramClient, caption: String?): AttachedFile {
@@ -144,7 +144,7 @@ private fun Document.toAttachedFile(client: TelegramClient, caption: String?): A
             fileSizeBytes = fileSize,
             mimeType = mimeType,
             durationSeconds = null,
-            thumbnailFileId = thumbnail?.fileId
+            thumbnailFileId = thumbnail?.fileId,
         )
     }
 
@@ -154,7 +154,7 @@ private fun Document.toAttachedFile(client: TelegramClient, caption: String?): A
         mimeType = mimeType,
         kind = kind,
         caption = caption,
-        loadBytes = { client.downloadFileBytes(fileId) }
+        loadBytes = { client.downloadFileBytes(fileId) },
     )
 }
 
@@ -167,7 +167,7 @@ private fun videoAttachedFile(
     mimeType: String?,
     durationSeconds: Int?,
     thumbnailFileId: String?,
-    isAnimation: Boolean = false
+    isAnimation: Boolean = false,
 ): AttachedFile =
     AttachedFile(
         name = name,
@@ -180,7 +180,7 @@ private fun videoAttachedFile(
         // video that still fits, so vision keeps a way in.
         loadThumbnailBytes = thumbnailFileId?.let { id -> suspend { client.downloadFileBytes(id) } },
         isAnimation = isAnimation,
-        loadBytes = { client.downloadFileBytes(fileId) }
+        loadBytes = { client.downloadFileBytes(fileId) },
     )
 
 private fun String?.orVideoName(fileUniqueId: String): String =
@@ -225,7 +225,7 @@ internal fun attachedFileContextBlock(file: AttachedFile): String =
                     append("Read it there with `runCommand` instead of asking the user to resend it.")
                 }
             }
-        }
+        },
     )
 
 private val IMAGE_EXTENSIONS = setOf("png", "jpg", "jpeg", "webp", "gif", "bmp")
@@ -244,14 +244,14 @@ private fun formatFileSize(bytes: Long): String =
 internal fun formatAgentInput(
     currentMessageText: String,
     repliedMessage: RepliedMessageSummary?,
-    quotedFragment: String?
+    quotedFragment: String?,
 ): String =
     buildReplyContextPrompt(currentMessageText, repliedMessage, quotedFragment) { it }
 
 internal fun formatConversationInput(
     currentMessageText: String,
     repliedMessage: RepliedMessageSummary?,
-    quotedFragment: String?
+    quotedFragment: String?,
 ): String =
     buildReplyContextPrompt(currentMessageText, repliedMessage, quotedFragment) {
         it.collapseWhitespaceAndCap(MAX_REPLIED_STORED_TEXT_CHARS).orEmpty()
@@ -261,7 +261,7 @@ private fun buildReplyContextPrompt(
     currentMessageText: String,
     repliedMessage: RepliedMessageSummary?,
     quotedFragment: String?,
-    transformText: (String) -> String
+    transformText: (String) -> String,
 ): String {
     if (repliedMessage == null && quotedFragment == null) return currentMessageText
 
@@ -313,7 +313,7 @@ private fun Message.summarizeInternalReply(botUserId: Long): RepliedMessageSumma
         type = contentTypeName(),
         textOrCaption = repliedTextOrNull(),
         author = authorLabel(botUserId),
-        metadata = mediaMetadataLines()
+        metadata = mediaMetadataLines(),
     )
 
 // a channel post forwarded into a discussion group and an anonymous admin both arrive without a sender
@@ -342,5 +342,5 @@ private fun ExternalReplyInfo.summarize(): RepliedMessageSummary =
     RepliedMessageSummary(
         type = summaryTypeNameOrNull()?.let { "external $it" } ?: "external text message",
         textOrCaption = null,
-        metadata = mediaMetadataLines()
+        metadata = mediaMetadataLines(),
     )

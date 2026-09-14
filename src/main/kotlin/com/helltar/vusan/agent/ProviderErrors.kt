@@ -20,7 +20,7 @@ private val CONTEXT_OVERFLOW_REGEX =
     Regex(
         "context[_ ]length|context window|maximum context|too many (input )?tokens|" +
                 "prompt is too long|input is too long",
-        RegexOption.IGNORE_CASE
+        RegexOption.IGNORE_CASE,
     )
 
 // a subscription that has run out of Codex usage reports it in the error body rather than by status:
@@ -29,13 +29,13 @@ private val SUBSCRIPTION_LIMIT_REGEX =
     Regex(
         "usage_limit_reached|usage limit reached|usage_not_included|quota_exceeded|" +
                 "insufficient_quota|exceeded your current quota",
-        RegexOption.IGNORE_CASE
+        RegexOption.IGNORE_CASE,
     )
 
 private val UNAUTHORIZED_REGEX =
     Regex(
         "\\b401\\b|missing_authorization_header|token_expired|invalid_api_key|unauthorized",
-        RegexOption.IGNORE_CASE
+        RegexOption.IGNORE_CASE,
     )
 
 // the provider refused the request itself over its content policy, and reports it in the error body:
@@ -45,7 +45,7 @@ private val CONTENT_POLICY_REGEX =
     Regex(
         "cyber_policy|content[_ ]policy|content[_ ]filter|moderation|invalid_prompt|" +
                 "prohibited_content|safety system|safety filter|was flagged",
-        RegexOption.IGNORE_CASE
+        RegexOption.IGNORE_CASE,
     )
 
 /**

@@ -17,7 +17,7 @@ import io.github.oshai.kotlinlogging.KotlinLogging
 class SearxngTools(
     private val client: SearxngClient,
     private val imageDownloader: ImageDownloadClient,
-    private val outbox: BotOutbox
+    private val outbox: BotOutbox,
 ) : ToolSet {
 
     @Tool
@@ -32,14 +32,14 @@ class SearxngTools(
         @LLMDescription(SearxngToolDescriptions.META_SEARCH_TIME_RANGE)
         timeRange: String = "",
         @LLMDescription(SearxngToolDescriptions.META_SEARCH_LANGUAGE)
-        language: String = ""
+        language: String = "",
     ): String = suspendToolGuard {
         val response =
             client.search(
                 query = query,
                 categories = categories.trim().lowercase().takeIf { it in allowedCategories },
                 timeRange = timeRange.trim().lowercase().takeIf { it in allowedTimeRanges },
-                language = language.trim().takeIf { it.isNotBlank() }
+                language = language.trim().takeIf { it.isNotBlank() },
             )
 
         val results = response.results.take(maxResults.coerceIn(1, MAX_RESULTS_LIMIT))
@@ -107,7 +107,7 @@ class SearxngTools(
         @LLMDescription(SearxngToolDescriptions.META_SEARCH_IMAGES_QUERY)
         query: String,
         @LLMDescription(SearxngToolDescriptions.META_SEARCH_IMAGES_MAX_RESULTS)
-        maxResults: Int = 5
+        maxResults: Int = 5,
     ): String = suspendToolGuard {
         outbox.photosRefusedReply()?.let { return@suspendToolGuard it }
 
@@ -122,7 +122,7 @@ class SearxngTools(
             query = query,
             candidates = candidates,
             limit = maxResults.coerceIn(1, MAX_IMAGE_RESULTS),
-            outbox = outbox
+            outbox = outbox,
         )
     }
 

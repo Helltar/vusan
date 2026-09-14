@@ -16,14 +16,14 @@ private val MAX_WINDOW = 90.days
 class GroupLogTools(
     private val repository: GroupLogRepository,
     private val reader: GroupLogReader,
-    private val context: RequestContext
+    private val context: RequestContext,
 ) : ToolSet {
 
     @Tool
     @LLMDescription(GroupLogToolDescriptions.READ_GROUP_LOG)
     suspend fun readGroupLog(
         @LLMDescription(GroupLogToolDescriptions.READ_GROUP_LOG_WINDOW) window: String,
-        @LLMDescription(GroupLogToolDescriptions.READ_GROUP_LOG_AUTHOR) author: String? = null
+        @LLMDescription(GroupLogToolDescriptions.READ_GROUP_LOG_AUTHOR) author: String? = null,
     ): String = suspendToolGuard {
         if (context.chat.isPrivate)
             return@suspendToolGuard "No group chat log in a private chat — this conversation is already your history."
@@ -38,7 +38,7 @@ class GroupLogTools(
         reader.read(
             chat = context.chatRef,
             window = parsed,
-            author = author?.trim()?.takeIf { it.isNotEmpty() }
+            author = author?.trim()?.takeIf { it.isNotEmpty() },
         )
     }
 

@@ -24,7 +24,7 @@ internal fun currentTurnPrompt(
     chatMemory: List<MemoryEntry>,
     recentChat: String? = null,
     stickerCatalog: String? = null,
-    toolGroups: String? = null
+    toolGroups: String? = null,
 ): String =
     buildList {
         add(currentTimeBlock())
@@ -54,7 +54,7 @@ private fun currentTimeBlock(): String {
 // chat, so it is quoted text and gets the same defusing.
 private fun memoryBlock(
     tag: String,
-    entries: List<MemoryEntry>
+    entries: List<MemoryEntry>,
 ): String? =
     entries
         .takeIf { it.isNotEmpty() }

@@ -20,14 +20,14 @@ private const val MAX_ANNOUNCEMENT_CHARS = 500
 @Suppress("unused")
 class MessageTools(
     private val outbox: BotOutbox,
-    private val narrator: TurnNarrator? = null
+    private val narrator: TurnNarrator? = null,
 ) : ToolSet {
 
     @Tool
     @LLMDescription(MessageToolDescriptions.SEND_MESSAGE)
     suspend fun sendMessage(
         @LLMDescription(MessageToolDescriptions.TEXT)
-        text: String
+        text: String,
     ): String = suspendToolGuard {
         val trimmed = text.requireToolText("Message text", MAX_MESSAGE_CHARS)
 
@@ -44,7 +44,7 @@ class MessageTools(
     @LLMDescription(MessageToolDescriptions.SEND_RICH_MESSAGE)
     suspend fun sendRichMessage(
         @LLMDescription(MessageToolDescriptions.RICH_MARKDOWN)
-        markdown: String
+        markdown: String,
     ): String = suspendToolGuard {
         val trimmed = markdown.requireToolText("Rich message", MAX_RICH_MESSAGE_CHARS)
 
@@ -60,7 +60,7 @@ class MessageTools(
     @LLMDescription(MessageToolDescriptions.ANNOUNCE_PLAN)
     suspend fun announcePlan(
         @LLMDescription(MessageToolDescriptions.PLAN_TEXT)
-        text: String
+        text: String,
     ): String = suspendToolGuard {
         val trimmed = text.requireToolText("Plan", MAX_ANNOUNCEMENT_CHARS)
 

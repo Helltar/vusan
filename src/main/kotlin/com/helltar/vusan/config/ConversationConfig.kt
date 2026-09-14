@@ -3,7 +3,7 @@ package com.helltar.vusan.config
 data class ConversationConfig(
     val maxRecentInteractions: Int = DEFAULT_MAX_RECENT_INTERACTIONS,
     val maxStoredInteractions: Int = DEFAULT_MAX_STORED_INTERACTIONS,
-    val retentionDays: Int = DEFAULT_RETENTION_DAYS
+    val retentionDays: Int = DEFAULT_RETENTION_DAYS,
 ) {
 
     init {

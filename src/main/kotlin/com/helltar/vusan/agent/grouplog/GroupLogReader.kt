@@ -23,14 +23,14 @@ class GroupLogReader(
     private val repository: GroupLogRepository,
     private val digester: GroupLogDigester?,
     private val budgetChars: Int,
-    private val zone: ZoneId = ZoneId.systemDefault()
+    private val zone: ZoneId = ZoneId.systemDefault(),
 ) {
 
     suspend fun read(
         chat: ChatRef,
         window: Duration,
         author: String? = null,
-        now: Instant = Instant.now()
+        now: Instant = Instant.now(),
     ): String {
         val from = now.minusSeconds(window.inWholeSeconds)
         val total = repository.countInWindow(chat, from, now, author)
@@ -105,8 +105,8 @@ class GroupLogReader(
                     block(
                         """today date="$today" messages="$todayTotal" quoted="${todayRendered.includedCount}"""",
                         todayRendered.text,
-                        closingTag = "today"
-                    )
+                        closingTag = "today",
+                    ),
                 )
             }
         }
@@ -179,7 +179,7 @@ class GroupLogReader(
         from: Instant,
         now: Instant,
         total: Long,
-        author: String?
+        author: String?,
     ): String =
         buildString {
             append(header(from, now, total, author))

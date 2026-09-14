@@ -45,7 +45,7 @@ class CodexCatalogTest {
         assertTrue(models.first().supportsVision)
         assertEquals(
             setOf(ReasoningEffort.LOW, ReasoningEffort.MEDIUM, ReasoningEffort.HIGH),
-            models.first().supportedReasoningEfforts
+            models.first().supportedReasoningEfforts,
         )
         assertTrue(!models.last().supportsVision)
         assertEquals(setOf(ReasoningEffort.LOW, ReasoningEffort.HIGH), models.last().supportedReasoningEfforts)
@@ -72,12 +72,12 @@ class CodexCatalogTest {
                 ]}]}
                 """.trimIndent()
             ),
-            store()
+            store(),
         )
 
         assertEquals(
             setOf(ReasoningEffort.LOW, ReasoningEffort.HIGH, ReasoningEffort.XHIGH, ReasoningEffort.MAX),
-            models.single().supportedReasoningEfforts
+            models.single().supportedReasoningEfforts,
         )
     }
 
@@ -93,7 +93,7 @@ class CodexCatalogTest {
                 ]}
                 """.trimIndent()
             ),
-            store()
+            store(),
         )
 
         assertEquals(setOf("priority"), models.first().supportedServiceTiers)
@@ -106,7 +106,7 @@ class CodexCatalogTest {
         val config =
             LlmProviderConfig.Codex(
                 model = "text-model",
-                requestTimeout = 120.seconds
+                requestTimeout = 120.seconds,
             )
         val model = codexModel(supportsVision = false, contextWindowTokens = 128_000)
 
@@ -122,12 +122,12 @@ class CodexCatalogTest {
             LlmProviderConfig.Codex(
                 model = "text-model",
                 requestTimeout = 120.seconds,
-                contextWindowTokens = 32_000
+                contextWindowTokens = 32_000,
             )
 
         assertEquals(
             32_000L,
-            applyCodexModelMetadata(config, codexModel(contextWindowTokens = 128_000)).contextWindowTokens
+            applyCodexModelMetadata(config, codexModel(contextWindowTokens = 128_000)).contextWindowTokens,
         )
     }
 
@@ -137,7 +137,7 @@ class CodexCatalogTest {
             LlmProviderConfig.Codex(
                 model = "text-model",
                 reasoningEffort = ReasoningEffort.HIGH,
-                requestTimeout = 120.seconds
+                requestTimeout = 120.seconds,
             )
 
         val error =
@@ -155,7 +155,7 @@ class CodexCatalogTest {
             LlmProviderConfig.Codex(
                 model = "text-model",
                 serviceTier = ServiceTier.PRIORITY,
-                requestTimeout = 120.seconds
+                requestTimeout = 120.seconds,
             )
 
         val error =
@@ -173,7 +173,7 @@ class CodexCatalogTest {
             LlmProviderConfig.Codex(
                 model = "text-model",
                 serviceTier = ServiceTier.PRIORITY,
-                requestTimeout = 120.seconds
+                requestTimeout = 120.seconds,
             )
 
         val configured = applyCodexModelMetadata(config, codexModel(supportedServiceTiers = setOf("priority")))
@@ -187,7 +187,7 @@ class CodexCatalogTest {
             LlmProviderConfig.Codex(
                 model = "text-model",
                 serviceTier = ServiceTier.PRIORITY,
-                requestTimeout = 120.seconds
+                requestTimeout = 120.seconds,
             )
 
         assertEquals(ServiceTier.PRIORITY, applyCodexModelMetadata(config, codexModel()).serviceTier)
@@ -224,7 +224,7 @@ class CodexCatalogTest {
                 MockEngine { request ->
                     version = request.url.parameters["client_version"]
                     respondJson("""{"models":[]}""")
-                }
+                },
             )
 
         fetchCodexModels(http, store())
@@ -243,7 +243,7 @@ class CodexCatalogTest {
                 MockEngine { request ->
                     version = request.url.parameters["client_version"]
                     respondJson("""{"models":[]}""")
-                }
+                },
             )
 
         try {
@@ -272,7 +272,7 @@ class CodexCatalogTest {
                     assertNotNull(request.url.parameters["client_version"])
 
                     respondJson("""{"models":[]}""")
-                }
+                },
             )
 
         fetchCodexModels(http, store())
@@ -292,7 +292,7 @@ class CodexCatalogTest {
                     originator = request.headers["originator"]
                     userAgent = request.headers[HttpHeaders.UserAgent]
                     respondJson("""{"models":[]}""")
-                }
+                },
             )
 
         fetchCodexModels(http, store())
@@ -341,7 +341,7 @@ class CodexCatalogTest {
         val store =
             CodexAuthStore(
                 Http.createClient(MockEngine { respondJson("{}") }),
-                Files.createTempDirectory("codex").resolve("auth.json")
+                Files.createTempDirectory("codex").resolve("auth.json"),
             )
 
         val error =
@@ -355,7 +355,7 @@ private fun codexModel(
     supportsVision: Boolean = true,
     contextWindowTokens: Long? = null,
     supportedEfforts: Set<ReasoningEffort>? = null,
-    supportedServiceTiers: Set<String>? = null
+    supportedServiceTiers: Set<String>? = null,
 ): CodexModel =
     CodexModel(
         id = "text-model",
@@ -363,7 +363,7 @@ private fun codexModel(
         contextWindowTokens = contextWindowTokens,
         supportsVision = supportsVision,
         supportedReasoningEfforts = supportedEfforts,
-        supportedServiceTiers = supportedServiceTiers
+        supportedServiceTiers = supportedServiceTiers,
     )
 
 /** Zero-padded so plain string ordering matches version ordering, independently of production code. */
@@ -375,7 +375,7 @@ private fun MockRequestHandleScope.respondJson(body: String, status: HttpStatusC
     respond(
         content = ByteReadChannel(body),
         status = status,
-        headers = headersOf(HttpHeaders.ContentType, ContentType.Application.Json.toString())
+        headers = headersOf(HttpHeaders.ContentType, ContentType.Application.Json.toString()),
     )
 
 private fun store(): CodexAuthStore =
@@ -388,7 +388,7 @@ private fun signedInAuthFile(): Path {
 
     val file = Files.createTempDirectory("codex").resolve("auth.json")
     file.writeText(
-        """{"tokens":{"id_token":"$token","access_token":"$token","refresh_token":"r","account_id":"acct-1"}}"""
+        """{"tokens":{"id_token":"$token","access_token":"$token","refresh_token":"r","account_id":"acct-1"}}""",
     )
 
     return file

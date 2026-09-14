@@ -49,7 +49,7 @@ internal fun Message.toGroupLogEntry(): GroupLogEntry? {
         text = text,
         descriptor = descriptor,
         forwardFrom = forwardFrom,
-        replyToMessageId = replyToMessageIdOrNull()?.toString()
+        replyToMessageId = replyToMessageIdOrNull()?.toString(),
     )
 }
 
@@ -81,6 +81,6 @@ internal fun PollAnswer.toGroupLogEntry(poll: SentPoll): GroupLogEntry? {
         senderId = voter.id.toString(),
         senderUsername = voter.userName,
         senderName = displayName(voter.firstName, voter.lastName),
-        text = "answered: ${chosen.joinToString(", ")}$verdict".collapseWhitespaceAndCap(MAX_TEXT_CHARS)
+        text = "answered: ${chosen.joinToString(", ")}$verdict".collapseWhitespaceAndCap(MAX_TEXT_CHARS),
     )
 }

@@ -16,7 +16,7 @@ internal fun requestContext(
     isPrivate: Boolean = true,
     attachedFiles: List<AttachedFile> = emptyList(),
     language: Language = Language.DEFAULT,
-    capabilities: ChatCapabilities = ChatCapabilities.UNRESTRICTED
+    capabilities: ChatCapabilities = ChatCapabilities.UNRESTRICTED,
 ): RequestContext =
     RequestContext(
         platform = Platform.TELEGRAM,
@@ -25,7 +25,7 @@ internal fun requestContext(
         messageId = messageId,
         replyToMessageId = replyToMessageId,
         attachedFiles = attachedFiles,
-        language = language
+        language = language,
     )
 
 internal fun testUser(id: Long = 1L, platform: Platform = Platform.TELEGRAM): UserRef =
@@ -37,6 +37,6 @@ internal fun testChat(id: Long = -100L, platform: Platform = Platform.TELEGRAM):
 internal fun testScope(
     userId: Long = 1L,
     chatId: Long = -100L,
-    platform: Platform = Platform.TELEGRAM
+    platform: Platform = Platform.TELEGRAM,
 ): ConversationScope =
     ConversationScope(testUser(userId, platform), testChat(chatId, platform))

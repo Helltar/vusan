@@ -17,7 +17,7 @@ class YouTubeTranscriptTools(private val client: YouTubeTranscriptClient) : Tool
     @LLMDescription(YouTubeTranscriptToolDescriptions.READ_TRANSCRIPT)
     suspend fun readYouTubeTranscript(
         @LLMDescription(YouTubeTranscriptToolDescriptions.READ_TRANSCRIPT_QUERY)
-        query: String
+        query: String,
     ): String = suspendToolGuard {
         when (val result = client.fetchTranscript(query)) {
             is YtDlpResult.NotFound ->

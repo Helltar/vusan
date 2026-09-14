@@ -28,7 +28,7 @@ data class TurnDelivery(
     val destination: Destination,
     val recipient: UserRef,
     val language: Language,
-    val attribution: Attribution? = null
+    val attribution: Attribution? = null,
 )
 
 /**

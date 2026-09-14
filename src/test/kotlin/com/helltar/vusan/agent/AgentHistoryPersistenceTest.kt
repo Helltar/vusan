@@ -45,7 +45,7 @@ class AgentHistoryPersistenceTest {
             toolName = toolName,
             args = """{"query":"test"}""",
             output = "result",
-            isError = false
+            isError = false,
         )
 
     // trailing chatter after a queued message is a duplicate and is dropped.

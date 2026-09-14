@@ -14,14 +14,14 @@ import io.github.oshai.kotlinlogging.KotlinLogging
 class VoiceTools(
     private val client: ElevenLabsTtsClient,
     private val config: ElevenLabsTtsConfig,
-    private val outbox: BotOutbox
+    private val outbox: BotOutbox,
 ) : ToolSet {
 
     @Tool
     @LLMDescription(VoiceToolDescriptions.SPEAK_WITH_VOICE)
     suspend fun speakWithVoice(
         @LLMDescription(VoiceToolDescriptions.TEXT)
-        text: String
+        text: String,
     ): String = suspendToolGuard {
         val trimmed = text.trim()
 

@@ -22,7 +22,7 @@ class ElevenLabsTtsClientTest {
 
     private val config = ElevenLabsTtsConfig(
         model = "eleven_v3",
-        voiceId = "voice-test"
+        voiceId = "voice-test",
     )
 
     @Test
@@ -48,9 +48,9 @@ class ElevenLabsTtsClientTest {
                     respond(
                         content = ByteReadChannel(responseBytes),
                         status = HttpStatusCode.OK,
-                        headers = headersOf(HttpHeaders.ContentType, "audio/mpeg")
+                        headers = headersOf(HttpHeaders.ContentType, "audio/mpeg"),
                     )
-                }
+                },
             )
         val client = ElevenLabsTtsClient(http, "sk-test")
 
@@ -68,9 +68,9 @@ class ElevenLabsTtsClientTest {
                     respond(
                         content = """{"error":{"message":"raw provider payload"}}""",
                         status = HttpStatusCode.BadRequest,
-                        headers = headersOf(HttpHeaders.ContentType, ContentType.Application.Json.toString())
+                        headers = headersOf(HttpHeaders.ContentType, ContentType.Application.Json.toString()),
                     )
-                }
+                },
             )
         val client = ElevenLabsTtsClient(http, "sk-test")
 
@@ -80,7 +80,7 @@ class ElevenLabsTtsClientTest {
 
         assertEquals(
             """HTTP 400 from api.elevenlabs.io: {"error":{"message":"raw provider payload"}}""",
-            error.message
+            error.message,
         )
         http.close()
     }

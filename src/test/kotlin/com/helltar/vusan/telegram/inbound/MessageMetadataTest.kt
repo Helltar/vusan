@@ -28,12 +28,12 @@ class MessageMetadataTest {
     fun `the forum flag refines a label rather than replacing it`() {
         assertEquals(
             "supergroup_forum",
-            messageIn("""{"id": -100, "type": "supergroup", "is_forum": true}""").promptChatType()
+            messageIn("""{"id": -100, "type": "supergroup", "is_forum": true}""").promptChatType(),
         )
 
         assertEquals(
             "private_forum",
-            messageIn("""{"id": 5, "type": "private", "is_forum": true}""").promptChatType()
+            messageIn("""{"id": 5, "type": "private", "is_forum": true}""").promptChatType(),
         )
     }
 
@@ -43,7 +43,7 @@ class MessageMetadataTest {
         assertEquals(
             "business",
             message(""""business_connection_id": "conn-1"""", chat = """{"id": -100, "type": "supergroup"}""")
-                .promptChatType()
+                .promptChatType(),
         )
     }
 
@@ -52,13 +52,13 @@ class MessageMetadataTest {
         assertEquals(
             "channel_direct_messages",
             message(""""direct_messages_topic": {"topic_id": 4}""", chat = """{"id": -100, "type": "channel"}""")
-                .promptChatType()
+                .promptChatType(),
         )
 
         assertEquals(
             "private",
             message(""""direct_messages_topic": {"topic_id": 4}""", chat = """{"id": 5, "type": "private"}""")
-                .promptChatType()
+                .promptChatType(),
         )
     }
 
@@ -117,7 +117,7 @@ class MessageMetadataTest {
 
         assertEquals(
             "3:20",
-            message(""""audio": {"file_id": "a", "file_unique_id": "au", "duration": 200}""").groupLogDescriptor()
+            message(""""audio": {"file_id": "a", "file_unique_id": "au", "duration": 200}""").groupLogDescriptor(),
         )
     }
 
@@ -200,12 +200,12 @@ class MessageMetadataTest {
     fun `a chat falls back to the person's name when it has no title`() {
         assertEquals(
             "Book Club",
-            messageIn("""{"id": -100, "type": "supergroup", "title": "Book Club"}""").chat.titleOrDisplayName()
+            messageIn("""{"id": -100, "type": "supergroup", "title": "Book Club"}""").chat.titleOrDisplayName(),
         )
 
         assertEquals(
             "Ada Bell",
-            messageIn("""{"id": 5, "type": "private", "first_name": "Ada", "last_name": "Bell"}""").chat.titleOrDisplayName()
+            messageIn("""{"id": 5, "type": "private", "first_name": "Ada", "last_name": "Bell"}""").chat.titleOrDisplayName(),
         )
 
         assertNull(messageIn("""{"id": 5, "type": "private"}""").chat.titleOrDisplayName())
@@ -253,7 +253,7 @@ class MessageMetadataTest {
             """{"origin": {"type": "hidden_user", "date": 1774000000, "sender_user_name": "Someone"}${
                 if (fields.isBlank()) "" else ", ${fields.trim()}"
             }}""",
-            ExternalReplyInfo::class.java
+            ExternalReplyInfo::class.java,
         )
 
     @Test
@@ -265,12 +265,12 @@ class MessageMetadataTest {
     fun `the accounts telegram shares between senders do not`() {
         assertFalse(
             sender("""{"id": 1087968824, "is_bot": true, "first_name": "Group"}""").toSenderContext().isPerson,
-            "GroupAnonymousBot"
+            "GroupAnonymousBot",
         )
 
         assertFalse(
             sender("""{"id": 136817688, "is_bot": true, "first_name": "Channel"}""").toSenderContext().isPerson,
-            "Channel_Bot"
+            "Channel_Bot",
         )
     }
 
@@ -280,7 +280,7 @@ class MessageMetadataTest {
         val context =
             message(
                 """"message_thread_id": 77, "is_topic_message": true""",
-                chat = """{"id": -100, "type": "supergroup", "is_forum": true, "title": "Crew"}"""
+                chat = """{"id": -100, "type": "supergroup", "is_forum": true, "title": "Crew"}""",
             ).toChatContext(profile)
 
         assertEquals("-100", context.id)
@@ -300,6 +300,6 @@ class MessageMetadataTest {
             """{"message_id": 1, "date": 1774000000, "chat": $chat${
                 if (fields.isBlank()) "" else ", ${fields.trim()}"
             }}""",
-            Message::class.java
+            Message::class.java,
         )
 }

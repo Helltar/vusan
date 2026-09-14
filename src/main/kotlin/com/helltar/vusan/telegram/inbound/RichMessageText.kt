@@ -77,7 +77,7 @@ private fun RichBlockTable.renderTable(): String {
 
     return listOf(
         if (header) (listOf(body.first(), separator) + body.drop(1)).joinToString("\n") else body.joinToString("\n"),
-        caption.render()
+        caption.render(),
     ).joinNonBlank("\n\n")
 }
 

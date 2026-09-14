@@ -37,7 +37,7 @@ enum class ImageModerationStage { INPUT, OUTPUT, UNKNOWN }
  */
 class ImageModerationBlocked(val stage: ImageModerationStage, val categories: List<String>) :
     IllegalStateException(
-        "Image moderation blocked the request: stage=[${stage.name.lowercase()}] categories=[${categories.joinToString()}]"
+        "Image moderation blocked the request: stage=[${stage.name.lowercase()}] categories=[${categories.joinToString()}]",
     )
 
 /** One image handed to the edit endpoint, with what either route needs to name and type it. */
@@ -81,8 +81,8 @@ class OpenAiImageClient(private val http: HttpClient, private val auth: ImageAut
                             quality = config.quality,
                             moderation = platformOnly(config.moderation),
                             outputFormat = platformOnly(OUTPUT_FORMAT),
-                            outputCompression = platformOnly(OUTPUT_COMPRESSION)
-                        )
+                            outputCompression = platformOnly(OUTPUT_COMPRESSION),
+                        ),
                     )
                 }.body()
             }
@@ -100,7 +100,7 @@ class OpenAiImageClient(private val http: HttpClient, private val auth: ImageAut
         prompt: String,
         images: List<SourceImage>,
         size: String,
-        config: OpenAiImageConfig
+        config: OpenAiImageConfig,
     ): ByteArray {
         require(prompt.isNotBlank()) { "Prompt must not be blank" }
         require(images.isNotEmpty()) { "At least one source image is required" }
@@ -121,7 +121,7 @@ class OpenAiImageClient(private val http: HttpClient, private val auth: ImageAut
         prompt: String,
         images: List<SourceImage>,
         size: String,
-        config: OpenAiImageConfig
+        config: OpenAiImageConfig,
     ): OpenAiImageResponse =
         http.submitFormWithBinaryData(
             url = "$PLATFORM_BASE_URL/edits",
@@ -145,10 +145,10 @@ class OpenAiImageClient(private val http: HttpClient, private val auth: ImageAut
                         headers = Headers.build {
                             append(HttpHeaders.ContentType, image.contentType)
                             append(HttpHeaders.ContentDisposition, """filename="${image.filename}"""")
-                        }
+                        },
                     )
                 }
-            }
+            },
         ) {
             authorize()
             imageTimeout()
@@ -160,7 +160,7 @@ class OpenAiImageClient(private val http: HttpClient, private val auth: ImageAut
     private suspend fun editViaCodex(
         prompt: String,
         images: List<SourceImage>,
-        config: OpenAiImageConfig
+        config: OpenAiImageConfig,
     ): OpenAiImageResponse =
         http.post("$CODEX_BASE_URL/edits") {
             authorize()
@@ -172,8 +172,8 @@ class OpenAiImageClient(private val http: HttpClient, private val auth: ImageAut
                     images = images.map { CodexImageSource(dataUrl(it.bytes, it.contentType)) },
                     prompt = prompt,
                     model = config.model,
-                    quality = config.quality
-                )
+                    quality = config.quality,
+                ),
             )
         }.body()
 

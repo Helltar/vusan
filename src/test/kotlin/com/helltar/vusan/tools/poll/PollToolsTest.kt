@@ -20,7 +20,7 @@ class PollToolsTest {
                 question = "  What's your favorite color?  ",
                 options = listOf("  Red  ", "Green", "Blue"),
                 isAnonymous = false,
-                allowsMultipleAnswers = true
+                allowsMultipleAnswers = true,
             )
 
         assertEquals("Poll \"What's your favorite color?\" ready with 3 options and will be sent.", result)
@@ -29,9 +29,9 @@ class PollToolsTest {
                 question = "What's your favorite color?",
                 options = listOf("Red", "Green", "Blue"),
                 isAnonymous = false,
-                allowsMultipleAnswers = true
+                allowsMultipleAnswers = true,
             ),
-            outbox.pending.single().output
+            outbox.pending.single().output,
         )
     }
 
@@ -42,7 +42,7 @@ class PollToolsTest {
 
         tools.createPoll(
             question = "Tea or coffee?",
-            options = listOf("Tea", "Coffee")
+            options = listOf("Tea", "Coffee"),
         )
 
         val poll = outbox.pending.single().output as BotOutput.Poll
@@ -60,7 +60,7 @@ class PollToolsTest {
             toolFailure {
                 tools.createPoll(
                     question = "Is it worth it?",
-                    options = listOf("Yes")
+                    options = listOf("Yes"),
                 )
             }
 
@@ -77,7 +77,7 @@ class PollToolsTest {
             toolFailure {
                 tools.createPoll(
                     question = "Choose a fruit",
-                    options = listOf("Apple", "apple", "Pear")
+                    options = listOf("Apple", "apple", "Pear"),
                 )
             }
 

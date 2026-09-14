@@ -19,7 +19,7 @@ data class ChatContext(
     val title: String? = null,
     val username: String? = null,
     val description: String? = null,
-    val capabilities: ChatCapabilities = ChatCapabilities.UNRESTRICTED
+    val capabilities: ChatCapabilities = ChatCapabilities.UNRESTRICTED,
 )
 
 /**
@@ -38,7 +38,7 @@ data class SenderContext(
     val username: String? = null,
     /** What the sender's client reports, where the platform passes it on; see `Language.fromCode`. */
     val languageCode: String? = null,
-    val isPerson: Boolean = true
+    val isPerson: Boolean = true,
 )
 
 /**
@@ -62,7 +62,7 @@ data class RequestContext(
     val messageId: String? = null,
     val replyToMessageId: String? = null,
     val attachedFiles: List<AttachedFile> = emptyList(),
-    val language: Language = Language.DEFAULT
+    val language: Language = Language.DEFAULT,
 ) {
 
     /**

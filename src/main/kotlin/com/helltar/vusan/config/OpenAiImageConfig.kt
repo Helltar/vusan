@@ -34,7 +34,7 @@ data class OpenAiImageConfig(
     val model: String,
     val quality: String,
     val moderation: String = DEFAULT_MODERATION,
-    val route: ImageRoute = ImageRoute.PLATFORM
+    val route: ImageRoute = ImageRoute.PLATFORM,
 ) {
 
     init {

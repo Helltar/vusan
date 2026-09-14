@@ -50,7 +50,7 @@ class TelegramVideoThumbnailTest {
         width: Int,
         height: Int,
         format: String,
-        type: Int = BufferedImage.TYPE_INT_RGB
+        type: Int = BufferedImage.TYPE_INT_RGB,
     ): ByteArray {
         val output = ByteArrayOutputStream()
         ImageIO.write(BufferedImage(width, height, type), format, output)

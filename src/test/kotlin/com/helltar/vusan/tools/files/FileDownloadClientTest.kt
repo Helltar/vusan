@@ -31,8 +31,8 @@ class FileDownloadClientTest {
                     headers =
                         headersOf(
                             HttpHeaders.ContentType to listOf("application/pdf"),
-                            HttpHeaders.ContentDisposition to listOf("""attachment; filename="annual report.pdf"""")
-                        )
+                            HttpHeaders.ContentDisposition to listOf("""attachment; filename="annual report.pdf""""),
+                        ),
                 )
             }
 
@@ -48,7 +48,7 @@ class FileDownloadClientTest {
             client {
                 respond(
                     content = "<html></html>".toByteArray(),
-                    headers = headersOf(HttpHeaders.ContentType, "text/html; charset=utf-8")
+                    headers = headersOf(HttpHeaders.ContentType, "text/html; charset=utf-8"),
                 )
             }
 
@@ -75,7 +75,7 @@ class FileDownloadClientTest {
             client {
                 respond(
                     content = ByteArray(4),
-                    headers = headersOf(HttpHeaders.ContentType, "application/octet-stream")
+                    headers = headersOf(HttpHeaders.ContentType, "application/octet-stream"),
                 )
             }
 
@@ -93,14 +93,14 @@ class FileDownloadClientTest {
                     headers =
                         headersOf(
                             HttpHeaders.ContentType to listOf("application/pdf"),
-                            HttpHeaders.ContentDisposition to listOf("""attachment; filename="server.pdf"""")
-                        )
+                            HttpHeaders.ContentDisposition to listOf("""attachment; filename="server.pdf""""),
+                        ),
                 )
             }
 
         val result =
             assertIs<FileDownloadResult.Success>(
-                client.download("https://$PUBLIC_HOST/x", requestedFilename = "../../etc/my report.pdf")
+                client.download("https://$PUBLIC_HOST/x", requestedFilename = "../../etc/my report.pdf"),
             )
 
         assertEquals("my report.pdf", result.filename)
@@ -135,7 +135,7 @@ class FileDownloadClientTest {
                     respond(
                         content = "",
                         status = HttpStatusCode.Found,
-                        headers = headersOf(HttpHeaders.Location, "https://$PUBLIC_HOST/final/data.csv")
+                        headers = headersOf(HttpHeaders.Location, "https://$PUBLIC_HOST/final/data.csv"),
                     )
                 } else {
                     respond(content = "a,b".toByteArray(), headers = headersOf(HttpHeaders.ContentType, "text/csv"))
@@ -154,7 +154,7 @@ class FileDownloadClientTest {
                 respond(
                     content = "",
                     status = HttpStatusCode.Found,
-                    headers = headersOf(HttpHeaders.Location, "http://169.254.169.254/latest/meta-data/")
+                    headers = headersOf(HttpHeaders.Location, "http://169.254.169.254/latest/meta-data/"),
                 )
             }
 

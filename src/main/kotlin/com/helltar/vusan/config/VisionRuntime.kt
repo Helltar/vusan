@@ -12,7 +12,7 @@ import kotlin.time.Duration
 data class VisionRuntime(
     val providerLabel: String,
     val executor: PromptExecutor,
-    val model: LLModel
+    val model: LLModel,
 )
 
 /**
@@ -26,7 +26,7 @@ fun resolveVisionRuntime(
     config: OpenAiVisionConfig?,
     chat: LlmRuntime,
     chatExecutor: PromptExecutor,
-    requestTimeout: Duration
+    requestTimeout: Duration,
 ): VisionRuntime? {
     if (config == null) {
         return chat
@@ -45,6 +45,6 @@ fun resolveVisionRuntime(
     return VisionRuntime(
         providerLabel = "OpenAI",
         executor = MultiLLMPromptExecutor(model.provider to client),
-        model = model
+        model = model,
     )
 }

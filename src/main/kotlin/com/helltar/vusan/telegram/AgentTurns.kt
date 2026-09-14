@@ -53,7 +53,7 @@ internal class AgentTurns(
     private val delivery: TelegramDelivery,
     private val inlineChoices: InlineChoiceHandler,
     private val chatProfiles: ChatProfiles,
-    private val voiceTranscriber: VoiceTranscriber?
+    private val voiceTranscriber: VoiceTranscriber?,
 ) {
 
     suspend fun dispatchToAgent(
@@ -62,7 +62,7 @@ internal class AgentTurns(
         botProfile: BotProfile,
         inputKind: String,
         loadRepliedAttachment: Boolean = true,
-        attachedFiles: List<AttachedFile> = emptyList()
+        attachedFiles: List<AttachedFile> = emptyList(),
     ) {
         // every reply describes what it answers, the bot's own messages included: the history that would
         // otherwise carry them belongs to one person and one chat, so in a group the message is missing
@@ -92,7 +92,7 @@ internal class AgentTurns(
                 message.replyToMessageIdOrNull()
                     ?.takeIf { isReplyToOtherUser(message.replyAuthorIdOrNull(), botProfile.userId) }
                     ?.toString(),
-            inputKind = inputKind
+            inputKind = inputKind,
         )
     }
 
@@ -102,7 +102,7 @@ internal class AgentTurns(
         conversationInput: String,
         attachedFiles: List<AttachedFile>,
         replyToMessageId: String?,
-        inputKind: String
+        inputKind: String,
     ) {
         val sender =
             message.from ?: run {
@@ -120,10 +120,10 @@ internal class AgentTurns(
                         messageId = message.messageIdLong.toString(),
                         replyToMessageId = replyToMessageId,
                         attachedFiles = attachedFiles,
-                        language = message.language
+                        language = message.language,
                     ),
                 prompt = agentInput,
-                conversationEntry = conversationInput
+                conversationEntry = conversationInput,
             )
 
         runAgentTurn(
@@ -131,7 +131,7 @@ internal class AgentTurns(
             inputKind = inputKind,
             waitForTurn = false,
             deliver = { result -> delivery.send(message, result) },
-            reply = { text -> delivery.sendReply(message, text) }
+            reply = { text -> delivery.sendReply(message, text) },
         )
     }
 
@@ -139,7 +139,7 @@ internal class AgentTurns(
         message: Message,
         user: User,
         selection: InlineChoiceSelection,
-        messages: Messages
+        messages: Messages,
     ) {
         val input = inlineChoiceAgentInput(selection)
         val attachedFile = inlineChoices.parkedAttachment(message.chatIdLong, user.id)
@@ -155,10 +155,10 @@ internal class AgentTurns(
                         sender = user.toSenderContext(),
                         messageId = selection.originMessageId?.toString(),
                         attachedFiles = listOfNotNull(attachedFile),
-                        language = Language.fromCode(user.languageCode)
+                        language = Language.fromCode(user.languageCode),
                     ),
                 prompt = attachedFile?.let { "${attachedFileContextBlock(it)}\n\n$input" } ?: input,
-                conversationEntry = input
+                conversationEntry = input,
             )
 
         runAgentTurn(
@@ -171,10 +171,10 @@ internal class AgentTurns(
                     message = message,
                     originMessageId = selection.originMessageId,
                     userId = user.id,
-                    messages = messages
+                    messages = messages,
                 )
             },
-            reply = { text -> delivery.sendReply(message, text, selection.originMessageId) }
+            reply = { text -> delivery.sendReply(message, text, selection.originMessageId) },
         )
     }
 
@@ -183,7 +183,7 @@ internal class AgentTurns(
         inputKind: String,
         waitForTurn: Boolean,
         deliver: suspend (AgentResult) -> Unit,
-        reply: suspend (text: String) -> Unit
+        reply: suspend (text: String) -> Unit,
     ) {
         val context = request.context
 
@@ -216,7 +216,7 @@ internal class AgentTurns(
             inlineChoices.parkAttachment(
                 chatId = context.chatRef.telegramChatId,
                 userId = context.user.telegramUserId,
-                file = context.attachedFile?.takeIf { result.outputs.any { it.output is BotOutput.InlineChoice } }
+                file = context.attachedFile?.takeIf { result.outputs.any { it.output is BotOutput.InlineChoice } },
             )
 
             deliver(result)

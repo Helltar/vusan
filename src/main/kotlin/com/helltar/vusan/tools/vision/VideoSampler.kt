@@ -22,7 +22,7 @@ interface VideoSampler {
 
 class FfmpegVideoSampler(
     private val ffmpegPath: String = "ffmpeg",
-    private val timeout: Duration = 120.seconds
+    private val timeout: Duration = 120.seconds,
 ) : VideoSampler {
 
     override suspend fun sampleFrames(video: ByteArray, durationSeconds: Int?, maxFrames: Int): List<ByteArray> {
@@ -36,7 +36,7 @@ class FfmpegVideoSampler(
                     "-vf", "fps=${frameRate(durationSeconds, maxFrames)},scale='min($FRAME_MAX_WIDTH,iw)':-2",
                     "-frames:v", maxFrames.toString(),
                     "-q:v", FRAME_QUALITY,
-                    workDir.resolve("frame-%03d.jpg").toString()
+                    workDir.resolve("frame-%03d.jpg").toString(),
                 )
 
             if (!runFfmpeg(command, ffmpegPath, timeout))
@@ -63,7 +63,7 @@ class FfmpegVideoSampler(
                     // aac is ffmpeg's own encoder, so this works on builds without any external codec
                     "-c:a", "aac",
                     "-b:a", AUDIO_BITRATE,
-                    output.toString()
+                    output.toString(),
                 )
 
             // a video with no audio stream fails the run, which is the same "no transcript" answer

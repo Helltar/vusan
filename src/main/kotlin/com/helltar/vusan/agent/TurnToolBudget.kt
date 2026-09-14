@@ -48,7 +48,7 @@ internal fun TurnToolBudget.report(): String =
             isLow ->
                 append(
                     "Narrow what you read from here on — a range, a page, a shorter window — and deliver your " +
-                            "answer soon: past the budget results arrive truncated, then empty."
+                            "answer soon: past the budget results arrive truncated, then empty.",
                 )
 
             else ->

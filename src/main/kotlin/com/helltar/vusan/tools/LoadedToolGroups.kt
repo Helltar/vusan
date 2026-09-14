@@ -19,7 +19,7 @@ class LoadedToolGroups {
     private val byScope =
         object : LinkedHashMap<ConversationScope, LinkedHashSet<ToolGroup>>(16, 0.75f, true) {
             override fun removeEldestEntry(
-                eldest: MutableMap.MutableEntry<ConversationScope, LinkedHashSet<ToolGroup>>?
+                eldest: MutableMap.MutableEntry<ConversationScope, LinkedHashSet<ToolGroup>>?,
             ): Boolean = size > MAX_SCOPES
         }
 
