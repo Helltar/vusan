@@ -9,12 +9,6 @@ see [Sandbox](#sandbox) and [Publishing to the web](#publishing-to-the-web).
 Chasing a symptom rather than reading for orientation? Start at [Where to look when…](#where-to-look-when) — it maps a
 symptom to the file that owns it, and beats searching the tree.
 
-- **Orientation** — [Layers](#layers) · [Request lifecycle](#request-lifecycle) ·
-  [Background and side flows](#background-and-side-flows) · [Startup](#startup) ·
-  [Sandbox](#sandbox) · [Publishing to the web](#publishing-to-the-web)
-- **Reference** — [Where to look when…](#where-to-look-when) · [Adding a tool](#adding-a-tool) ·
-  [Conventions](#conventions)
-
 ## Layers
 
 ```

@@ -12,11 +12,6 @@ after the person, then runs commands, moves files and reads output over HTTP. Ho
 isolated, which image it runs and what it can reach are set on the server, and Regolith's
 documentation covers them.
 
-- **Setting it up** — [The server](#the-server) · [Pointing the bot at it](#pointing-the-bot-at-it)
-- **What the model can do** — [Files](#files) · [Commands](#commands) · [Sending results](#sending-results)
-- **What to expect** — [Limits](#limits) · [When a home goes away](#when-a-home-goes-away) ·
-  [Removing it](#removing-it)
-
 ## The server
 
 Regolith runs on an ordinary Linux Docker host, beside the bot or on a machine of its own — a machine

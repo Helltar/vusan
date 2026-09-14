@@ -11,19 +11,6 @@ and its own configuration, which also publishes the pages people build. That spl
 than tidiness: it runs commands the model writes and holds a Docker socket to do it, and what it
 publishes faces the internet, so it is never handed the bot's secrets.
 
-- **Getting started** — [Minimum setup](#minimum-setup) · [Who Vusan answers](#who-vusan-answers)
-- **The model** — [LLM provider](#llm-provider) · [ChatGPT subscription](#chatgpt-subscription) ·
-  [Daily token budget](#daily-token-budget) · [Requests at once](#how-many-requests-at-once)
-- **Who it is** — [Personality](#personality) · [Appearance](#appearance)
-- **Tools** — [Optional tools](#optional-tools) · [Web search](#web-search) ·
-  [Voice output](#voice-output) · [Voice input](#voice-input) ·
-  [Image generation](#image-generation) · [Vision](#vision) · [Sandbox](#sandbox)
-- **What it remembers** — [Conversation](#conversation) · [Memory](#memory) ·
-  [Group log](#group-log) · [Scheduled tasks](#scheduled-tasks)
-- **In Telegram** — [Rights in a group](#rights-in-a-group) · [Command menu](#command-menu)
-- **Running it** — [Agent loop](#agent-loop) · [Storage and binaries](#storage-and-binaries) ·
-  [Logging](#logging) · [Health check](#health-check)
-
 **How values are read.** Booleans take `true` or `false` in any case and nothing else. A value that
 is set but unreadable — `AGENT_MAX_ITERATIONS=7O`, `GROUP_LOG_ENABLED=off`, a zero timeout, an ID
 that is not a number — stops startup with a message naming the variable and what it was given,
