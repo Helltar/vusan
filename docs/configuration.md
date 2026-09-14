@@ -3,7 +3,7 @@
 Everything the bot reads from `.env`. Copy
 [`.env.example`](../.env.example) and fill it in; blank values count as missing.
 
-For Docker, follow the [quick start](../README.md#docker). The same `.env` also carries the few
+For Docker, follow the [quick start](../README.md#quick-start). The same `.env` also carries the few
 Compose settings of the bot's own deployment, listed at the bottom of `.env.example`.
 
 One thing sits outside this file: the [sandbox](#sandbox), a Regolith server with its own deployment

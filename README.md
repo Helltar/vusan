@@ -17,17 +17,15 @@ Try it live in the [Vusan Playground](https://t.me/+56qi5dDwsNszZWFi) Telegram g
 
 ## Quick start
 
-Clone the repo and copy the env template:
+The bot runs from its published image, so it needs only the compose file and the env template:
 
 ```bash
-git clone https://github.com/Helltar/vusan.git
-cd vusan
-cp .env.example .env
-# for the database and bot files; if docker creates it, the bot can't write to it
-mkdir -p data
+mkdir -p vusan/data && cd vusan && \
+  curl -fsSLO "https://raw.githubusercontent.com/Helltar/vusan/master/{compose.yaml,.env.example}" && \
+  mv .env.example .env
 ```
 
-Only these values are required to start; everything else is optional and covered in
+Only these values in `.env` are required to start; everything else is optional and covered in
 [configuration.md](docs/configuration.md):
 
 ```dotenv
@@ -38,20 +36,10 @@ LLM_MODEL=gpt-5.4-mini
 LLM_API_KEY=sk-proj-qwerty
 ```
 
-Then start the bot — in Docker, or on a local JVM.
-
-### Docker
-
-Use the published image:
+Then start it:
 
 ```bash
 docker compose up -d
-```
-
-Or build from source:
-
-```bash
-docker compose up --build -d
 ```
 
 That starts the bot, which is the whole deployment. Two capabilities stay off until it can reach a
@@ -59,9 +47,23 @@ That starts the bot, which is the whole deployment. Two capabilities stay off un
 [publishing to the web](docs/sites.md), which puts what was built there at a public address. Both come
 from that one server, which is a separate project with a machine of its own as the recommendation.
 
-### Local JVM
+### From source
 
-Prerequisites: JDK 21, plus `ffmpeg` and `yt-dlp` on `PATH`.
+To build the image yourself or run on a local JVM, clone the repository and set up `.env` the same
+way:
+
+```bash
+git clone https://github.com/Helltar/vusan.git && cd vusan && \
+  cp .env.example .env && mkdir data
+```
+
+Then build and start the image:
+
+```bash
+docker compose up --build -d
+```
+
+Or run it on JDK 21, with `ffmpeg` and `yt-dlp` on `PATH`:
 
 ```bash
 ./gradlew run
