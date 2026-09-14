@@ -41,10 +41,6 @@ class ChatProfiles(
 
     override suspend fun of(chat: ChatRef): ChatProfile = of(chat.telegramChatId)
 
-    private companion object {
-        val DEFAULT_TTL = 10.minutes
-    }
-
     private data class Cached(val profile: ChatProfile, val readAt: Instant)
 
     private val cached = ConcurrentHashMap<Long, Cached>()
@@ -89,6 +85,10 @@ class ChatProfiles(
                 log.debug(error) { "$label failed for chat=$chatId; treating it as unrestricted" }
             }
             .getOrNull()
+
+    private companion object {
+        val DEFAULT_TTL = 10.minutes
+    }
 }
 
 internal fun capabilitiesOf(membership: ChatMember?, chat: ChatFullInfo?): ChatCapabilities {

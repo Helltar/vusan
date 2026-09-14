@@ -30,10 +30,6 @@ import org.telegram.telegrambots.meta.api.objects.Update
  */
 internal class UpdateSpool(private val retention: Duration) {
 
-    private companion object {
-        val log = KotlinLogging.logger {}
-    }
-
     // the library's own mapper settings are on the classes themselves (`@Jacksonized`, NON_NULL,
     // unknown properties ignored), so a default mapper reproduces the Bot API wire format exactly.
     private val mapper = ObjectMapper()
@@ -114,4 +110,8 @@ internal class UpdateSpool(private val retention: Duration) {
             log.error(it) { "failed to read the update spool; starting without replaying anything" }
             emptyList()
         }
+
+    private companion object {
+        val log = KotlinLogging.logger {}
+    }
 }

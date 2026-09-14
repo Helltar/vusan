@@ -44,10 +44,6 @@ sealed class FileDownloadResult {
 /** Uses the public-only connection engine supplied at startup, never the internal-service client. */
 class FileDownloadClient(http: HttpClient) {
 
-    private companion object {
-        val log = KotlinLogging.logger {}
-    }
-
     // redirects are followed by hand so every hop is re-checked against the local-address guard;
     // a public URL that 302s to 127.0.0.1 or 169.254.169.254 would otherwise walk straight past it.
     // statuses are inspected here too, so the shared client's expectSuccess is turned off.
@@ -176,6 +172,10 @@ class FileDownloadClient(http: HttpClient) {
         require(InetAddress.getByName(host).isPublicDestination) {
             "Refusing to download from a private or local address: [${target.host}]"
         }
+    }
+
+    private companion object {
+        val log = KotlinLogging.logger {}
     }
 }
 

@@ -37,16 +37,6 @@ class LlmConversationCompactor(
     private val contextWindowPolicy: ContextWindowPolicy = ContextWindowPolicy(model)
 ) : ConversationCompactor {
 
-    private companion object {
-        const val MAX_SUMMARY_CHARS = 6_000
-        const val MAX_USER_OR_ASSISTANT_SOURCE_CHARS = 1_500
-        const val MAX_TOOL_CALL_SOURCE_CHARS = 400
-        const val MAX_TOOL_RESULT_SOURCE_CHARS = 600
-        const val MIN_COMPACTION_INPUT_TOKENS = 2_048
-        const val MAX_COMPACTION_INPUT_TOKENS = 12_000
-        val log = KotlinLogging.logger {}
-    }
-
     override suspend fun compact(
         previousSummary: String?,
         interactions: List<ConversationInteraction>
@@ -134,6 +124,16 @@ class LlmConversationCompactor(
 
             append("</interaction>")
         }
+
+    private companion object {
+        const val MAX_SUMMARY_CHARS = 6_000
+        const val MAX_USER_OR_ASSISTANT_SOURCE_CHARS = 1_500
+        const val MAX_TOOL_CALL_SOURCE_CHARS = 400
+        const val MAX_TOOL_RESULT_SOURCE_CHARS = 600
+        const val MIN_COMPACTION_INPUT_TOKENS = 2_048
+        const val MAX_COMPACTION_INPUT_TOKENS = 12_000
+        val log = KotlinLogging.logger {}
+    }
 }
 
 // below this a context excerpt is too short to say what the request was answering, so the request

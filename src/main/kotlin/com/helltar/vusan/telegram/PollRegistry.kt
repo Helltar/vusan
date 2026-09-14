@@ -33,18 +33,6 @@ data class SentPoll(
  */
 class PollRegistry(private val retention: Duration = DEFAULT_RETENTION) {
 
-    private companion object {
-        // telegram caps a poll option at 100 characters and a poll at 12 of them; the joined form has
-        // room to spare, and an option cannot contain the newline that separates them.
-        const val OPTION_SEPARATOR = "\n"
-
-        // long enough that a poll left open over a holiday still resolves its answers, short enough
-        // that the table is not a permanent record of every question the bot ever asked.
-        val DEFAULT_RETENTION = 30.days
-
-        val log = KotlinLogging.logger {}
-    }
-
     suspend fun remember(pollId: String, chatId: Long, output: BotOutput) {
         val (options, correctOptionIndex) =
             when (output) {
@@ -98,4 +86,16 @@ class PollRegistry(private val retention: Duration = DEFAULT_RETENTION) {
             log.warn(it) { "failed to look up poll id=[$pollId]" }
             null
         }
+
+    private companion object {
+        // telegram caps a poll option at 100 characters and a poll at 12 of them; the joined form has
+        // room to spare, and an option cannot contain the newline that separates them.
+        const val OPTION_SEPARATOR = "\n"
+
+        // long enough that a poll left open over a holiday still resolves its answers, short enough
+        // that the table is not a permanent record of every question the bot ever asked.
+        val DEFAULT_RETENTION = 30.days
+
+        val log = KotlinLogging.logger {}
+    }
 }

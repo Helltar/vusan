@@ -22,11 +22,6 @@ import kotlin.test.assertTrue
 
 class SearxngToolsTest {
 
-    private companion object {
-        const val BASE_URL = "http://searxng:8080"
-        const val IMAGE_HOST = "93.184.216.34"
-    }
-
     private fun png(width: Int = 8, height: Int = 8): ByteArray =
         ByteArrayOutputStream().also { ImageIO.write(BufferedImage(width, height, BufferedImage.TYPE_INT_RGB), "png", it) }
             .toByteArray()
@@ -241,5 +236,10 @@ class SearxngToolsTest {
         val tools = SearxngTools(SearxngClient(http, BASE_URL), ImageDownloadClient(FileDownloadClient(http)), BotOutbox())
 
         assertContains(toolFailure { tools.metaSearch("kotlin") }, "temporarily unavailable")
+    }
+
+    private companion object {
+        const val BASE_URL = "http://searxng:8080"
+        const val IMAGE_HOST = "93.184.216.34"
     }
 }

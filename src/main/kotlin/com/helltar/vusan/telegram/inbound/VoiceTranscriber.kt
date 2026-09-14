@@ -48,10 +48,6 @@ internal fun Audio.toAudioInput(): AudioInput =
 
 internal class VoiceTranscriber(private val whisper: OpenAiWhisperClient, private val config: OpenAiSttConfig) {
 
-    private companion object {
-        val log = KotlinLogging.logger {}
-    }
-
     suspend fun transcribe(client: TelegramClient, input: AudioInput): VoiceTranscriptionResult {
         val duration = input.durationSeconds
 
@@ -91,6 +87,10 @@ internal class VoiceTranscriber(private val whisper: OpenAiWhisperClient, privat
             return VoiceTranscriptionResult.Empty("provider returned empty transcript")
 
         return VoiceTranscriptionResult.Success(trimmed)
+    }
+
+    private companion object {
+        val log = KotlinLogging.logger {}
     }
 }
 

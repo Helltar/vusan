@@ -32,32 +32,6 @@ class TelegramChannelReader(
     private val zone: ZoneId = ZoneId.systemDefault()
 ) {
 
-    private companion object {
-        const val MAX_PAGES = 10
-        const val DEFAULT_POSTS = 12
-        const val MAX_POSTS = 200
-
-        // Telegram caps message text at 4096, and the longest posts measured on real channels sit
-        // near 2000, so this leaves ordinary posts whole and trims only a rare longread.
-        const val MAX_POST_TEXT_CHARS = 2_500
-
-        // a day of the busiest channels measured renders at ~32k with metadata, so a full day always
-        // comes back whole and only a multi-day window starts dropping its oldest posts. The run's
-        // own tool budget in `AgentFactory` is what bounds this against the model's context.
-        const val MAX_OUTPUT_CHARS = 48_000
-
-        const val MAX_IMAGES_TO_DESCRIBE = 24
-        const val MAX_IMAGE_DESCRIPTION_CHARS = 600
-        const val VISION_CONCURRENCY = 4
-
-        const val MAX_LINKS_PER_POST = 6
-        const val MAX_LINK_PREVIEW_CHARS = 300
-        const val MAX_REPLY_QUOTE_CHARS = 160
-
-        val TIMESTAMP: DateTimeFormatter = DateTimeFormatter.ofPattern("yyyy-MM-dd'T'HH:mm")
-        val log = KotlinLogging.logger {}
-    }
-
     suspend fun read(
         channel: String,
         window: Duration?,
@@ -337,6 +311,32 @@ class TelegramChannelReader(
 
     private fun stamp(instant: Instant): String =
         TIMESTAMP.format(ZonedDateTime.ofInstant(instant, zone))
+
+    private companion object {
+        const val MAX_PAGES = 10
+        const val DEFAULT_POSTS = 12
+        const val MAX_POSTS = 200
+
+        // Telegram caps message text at 4096, and the longest posts measured on real channels sit
+        // near 2000, so this leaves ordinary posts whole and trims only a rare longread.
+        const val MAX_POST_TEXT_CHARS = 2_500
+
+        // a day of the busiest channels measured renders at ~32k with metadata, so a full day always
+        // comes back whole and only a multi-day window starts dropping its oldest posts. The run's
+        // own tool budget in `AgentFactory` is what bounds this against the model's context.
+        const val MAX_OUTPUT_CHARS = 48_000
+
+        const val MAX_IMAGES_TO_DESCRIBE = 24
+        const val MAX_IMAGE_DESCRIPTION_CHARS = 600
+        const val VISION_CONCURRENCY = 4
+
+        const val MAX_LINKS_PER_POST = 6
+        const val MAX_LINK_PREVIEW_CHARS = 300
+        const val MAX_REPLY_QUOTE_CHARS = 160
+
+        val TIMESTAMP: DateTimeFormatter = DateTimeFormatter.ofPattern("yyyy-MM-dd'T'HH:mm")
+        val log = KotlinLogging.logger {}
+    }
 }
 
 // below this a caption cannot be carrying the post on its own, so the image is the content and

@@ -71,11 +71,6 @@ class AgentFactory(
     private val contextWindowPolicy: ContextWindowPolicy = ContextWindowPolicy(model)
 ) {
 
-    private companion object {
-        const val TOOL_LOG_ARGS_MAX_CHARS = 300
-        val log = KotlinLogging.logger {}
-    }
-
     // the catalog is built before the turn text, not here: what it defers goes into that text as
     // `<tool_groups>`, and the budget below has to weigh the finished prompt.
     fun prepare(toolCatalog: ToolCatalog, currentTurn: String): AgentPromptPreparation {
@@ -203,6 +198,11 @@ class AgentFactory(
                 }
             }
         }
+    }
+
+    private companion object {
+        const val TOOL_LOG_ARGS_MAX_CHARS = 300
+        val log = KotlinLogging.logger {}
     }
 }
 

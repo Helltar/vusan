@@ -138,20 +138,6 @@ class TelegramDelivery(
     private val polls: PollRegistry? = null
 ) : OutputDelivery {
 
-    private companion object {
-        const val MAX_CAPTION_CHARS = 1000
-
-        // matches what an inbound message is allowed to cost the transcript.
-        const val MAX_BOT_TEXT_CHARS = 2_000
-
-        // pace consecutive sends in a multi-output reply so a batch does not trip Telegram's per-chat
-        // rate limit in the first place. `withFloodWaitRetry` handles the one that trips it anyway,
-        // but it costs the wait Telegram names — this keeps most batches from ever paying it.
-        val INTER_MESSAGE_DELAY = 700.milliseconds
-
-        val log = KotlinLogging.logger {}
-    }
-
     private data class DeliveryTarget(val chat: ChatTarget, val replyToMessageId: Long? = null) {
 
         constructor(chatId: Long) : this(ChatTarget(chatId))
@@ -622,4 +608,18 @@ class TelegramDelivery(
 
     private fun isPrivateChatBlocked(error: Throwable): Boolean =
         error.isForbidden()
+
+    private companion object {
+        const val MAX_CAPTION_CHARS = 1000
+
+        // matches what an inbound message is allowed to cost the transcript.
+        const val MAX_BOT_TEXT_CHARS = 2_000
+
+        // pace consecutive sends in a multi-output reply so a batch does not trip Telegram's per-chat
+        // rate limit in the first place. `withFloodWaitRetry` handles the one that trips it anyway,
+        // but it costs the wait Telegram names — this keeps most batches from ever paying it.
+        val INTER_MESSAGE_DELAY = 700.milliseconds
+
+        val log = KotlinLogging.logger {}
+    }
 }

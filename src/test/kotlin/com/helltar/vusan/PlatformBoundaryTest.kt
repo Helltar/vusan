@@ -29,22 +29,6 @@ import kotlin.test.fail
  */
 class PlatformBoundaryTest {
 
-    private companion object {
-        val TELEGRAM_IMPORT = Regex("""^import\s+(org\.telegram\.|com\.helltar\.vusan\.telegram\.)""")
-
-        // the composition root wires whichever adapters the deployment runs, so it is expected to name
-        // them. it is exempt rather than allowlisted: it will still import Telegram once nothing else does.
-        val COMPOSITION_ROOT = setOf("src/main/kotlin/com/helltar/vusan/Main.kt")
-
-        /**
-         * Shared files that still reach into Telegram, and what each is waiting for. It is empty, which is
-         * the state to hold: adding an entry means the boundary moved the wrong way and needs a deliberate
-         * decision, not a line here. A tool that only one messenger can implement belongs in its adapter
-         * and reaches the registry through `PlatformToolSets`.
-         */
-        val ALLOWED = emptyMap<String, String>()
-    }
-
     @Test
     fun `nothing outside the telegram adapter knows about Telegram`() {
         val root = projectRoot()
@@ -90,4 +74,20 @@ class PlatformBoundaryTest {
         generateSequence(Path.of("").toAbsolutePath()) { it.parent }
             .firstOrNull { it.resolve("src/main/kotlin").exists() }
             ?: fail("could not locate the project root from ${Path.of("").toAbsolutePath()}")
+
+    private companion object {
+        val TELEGRAM_IMPORT = Regex("""^import\s+(org\.telegram\.|com\.helltar\.vusan\.telegram\.)""")
+
+        // the composition root wires whichever adapters the deployment runs, so it is expected to name
+        // them. it is exempt rather than allowlisted: it will still import Telegram once nothing else does.
+        val COMPOSITION_ROOT = setOf("src/main/kotlin/com/helltar/vusan/Main.kt")
+
+        /**
+         * Shared files that still reach into Telegram, and what each is waiting for. It is empty, which is
+         * the state to hold: adding an entry means the boundary moved the wrong way and needs a deliberate
+         * decision, not a line here. A tool that only one messenger can implement belongs in its adapter
+         * and reaches the registry through `PlatformToolSets`.
+         */
+        val ALLOWED = emptyMap<String, String>()
+    }
 }

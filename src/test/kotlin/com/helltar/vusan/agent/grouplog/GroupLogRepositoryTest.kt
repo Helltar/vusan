@@ -318,10 +318,6 @@ class GroupLogRepositoryTest {
             replyToMessageId = answering
         )
 
-    private companion object {
-        val CHAT = testChat(-100)
-    }
-
     private fun testConfig(dbPath: String) =
         AppConfig(
             agentMaxIterations = 70,
@@ -356,4 +352,8 @@ class GroupLogRepositoryTest {
             telegramBotToken = "test",
             ytDlpCookiesFile = null
         )
+
+    private companion object {
+        val CHAT = testChat(-100)
+    }
 }

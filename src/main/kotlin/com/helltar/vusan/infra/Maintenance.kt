@@ -28,14 +28,6 @@ class Maintenance(
     /** One thing to clean up, and what it removed: rows, chats, conversations — whatever it counts. */
     class Step(val name: String, val run: suspend () -> Int)
 
-    private companion object {
-        val log = KotlinLogging.logger {}
-
-        // retention is measured in days everywhere it is configured, so nothing here is urgent; a
-        // restart runs a pass on the way in, which is what catches a bot that is only up briefly.
-        val DEFAULT_INTERVAL = 6.hours
-    }
-
     fun launchIn(scope: CoroutineScope): Job =
         scope.launch {
             log.info { "maintenance started: every ${interval.inWholeHours}h, ${steps.size} step(s)" }
@@ -55,5 +47,13 @@ class Maintenance(
                     log.warn(it) { "maintenance ${step.name} failed; the next pass tries again" }
                 }
         }
+    }
+
+    private companion object {
+        val log = KotlinLogging.logger {}
+
+        // retention is measured in days everywhere it is configured, so nothing here is urgent; a
+        // restart runs a pass on the way in, which is what catches a bot that is only up briefly.
+        val DEFAULT_INTERVAL = 6.hours
     }
 }

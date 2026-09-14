@@ -32,17 +32,6 @@ internal class TaskMenuHandler(
     private val now: () -> Instant = Instant::now
 ) {
 
-    private companion object {
-        const val CALLBACK_PREFIX = "tasks:"
-        const val MAX_TASK_LABEL_CHARS = 120
-
-        // MAX_TASKS_PER_USER is configurable, so the rendered list has to stay under Telegram's
-        // 4096-character message limit however high it is set. the slack covers the header and notice.
-        const val MAX_MENU_ITEMS_CHARS = 3600
-
-        const val ITEM_SEPARATOR = "\n\n"
-    }
-
     fun handles(callbackData: String?): Boolean =
         callbackData?.startsWith(CALLBACK_PREFIX) == true
 
@@ -377,6 +366,17 @@ internal class TaskMenuHandler(
         val text: String,
         val keyboard: InlineKeyboardMarkup
     )
+
+    private companion object {
+        const val CALLBACK_PREFIX = "tasks:"
+        const val MAX_TASK_LABEL_CHARS = 120
+
+        // MAX_TASKS_PER_USER is configurable, so the rendered list has to stay under Telegram's
+        // 4096-character message limit however high it is set. the slack covers the header and notice.
+        const val MAX_MENU_ITEMS_CHARS = 3600
+
+        const val ITEM_SEPARATOR = "\n\n"
+    }
 }
 
 private sealed interface TaskMenuAction {

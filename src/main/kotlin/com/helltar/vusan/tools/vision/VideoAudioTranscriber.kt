@@ -20,13 +20,6 @@ class WhisperVideoAudioTranscriber(
     private val config: OpenAiSttConfig
 ) : VideoAudioTranscriber {
 
-    private companion object {
-        const val AUDIO_FILE_NAME = "video-audio.m4a"
-        const val AUDIO_MIME_TYPE = "audio/mp4"
-
-        val log = KotlinLogging.logger {}
-    }
-
     override suspend fun transcribeOrNull(audio: ByteArray, durationSeconds: Int?): String? {
         if (audio.isEmpty()) return null
 
@@ -47,5 +40,12 @@ class WhisperVideoAudioTranscriber(
             .getOrNull()
             ?.trim()
             ?.takeIf { it.isNotEmpty() }
+    }
+
+    private companion object {
+        const val AUDIO_FILE_NAME = "video-audio.m4a"
+        const val AUDIO_MIME_TYPE = "audio/mp4"
+
+        val log = KotlinLogging.logger {}
     }
 }

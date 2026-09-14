@@ -16,12 +16,6 @@ class StickerTools(
     private val outbox: BotOutbox
 ) : ToolSet {
 
-    private companion object {
-        const val MAX_QUERY_CHARS = 120
-        const val DEFAULT_SEARCH_RESULTS = 8
-        const val MAX_SEARCH_RESULTS = 12
-    }
-
     @Tool
     @LLMDescription(StickerToolDescriptions.SEARCH_STICKERS)
     suspend fun searchStickers(
@@ -56,5 +50,11 @@ class StickerTools(
         outbox.enqueue(BotOutput.Sticker(fileId, catalogId = id))
 
         "Sticker $id queued."
+    }
+
+    private companion object {
+        const val MAX_QUERY_CHARS = 120
+        const val DEFAULT_SEARCH_RESULTS = 8
+        const val MAX_SEARCH_RESULTS = 12
     }
 }

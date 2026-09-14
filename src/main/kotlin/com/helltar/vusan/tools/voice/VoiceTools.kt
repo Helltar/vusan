@@ -17,11 +17,6 @@ class VoiceTools(
     private val outbox: BotOutbox
 ) : ToolSet {
 
-    companion object {
-        const val VOICE_TOOLS_MAX_CHARS = 500
-        private val log = KotlinLogging.logger {}
-    }
-
     @Tool
     @LLMDescription(VoiceToolDescriptions.SPEAK_WITH_VOICE)
     suspend fun speakWithVoice(
@@ -54,5 +49,10 @@ class VoiceTools(
 
         "Voice message queued (${trimmed.length} chars, ${bytes.size} bytes). " +
                 "Do not add a separate user-facing confirmation."
+    }
+
+    companion object {
+        const val VOICE_TOOLS_MAX_CHARS = 500
+        private val log = KotlinLogging.logger {}
     }
 }

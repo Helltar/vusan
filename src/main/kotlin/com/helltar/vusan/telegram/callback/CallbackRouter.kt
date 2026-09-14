@@ -26,10 +26,6 @@ internal class CallbackRouter(
     private val accessPolicy: AccessPolicy
 ) {
 
-    private companion object {
-        val log = KotlinLogging.logger {}
-    }
-
     suspend fun route(callback: CallbackQuery) {
         when {
             taskMenu.handles(callback.data) -> routeTaskMenu(callback)
@@ -135,4 +131,8 @@ internal class CallbackRouter(
 
     private fun isAllowed(chatId: Long, userId: Long?): Boolean =
         accessPolicy.allows(telegramChat(chatId), userId?.let(::telegramUser))
+
+    private companion object {
+        val log = KotlinLogging.logger {}
+    }
 }

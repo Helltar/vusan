@@ -56,12 +56,6 @@ internal class AgentTurns(
     private val voiceTranscriber: VoiceTranscriber?
 ) {
 
-    private companion object {
-        const val LOG_PROMPT_MAX_CHARS = 300
-
-        val log = KotlinLogging.logger {}
-    }
-
     suspend fun dispatchToAgent(
         message: Message,
         prompt: String,
@@ -264,4 +258,10 @@ internal class AgentTurns(
     // would spend two API calls to learn nothing.
     private suspend fun chatProfile(message: Message): ChatProfile =
         if (message.canLoadChatDescription) chatProfiles.of(message.chatIdLong) else ChatProfile.NONE
+
+    private companion object {
+        const val LOG_PROMPT_MAX_CHARS = 300
+
+        val log = KotlinLogging.logger {}
+    }
 }

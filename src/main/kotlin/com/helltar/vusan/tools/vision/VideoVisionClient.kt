@@ -19,10 +19,6 @@ class VideoVisionClient(
     private val transcriber: VideoAudioTranscriber? = null
 ) {
 
-    companion object {
-        const val MAX_FRAMES = 8
-    }
-
     suspend fun describe(video: AttachedFile, bytes: ByteArray, focus: String): String {
         val frames = sampler.sampleFrames(bytes, video.durationSeconds, MAX_FRAMES)
 
@@ -140,4 +136,8 @@ class VideoVisionClient(
             ?.takeIf { it > 0 }
             ?.let { "The $frameCount images below are frames spread evenly across a $it-second video, in chronological order." }
             ?: "The $frameCount images below are frames taken at a fixed interval from the start of the video, in chronological order."
+
+    companion object {
+        const val MAX_FRAMES = 8
+    }
 }

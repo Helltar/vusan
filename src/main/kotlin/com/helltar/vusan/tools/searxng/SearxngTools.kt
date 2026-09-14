@@ -20,27 +20,6 @@ class SearxngTools(
     private val outbox: BotOutbox
 ) : ToolSet {
 
-    private companion object {
-        const val MAX_SNIPPET_CHARS = 400
-        const val MAX_SEARCH_OUTPUT_CHARS = 4_000
-        const val MAX_ANSWER_CHARS = 600
-        const val MAX_RESULTS_LIMIT = 15
-
-        val allowedCategories =
-            setOf("general", "news", "it", "science", "videos", "music", "files", "social media", "map")
-
-        // an unknown time_range is a 400, unlike an unknown category, so this set is a hard guard
-        val allowedTimeRanges = setOf("day", "week", "month", "year")
-
-        // SearXNG mixes stock-photo and icon engines into every image query — unsplash, pexels, artic,
-        // devicons and lucide answer anything with something, so `blackpink` comes back with an 1878
-        // self-portrait. pinning the engine list is the only filter that works: `engines` combined with
-        // `categories=images` is ignored, because the category adds its own engines back on top.
-        const val IMAGE_ENGINES = "duckduckgo images,bing images,google cse images,wikicommons.images,flickr"
-
-        val log = KotlinLogging.logger {}
-    }
-
     @Tool
     @LLMDescription(SearxngToolDescriptions.META_SEARCH)
     suspend fun metaSearch(
@@ -145,5 +124,26 @@ class SearxngTools(
             limit = maxResults.coerceIn(1, MAX_IMAGE_RESULTS),
             outbox = outbox
         )
+    }
+
+    private companion object {
+        const val MAX_SNIPPET_CHARS = 400
+        const val MAX_SEARCH_OUTPUT_CHARS = 4_000
+        const val MAX_ANSWER_CHARS = 600
+        const val MAX_RESULTS_LIMIT = 15
+
+        val allowedCategories =
+            setOf("general", "news", "it", "science", "videos", "music", "files", "social media", "map")
+
+        // an unknown time_range is a 400, unlike an unknown category, so this set is a hard guard
+        val allowedTimeRanges = setOf("day", "week", "month", "year")
+
+        // SearXNG mixes stock-photo and icon engines into every image query — unsplash, pexels, artic,
+        // devicons and lucide answer anything with something, so `blackpink` comes back with an 1878
+        // self-portrait. pinning the engine list is the only filter that works: `engines` combined with
+        // `categories=images` is ignored, because the category adds its own engines back on top.
+        const val IMAGE_ENGINES = "duckduckgo images,bing images,google cse images,wikicommons.images,flickr"
+
+        val log = KotlinLogging.logger {}
     }
 }

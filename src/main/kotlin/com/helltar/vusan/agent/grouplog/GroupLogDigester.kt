@@ -27,11 +27,6 @@ class LlmGroupLogDigester(
     private val chatParams: LLMParams = LLMParams()
 ) : GroupLogDigester {
 
-    private companion object {
-        const val MAX_DIGEST_CHARS = 700
-        val log = KotlinLogging.logger {}
-    }
-
     override suspend fun digest(day: LocalDate, transcript: String): String? {
         if (transcript.isBlank()) return null
 
@@ -55,5 +50,10 @@ class LlmGroupLogDigester(
         }
 
         return digest
+    }
+
+    private companion object {
+        const val MAX_DIGEST_CHARS = 700
+        val log = KotlinLogging.logger {}
     }
 }

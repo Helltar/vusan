@@ -27,25 +27,6 @@ data class OutboxItem(
  */
 class BotOutbox(val capabilities: ChatCapabilities = ChatCapabilities.UNRESTRICTED) {
 
-    companion object {
-        private val log = KotlinLogging.logger {}
-
-        // upper bound on standalone text bubbles per turn. consecutive sendMessage calls are coalesced
-        // into the trailing bubble (see [enqueueText]), so a model that splits one answer into many small
-        // messages produces few real sends. this cap still bounds a runaway loop that keeps emitting
-        // full-size bubbles, whose blast radius would otherwise flood the chat past Telegram's rate limit.
-        const val MAX_TEXT_MESSAGES = 5
-
-        // keep a coalesced bubble within Telegram's 4096-char text limit, with headroom for HTML the model
-        // may add. a message that would overflow the trailing bubble starts a new one instead of merging.
-        const val MAX_TEXT_MESSAGE_CHARS = 4000
-
-        private const val TEXT_SEPARATOR = "\n\n"
-
-        // telegram's album size. an eleventh track starts a second album rather than being dropped.
-        private const val MAX_MEDIA_GROUP = 10
-    }
-
     private val items = mutableListOf<OutboxItem>()
 
     var redirectToPrivate: Boolean = false
@@ -163,5 +144,24 @@ class BotOutbox(val capabilities: ChatCapabilities = ChatCapabilities.UNRESTRICT
 
     fun useDirectMessages() {
         redirectToPrivate = true
+    }
+
+    companion object {
+        private val log = KotlinLogging.logger {}
+
+        // upper bound on standalone text bubbles per turn. consecutive sendMessage calls are coalesced
+        // into the trailing bubble (see [enqueueText]), so a model that splits one answer into many small
+        // messages produces few real sends. this cap still bounds a runaway loop that keeps emitting
+        // full-size bubbles, whose blast radius would otherwise flood the chat past Telegram's rate limit.
+        const val MAX_TEXT_MESSAGES = 5
+
+        // keep a coalesced bubble within Telegram's 4096-char text limit, with headroom for HTML the model
+        // may add. a message that would overflow the trailing bubble starts a new one instead of merging.
+        const val MAX_TEXT_MESSAGE_CHARS = 4000
+
+        private const val TEXT_SEPARATOR = "\n\n"
+
+        // telegram's album size. an eleventh track starts a second album rather than being dropped.
+        private const val MAX_MEDIA_GROUP = 10
     }
 }

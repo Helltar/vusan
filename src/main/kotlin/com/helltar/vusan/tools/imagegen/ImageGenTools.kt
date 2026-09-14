@@ -21,21 +21,6 @@ class ImageGenTools(
     private val selfImage: SelfImage? = null
 ) : ToolSet {
 
-    companion object {
-        const val IMAGE_PROMPT_MAX_CHARS = 32_000
-        const val MAX_EDIT_IMAGE_BYTES = 25 * 1024 * 1024
-
-        // the edits endpoint takes up to 16 sources; a telegram album stops at ten long before that,
-        // so this only bounds a turn that collected its images some other way.
-        const val MAX_EDIT_IMAGES = 16
-
-        // one upload, not one image: ten album photos at the per-image limit would be a quarter-gigabyte
-        // request that spends its five-minute timeout uploading.
-        const val MAX_EDIT_TOTAL_BYTES = 45 * 1024 * 1024
-
-        private val log = KotlinLogging.logger {}
-    }
-
     @Tool
     @LLMDescription(ImageGenToolDescriptions.GENERATE_IMAGE)
     suspend fun generateImage(
@@ -173,6 +158,21 @@ class ImageGenTools(
 
         "Edited image queued (${sources.size} source image(s), $size, ${bytes.size} bytes). " +
                 "Do not add a separate user-facing confirmation."
+    }
+
+    companion object {
+        const val IMAGE_PROMPT_MAX_CHARS = 32_000
+        const val MAX_EDIT_IMAGE_BYTES = 25 * 1024 * 1024
+
+        // the edits endpoint takes up to 16 sources; a telegram album stops at ten long before that,
+        // so this only bounds a turn that collected its images some other way.
+        const val MAX_EDIT_IMAGES = 16
+
+        // one upload, not one image: ten album photos at the per-image limit would be a quarter-gigabyte
+        // request that spends its five-minute timeout uploading.
+        const val MAX_EDIT_TOTAL_BYTES = 45 * 1024 * 1024
+
+        private val log = KotlinLogging.logger {}
     }
 }
 

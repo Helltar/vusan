@@ -51,10 +51,6 @@ class TokenBudget(
     private val clock: Clock = Clock.systemUTC()
 ) {
 
-    private companion object {
-        val log = KotlinLogging.logger {}
-    }
-
     private val mutex = Mutex()
     private var day: LocalDate? = null
     private var spent = DailySpend()
@@ -248,6 +244,10 @@ class TokenBudget(
                 it.rethrowIfCancellation()
                 log.warn(it) { "failed to persist $what; keeping the in-memory count" }
             }
+    }
+
+    private companion object {
+        val log = KotlinLogging.logger {}
     }
 }
 

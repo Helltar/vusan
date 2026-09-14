@@ -65,10 +65,6 @@ class TelegramSendFallbacksTest {
         assertEquals(1, attempts)
     }
 
-    private companion object {
-        const val CHAT_ID = -100_1234567890L
-    }
-
     private fun floodError(retryAfter: Int): TelegramApiRequestException =
         TelegramApiRequestException(
             "Error executing request",
@@ -79,4 +75,8 @@ class TelegramSendFallbacksTest {
                 .parameters(ResponseParameters(null, retryAfter))
                 .build()
         )
+
+    private companion object {
+        const val CHAT_ID = -100_1234567890L
+    }
 }

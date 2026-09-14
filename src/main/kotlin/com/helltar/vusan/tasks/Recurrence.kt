@@ -15,47 +15,6 @@ import kotlin.time.toJavaDuration
 
 sealed interface Recurrence {
 
-    companion object {
-        val MIN_INTERVAL = 5.minutes
-
-        private val CRON_PARSER = CronParser(CronDefinitionBuilder.instanceDefinitionFor(CronType.UNIX))
-        private val H_M_REGEX = Regex("""(?:(\d+)\s*h)?\s*(?:(\d+)\s*m(?:in)?)?""", RegexOption.IGNORE_CASE)
-
-        fun parse(raw: String): Recurrence? {
-            val token = raw.trim()
-
-            if (token.equals("once", ignoreCase = true))
-                return Once
-
-            val head = token.substringBefore(':', "").lowercase()
-            val tail = token.substringAfter(':', "")
-
-            return when (head) {
-                "every" -> parseInterval(tail)?.let { runCatching { Every(it) }.getOrNull() }
-                "cron" -> runCatching { Cron(tail) }.getOrNull()
-                else -> null
-            }
-        }
-
-        internal fun parseInterval(text: String): Duration? {
-            val trimmed = text.trim()
-
-            if (trimmed.isEmpty())
-                return null
-
-            runCatching { Duration.parse(trimmed) }.getOrNull()?.let { return it }
-
-            val match = H_M_REGEX.matchEntire(trimmed) ?: return null
-            val hours = match.groupValues[1].toLongOrNull() ?: 0
-            val minutes = match.groupValues[2].toLongOrNull() ?: 0
-
-            return (hours.hours + minutes.minutes).takeIf { it > Duration.ZERO }
-        }
-
-        internal fun validateCron(expression: String): Result<Unit> =
-            runCatching { CRON_PARSER.parse(expression).validate() }
-    }
-
     val display: String
 
     fun nextAfter(instant: Instant, timezone: ZoneId): Instant?
@@ -96,6 +55,47 @@ sealed interface Recurrence {
 
         override fun nextAfter(instant: Instant, timezone: ZoneId): Instant? =
             executionTime.nextExecution(instant.atZone(timezone)).map { it.toInstant() }.orElse(null)
+    }
+
+    companion object {
+        val MIN_INTERVAL = 5.minutes
+
+        private val CRON_PARSER = CronParser(CronDefinitionBuilder.instanceDefinitionFor(CronType.UNIX))
+        private val H_M_REGEX = Regex("""(?:(\d+)\s*h)?\s*(?:(\d+)\s*m(?:in)?)?""", RegexOption.IGNORE_CASE)
+
+        fun parse(raw: String): Recurrence? {
+            val token = raw.trim()
+
+            if (token.equals("once", ignoreCase = true))
+                return Once
+
+            val head = token.substringBefore(':', "").lowercase()
+            val tail = token.substringAfter(':', "")
+
+            return when (head) {
+                "every" -> parseInterval(tail)?.let { runCatching { Every(it) }.getOrNull() }
+                "cron" -> runCatching { Cron(tail) }.getOrNull()
+                else -> null
+            }
+        }
+
+        internal fun parseInterval(text: String): Duration? {
+            val trimmed = text.trim()
+
+            if (trimmed.isEmpty())
+                return null
+
+            runCatching { Duration.parse(trimmed) }.getOrNull()?.let { return it }
+
+            val match = H_M_REGEX.matchEntire(trimmed) ?: return null
+            val hours = match.groupValues[1].toLongOrNull() ?: 0
+            val minutes = match.groupValues[2].toLongOrNull() ?: 0
+
+            return (hours.hours + minutes.minutes).takeIf { it > Duration.ZERO }
+        }
+
+        internal fun validateCron(expression: String): Result<Unit> =
+            runCatching { CRON_PARSER.parse(expression).validate() }
     }
 }
 

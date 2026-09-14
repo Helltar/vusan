@@ -20,12 +20,6 @@ internal class TurnAdmission(
     private val maxWaiting: Int = maxConcurrent * WAITING_PER_TURN
 ) {
 
-    private companion object {
-        // the ceiling on the queue, as a multiple of what runs at once: a turn is tens of seconds, so
-        // this is already minutes of waiting, and past it saying so beats answering too late.
-        const val WAITING_PER_TURN = 4
-    }
-
     init {
         require(maxConcurrent > 0) { "Turn admission needs at least one place" }
         require(maxWaiting >= 0) { "Turn admission cannot have a negative queue" }
@@ -61,4 +55,10 @@ internal class TurnAdmission(
      * a scheduled fire, a spooled message — so refusing it would drop work rather than answer late.
      */
     suspend fun <T> admitQueued(turn: suspend () -> T): T = places.withPermit { turn() }
+
+    private companion object {
+        // the ceiling on the queue, as a multiple of what runs at once: a turn is tens of seconds, so
+        // this is already minutes of waiting, and past it saying so beats answering too late.
+        const val WAITING_PER_TURN = 4
+    }
 }

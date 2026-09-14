@@ -285,15 +285,6 @@ class ConversationRepositoryTest {
             ChatTurn(ChatRole.ASSISTANT, assistant)
         )
 
-    private companion object {
-        val DM_ON_DISCORD = testScope(userId = 42, chatId = 42, platform = Platform.DISCORD)
-        val OTHER_USER_IN_GROUP = testScope(userId = 99, chatId = -100)
-
-        // in telegram a private chat carries the user's own id, so the DM conversation is (42, 42).
-        val DM = testScope(userId = 42, chatId = 42)
-        val GROUP = testScope(userId = 42, chatId = -100)
-    }
-
     private fun testConfig(dbPath: String) =
         AppConfig(
             agentMaxIterations = 70,
@@ -328,4 +319,13 @@ class ConversationRepositoryTest {
             telegramBotToken = "test",
             ytDlpCookiesFile = null
         )
+
+    private companion object {
+        val DM_ON_DISCORD = testScope(userId = 42, chatId = 42, platform = Platform.DISCORD)
+        val OTHER_USER_IN_GROUP = testScope(userId = 99, chatId = -100)
+
+        // in telegram a private chat carries the user's own id, so the DM conversation is (42, 42).
+        val DM = testScope(userId = 42, chatId = 42)
+        val GROUP = testScope(userId = 42, chatId = -100)
+    }
 }

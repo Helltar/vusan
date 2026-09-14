@@ -82,19 +82,6 @@ class ToolRegistryFactory(
     private val selfImage: SelfImage? = null
 ) {
 
-    private companion object {
-        // an ordinary person in an ordinary chat, because that is what the startup list is read as: what
-        // this deployment can do. A sender that is not one person withholds exactly the tools whose
-        // configuration an operator most wants confirmed.
-        val TOOL_NAME_PROBE_CONTEXT =
-            RequestContext(
-                platform = Platform.TELEGRAM,
-                chat = ChatContext(id = "1", isPrivate = true),
-                sender = SenderContext(id = "1")
-            )
-        val log = KotlinLogging.logger {}
-    }
-
     // what each conversation already loaded, so its next turn opens with the same tool array: that
     // array is part of the cached prompt prefix, and rebuilding it every turn costs more than the
     // schemas the catalog saves. See notes/tool-catalog.md.
@@ -282,5 +269,18 @@ class ToolRegistryFactory(
         }
 
         return build(key)
+    }
+
+    private companion object {
+        // an ordinary person in an ordinary chat, because that is what the startup list is read as: what
+        // this deployment can do. A sender that is not one person withholds exactly the tools whose
+        // configuration an operator most wants confirmed.
+        val TOOL_NAME_PROBE_CONTEXT =
+            RequestContext(
+                platform = Platform.TELEGRAM,
+                chat = ChatContext(id = "1", isPrivate = true),
+                sender = SenderContext(id = "1")
+            )
+        val log = KotlinLogging.logger {}
     }
 }

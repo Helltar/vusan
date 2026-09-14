@@ -10,10 +10,6 @@ import com.helltar.vusan.tools.suspendToolGuard
 @Suppress("unused")
 class CatalogTools(private val catalog: ToolCatalog) : ToolSet {
 
-    private companion object {
-        const val MAX_GROUPS_CHARS = 200
-    }
-
     @Tool
     @LLMDescription(CatalogToolDescriptions.LOAD_TOOLS)
     suspend fun loadTools(
@@ -37,5 +33,9 @@ class CatalogTools(private val catalog: ToolCatalog) : ToolSet {
                 append("The groups are: ${catalog.groupNames().joinToString(", ")}.")
             }
         }
+    }
+
+    private companion object {
+        const val MAX_GROUPS_CHARS = 200
     }
 }

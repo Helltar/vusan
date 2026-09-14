@@ -13,11 +13,6 @@ package com.helltar.vusan.agent
  */
 class TurnToolBudget(val totalTokens: Int) {
 
-    private companion object {
-        // below this the next long read is the one that starts losing its own tail
-        const val LOW_PERCENT = 25
-    }
-
     @Volatile
     var remainingTokens: Int = totalTokens
         private set
@@ -30,6 +25,11 @@ class TurnToolBudget(val totalTokens: Int) {
 
     fun spend(tokens: Int) {
         remainingTokens = (remainingTokens - tokens).coerceAtLeast(0)
+    }
+
+    private companion object {
+        // below this the next long read is the one that starts losing its own tail
+        const val LOW_PERCENT = 25
     }
 }
 

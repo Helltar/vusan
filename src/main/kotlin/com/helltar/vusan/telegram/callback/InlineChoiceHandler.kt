@@ -38,13 +38,6 @@ internal class InlineChoiceHandler(
     private val currentHistoryRevision: suspend (scope: ConversationScope) -> Long
 ) {
 
-    private companion object {
-        const val MAX_RECENT_SELECTIONS = 1_000
-        const val MAX_PARKED_ATTACHMENTS = 200
-
-        val log = KotlinLogging.logger {}
-    }
-
     private data class MessageKey(val chatId: Long, val messageId: Int)
 
     private data class ConversationKey(val chatId: Long, val userId: Long)
@@ -197,6 +190,13 @@ internal class InlineChoiceHandler(
         synchronized(claimedMessages) {
             claimedMessages.remove(key)
         }
+    }
+
+    private companion object {
+        const val MAX_RECENT_SELECTIONS = 1_000
+        const val MAX_PARKED_ATTACHMENTS = 200
+
+        val log = KotlinLogging.logger {}
     }
 }
 

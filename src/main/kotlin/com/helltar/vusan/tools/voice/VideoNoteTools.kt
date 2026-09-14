@@ -20,10 +20,6 @@ class VideoNoteTools(
     private val renderer: VideoNoteRenderer = FfmpegVideoNoteRenderer()
 ) : ToolSet {
 
-    private companion object {
-        val log = KotlinLogging.logger {}
-    }
-
     @Tool
     @LLMDescription(VideoNoteToolDescriptions.SPEAK_AS_VIDEO_NOTE)
     suspend fun speakAsVideoNote(
@@ -67,5 +63,9 @@ class VideoNoteTools(
 
         "Round video message queued (${trimmed.length} chars, ${video.size} bytes). " +
                 "Do not add a separate user-facing confirmation."
+    }
+
+    private companion object {
+        val log = KotlinLogging.logger {}
     }
 }

@@ -31,10 +31,6 @@ internal class TurnStopHandler(
     private val agent: AgentRunner
 ) {
 
-    private companion object {
-        val log = KotlinLogging.logger {}
-    }
-
     fun handles(callbackData: String?): Boolean =
         callbackData?.startsWith(CALLBACK_PREFIX) == true
 
@@ -63,5 +59,9 @@ internal class TurnStopHandler(
 
         // the turn ended between the render and the tap, or this is a button left over from an older one.
         answerCallbackQuery(client, callbackQueryId, messages.nothingToStopReply)
+    }
+
+    private companion object {
+        val log = KotlinLogging.logger {}
     }
 }

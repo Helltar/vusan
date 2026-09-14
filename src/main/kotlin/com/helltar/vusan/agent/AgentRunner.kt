@@ -86,10 +86,6 @@ class AgentRunner(
 
     private val admission = TurnAdmission(maxConcurrentTurns)
 
-    private companion object {
-        val log = KotlinLogging.logger {}
-    }
-
     private val conversationLocks = HashMap<ConversationScope, ConversationLock>()
     private val running = RunningTurns<ConversationScope>()
 
@@ -535,6 +531,10 @@ class AgentRunner(
     }
 
     private class ConversationLock(val mutex: Mutex = Mutex(), var refCount: Int = 0)
+
+    private companion object {
+        val log = KotlinLogging.logger {}
+    }
 }
 
 private fun Messages.replyFor(stop: TokenBudgetStop): String =

@@ -8,16 +8,6 @@ import java.nio.file.Path
 
 class YouTubeTranscriptClient(private val runner: YtDlpRunner) {
 
-    private companion object {
-        const val SUBTITLE_FILE_PREFIX = "subs"
-        const val MAX_SUBTITLE_LANGUAGE_ATTEMPTS = 3
-
-        // fallback only, for videos that declare no language of their own: the widest-spoken
-        // languages on youtube, so the most likely original track is tried before a translation.
-        val SUBTITLE_LANGS = listOf("en", "es", "pt", "hi", "ru", "ja", "de", "fr", "ko", "uk")
-        val log = KotlinLogging.logger {}
-    }
-
     private data class SubtitleFile(val path: Path, val language: String)
 
     suspend fun fetchTranscript(query: String): YtDlpResult<YtDlpTranscript> =
@@ -246,6 +236,16 @@ class YouTubeTranscriptClient(private val runner: YtDlpRunner) {
                 }
             }
         }.getOrNull()
+
+    private companion object {
+        const val SUBTITLE_FILE_PREFIX = "subs"
+        const val MAX_SUBTITLE_LANGUAGE_ATTEMPTS = 3
+
+        // fallback only, for videos that declare no language of their own: the widest-spoken
+        // languages on youtube, so the most likely original track is tried before a translation.
+        val SUBTITLE_LANGS = listOf("en", "es", "pt", "hi", "ru", "ja", "de", "fr", "ko", "uk")
+        val log = KotlinLogging.logger {}
+    }
 }
 
 /**

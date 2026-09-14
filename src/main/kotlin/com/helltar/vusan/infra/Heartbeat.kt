@@ -33,19 +33,6 @@ internal class Heartbeat(
     private val interval: Duration = WRITE_INTERVAL
 ) {
 
-    private companion object {
-        const val HEARTBEAT_FILE = "/tmp/health"
-
-        val WRITE_INTERVAL = 30.seconds
-
-        // getUpdates long-polls for 50s and okhttp gives it a 100s read timeout, so even a request
-        // that hangs until it times out still marks a cycle inside this window. what falls outside
-        // it is a loop that stopped, or one backing off so hard it polls in name only.
-        val STALE_AFTER = 180.seconds
-
-        val log = KotlinLogging.logger {}
-    }
-
     // set from the polling thread, read from the heartbeat coroutine
     private val lastPollAt = AtomicLong(0)
 
@@ -103,5 +90,18 @@ internal class Heartbeat(
         writeFailureReported = true
 
         log.warn(cause) { "Failed to write the heartbeat file=[$file] — the healthcheck cannot see this bot" }
+    }
+
+    private companion object {
+        const val HEARTBEAT_FILE = "/tmp/health"
+
+        val WRITE_INTERVAL = 30.seconds
+
+        // getUpdates long-polls for 50s and okhttp gives it a 100s read timeout, so even a request
+        // that hangs until it times out still marks a cycle inside this window. what falls outside
+        // it is a loop that stopped, or one backing off so hard it polls in name only.
+        val STALE_AFTER = 180.seconds
+
+        val log = KotlinLogging.logger {}
     }
 }

@@ -30,12 +30,6 @@ class YtDlpRunner(
     val timeoutSeconds: Long = 180
 ) {
 
-    private companion object {
-        const val SEARCH_RESULT_LIMIT = 5
-        val json = Json { ignoreUnknownKeys = true }
-        val log = KotlinLogging.logger {}
-    }
-
     private val diagnosticsMutex = Mutex()
     private var cachedDiagnostics: String? = null
 
@@ -213,6 +207,12 @@ class YtDlpRunner(
         } catch (_: Exception) {
             ""
         }
+
+    private companion object {
+        const val SEARCH_RESULT_LIMIT = 5
+        val json = Json { ignoreUnknownKeys = true }
+        val log = KotlinLogging.logger {}
+    }
 }
 
 internal const val YT_DLP_BINARY = "yt-dlp"

@@ -25,22 +25,6 @@ class FfmpegVideoSampler(
     private val timeout: Duration = 120.seconds
 ) : VideoSampler {
 
-    private companion object {
-        // frames are read for content, not detail, and eight of them at this width stay cheap to send.
-        const val FRAME_MAX_WIDTH = 768
-        const val FRAME_QUALITY = "6"
-
-        // without a duration there is nothing to spread frames across, so they are taken at a fixed
-        // interval from the start instead. only video documents arrive without one.
-        const val FALLBACK_FRAME_INTERVAL_SECONDS = 3
-
-        const val AUDIO_CHANNELS = "1"
-        const val AUDIO_SAMPLE_RATE = "16000"
-        const val AUDIO_BITRATE = "48k"
-
-        val log = KotlinLogging.logger {}
-    }
-
     override suspend fun sampleFrames(video: ByteArray, durationSeconds: Int?, maxFrames: Int): List<ByteArray> {
         require(maxFrames > 0) { "maxFrames must be positive" }
 
@@ -117,4 +101,20 @@ class FfmpegVideoSampler(
         takeIf { Files.exists(it) }
             ?.let { runCatching { Files.readAllBytes(it) }.getOrNull() }
             ?.takeIf { it.isNotEmpty() }
+
+    private companion object {
+        // frames are read for content, not detail, and eight of them at this width stay cheap to send.
+        const val FRAME_MAX_WIDTH = 768
+        const val FRAME_QUALITY = "6"
+
+        // without a duration there is nothing to spread frames across, so they are taken at a fixed
+        // interval from the start instead. only video documents arrive without one.
+        const val FALLBACK_FRAME_INTERVAL_SECONDS = 3
+
+        const val AUDIO_CHANNELS = "1"
+        const val AUDIO_SAMPLE_RATE = "16000"
+        const val AUDIO_BITRATE = "48k"
+
+        val log = KotlinLogging.logger {}
+    }
 }

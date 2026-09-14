@@ -4,11 +4,6 @@ import com.helltar.vusan.tools.files.FileDownloadClient
 import com.helltar.vusan.tools.files.FileDownloadResult
 
 class TelegramChannelClient(private val downloader: FileDownloadClient) {
-    private companion object {
-        const val PAGE_LIMIT = 4 * 1024 * 1024L
-        const val IMAGE_LIMIT = 10 * 1024 * 1024L
-    }
-
     internal suspend fun read(
         reference: TelegramChannelReference,
         before: Long? = null,
@@ -81,5 +76,10 @@ class TelegramChannelClient(private val downloader: FileDownloadClient) {
                 .takeIf { it.isNotBlank() } ?: "telegram-channel-image"
 
         return "$base.$extension"
+    }
+
+    private companion object {
+        const val PAGE_LIMIT = 4 * 1024 * 1024L
+        const val IMAGE_LIMIT = 10 * 1024 * 1024L
     }
 }

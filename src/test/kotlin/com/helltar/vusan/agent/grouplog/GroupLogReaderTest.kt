@@ -293,10 +293,6 @@ class GroupLogReaderTest {
         override suspend fun digest(day: LocalDate, transcript: String): String? = error("provider is down")
     }
 
-    private companion object {
-        val CHAT = testChat(-100)
-    }
-
     private fun testConfig(dbPath: String) =
         AppConfig(
             agentMaxIterations = 70,
@@ -331,4 +327,8 @@ class GroupLogReaderTest {
             telegramBotToken = "test",
             ytDlpCookiesFile = null
         )
+
+    private companion object {
+        val CHAT = testChat(-100)
+    }
 }

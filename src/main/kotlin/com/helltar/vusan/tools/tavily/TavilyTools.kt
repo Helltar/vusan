@@ -20,22 +20,6 @@ class TavilyTools(
     private val outbox: BotOutbox
 ) : ToolSet {
 
-    private companion object {
-        const val MAX_SNIPPET_CHARS = 300
-        const val MAX_SEARCH_OUTPUT_CHARS = 3_000
-        // a long-form article runs well past a few thousand characters and the tool has no way to
-        // page through the rest, so the cut has to leave the body of a real page readable.
-        const val MAX_EXTRACT_CHARS = 16_000
-        val allowedTopics = setOf("general", "news", "finance")
-        val allowedTimeRanges = setOf("day", "week", "month", "year")
-
-        // the Instagram source pages expose images only through crawler/SEO endpoints
-        // (lookaside.instagram.com, lookaside.fbsbx.com) that serve HTML, not the
-        // actual file, so every download attempt fails. exclude these sources from
-        // image search so the provider returns directly downloadable candidates.
-        val imageExcludedDomains = listOf("instagram.com", "lookaside.instagram.com", "lookaside.fbsbx.com")
-    }
-
     @Tool
     @LLMDescription(TavilyToolDescriptions.WEB_SEARCH)
     suspend fun webSearch(
@@ -157,5 +141,21 @@ class TavilyTools(
         val host = runCatching { Url(url).host }.getOrNull()?.lowercase()?.takeIf { it.isNotBlank() } ?: return false
 
         return imageExcludedDomains.any { host == it || host.endsWith(".$it") }
+    }
+
+    private companion object {
+        const val MAX_SNIPPET_CHARS = 300
+        const val MAX_SEARCH_OUTPUT_CHARS = 3_000
+        // a long-form article runs well past a few thousand characters and the tool has no way to
+        // page through the rest, so the cut has to leave the body of a real page readable.
+        const val MAX_EXTRACT_CHARS = 16_000
+        val allowedTopics = setOf("general", "news", "finance")
+        val allowedTimeRanges = setOf("day", "week", "month", "year")
+
+        // the Instagram source pages expose images only through crawler/SEO endpoints
+        // (lookaside.instagram.com, lookaside.fbsbx.com) that serve HTML, not the
+        // actual file, so every download attempt fails. exclude these sources from
+        // image search so the provider returns directly downloadable candidates.
+        val imageExcludedDomains = listOf("instagram.com", "lookaside.instagram.com", "lookaside.fbsbx.com")
     }
 }

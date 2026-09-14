@@ -16,13 +16,6 @@ import com.helltar.vusan.request.ConversationScope
  */
 class LoadedToolGroups {
 
-    private companion object {
-        // room for a conversation that mixes two capabilities, without one old request pinning the
-        // whole menu open for the rest of the day.
-        const val MAX_GROUPS_PER_SCOPE = 3
-        const val MAX_SCOPES = 500
-    }
-
     private val byScope =
         object : LinkedHashMap<ConversationScope, LinkedHashSet<ToolGroup>>(16, 0.75f, true) {
             override fun removeEldestEntry(
@@ -47,5 +40,12 @@ class LoadedToolGroups {
 
             while (kept.size > MAX_GROUPS_PER_SCOPE) kept.remove(kept.first())
         }
+    }
+
+    private companion object {
+        // room for a conversation that mixes two capabilities, without one old request pinning the
+        // whole menu open for the rest of the day.
+        const val MAX_GROUPS_PER_SCOPE = 3
+        const val MAX_SCOPES = 500
     }
 }

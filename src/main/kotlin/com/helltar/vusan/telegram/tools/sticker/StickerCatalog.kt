@@ -155,10 +155,6 @@ class StickerCatalog(
     private val vision: ImageVisionClient
 ) {
 
-    private companion object {
-        val log = KotlinLogging.logger {}
-    }
-
     /** Record a sticker seen in a chat, pulling in its set once that set has earned it. */
     suspend fun observe(chatId: Long, sticker: Sticker) {
         val setName = sticker.setName?.takeIf { it.isNotBlank() } ?: return
@@ -746,5 +742,9 @@ class StickerCatalog(
         data object Refused : DescribeOutcome
         data object Failed : DescribeOutcome
         data object Postponed : DescribeOutcome
+    }
+
+    private companion object {
+        val log = KotlinLogging.logger {}
     }
 }

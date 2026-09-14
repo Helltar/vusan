@@ -16,15 +16,6 @@ class VisionTools(
     private val attachedFile: AttachedFile?
 ) : ToolSet {
 
-    private companion object {
-        const val MAX_IMAGE_BYTES = 8 * 1024 * 1024
-
-        // telegram serves bots files of at most 20 MB, so a bigger video cannot be fetched at all.
-        const val MAX_VIDEO_BYTES = 20 * 1024 * 1024
-
-        val log = KotlinLogging.logger {}
-    }
-
     @Tool
     @LLMDescription(VisionToolDescriptions.DESCRIBE_IMAGE)
     suspend fun describeImage(
@@ -93,4 +84,13 @@ class VisionTools(
             }
             .getOrNull()
             ?.takeIf { it.isNotEmpty() }
+
+    private companion object {
+        const val MAX_IMAGE_BYTES = 8 * 1024 * 1024
+
+        // telegram serves bots files of at most 20 MB, so a bigger video cannot be fetched at all.
+        const val MAX_VIDEO_BYTES = 20 * 1024 * 1024
+
+        val log = KotlinLogging.logger {}
+    }
 }

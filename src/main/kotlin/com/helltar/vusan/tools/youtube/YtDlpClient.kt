@@ -13,17 +13,6 @@ import kotlin.math.roundToInt
 
 class YtDlpClient(private val runner: YtDlpRunner) {
 
-    private companion object {
-        const val FORMAT_UNAVAILABLE_MARKER = "Requested format is not available"
-        const val VIDEO_MAX_FILE_SIZE_MB = 50
-        val VIDEO_HEIGHT_CAPS = listOf(720, 480, 360)
-
-        // --print-json implies --quiet, which swallows the max-filesize rejection that
-        // runMediaDownload reads to return TooLarge; without it the height ladder never steps down.
-        val PRINT_JSON_ARGS = listOf("--print-json", "--no-quiet")
-        val log = KotlinLogging.logger {}
-    }
-
     private data class DownloadAttempt<out T>(val result: YtDlpResult<T>, val retryable: Boolean = false)
 
     suspend fun downloadTrack(query: String, maxFileSizeMb: Int = 45): YtDlpResult<YtDlpTrack> =
@@ -408,6 +397,17 @@ class YtDlpClient(private val runner: YtDlpRunner) {
                 "yt-dlp list-formats output url=[$url] query=[${query.take(120)}]: ${output.take(3000)}"
             }
         }
+    }
+
+    private companion object {
+        const val FORMAT_UNAVAILABLE_MARKER = "Requested format is not available"
+        const val VIDEO_MAX_FILE_SIZE_MB = 50
+        val VIDEO_HEIGHT_CAPS = listOf(720, 480, 360)
+
+        // --print-json implies --quiet, which swallows the max-filesize rejection that
+        // runMediaDownload reads to return TooLarge; without it the height ladder never steps down.
+        val PRINT_JSON_ARGS = listOf("--print-json", "--no-quiet")
+        val log = KotlinLogging.logger {}
     }
 }
 

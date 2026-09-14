@@ -9,14 +9,6 @@ import java.nio.channels.UnresolvedAddressException
 
 class SearxngClient(private val http: HttpClient, baseUrl: String) {
 
-    private companion object {
-        // returned when the SearXNG instance can't be reached at all (container down, wrong URL).
-        // framed so the model reports it instead of retrying the same lookup.
-        const val UNREACHABLE_MESSAGE =
-            "The search service is not reachable right now, so the search did not run. " +
-                    "Tell the user web search is temporarily unavailable; do not retry."
-    }
-
     private val searchUrl = baseUrl.trimEnd('/') + "/search"
 
     /**
@@ -50,5 +42,13 @@ class SearxngClient(private val http: HttpClient, baseUrl: String) {
                 else -> throw e
             }
         }
+    }
+
+    private companion object {
+        // returned when the SearXNG instance can't be reached at all (container down, wrong URL).
+        // framed so the model reports it instead of retrying the same lookup.
+        const val UNREACHABLE_MESSAGE =
+            "The search service is not reachable right now, so the search did not run. " +
+                    "Tell the user web search is temporarily unavailable; do not retry."
     }
 }

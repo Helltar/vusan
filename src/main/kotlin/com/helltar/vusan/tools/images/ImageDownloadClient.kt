@@ -13,13 +13,6 @@ import kotlin.math.min
  */
 class ImageDownloadClient(private val downloader: FileDownloadClient) {
 
-    private companion object {
-        const val MAX_DIMENSION = 10_000
-        const val MAX_ASPECT_RATIO = 20.0
-
-        val log = KotlinLogging.logger {}
-    }
-
     /** Returns the bytes, or `null` when the response is not an image Telegram would show. */
     suspend fun download(url: String): ByteArray? {
         val result = downloader.download(url.withScheme(), maxBytes = MAX_PHOTO_BYTES.toLong())
@@ -64,6 +57,13 @@ class ImageDownloadClient(private val downloader: FileDownloadClient) {
             b(0) == 0x42 && b(1) == 0x4D -> true
             else -> false
         }
+    }
+
+    private companion object {
+        const val MAX_DIMENSION = 10_000
+        const val MAX_ASPECT_RATIO = 20.0
+
+        val log = KotlinLogging.logger {}
     }
 }
 

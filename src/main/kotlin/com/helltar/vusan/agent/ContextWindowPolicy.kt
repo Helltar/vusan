@@ -35,12 +35,6 @@ data class ContextTokenBudget(
 
 class ContextWindowPolicy(model: LLModel) {
 
-    companion object {
-        const val DEFAULT_CONTEXT_WINDOW_TOKENS = 16_384L
-        private const val TOOL_SCHEMA_OVERHEAD_TOKENS = 32
-        private const val FIXED_MESSAGE_OVERHEAD_TOKENS = 64
-    }
-
     val contextWindowTokens: Int =
         (model.contextLength ?: DEFAULT_CONTEXT_WINDOW_TOKENS)
             .coerceIn(1L, Int.MAX_VALUE.toLong())
@@ -92,5 +86,11 @@ class ContextWindowPolicy(model: LLModel) {
             safetyReserveTokens = safetyReserve,
             conversationTokens = conversationTokens
         )
+    }
+
+    companion object {
+        const val DEFAULT_CONTEXT_WINDOW_TOKENS = 16_384L
+        private const val TOOL_SCHEMA_OVERHEAD_TOKENS = 32
+        private const val FIXED_MESSAGE_OVERHEAD_TOKENS = 64
     }
 }

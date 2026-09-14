@@ -26,27 +26,6 @@ class GroupLogReader(
     private val zone: ZoneId = ZoneId.systemDefault()
 ) {
 
-    private companion object {
-        const val MAX_LINE_TEXT_CHARS = 300
-
-        // a plausible floor for one rendered line, used to turn the character budget into a row
-        // limit so a month-wide window is never pulled out of SQLite whole.
-        const val MIN_LINE_COST = 40
-        const val MAX_ROWS = 1_000
-        const val MAX_ROWS_PER_DAY = 1_500
-
-        // what one day's transcript may cost the digester's own prompt.
-        const val DIGEST_SOURCE_CHARS = 12_000
-
-        // share of the budget kept for quoting today, the part most questions are actually about.
-        const val TODAY_BUDGET_SHARE = 0.4
-
-        const val COUNT_FROM_HEADER = "Answer how many and how often from the count above, never by counting what is quoted."
-
-        val TIMESTAMP = DateTimeFormatter.ofPattern("yyyy-MM-dd'T'HH:mm")
-        val log = KotlinLogging.logger {}
-    }
-
     suspend fun read(
         chat: ChatRef,
         window: Duration,
@@ -235,6 +214,27 @@ class GroupLogReader(
         TIMESTAMP.format(ZonedDateTime.ofInstant(instant, zone))
 
     private fun LocalDate.startOfDay(): Instant = atStartOfDay(zone).toInstant()
+
+    private companion object {
+        const val MAX_LINE_TEXT_CHARS = 300
+
+        // a plausible floor for one rendered line, used to turn the character budget into a row
+        // limit so a month-wide window is never pulled out of SQLite whole.
+        const val MIN_LINE_COST = 40
+        const val MAX_ROWS = 1_000
+        const val MAX_ROWS_PER_DAY = 1_500
+
+        // what one day's transcript may cost the digester's own prompt.
+        const val DIGEST_SOURCE_CHARS = 12_000
+
+        // share of the budget kept for quoting today, the part most questions are actually about.
+        const val TODAY_BUDGET_SHARE = 0.4
+
+        const val COUNT_FROM_HEADER = "Answer how many and how often from the count above, never by counting what is quoted."
+
+        val TIMESTAMP = DateTimeFormatter.ofPattern("yyyy-MM-dd'T'HH:mm")
+        val log = KotlinLogging.logger {}
+    }
 }
 
 private fun block(openTag: String, content: String, closingTag: String = openTag): String =

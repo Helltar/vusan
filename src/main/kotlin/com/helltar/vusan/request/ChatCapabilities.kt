@@ -24,10 +24,6 @@ data class ChatCapabilities(
     val slowModeSeconds: Int = 0
 ) {
 
-    companion object {
-        val UNRESTRICTED = ChatCapabilities()
-    }
-
     /** The refused content kinds, named the way the agent-facing prompt and the logs both want them. */
     val restrictedKinds: List<String>
         get() = buildList {
@@ -41,4 +37,8 @@ data class ChatCapabilities(
             if (!stickersAndAnimations) add("stickers and GIFs")
             if (!reactions) add("reactions")
         }
+
+    companion object {
+        val UNRESTRICTED = ChatCapabilities()
+    }
 }

@@ -35,20 +35,6 @@ class TaskScheduler(
 
     private enum class FireOutcome { Delivered, RunFailed, ChatUnreachable, Stopped }
 
-    private companion object {
-        val log = KotlinLogging.logger {}
-
-        // implementation detail, not policy: a 30s tick is cheap (one SQLite query per tick)
-        // and fine-grained enough for the 5-minute minimum task interval
-        val POLL_INTERVAL = 30.seconds
-
-        // a failed run delivers nothing, so running it again cannot duplicate output. attempts stay few
-        // and the backoff short (30s, then 60s): a tick processes its due tasks one after another, so a
-        // task that keeps failing holds up everything due behind it.
-        const val MAX_ATTEMPTS = 3
-        val RETRY_BACKOFF = 30.seconds
-    }
-
     fun launchIn(scope: CoroutineScope): Job =
         scope.launch {
             log.info {
@@ -280,6 +266,20 @@ class TaskScheduler(
         if (!moved) {
             log.info { "task id=${task.id} was retimed or removed while it fired; its own schedule stands" }
         }
+    }
+
+    private companion object {
+        val log = KotlinLogging.logger {}
+
+        // implementation detail, not policy: a 30s tick is cheap (one SQLite query per tick)
+        // and fine-grained enough for the 5-minute minimum task interval
+        val POLL_INTERVAL = 30.seconds
+
+        // a failed run delivers nothing, so running it again cannot duplicate output. attempts stay few
+        // and the backoff short (30s, then 60s): a tick processes its due tasks one after another, so a
+        // task that keeps failing holds up everything due behind it.
+        const val MAX_ATTEMPTS = 3
+        val RETRY_BACKOFF = 30.seconds
     }
 }
 

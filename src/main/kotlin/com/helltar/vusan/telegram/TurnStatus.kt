@@ -92,10 +92,6 @@ internal class TurnStatus(
     private val activityOpensIt: Boolean
 ) : TurnNarrator {
 
-    private companion object {
-        val log = KotlinLogging.logger {}
-    }
-
     // a turn writes from two places — the tool that narrates, and the collector following the activity —
     // and both read the state they are about to change.
     private val edits = Mutex()
@@ -252,4 +248,8 @@ internal class TurnStatus(
                 )
             )
             .build()
+
+    private companion object {
+        val log = KotlinLogging.logger {}
+    }
 }

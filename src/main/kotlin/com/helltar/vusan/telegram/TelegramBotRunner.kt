@@ -84,57 +84,6 @@ internal class TelegramBotRunner(
     private val polls: PollRegistry? = null
 ) {
 
-    private companion object {
-        const val MENTION_ONLY_PROMPT = "User mentioned the bot with no text. Respond naturally and briefly."
-
-        // media without a caption is the whole message, and answering it is a conversation move rather
-        // than a report; the describe tools exist for when the answer actually depends on the content.
-        const val MEDIA_ONLY_PROMPT =
-            "User sent this with no caption, so the media itself is their whole message. " +
-                    "Reply the way a person would at this point in the conversation. " +
-                    "Look at it (`describeImage`, `describeVideo`) or process it (`runCommand`) only when your answer depends on what is inside, " +
-                    "and do not narrate what you saw unless the user asked what is in it."
-
-        // a gif is thrown into a chat the way a sticker is — as a reaction, not as a thing to review.
-        const val ANIMATION_ONLY_PROMPT =
-            "User answered with a GIF and no caption, the way one reacts with a sticker instead of typing. " +
-                    "Treat it as their reaction, match its mood, and keep the conversation going in your own voice. " +
-                    "Call `describeVideo` only if they ask what is in it; never describe or narrate it unasked."
-
-        // a round video message is the user talking, so the speech in it is the message, not the picture.
-        const val VIDEO_NOTE_ONLY_PROMPT =
-            "User sent a video note (a round video message) with no caption — it is them speaking to you. " +
-                    "Call `describeVideo` to get what they said, then answer that. " +
-                    "Do not describe how the video looks unless they ask."
-
-        // a rich message may carry 32768 characters where plain text tops out at 4096, and
-        // flattening adds markup on top of that. this is the only inbound content without a
-        // telegram-side ceiling, so it gets one here.
-        const val MAX_RICH_MESSAGE_CHARS = 8_192
-
-        // telegram caps an album at ten items, so a group with that many parts is complete.
-        const val MAX_ALBUM_PARTS = 10
-
-        // how long a message stays open to being answered by an edit of it. the reply anchors to that
-        // message, so past this the exchange it belongs to has moved on and there is nothing to answer.
-        val EDIT_TURN_WINDOW = 5.minutes
-
-        // how long a message stays known as answered. telegram delivers the same one more than once, and
-        // keeps an update it could not hand over for 24 hours, so the memory has to outlive that window.
-        val ANSWERED_MEMORY = 24.hours
-
-        // album parts arrive as separate updates with a shared media_group_id and no terminator;
-        // a group is treated as complete once the update stream stays quiet this long.
-        val ALBUM_QUIET_PERIOD = 1.seconds
-
-        // how late a message left over from the previous run may still be answered. past it the
-        // conversation has moved on, and an answer to what someone said hours ago reads worse than
-        // the silence they already got. shorter than telegram's own 24-hour hold on purpose.
-        val SPOOL_RETENTION = 30.minutes
-
-        val log = KotlinLogging.logger {}
-    }
-
     private val heartbeat = Heartbeat()
 
     private val spool = UpdateSpool(SPOOL_RETENTION)
@@ -713,6 +662,56 @@ internal class TelegramBotRunner(
             inAlbum = mediaGroupId != null
         )
 
+    private companion object {
+        const val MENTION_ONLY_PROMPT = "User mentioned the bot with no text. Respond naturally and briefly."
+
+        // media without a caption is the whole message, and answering it is a conversation move rather
+        // than a report; the describe tools exist for when the answer actually depends on the content.
+        const val MEDIA_ONLY_PROMPT =
+            "User sent this with no caption, so the media itself is their whole message. " +
+                    "Reply the way a person would at this point in the conversation. " +
+                    "Look at it (`describeImage`, `describeVideo`) or process it (`runCommand`) only when your answer depends on what is inside, " +
+                    "and do not narrate what you saw unless the user asked what is in it."
+
+        // a gif is thrown into a chat the way a sticker is — as a reaction, not as a thing to review.
+        const val ANIMATION_ONLY_PROMPT =
+            "User answered with a GIF and no caption, the way one reacts with a sticker instead of typing. " +
+                    "Treat it as their reaction, match its mood, and keep the conversation going in your own voice. " +
+                    "Call `describeVideo` only if they ask what is in it; never describe or narrate it unasked."
+
+        // a round video message is the user talking, so the speech in it is the message, not the picture.
+        const val VIDEO_NOTE_ONLY_PROMPT =
+            "User sent a video note (a round video message) with no caption — it is them speaking to you. " +
+                    "Call `describeVideo` to get what they said, then answer that. " +
+                    "Do not describe how the video looks unless they ask."
+
+        // a rich message may carry 32768 characters where plain text tops out at 4096, and
+        // flattening adds markup on top of that. this is the only inbound content without a
+        // telegram-side ceiling, so it gets one here.
+        const val MAX_RICH_MESSAGE_CHARS = 8_192
+
+        // telegram caps an album at ten items, so a group with that many parts is complete.
+        const val MAX_ALBUM_PARTS = 10
+
+        // how long a message stays open to being answered by an edit of it. the reply anchors to that
+        // message, so past this the exchange it belongs to has moved on and there is nothing to answer.
+        val EDIT_TURN_WINDOW = 5.minutes
+
+        // how long a message stays known as answered. telegram delivers the same one more than once, and
+        // keeps an update it could not hand over for 24 hours, so the memory has to outlive that window.
+        val ANSWERED_MEMORY = 24.hours
+
+        // album parts arrive as separate updates with a shared media_group_id and no terminator;
+        // a group is treated as complete once the update stream stays quiet this long.
+        val ALBUM_QUIET_PERIOD = 1.seconds
+
+        // how late a message left over from the previous run may still be answered. past it the
+        // conversation has moved on, and an answer to what someone said hours ago reads worse than
+        // the silence they already got. shorter than telegram's own 24-hour hold on purpose.
+        val SPOOL_RETENTION = 30.minutes
+
+        val log = KotlinLogging.logger {}
+    }
 }
 
 /**
