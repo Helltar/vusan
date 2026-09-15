@@ -36,13 +36,13 @@ class SandboxClientTest {
             respond(
                 """{"code":"not_found","detail":"Unexpected API redirect"}""", HttpStatusCode.Found,
                 headersOf(
-                    HttpHeaders.Location to listOf("http://another-service/v1/sandboxes/u42/execs"),
+                    HttpHeaders.Location to listOf("http://another-service/v1/sandboxes/$SANDBOX_ID/execs"),
                     HttpHeaders.ContentType to listOf("application/problem+json"),
                 ),
             )
         }).use { http ->
             val client = SandboxClient(http, "http://sandbox", "test-token")
-            assertFailsWith<IllegalStateException> { client.listCommands("u42") }
+            assertFailsWith<IllegalStateException> { client.open("telegram:42").listCommands() }
         }
         assertEquals(1, requests)
     }
@@ -51,6 +51,7 @@ class SandboxClientTest {
     fun `a file past the remaining budget is asked for with that bound and refused`() = runBlocking {
         val bounds = mutableListOf<String?>()
         val http = Http.createClient(MockEngine { request ->
+            if (request.url.encodedPath == "/v1/sandboxes") return@MockEngine json(sandboxInfo("telegram:1"))
             bounds += request.url.parameters["maxBytes"]
             respond(
                 problemDocument("payload_too_large", 413, "Payload too large", "`/home/sandbox/sample.bin` is larger than 4 bytes"),
@@ -60,7 +61,7 @@ class SandboxClientTest {
         })
         val client = SandboxClient(http, "http://sandbox", "test-token")
 
-        val error = assertFailsWith<IllegalStateException> { client.readFile("u1", "sample.bin", 4) }
+        val error = assertFailsWith<IllegalStateException> { client.open("telegram:1").readFile("sample.bin", 4) }
 
         assertContains(error.message.orEmpty(), "transfer limit")
         assertEquals(listOf<String?>("4"), bounds)
@@ -68,10 +69,12 @@ class SandboxClientTest {
 
     @Test
     fun `a file is never held past the budget, whatever the server sends`() = runBlocking {
-        val http = Http.createClient(MockEngine { respond(byteArrayOf(1, 2, 3, 4, 5), HttpStatusCode.OK) })
+        val http = Http.createClient(MockEngine { request ->
+            if (request.url.encodedPath == "/v1/sandboxes") json(sandboxInfo("telegram:1")) else respond(byteArrayOf(1, 2, 3, 4, 5), HttpStatusCode.OK)
+        })
         val client = SandboxClient(http, "http://sandbox", "test-token")
 
-        val error = assertFailsWith<IllegalStateException> { client.readFile("u1", "sample.bin", 4) }
+        val error = assertFailsWith<IllegalStateException> { client.open("telegram:1").readFile("sample.bin", 4) }
 
         assertContains(error.message.orEmpty(), "transfer limit")
     }
@@ -87,18 +90,18 @@ class SandboxClientTest {
                     headersOf(HttpHeaders.ContentType, "application/problem+json"),
                 )
             } else {
-                json(sandboxInfo("u1"))
+                json(sandboxInfo("telegram:1"))
             }
         })
         val client = SandboxClient(http, "http://sandbox", "test-token")
 
-        val error = assertFailsWith<IllegalStateException> { client.writeFile("u1", "notes.txt", byteArrayOf(1)) }
+        val error = assertFailsWith<IllegalStateException> { client.open("telegram:1").writeFile("notes.txt", byteArrayOf(1)) }
 
         assertEquals(detail, error.message)
     }
 
     @Test
-    fun `a command is started in the person's own sandbox, created with it`() = runBlocking {
+    fun `a command is started in the person's own sandbox, opened by their alias`() = runBlocking {
         val paths = mutableListOf<String>()
         val http = Http.createClient(MockEngine { request ->
             paths += "${request.method.value} ${request.url.encodedPath}"
@@ -106,38 +109,42 @@ class SandboxClientTest {
             when {
                 request.url.encodedPath.endsWith("/output") -> json("""{"frames":[{"kind":"stdout","text":"hello","end":6}],"nextOffset":6,"complete":true}""")
                 request.url.encodedPath.endsWith("/execs") && request.method == HttpMethod.Post -> json(FINISHED)
-                request.url.encodedPath.endsWith("/u42") -> json(sandboxInfo("u42"))
+                request.url.encodedPath == "/v1/sandboxes" -> json(sandboxInfo("telegram:42"))
                 else -> json(FINISHED)
             }
         })
         val client = SandboxClient(http, "http://sandbox", "test-token")
 
-        val first = client.exec("u42", "echo hello", 30)
-        client.exec("u42", "echo hello", 30)
+        val first = client.open("telegram:42").exec("echo hello", 30)
+        client.open("telegram:42").exec("echo hello", 30)
+
 
         assertEquals("hello", first.output)
         assertEquals(CommandStatus.COMPLETED, first.status)
         assertEquals(0, first.exitCode)
-        // every command asks for the sandbox first, and the server answers with the one it has.
-        assertEquals("PUT /v1/sandboxes/u42", paths.first())
-        assertEquals(2, paths.count { it == "PUT /v1/sandboxes/u42" })
-        assertTrue("POST /v1/sandboxes/u42/execs" in paths)
+        // opening asks the server for the person's sandbox; the id it answers with addresses the rest.
+        assertEquals("POST /v1/sandboxes", paths.first())
+        assertEquals(2, paths.count { it == "POST /v1/sandboxes" })
+        assertTrue("POST /v1/sandboxes/$SANDBOX_ID/execs" in paths)
     }
 
     @Test
     fun `polling keeps the byte offset and stops when nothing more arrives`() = runBlocking {
         val offsets = mutableListOf<String>()
         val http = Http.createClient(MockEngine { request ->
-            if (request.url.encodedPath.endsWith("/output")) {
-                offsets += request.url.parameters["offset"].orEmpty()
-                json("""{"frames":[],"nextOffset":16384,"complete":false}""")
-            } else {
-                json(RUNNING)
+            when {
+                request.url.encodedPath == "/v1/sandboxes" -> json(sandboxInfo("telegram:42"))
+                request.url.encodedPath.endsWith("/output") -> {
+                    offsets += request.url.parameters["offset"].orEmpty()
+                    json("""{"frames":[],"nextOffset":16384,"complete":false}""")
+                }
+
+                else -> json(RUNNING)
             }
         })
         val client = SandboxClient(http, "http://sandbox", "test-token")
 
-        val result = client.readCommand("u42", JOB, offset = 16384, waitSeconds = 20)
+        val result = client.open("telegram:42").readCommand(JOB, offset = 16384, waitSeconds = 20)
 
         assertEquals(listOf("16384"), offsets)
         assertEquals(CommandStatus.RUNNING, result.status)
@@ -154,7 +161,7 @@ class SandboxClientTest {
             )
         })
         val client = SandboxClient(http, "http://sandbox", "test-token")
-        val error = assertFailsWith<IllegalStateException> { client.exec("u42", "ls", null) }
+        val error = assertFailsWith<IllegalStateException> { client.open("telegram:42").exec("ls", null) }
         assertContains(error.message.orEmpty(), "at capacity")
     }
 
@@ -163,13 +170,13 @@ class SandboxClientTest {
         val failures = listOf(
             ConnectException("refused"),
             UnresolvedAddressException(),
-            HttpRequestTimeoutException("http://sandbox/v1/sandboxes/u42/execs", 90_000),
+            HttpRequestTimeoutException("http://sandbox/v1/sandboxes/$SANDBOX_ID/execs", 90_000),
         )
 
         for (failure in failures) {
             val http = Http.createClient(MockEngine { throw failure })
             val client = SandboxClient(http, "http://sandbox", "test-token")
-            val error = assertFailsWith<IllegalStateException> { client.listCommands("u42") }
+            val error = assertFailsWith<IllegalStateException> { client.open("telegram:42").listCommands() }
             assertContains(error.message.orEmpty(), "temporarily unavailable")
         }
     }

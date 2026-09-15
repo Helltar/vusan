@@ -25,12 +25,13 @@ private val VIDEO_EXTENSIONS = setOf("mp4", "mov", "m4v", "webm")
 @Suppress("unused")
 class SandboxTools(
     private val client: SandboxClient,
-    private val id: String,
+    private val person: String,
     private val outbox: BotOutbox,
     private val attachedFile: AttachedFile? = null,
 ) : ToolSet {
 
     private var attachmentHandled = false
+    private var opened: SandboxClient.PersonSandbox? = null
 
     @Tool
     @LLMDescription(SandboxToolDescriptions.RUN_COMMAND)
@@ -43,7 +44,7 @@ class SandboxTools(
         val script = command.requireToolText("Command", MAX_COMMAND_CHARS)
         require(timeoutSeconds >= 0) { "Timeout must not be negative" }
         val note = placeAttachment()
-        val result = client.exec(id, script, timeoutSeconds.takeIf { it > 0 })
+        val result = sandbox().exec(script, timeoutSeconds.takeIf { it > 0 })
         listOfNotNull(note, describeCommand(result)).joinToString("\n")
     }
 
@@ -61,10 +62,10 @@ class SandboxTools(
         require(waitSeconds in 0..20) { "Wait must be between 0 and 20 seconds" }
 
         if (jobId.isBlank()) {
-            client.listCommands(id).joinToString("\n") { "${it.jobId}: ${it.status.name.lowercase()}" }
+            sandbox().listCommands().joinToString("\n") { "${it.jobId}: ${it.status.name.lowercase()}" }
                 .ifBlank { "No recent commands in this sandbox." }
         } else {
-            describeCommand(client.readCommand(id, checkedJobId(jobId), offset, waitSeconds))
+            describeCommand(sandbox().readCommand(checkedJobId(jobId), offset, waitSeconds))
         }
     }
 
@@ -74,7 +75,7 @@ class SandboxTools(
         @LLMDescription(SandboxToolDescriptions.JOB_ID)
         jobId: String,
     ): String = suspendToolGuard {
-        describeCommand(client.cancelCommand(id, checkedJobId(jobId)))
+        describeCommand(sandbox().cancelCommand(checkedJobId(jobId)))
     }
 
     @Tool
@@ -88,7 +89,7 @@ class SandboxTools(
         val target = path.requireToolText("Path", MAX_PATH_CHARS)
         require(content.length <= MAX_CONTENT_CHARS) { "File content must be at most $MAX_CONTENT_CHARS characters" }
         val note = placeAttachment()
-        client.writeFile(id, target, content.toByteArray(Charsets.UTF_8))
+        sandbox().writeFile(target, content.toByteArray(Charsets.UTF_8))
         listOfNotNull(note, "Wrote `$target` (${content.length} chars). Use sendFromSandbox to deliver it.").joinToString("\n")
     }
 
@@ -99,14 +100,15 @@ class SandboxTools(
         path: String,
     ): String = suspendToolGuard {
         val target = path.requireToolText("Path", MAX_PATH_CHARS)
-        client.deleteFile(id, target)
+        sandbox().deleteFile(target)
         "Deleted `$target`. Everything else was kept, and running commands were left alone."
     }
 
     @Tool
     @LLMDescription(SandboxToolDescriptions.RESET_SANDBOX)
     suspend fun resetSandbox(): String = suspendToolGuard {
-        client.resetSandbox(id)
+        sandbox().reset()
+        opened = null
         "The sandbox is empty again. Every file and installed dependency is gone; the next command starts in a new home."
     }
 
@@ -128,7 +130,7 @@ class SandboxTools(
         wanted.forEach { path ->
             val bytes = runCatching {
                 require(remainingBytes > 0) { "The 50 MB transfer budget has been used" }
-                client.readFile(id, path, remainingBytes)
+                sandbox().readFile(path, remainingBytes)
             }.getOrElse {
                 it.rethrowIfCancellation()
                 failed += "`$path` (${it.message ?: "unreadable"})"
@@ -170,6 +172,9 @@ class SandboxTools(
         }.trim()
     }
 
+    /** The person's sandbox, asked for once per turn: every tool here works on the same one. */
+    private suspend fun sandbox(): SandboxClient.PersonSandbox = opened ?: client.open(person).also { opened = it }
+
     private suspend fun placeAttachment(): String? {
         if (attachmentHandled) return null
         attachmentHandled = true
@@ -181,7 +186,7 @@ class SandboxTools(
             val bytes = file.loadBytes()
             require(bytes.size <= MAX_ATTACHMENT_BYTES) { "Attachment exceeds the 20 MB input limit" }
             val path = "inbox/${UUID.randomUUID()}/$name"
-            client.writeFile(id, path, bytes)
+            sandbox().writeFile(path, bytes)
             "The attached file is in the sandbox at `$path`."
         }.getOrElse {
             it.rethrowIfCancellation()

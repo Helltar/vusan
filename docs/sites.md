@@ -12,8 +12,9 @@ Nothing beyond a sandbox. If the Regolith server the bot talks to has its
 in `GET /v1/info` and the publishing tools work; if not, the model gets the server's own message saying
 that sites are unavailable.
 
-The address is set by the server — normally the person's sandbox name under the pages domain, such as
-`https://tg-123456789.sites.example.com` — and the bot never builds it: the URL comes back from the
+The address is the server's, and it is random: something like `https://k7m2q9xwtp.sites.example.com`, which
+tells whoever has the link nothing about whose page it is. It stays the same while the site is up, so the link
+keeps working when the page is published again, and the bot never builds it — the URL comes back from the
 publish call. Limits, retention and what a site may hold are configured on the server as well, and
 [Regolith's documentation](https://github.com/reified-io/regolith) describes them.
 
@@ -26,7 +27,7 @@ publish call. Limits, retention and what a site may hold are configured on the s
 - **`siteStatus`** — what is online right now: the address, how much it holds, when it was last
   published.
 - **`unpublishSite`** — takes the site off the internet. The sandbox files are untouched, so it can
-  be published again later.
+  be published again later, at a new address.
 
 ## What publishing is
 

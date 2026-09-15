@@ -98,8 +98,8 @@ data class RequestContext(
  * whoever matched the number. Only Telegram has one so far, and a sender from anywhere else gets none
  * rather than a key that could collide. See notes/second-platform.md.
  *
- * It is also a DNS label wherever it travels — a sandbox name, and a site's address — so it stays
- * lowercase letters, digits and inner hyphens.
+ * It travels no further than the sandbox server, which takes it as the alias it files a sandbox under
+ * and builds nothing public from it.
  */
 val RequestContext.personKeyOrNull: String?
-    get() = sender.takeIf { it.isPerson && platform == Platform.TELEGRAM }?.let { "tg-${it.id}" }
+    get() = sender.takeIf { it.isPerson && platform == Platform.TELEGRAM }?.let { "telegram:${it.id}" }

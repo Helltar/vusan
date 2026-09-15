@@ -89,9 +89,10 @@ Preserve the package boundaries in [`docs/architecture.md`](docs/architecture.md
   images, resources, timeouts, retention and network policy, and states its
   limits in `GET /v1/info`; the client reads them there and trims what the model
   asks for, rather than keeping a second copy.
-- One sandbox per person, named by `personKeyOrNull` and created on first use.
-  Vusan sends no sandbox settings when it creates one: the server's defaults are
-  the deployment's business.
+- One sandbox per person: `personKeyOrNull` is the alias the server files it
+  under, `SandboxClient.open` hands back the sandbox it stands for, and a turn
+  works on that one handle. Vusan sends no sandbox settings when it creates one:
+  the server's defaults are the deployment's business.
 - It is optional — `REGOLITH_URL` plus `REGOLITH_TOKEN` is the whole switch, and
   without it neither the shell tools nor publishing are registered.
 

@@ -22,10 +22,12 @@ private const val INDEX = "index.html"
  */
 @Suppress("unused")
 class SiteTools(
-    private val sandbox: SandboxClient,
+    private val client: SandboxClient,
     // the sandbox the files come from and the site they are served at belong to the same person
-    private val personKey: String,
+    private val person: String,
 ) : ToolSet {
+
+    private var opened: SandboxClient.PersonSandbox? = null
 
     @Tool
     @LLMDescription(SiteToolDescriptions.PUBLISH_SITE)
@@ -35,14 +37,14 @@ class SiteTools(
     ): String = suspendToolGuard {
         val path = directory.requireToolText("Directory", MAX_PATH_CHARS)
         val warning = missingIndex(path)
-        val site = sandbox.publishSite(personKey, path)
+        val site = sandbox().publishSite(path)
         listOfNotNull(describePublished(site), warning).joinToString("\n")
     }
 
     @Tool
     @LLMDescription(SiteToolDescriptions.SITE_STATUS)
     suspend fun siteStatus(): String = suspendToolGuard {
-        val site = sandbox.publishedSite(personKey)
+        val site = sandbox().publishedSite()
             ?: return@suspendToolGuard "Nothing is published. Build the files in the sandbox, then publish that directory."
         buildString {
             append("Published at ${site.url} — ${site.files} file(s), ${site.bytes.asMegabytes()}")
@@ -54,19 +56,22 @@ class SiteTools(
     @Tool
     @LLMDescription(SiteToolDescriptions.UNPUBLISH_SITE)
     suspend fun unpublishSite(): String = suspendToolGuard {
-        if (sandbox.unpublishSite(personKey)) {
+        if (sandbox().unpublishSite()) {
             "The site is offline and its address returns nothing. The sandbox files were kept."
         } else {
             "There was nothing published to take down."
         }
     }
 
+    /** The person's sandbox, asked for once per turn: publishing and its check work on the same one. */
+    private suspend fun sandbox(): SandboxClient.PersonSandbox = opened ?: client.open(person).also { opened = it }
+
     /**
      * The one mistake that cannot be seen from the result: a directory with no `index.html` at its top
      * publishes fine and its link then opens nothing.
      */
     private suspend fun missingIndex(path: String): String? = runCatching {
-        if (INDEX in sandbox.entries(personKey, path)) {
+        if (INDEX in sandbox().entries(path)) {
             null
         } else {
             "There is no `$INDEX` at the top of `$path`, so the link itself will show nothing. " +

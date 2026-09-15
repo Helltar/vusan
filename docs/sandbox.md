@@ -55,10 +55,11 @@ The server has to run **Regolith 0.3**. The bot talks to it through Regolith's o
 the server's answers by that release's protocol, so a server from another minor version is not
 understood.
 
-Each person gets a sandbox named by their person key (`tg-<telegram id>`), created on first use with the
-server's own defaults. Everything else — image, memory, home size, idle stop, retention, network
-policy — is configured on the server, and the bot reads the limits it has to respect from
-`GET /v1/info` instead of keeping its own copy.
+Each person is an alias on that server — `telegram:<telegram id>` — and the sandbox behind it is created on
+first use with the server's own defaults. The alias goes no further than the server, which addresses the
+sandbox by an id of its own making. Everything else — image, memory, home size, idle stop, retention, network
+policy — is configured on the server, and the bot reads the limits it has to respect from `GET /v1/info`
+instead of keeping its own copy.
 
 ## Files
 

@@ -616,17 +616,17 @@ runs the commands and confines them. This repository holds only the client —
 file that uses Regolith's Kotlin SDK, which is what speaks the `/v1` API. Docker, homes and network policy never
 enter the bot's request flow.
 
-Each `userId` maps to a sandbox named `tg-<userId>`, the same in every chat. Conversation history still uses
-`(userId, chatId)`; only the files and the commands running in them are shared.
+Each `userId` is an alias on that server — `telegram:<userId>` — and the sandbox it stands for is the same in
+every chat. The server makes the id everything is addressed by, and the bot keeps none of it. Conversation
+history still uses `(userId, chatId)`; only the files and the commands running in them are shared.
 
-- **`SandboxClient`** — creates the person's sandbox on first use and remembers it, so later calls cost one
-  request. A command is an exec: it is started, then its recorded output is read from a byte offset until the
-  command ends, a page comes back empty or the call's ten seconds are up, and the model continues from
-  `nextOffset`. A file is read within the call's remaining transfer budget, which the server refuses to exceed
-  before sending any of it. Refusals carry the server's error `code`, which decides
+- **`SandboxClient`** — `open` asks the server for the person's sandbox, created if it has none, and hands back
+  the handle the rest of the turn works on. A command is an exec: it is started, then its recorded output is
+  read from a byte offset until the command ends, a page comes back empty or the call's ten seconds are up, and
+  the model continues from `nextOffset`. A file is read within the call's remaining transfer budget, which the
+  server refuses to exceed before sending any of it. Refusals carry the server's error `code`, which decides
   what the model is told — capacity and availability read as "try again", everything else as the server's own
-  sentence. A `not_found` forgets the sandbox, so the next call creates it again rather than failing forever
-  after retention deleted it.
+  sentence; no answer at all reads as temporarily unavailable.
 - **`SandboxTools`** — the model-facing surface: run, read, cancel, write, delete, reset, send. It copies the
   turn's attachment into `inbox/<unique-id>/<name>` before the first command that might want it, once per turn,
   and renders a command as text the model can act on — the exit code, and the session limit that explains it
@@ -646,10 +646,10 @@ A person's site is published by the same Regolith server that holds their sandbo
 sends one directory's path, the server snapshots it out of the sandbox and answers with the address, and `siteStatus` and
 `unpublishSite` read and remove it.
 
-- **One site per person**, keyed by the same `personKeyOrNull` the sandbox uses, so the files and the site they become
-  belong to the same identity across every chat.
-- **The bot never builds the URL.** It comes back from the publish call, so the naming scheme and the domain can change on
-  the server without touching the bot.
+- **One site per person**, because a site belongs to the sandbox it was published from, and that sandbox is the
+  person's in every chat.
+- **The bot never builds the URL, and never learns how it was chosen.** The server picks an address that says nothing
+  about the sandbox or the person, keeps it while the site is up, and hands it back from the publish call.
 - **The one check worth making locally**: a directory with no `index.html` at its top publishes fine and its link then
   opens nothing, so the tool lists the directory first and says so rather than handing over a dead link.
 - **Whether publishing exists at all** is the server's answer, not a setting here: `GET /v1/info` reports it, and a server

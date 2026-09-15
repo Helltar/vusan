@@ -2,6 +2,7 @@ package com.helltar.vusan.tools.sandbox
 
 import com.helltar.vusan.common.rethrowIfCancellation
 import io.ktor.client.HttpClient
+import io.reified.regolith.protocol.CreateSandboxRequest
 import io.reified.regolith.protocol.ErrorCodes
 import io.reified.regolith.protocol.ExecInfo
 import io.reified.regolith.protocol.ExecRequest
@@ -22,12 +23,15 @@ import kotlin.time.TimeSource
 internal const val SANDBOX_FILE_LIMIT = 50 * 1024 * 1024
 
 /**
- * The bot's side of a Regolith server: one named sandbox per person, holding their home.
+ * The bot's side of a Regolith server: one sandbox per person, holding their home.
  *
  * This is the only file that uses Regolith's Kotlin SDK. It turns the SDK's calls into what the tools
  * describe to the model — a command's output so far and where to read on — and its refusals into text
- * the model can act on. It keeps no state of its own: the server is asked for the person's sandbox
- * whenever one is needed, and answers with the one it has.
+ * the model can act on.
+ *
+ * A person is an alias on that server, and [open] hands back the sandbox it stands for, created if the
+ * server has none. Everything else happens on that [PersonSandbox], so one turn asks for the sandbox
+ * once and nothing here remembers it between turns: a home deleted by retention is simply made again.
  */
 class SandboxClient(
     http: HttpClient,
@@ -41,120 +45,108 @@ class SandboxClient(
     @Volatile
     private var server: ServerInfo? = null
 
-    suspend fun exec(sandboxId: String, command: String, timeoutSeconds: Int?): CommandResult {
-        val sandbox = sandbox(sandboxId)
-        val request = ExecRequest(shell = command, timeoutSeconds = clamped(timeoutSeconds))
-        val exec = call { sandbox.startExec(request) }
+    /** The person's sandbox, created on first use. The server sends nothing of ours back to anyone. */
+    suspend fun open(person: String): PersonSandbox =
+        PersonSandbox(call { regolith.getOrCreate(person, CreateSandboxRequest()) })
 
-        return collect(sandboxId, exec.id, offset = 0, waitSeconds = FIRST_WAIT_SECONDS)
-    }
+    /** One person's sandbox, for as long as the work that asked for it lasts. */
+    inner class PersonSandbox internal constructor(private val sandbox: Sandbox) {
 
-    suspend fun readCommand(sandboxId: String, jobId: String, offset: Long, waitSeconds: Int): CommandResult =
-        collect(sandboxId, jobId, offset, waitSeconds)
+        suspend fun exec(command: String, timeoutSeconds: Int?): CommandResult {
+            val request = ExecRequest(shell = command, timeoutSeconds = clamped(timeoutSeconds))
+            val exec = call { sandbox.startExec(request) }
 
-    suspend fun cancelCommand(sandboxId: String, jobId: String): CommandResult =
-        call { regolith.sandbox(sandboxId).exec(jobId).cancel() }
-            .result(output = "", nextOffset = 0, hasMore = false)
-
-    suspend fun listCommands(sandboxId: String): List<CommandResult> =
-        call { regolith.sandbox(sandboxId).execs() }
-            .map { it.result(output = "", nextOffset = 0, hasMore = false) }
-
-    suspend fun writeFile(sandboxId: String, path: String, bytes: ByteArray) {
-        require(bytes.size <= SANDBOX_FILE_LIMIT) { "File exceeds the 50 MB transfer limit" }
-        call { sandbox(sandboxId).files.write(path, bytes) }
-    }
-
-    suspend fun deleteFile(sandboxId: String, path: String) {
-        call { regolith.sandbox(sandboxId).files.delete(path, recursive = true) }
-    }
-
-    /** Publishes a directory of the sandbox to the web and returns the address it is served at. */
-    suspend fun publishSite(sandboxId: String, path: String): PublishedSite {
-        val sandbox = sandbox(sandboxId)
-
-        return call { sandbox.publish(path) }.published()
-    }
-
-    /** What is published for this person, or null when nothing is. */
-    suspend fun publishedSite(sandboxId: String): PublishedSite? = call {
-        whenPresent(absent = null) { regolith.sandbox(sandboxId).site().published() }
-    }
-
-    /** Takes the site down; false when there was nothing to take down. The sandbox keeps its files. */
-    suspend fun unpublishSite(sandboxId: String): Boolean = call {
-        whenPresent(absent = false) {
-            regolith.sandbox(sandboxId).unpublish()
-            true
+            return collect(exec.id, offset = 0, waitSeconds = FIRST_WAIT_SECONDS)
         }
-    }
 
-    /** The names in one directory of the sandbox, for a check before something is published. */
-    suspend fun entries(sandboxId: String, path: String): List<String> =
-        call { regolith.sandbox(sandboxId).files.list(path) }.map { it.name }
+        suspend fun readCommand(jobId: String, offset: Long, waitSeconds: Int): CommandResult =
+            collect(jobId, offset, waitSeconds)
 
-    /** Deletes the sandbox with its home; the next use creates an empty one under the same name. */
-    suspend fun resetSandbox(sandboxId: String) {
-        call { regolith.sandbox(sandboxId).delete() }
-    }
+        suspend fun cancelCommand(jobId: String): CommandResult =
+            call { sandbox.exec(jobId).cancel() }.result(output = "", nextOffset = 0, hasMore = false)
 
-    suspend fun readFile(sandboxId: String, path: String, maxBytes: Int = SANDBOX_FILE_LIMIT): ByteArray {
-        require(maxBytes in 1..SANDBOX_FILE_LIMIT) { "Invalid file transfer budget" }
+        suspend fun listCommands(): List<CommandResult> =
+            call { sandbox.execs() }.map { it.result(output = "", nextOffset = 0, hasMore = false) }
 
-        return call {
-            try {
-                regolith.sandbox(sandboxId).files.read(path, maxBytes.toLong())
-            } catch (e: RegolithException) {
-                // only here, where the bound is this call's budget, does the code mean the file does not fit in it:
-                // elsewhere it can be a full home or a site too large, which the server's own words explain.
-                if (e.code == ErrorCodes.PAYLOAD_TOO_LARGE) error("File exceeds the remaining transfer limit") else throw e
+        suspend fun writeFile(path: String, bytes: ByteArray) {
+            require(bytes.size <= SANDBOX_FILE_LIMIT) { "File exceeds the 50 MB transfer limit" }
+            call { sandbox.files.write(path, bytes) }
+        }
+
+        suspend fun readFile(path: String, maxBytes: Int = SANDBOX_FILE_LIMIT): ByteArray {
+            require(maxBytes in 1..SANDBOX_FILE_LIMIT) { "Invalid file transfer budget" }
+
+            return call {
+                try {
+                    sandbox.files.read(path, maxBytes.toLong())
+                } catch (e: RegolithException) {
+                    // only here, where the bound is this call's budget, does the code mean the file does not fit
+                    // in it: elsewhere it is a site too large, which the server's own words explain.
+                    if (e.code == ErrorCodes.PAYLOAD_TOO_LARGE) error("File exceeds the remaining transfer limit") else throw e
+                }
             }
         }
-    }
 
-    /**
-     * Reads recorded output from [offset] until the command ends, this call's budget runs out, or the
-     * output limit is reached, then reports the command as it now stands. Output is kept on the server,
-     * so what does not fit is read by the next call from [CommandResult.nextOffset].
-     */
-    private suspend fun collect(sandboxId: String, jobId: String, offset: Long, waitSeconds: Int): CommandResult {
-        val exec = regolith.sandbox(sandboxId).exec(jobId)
-        val started = TimeSource.Monotonic.markNow()
-        val output = StringBuilder()
-        var next = offset
-        var complete: Boolean
-        var dropped = false
-
-        while (true) {
-            val remaining = (waitSeconds.seconds - started.elapsedNow()).inWholeSeconds.toInt().coerceAtLeast(0)
-            val page = call { exec.readOutput(next, remaining, OUTPUT_CHARS) }
-            page.frames.forEach { frame ->
-                if (frame.kind == OutputKind.GAP) dropped = true else output.append(frame.text)
-            }
-            next = page.nextOffset
-            complete = page.complete
-            // the server holds the request until there is output or the wait runs out, so an empty page
-            // means nothing more arrived in time: looping again would only spin against it.
-            val arrived = page.frames.isNotEmpty()
-            val room = remaining > 0 && output.length < OUTPUT_CHARS
-            if (complete || !arrived || !room) break
+        suspend fun deleteFile(path: String) {
+            call { sandbox.files.delete(path, recursive = true) }
         }
 
-        val info = call { exec.info() }
+        /** The names in one directory of the sandbox, for a check before something is published. */
+        suspend fun entries(path: String): List<String> = call { sandbox.files.list(path) }.map { it.name }
 
-        return info.result(output.toString(), next, hasMore = !complete, dropped = dropped)
-    }
+        /** Deletes the sandbox with its home; the next [open] creates an empty one for this person. */
+        suspend fun reset() {
+            call { sandbox.delete() }
+        }
 
-    /**
-     * The person's sandbox, created unless the server already has it. It is asked for before every
-     * command and every write rather than remembered: the answer costs one request, and a sandbox
-     * deleted by retention or by hand is then simply created again instead of failing once first.
-     */
-    private suspend fun sandbox(sandboxId: String): Sandbox {
-        val sandbox = regolith.sandbox(sandboxId)
-        call { sandbox.getOrCreate() }
+        /** Publishes a directory of the sandbox to the web and returns the address it is served at. */
+        suspend fun publishSite(path: String): PublishedSite = call { sandbox.publish(path) }.published()
 
-        return sandbox
+        /** What is published for this person, or null when nothing is. */
+        suspend fun publishedSite(): PublishedSite? = call {
+            whenPresent(absent = null) { sandbox.site().published() }
+        }
+
+        /** Takes the site down; false when there was nothing to take down. The sandbox keeps its files. */
+        suspend fun unpublishSite(): Boolean = call {
+            whenPresent(absent = false) {
+                sandbox.unpublish()
+                true
+            }
+        }
+
+        /**
+         * Reads recorded output from [offset] until the command ends, this call's budget runs out, or the
+         * output limit is reached, then reports the command as it now stands. Output is kept on the server,
+         * so what does not fit is read by the next call from [CommandResult.nextOffset].
+         */
+        private suspend fun collect(jobId: String, offset: Long, waitSeconds: Int): CommandResult {
+            val exec = sandbox.exec(jobId)
+            val started = TimeSource.Monotonic.markNow()
+            val output = StringBuilder()
+            var next = offset
+            var complete: Boolean
+            var dropped = false
+
+            while (true) {
+                val remaining = (waitSeconds.seconds - started.elapsedNow()).inWholeSeconds.toInt().coerceAtLeast(0)
+                val page = call { exec.readOutput(next, remaining, OUTPUT_CHARS) }
+                page.frames.forEach { frame ->
+                    if (frame.kind == OutputKind.GAP) dropped = true else output.append(frame.text)
+                }
+                next = page.nextOffset
+                complete = page.complete
+                // the server holds the request until there is output or the wait runs out, so an empty page
+                // means nothing more arrived in time: looping again would only spin against it.
+                val arrived = page.frames.isNotEmpty()
+                val room = remaining > 0 && output.length < OUTPUT_CHARS
+                if (complete || !arrived || !room) break
+            }
+
+            val info = call { exec.info() }
+
+            return info.result(output.toString(), next, hasMore = !complete, dropped = dropped)
+        }
     }
 
     /** The server owns its limits; a timeout above the ceiling would be refused instead of trimmed. */

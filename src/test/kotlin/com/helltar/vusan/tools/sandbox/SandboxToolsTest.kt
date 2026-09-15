@@ -63,15 +63,19 @@ class SandboxToolsTest {
         val engine = MockEngine { request ->
             val path = request.url.encodedPath
             val wanted = request.url.parameters["path"].orEmpty()
-            assertTrue(path.startsWith("/v1/sandboxes/tg-55"), "a request left this person's sandbox: $path")
+            assertTrue(
+                path == "/v1/sandboxes" || path.startsWith("/v1/sandboxes/$SANDBOX_ID"),
+                "a request left this person's sandbox: $path",
+            )
             failure?.let { (status, body) -> return@MockEngine problem(status, body) }
             when {
-                path == "/v1/sandboxes/tg-55" && request.method == HttpMethod.Put -> {
+                path == "/v1/sandboxes" && request.method == HttpMethod.Post -> {
                     creations++
-                    json(sandboxInfo("tg-55"))
+                    assertContains(request.body.toByteArray().decodeToString(), """"alias":"telegram:55"""")
+                    json(sandboxInfo("telegram:55"))
                 }
 
-                path == "/v1/sandboxes/tg-55" && request.method == HttpMethod.Delete -> {
+                path == "/v1/sandboxes/$SANDBOX_ID" && request.method == HttpMethod.Delete -> {
                     resets++
                     respond("", HttpStatusCode.NoContent)
                 }
@@ -254,13 +258,13 @@ class SandboxToolsTest {
         assertContains(result, "$JOB: interrupted")
     }
 
-    // the server returns the sandbox it already has, so asking for it before each command costs one
-    // request and needs no memory of what was created when
+    // the tools hold one sandbox for the turn they were built for, and ask the server for it once:
+    // nothing is remembered between turns, so a home deleted by retention is simply made again
     @Test
-    fun `the sandbox is asked for before a command and before a write`() = runBlocking {
+    fun `the sandbox is opened once for a whole turn`() = runBlocking {
         val sandbox = tools()
         sandbox.runCommand("ls")
         sandbox.writeSandboxFile("notes.txt", "hello")
-        assertEquals(2, creations)
+        assertEquals(1, creations)
     }
 }
