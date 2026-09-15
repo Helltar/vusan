@@ -616,7 +616,7 @@ runs the commands and confines them. This repository holds only the client —
 file that uses Regolith's Kotlin SDK, which is what speaks the `/v1` API. Docker, homes and network policy never
 enter the bot's request flow.
 
-Each `userId` maps to a sandbox named `u<userId>`, the same in every chat. Conversation history still uses
+Each `userId` maps to a sandbox named `tg-<userId>`, the same in every chat. Conversation history still uses
 `(userId, chatId)`; only the files and the commands running in them are shared.
 
 - **`SandboxClient`** — creates the person's sandbox on first use and remembers it, so later calls cost one

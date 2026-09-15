@@ -55,7 +55,7 @@ The server has to run **Regolith 0.2**. The bot talks to it through Regolith's o
 the server's answers by that release's protocol, so a server from another minor version is not
 understood.
 
-Each person gets a sandbox named by their person key (`u<telegram id>`), created on first use with the
+Each person gets a sandbox named by their person key (`tg-<telegram id>`), created on first use with the
 server's own defaults. Everything else — image, memory, home size, idle stop, retention, network
 policy — is configured on the server, and the bot reads the limits it has to respect from
 `GET /v1/info` instead of keeping its own copy.

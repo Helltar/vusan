@@ -13,7 +13,7 @@ in `GET /v1/info` and the publishing tools work; if not, the model gets the serv
 that sites are unavailable.
 
 The address is set by the server — normally the person's sandbox name under the pages domain, such as
-`https://u123456789.sites.example.com` — and the bot never builds it: the URL comes back from the
+`https://tg-123456789.sites.example.com` — and the bot never builds it: the URL comes back from the
 publish call. Limits, retention and what a site may hold are configured on the server as well, and
 [Regolith's documentation](https://github.com/reified-io/regolith) describes them.
 

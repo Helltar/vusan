@@ -63,15 +63,15 @@ class SandboxToolsTest {
         val engine = MockEngine { request ->
             val path = request.url.encodedPath
             val wanted = request.url.parameters["path"].orEmpty()
-            assertTrue(path.startsWith("/v1/sandboxes/u55"), "a request left this person's sandbox: $path")
+            assertTrue(path.startsWith("/v1/sandboxes/tg-55"), "a request left this person's sandbox: $path")
             failure?.let { (status, body) -> return@MockEngine problem(status, body) }
             when {
-                path == "/v1/sandboxes/u55" && request.method == HttpMethod.Put -> {
+                path == "/v1/sandboxes/tg-55" && request.method == HttpMethod.Put -> {
                     creations++
-                    json(sandboxInfo("u55"))
+                    json(sandboxInfo("tg-55"))
                 }
 
-                path == "/v1/sandboxes/u55" && request.method == HttpMethod.Delete -> {
+                path == "/v1/sandboxes/tg-55" && request.method == HttpMethod.Delete -> {
                     resets++
                     respond("", HttpStatusCode.NoContent)
                 }

@@ -18,7 +18,7 @@ import kotlin.test.assertTrue
 import kotlinx.coroutines.runBlocking
 
 private const val PUBLISHED =
-    """{"site":"u55","url":"https://u55.example.test","release":"0f1e2d3c4b5a69788796a5b4c3d2e1f0","files":3,"bytes":2048,"publishedAt":"2026-09-13T12:00:00Z"}"""
+    """{"site":"tg-55","url":"https://tg-55.example.test","release":"0f1e2d3c4b5a69788796a5b4c3d2e1f0","files":3,"bytes":2048,"publishedAt":"2026-09-13T12:00:00Z"}"""
 
 class SiteToolsTest {
     private val context = requestContext(chatId = 55L, userId = 55L)
@@ -33,7 +33,7 @@ class SiteToolsTest {
         val engine = MockEngine { request ->
             val path = request.url.encodedPath
             requests += "${request.method.value} $path"
-            assertTrue(path.startsWith("/v1/sandboxes/u55"), "a request left this person's sandbox: $path")
+            assertTrue(path.startsWith("/v1/sandboxes/tg-55"), "a request left this person's sandbox: $path")
             when {
                 path.endsWith("/publish") -> {
                     publishedPath = Regex(""""path":"([^"]*)"""").find(request.body.toByteArray().decodeToString())?.groupValues?.get(1)
@@ -53,7 +53,7 @@ class SiteToolsTest {
                 path.endsWith("/site") ->
                     if (site == null) notFound() else respond(site, HttpStatusCode.OK, headersOf(HttpHeaders.ContentType, "application/json"))
 
-                else -> respond(sandboxInfo("u55"), HttpStatusCode.OK, headersOf(HttpHeaders.ContentType, "application/json"))
+                else -> respond(sandboxInfo("tg-55"), HttpStatusCode.OK, headersOf(HttpHeaders.ContentType, "application/json"))
             }
         }
 
@@ -67,7 +67,7 @@ class SiteToolsTest {
     fun `publishing hands back the link and the size`() = runBlocking {
         val result = tools().publishSite("site")
         assertEquals("site", publishedPath)
-        assertContains(result, "https://u55.example.test")
+        assertContains(result, "https://tg-55.example.test")
         assertContains(result, "3 file(s)")
         assertContains(result, "2 KB")
     }
@@ -77,7 +77,7 @@ class SiteToolsTest {
     @Test
     fun `a directory with no index page is published with a warning`() = runBlocking {
         val result = tools(entries = listOf("main.js", "style.css")).publishSite("dist")
-        assertContains(result, "https://u55.example.test")
+        assertContains(result, "https://tg-55.example.test")
         assertContains(result, "no `index.html`")
     }
 
@@ -97,7 +97,7 @@ class SiteToolsTest {
 
     @Test
     fun `status reads the site rather than the sandbox`() = runBlocking {
-        assertContains(tools().siteStatus(), "Published at https://u55.example.test")
+        assertContains(tools().siteStatus(), "Published at https://tg-55.example.test")
         assertContains(tools(site = null).siteStatus(), "Nothing is published")
     }
 
@@ -105,7 +105,7 @@ class SiteToolsTest {
     fun `taking a site down leaves the sandbox files alone`() = runBlocking {
         assertContains(tools().unpublishSite(), "sandbox files were kept")
         assertContains(tools(site = null).unpublishSite(), "nothing published")
-        assertFalse(requests.any { it.startsWith("DELETE /v1/sandboxes/u55/files") })
+        assertFalse(requests.any { it.startsWith("DELETE /v1/sandboxes/tg-55/files") })
     }
 }
 

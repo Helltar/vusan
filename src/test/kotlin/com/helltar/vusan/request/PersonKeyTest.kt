@@ -16,12 +16,12 @@ class PersonKeyTest {
 
     @Test
     fun `a private chat is keyed by the person alone`() {
-        assertEquals("u4242", key(userId = 4242, chatId = 4242, private = true))
+        assertEquals("tg-4242", key(userId = 4242, chatId = 4242, private = true))
     }
 
     @Test
     fun `a group is keyed by the person alone`() {
-        assertEquals("u4242", key(4242, -1001234567890, private = false))
+        assertEquals("tg-4242", key(4242, -1001234567890, private = false))
     }
 
     @Test
