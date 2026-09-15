@@ -89,6 +89,13 @@ class SiteToolsTest {
     }
 
     @Test
+    fun `a site too large for the server is refused in its own words`() = runBlocking {
+        val refusal = problemDocument("payload_too_large", 413, "Payload too large", "The snapshot grew past the 100 MB a site may hold")
+        val sandbox = tools(publish = HttpStatusCode.PayloadTooLarge to refusal)
+        assertContains(toolFailure { sandbox.publishSite("site") }, "grew past the 100 MB")
+    }
+
+    @Test
     fun `status reads the site rather than the sandbox`() = runBlocking {
         assertContains(tools().siteStatus(), "Published at https://u55.example.test")
         assertContains(tools(site = null).siteStatus(), "Nothing is published")

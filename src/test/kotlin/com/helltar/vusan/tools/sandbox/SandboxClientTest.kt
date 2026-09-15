@@ -76,6 +76,26 @@ class SandboxClientTest {
     }
 
     @Test
+    fun `a full home is told in the server's words, not as a file too large`() = runBlocking {
+        val http = Http.createClient(MockEngine { request ->
+            if (request.url.encodedPath.endsWith("/files/content")) {
+                respond(
+                    problemDocument("payload_too_large", 413, "Payload too large", "The sandbox home is full"),
+                    HttpStatusCode.PayloadTooLarge,
+                    headersOf(HttpHeaders.ContentType, "application/problem+json"),
+                )
+            } else {
+                json(sandboxInfo("u1"))
+            }
+        })
+        val client = SandboxClient(http, "http://sandbox", "test-token")
+
+        val error = assertFailsWith<IllegalStateException> { client.writeFile("u1", "notes.txt", byteArrayOf(1)) }
+
+        assertEquals("The sandbox home is full", error.message)
+    }
+
+    @Test
     fun `a command is started in the person's own sandbox, once created`() = runBlocking {
         val paths = mutableListOf<String>()
         val http = Http.createClient(MockEngine { request ->

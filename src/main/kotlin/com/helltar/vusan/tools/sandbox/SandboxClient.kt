@@ -110,7 +110,15 @@ class SandboxClient(
     suspend fun readFile(sandboxId: String, path: String, maxBytes: Int = SANDBOX_FILE_LIMIT): ByteArray {
         require(maxBytes in 1..SANDBOX_FILE_LIMIT) { "Invalid file transfer budget" }
 
-        return call(sandboxId) { regolith.sandbox(sandboxId).files.read(path, maxBytes.toLong()) }
+        return call(sandboxId) {
+            try {
+                regolith.sandbox(sandboxId).files.read(path, maxBytes.toLong())
+            } catch (e: RegolithException) {
+                // only here, where the bound is this call's budget, does the code mean the file does not fit in it:
+                // elsewhere it can be a full home or a site too large, which the server's own words explain.
+                if (e.code == ErrorCodes.PAYLOAD_TOO_LARGE) error("File exceeds the remaining transfer limit") else throw e
+            }
+        }
     }
 
     /**
@@ -211,8 +219,6 @@ private fun RegolithException.explain(): String = when (code) {
     ErrorCodes.CAPACITY_EXHAUSTED, ErrorCodes.UNAVAILABLE ->
         "The sandbox host is at capacity right now. Tell the user and try again in a minute."
     ErrorCodes.BUSY -> "This sandbox already runs as many commands as it may; wait for one to finish."
-    // a read past the call's remaining budget, or a file the server will not take: either way, too big to move.
-    ErrorCodes.PAYLOAD_TOO_LARGE -> "The file exceeds the transfer limit"
     // anything but a problem document came from something in front of the server, such as a proxy.
     else -> if (code.startsWith("http_")) {
         "The sandbox API answered $status"
