@@ -9,12 +9,12 @@ import io.reified.regolith.protocol.ExecStatus
 import io.reified.regolith.protocol.OutcomeType
 import io.reified.regolith.protocol.OutputKind
 import io.reified.regolith.protocol.PublishedSite as RegolithSite
+import io.reified.regolith.protocol.Reasons
 import io.reified.regolith.protocol.ServerInfo
 import io.reified.regolith.sdk.RegolithClient
+import io.reified.regolith.sdk.RegolithConnectionException
 import io.reified.regolith.sdk.RegolithException
 import io.reified.regolith.sdk.Sandbox
-import java.net.ConnectException
-import java.nio.channels.UnresolvedAddressException
 import java.util.concurrent.ConcurrentHashMap
 import kotlin.time.Clock
 import kotlin.time.Duration.Companion.seconds
@@ -184,7 +184,7 @@ class SandboxClient(
             ?.also { server = it }
     }
 
-    /** Runs one SDK call, turning a refusal or an unreachable server into text the model can act on. */
+    /** Runs one SDK call, turning a refusal or an unanswering server into text the model can act on. */
     private suspend fun <T> call(sandboxId: String?, block: suspend () -> T): T =
         try {
             block()
@@ -192,9 +192,7 @@ class SandboxClient(
             // the sandbox may have been deleted by retention or by hand: forget it, so the next call recreates it.
             if (e.code == ErrorCodes.NOT_FOUND && sandboxId != null) created -= sandboxId
             error(e.explain())
-        } catch (_: ConnectException) {
-            error(UNAVAILABLE)
-        } catch (_: UnresolvedAddressException) {
+        } catch (_: RegolithConnectionException) {
             error(UNAVAILABLE)
         }
 
@@ -221,7 +219,7 @@ private fun RegolithException.explain(): String = when (code) {
     else -> if (code.startsWith("http_")) {
         "The sandbox API answered $status"
     } else {
-        message.orEmpty().removePrefix("$code: ").ifBlank { "The sandbox refused the request" }
+        detail.ifBlank { "The sandbox refused the request" }
     }
 }
 
@@ -241,8 +239,8 @@ private fun ExecInfo.result(output: String, nextOffset: Long, hasMore: Boolean, 
         truncated = dropped || outputTruncated,
         elapsedMs = ((finishedAt ?: Clock.System.now()) - startedAt).inWholeMilliseconds.coerceAtLeast(0),
         limit = when (reason) {
-            "oom_killed" -> CommandLimit.OUT_OF_MEMORY
-            "pids_limited" -> CommandLimit.TOO_MANY_PROCESSES
+            Reasons.OOM_KILLED -> CommandLimit.OUT_OF_MEMORY
+            Reasons.PIDS_LIMITED -> CommandLimit.TOO_MANY_PROCESSES
             else -> null
         },
         reason = reason.takeIf { status == CommandStatus.INTERRUPTED },

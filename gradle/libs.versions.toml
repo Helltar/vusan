@@ -13,7 +13,7 @@ logback = "1.6.3"
 cron-utils = "9.2.1"
 shadow = "9.6.1"
 detekt = "1.23.8"
-regolith = "0.2.1"
+regolith = "0.3.0"
 
 [libraries]
 koog-agents = { module = "ai.koog:koog-agents", version.ref = "koog" }

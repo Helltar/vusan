@@ -51,7 +51,7 @@ the tools are not registered and the bot never mentions them — see
 [configuration](configuration.md#sandbox). The bot never reaches the sandbox host any other way: one
 token, one HTTPS or private address, no Docker socket on this side.
 
-The server has to run **Regolith 0.2**. The bot talks to it through Regolith's own client, which reads
+The server has to run **Regolith 0.3**. The bot talks to it through Regolith's own client, which reads
 the server's answers by that release's protocol, so a server from another minor version is not
 understood.
 

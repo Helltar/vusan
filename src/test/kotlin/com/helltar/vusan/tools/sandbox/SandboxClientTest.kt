@@ -2,6 +2,7 @@ package com.helltar.vusan.tools.sandbox
 
 import com.helltar.vusan.infra.Http
 import io.ktor.client.engine.mock.*
+import io.ktor.client.plugins.HttpRequestTimeoutException
 import io.ktor.http.*
 import java.net.ConnectException
 import java.nio.channels.UnresolvedAddressException
@@ -76,12 +77,13 @@ class SandboxClientTest {
     }
 
     @Test
-    fun `a full home is told in the server's words, not as a file too large`() = runBlocking {
+    fun `a full disk is told in the server's words, not as a file too large`() = runBlocking {
+        val detail = "The disk that holds `/home/sandbox/notes.txt` is full; delete files to make room"
         val http = Http.createClient(MockEngine { request ->
             if (request.url.encodedPath.endsWith("/files/content")) {
                 respond(
-                    problemDocument("payload_too_large", 413, "Payload too large", "The sandbox home is full"),
-                    HttpStatusCode.PayloadTooLarge,
+                    problemDocument("insufficient_storage", 507, "Insufficient storage", detail),
+                    HttpStatusCode.InsufficientStorage,
                     headersOf(HttpHeaders.ContentType, "application/problem+json"),
                 )
             } else {
@@ -92,7 +94,7 @@ class SandboxClientTest {
 
         val error = assertFailsWith<IllegalStateException> { client.writeFile("u1", "notes.txt", byteArrayOf(1)) }
 
-        assertEquals("The sandbox home is full", error.message)
+        assertEquals(detail, error.message)
     }
 
     @Test
@@ -156,8 +158,14 @@ class SandboxClientTest {
     }
 
     @Test
-    fun `an unreachable service is reported as temporary, not as a bug`() = runBlocking {
-        for (failure in listOf(ConnectException("refused"), UnresolvedAddressException())) {
+    fun `a service that does not answer is reported as temporary, not as a bug`() = runBlocking {
+        val failures = listOf(
+            ConnectException("refused"),
+            UnresolvedAddressException(),
+            HttpRequestTimeoutException("http://sandbox/v1/sandboxes/u42/execs", 90_000),
+        )
+
+        for (failure in failures) {
             val http = Http.createClient(MockEngine { throw failure })
             val client = SandboxClient(http, "http://sandbox", "test-token")
             val error = assertFailsWith<IllegalStateException> { client.listCommands("u42") }
