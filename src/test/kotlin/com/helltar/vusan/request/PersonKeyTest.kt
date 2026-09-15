@@ -34,10 +34,10 @@ class PersonKeyTest {
         assertNull(key(1_087_968_824, -1002, private = false, isPerson = false))
     }
 
-    // the sandbox and site protocols take `u` plus digits, and a site's public address is built from
-    // that number, so a second platform reusing the same shape would hand over somebody else's home.
+    // a number from another messenger says nothing about a telegram account: a key without the platform
+    // in it would hand one person's home to whoever elsewhere happens to have the same number.
     @Test
-    fun `only telegram has a person key while the services take one id shape`() {
+    fun `only telegram has a person key until another platform names itself in one`() {
         val onDiscord =
             RequestContext(
                 platform = Platform.DISCORD,
