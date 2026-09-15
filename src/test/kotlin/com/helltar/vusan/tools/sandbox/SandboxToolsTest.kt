@@ -29,12 +29,12 @@ private fun execInfo(status: String = "finished", outcome: String? = EXITED, tru
         ""","startedAt":"2026-09-13T12:00:00Z","outputEnd":0,"outputTruncated":$truncated,"stdinOpen":false}"""
 
 /** The recorded output from [offset]: everything on the first read, nothing to add on the next. */
-private fun outputPage(text: String, complete: Boolean, offset: Long): String {
+private fun recordedOutput(text: String, complete: Boolean, offset: Long, exec: String): String {
     val fresh = if (offset == 0L) text else ""
     val end = offset + fresh.length
     val frames = if (fresh.isEmpty()) "[]" else """[{"kind":"stdout","text":"$fresh","end":$end}]"""
 
-    return """{"frames":$frames,"nextOffset":$end,"complete":$complete}"""
+    return """{"frames":$frames,"nextOffset":$end,"complete":$complete,"exec":$exec}"""
 }
 
 private fun MockRequestHandleScope.json(body: String) =
@@ -82,11 +82,11 @@ class SandboxToolsTest {
 
                 path.endsWith("/execs") && request.method == HttpMethod.Post -> json(info)
                 path.endsWith("/execs") -> json(execs)
+                // the page carries the exec, so reading a command asks for nothing else
                 path.endsWith("/output") ->
-                    json(outputPage(output, complete, request.url.parameters["offset"]?.toLong() ?: 0))
+                    json(recordedOutput(output, complete, request.url.parameters["offset"]?.toLong() ?: 0, info))
 
                 path.endsWith("/cancel") -> json(info)
-                path.contains("/execs/") -> json(info)
 
                 path.endsWith("/files/content") && request.method == HttpMethod.Put -> {
                     writes += wanted to request.body.toByteArray()
@@ -106,8 +106,7 @@ class SandboxToolsTest {
         }
 
         return SandboxTools(
-            SandboxClient(Http.createClient(engine), "http://regolith:8080", "test-token"),
-            requireNotNull(context.personKeyOrNull),
+            SandboxClient(Http.createClient(engine), "http://regolith:8080", "test-token").sandboxOf(requireNotNull(context.personKeyOrNull)),
             outbox,
             attached,
         )
@@ -261,10 +260,22 @@ class SandboxToolsTest {
     // the tools hold one sandbox for the turn they were built for, and ask the server for it once:
     // nothing is remembered between turns, so a home deleted by retention is simply made again
     @Test
-    fun `the sandbox is opened once for a whole turn`() = runBlocking {
+    fun `the sandbox is opened once for a whole turn, and again after a reset`() = runBlocking {
         val sandbox = tools()
         sandbox.runCommand("ls")
         sandbox.writeSandboxFile("notes.txt", "hello")
         assertEquals(1, creations)
+
+        sandbox.resetSandbox()
+        sandbox.runCommand("ls")
+
+        assertEquals(2, creations)
+    }
+
+    // the sdk knows the shape of a server-made id, so a made-up one never reaches a request path
+    @Test
+    fun `a job id the model made up is refused in words it can act on`() = runBlocking {
+        assertContains(toolFailure { tools().readSandboxCommand(jobId = "build-1") }, "not an exec id")
+        assertContains(toolFailure { tools().cancelSandboxCommand(jobId = "../../info") }, "not an exec id")
     }
 }

@@ -7,8 +7,8 @@ and the same person uses the same files in private chat and in every group, whil
 stays separate per chat.
 
 It runs on **[Regolith](https://github.com/reified-io/regolith)**, a self-hosted sandbox server with
-its own deployment and documentation. This bot is one of its clients: it asks for a sandbox named
-after the person, then runs commands, moves files and reads output over HTTP. How a sandbox is
+its own deployment and documentation. This bot is one of its clients: it asks for the sandbox filed
+under the person, then runs commands, moves files and reads output over HTTP. How a sandbox is
 isolated, which image it runs and what it can reach are set on the server, and Regolith's
 documentation covers them.
 

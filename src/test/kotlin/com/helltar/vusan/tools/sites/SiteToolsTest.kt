@@ -62,8 +62,7 @@ class SiteToolsTest {
         }
 
         return SiteTools(
-            SandboxClient(Http.createClient(engine), "http://regolith:8080", "test-token"),
-            requireNotNull(context.personKeyOrNull),
+            SandboxClient(Http.createClient(engine), "http://regolith:8080", "test-token").sandboxOf(requireNotNull(context.personKeyOrNull)),
         )
     }
 

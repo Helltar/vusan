@@ -2,23 +2,20 @@ package com.helltar.vusan.tools.sandbox
 
 import com.helltar.vusan.common.rethrowIfCancellation
 import io.ktor.client.HttpClient
-import io.reified.regolith.protocol.CreateSandboxRequest
 import io.reified.regolith.protocol.ErrorCodes
 import io.reified.regolith.protocol.ExecInfo
 import io.reified.regolith.protocol.ExecRequest
 import io.reified.regolith.protocol.ExecStatus
 import io.reified.regolith.protocol.OutcomeType
-import io.reified.regolith.protocol.OutputKind
 import io.reified.regolith.protocol.PublishedSite as RegolithSite
 import io.reified.regolith.protocol.Reasons
-import io.reified.regolith.protocol.ServerInfo
+import io.reified.regolith.sdk.OutputSoFar
 import io.reified.regolith.sdk.RegolithClient
 import io.reified.regolith.sdk.RegolithConnectionException
 import io.reified.regolith.sdk.RegolithException
 import io.reified.regolith.sdk.Sandbox
 import kotlin.time.Clock
 import kotlin.time.Duration.Companion.seconds
-import kotlin.time.TimeSource
 
 internal const val SANDBOX_FILE_LIMIT = 50 * 1024 * 1024
 
@@ -29,9 +26,9 @@ internal const val SANDBOX_FILE_LIMIT = 50 * 1024 * 1024
  * describe to the model — a command's output so far and where to read on — and its refusals into text
  * the model can act on.
  *
- * A person is an alias on that server, and [open] hands back the sandbox it stands for, created if the
- * server has none. Everything else happens on that [PersonSandbox], so one turn asks for the sandbox
- * once and nothing here remembers it between turns: a home deleted by retention is simply made again.
+ * A person is an alias on that server. [sandboxOf] hands back a [PersonSandbox] for one turn, which
+ * asks the server for the sandbox behind the alias on first use and keeps it for the rest of the turn;
+ * nothing here remembers it between turns, so a home deleted by retention is simply made again.
  */
 class SandboxClient(
     http: HttpClient,
@@ -42,35 +39,37 @@ class SandboxClient(
     // the sdk never follows a redirect, so the bearer secret cannot be relayed to another origin.
     private val regolith = RegolithClient(baseUrl, token, http)
 
-    @Volatile
-    private var server: ServerInfo? = null
-
-    /** The person's sandbox, created on first use. The server sends nothing of ours back to anyone. */
-    suspend fun open(person: String): PersonSandbox =
-        PersonSandbox(call { regolith.getOrCreate(person, CreateSandboxRequest()) })
+    /**
+     * The person's sandbox for one turn's work. Nothing is sent until a tool uses it, and every tool of
+     * the turn should share this one, so the site is published from the sandbox the commands ran in.
+     */
+    fun sandboxOf(person: String): PersonSandbox = PersonSandbox(person)
 
     /** One person's sandbox, for as long as the work that asked for it lasts. */
-    inner class PersonSandbox internal constructor(private val sandbox: Sandbox) {
+    inner class PersonSandbox internal constructor(private val person: String) {
+
+        // created or found by the alias on first use; a reset forgets it, so the next use makes a new one.
+        @Volatile
+        private var opened: Sandbox? = null
 
         suspend fun exec(command: String, timeoutSeconds: Int?): CommandResult {
             val request = ExecRequest(shell = command, timeoutSeconds = clamped(timeoutSeconds))
-            val exec = call { sandbox.startExec(request) }
+            val exec = call { sandbox().startExec(request) }
 
-            return collect(exec.id, offset = 0, waitSeconds = FIRST_WAIT_SECONDS)
+            return read(exec.id, offset = 0, waitSeconds = FIRST_WAIT_SECONDS)
         }
 
-        suspend fun readCommand(jobId: String, offset: Long, waitSeconds: Int): CommandResult =
-            collect(jobId, offset, waitSeconds)
+        suspend fun readCommand(jobId: String, offset: Long, waitSeconds: Int): CommandResult = read(jobId, offset, waitSeconds)
 
         suspend fun cancelCommand(jobId: String): CommandResult =
-            call { sandbox.exec(jobId).cancel() }.result(output = "", nextOffset = 0, hasMore = false)
+            call { sandbox().exec(jobId).cancel() }.result(output = "", nextOffset = 0, hasMore = false)
 
         suspend fun listCommands(): List<CommandResult> =
-            call { sandbox.execs() }.map { it.result(output = "", nextOffset = 0, hasMore = false) }
+            call { sandbox().execs() }.map { it.result(output = "", nextOffset = 0, hasMore = false) }
 
         suspend fun writeFile(path: String, bytes: ByteArray) {
             require(bytes.size <= SANDBOX_FILE_LIMIT) { "File exceeds the 50 MB transfer limit" }
-            call { sandbox.files.write(path, bytes) }
+            call { sandbox().files.write(path, bytes) }
         }
 
         suspend fun readFile(path: String, maxBytes: Int = SANDBOX_FILE_LIMIT): ByteArray {
@@ -78,7 +77,7 @@ class SandboxClient(
 
             return call {
                 try {
-                    sandbox.files.read(path, maxBytes.toLong())
+                    sandbox().files.read(path, maxBytes.toLong())
                 } catch (e: RegolithException) {
                     // only here, where the bound is this call's budget, does the code mean the file does not fit
                     // in it: elsewhere it is a site too large, which the server's own words explain.
@@ -88,84 +87,55 @@ class SandboxClient(
         }
 
         suspend fun deleteFile(path: String) {
-            call { sandbox.files.delete(path, recursive = true) }
+            call { sandbox().files.delete(path, recursive = true) }
         }
 
         /** The names in one directory of the sandbox, for a check before something is published. */
-        suspend fun entries(path: String): List<String> = call { sandbox.files.list(path) }.map { it.name }
+        suspend fun entries(path: String): List<String> = call { sandbox().files.list(path) }.map { it.name }
 
-        /** Deletes the sandbox with its home; the next [open] creates an empty one for this person. */
+        /** Deletes the sandbox with its home; the next use creates an empty one for this person. */
         suspend fun reset() {
-            call { sandbox.delete() }
+            call { sandbox().delete() }
+            opened = null
         }
 
         /** Publishes a directory of the sandbox to the web and returns the address it is served at. */
-        suspend fun publishSite(path: String): PublishedSite = call { sandbox.publish(path) }.published()
+        suspend fun publishSite(path: String): PublishedSite = call { sandbox().publish(path) }.published()
 
         /** What is published for this person, or null when nothing is. */
-        suspend fun publishedSite(): PublishedSite? = call {
-            whenPresent(absent = null) { sandbox.site().published() }
-        }
+        suspend fun publishedSite(): PublishedSite? = call { sandbox().siteOrNull() }?.published()
 
         /** Takes the site down; false when there was nothing to take down. The sandbox keeps its files. */
-        suspend fun unpublishSite(): Boolean = call {
-            whenPresent(absent = false) {
-                sandbox.unpublish()
-                true
-            }
-        }
+        suspend fun unpublishSite(): Boolean = call { sandbox().unpublish() }
+
+        private suspend fun sandbox(): Sandbox = opened ?: call { regolith.getOrCreate(person) }.also { opened = it }
 
         /**
-         * Reads recorded output from [offset] until the command ends, this call's budget runs out, or the
-         * output limit is reached, then reports the command as it now stands. Output is kept on the server,
+         * Reads recorded output from [offset] until the command ends, this call's budget runs out or the
+         * output limit is reached, and reports the command as it now stands. Output is kept on the server,
          * so what does not fit is read by the next call from [CommandResult.nextOffset].
          */
-        private suspend fun collect(jobId: String, offset: Long, waitSeconds: Int): CommandResult {
-            val exec = sandbox.exec(jobId)
-            val started = TimeSource.Monotonic.markNow()
-            val output = StringBuilder()
-            var next = offset
-            var complete: Boolean
-            var dropped = false
+        private suspend fun read(jobId: String, offset: Long, waitSeconds: Int): CommandResult {
+            val exec = sandbox().exec(jobId)
+            val read = call { exec.readWithin(offset, waitSeconds.seconds, OUTPUT_CHARS) }
 
-            while (true) {
-                val remaining = (waitSeconds.seconds - started.elapsedNow()).inWholeSeconds.toInt().coerceAtLeast(0)
-                val page = call { exec.readOutput(next, remaining, OUTPUT_CHARS) }
-                page.frames.forEach { frame ->
-                    if (frame.kind == OutputKind.GAP) dropped = true else output.append(frame.text)
-                }
-                next = page.nextOffset
-                complete = page.complete
-                // the server holds the request until there is output or the wait runs out, so an empty page
-                // means nothing more arrived in time: looping again would only spin against it.
-                val arrived = page.frames.isNotEmpty()
-                val room = remaining > 0 && output.length < OUTPUT_CHARS
-                if (complete || !arrived || !room) break
-            }
-
-            val info = call { exec.info() }
-
-            return info.result(output.toString(), next, hasMore = !complete, dropped = dropped)
+            return read.exec.result(read)
         }
     }
 
     /** The server owns its limits; a timeout above the ceiling would be refused instead of trimmed. */
     private suspend fun clamped(timeoutSeconds: Int?): Int? {
         if (timeoutSeconds == null) return null
-        val ceiling = info()?.limits?.maxExecTimeoutSeconds ?: 0
+        val ceiling = limitOrNull()?.takeIf { it > 0 } ?: return timeoutSeconds
 
-        return if (ceiling > 0) minOf(timeoutSeconds, ceiling) else timeoutSeconds
+        return minOf(timeoutSeconds, ceiling)
     }
 
-    /** What the server says about itself, read once, for the limits the client trims to. */
-    private suspend fun info(): ServerInfo? {
-        server?.let { return it }
-
-        return runCatching { call { regolith.info() } }
+    /** The server's exec timeout ceiling; the sdk keeps what the server said, so this asks once. */
+    private suspend fun limitOrNull(): Int? =
+        runCatching { call { regolith.info() }.limits.maxExecTimeoutSeconds }
             .onFailure { it.rethrowIfCancellation() }
             .getOrNull()
-            ?.also { server = it }
-    }
 
     /** Runs one SDK call, turning a refusal or an unanswering server into text the model can act on. */
     private suspend fun <T> call(block: suspend () -> T): T =
@@ -184,17 +154,11 @@ class SandboxClient(
     }
 }
 
-/** A `not_found` here means the thing asked about is absent, not that the sandbox is gone. */
-private inline fun <T> whenPresent(absent: T, block: () -> T): T =
-    try {
-        block()
-    } catch (e: RegolithException) {
-        if (e.code == ErrorCodes.NOT_FOUND) absent else throw e
-    }
-
 private fun RegolithException.explain(): String = when (code) {
-    ErrorCodes.CAPACITY_EXHAUSTED, ErrorCodes.UNAVAILABLE ->
-        "The sandbox host is at capacity right now. Tell the user and try again in a minute."
+    ErrorCodes.CAPACITY_EXHAUSTED, ErrorCodes.UNAVAILABLE -> {
+        val wait = retryAfter?.let { "in about ${it.inWholeSeconds.coerceAtLeast(1)} seconds" } ?: "shortly"
+        "The sandbox host is at capacity right now. Tell the user and try again $wait."
+    }
     ErrorCodes.BUSY -> "This sandbox already runs as many commands as it may; wait for one to finish."
     // anything but a problem document came from something in front of the server, such as a proxy.
     else -> if (code.startsWith("http_")) {
@@ -205,6 +169,9 @@ private fun RegolithException.explain(): String = when (code) {
 }
 
 private fun RegolithSite.published(): PublishedSite = PublishedSite(url, files, bytes, publishedAt)
+
+private fun ExecInfo.result(read: OutputSoFar): CommandResult =
+    result(read.text, read.nextOffset, hasMore = !read.complete, dropped = read.gapped)
 
 private fun ExecInfo.result(output: String, nextOffset: Long, hasMore: Boolean, dropped: Boolean = false): CommandResult {
     val reason = outcome?.reason

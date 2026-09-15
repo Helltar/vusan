@@ -620,10 +620,11 @@ Each `userId` is an alias on that server — `telegram:<userId>` — and the san
 every chat. The server makes the id everything is addressed by, and the bot keeps none of it. Conversation
 history still uses `(userId, chatId)`; only the files and the commands running in them are shared.
 
-- **`SandboxClient`** — `open` asks the server for the person's sandbox, created if it has none, and hands back
-  the handle the rest of the turn works on. A command is an exec: it is started, then its recorded output is
-  read from a byte offset until the command ends, a page comes back empty or the call's ten seconds are up, and
-  the model continues from `nextOffset`. A file is read within the call's remaining transfer budget, which the
+- **`SandboxClient`** — `sandboxOf` gives a turn one handle for the person's sandbox, which asks the server for
+  it on first use, created if it has none; the sandbox and site tools of that turn share it, so a reset by one is
+  seen by the other. A command is an exec: it is started, then its output is read from a byte offset until the
+  command ends, a page comes back empty or the call's ten seconds are up — each page carrying the exec as it
+  stands, so no second request asks for its status — and the model continues from `nextOffset`. A file is read within the call's remaining transfer budget, which the
   server refuses to exceed before sending any of it. Refusals carry the server's error `code`, which decides
   what the model is told — capacity and availability read as "try again", everything else as the server's own
   sentence; no answer at all reads as temporarily unavailable.
@@ -674,8 +675,8 @@ A symptom-to-source map for finding the right file fast. Paths are under
 | A specific tool misbehaves | `tools/<feature>/<Feature>Tools.kt` for the tool surface, plus its `<Feature>Client.kt` for the external call |
 | Vusan will not hand a file from the chat back, or sends it under the wrong name | `telegram/tools/ChatFileTools.sendChatFile` (the `file_id` path and `chatFilename`) + `telegram/TelegramApi.downloadFileById` (`getFile`, and the 20 MB limit on what Telegram serves a bot) |
 | A command times out, says the sandbox is busy, or its output is cut short | `tools/sandbox/SandboxClient.kt` (the SDK calls, the refusals they turn into, and the output paging), then `tools/sandbox/SandboxTools.kt` (what the model is told); anything below that is the Regolith server's own log |
-| A sandbox cannot reach the internet, reaches something it should not, or loses a background process | The Regolith server: its network policy and its guards. Nothing here configures either — the bot only names the sandbox |
-| A sandbox loses files, or someone sees another person's | `request/RequestContext.personKeyOrNull` (the sender key that names the sandbox, and the site it publishes) and `telegram/inbound/MessageMetadata.toSenderContext` (the shared accounts that get nothing of their own) |
+| A sandbox cannot reach the internet, reaches something it should not, or loses a background process | The Regolith server: its network policy and its guards. Nothing here configures either — the bot only says whose sandbox it wants |
+| A sandbox loses files, or someone sees another person's | `request/RequestContext.personKeyOrNull` (the sender key a sandbox is filed under on the server; no address is built from it) and `telegram/inbound/MessageMetadata.toSenderContext` (the shared accounts that get nothing of their own) |
 | Publishing a site fails, or the link shows nothing | `tools/sites/SiteTools.kt` (the missing `index.html` warning and what the model is told), then the Regolith server's own log: it owns the snapshot, the caps and the serving |
 | A published page still serves its old files, or a site nobody wants is still up | the Regolith server owns the site: its releases, its caching and its takedown. `tools/sites/SiteTools.kt` only asks |
 | Wrong language in a canned reply (busy/error/voice/start/task menu) | `i18n/Language.kt` (language selection) + `i18n/Messages.kt` (the strings) |

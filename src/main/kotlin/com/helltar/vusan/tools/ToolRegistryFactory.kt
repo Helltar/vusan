@@ -224,10 +224,13 @@ class ToolRegistryFactory(
             searxngClient?.let { tools(SearxngTools(it, imageDownloadClient, outbox)) }
             sandboxClient?.let { client ->
                 context.personKeyOrNull?.let { person ->
-                    tools(SandboxTools(client, person, outbox, context.attachedFile))
+                    // one handle for the turn: a site is published from the sandbox the commands ran in,
+                    // and a reset by either set is seen by the other.
+                    val sandbox = client.sandboxOf(person)
+                    tools(SandboxTools(sandbox, outbox, context.attachedFile))
                     // publishing belongs to the same server: it answers `not_implemented` when it has
                     // no pages role, and says so to the model rather than the tool being missing.
-                    tools(ToolGroup.WEB_PUBLISHING, SiteTools(client, person))
+                    tools(ToolGroup.WEB_PUBLISHING, SiteTools(sandbox))
                 }
             }
 

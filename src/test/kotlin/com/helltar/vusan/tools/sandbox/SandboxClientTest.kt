@@ -42,7 +42,7 @@ class SandboxClientTest {
             )
         }).use { http ->
             val client = SandboxClient(http, "http://sandbox", "test-token")
-            assertFailsWith<IllegalStateException> { client.open("telegram:42").listCommands() }
+            assertFailsWith<IllegalStateException> { client.sandboxOf("telegram:42").listCommands() }
         }
         assertEquals(1, requests)
     }
@@ -61,7 +61,7 @@ class SandboxClientTest {
         })
         val client = SandboxClient(http, "http://sandbox", "test-token")
 
-        val error = assertFailsWith<IllegalStateException> { client.open("telegram:1").readFile("sample.bin", 4) }
+        val error = assertFailsWith<IllegalStateException> { client.sandboxOf("telegram:1").readFile("sample.bin", 4) }
 
         assertContains(error.message.orEmpty(), "transfer limit")
         assertEquals(listOf<String?>("4"), bounds)
@@ -74,7 +74,7 @@ class SandboxClientTest {
         })
         val client = SandboxClient(http, "http://sandbox", "test-token")
 
-        val error = assertFailsWith<IllegalStateException> { client.open("telegram:1").readFile("sample.bin", 4) }
+        val error = assertFailsWith<IllegalStateException> { client.sandboxOf("telegram:1").readFile("sample.bin", 4) }
 
         assertContains(error.message.orEmpty(), "transfer limit")
     }
@@ -95,37 +95,66 @@ class SandboxClientTest {
         })
         val client = SandboxClient(http, "http://sandbox", "test-token")
 
-        val error = assertFailsWith<IllegalStateException> { client.open("telegram:1").writeFile("notes.txt", byteArrayOf(1)) }
+        val error = assertFailsWith<IllegalStateException> { client.sandboxOf("telegram:1").writeFile("notes.txt", byteArrayOf(1)) }
 
         assertEquals(detail, error.message)
     }
 
     @Test
-    fun `a command is started in the person's own sandbox, opened by their alias`() = runBlocking {
+    fun `a turn opens the person's sandbox once by alias and reads a command from its pages alone`() = runBlocking {
         val paths = mutableListOf<String>()
         val http = Http.createClient(MockEngine { request ->
             paths += "${request.method.value} ${request.url.encodedPath}"
             assertEquals("Bearer test-token", request.headers[HttpHeaders.Authorization])
             when {
-                request.url.encodedPath.endsWith("/output") -> json("""{"frames":[{"kind":"stdout","text":"hello","end":6}],"nextOffset":6,"complete":true}""")
-                request.url.encodedPath.endsWith("/execs") && request.method == HttpMethod.Post -> json(FINISHED)
+                request.url.encodedPath.endsWith("/output") ->
+                    json(outputPage("""[{"kind":"stdout","text":"hello","end":6}]""", nextOffset = 6, complete = true, exec = FINISHED))
+                request.url.encodedPath.endsWith("/execs") && request.method == HttpMethod.Post -> json(RUNNING)
                 request.url.encodedPath == "/v1/sandboxes" -> json(sandboxInfo("telegram:42"))
-                else -> json(FINISHED)
+                else -> error("Unexpected request ${request.method.value} ${request.url.encodedPath}")
             }
         })
-        val client = SandboxClient(http, "http://sandbox", "test-token")
+        val sandbox = SandboxClient(http, "http://sandbox", "test-token").sandboxOf("telegram:42")
 
-        val first = client.open("telegram:42").exec("echo hello", 30)
-        client.open("telegram:42").exec("echo hello", 30)
-
+        val first = sandbox.exec("echo hello", null)
+        sandbox.exec("echo hello", null)
 
         assertEquals("hello", first.output)
         assertEquals(CommandStatus.COMPLETED, first.status)
         assertEquals(0, first.exitCode)
         // opening asks the server for the person's sandbox; the id it answers with addresses the rest.
         assertEquals("POST /v1/sandboxes", paths.first())
-        assertEquals(2, paths.count { it == "POST /v1/sandboxes" })
+        assertEquals(1, paths.count { it == "POST /v1/sandboxes" })
         assertTrue("POST /v1/sandboxes/$SANDBOX_ID/execs" in paths)
+    }
+
+    @Test
+    fun `a reset forgets the sandbox, so the next use opens the new one`() = runBlocking {
+        val paths = mutableListOf<String>()
+        val http = Http.createClient(MockEngine { request ->
+            paths += "${request.method.value} ${request.url.encodedPath}"
+            when {
+                request.method == HttpMethod.Delete -> respond("", HttpStatusCode.NoContent)
+                request.url.encodedPath.endsWith("/execs") -> json("""{"execs":[]}""")
+                else -> json(sandboxInfo("telegram:42"))
+            }
+        })
+        val sandbox = SandboxClient(http, "http://sandbox", "test-token").sandboxOf("telegram:42")
+
+        sandbox.listCommands()
+        sandbox.reset()
+        sandbox.listCommands()
+
+        assertEquals(
+            listOf(
+                "POST /v1/sandboxes",
+                "GET /v1/sandboxes/$SANDBOX_ID/execs",
+                "DELETE /v1/sandboxes/$SANDBOX_ID",
+                "POST /v1/sandboxes",
+                "GET /v1/sandboxes/$SANDBOX_ID/execs",
+            ),
+            paths,
+        )
     }
 
     @Test
@@ -136,15 +165,15 @@ class SandboxClientTest {
                 request.url.encodedPath == "/v1/sandboxes" -> json(sandboxInfo("telegram:42"))
                 request.url.encodedPath.endsWith("/output") -> {
                     offsets += request.url.parameters["offset"].orEmpty()
-                    json("""{"frames":[],"nextOffset":16384,"complete":false}""")
+                    json(outputPage("[]", nextOffset = 16384, complete = false, exec = RUNNING))
                 }
 
-                else -> json(RUNNING)
+                else -> error("Unexpected request ${request.method.value} ${request.url.encodedPath}")
             }
         })
         val client = SandboxClient(http, "http://sandbox", "test-token")
 
-        val result = client.open("telegram:42").readCommand(JOB, offset = 16384, waitSeconds = 20)
+        val result = client.sandboxOf("telegram:42").readCommand(JOB, offset = 16384, waitSeconds = 20)
 
         assertEquals(listOf("16384"), offsets)
         assertEquals(CommandStatus.RUNNING, result.status)
@@ -157,12 +186,16 @@ class SandboxClientTest {
             respond(
                 problemDocument("capacity_exhausted", 503, "No session capacity", "Every session slot is busy"),
                 HttpStatusCode.ServiceUnavailable,
-                headersOf(HttpHeaders.ContentType, "application/problem+json"),
+                headersOf(HttpHeaders.ContentType to listOf("application/problem+json"), HttpHeaders.RetryAfter to listOf("5")),
             )
         })
         val client = SandboxClient(http, "http://sandbox", "test-token")
-        val error = assertFailsWith<IllegalStateException> { client.open("telegram:42").exec("ls", null) }
+
+        val error = assertFailsWith<IllegalStateException> { client.sandboxOf("telegram:42").exec("ls", null) }
+
         assertContains(error.message.orEmpty(), "at capacity")
+        // the wait the server asked for, not one this side made up
+        assertContains(error.message.orEmpty(), "in about 5 seconds")
     }
 
     @Test
@@ -176,7 +209,7 @@ class SandboxClientTest {
         for (failure in failures) {
             val http = Http.createClient(MockEngine { throw failure })
             val client = SandboxClient(http, "http://sandbox", "test-token")
-            val error = assertFailsWith<IllegalStateException> { client.open("telegram:42").listCommands() }
+            val error = assertFailsWith<IllegalStateException> { client.sandboxOf("telegram:42").listCommands() }
             assertContains(error.message.orEmpty(), "temporarily unavailable")
         }
     }

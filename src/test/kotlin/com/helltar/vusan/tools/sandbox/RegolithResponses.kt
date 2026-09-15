@@ -21,3 +21,7 @@ internal fun fileEntry(name: String, size: Long, type: String = "file"): String 
 
 internal fun problemDocument(code: String, status: Int, title: String, detail: String): String =
     """{"type":"urn:regolith:error:$code","title":"$title","status":$status,"detail":"$detail","code":"$code"}"""
+
+/** One page of output as the server sends it, with the exec it came from. */
+internal fun outputPage(frames: String, nextOffset: Long, complete: Boolean, exec: String): String =
+    """{"frames":$frames,"nextOffset":$nextOffset,"complete":$complete,"exec":$exec}"""
