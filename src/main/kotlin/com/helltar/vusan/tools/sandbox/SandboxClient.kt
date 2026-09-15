@@ -8,7 +8,7 @@ import io.reified.regolith.protocol.ExecRequest
 import io.reified.regolith.protocol.ExecStatus
 import io.reified.regolith.protocol.OutcomeType
 import io.reified.regolith.protocol.OutputKind
-import io.reified.regolith.protocol.PublishedSite
+import io.reified.regolith.protocol.PublishedSite as RegolithSite
 import io.reified.regolith.protocol.ServerInfo
 import io.reified.regolith.sdk.RegolithClient
 import io.reified.regolith.sdk.RegolithException
@@ -78,12 +78,12 @@ class SandboxClient(
     suspend fun publishSite(sandboxId: String, path: String): PublishedSite {
         val sandbox = created(sandboxId)
 
-        return call(sandboxId) { sandbox.publish(path) }
+        return call(sandboxId) { sandbox.publish(path) }.published()
     }
 
     /** What is published for this person, or null when nothing is. */
     suspend fun publishedSite(sandboxId: String): PublishedSite? = call(sandboxId) {
-        whenPresent(absent = null) { regolith.sandbox(sandboxId).site() }
+        whenPresent(absent = null) { regolith.sandbox(sandboxId).site().published() }
     }
 
     /** Takes the site down; false when there was nothing to take down. The sandbox keeps its files. */
@@ -93,9 +93,6 @@ class SandboxClient(
             true
         }
     }
-
-    /** Whether this server publishes at all; it says so in its own info rather than the bot guessing. */
-    suspend fun publishes(): Boolean = info()?.publishing ?: false
 
     /** The names in one directory of the sandbox, for a check before something is published. */
     suspend fun entries(sandboxId: String, path: String): List<String> =
@@ -148,6 +145,7 @@ class SandboxClient(
             val room = remaining > 0 && output.length < OUTPUT_CHARS
             if (complete || !arrived || !room) break
         }
+
         val info = call(sandboxId) { exec.info() }
 
         return info.result(output.toString(), next, hasMore = !complete, dropped = dropped)
@@ -176,7 +174,7 @@ class SandboxClient(
         return if (ceiling > 0) minOf(timeoutSeconds, ceiling) else timeoutSeconds
     }
 
-    /** What the server says about itself, read once: its limits and whether it can publish. */
+    /** What the server says about itself, read once, for the limits the client trims to. */
     private suspend fun info(): ServerInfo? {
         server?.let { return it }
 
@@ -226,6 +224,8 @@ private fun RegolithException.explain(): String = when (code) {
         message.orEmpty().removePrefix("$code: ").ifBlank { "The sandbox refused the request" }
     }
 }
+
+private fun RegolithSite.published(): PublishedSite = PublishedSite(url, files, bytes, publishedAt)
 
 private fun ExecInfo.result(output: String, nextOffset: Long, hasMore: Boolean, dropped: Boolean = false): CommandResult {
     val reason = outcome?.reason

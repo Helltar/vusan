@@ -6,8 +6,8 @@ import ai.koog.agents.core.tools.reflect.ToolSet
 import com.helltar.vusan.common.rethrowIfCancellation
 import com.helltar.vusan.tools.requireToolText
 import com.helltar.vusan.tools.suspendToolGuard
+import com.helltar.vusan.tools.sandbox.PublishedSite
 import com.helltar.vusan.tools.sandbox.SandboxClient
-import io.reified.regolith.protocol.PublishedSite
 import kotlin.time.Clock
 import kotlin.time.Instant
 

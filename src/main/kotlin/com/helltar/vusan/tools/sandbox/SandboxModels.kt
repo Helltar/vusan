@@ -1,5 +1,7 @@
 package com.helltar.vusan.tools.sandbox
 
+import kotlin.time.Instant
+
 /** How a command ended, as the tools describe it to the model. */
 enum class CommandStatus { RUNNING, COMPLETED, TIMED_OUT, CANCELLED, INTERRUPTED }
 
@@ -22,4 +24,12 @@ data class CommandResult(
     val limit: CommandLimit? = null,
     /** Why a session ended under the command, as the server named it; only for [CommandStatus.INTERRUPTED]. */
     val reason: String? = null,
+)
+
+/** A published site as the tools describe it: the address it is served at, what it holds and when it was taken. */
+data class PublishedSite(
+    val url: String,
+    val files: Int,
+    val bytes: Long,
+    val publishedAt: Instant,
 )
