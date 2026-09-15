@@ -98,7 +98,7 @@ class SandboxClientTest {
     }
 
     @Test
-    fun `a command is started in the person's own sandbox, once created`() = runBlocking {
+    fun `a command is started in the person's own sandbox, created with it`() = runBlocking {
         val paths = mutableListOf<String>()
         val http = Http.createClient(MockEngine { request ->
             paths += "${request.method.value} ${request.url.encodedPath}"
@@ -118,8 +118,9 @@ class SandboxClientTest {
         assertEquals("hello", first.output)
         assertEquals(CommandStatus.COMPLETED, first.status)
         assertEquals(0, first.exitCode)
-        // the sandbox is created once and then reused; the commands do not ask for it again.
-        assertEquals(1, paths.count { it == "PUT /v1/sandboxes/u42" })
+        // every command asks for the sandbox first, and the server answers with the one it has.
+        assertEquals("PUT /v1/sandboxes/u42", paths.first())
+        assertEquals(2, paths.count { it == "PUT /v1/sandboxes/u42" })
         assertTrue("POST /v1/sandboxes/u42/execs" in paths)
     }
 

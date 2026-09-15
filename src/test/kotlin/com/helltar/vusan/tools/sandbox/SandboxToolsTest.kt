@@ -254,11 +254,13 @@ class SandboxToolsTest {
         assertContains(result, "$JOB: interrupted")
     }
 
+    // the server returns the sandbox it already has, so asking for it before each command costs one
+    // request and needs no memory of what was created when
     @Test
-    fun `the sandbox is created before the first command and not again`() = runBlocking {
+    fun `the sandbox is asked for before a command and before a write`() = runBlocking {
         val sandbox = tools()
         sandbox.runCommand("ls")
         sandbox.writeSandboxFile("notes.txt", "hello")
-        assertEquals(1, creations)
+        assertEquals(2, creations)
     }
 }
