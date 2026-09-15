@@ -108,7 +108,7 @@ class SandboxTools(
     @LLMDescription(SandboxToolDescriptions.RESET_SANDBOX)
     suspend fun resetSandbox(): String = suspendToolGuard {
         sandbox.reset()
-        "The sandbox is empty again. Every file and installed dependency is gone; the next command starts in a new home."
+        "The sandbox is empty again. Every file and installed dependency is gone, and so is any site published from it; the next command starts in a new home."
     }
 
     @Tool

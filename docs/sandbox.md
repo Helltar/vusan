@@ -69,7 +69,8 @@ instead of keeping its own copy.
   and creates parent directories; `deleteSandboxFile` removes one exact path, recursively for a
   directory, and leaves running commands alone.
 - **`resetSandbox`** — deletes the sandbox with its home; the next command starts in an empty one.
-  For a home too full, too broken or too tangled to repair file by file.
+  For a home too full, too broken or too tangled to repair file by file. A site published from it
+  goes down with it, and its address is never served again.
 - **Privacy** — what a command creates stays in the sandbox until the agent sends it. One home per
   person: a request in a group reaches the same files as private chat. Sharing files across chats is
   intentional; sharing raw history is not.
@@ -79,7 +80,8 @@ instead of keeping its own copy.
 Every command is a fresh shell starting at the home.
 
 - **Nothing carries over** — use `cd project && ...` explicitly; shell variables and the working
-  directory do not survive between commands. `~/.profile` is the place for setup that should.
+  directory do not survive between commands, and nothing is sourced before a command, `~/.profile`
+  included, so environment setup goes into the command itself.
 - **No terminal** — commands get no stdin and no TTY, so an interactive prompt ends rather than hangs.
 - **Long commands do not block** — the call returns in about ten seconds with a job id, and the agent
   reads more output from the byte offset it was given or cancels the job. Output is recorded on the
@@ -122,7 +124,7 @@ is to delete what is no longer needed.
 - **Retention** — a sandbox nobody has used for the server's retention window is deleted with its
   home, unless the person has a site published: then both stay until the site is taken down. The
   next command creates an empty one.
-- **Reset** — `resetSandbox`, immediately and permanently.
+- **Reset** — `resetSandbox`, immediately and permanently, together with the site it published.
 
 The bot keeps no copy of a home; backing one up is done on the Regolith host.
 

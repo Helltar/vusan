@@ -11,6 +11,7 @@ internal object SiteToolDescriptions {
                 "Everything is static, served as-is: HTML, CSS, JavaScript, WebAssembly, images, audio, fonts. " +
                 "There is no server, no database and no build step on the other side, so anything that needs one has to be built into plain files first. " +
                 "The page has its own web address, so `localStorage` works and saved progress survives. " +
+                "Everything in the directory becomes readable by anyone with the link, so say so before publishing anything personal. " +
                 "What is published is a snapshot taken now, so changing the files in the sandbox changes nothing until you publish again; a visitor's browser may hold older files for a minute."
 
     const val DIRECTORY =
@@ -22,6 +23,6 @@ internal object SiteToolDescriptions {
 
     const val UNPUBLISH_SITE =
         "Takes this person's site off the internet, address and all. " +
-                "The files in their sandbox are untouched, so it can be published again later. " +
+                "The files in their sandbox are untouched, so it can be published again later, but at a new address: the old link never works again. " +
                 "Only do this when they ask for it."
 }

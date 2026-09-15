@@ -51,7 +51,7 @@ class SiteTools(
     @LLMDescription(SiteToolDescriptions.UNPUBLISH_SITE)
     suspend fun unpublishSite(): String = suspendToolGuard {
         if (sandbox.unpublishSite()) {
-            "The site is offline and its address returns nothing. The sandbox files were kept."
+            "The site is offline and its address returns nothing. The sandbox files were kept; publishing again gives a new address."
         } else {
             "There was nothing published to take down."
         }

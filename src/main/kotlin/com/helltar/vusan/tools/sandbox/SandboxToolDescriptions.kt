@@ -10,7 +10,7 @@ internal object SandboxToolDescriptions {
                 "There is no `sudo` and the system image is read-only, so a missing system package is something to report rather than work around. " +
                 "The home is a fixed-size disk: `No space left on device` means it is full, and the fix is to delete what is no longer needed. " +
                 "The machine reaches the public internet for downloads and package installs, and nothing private. " +
-                "Each command starts at the sandbox root in a fresh shell; use `cd project && ...` explicitly, and `~/.profile` for setup that must survive. " +
+                "Each command is a fresh shell started at the home, and nothing is sourced before it, `~/.profile` included: put `cd project && ...` and any environment setup into the command itself. " +
                 "A long command returns a job ID and keeps running; collect it with `readSandboxCommand` rather than waiting. " +
                 "Attached files are copied into `inbox/` before the command; the tool result gives their exact paths. " +
                 "Use `sendFromSandbox` to deliver finished files to the user."
@@ -50,7 +50,7 @@ internal object SandboxToolDescriptions {
                 "Files are not delivered to the user until `sendFromSandbox` is called."
 
     const val WRITE_PATH =
-        "Path relative to the sandbox root, for example `project/main.py`."
+        "Path relative to the home, for example `project/main.py`."
 
     const val WRITE_CONTENT =
         "The complete file contents, not a patch or fragment."
@@ -62,13 +62,14 @@ internal object SandboxToolDescriptions {
                 "Deletion is permanent, so select only paths the user wants removed."
 
     const val DELETE_PATH =
-        "An exact path relative to the sandbox root, such as `project/build`; no globs or sandbox root."
+        "An exact path relative to the home, such as `project/build`; no globs, and not the home itself."
 
     const val RESET_SANDBOX =
         "Empties this person's sandbox completely and starts it over as a new, empty home. " +
                 "Use when the user asks to wipe or reset their sandbox, or when its home is beyond saving. " +
                 "Anything still running in it is stopped. " +
                 "Every file, project and installed dependency is removed permanently and cannot be recovered afterwards. " +
+                "A site published from it is taken down with it and its address is never served again, so say so before resetting while a site is up. " +
                 "Use `deleteSandboxFile` instead when only some files should go."
 
     const val SEND_FILES =
@@ -78,5 +79,5 @@ internal object SandboxToolDescriptions {
                 "At most 10 files and 50 MB total per call."
 
     const val SEND_PATHS =
-        "Paths relative to the sandbox root, for example `project/result.zip`."
+        "Paths relative to the home, for example `project/result.zip`."
 }
