@@ -226,7 +226,7 @@ class ToolRegistryFactory(
                 context.personKeyOrNull?.let { person ->
                     tools(SandboxTools(client, person, outbox, context.attachedFile))
                     // publishing belongs to the same server: it answers `not_implemented` when it has
-                    // no public role, and says so to the model rather than the tool being missing.
+                    // no pages role, and says so to the model rather than the tool being missing.
                     tools(ToolGroup.WEB_PUBLISHING, SiteTools(client, person))
                 }
             }
