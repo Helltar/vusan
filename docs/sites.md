@@ -7,13 +7,14 @@ of its own.
 
 ## What it needs
 
-Nothing beyond a sandbox. If the Regolith server the bot talks to has a public role configured, it
-reports that in `GET /v1/info` and the publishing tools work; if not, the model gets the server's own
-message saying that sites are unavailable.
+Nothing beyond a sandbox. If the Regolith server the bot talks to has its
+[pages role](https://github.com/reified-io/regolith/blob/main/docs/pages.md) set up, it reports that
+in `GET /v1/info` and the publishing tools work; if not, the model gets the server's own message saying
+that sites are unavailable.
 
-The address is set by the server — normally `<person>.<the server's site domain>` — and the bot never
-builds it: the URL comes back from the publish call. Limits, retention and what a site may hold are
-configured on the server as well, and
+The address is set by the server — normally the person's sandbox name under the pages domain, such as
+`https://u123456789.sites.example.com` — and the bot never builds it: the URL comes back from the
+publish call. Limits, retention and what a site may hold are configured on the server as well, and
 [Regolith's documentation](https://github.com/reified-io/regolith) describes them.
 
 ## What the model does

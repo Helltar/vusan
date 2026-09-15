@@ -653,7 +653,7 @@ sends one directory's path, the server snapshots it out of the sandbox and answe
 - **The one check worth making locally**: a directory with no `index.html` at its top publishes fine and its link then
   opens nothing, so the tool lists the directory first and says so rather than handing over a dead link.
 - **Whether publishing exists at all** is the server's answer, not a setting here: `GET /v1/info` reports it, and a server
-  without a public role refuses the call in its own words.
+  without a pages role refuses the call in its own words.
 
 ## Where to look when…
 

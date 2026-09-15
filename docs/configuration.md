@@ -481,8 +481,12 @@ These are the bot's side of it, and belong in `.env`:
 | `REGOLITH_TOKEN_FILE`  | —       | A file holding that token instead. An explicit token takes precedence.  |
 
 Both a URL and a token must be present, or the sandbox tools are not registered and the bot never
-mentions them. Everything else — the sandbox image, memory, home size, timeouts, retention and network
-policy — is configured on the server, and the bot reads its limits from it.
+mentions them. The token takes 32 to 256 printable characters, and `openssl rand -hex 32` makes one
+both sides accept. Regolith's default address reaches only its own machine, so
+[the sandbox guide](sandbox.md#pointing-the-bot-at-it) shows which address to give the bot.
+
+Everything else — the sandbox image, memory, home size, timeouts, retention and network policy — is
+configured on the server, and the bot reads its limits from it.
 
 ## Publishing to the web
 

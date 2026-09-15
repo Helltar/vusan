@@ -14,24 +14,37 @@ documentation covers them.
 
 ## The server
 
-Regolith runs on an ordinary Linux Docker host, beside the bot or on a machine of its own — a machine
-of its own for anything public or less trusted, since it runs commands the model wrote and holds the
-Docker socket to do it. Installing it, generating its token and checking the host before the first
-start are covered in [Regolith's documentation](https://github.com/reified-io/regolith).
+Regolith runs on an ordinary Linux Docker host. A machine of its own is the recommended setup, since
+it runs commands the model wrote and holds the Docker socket to do it, though it also runs beside the
+bot. Installing it, generating its token and checking the host before the first start are covered in
+[Regolith's documentation](https://github.com/reified-io/regolith).
 
 The **sandbox image** is set on the server, and the bot assumes only two things about it: there
 is no `sudo`, and nothing in particular is installed. The model is told to check what a task needs and
 to report a missing system package rather than work around it, so a deployment that wants Pandoc,
-FFmpeg, ImageMagick or a browser points the server at an image carrying them.
+FFmpeg, ImageMagick or a browser points the server at an image carrying them — Regolith's own
+[`regolith-sandbox-full`](https://github.com/reified-io/regolith/blob/main/docs/configuration.md#sandbox-images)
+is one.
 
 ## Pointing the bot at it
 
-Two values in the bot's `.env`, and the shell tools appear:
+Out of the box Regolith publishes its API on `127.0.0.1:8080`, which only its own machine reaches. The
+bot in its container cannot, even on that machine, so publish the API on an address the bot can use —
+a private network or a tunnel, where the sandbox machine is `10.0.0.4` here. In the server's `.env`:
 
 ```dotenv
-REGOLITH_URL=http://10.10.10.2:8080
-REGOLITH_TOKEN=the-same-token-the-server-was-started-with
+REGOLITH_PUBLISH=10.0.0.4:8080
 ```
+
+Then two values in the bot's `.env`, and the shell tools appear:
+
+```dotenv
+REGOLITH_URL=http://10.0.0.4:8080
+REGOLITH_TOKEN=<the same token>
+```
+
+A bot run from source on the server's own machine needs none of that: `http://127.0.0.1:8080` works
+as it is.
 
 `REGOLITH_TOKEN_FILE` holds the token in a file instead. Both a URL and a token must be present, or
 the tools are not registered and the bot never mentions them — see
@@ -109,7 +122,7 @@ is to delete what is no longer needed.
   home. The next command creates an empty one.
 - **Reset** — `resetSandbox`, immediately and permanently.
 
-Backups are made on the Regolith server; the bot keeps no copy of a home.
+The bot keeps no copy of a home; backing one up is done on the Regolith host.
 
 ## Removing it
 
