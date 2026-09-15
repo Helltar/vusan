@@ -90,9 +90,6 @@ class SandboxClient(
             call { sandbox().files.delete(path, recursive = true) }
         }
 
-        /** The names in one directory of the sandbox, for a check before something is published. */
-        suspend fun entries(path: String): List<String> = call { sandbox().files.list(path) }.map { it.name }
-
         /** Deletes the sandbox with its home; the next use creates an empty one for this person. */
         suspend fun reset() {
             call { sandbox().delete() }
@@ -168,7 +165,7 @@ private fun RegolithException.explain(): String = when (code) {
     }
 }
 
-private fun RegolithSite.published(): PublishedSite = PublishedSite(url, files, bytes, publishedAt)
+private fun RegolithSite.published(): PublishedSite = PublishedSite(url, files, bytes, publishedAt, hasIndex)
 
 private fun ExecInfo.result(read: OutputSoFar): CommandResult =
     result(read.text, read.nextOffset, hasMore = !read.complete, dropped = read.gapped)

@@ -26,10 +26,14 @@ data class CommandResult(
     val reason: String? = null,
 )
 
-/** A published site as the tools describe it: the address it is served at, what it holds and when it was taken. */
+/**
+ * A published site as the tools describe it: the address it is served at, what it holds, when it was
+ * taken, and whether an `index.html` sits at its top, which is the page the address opens.
+ */
 data class PublishedSite(
     val url: String,
     val files: Int,
     val bytes: Long,
     val publishedAt: Instant,
+    val hasIndex: Boolean,
 )

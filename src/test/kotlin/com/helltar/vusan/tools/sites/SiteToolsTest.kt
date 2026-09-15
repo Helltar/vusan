@@ -6,7 +6,6 @@ import com.helltar.vusan.request.requestContext
 import com.helltar.vusan.tools.toolFailure
 import com.helltar.vusan.tools.sandbox.SandboxClient
 import com.helltar.vusan.tools.sandbox.SANDBOX_ID
-import com.helltar.vusan.tools.sandbox.fileEntry
 import com.helltar.vusan.tools.sandbox.problemDocument
 import com.helltar.vusan.tools.sandbox.sandboxInfo
 import io.ktor.client.engine.mock.*
@@ -19,7 +18,10 @@ import kotlin.test.assertTrue
 import kotlinx.coroutines.runBlocking
 
 private const val PUBLISHED =
-    """{"url":"https://k7m2q9xwtp.example.test","release":"0f1e2d3c4b5a69788796a5b4c3d2e1f0","files":3,"bytes":2048,"publishedAt":"2026-09-13T12:00:00Z"}"""
+    """{"url":"https://k7m2q9xwtp.example.test","release":"0f1e2d3c4b5a69788796a5b4c3d2e1f0","files":3,"bytes":2048,"publishedAt":"2026-09-13T12:00:00Z","hasIndex":true}"""
+
+private const val PUBLISHED_WITHOUT_INDEX =
+    """{"url":"https://k7m2q9xwtp.example.test","release":"0f1e2d3c4b5a69788796a5b4c3d2e1f0","files":2,"bytes":2048,"publishedAt":"2026-09-13T12:00:00Z","hasIndex":false}"""
 
 class SiteToolsTest {
     private val context = requestContext(chatId = 55L, userId = 55L)
@@ -27,7 +29,6 @@ class SiteToolsTest {
     private var publishedPath: String? = null
 
     private fun tools(
-        entries: List<String> = listOf("index.html", "assets"),
         site: String? = PUBLISHED,
         publish: Pair<HttpStatusCode, String> = HttpStatusCode.OK to PUBLISHED,
     ): SiteTools {
@@ -43,13 +44,6 @@ class SiteToolsTest {
                     publishedPath = Regex(""""path":"([^"]*)"""").find(request.body.toByteArray().decodeToString())?.groupValues?.get(1)
                     respond(publish.second, publish.first, headersOf(HttpHeaders.ContentType, "application/problem+json"))
                 }
-
-                path.endsWith("/files/entries") ->
-                    respond(
-                        """{"path":"/home/sandbox/x","entries":[${entries.joinToString(",") { fileEntry(it, size = 1) }}]}""",
-                        HttpStatusCode.OK,
-                        headersOf(HttpHeaders.ContentType, "application/json"),
-                    )
 
                 path.endsWith("/site") && request.method == HttpMethod.Delete ->
                     if (site == null) notFound() else respond("", HttpStatusCode.NoContent)
@@ -75,13 +69,14 @@ class SiteToolsTest {
         assertContains(result, "2 KB")
     }
 
-    // a directory with no index.html publishes fine and its link then opens nothing, which the result
-    // alone never shows
+    // a directory with no index.html publishes fine and its link then opens nothing; the server saw the
+    // snapshot and says so, and nothing here lists the directory to find out
     @Test
     fun `a directory with no index page is published with a warning`() = runBlocking {
-        val result = tools(entries = listOf("main.js", "style.css")).publishSite("dist")
+        val result = tools(publish = HttpStatusCode.OK to PUBLISHED_WITHOUT_INDEX).publishSite("dist")
         assertContains(result, "https://k7m2q9xwtp.example.test")
         assertContains(result, "no `index.html`")
+        assertFalse(requests.any { it.contains("/files/") }, "the directory was listed to find the index page")
     }
 
     @Test

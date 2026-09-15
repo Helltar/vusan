@@ -108,8 +108,10 @@ Preserve the package boundaries in [`docs/architecture.md`](docs/architecture.md
 - Publishing is a snapshot of a directory, and the tools say so to the model.
   Nothing is served out of a live sandbox home, which is reclaimed when its
   session stops.
-- The one check worth doing on this side is the missing `index.html`, because a
-  directory without one publishes fine and its link opens nothing.
+- The one mistake worth a warning is the missing `index.html`, because a
+  directory without one publishes fine and its link opens nothing. The server
+  reports it as `hasIndex` on the publish answer; nothing here lists the
+  directory to find out.
 
 ### Deployment layouts
 

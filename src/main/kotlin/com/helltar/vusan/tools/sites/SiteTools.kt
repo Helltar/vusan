@@ -3,7 +3,6 @@ package com.helltar.vusan.tools.sites
 import ai.koog.agents.core.tools.annotations.LLMDescription
 import ai.koog.agents.core.tools.annotations.Tool
 import ai.koog.agents.core.tools.reflect.ToolSet
-import com.helltar.vusan.common.rethrowIfCancellation
 import com.helltar.vusan.tools.requireToolText
 import com.helltar.vusan.tools.suspendToolGuard
 import com.helltar.vusan.tools.sandbox.PublishedSite
@@ -12,7 +11,6 @@ import kotlin.time.Clock
 import kotlin.time.Instant
 
 private const val MAX_PATH_CHARS = 400
-private const val INDEX = "index.html"
 
 /**
  * Putting what someone built in their sandbox on the public internet.
@@ -33,9 +31,8 @@ class SiteTools(
         directory: String,
     ): String = suspendToolGuard {
         val path = directory.requireToolText("Directory", MAX_PATH_CHARS)
-        val warning = missingIndex(path)
         val site = sandbox.publishSite(path)
-        listOfNotNull(describePublished(site), warning).joinToString("\n")
+        listOfNotNull(describePublished(site), missingIndex(site, path)).joinToString("\n")
     }
 
     @Tool
@@ -61,20 +58,16 @@ class SiteTools(
     }
 
     /**
-     * The one mistake that cannot be seen from the result: a directory with no `index.html` at its top
-     * publishes fine and its link then opens nothing.
+     * The one mistake the numbers cannot show: a directory with no `index.html` at its top publishes
+     * fine and its link then opens nothing. The server saw the snapshot, so it is the one that says.
      */
-    private suspend fun missingIndex(path: String): String? = runCatching {
-        if (INDEX in sandbox.entries(path)) {
+    private fun missingIndex(site: PublishedSite, path: String): String? =
+        if (site.hasIndex) {
             null
         } else {
-            "There is no `$INDEX` at the top of `$path`, so the link itself will show nothing. " +
+            "There is no `index.html` at the top of `$path`, so the link itself will show nothing. " +
                 "Publish the directory that holds the page, not the one above it."
         }
-    }.getOrElse {
-        it.rethrowIfCancellation()
-        null
-    }
 }
 
 private fun describePublished(site: PublishedSite): String =
