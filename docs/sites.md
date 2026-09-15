@@ -38,7 +38,9 @@ was there before, so the directory must hold every file the page needs. Several 
 folders inside it, reachable at `/name/`.
 
 Nothing is served out of a live sandbox: a session stops when it goes idle and its home is reclaimed,
-so a page served from there would disappear with it.
+so a page served from there would disappear with it. A published site does keep the sandbox itself:
+the server's retention never deletes a sandbox while its site is up, so the files it was built from
+are still there to publish again.
 
 ## What is public
 

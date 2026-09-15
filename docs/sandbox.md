@@ -120,7 +120,8 @@ is to delete what is no longer needed.
 - **Idle** — the server stops a sandbox that has been idle for a while. Files stay; processes do not,
   so a background server started by an earlier command is gone by the next message.
 - **Retention** — a sandbox nobody has used for the server's retention window is deleted with its
-  home. The next command creates an empty one.
+  home, unless the person has a site published: then both stay until the site is taken down. The
+  next command creates an empty one.
 - **Reset** — `resetSandbox`, immediately and permanently.
 
 The bot keeps no copy of a home; backing one up is done on the Regolith host.

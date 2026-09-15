@@ -636,7 +636,8 @@ history still uses `(userId, chatId)`; only the files and the commands running i
   policy all belong to the server. The bot reads `GET /v1/info` for the limits it must respect, and trims a
   requested timeout to that ceiling instead of keeping a copy of the number.
 - **What a person keeps** — their home, until the server's retention window passes or `resetSandbox` deletes
-  the sandbox. Processes do not outlive an idle stop; files do.
+  the sandbox; while their site is up, retention leaves both alone. Processes do not outlive an idle stop;
+  files do.
 
 See [the sandbox guide](sandbox.md) for behaviour, setup and limits.
 
