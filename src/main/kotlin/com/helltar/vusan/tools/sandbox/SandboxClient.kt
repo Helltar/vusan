@@ -1,19 +1,22 @@
 package com.helltar.vusan.tools.sandbox
 
 import com.helltar.vusan.common.rethrowIfCancellation
-import io.ktor.client.*
-import io.ktor.client.call.*
-import io.ktor.client.plugins.*
-import io.ktor.client.request.*
-import io.ktor.client.statement.*
-import io.ktor.http.*
-import io.ktor.utils.io.*
-import kotlinx.serialization.json.Json
-import java.io.ByteArrayOutputStream
+import io.ktor.client.HttpClient
+import io.reified.regolith.protocol.ErrorCodes
+import io.reified.regolith.protocol.ExecInfo
+import io.reified.regolith.protocol.ExecRequest
+import io.reified.regolith.protocol.ExecStatus
+import io.reified.regolith.protocol.OutcomeType
+import io.reified.regolith.protocol.OutputKind
+import io.reified.regolith.protocol.PublishedSite
+import io.reified.regolith.protocol.ServerInfo
+import io.reified.regolith.sdk.RegolithClient
+import io.reified.regolith.sdk.RegolithException
+import io.reified.regolith.sdk.Sandbox
 import java.net.ConnectException
 import java.nio.channels.UnresolvedAddressException
-import java.time.Instant
 import java.util.concurrent.ConcurrentHashMap
+import kotlin.time.Clock
 import kotlin.time.Duration.Companion.seconds
 import kotlin.time.TimeSource
 
@@ -22,25 +25,19 @@ internal const val SANDBOX_FILE_LIMIT = 50 * 1024 * 1024
 /**
  * The bot's side of a Regolith server: one named sandbox per person, holding their home.
  *
- * This is the only file that knows the `/v1` API. It carries its own client rather than Regolith's
- * Kotlin SDK, which is not published yet; [SandboxModels] holds the wire types it needs. A sandbox
- * is created on first use and returned unchanged after that, so no state is kept here beyond
- * remembering which ones this process has already asked for.
+ * This is the only file that uses Regolith's Kotlin SDK. It turns the SDK's calls into what the tools
+ * describe to the model — a command's output so far and where to read on — and its refusals into text
+ * the model can act on. A sandbox is created on first use and returned unchanged after that, so no
+ * state is kept here beyond remembering which ones this process has already asked for.
  */
 class SandboxClient(
     http: HttpClient,
     baseUrl: String,
-    private val token: String,
+    token: String,
 ) {
 
-    init {
-        require(token.isNotBlank()) { "Sandbox API authentication is required" }
-    }
-
-    // the configured API has no redirect contract; never relay its bearer secret to another origin.
-    private val http = http.config { followRedirects = false }
-
-    private val base = baseUrl.trimEnd('/')
+    // the sdk never follows a redirect, so the bearer secret cannot be relayed to another origin.
+    private val regolith = RegolithClient(baseUrl, token, http)
 
     // sandboxes this process has created or found; a request that misses one clears it again.
     private val created = ConcurrentHashMap.newKeySet<String>()
@@ -49,134 +46,80 @@ class SandboxClient(
     private var server: ServerInfo? = null
 
     suspend fun exec(sandboxId: String, command: String, timeoutSeconds: Int?): CommandResult {
-        create(sandboxId)
-        val started: ExecInfo = reachable {
-            http.post("${sandbox(sandboxId)}/execs") {
-                sandboxRequest()
-                contentType(ContentType.Application.Json)
-                setBody(ExecRequest(command, clamped(timeoutSeconds)))
-            }.requireSuccess(sandboxId).body()
-        }
+        val sandbox = created(sandboxId)
+        val request = ExecRequest(shell = command, timeoutSeconds = clamped(timeoutSeconds))
+        val exec = call(sandboxId) { sandbox.startExec(request) }
 
-        return collect(sandboxId, started.id, offset = 0, waitSeconds = FIRST_WAIT_SECONDS)
+        return collect(sandboxId, exec.id, offset = 0, waitSeconds = FIRST_WAIT_SECONDS)
     }
 
     suspend fun readCommand(sandboxId: String, jobId: String, offset: Long, waitSeconds: Int): CommandResult =
         collect(sandboxId, jobId, offset, waitSeconds)
 
-    suspend fun cancelCommand(sandboxId: String, jobId: String): CommandResult {
-        val info: ExecInfo = reachable {
-            http.post("${sandbox(sandboxId)}/execs/$jobId/cancel") {
-                sandboxRequest()
-            }.requireSuccess(sandboxId).body()
-        }
+    suspend fun cancelCommand(sandboxId: String, jobId: String): CommandResult =
+        call(sandboxId) { regolith.sandbox(sandboxId).exec(jobId).cancel() }
+            .result(output = "", nextOffset = 0, hasMore = false)
 
-        return info.result(output = "", nextOffset = 0, hasMore = false)
-    }
-
-    suspend fun listCommands(sandboxId: String): List<CommandResult> = reachable {
-        http.get("${sandbox(sandboxId)}/execs") { sandboxRequest() }
-            .requireSuccess(sandboxId).body<ExecPage>().execs
+    suspend fun listCommands(sandboxId: String): List<CommandResult> =
+        call(sandboxId) { regolith.sandbox(sandboxId).execs() }
             .map { it.result(output = "", nextOffset = 0, hasMore = false) }
-    }
 
     suspend fun writeFile(sandboxId: String, path: String, bytes: ByteArray) {
         require(bytes.size <= SANDBOX_FILE_LIMIT) { "File exceeds the 50 MB transfer limit" }
-        create(sandboxId)
-        reachable {
-            http.put("${sandbox(sandboxId)}/files/content") {
-                sandboxRequest()
-                parameter("path", path)
-                setBody(bytes)
-            }.requireSuccess(sandboxId)
-        }
+        val sandbox = created(sandboxId)
+        call(sandboxId) { sandbox.files.write(path, bytes) }
     }
 
     suspend fun deleteFile(sandboxId: String, path: String) {
-        reachable {
-            http.delete("${sandbox(sandboxId)}/files") {
-                sandboxRequest()
-                parameter("path", path)
-                parameter("recursive", true)
-            }.requireSuccess(sandboxId)
-        }
+        call(sandboxId) { regolith.sandbox(sandboxId).files.delete(path, recursive = true) }
     }
 
     /** Publishes a directory of the sandbox to the web and returns the address it is served at. */
     suspend fun publishSite(sandboxId: String, path: String): PublishedSite {
-        create(sandboxId)
+        val sandbox = created(sandboxId)
 
-        return reachable {
-            http.post("${sandbox(sandboxId)}/publish") {
-                sandboxRequest()
-                contentType(ContentType.Application.Json)
-                setBody(PublishRequest(path))
-            }.requireSuccess(sandboxId).body()
-        }
+        return call(sandboxId) { sandbox.publish(path) }
     }
 
     /** What is published for this person, or null when nothing is. */
-    suspend fun publishedSite(sandboxId: String): PublishedSite? = reachable {
-        val response = http.get("${sandbox(sandboxId)}/site") { sandboxRequest() }
-        if (response.status == HttpStatusCode.NotFound) null else response.requireSuccess(sandboxId).body()
+    suspend fun publishedSite(sandboxId: String): PublishedSite? = call(sandboxId) {
+        whenPresent(absent = null) { regolith.sandbox(sandboxId).site() }
     }
 
     /** Takes the site down; false when there was nothing to take down. The sandbox keeps its files. */
-    suspend fun unpublishSite(sandboxId: String): Boolean = reachable {
-        val response = http.delete("${sandbox(sandboxId)}/site") { sandboxRequest() }
-        if (response.status == HttpStatusCode.NotFound) false else true.also { response.requireSuccess(sandboxId) }
+    suspend fun unpublishSite(sandboxId: String): Boolean = call(sandboxId) {
+        whenPresent(absent = false) {
+            regolith.sandbox(sandboxId).unpublish()
+            true
+        }
     }
 
     /** Whether this server publishes at all; it says so in its own info rather than the bot guessing. */
     suspend fun publishes(): Boolean = info()?.publishing ?: false
 
     /** The names in one directory of the sandbox, for a check before something is published. */
-    suspend fun entries(sandboxId: String, path: String): List<String> = reachable {
-        http.get("${sandbox(sandboxId)}/files/entries") {
-            sandboxRequest()
-            parameter("path", path)
-        }.requireSuccess(sandboxId).body<DirectoryListing>().entries.map { it.name }
-    }
+    suspend fun entries(sandboxId: String, path: String): List<String> =
+        call(sandboxId) { regolith.sandbox(sandboxId).files.list(path) }.map { it.name }
 
     /** Deletes the sandbox with its home; the next use creates an empty one under the same name. */
     suspend fun resetSandbox(sandboxId: String) {
-        reachable {
-            http.delete(sandbox(sandboxId)) { sandboxRequest() }.requireSuccess(sandboxId)
-        }
+        call(sandboxId) { regolith.sandbox(sandboxId).delete() }
         created -= sandboxId
     }
 
-    suspend fun readFile(sandboxId: String, path: String, maxBytes: Int = SANDBOX_FILE_LIMIT): ByteArray = reachable {
+    suspend fun readFile(sandboxId: String, path: String, maxBytes: Int = SANDBOX_FILE_LIMIT): ByteArray {
         require(maxBytes in 1..SANDBOX_FILE_LIMIT) { "Invalid file transfer budget" }
-        http.prepareGet("${sandbox(sandboxId)}/files/content") {
-            sandboxRequest()
-            parameter("path", path)
-        }.execute { response ->
-            response.requireSuccess(sandboxId)
-            val declared = response.contentLength()
-            require(declared == null || declared <= maxBytes) { "File exceeds the remaining transfer limit" }
-            val channel = response.bodyAsChannel()
-            val output = ByteArrayOutputStream(CHUNK_BYTES)
-            val chunk = ByteArray(CHUNK_BYTES)
-            while (true) {
-                val read = channel.readAvailable(chunk)
-                if (read < 0) break
-                if (output.size() + read > maxBytes) {
-                    channel.cancel()
-                    error("File exceeds the remaining transfer limit")
-                }
-                output.write(chunk, 0, read)
-            }
-            output.toByteArray()
-        }
+
+        return call(sandboxId) { regolith.sandbox(sandboxId).files.read(path, maxBytes.toLong()) }
     }
 
     /**
      * Reads recorded output from [offset] until the command ends, this call's budget runs out, or the
-     * page limit is reached, then reports the command as it now stands. Output is kept on the server,
+     * output limit is reached, then reports the command as it now stands. Output is kept on the server,
      * so what does not fit is read by the next call from [CommandResult.nextOffset].
      */
     private suspend fun collect(sandboxId: String, jobId: String, offset: Long, waitSeconds: Int): CommandResult {
+        val exec = regolith.sandbox(sandboxId).exec(jobId)
         val started = TimeSource.Monotonic.markNow()
         val output = StringBuilder()
         var next = offset
@@ -185,9 +128,9 @@ class SandboxClient(
 
         while (true) {
             val remaining = (waitSeconds.seconds - started.elapsedNow()).inWholeSeconds.toInt().coerceAtLeast(0)
-            val page = outputPage(sandboxId, jobId, next, remaining)
+            val page = call(sandboxId) { exec.readOutput(next, remaining, OUTPUT_CHARS) }
             page.frames.forEach { frame ->
-                if (frame.kind == GAP_FRAME) dropped = true else output.append(frame.text)
+                if (frame.kind == OutputKind.GAP) dropped = true else output.append(frame.text)
             }
             next = page.nextOffset
             complete = page.complete
@@ -197,34 +140,24 @@ class SandboxClient(
             val room = remaining > 0 && output.length < OUTPUT_CHARS
             if (complete || !arrived || !room) break
         }
-
-        val info: ExecInfo = reachable {
-            http.get("${sandbox(sandboxId)}/execs/$jobId") { sandboxRequest() }
-                .requireSuccess(sandboxId).body()
-        }
+        val info = call(sandboxId) { exec.info() }
 
         return info.result(output.toString(), next, hasMore = !complete, dropped = dropped)
     }
 
-    private suspend fun outputPage(sandboxId: String, jobId: String, offset: Long, waitSeconds: Int): OutputPage = reachable {
-        http.get("${sandbox(sandboxId)}/execs/$jobId/output") {
-            sandboxRequest()
-            parameter("offset", offset)
-            parameter("waitSeconds", waitSeconds)
-            parameter("maxBytes", OUTPUT_CHARS)
-        }.requireSuccess(sandboxId).body()
-    }
-
-    /** Creates the person's sandbox, or leaves the existing one exactly as it is. */
-    private suspend fun create(sandboxId: String) {
-        if (!created.add(sandboxId)) return
+    /** The person's sandbox, created on first use and left exactly as it is after that. */
+    private suspend fun created(sandboxId: String): Sandbox {
+        val sandbox = regolith.sandbox(sandboxId)
+        if (!created.add(sandboxId)) return sandbox
 
         try {
-            reachable { http.put(sandbox(sandboxId)) { sandboxRequest() }.requireSuccess(sandboxId) }
+            call(sandboxId) { sandbox.getOrCreate() }
         } catch (e: Throwable) {
             created -= sandboxId
             throw e
         }
+
+        return sandbox
     }
 
     /** The server owns its limits; a timeout above the ceiling would be refused instead of trimmed. */
@@ -239,59 +172,53 @@ class SandboxClient(
     private suspend fun info(): ServerInfo? {
         server?.let { return it }
 
-        return runCatching {
-            reachable { http.get("$base/v1/info") { sandboxRequest() }.requireSuccess(null).body<ServerInfo>() }
-        }.onFailure { it.rethrowIfCancellation() }.getOrNull()?.also { server = it }
+        return runCatching { call(null) { regolith.info() } }
+            .onFailure { it.rethrowIfCancellation() }
+            .getOrNull()
+            ?.also { server = it }
     }
 
-    private fun sandbox(sandboxId: String) = "$base/v1/sandboxes/$sandboxId"
-
-    private fun HttpRequestBuilder.sandboxRequest() {
-        bearerAuth(token)
-        accept(ContentType.Application.Json)
-        expectSuccess = false
-        timeout {
-            requestTimeoutMillis = REQUEST_TIMEOUT_MS
-            socketTimeoutMillis = REQUEST_TIMEOUT_MS
-        }
-    }
-
-    private suspend fun HttpResponse.requireSuccess(sandboxId: String?): HttpResponse {
-        if (status.isSuccess()) return this
-        val body = runCatching { bodyAsText() }.getOrDefault("")
-        val problem = runCatching { problems.decodeFromString(ProblemDetails.serializer(), body) }.getOrNull()
-        // the sandbox may have been deleted by retention or by hand: forget it, so the next call recreates it.
-        if (problem?.code == NOT_FOUND_CODE && sandboxId != null) created -= sandboxId
-        error(problem?.explain() ?: "The sandbox API answered ${status.value}")
-    }
-
-    private suspend fun <T> reachable(block: suspend () -> T): T =
-        runCatching { block() }.getOrElse { e ->
-            e.rethrowIfCancellation()
-            when (e) {
-                is ConnectException, is UnresolvedAddressException ->
-                    error("The sandbox is temporarily unavailable. Tell the user; do not retry immediately.")
-                else -> throw e
-            }
+    /** Runs one SDK call, turning a refusal or an unreachable server into text the model can act on. */
+    private suspend fun <T> call(sandboxId: String?, block: suspend () -> T): T =
+        try {
+            block()
+        } catch (e: RegolithException) {
+            // the sandbox may have been deleted by retention or by hand: forget it, so the next call recreates it.
+            if (e.code == ErrorCodes.NOT_FOUND && sandboxId != null) created -= sandboxId
+            error(e.explain())
+        } catch (_: ConnectException) {
+            error(UNAVAILABLE)
+        } catch (_: UnresolvedAddressException) {
+            error(UNAVAILABLE)
         }
 
     private companion object {
-        const val REQUEST_TIMEOUT_MS = 90_000L
-        const val CHUNK_BYTES = 64 * 1024
         const val OUTPUT_CHARS = 16 * 1024
         const val FIRST_WAIT_SECONDS = 10
-        const val GAP_FRAME = "gap"
-        const val NOT_FOUND_CODE = "not_found"
-
-        val problems = Json { ignoreUnknownKeys = true }
+        const val UNAVAILABLE = "The sandbox is temporarily unavailable. Tell the user; do not retry immediately."
     }
 }
 
-private fun ProblemDetails.explain(): String = when (code) {
-    "capacity_exhausted", "unavailable" ->
+/** A `not_found` here means the thing asked about is absent, not that the sandbox is gone. */
+private inline fun <T> whenPresent(absent: T, block: () -> T): T =
+    try {
+        block()
+    } catch (e: RegolithException) {
+        if (e.code == ErrorCodes.NOT_FOUND) absent else throw e
+    }
+
+private fun RegolithException.explain(): String = when (code) {
+    ErrorCodes.CAPACITY_EXHAUSTED, ErrorCodes.UNAVAILABLE ->
         "The sandbox host is at capacity right now. Tell the user and try again in a minute."
-    "busy" -> "This sandbox already runs as many commands as it may; wait for one to finish."
-    else -> detail.ifBlank { title }.ifBlank { "The sandbox refused the request" }
+    ErrorCodes.BUSY -> "This sandbox already runs as many commands as it may; wait for one to finish."
+    // a read past the call's remaining budget, or a file the server will not take: either way, too big to move.
+    ErrorCodes.PAYLOAD_TOO_LARGE -> "The file exceeds the transfer limit"
+    // anything but a problem document came from something in front of the server, such as a proxy.
+    else -> if (code.startsWith("http_")) {
+        "The sandbox API answered $status"
+    } else {
+        message.orEmpty().removePrefix("$code: ").ifBlank { "The sandbox refused the request" }
+    }
 }
 
 private fun ExecInfo.result(output: String, nextOffset: Long, hasMore: Boolean, dropped: Boolean = false): CommandResult {
@@ -306,7 +233,7 @@ private fun ExecInfo.result(output: String, nextOffset: Long, hasMore: Boolean, 
         nextOffset = nextOffset,
         hasMore = hasMore,
         truncated = dropped || outputTruncated,
-        elapsedMs = elapsedMs(),
+        elapsedMs = ((finishedAt ?: Clock.System.now()) - startedAt).inWholeMilliseconds.coerceAtLeast(0),
         limit = when (reason) {
             "oom_killed" -> CommandLimit.OUT_OF_MEMORY
             "pids_limited" -> CommandLimit.TOO_MANY_PROCESSES
@@ -316,19 +243,12 @@ private fun ExecInfo.result(output: String, nextOffset: Long, hasMore: Boolean, 
     )
 }
 
-// an outcome type this client does not know is reported as interrupted: the model is then told to run
-// the command again, which is right for anything that ended without the command deciding to.
 private fun ExecInfo.commandStatus(): CommandStatus = when {
-    status == "running" -> CommandStatus.RUNNING
-    outcome?.type == "exited" -> CommandStatus.COMPLETED
-    outcome?.type == "timed_out" -> CommandStatus.TIMED_OUT
-    outcome?.type == "cancelled" -> CommandStatus.CANCELLED
-    else -> CommandStatus.INTERRUPTED
-}
-
-private fun ExecInfo.elapsedMs(): Long {
-    val start = startedAt?.let { runCatching { Instant.parse(it) }.getOrNull() } ?: return 0
-    val end = finishedAt?.let { runCatching { Instant.parse(it) }.getOrNull() } ?: Instant.now()
-
-    return (end.toEpochMilli() - start.toEpochMilli()).coerceAtLeast(0)
+    status == ExecStatus.RUNNING -> CommandStatus.RUNNING
+    else -> when (outcome?.type) {
+        OutcomeType.EXITED -> CommandStatus.COMPLETED
+        OutcomeType.TIMED_OUT -> CommandStatus.TIMED_OUT
+        OutcomeType.CANCELLED -> CommandStatus.CANCELLED
+        OutcomeType.INTERRUPTED, null -> CommandStatus.INTERRUPTED
+    }
 }

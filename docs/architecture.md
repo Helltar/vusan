@@ -613,17 +613,20 @@ backoff decays to a 15-minute retry interval and a restart becomes the thing tha
 The sandbox is a [Regolith](sandbox.md) server: a separate project with its own deployment, which
 runs the commands and confines them. This repository holds only the client —
 [`tools/sandbox/SandboxClient.kt`](../src/main/kotlin/com/helltar/vusan/tools/sandbox/SandboxClient.kt), the one
-file that knows the `/v1` API. Docker, homes and network policy never enter the bot's request flow.
+file that uses Regolith's Kotlin SDK, which is what speaks the `/v1` API. Docker, homes and network policy never
+enter the bot's request flow.
 
 Each `userId` maps to a sandbox named `u<userId>`, the same in every chat. Conversation history still uses
 `(userId, chatId)`; only the files and the commands running in them are shared.
 
 - **`SandboxClient`** — creates the person's sandbox on first use and remembers it, so later calls cost one
   request. A command is an exec: it is started, then its recorded output is read from a byte offset until the
-  command ends or the call's ten seconds are up, and the model continues from `nextOffset`. Errors arrive as
-  RFC 9457 problem documents, and their `code` decides what the model is told — capacity and availability read
-  as "try again", everything else as the server's own sentence. A `not_found` forgets the sandbox, so the next
-  call creates it again rather than failing forever after retention deleted it.
+  command ends, a page comes back empty or the call's ten seconds are up, and the model continues from
+  `nextOffset`. A file is read within the call's remaining transfer budget, which the server refuses to exceed
+  before sending any of it. Refusals carry the server's error `code`, which decides
+  what the model is told — capacity and availability read as "try again", everything else as the server's own
+  sentence. A `not_found` forgets the sandbox, so the next call creates it again rather than failing forever
+  after retention deleted it.
 - **`SandboxTools`** — the model-facing surface: run, read, cancel, write, delete, reset, send. It copies the
   turn's attachment into `inbox/<unique-id>/<name>` before the first command that might want it, once per turn,
   and renders a command as text the model can act on — the exit code, and the session limit that explains it

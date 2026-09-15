@@ -18,6 +18,9 @@ private const val FINISHED =
     """{"id":"$JOB","status":"finished","outcome":{"type":"exited","exitCode":0},""" +
         """"startedAt":"2026-09-13T12:00:00Z","finishedAt":"2026-09-13T12:00:01Z","outputEnd":6,"outputTruncated":false,"stdinOpen":false}"""
 
+private const val RUNNING =
+    """{"id":"$JOB","status":"running","startedAt":"2026-09-13T12:00:00Z","outputEnd":16384,"outputTruncated":false,"stdinOpen":false}"""
+
 private fun MockRequestHandleScope.json(body: String) =
     respond(body, HttpStatusCode.OK, headersOf(HttpHeaders.ContentType, "application/json"))
 
@@ -44,20 +47,31 @@ class SandboxClientTest {
     }
 
     @Test
-    fun `file size is bounded even without content length`() = runBlocking {
-        val http = Http.createClient(MockEngine { respond(byteArrayOf(1, 2, 3, 4, 5), HttpStatusCode.OK) })
+    fun `a file past the remaining budget is asked for with that bound and refused`() = runBlocking {
+        val bounds = mutableListOf<String?>()
+        val http = Http.createClient(MockEngine { request ->
+            bounds += request.url.parameters["maxBytes"]
+            respond(
+                problemDocument("payload_too_large", 413, "Payload too large", "`/home/sandbox/sample.bin` is larger than 4 bytes"),
+                HttpStatusCode.PayloadTooLarge,
+                headersOf(HttpHeaders.ContentType, "application/problem+json"),
+            )
+        })
         val client = SandboxClient(http, "http://sandbox", "test-token")
+
         val error = assertFailsWith<IllegalStateException> { client.readFile("u1", "sample.bin", 4) }
+
         assertContains(error.message.orEmpty(), "transfer limit")
+        assertEquals(listOf<String?>("4"), bounds)
     }
 
     @Test
-    fun `declared oversize is refused before accepting the response body`() = runBlocking {
-        val http = Http.createClient(MockEngine {
-            respond(byteArrayOf(1), HttpStatusCode.OK, headersOf(HttpHeaders.ContentLength, "100"))
-        })
+    fun `a file is never held past the budget, whatever the server sends`() = runBlocking {
+        val http = Http.createClient(MockEngine { respond(byteArrayOf(1, 2, 3, 4, 5), HttpStatusCode.OK) })
         val client = SandboxClient(http, "http://sandbox", "test-token")
-        val error = assertFailsWith<IllegalArgumentException> { client.readFile("u1", "sample.bin", 4) }
+
+        val error = assertFailsWith<IllegalStateException> { client.readFile("u1", "sample.bin", 4) }
+
         assertContains(error.message.orEmpty(), "transfer limit")
     }
 
@@ -70,7 +84,7 @@ class SandboxClientTest {
             when {
                 request.url.encodedPath.endsWith("/output") -> json("""{"frames":[{"kind":"stdout","text":"hello","end":6}],"nextOffset":6,"complete":true}""")
                 request.url.encodedPath.endsWith("/execs") && request.method == HttpMethod.Post -> json(FINISHED)
-                request.url.encodedPath.endsWith("/u42") -> json("""{"name":"u42"}""")
+                request.url.encodedPath.endsWith("/u42") -> json(sandboxInfo("u42"))
                 else -> json(FINISHED)
             }
         })
@@ -95,7 +109,7 @@ class SandboxClientTest {
                 offsets += request.url.parameters["offset"].orEmpty()
                 json("""{"frames":[],"nextOffset":16384,"complete":false}""")
             } else {
-                json("""{"id":"$JOB","status":"running","startedAt":"2026-09-13T12:00:00Z","outputEnd":16384,"outputTruncated":false,"stdinOpen":false}""")
+                json(RUNNING)
             }
         })
         val client = SandboxClient(http, "http://sandbox", "test-token")
@@ -111,7 +125,7 @@ class SandboxClientTest {
     fun `a problem document explains a refusal in the words the model reads`() = runBlocking {
         val http = Http.createClient(MockEngine {
             respond(
-                """{"type":"urn:regolith:error:capacity_exhausted","title":"No session capacity","status":503,"detail":"Every session slot is busy","code":"capacity_exhausted"}""",
+                problemDocument("capacity_exhausted", 503, "No session capacity", "Every session slot is busy"),
                 HttpStatusCode.ServiceUnavailable,
                 headersOf(HttpHeaders.ContentType, "application/problem+json"),
             )

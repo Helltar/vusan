@@ -79,9 +79,12 @@ Preserve the package boundaries in [`docs/architecture.md`](docs/architecture.md
 ### The sandbox
 
 - The sandbox is a Regolith server: a separate project, deployed on its own,
-  reached only over HTTP through `tools/sandbox/SandboxClient.kt`. That file
-  is the only one that knows the `/v1` API; nothing here knows how a sandbox is
+  reached only through Regolith's Kotlin SDK, and only from
+  `tools/sandbox/SandboxClient.kt`; nothing here knows how a sandbox is
   isolated, and no Docker socket reaches this side.
+- The SDK reads the server's answers by its own protocol, so its version moves
+  with the server's minor version — and only to a release Maven Central already
+  serves, or the public build breaks. `docs/sandbox.md` names that version.
 - Do not copy the server's settings into Kotlin. It is authoritative about
   images, resources, timeouts, retention and network policy, and states its
   limits in `GET /v1/info`; the client reads them there and trims what the model

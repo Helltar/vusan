@@ -68,7 +68,7 @@ class SandboxToolsTest {
             when {
                 path == "/v1/sandboxes/u55" && request.method == HttpMethod.Put -> {
                     creations++
-                    json("""{"name":"u55"}""")
+                    json(sandboxInfo("u55"))
                 }
 
                 path == "/v1/sandboxes/u55" && request.method == HttpMethod.Delete -> {
@@ -90,7 +90,7 @@ class SandboxToolsTest {
                 }
 
                 path.endsWith("/files/content") -> files[wanted]?.let { respond(it, HttpStatusCode.OK) }
-                    ?: problem(HttpStatusCode.NotFound, """{"code":"not_found","detail":"No such file","title":"Not found","status":404}""")
+                    ?: problem(HttpStatusCode.NotFound, problemDocument("not_found", 404, "Not found", "No such file"))
 
                 path.endsWith("/files") && request.method == HttpMethod.Delete -> {
                     deletions += wanted
@@ -164,7 +164,7 @@ class SandboxToolsTest {
     fun `capacity refusal reaches the model`() = runBlocking {
         val sandbox = tools(
             failure = HttpStatusCode.ServiceUnavailable to
-                """{"type":"urn:regolith:error:capacity_exhausted","title":"No session capacity","status":503,"detail":"busy","code":"capacity_exhausted"}""",
+                problemDocument("capacity_exhausted", 503, "No session capacity", "busy"),
         )
         assertContains(toolFailure { sandbox.runCommand("ls") }, "at capacity")
     }

@@ -6,10 +6,10 @@ import ai.koog.agents.core.tools.reflect.ToolSet
 import com.helltar.vusan.common.rethrowIfCancellation
 import com.helltar.vusan.tools.requireToolText
 import com.helltar.vusan.tools.suspendToolGuard
-import com.helltar.vusan.tools.sandbox.PublishedSite
 import com.helltar.vusan.tools.sandbox.SandboxClient
-import java.time.Duration
-import java.time.Instant
+import io.reified.regolith.protocol.PublishedSite
+import kotlin.time.Clock
+import kotlin.time.Instant
 
 private const val MAX_PATH_CHARS = 400
 private const val INDEX = "index.html"
@@ -46,7 +46,7 @@ class SiteTools(
             ?: return@suspendToolGuard "Nothing is published. Build the files in the sandbox, then publish that directory."
         buildString {
             append("Published at ${site.url} — ${site.files} file(s), ${site.bytes.asMegabytes()}")
-            site.publishedAt?.let { append(", last published ${it.asAgeDescription()}") }
+            append(", last published ${site.publishedAt.asAgeDescription()}")
             append(".\nThis is what the site holds right now; the sandbox may have moved on since.")
         }
     }
@@ -84,14 +84,13 @@ private fun describePublished(site: PublishedSite): String =
 private fun Long.asMegabytes(): String =
     if (this < 1024 * 1024) "${(this + 1023) / 1024} KB" else "%.1f MB".format(this / (1024.0 * 1024.0))
 
-private fun String.asAgeDescription(): String {
-    val at = runCatching { Instant.parse(this) }.getOrNull() ?: return "at an unknown time"
-    val elapsed = Duration.between(at, Instant.now())
+private fun Instant.asAgeDescription(): String {
+    val elapsed = Clock.System.now() - this
 
     return when {
-        elapsed.isNegative || elapsed.toMinutes() < 1 -> "just now"
-        elapsed.toHours() < 1 -> "${elapsed.toMinutes()} minute(s) ago"
-        elapsed.toDays() < 1 -> "${elapsed.toHours()} hour(s) ago"
-        else -> "${elapsed.toDays()} day(s) ago"
+        elapsed.isNegative() || elapsed.inWholeMinutes < 1 -> "just now"
+        elapsed.inWholeHours < 1 -> "${elapsed.inWholeMinutes} minute(s) ago"
+        elapsed.inWholeDays < 1 -> "${elapsed.inWholeHours} hour(s) ago"
+        else -> "${elapsed.inWholeDays} day(s) ago"
     }
 }

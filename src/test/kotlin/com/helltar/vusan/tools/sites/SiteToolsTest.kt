@@ -5,6 +5,9 @@ import com.helltar.vusan.request.personKeyOrNull
 import com.helltar.vusan.request.requestContext
 import com.helltar.vusan.tools.toolFailure
 import com.helltar.vusan.tools.sandbox.SandboxClient
+import com.helltar.vusan.tools.sandbox.fileEntry
+import com.helltar.vusan.tools.sandbox.problemDocument
+import com.helltar.vusan.tools.sandbox.sandboxInfo
 import io.ktor.client.engine.mock.*
 import io.ktor.http.*
 import kotlin.test.Test
@@ -39,7 +42,7 @@ class SiteToolsTest {
 
                 path.endsWith("/files/entries") ->
                     respond(
-                        """{"path":"x","entries":[${entries.joinToString(",") { """{"name":"$it","type":"file"}""" }}]}""",
+                        """{"path":"/home/sandbox/x","entries":[${entries.joinToString(",") { fileEntry(it, size = 1) }}]}""",
                         HttpStatusCode.OK,
                         headersOf(HttpHeaders.ContentType, "application/json"),
                     )
@@ -50,7 +53,7 @@ class SiteToolsTest {
                 path.endsWith("/site") ->
                     if (site == null) notFound() else respond(site, HttpStatusCode.OK, headersOf(HttpHeaders.ContentType, "application/json"))
 
-                else -> respond("""{"name":"u55"}""", HttpStatusCode.OK, headersOf(HttpHeaders.ContentType, "application/json"))
+                else -> respond(sandboxInfo("u55"), HttpStatusCode.OK, headersOf(HttpHeaders.ContentType, "application/json"))
             }
         }
 
@@ -80,7 +83,7 @@ class SiteToolsTest {
 
     @Test
     fun `a server that cannot publish says so in its own words`() = runBlocking {
-        val refusal = """{"type":"urn:regolith:error:not_implemented","title":"Not implemented","status":501,"detail":"This server publishes nothing: no pages role is configured","code":"not_implemented"}"""
+        val refusal = problemDocument("not_implemented", 501, "Not implemented", "This server publishes nothing: no pages role is configured")
         val sandbox = tools(publish = HttpStatusCode.NotImplemented to refusal)
         assertContains(toolFailure { sandbox.publishSite("site") }, "publishes nothing")
     }
@@ -100,7 +103,7 @@ class SiteToolsTest {
 }
 
 private fun MockRequestHandleScope.notFound() = respond(
-    """{"type":"urn:regolith:error:not_found","title":"Not found","status":404,"detail":"Nothing is published","code":"not_found"}""",
+    problemDocument("not_found", 404, "Not found", "Nothing is published"),
     HttpStatusCode.NotFound,
     headersOf(HttpHeaders.ContentType, "application/problem+json"),
 )

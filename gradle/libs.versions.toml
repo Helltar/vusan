@@ -13,6 +13,7 @@ logback = "1.6.3"
 cron-utils = "9.2.1"
 shadow = "9.6.1"
 detekt = "1.23.8"
+regolith = "0.2.1"
 
 [libraries]
 koog-agents = { module = "ai.koog:koog-agents", version.ref = "koog" }
@@ -36,6 +37,7 @@ jsoup = { module = "org.jsoup:jsoup", version.ref = "jsoup" }
 cron-utils = { module = "com.cronutils:cron-utils", version.ref = "cron-utils" }
 kotlin-logging-jvm = { module = "io.github.oshai:kotlin-logging-jvm", version.ref = "kotlin-logging" }
 logback-classic = { module = "ch.qos.logback:logback-classic", version.ref = "logback" }
+regolith-sdk = { module = "io.reified.regolith:sdk", version.ref = "regolith" }
 
 [plugins]
 kotlin-jvm = { id = "org.jetbrains.kotlin.jvm", version.ref = "kotlin" }
