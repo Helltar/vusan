@@ -499,7 +499,7 @@ class AgentRunner(
         // the count a recap is triggered by, not what the prompt ends up carrying — a window too small
         // for these still fits only what its token budget allows. kept well above that budget on a
         // large window, where a low count buys nothing and only pays for recaps.
-        const val MAX_RECENT_INTERACTIONS = 24
+        const val MAX_RECENT_INTERACTIONS = 40
     }
 }
 

@@ -473,7 +473,7 @@ them, each with its own recap and its own retention.
 |-------------------------------|---------|----------------------------------------------------|
 | `CONVERSATION_RETENTION_DAYS` | `90`    | Days summarized raw interactions remain in SQLite. |
 
-The last 24 interactions are offered to the model verbatim, as many of them as the context window
+The last 40 interactions are offered to the model verbatim, as many of them as the context window
 fits; past that count the older ones are folded into the recap. Once recapped, the raw rows stay for
 the retention period, at most a hundred per thread, and never enter the prompt again. Cleanup runs
 when that thread completes a turn, and again in the maintenance pass every six hours, which is what
