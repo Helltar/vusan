@@ -41,6 +41,7 @@ import com.helltar.vusan.tools.quiz.QuizTools
 import com.helltar.vusan.tools.reaction.ReactionTools
 import com.helltar.vusan.tools.searxng.SearxngClient
 import com.helltar.vusan.tools.searxng.SearxngTools
+import com.helltar.vusan.tools.tasks.FollowUpTools
 import com.helltar.vusan.tools.tasks.TaskTools
 import com.helltar.vusan.tools.tavily.TavilyClient
 import com.helltar.vusan.tools.tavily.TavilyTools
@@ -201,14 +202,12 @@ class ToolRegistryFactory(
             tools(InlineChoiceTools(context, outbox, conversation::revision))
             tools(ConversationTools(conversation, context))
             tools(MemoryTools(memory, context))
+            tools(FollowUpTools(tasks, context, TasksRepository.MAX_FOLLOW_UPS_PER_USER))
             tools(ToolGroup.CURRENCY, currency)
             tools(ToolGroup.TELEGRAM_CHANNELS, telegramChannel)
             tools(ToolGroup.YOUTUBE, youTubeTranscript)
 
-            tools(
-                ToolGroup.SCHEDULED_TASKS,
-                TaskTools(repo = tasks, context, TasksRepository.MAX_TASKS_PER_USER, TasksRepository.MAX_FOLLOW_UPS_PER_USER),
-            )
+            tools(ToolGroup.SCHEDULED_TASKS, TaskTools(repo = tasks, context, TasksRepository.MAX_TASKS_PER_USER))
 
             if (chat.reactions) tools(ReactionTools(context, outbox))
             if (chat.audios) tools(ToolGroup.YOUTUBE, YouTubeMusicTools(ytDlpClient, outbox))

@@ -364,9 +364,12 @@ A normal user message travels:
   conversations or chats a round, the next round taking the rest) and reports what it removed, and a step that throws
   leaves the others to run. `Main` wires the steps, because one of them belongs to a messenger and `infra/` may not
   know that.
-- **Self-initiated follow-ups** — `scheduleFollowUp` lets the agent set itself a single future turn when the
-  conversation gives it a reason to come back ("ask how the exam went"). It is the same scheduler, store, and delivery
-  path as `scheduleTask`, narrowed: one-time only, a limit of its own (`MAX_FOLLOW_UPS_PER_USER`) so the agent cannot spend the
+- **Self-initiated follow-ups** — `scheduleFollowUp` (`tools/tasks/FollowUpTools`) lets the agent set itself a single
+  future turn when the conversation gives it a reason to come back ("ask how the exam went"). It is the one scheduling
+  tool that stays visible while the rest wait behind the `scheduled_tasks` group: nobody asks to be checked on, so a
+  tool the model would first have to load for something nobody asked for is a tool it never calls. The system prompt
+  names it as the one action that needs no request. It is the same scheduler, store, and delivery path as
+  `scheduleTask`, narrowed: one-time only, a limit of its own (`MAX_FOLLOW_UPS_PER_USER`) so the agent cannot spend the
   user's task quota, and a `self_initiated` flag on the row. In a group it fires anchored to the message that prompted
   it, and only when that message is gone does it fall back to a "following up with" notice instead of the "scheduled by"
   one, which would misattribute it to the user. The user sees and cancels them through `/tasks` like any other task.

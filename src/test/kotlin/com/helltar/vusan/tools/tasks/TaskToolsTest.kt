@@ -178,43 +178,8 @@ class TaskToolsTest {
         Unit
     }
 
-    @Test
-    fun `follow-up is stored as a one-time task the bot set for itself`() = runBlocking {
-        val tools = tools(requestContext(chatId = 100L, userId = 100L, messageId = "7"))
-        val at = Instant.now().atZone(ZoneId.systemDefault()).plusDays(1).toLocalDateTime().truncatedTo(ChronoUnit.MINUTES)
-
-        assertContains(tools.scheduleFollowUp("ask how the exam went", at.toString()), "Follow-up id=")
-
-        val stored = assertNotNull(repo.listForUser(testUser(100)).singleOrNull())
-        assertTrue(stored.selfInitiated)
-        assertIs<Recurrence.Once>(stored.recurrence)
-        assertEquals("7", stored.creatorMessageId)
-    }
-
-    @Test
-    fun `follow-ups and user-requested tasks are capped separately`() = runBlocking {
-        val tools = tools(requestContext(chatId = 100L, userId = 100L))
-        val at = Instant.now().atZone(ZoneId.systemDefault()).plusDays(1).toLocalDateTime().truncatedTo(ChronoUnit.MINUTES)
-
-        repeat(3) { assertContains(tools.scheduleFollowUp("check in $it", at.plusMinutes(it.toLong()).toString()), "Follow-up id=") }
-
-        assertContains(tools.scheduleFollowUp("one more", at.plusHours(2).toString()), "limit 3")
-
-        // the bot filling its own follow-up quota must not block what the user asks for
-        assertContains(tools.scheduleTask("send the news", "every 2h"), "Scheduled task id=")
-    }
-
-    @Test
-    fun `follow-up in the past is rejected`() = runBlocking {
-        val tools = tools(requestContext(chatId = 100L, userId = 100L))
-        val past = Instant.now().atZone(ZoneId.systemDefault()).minusDays(1).toLocalDateTime().truncatedTo(ChronoUnit.MINUTES)
-
-        assertContains(tools.scheduleFollowUp("too late", past.toString()), "in the past")
-        assertTrue(repo.listForUser(testUser(100)).isEmpty())
-    }
-
     private fun tools(context: RequestContext) =
-        TaskTools(repo = repo, context = context, maxTasksPerUser = 5, maxFollowUpsPerUser = 3)
+        TaskTools(repo = repo, context = context, maxTasksPerUser = 5)
 
     private suspend fun createTask(
         chatId: Long,

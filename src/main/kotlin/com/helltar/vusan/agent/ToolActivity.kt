@@ -7,6 +7,7 @@ import com.helltar.vusan.tools.imagegen.ImageGenTools
 import com.helltar.vusan.tools.memory.MemoryTools
 import com.helltar.vusan.tools.message.MessageTools
 import com.helltar.vusan.tools.searxng.SearxngTools
+import com.helltar.vusan.tools.tasks.FollowUpTools
 import com.helltar.vusan.tools.tasks.TaskTools
 import com.helltar.vusan.tools.tavily.TavilyTools
 import com.helltar.vusan.tools.tgchannel.TelegramChannelTools
@@ -80,7 +81,7 @@ private val TOOL_ACTIVITIES: Map<String, ToolActivity> = buildMap {
     put(MemoryTools::forgetMemory.name, ToolActivity.REMEMBERING)
     put(MemoryTools::forgetEverythingAboutMe.name, ToolActivity.REMEMBERING)
     put(TaskTools::scheduleTask.name, ToolActivity.MANAGING_TASKS)
-    put(TaskTools::scheduleFollowUp.name, ToolActivity.MANAGING_TASKS)
+    put(FollowUpTools::scheduleFollowUp.name, ToolActivity.MANAGING_TASKS)
     put(TaskTools::editTask.name, ToolActivity.MANAGING_TASKS)
     put(TaskTools::listTasks.name, ToolActivity.MANAGING_TASKS)
     put(TaskTools::pauseTask.name, ToolActivity.MANAGING_TASKS)

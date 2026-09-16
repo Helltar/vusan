@@ -12,15 +12,11 @@ import com.helltar.vusan.tools.suspendToolGuard
 import java.time.Instant
 import java.time.ZoneId
 
-private const val MAX_PROMPT_CHARS = 1000
-private const val MAX_TITLE_CHARS = 120
-
 @Suppress("unused")
 class TaskTools(
     private val repo: TasksRepository,
     private val context: RequestContext,
     private val maxTasksPerUser: Int,
-    private val maxFollowUpsPerUser: Int,
 ) : ToolSet {
 
     @Tool
@@ -38,12 +34,12 @@ class TaskTools(
         val owner = context.user
         val chat = context.chatRef
 
-        val trimmedPrompt = prompt.requireToolText("Task prompt", MAX_PROMPT_CHARS)
+        val trimmedPrompt = prompt.requireToolText("Task prompt", MAX_TASK_PROMPT_CHARS)
 
         val trimmedTitle = title?.trim()?.takeIf { it.isNotEmpty() }
 
-        require(trimmedTitle == null || trimmedTitle.length <= MAX_TITLE_CHARS) {
-            "Task title must be at most $MAX_TITLE_CHARS characters"
+        require(trimmedTitle == null || trimmedTitle.length <= MAX_TASK_TITLE_CHARS) {
+            "Task title must be at most $MAX_TASK_TITLE_CHARS characters"
         }
 
         val tz =
@@ -65,7 +61,7 @@ class TaskTools(
 
         val id =
             repo.create(
-                newTask(
+                context.newScheduledTask(
                     scope = ConversationScope(owner, chat),
                     prompt = trimmedPrompt,
                     title = trimmedTitle,
@@ -77,63 +73,6 @@ class TaskTools(
             )
 
         "Scheduled task id=$id, fires=${formatFire(plan.firstFire, tz)} (${plan.recurrence.display})."
-    }
-
-    @Tool
-    @LLMDescription(TaskToolDescriptions.SCHEDULE_FOLLOW_UP)
-    suspend fun scheduleFollowUp(
-        @LLMDescription(TaskToolDescriptions.FOLLOW_UP_PROMPT)
-        prompt: String,
-        @LLMDescription(TaskToolDescriptions.FOLLOW_UP_AT)
-        at: String,
-        @LLMDescription(TaskToolDescriptions.FOLLOW_UP_TIMEZONE)
-        timezone: String? = null,
-        @LLMDescription(TaskToolDescriptions.FOLLOW_UP_TITLE)
-        title: String? = null,
-    ): String = suspendToolGuard {
-        val owner = context.user
-        val chat = context.chatRef
-
-        val trimmedPrompt = prompt.requireToolText("Follow-up prompt", MAX_PROMPT_CHARS)
-        val trimmedTitle = title?.trim()?.takeIf { it.isNotEmpty() }
-
-        require(trimmedTitle == null || trimmedTitle.length <= MAX_TITLE_CHARS) {
-            "Follow-up title must be at most $MAX_TITLE_CHARS characters"
-        }
-
-        val tz =
-            parseTimezone(timezone)
-                ?: return@suspendToolGuard "Unknown timezone=`$timezone`. Use IANA names like `Europe/Kyiv` or omit."
-
-        // a follow-up is by definition a single moment, so the recurring schedule forms are not offered
-        // at all — the model only picks the datetime and the shared parser validates it.
-        val plan =
-            when (val parsed = parseSchedule("once ${at.trim()}", Instant.now(), tz)) {
-                is ScheduleParse.Err -> return@suspendToolGuard parsed.message
-                is ScheduleParse.Ok -> parsed
-            }
-
-        val pendingCount = repo.countForUser(owner, selfInitiated = true)
-
-        if (pendingCount >= maxFollowUpsPerUser) {
-            return@suspendToolGuard "You already owe this user $pendingCount follow-ups (limit $maxFollowUpsPerUser). " +
-                    "Wait for one to fire instead of promising another."
-        }
-
-        val id =
-            repo.create(
-                newTask(
-                    scope = ConversationScope(owner, chat),
-                    prompt = trimmedPrompt,
-                    title = trimmedTitle,
-                    recurrence = plan.recurrence,
-                    timezone = tz,
-                    nextFireAt = plan.firstFire,
-                    selfInitiated = true,
-                ),
-            )
-
-        "Follow-up id=$id set for ${formatFire(plan.firstFire, tz)}."
     }
 
     @Tool
@@ -178,7 +117,7 @@ class TaskTools(
                 ?: return@suspendToolGuard taskNotFound(id, scopedChat)
 
         val editedPrompt =
-            prompt?.requireToolText("Task prompt", MAX_PROMPT_CHARS)
+            prompt?.requireToolText("Task prompt", MAX_TASK_PROMPT_CHARS)
                 ?: existing.prompt
 
         val editedTitle =
@@ -188,8 +127,8 @@ class TaskTools(
                 title.trim().takeIf { it.isNotEmpty() }
             }
 
-        require(title == null || editedTitle == null || editedTitle.length <= MAX_TITLE_CHARS) {
-            "Task title must be at most $MAX_TITLE_CHARS characters"
+        require(title == null || editedTitle == null || editedTitle.length <= MAX_TASK_TITLE_CHARS) {
+            "Task title must be at most $MAX_TASK_TITLE_CHARS characters"
         }
 
         val editedTimezone =
@@ -304,36 +243,6 @@ class TaskTools(
             return@suspendToolGuard "Task id=$id is no longer available."
 
         "Cancelled task id=$id (${formatFire(existing.nextFireAt, existing.timezone)}, ${existing.recurrence.display})."
-    }
-
-    private fun newTask(
-        scope: ConversationScope,
-        prompt: String,
-        title: String?,
-        recurrence: Recurrence,
-        timezone: ZoneId,
-        nextFireAt: Instant,
-        selfInitiated: Boolean,
-    ) = NewScheduledTask(
-        scope = scope,
-        prompt = prompt,
-        title = title,
-        recurrence = recurrence,
-        timezone = timezone,
-        nextFireAt = nextFireAt,
-        creatorMessageId = context.messageId,
-        creatorThreadId = context.chat.threadId,
-        creatorUsername = context.sender.username,
-        creatorDisplayName = context.sender.displayName,
-        chatIsPrivate = context.chat.isPrivate,
-        language = context.language,
-        selfInitiated = selfInitiated,
-    )
-
-    private fun parseTimezone(raw: String?): ZoneId? {
-        if (raw.isNullOrBlank()) return ZoneId.systemDefault()
-
-        return runCatching { ZoneId.of(raw.trim()) }.getOrNull()
     }
 
     private fun scopedChat(): ChatRef? =
