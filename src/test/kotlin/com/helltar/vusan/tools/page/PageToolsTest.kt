@@ -74,13 +74,22 @@ class PageToolsTest {
     }
 
     @Test
-    fun `a long page is cut and says so`() = runBlocking {
+    fun `a long page is read in parts that continue from the stated offset`() = runBlocking {
         val body = "<p>" + "word ".repeat(10_000) + "</p>"
+        val tools = tools { respond(body, headers = headersOf(HttpHeaders.ContentType, "text/html")) }
 
-        val result = tools { respond(body, headers = headersOf(HttpHeaders.ContentType, "text/html")) }.readPage(PAGE_URL)
+        val first = tools.readPage(PAGE_URL)
 
-        assertTrue(result.length < body.length)
-        assertContains(result, "only this much was read")
+        assertTrue(first.length < body.length)
+        assertContains(first, "characters: 0 to $MAX_PAGE_TEXT_CHARS of 49999")
+        assertContains(first, "Continue reading with offset=$MAX_PAGE_TEXT_CHARS.")
+
+        val last = tools.readPage(PAGE_URL, offset = 3 * MAX_PAGE_TEXT_CHARS)
+
+        assertContains(last, "characters: ${3 * MAX_PAGE_TEXT_CHARS} to 49999 of 49999")
+        assertFalse("Continue reading" in last, "the last part still offered a continuation")
+
+        assertContains(toolFailure { tools.readPage(PAGE_URL, offset = 49999) }, "past the end")
     }
 
     @Test
