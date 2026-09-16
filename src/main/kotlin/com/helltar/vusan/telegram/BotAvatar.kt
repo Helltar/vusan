@@ -16,7 +16,7 @@ private const val TELEGRAM_PHOTO_NAME = "avatar.jpg"
  * The bot's own profile photo, as a reference the self-portrait tools can edit.
  *
  * A bot reads its own avatar the way it reads anyone's; nothing else in the Bot API exposes it. A
- * failure here is not fatal — the character then rests on `APPEARANCE` alone.
+ * failure here is not fatal — the character then rests on `APPEARANCE_FILE` alone.
  */
 internal suspend fun TelegramClient.profilePhotoReference(botId: Long): SourceImage? =
     runCatching {

@@ -37,7 +37,7 @@ internal suspend fun resolveSelfImage(
 
     if (reference == null && notes == null) {
         log.warn {
-            "Self-portraits: no reference photo and no APPEARANCE — a picture of the bot itself " +
+            "Self-portraits: no reference photo and no APPEARANCE_FILE — a picture of the bot itself " +
                     "shows a different person every time"
         }
 

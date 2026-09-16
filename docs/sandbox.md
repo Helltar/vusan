@@ -46,8 +46,8 @@ REGOLITH_TOKEN=<the same token>
 A bot run from source on the server's own machine needs none of that: `http://127.0.0.1:8080` works
 as it is.
 
-`REGOLITH_TOKEN_FILE` holds the token in a file instead. Both a URL and a token must be present, or
-the tools are not registered and the bot never mentions them — see
+Both a URL and a token must be present, or the tools are not registered and the bot never mentions
+them — see
 [configuration](configuration.md#sandbox). The bot never reaches the sandbox host any other way: one
 token, one HTTPS or private address, no Docker socket on this side.
 

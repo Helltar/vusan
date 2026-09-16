@@ -87,7 +87,7 @@ data class AppConfig(
                 openAiStt = resolveOpenAiStt(),
                 openAiVision = resolveOpenAiVision(),
                 personality = resolvePersonality(),
-                regolithToken = regolithUrl?.let { readServiceToken("REGOLITH", readEnv("REGOLITH_TOKEN"), readEnv("REGOLITH_TOKEN_FILE")) },
+                regolithToken = regolithUrl?.let { readServiceToken("REGOLITH", readEnv("REGOLITH_TOKEN")) },
                 regolithUrl = regolithUrl,
                 searxngUrl = readEnv("SEARXNG_URL"),
                 selfImageFile = readEnv("SELF_IMAGE_FILE"),
@@ -153,15 +153,10 @@ data class AppConfig(
         }
 
         private fun resolvePersonality(): String? {
-            readEnv("PERSONALITY")?.let {
-                log.info { "Personality: PERSONALITY env override (${it.length} chars)" }
-                return it
-            }
-
             val path =
                 readEnv("PERSONALITY_FILE")
                     ?: run {
-                        log.info { "Personality: built-in default (no PERSONALITY / PERSONALITY_FILE set)" }
+                        log.info { "Personality: built-in default (no PERSONALITY_FILE set)" }
                         return null
                     }
 
@@ -184,14 +179,13 @@ data class AppConfig(
         // image model, and a chat model handed a physical description tends to recite it.
         private fun resolveAppearance(): String? {
             val text =
-                readEnv("APPEARANCE")
-                    ?: readEnv("APPEARANCE_FILE")?.let { path ->
-                        val file = Path(path)
+                readEnv("APPEARANCE_FILE")?.let { path ->
+                    val file = Path(path)
 
-                        require(file.isReadable()) { "APPEARANCE_FILE=[$path] does not exist or is not readable" }
+                    require(file.isReadable()) { "APPEARANCE_FILE=[$path] does not exist or is not readable" }
 
-                        file.readText()
-                    }
+                    file.readText()
+                }
 
             return text?.trim()?.ifBlank { null }?.also { log.info { "Appearance: ${it.length} chars" } }
         }

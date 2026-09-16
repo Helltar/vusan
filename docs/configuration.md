@@ -239,14 +239,13 @@ nobody is watching one arrive, and refusing it would mean skipping the run.
 ## Personality
 
 The agent ships with a built-in personality named "Vusan", kept generic so each deployment can
-define its identity, tone and interaction style. Override it with either inline text or a file, or
-unset both to keep the built-in one. The operational rules for output and tools are always appended
-separately and cannot be removed by a custom personality.
+define its identity, tone and interaction style. Override it with a file, or leave the variable unset
+to keep the built-in one. The operational rules for output and tools are always appended separately
+and cannot be removed by a custom personality.
 
-| Variable           | Description                                                                                         |
-|--------------------|-----------------------------------------------------------------------------------------------------|
-| `PERSONALITY`      | Inline personality text, for something short. Takes precedence when set.                            |
-| `PERSONALITY_FILE` | Path to a file, for longer multi-line text. Unreadable fails startup; blank falls back to built-in. |
+| Variable           | Description                                                                           |
+|--------------------|---------------------------------------------------------------------------------------|
+| `PERSONALITY_FILE` | Path to the personality text. Unreadable fails startup; blank falls back to built-in. |
 
 ## Appearance
 
@@ -260,8 +259,7 @@ so it is read whenever either of those is enabled.
 | Variable          | Description                                                                                           |
 |-------------------|-------------------------------------------------------------------------------------------------------|
 | `SELF_IMAGE_FILE` | PNG, JPEG or WebP reference photo. Unreadable fails startup; unset falls back to the Telegram avatar. |
-| `APPEARANCE`      | Inline notes on what a portrait cannot show — height, build, tattoos, usual clothes.                  |
-| `APPEARANCE_FILE` | Path to a file, for longer text. Takes effect only when `APPEARANCE` is unset.                        |
+| `APPEARANCE_FILE` | Path to notes on what a portrait cannot show — height, build, tattoos, usual clothes.                 |
 
 Point `SELF_IMAGE_FILE` at the original whenever you have it: Telegram serves an avatar at 640x640,
 and a bigger, sharper face gives the image model more to hold on to. Keep the written notes to a few
@@ -433,11 +431,10 @@ in [the sandbox guide](sandbox.md).
 
 These are the bot's side of it, and belong in `.env`:
 
-| Variable               | Default | Description                                                             |
-|------------------------|---------|-------------------------------------------------------------------------|
-| `REGOLITH_URL`         | —       | Address of the Regolith server. Unset means the tools do not exist.     |
-| `REGOLITH_TOKEN`       | —       | Its API token, the same value the server was started with.              |
-| `REGOLITH_TOKEN_FILE`  | —       | A file holding that token instead. An explicit token takes precedence.  |
+| Variable         | Default | Description                                                         |
+|------------------|---------|---------------------------------------------------------------------|
+| `REGOLITH_URL`   | —       | Address of the Regolith server. Unset means the tools do not exist. |
+| `REGOLITH_TOKEN` | —       | Its API token, the same value the server was started with.          |
 
 Both a URL and a token must be present, or the sandbox tools are not registered and the bot never
 mentions them. The token takes 32 to 256 printable characters, and `openssl rand -hex 32` makes one
