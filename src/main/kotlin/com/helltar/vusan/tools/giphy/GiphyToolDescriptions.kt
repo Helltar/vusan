@@ -4,7 +4,7 @@ internal object GiphyToolDescriptions {
 
     const val SEARCH_GIF =
         "Finds and sends a GIF matching the user's request. " +
-                "Use when the user asks for a GIF, meme, reaction, or animated image. " +
+                "Use when the user asks for a GIF, a meme, or an animated image; an emoji reaction to a message is `setReaction`, not a GIF. " +
                 "After calling this tool, write a short natural comment for the user; the GIF will be sent automatically."
 
     const val QUERY =

@@ -13,7 +13,7 @@ internal object GroupLogToolDescriptions {
 
     const val READ_GROUP_LOG_WINDOW =
         "How far back to read, as a duration ending now: `30m`, `2h`, `24h`, `7d`. " +
-                "Reaches back at most `90d`."
+                "The log is kept for about a month; a window past that is answered with the exact limit."
 
     const val READ_GROUP_LOG_AUTHOR =
         "Restrict to one person, by Telegram username (with or without `@`) or by the name they display. " +

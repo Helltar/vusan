@@ -44,14 +44,14 @@ class ReactionTools(private val context: RequestContext, private val outbox: Bot
         val trimmedEmoji = emoji?.trim()
 
         require(!trimmedEmoji.isNullOrEmpty()) {
-            "Reaction emoji must be supplied — pass one emoji from the allowed list as the `emoji` argument."
+            "Reaction emoji must be supplied — pass one of Telegram's free reactions as the `emoji` argument."
         }
 
         val normalized = normalizeReactionEmoji(trimmedEmoji)
 
         require(normalized in ALLOWED_REACTION_EMOJI) {
             "Emoji `$trimmedEmoji` is not in Telegram's free reaction set and will be rejected. " +
-                    "Pick one from the allowed list in the tool description, or skip the reaction."
+                    "Pick one of these, or skip the reaction: ${ALLOWED_REACTION_EMOJI.joinToString(" ")}"
         }
 
         val targetId =

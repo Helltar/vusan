@@ -4,13 +4,11 @@ internal object MessageToolDescriptions {
 
     const val SEND_MESSAGE =
         "Sends a Telegram text message to the user. " +
-                "Use this for any substantive text content the user must see: web search summaries, news digests, riddle questions, facts, answers, explanations, lists. " +
+                "Use this for any substantive text content the user must see: web search summaries, news digests, facts, answers, explanations, lists. " +
                 "Call it once per distinct message; calls are sent in order alongside any other queued media. " +
                 "Keep a reply to a few messages; never split one answer into many tiny separate messages. " +
                 "Do NOT paste raw tool payloads here; write in the user's language, concise, natural. " +
-                "Format with Telegram HTML tags only (`<b>`, `<i>`, `<code>`, ...), never Markdown — `**` and `#` render as literal characters here; Markdown belongs only in `sendRichMessage`. " +
-                "Use real newlines for line breaks and never `<br>`, `<ul>`, `<li>`, or other unsupported HTML tags — Telegram rejects the whole message over them. " +
-                "Keep formatting light."
+                "Format it as the Telegram formatting rules say: the listed HTML tags only, never Markdown, and Markdown belongs only in `sendRichMessage`."
 
     const val TEXT =
         "Full text of the message to send to the user. " +

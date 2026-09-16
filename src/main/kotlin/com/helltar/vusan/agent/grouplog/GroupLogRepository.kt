@@ -39,6 +39,10 @@ import java.time.ZoneId
  */
 class GroupLogRepository(private val config: GroupLogConfig) {
 
+    /** How far back the log reaches at all, so a reader can refuse a window it could never fill. */
+    val retentionDays: Int
+        get() = config.retentionDays
+
     suspend fun record(entry: GroupLogEntry) {
         // exposed rejects a value longer than the column instead of truncating it, and every field
         // here comes from outside the process, so the fit is enforced at the one place that writes.

@@ -10,14 +10,16 @@ import com.helltar.vusan.tasks.Recurrence
 import com.helltar.vusan.tools.suspendToolGuard
 import kotlin.time.Duration.Companion.days
 
-private val MAX_WINDOW = 90.days
-
 @Suppress("unused")
 class GroupLogTools(
     private val repository: GroupLogRepository,
     private val reader: GroupLogReader,
     private val context: RequestContext,
 ) : ToolSet {
+
+    // a window past retention would read as an empty chat rather than as a limit, so it is refused
+    // with the number instead.
+    private val maxWindow = repository.retentionDays.days
 
     @Tool
     @LLMDescription(GroupLogToolDescriptions.READ_GROUP_LOG)
@@ -32,8 +34,10 @@ class GroupLogTools(
             Recurrence.parseInterval(window)
                 ?: return@suspendToolGuard "Unknown window=`$window`. Use a duration like `30m`, `2h`, `24h`, or `7d`."
 
-        if (parsed > MAX_WINDOW)
-            return@suspendToolGuard "Window `$window` is too long. The chat log only reaches back `90d`."
+        if (parsed > maxWindow) {
+            return@suspendToolGuard "Window `$window` is too long. " +
+                    "The chat log is kept for ${repository.retentionDays} days, so ask for at most `${repository.retentionDays}d`."
+        }
 
         reader.read(
             chat = context.chatRef,

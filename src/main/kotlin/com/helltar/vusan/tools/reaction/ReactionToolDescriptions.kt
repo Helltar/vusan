@@ -10,16 +10,11 @@ internal object ReactionToolDescriptions {
                 """Set `targetRepliedMessage` to `true` when the user is replying to someone and wants that earlier message reacted to (e.g. the user replies to someone's joke and writes "react to it"). """ +
                 "Pass `messageId` explicitly only when the user gives you the id of a specific message to react to (it overrides `targetRepliedMessage`). " +
                 "Use sparingly — do not stack a reaction on top of a substantive textual reply unless the user clearly asks for both. " +
-                "Allowed emoji (Telegram free reaction set): " +
-                "`👍`, `👎`, `❤`, `🔥`, `🥰`, `👏`, `😁`, `🤔`, `🤯`, `😱`, `🤬`, `😢`, `🎉`, `🤩`, `🤮`, `💩`, `🙏`, `👌`, `🕊`, " +
-                "`🤡`, `🥱`, `🥴`, `😍`, `🐳`, `❤‍🔥`, `🌚`, `🌭`, `💯`, `🤣`, `⚡`, `🍌`, `🏆`, `💔`, `🤨`, `😐`, `🍓`, `🍾`, `💋`, " +
-                "`🖕`, `😈`, `😴`, `😭`, `🤓`, `👻`, `👨‍💻`, `👀`, `🎃`, `🙈`, `😇`, `😨`, `🤝`, `✍`, `🤗`, `🫡`, `🎅`, `🎄`, `☃`, " +
-                "`💅`, `🤪`, `🗿`, `🆒`, `💘`, `🙉`, `🦄`, `😘`, `💊`, `🙊`, `😎`, `👾`, `🤷‍♂`, `🤷`, `🤷‍♀`, `😡`. " +
-                "Other emoji will be rejected by Telegram."
+                "Only Telegram's free reaction set is accepted — the common ones such as `👍`, `❤`, `🔥`, `😁`, `🤔`, `😢`, `🎉`, `🙏`, `👀` are in it; an emoji outside it is refused with the full list."
 
     const val EMOJI =
         "Required. " +
-                "Exactly one emoji from the allowed Telegram reaction set. " +
+                "Exactly one emoji from Telegram's free reaction set. " +
                 "Pass the raw emoji character, not its name or shortcode. " +
                 "Never omit this argument — the tool fails if `emoji` is missing."
 
