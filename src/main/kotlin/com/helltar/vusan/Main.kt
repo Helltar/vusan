@@ -99,8 +99,12 @@ suspend fun main() = coroutineScope {
             else null
 
         // the catalog only ever holds stickers vision has looked at, so without vision there is nothing
-        // to learn and nothing to offer the model.
-        val stickerCatalog = vision?.let { StickerCatalog(telegramClient, ImageVisionClient(it.executor, it.model)) }
+        // to learn and nothing to offer the model. with vision it learns on its own, and every set it
+        // learns is paid for in vision calls, which is what the switch is for.
+        val stickerCatalog =
+            vision
+                ?.takeIf { config.stickersEnabled }
+                ?.let { StickerCatalog(telegramClient, ImageVisionClient(it.executor, it.model)) }
 
         val contextWindowPolicy = ContextWindowPolicy(llm.model)
         val groupLogDigester = groupLog?.let { LlmGroupLogDigester(chatExecutor, llm.model, llm.compactionParams) }
@@ -261,6 +265,7 @@ private fun logStartup(
 
     if (vision != null) {
         log.info { "Vision: provider=[${vision.providerLabel}] model=[${vision.model.id}]" }
+        if (!config.stickersEnabled) log.info { "Stickers: off (STICKERS_ENABLED=false)" }
     } else {
         log.warn {
             "Vision disabled: model=[${llm.model.id}] cannot read images — " +

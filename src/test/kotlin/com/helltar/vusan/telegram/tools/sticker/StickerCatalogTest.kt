@@ -52,6 +52,7 @@ import kotlin.time.Duration.Companion.seconds
 
 private const val CHAT = -100L
 private const val OTHER_CHAT = -200L
+private const val THIRD_CHAT = -300L
 private const val SET_NAME = "vusan_test_set"
 
 // mirrors MIN_USES_BEFORE_LEARNING in the catalog
@@ -292,6 +293,30 @@ class StickerCatalogTest {
         catalog.learn(sticker("pack_four-1", set = "pack_four"))
 
         assertEquals(withinBudget.size, storedStickers().size, "the budget did not stop a fourth set")
+    }
+
+    @Test
+    fun `the bot as a whole cannot pull in more new sets a day than its own budget`() = runBlocking {
+        val client = FakeStickerClient(setOf = emptyList())
+        val catalog = catalog(client, visionAnswer = "penguin waving")
+
+        // three chats, two new sets each: within every chat's own budget, six across the bot
+        val chats = listOf(CHAT, OTHER_CHAT, THIRD_CHAT)
+
+        chats.forEachIndexed { chatIndex, chat ->
+            repeat(2) { setIndex ->
+                val pack = "pack_${chatIndex}_$setIndex"
+                client.setOf = listOf(sticker("$pack-1", set = pack))
+                catalog.learn(sticker("$pack-1", set = pack), chatId = chat)
+            }
+        }
+
+        assertEquals(6, storedStickers().size)
+
+        client.setOf = listOf(sticker("pack_extra-1", set = "pack_extra"))
+        catalog.learn(sticker("pack_extra-1", set = "pack_extra"), chatId = THIRD_CHAT)
+
+        assertEquals(6, storedStickers().size, "the bot-wide budget did not stop a seventh set")
     }
 
     @Test

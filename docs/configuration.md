@@ -415,10 +415,18 @@ behind `LLM_BASE_URL` may serve anything — so with either one vision stays off
 set, even when the model itself does accept images. The key always wins when it is set, even where
 the chat model could have looked at the picture itself.
 
-Sticker replies have no setting of their own: the catalog is enabled automatically whenever vision
-is available and stays off without it. With no vision at all, a startup `WARN` says so and Vusan
-answers without looking at attachments; Telegram channel posts still come back, as text only. Vision
-calls share the `LLM_REQUEST_TIMEOUT_SECONDS` budget.
+Sticker replies come with vision and stay off without it. They are the one thing here that spends
+on its own: a set a chat keeps using is pulled in and each of its stickers is described once, up to
+sixty vision calls per set, at most three new sets a day for any chat and six for the whole bot. A
+deployment that would rather not pay for that turns it off:
+
+| Variable           | Default | Description                                                           |
+|--------------------|---------|-----------------------------------------------------------------------|
+| `STICKERS_ENABLED` | `true`  | Set to `false` to learn no sticker sets and offer no sticker replies. |
+
+With no vision at all, a startup `WARN` says so and Vusan answers without looking at attachments;
+Telegram channel posts still come back, as text only. Vision calls share the
+`LLM_REQUEST_TIMEOUT_SECONDS` budget.
 
 ## Sandbox
 

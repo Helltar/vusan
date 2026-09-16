@@ -402,9 +402,10 @@ A normal user message travels:
   allowlisted chat — including ones the bot is not addressed in, which in a group is its only view of what people
   actually use — records the set and the individual sticker, and pulls the set in whole through `getStickerSet`. No
   message content or sender identity is stored. Pulling a set in is the only expensive step — up to 60 vision calls,
-  paid once — so it is gated twice: a set is learned only on the second time a chat reaches for it, and no chat may pull
-  in more than three new sets a day. Neither gate applies to a set already known from elsewhere, which costs nothing to
-  offer. A background worker then describes each sticker's thumbnail once through the vision model and caches the result
+  paid once — so it is gated three times: a set is learned only on the second time a chat reaches for it, no chat may
+  pull in more than three new sets a day, and the bot as a whole no more than six, so the worst day is bounded whatever
+  the number of chats. None of the gates applies to a set already known from elsewhere, which costs nothing to offer.
+  `STICKERS_ENABLED=false` leaves the catalog out entirely, vision or not. A background worker then describes each sticker's thumbnail once through the vision model and caches the result
   by `file_unique_id`. `AgentRunner` puts at most 16 ready-to-send entries into the current user turn: recently used
   individual stickers first, then frequent ones, with spare room filled round-robin across every described set the chat
   knows. A group that forbids stickers gets no index at all, matching the registry: the tools are gated on the same

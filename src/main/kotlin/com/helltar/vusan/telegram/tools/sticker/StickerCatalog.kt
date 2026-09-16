@@ -24,6 +24,7 @@ import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
+import org.jetbrains.exposed.v1.core.Op
 import org.jetbrains.exposed.v1.core.ResultRow
 import org.jetbrains.exposed.v1.core.SortOrder
 import org.jetbrains.exposed.v1.core.and
@@ -64,11 +65,15 @@ private const val RECENT_INDEX_ENTRIES = MAX_INDEX_ENTRIES / 2
 private const val MAX_DESCRIPTION_CHARS = 90
 
 // pulling in a set is the only expensive thing here — up to MAX_STICKERS_PER_SET vision calls, paid
-// once. these two keep that bill tied to what a chat actually uses: a set nobody reaches for twice is
+// once. these keep that bill tied to what a chat actually uses: a set nobody reaches for twice is
 // never learned, and no chat can pull in more than a handful of new sets a day however many stickers
 // it throws. neither applies to a set already known from another chat, which costs nothing to offer.
+// the per-chat cap alone still grows with the number of chats the bot sits in, so a cap on the whole
+// deployment bounds the worst day at MAX_NEW_SETS_PER_DAY × MAX_STICKERS_PER_SET vision calls,
+// whatever the chat count.
 private const val MIN_USES_BEFORE_LEARNING = 2
 private const val MAX_NEW_SETS_PER_CHAT_PER_DAY = 3
+private const val MAX_NEW_SETS_PER_DAY = 6
 private val NEW_SET_BUDGET_WINDOW = 24.hours
 
 private const val DESCRIPTIONS_PER_PASS = 20
@@ -176,6 +181,15 @@ class StickerCatalog(
                 log.warn {
                     "chat=$chatId reached its new sticker set budget " +
                             "($MAX_NEW_SETS_PER_CHAT_PER_DAY/day); set=[$setName] not learned"
+                }
+
+                return@runCatching
+            }
+
+            if (setsLearnedRecently() >= MAX_NEW_SETS_PER_DAY) {
+                log.warn {
+                    "the bot reached its new sticker set budget ($MAX_NEW_SETS_PER_DAY/day); " +
+                            "set=[$setName] from chat=$chatId not learned"
                 }
 
                 return@runCatching
@@ -576,13 +590,21 @@ class StickerCatalog(
     private suspend fun setsLearnedRecentlyIn(chatId: Long): Int = dbTransaction {
         TelegramChatStickerSetsTable
             .selectAll()
-            .where {
-                (TelegramChatStickerSetsTable.chatId eq chatId) and
-                        (TelegramChatStickerSetsTable.learnedAt greater Instant.now().minusSeconds(NEW_SET_BUDGET_WINDOW.inWholeSeconds))
-            }
+            .where { (TelegramChatStickerSetsTable.chatId eq chatId) and learnedWithinBudgetWindow() }
             .count()
             .toInt()
     }
+
+    private suspend fun setsLearnedRecently(): Int = dbTransaction {
+        TelegramChatStickerSetsTable
+            .selectAll()
+            .where { learnedWithinBudgetWindow() }
+            .count()
+            .toInt()
+    }
+
+    private fun learnedWithinBudgetWindow(): Op<Boolean> =
+        TelegramChatStickerSetsTable.learnedAt greater Instant.now().minusSeconds(NEW_SET_BUDGET_WINDOW.inWholeSeconds)
 
     private suspend fun markLearnedIn(chatId: Long, setName: String) = dbTransaction {
         TelegramChatStickerSetsTable.update({
