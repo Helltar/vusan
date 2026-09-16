@@ -74,13 +74,6 @@ internal object SpanishMessages : Messages {
             ?.let { "He agotado mi límite de uso — se renueva en unos ${waitLabel(it)}, inténtalo entonces ⏳" }
             ?: "He agotado mi límite de uso — se renueva en un rato, inténtalo más tarde 🙏"
 
-    override fun tokenBudgetExhaustedReply(untilReset: Duration): String =
-        "El presupuesto de tokens de hoy está agotado — vuelve en unos ${waitLabel(untilReset)} ⏳"
-
-    override fun tokenShareExhaustedReply(untilReset: Duration): String =
-        "El presupuesto de tokens de hoy se está acabando y tu parte ya está gastada — " +
-                "guardo el resto para los demás. Vuelve en unos ${waitLabel(untilReset)} ⏳"
-
     private fun waitLabel(untilReset: Duration): String =
         untilReset.toComponents { days, hours, minutes, _, _ ->
             when {

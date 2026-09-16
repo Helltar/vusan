@@ -215,35 +215,10 @@ CODEX_IMAGE_GENERATION_ENABLED=false
 ```
 
 Two limits are worth knowing. Usage is metered against the plan rather than billed per token, so a
-heavy day ends in a "usage limit reached" reply that says how long the window still has to run — the
-[daily token budget](#daily-token-budget) still works but is not what stops you first. And this
+heavy day ends in a "usage limit reached" reply that says how long the window still has to run. And this
 route depends on an endpoint OpenAI ships for its own Codex clients rather than documents for
 third-party apps, so an OpenAI-side change can break it; `LLM_PROVIDER=openai` with an API key stays
 the supported fallback.
-
-## Daily token budget
-
-A ceiling on the tokens Vusan may spend in a day, off by default. It exists for a provider allowance
-that refills on a clock — OpenAI hands out free daily tokens at 00:00 UTC in exchange for sharing
-API inputs and outputs — and works just as well as a plain daily spending cap.
-
-| Variable                                 | Default   | Description                                                               |
-|------------------------------------------|-----------|---------------------------------------------------------------------------|
-| `LLM_DAILY_TOKEN_BUDGET`                 | unlimited | Input plus output tokens allowed per day.                                 |
-| `LLM_TOKEN_BUDGET_TIMEZONE`              | `UTC`     | The zone whose midnight starts the next budget, e.g. `Europe/Kyiv`.       |
-| `LLM_TOKEN_BUDGET_FAIR_SHARE_AT_PERCENT` | `70`      | How much of the day is first come, first served; `100` turns sharing off. |
-
-Leaving `LLM_DAILY_TOKEN_BUDGET` unset means no ceiling and no bookkeeping at all. Match the
-timezone to your provider's reset — OpenAI's is `UTC`.
-
-Everything Vusan asks a model counts: replies, its own history recaps, group-chat digests, and
-reading images — including through a separate `OPENAI_VISION_API_KEY` model, since the ceiling is
-what Vusan spends rather than what one provider bills for.
-
-Once the day's budget is gone, Vusan answers every request with "come back in about N hours" instead
-of thinking, and scheduled tasks that come due are skipped and moved to their next run rather than
-retried. The count survives a restart, and the ceiling is checked before each request rather than
-mid-reply, so the day's last request can go slightly over it instead of being cut off in the middle.
 
 ## How many requests at once
 
@@ -260,22 +235,6 @@ Beyond that number people wait their turn, with the usual typing indicator, and 
 arrives a little later. Only when the queue is already several times the limit does Vusan say it is
 overloaded instead of queueing further. Scheduled tasks always wait rather than being turned away —
 nobody is watching one arrive, and refusing it would mean skipping the run.
-
-**Sharing it out.** Nobody gets a personal quota up front: splitting the day equally between
-everyone on the allowlist would freeze tokens for the members who never use the bot, while the few
-who do would run out by noon. Instead the day is free for all until
-`LLM_TOKEN_BUDGET_FAIR_SHARE_AT_PERCENT` of it is spent. Past that point a person who has already
-used more than `budget ÷ people active in the last week` waits for the reset, and everyone below
-their share carries on. The divisor counts who actually used the bot recently, not who is allowed
-to, so idle members reserve nothing.
-
-With a 2.5M budget and six people active this week, the first 1.75M go to whoever asks for them.
-After that the share is about 416k: someone already through 1.2M is told to come back later, while
-someone at 80k keeps working until the day's 2.5M is gone. If everyone left is over their share, the
-remainder is held until the reset rather than handed to the heaviest user.
-
-Vusan's own background work — describing stickers, digesting a group's day — belongs to no share and
-answers to the day's ceiling alone.
 
 ## Personality
 

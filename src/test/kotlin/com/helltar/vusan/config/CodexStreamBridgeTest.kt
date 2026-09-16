@@ -124,7 +124,7 @@ class CodexStreamBridgeTest {
     }
 
     @Test
-    fun `usage and model survive so the token budget still meters the turn`() {
+    fun `usage and model survive so the turn's token usage is still logged`() {
         val response =
             collectStreamedResponse(
                 listOf(

@@ -2,7 +2,6 @@ package com.helltar.vusan.tasks
 
 import com.helltar.vusan.agent.AgentRequest
 import com.helltar.vusan.agent.AgentRunner
-import com.helltar.vusan.budget.TokenBudget
 import com.helltar.vusan.common.rethrowIfCancellation
 import com.helltar.vusan.common.runInOwnJob
 import com.helltar.vusan.i18n.Messages
@@ -27,7 +26,6 @@ class TaskScheduler(
     private val delivery: OutputDelivery,
     private val maxLateness: Duration,
     private val chatProfiles: ChatProfileLookup,
-    private val tokenBudget: TokenBudget = TokenBudget(),
     // no default: an empty policy allows nobody, and a scheduler that silently fires nothing is worse
     // than one that will not be built without being told who may use it.
     private val accessPolicy: AccessPolicy,
@@ -91,19 +89,6 @@ class TaskScheduler(
 
         if (latenessMillis > maxLateness.inWholeMilliseconds) {
             handleMissed(task, now)
-            return
-        }
-
-        // no tokens for this task's owner: skip the run and move the recurrence on, the way an offline window
-        // is skipped. spending the retry attempts here would only burn the next day's budget on a stale task,
-        // and a notice per due task would fill the chat for as long as the budget stays out.
-        tokenBudget.stopFor(task.scope.user)?.let { stop ->
-            log.warn {
-                "task id=${task.id} skipped: token budget stop reason=${stop::class.simpleName} " +
-                        "resetsIn=${stop.untilReset}"
-            }
-
-            rescheduleAfterFire(task, now)
             return
         }
 

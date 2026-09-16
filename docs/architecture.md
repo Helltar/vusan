@@ -89,11 +89,6 @@ that is who owns writing them, not because only `agent/` reads them. No other ar
 - **`tasks/`** — scheduled-task subsystem: storage, persisted pause state, recurrence math, and the background
   `TaskScheduler`. It knows no messenger: it delivers through `OutputDelivery` and reads chat facts through
   `ChatProfileLookup`.
-- **`budget/`** — the daily token ceiling and how the day is shared out. `TokenBudget` counts the day's spend, both in
-  total and per person, and answers why someone cannot spend right now (`TokenBudgetStop`); `BudgetedPromptExecutor` is
-  the `PromptExecutor` wrapper that does the counting, so one place covers every LLM call the bot makes; `BudgetOwner`
-  is the coroutine-context element that says whose share a nested call comes out of. Inert unless
-  `LLM_DAILY_TOKEN_BUDGET` is set.
 - **`infra/`** — cross-cutting infrastructure: the SQLite/Exposed `Db` singleton and the Ktor `Http` client. Every
   table that holds state belonging to somebody carries a `platform` column beside the external id, so two messengers
   issuing the same number never read each other's rows. `Db.connect` creates a fresh database whole and stamps the version
@@ -182,10 +177,10 @@ A normal user message travels:
    with their typing indicator, and only a queue several times that long answered "overloaded" instead of queued; a
    queued turn (a scheduled fire, a spooled message) always waits rather than being refused. The place is taken
    **before** the lock in both paths, because a turn holding a lock while waiting for a place and a queued turn holding
-   a place while waiting for that lock would wait for each other. It then turns the request away with a "come
-   back later" reply when the day's token budget is already spent, loads durable memory (`agent/memory/MemoryRepository`
-   — the sender's user memory always, plus the group's memory in non-private chats), and places it with
-   `<message_context>` immediately before the current request in one user-role turn. That metadata also carries
+   a place while waiting for that lock would wait for each other. It then loads durable memory
+   (`agent/memory/MemoryRepository` — the sender's user memory always, plus the group's memory in non-private chats),
+   and places it with `<message_context>` immediately before the current request in one user-role turn. That
+   metadata also carries
    `last_exchange` — how long ago this user last spoke with Vusan in this chat — but only once the gap is long enough to
    be worth noticing, so ordinary back-and-forth stays free of it. In a group the turn also carries `<recent_chat>`: a
    hard-capped slice of what the chat was saying just before, so a question with no subject ("and what do you think?")
@@ -358,10 +353,9 @@ A normal user message travels:
   (or even the missed/failed notice) as undeliverable, and `parkTasksOnLostAccess` acting on the `my_chat_member` update
   the moment the bot is removed or silenced. Paused rather than deleted, so the tasks stay listed in `/tasks` and their
   owners can resume them if the bot gets back in. Paused tasks remain stored and count toward the per-user task limit,
-  but the due-task query skips them. A due task is also skipped, silently and without retries, while the daily token
-  budget is spent — the same treatment an offline window gets, minus the notice, which would otherwise repeat for every
-  task due until the budget resets. A task whose owner and chat are outside `ALLOWED_IDS`, or on `BANNED_IDS`, is skipped the same way,
-  ahead of the lateness check, so losing access produces no "missed" notices either. Recurrence math lives in `tasks/Recurrence.kt`.
+  but the due-task query skips them. A task whose owner and chat are outside `ALLOWED_IDS`, or on `BANNED_IDS`, is
+  skipped the same way, ahead of the lateness check, so losing access produces no "missed" notices either. Recurrence
+  math lives in `tasks/Recurrence.kt`.
 - **Maintenance** — `infra/Maintenance` runs a pass of bounded deletes on the way up and every six hours after
   that: conversations past `CONVERSATION_RETENTION_DAYS`, group transcripts past `GROUP_LOG_RETENTION_DAYS` or over
   their row cap, and polls past their retention. Each of these is also pruned where it is written, and that is enough
@@ -369,24 +363,7 @@ A normal user message travels:
   left, a chat the bot still sits in, a poll never followed by another. Every step bounds its own work (a hundred
   conversations or chats a round, the next round taking the rest) and reports what it removed, and a step that throws
   leaves the others to run. `Main` wires the steps, because one of them belongs to a messenger and `infra/` may not
-  know that. Per-user token spend is not here: `TokenBudget` prunes it as the budget day rolls over.
-- **Daily token budget** — with `LLM_DAILY_TOKEN_BUDGET` set, `budget/BudgetedPromptExecutor` wraps the executor every
-  LLM caller shares, adds each completed call's input plus output tokens to the day's total in `token_usage` and to its
-  author's row in `token_usage_by_user` — both in one transaction, so a restart never resumes a day that nobody spent —
-  and refuses to start a call the budget has no room for. A vision model of its own
-  (`OPENAI_VISION_API_KEY`) is wrapped separately in `Main`, since the ceiling counts what the bot spends rather than
-  what one provider bills for; work with no user behind it (the sticker worker, a group-log digest) answers to the
-  day's total alone. `TokenBudget` reloads the
-  day whenever the budget date changes, so a restart resumes the same day and midnight in `LLM_TOKEN_BUDGET_TIMEZONE`
-  starts a fresh one. The ceiling is checked before a call, never mid-call, so the day's last turn may overshoot by one
-  turn. A turn that runs out mid-way ends with the same "come back later" reply as one that never started, and is not
-  counted as a failure to retry. Past `LLM_TOKEN_BUDGET_FAIR_SHARE_AT_PERCENT` of the day, a second rule joins the
-  ceiling: a person over `budget ÷ users active in the last week` is turned away while everyone below their share keeps
-  working, so one heavy user cannot take the end of the day from the rest. The divisor comes from `token_usage_by_user`
-  rather than the allowlist — only people who actually used the bot count, so idle members reserve nothing. Attribution
-  rides on the `BudgetOwner` coroutine-context element that `AgentRunner` installs around a turn, which is how a history
-  recap or a vision call inside that turn lands on the same person; work started outside a turn (the sticker description
-  worker) carries no owner and answers to the day's ceiling alone.
+  know that.
 - **Self-initiated follow-ups** — `scheduleFollowUp` lets the agent set itself a single future turn when the
   conversation gives it a reason to come back ("ask how the exam went"). It is the same scheduler, store, and delivery
   path as `scheduleTask`, narrowed: one-time only, its own `MAX_FOLLOW_UPS_PER_USER` limit so the agent cannot spend the
@@ -538,8 +515,8 @@ A normal user message travels:
   non-streaming API would have returned, while preserving a non-empty completed output if the backend supplies one and
   rejecting failed, incomplete, or cancelled terminal events. Codex requests use `store=false` and explicitly request
   encrypted reasoning content, so reasoning items can be echoed through a stateless multi-step tool loop. Bridging at
-  the transport keeps Koog's own parsing of tool calls, reasoning items and usage, and leaves `AgentRunner` and the
-  token budget unaware that this provider streams.
+  the transport keeps Koog's own parsing of tool calls, reasoning items and usage, and leaves `AgentRunner` unaware
+  that this provider streams.
 
   Model discovery runs at startup through `config/CodexCatalog`: the account's own catalog decides which ids and context
   window are valid, since Codex and the Platform API expose different model sets. Input modalities decide whether the
@@ -567,10 +544,9 @@ A normal user message travels:
 
 `Main.kt` wires everything in order: load `AppConfig` → connect `Db` → create the `Http` client → (only with
 `LLM_PROVIDER=codex`) build the `CodexAuthStore` and run `codexPreflight`, which proves the ChatGPT session works and
-fills the context window in from the account's model catalog before any message is served → create the LLM runtime →
-wrap the executor in the `TokenBudget` meter, which everything downstream then uses → build repositories, context
-policy, conversation compactor, the Telegram client and its `BotProfile` — one `getMe` call shared by the runner, which
-matches mentions against it, and `AgentFactory`, which puts the handle in the system prompt → (only when image
+fills the context window in from the account's model catalog before any message is served → create the LLM runtime,
+whose executor everything downstream then shares → build repositories, context policy, conversation compactor, the
+Telegram client and its `BotProfile` — one `getMe` call shared by the runner, which matches mentions against it, and `AgentFactory`, which puts the handle in the system prompt → (only when image
 generation or `ELEVENLABS_API_KEY` is configured, the two things that use it) `resolveSelfImage`
 (`tools/imagegen/SelfImage.kt`), which reads the reference photo self-portraits and round video messages are drawn from:
 `SELF_IMAGE_FILE` when set, otherwise whatever avatar loader startup hands it — for Telegram, one
@@ -591,7 +567,7 @@ a separate DNS preflight.
 What that leaves in the log, in order: a `Starting Vusan <version>` banner (read from the jar manifest, `dev` on a
 classpath run), then whatever the Codex preflight and the optional-tool checks have to say, then one summary block from
 `logStartup` just before the runner starts — the LLM line (provider, model, reasoning effort, service tier), context
-window, daily budget, vision, database file, enabled tools. `TelegramBotRunner` closes it with the bot's own handle and
+window, vision, database file, enabled tools. `TelegramBotRunner` closes it with the bot's own handle and
 the allowlist.
 
 The runner's first act is `publishCommandMenu` (`telegram/CommandMenu.kt`): a `setMyCommands` call per `Language`, so
@@ -715,7 +691,6 @@ A symptom-to-source map for finding the right file fast. Paths are under
 | "Sign in again" replies, ChatGPT-subscription auth, or a rejected `LLM_MODEL` on `codex` | `config/CodexAuth.kt` (token load/refresh/persist) + `config/CodexCatalog.kt` (which models the plan offers) + `config/CodexHttpClient.kt` (per-request bearer and account headers) |
 | `describeImage`/`describeVideo` missing from the tool list | `config/VisionRuntime.kt` (chat model vs `OPENAI_VISION_API_KEY`), then `tools/ToolRegistryFactory.kt` (registration is skipped when there is no vision runtime) |
 | Garbled or empty tool-call crashes from a flaky model | `agent/AgentFactory.kt` — `vusanSingleRunStrategy` and `missingRequiredArgs` short-circuit them |
-| Vusan answers "come back later", or a scheduled task never fires | `budget/TokenBudget.kt` (the day's spend, the per-person share, the reset zone) + `budget/BudgetedPromptExecutor.kt` (what is counted) + `budget/TokenBudgetStop.kt` (day ceiling vs personal share, and the `BudgetOwner` attribution), then `LLM_DAILY_TOKEN_BUDGET` in [`configuration.md`](configuration.md) |
 
 ## Adding a tool
 

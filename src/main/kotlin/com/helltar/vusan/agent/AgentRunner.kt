@@ -6,10 +6,6 @@ import com.helltar.vusan.agent.grouplog.withoutExchangesWith
 import com.helltar.vusan.agent.conversation.*
 import com.helltar.vusan.agent.memory.MemoryRepository
 import com.helltar.vusan.agent.memory.memoryOwner
-import com.helltar.vusan.budget.BudgetOwner
-import com.helltar.vusan.budget.TokenBudget
-import com.helltar.vusan.budget.TokenBudgetStop
-import com.helltar.vusan.budget.tokenBudgetStop
 import com.helltar.vusan.common.collapseWhitespaceAndCap
 import com.helltar.vusan.common.limitTo
 import com.helltar.vusan.common.rethrowIfCancellation
@@ -27,7 +23,6 @@ import com.helltar.vusan.tools.ToolRegistryFactory
 import io.github.oshai.kotlinlogging.KotlinLogging
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
-import kotlinx.coroutines.withContext
 import java.time.Instant
 import java.time.ZoneId
 import java.time.temporal.ChronoUnit
@@ -77,7 +72,6 @@ class AgentRunner(
     private val stickerCatalog: (suspend (ChatRef) -> String?)? = null,
     private val groupLog: GroupLogRepository? = null,
     private val groupLogConfig: GroupLogConfig = GroupLogConfig(),
-    private val tokenBudget: TokenBudget = TokenBudget(),
     // the ceiling every conversation shares: one person's lock says nothing about how many people may
     // be served at once, and each turn is an LLM call with its tools behind it. no default — a runner
     // quietly serving one turn at a time is not something to discover under load.
@@ -182,27 +176,6 @@ class AgentRunner(
         narrator: TurnNarrator?,
     ): AgentResult {
         val context = request.context
-
-        tokenBudget.stopFor(context.user)?.let { stop ->
-            log.warn {
-                "token budget stop before the turn: chat=${context.chat.id} user=${context.sender.id} " +
-                        "reason=${stop::class.simpleName} resetsIn=${stop.untilReset}"
-            }
-
-            return AgentResult(outputs = emptyList(), comment = Messages.of(context.language).replyFor(stop))
-        }
-
-        // the turn spends tokens in places that never see the request — a history recap, a vision tool —
-        // so its author rides along in the coroutine context and every one of those calls is charged to them.
-        return withContext(BudgetOwner(context.user)) { runTurn(request, onToolStarting, narrator) }
-    }
-
-    private suspend fun runTurn(
-        request: AgentRequest,
-        onToolStarting: (activity: ToolActivity?) -> Unit,
-        narrator: TurnNarrator?,
-    ): AgentResult {
-        val context = request.context
         val userMemory = if (context.sender.isPerson) memory.load(context.user.memoryOwner) else emptyList()
         val chatMemory = if (context.chat.isPrivate) emptyList() else memory.load(context.chatRef.memoryOwner)
 
@@ -271,8 +244,6 @@ class AgentRunner(
                 )
             } catch (e: Throwable) {
                 e.rethrowIfCancellation()
-                budgetStopReply(context, e)?.let { return AgentResult(outputs = emptyList(), comment = it) }
-
                 // logs the cause either way; the reply itself is only used when nothing was delivered.
                 val failureReply = replyForAgentFailure(context, e)
 
@@ -476,19 +447,6 @@ class AgentRunner(
         }
     }
 
-    // the budget ran out with the turn already in flight. that is not a failure to retry — the turn is over
-    // until the budget resets — so it gets the same "come back later" reply as a turn that never started.
-    private fun budgetStopReply(context: RequestContext, e: Throwable): String? =
-        e.tokenBudgetStop()
-            ?.let { stop ->
-                log.warn {
-                    "token budget stop mid-turn: chat=${context.chat.id} user=${context.sender.id} " +
-                            "reason=${stop::class.simpleName} resetsIn=${stop.untilReset}"
-                }
-
-                Messages.of(context.language).replyFor(stop)
-            }
-
     // pick the user-facing reply and log accordingly. LLM provider errors arrive as a large JSON body, so
     // they get a single capped WARN line; a transient overload (429/503) gets a friendly "try again" reply,
     // any other provider error and genuine unexpected failures get the generic fallback (the latter with a
@@ -536,12 +494,6 @@ class AgentRunner(
         val log = KotlinLogging.logger {}
     }
 }
-
-private fun Messages.replyFor(stop: TokenBudgetStop): String =
-    when (stop) {
-        is TokenBudgetStop.DayBudget -> tokenBudgetExhaustedReply(stop.untilReset)
-        is TokenBudgetStop.UserShare -> tokenShareExhaustedReply(stop.untilReset)
-    }
 
 private fun tokenUsageLogSummary(usages: List<TokenUsage>): String {
 

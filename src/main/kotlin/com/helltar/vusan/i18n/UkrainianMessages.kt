@@ -72,13 +72,6 @@ internal object UkrainianMessages : Messages {
             ?.let { "Ліміт використання вичерпано — оновиться приблизно за ${waitLabel(it)}, тоді спробуй ще раз ⏳" }
             ?: "Ліміт використання вичерпано — він скоро оновиться, спробуй пізніше 🙏"
 
-    override fun tokenBudgetExhaustedReply(untilReset: Duration): String =
-        "Бюджет токенів на сьогодні вичерпано — повертайся приблизно за ${waitLabel(untilReset)} ⏳"
-
-    override fun tokenShareExhaustedReply(untilReset: Duration): String =
-        "Бюджет токенів на сьогодні добігає кінця, і твоя частка вже вичерпана — " +
-                "решту тримаю для інших. Повертайся приблизно за ${waitLabel(untilReset)} ⏳"
-
     private fun waitLabel(untilReset: Duration): String =
         untilReset.toComponents { days, hours, minutes, _, _ ->
             when {

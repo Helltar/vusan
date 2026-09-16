@@ -12,8 +12,6 @@ import com.helltar.vusan.infra.tables.TelegramPollsTable
 import com.helltar.vusan.infra.tables.ScheduledTasksTable
 import com.helltar.vusan.infra.tables.TelegramStickerSetsTable
 import com.helltar.vusan.infra.tables.TelegramStickersTable
-import com.helltar.vusan.infra.tables.TokenUsageTable
-import com.helltar.vusan.infra.tables.TokenUsageByUserTable
 import org.jetbrains.exposed.v1.core.Table
 
 /**
@@ -29,7 +27,7 @@ import org.jetbrains.exposed.v1.core.Table
 internal object Schema {
 
     /** Raise this by one for every schema change, and move deployed databases by hand to match. */
-    const val VERSION = 2
+    const val VERSION = 3
 
     val tables: List<Table> =
         listOf(
@@ -43,8 +41,6 @@ internal object Schema {
             TelegramStickerSetsTable,
             TelegramChatStickerSetsTable,
             TelegramChatStickersTable,
-            TokenUsageTable,
-            TokenUsageByUserTable,
             TelegramPendingUpdatesTable,
             TelegramPollsTable,
         )

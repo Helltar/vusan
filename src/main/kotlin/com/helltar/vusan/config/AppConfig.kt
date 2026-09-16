@@ -6,7 +6,6 @@ import com.helltar.vusan.request.Platform
 import com.helltar.vusan.request.UserRef
 import io.github.cdimascio.dotenv.dotenv
 import io.github.oshai.kotlinlogging.KotlinLogging
-import java.time.ZoneId
 import kotlin.io.path.Path
 import kotlin.io.path.isReadable
 import kotlin.io.path.readText
@@ -39,7 +38,6 @@ data class AppConfig(
     val taskMaxLatenessMinutes: Long,
     val tavilyApiKey: String?,
     val telegramBotToken: String,
-    val tokenBudget: TokenBudgetConfig = TokenBudgetConfig(),
     val ytDlpCookiesFile: String?,
 ) {
 
@@ -96,7 +94,6 @@ data class AppConfig(
                 taskMaxLatenessMinutes = readLongEnv("TASK_MAX_LATENESS_MINUTES") ?: DEFAULT_TASK_MAX_LATENESS_MINUTES,
                 tavilyApiKey = readEnv("TAVILY_API_KEY"),
                 telegramBotToken = requireEnv("TELEGRAM_BOT_TOKEN"),
-                tokenBudget = resolveTokenBudget(),
                 ytDlpCookiesFile = readEnv("YT_DLP_COOKIES_FILE"),
 
                 chatHistory =
@@ -197,22 +194,6 @@ data class AppConfig(
                     }
 
             return text?.trim()?.ifBlank { null }?.also { log.info { "Appearance: ${it.length} chars" } }
-        }
-
-        private fun resolveTokenBudget(): TokenBudgetConfig {
-            val zone =
-                readEnv("LLM_TOKEN_BUDGET_TIMEZONE")?.let { raw ->
-                    runCatching { ZoneId.of(raw) }
-                        .getOrElse { error("Unsupported LLM_TOKEN_BUDGET_TIMEZONE=[$raw], expected a zone id like Europe/Kyiv") }
-                } ?: TokenBudgetConfig.DEFAULT_ZONE
-
-            return TokenBudgetConfig(
-                dailyTokens = readLongEnv("LLM_DAILY_TOKEN_BUDGET"),
-                zone = zone,
-                fairSharePercent =
-                    readIntEnv("LLM_TOKEN_BUDGET_FAIR_SHARE_AT_PERCENT")
-                        ?: TokenBudgetConfig.DEFAULT_FAIR_SHARE_PERCENT,
-            )
         }
 
         private fun resolveOpenAiStt(): OpenAiSttConfig? {

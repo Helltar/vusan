@@ -9,7 +9,6 @@ import com.helltar.vusan.agent.conversation.LlmConversationCompactor
 import com.helltar.vusan.agent.grouplog.GroupLogRepository
 import com.helltar.vusan.agent.grouplog.LlmGroupLogDigester
 import com.helltar.vusan.agent.memory.MemoryRepository
-import com.helltar.vusan.budget.TokenBudget
 import com.helltar.vusan.config.*
 import com.helltar.vusan.infra.Db
 import com.helltar.vusan.infra.Http
@@ -78,25 +77,12 @@ suspend fun main() = coroutineScope {
             }
 
         val llm = resolveLlmRuntime(codexPreflight(config.llmProvider, http, codexAuth), codexAuth)
-        executor = MultiLLMPromptExecutor(llm.model.provider to llm.client)
-
-        // everything downstream talks to the metered executor, so every LLM call the bot makes — turns,
-        // history recaps, group-log digests, vision on the chat model — is counted against one daily budget.
-        val tokenBudget = TokenBudget(config.tokenBudget)
-        val chatExecutor = tokenBudget.meter(executor)
-        val visionRuntime =
-            resolveVisionRuntime(config.openAiVision, llm, chatExecutor, config.llmProvider.requestTimeout)
+        val chatExecutor = MultiLLMPromptExecutor(llm.model.provider to llm.client)
+        executor = chatExecutor
+        val vision = resolveVisionRuntime(config.openAiVision, llm, chatExecutor, config.llmProvider.requestTimeout)
 
         // a vision model of its own comes with a second executor to close; otherwise vision rides on the chat one
-        visionExecutor = visionRuntime?.executor?.takeIf { it !== chatExecutor }
-
-        // and it is metered like everything else: the day's ceiling counts what the bot spends, not what
-        // one provider bills for. only an executor of vision's own is wrapped — metering the chat one twice
-        // would count its calls twice — and what closes it is the executor underneath, held above.
-        val vision =
-            visionRuntime?.let {
-                if (it.executor === chatExecutor) it else it.copy(executor = tokenBudget.meter(it.executor))
-            }
+        visionExecutor = vision?.executor?.takeIf { it !== chatExecutor }
 
         val telegramClient = OkHttpTelegramClient(config.telegramBotToken)
 
@@ -142,7 +128,7 @@ suspend fun main() = coroutineScope {
             AgentRunner(
                 agentFactory, toolRegistryFactory, conversation, memory, conversationCompactor,
                 config.chatHistory, stickerCatalog?.let { catalog -> catalog::indexBlockFor },
-                groupLog, config.groupLog, tokenBudget, config.maxConcurrentTurns,
+                groupLog, config.groupLog, config.maxConcurrentTurns,
             )
 
         // answers to a poll are read back through the group transcript, so without one there is
@@ -157,8 +143,7 @@ suspend fun main() = coroutineScope {
 
         val scheduler =
             TaskScheduler(
-                tasks, agentRunner, delivery, config.taskMaxLatenessMinutes.minutes, chatProfiles, tokenBudget,
-                config.accessPolicy,
+                tasks, agentRunner, delivery, config.taskMaxLatenessMinutes.minutes, chatProfiles, config.accessPolicy,
             )
 
         val botRunner =
@@ -273,14 +258,6 @@ private fun logStartup(
         }
     } else {
         log.info { "Model context window: tokens=${llm.model.contextLength}" }
-    }
-
-    val tokenBudget = config.tokenBudget
-
-    if (tokenBudget.dailyTokens == null) {
-        log.info { "Daily token budget: unlimited" }
-    } else {
-        log.info { "Daily token budget: tokens=${tokenBudget.dailyTokens} resetZone=[${tokenBudget.zone}]" }
     }
 
     if (vision != null) {

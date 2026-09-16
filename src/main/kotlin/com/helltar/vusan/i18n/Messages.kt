@@ -41,10 +41,6 @@ interface Messages {
     /** The provider's usage limit is spent; [untilReset] is `null` when the error body did not say when it lifts. */
     fun subscriptionLimitReply(untilReset: Duration?): String
 
-    fun tokenBudgetExhaustedReply(untilReset: Duration): String
-
-    fun tokenShareExhaustedReply(untilReset: Duration): String
-
     fun inlineChoiceSelected(option: String): String
 
     fun taskMenuTitle(currentChatOnly: Boolean): String
