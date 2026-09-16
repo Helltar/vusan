@@ -207,7 +207,7 @@ class ToolRegistryFactory(
 
             tools(
                 ToolGroup.SCHEDULED_TASKS,
-                TaskTools(repo = tasks, context, config.maxTasksPerUser, config.maxFollowUpsPerUser),
+                TaskTools(repo = tasks, context, TasksRepository.MAX_TASKS_PER_USER, TasksRepository.MAX_FOLLOW_UPS_PER_USER),
             )
 
             if (chat.reactions) tools(ReactionTools(context, outbox))

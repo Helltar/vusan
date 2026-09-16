@@ -11,7 +11,6 @@ import com.helltar.vusan.common.limitTo
 import com.helltar.vusan.common.rethrowIfCancellation
 import com.helltar.vusan.config.CodexAuthException
 import com.helltar.vusan.config.ConversationConfig
-import com.helltar.vusan.config.GroupLogConfig
 import com.helltar.vusan.i18n.Messages
 import com.helltar.vusan.outbox.BotOutbox
 import com.helltar.vusan.outbox.BotOutput
@@ -32,6 +31,11 @@ import java.time.temporal.ChronoUnit
 private const val RECENT_CHAT_MAX_CHARS = 1_000
 private const val RECENT_CHAT_LINE_CHARS = 120
 private const val RECENT_CHAT_OVERFETCH = 3
+
+// the slice of what the group was just saying that a turn carries: enough to follow a question with no
+// subject, bounded so it stays a glance rather than a transcript.
+private const val RECENT_CHAT_MESSAGES = 15
+private const val RECENT_CHAT_MINUTES = 60L
 
 private const val EMERGENCY_SUMMARY_MAX_CHARS = 1_500
 private const val LOG_REPLY_MAX_CHARS = 300
@@ -71,7 +75,6 @@ class AgentRunner(
     // runner has no business holding something that needs a client to exist.
     private val stickerCatalog: (suspend (ChatRef) -> String?)? = null,
     private val groupLog: GroupLogRepository? = null,
-    private val groupLogConfig: GroupLogConfig = GroupLogConfig(),
     // the ceiling every conversation shares: one person's lock says nothing about how many people may
     // be served at once, and each turn is an LLM call with its tools behind it. no default — a runner
     // quietly serving one turn at a time is not something to discover under load.
@@ -299,7 +302,7 @@ class AgentRunner(
         val pruned =
             conversation.pruneCompacted(
                 scope = context.scope,
-                maxStoredInteractions = conversationConfig.maxStoredInteractions,
+                maxStoredInteractions = ConversationRepository.MAX_STORED_INTERACTIONS,
                 rawRetentionCutoff = Instant.now().minus(conversationConfig.retentionDays.toLong(), ChronoUnit.DAYS),
             )
 
@@ -322,15 +325,15 @@ class AgentRunner(
     // addressed to it, so without this a question like "and what do you think?" arrives with no subject.
     // the triggering message is left out — the model is already being shown it as the request itself.
     private suspend fun recentChatFor(context: RequestContext): String? {
-        val repository = groupLog?.takeIf { groupLogConfig.recentChatEnabled && !context.chat.isPrivate } ?: return null
+        val repository = groupLog?.takeIf { !context.chat.isPrivate } ?: return null
 
         val entries =
             try {
                 repository.recent(
                     chat = context.chatRef,
                     // over-fetch: dropping this user's own exchanges below must not thin the slice out.
-                    limit = groupLogConfig.recentMessages * RECENT_CHAT_OVERFETCH,
-                    since = Instant.now().minus(groupLogConfig.recentMinutes.toLong(), ChronoUnit.MINUTES),
+                    limit = RECENT_CHAT_MESSAGES * RECENT_CHAT_OVERFETCH,
+                    since = Instant.now().minus(RECENT_CHAT_MINUTES, ChronoUnit.MINUTES),
                     excludeMessageId = context.messageId,
                 )
             } catch (e: Throwable) {
@@ -342,7 +345,7 @@ class AgentRunner(
         val recent =
             entries
                 .withoutExchangesWith(context.sender.id)
-                .takeLast(groupLogConfig.recentMessages)
+                .takeLast(RECENT_CHAT_MESSAGES)
 
         return renderGroupLog(recent, ZoneId.systemDefault(), RECENT_CHAT_LINE_CHARS, RECENT_CHAT_MAX_CHARS)
             .text
@@ -396,7 +399,7 @@ class AgentRunner(
         planConversation(
             snapshot = snapshot,
             tokenBudget = tokenBudget,
-            maxRecentInteractions = conversationConfig.maxRecentInteractions,
+            maxRecentInteractions = MAX_RECENT_INTERACTIONS,
         )
 
     private suspend fun runAgentWithConversation(
@@ -492,6 +495,11 @@ class AgentRunner(
 
     private companion object {
         val log = KotlinLogging.logger {}
+
+        // the count a recap is triggered by, not what the prompt ends up carrying — a window too small
+        // for these still fits only what its token budget allows. kept well above that budget on a
+        // large window, where a low count buys nothing and only pays for recaps.
+        const val MAX_RECENT_INTERACTIONS = 24
     }
 }
 

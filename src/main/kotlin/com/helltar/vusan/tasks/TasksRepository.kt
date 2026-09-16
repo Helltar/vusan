@@ -221,6 +221,13 @@ class TasksRepository {
 
         return condition
     }
+
+    companion object {
+        // caps on one person, against a model that schedules in a loop rather than against the person:
+        // a morning brief, a weekly digest and a few reminders fit, a runaway turn does not.
+        const val MAX_TASKS_PER_USER = 10
+        const val MAX_FOLLOW_UPS_PER_USER = 3
+    }
 }
 
 private fun ownedBy(owner: UserRef): Op<Boolean> =

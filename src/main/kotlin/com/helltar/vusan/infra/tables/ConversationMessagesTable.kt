@@ -23,7 +23,7 @@ object ConversationMessagesTable : LongIdTable("conversation_messages") {
     init {
         // every read filters on the whole scope, never on one part of it, and `interaction_id` carries no
         // index of its own: the one query that names it narrows by scope first, and a conversation is
-        // capped at `CONVERSATION_MAX_STORED_INTERACTIONS` — too few rows to be worth an index write per
+        // capped at `MAX_STORED_INTERACTIONS` — too few rows to be worth an index write per
         // message.
         index(false, platform, userId, chatId)
     }

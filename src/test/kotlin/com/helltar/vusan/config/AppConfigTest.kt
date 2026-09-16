@@ -7,7 +7,6 @@ import kotlin.test.assertEquals
 import kotlin.test.assertNotEquals
 import kotlin.test.assertFailsWith
 import kotlin.test.assertNull
-import kotlin.test.assertTrue
 import kotlin.time.Duration.Companion.seconds
 
 class AppConfigTest {
@@ -97,8 +96,6 @@ class AppConfigTest {
     @Test
     fun `a number that parses but cannot work is rejected too`() {
         assertFailsWith<IllegalArgumentException> { config(agentMaxIterations = 0) }
-        assertFailsWith<IllegalArgumentException> { config(maxTasksPerUser = -1) }
-        assertFailsWith<IllegalArgumentException> { config(taskMaxLatenessMinutes = -1) }
     }
 
     // a service reached without its secret is a misconfiguration, never a service reached anonymously
@@ -107,18 +104,9 @@ class AppConfigTest {
         assertFailsWith<IllegalArgumentException> { config(regolithUrl = "http://regolith:8080") }
     }
 
-    @Test
-    fun `zero stays a way to turn a per-user limit off`() {
-        assertTrue(config(maxTasksPerUser = 0, maxFollowUpsPerUser = 0, maxMemoryPerScope = 0).maxTasksPerUser == 0)
-    }
-
     private fun config(
         agentMaxIterations: Int = 70,
-        maxFollowUpsPerUser: Int = 3,
-        maxMemoryPerScope: Int = 10,
-        maxTasksPerUser: Int = 5,
         regolithUrl: String? = null,
-        taskMaxLatenessMinutes: Long = 60,
     ): AppConfig =
         AppConfig(
             agentMaxIterations = agentMaxIterations,
@@ -136,9 +124,6 @@ class AppConfigTest {
                     requestTimeout = 120.seconds,
                 ),
             maxConcurrentTurns = 4,
-            maxFollowUpsPerUser = maxFollowUpsPerUser,
-            maxMemoryPerScope = maxMemoryPerScope,
-            maxTasksPerUser = maxTasksPerUser,
             openAiImageApiKey = null,
             openAiImage = null,
             openAiStt = null,
@@ -148,7 +133,6 @@ class AppConfigTest {
             regolithUrl = regolithUrl,
             searxngUrl = null,
             selfImageFile = null,
-            taskMaxLatenessMinutes = taskMaxLatenessMinutes,
             tavilyApiKey = null,
             telegramBotToken = "token",
             ytDlpCookiesFile = null,

@@ -224,7 +224,7 @@ internal class TaskMenuHandler(
     ): TaskMenu {
         val currentChatOnly = !chatIsPrivate
         val listedTasks = tasks.listForUser(telegramUser(userId), chatId.takeIf { currentChatOnly }?.let(::telegramChat))
-        // the capacity line is paired with MAX_TASKS_PER_USER, so it counts what that limit governs. the
+        // the capacity line is paired with the per-user task cap, so it counts what that limit governs. the
         // bot's own follow-ups are listed below it but have their own separate limit.
         val totalTasks = tasks.countForUser(telegramUser(userId), selfInitiated = false)
 
@@ -371,8 +371,8 @@ internal class TaskMenuHandler(
         const val CALLBACK_PREFIX = "tasks:"
         const val MAX_TASK_LABEL_CHARS = 120
 
-        // MAX_TASKS_PER_USER is configurable, so the rendered list has to stay under Telegram's
-        // 4096-character message limit however high it is set. the slack covers the header and notice.
+        // the per-user task cap is a constructor argument, so the rendered list has to stay under
+        // Telegram's 4096-character message limit however high it is set. the slack covers the header and notice.
         const val MAX_MENU_ITEMS_CHARS = 3600
 
         const val ITEM_SEPARATOR = "\n\n"

@@ -295,6 +295,11 @@ class ConversationRepository {
             }
             ?: StoredSummary(content = null, throughMessageId = 0L)
 
+    companion object {
+        // raw interactions kept per conversation once their recap covers them. the model never reads
+        // them again; they are the material a recap can be rebuilt from, and a hundred is plenty for that.
+        const val MAX_STORED_INTERACTIONS = 100
+    }
 }
 
 private fun conversationIs(scope: ConversationScope): Op<Boolean> =

@@ -335,7 +335,7 @@ A normal user message travels:
   (chat and optional thread), names the `UserRef` a DM-routed item belongs to, and answers a
   `DeliveryOutcome`. Chat facts come the same way, through `request/ChatProfileLookup`. A task runs with no incoming message behind it, so its `<message_context>` is
   rebuilt from what the task stored — the chat, and who set it up — instead of the live chat flavor, title, and
-  description a normal turn carries. Tasks overdue beyond `TASK_MAX_LATENESS_MINUTES` (e.g. after downtime) get a
+  description a normal turn carries. Tasks overdue beyond `TaskScheduler.MAX_LATENESS` (e.g. after downtime) get a
   "missed" notice and are advanced/disabled rather than fired. A failed run (`AgentResult.failed`, or a thrown error)
   delivers nothing, so it is repeated up to `MAX_ATTEMPTS` times with a short backoff, the retry prompt telling the
   agent that the earlier attempt delivered nothing; a failed *delivery* is never repeated, since part of the answer may
@@ -366,7 +366,7 @@ A normal user message travels:
   know that.
 - **Self-initiated follow-ups** — `scheduleFollowUp` lets the agent set itself a single future turn when the
   conversation gives it a reason to come back ("ask how the exam went"). It is the same scheduler, store, and delivery
-  path as `scheduleTask`, narrowed: one-time only, its own `MAX_FOLLOW_UPS_PER_USER` limit so the agent cannot spend the
+  path as `scheduleTask`, narrowed: one-time only, a limit of its own (`MAX_FOLLOW_UPS_PER_USER`) so the agent cannot spend the
   user's task quota, and a `self_initiated` flag on the row. In a group it fires anchored to the message that prompted
   it, and only when that message is gone does it fall back to a "following up with" notice instead of the "scheduled by"
   one, which would misattribute it to the user. The user sees and cancels them through `/tasks` like any other task.
@@ -375,7 +375,7 @@ A normal user message travels:
   the bot's own group messages are recorded from `TelegramDelivery.dispatch` after a send succeeds, skipping anything
   redirected to a DM. Text is collapsed and capped on write (harder for a forwarded post), media is reduced to a short
   label, and no file id is kept. Retention belongs to the maintenance pass below: it drops what is past
-  `GROUP_LOG_RETENTION_DAYS` and trims a chat to `GROUP_LOG_MAX_MESSAGES_PER_CHAT`, taking the chats that have
+  `GROUP_LOG_RETENTION_DAYS` and trims a chat to `GroupLogConfig.maxMessagesPerChat`, taking the chats that have
   something to remove rather than the chats that happen to be busy. On read, `GroupLogReader` quotes the window when it fits the budget derived from
   `liveToolResultMaxChars`; when it does not and the window reaches back into a closed day, it splits by local day,
   replaces each **closed** day with a `GroupLogDigester` recap cached in `group_log_digests`, and leaves the current day
@@ -423,7 +423,7 @@ A normal user message travels:
 - **Task menu** — `/tasks` bypasses the LLM and asks `TaskMenuHandler` to render the caller's enabled tasks. Private
   chats show all of that user's tasks; groups show only their tasks created in that chat. Callback data carries the menu
   owner, every action checks ownership and group scope, and Telegram is always sent an `answerCallbackQuery`. Since
-  `MAX_TASKS_PER_USER` is configurable, the menu renders only as many tasks as fit Telegram's message limit and points
+  the per-user cap is a constructor argument, the menu renders only as many tasks as fit Telegram's message limit and points
   at plain language for the rest; a rejected send falls back to the generic error reply rather than silence.
   Pause/resume edits the menu in place; cancel first renders a delete/back confirmation. Resuming an overdue recurring
   task advances it to the next future occurrence, while an overdue one-time task stays paused. The agent-callable

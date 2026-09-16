@@ -38,7 +38,6 @@ import kotlinx.coroutines.coroutineScope
 import java.time.Instant
 import java.time.temporal.ChronoUnit
 import org.telegram.telegrambots.client.okhttp.OkHttpTelegramClient
-import kotlin.time.Duration.Companion.minutes
 
 private val log = KotlinLogging.logger {}
 
@@ -62,7 +61,7 @@ suspend fun main() = coroutineScope {
         publicHttp = createPublicHttpClient()
 
         val conversation = ConversationRepository()
-        val memory = MemoryRepository(config.maxMemoryPerScope)
+        val memory = MemoryRepository()
         val tasks = TasksRepository()
         val groupLog = GroupLogRepository(config.groupLog).takeIf { config.groupLog.enabled }
 
@@ -128,7 +127,7 @@ suspend fun main() = coroutineScope {
             AgentRunner(
                 agentFactory, toolRegistryFactory, conversation, memory, conversationCompactor,
                 config.chatHistory, stickerCatalog?.let { catalog -> catalog::indexBlockFor },
-                groupLog, config.groupLog, config.maxConcurrentTurns,
+                groupLog, config.maxConcurrentTurns,
             )
 
         // answers to a poll are read back through the group transcript, so without one there is
@@ -138,12 +137,12 @@ suspend fun main() = coroutineScope {
         val delivery = TelegramDelivery(telegramClient, stickerCatalog?.let { it::recheckSetOf }, groupLog, polls)
         val voiceTranscriber = createVoiceTranscriber(http, config)
         val chatProfiles = ChatProfiles(telegramClient, botProfile.userId)
-        val taskMenu = TaskMenuHandler(telegramClient, tasks, config.maxTasksPerUser)
+        val taskMenu = TaskMenuHandler(telegramClient, tasks, TasksRepository.MAX_TASKS_PER_USER)
         val inlineChoices = InlineChoiceHandler(telegramClient, conversation::revision)
 
         val scheduler =
             TaskScheduler(
-                tasks, agentRunner, delivery, config.taskMaxLatenessMinutes.minutes, chatProfiles, config.accessPolicy,
+                tasks, agentRunner, delivery, chatProfiles, config.accessPolicy,
             )
 
         val botRunner =
@@ -161,7 +160,7 @@ suspend fun main() = coroutineScope {
                 listOfNotNull(
                     Maintenance.Step("conversation retention") {
                         conversation.pruneExpired(
-                            maxStoredInteractions = config.chatHistory.maxStoredInteractions,
+                            maxStoredInteractions = ConversationRepository.MAX_STORED_INTERACTIONS,
                             rawRetentionCutoff =
                                 Instant.now().minus(config.chatHistory.retentionDays.toLong(), ChronoUnit.DAYS),
                             maxConversations = MAINTENANCE_BATCH,

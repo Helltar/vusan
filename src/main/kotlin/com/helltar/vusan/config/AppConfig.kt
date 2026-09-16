@@ -23,9 +23,6 @@ data class AppConfig(
     val groupLog: GroupLogConfig = GroupLogConfig(),
     val llmProvider: LlmProviderConfig,
     val maxConcurrentTurns: Int,
-    val maxFollowUpsPerUser: Int,
-    val maxMemoryPerScope: Int,
-    val maxTasksPerUser: Int,
     val openAiImage: OpenAiImageConfig?,
     val openAiImageApiKey: String?,
     val openAiStt: OpenAiSttConfig?,
@@ -35,7 +32,6 @@ data class AppConfig(
     val regolithUrl: String?,
     val searxngUrl: String?,
     val selfImageFile: String?,
-    val taskMaxLatenessMinutes: Long,
     val tavilyApiKey: String?,
     val telegramBotToken: String,
     val ytDlpCookiesFile: String?,
@@ -44,21 +40,13 @@ data class AppConfig(
     init {
         require(agentMaxIterations > 0) { "AGENT_MAX_ITERATIONS must be positive" }
         require(maxConcurrentTurns > 0) { "MAX_CONCURRENT_TURNS must be positive" }
-        require(maxFollowUpsPerUser >= 0) { "MAX_FOLLOW_UPS_PER_USER must not be negative" }
-        require(maxMemoryPerScope >= 0) { "MAX_MEMORY_PER_SCOPE must not be negative" }
-        require(maxTasksPerUser >= 0) { "MAX_TASKS_PER_USER must not be negative" }
         require(regolithUrl == null || !regolithToken.isNullOrBlank()) { "Sandbox API authentication is required" }
-        require(taskMaxLatenessMinutes >= 0) { "TASK_MAX_LATENESS_MINUTES must not be negative" }
     }
 
     companion object {
         private const val DEFAULT_AGENT_MAX_ITERATIONS = 70
         private const val DEFAULT_LLM_REQUEST_TIMEOUT_SECONDS = 120L
         private const val DEFAULT_MAX_CONCURRENT_TURNS = 8
-        private const val DEFAULT_MAX_FOLLOW_UPS_PER_USER = 3
-        private const val DEFAULT_MAX_MEMORY_PER_SCOPE = 10
-        private const val DEFAULT_MAX_TASKS_PER_USER = 5
-        private const val DEFAULT_TASK_MAX_LATENESS_MINUTES = 60L
 
         private val dotenv = dotenv { ignoreIfMissing = true }
 
@@ -80,9 +68,6 @@ data class AppConfig(
                 giphyApiKey = readEnv("GIPHY_API_KEY"),
                 llmProvider = llmProvider,
                 maxConcurrentTurns = readIntEnv("MAX_CONCURRENT_TURNS") ?: DEFAULT_MAX_CONCURRENT_TURNS,
-                maxFollowUpsPerUser = readIntEnv("MAX_FOLLOW_UPS_PER_USER") ?: DEFAULT_MAX_FOLLOW_UPS_PER_USER,
-                maxMemoryPerScope = readIntEnv("MAX_MEMORY_PER_SCOPE") ?: DEFAULT_MAX_MEMORY_PER_SCOPE,
-                maxTasksPerUser = readIntEnv("MAX_TASKS_PER_USER") ?: DEFAULT_MAX_TASKS_PER_USER,
                 openAiImageApiKey = openAiImageKey,
                 openAiStt = resolveOpenAiStt(),
                 openAiVision = resolveOpenAiVision(),
@@ -91,21 +76,12 @@ data class AppConfig(
                 regolithUrl = regolithUrl,
                 searxngUrl = readEnv("SEARXNG_URL"),
                 selfImageFile = readEnv("SELF_IMAGE_FILE"),
-                taskMaxLatenessMinutes = readLongEnv("TASK_MAX_LATENESS_MINUTES") ?: DEFAULT_TASK_MAX_LATENESS_MINUTES,
                 tavilyApiKey = readEnv("TAVILY_API_KEY"),
                 telegramBotToken = requireEnv("TELEGRAM_BOT_TOKEN"),
                 ytDlpCookiesFile = readEnv("YT_DLP_COOKIES_FILE"),
 
                 chatHistory =
                     ConversationConfig(
-                        maxRecentInteractions =
-                            readIntEnv("CONVERSATION_MAX_RECENT_INTERACTIONS")
-                                ?: ConversationConfig.DEFAULT_MAX_RECENT_INTERACTIONS,
-
-                        maxStoredInteractions =
-                            readIntEnv("CONVERSATION_MAX_STORED_INTERACTIONS")
-                                ?: ConversationConfig.DEFAULT_MAX_STORED_INTERACTIONS,
-
                         retentionDays =
                             readIntEnv("CONVERSATION_RETENTION_DAYS")
                                 ?: ConversationConfig.DEFAULT_RETENTION_DAYS,
@@ -118,18 +94,6 @@ data class AppConfig(
                         retentionDays =
                             readIntEnv("GROUP_LOG_RETENTION_DAYS")
                                 ?: GroupLogConfig.DEFAULT_RETENTION_DAYS,
-
-                        maxMessagesPerChat =
-                            readIntEnv("GROUP_LOG_MAX_MESSAGES_PER_CHAT")
-                                ?: GroupLogConfig.DEFAULT_MAX_MESSAGES_PER_CHAT,
-
-                        recentMessages =
-                            readIntEnv("GROUP_LOG_RECENT_MESSAGES")
-                                ?: GroupLogConfig.DEFAULT_RECENT_MESSAGES,
-
-                        recentMinutes =
-                            readIntEnv("GROUP_LOG_RECENT_MINUTES")
-                                ?: GroupLogConfig.DEFAULT_RECENT_MINUTES,
                     ),
 
                 elevenLabsTts =

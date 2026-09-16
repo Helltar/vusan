@@ -20,7 +20,7 @@ import org.jetbrains.exposed.v1.jdbc.selectAll
  * Entries survive a history wipe; a [MemoryOwner] says whether a row is one person's or one group's,
  * and on which platform.
  */
-class MemoryRepository(private val maxEntriesPerScope: Int = 10) {
+class MemoryRepository(private val maxEntriesPerScope: Int = MAX_ENTRIES_PER_SCOPE) {
 
     suspend fun load(owner: MemoryOwner): List<MemoryEntry> = dbTransaction {
         MemoryTable
@@ -80,6 +80,12 @@ class MemoryRepository(private val maxEntriesPerScope: Int = 10) {
                 .firstOrNull() ?: return
 
         MemoryTable.deleteWhere { ownedBy(owner) and (MemoryTable.id less keepMinId) }
+    }
+
+    companion object {
+        // the oldest entry is evicted past this without a word, so it is sized for what a person
+        // accumulates over months — name, place, work, language, a handful of preferences — not weeks.
+        const val MAX_ENTRIES_PER_SCOPE = 20
     }
 }
 

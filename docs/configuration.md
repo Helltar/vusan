@@ -461,13 +461,13 @@ available for a bounded time but never enter the prompt again after their recap 
 Every limit below applies to one such thread. Someone active in a DM and two groups keeps three of
 them, each with its own recap and its own retention.
 
-| Variable                               | Default | Description                                                |
-|----------------------------------------|---------|------------------------------------------------------------|
-| `CONVERSATION_MAX_RECENT_INTERACTIONS` | `24`    | Unsummarized interactions offered to the model.            |
-| `CONVERSATION_MAX_STORED_INTERACTIONS` | `100`   | Raw interactions retained after they have been summarized. |
-| `CONVERSATION_RETENTION_DAYS`          | `90`    | Days summarized raw interactions remain in SQLite.         |
+| Variable                      | Default | Description                                        |
+|-------------------------------|---------|----------------------------------------------------|
+| `CONVERSATION_RETENTION_DAYS` | `90`    | Days summarized raw interactions remain in SQLite. |
 
-How many of those recent interactions actually fit is decided by the context window. Cleanup runs
+The last 24 interactions are offered to the model verbatim, as many of them as the context window
+fits; past that count the older ones are folded into the recap. Once recapped, the raw rows stay for
+the retention period, at most a hundred per thread, and never enter the prompt again. Cleanup runs
 when that thread completes a turn, and again in the maintenance pass every six hours, which is what
 reaches a conversation nobody has come back to. `/clear` removes the raw transcript and its recap for the chat it
 was sent from, leaving the caller's other chats and everyone else's history alone; durable memory
@@ -477,11 +477,8 @@ and scheduled tasks remain.
 
 Alongside the [conversation](#conversation) history, the agent keeps a durable **memory** that
 survives the user clearing the chat: personal memory keyed by user, and shared group memory keyed by
-chat. Built in; no env variable is required to enable it.
-
-| Variable               | Default | Description                                                               |
-|------------------------|---------|---------------------------------------------------------------------------|
-| `MAX_MEMORY_PER_SCOPE` | `10`    | Max durable memory entries per user and per chat; the oldest are evicted. |
+chat. Built in, with nothing to configure: each user and each chat holds up to twenty entries, and
+the oldest is evicted past that.
 
 Personal memory follows a person between chats, and their sandbox files are shared too. The
 history is not: what someone told the bot in a DM is not replayed inside a group, and two groups
@@ -497,13 +494,14 @@ bot records every message it receives, including the ones not addressed to it, s
 history above. Nothing is recorded for a chat outside `ALLOWED_IDS`, and nothing for a sender in
 [`BANNED_IDS`](#who-vusan-answers).
 
-| Variable                          | Default | Description                                                             |
-|-----------------------------------|---------|-------------------------------------------------------------------------|
-| `GROUP_LOG_ENABLED`               | `true`  | Set to `false` to record nothing and drop the group-log tools entirely. |
-| `GROUP_LOG_RETENTION_DAYS`        | `30`    | Days a recorded message stays in SQLite.                                |
-| `GROUP_LOG_MAX_MESSAGES_PER_CHAT` | `20000` | Ceiling on rows per chat; the oldest are dropped past it.               |
-| `GROUP_LOG_RECENT_MESSAGES`       | `15`    | Recent messages shown to the model on each group turn; `0` disables.    |
-| `GROUP_LOG_RECENT_MINUTES`        | `60`    | How far back those recent messages may reach.                           |
+| Variable                   | Default | Description                                                             |
+|----------------------------|---------|-------------------------------------------------------------------------|
+| `GROUP_LOG_ENABLED`        | `true`  | Set to `false` to record nothing and drop the group-log tools entirely. |
+| `GROUP_LOG_RETENTION_DAYS` | `30`    | Days a recorded message stays in SQLite.                                |
+
+A chat is also held to fifty thousand rows, so a group busier than a thousand messages a day is
+trimmed by count before it is trimmed by age. Each group turn carries the last fifteen messages of
+the past hour as a glance at what the chat was just saying.
 
 What a row holds: the text (collapsed and capped at 2000 characters, 1000 for a forwarded post), who
 sent it and when, the kind of message, a short label for non-text content (`🐤 UtyaDuck`, `0:14`,
@@ -529,19 +527,14 @@ Scheduled tasks are built in. The agent can schedule them in three forms:
 - **`every <interval>`** — fixed interval, minimum 5 minutes, timezone-independent.
 - **`cron <UNIX expr>`** — clock-time patterns, evaluated in the task's timezone.
 
-| Variable                    | Default | Description                                                   |
-|-----------------------------|---------|---------------------------------------------------------------|
-| `MAX_TASKS_PER_USER`        | `5`     | Maximum stored user-requested tasks per user.                 |
-| `MAX_FOLLOW_UPS_PER_USER`   | `3`     | Maximum pending follow-ups the agent may owe one user.        |
-| `TASK_MAX_LATENESS_MINUTES` | `60`    | How late a due task may still run before it counts as missed. |
-
-A task that could not fire in time — because Vusan was offline or the machine was asleep — is not
-run late. It gets a missed notice in the chat and the schedule moves on to the next fire.
+Nothing here is configured. One person may keep ten tasks. A task that could not fire within an hour
+of its time — because Vusan was offline or the machine was asleep — is not run late: it gets a missed
+notice in the chat and the schedule moves on to the next fire.
 
 Separately from tasks a user asks for, the agent may schedule its own one-time follow-up when the
 conversation gives it a reason to come back later ("ask how the exam went"). Those are counted
-against their own limit, so they can never use up the quota for what the user schedules, and they
-show up in `/tasks` like any other task, where the user can cancel them.
+against a limit of their own, three per person, so they can never use up the quota for what the user
+schedules, and they show up in `/tasks` like any other task, where the user can cancel them.
 
 ## Rights in a group
 

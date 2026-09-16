@@ -17,14 +17,13 @@ import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import java.time.Instant
-import kotlin.time.Duration
+import kotlin.time.Duration.Companion.minutes
 import kotlin.time.Duration.Companion.seconds
 
 class TaskScheduler(
     private val repo: TasksRepository,
     private val agentRunner: AgentRunner,
     private val delivery: OutputDelivery,
-    private val maxLateness: Duration,
     private val chatProfiles: ChatProfileLookup,
     // no default: an empty policy allows nobody, and a scheduler that silently fires nothing is worse
     // than one that will not be built without being told who may use it.
@@ -37,7 +36,7 @@ class TaskScheduler(
         scope.launch {
             log.info {
                 "TaskScheduler started: pollInterval=${POLL_INTERVAL.inWholeSeconds}s " +
-                        "maxLateness=${maxLateness.inWholeMinutes}m"
+                        "maxLateness=${MAX_LATENESS.inWholeMinutes}m"
             }
 
             while (true) {
@@ -87,7 +86,7 @@ class TaskScheduler(
 
         val latenessMillis = now.toEpochMilli() - task.nextFireAt.toEpochMilli()
 
-        if (latenessMillis > maxLateness.inWholeMilliseconds) {
+        if (latenessMillis > MAX_LATENESS.inWholeMilliseconds) {
             handleMissed(task, now)
             return
         }
@@ -259,6 +258,10 @@ class TaskScheduler(
         // implementation detail, not policy: a 30s tick is cheap (one SQLite query per tick)
         // and fine-grained enough for the 5-minute minimum task interval
         val POLL_INTERVAL = 30.seconds
+
+        // how late a due task may still run before it counts as missed. an hour covers a restart or a
+        // short outage; a task found later than that is announced as missed rather than run out of place.
+        val MAX_LATENESS = 60.minutes
 
         // a failed run delivers nothing, so running it again cannot duplicate output. attempts stay few
         // and the backoff short (30s, then 60s): a tick processes its due tasks one after another, so a
