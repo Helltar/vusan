@@ -579,13 +579,14 @@ has a ceiling, so a model looping on a broken tool stops costing tokens instead 
 
 | Variable               | Default | Description              |
 |------------------------|---------|--------------------------|
-| `AGENT_MAX_ITERATIONS` | `70`    | Steps one turn may take. |
+| `AGENT_MAX_ITERATIONS` | `200`   | Steps one turn may take. |
 
-A tool round is two steps, so the default allows roughly 34 tool calls. Reaching the ceiling is not
-an error: the last steps are reserved for a wrap-up in which the agent answers from what it gathered
-and says which parts it could not finish. Deep research over many sources is what runs into it —
-raise the value if such answers arrive routinely cut short, at the cost of a longer, more expensive
-worst-case turn.
+A tool round is two steps, so the default allows close to a hundred tool calls: enough to build a
+project in the sandbox, run it, fix it and send the result, or to research a question across many
+sources. Reaching the ceiling is not an error: the last steps are reserved for a wrap-up in which
+the agent answers from what it gathered and says which parts it could not finish. What bounds the
+cost of a long turn is not this number but the budget for tool results, which the agent can check
+with `checkContextBudget`; lower this only to keep a cheap model from wandering.
 
 ## Storage and binaries
 

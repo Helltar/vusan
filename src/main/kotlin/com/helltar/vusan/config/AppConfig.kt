@@ -45,7 +45,7 @@ data class AppConfig(
     }
 
     companion object {
-        private const val DEFAULT_AGENT_MAX_ITERATIONS = 70
+        private const val DEFAULT_AGENT_MAX_ITERATIONS = 200
         private const val DEFAULT_LLM_REQUEST_TIMEOUT_SECONDS = 120L
         private const val DEFAULT_MAX_CONCURRENT_TURNS = 8
 
