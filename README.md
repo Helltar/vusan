@@ -80,6 +80,7 @@ Or run it on JDK 21, with `ffmpeg` and `yt-dlp` on `PATH`:
 ### Looks things up
 
 - **Web search** — searches the web and reads the pages it finds.
+- **Links** — reads a web page you send and answers from it.
 - **Image search** — finds pictures on the web and sends them.
 - **Telegram channels** — recaps public channel posts by day or week, searches by keyword, and reads
   memes and screenshots.

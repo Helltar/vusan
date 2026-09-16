@@ -273,7 +273,7 @@ with a `WARN` log and Vusan keeps running.
 
 | Variable                | Enables                                   | Notes                                      |
 |-------------------------|-------------------------------------------|--------------------------------------------|
-| `TAVILY_API_KEY`        | Web search, image search, page extraction | See [Web search](#web-search)              |
+| `TAVILY_API_KEY`        | Web search, image search, page rendering  | See [Web search](#web-search)              |
 | `SEARXNG_URL`           | Fallback web and image search             | See [Web search](#web-search)              |
 | `GIPHY_API_KEY`         | GIF lookup                                | Giphy                                      |
 | `ELEVENLABS_API_KEY`    | Voice messages and round video messages   | See [Voice output](#voice-output)          |
@@ -284,15 +284,20 @@ with a `WARN` log and Vusan keeps running.
 
 ### Web search
 
-Two providers cover search, and either can run without the other:
+Reading a page needs nothing: `readPage` is built in, fetches any public `http` or `https` address
+and reduces it to its article text, so a link the user sends is answered from, and a search result
+is read in full, on every setup. Two providers cover the search itself, and either can run without
+the other:
 
-| Variable         | Tools                                             | Role                                           |
-|------------------|---------------------------------------------------|------------------------------------------------|
-| `TAVILY_API_KEY` | `webSearch`, `searchImages`, `extractPageContent` | Default web and image search; page extraction. |
-| `SEARXNG_URL`    | `metaSearch`, `metaSearchImages`                  | Fallback for both, plus category scoping.      |
+| Variable         | Tools                                             | Role                                                    |
+|------------------|---------------------------------------------------|---------------------------------------------------------|
+| `TAVILY_API_KEY` | `webSearch`, `searchImages`, `extractPageContent` | Default web and image search; a rendered page read.     |
+| `SEARXNG_URL`    | `metaSearch`, `metaSearchImages`                  | Fallback for both, plus category scoping.               |
 
 Tavily leads on both: its results are cleaned-up page extracts rather than snippets, and
-`searchImages` describes what is in each photo. [SearXNG](https://docs.searxng.org) is self-hosted,
+`searchImages` describes what is in each photo. Its `extractPageContent` renders a page before
+reading it, which is what `readPage` cannot do for a page that draws its content with scripts, so
+the agent reaches for it only after `readPage` found nothing. [SearXNG](https://docs.searxng.org) is self-hosted,
 so it costs nothing per call and keeps search working when Tavily fails or runs out of quota.
 `metaSearch` also scopes a query with `categories` (`news`, `it`, `science`, `videos`, `music`,
 `files`, `social media`, `map`), which Tavily cannot do — those categories query different engines,

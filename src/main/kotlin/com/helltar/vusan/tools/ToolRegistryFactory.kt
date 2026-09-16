@@ -36,6 +36,8 @@ import com.helltar.vusan.tools.imagegen.SelfImage
 import com.helltar.vusan.tools.images.ImageDownloadClient
 import com.helltar.vusan.tools.memory.MemoryTools
 import com.helltar.vusan.tools.message.MessageTools
+import com.helltar.vusan.tools.page.PageReader
+import com.helltar.vusan.tools.page.PageTools
 import com.helltar.vusan.tools.poll.PollTools
 import com.helltar.vusan.tools.quiz.QuizTools
 import com.helltar.vusan.tools.reaction.ReactionTools
@@ -101,6 +103,7 @@ class ToolRegistryFactory(
 
     private val currency = CurrencyTools(ExchangeRateClient(http))
     private val fileDownloadClient = FileDownloadClient(publicHttp)
+    private val pageReader = PageReader(fileDownloadClient)
     private val imageDownloadClient = ImageDownloadClient(fileDownloadClient)
     private val elevenLabsTts = config.elevenLabsTts
     private val openAiImage = config.openAiImage
@@ -221,6 +224,7 @@ class ToolRegistryFactory(
 
             tavilyClient?.let { tools(TavilyTools(it, imageDownloadClient, outbox)) }
             searxngClient?.let { tools(SearxngTools(it, imageDownloadClient, outbox)) }
+            tools(PageTools(pageReader))
             sandboxClient?.let { client ->
                 context.personKeyOrNull?.let { person ->
                     // one handle for the turn: a site is published from the sandbox the commands ran in,

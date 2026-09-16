@@ -5,7 +5,7 @@ internal object TavilyToolDescriptions {
     const val WEB_SEARCH =
         "Search the web for up-to-date information on any topic, event, person, or question. " +
                 "This is the default web lookup — use it whenever the user asks about recent news, facts, or anything that needs a live check. " +
-                "Each result comes back as a cleaned-up extract of the page rather than a short snippet."
+                "Each result comes back as a cleaned-up extract of the page rather than a short snippet; `readPage` reads one in full."
 
     const val WEB_SEARCH_QUERY =
         "Search query — a concise phrase or question."
@@ -43,8 +43,9 @@ internal object TavilyToolDescriptions {
                 "When 2 or more images are returned they are sent as a single media group."
 
     const val EXTRACT_PAGE_CONTENT =
-        "Fetch and extract the full text content of a web page by URL into your own context. " +
-                "Use when you need to read the page to answer, summarize, or quote it; this tool sends nothing to the user. " +
+        "Fetch and extract the full text content of a web page by URL into your own context, through a service that renders the page first. " +
+                "Use it when `readPage` came back with no readable text or with the shell of a page that draws its content with scripts; for an ordinary article `readPage` is enough and costs nothing. " +
+                "This tool sends nothing to the user. " +
                 "Use `downloadFile` instead when the user asks to download, save, or receive the link itself, and for PDFs, archives, images, and other non-text targets whose text this tool cannot extract."
 
     const val EXTRACT_PAGE_URL =

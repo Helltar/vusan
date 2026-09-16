@@ -35,7 +35,14 @@ private const val USER_AGENT =
 
 sealed class FileDownloadResult {
 
-    class Success(val bytes: ByteArray, val filename: String, val url: Url, val contentType: String?) : FileDownloadResult()
+    /** [contentType] is the media type alone; [charset] is the one the server declared beside it, if any. */
+    class Success(
+        val bytes: ByteArray,
+        val filename: String,
+        val url: Url,
+        val contentType: String?,
+        val charset: String? = null,
+    ) : FileDownloadResult()
 
     /** [sizeBytes] is the declared `Content-Length`, or `null` when the cap tripped mid-stream. */
     class TooLarge(val sizeBytes: Long?) : FileDownloadResult()
@@ -148,7 +155,15 @@ class FileDownloadClient(http: HttpClient) {
 
         log.info { "download ok host=[${target.host}] filename=[$filename] bytes=${bytes.size}" }
 
-        return FileDownloadResult.Success(bytes, filename, target, response.contentType()?.withoutParameters()?.toString())
+        val contentType = response.contentType()
+
+        return FileDownloadResult.Success(
+            bytes,
+            filename,
+            target,
+            contentType?.withoutParameters()?.toString(),
+            contentType?.charset()?.name(),
+        )
     }
 
     private fun resolveFilename(requested: String, target: Url, response: HttpResponse): String {

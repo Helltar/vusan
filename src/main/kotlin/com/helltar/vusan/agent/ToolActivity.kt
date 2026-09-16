@@ -6,6 +6,7 @@ import com.helltar.vusan.tools.grouplog.GroupLogTools
 import com.helltar.vusan.tools.imagegen.ImageGenTools
 import com.helltar.vusan.tools.memory.MemoryTools
 import com.helltar.vusan.tools.message.MessageTools
+import com.helltar.vusan.tools.page.PageTools
 import com.helltar.vusan.tools.searxng.SearxngTools
 import com.helltar.vusan.tools.tasks.FollowUpTools
 import com.helltar.vusan.tools.tasks.TaskTools
@@ -55,6 +56,7 @@ private val TOOL_ACTIVITIES: Map<String, ToolActivity> = buildMap {
     put(MessageTools::sendRichMessage.name, ToolActivity.WRITING)
     put(TavilyTools::webSearch.name, ToolActivity.SEARCHING_WEB)
     put(SearxngTools::metaSearch.name, ToolActivity.SEARCHING_WEB)
+    put(PageTools::readPage.name, ToolActivity.READING_PAGE)
     put(TavilyTools::extractPageContent.name, ToolActivity.READING_PAGE)
     put(TelegramChannelTools::readTelegramChannelPosts.name, ToolActivity.READING_CHANNEL)
     put(YouTubeTranscriptTools::readYouTubeTranscript.name, ToolActivity.READING_TRANSCRIPT)
