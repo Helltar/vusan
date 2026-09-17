@@ -144,7 +144,7 @@ internal object RussianMessages : Messages {
 
     override fun taskFollowUpNotice(mention: String) = "💬 Возвращаюсь к разговору с $mention"
 
-    override fun fallbackModelNote(model: String): String = "на резервной модели: $model"
+    override fun fallbackModelNote(model: String): String = "↳ на резервной модели: $model"
 
     override fun progressLabel(activity: ToolActivity): String =
 
