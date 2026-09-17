@@ -60,8 +60,8 @@ class LlmRuntimeTest {
     }
 
     @Test
-    fun `a hosted openai runtime carries the configured effort on either endpoint`() {
-        val onResponses =
+    fun `a hosted openai runtime carries the configured effort and context override`() {
+        val runtime =
             resolveLlmRuntime(
                 LlmProviderConfig.Hosted(
                     provider = HostedLlmProvider.OPENAI,
@@ -73,23 +73,47 @@ class LlmRuntimeTest {
                 ),
             )
 
-        assertEquals("xhigh", onResponses.reasoningEffort)
-        assertEquals(272_000L, onResponses.model.contextLength)
-
-        val onCompletions =
-            resolveLlmRuntime(
-                LlmProviderConfig.Hosted(
-                    provider = HostedLlmProvider.OPENAI,
-                    apiKey = "key",
-                    model = "gpt-5.4-mini",
-                    reasoningEffort = ReasoningEffort.LOW,
-                    requestTimeout = 120.seconds,
-                ),
-            )
-
-        assertEquals("low", onCompletions.reasoningEffort)
-        assertIs<OpenAIChatParams>(onCompletions.chatParams)
+        assertEquals("xhigh", runtime.reasoningEffort)
+        assertEquals(272_000L, runtime.model.contextLength)
     }
+
+    // verified against the API on 2026-09-17: gpt-5.4-mini with an effort and one tool answers 400 on
+    // /v1/chat/completions ("To use function tools, use /v1/responses or set reasoning_effort to
+    // 'none'") and returns the tool call on /v1/responses.
+    @Test
+    fun `an effort moves a model that speaks both endpoints onto responses, with thinking`() {
+        val catalogued = assertNotNull(cataloguedOpenAiModel("gpt-5.4-mini"))
+
+        assertTrue(catalogued.supports(LLMCapability.OpenAIEndpoint.Completions), "the premise of this test is gone")
+
+        val runtime = hostedOpenAi("gpt-5.4-mini", ReasoningEffort.MEDIUM)
+
+        assertIs<OpenAIResponsesParams>(runtime.chatParams)
+        assertIs<OpenAIResponsesParams>(runtime.compactionParams)
+        assertFalse(runtime.model.supports(LLMCapability.OpenAIEndpoint.Completions))
+        assertTrue(runtime.model.supports(LLMCapability.Thinking), "responses drops echoed reasoning without it")
+        assertEquals(1, runtime.model.capabilities.orEmpty().count { it == LLMCapability.Thinking })
+    }
+
+    // `none` is the other way out the refusal names, and it keeps the cheaper endpoint.
+    @Test
+    fun `an effort of none leaves the model on completions`() {
+        val runtime = hostedOpenAi("gpt-5.4-mini", ReasoningEffort.NONE)
+
+        assertIs<OpenAIChatParams>(runtime.chatParams)
+        assertEquals("none", runtime.reasoningEffort)
+    }
+
+    private fun hostedOpenAi(model: String, effort: ReasoningEffort?): LlmRuntime =
+        resolveLlmRuntime(
+            LlmProviderConfig.Hosted(
+                provider = HostedLlmProvider.OPENAI,
+                apiKey = "key",
+                model = model,
+                reasoningEffort = effort,
+                requestTimeout = 120.seconds,
+            ),
+        )
 
     @Test
     fun `a responses-only model is not handed chat completions params`() {

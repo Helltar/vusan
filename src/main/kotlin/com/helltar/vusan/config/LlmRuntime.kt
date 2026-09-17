@@ -278,7 +278,10 @@ private fun resolveHostedRuntime(config: LlmProviderConfig.Hosted, timeoutConfig
 
     when (config.provider) {
         HostedLlmProvider.OPENAI -> {
-            val model = openAiModel(config.model).withContextOverride(config.contextWindowTokens)
+            val model =
+                openAiModel(config.model)
+                    .forReasoningEffort(config.reasoningEffort)
+                    .withContextOverride(config.contextWindowTokens)
 
             LlmRuntime(
                 providerLabel = "OpenAI",
@@ -401,3 +404,22 @@ private fun normalizeModelKey(value: String): String =
 
 private fun LLModel.withContextOverride(contextWindowTokens: Long?): LLModel =
     contextWindowTokens?.let { copy(contextLength = it) } ?: this
+
+/**
+ * The same model as it has to be described once an effort is asked of it.
+ *
+ * OpenAI refuses function tools alongside a `reasoning_effort` on `/v1/chat/completions` — *"To use
+ * function tools, use /v1/responses or set reasoning_effort to 'none'"* — and every turn here carries
+ * tools, so a configured effort is what moves a model that speaks both endpoints onto responses. The
+ * capability goes with it rather than the params alone, because the two are one decision:
+ * [openAiHostedParams] reads the endpoint back off the model. `Thinking` comes along because responses
+ * echoes reasoning items, and koog drops them without it, leaving every tool result to re-derive the
+ * whole chain. A model that speaks only completions is left where it is: there is no endpoint to move
+ * it to, and koog would refuse params its model does not declare.
+ */
+private fun LLModel.forReasoningEffort(effort: ReasoningEffort?): LLModel {
+    val moves = effort != null && effort != ReasoningEffort.NONE && supports(LLMCapability.OpenAIEndpoint.Responses)
+    if (!moves) return this
+
+    return copy(capabilities = (capabilities.orEmpty() - LLMCapability.OpenAIEndpoint.Completions + LLMCapability.Thinking).distinct())
+}
