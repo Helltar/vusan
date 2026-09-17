@@ -100,10 +100,11 @@ endpoint itself, from the catalog for a model it knows and Responses for a newer
 depends on the model, and only `codex` checks yours at startup. Give `LLM_BASE_URL` no `/v1` — the
 API path is appended for you. Raise the timeout for slow local servers and heavy reasoning models.
 
-Set `LLM_CONTEXT_WINDOW_TOKENS` whenever the model's window is not in the catalog: every
-`openai-compatible` model, and an `openai` model newer than the catalog, which startup names in a
-warning. Vusan reserves part of that window for the response, tool results and estimation error,
-then fits only complete conversation interactions into the remainder.
+Set `LLM_CONTEXT_WINDOW_TOKENS` whenever an `openai-compatible` model has a different window. An
+`openai` model newer than the catalog is assumed to keep the window of the last catalogued
+generation, 1,050,000 tokens, which the variable overrides. Vusan reserves part of that window for
+the response, tool results and estimation error, then fits only complete conversation interactions
+into the remainder.
 
 Third-party servers all take the same shape, with `LLM_PROVIDER=openai-compatible`:
 

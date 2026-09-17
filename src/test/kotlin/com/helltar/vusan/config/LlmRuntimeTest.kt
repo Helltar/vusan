@@ -39,6 +39,58 @@ class LlmRuntimeTest {
         assertEquals(OpenAIModels.Chat.GPT4_1, openAiModel("gpt_4.1"))
     }
 
+    // koog's catalog trails OpenAI's releases; a model it has not heard of is declared as what every
+    // recent OpenAI model is, rather than refused.
+    @Test
+    fun `openAiModel declares a model the catalog does not know as a responses reasoning model that sees`() {
+        assertNull(cataloguedOpenAiModel("gpt-5.6-luna"))
+
+        val model = openAiModel(" gpt-5.6-luna ")
+
+        assertEquals("gpt-5.6-luna", model.id)
+        assertEquals(LLMProvider.OpenAI, model.provider)
+        assertEquals(1_050_000L, model.contextLength)
+        assertEquals(128_000L, model.maxOutputTokens)
+        assertTrue(model.supports(LLMCapability.Tools))
+        assertTrue(model.supports(LLMCapability.Vision.Image))
+        assertTrue(model.supports(LLMCapability.Thinking))
+        assertTrue(model.supports(LLMCapability.OpenAIEndpoint.Responses))
+        assertFalse(model.supports(LLMCapability.OpenAIEndpoint.Completions))
+        assertIs<OpenAIResponsesParams>(openAiHostedParams(model, "vusan"))
+    }
+
+    @Test
+    fun `a hosted openai runtime carries the configured effort on either endpoint`() {
+        val onResponses =
+            resolveLlmRuntime(
+                LlmProviderConfig.Hosted(
+                    provider = HostedLlmProvider.OPENAI,
+                    apiKey = "key",
+                    model = "gpt-5.6-luna",
+                    reasoningEffort = ReasoningEffort.XHIGH,
+                    requestTimeout = 120.seconds,
+                    contextWindowTokens = 272_000,
+                ),
+            )
+
+        assertEquals("xhigh", onResponses.reasoningEffort)
+        assertEquals(272_000L, onResponses.model.contextLength)
+
+        val onCompletions =
+            resolveLlmRuntime(
+                LlmProviderConfig.Hosted(
+                    provider = HostedLlmProvider.OPENAI,
+                    apiKey = "key",
+                    model = "gpt-5.4-mini",
+                    reasoningEffort = ReasoningEffort.LOW,
+                    requestTimeout = 120.seconds,
+                ),
+            )
+
+        assertEquals("low", onCompletions.reasoningEffort)
+        assertIs<OpenAIChatParams>(onCompletions.chatParams)
+    }
+
     @Test
     fun `a responses-only model is not handed chat completions params`() {
         assertIs<OpenAIResponsesParams>(openAiHostedParams(openAiModel("gpt-5-pro"), "vusan"))

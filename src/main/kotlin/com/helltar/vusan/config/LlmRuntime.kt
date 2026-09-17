@@ -39,6 +39,12 @@ import kotlin.reflect.jvm.javaField
 import kotlin.time.Duration
 
 private const val OPENAI_API_BASE_URL = "https://api.openai.com"
+
+// what every OpenAI model since gpt-5.5 lists on its model page (checked 2026-09-17 for the 5.6 and 6
+// generations), and what the catalog gives gpt-5.5 itself. a newer model is assumed to keep it, and
+// LLM_CONTEXT_WINDOW_TOKENS says otherwise when one does not.
+private const val UNCATALOGUED_OPENAI_CONTEXT_WINDOW = 1_050_000L
+private const val UNCATALOGUED_OPENAI_MAX_OUTPUT = 128_000L
 private const val OPENAI_PROMPT_CACHE_KEY = "vusan"
 private const val OPENAI_COMPACTION_CACHE_KEY = "vusan-recap"
 private const val COMPLETIONS_REASONING_EFFORT = "reasoning_effort"
@@ -354,8 +360,8 @@ internal fun cataloguedOpenAiModel(rawValue: String): LLModel? = openAiModelsByK
  * not exist: every chat model OpenAI has shipped for a long while reasons, sees images, calls tools and
  * speaks the Responses API, which is the one endpoint where tools work for it. So a newer id is given
  * exactly that shape, the way `openai-compatible` declares its models, and startup asks OpenAI whether
- * the id exists rather than the catalog. What the catalog would have known and this cannot is the
- * context window, which `LLM_CONTEXT_WINDOW_TOKENS` supplies.
+ * the id exists rather than the catalog. The context window is the last catalogued generation's, since
+ * OpenAI's model list does not report one; `LLM_CONTEXT_WINDOW_TOKENS` overrides it.
  */
 internal fun openAiModel(rawValue: String): LLModel =
     cataloguedOpenAiModel(rawValue) ?: uncataloguedOpenAiModel(rawValue.trim())
@@ -364,7 +370,8 @@ private fun uncataloguedOpenAiModel(id: String): LLModel =
     LLModel(
         provider = LLMProvider.OpenAI,
         id = id,
-        contextLength = null,
+        contextLength = UNCATALOGUED_OPENAI_CONTEXT_WINDOW,
+        maxOutputTokens = UNCATALOGUED_OPENAI_MAX_OUTPUT,
         capabilities =
             listOf(
                 LLMCapability.Completion,
