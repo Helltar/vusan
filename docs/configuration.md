@@ -25,7 +25,7 @@ Five values, and Vusan runs:
 ALLOWED_IDS=123456789,-1001234567890
 TELEGRAM_BOT_TOKEN=1234567890:qwerty
 LLM_PROVIDER=openai
-LLM_MODEL=gpt-5.4-mini
+LLM_MODEL=gpt-5.6-sol
 LLM_API_KEY=sk-proj-qwerty
 ```
 
@@ -67,7 +67,7 @@ banned, and startup says so in the log.
 
 | `LLM_PROVIDER`      | Example `LLM_MODEL`                 |
 |---------------------|-------------------------------------|
-| `openai`            | `gpt-5.4-mini`                      |
+| `openai`            | `gpt-5.6-sol`                       |
 | `anthropic`         | `claude-sonnet-4-6`                 |
 | `google`            | `gemini-2.5-flash`                  |
 | `deepseek`          | `deepseek-v4-pro`                   |
@@ -230,9 +230,12 @@ LLM_PROVIDER=codex
 LLM_MODEL=gpt-5.6-sol
 
 LLM_FALLBACK_PROVIDER=openai
-LLM_FALLBACK_MODEL=gpt-5.4-mini
+LLM_FALLBACK_MODEL=gpt-5.6-sol
 LLM_FALLBACK_API_KEY=sk-proj-qwerty
 ```
+
+The same model on both sides is the ordinary case: the plan pays for it until its window is spent,
+the key after that.
 
 `LLM_FALLBACK_BASE_URL`, `LLM_FALLBACK_OPENAI_ENDPOINT`, `LLM_FALLBACK_REASONING_EFFORT`,
 `LLM_FALLBACK_REQUEST_TIMEOUT_SECONDS` and `LLM_FALLBACK_CONTEXT_WINDOW_TOKENS` mean what their

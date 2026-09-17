@@ -32,7 +32,7 @@ Only these values in `.env` are required to start; everything else is optional a
 ALLOWED_IDS=123456789,-1001234567890
 TELEGRAM_BOT_TOKEN=1234567890:qwerty
 LLM_PROVIDER=openai
-LLM_MODEL=gpt-5.4-mini
+LLM_MODEL=gpt-5.6-sol
 LLM_API_KEY=sk-proj-qwerty
 ```
 
