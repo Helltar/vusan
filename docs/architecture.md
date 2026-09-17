@@ -582,7 +582,7 @@ the menu Telegram shows follows `dispatchText` without an operator step. It writ
 `/setcommands` edits, which means a manual edit there is replaced on the next start. A rejected call is a warning, not a
 failed startup — an out-of-date menu is not worth refusing to serve over.
 
-Registration also wraps the session's `getUpdates` generator, so every poll cycle marks `infra/Heartbeat`, which keeps
+Registration also wraps the session's `getUpdates` generator, so every poll cycle beats a `Heartbeat` (the `com.helltar:heartbeat` library), which keeps
 `/tmp/health` fresh for as long as the loop turns; the image's `HEALTHCHECK` reads nothing but that file's age, and the
 runner cancels the heartbeat when it shuts down. The hook belongs on the generator rather than the update consumer
 because the session skips the consumer entirely when a batch comes back empty — a bot nobody writes to would otherwise
@@ -649,7 +649,7 @@ A symptom-to-source map for finding the right file fast. Paths are under
 |---|---|
 | The same message is answered twice, or editing one to add the mention does nothing | `TelegramBotRunner.startsTurnOnEdit` (what an edit must pass to start a turn) + `TelegramBotRunner.isAccepted`/`AnsweredMessages` (one turn per message, per-process, empty after a restart) |
 | Vusan ignores a message entirely | `TelegramBotRunner.passesAllowlist` and `request/AccessPolicy.kt` (the `ALLOWED_IDS` allowlist and the `BANNED_IDS` ban list, both platform-qualified, applied on the polling loop), then `telegram/inbound/MessageFilter.kt` (`shouldHandle` — group reply/mention rules) |
-| Container says `Up` but the bot answers nothing | `infra/Heartbeat.kt` (the `/tmp/health` freshness signal, and the `ERROR` logged once when polling stalls) + `TelegramBotRunner.start` (the `getUpdates` generator hook that feeds it) |
+| Container says `Up` but the bot answers nothing | the `com.helltar:heartbeat` library (the `/tmp/health` freshness signal, and the `ERROR` logged once when polling stalls) + `TelegramBotRunner.start` (the `getUpdates` generator hook that feeds it) |
 | Reply says "still working on your previous request" | `agent/AgentRunner.kt` — the per-conversation `Mutex` rejects a second concurrent turn in the same chat |
 | A message goes unanswered after a restart or deploy, or one is answered twice | `telegram/UpdateSpool.kt` (what is kept, what is replayed, and `SPOOL_RETENTION`) + `telegram/TelegramBotRunner.kt` (the blocking spool write in the poll callback, and `settle` on pickup) + `telegram/AnsweredMessages.kt` (the one-turn-per-message claim) |
 | Reply lands in the wrong chat, loses its reply anchor, or DM redirect misbehaves | `telegram/delivery/TelegramDelivery.kt` (routing/anchor/private-redirect *policy*) |

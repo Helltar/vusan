@@ -1,5 +1,6 @@
 package com.helltar.vusan.telegram
 
+import com.helltar.heartbeat.Heartbeat
 import com.helltar.vusan.agent.AgentRunner
 import com.helltar.vusan.agent.grouplog.GroupLogRepository
 import com.helltar.vusan.agent.neutralizePromptBlocks
@@ -7,7 +8,6 @@ import com.helltar.vusan.common.limitTo
 import com.helltar.vusan.common.rethrowIfCancellation
 import com.helltar.vusan.common.xmlBlock
 import com.helltar.vusan.i18n.Messages
-import com.helltar.vusan.infra.Heartbeat
 import com.helltar.vusan.request.AccessPolicy
 import com.helltar.vusan.request.AttachedFile
 import com.helltar.vusan.request.AttachedFileKind
@@ -122,7 +122,6 @@ internal class TelegramBotRunner(
         // dispatch (and album aggregation) happens inside the coroutine world.
         val updates = Channel<Update>(Channel.UNLIMITED)
         val longPolling = TelegramBotsLongPollingApplication()
-        val getUpdates = DefaultGetUpdatesGenerator()
 
         // the generator is where the heartbeat hooks in, because the session calls it once per poll
         // cycle before every request. the consumer below would not do: the session skips it entirely
@@ -130,10 +129,7 @@ internal class TelegramBotRunner(
         longPolling.registerBot(
             botToken,
             { TelegramUrl.DEFAULT_URL },
-            { offset ->
-                heartbeat.markPoll()
-                getUpdates.apply(offset)
-            }
+            heartbeat.beatOn(DefaultGetUpdatesGenerator())
         ) { batch ->
             // blocking on purpose, on the session's own poller thread: the batch has to be on disk
             // before this returns, because returning is what lets the next request confirm it to
@@ -146,7 +142,7 @@ internal class TelegramBotRunner(
         // handlers inherit this dispatcher; without it, they would run on the single-threaded
         // event loop of `suspend main` instead of parallelizing across cores.
         return scope.launch(Dispatchers.Default) {
-            val heartbeatJob = heartbeat.launchIn(this)
+            heartbeat.start()
 
             client.publishCommandMenu()
 
@@ -158,7 +154,7 @@ internal class TelegramBotRunner(
             try {
                 processUpdates(updates, profile)
             } finally {
-                heartbeatJob.cancel()
+                heartbeat.close()
 
                 runCatching { longPolling.close() }
                     .onFailure { log.warn(it) { "failed to stop long polling cleanly" } }
