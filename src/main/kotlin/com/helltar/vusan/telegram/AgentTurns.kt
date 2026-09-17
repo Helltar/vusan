@@ -54,6 +54,7 @@ internal class AgentTurns(
     private val inlineChoices: InlineChoiceHandler,
     private val chatProfiles: ChatProfiles,
     private val voiceTranscriber: VoiceTranscriber?,
+    private val fallbackModelInUse: () -> String? = { null },
 ) {
 
     suspend fun dispatchToAgent(
@@ -204,7 +205,7 @@ internal class AgentTurns(
             // so a tool can say what the turn is about to do while it still matters; delivery then shows
             // its own per-item action.
             val result =
-                client.withLiveProgress(request) { setActivity, status ->
+                client.withLiveProgress(request, fallbackModelInUse) { setActivity, status ->
                     if (waitForTurn)
                         agent.handleQueued(request, setActivity, status)
                     else

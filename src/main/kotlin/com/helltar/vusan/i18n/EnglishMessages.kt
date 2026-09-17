@@ -144,6 +144,8 @@ internal object EnglishMessages : Messages {
 
     override fun taskFollowUpNotice(mention: String) = "💬 Following up with $mention"
 
+    override fun fallbackModelNote(model: String): String = "🛟 fallback model: $model"
+
     override fun progressLabel(activity: ToolActivity): String =
 
         when (activity) {

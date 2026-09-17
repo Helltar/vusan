@@ -93,7 +93,7 @@ suspend fun main() = coroutineScope {
         // every call the bot makes is covered, and so a turn that runs into the limit finishes on the
         // fallback instead of ending in "come back later".
         val fallback = config.llmFallback?.let { resolveLlmRuntime(codexPreflight(it, http, codexAuth), codexAuth) }
-        val chatExecutor =
+        val fallbackExecutor =
             fallback?.let {
                 FallbackPromptExecutor(
                     primary = MultiLLMPromptExecutor(llm.model.provider to llm.client),
@@ -103,7 +103,11 @@ suspend fun main() = coroutineScope {
                     fallbackModel = it.model,
                     fallbackParams = it.chatParams,
                 )
-            } ?: MultiLLMPromptExecutor(llm.model.provider to llm.client)
+            }
+
+        // what the turn and its status ask to find out whether the primary is answering right now.
+        val fallbackModelInUse: () -> String? = { fallbackExecutor?.fallbackModelInUse }
+        val chatExecutor = fallbackExecutor ?: MultiLLMPromptExecutor(llm.model.provider to llm.client)
         executor = chatExecutor
         val vision = resolveVisionRuntime(config.openAiVision, llm, chatExecutor, config.llmProvider.requestTimeout)
 
@@ -158,7 +162,7 @@ suspend fun main() = coroutineScope {
             AgentRunner(
                 agentFactory, toolRegistryFactory, conversation, memory, conversationCompactor,
                 config.chatHistory, stickerCatalog?.let { catalog -> catalog::indexBlockFor },
-                groupLog, config.maxConcurrentTurns,
+                groupLog, fallbackModelInUse, config.maxConcurrentTurns,
             )
 
         // answers to a poll are read back through the group transcript, so without one there is
@@ -180,7 +184,7 @@ suspend fun main() = coroutineScope {
             TelegramBotRunner(
                 telegramClient, config.telegramBotToken, delivery, agentRunner, taskMenu, inlineChoices, tasks,
                 chatProfiles, config.accessPolicy, voiceTranscriber, botProfile, stickerCatalog,
-                groupLog, polls,
+                groupLog, polls, fallbackModelInUse,
             )
 
         // retention runs on a clock of its own rather than on whoever happens to write next: what needs

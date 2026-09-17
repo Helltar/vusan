@@ -25,6 +25,7 @@ internal fun currentTurnPrompt(
     recentChat: String? = null,
     stickerCatalog: String? = null,
     toolGroups: String? = null,
+    fallbackModel: String? = null,
 ): String =
     buildList {
         add(currentTimeBlock())
@@ -34,6 +35,9 @@ internal fun currentTurnPrompt(
         // it changes with what this conversation has already loaded, so it cannot live in the system
         // block: that block is the one prefix every request of the deployment shares.
         toolGroups?.takeIf { it.isNotBlank() }?.let { add(xmlBlock("tool_groups", it)) }
+        // only while the primary provider is out, so the block costs nothing on an ordinary turn and the
+        // system prompt's own model id stays the answer whenever it is the true one.
+        fallbackModel?.takeIf { it.isNotBlank() }?.let { add(xmlBlock("current_model", it)) }
         stickerCatalog?.takeIf { it.isNotBlank() }?.let(::add)
         recentChat?.takeIf { it.isNotBlank() }?.let { add(xmlBlock("recent_chat", it)) }
         add(userInput)

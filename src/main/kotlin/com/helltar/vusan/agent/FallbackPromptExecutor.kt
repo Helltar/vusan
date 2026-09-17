@@ -47,9 +47,12 @@ internal class FallbackPromptExecutor(
     @Volatile
     private var primaryDownUntil: Instant? = null
 
-    /** Whether calls are going to the fallback right now. */
-    val onFallback: Boolean
-        get() = primaryDownUntil?.isAfter(clock.instant()) == true
+    /** The model answering right now while the primary is out, or `null` when it is the primary's turn. */
+    val fallbackModelInUse: String?
+        get() = fallbackModel.id.takeIf { primaryDownUntil?.isAfter(clock.instant()) == true }
+
+    private val onFallback: Boolean
+        get() = fallbackModelInUse != null
 
     override suspend fun execute(prompt: Prompt, model: LLModel, tools: List<ToolDescriptor>): Message.Assistant =
         routed(prompt, { primary.execute(prompt, model, tools) }) { fallback.execute(it, fallbackModel, tools) }

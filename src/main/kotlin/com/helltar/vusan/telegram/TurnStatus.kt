@@ -30,8 +30,8 @@ import org.telegram.telegrambots.meta.generics.TelegramClient
  * The line is plain text — the emoji already sets it apart from the plan above it — and carries its own
  * ellipsis, since nothing animates one after a message is sent.
  */
-internal fun statusMessageText(plan: String?, label: String?): String? {
-    val running = label?.let { "$it…" }
+internal fun statusMessageText(plan: String?, label: String?, fallbackNote: String? = null): String? {
+    val running = listOfNotNull(label?.let { "$it…" }, fallbackNote).joinToString("\n").ifEmpty { null }
 
     return when {
         plan == null -> running
@@ -90,6 +90,9 @@ internal class TurnStatus(
     // in a slow-mode group the bot's messages are rationed, so a bubble is spent only on words the model
     // chose to send; naming a running tool is never worth one of those slots.
     private val activityOpensIt: Boolean,
+    // which model is answering while the usual provider is out, so a turn served by the fallback says so
+    // where it is happening rather than only in the log.
+    private val fallbackModelInUse: () -> String? = { null },
 ) : TurnNarrator {
 
     // a turn writes from two places — the tool that narrates, and the collector following the activity —
@@ -202,7 +205,8 @@ internal class TurnStatus(
             }
     }
 
-    private fun statusText(): String? = statusMessageText(announcement, label)
+    private fun statusText(): String? =
+        statusMessageText(announcement, label, fallbackModelInUse()?.let { messages.fallbackModelNote(it) })
 
     // a write in flight when the turn ends must still finish. `/stop`, or simply the turn being over,
     // cancels the collector this runs in, and a send cancelled mid-flight can still have created the

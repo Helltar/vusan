@@ -252,6 +252,10 @@ back and forth and short enough that the fallback is not paid for once it has pa
 probes the primary again, and the bot returns to it or waits another round. A content refusal is not
 an outage — it repeats on any provider — and reaches the user as it always did.
 
+While the fallback is answering, the status message a turn puts up names it, so the chat shows which
+model is behind the reply rather than only the log. The agent is told the same thing, so someone who
+asks which model it is running on gets the truth instead of the one the system prompt names.
+
 Pick a fallback that can do what the primary does: one that sees images if the chat model does,
 because vision rides on the same switch, and one whose context window is not much smaller, because
 the history is planned against the primary's. Image generation does not follow: on the Codex route it

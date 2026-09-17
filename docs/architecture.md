@@ -44,7 +44,8 @@ that is who owns writing them, not because only `agent/` reads them. No other ar
   `TurnPrompt` renders the blocks the model is shown for this turn, `TurnHistory` decides what the finished turn leaves
   behind, `ProviderErrors` reads a provider's refusal out of the message koog wrapped it in and picks the reply it
   earns, and `FallbackPromptExecutor` is the executor wrapper that hands every call to a second provider while the
-  first is out. `AgentFactory` builds the `AIAgent` (system prompt + history + tools) and budgets its model context; `SystemPrompt` keeps the deployment's customizable personality and the
+  first is out, which is also what `TurnPrompt`'s `<current_model>` block and the status message's fallback line read
+  to say who is answering. `AgentFactory` builds the `AIAgent` (system prompt + history + tools) and budgets its model context; `SystemPrompt` keeps the deployment's customizable personality and the
   fixed delivery/tool contract in separate XML-delimited blocks. `agent/conversation/` groups turns into complete
   interactions, persists raw history, and maintains its semantic recap, all keyed by a `ConversationScope` — one
   person in one chat, so a private exchange can never be replayed as that person's own words inside a group, and what

@@ -81,6 +81,9 @@ interface Messages {
      */
     fun progressLabel(activity: ToolActivity): String
 
+    /** Shown in the status while the usual provider is out and [model] is answering instead. */
+    fun fallbackModelNote(model: String): String
+
     companion object {
         fun of(language: Language): Messages =
             when (language) {

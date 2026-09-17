@@ -75,6 +75,9 @@ class AgentRunner(
     // runner has no business holding something that needs a client to exist.
     private val stickerCatalog: (suspend (ChatRef) -> String?)? = null,
     private val groupLog: GroupLogRepository? = null,
+    // which model is answering when it is not the one the system prompt names, so a turn served by the
+    // fallback provider does not claim to be the primary.
+    private val fallbackModelInUse: () -> String? = { null },
     // the ceiling every conversation shares: one person's lock says nothing about how many people may
     // be served at once, and each turn is an LLM call with its tools behind it. no default — a runner
     // quietly serving one turn at a time is not something to discover under load.
@@ -197,6 +200,7 @@ class AgentRunner(
                 recentChat = recentChatFor(context),
                 stickerCatalog = stickerCatalogFor(context),
                 toolGroups = toolCatalog.menu(),
+                fallbackModel = fallbackModelInUse(),
             )
 
         val preparation = agentFactory.prepare(toolCatalog, currentTurn)

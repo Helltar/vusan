@@ -82,13 +82,15 @@ internal class TelegramBotRunner(
     private val stickerCatalog: StickerCatalog? = null,
     private val groupLog: GroupLogRepository? = null,
     private val polls: PollRegistry? = null,
+    fallbackModelInUse: () -> String? = { null },
 ) {
 
     private val heartbeat = Heartbeat()
 
     private val spool = UpdateSpool(SPOOL_RETENTION)
 
-    private val turns = AgentTurns(client, agent, delivery, inlineChoices, chatProfiles, voiceTranscriber)
+    private val turns =
+        AgentTurns(client, agent, delivery, inlineChoices, chatProfiles, voiceTranscriber, fallbackModelInUse)
 
     private val turnStop = TurnStopHandler(client, agent)
     private val callbacks = CallbackRouter(client, taskMenu, inlineChoices, turnStop, turns, accessPolicy)

@@ -27,6 +27,24 @@ class TurnStatusTest {
     // the bubble opens on the first named activity or the first thing the model says; before either
     // there is nothing to put in it.
     @Test
+    fun `a fallback note sits under the running line`() {
+        assertEquals(
+            "I will build the game\n\n\uD83D\uDCBB Running code…\n\uD83D\uDEDF fallback model: gpt-5.4-mini",
+            statusMessageText(
+                plan = "I will build the game",
+                label = "\uD83D\uDCBB Running code",
+                fallbackNote = Messages.of(Language.ENGLISH).fallbackModelNote("gpt-5.4-mini"),
+            ),
+        )
+
+        // a turn with nothing named yet still says where it is answering from
+        assertEquals(
+            "\uD83D\uDEDF fallback model: gpt-5.4-mini",
+            statusMessageText(plan = null, label = null, fallbackNote = Messages.of(Language.ENGLISH).fallbackModelNote("gpt-5.4-mini")),
+        )
+    }
+
+    @Test
     fun `nothing to say yields no message`() {
         assertNull(statusMessageText(plan = null, label = null))
     }

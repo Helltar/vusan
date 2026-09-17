@@ -19,6 +19,8 @@ import java.time.ZoneOffset
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFailsWith
+import kotlin.test.assertNotNull
+import kotlin.test.assertNull
 import kotlin.test.assertFalse
 import kotlin.test.assertTrue
 import kotlin.time.Duration.Companion.hours
@@ -83,7 +85,7 @@ class FallbackPromptExecutorTest {
         val params = sentPrompt.params as OpenAIResponsesParams
         assertEquals("vusan-abc", params.promptCacheKey)
         assertEquals(false, params.parallelToolCalls)
-        assertTrue(executor.onFallback)
+        assertEquals(FALLBACK_MODEL.id, executor.fallbackModelInUse, "the turn cannot say which model answered")
     }
 
     @Test
@@ -103,7 +105,7 @@ class FallbackPromptExecutorTest {
         primary.failWith = null
 
         assertEquals("from primary", executor.execute(prompt(), PRIMARY_MODEL).textContent())
-        assertFalse(executor.onFallback)
+        assertNull(executor.fallbackModelInUse)
         assertEquals(2, fallback.calls.size, "the fallback was asked after the primary came back")
     }
 
@@ -119,7 +121,7 @@ class FallbackPromptExecutorTest {
         executor.execute(prompt(), PRIMARY_MODEL)
 
         assertEquals(2, primary.calls.size)
-        assertTrue(executor.onFallback)
+        assertNotNull(executor.fallbackModelInUse)
     }
 
     @Test
@@ -130,10 +132,10 @@ class FallbackPromptExecutorTest {
         val executor = executor(primary, fallback, clock)
 
         assertEquals("from fallback", executor.execute(prompt(), PRIMARY_MODEL).textContent())
-        assertTrue(executor.onFallback)
+        assertNotNull(executor.fallbackModelInUse)
 
         clock.now = start.plus(3.minutes.toJavaDuration())
-        assertFalse(executor.onFallback)
+        assertNull(executor.fallbackModelInUse)
     }
 
     @Test
@@ -143,7 +145,7 @@ class FallbackPromptExecutorTest {
         val executor = executor(primary, fallback, TickingClock(start))
 
         assertEquals("from fallback", executor.execute(prompt(), PRIMARY_MODEL).textContent())
-        assertTrue(executor.onFallback)
+        assertNotNull(executor.fallbackModelInUse)
     }
 
     @Test
@@ -155,7 +157,7 @@ class FallbackPromptExecutorTest {
 
         assertFailsWith<LLMClientException> { executor.execute(prompt(), PRIMARY_MODEL) }
         assertTrue(fallback.calls.isEmpty())
-        assertFalse(executor.onFallback)
+        assertNull(executor.fallbackModelInUse)
     }
 
     @Test
@@ -166,9 +168,9 @@ class FallbackPromptExecutorTest {
         val executor = executor(primary, fallback, clock)
 
         executor.execute(prompt(), PRIMARY_MODEL)
-        assertTrue(executor.onFallback)
+        assertNotNull(executor.fallbackModelInUse)
 
         clock.now = start.plus(31.minutes.toJavaDuration())
-        assertFalse(executor.onFallback)
+        assertNull(executor.fallbackModelInUse)
     }
 }

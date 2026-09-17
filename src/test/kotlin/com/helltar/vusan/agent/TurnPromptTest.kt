@@ -13,6 +13,32 @@ import kotlin.test.assertTrue
 
 class TurnPromptTest {
 
+    // the system prompt names the primary model and is cached whole, so the truth about a turn the
+    // fallback answered can only ride here.
+    @Test
+    fun `the answering model is named only while it is not the one the system prompt names`() {
+        val withFallback =
+            currentTurnPrompt(
+                userInput = "which model are you?",
+                context = context(),
+                userMemory = emptyList(),
+                chatMemory = emptyList(),
+                fallbackModel = "gpt-5.4-mini",
+            )
+
+        assertContains(withFallback, "<current_model>\ngpt-5.4-mini\n</current_model>")
+
+        val ordinary =
+            currentTurnPrompt(
+                userInput = "which model are you?",
+                context = context(),
+                userMemory = emptyList(),
+                chatMemory = emptyList(),
+            )
+
+        assertFalse("current_model" in ordinary, "an ordinary turn paid for the block")
+    }
+
     @Test
     fun `current turn keeps metadata and memory next to the current request`() {
         val prompt =
