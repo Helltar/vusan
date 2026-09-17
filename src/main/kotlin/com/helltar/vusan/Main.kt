@@ -1,8 +1,10 @@
 package com.helltar.vusan
 
 import ai.koog.prompt.executor.llms.MultiLLMPromptExecutor
+import ai.koog.prompt.executor.model.PromptExecutor
 import com.helltar.vusan.agent.AgentFactory
 import com.helltar.vusan.agent.AgentRunner
+import com.helltar.vusan.agent.FallbackPromptExecutor
 import com.helltar.vusan.agent.ContextWindowPolicy
 import com.helltar.vusan.agent.conversation.ConversationRepository
 import com.helltar.vusan.agent.conversation.LlmConversationCompactor
@@ -52,7 +54,7 @@ suspend fun main() = coroutineScope {
 
     var http: HttpClient? = null
     var publicHttp: HttpClient? = null
-    var executor: MultiLLMPromptExecutor? = null
+    var executor: PromptExecutor? = null
     var visionExecutor: AutoCloseable? = null
 
     try {
@@ -76,7 +78,22 @@ suspend fun main() = coroutineScope {
             }
 
         val llm = resolveLlmRuntime(codexPreflight(config.llmProvider, http, codexAuth), codexAuth)
-        val chatExecutor = MultiLLMPromptExecutor(llm.model.provider to llm.client)
+
+        // a second provider stands behind the first for when it is out — a spent subscription, above all.
+        // it wraps the executor so that every call the bot makes is covered, and so a turn that runs
+        // into the limit finishes on the fallback instead of ending in "come back later".
+        val fallback = config.llmFallback?.let { resolveLlmRuntime(it) }
+        val chatExecutor =
+            fallback?.let {
+                FallbackPromptExecutor(
+                    primary = MultiLLMPromptExecutor(llm.model.provider to llm.client),
+                    primaryLabel = llm.providerLabel,
+                    fallback = MultiLLMPromptExecutor(it.model.provider to it.client),
+                    fallbackLabel = it.providerLabel,
+                    fallbackModel = it.model,
+                    fallbackParams = it.chatParams,
+                )
+            } ?: MultiLLMPromptExecutor(llm.model.provider to llm.client)
         executor = chatExecutor
         val vision = resolveVisionRuntime(config.openAiVision, llm, chatExecutor, config.llmProvider.requestTimeout)
 
@@ -175,7 +192,7 @@ suspend fun main() = coroutineScope {
                 ),
             )
 
-        logStartup(config, llm, vision, toolRegistryFactory.availableToolNames)
+        logStartup(config, llm, fallback, vision, toolRegistryFactory.availableToolNames)
 
         val botJob = botRunner.start(this)
         val schedulerJob = scheduler.launchIn(this)
@@ -245,6 +262,7 @@ private suspend fun codexPreflight(
 private fun logStartup(
     config: AppConfig,
     llm: LlmRuntime,
+    fallback: LlmRuntime?,
     vision: VisionRuntime?,
     toolNames: List<String>,
 ) {
@@ -253,6 +271,8 @@ private fun logStartup(
                 llm.reasoningEffort?.let { " reasoningEffort=[$it]" }.orEmpty() +
                 llm.serviceTier?.let { " serviceTier=[${it.requestValue}]" }.orEmpty()
     }
+
+    fallback?.let { log.info { "LLM fallback: provider=[${it.providerLabel}] model=[${it.model.id}]" } }
 
     if (llm.model.contextLength == null) {
         log.warn {

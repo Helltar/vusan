@@ -42,8 +42,9 @@ that is who owns writing them, not because only `agent/` reads them. No other ar
   the current user turn (chat metadata + durable memory + request), and owns every history write for it, so no other
   layer appends or clears turns behind a running turn's back. What it orchestrates sits beside it, one file per concern:
   `TurnPrompt` renders the blocks the model is shown for this turn, `TurnHistory` decides what the finished turn leaves
-  behind, and `ProviderErrors` reads a provider's refusal out of the message koog wrapped it in and picks the reply it
-  earns. `AgentFactory` builds the `AIAgent` (system prompt + history + tools) and budgets its model context; `SystemPrompt` keeps the deployment's customizable personality and the
+  behind, `ProviderErrors` reads a provider's refusal out of the message koog wrapped it in and picks the reply it
+  earns, and `FallbackPromptExecutor` is the executor wrapper that hands every call to a second provider while the
+  first is out. `AgentFactory` builds the `AIAgent` (system prompt + history + tools) and budgets its model context; `SystemPrompt` keeps the deployment's customizable personality and the
   fixed delivery/tool contract in separate XML-delimited blocks. `agent/conversation/` groups turns into complete
   interactions, persists raw history, and maintains its semantic recap, all keyed by a `ConversationScope` — one
   person in one chat, so a private exchange can never be replayed as that person's own words inside a group, and what
@@ -549,7 +550,8 @@ A normal user message travels:
 `Main.kt` wires everything in order: load `AppConfig` → connect `Db` → create the `Http` client → (only with
 `LLM_PROVIDER=codex`) build the `CodexAuthStore` and run `codexPreflight`, which proves the ChatGPT session works and
 fills the context window in from the account's model catalog before any message is served → create the LLM runtime,
-whose executor everything downstream then shares → build repositories, context policy, conversation compactor, the
+whose executor everything downstream then shares — wrapped in `agent/FallbackPromptExecutor` when `LLM_FALLBACK_PROVIDER`
+names a second runtime, so a spent subscription hands every call to it until the deadline its refusal named → build repositories, context policy, conversation compactor, the
 Telegram client and its `BotProfile` — one `getMe` call shared by the runner, which matches mentions against it, and `AgentFactory`, which puts the handle in the system prompt → (only when image
 generation or `ELEVENLABS_API_KEY` is configured, the two things that use it) `resolveSelfImage`
 (`tools/imagegen/SelfImage.kt`), which reads the reference photo self-portraits and round video messages are drawn from:
@@ -664,6 +666,7 @@ A symptom-to-source map for finding the right file fast. Paths are under
 | A turn's plan reaches the chat only after the work it announced, or arrives twice | `tools/message/MessageTools.announcePlan` (the tool and its one-per-turn rule) + `telegram/TurnStatus.kt` (`say`, and what survives `finish`) + `outbox/BotOutbox.kt` (`recordDelivered`, `hasDelivered`) + `telegram/delivery/TelegramDelivery.dispatch` (skipping an item already in the chat) |
 | The typing indicator or the turn's status message is wrong, stale, or missing | `telegram/TelegramProgress.kt` (both tickers, and `statusGraceFor`, the per-activity gate deciding which turns get a message at all) + `telegram/TurnStatus.kt` (the message itself, the emoji beside each activity, its stop button, and how it ends) + `agent/ToolActivity.kt` (which tool means what) + `i18n/Messages.progressLabel` (the words) + `telegram/delivery/TelegramDelivery.chatActionFor` (the action) |
 | A long research turn ends in the generic error reply or is answered mid-way | `agent/AgentFactory.kt` (`maxIterations`, `outOfToolBudget` and the wrap-up node that lands the turn) + `agent/AgentRunner.kt` (delivering what the outbox holds when a run fails) |
+| A spent subscription still ends turns in "come back later", or the bot never returns to it | `agent/FallbackPromptExecutor.kt` (which failures switch, the outage deadline, the single probe back) + `agent/ProviderErrors.providerOutage` (the patterns and the reset time read from the body), then `LLM_FALLBACK_*` in [`configuration.md`](configuration.md#a-second-provider-behind-the-first) |
 | The reply to a failed turn says nothing about what the provider did | `agent/AgentRunner.providerErrorReply` (which error body earns which canned reply: a content-policy refusal, a spent usage limit, a dead key, a 429/503 overload) + `i18n/Messages.kt` (the strings) |
 | You need to see exactly what the model was sent this turn | `agent/PromptDump.kt` (the whole request rendered per message) — it hangs on koog's `onLLMCallStarting` in `agent/AgentFactory.kt` and is switched by the `PromptDump` logger in [`logback.xml`](../src/main/resources/logback.xml) |
 | Vusan forgets context or the history recap looks wrong | `agent/conversation/ConversationPlan.kt` (budget/selection) + `agent/conversation/ConversationCompactor.kt` (semantic recap) + `agent/conversation/ConversationRepository.kt` (storage/checkpoint) |

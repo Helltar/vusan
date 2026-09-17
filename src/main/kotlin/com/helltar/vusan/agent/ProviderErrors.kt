@@ -6,6 +6,7 @@ import com.helltar.vusan.i18n.Messages
 import java.time.Instant
 import kotlin.time.Duration
 import kotlin.time.Duration.Companion.days
+import kotlin.time.Duration.Companion.minutes
 import kotlin.time.Duration.Companion.seconds
 
 // what a provider failure means, read out of the message koog folded the status and the error body
@@ -93,3 +94,23 @@ private fun Regex.longIn(text: String): Long? =
 
 internal fun Throwable.isContextOverflow(): Boolean =
     providerErrorMessage()?.let(CONTEXT_OVERFLOW_REGEX::containsMatchIn) == true
+
+/**
+ * How long the provider behind [this] is out for, or `null` when the failure says nothing of the kind.
+ *
+ * Only a spent allowance and a dead sign-in count: both mean every call is refused until something
+ * outside the bot changes, which is what a fallback provider is for. A plain 429 or 503 is a moment's
+ * wait, and a content refusal repeats on any provider. When the body names no deadline, the wait is
+ * [DEFAULT_PROVIDER_OUTAGE], long enough not to hammer a dead route and short enough to notice it back.
+ */
+internal fun Throwable.providerOutage(now: Instant = Instant.now()): Duration? {
+    val message = providerErrorMessage() ?: return null
+
+    return when {
+        SUBSCRIPTION_LIMIT_REGEX.containsMatchIn(message) -> usageLimitResetIn(message, now) ?: DEFAULT_PROVIDER_OUTAGE
+        UNAUTHORIZED_REGEX.containsMatchIn(message) -> DEFAULT_PROVIDER_OUTAGE
+        else -> null
+    }
+}
+
+private val DEFAULT_PROVIDER_OUTAGE = 30.minutes

@@ -9,6 +9,7 @@ import io.github.oshai.kotlinlogging.KotlinLogging
 import kotlin.io.path.Path
 import kotlin.io.path.isReadable
 import kotlin.io.path.readText
+import kotlin.time.Duration
 import kotlin.time.Duration.Companion.seconds
 
 data class AppConfig(
@@ -22,6 +23,7 @@ data class AppConfig(
     val giphyApiKey: String?,
     val groupLog: GroupLogConfig = GroupLogConfig(),
     val llmProvider: LlmProviderConfig,
+    val llmFallback: LlmProviderConfig? = null,
     val maxConcurrentTurns: Int,
     val openAiImage: OpenAiImageConfig?,
     val openAiImageApiKey: String?,
@@ -47,6 +49,8 @@ data class AppConfig(
     companion object {
         private const val DEFAULT_AGENT_MAX_ITERATIONS = 200
         private const val DEFAULT_LLM_REQUEST_TIMEOUT_SECONDS = 120L
+        private const val LLM_PREFIX = "LLM"
+        private const val LLM_FALLBACK_PREFIX = "LLM_FALLBACK"
         private const val DEFAULT_MAX_CONCURRENT_TURNS = 8
 
         private val dotenv = dotenv { ignoreIfMissing = true }
@@ -57,6 +61,7 @@ data class AppConfig(
             val elevenLabsKey = readEnv("ELEVENLABS_API_KEY")
             val openAiImageKey = readEnv("OPENAI_IMAGE_API_KEY")
             val llmProvider = resolveLlmProvider()
+            val llmFallback = resolveLlmFallback(llmProvider)
             val imageRoute = resolveImageRoute(openAiImageKey != null, llmProvider)
             val regolithUrl = readEnv("REGOLITH_URL")
 
@@ -68,6 +73,7 @@ data class AppConfig(
                 elevenLabsApiKey = elevenLabsKey,
                 giphyApiKey = readEnv("GIPHY_API_KEY"),
                 llmProvider = llmProvider,
+                llmFallback = llmFallback,
                 maxConcurrentTurns = readIntEnv("MAX_CONCURRENT_TURNS") ?: DEFAULT_MAX_CONCURRENT_TURNS,
                 openAiImageApiKey = openAiImageKey,
                 openAiStt = resolveOpenAiStt(),
@@ -176,20 +182,38 @@ data class AppConfig(
             )
         }
 
-        private fun resolveLlmProvider(): LlmProviderConfig {
-            val raw = requireEnv("LLM_PROVIDER")
+        private fun resolveLlmProvider(): LlmProviderConfig = resolveLlmProvider(LLM_PREFIX, fallbackTimeout = null)
 
-            val contextWindowTokens = readLongEnv("LLM_CONTEXT_WINDOW_TOKENS")
+        // the same settings again under LLM_FALLBACK_, a second provider that answers while the first is
+        // out. a subscription cannot stand behind another: its allowance is the very thing that runs out.
+        private fun resolveLlmFallback(primary: LlmProviderConfig): LlmProviderConfig? {
+            readEnv("${LLM_FALLBACK_PREFIX}_PROVIDER") ?: return null
+
+            val fallback = resolveLlmProvider(LLM_FALLBACK_PREFIX, fallbackTimeout = primary.requestTimeout)
+
+            require(fallback !is LlmProviderConfig.Codex) {
+                "${LLM_FALLBACK_PREFIX}_PROVIDER cannot be codex: a subscription is what the fallback covers for"
+            }
+
+            return fallback
+        }
+
+        private fun resolveLlmProvider(prefix: String, fallbackTimeout: Duration?): LlmProviderConfig {
+            val raw = requireEnv("${prefix}_PROVIDER")
+
+            val contextWindowTokens = readLongEnv("${prefix}_CONTEXT_WINDOW_TOKENS")
 
             val requestTimeout =
-                (readLongEnv("LLM_REQUEST_TIMEOUT_SECONDS") ?: DEFAULT_LLM_REQUEST_TIMEOUT_SECONDS).seconds
+                readLongEnv("${prefix}_REQUEST_TIMEOUT_SECONDS")?.seconds
+                    ?: fallbackTimeout
+                    ?: DEFAULT_LLM_REQUEST_TIMEOUT_SECONDS.seconds
 
             val provider = raw.trim().lowercase()
 
             if (provider == "codex") {
                 return LlmProviderConfig.Codex(
-                    model = requireEnv("LLM_MODEL"),
-                    reasoningEffort = resolveReasoningEffort(),
+                    model = requireEnv("${prefix}_MODEL"),
+                    reasoningEffort = resolveReasoningEffort(prefix),
                     serviceTier = resolveCodexServiceTier(),
                     imageGeneration = readBooleanEnv("CODEX_IMAGE_GENERATION_ENABLED") ?: true,
                     clientVersion = resolveCodexClientVersion(),
@@ -201,11 +225,11 @@ data class AppConfig(
 
             if (provider == "openai-compatible") {
                 return LlmProviderConfig.OpenAiCompatible(
-                    baseUrl = requireEnv("LLM_BASE_URL"),
-                    apiKey = requireEnv("LLM_API_KEY"),
-                    model = requireEnv("LLM_MODEL"),
-                    endpoint = resolveOpenAiEndpoint(),
-                    reasoningEffort = resolveReasoningEffort(),
+                    baseUrl = requireEnv("${prefix}_BASE_URL"),
+                    apiKey = requireEnv("${prefix}_API_KEY"),
+                    model = requireEnv("${prefix}_MODEL"),
+                    endpoint = resolveOpenAiEndpoint(prefix),
+                    reasoningEffort = resolveReasoningEffort(prefix),
                     requestTimeout = requestTimeout,
                     contextWindowTokens = contextWindowTokens,
                 )
@@ -214,31 +238,31 @@ data class AppConfig(
             val hosted =
                 runCatching { HostedLlmProvider.valueOf(provider.uppercase()) }.getOrNull()
                     ?: error(
-                        "Unsupported LLM_PROVIDER=[$provider]. " +
+                        "Unsupported ${prefix}_PROVIDER=[$provider]. " +
                                 "Supported values: openai, anthropic, google, deepseek, openai-compatible, codex",
                     )
 
             return LlmProviderConfig.Hosted(
                 provider = hosted,
-                apiKey = requireEnv("LLM_API_KEY"),
-                model = requireEnv("LLM_MODEL"),
+                apiKey = requireEnv("${prefix}_API_KEY"),
+                model = requireEnv("${prefix}_MODEL"),
                 requestTimeout = requestTimeout,
                 contextWindowTokens = contextWindowTokens,
             )
         }
 
-        private fun resolveOpenAiEndpoint(): OpenAiEndpoint {
-            val raw = readEnv("LLM_OPENAI_ENDPOINT") ?: return OpenAiEndpoint.COMPLETIONS
+        private fun resolveOpenAiEndpoint(prefix: String): OpenAiEndpoint {
+            val raw = readEnv("${prefix}_OPENAI_ENDPOINT") ?: return OpenAiEndpoint.COMPLETIONS
 
             return enumOrNull<OpenAiEndpoint>(raw)
-                ?: error("Unsupported LLM_OPENAI_ENDPOINT=[$raw]. Supported values: ${supportedValues<OpenAiEndpoint>()}")
+                ?: error("Unsupported ${prefix}_OPENAI_ENDPOINT=[$raw]. Supported values: ${supportedValues<OpenAiEndpoint>()}")
         }
 
-        private fun resolveReasoningEffort(): ReasoningEffort? {
-            val raw = readEnv("LLM_REASONING_EFFORT") ?: return null
+        private fun resolveReasoningEffort(prefix: String): ReasoningEffort? {
+            val raw = readEnv("${prefix}_REASONING_EFFORT") ?: return null
 
             return enumOrNull<ReasoningEffort>(raw)
-                ?: error("Unsupported LLM_REASONING_EFFORT=[$raw]. Supported values: ${supportedValues<ReasoningEffort>()}")
+                ?: error("Unsupported ${prefix}_REASONING_EFFORT=[$raw]. Supported values: ${supportedValues<ReasoningEffort>()}")
         }
 
         // `default` is Codex's own sentinel for "no tier chosen" rather than a tier the catalog offers, so

@@ -215,10 +215,45 @@ CODEX_IMAGE_GENERATION_ENABLED=false
 ```
 
 Two limits are worth knowing. Usage is metered against the plan rather than billed per token, so a
-heavy day ends in a "usage limit reached" reply that says how long the window still has to run. And this
-route depends on an endpoint OpenAI ships for its own Codex clients rather than documents for
-third-party apps, so an OpenAI-side change can break it; `LLM_PROVIDER=openai` with an API key stays
-the supported fallback.
+heavy day ends in a "usage limit reached" reply that says how long the window still has to run —
+unless a [fallback provider](#a-second-provider-behind-the-first) takes over. And this route depends
+on an endpoint OpenAI ships for its own Codex clients rather than documents for third-party apps, so
+an OpenAI-side change can break it; `LLM_PROVIDER=openai` with an API key stays the supported
+fallback.
+
+## A second provider behind the first
+
+A second provider can stand behind the first for when it is out: a subscription whose window is
+spent, a sign-in that expired. It is the same set of variables again under `LLM_FALLBACK_`, and any
+provider but `codex` may take the role:
+
+```dotenv
+LLM_PROVIDER=codex
+LLM_MODEL=gpt-5.6-sol
+
+LLM_FALLBACK_PROVIDER=openai
+LLM_FALLBACK_MODEL=gpt-5.4-mini
+LLM_FALLBACK_API_KEY=sk-proj-qwerty
+```
+
+`LLM_FALLBACK_BASE_URL`, `LLM_FALLBACK_OPENAI_ENDPOINT`, `LLM_FALLBACK_REASONING_EFFORT`,
+`LLM_FALLBACK_REQUEST_TIMEOUT_SECONDS` and `LLM_FALLBACK_CONTEXT_WINDOW_TOKENS` mean what their
+`LLM_` counterparts mean; the timeout follows the primary's when unset.
+
+What switches is only a refusal that will not pass on its own: the plan's usage limit, or credentials
+the provider no longer accepts. The call that ran into it is repeated on the fallback with the
+fallback's own model, so the turn finishes instead of ending in "come back later", and every later
+call — turns, history recaps, group-log digests, vision on the chat model — goes the same way until
+the deadline the refusal named, or for half an hour when it named none. Then one call probes the
+primary again, and the bot returns to it or waits another round. A moment's rate limit or an
+overloaded provider is not an outage and is retried where it happened, and a content refusal repeats
+on any provider, so neither switches.
+
+Pick a fallback that can do what the primary does: one that sees images if the chat model does,
+because vision rides on the same switch, and one whose context window is not much smaller, because
+the history is planned against the primary's. Image generation does not follow: on the Codex route it
+spends the same subscription and fails with it until the window resets, so a deployment that wants
+pictures through the outage sets `OPENAI_IMAGE_API_KEY`, which sends every picture to the API.
 
 ## How many requests at once
 
