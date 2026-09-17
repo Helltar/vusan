@@ -185,14 +185,15 @@ data class AppConfig(
         private fun resolveLlmProvider(): LlmProviderConfig = resolveLlmProvider(LLM_PREFIX, fallbackTimeout = null)
 
         // the same settings again under LLM_FALLBACK_, a second provider that answers while the first is
-        // out. a subscription cannot stand behind another: its allowance is the very thing that runs out.
+        // out. a subscription may stand on either side, but not both: the CODEX_* settings and the signed-in
+        // account are one set, and two subscriptions would need two.
         private fun resolveLlmFallback(primary: LlmProviderConfig): LlmProviderConfig? {
             readEnv("${LLM_FALLBACK_PREFIX}_PROVIDER") ?: return null
 
             val fallback = resolveLlmProvider(LLM_FALLBACK_PREFIX, fallbackTimeout = primary.requestTimeout)
 
-            require(fallback !is LlmProviderConfig.Codex) {
-                "${LLM_FALLBACK_PREFIX}_PROVIDER cannot be codex: a subscription is what the fallback covers for"
+            require(primary !is LlmProviderConfig.Codex || fallback !is LlmProviderConfig.Codex) {
+                "${LLM_FALLBACK_PREFIX}_PROVIDER cannot be codex when LLM_PROVIDER is: there is one signed-in account"
             }
 
             return fallback

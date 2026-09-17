@@ -224,8 +224,9 @@ fallback.
 ## A second provider behind the first
 
 A second provider can stand behind the first for when it is out: a subscription whose window is
-spent, a sign-in that expired. It is the same set of variables again under `LLM_FALLBACK_`, and any
-provider but `codex` may take the role:
+spent, a key whose credit ran dry, a sign-in that expired. It is the same set of variables again
+under `LLM_FALLBACK_`, and any provider may take the role, the subscription included — in either
+direction, but not on both sides, since the `CODEX_*` settings and the signed-in account are one set:
 
 ```dotenv
 LLM_PROVIDER=codex

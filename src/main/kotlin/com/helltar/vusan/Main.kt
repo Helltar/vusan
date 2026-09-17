@@ -71,18 +71,22 @@ suspend fun main() = coroutineScope {
         // nobody has run `codex login` here, then validate the selected model and its capabilities
         // before the first user turn hits an opaque backend error. the reported client version goes in
         // first, because it decides how much of the model catalog that validation is shown.
+        // the subscription may be the primary or the fallback; whichever it is, it is the one signed-in account.
         val codexAuth =
-            (config.llmProvider as? LlmProviderConfig.Codex)?.let { codex ->
-                pinCodexClientVersion(codex.clientVersion)
-                CodexAuthStore(http, codex.authFile)
-            }
+            listOfNotNull(config.llmProvider, config.llmFallback)
+                .firstNotNullOfOrNull { it as? LlmProviderConfig.Codex }
+                ?.let { codex ->
+                    pinCodexClientVersion(codex.clientVersion)
+                    CodexAuthStore(http, codex.authFile)
+                }
 
         val llm = resolveLlmRuntime(codexPreflight(config.llmProvider, http, codexAuth), codexAuth)
 
-        // a second provider stands behind the first for when it is out — a spent subscription, above all.
-        // it wraps the executor so that every call the bot makes is covered, and so a turn that runs
-        // into the limit finishes on the fallback instead of ending in "come back later".
-        val fallback = config.llmFallback?.let { resolveLlmRuntime(it) }
+        // a second provider stands behind the first for when it is out — a spent subscription, above all,
+        // or a key whose credit ran dry with the subscription behind it. it wraps the executor so that
+        // every call the bot makes is covered, and so a turn that runs into the limit finishes on the
+        // fallback instead of ending in "come back later".
+        val fallback = config.llmFallback?.let { resolveLlmRuntime(codexPreflight(it, http, codexAuth), codexAuth) }
         val chatExecutor =
             fallback?.let {
                 FallbackPromptExecutor(
