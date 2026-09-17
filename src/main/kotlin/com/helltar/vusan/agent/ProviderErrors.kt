@@ -2,7 +2,12 @@ package com.helltar.vusan.agent
 
 import ai.koog.http.client.KoogHttpClientException
 import ai.koog.prompt.executor.clients.LLMClientException
+import com.helltar.vusan.config.CodexAuthException
 import com.helltar.vusan.i18n.Messages
+import io.ktor.client.network.sockets.ConnectTimeoutException
+import io.ktor.client.network.sockets.SocketTimeoutException
+import io.ktor.client.plugins.HttpRequestTimeoutException
+import java.io.IOException
 import java.time.Instant
 import kotlin.time.Duration
 import kotlin.time.Duration.Companion.days
@@ -96,21 +101,41 @@ internal fun Throwable.isContextOverflow(): Boolean =
     providerErrorMessage()?.let(CONTEXT_OVERFLOW_REGEX::containsMatchIn) == true
 
 /**
- * How long the provider behind [this] is out for, or `null` when the failure says nothing of the kind.
+ * How long the provider behind [this] is out for, or `null` when the failure is not the provider's.
  *
- * Only a spent allowance and a dead sign-in count: both mean every call is refused until something
- * outside the bot changes, which is what a fallback provider is for. A plain 429 or 503 is a moment's
- * wait, and a content refusal repeats on any provider. When the body names no deadline, the wait is
- * [DEFAULT_PROVIDER_OUTAGE], long enough not to hammer a dead route and short enough to notice it back.
+ * A spent allowance and a dead sign-in mean every call is refused until something outside the bot
+ * changes, so they keep the provider out for the deadline the body names, or [DEFAULT_PROVIDER_OUTAGE]
+ * without one. A rate limit, an overloaded server or a dropped connection usually passes in seconds,
+ * so those keep it out for [TRANSIENT_OUTAGE] only — long enough that a blip does not flip every
+ * call back and forth, short enough that the fallback is not paid for after the blip is over. A
+ * content refusal is not an outage at all: it repeats on any provider.
  */
 internal fun Throwable.providerOutage(now: Instant = Instant.now()): Duration? {
-    val message = providerErrorMessage() ?: return null
+    if (causes().any { it is CodexAuthException }) return DEFAULT_PROVIDER_OUTAGE
+
+    val message = providerErrorMessage()
 
     return when {
-        SUBSCRIPTION_LIMIT_REGEX.containsMatchIn(message) -> usageLimitResetIn(message, now) ?: DEFAULT_PROVIDER_OUTAGE
-        UNAUTHORIZED_REGEX.containsMatchIn(message) -> DEFAULT_PROVIDER_OUTAGE
+        message != null && CONTENT_POLICY_REGEX.containsMatchIn(message) -> null
+
+        message != null && SUBSCRIPTION_LIMIT_REGEX.containsMatchIn(message) ->
+            usageLimitResetIn(message, now) ?: DEFAULT_PROVIDER_OUTAGE
+
+        message != null && UNAUTHORIZED_REGEX.containsMatchIn(message) -> DEFAULT_PROVIDER_OUTAGE
+        message != null && TRANSIENT_STATUS_REGEX.containsMatchIn(message) -> TRANSIENT_OUTAGE
+        isNetworkFailure() -> TRANSIENT_OUTAGE
         else -> null
     }
 }
 
 private val DEFAULT_PROVIDER_OUTAGE = 30.minutes
+private val TRANSIENT_OUTAGE = 2.minutes
+
+private fun Throwable.causes(): Sequence<Throwable> = generateSequence(this) { it.cause }
+
+// the request never got an answer to read a status out of: a timeout on either side of the socket, a
+// refused or dropped connection, a name that does not resolve.
+private fun Throwable.isNetworkFailure(): Boolean =
+    causes().any {
+        it is IOException || it is HttpRequestTimeoutException || it is ConnectTimeoutException || it is SocketTimeoutException
+    }

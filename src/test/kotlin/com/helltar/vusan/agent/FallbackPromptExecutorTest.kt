@@ -123,8 +123,33 @@ class FallbackPromptExecutorTest {
     }
 
     @Test
-    fun `a moment's rate limit is not an outage and reaches the caller`() = runBlocking {
+    fun `a moment's rate limit hands the call over and keeps the primary out for minutes, not hours`() = runBlocking {
+        val clock = TickingClock(start)
         val primary = ScriptedExecutor("from primary", failWith = LLMClientException("OpenAILLMClient", "Status code: 429 rate limit"))
+        val fallback = ScriptedExecutor("from fallback")
+        val executor = executor(primary, fallback, clock)
+
+        assertEquals("from fallback", executor.execute(prompt(), PRIMARY_MODEL).textContent())
+        assertTrue(executor.onFallback)
+
+        clock.now = start.plus(3.minutes.toJavaDuration())
+        assertFalse(executor.onFallback)
+    }
+
+    @Test
+    fun `a dropped connection counts the same way`() = runBlocking {
+        val primary = ScriptedExecutor("from primary", failWith = RuntimeException("wrapped", java.net.ConnectException("refused")))
+        val fallback = ScriptedExecutor("from fallback")
+        val executor = executor(primary, fallback, TickingClock(start))
+
+        assertEquals("from fallback", executor.execute(prompt(), PRIMARY_MODEL).textContent())
+        assertTrue(executor.onFallback)
+    }
+
+    @Test
+    fun `a content refusal is not an outage and reaches the caller`() = runBlocking {
+        val body = "Status code: 400 Error body: {\"error\":{\"code\":\"invalid_prompt\",\"message\":\"flagged by content_policy\"}}"
+        val primary = ScriptedExecutor("from primary", failWith = LLMClientException("OpenAILLMClient", body))
         val fallback = ScriptedExecutor("from fallback")
         val executor = executor(primary, fallback, TickingClock(start))
 

@@ -241,14 +241,16 @@ LLM_FALLBACK_API_KEY=sk-proj-qwerty
 `LLM_FALLBACK_REQUEST_TIMEOUT_SECONDS` and `LLM_FALLBACK_CONTEXT_WINDOW_TOKENS` mean what their
 `LLM_` counterparts mean; the timeout follows the primary's when unset.
 
-What switches is only a refusal that will not pass on its own: the plan's usage limit, or credentials
-the provider no longer accepts. The call that ran into it is repeated on the fallback with the
-fallback's own model, so the turn finishes instead of ending in "come back later", and every later
-call — turns, history recaps, group-log digests, vision on the chat model — goes the same way until
-the deadline the refusal named, or for half an hour when it named none. Then one call probes the
-primary again, and the bot returns to it or waits another round. A moment's rate limit or an
-overloaded provider is not an outage and is retried where it happened, and a content refusal repeats
-on any provider, so neither switches.
+Any failure that is the provider's switches: the plan's usage limit, credentials it no longer
+accepts, a rate limit, an overloaded server, a connection that timed out or dropped. The call that
+ran into it is repeated on the fallback with the fallback's own model, so the turn finishes instead
+of ending in an error reply, and every later call — turns, history recaps, group-log digests, vision
+on the chat model — goes the same way for as long as the primary is held out. How long that is
+depends on the failure: a usage limit until the deadline the refusal named, a dead sign-in for half
+an hour, a rate limit or an outage for two minutes, long enough that a blip does not flip every call
+back and forth and short enough that the fallback is not paid for once it has passed. Then one call
+probes the primary again, and the bot returns to it or waits another round. A content refusal is not
+an outage — it repeats on any provider — and reaches the user as it always did.
 
 Pick a fallback that can do what the primary does: one that sees images if the chat model does,
 because vision rides on the same switch, and one whose context window is not much smaller, because
