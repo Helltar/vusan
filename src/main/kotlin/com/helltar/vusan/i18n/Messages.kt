@@ -81,7 +81,12 @@ interface Messages {
      */
     fun progressLabel(activity: ToolActivity): String
 
-    /** Shown in the status while the usual provider is out and [model] is answering instead. */
+    /**
+     * Shown in the status while the usual provider is out and [model] is answering instead.
+     *
+     * It carries no emoji of its own: it sits directly under the line naming the running tool, which
+     * has one, and two emoji stacked on consecutive lines crowd each other in Telegram.
+     */
     fun fallbackModelNote(model: String): String
 
     companion object {
