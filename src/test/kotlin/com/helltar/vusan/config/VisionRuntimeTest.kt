@@ -66,6 +66,19 @@ class VisionRuntimeTest {
     }
 
     @Test
+    fun `a vision model newer than the catalog is accepted and assumed to see`() {
+        val vision =
+            resolveVisionRuntime(
+                config = OpenAiVisionConfig(apiKey = "key", model = "gpt-5.6-luna"),
+                chat = hostedChat(HostedLlmProvider.DEEPSEEK, "deepseek-v4-pro"),
+                chatExecutor = chatExecutor,
+                requestTimeout = TIMEOUT,
+            )
+
+        assertEquals("gpt-5.6-luna", vision?.model?.id)
+    }
+
+    @Test
     fun `an openai-compatible chat model never claims vision on its own`() {
         // the server behind LLM_BASE_URL can serve anything, so image support is only ever taken from the key
         val chat =
@@ -79,18 +92,6 @@ class VisionRuntimeTest {
             )
 
         assertNull(resolveVisionRuntime(config = null, chat = chat, chatExecutor = chatExecutor, requestTimeout = TIMEOUT))
-    }
-
-    @Test
-    fun `an unknown vision model fails at startup`() {
-        assertFailsWith<IllegalArgumentException> {
-            resolveVisionRuntime(
-                config = OpenAiVisionConfig(apiKey = "key", model = "gpt-unknown"),
-                chat = hostedChat(HostedLlmProvider.OPENAI, "gpt-5.4-mini"),
-                chatExecutor = chatExecutor,
-                requestTimeout = TIMEOUT,
-            )
-        }
     }
 
     private fun hostedChat(provider: HostedLlmProvider, model: String): LlmRuntime =

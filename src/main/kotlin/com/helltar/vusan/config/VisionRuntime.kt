@@ -34,7 +34,7 @@ fun resolveVisionRuntime(
             ?.let { VisionRuntime(it.providerLabel, chatExecutor, it.model) }
     }
 
-    val model = resolveOpenAiModel(config.model)
+    val model = openAiModel(config.model)
 
     require(model.supports(LLMCapability.Vision.Image)) {
         "OPENAI_VISION_MODEL=[${config.model}] cannot read images"

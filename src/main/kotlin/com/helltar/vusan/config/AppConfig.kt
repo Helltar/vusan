@@ -247,6 +247,7 @@ data class AppConfig(
                 provider = hosted,
                 apiKey = requireEnv("${prefix}_API_KEY"),
                 model = requireEnv("${prefix}_MODEL"),
+                reasoningEffort = resolveReasoningEffort(prefix),
                 requestTimeout = requestTimeout,
                 contextWindowTokens = contextWindowTokens,
             )

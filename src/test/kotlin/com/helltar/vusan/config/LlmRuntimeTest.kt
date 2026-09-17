@@ -33,30 +33,23 @@ import kotlin.time.Duration.Companion.seconds
 class LlmRuntimeTest {
 
     @Test
-    fun `resolveOpenAiModel resolves configured model names`() {
-        assertEquals(OpenAIModels.Chat.GPT5_4Nano, resolveOpenAiModel("gpt-5.4-nano"))
-        assertEquals(OpenAIModels.Chat.GPT5_4Mini, resolveOpenAiModel("GPT-5.4-MINI"))
-        assertEquals(OpenAIModels.Chat.GPT4_1, resolveOpenAiModel("gpt_4.1"))
-    }
-
-    @Test
-    fun `resolveOpenAiModel rejects unknown model names`() {
-        assertFailsWith<IllegalArgumentException> {
-            resolveOpenAiModel("gpt-unknown")
-        }
+    fun `openAiModel resolves configured model names`() {
+        assertEquals(OpenAIModels.Chat.GPT5_4Nano, openAiModel("gpt-5.4-nano"))
+        assertEquals(OpenAIModels.Chat.GPT5_4Mini, openAiModel("GPT-5.4-MINI"))
+        assertEquals(OpenAIModels.Chat.GPT4_1, openAiModel("gpt_4.1"))
     }
 
     @Test
     fun `a responses-only model is not handed chat completions params`() {
-        assertIs<OpenAIResponsesParams>(openAiHostedParams(resolveOpenAiModel("gpt-5-pro"), "vusan"))
-        assertIs<OpenAIResponsesParams>(openAiHostedParams(resolveOpenAiModel("gpt-5-codex"), "vusan"))
-        assertIs<OpenAIChatParams>(openAiHostedParams(resolveOpenAiModel("gpt-5.4-mini"), "vusan"))
+        assertIs<OpenAIResponsesParams>(openAiHostedParams(openAiModel("gpt-5-pro"), "vusan"))
+        assertIs<OpenAIResponsesParams>(openAiHostedParams(openAiModel("gpt-5-codex"), "vusan"))
+        assertIs<OpenAIChatParams>(openAiHostedParams(openAiModel("gpt-5.4-mini"), "vusan"))
     }
 
     @Test
     fun `the prompt cache key survives either endpoint`() {
-        val responses = openAiHostedParams(resolveOpenAiModel("gpt-5-pro"), "vusan-recap")
-        val chat = openAiHostedParams(resolveOpenAiModel("gpt-5.4-mini"), "vusan-recap")
+        val responses = openAiHostedParams(openAiModel("gpt-5-pro"), "vusan-recap")
+        val chat = openAiHostedParams(openAiModel("gpt-5.4-mini"), "vusan-recap")
 
         assertEquals("vusan-recap", assertIs<OpenAIResponsesParams>(responses).promptCacheKey)
         assertEquals("vusan-recap", assertIs<OpenAIChatParams>(chat).promptCacheKey)

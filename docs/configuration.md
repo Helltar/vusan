@@ -74,8 +74,12 @@ banned, and startup says so in the log.
 | `openai-compatible` | any model id the server understands |
 | `codex`             | any model the ChatGPT plan offers   |
 
-- **The four native providers** — each talks to its vendor's own API and accepts only model ids it
-  knows; an unrecognized id fails at startup and lists the supported ones.
+- **The four native providers** — each talks to its vendor's own API. `anthropic`, `google` and
+  `deepseek` accept only model ids their built-in catalog knows, and an unrecognized id fails at
+  startup listing the supported ones. `openai` takes any id: one the catalog knows comes with its
+  metadata, a newer one is assumed to be what every recent OpenAI model is — a reasoning model that
+  sees images and speaks the Responses API — and is checked against OpenAI's own model list at
+  startup, so a typo still fails there rather than on the first message.
 - **`openai-compatible`** — any OpenAI-compatible server, remote or local, taking whatever model
   string it serves.
 - **`codex`** — a ChatGPT subscription instead of an API key; see
@@ -89,29 +93,19 @@ banned, and startup says so in the log.
 | `LLM_REQUEST_TIMEOUT_SECONDS` | `120`                     | Seconds one LLM call may hang before Vusan gives up and replies with an error.  |
 | `LLM_CONTEXT_WINDOW_TOKENS`   | model metadata or `16384` | Context size override.                                                          |
 
-`LLM_OPENAI_ENDPOINT` applies to `openai-compatible` only, `LLM_REASONING_EFFORT` to
-`openai-compatible` and `codex`. Which efforts work depends on the model, and only `codex` checks
-yours at startup. Give `LLM_BASE_URL` no `/v1` — the API path is appended for you. Raise the timeout
-for slow local servers and heavy reasoning models.
+`LLM_OPENAI_ENDPOINT` is for `openai-compatible` alone: it says which of the two OpenAI APIs the
+server behind `LLM_BASE_URL` speaks, since a third-party server may offer either. `openai` picks the
+endpoint itself, from the catalog for a model it knows and Responses for a newer one.
+`LLM_REASONING_EFFORT` applies to `openai`, `openai-compatible` and `codex`. Which efforts work
+depends on the model, and only `codex` checks yours at startup. Give `LLM_BASE_URL` no `/v1` — the
+API path is appended for you. Raise the timeout for slow local servers and heavy reasoning models.
 
-Set `LLM_CONTEXT_WINDOW_TOKENS` whenever an `openai-compatible` model has a different window. Vusan
-reserves part of that window for the response, tool results and estimation error, then fits only
-complete conversation interactions into the remainder.
+Set `LLM_CONTEXT_WINDOW_TOKENS` whenever the model's window is not in the catalog: every
+`openai-compatible` model, and an `openai` model newer than the catalog, which startup names in a
+warning. Vusan reserves part of that window for the response, tool results and estimation error,
+then fits only complete conversation interactions into the remainder.
 
-**Reaching OpenAI itself this way.** An OpenAI model released after the `openai` provider's model
-list was last updated is rejected there as unknown, but stays reachable through `openai-compatible`.
-Newer reasoning models additionally refuse tools on the completions API, so they need `responses` —
-or `LLM_REASONING_EFFORT=none`, which turns reasoning off instead:
-
-```dotenv
-LLM_PROVIDER=openai-compatible
-LLM_API_KEY=sk-proj-qwerty
-LLM_BASE_URL=https://api.openai.com
-LLM_MODEL=gpt-5.6-luna
-LLM_OPENAI_ENDPOINT=responses
-```
-
-Other servers follow the same shape, with `LLM_PROVIDER=openai-compatible`:
+Third-party servers all take the same shape, with `LLM_PROVIDER=openai-compatible`:
 
 ```dotenv
 # Grok
@@ -451,7 +445,7 @@ OPENAI_VISION_API_KEY=sk-proj-qwerty
 | Variable                | Default        | Description                                                        |
 |-------------------------|----------------|--------------------------------------------------------------------|
 | `OPENAI_VISION_API_KEY` | —              | Enables a separate vision model. Can reuse your OpenAI key.        |
-| `OPENAI_VISION_MODEL`   | `gpt-5.4-mini` | OpenAI model that reads the images; must be one that accepts them. |
+| `OPENAI_VISION_MODEL`   | `gpt-5.4-mini` | OpenAI model that reads the images; a newer id than the catalog is assumed to. |
 
 DeepSeek models cannot see, and `openai-compatible` never claims it either, because the server
 behind `LLM_BASE_URL` may serve anything — so with either one vision stays off until this key is

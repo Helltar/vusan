@@ -262,17 +262,17 @@ internal fun connectionTimeouts(requestTimeout: Duration): ConnectionTimeoutConf
 // call rather than at startup, so a deployment looks configured and then answers nothing. Koog picks the
 // endpoint itself when handed plain LLMParams, but the prompt cache key rides on the endpoint-specific
 // params, so the choice is made here. Completions stays the default wherever a model speaks both.
-internal fun openAiHostedParams(model: LLModel, promptCacheKey: String): LLMParams =
+internal fun openAiHostedParams(model: LLModel, promptCacheKey: String, effort: ReasoningEffort? = null): LLMParams =
     if (model.supports(LLMCapability.OpenAIEndpoint.Completions))
-        OpenAIChatParams(promptCacheKey = promptCacheKey)
+        OpenAIChatParams(promptCacheKey = promptCacheKey, additionalProperties = completionsReasoning(effort))
     else
-        OpenAIResponsesParams(promptCacheKey = promptCacheKey)
+        OpenAIResponsesParams(promptCacheKey = promptCacheKey, additionalProperties = responsesReasoning(effort))
 
 private fun resolveHostedRuntime(config: LlmProviderConfig.Hosted, timeoutConfig: ConnectionTimeoutConfig): LlmRuntime =
 
     when (config.provider) {
         HostedLlmProvider.OPENAI -> {
-            val model = resolveOpenAiModel(config.model).withContextOverride(config.contextWindowTokens)
+            val model = openAiModel(config.model).withContextOverride(config.contextWindowTokens)
 
             LlmRuntime(
                 providerLabel = "OpenAI",
@@ -283,8 +283,8 @@ private fun resolveHostedRuntime(config: LlmProviderConfig.Hosted, timeoutConfig
                         explicitPromptCaching = true,
                     ),
                 model = model,
-                chatParams = openAiHostedParams(model, OPENAI_PROMPT_CACHE_KEY),
-                compactionParams = openAiHostedParams(model, OPENAI_COMPACTION_CACHE_KEY),
+                chatParams = openAiHostedParams(model, OPENAI_PROMPT_CACHE_KEY, config.reasoningEffort),
+                compactionParams = openAiHostedParams(model, OPENAI_COMPACTION_CACHE_KEY, config.reasoningEffort),
             )
         }
 
@@ -344,10 +344,38 @@ private val openAiModelsByKey: Map<String, LLModel> by lazy {
         .associateBy { it.id.lowercase() }
 }
 
-internal fun resolveOpenAiModel(rawValue: String): LLModel =
-    requireNotNull(openAiModelsByKey[normalizeModelKey(rawValue)]) {
-        "Unsupported OpenAI model '$rawValue'. Supported values: ${openAiModelsByKey.keys.sorted().joinToString()}"
-    }
+/** The catalog's entry for [rawValue], or `null` when koog has not heard of the model. */
+internal fun cataloguedOpenAiModel(rawValue: String): LLModel? = openAiModelsByKey[normalizeModelKey(rawValue)]
+
+/**
+ * The OpenAI model to run, from the catalog when it is there and declared here when it is not.
+ *
+ * Koog's catalog trails OpenAI's releases, and a model it has not heard of is not a model that does
+ * not exist: every chat model OpenAI has shipped for a long while reasons, sees images, calls tools and
+ * speaks the Responses API, which is the one endpoint where tools work for it. So a newer id is given
+ * exactly that shape, the way `openai-compatible` declares its models, and startup asks OpenAI whether
+ * the id exists rather than the catalog. What the catalog would have known and this cannot is the
+ * context window, which `LLM_CONTEXT_WINDOW_TOKENS` supplies.
+ */
+internal fun openAiModel(rawValue: String): LLModel =
+    cataloguedOpenAiModel(rawValue) ?: uncataloguedOpenAiModel(rawValue.trim())
+
+private fun uncataloguedOpenAiModel(id: String): LLModel =
+    LLModel(
+        provider = LLMProvider.OpenAI,
+        id = id,
+        contextLength = null,
+        capabilities =
+            listOf(
+                LLMCapability.Completion,
+                LLMCapability.Temperature,
+                LLMCapability.Schema.JSON.Standard,
+                LLMCapability.Tools,
+                LLMCapability.Vision.Image,
+                LLMCapability.OpenAIEndpoint.Responses,
+                LLMCapability.Thinking,
+            ),
+    )
 
 internal fun resolveModel(definitions: LLModelDefinitions, providerLabel: String, rawValue: String): LLModel {
     val key = normalizeModelKey(rawValue)

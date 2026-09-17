@@ -50,6 +50,8 @@ sealed interface LlmProviderConfig {
         val provider: HostedLlmProvider,
         val apiKey: String,
         val model: String,
+        // honoured by openai alone, which is the one native provider whose request carries an effort.
+        val reasoningEffort: ReasoningEffort? = null,
         override val requestTimeout: Duration,
         override val contextWindowTokens: Long? = null,
     ) : LlmProviderConfig {

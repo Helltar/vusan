@@ -80,6 +80,12 @@ suspend fun main() = coroutineScope {
                     CodexAuthStore(http, codex.authFile)
                 }
 
+        listOfNotNull(config.llmProvider, config.llmFallback)
+            .filterIsInstance<LlmProviderConfig.Hosted>()
+            .filter { it.provider == HostedLlmProvider.OPENAI }
+            .forEach { verifyOpenAiModel(http, it.apiKey, it.model) }
+        config.openAiVision?.let { verifyOpenAiModel(http, it.apiKey, it.model) }
+
         val llm = resolveLlmRuntime(codexPreflight(config.llmProvider, http, codexAuth), codexAuth)
 
         // a second provider stands behind the first for when it is out — a spent subscription, above all,
