@@ -13,6 +13,7 @@ import kotlin.time.Duration
 import kotlin.time.Duration.Companion.days
 import kotlin.time.Duration.Companion.minutes
 import kotlin.time.Duration.Companion.seconds
+import kotlin.time.toJavaDuration
 
 // what a provider failure means, read out of the message koog folded the status and the error body
 // into. a provider says why it refused in prose that varies by endpoint and by vendor, so every rule
@@ -101,6 +102,12 @@ internal fun Throwable.isContextOverflow(): Boolean =
     providerErrorMessage()?.let(CONTEXT_OVERFLOW_REGEX::containsMatchIn) == true
 
 /**
+ * A provider that is out [until] a deadline. [deadlineNamed] is true only when the provider stated that
+ * deadline itself; otherwise it is merely when the next probe is due, and no promise to anybody.
+ */
+internal class ProviderOutage(val until: Instant, val deadlineNamed: Boolean)
+
+/**
  * How long the provider behind [this] is out for, or `null` when the failure is not the provider's.
  *
  * A spent allowance and a dead sign-in mean every call is refused until something outside the bot
@@ -110,8 +117,8 @@ internal fun Throwable.isContextOverflow(): Boolean =
  * call back and forth, short enough that the fallback is not paid for after the blip is over. A
  * content refusal is not an outage at all: it repeats on any provider.
  */
-internal fun Throwable.providerOutage(now: Instant = Instant.now()): Duration? {
-    if (causes().any { it is CodexAuthException }) return DEFAULT_PROVIDER_OUTAGE
+internal fun Throwable.providerOutage(now: Instant = Instant.now()): ProviderOutage? {
+    if (causes().any { it is CodexAuthException }) return now.outageFor(DEFAULT_PROVIDER_OUTAGE)
 
     val message = providerErrorMessage()
 
@@ -119,14 +126,18 @@ internal fun Throwable.providerOutage(now: Instant = Instant.now()): Duration? {
         message != null && CONTENT_POLICY_REGEX.containsMatchIn(message) -> null
 
         message != null && SUBSCRIPTION_LIMIT_REGEX.containsMatchIn(message) ->
-            usageLimitResetIn(message, now) ?: DEFAULT_PROVIDER_OUTAGE
+            usageLimitResetIn(message, now)?.let { now.outageFor(it, deadlineNamed = true) }
+                ?: now.outageFor(DEFAULT_PROVIDER_OUTAGE)
 
-        message != null && UNAUTHORIZED_REGEX.containsMatchIn(message) -> DEFAULT_PROVIDER_OUTAGE
-        message != null && TRANSIENT_STATUS_REGEX.containsMatchIn(message) -> TRANSIENT_OUTAGE
-        isNetworkFailure() -> TRANSIENT_OUTAGE
+        message != null && UNAUTHORIZED_REGEX.containsMatchIn(message) -> now.outageFor(DEFAULT_PROVIDER_OUTAGE)
+        message != null && TRANSIENT_STATUS_REGEX.containsMatchIn(message) -> now.outageFor(TRANSIENT_OUTAGE)
+        isNetworkFailure() -> now.outageFor(TRANSIENT_OUTAGE)
         else -> null
     }
 }
+
+private fun Instant.outageFor(duration: Duration, deadlineNamed: Boolean = false): ProviderOutage =
+    ProviderOutage(plus(duration.toJavaDuration()), deadlineNamed)
 
 private val DEFAULT_PROVIDER_OUTAGE = 30.minutes
 private val TRANSIENT_OUTAGE = 2.minutes

@@ -7,6 +7,7 @@ import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertNull
 import kotlin.test.assertTrue
+import kotlin.time.Duration.Companion.minutes
 
 class TurnStatusTest {
 
@@ -33,14 +34,22 @@ class TurnStatusTest {
             statusMessageText(
                 plan = "I will build the game",
                 label = "\uD83D\uDCBB Running code",
-                fallbackNote = Messages.of(Language.ENGLISH).fallbackModelNote("gpt-5.4-mini"),
+                fallbackNote = Messages.of(Language.ENGLISH).fallbackModelNote("gpt-5.4-mini", primaryBackIn = null),
             ),
         )
 
         // a turn with nothing named yet still says where it is answering from
         assertEquals(
             "\u21B3 on the fallback model: gpt-5.4-mini",
-            statusMessageText(plan = null, label = null, fallbackNote = Messages.of(Language.ENGLISH).fallbackModelNote("gpt-5.4-mini")),
+            statusMessageText(plan = null, label = null, fallbackNote = Messages.of(Language.ENGLISH).fallbackModelNote("gpt-5.4-mini", primaryBackIn = null)),
+        )
+    }
+
+    @Test
+    fun `a fallback note says when the usual model is due back, if the provider said`() {
+        assertEquals(
+            "\u21B3 on the fallback model: gpt-5.4-mini \u00B7 the usual one is back in about 2h 15min",
+            Messages.of(Language.ENGLISH).fallbackModelNote("gpt-5.4-mini", primaryBackIn = 135.minutes),
         )
     }
 

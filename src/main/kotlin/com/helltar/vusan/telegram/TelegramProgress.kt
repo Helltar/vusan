@@ -1,6 +1,7 @@
 package com.helltar.vusan.telegram
 
 import com.helltar.vusan.agent.AgentRequest
+import com.helltar.vusan.agent.FallbackInUse
 import com.helltar.vusan.agent.ToolActivity
 import com.helltar.vusan.common.rethrowIfCancellation
 import com.helltar.vusan.i18n.Messages
@@ -77,12 +78,12 @@ internal fun statusGraceFor(activity: ToolActivity): Duration =
  */
 internal suspend fun <T> TelegramClient.withLiveProgress(
     request: AgentRequest,
-    fallbackModelInUse: () -> String? = { null },
+    fallbackInUse: () -> FallbackInUse? = { null },
     block: suspend (setActivity: (ToolActivity?) -> Unit, status: TurnStatus) -> T,
 ): T =
     coroutineScope {
         val activity = MutableStateFlow<ToolActivity?>(null)
-        val status = statusFor(request, fallbackModelInUse)
+        val status = statusFor(request, fallbackInUse)
         val started = TimeSource.Monotonic.markNow()
 
         val actionTicker =
@@ -139,7 +140,7 @@ internal suspend fun <T> TelegramClient.withLiveProgress(
 private val RequestContext.chatTarget: ChatTarget
     get() = ChatTarget(chatRef.telegramChatId, telegramThreadId(chat.threadId))
 
-private fun TelegramClient.statusFor(request: AgentRequest, fallbackModelInUse: () -> String?): TurnStatus =
+private fun TelegramClient.statusFor(request: AgentRequest, fallbackInUse: () -> FallbackInUse?): TurnStatus =
     TurnStatus(
         client = this,
         target = request.context.chatTarget,
@@ -147,7 +148,7 @@ private fun TelegramClient.statusFor(request: AgentRequest, fallbackModelInUse: 
         replyToMessageId = request.context.messageId?.telegramMessageId,
         messages = Messages.of(request.context.language),
         activityOpensIt = request.context.chat.capabilities.slowModeSeconds == 0,
-        fallbackModelInUse = fallbackModelInUse,
+        fallbackInUse = fallbackInUse,
     )
 
 private suspend fun TelegramClient.indicateChatAction(target: ChatTarget, action: ActionType) {

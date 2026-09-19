@@ -144,7 +144,8 @@ internal object RussianMessages : Messages {
 
     override fun taskFollowUpNotice(mention: String) = "💬 Возвращаюсь к разговору с $mention"
 
-    override fun fallbackModelNote(model: String): String = "↳ на резервной модели: $model"
+    override fun fallbackModelNote(model: String, primaryBackIn: Duration?): String =
+        "↳ на резервной модели: $model" + primaryBackIn?.let { " · основная вернётся примерно через ${waitLabel(it)}" }.orEmpty()
 
     override fun progressLabel(activity: ToolActivity): String =
 

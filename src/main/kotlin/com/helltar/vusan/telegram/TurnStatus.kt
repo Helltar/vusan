@@ -1,5 +1,6 @@
 package com.helltar.vusan.telegram
 
+import com.helltar.vusan.agent.FallbackInUse
 import com.helltar.vusan.agent.ToolActivity
 import com.helltar.vusan.agent.TurnNarrator
 import com.helltar.vusan.common.rethrowIfCancellation
@@ -90,9 +91,9 @@ internal class TurnStatus(
     // in a slow-mode group the bot's messages are rationed, so a bubble is spent only on words the model
     // chose to send; naming a running tool is never worth one of those slots.
     private val activityOpensIt: Boolean,
-    // which model is answering while the usual provider is out, so a turn served by the fallback says so
-    // where it is happening rather than only in the log.
-    private val fallbackModelInUse: () -> String? = { null },
+    // which model is answering while the usual provider is out, and when that provider said it would be
+    // back, so a turn served by the fallback says so where it is happening rather than only in the log.
+    private val fallbackInUse: () -> FallbackInUse? = { null },
 ) : TurnNarrator {
 
     // a turn writes from two places — the tool that narrates, and the collector following the activity —
@@ -206,7 +207,7 @@ internal class TurnStatus(
     }
 
     private fun statusText(): String? =
-        statusMessageText(announcement, label, fallbackModelInUse()?.let { messages.fallbackModelNote(it) })
+        statusMessageText(announcement, label, fallbackInUse()?.let { messages.fallbackModelNote(it.model, it.primaryBackIn) })
 
     // a write in flight when the turn ends must still finish. `/stop`, or simply the turn being over,
     // cancels the collector this runs in, and a send cancelled mid-flight can still have created the

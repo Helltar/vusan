@@ -3,6 +3,7 @@ package com.helltar.vusan.telegram
 import com.helltar.vusan.agent.AgentRequest
 import com.helltar.vusan.agent.AgentResult
 import com.helltar.vusan.agent.AgentRunner
+import com.helltar.vusan.agent.FallbackInUse
 import com.helltar.vusan.common.collapseWhitespaceAndCap
 import com.helltar.vusan.common.rethrowIfCancellation
 import com.helltar.vusan.i18n.Language
@@ -54,7 +55,7 @@ internal class AgentTurns(
     private val inlineChoices: InlineChoiceHandler,
     private val chatProfiles: ChatProfiles,
     private val voiceTranscriber: VoiceTranscriber?,
-    private val fallbackModelInUse: () -> String? = { null },
+    private val fallbackInUse: () -> FallbackInUse? = { null },
 ) {
 
     suspend fun dispatchToAgent(
@@ -205,7 +206,7 @@ internal class AgentTurns(
             // so a tool can say what the turn is about to do while it still matters; delivery then shows
             // its own per-item action.
             val result =
-                client.withLiveProgress(request, fallbackModelInUse) { setActivity, status ->
+                client.withLiveProgress(request, fallbackInUse) { setActivity, status ->
                     if (waitForTurn)
                         agent.handleQueued(request, setActivity, status)
                     else

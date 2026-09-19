@@ -4,6 +4,7 @@ import ai.koog.prompt.executor.llms.MultiLLMPromptExecutor
 import ai.koog.prompt.executor.model.PromptExecutor
 import com.helltar.vusan.agent.AgentFactory
 import com.helltar.vusan.agent.AgentRunner
+import com.helltar.vusan.agent.FallbackInUse
 import com.helltar.vusan.agent.FallbackPromptExecutor
 import com.helltar.vusan.agent.ContextWindowPolicy
 import com.helltar.vusan.agent.conversation.ConversationRepository
@@ -106,7 +107,7 @@ suspend fun main() = coroutineScope {
             }
 
         // what the turn and its status ask to find out whether the primary is answering right now.
-        val fallbackModelInUse: () -> String? = { fallbackExecutor?.fallbackModelInUse }
+        val fallbackInUse: () -> FallbackInUse? = { fallbackExecutor?.fallbackInUse }
         val chatExecutor = fallbackExecutor ?: MultiLLMPromptExecutor(llm.model.provider to llm.client)
         executor = chatExecutor
         val vision = resolveVisionRuntime(config.openAiVision, llm, chatExecutor, config.llmProvider.requestTimeout)
@@ -162,7 +163,7 @@ suspend fun main() = coroutineScope {
             AgentRunner(
                 agentFactory, toolRegistryFactory, conversation, memory, conversationCompactor,
                 config.chatHistory, stickerCatalog?.let { catalog -> catalog::indexBlockFor },
-                groupLog, fallbackModelInUse, config.maxConcurrentTurns,
+                groupLog, { fallbackInUse()?.model }, config.maxConcurrentTurns,
             )
 
         // answers to a poll are read back through the group transcript, so without one there is
@@ -184,7 +185,7 @@ suspend fun main() = coroutineScope {
             TelegramBotRunner(
                 telegramClient, config.telegramBotToken, delivery, agentRunner, taskMenu, inlineChoices, tasks,
                 chatProfiles, config.accessPolicy, voiceTranscriber, botProfile, stickerCatalog,
-                groupLog, polls, fallbackModelInUse,
+                groupLog, polls, fallbackInUse,
             )
 
         // retention runs on a clock of its own rather than on whoever happens to write next: what needs

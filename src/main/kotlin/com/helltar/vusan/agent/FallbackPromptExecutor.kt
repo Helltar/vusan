@@ -19,8 +19,15 @@ import com.helltar.vusan.common.rethrowIfCancellation
 import io.github.oshai.kotlinlogging.KotlinLogging
 import kotlinx.coroutines.flow.Flow
 import java.time.Clock
-import java.time.Instant
-import kotlin.time.toJavaDuration
+import kotlin.time.Duration
+import kotlin.time.toKotlinDuration
+import java.time.Duration as JavaDuration
+
+/**
+ * The fallback [model] answering while the primary is out, and how long until the primary is due back
+ * — known only when the primary named that deadline itself.
+ */
+internal data class FallbackInUse(val model: String, val primaryBackIn: Duration?)
 
 /**
  * The primary provider with a second one behind it for when the first is out: a spent subscription, a
@@ -45,14 +52,24 @@ internal class FallbackPromptExecutor(
 ) : PromptExecutor() {
 
     @Volatile
-    private var primaryDownUntil: Instant? = null
+    private var primaryOutage: ProviderOutage? = null
 
-    /** The model answering right now while the primary is out, or `null` when it is the primary's turn. */
-    val fallbackModelInUse: String?
-        get() = fallbackModel.id.takeIf { primaryDownUntil?.isAfter(clock.instant()) == true }
+    /** What is answering right now while the primary is out, or `null` when it is the primary's turn. */
+    val fallbackInUse: FallbackInUse?
+        get() {
+            val now = clock.instant()
+            val outage = primaryOutage?.takeIf { it.until.isAfter(now) } ?: return null
+
+            // only a deadline the provider named is worth repeating to people: the others are when the
+            // next probe is due, and a sign-in that expired stays expired however many of them pass.
+            val primaryBackIn =
+                outage.takeIf { it.deadlineNamed }?.let { JavaDuration.between(now, it.until).toKotlinDuration() }
+
+            return FallbackInUse(fallbackModel.id, primaryBackIn)
+        }
 
     private val onFallback: Boolean
-        get() = fallbackModelInUse != null
+        get() = fallbackInUse != null
 
     override suspend fun execute(prompt: Prompt, model: LLModel, tools: List<ToolDescriptor>): Message.Assistant =
         routed(prompt, { primary.execute(prompt, model, tools) }) { fallback.execute(it, fallbackModel, tools) }
@@ -116,23 +133,23 @@ internal class FallbackPromptExecutor(
 
     private suspend fun <T> routed(prompt: Prompt, onPrimary: suspend () -> T, onFallback: suspend (Prompt) -> T): T {
         val now = clock.instant()
-        val downUntil = primaryDownUntil
+        val known = primaryOutage
 
-        if (downUntil != null && downUntil.isAfter(now)) return onFallback(prompt.forFallback())
+        if (known != null && known.until.isAfter(now)) return onFallback(prompt.forFallback())
 
-        if (downUntil != null) log.info { "probing $primaryLabel again after its outage" }
+        if (known != null) log.info { "probing $primaryLabel again after its outage" }
 
         return try {
-            onPrimary().also { if (downUntil != null) recovered() }
+            onPrimary().also { if (known != null) recovered() }
         } catch (e: Throwable) {
             e.rethrowIfCancellation()
             val outage = e.providerOutage(now) ?: throw e
 
-            primaryDownUntil = now.plus(outage.toJavaDuration())
+            primaryOutage = outage
 
             log.warn {
-                "$primaryLabel is out for ${outage.inWholeMinutes}m: ${e.providerErrorMessage()?.lineSequence()?.firstOrNull()}; " +
-                        "answering from $fallbackLabel until then"
+                "$primaryLabel is out for ${JavaDuration.between(now, outage.until).toMinutes()}m: " +
+                        "${e.providerErrorMessage()?.lineSequence()?.firstOrNull()}; answering from $fallbackLabel until then"
             }
 
             onFallback(prompt.forFallback())
@@ -140,7 +157,7 @@ internal class FallbackPromptExecutor(
     }
 
     private fun recovered() {
-        primaryDownUntil = null
+        primaryOutage = null
         log.info { "$primaryLabel is back; $fallbackLabel stands down" }
     }
 

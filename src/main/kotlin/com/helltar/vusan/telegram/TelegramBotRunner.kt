@@ -2,6 +2,7 @@ package com.helltar.vusan.telegram
 
 import com.helltar.heartbeat.Heartbeat
 import com.helltar.vusan.agent.AgentRunner
+import com.helltar.vusan.agent.FallbackInUse
 import com.helltar.vusan.agent.grouplog.GroupLogRepository
 import com.helltar.vusan.agent.neutralizePromptBlocks
 import com.helltar.vusan.common.limitTo
@@ -82,7 +83,7 @@ internal class TelegramBotRunner(
     private val stickerCatalog: StickerCatalog? = null,
     private val groupLog: GroupLogRepository? = null,
     private val polls: PollRegistry? = null,
-    fallbackModelInUse: () -> String? = { null },
+    fallbackInUse: () -> FallbackInUse? = { null },
 ) {
 
     private val heartbeat = Heartbeat()
@@ -90,7 +91,7 @@ internal class TelegramBotRunner(
     private val spool = UpdateSpool(SPOOL_RETENTION)
 
     private val turns =
-        AgentTurns(client, agent, delivery, inlineChoices, chatProfiles, voiceTranscriber, fallbackModelInUse)
+        AgentTurns(client, agent, delivery, inlineChoices, chatProfiles, voiceTranscriber, fallbackInUse)
 
     private val turnStop = TurnStopHandler(client, agent)
     private val callbacks = CallbackRouter(client, taskMenu, inlineChoices, turnStop, turns, accessPolicy)

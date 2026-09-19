@@ -82,14 +82,15 @@ interface Messages {
     fun progressLabel(activity: ToolActivity): String
 
     /**
-     * Shown in the status while the usual provider is out and [model] is answering instead.
+     * Shown in the status while the usual provider is out and [model] is answering instead, with how
+     * long until the usual one is due back when the provider itself said so.
      *
      * It opens with `↳` rather than an emoji of its own: it sits directly under the line naming the
      * running tool, which has one, and Telegram draws real emoji in its own larger font, so two of them
      * on consecutive lines crowd each other. An arrow is an ordinary character in the text font, and it
      * reads as what this line is — a continuation of the one above.
      */
-    fun fallbackModelNote(model: String): String
+    fun fallbackModelNote(model: String, primaryBackIn: Duration?): String
 
     companion object {
         fun of(language: Language): Messages =
