@@ -48,7 +48,7 @@ class TurnStatusTest {
     @Test
     fun `a fallback note says when the usual model is due back, if the provider said`() {
         assertEquals(
-            "\u21B3 on the fallback model: gpt-5.4-mini \u00B7 the usual one is back in about 2h 15min",
+            "\u21B3 on the fallback model: gpt-5.4-mini\n\u21B3 the usual one is back in about 2h 15min",
             Messages.of(Language.ENGLISH).fallbackModelNote("gpt-5.4-mini", primaryBackIn = 135.minutes),
         )
     }

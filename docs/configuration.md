@@ -254,7 +254,7 @@ an outage — it repeats on any provider — and reaches the user as it always d
 
 While the fallback is answering, the status message a turn puts up names it, so the chat shows which
 model is behind the reply rather than only the log. When the primary ran out of its usage limit and
-named the time it resets, the same line says how long until the usual model is due back; any other
+named the time it resets, a second line under it says how long until the usual model is due back; any other
 failure has no such time to give, only the moment of the next probe, so the line stays silent about
 it. The agent is told which model is answering, so someone who asks what it is running on gets the
 truth instead of the one the system prompt names.

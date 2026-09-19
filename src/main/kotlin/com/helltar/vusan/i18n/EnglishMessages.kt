@@ -145,7 +145,7 @@ internal object EnglishMessages : Messages {
     override fun taskFollowUpNotice(mention: String) = "💬 Following up with $mention"
 
     override fun fallbackModelNote(model: String, primaryBackIn: Duration?): String =
-        "↳ on the fallback model: $model" + primaryBackIn?.let { " · the usual one is back in about ${waitLabel(it)}" }.orEmpty()
+        "↳ on the fallback model: $model" + primaryBackIn?.let { "\n↳ the usual one is back in about ${waitLabel(it)}" }.orEmpty()
 
     override fun progressLabel(activity: ToolActivity): String =
 

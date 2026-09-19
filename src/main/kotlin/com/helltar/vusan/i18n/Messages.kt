@@ -83,7 +83,8 @@ interface Messages {
 
     /**
      * Shown in the status while the usual provider is out and [model] is answering instead, with how
-     * long until the usual one is due back when the provider itself said so.
+     * long until the usual one is due back when the provider itself said so — on a line of its own,
+     * because a model id is long enough that one line wraps in a phone-width bubble.
      *
      * It opens with `↳` rather than an emoji of its own: it sits directly under the line naming the
      * running tool, which has one, and Telegram draws real emoji in its own larger font, so two of them
