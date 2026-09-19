@@ -29,7 +29,8 @@ import org.telegram.telegrambots.meta.generics.TelegramClient
 /**
  * The status message's body: the plan the model announced, and under it the line naming what is running.
  * The line is plain text — the emoji already sets it apart from the plan above it — and carries its own
- * ellipsis, since nothing animates one after a message is sent.
+ * ellipsis, since nothing animates one after a message is sent. The fallback note under it brings its own
+ * markup, like the plan does.
  */
 internal fun statusMessageText(plan: String?, label: String?, fallbackNote: String? = null): String? {
     val running = listOfNotNull(label?.let { "$it…" }, fallbackNote).joinToString("\n").ifEmpty { null }

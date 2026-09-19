@@ -30,7 +30,7 @@ class TurnStatusTest {
     @Test
     fun `a fallback note sits under the running line`() {
         assertEquals(
-            "I will build the game\n\n\uD83D\uDCBB Running code…\n\u21B3 on the fallback model: gpt-5.4-mini",
+            "I will build the game\n\n\uD83D\uDCBB Running code…\n\u21B3 on the fallback model: <code>gpt-5.4-mini</code>",
             statusMessageText(
                 plan = "I will build the game",
                 label = "\uD83D\uDCBB Running code",
@@ -40,7 +40,7 @@ class TurnStatusTest {
 
         // a turn with nothing named yet still says where it is answering from
         assertEquals(
-            "\u21B3 on the fallback model: gpt-5.4-mini",
+            "\u21B3 on the fallback model: <code>gpt-5.4-mini</code>",
             statusMessageText(plan = null, label = null, fallbackNote = Messages.of(Language.ENGLISH).fallbackModelNote("gpt-5.4-mini", primaryBackIn = null)),
         )
     }
@@ -48,7 +48,7 @@ class TurnStatusTest {
     @Test
     fun `a fallback note says when the usual model is due back, if the provider said`() {
         assertEquals(
-            "\u21B3 on the fallback model: gpt-5.4-mini\n\u21B3 the usual one is back in about 2h 15min",
+            "\u21B3 on the fallback model: <code>gpt-5.4-mini</code>\n\u21B3 the usual one is back in about <b>2h 15min</b>",
             Messages.of(Language.ENGLISH).fallbackModelNote("gpt-5.4-mini", primaryBackIn = 135.minutes),
         )
     }

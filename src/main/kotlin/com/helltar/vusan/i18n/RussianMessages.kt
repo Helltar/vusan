@@ -1,6 +1,7 @@
 package com.helltar.vusan.i18n
 
 import com.helltar.vusan.agent.ToolActivity
+import com.helltar.vusan.common.escapeHtml
 import kotlin.time.Duration
 
 internal object RussianMessages : Messages {
@@ -145,7 +146,8 @@ internal object RussianMessages : Messages {
     override fun taskFollowUpNotice(mention: String) = "💬 Возвращаюсь к разговору с $mention"
 
     override fun fallbackModelNote(model: String, primaryBackIn: Duration?): String =
-        "↳ на резервной модели: $model" + primaryBackIn?.let { "\n↳ основная будет примерно через ${waitLabel(it)}" }.orEmpty()
+        "↳ на резервной модели: <code>${model.escapeHtml()}</code>" +
+                primaryBackIn?.let { "\n↳ основная будет примерно через <b>${waitLabel(it)}</b>" }.orEmpty()
 
     override fun progressLabel(activity: ToolActivity): String =
 
