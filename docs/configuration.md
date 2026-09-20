@@ -331,18 +331,19 @@ with a `WARN` log and Vusan keeps running.
 
 Reading a page needs nothing: `readPage` is built in, fetches any public `http` or `https` address
 and reduces it to its article text, so a link the user sends is answered from, and a search result
-is read in full, on every setup. Two providers cover the search itself, and either can run without
-the other:
+is read in full, on every setup. With a Tavily key it becomes the fallback for `extractPageContent`.
+Two providers cover the search itself, and either can run without the other:
 
 | Variable         | Tools                                             | Role                                                    |
 |------------------|---------------------------------------------------|---------------------------------------------------------|
-| `TAVILY_API_KEY` | `webSearch`, `searchImages`, `extractPageContent` | Default web and image search; a rendered page read.     |
+| `TAVILY_API_KEY` | `webSearch`, `searchImages`, `extractPageContent` | Default web and image search; the default page read.    |
 | `SEARXNG_URL`    | `metaSearch`, `metaSearchImages`                  | Fallback for both, plus category scoping.               |
 
 Tavily leads on both: its results are cleaned-up page extracts rather than snippets, and
 `searchImages` describes what is in each photo. Its `extractPageContent` renders a page before
 reading it, which is what `readPage` cannot do for a page that draws its content with scripts, so
-the agent reaches for it only after `readPage` found nothing. [SearXNG](https://docs.searxng.org) is self-hosted,
+the agent reads with it first and falls back to `readPage` when it fails, returns nothing or cuts a
+long page short — `readPage` continues one in parts. [SearXNG](https://docs.searxng.org) is self-hosted,
 so it costs nothing per call and keeps search working when Tavily fails or runs out of quota.
 `metaSearch` also scopes a query with `categories` (`news`, `it`, `science`, `videos`, `music`,
 `files`, `social media`, `map`), which Tavily cannot do — those categories query different engines,

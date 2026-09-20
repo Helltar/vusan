@@ -115,13 +115,13 @@ class TavilyTools(
 
         if (result == null) {
             val reason = response.failedResults.firstOrNull()?.error ?: "unknown error"
-            return@suspendToolGuard "Could not extract content from $url: $reason"
+            return@suspendToolGuard "Could not extract content from $url: $reason. `readPage` reads the same address directly."
         }
 
         val content = result.rawContent.trim().limitTo(MAX_EXTRACT_CHARS)
 
         if (content.isBlank()) {
-            return@suspendToolGuard "Page at $url returned empty content."
+            return@suspendToolGuard "Page at $url returned empty content. `readPage` reads the same address directly."
         }
 
         buildString {
@@ -132,7 +132,7 @@ class TavilyTools(
 
             if (result.rawContent.length > MAX_EXTRACT_CHARS) {
                 appendLine()
-                append("[content truncated at $MAX_EXTRACT_CHARS chars]")
+                append("The page goes on past $MAX_EXTRACT_CHARS characters. `readPage` reads a long page in parts.")
             }
         }
     }
@@ -146,8 +146,9 @@ class TavilyTools(
     private companion object {
         const val MAX_SNIPPET_CHARS = 300
         const val MAX_SEARCH_OUTPUT_CHARS = 3_000
-        // a long-form article runs well past a few thousand characters and the tool has no way to
-        // page through the rest, so the cut has to leave the body of a real page readable.
+        // a long-form article runs well past a few thousand characters and this tool has no way to
+        // page through the rest, so the cut has to leave the body of a real page readable. what is
+        // past it is left to readPage, which continues by offset.
         const val MAX_EXTRACT_CHARS = 16_000
         val allowedTopics = setOf("general", "news", "finance")
         val allowedTimeRanges = setOf("day", "week", "month", "year")
