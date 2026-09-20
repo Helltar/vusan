@@ -72,4 +72,21 @@ class RunningTurnsTest {
         assertTrue(turns.cancel("alice"))
         assertTrue(runCatching { running.await() }.isFailure)
     }
+
+    @Test
+    fun `a stop takes every turn the conversation has under way`() = runBlocking {
+        val turns = RunningTurns<String>()
+        val first = CompletableDeferred<Unit>()
+        val second = CompletableDeferred<Unit>()
+
+        val running = async { turns.track("alice") { first.complete(Unit); awaitCancellation() } }
+        val waiting = async { turns.track("alice") { second.complete(Unit); awaitCancellation() } }
+
+        first.await()
+        second.await()
+        assertTrue(turns.cancel("alice"))
+        assertTrue(runCatching { running.await() }.isFailure)
+        assertTrue(runCatching { waiting.await() }.isFailure)
+        assertFalse(turns.cancel("alice"))
+    }
 }

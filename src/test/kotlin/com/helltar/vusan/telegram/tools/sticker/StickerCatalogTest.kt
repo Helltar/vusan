@@ -522,6 +522,7 @@ class StickerCatalogTest {
                     requestTimeout = 60.seconds,
                 ),
             maxConcurrentTurns = 4,
+            maxQueuedTurnsPerConversation = 3,
             openAiImageApiKey = null,
             openAiImage = null,
             openAiStt = null,

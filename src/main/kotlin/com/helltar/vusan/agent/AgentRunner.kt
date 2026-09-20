@@ -20,8 +20,6 @@ import com.helltar.vusan.request.ConversationScope
 import com.helltar.vusan.request.RequestContext
 import com.helltar.vusan.tools.ToolRegistryFactory
 import io.github.oshai.kotlinlogging.KotlinLogging
-import kotlinx.coroutines.sync.Mutex
-import kotlinx.coroutines.sync.withLock
 import java.time.Instant
 import java.time.ZoneId
 import java.time.temporal.ChronoUnit
@@ -82,11 +80,15 @@ class AgentRunner(
     // be served at once, and each turn is an LLM call with its tools behind it. no default — a runner
     // quietly serving one turn at a time is not something to discover under load.
     maxConcurrentTurns: Int,
+    // how many turns may wait behind the one a conversation is running before the next is told to hold
+    // on. the lock is taken before a place, in every path: a turn that holds a place is running and waits
+    // for nothing, so nothing can wait in a circle — and a person's line costs the others no places.
+    maxQueuedTurnsPerConversation: Int,
 ) {
 
     private val admission = TurnAdmission(maxConcurrentTurns)
 
-    private val conversationLocks = HashMap<ConversationScope, ConversationLock>()
+    private val conversationLocks = ConversationLocks<ConversationScope>(maxQueuedTurnsPerConversation)
     private val running = RunningTurns<ConversationScope>()
 
     suspend fun handle(
@@ -94,46 +96,28 @@ class AgentRunner(
         onToolStarting: (activity: ToolActivity?) -> Unit = {},
         narrator: TurnNarrator? = null,
     ): AgentResult {
-        val context = request.context
-        val key = context.scope
-        val messages = Messages.of(context.language)
-        val busy = AgentResult(outputs = emptyList(), comment = messages.busyReply)
-        val lock = retainLock(key)
+        val key = request.context.scope
+        val messages = Messages.of(request.context.language)
 
-        try {
-            // a look at the lock before queueing rather than after. the answer is the same one `tryLock`
-            // gives below, and racing it costs nothing — but waiting for a place only to find this
-            // conversation busy would spend a queue slot on somebody the bot cannot serve anyway, and
-            // one person writing repeatedly would take those slots from everybody else.
-            if (lock.isLocked) return busy
-
-            // a place first, then the lock — always that order. taken the other way round, a turn holding
-            // a lock while it waits for a place and a queued turn holding a place while it waits for that
-            // lock would wait for each other.
-            val result =
-                admission.admit {
-                    if (!lock.tryLock()) {
-                        return@admit busy
-                    }
-
-                    try {
-                        running.track(key) { runAgent(request, onToolStarting, narrator) }
-                    } finally {
-                        lock.unlock()
-                    }
+        // tracked from the line on, so a stop takes the person's waiting messages along with the one
+        // that is running instead of letting the next of them start.
+        val result =
+            running.track(key) {
+                conversationLocks.withLockIfRoom(key) {
+                    admission.admit { runAgent(request, onToolStarting, narrator) }
+                        ?: AgentResult(outputs = emptyList(), comment = messages.overloadedReply)
                 }
+            }
 
-            return result ?: AgentResult(outputs = emptyList(), comment = messages.overloadedReply)
-        } finally {
-            releaseLock(key)
-        }
+        return result ?: AgentResult(outputs = emptyList(), comment = messages.busyReply)
     }
 
     /**
-     * Cancels the turn this conversation is running, and reports whether there was one. What it happened
-     * to be doing does not matter: the model call, the tool it is inside and everything that tool started
-     * are children of the same job. A sandbox command outlives it on its own machine, bounded by its own
-     * timeout, and the model can list and cancel those separately.
+     * Cancels what this conversation has under way — the turn it is running and the person's messages
+     * waiting behind it — and reports whether there was anything. What the turn happened to be doing does
+     * not matter: the model call, the tool it is inside and everything that tool started are children of
+     * the same job. A sandbox command outlives it on its own machine, bounded by its own timeout, and the
+     * model can list and cancel those separately.
      */
     fun stop(scope: ConversationScope): Boolean =
         running.cancel(scope)
@@ -148,16 +132,10 @@ class AgentRunner(
     ): AgentResult {
         val key = request.context.scope
 
-        // a queued turn waits for its place rather than being turned away, and takes it before the
+        // a queued turn waits for its place rather than being turned away, and takes it after the
         // conversation lock for the same reason `handle` does.
-        return admission.admitQueued {
-            val lock = retainLock(key)
-
-            try {
-                lock.withLock { running.track(key) { runAgent(request, onToolStarting, narrator) } }
-            } finally {
-                releaseLock(key)
-            }
+        return conversationLocks.withLock(key) {
+            admission.admitQueued { running.track(key) { runAgent(request, onToolStarting, narrator) } }
         }
     }
 
@@ -167,13 +145,7 @@ class AgentRunner(
     // served in both instead of being told the bot is busy.
     // `clearConversation` runs inside a turn and must keep using the repository directly.
     suspend fun clearConversation(scope: ConversationScope) {
-        val lock = retainLock(scope)
-
-        try {
-            lock.withLock { conversation.clear(scope) }
-        } finally {
-            releaseLock(scope)
-        }
+        conversationLocks.withLock(scope) { conversation.clear(scope) }
     }
 
     private suspend fun runAgent(
@@ -482,20 +454,6 @@ class AgentRunner(
 
         return messages.providerErrorReply(providerError)
     }
-
-    private fun retainLock(key: ConversationScope): Mutex =
-        synchronized(conversationLocks) {
-            conversationLocks.getOrPut(key) { ConversationLock() }.also { it.refCount++ }.mutex
-        }
-
-    private fun releaseLock(key: ConversationScope) {
-        synchronized(conversationLocks) {
-            val entry = conversationLocks[key] ?: return
-            if (--entry.refCount <= 0) conversationLocks.remove(key)
-        }
-    }
-
-    private class ConversationLock(val mutex: Mutex = Mutex(), var refCount: Int = 0)
 
     private companion object {
         val log = KotlinLogging.logger {}

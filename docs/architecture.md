@@ -174,12 +174,16 @@ A normal user message travels:
    no one's text can end a block early or open one of its own. `xmlBlock` escapes only a closing tag of its own name,
    which is what keeps nesting working, so this is the step that stops a group member forging a block in somebody else's
    turn. `AgentTurns.dispatchToAgent` assembles the agent input and the shorter history input.
-4. **Run** — `AgentRunner.handle` takes a place from `agent/TurnAdmission` and then the conversation lock (or returns
-   "busy"). Admission is the ceiling every conversation shares — `MAX_CONCURRENT_TURNS` turns at once, the rest waiting
-   with their typing indicator, and only a queue several times that long answered "overloaded" instead of queued; a
-   queued turn (a scheduled fire, a spooled message) always waits rather than being refused. The place is taken
-   **before** the lock in both paths, because a turn holding a lock while waiting for a place and a queued turn holding
-   a place while waiting for that lock would wait for each other. It then loads durable memory
+4. **Run** — `AgentRunner.handle` joins the conversation's line in `agent/ConversationLocks` and then takes a place
+   from `agent/TurnAdmission`. One turn per conversation runs at a time, because a turn reads the history when it
+   starts and appends to it when it ends: the next message waits with its typing indicator and starts with the answer
+   before it already in its history. `MAX_QUEUED_TURNS_PER_CONVERSATION` messages may wait that way, in the order they
+   arrived, and the one after that is answered "busy". Admission is the ceiling every conversation shares —
+   `MAX_CONCURRENT_TURNS` turns at once, the rest waiting the same way, and only a queue several times that long
+   answered "overloaded" instead of queued; a queued turn (a scheduled fire, a pressed button) waits in both rather
+   than being refused. The lock is taken **before** the place in every path: a turn that holds a place is running and
+   waits for nothing, so nothing can wait in a circle, and a person's line costs everybody else no places.
+   It then loads durable memory
    (`agent/memory/MemoryRepository` — the sender's user memory always, plus the group's memory in non-private chats),
    and places it with `<message_context>` immediately before the current request in one user-role turn. That
    metadata also carries
@@ -441,9 +445,10 @@ A normal user message travels:
 - **Stopping a turn** — `/stop`, or the stop button on the turn's status message, cancels whatever the caller's
   conversation is running: the model call, the tool inside it, and everything that tool started, since all of them are
   children of the turn's job. It is the one path that must not take the conversation lock, because the turn it
-  interrupts is holding it — so `AgentRunner` keeps the running turn's `Job` in a small register (`RunningTurns`)
-  alongside the lock, keyed the same way, and only a turn that has actually started is in it. The interrupted turn
-  reports itself rather than the command doing it: on cancellation it replies with the stopped notice under
+  interrupts is holding it — so `AgentRunner` keeps each turn's `Job` in a small register (`RunningTurns`)
+  alongside the lock, keyed the same way. A person's own messages are in it from the moment they join the line, so a
+  stop takes the waiting ones along instead of letting the next start; a scheduled fire is in it only once it has
+  actually started. Each interrupted turn reports itself rather than the command doing it: on cancellation it replies with the stopped notice under
   `NonCancellable`, and the status message closes itself on the way out. `/stop` answers only when there was nothing
   running. The button reaches the same `AgentRunner.stop` through `CallbackRouter` and `TurnStopHandler`, and exists
   because in a group the typed command has to be addressed (`/stop@bot`) to be seen at all — it sits on a message
@@ -650,7 +655,7 @@ A symptom-to-source map for finding the right file fast. Paths are under
 | The same message is answered twice, or editing one to add the mention does nothing | `TelegramBotRunner.startsTurnOnEdit` (what an edit must pass to start a turn) + `TelegramBotRunner.isAccepted`/`AnsweredMessages` (one turn per message, per-process, empty after a restart) |
 | Vusan ignores a message entirely | `TelegramBotRunner.passesAllowlist` and `request/AccessPolicy.kt` (the `ALLOWED_IDS` allowlist and the `BANNED_IDS` ban list, both platform-qualified, applied on the polling loop), then `telegram/inbound/MessageFilter.kt` (`shouldHandle` — group reply/mention rules) |
 | Container says `Up` but the bot answers nothing | the `com.helltar:heartbeat` library (the `/tmp/health` freshness signal, and the `ERROR` logged once when polling stalls) + `TelegramBotRunner.start` (the `getUpdates` generator hook that feeds it) |
-| Reply says "still working on your previous request" | `agent/AgentRunner.kt` — the per-conversation `Mutex` rejects a second concurrent turn in the same chat |
+| Reply says "still working on your previous request", or a second message is answered only after the first | `agent/ConversationLocks.kt` — one turn per conversation, `MAX_QUEUED_TURNS_PER_CONVERSATION` waiting behind it, the next refused |
 | A message goes unanswered after a restart or deploy, or one is answered twice | `telegram/UpdateSpool.kt` (what is kept, what is replayed, and `SPOOL_RETENTION`) + `telegram/TelegramBotRunner.kt` (the blocking spool write in the poll callback, and `settle` on pickup) + `telegram/AnsweredMessages.kt` (the one-turn-per-message claim) |
 | Reply lands in the wrong chat, loses its reply anchor, or DM redirect misbehaves | `telegram/delivery/TelegramDelivery.kt` (routing/anchor/private-redirect *policy*) |
 | Formatting renders wrong, message rejected, or media falls back to document/text | `agent/SystemPrompt.kt` (allowed HTML tags the agent emits), `telegram/delivery/TelegramOutputSender.kt` (which call and which fallback each output kind gets), `telegram/delivery/TelegramSendFallbacks.kt` (the fallback *mechanism* itself), `telegram/delivery/TelegramErrors.kt` (which provider errors trigger a fallback) |

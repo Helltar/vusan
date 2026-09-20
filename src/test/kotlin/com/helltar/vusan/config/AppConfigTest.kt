@@ -124,6 +124,7 @@ class AppConfigTest {
                     requestTimeout = 120.seconds,
                 ),
             maxConcurrentTurns = 4,
+            maxQueuedTurnsPerConversation = 3,
             openAiImageApiKey = null,
             openAiImage = null,
             openAiStt = null,

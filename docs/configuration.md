@@ -267,12 +267,17 @@ pictures through the outage sets `OPENAI_IMAGE_API_KEY`, which sends every pictu
 
 ## How many requests at once
 
-| Variable               | Default | Description                                        |
-|------------------------|---------|----------------------------------------------------|
-| `MAX_CONCURRENT_TURNS` | `8`     | Requests Vusan works on at the same time.          |
+| Variable                            | Default | Description                                                  |
+|-------------------------------------|---------|--------------------------------------------------------------|
+| `MAX_CONCURRENT_TURNS`              | `8`     | Requests Vusan works on at the same time.                    |
+| `MAX_QUEUED_TURNS_PER_CONVERSATION` | `3`     | Messages one person may have waiting in a chat behind the one being answered. |
 
-One person cannot start two requests in the same chat — the second is told to wait for the first.
-This is the other half: how many *different* people Vusan serves at once. Every request is a model
+Vusan answers one person's messages in a chat one at a time, in order, so a follow-up sent while it is
+still working starts with the previous answer already known. Up to three wait that way; the next is
+told to hold on. Set it to `0` and a second message is told so at once.
+
+`MAX_CONCURRENT_TURNS` is the other half: how many *different* people Vusan serves at once. Waiting
+messages do not count towards it. Every request is a model
 call with whatever tools it decides to run, so the number to match is what your provider accepts at
 once, not what the machine could hold.
 

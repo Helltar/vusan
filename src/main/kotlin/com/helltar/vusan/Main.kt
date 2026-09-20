@@ -164,6 +164,7 @@ suspend fun main() = coroutineScope {
                 agentFactory, toolRegistryFactory, conversation, memory, conversationCompactor,
                 config.chatHistory, stickerCatalog?.let { catalog -> catalog::indexBlockFor },
                 groupLog, { fallbackInUse()?.model }, config.maxConcurrentTurns,
+                config.maxQueuedTurnsPerConversation,
             )
 
         // answers to a poll are read back through the group transcript, so without one there is
