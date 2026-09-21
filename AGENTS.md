@@ -5,8 +5,8 @@ Root instruction file for coding agents on Vusan, a Telegram AI agent built on
 [TelegramBots](https://github.com/rubenlagus/TelegramBots), and Exposed/SQLite.
 It applies to the whole repository; `CLAUDE.md` is just the one-line `@AGENTS.md`
 import that points Claude Code here. Keep this file short and actionable —
-product docs go in `README.md` or `docs/`. The project is pre-1.0, so prefer
-clean removals over compatibility shims.
+product docs go in `README.md` or `docs/`. Prefer clean removals over
+compatibility shims.
 
 Read [`docs/architecture.md`](docs/architecture.md) before changing request flow,
 delivery, tools, storage, scheduling or startup wiring, and use its
