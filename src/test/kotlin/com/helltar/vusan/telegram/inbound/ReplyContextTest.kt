@@ -1,6 +1,8 @@
 package com.helltar.vusan.telegram.inbound
 
 import com.fasterxml.jackson.databind.ObjectMapper
+import com.helltar.vusan.agent.attachedFileContextBlock
+import com.helltar.vusan.agent.formatAgentInput
 import com.helltar.vusan.request.AttachedFileKind
 import java.lang.reflect.Proxy
 import kotlinx.coroutines.runBlocking
@@ -16,88 +18,10 @@ import kotlin.test.assertTrue
 class ReplyContextTest {
 
     @Test
-    fun `formatAgentInput includes replied text before current user message`() {
-        val prompt =
-            formatAgentInput(
-                currentMessageText = "summarize this article",
-                repliedMessage = RepliedMessageSummary(type = "text", textOrCaption = "https://example.com/article/4034"),
-                quotedFragment = null,
-            )
-
-        assertTrue(prompt.contains("<reply_context>"))
-        assertTrue(prompt.contains("- type: text"))
-        assertTrue(prompt.contains("https://example.com/article/4034"))
-        assertTrue(prompt.contains("</reply_context>"))
-        assertTrue(prompt.contains("<user_message>"))
-        assertTrue(prompt.contains("summarize this article"))
-        assertTrue(prompt.contains("</user_message>"))
-    }
-
-    @Test
-    fun `formatAgentInput handles media without caption`() {
-        val prompt =
-            formatAgentInput(
-                currentMessageText = "what's in the photo?",
-                repliedMessage = RepliedMessageSummary(
-                    type = "photo",
-                    textOrCaption = null,
-                    metadata = listOf("file_id: abc123", "width: 1280", "height: 720"),
-                ),
-                quotedFragment = null,
-            )
-
-        assertTrue(prompt.contains("- type: photo"))
-        assertTrue(prompt.contains("- metadata:\n  - file_id: abc123"))
-        assertTrue(prompt.contains("  - width: 1280"))
-        assertFalse(prompt.contains("<text_caption>"))
-    }
-
-    @Test
     fun `isReplyToOtherUser skips replies to the bot`() {
         assertFalse(isReplyToOtherUser(replyAuthorId = 123, botUserId = 123))
         assertTrue(isReplyToOtherUser(replyAuthorId = 456, botUserId = 123))
         assertTrue(isReplyToOtherUser(replyAuthorId = null, botUserId = 123))
-    }
-
-    @Test
-    fun `formatConversationInput keeps compact replied text context`() {
-        val historyText =
-            formatConversationInput(
-                currentMessageText = "summarize this article and send it as a markdown file",
-                repliedMessage = RepliedMessageSummary(
-                    type = "text",
-                    textOrCaption = "https://example.com/article/4034",
-                    metadata = listOf("file_id: file-1"),
-                ),
-                quotedFragment = null,
-            )
-
-        assertTrue(historyText.contains("<reply_context>"))
-        assertTrue(historyText.contains("- type: text"))
-        assertTrue(historyText.contains("- metadata:\n  - file_id: file-1"))
-        assertTrue(historyText.contains("https://example.com/article/4034"))
-        assertTrue(historyText.contains("<text_caption>"))
-        assertTrue(historyText.contains("</text_caption>"))
-        assertTrue(historyText.contains("</reply_context>"))
-        assertTrue(historyText.contains("<user_message>"))
-        assertTrue(historyText.contains("summarize this article"))
-        assertTrue(historyText.contains("</user_message>"))
-    }
-
-    @Test
-    fun `formatAgentInput keeps quoted and current text inside their xml blocks`() {
-        val prompt =
-            formatAgentInput(
-                currentMessageText = "answer & continue",
-                repliedMessage = RepliedMessageSummary(
-                    type = "text",
-                    textOrCaption = "quoted & content",
-                ),
-                quotedFragment = null,
-            )
-
-        assertTrue(prompt.contains("<text_caption>\nquoted & content\n</text_caption>"))
-        assertTrue(prompt.contains("<user_message>\nanswer & continue\n</user_message>"))
     }
 
     @Test
@@ -119,66 +43,6 @@ class ReplyContextTest {
 
         assertEquals("the second engine stage", message.quotedFragmentOrNull())
         assertNull(withoutQuote.quotedFragmentOrNull())
-    }
-
-    // the reply block is optional: a fragment that arrives without one still has to land in front of
-    // the request rather than be dropped with it.
-    @Test
-    fun `formatAgentInput carries a quoted fragment without a reply summary`() {
-        val prompt =
-            formatAgentInput(
-                currentMessageText = "what is this",
-                repliedMessage = null,
-                quotedFragment = "the second engine stage",
-            )
-
-        assertFalse(prompt.contains("<reply_context>"))
-        assertTrue(prompt.contains("<quoted_fragment>\nthe second engine stage\n</quoted_fragment>"))
-        assertTrue(prompt.indexOf("</quoted_fragment>") < prompt.indexOf("<user_message>"))
-    }
-
-    @Test
-    fun `formatAgentInput keeps a quoted fragment next to the replied message it came from`() {
-        val prompt =
-            formatAgentInput(
-                currentMessageText = "what does this mean?",
-                repliedMessage = RepliedMessageSummary(type = "text", textOrCaption = "one two three four"),
-                quotedFragment = "three",
-            )
-
-        assertTrue(prompt.contains("<text_caption>\none two three four\n</text_caption>"))
-        assertTrue(prompt.contains("<quoted_fragment>\nthree\n</quoted_fragment>"))
-        assertTrue(prompt.indexOf("</reply_context>") < prompt.indexOf("<quoted_fragment>"))
-    }
-
-    @Test
-    fun `a fragment covering the whole replied message is not repeated`() {
-        val prompt =
-            formatAgentInput(
-                currentMessageText = "what does this mean?",
-                repliedMessage = RepliedMessageSummary(type = "text", textOrCaption = "one two three"),
-                quotedFragment = "one two three",
-            )
-
-        assertFalse(prompt.contains("<quoted_fragment>"))
-    }
-
-    @Test
-    fun `plain input stays plain when nothing is replied to or quoted`() {
-        assertEquals("hello", formatAgentInput("hello", repliedMessage = null, quotedFragment = null))
-        assertEquals("hello", formatConversationInput("hello", repliedMessage = null, quotedFragment = null))
-    }
-
-    @Test
-    fun `a quoted fragment is stored with the history entry`() {
-        val historyText =
-            formatConversationInput(
-                currentMessageText = "what is this",
-                repliedMessage = null,
-                quotedFragment = "the second engine stage",
-            )
-
-        assertTrue(historyText.contains("<quoted_fragment>\nthe second engine stage\n</quoted_fragment>"))
     }
 
     // the conversation history is keyed by user and chat, so a reply to something the bot wrote for

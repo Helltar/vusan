@@ -4,6 +4,10 @@ import com.helltar.vusan.agent.AgentRequest
 import com.helltar.vusan.agent.AgentResult
 import com.helltar.vusan.agent.AgentRunner
 import com.helltar.vusan.agent.FallbackInUse
+import com.helltar.vusan.agent.attachedFileContextBlock
+import com.helltar.vusan.agent.formatAgentInput
+import com.helltar.vusan.agent.formatConversationInput
+import com.helltar.vusan.agent.inlineChoiceInput
 import com.helltar.vusan.common.collapseWhitespaceAndCap
 import com.helltar.vusan.common.rethrowIfCancellation
 import com.helltar.vusan.i18n.Language
@@ -15,15 +19,11 @@ import com.helltar.vusan.request.Platform
 import com.helltar.vusan.request.RequestContext
 import com.helltar.vusan.telegram.callback.InlineChoiceHandler
 import com.helltar.vusan.telegram.callback.InlineChoiceSelection
-import com.helltar.vusan.telegram.callback.inlineChoiceAgentInput
 import com.helltar.vusan.telegram.delivery.TelegramDelivery
 import com.helltar.vusan.telegram.inbound.VoiceTranscriber
-import com.helltar.vusan.telegram.inbound.attachedFileContextBlock
 import com.helltar.vusan.telegram.inbound.canLoadChatDescription
 import com.helltar.vusan.telegram.inbound.chatIdLong
-import com.helltar.vusan.telegram.inbound.formatAgentInput
 import com.helltar.vusan.telegram.inbound.forumTopicIdOrNull
-import com.helltar.vusan.telegram.inbound.formatConversationInput
 import com.helltar.vusan.telegram.inbound.isReplyToOtherUser
 import com.helltar.vusan.telegram.inbound.language
 import com.helltar.vusan.telegram.inbound.messageIdLong
@@ -143,7 +143,7 @@ internal class AgentTurns(
         selection: InlineChoiceSelection,
         messages: Messages,
     ) {
-        val input = inlineChoiceAgentInput(selection)
+        val input = inlineChoiceInput(selection.question, selection.option)
         val attachedFile = inlineChoices.parkedAttachment(message.chatIdLong, user.id)
 
         // the selection continues the exchange the user started, so the turn runs as if it came from that

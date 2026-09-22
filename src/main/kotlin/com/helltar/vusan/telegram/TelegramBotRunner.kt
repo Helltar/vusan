@@ -4,14 +4,14 @@ import com.helltar.heartbeat.Heartbeat
 import com.helltar.vusan.agent.AgentRunner
 import com.helltar.vusan.agent.FallbackInUse
 import com.helltar.vusan.agent.grouplog.GroupLogRepository
-import com.helltar.vusan.agent.neutralizePromptBlocks
+import com.helltar.vusan.agent.albumContextBlock
+import com.helltar.vusan.agent.wrapAudioTranscript
+import com.helltar.vusan.agent.wrapRichMessage
 import com.helltar.vusan.common.limitTo
 import com.helltar.vusan.common.rethrowIfCancellation
-import com.helltar.vusan.common.xmlBlock
 import com.helltar.vusan.i18n.Messages
 import com.helltar.vusan.request.AccessPolicy
 import com.helltar.vusan.request.AttachedFile
-import com.helltar.vusan.request.AttachedFileKind
 import com.helltar.vusan.request.ConversationScope
 import com.helltar.vusan.request.UserRef
 import com.helltar.vusan.tasks.TasksRepository
@@ -45,7 +45,6 @@ import com.helltar.vusan.telegram.inbound.toAttachedFileOrNull
 import com.helltar.vusan.telegram.inbound.toAudioInput
 import com.helltar.vusan.telegram.inbound.toGroupLogEntry
 import com.helltar.vusan.telegram.inbound.toRichMarkdown
-import com.helltar.vusan.telegram.inbound.wrapAudioTranscript
 import com.helltar.vusan.telegram.tools.sticker.StickerCatalog
 import io.github.oshai.kotlinlogging.KotlinLogging
 import kotlinx.coroutines.*
@@ -528,8 +527,7 @@ internal class TelegramBotRunner(
 
         turns.dispatchToAgent(
             message,
-            // flattened markdown never passes MessageSanitizer, which is where ordinary text is defused.
-            xmlBlock("rich_message", markdown.neutralizePromptBlocks()),
+            wrapRichMessage(markdown),
             botProfile,
             inputKind = "rich message",
         )
@@ -575,7 +573,6 @@ internal class TelegramBotRunner(
         val photoCount = parts.count { !it.photo.isNullOrEmpty() }
         val videoCount = parts.count { it.video != null || it.animation != null }
         val attachedFiles = parts.mapNotNull { it.toAttachedFileOrNull(client) }
-        val attachedImages = attachedFiles.count { it.kind == AttachedFileKind.IMAGE }
 
         val caption =
             captionedPart?.messageTextOrNull()
@@ -583,29 +580,7 @@ internal class TelegramBotRunner(
                 .orEmpty()
                 .ifBlank { MEDIA_ONLY_PROMPT }
 
-        val albumContext =
-            xmlBlock(
-                "album",
-                buildString {
-                    append("User sent an album of ${parts.size} media item(s): $photoCount photo(s), $videoCount video(s). ")
-
-                    when {
-                        attachedFiles.isEmpty() ->
-                            append("None of the items is available as an attached file; ")
-
-                        attachedImages > 1 ->
-                            append(
-                                "All $attachedImages images are attached at once, and `editImage` works on them " +
-                                        "together — combining them, putting one into another, building a collage. " +
-                                        "Every other tool sees only the first item; ",
-                            )
-
-                        else -> append("Only the first item, `${attachedFiles.first().name}`, is attached; ")
-                    }
-
-                    append("mention this if the request depends on the other items.")
-                },
-            )
+        val albumContext = albumContextBlock(parts.size, photoCount, videoCount, attachedFiles)
 
         turns.dispatchToAgent(
             anchor,

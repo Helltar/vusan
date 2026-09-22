@@ -2,7 +2,6 @@ package com.helltar.vusan.telegram.callback
 
 import com.helltar.vusan.telegram.telegramMessageId
 import com.helltar.vusan.common.rethrowIfCancellation
-import com.helltar.vusan.common.xmlBlock
 import com.helltar.vusan.i18n.Messages
 import com.helltar.vusan.outbox.BotOutput
 import com.helltar.vusan.request.AttachedFile
@@ -226,15 +225,6 @@ internal fun inlineChoiceKeyboard(choice: BotOutput.InlineChoice): InlineKeyboar
         .keyboard(buttons.chunked(buttonsPerRow).map { InlineKeyboardRow(it) })
         .build()
 }
-
-internal fun inlineChoiceAgentInput(selection: InlineChoiceSelection): String =
-    xmlBlock(
-        "inline_choice",
-        buildString {
-            appendLine(xmlBlock("question", selection.question))
-            append(xmlBlock("selected_option", selection.option))
-        },
-    )
 
 private fun emptyInlineKeyboard(): InlineKeyboardMarkup =
     InlineKeyboardMarkup.builder()

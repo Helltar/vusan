@@ -170,21 +170,6 @@ class InlineChoiceHandlerTest {
         }
     }
 
-    @Test
-    fun `selection becomes structured agent input`() {
-        val input =
-            inlineChoiceAgentInput(
-                InlineChoiceSelection(
-                    question = "Tea or coffee?",
-                    option = "Tea",
-                ),
-            )
-
-        assertContains(input, "<inline_choice>")
-        assertContains(input, "<question>\nTea or coffee?\n</question>")
-        assertContains(input, "<selected_option>\nTea\n</selected_option>")
-    }
-
     // the selection turn has no message of its own, so a photo the question was asked about only
     // reaches it through the parked slot.
     @Test

@@ -41,7 +41,9 @@ that is who owns writing them, not because only `agent/` reads them. No other ar
 - **`agent/`** — agent orchestration on top of Koog. `AgentRunner` serializes the turns of one conversation, assembles
   the current user turn (chat metadata + durable memory + request), and owns every history write for it, so no other
   layer appends or clears turns behind a running turn's back. What it orchestrates sits beside it, one file per concern:
-  `TurnPrompt` renders the blocks the model is shown for this turn, `TurnHistory` decides what the finished turn leaves
+  `TurnPrompt` renders the blocks the model is shown for this turn, `TurnInput` writes the ones the request itself
+  arrives in — what it replies to, the quoted fragment, the attachment, an album, a transcript, a pressed choice — so
+  every adapter fills in the tags the contract describes instead of spelling its own, `TurnHistory` decides what the finished turn leaves
   behind, `ProviderErrors` reads a provider's refusal out of the message koog wrapped it in and picks the reply it
   earns, and `FallbackPromptExecutor` is the executor wrapper that hands every call to a second provider while the
   first is out, which is also what `TurnPrompt`'s `<current_model>` block and the status message's fallback line read
@@ -163,7 +165,8 @@ A normal user message travels:
    (`telegram/inbound/RichMessageText.kt`), both as its own input and when one is quoted in a reply, capped on the way
    in by `TelegramBotRunner.MAX_RICH_MESSAGE_CHARS` — well under the 32768 characters Telegram allows a rich message
    against plain text's 4096, and a different constant from the outbound cap `MessageTools` enforces; replied-message
-   context is wrapped in `<reply_context>`/`<user_message>`; current or replied photo, video, and document input becomes
+   context is wrapped in `<reply_context>`/`<user_message>` — the adapter reads the update, and `agent/TurnInput.kt`
+   writes those blocks, as it writes every block the request arrives in; current or replied photo, video, and document input becomes
    `AttachedFile`. A reply carries that context whoever wrote the message it answers, the bot's own included, and an
    `author` line says whose it is (`you` for the bot's own). The history that would otherwise carry it belongs to one
    user in one chat, so in a group a reply to something the bot wrote for somebody else has nothing behind it — and no
@@ -687,8 +690,8 @@ A symptom-to-source map for finding the right file fast. Paths are under
 | Image search sends nothing, or sends irrelevant pictures | `tools/images/ImageSearchDelivery.kt` (candidate retries, size caps, media group) + `tools/images/ImageDownloadClient.kt` (user agent, format/dimension checks); for relevance, `SearxngTools.IMAGE_ENGINES` and `TavilyTools.imageExcludedDomains` |
 | A selfie shows a stranger instead of the bot's avatar | `tools/imagegen/SelfImage.kt` (which reference photo is read at startup, and the prompt that keeps the face while dropping the rest of it) + `tools/imagegen/ImageGenToolDescriptions.SELF_PORTRAIT` (whether the model sets the flag at all) |
 | Vusan sends a voice message instead of a round video, or offers no round video at all | `tools/voice/VideoNoteTools.kt` (synthesize → render → outbox, and the voice fallback when the render fails) + `tools/voice/VideoNoteRenderer.kt` (the ffmpeg graph; the waveform box stays inside the circle Telegram crops to) + `tools/ToolRegistryFactory.kt` (needs `ELEVENLABS_API_KEY`, `can_send_video_notes`, and a `SelfImage` reference photo) |
-| Vusan answers about a whole message when the user quoted one part of it | `telegram/inbound/ReplyContext.kt` (`quotedFragmentOrNull` and the `<quoted_fragment>` block) + `agent/SystemPrompt.kt` (what the block means) |
-| Vusan does not know what a reply is about, or cannot edit a picture it made itself | `telegram/AgentTurns.kt` (the reply summary and replied file are built for every reply) + `telegram/inbound/ReplyContext.kt` (`replySummaryOrNull`, the `author` line, `repliedAttachedFileOrNull`) |
+| Vusan answers about a whole message when the user quoted one part of it | `telegram/inbound/ReplyContext.kt` (`quotedFragmentOrNull`, what the sender selected) + `agent/TurnInput.kt` (the `<quoted_fragment>` block, and when it is left out) + `agent/SystemPrompt.kt` (what the block means) |
+| Vusan does not know what a reply is about, or cannot edit a picture it made itself | `telegram/AgentTurns.kt` (the reply summary and replied file are built for every reply) + `telegram/inbound/ReplyContext.kt` (`replySummaryOrNull`, who the `author` is, `repliedAttachedFileOrNull`) + `agent/TurnInput.kt` (the `<reply_context>` block itself) |
 | A rich message reads as empty, `unknown`, or loses its structure | `telegram/inbound/RichMessageText.kt` (block tree → rich markdown), then `MessageMetadata.contentTypeName`/`textSnippetOrNull` and `ReplyContext.repliedTextOrNull` |
 | Scheduled task fires late, not at all, or reports "missed"/"failed" | `tasks/TaskScheduler.kt` (polling, lateness, retries) + `tasks/Recurrence.kt` (next-run math) |
 | A chat's tasks all went paused on their own, or one keeps firing into a chat the bot was removed from | `telegram/BotMembership.kt` (the `my_chat_member` path) + `telegram/delivery/TelegramErrors.kt` (`isChatUnreachable`) + `tasks/TaskScheduler.kt` (`parkTasksOfUnreachableChat`) |

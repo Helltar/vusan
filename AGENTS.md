@@ -188,6 +188,11 @@ what they describe:
   fetched pages cannot end their block early; text quoted from a message needs
   `neutralizePromptBlocks` too, which defuses every tag the prompt uses. Avoid
   plain markers such as `Reply context:` or `[Sent N images]` — models parrot them.
+- The blocks the current request arrives in — `<reply_context>`,
+  `<quoted_fragment>`, `<attached_file>`, `<album>`, a transcript, a pressed
+  choice — are written by `agent/TurnInput.kt`, beside the contract that says
+  what they mean. An adapter reads its update into them and never spells one
+  of those tags itself.
 
 ## Tools
 

@@ -1,14 +1,13 @@
 package com.helltar.vusan.telegram.inbound
 
+import com.helltar.vusan.agent.RepliedMessageSummary
 import com.helltar.vusan.agent.neutralizePromptBlocks
 import com.helltar.vusan.common.collapseWhitespaceAndCap
 import com.helltar.vusan.common.limitTo
 import com.helltar.vusan.common.sanitizeFilename
-import com.helltar.vusan.common.xmlBlock
 import com.helltar.vusan.request.AttachedFile
 import com.helltar.vusan.request.AttachedFileKind
 import com.helltar.vusan.telegram.downloadFileBytes
-import java.util.Locale
 import org.telegram.telegrambots.meta.api.objects.Document
 import org.telegram.telegrambots.meta.api.objects.ExternalReplyInfo
 import org.telegram.telegrambots.meta.api.objects.Video
@@ -19,22 +18,10 @@ import org.telegram.telegrambots.meta.api.objects.photo.PhotoSize
 import org.telegram.telegrambots.meta.generics.TelegramClient
 
 private const val MAX_REPLIED_TEXT_CHARS = 4096
-private const val MAX_REPLIED_STORED_TEXT_CHARS = 600
 private const val MAX_QUOTED_FRAGMENT_CHARS = 1024
 
 // a first name, a last name and a username, with room to spare for telegram's own limits.
 private const val MAX_AUTHOR_CHARS = 160
-
-internal data class RepliedMessageSummary(
-    val type: String,
-    val textOrCaption: String?,
-    // who wrote the message being replied to, `you` when it is the bot's own. in a group the person
-    // replying is often not the one that message was written for, so their history carries nothing
-    // about it — this block is then all the model gets.
-    val author: String? = null,
-    val metadata: List<String> = emptyList(),
-    val transcript: String? = null,
-)
 
 internal fun isReplyToOtherUser(replyAuthorId: Long?, botUserId: Long): Boolean =
     replyAuthorId != botUserId
@@ -196,112 +183,10 @@ private fun documentKind(mimeType: String?, name: String): AttachedFileKind {
     }
 }
 
-internal fun attachedFileContextBlock(file: AttachedFile): String =
-    xmlBlock(
-        "attached_file",
-        buildString {
-            appendLine("name: ${file.name}")
-            file.fileSizeBytes?.let { appendLine("size: ${formatFileSize(it)}") }
-            file.durationSeconds?.let { appendLine("duration: ${it}s") }
-
-            when (file.kind) {
-                AttachedFileKind.IMAGE -> {
-                    append("The sandbox command or file-writing tool copies this file into `inbox/` and returns its exact path. ")
-                    append("It is an image: call `describeImage` to answer about what is visible, or work on it with `runCommand` (resize, filter, colors, dimensions).")
-                }
-
-                // the GIF line has to live here rather than in the no-caption prompt: a caption replaces
-                // that prompt, and the reaction still is not something to review.
-                AttachedFileKind.VIDEO ->
-                    if (file.isAnimation)
-                        append("It is a GIF: a short soundless loop, usually thrown into a chat as a reaction rather than as something to review. Call `describeVideo` only when the user asks what is in it, and never narrate it unasked.")
-                    else {
-                        append("It is a video: call `describeVideo` when your answer depends on what happens in it or what is said in it. ")
-                        append("To convert, cut or re-encode it, use the sandbox; its command or file-writing tool copies the file into `inbox/` and returns its exact path.")
-                    }
-
-                AttachedFileKind.OTHER -> {
-                    append("The sandbox command or file-writing tool copies this file into `inbox/` and returns its exact path. ")
-                    append("Read it there with `runCommand` instead of asking the user to resend it.")
-                }
-            }
-        },
-    )
-
 private val IMAGE_EXTENSIONS = setOf("png", "jpg", "jpeg", "webp", "gif", "bmp")
 
 private val VIDEO_EXTENSIONS =
     setOf("mp4", "m4v", "mov", "mkv", "webm", "avi", "wmv", "flv", "mpeg", "mpg", "3gp", "ogv")
-
-private fun formatFileSize(bytes: Long): String =
-
-    when {
-        bytes >= 1024 * 1024 -> "%.1f MB".format(Locale.ROOT, bytes / (1024.0 * 1024))
-        bytes >= 1024 -> "%.0f KB".format(Locale.ROOT, bytes / 1024.0)
-        else -> "$bytes B"
-    }
-
-internal fun formatAgentInput(
-    currentMessageText: String,
-    repliedMessage: RepliedMessageSummary?,
-    quotedFragment: String?,
-): String =
-    buildReplyContextPrompt(currentMessageText, repliedMessage, quotedFragment) { it }
-
-internal fun formatConversationInput(
-    currentMessageText: String,
-    repliedMessage: RepliedMessageSummary?,
-    quotedFragment: String?,
-): String =
-    buildReplyContextPrompt(currentMessageText, repliedMessage, quotedFragment) {
-        it.collapseWhitespaceAndCap(MAX_REPLIED_STORED_TEXT_CHARS).orEmpty()
-    }
-
-private fun buildReplyContextPrompt(
-    currentMessageText: String,
-    repliedMessage: RepliedMessageSummary?,
-    quotedFragment: String?,
-    transformText: (String) -> String,
-): String {
-    if (repliedMessage == null && quotedFragment == null) return currentMessageText
-
-    // quoting the whole message says nothing beyond the reply itself, and repeating it would read as
-    // two different pieces of context.
-    val fragment = quotedFragment?.takeUnless { it.trim() == repliedMessage?.textOrCaption?.trim() }
-
-    return buildString {
-        if (repliedMessage != null) {
-            appendLine("<reply_context>")
-            repliedMessage.author?.let { appendLine("- author: $it") }
-            appendLine("- type: ${repliedMessage.type}")
-
-            if (repliedMessage.metadata.isNotEmpty()) {
-                appendLine("- metadata:")
-                repliedMessage.metadata.forEach { appendLine("  - $it") }
-            }
-
-            // the quoted message is somebody else's text and never passed through inbound sanitizing.
-            repliedMessage.textOrCaption?.let {
-                appendLine(xmlBlock("text_caption", transformText(it).neutralizePromptBlocks()))
-            }
-
-            repliedMessage.transcript?.let {
-                appendLine(xmlBlock("audio_transcript", transformText(it).neutralizePromptBlocks()))
-            }
-
-            appendLine("</reply_context>")
-            appendLine()
-        }
-
-        // last before the request: the fragment is what the request is about.
-        fragment?.let {
-            appendLine(xmlBlock("quoted_fragment", it.neutralizePromptBlocks()))
-            appendLine()
-        }
-
-        append(xmlBlock("user_message", currentMessageText))
-    }
-}
 
 private fun Message.toReplySummary(botUserId: Long): RepliedMessageSummary? =
     replyToMessage?.summarizeInternalReply(botUserId)
