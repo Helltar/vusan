@@ -1,7 +1,6 @@
 package com.helltar.vusan.telegram.inbound
 
 import com.helltar.vusan.agent.RepliedMessageSummary
-import com.helltar.vusan.agent.neutralizePromptBlocks
 import com.helltar.vusan.common.collapseWhitespaceAndCap
 import com.helltar.vusan.common.limitTo
 import com.helltar.vusan.common.sanitizeFilename
@@ -213,9 +212,10 @@ private fun Message.authorLabel(botUserId: Long): String? {
         .authorValueOrNull()
 }
 
-// a display name is whatever its owner typed, and it lands on a line of its own inside the block.
+// a display name is whatever its owner typed, and it lands on a line of its own inside the block,
+// which defuses it; all that is left here is keeping it one short line.
 private fun String?.authorValueOrNull(): String? =
-    this?.collapseWhitespaceAndCap(MAX_AUTHOR_CHARS)?.takeIf { it.isNotBlank() }?.neutralizePromptBlocks()
+    this?.collapseWhitespaceAndCap(MAX_AUTHOR_CHARS)?.takeIf { it.isNotBlank() }
 
 // a quoted rich message keeps its layout: collapsing a tree of headings, lists and code into one
 // line leaves the model guessing at the structure it is being asked about.

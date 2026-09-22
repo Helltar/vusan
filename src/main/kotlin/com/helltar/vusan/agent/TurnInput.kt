@@ -12,7 +12,12 @@ import java.util.Locale
 
 private const val MAX_REPLIED_STORED_TEXT_CHARS = 600
 
-/** The message a request replies to, as far as the adapter could read it. */
+/**
+ * The message a request replies to, as far as the adapter could read it.
+ *
+ * Anything in it may be somebody else's text — a display name, a file name, a caption — and all of it
+ * is defused where the block is written, so the adapter only has to cap what it reads.
+ */
 internal data class RepliedMessageSummary(
     val type: String,
     val textOrCaption: String?,
@@ -63,15 +68,15 @@ private fun buildReplyContextPrompt(
     return buildString {
         if (repliedMessage != null) {
             appendLine("<reply_context>")
-            repliedMessage.author?.let { appendLine("- author: $it") }
+            repliedMessage.author?.let { appendLine("- author: ${it.neutralizePromptBlocks()}") }
             appendLine("- type: ${repliedMessage.type}")
 
             if (repliedMessage.metadata.isNotEmpty()) {
                 appendLine("- metadata:")
-                repliedMessage.metadata.forEach { appendLine("  - $it") }
+                repliedMessage.metadata.forEach { appendLine("  - ${it.neutralizePromptBlocks()}") }
             }
 
-            // the quoted message is somebody else's text and never passed through inbound sanitizing.
+            // the replied message is somebody else's, and none of it passed through inbound sanitizing.
             repliedMessage.textOrCaption?.let {
                 appendLine(xmlBlock("text_caption", transformText(it).neutralizePromptBlocks()))
             }
