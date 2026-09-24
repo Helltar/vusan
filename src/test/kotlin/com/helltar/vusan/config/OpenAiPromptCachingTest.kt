@@ -148,6 +148,9 @@ class OpenAiPromptCachingTest {
         assertFalse(supportsExplicitOpenAiPromptCaching("gpt-5.5"))
         assertTrue(supportsExplicitOpenAiPromptCaching("gpt-5.6-luna"))
         assertTrue(supportsExplicitOpenAiPromptCaching("GPT-6.0"))
+        assertTrue(supportsExplicitOpenAiPromptCaching("gpt-6-sol"))
+        assertFalse(supportsExplicitOpenAiPromptCaching("gpt-5-mini"))
+        assertFalse(supportsExplicitOpenAiPromptCaching("gpt-4o"))
         assertFalse(supportsExplicitOpenAiPromptCaching("grok-5.6"))
     }
 

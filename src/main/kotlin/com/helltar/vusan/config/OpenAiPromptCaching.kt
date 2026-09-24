@@ -159,7 +159,8 @@ internal fun addExplicitOpenAiPromptCacheBreakpoint(requestBody: String, json: J
 internal fun supportsExplicitOpenAiPromptCaching(model: String): Boolean {
     val version = GPT_MODEL_VERSION.find(model.trim().lowercase()) ?: return false
     val major = version.groupValues[1].toInt()
-    val minor = version.groupValues[2].toInt()
+    // a generation's first models carry no minor version at all: gpt-6-sol is 6.0
+    val minor = version.groupValues[2].toIntOrNull() ?: 0
 
     return major > 5 || major == 5 && minor >= 6
 }
@@ -228,7 +229,7 @@ private fun markLastTextBlock(content: JsonElement?, textBlockType: String): Jso
 private fun markedTextBlock(block: JsonObject): JsonObject =
     JsonObject(block + ("prompt_cache_breakpoint" to EXPLICIT_CACHE_CONTROL))
 
-private val GPT_MODEL_VERSION = Regex("""^gpt-(\d+)\.(\d+)""")
+private val GPT_MODEL_VERSION = Regex("""^gpt-(\d+)(?:\.(\d+))?""")
 private val EXPLICIT_CACHE_CONTROL =
     buildJsonObject {
         put("mode", "explicit")
