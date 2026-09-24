@@ -1,5 +1,6 @@
 package com.helltar.vusan.agent
 
+import com.helltar.vusan.agent.grouplog.GroupLogEntry
 import com.helltar.vusan.agent.grouplog.GroupLogRepository
 import com.helltar.vusan.agent.grouplog.renderGroupLog
 import com.helltar.vusan.agent.grouplog.withoutExchangesWith
@@ -38,6 +39,29 @@ private const val RECENT_CHAT_MINUTES = 60L
 private const val EMERGENCY_SUMMARY_MAX_CHARS = 1_500
 private const val LOG_REPLY_MAX_CHARS = 300
 private const val PROVIDER_ERROR_LOG_MAX_CHARS = 300
+
+/**
+ * What `<recent_chat>` shows of [entries], oldest first.
+ *
+ * An ordinary turn leaves out the person's own exchanges with the bot, which it replays as history, and
+ * [entries] already lack the message itself. A turn nobody called the bot into keeps those exchanges and
+ * ends right before the message: nothing but the order of the lines says whether a bare "which one?"
+ * follows the bot's last reply or somebody else's line in between, and history carries no such order.
+ * A message the log has not recorded yet leaves the slice uncut.
+ */
+internal fun recentChatSlice(
+    entries: List<GroupLogEntry>,
+    senderId: String,
+    messageId: String?,
+    ambient: Boolean,
+): List<GroupLogEntry> {
+    if (!ambient) return entries.withoutExchangesWith(senderId).takeLast(RECENT_CHAT_MESSAGES)
+
+    val at = entries.indexOfFirst { messageId != null && it.messageId == messageId }
+    val before = if (at >= 0) entries.take(at) else entries
+
+    return before.takeLast(RECENT_CHAT_MESSAGES)
+}
 
 /**
  * One turn to run: where it came from, and the two texts it is made of.
@@ -331,7 +355,8 @@ class AgentRunner(
                     // over-fetch: dropping this user's own exchanges below must not thin the slice out.
                     limit = RECENT_CHAT_MESSAGES * RECENT_CHAT_OVERFETCH,
                     since = Instant.now().minus(RECENT_CHAT_MINUTES, ChronoUnit.MINUTES),
-                    excludeMessageId = context.messageId,
+                    // an ambient slice is cut at the message instead, so it has to be there to cut at.
+                    excludeMessageId = context.messageId.takeUnless { context.ambient },
                 )
             } catch (e: Throwable) {
                 e.rethrowIfCancellation()
@@ -339,10 +364,7 @@ class AgentRunner(
                 return null
             }
 
-        val recent =
-            entries
-                .withoutExchangesWith(context.sender.id)
-                .takeLast(RECENT_CHAT_MESSAGES)
+        val recent = recentChatSlice(entries, context.sender.id, context.messageId, context.ambient)
 
         return renderGroupLog(recent, ZoneId.systemDefault(), RECENT_CHAT_LINE_CHARS, RECENT_CHAT_MAX_CHARS)
             .text

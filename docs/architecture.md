@@ -205,7 +205,10 @@ A normal user message travels:
    hard-capped slice of what the chat was saying just before, so a question with no subject ("and what do you think?")
    still has one. It leaves out the triggering message and this user's own exchanges with the bot, both of which the
    prompt already carries — the first as the request itself, the second as replayed `user`/`assistant` turns. Other
-   people's messages and the bot's replies to *them* stay, since one person's conversation never contains those.
+   people's messages and the bot's replies to *them* stay, since one person's conversation never contains those. An
+   ambient turn keeps this user's exchanges too and cuts the slice right before the message (`recentChatSlice`): with
+   no mention and no reply, the order of the lines is the only thing that says whether a bare "which one?" follows the
+   bot's last reply or somebody else's line in between, and the replayed history carries no such order.
    `<current_time>` and the chat's `<sticker_catalog>` ride in that same user turn rather than in a system message of
    their own: a system message reads as a higher-priority instruction, which is wrong for context assembled out of what
    people sent, and koog's Anthropic and Google clients hoist every system message into the top-level system field
