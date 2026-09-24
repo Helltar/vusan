@@ -83,8 +83,13 @@ suspend fun main() = coroutineScope {
 
         listOfNotNull(config.llmProvider, config.llmFallback)
             .filterIsInstance<LlmProviderConfig.Hosted>()
-            .filter { it.provider == HostedLlmProvider.OPENAI }
-            .forEach { verifyOpenAiModel(http, it.apiKey, it.model) }
+            .forEach {
+                when (it.provider) {
+                    HostedLlmProvider.OPENAI -> verifyOpenAiModel(http, it.apiKey, it.model)
+                    HostedLlmProvider.ANTHROPIC -> verifyAnthropicModel(http, it.apiKey, it.model)
+                    HostedLlmProvider.GOOGLE, HostedLlmProvider.DEEPSEEK -> Unit
+                }
+            }
         config.openAiVision?.let { verifyOpenAiModel(http, it.apiKey, it.model) }
 
         val llm = resolveLlmRuntime(codexPreflight(config.llmProvider, http, codexAuth), codexAuth)

@@ -68,17 +68,17 @@ banned, and startup says so in the log.
 | `LLM_PROVIDER`      | Example `LLM_MODEL`                 |
 |---------------------|-------------------------------------|
 | `openai`            | `gpt-5.6-sol`                       |
-| `anthropic`         | `claude-sonnet-4-6`                 |
+| `anthropic`         | `claude-opus-5-5`                   |
 | `google`            | `gemini-2.5-flash`                  |
 | `deepseek`          | `deepseek-v4-pro`                   |
 | `openai-compatible` | any model id the server understands |
 | `codex`             | any model the ChatGPT plan offers   |
 
-- **The four native providers** — each talks to its vendor's own API. `anthropic`, `google` and
-  `deepseek` accept only model ids their built-in catalog knows, and an unrecognized id fails at
-  startup listing the supported ones. `openai` takes any id: one the catalog knows comes with its
-  metadata, a newer one is assumed to be what every recent OpenAI model is — a reasoning model that
-  sees images and speaks the Responses API — and is checked against OpenAI's own model list at
+- **The four native providers** — each talks to its vendor's own API. `google` and `deepseek`
+  accept only model ids their built-in catalog knows, and an unrecognized id fails at startup
+  listing the supported ones. `openai` and `anthropic` take any id: one the catalog knows comes with
+  its metadata, a newer one is assumed to be what the vendor's current models are — a reasoning
+  model that sees images and calls tools — and is checked against the vendor's own model list at
   startup, so a typo still fails there rather than on the first message.
 - **`openai-compatible`** — any OpenAI-compatible server, remote or local, taking whatever model
   string it serves.
@@ -103,11 +103,11 @@ carries tools, so a reasoning model runs on Responses unless the effort is `none
 `LLM_BASE_URL` no `/v1` — the API path is appended for you. Raise the timeout for slow local
 servers and heavy reasoning models.
 
-Set `LLM_CONTEXT_WINDOW_TOKENS` whenever an `openai-compatible` model has a different window. An
-`openai` model newer than the catalog is assumed to keep the window of the last catalogued
-generation, 1,050,000 tokens, which the variable overrides. Vusan reserves part of that window for
-the response, tool results and estimation error, then fits only complete conversation interactions
-into the remainder.
+Set `LLM_CONTEXT_WINDOW_TOKENS` whenever an `openai-compatible` model has a different window. A
+model newer than the catalog is assumed to keep the window of its vendor's current generation —
+1,050,000 tokens on `openai`, 1,000,000 on `anthropic` — which the variable overrides. Vusan
+reserves part of that window for the response, tool results and estimation error, then fits only
+complete conversation interactions into the remainder.
 
 Third-party servers all take the same shape, with `LLM_PROVIDER=openai-compatible`:
 

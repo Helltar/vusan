@@ -9,7 +9,7 @@ import kotlin.test.assertContains
 import kotlin.test.assertEquals
 import kotlin.test.assertFailsWith
 
-class OpenAiCatalogTest {
+class HostedModelCheckTest {
 
     @Test
     fun `a model the catalog knows is not asked about at all`() = runBlocking {
@@ -17,6 +17,8 @@ class OpenAiCatalogTest {
         val http = Http.createClient(MockEngine { requests++; respond("") })
 
         verifyOpenAiModel(http, "key", "gpt-5.4-mini")
+        verifyAnthropicModel(http, "key", "claude-sonnet-5")
+        verifyAnthropicModel(http, "key", "claude-haiku-4-5-20251001")
 
         assertEquals(0, requests)
     }
@@ -39,12 +41,35 @@ class OpenAiCatalogTest {
     }
 
     @Test
-    fun `a model OpenAI does not know stops the startup`() = runBlocking {
+    fun `a model Anthropic serves passes, asked the way its API expects`() = runBlocking {
+        var apiKey: String? = null
+        var version: String? = null
+        val http =
+            Http.createClient(
+                MockEngine { request ->
+                    apiKey = request.headers["x-api-key"]
+                    version = request.headers["anthropic-version"]
+                    assertEquals("api.anthropic.com", request.url.host)
+                    assertEquals("/v1/models/claude-opus-5-5", request.url.encodedPath)
+                    respond("""{"id":"claude-opus-5-5","type":"model"}""", headers = headersOf(HttpHeaders.ContentType, "application/json"))
+                },
+            )
+
+        verifyAnthropicModel(http, "sk-ant-test", "claude-opus-5-5")
+
+        assertEquals("sk-ant-test", apiKey)
+        assertEquals("2023-06-01", version)
+    }
+
+    @Test
+    fun `a model the provider does not know stops the startup`() = runBlocking {
         val http = Http.createClient(MockEngine { respond("""{"error":{"code":"model_not_found"}}""", status = HttpStatusCode.NotFound) })
 
-        val failure = assertFailsWith<IllegalStateException> { verifyOpenAiModel(http, "key", "gpt-5.6-lunar") }
+        val openAi = assertFailsWith<IllegalStateException> { verifyOpenAiModel(http, "key", "gpt-6-lunar") }
+        val anthropic = assertFailsWith<IllegalStateException> { verifyAnthropicModel(http, "key", "claude-opus-5-6") }
 
-        assertContains(failure.message.orEmpty(), "gpt-5.6-lunar")
+        assertContains(openAi.message.orEmpty(), "gpt-6-lunar")
+        assertContains(anthropic.message.orEmpty(), "claude-opus-5-6")
     }
 
     @Test
@@ -52,5 +77,6 @@ class OpenAiCatalogTest {
         val http = Http.createClient(MockEngine { respond("", status = HttpStatusCode.ServiceUnavailable) })
 
         verifyOpenAiModel(http, "key", "gpt-6-luna")
+        verifyAnthropicModel(http, "key", "claude-opus-5-5")
     }
 }

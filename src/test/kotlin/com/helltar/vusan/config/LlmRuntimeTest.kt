@@ -1,7 +1,9 @@
 package com.helltar.vusan.config
 
+import ai.koog.http.client.ktor.KtorKoogHttpClient
 import ai.koog.prompt.Prompt
 import ai.koog.prompt.executor.clients.anthropic.AnthropicCacheControl
+import ai.koog.prompt.executor.clients.anthropic.AnthropicLLMClient
 import ai.koog.prompt.executor.clients.anthropic.AnthropicModels
 import ai.koog.prompt.executor.clients.anthropic.AnthropicParams
 import ai.koog.prompt.executor.clients.openai.OpenAIChatParams
@@ -11,11 +13,18 @@ import ai.koog.prompt.executor.clients.openai.base.models.ServiceTier
 import ai.koog.prompt.executor.clients.openai.models.OpenAIInclude
 import ai.koog.prompt.llm.LLMCapability
 import ai.koog.prompt.llm.LLMProvider
+import ai.koog.prompt.message.Message
+import ai.koog.prompt.message.RequestMetaInfo
 import com.helltar.vusan.infra.Http
 import com.sun.net.httpserver.HttpServer
+import io.ktor.client.*
 import io.ktor.client.engine.mock.*
+import io.ktor.http.*
 import kotlinx.coroutines.runBlocking
 import kotlinx.serialization.json.Json
+import kotlinx.serialization.json.JsonObject
+import kotlinx.serialization.json.int
+import kotlinx.serialization.json.jsonArray
 import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.jsonPrimitive
 import java.net.InetSocketAddress
@@ -204,6 +213,65 @@ class LlmRuntimeTest {
 
         assertEquals(LLMProvider.Anthropic, runtime.model.provider)
         assertEquals("claude-sonnet-4-5", runtime.model.id)
+    }
+
+    // the same promise as for OpenAI: a model newer than koog's catalog is declared, not refused
+    @Test
+    fun `anthropicModel declares a model the catalog does not know as a thinking model that sees`() {
+        assertNull(cataloguedAnthropicModel("claude-opus-5-5"))
+
+        val model = anthropicModel(" claude-opus-5-5 ")
+
+        assertEquals("claude-opus-5-5", model.id)
+        assertEquals(LLMProvider.Anthropic, model.provider)
+        assertEquals(1_000_000L, model.contextLength)
+        assertEquals(128_000L, model.maxOutputTokens)
+        assertTrue(model.supports(LLMCapability.Tools))
+        assertTrue(model.supports(LLMCapability.Vision.Image))
+        assertTrue(model.supports(LLMCapability.Thinking))
+        assertFalse(model.supports(LLMCapability.Temperature), "sampling parameters are refused from Opus 4.7 on")
+    }
+
+    @Test
+    fun `an anthropic model is found by its dated id as well as its alias`() {
+        assertEquals(AnthropicModels.Haiku_4_5, anthropicModel("claude-haiku-4-5-20251001"))
+        assertEquals(AnthropicModels.Haiku_4_5, anthropicModel("CLAUDE-HAIKU-4-5"))
+    }
+
+    // koog sends 2048 when nothing is asked for, which a model that always thinks can spend on thinking
+    @Test
+    fun `anthropic prompts ask for the model's whole output ceiling`() {
+        val runtime = anthropic()
+
+        assertEquals(64_000, assertIs<AnthropicParams>(runtime.chatParams).maxTokens)
+        assertEquals(64_000, assertIs<AnthropicParams>(runtime.compactionParams).maxTokens)
+    }
+
+    // koog finds the id it sends by looking the whole model up, so a model it has no entry for, or one a
+    // context override made different, is refused on its first call rather than at startup.
+    @Test
+    fun `the anthropic client sends the model it was given under the id the api knows`() = runBlocking {
+        val declared = sentAnthropicRequests(anthropic("claude-opus-5-5"))
+        val overridden = sentAnthropicRequests(anthropic("claude-haiku-4-5", contextWindowTokens = 65_536))
+
+        assertEquals("claude-opus-5-5", declared.first().getValue("model").jsonPrimitive.content)
+        assertEquals(128_000, declared.first().getValue("max_tokens").jsonPrimitive.int)
+        assertEquals("claude-haiku-4-5-20251001", overridden.first().getValue("model").jsonPrimitive.content)
+    }
+
+    // a model that thinks on every turn hands its thinking back with each tool round, and koog refuses to
+    // replay a thinking block for a model that does not declare it can think.
+    @Test
+    fun `a declared anthropic model replays the thinking it was sent`() = runBlocking {
+        val followUp = sentAnthropicRequests(anthropic("claude-opus-5-5")).last()
+
+        val replayed =
+            followUp.getValue("messages").jsonArray
+                .flatMap { it.jsonObject.getValue("content").jsonArray }
+                .map { it.jsonObject }
+                .single { it.getValue("type").jsonPrimitive.content == "thinking" }
+
+        assertEquals("sig-1", replayed.getValue("signature").jsonPrimitive.content)
     }
 
     // Anthropic caches nothing implicitly, so without this every step of a turn is billed in full.
@@ -448,15 +516,45 @@ class LlmRuntimeTest {
         )
     }
 
-    private fun anthropic(): LlmRuntime =
+    private fun anthropic(model: String = "claude-sonnet-4-5", contextWindowTokens: Long? = null): LlmRuntime =
         resolveLlmRuntime(
             LlmProviderConfig.Hosted(
                 provider = HostedLlmProvider.ANTHROPIC,
                 apiKey = "key",
-                model = "claude-sonnet-4-5",
+                model = model,
                 requestTimeout = 120.seconds,
+                contextWindowTokens = contextWindowTokens,
             ),
         )
+
+    /**
+     * The two bodies koog's Anthropic client sends for [runtime]'s model through the settings the runtime
+     * builds: a first request, answered the way a model that always thinks answers — an empty thinking
+     * block ahead of the text — and a follow-up that carries that answer back.
+     */
+    private suspend fun sentAnthropicRequests(runtime: LlmRuntime): List<JsonObject> {
+        val sent = mutableListOf<JsonObject>()
+
+        val engine =
+            MockEngine { request ->
+                sent += Json.parseToJsonElement(request.body.toByteArray().decodeToString()).jsonObject
+                respond(ANTHROPIC_THINKING_REPLY, headers = headersOf(HttpHeaders.ContentType, ContentType.Application.Json.toString()))
+            }
+
+        val client =
+            AnthropicLLMClient(
+                apiKey = "key",
+                settings = anthropicClientSettings(runtime.model, connectionTimeouts(120.seconds)),
+                httpClientFactory = KtorKoogHttpClient.Factory(HttpClient(engine)),
+            )
+
+        val prompt = Prompt.build("wire", params = runtime.chatParams) { user("current request") }
+        val answer = client.execute(prompt, runtime.model, emptyList())
+
+        client.execute(prompt.withMessages { it + answer + Message.User("next request", RequestMetaInfo.Empty) }, runtime.model, emptyList())
+
+        return sent
+    }
 
     private fun codex(
         contextWindowTokens: Long? = null,
@@ -493,4 +591,11 @@ class LlmRuntimeTest {
                 contextWindowTokens = contextWindowTokens,
             ),
         )
+
+    private companion object {
+        const val ANTHROPIC_THINKING_REPLY =
+            """{"id":"msg_1","type":"message","role":"assistant","model":"claude-opus-5-5",""" +
+                    """"content":[{"type":"thinking","thinking":"","signature":"sig-1"},{"type":"text","text":"ok"}],""" +
+                    """"stop_reason":"end_turn","stop_sequence":null,"usage":{"input_tokens":10,"output_tokens":5}}"""
+    }
 }

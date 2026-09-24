@@ -499,7 +499,9 @@ A normal user message travels:
   single wording both that tool and the run's own low-reserve notice state it in.
 - **LLM provider resolution** — `config/LlmRuntime.resolveLlmRuntime` turns `AppConfig.llmProvider` into a Koog
   client/model/params triple. Native clients cover OpenAI, Anthropic, Google, and DeepSeek — models are matched against
-  each client's predefined catalog. `openai-compatible` keeps a hand-declared model for any other server (llama.cpp,
+  each client's predefined catalog, except that OpenAI and Anthropic also take an id newer than koog's catalog, declared
+  with the shape of their current generation (`openAiModel`, `anthropicModel`) and checked against the vendor's own
+  model list at startup (`config/HostedModelCheck`). `openai-compatible` keeps a hand-declared model for any other server (llama.cpp,
   Ollama, …), with a configurable context size. Its endpoint capability and params type are declared as a pair
   (`OpenAIChatParams` → `/v1/chat/completions`, `OpenAIResponsesParams` → `/v1/responses`), because the Koog client
   reads the route off the params type and rejects params the model does not declare an endpoint for. Direct OpenAI
@@ -510,7 +512,9 @@ A normal user message travels:
   carries tools — which keeps the system prompt and tool schemas reusable while leaving history, memory and tool
   results out of billable cache writes. The adapter exists because Koog 1.3.0 cannot represent OpenAI's explicit
   breakpoint fields itself. Anthropic caches nothing implicitly, so its chat params ask for request-level
-  `cache_control` and let the API place the breakpoint; the recap asks for none.
+  `cache_control` and let the API place the breakpoint; the recap asks for none. Its chat and recap params both ask for the
+  model's whole output ceiling as `max_tokens`, which koog otherwise sets to 2048 — less than a model that always thinks
+  may spend before it answers.
 - **ChatGPT subscription (`codex`)** — the same Koog OpenAI client pointed at the Codex backend's Responses API, with no
   API key. `config/CodexAuth.CodexAuthStore` owns the credentials `codex login` writes to `~/.codex/auth.json` (or
   `$CODEX_HOME`). `AppConfig` resolves that path into the Codex provider config, and the store rereads the file per
@@ -558,7 +562,8 @@ A normal user message travels:
 
 `Main.kt` wires everything in order: load `AppConfig` → connect `Db` → create the `Http` client → (only with
 `LLM_PROVIDER=codex`) build the `CodexAuthStore` and run `codexPreflight`, which proves the ChatGPT session works and
-fills the context window in from the account's model catalog before any message is served → create the LLM runtime,
+fills the context window in from the account's model catalog before any message is served → (only for an `openai` or
+`anthropic` model koog's catalog lacks) ask the vendor whether the id exists, so a typo fails here → create the LLM runtime,
 whose executor everything downstream then shares — wrapped in `agent/FallbackPromptExecutor` when `LLM_FALLBACK_PROVIDER`
 names a second runtime, so a spent subscription hands every call to it until the deadline its refusal named → build repositories, context policy, conversation compactor, the
 Telegram client and its `BotProfile` — one `getMe` call shared by the runner, which matches mentions against it, and `AgentFactory`, which puts the handle in the system prompt → (only when image

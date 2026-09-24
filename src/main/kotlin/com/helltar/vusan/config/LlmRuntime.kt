@@ -45,6 +45,12 @@ private const val OPENAI_API_BASE_URL = "https://api.openai.com"
 // LLM_CONTEXT_WINDOW_TOKENS says otherwise when one does not.
 private const val UNCATALOGUED_OPENAI_CONTEXT_WINDOW = 1_050_000L
 private const val UNCATALOGUED_OPENAI_MAX_OUTPUT = 128_000L
+
+// what every claude model since opus 4.7 lists on the models overview (checked 2026-09-24 for opus 5.5 and
+// fable 5.1), and what the catalog gives claude-opus-5 itself.
+private const val UNCATALOGUED_ANTHROPIC_CONTEXT_WINDOW = 1_000_000L
+private const val UNCATALOGUED_ANTHROPIC_MAX_OUTPUT = 128_000L
+
 private const val OPENAI_PROMPT_CACHE_KEY = "vusan"
 private const val OPENAI_COMPACTION_CACHE_KEY = "vusan-recap"
 private const val COMPLETIONS_REASONING_EFFORT = "reasoning_effort"
@@ -297,19 +303,26 @@ private fun resolveHostedRuntime(config: LlmProviderConfig.Hosted, timeoutConfig
             )
         }
 
-        HostedLlmProvider.ANTHROPIC ->
+        HostedLlmProvider.ANTHROPIC -> {
+            val model = anthropicModel(config.model).withContextOverride(config.contextWindowTokens)
+            // the API requires max_tokens, and koog sends 2048 when it is unset, which a model that thinks
+            // before every answer can spend before the answer starts. the ceiling costs nothing: output is
+            // billed and rate-limited on what is generated, not on what was allowed.
+            val maxTokens = model.maxOutputTokens?.toInt()
+
             LlmRuntime(
                 providerLabel = "Anthropic",
-                client = AnthropicLLMClient(config.apiKey, AnthropicClientSettings(timeoutConfig = timeoutConfig)),
-                model = resolveModel(AnthropicModels, "Anthropic", config.model).withContextOverride(config.contextWindowTokens),
+                client = AnthropicLLMClient(config.apiKey, anthropicClientSettings(model, timeoutConfig)),
+                model = model,
                 // Anthropic caches nothing on its own: without a control every step of a turn re-reads the
                 // whole prompt at full price. The request-level one lets the API place the breakpoint on the
                 // last cacheable block, which is what an agent loop wants — each iteration appends and reads
                 // back everything before it. The recap keeps none: its body never repeats, so the write
                 // would buy a read nobody makes.
-                chatParams = AnthropicParams(cacheControl = AnthropicCacheControl.Default),
-                compactionParams = AnthropicParams(),
+                chatParams = AnthropicParams(maxTokens = maxTokens, cacheControl = AnthropicCacheControl.Default),
+                compactionParams = AnthropicParams(maxTokens = maxTokens),
             )
+        }
 
         HostedLlmProvider.GOOGLE ->
             LlmRuntime(
@@ -386,6 +399,64 @@ private fun uncataloguedOpenAiModel(id: String): LLModel =
                 LLMCapability.Thinking,
             ),
     )
+
+// the catalog pins older models to dated snapshots, so an id is recognised by either name.
+private val anthropicApiIds: Map<LLModel, String> by lazy { AnthropicClientSettings().modelVersionsMap }
+
+/** The catalog's entry for [rawValue], by its alias or its dated id, or `null` when koog has not heard of the model. */
+internal fun cataloguedAnthropicModel(rawValue: String): LLModel? {
+    val key = normalizeModelKey(rawValue)
+
+    return AnthropicModels.models.firstOrNull { model ->
+        normalizeModelKey(model.id) == key || anthropicApiIds[model]?.let(::normalizeModelKey) == key
+    }
+}
+
+/**
+ * The Claude model to run, from the catalog when it is there and declared here when it is not.
+ *
+ * The same reasoning as [openAiModel]: koog's catalog trails Anthropic's releases, and every model
+ * since Opus 4.7 has the same shape — tools, images, documents, thinking, prompt caching, a 1M window
+ * and 128K of output — so a newer id is given that shape, and startup asks Anthropic whether it exists.
+ * It declares no `Temperature`: sampling parameters are refused outright from Opus 4.7 on.
+ */
+internal fun anthropicModel(rawValue: String): LLModel =
+    cataloguedAnthropicModel(rawValue) ?: uncataloguedAnthropicModel(rawValue.trim())
+
+private fun uncataloguedAnthropicModel(id: String): LLModel =
+    LLModel(
+        provider = LLMProvider.Anthropic,
+        id = id,
+        contextLength = UNCATALOGUED_ANTHROPIC_CONTEXT_WINDOW,
+        maxOutputTokens = UNCATALOGUED_ANTHROPIC_MAX_OUTPUT,
+        capabilities =
+            listOf(
+                LLMCapability.Completion,
+                LLMCapability.Schema.JSON.Basic,
+                LLMCapability.Schema.JSON.Standard,
+                LLMCapability.Tools,
+                LLMCapability.Vision.Image,
+                LLMCapability.Document,
+                // the thinking blocks a turn produces are replayed with it, and koog refuses to replay them
+                // for a model that does not declare it.
+                LLMCapability.Thinking,
+                LLMCapability.PromptCaching,
+            ),
+    )
+
+/**
+ * Settings for a client that sends [model] and nothing else.
+ *
+ * Koog finds the id it puts on the wire by looking the whole model up in `modelVersionsMap`, so the
+ * default map fails a model the catalog lacks, and also a catalogued one whose context window was
+ * overridden, since that makes it a different model. The entry is therefore the model exactly as the
+ * runtime passes it, under the id the catalog pins it to or its own.
+ */
+internal fun anthropicClientSettings(model: LLModel, timeoutConfig: ConnectionTimeoutConfig): AnthropicClientSettings {
+    val apiId = anthropicApiIds.entries.firstOrNull { it.key.id == model.id }?.value ?: model.id
+
+    return AnthropicClientSettings(modelVersionsMap = mapOf(model to apiId), timeoutConfig = timeoutConfig)
+}
 
 internal fun resolveModel(definitions: LLModelDefinitions, providerLabel: String, rawValue: String): LLModel {
     val key = normalizeModelKey(rawValue)
