@@ -28,12 +28,12 @@ class OpenAiCatalogTest {
             Http.createClient(
                 MockEngine { request ->
                     authorization = request.headers[HttpHeaders.Authorization]
-                    assertEquals("/v1/models/gpt-5.6-luna", request.url.encodedPath)
-                    respond("""{"id":"gpt-5.6-luna","object":"model"}""", headers = headersOf(HttpHeaders.ContentType, "application/json"))
+                    assertEquals("/v1/models/gpt-6-luna", request.url.encodedPath)
+                    respond("""{"id":"gpt-6-luna","object":"model"}""", headers = headersOf(HttpHeaders.ContentType, "application/json"))
                 },
             )
 
-        verifyOpenAiModel(http, "sk-test", "gpt-5.6-luna")
+        verifyOpenAiModel(http, "sk-test", "gpt-6-luna")
 
         assertEquals("Bearer sk-test", authorization)
     }
@@ -51,6 +51,6 @@ class OpenAiCatalogTest {
     fun `an answer that is neither yes nor no leaves the model alone`() = runBlocking {
         val http = Http.createClient(MockEngine { respond("", status = HttpStatusCode.ServiceUnavailable) })
 
-        verifyOpenAiModel(http, "key", "gpt-5.6-luna")
+        verifyOpenAiModel(http, "key", "gpt-6-luna")
     }
 }

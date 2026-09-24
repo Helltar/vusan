@@ -416,9 +416,13 @@ private fun LLModel.withContextOverride(contextWindowTokens: Long?): LLModel =
  * echoes reasoning items, and koog drops them without it, leaving every tool result to re-derive the
  * whole chain. A model that speaks only completions is left where it is: there is no endpoint to move
  * it to, and koog would refuse params its model does not declare.
+ *
+ * No effort at all is the model's own default, and that is an effort too: gpt-5.6 refuses tools on
+ * completions with nothing configured, so a reasoning model moves unless it is told `none`.
  */
 private fun LLModel.forReasoningEffort(effort: ReasoningEffort?): LLModel {
-    val moves = effort != null && effort != ReasoningEffort.NONE && supports(LLMCapability.OpenAIEndpoint.Responses)
+    val reasons = if (effort == null) supports(LLMCapability.Thinking) else effort != ReasoningEffort.NONE
+    val moves = reasons && supports(LLMCapability.OpenAIEndpoint.Responses)
     if (!moves) return this
 
     return copy(capabilities = (capabilities.orEmpty() - LLMCapability.OpenAIEndpoint.Completions + LLMCapability.Thinking).distinct())

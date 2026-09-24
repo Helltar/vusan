@@ -43,11 +43,11 @@ class LlmRuntimeTest {
     // recent OpenAI model is, rather than refused.
     @Test
     fun `openAiModel declares a model the catalog does not know as a responses reasoning model that sees`() {
-        assertNull(cataloguedOpenAiModel("gpt-5.6-luna"))
+        assertNull(cataloguedOpenAiModel("gpt-6-luna"))
 
-        val model = openAiModel(" gpt-5.6-luna ")
+        val model = openAiModel(" gpt-6-luna ")
 
-        assertEquals("gpt-5.6-luna", model.id)
+        assertEquals("gpt-6-luna", model.id)
         assertEquals(LLMProvider.OpenAI, model.provider)
         assertEquals(1_050_000L, model.contextLength)
         assertEquals(128_000L, model.maxOutputTokens)
@@ -102,6 +102,28 @@ class LlmRuntimeTest {
 
         assertIs<OpenAIChatParams>(runtime.chatParams)
         assertEquals("none", runtime.reasoningEffort)
+    }
+
+    // verified against the API on 2026-09-24: with a tool and no reasoning_effort, gpt-5.6-sol and
+    // gpt-5.6-luna answer /v1/chat/completions with the same refusal, while gpt-5.5 and older still call
+    // the tool there. the catalog has spoken both endpoints for gpt-5.6 since koog 1.3.0.
+    @Test
+    fun `no effort at all moves a reasoning model onto responses too`() {
+        val catalogued = assertNotNull(cataloguedOpenAiModel("gpt-5.6-sol"))
+
+        assertTrue(catalogued.supports(LLMCapability.OpenAIEndpoint.Completions), "the premise of this test is gone")
+
+        val runtime = hostedOpenAi("gpt-5.6-sol", effort = null)
+
+        assertIs<OpenAIResponsesParams>(runtime.chatParams)
+        assertIs<OpenAIResponsesParams>(runtime.compactionParams)
+        assertFalse(runtime.model.supports(LLMCapability.OpenAIEndpoint.Completions))
+        assertNull(runtime.reasoningEffort, "the model's own default is what runs")
+    }
+
+    @Test
+    fun `a model that does not reason stays on completions without an effort`() {
+        assertIs<OpenAIChatParams>(hostedOpenAi("gpt-4.1", effort = null).chatParams)
     }
 
     private fun hostedOpenAi(model: String, effort: ReasoningEffort?): LlmRuntime =

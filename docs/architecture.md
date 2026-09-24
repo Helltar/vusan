@@ -508,7 +508,7 @@ A normal user message travels:
   shared key, their tool-free prefix being identical everywhere. For GPT-5.6 and later, `config/OpenAiPromptCaching`
   marks two explicit breakpoints — the stable system/developer block, and the last user message when the request
   carries tools — which keeps the system prompt and tool schemas reusable while leaving history, memory and tool
-  results out of billable cache writes. The adapter exists because Koog 1.2.0 cannot represent OpenAI's explicit
+  results out of billable cache writes. The adapter exists because Koog 1.3.0 cannot represent OpenAI's explicit
   breakpoint fields itself. Anthropic caches nothing implicitly, so its chat params ask for request-level
   `cache_control` and let the API place the breakpoint; the recap asks for none.
 - **ChatGPT subscription (`codex`)** — the same Koog OpenAI client pointed at the Codex backend's Responses API, with no

@@ -98,9 +98,10 @@ server behind `LLM_BASE_URL` speaks, since a third-party server may offer either
 endpoint itself, from the catalog for a model it knows and Responses for a newer one.
 `LLM_REASONING_EFFORT` applies to `openai`, `openai-compatible` and `codex`. Which efforts work
 depends on the model, and only `codex` checks yours at startup. On `openai` it also decides the
-endpoint: OpenAI refuses tools alongside an effort on the completions API, and every turn here
-carries tools, so an effort other than `none` puts the model on Responses. Give `LLM_BASE_URL` no `/v1` — the
-API path is appended for you. Raise the timeout for slow local servers and heavy reasoning models.
+endpoint: OpenAI refuses tools alongside reasoning on the completions API, and every turn here
+carries tools, so a reasoning model runs on Responses unless the effort is `none`. Give
+`LLM_BASE_URL` no `/v1` — the API path is appended for you. Raise the timeout for slow local
+servers and heavy reasoning models.
 
 Set `LLM_CONTEXT_WINDOW_TOKENS` whenever an `openai-compatible` model has a different window. An
 `openai` model newer than the catalog is assumed to keep the window of the last catalogued
