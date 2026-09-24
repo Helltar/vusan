@@ -14,6 +14,7 @@ import kotlin.time.Duration.Companion.seconds
 
 data class AppConfig(
     val accessPolicy: AccessPolicy,
+    val addressing: AddressingConfig? = null,
     val agentMaxIterations: Int,
     val appearance: String?,
     val chatHistory: ConversationConfig = ConversationConfig(),
@@ -70,6 +71,7 @@ data class AppConfig(
 
             return AppConfig(
                 accessPolicy = AccessPolicy(allowed = readIdSetEnv("ALLOWED_IDS"), banned = readIdSetEnv("BANNED_IDS")),
+                addressing = resolveAddressing(),
                 agentMaxIterations = readIntEnv("AGENT_MAX_ITERATIONS") ?: DEFAULT_AGENT_MAX_ITERATIONS,
                 appearance = resolveAppearance(),
                 databasePath = readEnv("DB_FILE") ?: "data/db/vusan.db",
@@ -184,6 +186,17 @@ data class AppConfig(
             return OpenAiVisionConfig(
                 apiKey = key,
                 model = readEnv("OPENAI_VISION_MODEL") ?: OpenAiVisionConfig.DEFAULT_MODEL,
+            )
+        }
+
+        private fun resolveAddressing(): AddressingConfig? {
+            val key = readEnv("OPENAI_ADDRESSING_API_KEY") ?: return null
+
+            return AddressingConfig(
+                apiKey = key,
+                model = readEnv("OPENAI_ADDRESSING_MODEL") ?: AddressingConfig.DEFAULT_MODEL,
+                names = readEnv("ADDRESSING_NAMES")?.split(',')?.map(String::trim)?.filter(String::isNotEmpty).orEmpty(),
+                shadow = readBooleanEnv("ADDRESSING_SHADOW") ?: false,
             )
         }
 

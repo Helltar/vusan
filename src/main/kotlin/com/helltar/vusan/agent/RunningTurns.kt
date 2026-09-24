@@ -36,6 +36,10 @@ internal class RunningTurns<K : Any> {
         }
     }
 
+    /** Whether that conversation has anything under way, running or waiting in its line. */
+    fun holds(key: K): Boolean =
+        synchronized(turns) { turns.containsKey(key) }
+
     /** Cancels everything that conversation has under way and reports whether there was anything. */
     fun cancel(key: K): Boolean {
         val held = synchronized(turns) { turns[key]?.toList() }.orEmpty()

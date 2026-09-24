@@ -74,6 +74,23 @@ class RunningTurnsTest {
     }
 
     @Test
+    fun `a conversation is held while a turn of it runs, and let go after`() = runBlocking {
+        val turns = RunningTurns<String>()
+        val started = CompletableDeferred<Unit>()
+        val release = CompletableDeferred<Unit>()
+
+        val running = async { turns.track("alice") { started.complete(Unit); release.await() } }
+
+        started.await()
+        assertTrue(turns.holds("alice"))
+        assertFalse(turns.holds("bob"))
+
+        release.complete(Unit)
+        running.await()
+        assertFalse(turns.holds("alice"))
+    }
+
+    @Test
     fun `a stop takes every turn the conversation has under way`() = runBlocking {
         val turns = RunningTurns<String>()
         val first = CompletableDeferred<Unit>()

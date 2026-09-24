@@ -99,18 +99,34 @@ class AgentRunner(
         val key = request.context.scope
         val messages = Messages.of(request.context.language)
 
+        // a message nobody tagged the bot in may not have been meant for it at all, so it is turned away
+        // in silence: "hold on" dropped into someone else's conversation is the one reply worse than none.
+        fun refusal(reply: String): AgentResult {
+            if (!request.context.ambient) return AgentResult(outputs = emptyList(), comment = reply)
+
+            log.info {
+                "ambient message turned away unanswered: chat=${request.context.chat.id} user=${request.context.sender.id}"
+            }
+
+            return AgentResult(outputs = emptyList(), comment = null)
+        }
+
         // tracked from the line on, so a stop takes the person's waiting messages along with the one
         // that is running instead of letting the next of them start.
         val result =
             running.track(key) {
                 conversationLocks.withLockIfRoom(key) {
                     admission.admit { runAgent(request, onToolStarting, narrator) }
-                        ?: AgentResult(outputs = emptyList(), comment = messages.overloadedReply)
+                        ?: refusal(messages.overloadedReply)
                 }
             }
 
-        return result ?: AgentResult(outputs = emptyList(), comment = messages.busyReply)
+        return result ?: refusal(messages.busyReply)
     }
+
+    /** Whether this conversation has a turn running or waiting in its line. */
+    fun hasTurnUnderWay(scope: ConversationScope): Boolean =
+        running.holds(scope)
 
     /**
      * Cancels what this conversation has under way — the turn it is running and the person's messages
@@ -220,6 +236,7 @@ class AgentRunner(
                     toolEvents = toolEvents,
                     tokenUsages = tokenUsages,
                     onToolStarting = onToolStarting,
+                    mayStaySilent = context.ambient,
                 )
             } catch (e: Throwable) {
                 e.rethrowIfCancellation()
@@ -252,7 +269,11 @@ class AgentRunner(
         val comment = extractFinalComment(answer, outputs)
 
         if (outputs.isEmpty() && comment.isNullOrBlank()) {
-            log.info { "agent produced no output for chat=${context.chat.id} user=${context.sender.id}; staying silent" }
+            log.info {
+                "agent produced no output for chat=${context.chat.id} user=${context.sender.id}; staying silent" +
+                        if (context.ambient) " ambient=[true]" else ""
+            }
+
             return AgentResult(outputs = emptyList(), comment = null)
         }
 
@@ -388,6 +409,7 @@ class AgentRunner(
         toolEvents: MutableList<ToolEvent>,
         tokenUsages: MutableList<TokenUsage>,
         onToolStarting: (activity: ToolActivity?) -> Unit,
+        mayStaySilent: Boolean,
     ): String {
         suspend fun run(prompt: PromptConversation): String =
             agentFactory
@@ -400,6 +422,7 @@ class AgentRunner(
                     toolEvents = toolEvents::add,
                     tokenUsage = tokenUsages::add,
                     onToolStarting = onToolStarting,
+                    mayStaySilent = mayStaySilent,
                 )
                 .run(currentTurn)
 

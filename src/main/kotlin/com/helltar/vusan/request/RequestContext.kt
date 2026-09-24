@@ -63,6 +63,12 @@ data class RequestContext(
     val replyToMessageId: String? = null,
     val attachedFiles: List<AttachedFile> = emptyList(),
     val language: Language = Language.DEFAULT,
+    /**
+     * Nothing called the bot outright — no mention, reply or command — and a classifier judged the
+     * message meant for it. That judgement can be wrong, so such a turn may end in silence, and is
+     * turned away without a word when the conversation has no room for it.
+     */
+    val ambient: Boolean = false,
 ) {
 
     /**

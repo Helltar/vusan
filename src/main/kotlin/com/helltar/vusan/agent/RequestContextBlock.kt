@@ -39,6 +39,12 @@ internal fun RequestContext.toPromptBlock(previousExchangeAt: Instant? = null): 
             sender.username?.asMetadataValue()?.let { add("- username: $it") }
             sender.languageCode?.asMetadataValue()?.let { add("- client_language: $it") }
             previousExchangeAt?.let(::elapsedSinceOrNull)?.let { add("- last_exchange: $it") }
+
+            if (ambient) {
+                add("")
+                add("Addressing:")
+                add("- implicit: nobody mentioned you, replied to you or used a command; this message was judged to be meant for you")
+            }
         }
 
     return xmlBlock("message_context", lines.joinToString("\n"))

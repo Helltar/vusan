@@ -584,6 +584,47 @@ messages in a chat. Asking the agent to forget the group log wipes that chat's m
 cached daily recap; `/clear` does not touch it, since the log belongs to the group rather than to
 the person running the command.
 
+## Answering without a mention
+
+In a group Vusan answers a mention, a reply to its message, or a command. With this on, it also
+answers a message that calls it by name — «robin, what do you think» — or follows up on what it just
+said, with no mention at all. A small separate model decides whether each such message is meant for
+Vusan; everything that calls it outright is answered exactly as before, without asking that model.
+
+```dotenv
+OPENAI_ADDRESSING_API_KEY=sk-proj-qwerty
+ADDRESSING_NAMES=robin,robbie
+ADDRESSING_SHADOW=true
+```
+
+| Variable                    | Default          | Description                                                     |
+|-----------------------------|------------------|-----------------------------------------------------------------|
+| `OPENAI_ADDRESSING_API_KEY` | —                | Turns the feature on. Can reuse your OpenAI key.                |
+| `OPENAI_ADDRESSING_MODEL`   | `gpt-5.6-luna`   | OpenAI model that decides; never the chat model.                |
+| `ADDRESSING_NAMES`          | from the profile | Spellings the chat uses, comma-separated.                       |
+| `ADDRESSING_SHADOW`         | `false`          | `true` decides and logs every verdict, but never answers.       |
+
+- **Names** — the bot's Telegram name is always one of them. Without `ADDRESSING_NAMES` the other is
+  its handle minus the `bot` ending, so `@robinbot` answers to «robin». A name matches at the start of
+  a word in any case, so an ending the language adds to it still counts.
+- **What is asked about** — a message that names Vusan, one from someone whose request it is still
+  answering, and any message within five minutes of its reply while that reply is still among the
+  last six lines. Nothing else in the chat is ever sent anywhere.
+- **What is sent** — that one message and at most six lines before it, none older than ten minutes,
+  with names. At most twenty messages per chat a minute; past that, and on any error or a verdict
+  slower than five seconds, Vusan simply stays out.
+- **What is not asked about** — voice messages, stickers, edits, forwards, commands, and messages
+  from bots or from a channel.
+- **While Vusan is busy** — a message it was called into by name waits its turn like a mention
+  does, and is dropped without a word if the line is full. If the answer before it already covered
+  it, or it turns out to be for somebody else, Vusan may stay silent.
+- **Shadow mode** — the way to start: each verdict goes to the log as
+  `ambient verdict: chat=[…] msg=[…] gate=[…] verdict=[…]` without the text, and the message id finds
+  the text in the group log when a verdict needs a second look.
+
+It needs the [group log](#group-log), which is where the recent lines come from; with
+`GROUP_LOG_ENABLED=false` it stays off, and startup says so.
+
 ## Scheduled tasks
 
 Scheduled tasks are built in. The agent can schedule them in three forms:

@@ -102,6 +102,8 @@ class AgentFactory(
         toolEvents: (ToolEvent) -> Unit,
         tokenUsage: (TokenUsage) -> Unit,
         onToolStarting: (activity: ToolActivity?) -> Unit = {},
+        // a turn nobody called the bot into outright may end without a word; see `owesDelivery`.
+        mayStaySilent: Boolean = false,
     ): AIAgent<String, String> {
         val seededPrompt =
             prompt(id = "vusan-turn-$scope", params = chatParams.forConversation(scope.toString())) {
@@ -143,7 +145,9 @@ class AgentFactory(
             promptExecutor = promptExecutor,
             agentConfig = agentConfig,
             strategy =
-                vusanSingleRunStrategy(outbox, preparation.toolCatalog, toolBudget, maxIterations, scope),
+                vusanSingleRunStrategy(
+                    outbox, preparation.toolCatalog, toolBudget, maxIterations, scope, mayStaySilent,
+                ),
             toolRegistry = preparation.toolCatalog.registry,
             id = "vusan-turn-$scope",
         ) {
@@ -238,6 +242,7 @@ private fun vusanSingleRunStrategy(
     toolBudget: TurnToolBudget,
     maxIterations: Int,
     scope: ConversationScope,
+    mayStaySilent: Boolean,
 ): AIAgentGraphStrategy<String, String> =
     strategy<String, String>("single_run") {
         var nudged = false
@@ -255,12 +260,8 @@ private fun vusanSingleRunStrategy(
             llm.writeSession { tools = catalog.visibleDescriptors() }
         }
 
-        // the model ended its turn without putting anything in front of the user: it delivered
-        // nothing (no tool call to execute, no caption text) and the outbox holds nothing to send. an
-        // announced plan does not count as delivering — that is the promise, not the answer. nudge at
-        // most once to avoid looping on a stubbornly empty model.
-        fun undelivered(msg: Message.Assistant): Boolean =
-            !nudged && msg.deliveredNothing() && !outbox.hasQueuedOutput
+        fun undelivered(msg: Message.Assistant, silenceAllowed: Boolean = false): Boolean =
+            owesDelivery(msg, nudged, outbox.hasQueuedOutput, silenceAllowed)
 
         val nodeNarrowTools by node<String, String>("narrowVisibleTools") { message ->
             sendVisibleTools()
@@ -368,7 +369,7 @@ private fun vusanSingleRunStrategy(
         edge(nodeStart forwardTo nodeNarrowTools)
         edge(nodeNarrowTools forwardTo nodeCallLLM)
         edge(nodeCallLLM forwardTo nodeExecuteTool onToolCalls { true })
-        edge(nodeCallLLM forwardTo nodeNudgeDeliver onCondition { undelivered(it) })
+        edge(nodeCallLLM forwardTo nodeNudgeDeliver onCondition { undelivered(it, silenceAllowed = mayStaySilent) })
         finishWhenNoToolCalls(nodeCallLLM)
 
         edge(nodeExecuteTool forwardTo nodeWrapUp onCondition { toolBudgetSpent })
@@ -458,6 +459,22 @@ private const val DELIVER_NUDGE =
     "Your turn ended without sending anything to the user — no message, media, or reaction was delivered. " +
             "Deliver your answer now by calling `sendMessage` (or the appropriate media or reaction tool). " +
             "Do not reply with empty text."
+
+// the model ended its turn without putting anything in front of the user: it delivered nothing (no tool
+// call to execute, no caption text) and the outbox holds nothing to send. an announced plan does not count
+// as delivering — that is the promise, not the answer. nudged at most once, to avoid looping on a
+// stubbornly empty model.
+//
+// a turn nobody called the bot into may end in silence, but only on its first reply: a model that sees the
+// message was not for it says nothing before it calls anything, while an empty reply after a round of tools
+// is the flaky provider the nudge exists for, and silence then would throw the work away.
+internal fun owesDelivery(
+    reply: Message.Assistant,
+    nudged: Boolean,
+    outboxHasOutput: Boolean,
+    silenceAllowed: Boolean,
+): Boolean =
+    !silenceAllowed && !nudged && reply.deliveredNothing() && !outboxHasOutput
 
 // true when the assistant ended its turn with nothing for the user: no tool call left to execute
 // (so nothing more is coming this turn) and no plain text to fall back on as a caption.

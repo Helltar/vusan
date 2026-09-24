@@ -20,3 +20,19 @@ internal data class BotProfile(
 internal suspend fun TelegramClient.botProfile(): BotProfile =
     api { executeAsync(GetMe()) }
         .let { BotProfile(userId = it.id, username = it.userName, displayName = it.firstName) }
+
+/**
+ * The names people call the bot by in a group: its profile name first, then the ones the deployment
+ * lists — or, when it lists none, its handle without the `bot` Telegram makes every handle end in,
+ * since `@vusanbot` is spoken of as «vusan».
+ */
+internal fun BotProfile.addressingNames(configured: List<String>): List<String> {
+    val spoken = configured.ifEmpty { listOfNotNull(username?.replace(BOT_SUFFIX, "")) }
+
+    return (listOfNotNull(displayName) + spoken)
+        .map(String::trim)
+        .filter(String::isNotEmpty)
+        .distinctBy(String::lowercase)
+}
+
+private val BOT_SUFFIX = Regex("_?bot$", RegexOption.IGNORE_CASE)

@@ -65,6 +65,7 @@ internal class AgentTurns(
         inputKind: String,
         loadRepliedAttachment: Boolean = true,
         attachedFiles: List<AttachedFile> = emptyList(),
+        ambient: Boolean = false,
     ) {
         // every reply describes what it answers, the bot's own messages included: the history that would
         // otherwise carry them belongs to one person and one chat, so in a group the message is missing
@@ -95,6 +96,7 @@ internal class AgentTurns(
                     ?.takeIf { isReplyToOtherUser(message.replyAuthorIdOrNull(), botProfile.userId) }
                     ?.toString(),
             inputKind = inputKind,
+            ambient = ambient,
         )
     }
 
@@ -105,6 +107,7 @@ internal class AgentTurns(
         attachedFiles: List<AttachedFile>,
         replyToMessageId: String?,
         inputKind: String,
+        ambient: Boolean,
     ) {
         val sender =
             message.from ?: run {
@@ -123,6 +126,7 @@ internal class AgentTurns(
                         replyToMessageId = replyToMessageId,
                         attachedFiles = attachedFiles,
                         language = message.language,
+                        ambient = ambient,
                     ),
                 prompt = agentInput,
                 conversationEntry = conversationInput,
@@ -197,6 +201,7 @@ internal class AgentTurns(
                 context.sender.displayName?.let { append(" name=[$it]") }
                 context.replyToMessageId?.let { append(" replyTo=$it") }
                 context.attachedFile?.let { append(" attachedFile=[${it.name}]") }
+                if (context.ambient) append(" ambient=[true]")
                 append(" text=[${request.prompt.collapseWhitespaceAndCap(LOG_PROMPT_MAX_CHARS).orEmpty()}]")
             }
         }

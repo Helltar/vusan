@@ -159,7 +159,16 @@ A normal user message travels:
    only replies, mentions, or targeted commands), and past it `isAccepted` claims the message in `AnsweredMessages`; a
    message already claimed is dropped with a warning, because Telegram hands the same one over more than once — as an
    edit of it, and as a plain redelivery under a fresh update id, which the polling session's own duplicate filter does
-   not catch.
+   not catch. On the text, caption and album paths a group message `shouldHandle` turned away gets one more look when
+   `OPENAI_ADDRESSING_API_KEY` is set: `TelegramBotRunner.acceptance` builds an `AmbientCandidate`
+   (`telegram/inbound/AmbientCandidates.kt` — typed text or a caption only, never an edit, forward, command, bot or
+   channel post) and asks `agent/addressing/AmbientAddressing`. That puts it to a classifier model of its own only when
+   the message names the bot, its author has a turn under way (`AgentRunner.hasTurnUnderWay`), or the bot spoke within
+   five minutes and that line is among the six the classifier is shown, read from the group log; nothing else leaves
+   the machine. A failure, a timeout, an unreadable answer or a chat over twenty checks a minute all mean no, so it can
+   add answers and never take one away, and it costs nothing to a message the bot answers today. A yes is claimed like
+   any other message and runs as an ordinary turn with `RequestContext.ambient` set; with `ADDRESSING_SHADOW` every
+   verdict is logged and none acted on.
 3. **Normalize** — text is sanitized (`MessageSanitizer`); voice/audio is transcribed (`VoiceTranscriber` → `stt/`);
    stickers become a metadata prompt; a rich message — which never carries `text` — is flattened back into rich markdown
    (`telegram/inbound/RichMessageText.kt`), both as its own input and when one is quoted in a reply, capped on the way
@@ -181,7 +190,8 @@ A normal user message travels:
    from `agent/TurnAdmission`. One turn per conversation runs at a time, because a turn reads the history when it
    starts and appends to it when it ends: the next message waits with its typing indicator and starts with the answer
    before it already in its history. `MAX_QUEUED_TURNS_PER_CONVERSATION` messages may wait that way, in the order they
-   arrived, and the one after that is answered "busy". Admission is the ceiling every conversation shares —
+   arrived, and the one after that is answered "busy" — or, for an ambient message, turned away without a word, since
+   "hold on" dropped into someone else's conversation is worse than silence; the same goes for "overloaded". Admission is the ceiling every conversation shares —
    `MAX_CONCURRENT_TURNS` turns at once, the rest waiting the same way, and only a queue several times that long
    answered "overloaded" instead of queued; a queued turn (a scheduled fire, a pressed button) waits in both rather
    than being refused. The lock is taken **before** the place in every path: a turn that holds a place is running and
@@ -234,7 +244,10 @@ A normal user message travels:
       that koog decodes into the defaults;
     - a turn that ends having delivered nothing — no `sendMessage`, media, or reaction, and empty assistant text (flaky
       providers return an empty completion after a batch of tool results) — gets one nudge to actually deliver before
-      finishing, so a full turn of research does not collapse into silence.
+      finishing, so a full turn of research does not collapse into silence. An ambient turn is exempt on its first
+      reply only (`owesDelivery`): the system prompt lets it end at once, empty and with no tool calls, when the
+      message turns out to be for someone else or already answered, while an empty reply after tools is still the
+      flaky provider and still nudged.
 
    It also lands a turn that runs long instead of letting it crash. Koog counts one iteration per graph node and throws
    `AIAgentMaxNumberOfIterationsReachedException` the moment `AGENT_MAX_ITERATIONS` is passed, which would throw away
@@ -662,6 +675,7 @@ A symptom-to-source map for finding the right file fast. Paths are under
 |---|---|
 | The same message is answered twice, or editing one to add the mention does nothing | `TelegramBotRunner.startsTurnOnEdit` (what an edit must pass to start a turn) + `TelegramBotRunner.isAccepted`/`AnsweredMessages` (one turn per message, per-process, empty after a restart) |
 | Vusan ignores a message entirely | `TelegramBotRunner.passesAllowlist` and `request/AccessPolicy.kt` (the `ALLOWED_IDS` allowlist and the `BANNED_IDS` ban list, both platform-qualified, applied on the polling loop), then `telegram/inbound/MessageFilter.kt` (`shouldHandle` — group reply/mention rules) |
+| Vusan answers a group message nobody tagged it in, or does not answer one that named it | `ambient verdict` lines in the log (gate, verdict, latency, never the text), then `agent/addressing/AmbientAddressing.kt` (the gate, the windows, the rate) + `LlmAddressingClassifier.kt` (the measured wording) + `telegram/inbound/AmbientCandidates.kt` (what is never asked about) |
 | Container says `Up` but the bot answers nothing | the `com.helltar:heartbeat` library (the `/tmp/health` freshness signal, and the `ERROR` logged once when polling stalls) + `TelegramBotRunner.start` (the `getUpdates` generator hook that feeds it) |
 | Reply says "still working on your previous request", or a second message is answered only after the first | `agent/ConversationLocks.kt` — one turn per conversation, `MAX_QUEUED_TURNS_PER_CONVERSATION` waiting behind it, the next refused |
 | A message goes unanswered after a restart or deploy, or one is answered twice | `telegram/UpdateSpool.kt` (what is kept, what is replayed, and `SPOOL_RETENTION`) + `telegram/TelegramBotRunner.kt` (the blocking spool write in the poll callback, and `settle` on pickup) + `telegram/AnsweredMessages.kt` (the one-turn-per-message claim) |

@@ -120,8 +120,17 @@ class RequestContextBlockTest {
     private fun promptWithPreviousExchange(ago: Duration): String =
         context().toPromptBlock(previousExchangeAt = Instant.now().minus(ago))
 
+    @Test
+    fun `a message nobody tagged the bot in says so`() {
+        val chat = ChatContext(id = "-100", isPrivate = false)
+
+        assertTrue(context(chat = chat, ambient = true).toPromptBlock().contains("- implicit: nobody mentioned you"))
+        assertFalse(context(chat = chat).toPromptBlock().contains("Addressing:"))
+    }
+
     private fun context(
         chat: ChatContext = ChatContext(id = "1", isPrivate = true),
         sender: SenderContext = SenderContext(id = "2"),
-    ) = RequestContext(platform = Platform.TELEGRAM, chat = chat, sender = sender)
+        ambient: Boolean = false,
+    ) = RequestContext(platform = Platform.TELEGRAM, chat = chat, sender = sender, ambient = ambient)
 }

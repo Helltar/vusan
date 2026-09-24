@@ -6,6 +6,8 @@ import com.helltar.vusan.agent.AgentFactory
 import com.helltar.vusan.agent.AgentRunner
 import com.helltar.vusan.agent.FallbackInUse
 import com.helltar.vusan.agent.FallbackPromptExecutor
+import com.helltar.vusan.agent.addressing.AmbientAddressing
+import com.helltar.vusan.agent.addressing.LlmAddressingClassifier
 import com.helltar.vusan.agent.ContextWindowPolicy
 import com.helltar.vusan.agent.conversation.ConversationRepository
 import com.helltar.vusan.agent.conversation.LlmConversationCompactor
@@ -23,6 +25,7 @@ import com.helltar.vusan.tasks.TasksRepository
 import com.helltar.vusan.telegram.ChatProfiles
 import com.helltar.vusan.telegram.PollRegistry
 import com.helltar.vusan.telegram.TelegramBotRunner
+import com.helltar.vusan.telegram.addressingNames
 import com.helltar.vusan.telegram.botProfile
 import com.helltar.vusan.telegram.profilePhotoReference
 import com.helltar.vusan.telegram.callback.InlineChoiceHandler
@@ -57,6 +60,7 @@ suspend fun main() = coroutineScope {
     var publicHttp: HttpClient? = null
     var executor: PromptExecutor? = null
     var visionExecutor: AutoCloseable? = null
+    var addressingExecutor: AutoCloseable? = null
 
     try {
         Db.connect(config)
@@ -91,6 +95,7 @@ suspend fun main() = coroutineScope {
                 }
             }
         config.openAiVision?.let { verifyOpenAiModel(http, it.apiKey, it.model) }
+        config.addressing?.let { verifyOpenAiModel(http, it.apiKey, it.model) }
 
         val llm = resolveLlmRuntime(codexPreflight(config.llmProvider, http, codexAuth), codexAuth)
 
@@ -124,6 +129,22 @@ suspend fun main() = coroutineScope {
 
         // read once and shared: the runner matches mentions against it, the agent is told its own handle.
         val botProfile = telegramClient.botProfile()
+
+        // the classifier's context and the bot's own recent lines both come from the group transcript, so
+        // without one there is nothing to judge a message against and the feature stays off.
+        val ambient =
+            config.addressing?.let { addressing ->
+                val transcript = groupLog ?: return@let null
+                val runtime = resolveAddressingRuntime(addressing, config.llmProvider.requestTimeout)
+                addressingExecutor = runtime.executor
+
+                AmbientAddressing(
+                    LlmAddressingClassifier(runtime.executor, runtime.model, runtime.params),
+                    transcript,
+                    botProfile.addressingNames(addressing.names),
+                    shadow = addressing.shadow,
+                )
+            }
 
         // a picture of the bot itself has to show the same face every time, which text-to-image cannot
         // hold on its own — so the reference is read once, here, and only where it can be used at all:
@@ -191,7 +212,7 @@ suspend fun main() = coroutineScope {
             TelegramBotRunner(
                 telegramClient, config.telegramBotToken, delivery, agentRunner, taskMenu, inlineChoices, tasks,
                 chatProfiles, config.accessPolicy, voiceTranscriber, botProfile, stickerCatalog,
-                groupLog, polls, fallbackInUse,
+                groupLog, polls, fallbackInUse, ambient,
             )
 
         // retention runs on a clock of its own rather than on whoever happens to write next: what needs
@@ -213,7 +234,7 @@ suspend fun main() = coroutineScope {
                 ),
             )
 
-        logStartup(config, llm, fallback, vision, toolRegistryFactory.availableToolNames)
+        logStartup(config, llm, fallback, vision, ambient?.botNames, toolRegistryFactory.availableToolNames)
 
         val botJob = botRunner.start(this)
         val schedulerJob = scheduler.launchIn(this)
@@ -229,6 +250,7 @@ suspend fun main() = coroutineScope {
         }
     } finally {
         visionExecutor?.close()
+        addressingExecutor?.close()
         executor?.close()
         http?.close()
         publicHttp?.close()
@@ -285,6 +307,7 @@ private fun logStartup(
     llm: LlmRuntime,
     fallback: LlmRuntime?,
     vision: VisionRuntime?,
+    ambientNames: List<String>?,
     toolNames: List<String>,
 ) {
     log.info {
@@ -311,6 +334,17 @@ private fun logStartup(
         log.warn {
             "Vision disabled: model=[${llm.model.id}] cannot read images — " +
                     "set OPENAI_VISION_API_KEY to run vision on a separate model"
+        }
+    }
+
+    config.addressing?.let {
+        if (ambientNames == null) {
+            log.warn { "Ambient addressing off: it reads the group log, and GROUP_LOG_ENABLED=false" }
+        } else {
+            log.info {
+                "Ambient addressing: model=[${it.model}] names=[${ambientNames.joinToString(", ")}]" +
+                        if (it.shadow) " shadow=[true] — verdicts are logged and never acted on" else ""
+            }
         }
     }
 

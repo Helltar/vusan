@@ -61,6 +61,19 @@ class AgentFactoryTest {
     }
 
     @Test
+    fun `an empty reply with nothing queued is nudged to deliver once`() {
+        assertTrue(owesDelivery(assistant(), nudged = false, outboxHasOutput = false, silenceAllowed = false))
+        assertFalse(owesDelivery(assistant(), nudged = true, outboxHasOutput = false, silenceAllowed = false))
+        assertFalse(owesDelivery(assistant(), nudged = false, outboxHasOutput = true, silenceAllowed = false))
+    }
+
+    @Test
+    fun `a reply allowed to stay silent is not nudged`() {
+        // an ambient turn that saw the message was not for it; the runner only allows this on the first reply
+        assertFalse(owesDelivery(assistant(), nudged = false, outboxHasOutput = false, silenceAllowed = true))
+    }
+
+    @Test
     fun `trailing empty assistant is dropped before the nudge re-request`() {
         val turn = user("ok then")
         assertEquals(listOf(turn), listOf(turn, assistant()).withoutTrailingEmptyAssistant())

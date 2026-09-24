@@ -3,6 +3,7 @@ package com.helltar.vusan.telegram
 import com.helltar.heartbeat.Heartbeat
 import com.helltar.vusan.agent.AgentRunner
 import com.helltar.vusan.agent.FallbackInUse
+import com.helltar.vusan.agent.addressing.AmbientAddressing
 import com.helltar.vusan.agent.grouplog.GroupLogRepository
 import com.helltar.vusan.agent.albumContextBlock
 import com.helltar.vusan.agent.wrapAudioTranscript
@@ -26,6 +27,7 @@ import com.helltar.vusan.telegram.inbound.BotCommand
 import com.helltar.vusan.telegram.inbound.MessageText
 import com.helltar.vusan.telegram.inbound.VoiceTranscriber
 import com.helltar.vusan.telegram.inbound.VoiceTranscriptionResult
+import com.helltar.vusan.telegram.inbound.ambientCandidateOrNull
 import com.helltar.vusan.telegram.inbound.captionedPartOrNull
 import com.helltar.vusan.telegram.inbound.chatIdLong
 import com.helltar.vusan.telegram.inbound.describeIncomingSticker
@@ -83,6 +85,8 @@ internal class TelegramBotRunner(
     private val groupLog: GroupLogRepository? = null,
     private val polls: PollRegistry? = null,
     fallbackInUse: () -> FallbackInUse? = { null },
+    // answers a group message nobody tagged the bot in when it is meant for it all the same; `null` is off.
+    private val ambient: AmbientAddressing? = null,
 ) {
 
     private val heartbeat = Heartbeat()
@@ -434,13 +438,13 @@ internal class TelegramBotRunner(
     }
 
     private suspend fun handleTextUpdate(message: Message, content: MessageText, botProfile: BotProfile) {
-        if (!message.isAccepted(botProfile)) return
+        val acceptance = message.acceptance(botProfile) ?: return
 
         val userText =
             sanitizeUserText(content, botProfile.userId, botProfile.username)
                 .ifBlank { MENTION_ONLY_PROMPT }
 
-        turns.dispatchToAgent(message, userText, botProfile, inputKind = "text")
+        turns.dispatchToAgent(message, userText, botProfile, inputKind = "text", ambient = acceptance.ambient)
     }
 
     private suspend fun handleTranscribableUpdate(
@@ -545,7 +549,7 @@ internal class TelegramBotRunner(
         inputKind: String,
         noCaptionPrompt: String = MEDIA_ONLY_PROMPT,
     ) {
-        if (!message.isAccepted(botProfile)) return
+        val acceptance = message.acceptance(botProfile) ?: return
 
         val caption =
             message.messageTextOrNull()
@@ -559,6 +563,7 @@ internal class TelegramBotRunner(
             botProfile,
             inputKind = inputKind,
             attachedFiles = listOfNotNull(message.toAttachedFileOrNull(client)),
+            ambient = acceptance.ambient,
         )
     }
 
@@ -568,7 +573,7 @@ internal class TelegramBotRunner(
         val anchor = parts.first()
         val captionedPart = parts.captionedPartOrNull()
 
-        if (!anchor.isAccepted(botProfile, captionSource = captionedPart ?: anchor)) return
+        val acceptance = anchor.acceptance(botProfile, captionSource = captionedPart ?: anchor) ?: return
 
         val photoCount = parts.count { !it.photo.isNullOrEmpty() }
         val videoCount = parts.count { it.video != null || it.animation != null }
@@ -588,6 +593,7 @@ internal class TelegramBotRunner(
             botProfile,
             inputKind = "gallery",
             attachedFiles = attachedFiles,
+            ambient = acceptance.ambient,
         )
     }
 
@@ -606,10 +612,33 @@ internal class TelegramBotRunner(
 
     // the single gate every dispatched message goes through, so it is also where a message is claimed for
     // its one turn: the alternative is remembering to do that at each of the callers.
-    private fun Message.isAccepted(botProfile: BotProfile, captionSource: Message = this): Boolean {
-        if (!shouldHandle(this, botProfile.userId, botProfile.username, captionSource))
-            return false
+    private fun Message.isAccepted(botProfile: BotProfile, captionSource: Message = this): Boolean =
+        shouldHandle(this, botProfile.userId, botProfile.username, captionSource) && claimForTurn()
 
+    // the same gate for the paths a message nobody tagged the bot in may take too. `null` means the bot stays
+    // out. ambient addressing is asked only once everything that calls the bot outright has said no, so it
+    // can add answers but never take one away, and nothing it costs falls on a message the bot answers today.
+    private suspend fun Message.acceptance(botProfile: BotProfile, captionSource: Message = this): Acceptance? {
+        val acceptance =
+            when {
+                shouldHandle(this, botProfile.userId, botProfile.username, captionSource) -> Acceptance.ADDRESSED
+                isAmbientlyAddressed(captionSource) -> Acceptance.AMBIENT
+                else -> return null
+            }
+
+        return acceptance.takeIf { claimForTurn() }
+    }
+
+    private suspend fun Message.isAmbientlyAddressed(captionSource: Message): Boolean {
+        val addressing = ambient ?: return false
+        val sender = senderIdOrNull() ?: return false
+        val waiting = agent.hasTurnUnderWay(conversationScopeOf(sender))
+        val candidate = ambientCandidateOrNull(captionSource, authorWaiting = waiting) ?: return false
+
+        return addressing.isAddressed(candidate)
+    }
+
+    private fun Message.claimForTurn(): Boolean {
         // an edit reaches the agent through the same path as a new message, so without this the two are
         // indistinguishable in the log. it sits behind the addressing check because an edit of a message
         // nobody aimed at the bot starts nothing, and ahead of the claim so a refused duplicate is labeled.
@@ -624,6 +653,13 @@ internal class TelegramBotRunner(
         }
 
         return true
+    }
+
+    // how a message came to be the bot's to answer: somebody called it outright, or ambient addressing
+    // judged a message nobody tagged it in to be meant for it.
+    private enum class Acceptance(val ambient: Boolean) {
+        ADDRESSED(ambient = false),
+        AMBIENT(ambient = true),
     }
 
     private fun Message.startsTurnOnEdit(): Boolean =
