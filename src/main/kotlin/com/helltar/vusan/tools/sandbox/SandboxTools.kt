@@ -28,10 +28,10 @@ class SandboxTools(
     // shared with every other tool of the turn, so a reset here is a reset for them too
     private val sandbox: SandboxClient.PersonSandbox,
     private val outbox: BotOutbox,
-    private val attachedFile: AttachedFile? = null,
+    private val attachedFiles: List<AttachedFile> = emptyList(),
 ) : ToolSet {
 
-    private var attachmentHandled = false
+    private var attachmentsHandled = false
 
     @Tool
     @LLMDescription(SandboxToolDescriptions.RUN_COMMAND)
@@ -43,7 +43,7 @@ class SandboxTools(
     ): String = suspendToolGuard {
         val script = command.requireToolText("Command", MAX_COMMAND_CHARS)
         require(timeoutSeconds >= 0) { "Timeout must not be negative" }
-        val note = placeAttachment()
+        val note = placeAttachments()
         val result = sandbox.exec(script, timeoutSeconds.takeIf { it > 0 })
         listOfNotNull(note, describeCommand(result)).joinToString("\n")
     }
@@ -88,7 +88,7 @@ class SandboxTools(
     ): String = suspendToolGuard {
         val target = path.requireToolText("Path", MAX_PATH_CHARS)
         require(content.length <= MAX_CONTENT_CHARS) { "File content must be at most $MAX_CONTENT_CHARS characters" }
-        val note = placeAttachment()
+        val note = placeAttachments()
         sandbox.writeFile(target, content.toByteArray(Charsets.UTF_8))
         listOfNotNull(note, "Wrote `$target` (${content.length} chars). Use sendFromSandbox to deliver it.").joinToString("\n")
     }
@@ -171,10 +171,15 @@ class SandboxTools(
         }.trim()
     }
 
-    private suspend fun placeAttachment(): String? {
-        if (attachmentHandled) return null
-        attachmentHandled = true
-        val file = attachedFile ?: return null
+    private suspend fun placeAttachments(): String? {
+        if (attachmentsHandled || attachedFiles.isEmpty()) return null
+        attachmentsHandled = true
+
+        return attachedFiles.map { placeAttachment(it) }.joinToString("\n")
+    }
+
+    // a directory per file rather than per turn: the items of one album may well share a name.
+    private suspend fun placeAttachment(file: AttachedFile): String {
         val name = file.name.sanitizeFilename().ifBlank { "attachment" }
         if ((file.fileSizeBytes ?: 0) > MAX_ATTACHMENT_BYTES) return "The attached file `$name` exceeds the 20 MB input limit."
 

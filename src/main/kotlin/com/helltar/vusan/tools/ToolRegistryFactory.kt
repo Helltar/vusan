@@ -230,7 +230,7 @@ class ToolRegistryFactory(
                     // one handle for the turn: a site is published from the sandbox the commands ran in,
                     // and a reset by either set is seen by the other.
                     val sandbox = client.sandboxOf(person)
-                    tools(SandboxTools(sandbox, outbox, context.attachedFile))
+                    tools(SandboxTools(sandbox, outbox, context.attachedFiles))
                     // publishing belongs to the same server: it answers `not_implemented` when it has
                     // no pages role, and says so to the model rather than the tool being missing.
                     tools(ToolGroup.WEB_PUBLISHING, SiteTools(sandbox))

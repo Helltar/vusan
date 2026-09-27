@@ -139,36 +139,47 @@ private fun formatFileSize(bytes: Long): String =
         else -> "$bytes B"
     }
 
-/** Several media items sent as one message, and which tools get to see which of them. */
+/** Several items sent as one message, and which tools get to see which of them. */
 internal fun albumContextBlock(
     itemCount: Int,
     photoCount: Int,
     videoCount: Int,
     attachedFiles: List<AttachedFile>,
 ): String {
+    val otherCount = itemCount - photoCount - videoCount
     val attachedImages = attachedFiles.count { it.kind == AttachedFileKind.IMAGE }
+    val attachedVisuals = attachedFiles.count { it.kind != AttachedFileKind.OTHER }
 
     return xmlBlock(
         "album",
         buildString {
-            append("User sent an album of $itemCount media item(s): $photoCount photo(s), $videoCount video(s). ")
+            append("User sent an album of $itemCount item(s): ")
+            append("$photoCount photo(s), $videoCount video(s), $otherCount other file(s). ")
 
-            when {
-                attachedFiles.isEmpty() ->
-                    append("None of the items is available as an attached file; ")
-
-                attachedImages > 1 ->
-                    append(
-                        "All $attachedImages images are attached at once, and `editImage` works on them " +
-                                "together — combining them, putting one into another, building a collage. " +
-                                "Every other tool sees only the first item; ",
-                    )
-
-                else -> append("Only the first item, `${attachedFiles.first().name}`, is attached; ")
+            if (attachedFiles.isEmpty()) {
+                append("None of the items is available as an attached file; mention this if the request depends on them.")
+                return@buildString
             }
 
-            append("mention this if the request depends on the other items.")
-        },
+            // the sender picked every one of these names, and they all land inside the block.
+            val names = attachedFiles.joinToString(", ") { "`${it.name.neutralizePromptBlocks()}`" }
+
+            if (attachedFiles.size < itemCount)
+                append("Only ${attachedFiles.size} of them are attached, and the rest cannot be opened: $names. ")
+            else
+                append("All of them are attached: $names. ")
+
+            append("The sandbox command or file-writing tool copies every attached item into `inbox/` and returns each exact path. ")
+
+            if (attachedImages > 1)
+                append(
+                    "`editImage` works on all $attachedImages images together — combining them, " +
+                            "putting one into another, building a collage. ",
+                )
+
+            if (attachedVisuals > 1)
+                append("`describeImage` and `describeVideo` see only the first item; mention this if the request depends on how the others look.")
+        }.trim(),
     )
 }
 

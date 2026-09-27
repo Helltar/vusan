@@ -74,7 +74,7 @@ data class RequestContext(
     /**
      * The attachment a tool means when it can only work on one — an album's first item.
      *
-     * Only image editing takes the whole [attachedFiles] list; everything else looks at this one, and
+     * The sandbox and image editing take the whole [attachedFiles] list; vision looks at this one, and
      * the album's own context block tells the model so.
      */
     val attachedFile: AttachedFile?

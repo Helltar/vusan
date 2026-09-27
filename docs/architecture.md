@@ -121,7 +121,7 @@ A normal user message travels:
    video note, GIF, document). Album (media group) parts arrive as separate updates sharing a `media_group_id`; the
    runner buffers them until the update stream goes quiet (`ALBUM_QUIET_PERIOD`, or the ten-item album cap) and handles
    the batch as one gallery message: the caption may sit on any album part, every inspectable item becomes an
-   `AttachedFile` on the turn, and the agent is told that only image editing takes them all while every other tool sees
+   `AttachedFile` on the turn, the sandbox and image editing take them all, and the agent is told that vision sees only
    the first. `/tasks`, `/clear`, `/stop`, and task-menu
    callback queries take direct paths that never enter the agent loop. Every pressed button reaches `CallbackRouter`,
    which rechecks the allowlist and picks the flow: an agent-created inline-choice callback is validated and consumed by
@@ -640,9 +640,9 @@ history still uses `(userId, chatId)`; only the files and the commands running i
   server refuses to exceed before sending any of it. Refusals carry the server's error `code`, which decides
   what the model is told — capacity and availability read as "try again", everything else as the server's own
   sentence; no answer at all reads as temporarily unavailable.
-- **`SandboxTools`** — the model-facing surface: run, read, cancel, write, delete, reset, send. It copies the
-  turn's attachment into `inbox/<unique-id>/<name>` before the first command that might want it, once per turn,
-  and renders a command as text the model can act on — the exit code, and the session limit that explains it
+- **`SandboxTools`** — the model-facing surface: run, read, cancel, write, delete, reset, send. It copies each of
+  the turn's attachments into its own `inbox/<unique-id>/<name>` before the first command that might want them,
+  once per turn, and renders a command as text the model can act on — the exit code, and the session limit that explains it
   when the memory or process cap is what killed it.
 - **What the bot does not decide** — the sandbox image, memory, home size, idle stop, retention and network
   policy all belong to the server. The bot reads `GET /v1/info` for the limits it must respect, and trims a

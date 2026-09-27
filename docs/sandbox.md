@@ -63,8 +63,9 @@ instead of keeping its own copy.
 
 ## Files
 
-- **Attachments** — copied to `inbox/<unique-id>/<filename>` before the first command that might want
-  them, and the tool result names the exact path. Repeated filenames never overwrite.
+- **Attachments** — every file the message carried, an album's included, each copied to its own
+  `inbox/<unique-id>/<filename>` before the first command that might want them, and the tool result
+  names every exact path. Repeated filenames never overwrite.
 - **Paths** — relative to the home, `/home/sandbox`. `writeSandboxFile` replaces a file atomically
   and creates parent directories; `deleteSandboxFile` removes one exact path, recursively for a
   directory, and leaves running commands alone.

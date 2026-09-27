@@ -57,7 +57,7 @@ class SandboxToolsTest {
         execs: String = """{"execs":[]}""",
         failure: Pair<HttpStatusCode, String>? = null,
         files: Map<String, ByteArray> = emptyMap(),
-        attached: AttachedFile? = null,
+        attached: List<AttachedFile> = emptyList(),
         outbox: BotOutbox = BotOutbox(),
     ): SandboxTools {
         val engine = MockEngine { request ->
@@ -178,15 +178,53 @@ class SandboxToolsTest {
             name = "orders.csv", fileSizeBytes = 9, mimeType = "text/csv", kind = AttachedFileKind.OTHER,
             loadBytes = { "id,total\n".toByteArray() },
         )
-        val firstTurn = tools(attached = attached)
+        val firstTurn = tools(attached = listOf(attached))
         val result = firstTurn.runCommand("ls inbox")
         val firstPath = writes.single().first
         assertTrue(firstPath.startsWith("inbox/") && firstPath.endsWith("/orders.csv"))
         assertContains(result, firstPath)
         firstTurn.runCommand("ls inbox")
         assertEquals(1, writes.size)
-        tools(attached = attached).writeSandboxFile("notes.txt", "review the totals")
+        tools(attached = listOf(attached)).writeSandboxFile("notes.txt", "review the totals")
         assertNotEquals(firstPath, writes[1].first)
+    }
+
+    // two items of one album may carry the same name, so each gets a directory of its own.
+    @Test
+    fun `every attachment of an album is copied, each to its own path`() = runBlocking {
+        val album = listOf("photo.jpg", "photo.jpg", "notes.txt").map { name ->
+            AttachedFile(
+                name = name, fileSizeBytes = 1, mimeType = null, kind = AttachedFileKind.OTHER,
+                loadBytes = { byteArrayOf(1) },
+            )
+        }
+        val sandbox = tools(attached = album)
+        val result = sandbox.runCommand("ls inbox")
+        val paths = writes.map { it.first }
+        assertEquals(3, paths.distinct().size)
+        assertEquals(listOf("photo.jpg", "photo.jpg", "notes.txt"), paths.map { it.substringAfterLast('/') })
+        paths.forEach { assertContains(result, it) }
+        sandbox.writeSandboxFile("notes.md", "done")
+        assertEquals(4, writes.size)
+    }
+
+    // one file over the limit costs the model that file, not the rest of the album.
+    @Test
+    fun `an oversized attachment is named while the others still arrive`() = runBlocking {
+        val album = listOf(
+            AttachedFile(
+                name = "huge.bin", fileSizeBytes = 21L * 1024 * 1024, mimeType = null, kind = AttachedFileKind.OTHER,
+                loadBytes = { error("An oversized attachment must not be downloaded") },
+            ),
+            AttachedFile(
+                name = "small.txt", fileSizeBytes = 1, mimeType = "text/plain", kind = AttachedFileKind.OTHER,
+                loadBytes = { byteArrayOf(1) },
+            ),
+        )
+        val result = tools(attached = album).runCommand("ls inbox")
+        assertContains(result, "`huge.bin` exceeds the 20 MB input limit")
+        assertTrue(writes.single().first.endsWith("/small.txt"))
+        assertContains(result, writes.single().first)
     }
 
     @Test
@@ -195,7 +233,7 @@ class SandboxToolsTest {
             name = "table.csv", fileSizeBytes = 1, mimeType = "text/csv", kind = AttachedFileKind.OTHER,
             loadBytes = { byteArrayOf(1) },
         )
-        val result = tools(attached = attached).writeSandboxFile("script.py", "print(1)")
+        val result = tools(attached = listOf(attached)).writeSandboxFile("script.py", "print(1)")
         assertContains(result, writes.first().first)
     }
 
@@ -231,7 +269,7 @@ class SandboxToolsTest {
             name = "unused.csv", fileSizeBytes = 1, mimeType = "text/csv", kind = AttachedFileKind.OTHER,
             loadBytes = { error("Cleanup must not download attachments") },
         )
-        val result = tools(attached = attached).deleteSandboxFile("project/build output")
+        val result = tools(attached = listOf(attached)).deleteSandboxFile("project/build output")
         assertEquals(listOf("project/build output"), deletions)
         assertTrue(writes.isEmpty())
         assertContains(result, "Deleted")
@@ -244,7 +282,7 @@ class SandboxToolsTest {
             name = "unused.csv", fileSizeBytes = 1, mimeType = "text/csv", kind = AttachedFileKind.OTHER,
             loadBytes = { error("A reset must not download attachments") },
         )
-        val result = tools(attached = attached).resetSandbox()
+        val result = tools(attached = listOf(attached)).resetSandbox()
         assertEquals(1, resets)
         assertTrue(deletions.isEmpty() && writes.isEmpty())
         assertContains(result, "empty again")
