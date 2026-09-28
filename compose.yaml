@@ -18,8 +18,3 @@ services:
       # start — `mkdir -p data` — because a bind mount Docker creates comes out owned by root while
       # the bot runs as uid 1000.
       - "${VUSAN_HOST_DIR:-./data}:/app/data"
-    logging:
-      driver: json-file
-      options:
-        max-size: "10m"
-        max-file: "3"
