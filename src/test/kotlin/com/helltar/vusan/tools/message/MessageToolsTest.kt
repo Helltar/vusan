@@ -76,7 +76,7 @@ class MessageToolsTest {
     }
 
     @Test
-    fun `announcePlan refuses empty text`() = runBlocking {
+    fun `announcePlan refuses empty text`() = runBlocking<Unit> {
         toolFailure { MessageTools(BotOutbox(), RecordingNarrator(reaches = true)).announcePlan("   ") }
     }
 

@@ -75,7 +75,7 @@ class PollRegistryTest {
     }
 
     @Test
-    fun `a poll old enough to be forgotten is dropped by the maintenance pass`() = runBlocking {
+    fun `a poll old enough to be forgotten is dropped by the maintenance pass`() = runBlocking<Unit> {
         val forgetful = PollRegistry(20.milliseconds)
 
         forgetful.remember("p1", chatId = -100L, output = quiz)
