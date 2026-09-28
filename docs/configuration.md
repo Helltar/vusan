@@ -378,7 +378,7 @@ search:
 | Variable               | Default                | Description                      |
 |------------------------|------------------------|----------------------------------|
 | `ELEVENLABS_VOICE_ID`  | `VD1if7jDVYtAKs4P0FIY` | Voice used for generated speech. |
-| `ELEVENLABS_TTS_MODEL` | `eleven_v3`            | ElevenLabs TTS model.            |
+| `ELEVENLABS_TTS_MODEL` | `eleven_v4`            | ElevenLabs TTS model.            |
 
 The same key also enables the round video message — the reference photo from
 [Appearance](#appearance) in the circle, the same voice over it, drawn by `ffmpeg`. A deployment

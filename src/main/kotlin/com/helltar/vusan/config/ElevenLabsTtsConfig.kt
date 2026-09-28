@@ -11,7 +11,7 @@ data class ElevenLabsTtsConfig(
     }
 
     companion object {
-        const val DEFAULT_MODEL = "eleven_v3"
+        const val DEFAULT_MODEL = "eleven_v4"
 
         // https://elevenlabs.io/app/voice-library?voiceId=VD1if7jDVYtAKs4P0FIY
         const val DEFAULT_VOICE_ID = "VD1if7jDVYtAKs4P0FIY"
