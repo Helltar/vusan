@@ -141,6 +141,9 @@ class CodexAuthStore(
     private val authFile: Path = defaultCodexAuthFile(),
 ) {
 
+    /** How much of this account's subscription the bot has drawn, chat and pictures alike. */
+    val limits = CodexLimits()
+
     private val mutex = Mutex()
     private var cached: CachedCodexTokens? = null
     private var lastRefreshFailure: Instant? = null

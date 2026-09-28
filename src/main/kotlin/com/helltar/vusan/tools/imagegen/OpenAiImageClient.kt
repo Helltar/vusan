@@ -10,6 +10,7 @@ import io.ktor.client.call.*
 import io.ktor.client.plugins.*
 import io.ktor.client.request.*
 import io.ktor.client.request.forms.*
+import io.ktor.client.statement.*
 import io.ktor.http.*
 import java.util.*
 import kotlin.time.Duration.Companion.minutes
@@ -84,7 +85,7 @@ class OpenAiImageClient(private val http: HttpClient, private val auth: ImageAut
                             outputCompression = platformOnly(OUTPUT_COMPRESSION),
                         ),
                     )
-                }.body()
+                }.observed().body()
             }
 
         return response.firstImageBytes()
@@ -175,7 +176,7 @@ class OpenAiImageClient(private val http: HttpClient, private val auth: ImageAut
                     quality = config.quality,
                 ),
             )
-        }.body()
+        }.observed().body()
 
     // a refusal from the content filter is a different answer than a failed call, so it is turned into
     // its own exception here, where the provider's error shape is known.
@@ -196,6 +197,15 @@ class OpenAiImageClient(private val http: HttpClient, private val auth: ImageAut
         when (auth) {
             is ImageAuth.ApiKey -> PLATFORM_BASE_URL
             is ImageAuth.Codex -> CODEX_BASE_URL
+        }
+
+    // a picture drawn through the subscription draws on its windows as a turn does, and says so the same way
+    private fun HttpResponse.observed(): HttpResponse =
+        apply {
+            (auth as? ImageAuth.Codex)?.store?.limits?.let { limits ->
+                limits.observe { headers[it] }
+                limits.countImage()
+            }
         }
 
     private suspend fun HttpRequestBuilder.authorize() {

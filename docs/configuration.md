@@ -219,6 +219,11 @@ on an endpoint OpenAI ships for its own Codex clients rather than documents for 
 an OpenAI-side change can break it; `LLM_PROVIDER=openai` with an API key stays the supported
 fallback.
 
+**How much the plan holds.** OpenAI states only the share of each window used, never its size, so
+Vusan logs a `codex limits:` line every time a share moves, with the calls, pictures and tokens spent
+since the previous move. Read side by side, those lines say how many tokens one percent of the
+five-hour or the weekly window holds on your plan and model.
+
 ## A second provider behind the first
 
 A second provider can stand behind the first for when it is out: a subscription whose window is

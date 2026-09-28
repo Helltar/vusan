@@ -18,6 +18,7 @@ import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.JsonPrimitive
 import kotlinx.serialization.json.contentOrNull
 import kotlinx.serialization.json.jsonObject
+import kotlinx.serialization.json.longOrNull
 import kotlinx.serialization.serializer
 import kotlin.reflect.KClass
 import kotlin.reflect.full.createType
@@ -77,14 +78,18 @@ internal fun codexHttpClientFactory(auth: CodexAuthStore, routingHint: String): 
 
                                     credentials.accountId?.let { request.headers.append("ChatGPT-Account-ID", it) }
                                 }
+
+                                onResponse { response -> auth.limits.observe { response.headers[it] } }
                             },
                         )
                     },
             ),
+        limits = auth.limits,
     )
 
 private class CodexHttpClientFactory(
     private val delegate: KoogHttpClient.Factory,
+    private val limits: CodexLimits,
 ) : KoogHttpClient.Factory {
 
     override fun create(
@@ -113,12 +118,14 @@ private class CodexHttpClientFactory(
                     json = json,
                 ),
             json = json,
+            limits = limits,
         )
 }
 
 private class CodexHttpClient(
     private val delegate: KoogHttpClient,
     private val json: Json,
+    private val limits: CodexLimits,
 ) : KoogHttpClient {
 
     override val clientName: String = delegate.clientName
@@ -158,11 +165,13 @@ private class CodexHttpClient(
                 headers = headers + mapOf("Accept" to "text/event-stream"),
             )
 
-        val completed = collectStreamedResponse(lines.toList(), json, clientName)
+        val response = collectStreamedResponse(lines.toList(), json, clientName)
+        countUsage(response, limits)
+        val completed = response.toString()
 
         @Suppress("UNCHECKED_CAST")
 
-        return json.decodeFromString(serializer(responseType.createType()), completed.toString()) as R
+        return json.decodeFromString(serializer(responseType.createType()), completed) as R
     }
 
     override fun <T : Any, R : Any, O : Any> sse(
@@ -223,6 +232,19 @@ internal fun forceStreamingRequest(requestBody: String, json: Json = Json): Stri
     return JsonObject(
         root + mapOf("stream" to JsonPrimitive(true), "store" to JsonPrimitive(false)),
     ).toString()
+}
+
+/** Counts a completed response's tokens towards the subscription's next step, see [CodexLimits]. */
+internal fun countUsage(response: JsonObject, limits: CodexLimits) {
+    val usage = response["usage"] as? JsonObject ?: return
+
+    fun JsonObject.long(name: String): Long = (this[name] as? JsonPrimitive)?.longOrNull ?: 0L
+
+    limits.countCall(
+        inputTokens = usage.long("input_tokens"),
+        cachedInputTokens = (usage["input_tokens_details"] as? JsonObject)?.long("cached_tokens") ?: 0L,
+        outputTokens = usage.long("output_tokens"),
+    )
 }
 
 /**
