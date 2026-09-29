@@ -305,9 +305,11 @@ A normal user message travels:
       rewrite what the user has already read. A turn with no live status — a scheduled run — queues the words with the
       rest of the reply instead.
     - **HTML and its fallbacks** — text and captions go out with Telegram's `HTML` parse mode; `agent/SystemPrompt.kt`
-      instructs the agent to use only the supported tags and escape `<`/`>`/`&`. Models still slip in `<br>`, so
-      `TelegramOutputSender` turns `<br>`-style tags into real newlines instead of letting Telegram reject the whole
-      message. Rejected reply text is re-sent as a `message.html` document (`telegram/delivery/HtmlReplyDocument.kt` — a
+      instructs the agent to use only the supported tags and escape `<`/`>`/`&`. Models still slip in `<br>`, and
+      cheaper ones answer in Markdown code anyway, so `TelegramSendFallbacks` repairs what maps onto HTML one to one
+      before the send: `<br>`-style tags become real newlines, a fenced block becomes `<pre>` and a backticked span
+      `<code>`, with bare `<`/`>`/`&` escaped inside — a message that would have gone out with literal backticks, or
+      been rejected whole, arrives formatted. Rejected reply text is re-sent as a `message.html` document (`telegram/delivery/HtmlReplyDocument.kt` — a
       standalone, responsive, light/dark page with a no-script CSP) so the formatting still arrives; a rejected caption
       resends the media captionless and delivers the caption the same way; localized notices fall back to plain text.
     - **Rich messages** — opt-in Bot API 10.1 (`BotOutput.RichMessage`, github-flavored markdown) via the

@@ -22,7 +22,59 @@ private val log = KotlinLogging.logger("TelegramSendFallbacks")
 // the send and degrading to the document fallback.
 private val brTagRegex = Regex("""</?br\s*/?>""", RegexOption.IGNORE_CASE)
 
-internal fun String.withBrTagsAsNewlines(): String = replace(brTagRegex, "\n")
+// cheaper models also keep answering in markdown, and a fenced block or a backticked span lands in
+// the chat as literal backticks: telegram's html mode accepts the send and shows them as typed. both
+// map onto html one to one, so they are repaired the same way. one pass handles the fence before the
+// span, so a backtick inside converted code is never read as markup again; a run of backticks that is
+// not a fence stays as typed rather than being half-converted.
+private val markdownCodeRegex =
+    Regex(
+        """```([\w+#.-]*)[^\S\n]*\n(.*?)\n?```|(?<!`)`([^`\n]+)`(?!`)""",
+        RegexOption.DOT_MATCHES_ALL,
+    )
+
+// a backtick inside html the model already wrote as code is code, not markup. these regions are
+// skipped whole, which also keeps canned texts and repaired fences from being touched twice.
+private val htmlCodeRegex = Regex("""<(pre|code)\b.*?</\1>""", RegexOption.DOT_MATCHES_ALL)
+
+// markdown code is raw text, but the prompt asks for entities inside `<pre>` too, so a model mixing
+// the two conventions has already written `&lt;` here and there. an entity survives as it is and only
+// a bare character is escaped, which reads right in html mode either way.
+private val bareAmpersandRegex = Regex("""&(?!(?:[a-zA-Z]+|#\d+|#x[0-9a-fA-F]+);)""")
+
+internal fun String.withModelMarkupRepaired(): String =
+    replace(brTagRegex, "\n").withMarkdownCodeAsHtml()
+
+private fun String.withMarkdownCodeAsHtml(): String {
+    if (!contains('`')) return this
+
+    val repaired = StringBuilder()
+    var rest = 0
+
+    for (region in htmlCodeRegex.findAll(this)) {
+        repaired.append(substring(rest, region.range.first).replace(markdownCodeRegex, ::markdownCodeAsHtml))
+        repaired.append(region.value)
+        rest = region.range.last + 1
+    }
+    repaired.append(substring(rest).replace(markdownCodeRegex, ::markdownCodeAsHtml))
+
+    return repaired.toString()
+}
+
+private fun markdownCodeAsHtml(match: MatchResult): String {
+    val (language, block, span) = match.destructured
+
+    return when {
+        span.isNotEmpty() -> "<code>${span.escapeCodeHtml()}</code>"
+        language.isNotEmpty() -> "<pre><code class=\"language-$language\">${block.trimEnd().escapeCodeHtml()}</code></pre>"
+        else -> "<pre>${block.trimEnd().escapeCodeHtml()}</pre>"
+    }
+}
+
+private fun String.escapeCodeHtml(): String =
+    replace(bareAmpersandRegex, "&amp;")
+        .replace("<", "&lt;")
+        .replace(">", "&gt;")
 
 internal fun rethrowIfReplyNotFound(error: Throwable, replyParameters: ReplyParameters?) {
     if (replyParameters != null && error.isReplyMessageNotFound()) throw error
@@ -92,7 +144,7 @@ internal suspend fun sendWithCaptionHtmlFallback(
         return
     }
 
-    val html = caption.withBrTagsAsNewlines()
+    val html = caption.withModelMarkupRepaired()
 
     runCatching { send(html, ParseMode.HTML) }
         .recoverCatching { e ->

@@ -93,7 +93,7 @@ internal object TelegramOutputSender {
         text: String,
         replyParameters: ReplyParameters?,
     ) {
-        val html = text.withBrTagsAsNewlines()
+        val html = text.withModelMarkupRepaired()
 
         sendWithHtmlFallback { parseMode ->
             sendTextMessage(client, target, html, parseMode, replyParameters)
@@ -110,7 +110,7 @@ internal object TelegramOutputSender {
         replyParameters: ReplyParameters?,
         formattingFileNotice: String,
     ) {
-        val html = text.withBrTagsAsNewlines()
+        val html = text.withModelMarkupRepaired()
 
         runCatching {
             sendTextMessage(client, target, html, ParseMode.HTML, replyParameters)

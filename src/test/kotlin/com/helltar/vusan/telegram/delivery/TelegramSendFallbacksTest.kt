@@ -65,6 +65,48 @@ class TelegramSendFallbacksTest {
         assertEquals(1, attempts)
     }
 
+    @Test
+    fun `turns a fenced block into a pre with its language and escapes the code`() {
+        val text = "Like so:\n```kotlin\nif (a < b && c > d) run()\n```\nDone."
+
+        assertEquals(
+            "Like so:\n<pre><code class=\"language-kotlin\">if (a &lt; b &amp;&amp; c &gt; d) run()</code></pre>\nDone.",
+            text.withModelMarkupRepaired(),
+        )
+    }
+
+    @Test
+    fun `turns a fence without a language into a bare pre`() {
+        assertEquals("<pre>total 4\ndrwx------ 2 me me 4096 Jan 1 .</pre>", "```\ntotal 4\ndrwx------ 2 me me 4096 Jan 1 .\n```".withModelMarkupRepaired())
+    }
+
+    @Test
+    fun `turns a backticked span into inline code`() {
+        assertEquals("run <code>make &lt;target&gt;</code> first", "run `make <target>` first".withModelMarkupRepaired())
+    }
+
+    @Test
+    fun `keeps an entity the model already wrote inside the code`() {
+        assertEquals("<pre>x &lt; y &amp;&amp; z</pre>", "```\nx &lt; y && z\n```".withModelMarkupRepaired())
+    }
+
+    @Test
+    fun `leaves a backtick inside html code alone`() {
+        val text = "<pre>const s = `hi ${'$'}{name}`;</pre> and <code>`</code> but `this`"
+
+        assertEquals("<pre>const s = `hi ${'$'}{name}`;</pre> and <code>`</code> but <code>this</code>", text.withModelMarkupRepaired())
+    }
+
+    @Test
+    fun `leaves a run of backticks that is not a fence as typed`() {
+        assertEquals("``` not a block ```", "``` not a block ```".withModelMarkupRepaired())
+    }
+
+    @Test
+    fun `still turns br tags into newlines`() {
+        assertEquals("one\ntwo\n<code>three</code>", "one<br>two<br/>`three`".withModelMarkupRepaired())
+    }
+
     private fun floodError(retryAfter: Int): TelegramApiRequestException =
         TelegramApiRequestException(
             "Error executing request",
