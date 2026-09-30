@@ -73,7 +73,7 @@ internal object SandboxToolDescriptions {
                 "Use `deleteSandboxFile` instead when only some files should go."
 
     const val SEND_FILES =
-        "Sends finished files from the sandbox to the chat: images as photos, videos as videos, and other files as documents. " +
+        "Sends finished files from the sandbox to the chat: images as photos, GIFs as animations, videos as videos, and other files as documents. " +
                 "Files may come from this person's other chats; send only files requested for the current chat. " +
                 "For a multi-file project, create and send an archive. " +
                 "At most 10 files and 50 MB total per call."

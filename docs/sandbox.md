@@ -96,9 +96,9 @@ Every command is a fresh shell starting at the home.
 
 ## Sending results
 
-`sendFromSandbox` delivers finished files to the chat: images as photos, videos as videos, anything
-else as a document. At most 10 files and 50 MB per call, and a file kind the chat refuses is named in
-the result rather than reported as sent.
+`sendFromSandbox` delivers finished files to the chat: images as photos, GIFs as animations, videos as
+videos, anything else as a document. At most 10 files and 50 MB per call, and a file kind the chat
+refuses is named in the result rather than reported as sent.
 
 ## Limits
 

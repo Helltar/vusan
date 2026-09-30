@@ -240,10 +240,12 @@ class SandboxToolsTest {
     @Test
     fun `sending picks media kinds and reports missing files`() = runBlocking {
         val outbox = BotOutbox()
-        val result = tools(files = mapOf("cover.png" to byteArrayOf(1), "project.zip" to byteArrayOf(2)), outbox = outbox)
-            .sendFromSandbox(listOf("cover.png", "project.zip", "missing.txt"))
+        val files = mapOf("cover.png" to byteArrayOf(1), "clip.gif" to byteArrayOf(3), "project.zip" to byteArrayOf(2))
+        val result = tools(files = files, outbox = outbox)
+            .sendFromSandbox(listOf("cover.png", "clip.gif", "project.zip", "missing.txt"))
         val queued = outbox.pending.map { it.output }
         assertIs<BotOutput.Photo>(queued.first { it is BotOutput.Photo })
+        assertEquals("clip.gif", queued.filterIsInstance<BotOutput.Animation>().single().filename)
         assertEquals("project.zip", queued.filterIsInstance<BotOutput.Document>().single().filename)
         assertContains(result, "Not sent")
         assertContains(result, "missing.txt")

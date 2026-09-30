@@ -143,6 +143,7 @@ class SandboxTools(
             val name = path.substringAfterLast('/').sanitizeFilename().ifBlank { "file" }
             when (name.substringAfterLast('.', "").lowercase()) {
                 in IMAGE_EXTENSIONS -> photos += BotOutput.Photo(bytes = bytes, filename = name)
+                "gif" -> others += BotOutput.Animation(bytes = bytes, filename = name) to name
                 in VIDEO_EXTENSIONS -> others += BotOutput.Video(bytes = bytes, filename = name) to name
                 else -> others += BotOutput.Document(bytes = bytes, filename = name) to name
             }
