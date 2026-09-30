@@ -5,9 +5,14 @@ import java.io.Serializable
 import java.lang.reflect.Proxy
 import java.util.concurrent.CompletableFuture
 import kotlin.test.Test
+import kotlin.test.assertContentEquals
+import kotlin.test.assertTrue
 import kotlin.test.assertEquals
 import kotlin.test.assertIs
 import kotlinx.coroutines.runBlocking
+import org.telegram.telegrambots.meta.api.methods.ParseMode
+import org.telegram.telegrambots.meta.api.methods.send.SendAnimation
+import org.telegram.telegrambots.meta.api.objects.ReplyParameters
 import org.telegram.telegrambots.meta.api.methods.send.SendDocument
 import org.telegram.telegrambots.meta.api.methods.send.SendMediaGroup
 import org.telegram.telegrambots.meta.api.methods.send.SendMessage
@@ -22,6 +27,49 @@ import org.telegram.telegrambots.meta.exceptions.TelegramApiRequestException
 import org.telegram.telegrambots.meta.generics.TelegramClient
 
 class TelegramOutputSenderTest {
+
+    @Test
+    fun `silent mp4 animation is uploaded through sendAnimation with routing and caption`() = runBlocking {
+        val client = RecordingClient()
+        val payload = byteArrayOf(1, 2, 3)
+        val reply = ReplyParameters.builder().messageId(42).build()
+
+        TelegramOutputSender.send(
+            client = client.proxy,
+            item = BotOutput.Animation(bytes = payload, filename = "silent.mp4"),
+            target = ChatTarget(1L, messageThreadId = 7),
+            replyParameters = reply,
+            caption = "<b>animation</b>",
+            formattingFileNotice = "notice",
+        )
+
+        val request = assertIs<SendAnimation>(client.requests.single())
+        assertEquals("1", request.chatId)
+        assertEquals(7, request.messageThreadId)
+        assertEquals(reply, request.replyParameters)
+        assertEquals("<b>animation</b>", request.caption)
+        assertEquals(ParseMode.HTML, request.parseMode)
+        assertEquals("silent.mp4", request.animation.mediaName)
+        assertTrue(request.animation.isNew)
+        assertContentEquals(payload, request.animation.newMediaStream.readBytes())
+    }
+
+    @Test
+    fun `rejected mp4 animation falls back to document not sendVideo`() = runBlocking {
+        val client = RecordingClient(failAnimation = true)
+
+        TelegramOutputSender.send(
+            client = client.proxy,
+            item = BotOutput.Animation(bytes = byteArrayOf(1, 2, 3), filename = "silent.mp4"),
+            target = ChatTarget(1L),
+            replyParameters = null,
+            caption = null,
+            formattingFileNotice = "notice",
+        )
+
+        assertEquals(listOf("sendAnimation", "sendDocument"), client.methods)
+        assertEquals("silent.mp4", assertIs<SendDocument>(client.requests.last()).document.mediaName)
+    }
 
     @Test
     fun `inline choice is sent as plain text with owner-bound callback buttons`() = runBlocking {
@@ -250,6 +298,7 @@ class TelegramOutputSenderTest {
     // so a reflective proxy avoids implementing the whole TelegramClient surface.
     private class RecordingClient(
         private val failPhoto: Boolean = false,
+        private val failAnimation: Boolean = false,
         private val failHtmlText: Boolean = false,
         private var failHtmlCaptionOnce: Boolean = false,
         private val failRichMessage: Boolean = false,
@@ -291,6 +340,7 @@ class TelegramOutputSenderTest {
 
                 failRichMessage && method == "sendRichMessage" -> "Bad Request: can't parse entities"
                 failDocument && method == "sendDocument" -> "Bad Request: file too big"
+                failAnimation && method == "sendAnimation" -> "Bad Request: ANIMATION_INVALID"
                 failPhoto && method == "sendPhoto" -> "Bad Request: PHOTO_INVALID_DIMENSIONS"
                 failVideoNote && method == "sendVideoNote" -> "Bad Request: VOICE_MESSAGES_FORBIDDEN"
                 failHtmlText && method == "sendMessage" -> "Bad Request: can't parse entities"

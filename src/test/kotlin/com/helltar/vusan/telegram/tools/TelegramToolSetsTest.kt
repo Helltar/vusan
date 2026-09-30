@@ -30,23 +30,23 @@ class TelegramToolSetsTest {
     private val catalog = StickerCatalog(client, ImageVisionClient(FakePromptExecutor(), TEST_MODEL))
 
     @Test
-    fun `an unrestricted chat gets both of telegram's own tool sets`() {
+    fun `an unrestricted chat gets all of telegram's own tool sets`() {
         assertEquals(
-            listOf(ChatFileTools::class, StickerTools::class),
+            listOf(ChatFileTools::class, AnimationTools::class, StickerTools::class),
             toolSetsFor(ChatCapabilities.UNRESTRICTED).map { it::class },
         )
     }
 
     @Test
-    fun `a chat that forbids documents is not offered resending by file id`() {
+    fun `a chat that forbids documents still gets animations`() {
         assertEquals(
-            listOf(StickerTools::class),
+            listOf(AnimationTools::class, StickerTools::class),
             toolSetsFor(ChatCapabilities(documents = false)).map { it::class },
         )
     }
 
     @Test
-    fun `a chat that forbids stickers is not offered the catalog`() {
+    fun `a chat that forbids stickers and animations gets neither tool`() {
         assertEquals(
             listOf(ChatFileTools::class),
             toolSetsFor(ChatCapabilities(stickersAndAnimations = false)).map { it::class },
@@ -58,7 +58,7 @@ class TelegramToolSetsTest {
     fun `a deployment without a catalog offers no sticker tools`() {
         val sets = TelegramToolSets(client).of(requestContext(), BotOutbox())
 
-        assertEquals(listOf(ChatFileTools::class), sets.map { it::class })
+        assertEquals(listOf(ChatFileTools::class, AnimationTools::class), sets.map { it::class })
     }
 
     @Test

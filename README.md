@@ -97,7 +97,8 @@ Or run it on JDK 21, with `ffmpeg` and `yt-dlp` on `PATH`:
 - **Images** — draws from descriptions, edits your pictures, and merges several into one.
 - **Voice replies** — answers out loud with voice messages.
 - **Round video messages** — replies with its own face and voice in a video circle.
-- **GIFs** — finds and sends a fitting GIF.
+- **GIFs** — finds and sends a fitting GIF; resends a GIF or an already silent H.264 MP4 from
+  the chat as an animation without converting it to GIF.
 
 ### In the chat
 

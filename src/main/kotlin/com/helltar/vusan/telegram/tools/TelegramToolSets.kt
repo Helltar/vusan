@@ -25,7 +25,10 @@ class TelegramToolSets(
 
         return buildList {
             if (chat.documents) add(ChatFileTools(client, outbox))
-            if (chat.stickersAndAnimations) stickers?.let { add(StickerTools(it, context, outbox)) }
+            if (chat.stickersAndAnimations) {
+                add(AnimationTools(client, outbox))
+                stickers?.let { add(StickerTools(it, context, outbox)) }
+            }
         }
     }
 }

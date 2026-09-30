@@ -32,7 +32,7 @@ that is who owns writing them, not because only `agent/` reads them. No other ar
   list, and works out what each one says; `AgentTurns`, also at the root, takes it from there — the reply context, the
   `AgentRequest`, the progress indicator, the delivery and its fallback — so a turn started by a message and one started
   by a button follow the same path; `telegram/tools/` holds the tools only Telegram can implement — resending by
-  `file_id`, and the sticker catalog — which reach the registry through the shared `PlatformToolSets` port rather than
+  `file_id` as documents or animations, and the sticker catalog — which reach the registry through the shared `PlatformToolSets` port rather than
   being registered centrally; `telegram/inbound/` normalizes an update into agent input; `telegram/delivery/`
   sends agent results back, including HTML-formatting, opt-in rich-message, reply-anchor, media/document, media-group,
   and private-message fallbacks; `telegram/callback/` owns the inline-button flows — `CallbackRouter` validates a
@@ -765,3 +765,20 @@ as on a public machine.
 
 In CI the deployment has to resolve from the example file a reader starts with: `.github/workflows/image.yml` copies
 `.env.example` to `.env` and runs `docker compose config`.
+
+### Sending a chat file as an animation
+
+`telegram/tools/AnimationTools.sendAnimation` is offered when the chat permits stickers and
+animations, independently of document permissions or the vision-backed sticker catalog. It takes
+a message metadata `file_id`, downloads the original via `TelegramApi.downloadFileById`, and
+queues `BotOutput.Animation(bytes, filename)`. Existing delivery reuploads those bytes through
+`sendAnimationFile` / Bot API `sendAnimation`, retaining routing, reply anchoring, captions,
+HTML fallback and document fallback. A video cannot change type by resending its original
+`file_id`, so this path deliberately downloads and reuploads rather than passing the ID through.
+
+The input must already be GIF or silent H.264 MP4. The tool checks the served extension, not the
+codec or audio streams, and performs no conversion. Telegram validates the actual media at send
+time; a rejected animation may arrive as a document through the existing fallback. The cloud
+Bot API download limit of 20 MB applies to this tool, not the larger 50 MB animation upload limit.
+See [sendAnimation](https://core.telegram.org/bots/api#sendanimation) and
+[Sending files](https://core.telegram.org/bots/api#sending-files).
