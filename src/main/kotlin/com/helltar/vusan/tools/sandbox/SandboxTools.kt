@@ -22,6 +22,9 @@ private const val MAX_JOB_ID_CHARS = 64
 private const val MAX_ATTACHMENT_BYTES = 20 * 1024 * 1024
 private val IMAGE_EXTENSIONS = setOf("png", "jpg", "jpeg", "webp", "bmp")
 private val VIDEO_EXTENSIONS = setOf("mp4", "mov", "m4v", "webm")
+private val ANIMATION_EXTENSIONS = setOf("gif", "mp4")
+private const val SEND_AS_DOCUMENT = "document"
+private const val SEND_AS_ANIMATION = "animation"
 
 @Suppress("unused")
 class SandboxTools(
@@ -116,10 +119,17 @@ class SandboxTools(
     suspend fun sendFromSandbox(
         @LLMDescription(SandboxToolDescriptions.SEND_PATHS)
         paths: List<String>,
+        @LLMDescription(SandboxToolDescriptions.SEND_AS)
+        sendAs: String = "",
     ): String = suspendToolGuard {
         require(paths.isNotEmpty()) { "At least one path is required" }
         require(paths.size <= MAX_SEND_FILES) { "At most $MAX_SEND_FILES files per call" }
         val wanted = paths.map { it.requireToolText("Path", MAX_PATH_CHARS) }.distinct()
+        val kind = sendAs.trim().lowercase()
+        require(kind in setOf("", SEND_AS_DOCUMENT, SEND_AS_ANIMATION)) { "sendAs must be `document`, `animation` or empty" }
+        require(kind != SEND_AS_ANIMATION || wanted.all { sandboxFilename(it).extension in ANIMATION_EXTENSIONS }) {
+            "Only `.gif` and `.mp4` files can be sent as an animation"
+        }
         val photos = mutableListOf<BotOutput.Photo>()
         val others = mutableListOf<Pair<BotOutput, String>>()
         val sent = mutableListOf<String>()
@@ -140,12 +150,10 @@ class SandboxTools(
                 return@forEach
             }
             remainingBytes -= bytes.size
-            val name = path.substringAfterLast('/').sanitizeFilename().ifBlank { "file" }
-            when (name.substringAfterLast('.', "").lowercase()) {
-                in IMAGE_EXTENSIONS -> photos += BotOutput.Photo(bytes = bytes, filename = name)
-                "gif" -> others += BotOutput.Animation(bytes = bytes, filename = name) to name
-                in VIDEO_EXTENSIONS -> others += BotOutput.Video(bytes = bytes, filename = name) to name
-                else -> others += BotOutput.Document(bytes = bytes, filename = name) to name
+            val name = sandboxFilename(path)
+            when (val output = sandboxOutput(name, bytes, kind)) {
+                is BotOutput.Photo -> photos += output
+                else -> others += output to name
             }
             sent += name
         }
@@ -196,6 +204,21 @@ class SandboxTools(
         }
     }
 }
+
+private fun sandboxFilename(path: String): String = path.substringAfterLast('/').sanitizeFilename().ifBlank { "file" }
+
+private val String.extension: String get() = substringAfterLast('.', "").lowercase()
+
+// the extension decides unless the model asked for a kind: a GIF from a chat is a soundless mp4, and
+// only the model knows that the mp4 it made from one is meant to loop rather than play as a video.
+private fun sandboxOutput(name: String, bytes: ByteArray, kind: String): BotOutput =
+    when {
+        kind == SEND_AS_DOCUMENT -> BotOutput.Document(bytes = bytes, filename = name)
+        kind == SEND_AS_ANIMATION || name.extension == "gif" -> BotOutput.Animation(bytes = bytes, filename = name)
+        name.extension in IMAGE_EXTENSIONS -> BotOutput.Photo(bytes = bytes, filename = name)
+        name.extension in VIDEO_EXTENSIONS -> BotOutput.Video(bytes = bytes, filename = name)
+        else -> BotOutput.Document(bytes = bytes, filename = name)
+    }
 
 // the server's id shape is the sdk's to check; this only keeps model text short before it is echoed back.
 private fun checkedJobId(value: String): String = value.requireToolText("Job ID", MAX_JOB_ID_CHARS)

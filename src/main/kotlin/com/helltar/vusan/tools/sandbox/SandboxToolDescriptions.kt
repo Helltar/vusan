@@ -73,11 +73,17 @@ internal object SandboxToolDescriptions {
                 "Use `deleteSandboxFile` instead when only some files should go."
 
     const val SEND_FILES =
-        "Sends finished files from the sandbox to the chat: images as photos, GIFs as animations, videos as videos, and other files as documents. " +
+        "Sends finished files from the sandbox to the chat: images as photos, GIFs as animations, videos as videos, and other files as documents, unless `sendAs` asks for something else. " +
                 "Files may come from this person's other chats; send only files requested for the current chat. " +
                 "For a multi-file project, create and send an archive. " +
                 "At most 10 files and 50 MB total per call."
 
     const val SEND_PATHS =
         "Paths relative to the home, for example `project/result.zip`."
+
+    const val SEND_AS =
+        "Optional; leave empty to go by extension. " +
+                "`document` sends every file of the call as a plain file, for a photo or video the user wants uncompressed or as a file. " +
+                "`animation` sends a `.gif` or a soundless `.mp4` as a looping GIF. " +
+                "A GIF from the chat arrives as an `.mp4`, so return an edited one as an H.264 `.mp4` without audio (`-an`, `-pix_fmt yuv420p`) with `animation`, rather than converting it to `.gif`."
 }

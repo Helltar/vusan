@@ -251,6 +251,35 @@ class SandboxToolsTest {
         assertContains(result, "missing.txt")
     }
 
+    @Test
+    fun `a soundless mp4 goes out as an animation when asked`() = runBlocking {
+        val outbox = BotOutbox()
+        tools(files = mapOf("reversed.mp4" to byteArrayOf(1)), outbox = outbox)
+            .sendFromSandbox(listOf("reversed.mp4"), sendAs = "animation")
+
+        assertEquals("reversed.mp4", assertIs<BotOutput.Animation>(outbox.pending.single().output).filename)
+    }
+
+    @Test
+    fun `media goes out as plain documents when asked`() = runBlocking {
+        val outbox = BotOutbox()
+        tools(files = mapOf("cover.png" to byteArrayOf(1), "clip.mp4" to byteArrayOf(2)), outbox = outbox)
+            .sendFromSandbox(listOf("cover.png", "clip.mp4"), sendAs = "document")
+
+        val documents = outbox.pending.map { assertIs<BotOutput.Document>(it.output).filename }
+        assertEquals(listOf("cover.png", "clip.mp4"), documents)
+    }
+
+    @Test
+    fun `a kind that does not fit the files is refused and nothing is sent`() = runBlocking {
+        val outbox = BotOutbox()
+        val sandbox = tools(files = mapOf("clip.webm" to byteArrayOf(1)), outbox = outbox)
+
+        assertContains(toolFailure { sandbox.sendFromSandbox(listOf("clip.webm"), sendAs = "animation") }, "`.gif` and `.mp4`")
+        assertContains(toolFailure { sandbox.sendFromSandbox(listOf("clip.webm"), sendAs = "sticker") }, "sendAs must be")
+        assertTrue(outbox.pending.isEmpty())
+    }
+
     // reporting a photo as sent into a chat that drops it leaves the model believing the user can see
     // something nobody sent, so the refusal has to reach it by name.
     @Test

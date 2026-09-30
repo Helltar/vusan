@@ -97,8 +97,10 @@ Every command is a fresh shell starting at the home.
 ## Sending results
 
 `sendFromSandbox` delivers finished files to the chat: images as photos, GIFs as animations, videos as
-videos, anything else as a document. At most 10 files and 50 MB per call, and a file kind the chat
-refuses is named in the result rather than reported as sent.
+videos, anything else as a document. The model can ask for another kind for the whole call: every file
+as a document, or a `.gif` or soundless `.mp4` as an animation — which is how an edited GIF goes back,
+since a GIF in a chat is itself a soundless MP4. At most 10 files and 50 MB per call, and a file kind
+the chat refuses is named in the result rather than reported as sent.
 
 ## Limits
 
