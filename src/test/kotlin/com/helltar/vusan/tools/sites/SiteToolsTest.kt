@@ -18,10 +18,10 @@ import kotlin.test.assertTrue
 import kotlinx.coroutines.runBlocking
 
 private const val PUBLISHED =
-    """{"url":"https://k7m2q9xwtp.example.test","release":"0f1e2d3c4b5a69788796a5b4c3d2e1f0","files":3,"bytes":2048,"publishedAt":"2026-09-13T12:00:00Z","hasIndex":true}"""
+    """{"url":"https://k7m2q9xwtp.example.test","release":"0f1e2d3c4b5a69788796a5b4c3d2e1f0","files":3,"bytes":2048,"publishedAt":"2026-09-13T12:00:00Z","until":"2026-10-13T12:00:00Z","hasIndex":true}"""
 
 private const val PUBLISHED_WITHOUT_INDEX =
-    """{"url":"https://k7m2q9xwtp.example.test","release":"0f1e2d3c4b5a69788796a5b4c3d2e1f0","files":2,"bytes":2048,"publishedAt":"2026-09-13T12:00:00Z","hasIndex":false}"""
+    """{"url":"https://k7m2q9xwtp.example.test","release":"0f1e2d3c4b5a69788796a5b4c3d2e1f0","files":2,"bytes":2048,"publishedAt":"2026-09-13T12:00:00Z","until":"2026-10-13T12:00:00Z","hasIndex":false}"""
 
 class SiteToolsTest {
     private val context = requestContext(chatId = 55L, userId = 55L)
@@ -31,6 +31,7 @@ class SiteToolsTest {
     private fun tools(
         site: String? = PUBLISHED,
         publish: Pair<HttpStatusCode, String> = HttpStatusCode.OK to PUBLISHED,
+        homeReleasedAt: String? = null,
     ): SiteTools {
         val engine = MockEngine { request ->
             val path = request.url.encodedPath
@@ -51,7 +52,11 @@ class SiteToolsTest {
                 path.endsWith("/site") ->
                     if (site == null) notFound() else respond(site, HttpStatusCode.OK, headersOf(HttpHeaders.ContentType, "application/json"))
 
-                else -> respond(sandboxInfo("telegram:55"), HttpStatusCode.OK, headersOf(HttpHeaders.ContentType, "application/json"))
+                else -> respond(
+                    sandboxInfo("telegram:55", homeReleasedAt = homeReleasedAt),
+                    HttpStatusCode.OK,
+                    headersOf(HttpHeaders.ContentType, "application/json"),
+                )
             }
         }
 
@@ -67,6 +72,7 @@ class SiteToolsTest {
         assertContains(result, "https://k7m2q9xwtp.example.test")
         assertContains(result, "3 file(s)")
         assertContains(result, "2 KB")
+        assertContains(result, "online until 2026-10-13")
     }
 
     // a directory with no index.html publishes fine and its link then opens nothing; the server saw the
@@ -95,8 +101,17 @@ class SiteToolsTest {
 
     @Test
     fun `status reads the site rather than the sandbox`() = runBlocking {
-        assertContains(tools().siteStatus(), "Published at https://k7m2q9xwtp.example.test")
+        val status = tools().siteStatus()
+        assertContains(status, "Published at https://k7m2q9xwtp.example.test")
+        assertContains(status, "online until 2026-10-13")
+        assertFalse("deleted" in status)
         assertContains(tools(site = null).siteStatus(), "Nothing is published")
+    }
+
+    // retention may take the home a site was built from and leave the site up; editing it then starts over
+    @Test
+    fun `status says when the files a site was built from are gone`() = runBlocking {
+        assertContains(tools(homeReleasedAt = "2026-09-20T12:00:00Z").siteStatus(), "build it again first")
     }
 
     @Test

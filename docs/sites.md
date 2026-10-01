@@ -38,10 +38,12 @@ was there before, so the directory must hold every file the page needs. Several 
 folders inside it, reachable at `/name/`.
 
 Nothing is served out of a live sandbox: a session stops when it goes idle and its home is reclaimed,
-so a page served from there would disappear with it. A published site does keep the sandbox itself:
-the server's retention never deletes a sandbox while its site is up, so the files it was built from
-are still there to publish again. Resetting the sandbox is the other way a site ends: it goes down with
-the sandbox, and its address is never served again.
+so a page served from there would disappear with it. A site has a term of its own instead, set by the
+server and stated in every publish answer, after which the server takes it down; how long that is,
+and what publishing again does to it, is the server's to decide and document. While the site is up
+the sandbox's own retention still runs, but takes only its files: the site stays at its address, and
+the agent is told the files it was built from are gone before it tries to change it. Resetting the
+sandbox ends a site at once: it goes down with the sandbox, and its address is never served again.
 
 ## What is public
 

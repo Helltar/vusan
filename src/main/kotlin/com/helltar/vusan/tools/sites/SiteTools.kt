@@ -42,8 +42,14 @@ class SiteTools(
             ?: return@suspendToolGuard "Nothing is published. Build the files in the sandbox, then publish that directory."
         buildString {
             append("Published at ${site.url} — ${site.files} file(s), ${site.bytes.asMegabytes()}")
-            append(", last published ${site.publishedAt.asAgeDescription()}")
+            append(", last published ${site.publishedAt.asAgeDescription()}, online until ${site.until.asDate()}")
             append(".\nThis is what the site holds right now; the sandbox may have moved on since.")
+            if (sandbox.homeReleased()) {
+                append(
+                    "\nThe sandbox files it was built from were deleted after the sandbox went unused; " +
+                        "the site itself is unchanged. To change it, build it again first.",
+                )
+            }
         }
     }
 
@@ -71,7 +77,11 @@ class SiteTools(
 }
 
 private fun describePublished(site: PublishedSite): String =
-    "Published at ${site.url} — ${site.files} file(s), ${site.bytes.asMegabytes()}. Give the user that link."
+    "Published at ${site.url} — ${site.files} file(s), ${site.bytes.asMegabytes()}, online until ${site.until.asDate()}. " +
+        "Give the user that link."
+
+// a day is what a person reads a term in; the hour of it is the server's business
+private fun Instant.asDate(): String = toString().substringBefore('T')
 
 private fun Long.asMegabytes(): String =
     if (this < 1024 * 1024) "${(this + 1023) / 1024} KB" else "%.1f MB".format(this / (1024.0 * 1024.0))

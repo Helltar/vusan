@@ -51,7 +51,7 @@ them — see
 [configuration](configuration.md#sandbox). The bot never reaches the sandbox host any other way: one
 token, one HTTPS or private address, no Docker socket on this side.
 
-The server has to run **Regolith 0.5**. The bot talks to it through Regolith's own client, which reads
+The server has to run **Regolith 0.6**. The bot talks to it through Regolith's own client, which reads
 the server's answers by that release's protocol, so a server from another minor version is not
 understood.
 
@@ -125,8 +125,8 @@ is to delete what is no longer needed.
 - **Idle** — the server stops a sandbox that has been idle for a while. Files stay; processes do not,
   so a background server started by an earlier command is gone by the next message.
 - **Retention** — a sandbox nobody has used for the server's retention window is deleted with its
-  home, unless the person has a site published: then both stay until the site is taken down. The
-  next command creates an empty one.
+  home. While the person has a site published only the home goes, and the site stays until its own
+  term (see [sites](sites.md)). The next command creates an empty one.
 - **Reset** — `resetSandbox`, immediately and permanently, together with the site it published.
 
 The bot keeps no copy of a home; backing one up is done on the Regolith host.

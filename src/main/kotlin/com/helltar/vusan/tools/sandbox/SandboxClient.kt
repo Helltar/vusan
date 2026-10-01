@@ -96,8 +96,14 @@ class SandboxClient(
             opened = null
         }
 
-        /** Publishes a directory of the sandbox to the web and returns the address it is served at. */
+        /**
+         * Publishes a directory of the sandbox to the web and returns the address it is served at. No term
+         * is sent: a first publish gets the server's default and a later one keeps the term the site has.
+         */
         suspend fun publishSite(path: String): PublishedSite = call { sandbox().publish(path) }.published()
+
+        /** Whether retention took the home a site of this person's was built from, since it was last used. */
+        suspend fun homeReleased(): Boolean = call { sandbox().get() }.homeReleasedAt != null
 
         /** What is published for this person, or null when nothing is. */
         suspend fun publishedSite(): PublishedSite? = call { sandbox().siteOrNull() }?.published()
@@ -165,7 +171,7 @@ private fun RegolithException.explain(): String = when (code) {
     }
 }
 
-private fun RegolithSite.published(): PublishedSite = PublishedSite(url, files, bytes, publishedAt, hasIndex)
+private fun RegolithSite.published(): PublishedSite = PublishedSite(url, files, bytes, publishedAt, until, hasIndex)
 
 private fun ExecInfo.result(read: OutputSoFar): CommandResult =
     result(read.text, read.nextOffset, hasMore = !read.complete, dropped = read.gapped)

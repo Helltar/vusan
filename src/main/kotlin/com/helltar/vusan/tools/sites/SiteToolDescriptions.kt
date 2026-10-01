@@ -12,13 +12,14 @@ internal object SiteToolDescriptions {
                 "There is no server, no database and no build step on the other side, so anything that needs one has to be built into plain files first. " +
                 "The page has its own web address, so `localStorage` works and saved progress survives. " +
                 "Everything in the directory becomes readable by anyone with the link, so say so before publishing anything personal. " +
-                "What is published is a snapshot taken now, so changing the files in the sandbox changes nothing until you publish again; a visitor's browser may hold older files for a minute."
+                "What is published is a snapshot taken now, so changing the files in the sandbox changes nothing until you publish again; a visitor's browser may hold older files for a minute. " +
+                "The site stays online until the date the answer states, and every publish states it anew; after that date it is gone, and the next publish gets a new address."
 
     const val DIRECTORY =
         "Path of the directory to publish, such as `site` or `project/dist`."
 
     const val SITE_STATUS =
-        "Reports whether this person currently has a site published: its address, how much it holds and when it was last published. " +
+        "Reports whether this person currently has a site published: its address, how much it holds, when it was last published and until when it stays online. " +
                 "Use it before answering questions about what is online rather than assuming the last publish is still what is there."
 
     const val UNPUBLISH_SITE =
