@@ -6,8 +6,8 @@ import kotlinx.serialization.Serializable
 @Serializable
 data class SearchRequest(
     val query: String,
-    @SerialName("max_results") val maxResults: Int = 5,
-    @SerialName("search_depth") val searchDepth: String = "advanced",
+    // no default: the shared json leaves defaults out, and tavily's own is 10
+    @SerialName("max_results") val maxResults: Int,
     val topic: String? = null,
     @SerialName("time_range") val timeRange: String? = null,
     @SerialName("include_images") val includeImages: Boolean = false,
