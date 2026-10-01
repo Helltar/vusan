@@ -159,7 +159,7 @@ A normal user message travels:
    only replies, mentions, or targeted commands), and past it `isAccepted` claims the message in `AnsweredMessages`; a
    message already claimed is dropped with a warning, because Telegram hands the same one over more than once — as an
    edit of it, and as a plain redelivery under a fresh update id, which the polling session's own duplicate filter does
-   not catch. An ephemeral command — `/tasks` or `/clear` picked from a group's menu — has no message id, so `shouldHandle` takes
+   not catch. An ephemeral command — `/tasks` or `/clear` in a group, sent so by a client that knows them as such — has no message id, so `shouldHandle` takes
    it as addressed, `isAccepted` does not dedupe it and the group log skips it; a reply to the bot's ephemeral answer
    is ephemeral itself, and `dispatch` turns any ephemeral message that is not a command into a private note to write
    in the open (`TelegramDelivery.sendForSenderOnly`), since the agent's own delivery is not ephemeral and a public
@@ -457,8 +457,9 @@ A normal user message travels:
   chat, so what gets deleted is still decided by asking Telegram about the set.
 - **Task menu** — `/tasks` bypasses the LLM and asks `TaskMenuHandler` to render the caller's enabled tasks. Private
   chats show all of that user's tasks; groups show only their tasks created in that chat, as an ephemeral message for
-  the caller alone (the open menu when Telegram refuses one, which it does for a hand-typed command in a chat the bot
-  does not administer), whose buttons then edit it through `editEphemeralMessageText` — `EditableMessage` in
+  the caller alone (the open menu when Telegram refuses one: a client that does not yet know the command is ephemeral
+  sends it plain, and only an administrator may answer a plain message for one person's eyes), whose buttons then edit
+  it through `editEphemeralMessageText` — `EditableMessage` in
   `delivery/TelegramRequests` is the address a callback carries, ephemeral or not. Callback data carries the menu
   owner, every action checks ownership and group scope, and Telegram is always sent an `answerCallbackQuery`. Since
   the per-user cap is a constructor argument, the menu renders only as many tasks as fit Telegram's message limit and points

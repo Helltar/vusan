@@ -405,8 +405,10 @@ internal class TelegramBotRunner(
 
         val messages = Messages.of(message.language)
 
-        // in a group the menu is one person's business, so it is shown to them alone; typed by hand in a
-        // chat the bot does not administer telegram refuses that, and the open menu is what it was before
+        // in a group the menu is one person's business, so it is shown to them alone. a client that knows
+        // the command is ephemeral sends it so, typed or picked; one that does not (an old app, a stale
+        // command list) sends a plain message, which only an administrator may answer for one person's
+        // eyes, so the open menu is what it was before
         val forSenderOnly = !message.isPrivateChat
 
         // the menu is sent straight to the bot api, so unlike an agent reply it has no delivery
