@@ -34,13 +34,14 @@ internal suspend fun TelegramClient.publishCommandMenu() {
     Language.entries.forEach { language ->
         val messages = Messages.of(language)
 
-        // the task menu is one person's business, so it is ephemeral in a group, where the command and its
-        // answer are then seen by that person and the bot alone; a client hides an ephemeral command in a
-        // private chat, where nothing is ephemeral, so the private list has the same command plain.
+        // the task menu and a clear are one person's business, so they are ephemeral in a group, where
+        // the command and its answer are then seen by that person and the bot alone; a client hides an
+        // ephemeral command in a private chat, where nothing is ephemeral, so the private list has the
+        // same commands plain. a stop stays in the open on purpose: the chat sees why the bot fell silent.
         fun commands(personal: (String, String) -> BotCommand): List<BotCommand> =
             listOf(
                 personal(TASKS_COMMAND, messages.tasksCommandDescription),
-                BotCommand(CLEAR_COMMAND, messages.clearCommandDescription),
+                personal(CLEAR_COMMAND, messages.clearCommandDescription),
                 BotCommand(STOP_COMMAND, messages.stopCommandDescription),
             )
 

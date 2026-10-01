@@ -159,7 +159,7 @@ A normal user message travels:
    only replies, mentions, or targeted commands), and past it `isAccepted` claims the message in `AnsweredMessages`; a
    message already claimed is dropped with a warning, because Telegram hands the same one over more than once — as an
    edit of it, and as a plain redelivery under a fresh update id, which the polling session's own duplicate filter does
-   not catch. An ephemeral command — `/tasks` picked from a group's menu — has no message id, so `shouldHandle` takes
+   not catch. An ephemeral command — `/tasks` or `/clear` picked from a group's menu — has no message id, so `shouldHandle` takes
    it as addressed, `isAccepted` does not dedupe it and the group log skips it; a reply to the bot's ephemeral answer
    is ephemeral itself, and `dispatch` turns any ephemeral message that is not a command into a private note to write
    in the open (`TelegramDelivery.sendForSenderOnly`), since the agent's own delivery is not ephemeral and a public

@@ -668,10 +668,10 @@ strips capabilities.
 
 Nothing to set up: the bot publishes its own command menu on every start, in each language it
 speaks. That is the same list BotFather's `/setcommands` edits — there is no separate one — so an
-edit made there survives only until the bot restarts. Groups get `/tasks` as an ephemeral command:
-picked from the menu, the command and its answer are seen by that person and the bot alone. Private
-chats get the same command plain, since a client hides an ephemeral command where nothing is
-ephemeral.
+edit made there survives only until the bot restarts. Groups get `/tasks` and `/clear` as ephemeral
+commands: picked from the menu, the command and its answer are seen by that person and the bot alone.
+`/stop` stays in the open on purpose, so the chat sees why the bot fell silent. Private chats get the
+same commands plain, since a client hides an ephemeral command where nothing is ephemeral.
 
 ## Agent loop
 

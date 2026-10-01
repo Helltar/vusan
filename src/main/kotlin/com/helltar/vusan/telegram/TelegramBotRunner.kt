@@ -469,7 +469,10 @@ internal class TelegramBotRunner(
             }
 
         agent.clearConversation(message.conversationScopeOf(userId))
-        delivery.sendReply(message, Messages.of(message.language).conversationClearedReply)
+
+        // from a group's menu the command reached the bot alone, and so does the answer
+        val reply = Messages.of(message.language).conversationClearedReply
+        if (message.isEphemeral) delivery.sendForSenderOnly(message, reply) else delivery.sendReply(message, reply)
     }
 
     private suspend fun handleTextUpdate(message: Message, content: MessageText, botProfile: BotProfile) {
