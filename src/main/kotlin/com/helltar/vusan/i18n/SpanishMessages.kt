@@ -66,6 +66,8 @@ internal object SpanishMessages : Messages {
     override val clearCommandDescription = "Borrar el historial de la conversación"
     override val stopCommandDescription = "Detener lo que estoy haciendo ahora"
 
+    override val ephemeralChatReply = "Esto solo lo vemos tú y yo, y yo respondo a la vista de todos: escríbeme un mensaje normal."
+
     override fun voiceTooLongReply(durationSeconds: Long, maxSeconds: Long): String =
         "Ese mensaje de voz dura ${durationSeconds}s — solo puedo transcribir hasta ${maxSeconds}s, " +
                 "manda uno más corto o escríbelo"

@@ -6,9 +6,15 @@ import com.helltar.vusan.i18n.Messages
 import io.github.oshai.kotlinlogging.KotlinLogging
 import org.telegram.telegrambots.meta.api.methods.commands.SetMyCommands
 import org.telegram.telegrambots.meta.api.objects.commands.BotCommand
+import org.telegram.telegrambots.meta.api.objects.commands.scope.BotCommandScopeAllGroupChats
+import org.telegram.telegrambots.meta.api.objects.commands.scope.BotCommandScopeAllPrivateChats
+import org.telegram.telegrambots.meta.api.objects.commands.scope.BotCommandScopeDefault
 import org.telegram.telegrambots.meta.generics.TelegramClient
 
 private val log = KotlinLogging.logger {}
+
+private fun ephemeralCommand(command: String, description: String): BotCommand =
+    BotCommand.builder().command(command).description(description).isEphemeral(true).build()
 
 internal const val TASKS_COMMAND = "tasks"
 internal const val CLEAR_COMMAND = "clear"
@@ -28,21 +34,34 @@ internal suspend fun TelegramClient.publishCommandMenu() {
     Language.entries.forEach { language ->
         val messages = Messages.of(language)
 
-        val commands =
+        // the task menu is one person's business, so it is ephemeral in a group, where the command and its
+        // answer are then seen by that person and the bot alone; a client hides an ephemeral command in a
+        // private chat, where nothing is ephemeral, so the private list has the same command plain.
+        fun commands(personal: (String, String) -> BotCommand): List<BotCommand> =
             listOf(
-                BotCommand(TASKS_COMMAND, messages.tasksCommandDescription),
+                personal(TASKS_COMMAND, messages.tasksCommandDescription),
                 BotCommand(CLEAR_COMMAND, messages.clearCommandDescription),
                 BotCommand(STOP_COMMAND, messages.stopCommandDescription),
             )
 
         // the list without a language answers everyone whose own language has no dedicated one
         val languageCode = language.codes.first().takeUnless { language == Language.DEFAULT }
+        val plain = commands(::BotCommand)
+        val ephemeral = commands(::ephemeralCommand)
 
-        runCatching {
-            api { executeAsync(SetMyCommands.builder().commands(commands).languageCode(languageCode).build()) }
-        }.onFailure { error ->
-            error.rethrowIfCancellation()
-            log.warn { "failed to publish the $language command menu: ${error.message}" }
+        // a private chat reads its own scope before the default, a group its own; the default is what
+        // is left for anywhere else, the plain list
+        listOf(
+            BotCommandScopeAllPrivateChats() to plain,
+            BotCommandScopeAllGroupChats() to ephemeral,
+            BotCommandScopeDefault() to plain,
+        ).forEach { (scope, list) ->
+            runCatching {
+                api { executeAsync(SetMyCommands.builder().commands(list).scope(scope).languageCode(languageCode).build()) }
+            }.onFailure { error ->
+                error.rethrowIfCancellation()
+                log.warn { "failed to publish the $language command menu for ${scope.type}: ${error.message}" }
+            }
         }
     }
 }

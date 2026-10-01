@@ -32,14 +32,20 @@ import io.github.oshai.kotlinlogging.KotlinLogging
 import kotlinx.coroutines.delay
 import kotlin.time.Duration.Companion.milliseconds
 import org.telegram.telegrambots.meta.api.methods.ActionType
+import org.telegram.telegrambots.meta.api.methods.ParseMode
 import org.telegram.telegrambots.meta.api.methods.send.SendChatAction
 import org.telegram.telegrambots.meta.api.objects.ReplyParameters
+import org.telegram.telegrambots.meta.api.objects.ephemeral.EphemeralMessageParameters
 import org.telegram.telegrambots.meta.api.objects.message.Message
 import org.telegram.telegrambots.meta.generics.TelegramClient
 import java.time.Instant
 
 internal fun replyParameters(replyToMessageId: Long?): ReplyParameters? =
     replyToMessageId?.let { ReplyParameters.builder().messageId(it.toInt()).build() }
+
+// an ephemeral message has no message id, only one of its own kind, and a reply to it is ephemeral too
+internal fun ephemeralReplyParameters(ephemeralMessageId: Int): ReplyParameters =
+    ReplyParameters.builder().ephemeralMessageId(ephemeralMessageId).build()
 
 // where an answer to this message belongs. an anchored reply would land in the right topic on its
 // own, but everything sent without one — a notice, a scheduled fire, an item after the anchor is
@@ -236,6 +242,26 @@ class TelegramDelivery(
                 target = message.chatTarget,
                 text = text,
                 replyParameters = replyParameters(replyToMessageId ?: message.messageIdLong),
+            )
+        }
+    }
+
+    /**
+     * A reply only [message]'s sender sees, as Telegram's ephemeral messages: anchored to the ephemeral
+     * message it answers when there is one, and otherwise sent on the bot's own standing in the chat,
+     * which Telegram grants an administrator alone — so this may fail, and the caller says what then.
+     */
+    suspend fun sendForSenderOnly(message: Message, text: String) {
+        val receiver = requireNotNull(message.from?.id) { "An ephemeral reply needs a person to receive it" }
+
+        withFloodWaitRetry(message.chatIdLong) {
+            sendTextMessage(
+                client = client,
+                target = message.chatTarget,
+                text = text,
+                parseMode = ParseMode.HTML,
+                replyParameters = message.ephemeralMessageId?.let(::ephemeralReplyParameters),
+                ephemeral = EphemeralMessageParameters.builder().receiverUserId(receiver).build(),
             )
         }
     }

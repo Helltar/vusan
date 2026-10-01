@@ -48,6 +48,10 @@ internal val Message.canLoadChatDescription: Boolean
 internal val Message.isPrivateChat: Boolean
     get() = chat.isUserChat
 
+// an ephemeral command: seen by its sender and the bot alone, with no message id, only an ephemeral one
+internal val Message.isEphemeral: Boolean
+    get() = ephemeralMessageId != null
+
 internal fun Message.senderIdOrNull(): Long? = from?.id
 
 internal fun Message.senderDisplayNameOrNull(): String? =

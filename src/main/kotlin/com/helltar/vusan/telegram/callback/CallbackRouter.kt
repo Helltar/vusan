@@ -4,6 +4,7 @@ import com.helltar.vusan.i18n.Messages
 import com.helltar.vusan.telegram.AgentTurns
 import com.helltar.vusan.telegram.delivery.answerCallbackQuery
 import com.helltar.vusan.request.AccessPolicy
+import com.helltar.vusan.telegram.delivery.EditableMessage
 import com.helltar.vusan.telegram.telegramChat
 import com.helltar.vusan.telegram.telegramUser
 import io.github.oshai.kotlinlogging.KotlinLogging
@@ -54,12 +55,18 @@ internal class CallbackRouter(
             return
         }
 
+        // a menu shown to one person alone has no message id, only an ephemeral one, and is edited as such
+        val editable =
+            (message as? Message)?.ephemeralMessageId
+                ?.let { EditableMessage.Ephemeral(receiverUserId = message.receiverUser?.id ?: userId, ephemeralMessageId = it) }
+                ?: EditableMessage.Regular(message.messageId)
+
         taskMenu.handleCallback(
             callbackQueryId = callback.id,
             callbackData = callback.data,
             userId = userId,
             chatId = chatId,
-            messageId = message.messageId,
+            message = editable,
             chatIsPrivate = message.chat.isUserChat,
             messages = messages,
         )

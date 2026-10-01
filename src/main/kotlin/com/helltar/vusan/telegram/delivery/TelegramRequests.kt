@@ -11,9 +11,11 @@ import org.telegram.telegrambots.meta.api.methods.send.SendMediaGroup
 import org.telegram.telegrambots.meta.api.methods.send.SendMessage
 import org.telegram.telegrambots.meta.api.methods.send.SendRichMessage
 import org.telegram.telegrambots.meta.api.methods.updatingmessages.DeleteMessage
+import org.telegram.telegrambots.meta.api.methods.updatingmessages.EditEphemeralMessageText
 import org.telegram.telegrambots.meta.api.methods.updatingmessages.EditMessageText
 import org.telegram.telegrambots.meta.api.objects.InputFile
 import org.telegram.telegrambots.meta.api.objects.ReplyParameters
+import org.telegram.telegrambots.meta.api.objects.ephemeral.EphemeralMessageParameters
 import org.telegram.telegrambots.meta.api.objects.media.InputMedia
 import org.telegram.telegrambots.meta.api.objects.replykeyboard.InlineKeyboardMarkup
 import org.telegram.telegrambots.meta.api.objects.richtext.InputRichMessage
@@ -39,6 +41,8 @@ internal suspend fun sendTextMessage(
     parseMode: String?,
     replyParameters: ReplyParameters?,
     replyMarkup: InlineKeyboardMarkup? = null,
+    // set, the message is shown to that one person alone, as telegram's ephemeral messages are
+    ephemeral: EphemeralMessageParameters? = null,
 ) {
     client.api {
         executeAsync(
@@ -49,8 +53,47 @@ internal suspend fun sendTextMessage(
                 .parseMode(parseMode)
                 .replyParameters(replyParameters)
                 .replyMarkup(replyMarkup)
+                .ephemeralMessageParameters(ephemeral)
                 .build(),
         )
+    }
+}
+
+/**
+ * A message of the bot's that a callback may edit: an ordinary one by its id, or an ephemeral one by
+ * the person it was shown to and its own id, since an ephemeral message has no message id and is
+ * edited through methods of its own.
+ */
+internal sealed interface EditableMessage {
+
+    data class Regular(val messageId: Int) : EditableMessage
+
+    data class Ephemeral(val receiverUserId: Long, val ephemeralMessageId: Int) : EditableMessage
+}
+
+internal suspend fun editTextMessage(
+    client: TelegramClient,
+    chatId: Long,
+    message: EditableMessage,
+    text: String,
+    replyMarkup: InlineKeyboardMarkup?,
+    parseMode: String? = null,
+) {
+    when (message) {
+        is EditableMessage.Regular -> editTextMessage(client, chatId, message.messageId, text, replyMarkup, parseMode)
+        is EditableMessage.Ephemeral ->
+            client.api {
+                executeAsync(
+                    EditEphemeralMessageText.builder()
+                        .chatId(chatId)
+                        .receiverUserId(message.receiverUserId)
+                        .ephemeralMessageId(message.ephemeralMessageId)
+                        .text(text)
+                        .parseMode(parseMode)
+                        .replyMarkup(replyMarkup)
+                        .build(),
+                )
+            }
     }
 }
 

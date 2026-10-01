@@ -22,6 +22,8 @@ import com.helltar.vusan.telegram.callback.TaskMenuHandler
 import com.helltar.vusan.telegram.callback.TurnStopHandler
 import com.helltar.vusan.telegram.delivery.TelegramDelivery
 import com.helltar.vusan.telegram.delivery.chatTarget
+import com.helltar.vusan.telegram.delivery.ephemeralReplyParameters
+import com.helltar.vusan.telegram.delivery.replyParameters
 import com.helltar.vusan.telegram.inbound.AudioInput
 import com.helltar.vusan.telegram.inbound.BotCommand
 import com.helltar.vusan.telegram.inbound.MessageText
@@ -32,6 +34,7 @@ import com.helltar.vusan.telegram.inbound.captionedPartOrNull
 import com.helltar.vusan.telegram.inbound.chatIdLong
 import com.helltar.vusan.telegram.inbound.describeIncomingSticker
 import com.helltar.vusan.telegram.inbound.isBotCommand
+import com.helltar.vusan.telegram.inbound.isEphemeral
 import com.helltar.vusan.telegram.inbound.isPrivateChat
 import com.helltar.vusan.telegram.inbound.language
 import com.helltar.vusan.telegram.inbound.leadingBotCommandOrNull
@@ -60,6 +63,7 @@ import org.telegram.telegrambots.meta.TelegramUrl
 import org.telegram.telegrambots.meta.api.objects.CallbackQuery
 import org.telegram.telegrambots.meta.api.objects.Update
 import org.telegram.telegrambots.meta.api.objects.User
+import org.telegram.telegrambots.meta.api.objects.ephemeral.EphemeralMessageParameters
 import org.telegram.telegrambots.meta.api.objects.message.Message
 import org.telegram.telegrambots.meta.api.objects.polls.PollAnswer
 import org.telegram.telegrambots.meta.generics.TelegramClient
@@ -265,7 +269,8 @@ internal class TelegramBotRunner(
     // album buffering so each part of a gallery is logged in its own right.
     private fun CoroutineScope.recordGroupLog(message: Message, edited: Boolean = false) {
         val repository = groupLog ?: return
-        if (message.isPrivateChat) return
+        // an ephemeral command was said to the bot alone, so it is nothing the chat heard
+        if (message.isPrivateChat || message.isEphemeral) return
 
         val entry = message.toGroupLogEntry() ?: return
 
@@ -332,6 +337,19 @@ internal class TelegramBotRunner(
     private suspend fun dispatch(message: Message, profile: BotProfile) {
         message.logIncoming()
 
+        // a reply to one of the bot's ephemeral answers is ephemeral itself, and the agent answers in the
+        // open: only the task menu is shown for one person's eyes, anything else is asked to be said
+        // aloud. an ephemeral message is always a person's own, so the note has somebody to reach.
+        if (message.isEphemeral && message.messageTextOrNull()?.leadingBotCommandOrNull() == null) {
+            runCatching { delivery.sendForSenderOnly(message, Messages.of(message.language).ephemeralChatReply) }
+                .onFailure { error ->
+                    error.rethrowIfCancellation()
+                    log.warn { "could not answer an ephemeral message in chat=${message.chatIdLong}: ${error.message}" }
+                }
+
+            return
+        }
+
         when {
             message.text != null -> dispatchText(message, profile)
             message.richMessage != null -> handleRichMessageUpdate(message, profile)
@@ -387,13 +405,30 @@ internal class TelegramBotRunner(
 
         val messages = Messages.of(message.language)
 
+        // in a group the menu is one person's business, so it is shown to them alone; typed by hand in a
+        // chat the bot does not administer telegram refuses that, and the open menu is what it was before
+        val forSenderOnly = !message.isPrivateChat
+
         // the menu is sent straight to the bot api, so unlike an agent reply it has no delivery
         // fallback chain — without this the user would see nothing at all when the send is rejected.
         runCatching {
             taskMenu.sendMenu(
                 target = message.chatTarget,
                 userId = userId,
-                replyToMessageId = message.messageIdLong,
+                replyParameters = if (forSenderOnly) message.ephemeralMessageId?.let(::ephemeralReplyParameters) else replyParameters(message.messageIdLong),
+                chatIsPrivate = message.isPrivateChat,
+                messages = messages,
+                ephemeral = EphemeralMessageParameters.builder().receiverUserId(userId).build().takeIf { forSenderOnly },
+            )
+        }.recoverCatching { error ->
+            error.rethrowIfCancellation()
+            if (!forSenderOnly || message.isEphemeral) throw error
+            log.info { "no ephemeral task menu in chat=${message.chatIdLong} for user=$userId: ${error.message}" }
+
+            taskMenu.sendMenu(
+                target = message.chatTarget,
+                userId = userId,
+                replyParameters = replyParameters(message.messageIdLong),
                 chatIsPrivate = message.isPrivateChat,
                 messages = messages,
             )
@@ -647,6 +682,9 @@ internal class TelegramBotRunner(
         // telegram hands the same message over more than once — as an edit of it, and as a plain
         // redelivery under a fresh update id, which the polling session's own duplicate filter misses. the
         // second turn would repeat an answer into a conversation that has moved on since.
+        // an ephemeral command has no message id to claim, and its own id is reused once it expires
+        if (isEphemeral) return true
+
         if (!answeredMessages.markAnswered(chatIdLong, messageIdLong, Instant.now())) {
             log.warn { "skipping a message already answered: chat=$chatIdLong msg=$messageIdLong" }
             return false

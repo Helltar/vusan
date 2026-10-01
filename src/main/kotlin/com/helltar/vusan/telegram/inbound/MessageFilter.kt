@@ -11,7 +11,8 @@ internal fun shouldHandle(
     botUsername: String?,
     captionSource: Message = message,
 ): Boolean {
-    if (message.isPrivateChat) return true
+    // an ephemeral command reaches this bot and nobody else, so it is addressed to it however it is spelled
+    if (message.isPrivateChat || message.isEphemeral) return true
 
     val isReplyToBot = message.replyAuthorIdOrNull() == botUserId
     val content =

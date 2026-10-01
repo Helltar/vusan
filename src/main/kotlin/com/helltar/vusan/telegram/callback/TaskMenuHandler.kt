@@ -10,16 +10,18 @@ import com.helltar.vusan.tasks.TasksRepository
 import com.helltar.vusan.tasks.formatFire
 import com.helltar.vusan.tasks.nextFireAfterResume
 import com.helltar.vusan.telegram.delivery.ChatTarget
+import com.helltar.vusan.telegram.delivery.EditableMessage
 import com.helltar.vusan.telegram.telegramChat
 import com.helltar.vusan.telegram.telegramUser
 import com.helltar.vusan.telegram.telegramUserId
 import com.helltar.vusan.telegram.delivery.answerCallbackQuery
 import com.helltar.vusan.telegram.delivery.editTextMessage
 import com.helltar.vusan.telegram.delivery.isMessageNotModified
-import com.helltar.vusan.telegram.delivery.replyParameters
 import com.helltar.vusan.telegram.delivery.sendTextMessage
 import java.time.Instant
 import org.telegram.telegrambots.meta.api.methods.ParseMode
+import org.telegram.telegrambots.meta.api.objects.ReplyParameters
+import org.telegram.telegrambots.meta.api.objects.ephemeral.EphemeralMessageParameters
 import org.telegram.telegrambots.meta.api.objects.replykeyboard.InlineKeyboardMarkup
 import org.telegram.telegrambots.meta.api.objects.replykeyboard.buttons.InlineKeyboardButton
 import org.telegram.telegrambots.meta.api.objects.replykeyboard.buttons.InlineKeyboardRow
@@ -35,12 +37,17 @@ internal class TaskMenuHandler(
     fun handles(callbackData: String?): Boolean =
         callbackData?.startsWith(CALLBACK_PREFIX) == true
 
+    /**
+     * Sends [userId]'s menu, anchored by [replyParameters]; with [ephemeral] set it is shown to that
+     * person alone, the way `/tasks` from the menu of a group is answered.
+     */
     suspend fun sendMenu(
         target: ChatTarget,
         userId: Long,
-        replyToMessageId: Long,
+        replyParameters: ReplyParameters?,
         chatIsPrivate: Boolean,
         messages: Messages,
+        ephemeral: EphemeralMessageParameters? = null,
     ) {
         val menu = buildMenu(userId, target.chatId, chatIsPrivate, messages)
 
@@ -49,8 +56,9 @@ internal class TaskMenuHandler(
             target = target,
             text = menu.text,
             parseMode = ParseMode.HTML,
-            replyParameters = replyParameters(replyToMessageId),
+            replyParameters = replyParameters,
             replyMarkup = menu.keyboard,
+            ephemeral = ephemeral,
         )
     }
 
@@ -59,7 +67,7 @@ internal class TaskMenuHandler(
         callbackData: String,
         userId: Long,
         chatId: Long,
-        messageId: Int,
+        message: EditableMessage,
         chatIsPrivate: Boolean,
         messages: Messages,
     ) {
@@ -87,22 +95,22 @@ internal class TaskMenuHandler(
 
             when (action) {
                 is TaskMenuAction.Refresh,
-                is TaskMenuAction.Back -> editMenu(chatId, messageId, userId, chatIsPrivate, messages)
+                is TaskMenuAction.Back -> editMenu(chatId, message, userId, chatIsPrivate, messages)
 
                 is TaskMenuAction.Pause -> {
                     if (!tasks.pauseForUser(telegramUser(userId), action.taskId, scopedChatId?.let(::telegramChat))) {
-                        editMenu(chatId, messageId, userId, chatIsPrivate, messages)
+                        editMenu(chatId, message, userId, chatIsPrivate, messages)
                         return answerUnavailable(callbackQueryId, messages)
                     }
 
-                    editMenu(chatId, messageId, userId, chatIsPrivate, messages)
+                    editMenu(chatId, message, userId, chatIsPrivate, messages)
                 }
 
                 is TaskMenuAction.Resume -> {
                     val task = tasks.findForUser(telegramUser(userId), action.taskId, scopedChatId?.let(::telegramChat))
 
                     if (task == null) {
-                        editMenu(chatId, messageId, userId, chatIsPrivate, messages)
+                        editMenu(chatId, message, userId, chatIsPrivate, messages)
                         return answerUnavailable(callbackQueryId, messages)
                     }
 
@@ -119,31 +127,31 @@ internal class TaskMenuHandler(
                     }
 
                     if (!tasks.resumeForUser(telegramUser(userId), action.taskId, nextFireAt, scopedChatId?.let(::telegramChat))) {
-                        editMenu(chatId, messageId, userId, chatIsPrivate, messages)
+                        editMenu(chatId, message, userId, chatIsPrivate, messages)
                         return answerUnavailable(callbackQueryId, messages)
                     }
 
-                    editMenu(chatId, messageId, userId, chatIsPrivate, messages)
+                    editMenu(chatId, message, userId, chatIsPrivate, messages)
                 }
 
                 is TaskMenuAction.ConfirmDelete -> {
                     val task = tasks.findForUser(telegramUser(userId), action.taskId, scopedChatId?.let(::telegramChat))
 
                     if (task == null) {
-                        editMenu(chatId, messageId, userId, chatIsPrivate, messages)
+                        editMenu(chatId, message, userId, chatIsPrivate, messages)
                         return answerUnavailable(callbackQueryId, messages)
                     }
 
-                    editDeleteConfirmation(chatId, messageId, task, messages)
+                    editDeleteConfirmation(chatId, message, task, messages)
                 }
 
                 is TaskMenuAction.Delete -> {
                     if (!tasks.deleteForUser(telegramUser(userId), action.taskId, scopedChatId?.let(::telegramChat))) {
-                        editMenu(chatId, messageId, userId, chatIsPrivate, messages)
+                        editMenu(chatId, message, userId, chatIsPrivate, messages)
                         return answerUnavailable(callbackQueryId, messages)
                     }
 
-                    editMenu(chatId, messageId, userId, chatIsPrivate, messages)
+                    editMenu(chatId, message, userId, chatIsPrivate, messages)
                 }
             }
 
@@ -175,18 +183,18 @@ internal class TaskMenuHandler(
 
     private suspend fun editMenu(
         chatId: Long,
-        messageId: Int,
+        message: EditableMessage,
         userId: Long,
         chatIsPrivate: Boolean,
         messages: Messages,
     ) {
         val menu = buildMenu(userId, chatId, chatIsPrivate, messages)
-        editIgnoringUnchanged(chatId, messageId, menu.text, menu.keyboard)
+        editIgnoringUnchanged(chatId, message, menu.text, menu.keyboard)
     }
 
     private suspend fun editDeleteConfirmation(
         chatId: Long,
-        messageId: Int,
+        message: EditableMessage,
         task: ScheduledTask,
         messages: Messages,
     ) {
@@ -210,7 +218,7 @@ internal class TaskMenuHandler(
 
         editIgnoringUnchanged(
             chatId,
-            messageId,
+            message,
             messages.taskMenuDeleteConfirmation(task.id, task.menuLabel().escapeHtml()),
             keyboard,
         )
@@ -287,12 +295,12 @@ internal class TaskMenuHandler(
 
     private suspend fun editIgnoringUnchanged(
         chatId: Long,
-        messageId: Int,
+        message: EditableMessage,
         text: String,
         keyboard: InlineKeyboardMarkup,
     ) {
         runCatching {
-            editTextMessage(client, chatId, messageId, text, keyboard, ParseMode.HTML)
+            editTextMessage(client, chatId, message, text, keyboard, ParseMode.HTML)
         }.recoverCatching { error ->
             error.rethrowIfCancellation()
             if (!error.isMessageNotModified()) throw error

@@ -34,6 +34,8 @@ import kotlin.time.Duration.Companion.seconds
 import kotlinx.coroutines.runBlocking
 import org.telegram.telegrambots.meta.api.methods.AnswerCallbackQuery
 import org.telegram.telegrambots.meta.api.methods.ParseMode
+import com.helltar.vusan.telegram.delivery.EditableMessage
+import com.helltar.vusan.telegram.delivery.replyParameters
 import org.telegram.telegrambots.meta.api.methods.send.SendMessage
 import org.telegram.telegrambots.meta.api.methods.updatingmessages.EditMessageText
 import org.telegram.telegrambots.meta.api.objects.message.Message
@@ -80,7 +82,7 @@ class TaskMenuHandlerTest {
         handler.sendMenu(
             target = ChatTarget(-200L),
             userId = 100L,
-            replyToMessageId = 55L,
+            replyParameters = replyParameters(55L),
             chatIsPrivate = false,
             messages = Messages.of(Language.ENGLISH),
         )
@@ -111,7 +113,7 @@ class TaskMenuHandlerTest {
         handler.sendMenu(
             target = ChatTarget(100L),
             userId = 100L,
-            replyToMessageId = 55L,
+            replyParameters = replyParameters(55L),
             chatIsPrivate = true,
             messages = Messages.of(Language.ENGLISH),
         )
@@ -127,7 +129,7 @@ class TaskMenuHandlerTest {
         handler.sendMenu(
             target = ChatTarget(-200L),
             userId = 100L,
-            replyToMessageId = 55L,
+            replyParameters = replyParameters(55L),
             chatIsPrivate = false,
             messages = Messages.of(Language.ENGLISH),
         )
@@ -157,7 +159,7 @@ class TaskMenuHandlerTest {
         roomyHandler.sendMenu(
             target = ChatTarget(100L),
             userId = 100L,
-            replyToMessageId = 55L,
+            replyParameters = replyParameters(55L),
             chatIsPrivate = true,
             messages = Messages.of(Language.ENGLISH),
         )
@@ -182,7 +184,7 @@ class TaskMenuHandlerTest {
             callbackData = "tasks:100:pause:$id",
             userId = 100L,
             chatId = 100L,
-            messageId = 9,
+            message = EditableMessage.Regular(9),
             chatIsPrivate = true,
             messages = Messages.of(Language.ENGLISH),
         )
@@ -203,7 +205,7 @@ class TaskMenuHandlerTest {
             callbackData = "tasks:100:resume:$id",
             userId = 100L,
             chatId = 100L,
-            messageId = 9,
+            message = EditableMessage.Regular(9),
             chatIsPrivate = true,
             messages = Messages.of(Language.ENGLISH),
         )
@@ -233,7 +235,7 @@ class TaskMenuHandlerTest {
             callbackData = "tasks:100:resume:$id",
             userId = 100L,
             chatId = 100L,
-            messageId = 9,
+            message = EditableMessage.Regular(9),
             chatIsPrivate = true,
             messages = Messages.of(Language.ENGLISH),
         )
@@ -260,7 +262,7 @@ class TaskMenuHandlerTest {
             callbackData = "tasks:100:resume:$id",
             userId = 100L,
             chatId = 100L,
-            messageId = 9,
+            message = EditableMessage.Regular(9),
             chatIsPrivate = true,
             messages = Messages.of(Language.ENGLISH),
         )
@@ -280,7 +282,7 @@ class TaskMenuHandlerTest {
             callbackData = "tasks:100:pause:$id",
             userId = 200L,
             chatId = -200L,
-            messageId = 9,
+            message = EditableMessage.Regular(9),
             chatIsPrivate = false,
             messages = Messages.of(Language.ENGLISH),
         )
@@ -300,7 +302,7 @@ class TaskMenuHandlerTest {
             callbackData = "tasks:100:confirm:$id",
             userId = 100L,
             chatId = 100L,
-            messageId = 9,
+            message = EditableMessage.Regular(9),
             chatIsPrivate = true,
             messages = Messages.of(Language.ENGLISH),
         )
@@ -321,7 +323,7 @@ class TaskMenuHandlerTest {
             callbackData = "tasks:100:delete:$id",
             userId = 100L,
             chatId = 100L,
-            messageId = 9,
+            message = EditableMessage.Regular(9),
             chatIsPrivate = true,
             messages = Messages.of(Language.ENGLISH),
         )

@@ -36,6 +36,9 @@ interface Messages {
     val clearCommandDescription: String
     val stopCommandDescription: String
 
+    /** A reply to one of the bot's ephemeral answers, which only the two of them can see: the bot answers in the open. */
+    val ephemeralChatReply: String
+
     fun voiceTooLongReply(durationSeconds: Long, maxSeconds: Long): String
 
     /** The provider's usage limit is spent; [untilReset] is `null` when the error body did not say when it lifts. */

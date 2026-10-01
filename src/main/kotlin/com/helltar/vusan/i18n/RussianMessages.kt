@@ -64,6 +64,8 @@ internal object RussianMessages : Messages {
     override val clearCommandDescription = "Очистить историю переписки"
     override val stopCommandDescription = "Остановить то, что я сейчас делаю"
 
+    override val ephemeralChatReply = "Это видим только мы с тобой, а отвечаю я всем — напиши мне обычным сообщением."
+
     override fun voiceTooLongReply(durationSeconds: Long, maxSeconds: Long): String =
         "Это голосовое длится ${durationSeconds}с — я могу распознать не больше ${maxSeconds}с, " +
                 "пришли короче или напиши текстом"
