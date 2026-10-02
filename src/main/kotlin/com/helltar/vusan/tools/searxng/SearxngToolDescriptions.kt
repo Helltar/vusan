@@ -34,7 +34,8 @@ internal object SearxngToolDescriptions {
 
     const val META_SEARCH_IMAGES =
         "Search the web for images and send them to the chat. " +
-                "This is the fallback picture search: prefer `searchImages` when it is offered, and use this one when `searchImages` reported that it could not download anything, or when it is not offered at all. " +
+                "This is the fallback picture search: prefer `searchImages` when it is offered, and use this one when `searchImages` could not download anything, when it sent fewer images than the user wants and they ask for more, or when it is not offered at all. " +
+                "Each call sends its own album, so one call after a short `searchImages` album gives the user a second album rather than a longer one. " +
                 """Use when the user asks to show, send, or find a picture/photo of something — for example "show me a photo of the Eiffel Tower", "send a BMW X6 picture", "find a red panda photo". """ +
                 "Multiple results are sent as a Telegram media group. " +
                 "Do not use for animated GIFs (use `searchGif` instead). " +

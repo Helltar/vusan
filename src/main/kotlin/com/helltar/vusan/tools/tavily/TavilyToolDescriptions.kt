@@ -30,6 +30,8 @@ internal object TavilyToolDescriptions {
                 """Use when the user asks to show, send, or find a picture/photo of something — for example "show me a photo of the Eiffel Tower", "send a BMW X6 picture", "find a red panda photo". """ +
                 "Use this for static images, including anime art or character pictures. " +
                 "Multiple results are sent as a Telegram media group. " +
+                "Each call sends its own album and usually yields about 5 images whatever `maxResults` asks, so do not promise a count before the result comes back, and do not call it again just to top a short album up: the user would get two albums. " +
+                "When the user wants more than one call gave, say how many were sent and offer `metaSearchImages`, which draws on other engines and sends a second album. " +
                 "Do not use for animated GIFs (use `searchGif` instead). " +
                 "The tool returns a description of what is visible in each photo. " +
                 "If the user asked you to describe / say what's on the photo (`describe it`, `what's on it`, `what does it show`), use these descriptions as the source — rewrite them in the user's language as your plain reply (becomes the caption for a single image) or via `sendMessage` (after a media group)."
@@ -38,9 +40,10 @@ internal object TavilyToolDescriptions {
         "Image search query — a concise descriptive phrase, e.g. `BMW X6`, `Eiffel Tower at night`, `red panda`."
 
     const val SEARCH_IMAGES_MAX_RESULTS =
-        "How many images to return, from 1 to 10. " +
+        "How many images to send, from 1 to 10. " +
                 "Prefer 3 to 5. " +
-                "When 2 or more images are returned they are sent as a single media group."
+                "The provider hands back about 5 candidates per call whatever is asked, so a larger request usually arrives short; the result says how many were sent. " +
+                "When 2 or more images are sent they go as a single media group."
 
     const val EXTRACT_PAGE_CONTENT =
         "Fetch and extract the full text content of a web page by URL into your own context, through a service that renders the page first. " +

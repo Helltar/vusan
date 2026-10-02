@@ -351,7 +351,9 @@ Two providers cover the search itself, and either can run without the other:
 | `SEARXNG_URL`    | `metaSearch`, `metaSearchImages`                  | Fallback for both, plus category scoping.               |
 
 Tavily leads on both: its results are cleaned-up page extracts rather than snippets, and
-`searchImages` describes what is in each photo. Its `extractPageContent` renders a page before
+`searchImages` describes what is in each photo. Tavily returns the images of a search as a side list
+of about five, whatever `maxResults` asks, so a request for ten arrives short; `metaSearchImages`
+is what fills a larger order, as a second album. Tavily's `extractPageContent` renders a page before
 reading it, which is what `readPage` cannot do for a page that draws its content with scripts, so
 the agent reads with it first and falls back to `readPage` when it fails, returns nothing or cuts a
 long page short — `readPage` continues one in parts. [SearXNG](https://docs.searxng.org) is self-hosted,
