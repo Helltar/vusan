@@ -109,6 +109,8 @@ Or run it on JDK 21, with `ffmpeg` and `yt-dlp` on `PATH`:
 - **Replies** — uses the message you reply to as context, including other people's files and
   pictures.
 - **Private replies** — moves the answer into your DMs when you ask.
+- **Speaks up on its own** — now and then reacts to a message or drops a line into the group without
+  being called, and notices when someone has gone quiet.
 
 ### Speaks Telegram
 
@@ -125,6 +127,7 @@ Or run it on JDK 21, with `ffmpeg` and `yt-dlp` on `PATH`:
 - **Conversation history** — keeps context with recent messages and recaps, separately in each chat.
 - **What the group said** — recaps the whole conversation and answers questions about who said what.
 - **Sense of time** — notices gaps between conversations.
+- **Diary** — writes down what each day in a group was like and picks up yesterday's thread.
 - **Memory** — remembers facts about you and the group across history resets; forgets them on
   request.
 - **Scheduled tasks** — runs tasks once or on a recurring schedule; lets you pause, resume, edit or

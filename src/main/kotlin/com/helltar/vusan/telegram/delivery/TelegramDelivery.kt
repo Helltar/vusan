@@ -13,6 +13,7 @@ import com.helltar.vusan.delivery.Destination
 import com.helltar.vusan.delivery.DeliveryOutcome
 import com.helltar.vusan.delivery.OutputDelivery
 import com.helltar.vusan.delivery.TurnDelivery
+import com.helltar.vusan.i18n.Language
 import com.helltar.vusan.i18n.Messages
 import com.helltar.vusan.outbox.BotOutput
 import com.helltar.vusan.outbox.OutboxItem
@@ -202,6 +203,22 @@ class TelegramDelivery(
         }
 
         return outcome.asOutcome()
+    }
+
+    override suspend fun deliverUnprompted(
+        destination: Destination,
+        outputs: List<BotOutput>,
+        anchorMessageId: String?,
+    ): DeliveryOutcome {
+        val plainTarget = DeliveryTarget(destination.chatTarget)
+
+        return dispatch(
+            result = AgentResult(outputs.map { OutboxItem(it, toPrivate = false) }, comment = null),
+            originTarget = plainTarget.copy(replyToMessageId = anchorMessageId?.telegramMessageId),
+            currentChatTarget = plainTarget,
+            senderPrivateChatId = null,
+            messages = Messages.of(Language.DEFAULT),
+        ).asOutcome()
     }
 
     /**

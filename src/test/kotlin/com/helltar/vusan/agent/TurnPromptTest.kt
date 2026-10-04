@@ -13,6 +13,32 @@ import kotlin.test.assertTrue
 
 class TurnPromptTest {
 
+    @Test
+    fun `the diary rides ahead of the recent chat and only where there is one`() {
+        val withDiary =
+            currentTurnPrompt(
+                userInput = "so what did we settle on?",
+                context = context(),
+                userMemory = emptyList(),
+                chatMemory = emptyList(),
+                diary = "2026-10-03: the ferry won",
+                recentChat = "12:14 bob: bridge is closed",
+            )
+
+        assertContains(withDiary, "<diary>\n2026-10-03: the ferry won\n</diary>")
+        assertTrue(withDiary.indexOf("<diary>") < withDiary.indexOf("<recent_chat>"))
+
+        val without =
+            currentTurnPrompt(
+                userInput = "so what did we settle on?",
+                context = context(),
+                userMemory = emptyList(),
+                chatMemory = emptyList(),
+            )
+
+        assertFalse("<diary>" in without, "a turn with no diary paid for the block")
+    }
+
     // the system prompt names the primary model and is cached whole, so the truth about a turn the
     // fallback answered can only ride here.
     @Test

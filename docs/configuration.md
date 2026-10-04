@@ -632,6 +632,91 @@ ADDRESSING_SHADOW=true
 It needs the [group log](#group-log), which is where the recent lines come from; with
 `GROUP_LOG_ENABLED=false` it stays off, and startup says so.
 
+## Diary
+
+After a day ends, Vusan writes itself a short entry about what that day was like in each group: what
+people talked about, who promised what, what was funny, how it felt about it. The last three entries
+ride along on every turn in that group, so it can pick up yesterday's thread instead of meeting the
+chat fresh every time.
+
+```dotenv
+DIARY_ENABLED=true
+```
+
+| Variable        | Default | Description                                          |
+|-----------------|---------|------------------------------------------------------|
+| `DIARY_ENABLED` | `false` | `true` writes an entry for each group's closed day.  |
+
+- **What is sent** — once per group per day, that day's transcript from the [group log](#group-log)
+  (up to 12,000 characters of it) goes to the chat model, with nobody having asked. That is the
+  difference from a recap, which is made only when someone asks for one, and why this is off by
+  default.
+- **Which days** — only a day that has ended, and only one with at least fifteen messages from
+  people. Yesterday is written within a quarter of an hour of the bot being up; older days are not
+  backfilled.
+- **How long** — entries are kept for a week. Asking the agent to forget the group log drops the
+  chat's entries with it.
+- **Voice** — an entry is written in the bot's own [personality](#personality), in the language the
+  chat mostly uses.
+
+It needs the group log; with `GROUP_LOG_ENABLED=false` it stays off, and startup says so.
+
+## Initiative
+
+In a group Vusan normally speaks only when spoken to. With this on, it also looks over a chat people
+are writing in and, now and then, puts an emoji on a message or says a line of its own — a joke on
+what was just said, an opinion, a question about someone who has gone quiet. Most looks end with
+nothing, which is the point: it is meant to feel like a member of the chat, not a notification.
+
+```dotenv
+INITIATIVE_ENABLED=true
+INITIATIVE_SHADOW=true
+```
+
+| Variable                          | Default | Description                                                      |
+|-----------------------------------|---------|------------------------------------------------------------------|
+| `INITIATIVE_ENABLED`              | `false` | `true` turns it on for every group in `ALLOWED_IDS`.             |
+| `INITIATIVE_SHADOW`               | `false` | `true` decides and logs every look, but sends nothing.           |
+| `INITIATIVE_INTERVAL_MINUTES`     | `30`    | Middle of the pause between two looks at one chat; at least 5.   |
+| `INITIATIVE_MAX_MESSAGES_PER_DAY` | `4`     | Lines it may write into one chat a day without being asked.      |
+| `INITIATIVE_QUIET_HOURS`          | `1-8`   | Local hours with no looks at all; `23-7` runs over midnight.     |
+
+- **When it looks** — only at a chat somebody wrote in during the last fifteen minutes, after a pause
+  drawn at random between half the interval and one and a half of it, with at least three new
+  messages since its last look, and not within ten minutes of its own last line there — if it is
+  already in the conversation, it does not talk over itself.
+- **What is sent** — up to thirty lines of the chat's last ninety minutes, with names, to the chat
+  model, with nobody having asked. Everything else Vusan does sends a group's messages somewhere
+  only when it is addressed, so this is a deliberate switch. With the [diary](#diary) on, its entries
+  go along, as do the names of people who used to write in the chat and have not for three days.
+- **What it may do** — nothing, one reaction, or one short message, optionally as a reply. Reactions
+  have a ceiling of ten per chat a day beside the message limit; with `INITIATIVE_MAX_MESSAGES_PER_DAY=0`
+  it only ever reacts.
+- **Quiet hours** — from the first hour up to, not including, the last, on the bot's own clock.
+  `0-0` is an empty range, so it looks around the clock.
+- **Telling it to stop** — it reads the chat it is about to speak into, and is told to stay out when
+  someone asked it to be quiet. For a hard stop, turn the switch off.
+- **After a restart** — what it has looked at and how much it said today are kept in memory only, so
+  a restart starts the day's count again; it also waits out one pause before its first look.
+- **Forum groups** — a line that replies to a message lands in that message's topic; one that
+  stands alone goes to General.
+
+What to read in the log:
+
+```
+initiative look: chat=[telegram:-100123] fresh=[7] said=[1/4] reacted=[0/10] action=[reply] msg=[4812] chars=[41] text=[…] ms=[2140] why=[…]
+initiative look: chat=[telegram:-100123] fresh=[4] said=[1/4] reacted=[0/10] action=[silent] ms=[1630] why=[two people sorting out a trip]
+initiative skip: chat=[telegram:-100123] reason=[already talking] fresh=[5]
+```
+
+`action` is `silent`, `react`, `say` or `reply`, and `why` is the model's own short reason, there so a
+day of looks can be read without opening the chat. A decision that was not carried out says so in
+`result` (`over budget`, `no such target`, `emoji not allowed`, `no readable decision`). `skip` names
+the gate that kept it from looking: `quiet`, `already talking` or `budget spent`. Start with
+`INITIATIVE_SHADOW=true`, read a day or two of these, then let it speak.
+
+It needs the group log; with `GROUP_LOG_ENABLED=false` it stays off, and startup says so.
+
 ## Scheduled tasks
 
 Scheduled tasks are built in. The agent can schedule them in three forms:

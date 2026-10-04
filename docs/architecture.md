@@ -18,6 +18,8 @@ Telegram ──► telegram/ ──► agent/ ◄──► tools/ ──► exte
                 │            ├─ reads/stores the dialogue via ─► agent/conversation/ ─► infra/
                 │            └─ reads/stores memory via ──► agent/memory/ ──► infra/
                 ├─ records every group message into ─► agent/grouplog/ ─► infra/
+                │                                          ▲
+                │            agent/presence/ ── reads ─────┘  (and speaks through delivery/)
                 └─ delivers outbox back to Telegram
 ```
 
@@ -55,7 +57,10 @@ that is who owns writing them, not because only `agent/` reads them. No other ar
   `MemoryOwner` (one person, or one group), which survives a history clear and is injected as
   `<user_memory>`/`<group_memory>`; `agent/grouplog/` is the group transcript, keyed by chat alone, holding every message the bot saw in a group rather than only the turns it took
   part in. `GroupLogReader` answers a window from it under a character budget, falling back to cached per-day recaps
-  produced by `GroupLogDigester` when the window is too wide to quote.
+  produced by `GroupLogDigester` when the window is too wide to quote. `agent/presence/` is what the bot does in a
+  group with nobody asking: `Diary` writes an entry about each closed day, and `Initiative` looks over a chat people are
+  writing in and now and then reacts or says something. Neither is a turn — no history, no tools, one model call each —
+  and both are off unless switched on; see [Background and side flows](#background-and-side-flows).
 - **`tools/`** — agent-callable tools, one subpackage per capability (search, voice, vision, scheduled tasks, …).
   `ToolRegistryFactory` owns clients and builds a per-request `ToolCatalog` from required tools, optional tools whose
   env/config is present, and whatever the turn's messenger adds through the `PlatformToolSets` port — a tool only one
@@ -89,7 +94,9 @@ that is who owns writing them, not because only `agent/` reads them. No other ar
   part of an address), the `Attribution` saying who a scheduled answer belongs to, where it hangs, and why the chat is
   hearing from the bot at all
   (`AttributionReason`) — the adapter writes the mention itself, since naming a person is platform syntax — and
-  `OutputDelivery`, which an adapter implements so nothing outside one needs a messenger client to deliver a turn.
+  `OutputDelivery`, which an adapter implements so nothing outside one needs a messenger client to deliver a turn. Its
+  `deliverUnprompted` is the send with no person behind it at all — what the bot says of its own accord, optionally
+  hung under one message.
 - **`tasks/`** — scheduled-task subsystem: storage, persisted pause state, recurrence math, and the background
   `TaskScheduler`. It knows no messenger: it delivers through `OutputDelivery` and reads chat facts through
   `ChatProfileLookup`.
@@ -207,7 +214,8 @@ A normal user message travels:
    `last_exchange` — how long ago this user last spoke with Vusan in this chat — but only once the gap is long enough to
    be worth noticing, so ordinary back-and-forth stays free of it. In a group the turn also carries `<recent_chat>`: a
    hard-capped slice of what the chat was saying just before, so a question with no subject ("and what do you think?")
-   still has one. It leaves out the triggering message and this user's own exchanges with the bot, both of which the
+   still has one, and — where the deployment keeps a [diary](#background-and-side-flows) — `<diary>`, the bot's own
+   entries about the chat's last three written-up days. `<recent_chat>` leaves out the triggering message and this user's own exchanges with the bot, both of which the
    prompt already carries — the first as the request itself, the second as replayed `user`/`assistant` turns. Other
    people's messages and the bot's replies to *them* stay, since one person's conversation never contains those. An
    ambient turn keeps this user's exchanges too and cuts the slice right before the message (`recentChatSlice`): with
@@ -389,7 +397,7 @@ A normal user message travels:
   math lives in `tasks/Recurrence.kt`.
 - **Maintenance** — `infra/Maintenance` runs a pass of bounded deletes on the way up and every six hours after
   that: conversations past `CONVERSATION_RETENTION_DAYS`, group transcripts past `GROUP_LOG_RETENTION_DAYS` or over
-  their row cap, and polls past their retention. Each of these is also pruned where it is written, and that is enough
+  their row cap, polls past their retention, and diary entries older than a week. Each of these is also pruned where it is written, and that is enough
   for as long as somebody keeps writing — the pass exists for what nobody writes to any more: a conversation the person
   left, a chat the bot still sits in, a poll never followed by another. Every step bounds its own work (a hundred
   conversations or chats a round, the next round taking the rest) and reports what it removed, and a step that throws
@@ -419,6 +427,36 @@ A normal user message travels:
   to one author when one was asked for, because the transcript under it may be only part of the window and a "how many"
   answer must not be a tally of quoted lines. The digest path counts over the day-snapped window it prints rather than
   the narrower one requested, and labels `<today>` with how many of its messages fit.
+- **Diary** — `agent/presence/Diary` gives the bot a memory of what a group's days were like, which neither history
+  (one person's exchanges with it) nor durable memory (facts somebody asked to be kept) holds. Every fifteen minutes it
+  looks for chats people wrote in yesterday that have no entry for that day, and has `DiaryWriter` write one from the
+  day's transcript: first person, in the deployment's own personality, with the two entries before it for continuity.
+  Only a closed day is written, for the reason only a closed day is digested, and a day of fewer than fifteen messages
+  gets none. A day whose writer keeps failing is given up on after three tries. `AgentRunner` then puts the newest three
+  entries of the past week into every turn in that group as `<diary>` — defused like the transcript they came from —
+  and `Initiative` reads the same block. Entries live in `chat_diary`, a week at most (`Maintenance`), and
+  `GroupLogRepository.clear` drops them with the transcript they were written from. Unlike a digest, an entry is written
+  with nobody having asked, so a whole day of a chat goes to the chat model unprompted: `DIARY_ENABLED` is the switch,
+  off by default, and a chat the allowlist no longer names is never read.
+- **Initiative** — `agent/presence/Initiative` is the bot speaking up without being called. Code decides whether to
+  look, a model decides what comes of it. Once a minute it takes the chats people wrote in during the last quarter of
+  an hour and, for each, checks the gates: outside `INITIATIVE_QUIET_HOURS`; a pause drawn at random between half and
+  one and a half `INITIATIVE_INTERVAL_MINUTES` has passed since the last look (a chat seen for the first time waits one
+  out too, so a restart is not followed by the bot speaking everywhere); at least three messages from people since
+  that look; no line of the bot's own in the last ten minutes, since then the conversation already has it; and
+  something left of the day's budget. A look that passes sends `InitiativeMind` up to thirty lines of the last ninety
+  minutes, the diary block, how much it has already said today, and — from `GroupLogRepository.authorActivity` — the
+  people who used to write here and have not for three days. The lines a person wrote since the last look carry a
+  number, and a number is the only way to point at a message: message ids are never shown, so a decision cannot reach
+  past what the look put in front of it. The answer is one JSON object — `silent`, `react` (one emoji from Telegram's
+  free set on one numbered line) or `say` (one short plain-text line, optionally a reply to a numbered line) — and
+  anything unreadable, failed or slower than ninety seconds is silence. What it writes is bounded per chat per day
+  (`INITIATIVE_MAX_MESSAGES_PER_DAY`, ten reactions), and a decision over the budget is dropped. The line goes out
+  through `OutputDelivery.deliverUnprompted`, so it lands in the group transcript like any other bot line and a reply to
+  it starts an ordinary turn with that line as `<reply_context>`. A chat that turns the bot away is left alone until a
+  restart. State — the last look, the next one, today's counts — is process memory. With `INITIATIVE_SHADOW` every
+  decision is reached, counted and logged, and nothing is sent. Every look and every skipped one leaves a log line; see
+  [Initiative](configuration.md#initiative).
 - **Poll answers** — a vote on a poll the bot put in a group reaches it as a `poll_answer` update, which carries a poll
   id and option numbers and nothing else: not the question, not what the options said, not even the chat. `PollRegistry`
   writes what a sent poll said (`polls`) at the moment `TelegramOutputSender` gets an id back for it, and only where the
@@ -600,7 +638,8 @@ generation or `ELEVENLABS_API_KEY` is configured, the two things that use it) `r
 failed startup → (only with a vision runtime) the `StickerCatalog`, then `TelegramToolSets` over it and the client,
 `ToolRegistryFactory`, `AgentFactory`, `AgentRunner` → create `TaskMenuHandler` and `InlineChoiceHandler`, and
 optionally enable voice transcription → start `TelegramBotRunner`, which builds its own `AgentTurns` and
-`CallbackRouter` over those, and launch `TaskScheduler` and the sticker description worker, then block on the runner job
+`CallbackRouter` over those, and launch `TaskScheduler`, the sticker description worker and — where switched on — the
+`Diary` and `Initiative` loops, then block on the runner job
 until shutdown (closing the executor, HTTP client, and DB in `finally`).
 
 Public URL downloads have their own `createPublicHttpClient` (`infra/PublicHttp.kt`), also closed at shutdown. Its
@@ -715,6 +754,8 @@ A symptom-to-source map for finding the right file fast. Paths are under
 | A group recap misses messages, or `readGroupLog` returns too little | `telegram/TelegramBotRunner.recordGroupLog` + `telegram/inbound/GroupLogEntries.kt` (what gets recorded at all), then `agent/grouplog/GroupLogReader.kt` (window budget, day split, digest cache) and `agent/grouplog/GroupLogRepository.kt` (retention and the per-chat row cap) |
 | Vusan misreads what "that" refers to in a group, or parrots the group's chatter | `agent/AgentRunner.recentChatFor` (the `<recent_chat>` slice and its caps) + `agent/SystemPrompt.kt` (the `<recent_chat>` contract) |
 | A channel recap misses posts, quotes the wrong text, or costs too much vision | `tools/tgchannel/TelegramChannelReader.kt` (the `?before=` walk, the window cutoff, the size budget, and which posts get vision) + `tools/tgchannel/TelegramChannelParser.kt` (own text vs the quote of a replied-to post, reactions, media kinds) |
+| Vusan speaks up in a group too often, too rarely, or at the wrong moment | `initiative look` and `initiative skip` lines in the log (what it decided and why, or which gate kept it out), then `agent/presence/Initiative.kt` (the gates, the pause, the day's budget) + `agent/presence/InitiativeMind.kt` (what it is told it may do, and what counts as a readable decision) |
+| Vusan does not remember yesterday in a group, or remembers it wrong | `diary entry written` lines in the log, then `agent/presence/Diary.kt` (which day is written, the fifteen-message floor, how many entries a turn is shown) + `agent/presence/DiaryWriter.kt` (the instructions) + `agent/SystemPrompt.kt` (the `<diary>` contract) |
 | Voice/audio not transcribed | `telegram/inbound/VoiceTranscriber.kt` + `stt/OpenAiWhisperClient.kt` (needs `OPENAI_STT_API_KEY`); for a video's sound `tools/vision/VideoAudioTranscriber.kt` |
 | Vusan cannot see what is in a video | `tools/vision/VisionTools.kt` (`describeVideo` guards and the preview-frame fallback), `tools/vision/VideoVisionClient.kt` (frames + transcript prompt), `tools/vision/VideoSampler.kt` (ffmpeg), `telegram/inbound/ReplyContext.kt` (which media becomes an `AttachedFile`) |
 | Web search picks the wrong provider, or results are thin | the `@LLMDescription` text that ranks them: `tools/tavily/TavilyToolDescriptions.kt` (`webSearch`, the default) and `tools/searxng/SearxngToolDescriptions.kt` (`metaSearch`, the fallback) |

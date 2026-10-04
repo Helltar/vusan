@@ -77,6 +77,36 @@ class GroupLogRepositoryTest {
     }
 
     @Test
+    fun `a chat only the bot has written in is not an active one`() = runBlocking {
+        val repository = GroupLogRepository(GroupLogConfig())
+        val other = testChat(-200)
+
+        repository.record(entry(messageId = "1", text = "anyone around", at = now.minusSeconds(60)))
+        repository.record(
+            GroupLogEntry(chat = other, messageId = null, kind = GroupLogEntry.BOT_KIND, sentAt = now, text = "hello"),
+        )
+
+        assertEquals(listOf(CHAT), repository.activeChats(now.minusSeconds(600), now))
+        assertTrue(repository.activeChats(now.minusSeconds(30), now).isEmpty())
+    }
+
+    @Test
+    fun `author activity counts each person's messages and keeps their latest`() = runBlocking {
+        val repository = GroupLogRepository(GroupLogConfig())
+
+        repository.record(entry(messageId = "1", text = "first", at = now.minusSeconds(300)))
+        repository.record(entry(messageId = "2", text = "second", at = now.minusSeconds(100)))
+        repository.record(
+            GroupLogEntry(chat = CHAT, messageId = null, kind = GroupLogEntry.BOT_KIND, sentAt = now, text = "noted"),
+        )
+
+        val activity = repository.authorActivity(CHAT, since = now.minusSeconds(600)).single()
+
+        assertEquals(2L, activity.messages)
+        assertEquals(now.minusSeconds(100), activity.lastSeenAt)
+    }
+
+    @Test
     fun `bot rows carry no message id and never collide`() = runBlocking {
         val repository = GroupLogRepository(GroupLogConfig())
 

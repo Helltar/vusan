@@ -22,6 +22,7 @@ internal fun currentTurnPrompt(
     previousExchangeAt: Instant? = null,
     userMemory: List<MemoryEntry>,
     chatMemory: List<MemoryEntry>,
+    diary: String? = null,
     recentChat: String? = null,
     stickerCatalog: String? = null,
     toolGroups: String? = null,
@@ -32,6 +33,7 @@ internal fun currentTurnPrompt(
         add(context.toPromptBlock(previousExchangeAt))
         memoryBlock("user_memory", userMemory)?.let(::add)
         memoryBlock("group_memory", chatMemory)?.let(::add)
+        diary?.takeIf { it.isNotBlank() }?.let { add(xmlBlock("diary", it)) }
         // it changes with what this conversation has already loaded, so it cannot live in the system
         // block: that block is the one prefix every request of the deployment shares.
         toolGroups?.takeIf { it.isNotBlank() }?.let { add(xmlBlock("tool_groups", it)) }

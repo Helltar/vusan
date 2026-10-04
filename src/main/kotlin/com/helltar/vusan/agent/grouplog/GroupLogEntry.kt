@@ -30,3 +30,6 @@ data class GroupLogEntry(
         const val BOT_KIND = "bot"
     }
 }
+
+/** One person's share of a chat over some stretch: under the name the transcript shows them by. */
+data class AuthorActivity(val name: String, val messages: Long, val lastSeenAt: Instant)

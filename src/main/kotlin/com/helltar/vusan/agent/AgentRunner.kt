@@ -108,6 +108,8 @@ class AgentRunner(
     // on. the lock is taken before a place, in every path: a turn that holds a place is running and waits
     // for nothing, so nothing can wait in a circle — and a person's line costs the others no places.
     maxQueuedTurnsPerConversation: Int,
+    // what the bot wrote down about this chat's last few days, if this deployment keeps a diary.
+    private val diary: (suspend (ChatRef) -> String?)? = null,
 ) {
 
     private val admission = TurnAdmission(maxConcurrentTurns)
@@ -209,6 +211,7 @@ class AgentRunner(
                 previousExchangeAt = conversation.lastInteractionAt(context.scope),
                 userMemory = userMemory,
                 chatMemory = chatMemory,
+                diary = diaryFor(context),
                 recentChat = recentChatFor(context),
                 stickerCatalog = stickerCatalogFor(context),
                 toolGroups = toolCatalog.menu(),
@@ -341,6 +344,19 @@ class AgentRunner(
         stickerCatalog
             ?.takeIf { context.chat.capabilities.stickersAndAnimations }
             ?.invoke(context.chatRef)
+
+    // a group's days belong to the group: a private chat has its history instead, and no diary.
+    private suspend fun diaryFor(context: RequestContext): String? {
+        val entries = diary?.takeIf { !context.chat.isPrivate } ?: return null
+
+        return try {
+            entries(context.chatRef)
+        } catch (e: Throwable) {
+            e.rethrowIfCancellation()
+            log.warn(e) { "failed to load the diary for chat=${context.chat.id}" }
+            null
+        }
+    }
 
     // what the group was saying just before this turn. in a group the bot only ever sees the messages
     // addressed to it, so without this a question like "and what do you think?" arrives with no subject.

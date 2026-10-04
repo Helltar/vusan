@@ -2,6 +2,7 @@ package com.helltar.vusan.delivery
 
 import com.helltar.vusan.agent.AgentResult
 import com.helltar.vusan.i18n.Language
+import com.helltar.vusan.outbox.BotOutput
 import com.helltar.vusan.request.UserRef
 
 /**
@@ -12,6 +13,17 @@ interface OutputDelivery {
 
     /** Sends everything a finished turn produced. */
     suspend fun deliver(delivery: TurnDelivery): DeliveryOutcome
+
+    /**
+     * Sends what the bot says of its own accord. Nobody asked, so there is no person to route anything
+     * to and no line saying whose answer it is; [anchorMessageId] is the message it picks up, when it
+     * picks one up, and the outputs stand on their own when that message is gone.
+     */
+    suspend fun deliverUnprompted(
+        destination: Destination,
+        outputs: List<BotOutput>,
+        anchorMessageId: String? = null,
+    ): DeliveryOutcome
 
     /** Sends one line of plain text from the bot itself — no anchor, no formatting fallbacks. */
     suspend fun notify(destination: Destination, text: String): DeliveryOutcome

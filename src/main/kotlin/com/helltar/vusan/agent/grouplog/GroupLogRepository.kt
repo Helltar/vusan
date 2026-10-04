@@ -3,6 +3,7 @@ package com.helltar.vusan.agent.grouplog
 import com.helltar.vusan.common.limitTo
 import com.helltar.vusan.config.GroupLogConfig
 import com.helltar.vusan.infra.Db.dbTransaction
+import com.helltar.vusan.infra.tables.ChatDiaryTable
 import com.helltar.vusan.infra.tables.GroupLogDigestsTable
 import com.helltar.vusan.infra.tables.GroupLogTable
 import com.helltar.vusan.request.ChatRef
@@ -15,11 +16,13 @@ import org.jetbrains.exposed.v1.core.count
 import org.jetbrains.exposed.v1.core.greater
 import org.jetbrains.exposed.v1.core.eq
 import org.jetbrains.exposed.v1.core.greaterEq
+import org.jetbrains.exposed.v1.core.isNotNull
 import org.jetbrains.exposed.v1.core.isNull
 import org.jetbrains.exposed.v1.core.less
 import org.jetbrains.exposed.v1.core.lessEq
 import org.jetbrains.exposed.v1.core.like
 import org.jetbrains.exposed.v1.core.lowerCase
+import org.jetbrains.exposed.v1.core.max
 import org.jetbrains.exposed.v1.core.neq
 import org.jetbrains.exposed.v1.core.or
 import org.jetbrains.exposed.v1.jdbc.deleteWhere
@@ -178,9 +181,58 @@ class GroupLogRepository(private val config: GroupLogConfig) {
         }
     }
 
-    /** Drops everything recorded for [chat], transcript and cached digests alike. */
+    /**
+     * The chats people wrote in between [from] and [to]. The bot's own lines do not count: a chat only
+     * the bot has spoken in is not one anybody is in.
+     */
+    suspend fun activeChats(from: Instant, to: Instant): List<ChatRef> = dbTransaction {
+        GroupLogTable
+            .select(GroupLogTable.platform, GroupLogTable.chatId)
+            .where {
+                (GroupLogTable.sentAt greaterEq from) and
+                        (GroupLogTable.sentAt lessEq to) and
+                        (GroupLogTable.kind neq GroupLogEntry.BOT_KIND)
+            }
+            .withDistinct()
+            .map { ChatRef(it[GroupLogTable.platform], it[GroupLogTable.chatId]) }
+    }
+
+    /**
+     * Who wrote in [chat] since [since], how much, and when last. Senders with no id of their own — an
+     * anonymous admin, a linked channel — are left out, since such a row is not one person.
+     */
+    suspend fun authorActivity(chat: ChatRef, since: Instant): List<AuthorActivity> = dbTransaction {
+        val messages = GroupLogTable.id.count()
+        val lastSeenAt = GroupLogTable.sentAt.max()
+        val username = GroupLogTable.senderUsername.max()
+        val name = GroupLogTable.senderName.max()
+
+        GroupLogTable
+            .select(GroupLogTable.senderId, messages, lastSeenAt, username, name)
+            .where {
+                inChat(chat) and
+                        (GroupLogTable.sentAt greaterEq since) and
+                        (GroupLogTable.kind neq GroupLogEntry.BOT_KIND) and
+                        GroupLogTable.senderId.isNotNull()
+            }
+            .groupBy(GroupLogTable.senderId)
+            .mapNotNull { row ->
+                AuthorActivity(
+                    name = row[username] ?: row[name] ?: return@mapNotNull null,
+                    messages = row[messages],
+                    lastSeenAt = row[lastSeenAt] ?: return@mapNotNull null,
+                )
+            }
+    }
+
+    /** Drops everything recorded for [chat]: the transcript, and the digests and diary made from it. */
     suspend fun clear(chat: ChatRef): Int = dbTransaction {
         GroupLogDigestsTable.deleteWhere { digestsInChat(chat) }
+
+        ChatDiaryTable.deleteWhere {
+            (ChatDiaryTable.platform eq chat.platform) and (ChatDiaryTable.chatId eq chat.id)
+        }
+
         GroupLogTable.deleteWhere { inChat(chat) }
     }
 

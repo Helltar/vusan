@@ -260,6 +260,18 @@ class TelegramDeliveryTest {
     }
 
     @Test
+    fun `an unprompted line hangs under the message it picks up, or under none`() = runBlocking {
+        val client = RecordingClient()
+        val delivery = TelegramDelivery(client.proxy)
+
+        delivery.deliverUnprompted(Destination(testChat(-7)), listOf(BotOutput.Text("take the ferry")), "15")
+        delivery.deliverUnprompted(Destination(testChat(-7)), listOf(BotOutput.Text("morning")))
+
+        assertEquals(listOf<Int?>(15, null), client.replyTargets)
+        assertEquals(listOf("take the ferry", "morning"), client.sentTexts)
+    }
+
+    @Test
     fun `a fire in a chat without topics names none`() = runBlocking {
         val client = RecordingClient()
 

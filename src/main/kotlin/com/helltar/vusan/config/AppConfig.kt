@@ -19,10 +19,12 @@ data class AppConfig(
     val appearance: String?,
     val chatHistory: ConversationConfig = ConversationConfig(),
     val databasePath: String,
+    val diaryEnabled: Boolean = false,
     val elevenLabsApiKey: String?,
     val elevenLabsTts: ElevenLabsTtsConfig?,
     val giphyApiKey: String?,
     val groupLog: GroupLogConfig = GroupLogConfig(),
+    val initiative: InitiativeConfig? = null,
     val llmProvider: LlmProviderConfig,
     val llmFallback: LlmProviderConfig? = null,
     val maxConcurrentTurns: Int,
@@ -75,8 +77,10 @@ data class AppConfig(
                 agentMaxIterations = readIntEnv("AGENT_MAX_ITERATIONS") ?: DEFAULT_AGENT_MAX_ITERATIONS,
                 appearance = resolveAppearance(),
                 databasePath = readEnv("DB_FILE") ?: "data/db/vusan.db",
+                diaryEnabled = readBooleanEnv("DIARY_ENABLED") ?: false,
                 elevenLabsApiKey = elevenLabsKey,
                 giphyApiKey = readEnv("GIPHY_API_KEY"),
+                initiative = resolveInitiative(),
                 llmProvider = llmProvider,
                 llmFallback = llmFallback,
                 maxConcurrentTurns = readIntEnv("MAX_CONCURRENT_TURNS") ?: DEFAULT_MAX_CONCURRENT_TURNS,
@@ -197,6 +201,22 @@ data class AppConfig(
                 model = readEnv("OPENAI_ADDRESSING_MODEL") ?: AddressingConfig.DEFAULT_MODEL,
                 names = readEnv("ADDRESSING_NAMES")?.split(',')?.map(String::trim)?.filter(String::isNotEmpty).orEmpty(),
                 shadow = readBooleanEnv("ADDRESSING_SHADOW") ?: false,
+            )
+        }
+
+        private fun resolveInitiative(): InitiativeConfig? {
+            if (readBooleanEnv("INITIATIVE_ENABLED") != true) return null
+
+            return InitiativeConfig(
+                shadow = readBooleanEnv("INITIATIVE_SHADOW") ?: false,
+                intervalMinutes =
+                    readIntEnv("INITIATIVE_INTERVAL_MINUTES") ?: InitiativeConfig.DEFAULT_INTERVAL_MINUTES,
+                maxMessagesPerDay =
+                    readIntEnv("INITIATIVE_MAX_MESSAGES_PER_DAY") ?: InitiativeConfig.DEFAULT_MAX_MESSAGES_PER_DAY,
+                quietHours =
+                    readEnv("INITIATIVE_QUIET_HOURS")
+                        ?.let { QuietHours.parse("INITIATIVE_QUIET_HOURS", it) }
+                        ?: QuietHours.DEFAULT,
             )
         }
 

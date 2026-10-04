@@ -9,16 +9,23 @@ import com.helltar.vusan.agent.FallbackPromptExecutor
 import com.helltar.vusan.agent.addressing.AmbientAddressing
 import com.helltar.vusan.agent.addressing.LlmAddressingClassifier
 import com.helltar.vusan.agent.ContextWindowPolicy
+import com.helltar.vusan.agent.DEFAULT_PERSONALITY
 import com.helltar.vusan.agent.conversation.ConversationRepository
 import com.helltar.vusan.agent.conversation.LlmConversationCompactor
 import com.helltar.vusan.agent.grouplog.GroupLogRepository
 import com.helltar.vusan.agent.grouplog.LlmGroupLogDigester
 import com.helltar.vusan.agent.memory.MemoryRepository
+import com.helltar.vusan.agent.presence.Diary
+import com.helltar.vusan.agent.presence.DiaryRepository
+import com.helltar.vusan.agent.presence.Initiative
+import com.helltar.vusan.agent.presence.LlmDiaryWriter
+import com.helltar.vusan.agent.presence.LlmInitiativeMind
 import com.helltar.vusan.config.*
 import com.helltar.vusan.infra.Db
 import com.helltar.vusan.infra.Http
 import com.helltar.vusan.infra.Maintenance
 import com.helltar.vusan.infra.createPublicHttpClient
+import com.helltar.vusan.request.ChatRef
 import com.helltar.vusan.stt.OpenAiWhisperClient
 import com.helltar.vusan.tasks.TaskScheduler
 import com.helltar.vusan.tasks.TasksRepository
@@ -185,12 +192,26 @@ suspend fun main() = coroutineScope {
         val conversationCompactor =
             LlmConversationCompactor(chatExecutor, llm.model, llm.compactionParams, contextWindowPolicy)
 
+        // both read whole stretches of a group's transcript with nobody having asked, so each is a
+        // switch of its own, and neither looks into a chat the allowlist no longer names.
+        val personality = config.personality ?: DEFAULT_PERSONALITY
+        val isAllowedChat = { chat: ChatRef -> config.accessPolicy.allows(chat, user = null) }
+
+        val diary =
+            groupLog?.takeIf { config.diaryEnabled }?.let {
+                Diary(
+                    LlmDiaryWriter(chatExecutor, llm.model, llm.compactionParams, personality),
+                    DiaryRepository(), it, isAllowedChat,
+                )
+            }
+
         val agentRunner =
             AgentRunner(
                 agentFactory, toolRegistryFactory, conversation, memory, conversationCompactor,
                 config.chatHistory, stickerCatalog?.let { catalog -> catalog::indexBlockFor },
                 groupLog, { fallbackInUse()?.model }, config.maxConcurrentTurns,
                 config.maxQueuedTurnsPerConversation,
+                diary = diary?.let { it::blockFor },
             )
 
         // answers to a poll are read back through the group transcript, so without one there is
@@ -207,6 +228,17 @@ suspend fun main() = coroutineScope {
             TaskScheduler(
                 tasks, agentRunner, delivery, chatProfiles, config.accessPolicy,
             )
+
+        val initiative =
+            config.initiative?.let { initiativeConfig ->
+                val transcript = groupLog ?: return@let null
+
+                Initiative(
+                    LlmInitiativeMind(chatExecutor, llm.model, llm.compactionParams, personality),
+                    transcript, delivery, initiativeConfig, isAllowedChat,
+                    diary = diary?.let { it::blockFor },
+                )
+            }
 
         val botRunner =
             TelegramBotRunner(
@@ -231,19 +263,25 @@ suspend fun main() = coroutineScope {
                     },
                     groupLog?.let { Maintenance.Step("group log retention") { it.pruneExpired(MAINTENANCE_BATCH) } },
                     polls?.let { Maintenance.Step("expired polls") { it.pruneExpired() } },
+                    diary?.let { Maintenance.Step("diary retention") { it.pruneExpired() } },
                 ),
             )
 
         logStartup(config, llm, fallback, vision, ambient?.botNames, toolRegistryFactory.availableToolNames)
+        logPresence(config, groupLogOn = groupLog != null)
 
         val botJob = botRunner.start(this)
         val schedulerJob = scheduler.launchIn(this)
         val stickerJob = stickerCatalog?.launchDescriptionWorker(this)
         val maintenanceJob = maintenance.launchIn(this)
+        val diaryJob = diary?.launchIn(this)
+        val initiativeJob = initiative?.launchIn(this)
 
         try {
             botJob.join()
         } finally {
+            initiativeJob?.cancelAndJoin()
+            diaryJob?.cancelAndJoin()
             maintenanceJob.cancelAndJoin()
             stickerJob?.cancelAndJoin()
             schedulerJob.cancelAndJoin()
@@ -298,6 +336,28 @@ private suspend fun codexPreflight(
     log.info { "Codex: model=[${discovered.id}] (${discovered.displayName})" }
 
     return applyCodexModelMetadata(config, discovered)
+}
+
+private fun logPresence(config: AppConfig, groupLogOn: Boolean) {
+    val initiative = config.initiative
+
+    if (!groupLogOn) {
+        if (config.diaryEnabled || initiative != null) {
+            log.warn { "Diary and initiative are off: both read the group log, and GROUP_LOG_ENABLED=false" }
+        }
+
+        return
+    }
+
+    if (config.diaryEnabled) log.info { "Diary: on — each group's closed day is written up by the chat model" }
+
+    initiative?.let {
+        log.info {
+            "Initiative: interval=[${it.intervalMinutes}m] maxMessagesPerDay=[${it.maxMessagesPerDay}] " +
+                    "quietHours=[${it.quietHours.from}-${it.quietHours.until}]" +
+                    if (it.shadow) " shadow=[true] — decisions are logged and nothing is sent" else ""
+        }
+    }
 }
 
 // ordered as an operator reads it: which model, how much room it has, what it may spend, what it can
