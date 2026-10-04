@@ -443,15 +443,17 @@ A normal user message travels:
   an hour and, for each, checks the gates: outside `INITIATIVE_QUIET_HOURS`; a pause drawn at random between half and
   one and a half `INITIATIVE_INTERVAL_MINUTES` has passed since the last look (a chat seen for the first time waits one
   out too, so a restart is not followed by the bot speaking everywhere); at least three messages from people since
-  that look; no line of the bot's own in the last ten minutes, since then the conversation already has it; and
-  something left of the day's budget. A look that passes sends `InitiativeMind` up to thirty lines of the last ninety
+  that look; no line of the bot's own in the last five minutes, since then the conversation already has it; and
+  something left of the day's budget. A look a gate turned away cost no model call, so it is tried again five to ten
+  minutes later rather than after a whole pause. A look that passes sends `InitiativeMind` up to thirty lines of the last ninety
   minutes, the diary block, how much it has already said today, and — from `GroupLogRepository.authorActivity` — the
   people who used to write here and have not for three days. The lines a person wrote since the last look carry a
   number, and a number is the only way to point at a message: message ids are never shown, so a decision cannot reach
   past what the look put in front of it. The answer is one JSON object — `silent`, `react` (one emoji from Telegram's
   free set on one numbered line) or `say` (one short plain-text line, optionally a reply to a numbered line) — and
   anything unreadable, failed or slower than ninety seconds is silence. What it writes is bounded per chat per day
-  (`INITIATIVE_MAX_MESSAGES_PER_DAY`, ten reactions), and a decision over the budget is dropped. The line goes out
+  (`INITIATIVE_MAX_MESSAGES_PER_DAY`, ten reactions) and its own lines are at least ninety minutes apart, so a lively hour
+  cannot take the whole day's count; a decision over either bound is dropped. The line goes out
   through `OutputDelivery.deliverUnprompted`, so it lands in the group transcript like any other bot line and a reply to
   it starts an ordinary turn with that line as `<reply_context>`. A chat that turns the bot away is left alone until a
   restart. State — the last look, the next one, today's counts — is process memory. With `INITIATIVE_SHADOW` every

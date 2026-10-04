@@ -683,12 +683,15 @@ INITIATIVE_SHADOW=true
 
 - **When it looks** — only at a chat somebody wrote in during the last fifteen minutes, after a pause
   drawn at random between half the interval and one and a half of it, with at least three new
-  messages since its last look, and not within ten minutes of its own last line there — if it is
-  already in the conversation, it does not talk over itself.
+  messages since its last look, and not within five minutes of its own last line there — if it is
+  already in the conversation, it does not talk over itself. A look one of these turned away is tried
+  again five to ten minutes later.
 - **What is sent** — up to thirty lines of the chat's last ninety minutes, with names, to the chat
   model, with nobody having asked. Everything else Vusan does sends a group's messages somewhere
   only when it is addressed, so this is a deliberate switch. With the [diary](#diary) on, its entries
   go along, as do the names of people who used to write in the chat and have not for three days.
+- **How often it writes** — besides the daily limit, two of its own lines in one chat are at least
+  ninety minutes apart. A reaction is not held back by that.
 - **What it may do** — nothing, one reaction, or one short message, optionally as a reply. Reactions
   have a ceiling of ten per chat a day beside the message limit; with `INITIATIVE_MAX_MESSAGES_PER_DAY=0`
   it only ever reacts.

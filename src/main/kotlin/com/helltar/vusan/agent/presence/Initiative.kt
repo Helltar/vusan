@@ -67,6 +67,7 @@ class Initiative(
         var day: LocalDate? = null
         var said = 0
         var reacted = 0
+        var lastSaidAt: Instant? = null
 
         fun startDay(today: LocalDate) {
             if (day == today) return
@@ -131,7 +132,12 @@ class Initiative(
 
         val entries = groupLog.recent(chat, CONTEXT_LINES, since = now - CONTEXT_MAX_AGE)
         val fresh = entries.count { it.isFromPerson && it.sentAt.isAfter(state.lastLookAt) }
-        val maySpeak = state.said < config.maxMessagesPerDay
+
+        // the day's count bounds how much it writes, the gap how often: without it a lively hour could
+        // take the whole day's lines one look after another
+        val maySpeak =
+            state.said < config.maxMessagesPerDay &&
+                    state.lastSaidAt?.let { !now.isBefore(it + MIN_GAP_BETWEEN_LINES) } != false
         val mayReact = state.reacted < MAX_REACTIONS_PER_DAY
 
         val skip =
@@ -140,12 +146,17 @@ class Initiative(
                 // its own line this recently means somebody called it in, or it just spoke up: either way
                 // the conversation already has it, and a second voice of its own would be talking over itself
                 entries.any { !it.isFromPerson && it.sentAt.isAfter(now - OWN_LINE_COOLDOWN) } -> "already talking"
-                !maySpeak && !mayReact -> "budget spent"
+                !maySpeak && !mayReact -> BUDGET_SPENT
                 else -> null
             }
 
         if (skip != null) {
-            // the last look is left where it was, so what was said meanwhile is still new next time
+            // the last look is left where it was, so what was said meanwhile is still new next time.
+            // a skipped look cost no model call, so it comes back soon instead of waiting out a whole
+            // pause: in a chat that keeps calling the bot in, a full pause after every skip left it
+            // hardly any look at all
+            if (skip != BUDGET_SPENT) state.nextLookAt = now + retryPause()
+
             log.info { "initiative skip: chat=[$chat] reason=[$skip] fresh=[$fresh]" }
             return
         }
@@ -224,6 +235,7 @@ class Initiative(
                     "action=[say] result=[over budget]"
                 } else {
                     state.said++
+                    state.lastSaidAt = clock()
                     // the mind writes plain text, and delivery reads text as telegram html
                     send(chat, BotOutput.Text(text.escapeHtml()), anchor)
 
@@ -254,6 +266,8 @@ class Initiative(
 
     private fun nextPause(): Duration = config.intervalMinutes.minutes * (PAUSE_MIN_SHARE + random.nextDouble())
 
+    private fun retryPause(): Duration = RETRY_AFTER_SKIP * (1 + random.nextDouble())
+
     private companion object {
         val TICK = 1.minutes
 
@@ -261,7 +275,16 @@ class Initiative(
         // left is the bot talking to itself
         val ACTIVE_WITHIN = 15.minutes
         const val MIN_FRESH_MESSAGES = 3
-        val OWN_LINE_COOLDOWN = 10.minutes
+        val OWN_LINE_COOLDOWN = 5.minutes
+
+        // a skipped look is tried again after this much to twice this much
+        val RETRY_AFTER_SKIP = 5.minutes
+
+        // between two lines of its own in one chat, whatever is left of the day's count; a reaction is
+        // not a line and is not held back by it
+        val MIN_GAP_BETWEEN_LINES = 90.minutes
+
+        const val BUDGET_SPENT = "budget spent"
 
         // a pause runs from half the interval to one and a half of it
         const val PAUSE_MIN_SHARE = 0.5

@@ -170,6 +170,34 @@ class InitiativeTest {
     }
 
     @Test
+    fun `a second line has to wait out the gap, while a reaction does not`() = runBlocking {
+        val delivery = FakeDelivery()
+        val mind = FakeMind(InitiativeDecision.Say("the ferry is the better plan"))
+        val initiative = initiative(mind, delivery)
+
+        lookWith(initiative)
+        lookAgain(initiative)
+        now = now.plusSeconds(90 * 60)
+        lookAgain(initiative)
+
+        assertEquals(listOf(true, false, true), mind.inputs.map { it.maySpeak })
+        assertEquals(2, delivery.sent.size)
+    }
+
+    @Test
+    fun `a skipped look comes back sooner than a whole pause`() = runBlocking {
+        val mind = FakeMind(InitiativeDecision.Silent())
+        val initiative = initiative(mind)
+
+        lookWith(initiative, messages = 2)
+        now = now.plusSeconds(RETRY_SECONDS)
+        chatter(messages = 1)
+        initiative.tick()
+
+        assertEquals(1, mind.inputs.size)
+    }
+
+    @Test
     fun `shadow mode decides and sends nothing`() = runBlocking {
         val delivery = FakeDelivery()
         val mind = FakeMind(InitiativeDecision.Say("the ferry is the better plan"))
@@ -320,5 +348,8 @@ class InitiativeTest {
 
         // a pause is at most one and a half intervals
         const val LONGEST_PAUSE_SECONDS = INTERVAL_MINUTES * 90L + 1
+
+        // a skipped look is retried within ten minutes
+        const val RETRY_SECONDS = 10 * 60L + 1
     }
 }
