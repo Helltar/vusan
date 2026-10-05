@@ -151,4 +151,29 @@ class CodexStreamBridgeTest {
         assertNull(served("text-model-2026-09-01"))
         assertNull(servedModelMismatch(request, json.parseToJsonElement("{}").jsonObject, json))
     }
+
+    @Test
+    fun `a call's log line says whose it was and how much came from cache`() {
+        val request = """{"model":"m","prompt_cache_key":"vusan-1a2b","tools":[{"name":"a"},{"name":"b"}]}"""
+
+        val response =
+            json.parseToJsonElement(
+                """{"usage":{"input_tokens":2000,"input_tokens_details":{"cached_tokens":1500},"output_tokens":40}}""",
+            ).jsonObject
+
+        val session = checkNotNull(codexSessionId(request)).take(8)
+
+        assertEquals(
+            "session=[$session] input=[2000] cached=[1500] cachedPercent=[75] output=[40] tools=[2]",
+            codexCallSummary(request, response, json),
+        )
+    }
+
+    @Test
+    fun `a call's log line survives a response without usage`() {
+        assertEquals(
+            "session=[none] input=[0] cached=[0] cachedPercent=[0] output=[0] tools=[0]",
+            codexCallSummary("not json", json.parseToJsonElement("{}").jsonObject, json),
+        )
+    }
 }

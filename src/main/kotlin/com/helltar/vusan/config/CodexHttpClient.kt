@@ -38,6 +38,8 @@ internal const val CODEX_ORIGINATOR = "codex_cli_rs"
 private const val CODEX_ROUTING_HINT_HEADER = "x-codex-routing-hint"
 private const val CODEX_SESSION_ID_HEADER = "session-id"
 private const val SSE_DATA_PREFIX = "data:"
+private const val SESSION_LOG_CHARS = 8
+private const val PERCENT = 100
 
 private val log = KotlinLogging.logger {}
 
@@ -102,8 +104,16 @@ internal fun codexSessionId(requestBody: Any): String? {
     val root = runCatching { Json.parseToJsonElement(requestBody) as? JsonObject }.getOrNull()
     val cacheKey = (root?.get("prompt_cache_key") as? JsonPrimitive)?.contentOrNull
 
-    return cacheKey?.let { UUID.nameUUIDFromBytes(it.toByteArray()).toString() }
+    return cacheKey?.let(::sessionIdOf)
 }
+
+private fun sessionIdOf(cacheKey: String): String = UUID.nameUUIDFromBytes(cacheKey.toByteArray()).toString()
+
+/**
+ * The label a conversation's model calls carry in the log, see [codexCallSummary]: the start of the
+ * session id its cache key folds into. A turn logs the same label, which is what ties a call to a chat.
+ */
+internal fun codexSessionLabel(cacheKey: String): String = sessionIdOf(cacheKey).take(SESSION_LOG_CHARS)
 
 private class CodexHttpClientFactory(
     private val delegate: KoogHttpClient.Factory,
@@ -187,6 +197,7 @@ private class CodexHttpClient(
 
         val response = collectStreamedResponse(lines.toList(), json, clientName)
         countUsage(response, limits)
+        log.info { "codex call: ${codexCallSummary(requestBody, response, json)}" }
         warnOnAnotherModel(requestBody, response)
         val completed = response.toString()
 
@@ -279,6 +290,33 @@ internal fun servedModelMismatch(requestBody: String, response: JsonObject, json
     val served = (response["model"] as? JsonPrimitive)?.contentOrNull?.takeIf { it.isNotBlank() } ?: return null
 
     return served.takeUnless { it.startsWith(requested, ignoreCase = true) }
+}
+
+/**
+ * One model call as a log line: whose conversation it was, how much of its input was read from cache,
+ * and how many tools rode along.
+ *
+ * The limits line next to it adds calls up between two changes of the allowance, which hides exactly
+ * what a cache question asks: which call of which conversation missed. The session is the one sent in
+ * `session-id`, shortened, so a conversation's calls can be followed without naming anybody; the tool
+ * count is there because a group loaded mid-turn changes the front of the request and takes the cached
+ * prefix with it.
+ */
+internal fun codexCallSummary(requestBody: String, response: JsonObject, json: Json = Json): String {
+    val request = runCatching { json.parseToJsonElement(requestBody) as? JsonObject }.getOrNull()
+    val usage = response["usage"] as? JsonObject
+
+    fun JsonObject?.long(name: String): Long = (this?.get(name) as? JsonPrimitive)?.longOrNull ?: 0L
+
+    val input = usage.long("input_tokens")
+    val cached = (usage?.get("input_tokens_details") as? JsonObject).long("cached_tokens")
+    val cachedPercent = if (input > 0) cached * PERCENT / input else 0
+
+    val cacheKey = (request?.get("prompt_cache_key") as? JsonPrimitive)?.contentOrNull
+
+    return "session=[${cacheKey?.let(::codexSessionLabel) ?: "none"}] " +
+            "input=[$input] cached=[$cached] cachedPercent=[$cachedPercent] " +
+            "output=[${usage.long("output_tokens")}] tools=[${(request?.get("tools") as? JsonArray)?.size ?: 0}]"
 }
 
 /** Counts a completed response's tokens towards the subscription's next step, see [CodexLimits]. */

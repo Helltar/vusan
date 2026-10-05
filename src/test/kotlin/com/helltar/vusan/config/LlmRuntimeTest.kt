@@ -34,6 +34,7 @@ import kotlin.test.assertEquals
 import kotlin.test.assertFailsWith
 import kotlin.test.assertFalse
 import kotlin.test.assertIs
+import kotlin.test.assertNotEquals
 import kotlin.test.assertNotNull
 import kotlin.test.assertNull
 import kotlin.test.assertTrue
@@ -508,6 +509,19 @@ class LlmRuntimeTest {
     @Test
     fun `no verbosity is sent when the catalog named none`() = runBlocking {
         assertNull(sentOpenAiRequest(codex())["text"]?.jsonObject?.get("verbosity"))
+    }
+
+    // a turn logs this label and every model call of it logs the one read off the wire, so they must agree.
+    @Test
+    fun `a conversation's log label is the one its calls carry`() = runBlocking {
+        val runtime = codex()
+        val scoped = runtime.copy(chatParams = runtime.chatParams.forConversation("chat-1/user-2"))
+        val sent = sentOpenAiRequest(scoped)
+
+        val label = assertNotNull(runtime.chatParams.sessionLogLabel("chat-1/user-2"))
+
+        assertEquals(label, codexSessionId(sent.toString())?.take(label.length))
+        assertNotEquals(label, runtime.chatParams.sessionLogLabel("chat-1/user-3"))
     }
 
     @Test

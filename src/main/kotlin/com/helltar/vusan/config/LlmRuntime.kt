@@ -89,6 +89,14 @@ fun LLMParams.forConversation(conversation: String): LLMParams =
         else -> this
     }
 
+/** The log label of [conversation]'s model calls under these params, or `null` when they carry no cache key. */
+fun LLMParams.sessionLogLabel(conversation: String): String? =
+    when (val scoped = forConversation(conversation)) {
+        is OpenAIChatParams -> scoped.promptCacheKey
+        is OpenAIResponsesParams -> scoped.promptCacheKey
+        else -> null
+    }?.let(::codexSessionLabel)
+
 private fun String.scoped(conversation: String): String =
     "$this-${conversation.hashCode().toUInt().toString(HEX_RADIX)}"
 

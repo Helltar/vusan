@@ -25,6 +25,7 @@ import com.helltar.vusan.agent.conversation.PromptConversation
 import com.helltar.vusan.agent.conversation.toolCallArgsForStorage
 import com.helltar.vusan.common.collapseWhitespaceAndCap
 import com.helltar.vusan.config.forConversation
+import com.helltar.vusan.config.sessionLogLabel
 import com.helltar.vusan.common.limitTo
 import com.helltar.vusan.common.xmlBlock
 import com.helltar.vusan.outbox.BotOutbox
@@ -88,6 +89,9 @@ class AgentFactory(
                 ),
         )
     }
+
+    /** What this conversation's model calls are labelled with in the log, when the provider names sessions. */
+    fun sessionLogLabel(scope: ConversationScope): String? = chatParams.sessionLogLabel(scope.toString())
 
     /** The reserve one run may spend on tool results, from which the runner opens its [TurnToolBudget]. */
     val liveToolResultMaxTokens: Int

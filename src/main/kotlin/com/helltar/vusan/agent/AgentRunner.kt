@@ -224,6 +224,7 @@ class AgentRunner(
 
         log.info {
             "prompt history loaded: user=${context.sender.id} chat=${context.chat.id} " +
+                    "session=[${agentFactory.sessionLogLabel(context.scope) ?: "none"}] " +
                     "storedInteractions=${conversationPlan.stats.storedInteractions} storedMessages=${conversationPlan.stats.storedMessages} " +
                     "storedChars=${conversationPlan.stats.storedChars} unsummarized=${conversationPlan.stats.unsummarizedInteractions} " +
                     "includedInteractions=${conversationPlan.includedInteractions} turns=${conversationPlan.prompt.turns.size} " +
