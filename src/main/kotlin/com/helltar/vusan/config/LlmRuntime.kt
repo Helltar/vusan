@@ -110,7 +110,10 @@ val LlmRuntime.reasoningEffort: String?
 val LlmRuntime.serviceTier: ServiceTier?
     get() = (chatParams as? OpenAIResponsesParams)?.serviceTier
 
-fun resolveLlmRuntime(config: LlmProviderConfig, codexAuth: CodexAuthStore? = null): LlmRuntime {
+fun resolveLlmRuntime(config: LlmProviderConfig, codexAuth: CodexAuthStore? = null): LlmRuntime =
+    resolveProviderRuntime(config, codexAuth).let { it.copy(client = it.client.repeatingTransientFailures()) }
+
+private fun resolveProviderRuntime(config: LlmProviderConfig, codexAuth: CodexAuthStore?): LlmRuntime {
     val timeoutConfig = connectionTimeouts(config.requestTimeout)
 
     return when (config) {

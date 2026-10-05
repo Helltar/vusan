@@ -255,6 +255,10 @@ the key after that.
 `LLM_FALLBACK_REQUEST_TIMEOUT_SECONDS` and `LLM_FALLBACK_CONTEXT_WINDOW_TOKENS` mean what their
 `LLM_` counterparts mean; the timeout follows the primary's when unset.
 
+A call the provider's server fumbled — a `5xx`, an overloaded server, a stream cut short — is first
+made again, up to three times within a few seconds, on any provider and with or without a fallback.
+What survives that, and what a repeat cannot fix, is the fallback's.
+
 Any failure that is the provider's switches: the plan's usage limit, credentials it no longer
 accepts, a rate limit, an overloaded server, a connection that timed out or dropped. The call that
 ran into it is repeated on the fallback with the fallback's own model, so the turn finishes instead
