@@ -49,7 +49,7 @@ That starts the bot, which is the whole deployment. Two capabilities stay off un
 [publishing to the web](docs/sites.md), which puts what was built there at a public address. Both come
 from that one server, which is a separate project with a machine of its own as the recommendation.
 
-### In a group
+### Add it to a group
 
 Add the group's ID to `ALLOWED_IDS`, then let the bot see the whole chat: turn off its privacy mode
 in [@BotFather](https://t.me/BotFather) with `/setprivacy`, or make it an administrator. Without
