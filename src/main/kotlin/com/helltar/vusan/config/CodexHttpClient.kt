@@ -4,6 +4,7 @@ import ai.koog.http.client.KoogHttpClient
 import ai.koog.http.client.KoogHttpClientException
 import ai.koog.http.client.ktor.KtorKoogHttpClient
 import ai.koog.prompt.executor.clients.openai.base.models.ServiceTier
+import io.github.oshai.kotlinlogging.KotlinLogging
 import io.ktor.client.*
 import io.ktor.client.engine.cio.*
 import io.ktor.client.plugins.api.*
@@ -21,6 +22,7 @@ import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.longOrNull
 import kotlinx.serialization.serializer
 import java.util.UUID
+import java.util.concurrent.atomic.AtomicReference
 import kotlin.reflect.KClass
 import kotlin.reflect.full.createType
 
@@ -36,6 +38,8 @@ internal const val CODEX_ORIGINATOR = "codex_cli_rs"
 private const val CODEX_ROUTING_HINT_HEADER = "x-codex-routing-hint"
 private const val CODEX_SESSION_ID_HEADER = "session-id"
 private const val SSE_DATA_PREFIX = "data:"
+
+private val log = KotlinLogging.logger {}
 
 /**
  * What the CLI tells the backend to route a turn on: the model, plus the serving tier when one is asked
@@ -144,6 +148,8 @@ private class CodexHttpClient(
 
     override val clientName: String = delegate.clientName
 
+    private val lastReportedModel = AtomicReference<String?>(null)
+
     override suspend fun <R : Any> get(
         path: String,
         responseType: KClass<R>,
@@ -181,6 +187,7 @@ private class CodexHttpClient(
 
         val response = collectStreamedResponse(lines.toList(), json, clientName)
         countUsage(response, limits)
+        warnOnAnotherModel(requestBody, response)
         val completed = response.toString()
 
         @Suppress("UNCHECKED_CAST")
@@ -234,6 +241,16 @@ private class CodexHttpClient(
 
     override fun close() = delegate.close()
 
+    // the backend may answer from a model other than the one asked for, and says so only here. once per
+    // model is enough: it is a fact about the deployment, not about a call.
+    private fun warnOnAnotherModel(requestBody: String, response: JsonObject) {
+        val served = servedModelMismatch(requestBody, response, json) ?: return
+
+        if (lastReportedModel.getAndSet(served) != served) {
+            log.warn { "codex answered from another model than the one requested: served=[$served]" }
+        }
+    }
+
     @Suppress("UNCHECKED_CAST")
     private fun <T : Any> streamingBodyOrOriginal(requestBody: T): T =
         if (requestBody is String) forceStreamingRequest(requestBody, json) as T else requestBody
@@ -246,6 +263,22 @@ internal fun forceStreamingRequest(requestBody: String, json: Json = Json): Stri
     return JsonObject(
         root + mapOf("stream" to JsonPrimitive(true), "store" to JsonPrimitive(false)),
     ).toString()
+}
+
+/**
+ * The model a completed response says it came from, when that is not the one the request named.
+ *
+ * A dated or suffixed name of the requested model is the same model, so only a different family counts.
+ */
+internal fun servedModelMismatch(requestBody: String, response: JsonObject, json: Json = Json): String? {
+    val requested =
+        runCatching { (json.parseToJsonElement(requestBody) as? JsonObject)?.get("model") }.getOrNull()
+            ?.let { (it as? JsonPrimitive)?.contentOrNull }
+            ?: return null
+
+    val served = (response["model"] as? JsonPrimitive)?.contentOrNull?.takeIf { it.isNotBlank() } ?: return null
+
+    return served.takeUnless { it.startsWith(requested, ignoreCase = true) }
 }
 
 /** Counts a completed response's tokens towards the subscription's next step, see [CodexLimits]. */

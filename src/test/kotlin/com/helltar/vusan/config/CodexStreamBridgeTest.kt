@@ -9,6 +9,7 @@ import kotlinx.serialization.json.jsonPrimitive
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFailsWith
+import kotlin.test.assertNull
 import kotlin.test.assertTrue
 
 class CodexStreamBridgeTest {
@@ -137,5 +138,17 @@ class CodexStreamBridgeTest {
 
         assertEquals("gpt-5.6-terra", response["model"]?.jsonPrimitive?.content)
         assertEquals(22, response["usage"]?.jsonObject?.get("total_tokens")?.jsonPrimitive?.content?.toInt())
+    }
+
+    @Test
+    fun `a response from another model is noticed, a dated name of the same one is not`() {
+        val request = """{"model":"text-model","input":[]}"""
+
+        fun served(model: String) = servedModelMismatch(request, json.parseToJsonElement("""{"model":"$model"}""").jsonObject, json)
+
+        assertEquals("small-model", served("small-model"))
+        assertNull(served("text-model"))
+        assertNull(served("text-model-2026-09-01"))
+        assertNull(servedModelMismatch(request, json.parseToJsonElement("{}").jsonObject, json))
     }
 }
