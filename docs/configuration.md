@@ -90,7 +90,7 @@ banned, and startup says so in the log.
 | `LLM_BASE_URL`                | —                         | Server address. Required by `openai-compatible`, unused by the others.          |
 | `LLM_OPENAI_ENDPOINT`         | `completions`             | Which OpenAI API to call: `completions` or `responses`.                         |
 | `LLM_REASONING_EFFORT`        | model default             | Reasoning depth: `none`, `minimal`, `low`, `medium`, `high`, `xhigh`, or `max`. |
-| `LLM_REQUEST_TIMEOUT_SECONDS` | `120`                     | Seconds one LLM call may hang before Vusan gives up and replies with an error.  |
+| `LLM_REQUEST_TIMEOUT_SECONDS` | `300`                     | Seconds one LLM call may hang before Vusan gives up and replies with an error.  |
 | `LLM_CONTEXT_WINDOW_TOKENS`   | model metadata or `16384` | Context size override.                                                          |
 
 `LLM_OPENAI_ENDPOINT` is for `openai-compatible` alone: it says which of the two OpenAI APIs the
@@ -190,7 +190,7 @@ newer, so upgrading `codex` on the host usually settles it. Where there is no CL
 container, most often — claim a version yourself:
 
 ```dotenv
-CODEX_CLIENT_VERSION=0.153.4
+CODEX_CLIENT_VERSION=0.160.1
 ```
 
 It has to look like a Codex CLI version, and anything else stops startup. One older than the model

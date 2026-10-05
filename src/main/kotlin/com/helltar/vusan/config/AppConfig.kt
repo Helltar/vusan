@@ -51,7 +51,7 @@ data class AppConfig(
 
     companion object {
         private const val DEFAULT_AGENT_MAX_ITERATIONS = 200
-        private const val DEFAULT_LLM_REQUEST_TIMEOUT_SECONDS = 120L
+        private const val DEFAULT_LLM_REQUEST_TIMEOUT_SECONDS = 300L
         private const val LLM_PREFIX = "LLM"
         private const val LLM_FALLBACK_PREFIX = "LLM_FALLBACK"
         private const val DEFAULT_MAX_CONCURRENT_TURNS = 8
@@ -304,7 +304,7 @@ data class AppConfig(
             val raw = readEnv("CODEX_CLIENT_VERSION")?.trim() ?: return null
 
             return raw.takeIf { CODEX_VERSION.matches(it) }
-                ?: error("Unsupported CODEX_CLIENT_VERSION=[$raw]. Expected a Codex CLI version such as 0.153.4")
+                ?: error("Unsupported CODEX_CLIENT_VERSION=[$raw]. Expected a Codex CLI version such as 0.160.1")
         }
 
         private inline fun <reified T : Enum<T>> enumOrNull(raw: String): T? =

@@ -24,7 +24,7 @@ private val log = KotlinLogging.logger {}
 // the newest model look like one the plan does not offer. a locally installed CLI wins while it is
 // newer, so a host that upgrades codex sees new models without a vusan release; the constant is the
 // floor everywhere else, the container included, where there is no binary to ask.
-private const val CODEX_CLIENT_VERSION_FLOOR = "0.153.4"
+private const val CODEX_CLIENT_VERSION_FLOOR = "0.160.1"
 internal val CODEX_VERSION = Regex("""\d+\.\d+\.\d+""")
 
 @Volatile
