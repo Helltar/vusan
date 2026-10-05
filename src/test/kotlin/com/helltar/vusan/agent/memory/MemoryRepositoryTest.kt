@@ -71,6 +71,32 @@ class MemoryRepositoryTest {
     }
 
     @Test
+    fun `replace puts the new detail where the old one was`() = runBlocking {
+        val repo = MemoryRepository()
+        val owner = testUser(100).memoryOwner
+
+        repo.add(owner, "likes tea")
+        val old = repo.add(owner, "lives by the harbour")
+        val replacement = repo.replace(owner, old, "lives by the lighthouse")
+
+        assertTrue(replacement != null && replacement != old)
+        assertEquals(listOf("likes tea", "lives by the lighthouse"), repo.load(owner).map { it.content })
+    }
+
+    @Test
+    fun `replace saves nothing when the owner has no such entry`() = runBlocking {
+        val repo = MemoryRepository()
+        val others = repo.add(testUser(200).memoryOwner, "keeps bees")
+
+        // the same number in another scope is somebody else's row too
+        assertEquals(null, repo.replace(testUser(100).memoryOwner, others, "keeps goats"))
+        assertEquals(null, repo.replace(testChat(200).memoryOwner, others, "keeps goats"))
+
+        assertEquals(listOf("keeps bees"), repo.load(testUser(200).memoryOwner).map { it.content })
+        assertTrue(repo.load(testUser(100).memoryOwner).isEmpty())
+    }
+
+    @Test
     fun `forget removes the caller's own user memory`() = runBlocking {
         val repo = MemoryRepository()
         val id = repo.add(testUser(100).memoryOwner, content = "alice detail")

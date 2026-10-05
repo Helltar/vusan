@@ -38,16 +38,20 @@ class MemoryRepository(private val maxEntriesPerScope: Int = MAX_ENTRIES_PER_SCO
     suspend fun add(owner: MemoryOwner, content: String): Long = dbTransaction {
         require(content.isNotBlank()) { "Memory content must not be blank" }
 
-        val id =
-            MemoryTable.insertAndGetId {
-                it[MemoryTable.platform] = owner.platform
-                it[MemoryTable.scope] = owner.scope
-                it[MemoryTable.ownerId] = owner.id
-                it[MemoryTable.content] = content
-            }.value
+        insert(owner, content).also { trim(owner) }
+    }
 
-        trim(owner)
-        id
+    /**
+     * Saves [content] in place of [owner]'s entry [replaces], so a detail that was refined or turned
+     * out wrong does not stay beside its correction. Returns the new entry's id, or `null` with
+     * nothing saved when [owner] has no such entry — another owner's is never touched.
+     */
+    suspend fun replace(owner: MemoryOwner, replaces: Long, content: String): Long? = dbTransaction {
+        require(content.isNotBlank()) { "Memory content must not be blank" }
+
+        val removed = MemoryTable.deleteWhere { (MemoryTable.id eq replaces) and ownedBy(owner) }
+
+        if (removed > 0) insert(owner, content) else null
     }
 
     /**
@@ -67,6 +71,14 @@ class MemoryRepository(private val maxEntriesPerScope: Int = MAX_ENTRIES_PER_SCO
     suspend fun clearScope(owner: MemoryOwner): Int = dbTransaction {
         MemoryTable.deleteWhere { ownedBy(owner) }
     }
+
+    private fun insert(owner: MemoryOwner, content: String): Long =
+        MemoryTable.insertAndGetId {
+            it[MemoryTable.platform] = owner.platform
+            it[MemoryTable.scope] = owner.scope
+            it[MemoryTable.ownerId] = owner.id
+            it[MemoryTable.content] = content
+        }.value
 
     private fun trim(owner: MemoryOwner) {
         val keepMinId =

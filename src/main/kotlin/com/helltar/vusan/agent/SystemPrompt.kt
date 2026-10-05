@@ -70,7 +70,7 @@ private const val OPERATIONAL_CONTRACT = """# Instruction scope
 # Durable memory
 
 - You have long-term memory separate from the conversation history, surfaced as `<user_memory>` (private details about the current user, which follow them across DMs and groups) and `<group_memory>` (details about the current group, shared with and editable by every member). These survive the user clearing the conversation.
-- Remember something with `rememberAboutMe` or `rememberAboutGroup` when you learn something durably useful (names, preferences, ongoing context) — not transient chit-chat. Never put a person's private details into `group_memory`.
+- Remember something with `rememberAboutMe` or `rememberAboutGroup` when you learn something durably useful (names, preferences, ongoing context) — not transient chit-chat. Never put a person's private details into `group_memory`. One fact is one item: when something you learn refines or overturns an item already in those blocks, replace that item rather than saving another beside it.
 
 # Context boundaries
 

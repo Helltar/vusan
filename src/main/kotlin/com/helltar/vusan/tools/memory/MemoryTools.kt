@@ -3,6 +3,7 @@ package com.helltar.vusan.tools.memory
 import ai.koog.agents.core.tools.annotations.LLMDescription
 import ai.koog.agents.core.tools.annotations.Tool
 import ai.koog.agents.core.tools.reflect.ToolSet
+import com.helltar.vusan.agent.memory.MemoryOwner
 import com.helltar.vusan.agent.memory.MemoryRepository
 import com.helltar.vusan.agent.memory.memoryOwner
 import com.helltar.vusan.common.collapseWhitespaceAndCap
@@ -22,14 +23,12 @@ class MemoryTools(private val memory: MemoryRepository, private val context: Req
     suspend fun rememberAboutMe(
         @LLMDescription(MemoryToolDescriptions.REMEMBER_ABOUT_ME_DETAIL)
         detail: String,
+        @LLMDescription(MemoryToolDescriptions.REPLACES_ID)
+        replacesId: Long = 0,
     ): String = suspendToolGuard {
         if (!context.sender.isPerson) return@suspendToolGuard NO_PERSONAL_MEMORY
 
-        detail.collapseWhitespaceAndCap(MAX_MEMORY_CHARS)?.let { clean ->
-            val id = memory.add(context.user.memoryOwner, clean)
-            "Saved to your personal memory (#$id): $clean"
-        }
-            ?: "Nothing to remember — the detail was empty."
+        save(context.user.memoryOwner, "your personal memory", detail, replacesId)
     }
 
     @Tool
@@ -37,15 +36,13 @@ class MemoryTools(private val memory: MemoryRepository, private val context: Req
     suspend fun rememberAboutGroup(
         @LLMDescription(MemoryToolDescriptions.REMEMBER_ABOUT_GROUP_DETAIL)
         detail: String,
+        @LLMDescription(MemoryToolDescriptions.REPLACES_ID)
+        replacesId: Long = 0,
     ): String = suspendToolGuard {
         if (context.chat.isPrivate)
             return@suspendToolGuard "No shared group memory in a private chat — use rememberAboutMe for personal details."
 
-        detail.collapseWhitespaceAndCap(MAX_MEMORY_CHARS)?.let { clean ->
-            val id = memory.add(context.chatRef.memoryOwner, clean)
-            "Saved to this group's memory (#$id): $clean"
-        }
-            ?: "Nothing to remember — the detail was empty."
+        save(context.chatRef.memoryOwner, "this group's memory", detail, replacesId)
     }
 
     @Tool
@@ -67,5 +64,19 @@ class MemoryTools(private val memory: MemoryRepository, private val context: Req
 
         val removed = memory.clearScope(context.user.memoryOwner)
         "Cleared your personal memory ($removed item(s) removed). Chat history and group memory are untouched."
+    }
+
+    // a wrong id still saves the detail: losing what the user asked to keep is worse than a stale
+    // entry left beside it, and the reply says which of the two happened.
+    private suspend fun save(owner: MemoryOwner, where: String, detail: String, replacesId: Long): String {
+        val clean =
+            detail.collapseWhitespaceAndCap(MAX_MEMORY_CHARS)
+                ?: return "Nothing to remember — the detail was empty."
+
+        if (replacesId <= 0) return "Saved to $where (#${memory.add(owner, clean)}): $clean"
+
+        return memory.replace(owner, replacesId, clean)
+            ?.let { "Saved to $where (#$it) in place of #$replacesId: $clean" }
+            ?: "Saved to $where (#${memory.add(owner, clean)}) as a new item, because it holds no #$replacesId: $clean"
     }
 }
