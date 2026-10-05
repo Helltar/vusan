@@ -29,6 +29,7 @@ import java.time.format.DateTimeFormatter
 import kotlin.random.Random
 import kotlin.time.Duration
 import kotlin.time.Duration.Companion.days
+import kotlin.time.Duration.Companion.hours
 import kotlin.time.Duration.Companion.minutes
 import kotlin.time.Duration.Companion.seconds
 import kotlin.time.TimeSource
@@ -293,13 +294,15 @@ class Initiative(
         // a pause runs from half the interval to one and a half of it
         const val PAUSE_MIN_SHARE = 0.5
 
-        const val CONTEXT_LINES = 30
-        val CONTEXT_MAX_AGE = 90.minutes
+        // a lively half hour between two looks runs past thirty lines, and someone who opens a chat
+        // after a slow afternoon reads back further than an hour and a half
+        const val CONTEXT_LINES = 60
+        val CONTEXT_MAX_AGE = 6.hours
 
         // the chat model answers this, reasoning and all, and nothing is waiting on it
         val MIND_TIMEOUT = 90.seconds
 
-        const val MAX_REACTIONS_PER_DAY = 10
+        const val MAX_REACTIONS_PER_DAY = 20
         const val MAX_SAY_CHARS = 500
         const val MAX_LOGGED_TEXT_CHARS = 200
 

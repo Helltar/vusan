@@ -696,17 +696,15 @@ INITIATIVE_ENABLED=true
   messages since its last look, and not within five minutes of its own last line there — if it is
   already in the conversation, it does not talk over itself. A look one of these turned away is tried
   again five to ten minutes later.
-- **What is sent** — up to thirty lines of the chat's last ninety minutes, with names, to the chat
+- **What is sent** — up to sixty lines of the chat's last six hours, with names, to the chat
   model, with nobody having asked. Everything else Vusan does sends a group's messages somewhere
   only when it is addressed, so this is a deliberate switch. With the [diary](#diary) on, its entries
   go along, as do the names of people who used to write in the chat and have not for three days.
 - **How often it writes** — besides the daily limit, two of its own lines in one chat are at least
   ninety minutes apart. A reaction is not held back by that.
 - **What it may do** — nothing, one reaction, or one short message, optionally as a reply. Reactions
-  have a ceiling of ten per chat a day beside the message limit; with `INITIATIVE_MAX_MESSAGES_PER_DAY=0`
-  it only ever reacts.
-- **Quiet hours** — from the first hour up to, not including, the last, on the bot's own clock.
-  `0-0` is an empty range, so it looks around the clock.
+  have a ceiling of twenty per chat a day beside the message limit.
+- **Quiet hours** — it does not look at all from one to eight in the morning, on the bot's own clock.
 - **Telling it to stop** — it reads the chat it is about to speak into, and is told to stay out when
   someone asked it to be quiet. For a hard stop, turn the switch off.
 - **After a restart** — what it has looked at and how much it said today are kept in memory only, so
@@ -717,8 +715,8 @@ INITIATIVE_ENABLED=true
 What to read in the log:
 
 ```
-initiative look: chat=[telegram:-100123] fresh=[7] said=[1/4] reacted=[0/10] action=[reply] msg=[4812] chars=[41] text=[…] ms=[2140] why=[…]
-initiative look: chat=[telegram:-100123] fresh=[4] said=[1/4] reacted=[0/10] action=[silent] ms=[1630] why=[two people sorting out a trip]
+initiative look: chat=[telegram:-100123] fresh=[7] said=[1/4] reacted=[0/20] action=[reply] msg=[4812] chars=[41] text=[…] ms=[2140] why=[…]
+initiative look: chat=[telegram:-100123] fresh=[4] said=[1/4] reacted=[0/20] action=[silent] ms=[1630] why=[two people sorting out a trip]
 initiative skip: chat=[telegram:-100123] reason=[already talking] fresh=[5]
 ```
 
