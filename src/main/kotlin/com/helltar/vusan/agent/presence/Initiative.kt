@@ -130,7 +130,15 @@ class Initiative(
         state.startDay(LocalDate.ofInstant(now, zone))
 
         val entries = groupLog.recent(chat, CONTEXT_LINES, since = now - CONTEXT_MAX_AGE)
-        val fresh = entries.count { it.isFromPerson && it.sentAt.isAfter(state.lastLookAt) }
+
+        // a line of its own is proof it was here, whoever that line was for: what stands above it has
+        // been read, and reacting to it afterwards looks like noticing a message it already answered past
+        val seenUntil =
+            entries.filterNot { it.isFromPerson }.maxOfOrNull { it.sentAt }
+                ?.takeIf { it.isAfter(state.lastLookAt) }
+                ?: state.lastLookAt
+
+        val fresh = entries.count { it.isFromPerson && it.sentAt.isAfter(seenUntil) }
 
         // the day's count bounds how much it writes, the gap how often: without it a lively hour could
         // take the whole day's lines one look after another
@@ -160,7 +168,7 @@ class Initiative(
             return
         }
 
-        val glance = Glance(entries, state.lastLookAt, zone)
+        val glance = Glance(entries, seenUntil, zone)
         state.lastLookAt = now
 
         val input =
@@ -307,16 +315,17 @@ class Initiative(
 /**
  * The recent chat as one look shows it, and the way back from a number the model points at to the
  * message it stands for. Message ids themselves are never shown: a number can only name a line a person
- * wrote since [lastLookAt], so a decision cannot reach past what this look put in front of it.
+ * wrote after [seenUntil] — the last look, or the bot's own last line when that came later — so a
+ * decision cannot reach past what this look put in front of it.
  */
-private class Glance(entries: List<GroupLogEntry>, lastLookAt: Instant, zone: ZoneId) {
+private class Glance(entries: List<GroupLogEntry>, seenUntil: Instant, zone: ZoneId) {
 
     private val targets = HashMap<Int, String>()
 
     val lines: List<ChatGlanceLine> =
         entries.mapNotNull { entry ->
             val content = entry.glanceContent() ?: return@mapNotNull null
-            val fresh = entry.sentAt.isAfter(lastLookAt)
+            val fresh = entry.sentAt.isAfter(seenUntil)
 
             val number =
                 entry.messageId

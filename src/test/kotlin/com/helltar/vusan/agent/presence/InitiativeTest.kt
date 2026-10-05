@@ -129,6 +129,27 @@ class InitiativeTest {
     }
 
     @Test
+    fun `what stood above its own last line is read, not new`() = runBlocking {
+        val mind = FakeMind(InitiativeDecision.Silent())
+        val initiative = initiative(mind)
+
+        chatter()
+        initiative.tick()
+        now = now.plusSeconds(LONGEST_PAUSE_SECONDS)
+
+        // an ordinary answer, long enough ago that it no longer holds the look back
+        groupLog.record(person("early", "the pier is closed today", now.minusSeconds(900)))
+        groupLog.record(bot("the ferry still runs", now.minusSeconds(600)))
+        chatter()
+        initiative.tick()
+
+        val lines = mind.inputs.single().lines
+
+        assertEquals(listOf(null, null, null, null, null, 1, 2, 3), lines.map { it.number })
+        assertEquals(listOf("the pier is closed today", "the ferry still runs"), lines.slice(3..4).map { it.content })
+    }
+
+    @Test
     fun `nothing is looked at during the quiet hours`() = runBlocking {
         val mind = FakeMind(InitiativeDecision.Silent())
 

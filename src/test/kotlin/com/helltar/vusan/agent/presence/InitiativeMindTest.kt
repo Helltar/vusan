@@ -59,7 +59,7 @@ class InitiativeMindTest {
             """
             11:58 alice: ferry or bridge
             11:59 you: ferry
-            --- since your last look ---
+            --- new since you were last here ---
             [1] 12:14 bob: bridge is closed
             """.trimIndent(),
             rendered,
