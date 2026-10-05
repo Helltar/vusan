@@ -745,8 +745,14 @@ schedules, and they show up in `/tasks` like any other task, where the user can 
 Vusan reads what the group lets it post before each turn and adapts: a chat that forbids photos is
 never offered image generation, one that forbids polls gets no poll tools, and slow mode is stated
 in the turn so the answer comes as one message instead of several that Telegram would drop. Nothing
-has to be configured for this — but two group settings do change what it can do:
+has to be configured for this — but three group settings do change what it can do:
 
+- **Privacy mode decides what it sees** — a bot is created with it on, and then Telegram hands it
+  only mentions, replies to its messages and commands. The [group log](#group-log), recaps,
+  [answering without a mention](#answering-without-a-mention), the [diary](#diary) and
+  [initiative](#initiative) all need the whole chat: turn privacy mode off in
+  [@BotFather](https://t.me/BotFather) with `/setprivacy` and add the bot to the group again, or
+  make it an administrator.
 - **A plain member obeys the group's default permissions** — turning off photos, stickers, polls,
   voice messages or files for everyone turns them off for Vusan too, and the matching tools
   disappear from that chat. Promoting it to administrator lifts all of it, slow mode included.
