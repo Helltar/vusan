@@ -102,6 +102,32 @@ class CodexCatalogTest {
     }
 
     @Test
+    fun `the catalog's default verbosity counts only for a model that takes one`() = runBlocking {
+        val models = fetchCodexModels(
+            catalogClient(
+                """
+                {"models":[
+                  {"slug":"terse-model","support_verbosity":true,"default_verbosity":"low"},
+                  {"slug":"deaf-model","support_verbosity":false,"default_verbosity":"low"},
+                  {"slug":"plain-model"}
+                ]}
+                """.trimIndent()
+            ),
+            store(),
+        )
+
+        assertEquals(listOf("low", null, null), models.map { it.defaultVerbosity })
+    }
+
+    @Test
+    fun `catalog metadata configures the verbosity`() {
+        val config = LlmProviderConfig.Codex(model = "text-model", requestTimeout = 120.seconds)
+
+        assertEquals("low", applyCodexModelMetadata(config, codexModel(defaultVerbosity = "low")).verbosity)
+        assertNull(applyCodexModelMetadata(config, codexModel()).verbosity)
+    }
+
+    @Test
     fun `catalog metadata configures context and vision`() {
         val config =
             LlmProviderConfig.Codex(
@@ -356,6 +382,7 @@ private fun codexModel(
     contextWindowTokens: Long? = null,
     supportedEfforts: Set<ReasoningEffort>? = null,
     supportedServiceTiers: Set<String>? = null,
+    defaultVerbosity: String? = null,
 ): CodexModel =
     CodexModel(
         id = "text-model",
@@ -364,6 +391,7 @@ private fun codexModel(
         supportsVision = supportsVision,
         supportedReasoningEfforts = supportedEfforts,
         supportedServiceTiers = supportedServiceTiers,
+        defaultVerbosity = defaultVerbosity,
     )
 
 /** Zero-padded so plain string ordering matches version ordering, independently of production code. */

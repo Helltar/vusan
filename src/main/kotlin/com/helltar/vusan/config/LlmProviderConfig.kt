@@ -76,6 +76,9 @@ sealed interface LlmProviderConfig {
         // the plan's faster serving tier. it is not free: the same allowance is spent quicker, so it stays
         // off unless the operator asks for it.
         val serviceTier: ServiceTier? = null,
+        // how wordy the catalog says this model should be by default. the backend's own default is a step
+        // wordier than what the CLI asks for, so the catalog's value is sent the way the CLI sends it.
+        val verbosity: String? = null,
         // whether image generation may run on the plan when no OPENAI_IMAGE_API_KEY is set. every other
         // route waits for its key, so this is the one that has to be switched off rather than left unset.
         val imageGeneration: Boolean = true,

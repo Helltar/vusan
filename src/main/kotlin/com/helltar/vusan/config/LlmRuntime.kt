@@ -56,6 +56,8 @@ private const val OPENAI_COMPACTION_CACHE_KEY = "vusan-recap"
 private const val COMPLETIONS_REASONING_EFFORT = "reasoning_effort"
 private const val RESPONSES_REASONING = "reasoning"
 private const val RESPONSES_REASONING_EFFORT = "effort"
+private const val RESPONSES_TEXT = "text"
+private const val RESPONSES_TEXT_VERBOSITY = "verbosity"
 private const val HEX_RADIX = 16
 
 data class LlmRuntime(
@@ -240,7 +242,9 @@ private fun codexModel(config: LlmProviderConfig.Codex): LLModel =
 
 private fun codexParams(config: LlmProviderConfig.Codex, promptCacheKey: String): LLMParams =
     OpenAIResponsesParams(
-        additionalProperties = responsesReasoning(config.reasoningEffort),
+        additionalProperties =
+            (responsesReasoning(config.reasoningEffort).orEmpty() + responsesVerbosity(config.verbosity).orEmpty())
+                .takeIf { it.isNotEmpty() },
         include = listOf(OpenAIInclude.REASONING_ENCRYPTED_CONTENT),
         parallelToolCalls = false,
         promptCacheKey = promptCacheKey,
@@ -257,6 +261,13 @@ private fun completionsReasoning(effort: ReasoningEffort?): Map<String, JsonElem
 private fun responsesReasoning(effort: ReasoningEffort?): Map<String, JsonElement>? =
     effort?.let { value ->
         mapOf(RESPONSES_REASONING to buildJsonObject { put(RESPONSES_REASONING_EFFORT, value.requestValue) })
+    }
+
+// rides beside the effort for the same reason: koog has no field for it. a structured-output call sets
+// `text` itself and koog's merge keeps its own, which costs that one call the verbosity and nothing else.
+private fun responsesVerbosity(verbosity: String?): Map<String, JsonElement>? =
+    verbosity?.let { value ->
+        mapOf(RESPONSES_TEXT to buildJsonObject { put(RESPONSES_TEXT_VERBOSITY, value) })
     }
 
 // prompt_cache_key is an openai extension, so do not leak it to arbitrary compatible servers that may

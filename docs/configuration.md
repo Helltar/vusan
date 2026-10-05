@@ -171,7 +171,7 @@ no refresh token: Vusan uses it while it is fresh and asks for a replacement as 
 instead of failing a request after it expires.
 
 **What the plan's catalog decides.** The models your plan actually offers are read at startup, and
-four settings are checked against that list:
+five settings are checked against that list:
 
 - **`LLM_MODEL`** — startup fails with the available ids if it does not match. Codex and the OpenAI
   Platform API expose different model sets, so a Platform-only id would otherwise fail on the first
@@ -180,6 +180,8 @@ four settings are checked against that list:
   images.
 - **`LLM_REASONING_EFFORT`** — an effort the model does not offer stops startup instead of a turn.
 - **The context window** — comes from there too, so `LLM_CONTEXT_WINDOW_TOKENS` is only an override.
+- **How wordy replies are** — the model's default verbosity is taken from there and sent with every
+  request, the way the Codex CLI does it. Without a catalog the backend's own, wordier default applies.
 
 Older catalog responses without capability metadata retain the compatible image-capable default.
 

@@ -498,6 +498,19 @@ class LlmRuntimeTest {
     }
 
     @Test
+    fun `the catalog's verbosity is sent beside the effort`() = runBlocking {
+        val sent = sentOpenAiRequest(codex(reasoningEffort = ReasoningEffort.XHIGH, verbosity = "low"))
+
+        assertEquals("low", sent.getValue("text").jsonObject.getValue("verbosity").jsonPrimitive.content)
+        assertEquals("xhigh", sent.getValue("reasoning").jsonObject.getValue("effort").jsonPrimitive.content)
+    }
+
+    @Test
+    fun `no verbosity is sent when the catalog named none`() = runBlocking {
+        assertNull(sentOpenAiRequest(codex())["text"]?.jsonObject?.get("verbosity"))
+    }
+
+    @Test
     fun `codex asks for no serving tier by default`() {
         assertNull(assertIs<OpenAIResponsesParams>(codex().chatParams).serviceTier)
         assertEquals("model=gpt-5.6-terra", codexRoutingHint("gpt-5.6-terra", serviceTier = null))
@@ -561,6 +574,7 @@ class LlmRuntimeTest {
         supportsVision: Boolean = true,
         reasoningEffort: ReasoningEffort? = null,
         serviceTier: ServiceTier? = null,
+        verbosity: String? = null,
     ): LlmRuntime =
         resolveLlmRuntime(
             LlmProviderConfig.Codex(
@@ -570,6 +584,7 @@ class LlmRuntimeTest {
                 contextWindowTokens = contextWindowTokens,
                 supportsVision = supportsVision,
                 serviceTier = serviceTier,
+                verbosity = verbosity,
             ),
             codexAuth = CodexAuthStore(Http.createClient(MockEngine { error("no calls expected") })),
         )

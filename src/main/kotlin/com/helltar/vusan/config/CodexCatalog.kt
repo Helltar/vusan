@@ -116,6 +116,8 @@ data class CodexModel(
     // the serving tiers this model offers beyond the standard one, by their request value. an empty set
     // means the catalog says none; `null` means it did not say.
     val supportedServiceTiers: Set<String>?,
+    // `null` when the model takes no verbosity or the catalog names no default for it.
+    val defaultVerbosity: String?,
 )
 
 @Serializable
@@ -131,6 +133,8 @@ private data class CodexModelInfo(
     @SerialName("supported_reasoning_efforts") val supportedReasoningEfforts: JsonElement? = null,
     @SerialName("supported_reasoning_levels") val supportedReasoningLevels: JsonElement? = null,
     @SerialName("service_tiers") val serviceTiers: List<CodexServiceTierInfo>? = null,
+    @SerialName("support_verbosity") val supportVerbosity: Boolean = false,
+    @SerialName("default_verbosity") val defaultVerbosity: String? = null,
 )
 
 @Serializable
@@ -166,6 +170,7 @@ suspend fun fetchCodexModels(http: HttpClient, auth: CodexAuthStore): List<Codex
                     (it.supportedReasoningEfforts ?: it.supportedReasoningLevels).reasoningEfforts(),
                 supportedServiceTiers =
                     it.serviceTiers?.mapNotNull { tier -> tier.id.takeIf(String::isNotBlank) }?.toSet(),
+                defaultVerbosity = it.defaultVerbosity?.takeIf { value -> it.supportVerbosity && value.isNotBlank() },
             )
         }
 }
@@ -220,6 +225,7 @@ internal fun applyCodexModelMetadata(
     return config.copy(
         contextWindowTokens = config.contextWindowTokens ?: model.contextWindowTokens,
         supportsVision = model.supportsVision,
+        verbosity = model.defaultVerbosity,
     )
 }
 
