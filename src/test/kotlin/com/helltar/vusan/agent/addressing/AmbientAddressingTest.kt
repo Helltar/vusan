@@ -133,14 +133,6 @@ class AmbientAddressingTest {
     }
 
     @Test
-    fun `shadow mode asks and never answers`() = runBlocking {
-        val classifier = FakeClassifier(answer = true)
-
-        assertFalse(addressing(classifier, shadow = true).isAddressed(candidate("robin, hello")))
-        assertEquals(1, classifier.inputs.size)
-    }
-
-    @Test
     fun `a classifier that fails or answers nothing readable keeps the bot out`() = runBlocking {
         assertFalse(addressing(FakeClassifier(failure = IllegalStateException("boom"))).isAddressed(candidate("robin, hi")))
         assertFalse(addressing(FakeClassifier(answer = null)).isAddressed(candidate("robin, hi")))
@@ -191,8 +183,8 @@ class AmbientAddressingTest {
 
     private fun minutesAgo(minutes: Long): Instant = now.minusSeconds(minutes * 60)
 
-    private fun addressing(classifier: AddressingClassifier, shadow: Boolean = false) =
-        AmbientAddressing(classifier, groupLog, listOf("Robin", "robin"), shadow = shadow, clock = { now })
+    private fun addressing(classifier: AddressingClassifier) =
+        AmbientAddressing(classifier, groupLog, listOf("Robin", "robin"), clock = { now })
 
     private fun candidate(text: String, messageId: String = MESSAGE_ID, authorWaiting: Boolean = false) =
         AmbientCandidate(
@@ -249,7 +241,6 @@ class AmbientAddressingTest {
                     requestTimeout = 60.seconds,
                 ),
             maxConcurrentTurns = 4,
-            maxQueuedTurnsPerConversation = 3,
             openAiImageApiKey = null,
             openAiImage = null,
             openAiStt = null,

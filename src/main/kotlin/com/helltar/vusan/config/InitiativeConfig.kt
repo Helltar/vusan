@@ -6,11 +6,9 @@ package com.helltar.vusan.config
  *
  * [intervalMinutes] is the middle of the pause between two looks at one chat, each pause drawn at
  * random around it so the bot does not speak on a clock. [maxMessagesPerDay] bounds what it writes
- * into one chat unprompted; a reaction is not a message and has a ceiling of its own. In [shadow] mode
- * every decision is reached and logged, and nothing is sent.
+ * into one chat unprompted; a reaction is not a message and has a ceiling of its own.
  */
 data class InitiativeConfig(
-    val shadow: Boolean = false,
     val intervalMinutes: Int = DEFAULT_INTERVAL_MINUTES,
     val maxMessagesPerDay: Int = DEFAULT_MAX_MESSAGES_PER_DAY,
     val quietHours: QuietHours = QuietHours.DEFAULT,

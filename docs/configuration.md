@@ -284,11 +284,10 @@ pictures through the outage sets `OPENAI_IMAGE_API_KEY`, which sends every pictu
 | Variable                            | Default | Description                                                  |
 |-------------------------------------|---------|--------------------------------------------------------------|
 | `MAX_CONCURRENT_TURNS`              | `8`     | Requests Vusan works on at the same time.                    |
-| `MAX_QUEUED_TURNS_PER_CONVERSATION` | `3`     | Messages one person may have waiting in a chat behind the one being answered. |
 
 Vusan answers one person's messages in a chat one at a time, in order, so a follow-up sent while it is
 still working starts with the previous answer already known. Up to three wait that way; the next is
-told to hold on. Set it to `0` and a second message is told so at once.
+told to hold on.
 
 `MAX_CONCURRENT_TURNS` is the other half: how many *different* people Vusan serves at once. Waiting
 messages do not count towards it. Every request is a model
@@ -412,14 +411,14 @@ voice message.
 
 ### Voice input
 
-`OPENAI_STT_API_KEY` enables listening; these tune what does the listening.
+`OPENAI_STT_API_KEY` enables listening; this picks what does the listening.
 
 | Variable                          | Default             | Description                               |
 |-----------------------------------|---------------------|-------------------------------------------|
 | `OPENAI_STT_MODEL`                | `gpt-4o-transcribe` | Speech-to-text model.                     |
-| `OPENAI_STT_MAX_DURATION_SECONDS` | `300`               | Longest voice or video Vusan transcribes. |
 
-Past that length a voice message is refused, and a video is watched without its sound.
+Vusan transcribes up to five minutes. Past that length a voice message is refused, and a video is
+watched without its sound.
 
 ### Image generation
 
@@ -433,15 +432,14 @@ picture of the bot itself goes to `/v1/images/edits` instead, with the reference
 |---------------------------|--------------------------------------------|------------------------------------------------------------------------|
 | `OPENAI_IMAGE_MODEL`      | `gpt-image-1.5` / `gpt-image-2` on `codex` | Image model.                                                           |
 | `OPENAI_IMAGE_QUALITY`    | `medium`                                   | Rendering quality: `low`, `medium`, `high`, `xhigh`, `max`, or `auto`. |
-| `OPENAI_IMAGE_MODERATION` | `auto`                                     | Content filter strictness: `auto` or `low`.                            |
 
 `xhigh` and `max` render only on the `gpt-image-2.5` models; every earlier model stops at `high`
 and fails the request if you ask for more. Quality drives the price per image, so raise it
 deliberately.
 
 OpenAI filters both the description it is given and the picture it produced, and that filter cannot
-be turned off — `OPENAI_IMAGE_MODERATION` only chooses between its standard setting and the less
-restrictive `low`. Either way a refusal comes back as a refusal: Vusan says the picture cannot be
+be turned off — Vusan asks for the less restrictive of its two settings. A refusal still comes back
+as a refusal: Vusan says the picture cannot be
 drawn and offers to change it, instead of reporting that something broke.
 
 Editing keeps the original as faithfully as the model allows, which is what holds a face still in a
@@ -460,9 +458,8 @@ subscription instead. Setting `OPENAI_IMAGE_API_KEY` always wins, because it bil
 than spending the same subscription allowance the conversation itself runs on. Three differences are
 worth knowing before relying on the subscription route: images count against your ChatGPT usage
 limit, so a heavy image day can exhaust the same quota that answers messages; the model chooses its
-own output dimensions, so the requested aspect ratio is a hint rather than a guarantee; and
-`OPENAI_IMAGE_MODERATION` does not reach it, since it filters the way ChatGPT does and takes no
-setting of its own.
+own output dimensions, so the requested aspect ratio is a hint rather than a guarantee; and it
+filters the way ChatGPT does, with no strictness to choose.
 
 `CODEX_IMAGE_GENERATION_ENABLED=false` takes the subscription route away, so only a key enables
 the tools, as on every other provider.
@@ -618,7 +615,6 @@ Vusan; everything that calls it outright is answered exactly as before, without 
 ```dotenv
 OPENAI_ADDRESSING_API_KEY=sk-proj-qwerty
 ADDRESSING_NAMES=robin,robbie
-ADDRESSING_SHADOW=true
 ```
 
 | Variable                    | Default          | Description                                                     |
@@ -626,7 +622,6 @@ ADDRESSING_SHADOW=true
 | `OPENAI_ADDRESSING_API_KEY` | —                | Turns the feature on. Can reuse your OpenAI key.                |
 | `OPENAI_ADDRESSING_MODEL`   | `gpt-5.6-luna`   | OpenAI model that decides; never the chat model.                |
 | `ADDRESSING_NAMES`          | from the profile | Spellings the chat uses, comma-separated.                       |
-| `ADDRESSING_SHADOW`         | `false`          | `true` decides and logs every verdict, but never answers.       |
 
 - **Names** — the bot's Telegram name is always one of them. Without `ADDRESSING_NAMES` the other is
   its handle minus the `bot` ending, so `@robinbot` answers to «robin». A name matches at the start of
@@ -642,8 +637,8 @@ ADDRESSING_SHADOW=true
 - **While Vusan is busy** — a message it was called into by name waits its turn like a mention
   does, and is dropped without a word if the line is full. If the answer before it already covered
   it, or it turns out to be for somebody else, Vusan may stay silent.
-- **Shadow mode** — the way to start: each verdict goes to the log as
-  `ambient verdict: chat=[…] msg=[…] gate=[…] verdict=[…]` without the text, and the message id finds
+- **In the log** — each verdict is a line,
+  `ambient verdict: chat=[…] msg=[…] gate=[…] verdict=[…]`, without the text, and the message id finds
   the text in the group log when a verdict needs a second look.
 
 It needs the [group log](#group-log), which is where the recent lines come from; with
@@ -687,13 +682,11 @@ nothing, which is the point: it is meant to feel like a member of the chat, not 
 
 ```dotenv
 INITIATIVE_ENABLED=true
-INITIATIVE_SHADOW=true
 ```
 
 | Variable                          | Default | Description                                                      |
 |-----------------------------------|---------|------------------------------------------------------------------|
 | `INITIATIVE_ENABLED`              | `false` | `true` turns it on for every group in `ALLOWED_IDS`.             |
-| `INITIATIVE_SHADOW`               | `false` | `true` decides and logs every look, but sends nothing.           |
 | `INITIATIVE_INTERVAL_MINUTES`     | `30`    | Middle of the pause between two looks at one chat; at least 5.   |
 | `INITIATIVE_MAX_MESSAGES_PER_DAY` | `4`     | Lines it may write into one chat a day without being asked.      |
 | `INITIATIVE_QUIET_HOURS`          | `1-8`   | Local hours with no looks at all; `23-7` runs over midnight.     |
@@ -732,8 +725,7 @@ initiative skip: chat=[telegram:-100123] reason=[already talking] fresh=[5]
 `action` is `silent`, `react`, `say` or `reply`, and `why` is the model's own short reason, there so a
 day of looks can be read without opening the chat. A decision that was not carried out says so in
 `result` (`over budget`, `no such target`, `emoji not allowed`, `no readable decision`). `skip` names
-the gate that kept it from looking: `quiet`, `already talking` or `budget spent`. Start with
-`INITIATIVE_SHADOW=true`, read a day or two of these, then let it speak.
+the gate that kept it from looking: `quiet`, `already talking` or `budget spent`.
 
 It needs the group log; with `GROUP_LOG_ENABLED=false` it stays off, and startup says so.
 

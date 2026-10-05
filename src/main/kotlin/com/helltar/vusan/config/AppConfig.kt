@@ -28,7 +28,6 @@ data class AppConfig(
     val llmProvider: LlmProviderConfig,
     val llmFallback: LlmProviderConfig? = null,
     val maxConcurrentTurns: Int,
-    val maxQueuedTurnsPerConversation: Int,
     val openAiImage: OpenAiImageConfig?,
     val openAiImageApiKey: String?,
     val openAiStt: OpenAiSttConfig?,
@@ -47,7 +46,6 @@ data class AppConfig(
     init {
         require(agentMaxIterations > 0) { "AGENT_MAX_ITERATIONS must be positive" }
         require(maxConcurrentTurns > 0) { "MAX_CONCURRENT_TURNS must be positive" }
-        require(maxQueuedTurnsPerConversation >= 0) { "MAX_QUEUED_TURNS_PER_CONVERSATION must not be negative" }
         require(regolithUrl == null || !regolithToken.isNullOrBlank()) { "Sandbox API authentication is required" }
     }
 
@@ -57,7 +55,6 @@ data class AppConfig(
         private const val LLM_PREFIX = "LLM"
         private const val LLM_FALLBACK_PREFIX = "LLM_FALLBACK"
         private const val DEFAULT_MAX_CONCURRENT_TURNS = 8
-        private const val DEFAULT_MAX_QUEUED_TURNS_PER_CONVERSATION = 3
 
         private val dotenv = dotenv { ignoreIfMissing = true }
 
@@ -84,8 +81,6 @@ data class AppConfig(
                 llmProvider = llmProvider,
                 llmFallback = llmFallback,
                 maxConcurrentTurns = readIntEnv("MAX_CONCURRENT_TURNS") ?: DEFAULT_MAX_CONCURRENT_TURNS,
-                maxQueuedTurnsPerConversation =
-                    readIntEnv("MAX_QUEUED_TURNS_PER_CONVERSATION") ?: DEFAULT_MAX_QUEUED_TURNS_PER_CONVERSATION,
                 openAiImageApiKey = openAiImageKey,
                 openAiStt = resolveOpenAiStt(),
                 openAiVision = resolveOpenAiVision(),
@@ -128,7 +123,6 @@ data class AppConfig(
                         OpenAiImageConfig(
                             model = readEnv("OPENAI_IMAGE_MODEL") ?: defaultImageModel(route),
                             quality = readEnv("OPENAI_IMAGE_QUALITY") ?: OpenAiImageConfig.DEFAULT_QUALITY,
-                            moderation = readEnv("OPENAI_IMAGE_MODERATION") ?: OpenAiImageConfig.DEFAULT_MODERATION,
                             route = route,
                         )
                     },
@@ -179,8 +173,6 @@ data class AppConfig(
             return OpenAiSttConfig(
                 apiKey = key,
                 model = readEnv("OPENAI_STT_MODEL") ?: OpenAiSttConfig.DEFAULT_MODEL,
-                maxDurationSeconds =
-                    readLongEnv("OPENAI_STT_MAX_DURATION_SECONDS") ?: OpenAiSttConfig.DEFAULT_MAX_DURATION_SECONDS,
             )
         }
 
@@ -200,7 +192,6 @@ data class AppConfig(
                 apiKey = key,
                 model = readEnv("OPENAI_ADDRESSING_MODEL") ?: AddressingConfig.DEFAULT_MODEL,
                 names = readEnv("ADDRESSING_NAMES")?.split(',')?.map(String::trim)?.filter(String::isNotEmpty).orEmpty(),
-                shadow = readBooleanEnv("ADDRESSING_SHADOW") ?: false,
             )
         }
 
@@ -208,7 +199,6 @@ data class AppConfig(
             if (readBooleanEnv("INITIATIVE_ENABLED") != true) return null
 
             return InitiativeConfig(
-                shadow = readBooleanEnv("INITIATIVE_SHADOW") ?: false,
                 intervalMinutes =
                     readIntEnv("INITIATIVE_INTERVAL_MINUTES") ?: InitiativeConfig.DEFAULT_INTERVAL_MINUTES,
                 maxMessagesPerDay =

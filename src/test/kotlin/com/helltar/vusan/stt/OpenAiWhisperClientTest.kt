@@ -19,7 +19,6 @@ class OpenAiWhisperClientTest {
     private val config = OpenAiSttConfig(
         apiKey = "sk-test",
         model = "whisper-1",
-        maxDurationSeconds = 600,
     )
 
     @Test

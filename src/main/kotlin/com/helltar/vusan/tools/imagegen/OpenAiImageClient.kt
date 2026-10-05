@@ -23,6 +23,9 @@ private val IMAGE_TIMEOUT = 5.minutes
 // telegram re-encodes every photo it delivers, so a lossless png is bytes nobody ever sees: asking for
 // jpeg instead is a several-times smaller upload and keeps a max-quality picture under telegram's own
 // size limit. the codex route has no such field and sends png.
+// the filter cannot be turned off, only set to the less restrictive of its two strictnesses. the codex
+// route takes no such field and filters the way chatgpt does.
+private const val MODERATION = "low"
 private const val OUTPUT_FORMAT = "jpeg"
 private const val OUTPUT_COMPRESSION = 95
 private val errorJson = Json { ignoreUnknownKeys = true }
@@ -80,7 +83,7 @@ class OpenAiImageClient(private val http: HttpClient, private val auth: ImageAut
                             prompt = prompt,
                             size = size,
                             quality = config.quality,
-                            moderation = platformOnly(config.moderation),
+                            moderation = platformOnly(MODERATION),
                             outputFormat = platformOnly(OUTPUT_FORMAT),
                             outputCompression = platformOnly(OUTPUT_COMPRESSION),
                         ),
@@ -131,7 +134,7 @@ class OpenAiImageClient(private val http: HttpClient, private val auth: ImageAut
                 append("prompt", prompt)
                 append("size", size)
                 append("quality", config.quality)
-                append("moderation", config.moderation)
+                append("moderation", MODERATION)
                 append("output_format", OUTPUT_FORMAT)
                 append("output_compression", OUTPUT_COMPRESSION.toString())
 

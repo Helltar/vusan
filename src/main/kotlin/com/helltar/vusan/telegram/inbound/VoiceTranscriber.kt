@@ -49,8 +49,8 @@ internal class VoiceTranscriber(private val whisper: OpenAiWhisperClient, privat
     suspend fun transcribe(client: TelegramClient, input: AudioInput): VoiceTranscriptionResult {
         val duration = input.durationSeconds
 
-        if (duration != null && duration > config.maxDurationSeconds) {
-            return VoiceTranscriptionResult.TooLong(duration, config.maxDurationSeconds)
+        if (duration != null && duration > OpenAiSttConfig.MAX_DURATION_SECONDS) {
+            return VoiceTranscriptionResult.TooLong(duration, OpenAiSttConfig.MAX_DURATION_SECONDS)
         }
 
         val bytes =

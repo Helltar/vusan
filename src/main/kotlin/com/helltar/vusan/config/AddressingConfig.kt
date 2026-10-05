@@ -5,13 +5,12 @@ package com.helltar.vusan.config
  * without a mention, a reply or a command. The key is the whole switch.
  *
  * [names] are the spellings the chat uses besides the bot's own display name; empty means the ones
- * derived from its profile. In [shadow] mode every verdict is reached and logged, and none is acted on.
+ * derived from its profile.
  */
 data class AddressingConfig(
     val apiKey: String,
     val model: String,
     val names: List<String>,
-    val shadow: Boolean,
 ) {
 
     init {

@@ -178,8 +178,7 @@ A normal user message travels:
    five minutes and that line is among the six the classifier is shown, read from the group log; nothing else leaves
    the machine. A failure, a timeout, an unreadable answer or a chat over twenty checks a minute all mean no, so it can
    add answers and never take one away, and it costs nothing to a message the bot answers today. A yes is claimed like
-   any other message and runs as an ordinary turn with `RequestContext.ambient` set; with `ADDRESSING_SHADOW` every
-   verdict is logged and none acted on.
+   any other message and runs as an ordinary turn with `RequestContext.ambient` set.
 3. **Normalize** — text is sanitized (`MessageSanitizer`); voice/audio is transcribed (`VoiceTranscriber` → `stt/`);
    stickers become a metadata prompt; a rich message — which never carries `text` — is flattened back into rich markdown
    (`telegram/inbound/RichMessageText.kt`), both as its own input and when one is quoted in a reply, capped on the way
@@ -200,7 +199,7 @@ A normal user message travels:
 4. **Run** — `AgentRunner.handle` joins the conversation's line in `agent/ConversationLocks` and then takes a place
    from `agent/TurnAdmission`. One turn per conversation runs at a time, because a turn reads the history when it
    starts and appends to it when it ends: the next message waits with its typing indicator and starts with the answer
-   before it already in its history. `MAX_QUEUED_TURNS_PER_CONVERSATION` messages may wait that way, in the order they
+   before it already in its history. Three messages may wait that way, in the order they
    arrived, and the one after that is answered "busy" — or, for an ambient message, turned away without a word, since
    "hold on" dropped into someone else's conversation is worse than silence; the same goes for "overloaded". Admission is the ceiling every conversation shares —
    `MAX_CONCURRENT_TURNS` turns at once, the rest waiting the same way, and only a queue several times that long
@@ -456,8 +455,7 @@ A normal user message travels:
   cannot take the whole day's count; a decision over either bound is dropped. The line goes out
   through `OutputDelivery.deliverUnprompted`, so it lands in the group transcript like any other bot line and a reply to
   it starts an ordinary turn with that line as `<reply_context>`. A chat that turns the bot away is left alone until a
-  restart. State — the last look, the next one, today's counts — is process memory. With `INITIATIVE_SHADOW` every
-  decision is reached, counted and logged, and nothing is sent. Every look and every skipped one leaves a log line; see
+  restart. State — the last look, the next one, today's counts — is process memory. Every look and every skipped one leaves a log line; see
   [Initiative](configuration.md#initiative).
 - **Poll answers** — a vote on a poll the bot put in a group reaches it as a `poll_answer` update, which carries a poll
   id and option numbers and nothing else: not the question, not what the options said, not even the chat. `PollRegistry`
@@ -616,7 +614,7 @@ A normal user message travels:
   on every other provider. `OpenAiImageClient` takes an `ImageAuth` telling it which: the generation call differs only
   by URL and credentials, but the edit call genuinely forks — the Platform endpoint takes a multipart upload while the
   Codex one takes JSON with the source inlined as a data URL and infers the output size from it. The fork extends to
-  what each request may carry: only the Platform one sends `OPENAI_IMAGE_MODERATION`, jpeg output, and high
+  what each request may carry: only the Platform one sends the `low` moderation setting, jpeg output, and high
   `input_fidelity` on the models that accept it, because the Codex backend's request has none of those fields. Both
   routes answer a refusal the same way: an error body naming OpenAI's content filter becomes an
   `ImageModerationBlocked`, so the tool tells the model to rewrite the description or give up instead of handing it a
@@ -731,7 +729,7 @@ A symptom-to-source map for finding the right file fast. Paths are under
 | Vusan ignores a message entirely | `TelegramBotRunner.passesAllowlist` and `request/AccessPolicy.kt` (the `ALLOWED_IDS` allowlist and the `BANNED_IDS` ban list, both platform-qualified, applied on the polling loop), then `telegram/inbound/MessageFilter.kt` (`shouldHandle` — group reply/mention rules) |
 | Vusan answers a group message nobody tagged it in, or does not answer one that named it | `ambient verdict` lines in the log (gate, verdict, latency, never the text), then `agent/addressing/AmbientAddressing.kt` (the gate, the windows, the rate) + `LlmAddressingClassifier.kt` (the measured wording) + `telegram/inbound/AmbientCandidates.kt` (what is never asked about) |
 | Container says `Up` but the bot answers nothing | the `com.helltar:heartbeat` library (the `/tmp/health` freshness signal, and the `ERROR` logged once when polling stalls) + `TelegramBotRunner.start` (the `getUpdates` generator hook that feeds it) |
-| Reply says "still working on your previous request", or a second message is answered only after the first | `agent/ConversationLocks.kt` — one turn per conversation, `MAX_QUEUED_TURNS_PER_CONVERSATION` waiting behind it, the next refused |
+| Reply says "still working on your previous request", or a second message is answered only after the first | `agent/ConversationLocks.kt` — one turn per conversation, three waiting behind it (`AgentRunner`), the next refused |
 | A message goes unanswered after a restart or deploy, or one is answered twice | `telegram/UpdateSpool.kt` (what is kept, what is replayed, and `SPOOL_RETENTION`) + `telegram/TelegramBotRunner.kt` (the blocking spool write in the poll callback, and `settle` on pickup) + `telegram/AnsweredMessages.kt` (the one-turn-per-message claim) |
 | Reply lands in the wrong chat, loses its reply anchor, or DM redirect misbehaves | `telegram/delivery/TelegramDelivery.kt` (routing/anchor/private-redirect *policy*) |
 | Formatting renders wrong, message rejected, or media falls back to document/text | `agent/SystemPrompt.kt` (allowed HTML tags the agent emits), `telegram/delivery/TelegramOutputSender.kt` (which call and which fallback each output kind gets), `telegram/delivery/TelegramSendFallbacks.kt` (the fallback *mechanism* itself), `telegram/delivery/TelegramErrors.kt` (which provider errors trigger a fallback) |

@@ -49,7 +49,6 @@ import kotlin.time.toJavaDuration
  * silence, and what it writes in a day is bounded whatever the model would like.
  *
  * The state is process memory: a restart forgets what was looked at and what today's count stood at.
- * In [InitiativeConfig.shadow] mode every decision is reached, counted and logged, and nothing is sent.
  */
 class Initiative(
     private val mind: InitiativeMind,
@@ -182,8 +181,7 @@ class Initiative(
             "initiative look: chat=[$chat] fresh=[$fresh] said=[${state.said}/${config.maxMessagesPerDay}] " +
                     "reacted=[${state.reacted}/$MAX_REACTIONS_PER_DAY] $outcome " +
                     "ms=[${started.elapsedNow().inWholeMilliseconds}]" +
-                    decision?.why?.let { " why=[$it]" }.orEmpty() +
-                    if (config.shadow) " shadow=[true]" else ""
+                    decision?.why?.let { " why=[$it]" }.orEmpty()
         }
     }
 
@@ -247,8 +245,6 @@ class Initiative(
         }
 
     private suspend fun send(chat: ChatRef, output: BotOutput, anchor: String?) {
-        if (config.shadow) return
-
         if (delivery.deliverUnprompted(Destination(chat), listOf(output), anchor).isUnreachable) {
             unreachable += chat
             log.warn { "initiative stopped for a chat that no longer accepts the bot: chat=[$chat]" }

@@ -198,17 +198,6 @@ class InitiativeTest {
     }
 
     @Test
-    fun `shadow mode decides and sends nothing`() = runBlocking {
-        val delivery = FakeDelivery()
-        val mind = FakeMind(InitiativeDecision.Say("the ferry is the better plan"))
-
-        lookWith(initiative(mind, delivery, shadow = true))
-
-        assertEquals(1, mind.inputs.size)
-        assertTrue(delivery.sent.isEmpty())
-    }
-
-    @Test
     fun `a chat the allowlist does not name is never looked at`() = runBlocking {
         val mind = FakeMind(InitiativeDecision.Silent())
 
@@ -290,7 +279,6 @@ class InitiativeTest {
     private fun initiative(
         mind: InitiativeMind,
         delivery: OutputDelivery = FakeDelivery(),
-        shadow: Boolean = false,
         maxMessagesPerDay: Int = 4,
         quietHours: QuietHours = QuietHours(from = 0, until = 0),
         isAllowed: (ChatRef) -> Boolean = { true },
@@ -299,7 +287,7 @@ class InitiativeTest {
             mind = mind,
             groupLog = groupLog,
             delivery = delivery,
-            config = InitiativeConfig(shadow, INTERVAL_MINUTES, maxMessagesPerDay, quietHours),
+            config = InitiativeConfig(INTERVAL_MINUTES, maxMessagesPerDay, quietHours),
             isAllowed = isAllowed,
             zone = ZoneOffset.UTC,
             clock = { now },

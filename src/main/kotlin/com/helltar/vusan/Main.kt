@@ -149,7 +149,6 @@ suspend fun main() = coroutineScope {
                     LlmAddressingClassifier(runtime.executor, runtime.model, runtime.params),
                     transcript,
                     botProfile.addressingNames(addressing.names),
-                    shadow = addressing.shadow,
                 )
             }
 
@@ -210,7 +209,6 @@ suspend fun main() = coroutineScope {
                 agentFactory, toolRegistryFactory, conversation, memory, conversationCompactor,
                 config.chatHistory, stickerCatalog?.let { catalog -> catalog::indexBlockFor },
                 groupLog, { fallbackInUse()?.model }, config.maxConcurrentTurns,
-                config.maxQueuedTurnsPerConversation,
                 diary = diary?.let { it::blockFor },
             )
 
@@ -354,8 +352,7 @@ private fun logPresence(config: AppConfig, groupLogOn: Boolean) {
     initiative?.let {
         log.info {
             "Initiative: interval=[${it.intervalMinutes}m] maxMessagesPerDay=[${it.maxMessagesPerDay}] " +
-                    "quietHours=[${it.quietHours.from}-${it.quietHours.until}]" +
-                    if (it.shadow) " shadow=[true] — decisions are logged and nothing is sent" else ""
+                    "quietHours=[${it.quietHours.from}-${it.quietHours.until}]"
         }
     }
 }
@@ -401,21 +398,12 @@ private fun logStartup(
         if (ambientNames == null) {
             log.warn { "Ambient addressing off: it reads the group log, and GROUP_LOG_ENABLED=false" }
         } else {
-            log.info {
-                "Ambient addressing: model=[${it.model}] names=[${ambientNames.joinToString(", ")}]" +
-                        if (it.shadow) " shadow=[true] — verdicts are logged and never acted on" else ""
-            }
+            log.info { "Ambient addressing: model=[${it.model}] names=[${ambientNames.joinToString(", ")}]" }
         }
     }
 
     config.openAiImage?.let {
-        log.info {
-            "Images: route=[${it.route.name.lowercase()}] model=[${it.model}] quality=[${it.quality}] " +
-                    "moderation=[${it.moderation}]"
-        }
-
-        if (it.route == ImageRoute.CODEX && it.moderation != OpenAiImageConfig.DEFAULT_MODERATION)
-            log.warn { "OPENAI_IMAGE_MODERATION is ignored on the codex route, which has no such setting" }
+        log.info { "Images: route=[${it.route.name.lowercase()}] model=[${it.model}] quality=[${it.quality}]" }
     }
 
     log.info { "Database: [${config.databasePath}]" }

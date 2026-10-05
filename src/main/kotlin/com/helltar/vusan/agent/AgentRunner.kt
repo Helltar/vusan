@@ -104,17 +104,15 @@ class AgentRunner(
     // be served at once, and each turn is an LLM call with its tools behind it. no default — a runner
     // quietly serving one turn at a time is not something to discover under load.
     maxConcurrentTurns: Int,
-    // how many turns may wait behind the one a conversation is running before the next is told to hold
-    // on. the lock is taken before a place, in every path: a turn that holds a place is running and waits
-    // for nothing, so nothing can wait in a circle — and a person's line costs the others no places.
-    maxQueuedTurnsPerConversation: Int,
     // what the bot wrote down about this chat's last few days, if this deployment keeps a diary.
     private val diary: (suspend (ChatRef) -> String?)? = null,
 ) {
 
     private val admission = TurnAdmission(maxConcurrentTurns)
 
-    private val conversationLocks = ConversationLocks<ConversationScope>(maxQueuedTurnsPerConversation)
+    // the lock is taken before a place, in every path: a turn that holds a place is running and waits
+    // for nothing, so nothing can wait in a circle — and a person's line costs the others no places.
+    private val conversationLocks = ConversationLocks<ConversationScope>(MAX_QUEUED_TURNS_PER_CONVERSATION)
     private val running = RunningTurns<ConversationScope>()
 
     suspend fun handle(
@@ -523,6 +521,10 @@ class AgentRunner(
         // for these still fits only what its token budget allows. kept well above that budget on a
         // large window, where a low count buys nothing and only pays for recaps.
         const val MAX_RECENT_INTERACTIONS = 40
+
+        // how many turns may wait behind the one a conversation is running before the next is told to
+        // hold on.
+        const val MAX_QUEUED_TURNS_PER_CONVERSATION = 3
     }
 }
 

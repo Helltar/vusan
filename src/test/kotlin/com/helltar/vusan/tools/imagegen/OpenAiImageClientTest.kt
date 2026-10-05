@@ -47,7 +47,7 @@ class OpenAiImageClientTest {
                     assertEquals("a red panda astronaut", payload["prompt"]?.jsonPrimitive?.content)
                     assertEquals("1536x1024", payload["size"]?.jsonPrimitive?.content)
                     assertEquals("medium", payload["quality"]?.jsonPrimitive?.content)
-                    assertEquals("auto", payload["moderation"]?.jsonPrimitive?.content)
+                    assertEquals("low", payload["moderation"]?.jsonPrimitive?.content)
                     // gpt-image-1 rejects response_format, so it must never be sent.
                     assertFalse(payload.containsKey("response_format"))
 

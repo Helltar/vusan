@@ -50,7 +50,6 @@ internal fun testConfig(dbPath: String) =
                 requestTimeout = 60.seconds,
             ),
         maxConcurrentTurns = 4,
-        maxQueuedTurnsPerConversation = 3,
         openAiImageApiKey = null,
         openAiImage = null,
         openAiStt = null,

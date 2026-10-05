@@ -23,10 +23,10 @@ class WhisperVideoAudioTranscriber(
     override suspend fun transcribeOrNull(audio: ByteArray, durationSeconds: Int?): String? {
         if (audio.isEmpty()) return null
 
-        if (durationSeconds != null && durationSeconds > config.maxDurationSeconds) {
+        if (durationSeconds != null && durationSeconds > OpenAiSttConfig.MAX_DURATION_SECONDS) {
             log.info {
                 "video audio left untranscribed: duration=[${durationSeconds}s] " +
-                        "over OPENAI_STT_MAX_DURATION_SECONDS=[${config.maxDurationSeconds}]"
+                        "over max=[${OpenAiSttConfig.MAX_DURATION_SECONDS}s]"
             }
 
             return null

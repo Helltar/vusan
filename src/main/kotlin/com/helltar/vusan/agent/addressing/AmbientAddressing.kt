@@ -39,15 +39,11 @@ data class AmbientCandidate(
  * names the bot, when its author is still waiting on the bot, or when the bot spoke within
  * [FOLLOW_UP_WINDOW] and that line is among the few the model is shown; everything else in the chat
  * never leaves the machine. The gate is about privacy before cost.
- *
- * In [shadow] mode every verdict is reached and logged, and none is acted on — the way to see how it
- * reads a real chat before it speaks in one.
  */
 class AmbientAddressing(
     private val classifier: AddressingClassifier,
     private val groupLog: GroupLogRepository,
     botNames: List<String>,
-    private val shadow: Boolean,
     private val clock: () -> Instant = Instant::now,
 ) {
 
@@ -78,11 +74,10 @@ class AmbientAddressing(
         // no text, ever: the message id finds it in the group log when a verdict needs a second look
         log.info {
             "ambient verdict: chat=[${candidate.chat}] msg=[${candidate.messageId}] gate=[${gate.label}] " +
-                    "verdict=[${verdict.label}] ms=[${started.elapsedNow().inWholeMilliseconds}]" +
-                    if (shadow) " shadow=[true]" else ""
+                    "verdict=[${verdict.label}] ms=[${started.elapsedNow().inWholeMilliseconds}]"
         }
 
-        return verdict == Verdict.ADDRESSED && !shadow
+        return verdict == Verdict.ADDRESSED
     }
 
     private suspend fun recentEntries(candidate: AmbientCandidate, now: Instant): List<GroupLogEntry>? =
