@@ -8,6 +8,7 @@ import com.helltar.vusan.agent.TurnNarrator
 import com.helltar.vusan.agent.TurnToolBudget
 import com.helltar.vusan.agent.memory.MemoryRepository
 import com.helltar.vusan.config.AppConfig
+import com.helltar.vusan.config.LlmProviderConfig
 import com.helltar.vusan.config.VisionRuntime
 import com.helltar.vusan.outbox.BotOutbox
 import com.helltar.vusan.request.ChatContext
@@ -18,6 +19,8 @@ import com.helltar.vusan.request.personKeyOrNull
 import com.helltar.vusan.stt.OpenAiWhisperClient
 import com.helltar.vusan.tasks.TasksRepository
 import com.helltar.vusan.tools.choice.InlineChoiceTools
+import com.helltar.vusan.tools.codexsearch.CodexSearchClient
+import com.helltar.vusan.tools.codexsearch.CodexSearchTools
 import com.helltar.vusan.tools.currency.CurrencyTools
 import com.helltar.vusan.tools.currency.ExchangeRateClient
 import com.helltar.vusan.tools.files.FileDownloadClient
@@ -79,8 +82,8 @@ class ToolRegistryFactory(
     private val groupLog: GroupLogRepository?,
     groupLogDigester: GroupLogDigester?,
     toolResultMaxChars: Int,
-    // present only on LLM_PROVIDER=codex; lets image generation ride the ChatGPT session
-    // instead of needing a second paid key.
+    // present only on LLM_PROVIDER=codex; lets image generation and a web search ride the ChatGPT
+    // session instead of needing a second paid key.
     codexAuth: CodexAuthStore? = null,
     private val selfImage: SelfImage? = null,
 ) {
@@ -130,6 +133,14 @@ class ToolRegistryFactory(
         optional("SEARXNG_URL", config.searxngUrl, "SearXNG web/image search tools") {
             SearxngClient(http, it)
         }
+
+    // the subscription is the chat provider or the one behind it; either way the search runs on the
+    // model that side was configured with, which the signed-in plan is known to offer.
+    private val codexSearchClient =
+        listOfNotNull(config.llmProvider, config.llmFallback)
+            .firstNotNullOfOrNull { it as? LlmProviderConfig.Codex }
+            ?.takeIf { it.webSearch }
+            ?.let { codex -> codexAuth?.let { CodexSearchClient(http, it, codex.model) } }
 
     private val giphyClient =
         optional("GIPHY_API_KEY", config.giphyApiKey, "Giphy GIF tool") {
@@ -224,6 +235,7 @@ class ToolRegistryFactory(
 
             tavilyClient?.let { tools(TavilyTools(it, imageDownloadClient, outbox)) }
             searxngClient?.let { tools(SearxngTools(it, imageDownloadClient, outbox)) }
+            codexSearchClient?.let { tools(CodexSearchTools(it)) }
             tools(PageTools(pageReader))
             sandboxClient?.let { client ->
                 context.personKeyOrNull?.let { person ->

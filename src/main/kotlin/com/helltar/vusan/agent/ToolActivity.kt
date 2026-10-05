@@ -1,5 +1,6 @@
 package com.helltar.vusan.agent
 
+import com.helltar.vusan.tools.codexsearch.CodexSearchTools
 import com.helltar.vusan.tools.files.FileTools
 import com.helltar.vusan.tools.giphy.GiphyTools
 import com.helltar.vusan.tools.grouplog.GroupLogTools
@@ -56,6 +57,7 @@ private val TOOL_ACTIVITIES: Map<String, ToolActivity> = buildMap {
     put(MessageTools::sendRichMessage.name, ToolActivity.WRITING)
     put(TavilyTools::webSearch.name, ToolActivity.SEARCHING_WEB)
     put(SearxngTools::metaSearch.name, ToolActivity.SEARCHING_WEB)
+    put(CodexSearchTools::answerFromWeb.name, ToolActivity.SEARCHING_WEB)
     put(PageTools::readPage.name, ToolActivity.READING_PAGE)
     put(TavilyTools::extractPageContent.name, ToolActivity.READING_PAGE)
     put(TelegramChannelTools::readTelegramChannelPosts.name, ToolActivity.READING_CHANNEL)

@@ -3,7 +3,7 @@ package com.helltar.vusan.tools.imagegen
 import com.helltar.vusan.common.rethrowIfCancellation
 import com.helltar.vusan.config.CodexAuthStore
 import com.helltar.vusan.config.OpenAiImageConfig
-import com.helltar.vusan.config.codexImageHeaders
+import com.helltar.vusan.config.codexRequestHeaders
 import com.helltar.vusan.infra.HttpStatusException
 import io.ktor.client.*
 import io.ktor.client.call.*
@@ -213,7 +213,7 @@ class OpenAiImageClient(private val http: HttpClient, private val auth: ImageAut
             is ImageAuth.ApiKey -> bearerAuth(auth.key)
 
             is ImageAuth.Codex ->
-                codexImageHeaders(auth.store.credentials()).forEach { (name, value) -> header(name, value) }
+                codexRequestHeaders(auth.store.credentials()).forEach { (name, value) -> header(name, value) }
         }
     }
 }

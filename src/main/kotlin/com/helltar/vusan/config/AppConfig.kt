@@ -255,6 +255,7 @@ data class AppConfig(
                     reasoningEffort = resolveReasoningEffort(prefix),
                     serviceTier = resolveCodexServiceTier(),
                     imageGeneration = readBooleanEnv("CODEX_IMAGE_GENERATION_ENABLED") ?: true,
+                    webSearch = readBooleanEnv("CODEX_WEB_SEARCH_ENABLED") ?: true,
                     clientVersion = resolveCodexClientVersion(),
                     authFile = defaultCodexAuthFile(readEnv("CODEX_HOME")),
                     requestTimeout = requestTimeout,

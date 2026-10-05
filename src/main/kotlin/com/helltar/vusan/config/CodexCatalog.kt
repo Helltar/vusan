@@ -95,7 +95,7 @@ internal fun codexCloudflareHeaders(): Map<String, String> =
     )
 
 /** Everything a plain HTTP call to the Codex backend needs: the token plus the Cloudflare headers. */
-fun codexImageHeaders(credentials: CodexCredentials): Map<String, String> =
+fun codexRequestHeaders(credentials: CodexCredentials): Map<String, String> =
     buildMap {
         put("Authorization", "Bearer ${credentials.accessToken}")
         putAll(codexCloudflareHeaders())
@@ -150,7 +150,7 @@ suspend fun fetchCodexModels(http: HttpClient, auth: CodexAuthStore): List<Codex
         http.get("$CODEX_BACKEND_BASE_URL/models") {
             // the endpoint 400s without it: "query.client_version: Field required"
             parameter("client_version", codexClientVersion())
-            codexImageHeaders(credentials).forEach { (name, value) -> header(name, value) }
+            codexRequestHeaders(credentials).forEach { (name, value) -> header(name, value) }
         }.body()
 
     return response.models

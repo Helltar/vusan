@@ -212,6 +212,14 @@ as on any other provider without a key; setting the key still brings them back, 
 CODEX_IMAGE_GENERATION_ENABLED=false
 ```
 
+**Web search on the plan.** The subscription also answers a [web search](#web-search) of its own,
+`answerFromWeb`, with no search key at all. Each search draws on the same allowance as the turns, and
+a good deal more of it than a search through a key does; switch it off to keep the plan for answering:
+
+```dotenv
+CODEX_WEB_SEARCH_ENABLED=false
+```
+
 Two limits are worth knowing. Usage is metered against the plan rather than billed per token, so a
 heavy day ends in a "usage limit reached" reply that says how long the window still has to run —
 unless a [fallback provider](#a-second-provider-behind-the-first) takes over. And this route depends
@@ -343,12 +351,13 @@ with a `WARN` log and Vusan keeps running.
 Reading a page needs nothing: `readPage` is built in, fetches any public `http` or `https` address
 and reduces it to its article text, so a link the user sends is answered from, and a search result
 is read in full, on every setup. With a Tavily key it becomes the fallback for `extractPageContent`.
-Two providers cover the search itself, and either can run without the other:
+Three providers cover the search itself, and each can run without the others:
 
-| Variable         | Tools                                             | Role                                                    |
-|------------------|---------------------------------------------------|---------------------------------------------------------|
-| `TAVILY_API_KEY` | `webSearch`, `searchImages`, `extractPageContent` | Default web and image search; the default page read.    |
-| `SEARXNG_URL`    | `metaSearch`, `metaSearchImages`                  | Fallback for both, plus category scoping.               |
+| Variable             | Tools                                             | Role                                                    |
+|----------------------|---------------------------------------------------|---------------------------------------------------------|
+| `TAVILY_API_KEY`     | `webSearch`, `searchImages`, `extractPageContent` | Default web and image search; the default page read.    |
+| `SEARXNG_URL`        | `metaSearch`, `metaSearchImages`                  | Fallback for both, plus category scoping.               |
+| `LLM_PROVIDER=codex` | `answerFromWeb`                                   | A researched answer with its sources, on the plan.      |
 
 Tavily leads on both: its results are cleaned-up page extracts rather than snippets, and
 `searchImages` describes what is in each photo. Tavily returns the images of a search as a side list
@@ -361,6 +370,14 @@ so it costs nothing per call and keeps search working when Tavily fails or runs 
 `metaSearch` also scopes a query with `categories` (`news`, `it`, `science`, `videos`, `music`,
 `files`, `social media`, `map`), which Tavily cannot do — those categories query different engines,
 so they still answer when the general ones are rate-limited.
+
+`answerFromWeb` needs no key: on a [ChatGPT subscription](#chatgpt-subscription), as the provider or
+as the fallback behind another one, OpenAI runs the search itself and hands back a written answer
+with the pages it rests on instead of a list of results. That makes it the only search a setup with
+neither key has, and the one the agent turns to for a question that takes several pages to answer.
+It is slower than the other two — ten seconds or more — and spends the plan's allowance, so the agent
+still searches with Tavily or SearXNG first when they are there. `CODEX_WEB_SEARCH_ENABLED=false`
+leaves it out.
 
 Point `SEARXNG_URL` at the instance root, without the `/search` path:
 
