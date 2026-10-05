@@ -6,7 +6,7 @@ import io.ktor.client.request.*
 
 class GiphyClient(private val http: HttpClient, private val apiKey: String) {
 
-    suspend fun search(query: String, limit: Int = 1, rating: String = "g"): GiphySearchResponse {
+    suspend fun search(query: String, limit: Int, rating: String): GiphySearchResponse {
         require(query.isNotBlank()) { "Query must not be blank" }
 
         val body: GiphySearchResponse =

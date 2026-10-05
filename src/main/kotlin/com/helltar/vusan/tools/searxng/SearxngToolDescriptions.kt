@@ -38,7 +38,7 @@ internal object SearxngToolDescriptions {
                 "Each call sends its own album, so one call after a short `searchImages` album gives the user a second album rather than a longer one. " +
                 """Use when the user asks to show, send, or find a picture/photo of something — for example "show me a photo of the Eiffel Tower", "send a BMW X6 picture", "find a red panda photo". """ +
                 "Multiple results are sent as a Telegram media group. " +
-                "Do not use for animated GIFs (use `searchGif` instead). " +
+                "Do not use for animated GIFs (use `searchGifs` instead). " +
                 "This tool does not report what is in each photo, so do not describe their contents as if you had seen them."
 
     const val META_SEARCH_IMAGES_QUERY =

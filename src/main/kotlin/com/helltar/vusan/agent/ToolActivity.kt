@@ -65,7 +65,7 @@ private val TOOL_ACTIVITIES: Map<String, ToolActivity> = buildMap {
     put(GroupLogTools::readGroupLog.name, ToolActivity.READING_CHAT_LOG)
     put(TavilyTools::searchImages.name, ToolActivity.SEARCHING_IMAGES)
     put(SearxngTools::metaSearchImages.name, ToolActivity.SEARCHING_IMAGES)
-    put(GiphyTools::searchGif.name, ToolActivity.SEARCHING_GIF)
+    put(GiphyTools::searchGifs.name, ToolActivity.SEARCHING_GIF)
     put(ImageGenTools::generateImage.name, ToolActivity.DRAWING)
     put(ImageGenTools::editImage.name, ToolActivity.DRAWING)
     put(SandboxTools::runCommand.name, ToolActivity.RUNNING_CODE)

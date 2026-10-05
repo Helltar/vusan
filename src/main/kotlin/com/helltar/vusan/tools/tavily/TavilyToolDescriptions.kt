@@ -32,7 +32,7 @@ internal object TavilyToolDescriptions {
                 "Multiple results are sent as a Telegram media group. " +
                 "Each call sends its own album and usually yields about 5 images whatever `maxResults` asks, so do not promise a count before the result comes back, and do not call it again just to top a short album up: the user would get two albums. " +
                 "When the user wants more than one call gave, say how many were sent and offer `metaSearchImages`, which draws on other engines and sends a second album. " +
-                "Do not use for animated GIFs (use `searchGif` instead). " +
+                "Do not use for animated GIFs (use `searchGifs` instead). " +
                 "The tool returns a description of what is visible in each photo. " +
                 "If the user asked you to describe / say what's on the photo (`describe it`, `what's on it`, `what does it show`), use these descriptions as the source — rewrite them in the user's language as your plain reply (becomes the caption for a single image) or via `sendMessage` (after a media group)."
 
