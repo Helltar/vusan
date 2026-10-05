@@ -20,6 +20,7 @@ import kotlinx.serialization.json.contentOrNull
 import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.longOrNull
 import kotlinx.serialization.serializer
+import java.util.UUID
 import kotlin.reflect.KClass
 import kotlin.reflect.full.createType
 
@@ -33,6 +34,7 @@ internal const val CODEX_BACKEND_BASE_URL = "https://chatgpt.com/backend-api/cod
 internal const val CODEX_ORIGINATOR = "codex_cli_rs"
 
 private const val CODEX_ROUTING_HINT_HEADER = "x-codex-routing-hint"
+private const val CODEX_SESSION_ID_HEADER = "session-id"
 private const val SSE_DATA_PREFIX = "data:"
 
 /**
@@ -54,38 +56,50 @@ internal fun codexRoutingHint(model: String, serviceTier: ServiceTier?): String 
  */
 internal fun codexHttpClientFactory(auth: CodexAuthStore, routingHint: String): KoogHttpClient.Factory =
     CodexHttpClientFactory(
-        delegate =
-            KtorKoogHttpClient.Factory(
-                baseClient =
-                    HttpClient(CIO) {
-                        install(
-                            createClientPlugin("CodexAuth") {
-                                onRequest { request, _ ->
-                                    val credentials = auth.credentials()
-
-                                    request.headers.remove(HttpHeaders.Authorization)
-                                    request.headers.append(
-                                        HttpHeaders.Authorization,
-                                        "Bearer ${credentials.accessToken}",
-                                    )
-                                    request.headers.append("originator", CODEX_ORIGINATOR)
-                                    request.headers.append(CODEX_ROUTING_HINT_HEADER, routingHint)
-
-                                    // the whitelist is matched on the User-Agent shape too, so lead with the
-                                    // CLI token and installed version, then say who is really calling.
-                                    request.headers.remove(HttpHeaders.UserAgent)
-                                    request.headers.append(HttpHeaders.UserAgent, codexUserAgent())
-
-                                    credentials.accountId?.let { request.headers.append("ChatGPT-Account-ID", it) }
-                                }
-
-                                onResponse { response -> auth.limits.observe { response.headers[it] } }
-                            },
-                        )
-                    },
-            ),
+        delegate = KtorKoogHttpClient.Factory(baseClient = HttpClient(CIO) { install(codexRequestPlugin(auth, routingHint)) }),
         limits = auth.limits,
     )
+
+internal fun codexRequestPlugin(auth: CodexAuthStore, routingHint: String): ClientPlugin<Unit> =
+    createClientPlugin("CodexAuth") {
+        onRequest { request, content ->
+            val credentials = auth.credentials()
+
+            request.headers.remove(HttpHeaders.Authorization)
+            request.headers.append(HttpHeaders.Authorization, "Bearer ${credentials.accessToken}")
+            request.headers.append("originator", CODEX_ORIGINATOR)
+            request.headers.append(CODEX_ROUTING_HINT_HEADER, routingHint)
+
+            // the whitelist is matched on the User-Agent shape too, so lead with the
+            // CLI token and installed version, then say who is really calling.
+            request.headers.remove(HttpHeaders.UserAgent)
+            request.headers.append(HttpHeaders.UserAgent, codexUserAgent())
+
+            credentials.accountId?.let { request.headers.append("ChatGPT-Account-ID", it) }
+            codexSessionId(content)?.let { request.headers.append(CODEX_SESSION_ID_HEADER, it) }
+        }
+
+        onResponse { response -> auth.limits.observe { response.headers[it] } }
+    }
+
+/**
+ * The session a request is filed under, derived from the conversation's `prompt_cache_key`.
+ *
+ * On this backend the key alone reads almost nothing back: requests are spread over machines, and the
+ * `session-id` header is what keeps a conversation on the one that holds its prefix. Probed live on
+ * 2026-10-06 with a 6k-token prefix: five follow-up requests read 5888 cached tokens on four or five of
+ * them with the header, and on none or one without it, whatever else was sent — `thread-id`,
+ * `x-client-request-id` and a replayed `x-codex-turn-state` changed nothing on their own. The CLI sends a
+ * UUID here, so the key is folded into one rather than sent as it is.
+ */
+internal fun codexSessionId(requestBody: Any): String? {
+    if (requestBody !is String) return null
+
+    val root = runCatching { Json.parseToJsonElement(requestBody) as? JsonObject }.getOrNull()
+    val cacheKey = (root?.get("prompt_cache_key") as? JsonPrimitive)?.contentOrNull
+
+    return cacheKey?.let { UUID.nameUUIDFromBytes(it.toByteArray()).toString() }
+}
 
 private class CodexHttpClientFactory(
     private val delegate: KoogHttpClient.Factory,
