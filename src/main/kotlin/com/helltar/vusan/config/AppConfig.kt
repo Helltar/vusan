@@ -195,20 +195,10 @@ data class AppConfig(
             )
         }
 
-        private fun resolveInitiative(): InitiativeConfig? {
-            if (readBooleanEnv("INITIATIVE_ENABLED") != true) return null
-
-            return InitiativeConfig(
-                intervalMinutes =
-                    readIntEnv("INITIATIVE_INTERVAL_MINUTES") ?: InitiativeConfig.DEFAULT_INTERVAL_MINUTES,
-                maxMessagesPerDay =
-                    readIntEnv("INITIATIVE_MAX_MESSAGES_PER_DAY") ?: InitiativeConfig.DEFAULT_MAX_MESSAGES_PER_DAY,
-                quietHours =
-                    readEnv("INITIATIVE_QUIET_HOURS")
-                        ?.let { QuietHours.parse("INITIATIVE_QUIET_HOURS", it) }
-                        ?: QuietHours.DEFAULT,
-            )
-        }
+        // the switch is the only setting: how often it looks and how much it says are the feature's own
+        // numbers, and live with it.
+        private fun resolveInitiative(): InitiativeConfig? =
+            InitiativeConfig().takeIf { readBooleanEnv("INITIATIVE_ENABLED") == true }
 
         private fun resolveLlmProvider(): LlmProviderConfig = resolveLlmProvider(LLM_PREFIX, fallbackTimeout = null)
 

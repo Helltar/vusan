@@ -7,6 +7,9 @@ package com.helltar.vusan.config
  * [intervalMinutes] is the middle of the pause between two looks at one chat, each pause drawn at
  * random around it so the bot does not speak on a clock. [maxMessagesPerDay] bounds what it writes
  * into one chat unprompted; a reaction is not a message and has a ceiling of its own.
+ *
+ * None of the three is a setting. A deployment switches initiative on or off and nothing else: the
+ * defaults here are the ones it runs on.
  */
 data class InitiativeConfig(
     val intervalMinutes: Int = DEFAULT_INTERVAL_MINUTES,
@@ -16,10 +19,10 @@ data class InitiativeConfig(
 
     init {
         require(intervalMinutes >= MIN_INTERVAL_MINUTES) {
-            "INITIATIVE_INTERVAL_MINUTES must be at least $MIN_INTERVAL_MINUTES"
+            "The pause between two looks must be at least $MIN_INTERVAL_MINUTES minutes"
         }
 
-        require(maxMessagesPerDay >= 0) { "INITIATIVE_MAX_MESSAGES_PER_DAY must not be negative" }
+        require(maxMessagesPerDay >= 0) { "Messages a day must not be negative" }
     }
 
     companion object {
@@ -48,17 +51,7 @@ data class QuietHours(val from: Int, val until: Int) {
     companion object {
         // the constructor reads this, so it has to exist before the default below is built
         private val HOURS = 0..23
-        private val FORMAT = Regex("""(\d{1,2})\s*-\s*(\d{1,2})""")
 
         val DEFAULT = QuietHours(from = 1, until = 8)
-
-        fun parse(env: String, raw: String): QuietHours {
-            val (from, until) =
-                FORMAT.matchEntire(raw.trim())?.destructured
-                    ?: error("$env=[$raw] is not a range of hours such as 1-8")
-
-            return runCatching { QuietHours(from.toInt(), until.toInt()) }
-                .getOrElse { error("$env=[$raw] must name hours within 0..23") }
-        }
     }
 }

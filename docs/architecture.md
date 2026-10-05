@@ -439,8 +439,8 @@ A normal user message travels:
   off by default, and a chat the allowlist no longer names is never read.
 - **Initiative** — `agent/presence/Initiative` is the bot speaking up without being called. Code decides whether to
   look, a model decides what comes of it. Once a minute it takes the chats people wrote in during the last quarter of
-  an hour and, for each, checks the gates: outside `INITIATIVE_QUIET_HOURS`; a pause drawn at random between half and
-  one and a half `INITIATIVE_INTERVAL_MINUTES` has passed since the last look (a chat seen for the first time waits one
+  an hour and, for each, checks the gates: outside the quiet hours, one to eight in the morning; a pause drawn at random between half and
+  one and a half of thirty minutes has passed since the last look (a chat seen for the first time waits one
   out too, so a restart is not followed by the bot speaking everywhere); at least three messages from people since
   that look; no line of the bot's own in the last five minutes, since then the conversation already has it; and
   something left of the day's budget. A look a gate turned away cost no model call, so it is tried again five to ten

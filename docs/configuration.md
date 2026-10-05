@@ -684,24 +684,20 @@ nothing, which is the point: it is meant to feel like a member of the chat, not 
 INITIATIVE_ENABLED=true
 ```
 
-| Variable                          | Default | Description                                                      |
-|-----------------------------------|---------|------------------------------------------------------------------|
-| `INITIATIVE_ENABLED`              | `false` | `true` turns it on for every group in `ALLOWED_IDS`.             |
-| `INITIATIVE_INTERVAL_MINUTES`     | `30`    | Middle of the pause between two looks at one chat; at least 5.   |
-| `INITIATIVE_MAX_MESSAGES_PER_DAY` | `4`     | Lines it may write into one chat a day without being asked.      |
-| `INITIATIVE_QUIET_HOURS`          | `1-8`   | Local hours with no looks at all; `23-7` runs over midnight.     |
+`INITIATIVE_ENABLED=true` turns it on for every group in `ALLOWED_IDS`, and is the only setting it
+has: how often it looks and how much it says are fixed.
 
 - **When it looks** — only at a chat somebody wrote in during the last fifteen minutes, after a pause
-  drawn at random between half the interval and one and a half of it, with at least three new
-  messages since its last look, and not within five minutes of its own last line there — if it is
-  already in the conversation, it does not talk over itself. A look one of these turned away is tried
+  drawn at random between fifteen and forty-five minutes, with at least three new messages since its
+  last look or its own last line there, and not within five minutes of that line — if it is already
+  in the conversation, it does not talk over itself. A look one of these turned away is tried
   again five to ten minutes later.
 - **What is sent** — up to sixty lines of the chat's last six hours, with names, to the chat
   model, with nobody having asked. Everything else Vusan does sends a group's messages somewhere
   only when it is addressed, so this is a deliberate switch. With the [diary](#diary) on, its entries
   go along, as do the names of people who used to write in the chat and have not for three days.
-- **How often it writes** — besides the daily limit, two of its own lines in one chat are at least
-  ninety minutes apart. A reaction is not held back by that.
+- **How often it writes** — at most four lines of its own in one chat a day, at least ninety minutes
+  apart. A reaction is not held back by that.
 - **What it may do** — nothing, one reaction, or one short message, optionally as a reply. Reactions
   have a ceiling of twenty per chat a day beside the message limit.
 - **Quiet hours** — it does not look at all from one to eight in the morning, on the bot's own clock.
