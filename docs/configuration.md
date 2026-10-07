@@ -345,6 +345,7 @@ with a `WARN` log and Vusan keeps running.
 | `TAVILY_API_KEY`        | Web search, image search, page rendering  | See [Web search](#web-search)              |
 | `SEARXNG_URL`           | Fallback web and image search             | See [Web search](#web-search)              |
 | `GIPHY_API_KEY`         | GIF lookup                                | Giphy                                      |
+| `KLIPY_API_KEY`         | GIF, meme and clip lookup                 | KLIPY; used instead of Giphy when both are set |
 | `ELEVENLABS_API_KEY`    | Voice messages and round video messages   | See [Voice output](#voice-output)          |
 | `OPENAI_STT_API_KEY`    | Voice input, sound of a video             | Reuse your OpenAI key                      |
 | `OPENAI_IMAGE_API_KEY`  | Image generation                          | Reuse your OpenAI key; optional on `codex` |

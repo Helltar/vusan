@@ -3,6 +3,7 @@ package com.helltar.vusan.agent
 import com.helltar.vusan.tools.codexsearch.CodexSearchTools
 import com.helltar.vusan.tools.files.FileTools
 import com.helltar.vusan.tools.giphy.GiphyTools
+import com.helltar.vusan.tools.klipy.KlipyTools
 import com.helltar.vusan.tools.grouplog.GroupLogTools
 import com.helltar.vusan.tools.imagegen.ImageGenTools
 import com.helltar.vusan.tools.memory.MemoryTools
@@ -66,6 +67,7 @@ private val TOOL_ACTIVITIES: Map<String, ToolActivity> = buildMap {
     put(TavilyTools::searchImages.name, ToolActivity.SEARCHING_IMAGES)
     put(SearxngTools::metaSearchImages.name, ToolActivity.SEARCHING_IMAGES)
     put(GiphyTools::searchGifs.name, ToolActivity.SEARCHING_GIF)
+    put(KlipyTools::searchGifs.name, ToolActivity.SEARCHING_GIF)
     put(ImageGenTools::generateImage.name, ToolActivity.DRAWING)
     put(ImageGenTools::editImage.name, ToolActivity.DRAWING)
     put(SandboxTools::runCommand.name, ToolActivity.RUNNING_CODE)

@@ -27,6 +27,10 @@ import com.helltar.vusan.tools.files.FileDownloadClient
 import com.helltar.vusan.tools.files.FileTools
 import com.helltar.vusan.tools.giphy.GiphyClient
 import com.helltar.vusan.tools.giphy.GiphyTools
+import com.helltar.vusan.tools.klipy.KlipyClient
+import com.helltar.vusan.tools.klipy.KlipyKind
+import com.helltar.vusan.tools.klipy.KlipyTools
+import com.helltar.vusan.tools.klipy.deliverableIn
 import com.helltar.vusan.tools.grouplog.GroupLogTools
 import com.helltar.vusan.tools.context.ContextTools
 import com.helltar.vusan.tools.conversation.ConversationTools
@@ -147,6 +151,11 @@ class ToolRegistryFactory(
             GiphyClient(http, it)
         }
 
+    private val klipyClient =
+        optional("KLIPY_API_KEY", config.klipyApiKey, "KLIPY GIF, meme and clip tool") {
+            KlipyClient(http, it)
+        }
+
     private val elevenLabsTtsClient =
         optional("ELEVENLABS_API_KEY", config.elevenLabsApiKey, "voice/TTS tool") {
             ElevenLabsTtsClient(http, it)
@@ -249,7 +258,14 @@ class ToolRegistryFactory(
                 }
             }
 
-            if (chat.stickersAndAnimations) giphyClient?.let { tools(ToolGroup.GIFS, GiphyTools(it, outbox)) }
+            // both answer to the same tool names, so one of them is registered: KLIPY where it is
+            // configured, because it also finds memes and clips, which a chat may take without taking GIFs.
+            val klipy = klipyClient?.takeIf { KlipyKind.entries.any { kind -> kind.deliverableIn(chat) } }
+
+            when {
+                klipy != null -> tools(ToolGroup.GIFS, KlipyTools(klipy, fileDownloadClient, outbox))
+                chat.stickersAndAnimations -> giphyClient?.let { tools(ToolGroup.GIFS, GiphyTools(it, outbox)) }
+            }
 
             if (groupLog != null && groupLogReader != null) {
                 tools(GroupLogTools(groupLog, groupLogReader, context))

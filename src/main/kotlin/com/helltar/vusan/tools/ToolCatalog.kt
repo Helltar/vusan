@@ -24,7 +24,7 @@ enum class ToolGroup(val summary: String) {
     SCHEDULED_TASKS("run something later, once or on a repeating schedule, and list, pause, edit or cancel what is scheduled"),
     WEB_PUBLISHING("put a page, game or small app built in the sandbox on the internet at its own address"),
     POLLS("create a poll or a quiz in the chat and follow who answered what"),
-    GIFS("find and send an animated GIF"),
+    GIFS("find and send a ready-made GIF and, where the deployment has them, a meme picture or a short clip"),
     TELEGRAM_CHANNELS("recap a public channel by day or week, search its posts, and read the pictures in them"),
     CURRENCY("live exchange rates"),
     FILE_TRANSFERS("send a document to the chat, or download a link into a file");

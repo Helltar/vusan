@@ -189,6 +189,7 @@ class DatabaseMigrationTest {
             elevenLabsApiKey = null,
             elevenLabsTts = null,
             giphyApiKey = null,
+            klipyApiKey = null,
             llmProvider = LlmProviderConfig.Hosted(
                 provider = HostedLlmProvider.OPENAI,
                 apiKey = "test",
