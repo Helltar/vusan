@@ -695,8 +695,9 @@ has: how often it looks and how much it says are fixed.
 
 - **When it looks** — only at a chat somebody wrote in during the last fifteen minutes, after a pause
   drawn at random between fifteen and forty-five minutes, with at least three new messages since its
-  last look or its own last line there, and not within five minutes of that line — if it is already
-  in the conversation, it does not talk over itself. A look one of these turned away is tried
+  last look or its own last line there, not while it is answering somebody there, and not within
+  five minutes of its own last line — if it is already in the conversation, it does not talk over
+  itself. A look one of these turned away is tried
   again five to ten minutes later.
 - **What is sent** — up to sixty lines of the chat's last six hours, with names, to the chat
   model, with nobody having asked. Everything else Vusan does sends a group's messages somewhere

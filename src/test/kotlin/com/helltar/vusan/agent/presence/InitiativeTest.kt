@@ -177,6 +177,17 @@ class InitiativeTest {
     }
 
     @Test
+    fun `a turn under way in the chat keeps it from answering beside the answer`() = runBlocking {
+        val mind = FakeMind(InitiativeDecision.Say("the ferry leaves at nine"))
+        val delivery = FakeDelivery()
+
+        lookWith(initiative(mind, delivery, isAnswering = { true }))
+
+        assertTrue(mind.inputs.isEmpty())
+        assertTrue(delivery.sent.isEmpty())
+    }
+
+    @Test
     fun `a spent day leaves only reactions open and drops a line anyway written`() = runBlocking {
         val delivery = FakeDelivery()
         val mind = FakeMind(InitiativeDecision.Say("the ferry is the better plan"))
@@ -303,6 +314,7 @@ class InitiativeTest {
         maxMessagesPerDay: Int = 4,
         quietHours: QuietHours = QuietHours(from = 0, until = 0),
         isAllowed: (ChatRef) -> Boolean = { true },
+        isAnswering: (ChatRef) -> Boolean = { false },
     ) =
         Initiative(
             mind = mind,
@@ -310,6 +322,7 @@ class InitiativeTest {
             delivery = delivery,
             config = InitiativeConfig(INTERVAL_MINUTES, maxMessagesPerDay, quietHours),
             isAllowed = isAllowed,
+            isAnswering = isAnswering,
             zone = ZoneOffset.UTC,
             clock = { now },
             random = Random(1),

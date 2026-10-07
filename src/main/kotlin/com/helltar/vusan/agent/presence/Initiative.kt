@@ -42,7 +42,8 @@ import kotlin.time.toJavaDuration
  * Code decides whether to look, a model decides what comes of it. A chat is looked at only while people
  * are writing in it, after a pause drawn at random around the configured interval, outside the quiet
  * hours, when there is something new since the last look and the bot is not already in the
- * conversation. What the model then sees is the chat's recent lines, so unlike everything else the bot
+ * conversation — neither answering somebody there right now nor just done with it. What the model then
+ * sees is the chat's recent lines, so unlike everything else the bot
  * does, a look sends a group's conversation to the model with nobody having asked — which is why it is
  * switched on deliberately, and only for chats [isAllowed] still admits.
  *
@@ -57,6 +58,7 @@ class Initiative(
     private val delivery: OutputDelivery,
     private val config: InitiativeConfig,
     private val isAllowed: (ChatRef) -> Boolean,
+    private val isAnswering: (ChatRef) -> Boolean = { false },
     private val diary: (suspend (ChatRef) -> String?)? = null,
     private val zone: ZoneId = ZoneId.systemDefault(),
     private val clock: () -> Instant = Instant::now,
@@ -151,9 +153,12 @@ class Initiative(
         val skip =
             when {
                 fresh < MIN_FRESH_MESSAGES -> "quiet"
+                // a turn under way is the bot answering somebody here and its line not written yet: to a look
+                // the request stands unanswered, and a line of its own now would arrive beside the answer.
                 // its own line this recently means somebody called it in, or it just spoke up: either way
                 // the conversation already has it, and a second voice of its own would be talking over itself
-                entries.any { !it.isFromPerson && it.sentAt.isAfter(now - OWN_LINE_COOLDOWN) } -> "already talking"
+                isAnswering(chat) ||
+                        entries.any { !it.isFromPerson && it.sentAt.isAfter(now - OWN_LINE_COOLDOWN) } -> "already talking"
                 !maySpeak && !mayReact -> BUDGET_SPENT
                 else -> null
             }

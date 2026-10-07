@@ -152,6 +152,10 @@ class AgentRunner(
     fun hasTurnUnderWay(scope: ConversationScope): Boolean =
         running.holds(scope)
 
+    /** Whether anyone in this chat has a turn running or waiting in their line. */
+    fun hasTurnUnderWayIn(chat: ChatRef): Boolean =
+        running.holdsAny { it.chat == chat }
+
     /**
      * Cancels what this conversation has under way — the turn it is running and the person's messages
      * waiting behind it — and reports whether there was anything. What the turn happened to be doing does

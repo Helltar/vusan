@@ -234,6 +234,7 @@ suspend fun main() = coroutineScope {
                 Initiative(
                     LlmInitiativeMind(chatExecutor, llm.model, llm.compactionParams, personality),
                     transcript, delivery, initiativeConfig, isAllowedChat,
+                    isAnswering = agentRunner::hasTurnUnderWayIn,
                     diary = diary?.let { it::blockFor },
                 )
             }

@@ -442,7 +442,9 @@ A normal user message travels:
   an hour and, for each, checks the gates: outside the quiet hours, one to eight in the morning; a pause drawn at random between half and
   one and a half of thirty minutes has passed since the last look (a chat seen for the first time waits one
   out too, so a restart is not followed by the bot speaking everywhere); at least three messages from people since
-  that look; no line of the bot's own in the last five minutes, since then the conversation already has it; and
+  that look; nobody in the chat with a turn running or waiting (`AgentRunner.hasTurnUnderWayIn`) and no line of the
+  bot's own in the last five minutes, since either way the conversation already has it — a request a turn is still
+  answering reads to a look as one nobody answered, and a line of its own would land beside the answer; and
   something left of the day's budget. A look a gate turned away cost no model call, so it is tried again five to ten
   minutes later rather than after a whole pause. A look that passes sends `InitiativeMind` up to sixty lines of the last six
   hours, the diary block, how much it has already said today, and — from `GroupLogRepository.authorActivity` — the
