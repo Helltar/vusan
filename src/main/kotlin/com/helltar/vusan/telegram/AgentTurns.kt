@@ -161,7 +161,7 @@ internal class AgentTurns(
                         sender = user.toSenderContext(),
                         messageId = selection.originMessageId?.toString(),
                         attachedFiles = listOfNotNull(attachedFile),
-                        language = Language.fromCode(user.languageCode),
+                        language = Language.ofText(input, Language.fromCode(user.languageCode)),
                     ),
                 prompt = attachedFile?.let { "${attachedFileContextBlock(it)}\n\n$input" } ?: input,
                 conversationEntry = input,

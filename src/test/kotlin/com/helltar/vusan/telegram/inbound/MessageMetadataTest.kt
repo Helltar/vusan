@@ -1,6 +1,7 @@
 package com.helltar.vusan.telegram.inbound
 
 import com.fasterxml.jackson.databind.ObjectMapper
+import com.helltar.vusan.i18n.Language
 import com.helltar.vusan.request.ChatCapabilities
 import com.helltar.vusan.request.ChatProfile
 import kotlin.test.Test
@@ -292,6 +293,17 @@ class MessageMetadataTest {
     }
 
     private fun sender(json: String): User = mapper.readValue(json, User::class.java)
+
+    @Test
+    fun `the reply language comes from the text, and from the client only when the text says nothing`() {
+        val sender = """"from": {"id": 7, "is_bot": false, "first_name": "Ada", "language_code": "en"}"""
+
+        assertEquals(Language.RUSSIAN, message("""$sender, "text": "привет, ты где"""").language)
+        assertEquals(Language.UKRAINIAN, message("""$sender, "caption": "шо це таке"""").language)
+        assertEquals(Language.ENGLISH, message("""$sender, "text": "where are you"""").language)
+        assertEquals(Language.ENGLISH, message(sender).language)
+        assertEquals(Language.DEFAULT, message(""""text": "where are you"""").language)
+    }
 
     private fun messageIn(chat: String): Message = message(chat = chat)
 

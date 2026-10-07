@@ -28,7 +28,7 @@ import com.helltar.vusan.telegram.inbound.chatIdLong
 import com.helltar.vusan.telegram.inbound.forumTopicIdOrNull
 import com.helltar.vusan.telegram.inbound.messageIdLong
 import com.helltar.vusan.telegram.inbound.senderIdOrNull
-import com.helltar.vusan.telegram.inbound.senderLanguageCodeOrNull
+import com.helltar.vusan.telegram.inbound.language
 import io.github.oshai.kotlinlogging.KotlinLogging
 import kotlinx.coroutines.delay
 import kotlin.time.Duration.Companion.milliseconds
@@ -176,7 +176,7 @@ class TelegramDelivery(
             originTarget = DeliveryTarget(message.chatTarget, replyToMessageId = message.messageIdLong),
             currentChatTarget = DeliveryTarget(message.chatTarget),
             senderPrivateChatId = message.senderIdOrNull(),
-            messages = Messages.forCode(message.senderLanguageCodeOrNull()),
+            messages = Messages.of(message.language),
         )
     }
 

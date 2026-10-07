@@ -113,8 +113,11 @@ that is who owns writing them, not because only `agent/` reads them. No other ar
 - **`stt/`** — OpenAI speech-to-text client (`OpenAiWhisperClient`, default model `gpt-4o-transcribe`); used for voice
   transcription and for the sound of a video the vision tool watches, opt-in via `OPENAI_STT_API_KEY`.
 - **`i18n/`** — user-facing message strings: the `Messages` interface, and one implementation per `Language` in a file
-  of its own (English, Ukrainian, Russian, Spanish). `Language.fromCode` picks the language from the sender's Telegram
-  language code, falling back to English. Adding a language is an enum entry plus a `Messages` file — the exhaustive
+  of its own (English, Ukrainian, Russian, Spanish). `Language.ofText` reads the language off the message itself —
+  Ukrainian and Russian by the letters and everyday words only one of them has — and leaves what it cannot tell, Latin
+  script or a bare `ок`, to `Language.fromCode` on the sender's Telegram language code, falling back to English; a
+  Cyrillic message from a client set to neither is answered in Ukrainian. Adding a language is an enum entry plus a
+  `Messages` file — the exhaustive
   `when` in `Messages.of` and the interface itself make the compiler name everything still missing.
 - **`common/`** — tiny shared utilities: prompt/text helpers (`Strings.kt`) and cancellation rethrow
   (`Cancellation.kt`).
@@ -745,7 +748,7 @@ A symptom-to-source map for finding the right file fast. Paths are under
 | A sandbox loses files, or someone sees another person's | `request/RequestContext.personKeyOrNull` (the sender key a sandbox is filed under on the server; no address is built from it) and `telegram/inbound/MessageMetadata.toSenderContext` (the shared accounts that get nothing of their own) |
 | Publishing a site fails, or the link shows nothing | `tools/sites/SiteTools.kt` (the missing `index.html` warning and what the model is told), then the Regolith server's own log: it owns the snapshot, the caps and the serving |
 | A published page still serves its old files, or a site nobody wants is still up | the Regolith server owns the site: its releases, its caching and its takedown. `tools/sites/SiteTools.kt` only asks |
-| Wrong language in a canned reply (busy/error/voice/start/task menu) | `i18n/Language.kt` (language selection) + `i18n/Messages.kt` (the strings) |
+| Wrong language in a canned reply (busy/error/voice/start/task menu) | `i18n/Language.kt` (`ofText` on the message, `fromCode` on the client) + `telegram/inbound/MessageMetadata.kt` (`Message.language`) + the `i18n/*Messages.kt` files (the strings) |
 | A turn's plan reaches the chat only after the work it announced, or arrives twice | `tools/message/MessageTools.announcePlan` (the tool and its one-per-turn rule) + `telegram/TurnStatus.kt` (`say`, and what survives `finish`) + `outbox/BotOutbox.kt` (`recordDelivered`, `hasDelivered`) + `telegram/delivery/TelegramDelivery.dispatch` (skipping an item already in the chat) |
 | The typing indicator or the turn's status message is wrong, stale, or missing | `telegram/TelegramProgress.kt` (both tickers, and `statusGraceFor`, the per-activity gate deciding which turns get a message at all) + `telegram/TurnStatus.kt` (the message itself, the emoji beside each activity, its stop button, and how it ends) + `agent/ToolActivity.kt` (which tool means what) + `i18n/Messages.progressLabel` (the words) + `telegram/delivery/TelegramDelivery.chatActionFor` (the action) |
 | A long research turn ends in the generic error reply or is answered mid-way | `agent/AgentFactory.kt` (`maxIterations`, `outOfToolBudget` and the wrap-up node that lands the turn) + `agent/AgentRunner.kt` (delivering what the outbox holds when a run fails) |

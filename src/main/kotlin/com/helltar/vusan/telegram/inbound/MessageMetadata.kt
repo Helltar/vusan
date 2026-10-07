@@ -62,7 +62,7 @@ internal fun Message.senderUsernameOrNull(): String? = from?.userName
 internal fun Message.senderLanguageCodeOrNull(): String? = from?.languageCode
 
 internal val Message.language: Language
-    get() = Language.fromCode(senderLanguageCodeOrNull())
+    get() = Language.ofText(textSnippetOrNull(), Language.fromCode(senderLanguageCodeOrNull()))
 
 internal fun Message.textSnippetOrNull(): String? =
     text ?: caption ?: richMessage?.toRichMarkdown()?.takeIf { it.isNotBlank() }

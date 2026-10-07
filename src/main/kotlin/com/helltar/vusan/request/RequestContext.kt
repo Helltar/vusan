@@ -62,6 +62,10 @@ data class RequestContext(
     val messageId: String? = null,
     val replyToMessageId: String? = null,
     val attachedFiles: List<AttachedFile> = emptyList(),
+    /**
+     * The language canned replies to this turn are in. The adapter reads it off the message itself and
+     * falls back to what the sender's client reports; see `Language.ofText`.
+     */
     val language: Language = Language.DEFAULT,
     /**
      * Nothing called the bot outright — no mention, reply or command — and a classifier judged the
