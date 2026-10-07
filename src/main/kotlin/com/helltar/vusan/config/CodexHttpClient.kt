@@ -159,6 +159,7 @@ private class CodexHttpClient(
     override val clientName: String = delegate.clientName
 
     private val lastReportedModel = AtomicReference<String?>(null)
+    private val drift = CodexPrefixDrift()
 
     override suspend fun <R : Any> get(
         path: String,
@@ -197,7 +198,7 @@ private class CodexHttpClient(
 
         val response = collectStreamedResponse(lines.toList(), json, clientName)
         countUsage(response, limits)
-        log.info { "codex call: ${codexCallSummary(requestBody, response, json)}" }
+        log.info { "codex call: ${codexCallSummary(requestBody, response, json)}${prefixDrift(requestBody)}" }
         warnOnAnotherModel(requestBody, response)
         val completed = response.toString()
 
@@ -251,6 +252,13 @@ private class CodexHttpClient(
         }
 
     override fun close() = delegate.close()
+
+    private fun prefixDrift(requestBody: String): String {
+        val request = runCatching { json.parseToJsonElement(requestBody) as? JsonObject }.getOrNull() ?: return ""
+        val cacheKey = (request["prompt_cache_key"] as? JsonPrimitive)?.contentOrNull ?: return ""
+
+        return " " + drift.describe(codexSessionLabel(cacheKey), request)
+    }
 
     // the backend may answer from a model other than the one asked for, and says so only here. once per
     // model is enough: it is a fact about the deployment, not about a call.
