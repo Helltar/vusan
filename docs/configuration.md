@@ -352,6 +352,14 @@ with a `WARN` log and Vusan keeps running.
 | `OPENAI_VISION_API_KEY` | Vision on a chat model that cannot see    | See [Vision](#vision)                      |
 | `REGOLITH_URL`          | Shell sandbox                           | See [Sandbox](#sandbox)                |
 
+### GIFs, memes and clips
+
+Giphy finds GIFs. KLIPY finds GIFs, meme pictures and short clips, and answers alone when both keys
+are set. KLIPY's [integration requirements](https://docs.klipy.com/integration-requirements) expect
+requests from the end user's own device, and a bot sends them from its server, so running Vusan
+with a KLIPY key needs their prior written approval from developers@klipy.com. The key the sign-up
+form issues is not that approval.
+
 ### Web search
 
 Reading a page needs nothing: `readPage` is built in, fetches any public `http` or `https` address
