@@ -6,39 +6,36 @@ import kotlin.time.Duration
 
 internal object RussianMessages : Messages {
 
-    override val startReply = "Привет! Просто скажи, что тебе нужно 👋"
+    override val startReply = "Привет. Просто скажи, что тебе нужно"
 
-    override val busyReply = "Подожди, я ещё работаю над твоим предыдущим запросом 😊"
+    override val busyReply = "Подожди, я ещё с твоим предыдущим"
 
-    override val fallbackErrorReply = "Что-то пошло не так — попробуешь ещё раз? 🥲"
+    override val fallbackErrorReply = "Что-то сломалось, попробуй ещё раз"
 
-    override val overloadedReply = "Сейчас у меня слишком много запросов — дай минутку и попробуй снова 🙏"
-    override val signInRequiredReply = "Моё подключение к AI-сервису надо обновить — нужен повторный вход 🔑"
+    override val overloadedReply = "Сейчас слишком много запросов, дай минуту и попробуй снова"
+    override val signInRequiredReply = "Мой вход в AI-сервис слетел, нужен повторный вход"
 
-    override val contentPolicyReply =
-        "AI-сервис отклонил этот запрос из-за своей политики контента — попробуй сформулировать иначе 🚫"
+    override val contentPolicyReply = "Это не пропустило, сформулируй иначе"
 
-    override val formattingAsFileNotice =
-        "Телеграм не смог показать форматирование, поэтому вот полный ответ файлом 📄"
+    override val formattingAsFileNotice = "Телеграм не показал форматирование, поэтому полный ответ файлом"
 
     override val privateBlockedNotice =
-        "Хочу написать тебе в личные, но не получается — открой мой чат, нажми /start, а потом спроси снова 😊"
+        "Хочу написать тебе в личные, а не получается. Открой мой чат, нажми /start и спроси снова"
 
     override val conversationClearedReply =
-        "История нашей переписки в этом чате очищена. Другие чаты, память и запланированные задачи не тронуты. 🧹"
+        "История нашей переписки в этом чате очищена. Другие чаты, память и запланированные задачи на месте"
 
-    override val turnStoppedNotice =
-        "Остановил. Что уже отправлено — остаётся; история и файлы не тронуты. ✋"
+    override val turnStoppedNotice = "Останавливаю. Что уже отправлено, остаётся, история и файлы не тронуты"
 
-    override val nothingToStopReply = "Сейчас ничего не делаю — нечего останавливать 🙂"
+    override val nothingToStopReply = "Сейчас ничего не делаю, нечего останавливать"
 
     override val turnStopButton = "⏹ Остановить"
 
     override val turnStopNotOwnerAlert = "Это запрос другого пользователя."
 
-    override val voiceEmptyReply = "Ничего не слышу в этом голосовом — попробуй ещё раз или напиши текстом 🙉"
+    override val voiceEmptyReply = "В этом голосовом ничего не слышно, попробуй ещё раз или напиши текстом"
 
-    override val voiceTranscriptionFailedReply = "Не удалось распознать это голосовое — лучше напиши текстом 😊"
+    override val voiceTranscriptionFailedReply = "Не разобрать это голосовое, напиши текстом"
 
     override val inlineChoiceNotOwnerAlert = "Этот выбор был предназначен другому пользователю."
 
@@ -64,16 +61,15 @@ internal object RussianMessages : Messages {
     override val clearCommandDescription = "Очистить историю переписки"
     override val stopCommandDescription = "Остановить то, что я сейчас делаю"
 
-    override val ephemeralChatReply = "Это видим только мы с тобой, а отвечаю я всем — напиши мне обычным сообщением."
+    override val ephemeralChatReply = "Это видим только мы с тобой, а отвечаю я всем. Напиши мне обычным сообщением"
 
     override fun voiceTooLongReply(durationSeconds: Long, maxSeconds: Long): String =
-        "Это голосовое длится ${durationSeconds}с — я могу распознать не больше ${maxSeconds}с, " +
-                "пришли короче или напиши текстом"
+        "Это голосовое на ${durationSeconds}с, а я слушаю до ${maxSeconds}с. Пришли короче или напиши текстом"
 
     override fun subscriptionLimitReply(untilReset: Duration?): String =
         untilReset
-            ?.let { "Лимит использования исчерпан — обновится примерно через ${waitLabel(it)}, тогда попробуй снова ⏳" }
-            ?: "Лимит использования исчерпан — он скоро обновится, попробуй позже 🙏"
+            ?.let { "Лимит исчерпан, обновится примерно через ${waitLabel(it)}, тогда попробуй снова" }
+            ?: "Лимит исчерпан, скоро обновится, попробуй позже"
 
     private fun waitLabel(untilReset: Duration): String =
         untilReset.toComponents { days, hours, minutes, _, _ ->
@@ -134,13 +130,13 @@ internal object RussianMessages : Messages {
     override fun taskMissedNotice(id: Long, title: String?, scheduledFor: String): String {
         val label = title?.let { " «$it»" } ?: ""
 
-        return "⏰ Задача #$id$label, запланированная на $scheduledFor, пропущена — меня не было онлайн."
+        return "⏰ Задача #$id$label, запланированная на $scheduledFor, пропущена: меня не было онлайн."
     }
 
     override fun taskFailedNotice(id: Long, title: String?): String {
         val label = title?.let { " «$it»" } ?: ""
 
-        return "⚠️ Задача #$id$label не выполнена — даже за несколько попыток ничего не вышло."
+        return "⚠️ Задача #$id$label не выполнена: даже за несколько попыток ничего не вышло."
     }
 
     override fun taskScheduledByNotice(mention: String) = "⏰ Запланировано: $mention"

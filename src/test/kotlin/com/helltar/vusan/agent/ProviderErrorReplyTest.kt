@@ -47,7 +47,7 @@ class ProviderErrorReplyTest {
     fun `a spent subscription is answered with the wait it reported`() {
         val reply = EnglishMessages.providerErrorReply(usageLimitBody, now)
 
-        assertEquals("I've hit my usage limit — it resets in about 10min, try again then ⏳", reply)
+        assertEquals("Usage limit reached, resets in about 10min, try again then", reply)
     }
 
     @Test

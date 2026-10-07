@@ -116,8 +116,9 @@ that is who owns writing them, not because only `agent/` reads them. No other ar
   of its own (English, Ukrainian, Russian, Spanish). `Language.ofText` reads the language off the message itself —
   Ukrainian and Russian by the letters and everyday words only one of them has — and leaves what it cannot tell, Latin
   script or a bare `ок`, to `Language.fromCode` on the sender's Telegram language code, falling back to English; a
-  Cyrillic message from a client set to neither is answered in Ukrainian. Adding a language is an enum entry plus a
-  `Messages` file — the exhaustive
+  Cyrillic message from a client set to neither is answered in Ukrainian. The strings are plain and gender-neutral,
+  because a deployment's personality is its own and the bot's grammatical gender is not known here. Adding a
+  language is an enum entry plus a `Messages` file — the exhaustive
   `when` in `Messages.of` and the interface itself make the compiler name everything still missing.
 - **`common/`** — tiny shared utilities: prompt/text helpers (`Strings.kt`) and cancellation rethrow
   (`Cancellation.kt`).

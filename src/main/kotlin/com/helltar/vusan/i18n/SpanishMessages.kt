@@ -6,41 +6,37 @@ import kotlin.time.Duration
 
 internal object SpanishMessages : Messages {
 
-    override val startReply = "¡Hola! Solo dime qué necesitas 👋"
+    override val startReply = "Hola. Solo dime qué necesitas"
 
-    override val busyReply = "Espera, todavía estoy con tu petición anterior 😊"
+    override val busyReply = "Espera, todavía estoy con tu petición anterior"
 
-    override val fallbackErrorReply = "Algo salió mal, ¿lo intentamos otra vez? 🥲"
+    override val fallbackErrorReply = "Algo falló, inténtalo otra vez"
 
-    override val overloadedReply = "Ahora mismo tengo demasiadas peticiones — dame un momento e inténtalo de nuevo 🙏"
-    override val signInRequiredReply =
-        "Hay que renovar mi conexión con el servicio de IA — requiere iniciar sesión de nuevo 🔑"
+    override val overloadedReply = "Ahora mismo hay demasiadas peticiones, dame un momento e inténtalo de nuevo"
+    override val signInRequiredReply = "Mi sesión en el servicio de IA caducó, hay que iniciar sesión de nuevo"
 
-    override val contentPolicyReply =
-        "El servicio de IA rechazó esta petición por su política de contenido — prueba a plantearla de otra forma 🚫"
+    override val contentPolicyReply = "Eso no pasó, plantéalo de otra forma"
 
     override val formattingAsFileNotice =
-        "Telegram no pudo mostrar el formato, así que aquí tienes la respuesta completa como archivo 📄"
+        "Telegram no pudo mostrar el formato, así que aquí va la respuesta completa como archivo"
 
     override val privateBlockedNotice =
-        "Quería escribirte en privado, pero no puedo — abre mi chat, pulsa /start y vuelve a preguntar 😊"
+        "Quería escribirte en privado pero no puedo. Abre mi chat, pulsa /start y vuelve a preguntar"
 
     override val conversationClearedReply =
-        "El historial de nuestra conversación en este chat está borrado. " +
-                "Los demás chats, la memoria y las tareas programadas siguen intactos. 🧹"
+        "El historial de este chat está borrado. Los demás chats, la memoria y las tareas programadas siguen igual"
 
-    override val turnStoppedNotice =
-        "Detenido. Lo que ya envié se queda; el historial y los archivos no cambian. ✋"
+    override val turnStoppedNotice = "Paro aquí. Lo que ya envié se queda, el historial y los archivos no cambian"
 
-    override val nothingToStopReply = "Ahora mismo no estoy haciendo nada — no hay nada que detener 🙂"
+    override val nothingToStopReply = "Ahora mismo no hago nada, no hay nada que detener"
 
     override val turnStopButton = "⏹ Detener"
 
     override val turnStopNotOwnerAlert = "Esta petición es de otra persona."
 
-    override val voiceEmptyReply = "No oigo nada en ese mensaje de voz — inténtalo otra vez o escríbelo 🙉"
+    override val voiceEmptyReply = "No se oye nada en ese mensaje de voz, inténtalo otra vez o escríbelo"
 
-    override val voiceTranscriptionFailedReply = "No pude transcribir ese mensaje de voz — mejor escríbelo 😊"
+    override val voiceTranscriptionFailedReply = "No pude entender ese mensaje de voz, mejor escríbelo"
 
     override val inlineChoiceNotOwnerAlert = "Esta elección era para otra persona."
 
@@ -66,16 +62,16 @@ internal object SpanishMessages : Messages {
     override val clearCommandDescription = "Borrar el historial de la conversación"
     override val stopCommandDescription = "Detener lo que estoy haciendo ahora"
 
-    override val ephemeralChatReply = "Esto solo lo vemos tú y yo, y yo respondo a la vista de todos: escríbeme un mensaje normal."
+    override val ephemeralChatReply =
+        "Esto solo lo vemos tú y yo, y yo respondo a la vista de todos. Escríbeme un mensaje normal"
 
     override fun voiceTooLongReply(durationSeconds: Long, maxSeconds: Long): String =
-        "Ese mensaje de voz dura ${durationSeconds}s — solo puedo transcribir hasta ${maxSeconds}s, " +
-                "manda uno más corto o escríbelo"
+        "Ese mensaje de voz dura ${durationSeconds}s y yo escucho hasta ${maxSeconds}s. Manda uno más corto o escríbelo"
 
     override fun subscriptionLimitReply(untilReset: Duration?): String =
         untilReset
-            ?.let { "He agotado mi límite de uso — se renueva en unos ${waitLabel(it)}, inténtalo entonces ⏳" }
-            ?: "He agotado mi límite de uso — se renueva en un rato, inténtalo más tarde 🙏"
+            ?.let { "Llegué al límite de uso, se renueva en unos ${waitLabel(it)}, inténtalo entonces" }
+            ?: "Llegué al límite de uso por ahora, inténtalo más tarde"
 
     private fun waitLabel(untilReset: Duration): String =
         untilReset.toComponents { days, hours, minutes, _, _ ->
@@ -136,13 +132,13 @@ internal object SpanishMessages : Messages {
     override fun taskMissedNotice(id: Long, title: String?, scheduledFor: String): String {
         val label = title?.let { " «$it»" } ?: ""
 
-        return "⏰ Me salté la tarea #$id$label programada para $scheduledFor — estaba sin conexión."
+        return "⏰ Me salté la tarea #$id$label programada para $scheduledFor: estaba sin conexión."
     }
 
     override fun taskFailedNotice(id: Long, title: String?): String {
         val label = title?.let { " «$it»" } ?: ""
 
-        return "⚠️ La tarea #$id$label no llegó a nada — no pude terminarla ni tras varios intentos."
+        return "⚠️ La tarea #$id$label no llegó a nada: no pude terminarla ni tras varios intentos."
     }
 
     override fun taskScheduledByNotice(mention: String) = "⏰ Programado por $mention"
