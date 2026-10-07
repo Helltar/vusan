@@ -158,9 +158,12 @@ class SandboxClient(
 }
 
 private fun RegolithException.explain(): String = when (code) {
-    ErrorCodes.CAPACITY_EXHAUSTED, ErrorCodes.UNAVAILABLE -> {
-        val wait = retryAfter?.let { "in about ${it.inWholeSeconds.coerceAtLeast(1)} seconds" } ?: "shortly"
-        "The sandbox host is at capacity right now. Tell the user and try again $wait."
+    ErrorCodes.CAPACITY_EXHAUSTED -> "The sandbox host is at capacity right now. Tell the user and try again ${retryHint()}."
+    // not capacity: the server says why it cannot serve, such as a failing health check, and the model
+    // should read that rather than a wait that will not change it.
+    ErrorCodes.UNAVAILABLE -> {
+        val reason = detail.ifBlank { "the server is not serving requests" }
+        "The sandbox is unavailable: $reason. Tell the user and try again ${retryHint()}."
     }
     ErrorCodes.BUSY -> "This sandbox already runs as many commands as it may; wait for one to finish."
     // anything but a problem document came from something in front of the server, such as a proxy.
@@ -170,6 +173,10 @@ private fun RegolithException.explain(): String = when (code) {
         detail.ifBlank { "The sandbox refused the request" }
     }
 }
+
+/** The wait the server asked for, never one made up here. */
+private fun RegolithException.retryHint(): String =
+    retryAfter?.let { "in about ${it.inWholeSeconds.coerceAtLeast(1)} seconds" } ?: "shortly"
 
 private fun RegolithSite.published(): PublishedSite = PublishedSite(url, files, bytes, publishedAt, until, hasIndex)
 

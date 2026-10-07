@@ -10,6 +10,7 @@ import kotlin.test.Test
 import kotlin.test.assertContains
 import kotlin.test.assertEquals
 import kotlin.test.assertFailsWith
+import kotlin.test.assertFalse
 import kotlin.test.assertTrue
 import kotlinx.coroutines.runBlocking
 
@@ -196,6 +197,24 @@ class SandboxClientTest {
         assertContains(error.message.orEmpty(), "at capacity")
         // the wait the server asked for, not one this side made up
         assertContains(error.message.orEmpty(), "in about 5 seconds")
+    }
+
+    @Test
+    fun `an unavailable server is explained by its own reason, not as capacity`() = runBlocking {
+        val http = Http.createClient(MockEngine {
+            respond(
+                problemDocument("unavailable", 503, "Unavailable", "The storage check is failing; sessions are refused"),
+                HttpStatusCode.ServiceUnavailable,
+                headersOf(HttpHeaders.ContentType to listOf("application/problem+json"), HttpHeaders.RetryAfter to listOf("5")),
+            )
+        })
+        val client = SandboxClient(http, "http://sandbox", "test-token")
+
+        val error = assertFailsWith<IllegalStateException> { client.sandboxOf("telegram:42").exec("ls", null) }
+
+        assertContains(error.message.orEmpty(), "The storage check is failing")
+        assertContains(error.message.orEmpty(), "in about 5 seconds")
+        assertFalse(error.message.orEmpty().contains("capacity"))
     }
 
     @Test

@@ -689,8 +689,9 @@ history still uses `(userId, chatId)`; only the files and the commands running i
   command ends, a page comes back empty or the call's ten seconds are up — each page carrying the exec as it
   stands, so no second request asks for its status — and the model continues from `nextOffset`. A file is read within the call's remaining transfer budget, which the
   server refuses to exceed before sending any of it. Refusals carry the server's error `code`, which decides
-  what the model is told — capacity and availability read as "try again", everything else as the server's own
-  sentence; no answer at all reads as temporarily unavailable.
+  what the model is told — capacity reads as "try again" with the wait the server asked for, an unavailable
+  server as its own reason plus that wait, everything else as the server's own sentence; no answer at all reads
+  as temporarily unavailable.
 - **`SandboxTools`** — the model-facing surface: run, read, cancel, write, delete, reset, send. It copies each of
   the turn's attachments into its own `inbox/<unique-id>/<name>` before the first command that might want them,
   once per turn, and renders a command as text the model can act on — the exit code, and the session limit that explains it
