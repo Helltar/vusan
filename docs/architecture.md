@@ -435,8 +435,8 @@ A normal user message travels:
   entries of the past week into every turn in that group as `<diary>` — defused like the transcript they came from —
   and `Initiative` reads the same block. Entries live in `chat_diary`, a week at most (`Maintenance`), and
   `GroupLogRepository.clear` drops them with the transcript they were written from. Unlike a digest, an entry is written
-  with nobody having asked, so a whole day of a chat goes to the chat model unprompted: `DIARY_ENABLED` is the switch,
-  off by default, and a chat the allowlist no longer names is never read.
+  with nobody having asked, so a whole day of a chat goes to the chat model unprompted: `DIARY_ENABLED=false` is the
+  switch, and a chat the allowlist no longer names is never read.
 - **Initiative** — `agent/presence/Initiative` is the bot speaking up without being called. Code decides whether to
   look, a model decides what comes of it. Once a minute it takes the chats people wrote in during the last quarter of
   an hour and, for each, checks the gates: outside the quiet hours, one to eight in the morning; a pause drawn at random between half and

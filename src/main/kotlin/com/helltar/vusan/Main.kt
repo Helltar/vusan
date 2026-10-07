@@ -348,12 +348,18 @@ private fun logPresence(config: AppConfig, groupLogOn: Boolean) {
         return
     }
 
-    if (config.diaryEnabled) log.info { "Diary: on — each group's closed day is written up by the chat model" }
+    if (config.diaryEnabled) {
+        log.info { "Diary: on — each group's closed day is written up by the chat model" }
+    } else {
+        log.info { "Diary: off (DIARY_ENABLED=false)" }
+    }
 
-    initiative?.let {
+    if (initiative == null) {
+        log.info { "Initiative: off (INITIATIVE_ENABLED=false)" }
+    } else {
         log.info {
-            "Initiative: interval=[${it.intervalMinutes}m] maxMessagesPerDay=[${it.maxMessagesPerDay}] " +
-                    "quietHours=[${it.quietHours.from}-${it.quietHours.until}]"
+            "Initiative: interval=[${initiative.intervalMinutes}m] maxMessagesPerDay=[${initiative.maxMessagesPerDay}] " +
+                    "quietHours=[${initiative.quietHours.from}-${initiative.quietHours.until}]"
         }
     }
 }

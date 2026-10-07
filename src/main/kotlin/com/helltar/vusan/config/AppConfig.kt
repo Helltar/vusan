@@ -19,7 +19,7 @@ data class AppConfig(
     val appearance: String?,
     val chatHistory: ConversationConfig = ConversationConfig(),
     val databasePath: String,
-    val diaryEnabled: Boolean = false,
+    val diaryEnabled: Boolean = true,
     val elevenLabsApiKey: String?,
     val elevenLabsTts: ElevenLabsTtsConfig?,
     val giphyApiKey: String?,
@@ -75,7 +75,7 @@ data class AppConfig(
                 agentMaxIterations = readIntEnv("AGENT_MAX_ITERATIONS") ?: DEFAULT_AGENT_MAX_ITERATIONS,
                 appearance = resolveAppearance(),
                 databasePath = readEnv("DB_FILE") ?: "data/db/vusan.db",
-                diaryEnabled = readBooleanEnv("DIARY_ENABLED") ?: false,
+                diaryEnabled = readBooleanEnv("DIARY_ENABLED") ?: true,
                 elevenLabsApiKey = elevenLabsKey,
                 giphyApiKey = readEnv("GIPHY_API_KEY"),
                 klipyApiKey = readEnv("KLIPY_API_KEY"),
@@ -197,10 +197,10 @@ data class AppConfig(
             )
         }
 
-        // the switch is the only setting: how often it looks and how much it says are the feature's own
-        // numbers, and live with it.
+        // the switch is the only setting, and it is on unless turned off: how often it looks and how much
+        // it says are the feature's own numbers, and live with it.
         private fun resolveInitiative(): InitiativeConfig? =
-            InitiativeConfig().takeIf { readBooleanEnv("INITIATIVE_ENABLED") == true }
+            InitiativeConfig().takeIf { readBooleanEnv("INITIATIVE_ENABLED") != false }
 
         private fun resolveLlmProvider(): LlmProviderConfig = resolveLlmProvider(LLM_PREFIX, fallbackTimeout = null)
 

@@ -667,17 +667,17 @@ ride along on every turn in that group, so it can pick up yesterday's thread ins
 chat fresh every time.
 
 ```dotenv
-DIARY_ENABLED=true
+DIARY_ENABLED=false
 ```
 
-| Variable        | Default | Description                                          |
-|-----------------|---------|------------------------------------------------------|
-| `DIARY_ENABLED` | `false` | `true` writes an entry for each group's closed day.  |
+| Variable        | Default | Description                                            |
+|-----------------|---------|--------------------------------------------------------|
+| `DIARY_ENABLED` | `true`  | `false` writes nothing and sends no day anywhere.      |
 
 - **What is sent** — once per group per day, that day's transcript from the [group log](#group-log)
   (up to 12,000 characters of it) goes to the chat model, with nobody having asked. That is the
-  difference from a recap, which is made only when someone asks for one, and why this is off by
-  default.
+  difference from a recap, which is made only when someone asks for one, and why this has a switch
+  of its own.
 - **Which days** — only a day that has ended, and only one with at least fifteen messages from
   people. Yesterday is written within a quarter of an hour of the bot being up; older days are not
   backfilled.
@@ -696,10 +696,10 @@ what was just said, an opinion, a question about someone who has gone quiet. Mos
 nothing, which is the point: it is meant to feel like a member of the chat, not a notification.
 
 ```dotenv
-INITIATIVE_ENABLED=true
+INITIATIVE_ENABLED=false
 ```
 
-`INITIATIVE_ENABLED=true` turns it on for every group in `ALLOWED_IDS`, and is the only setting it
+It is on for every group in `ALLOWED_IDS`, and `INITIATIVE_ENABLED=false` is the only setting it
 has: how often it looks and how much it says are fixed.
 
 - **When it looks** — only at a chat somebody wrote in during the last fifteen minutes, after a pause
@@ -710,7 +710,7 @@ has: how often it looks and how much it says are fixed.
   again five to ten minutes later.
 - **What is sent** — up to sixty lines of the chat's last six hours, with names, to the chat
   model, with nobody having asked. Everything else Vusan does sends a group's messages somewhere
-  only when it is addressed, so this is a deliberate switch. With the [diary](#diary) on, its entries
+  only when it is addressed, which is why this has a switch. With the [diary](#diary) on, its entries
   go along, as do the names of people who used to write in the chat and have not for three days.
 - **How often it writes** — at most four lines of its own in one chat a day, at least ninety minutes
   apart. A reaction is not held back by that.
