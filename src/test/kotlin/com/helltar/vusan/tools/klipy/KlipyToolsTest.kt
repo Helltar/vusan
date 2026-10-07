@@ -8,6 +8,7 @@ import com.helltar.vusan.tools.files.FileDownloadClient
 import com.helltar.vusan.tools.toolFailure
 import io.ktor.client.*
 import io.ktor.client.engine.mock.*
+import io.ktor.client.plugins.*
 import io.ktor.client.request.*
 import io.ktor.http.*
 import kotlinx.coroutines.runBlocking
@@ -15,6 +16,7 @@ import kotlin.test.Test
 import kotlin.test.assertContains
 import kotlin.test.assertContentEquals
 import kotlin.test.assertEquals
+import kotlin.test.assertFalse
 import kotlin.test.assertIs
 import kotlin.test.assertTrue
 
@@ -22,6 +24,7 @@ class KlipyToolsTest {
 
     private val requests = mutableListOf<HttpRequestData>()
     private var shareStatus = HttpStatusCode.OK
+    private var searchTimesOut = false
 
     @Test
     fun `a search lists candidates in the provider's order and queues nothing`() = runBlocking {
@@ -107,6 +110,16 @@ class KlipyToolsTest {
     }
 
     @Test
+    fun `a failure that names the request url does not carry the key out`() = runBlocking {
+        searchTimesOut = true
+
+        val failure = toolFailure { tools(BotOutbox()).searchGifs("sleepy cat") }
+
+        assertContains(failure, "timeout")
+        assertFalse("test-key" in failure, failure)
+    }
+
+    @Test
     fun `a share report that fails does not undo the send`() = runBlocking {
         shareStatus = HttpStatusCode.InternalServerError
 
@@ -126,6 +139,8 @@ class KlipyToolsTest {
                 val path = request.url.encodedPath
 
                 when {
+                    searchTimesOut && path.endsWith("/search") ->
+                        throw HttpRequestTimeoutException(request.url.toString(), 20_000)
                     path.endsWith("/gifs/search") -> respondJson(GIFS)
                     path.endsWith("/static-memes/search") -> respondJson(MEMES)
                     path.endsWith("/clips/search") -> respondJson(CLIPS)
