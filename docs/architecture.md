@@ -605,7 +605,8 @@ A normal user message travels:
   before 4.6, which the API serves under a dated id, gets neither thinking nor an effort. `openai-compatible` speaks
   either OpenAI API under `LLM_BASE_URL` (`LLM_OPENAI_ENDPOINT`), never claims vision, disables parallel tool calls
   because third-party models garble the siblings, and gets none of the OpenAI-only fields unless the base URL is the
-  official API. A vision or an addressing model is one more `LlmProviderConfig`, read from its own prefix
+  official API. A server there that thinks aloud in `reasoning_content` (DeepSeek) refuses a tool call of the turn
+  without it, so a call the provider before a fallback wrote carries an empty one. A vision or an addressing model is one more `LlmProviderConfig`, read from its own prefix
   (`VISION_`, `ADDRESSING_`) and resolved the same way; by default it runs on the chat provider with the chat key.
 - **ChatGPT subscription (`codex`)** — the same OpenAI client pointed at the Codex backend's Responses API, with no API
   key. `config/CodexAuth.CodexAuthStore` owns the credentials `codex login` writes to `~/.codex/auth.json` (or

@@ -44,6 +44,9 @@ enum class OpenAiEndpoint {
  * API not to store the conversation and to hand reasoning back encrypted, which is what lets a tool
  * loop echo it; a third-party server may know neither field. [explicitPromptCaching] marks the two
  * prefixes a turn re-sends — the platform's GPT-5.6-era caching reads nothing without it.
+ * [echoesReasoningContent] is for a Chat Completions server that thinks aloud in `reasoning_content` and
+ * wants it back on every tool call of a turn, as DeepSeek does: a call another endpoint wrote — the
+ * provider a fallback took over from — then carries an empty one, since none at all is a 400.
  *
  * [onResponse] sees every request and the response it got, for a caller that keeps books on them.
  */
@@ -55,6 +58,7 @@ class OpenAiClient(
     private val streamed: Boolean = false,
     private val statelessReasoning: Boolean = false,
     private val explicitPromptCaching: Boolean = false,
+    private val echoesReasoningContent: Boolean = false,
     private val label: String = "OpenAI",
     private val onResponse: (request: JsonObject, response: JsonObject) -> Unit = { _, _ -> },
 ) : LlmClient {
@@ -388,10 +392,15 @@ class OpenAiClient(
                         put("content", message.text)
 
                         // a server that thinks between tool calls wants its thoughts back with the call
-                        message.parts.filterIsInstance<Part.Reasoning>()
-                            .firstOrNull { it.source == reasoningSource }
-                            ?.raw?.get(REASONING_CONTENT)
-                            ?.let { put(REASONING_CONTENT, it) }
+                        val reasoning =
+                            message.parts.filterIsInstance<Part.Reasoning>()
+                                .firstOrNull { it.source == reasoningSource }
+                                ?.raw?.get(REASONING_CONTENT)
+
+                        when {
+                            reasoning != null -> put(REASONING_CONTENT, reasoning)
+                            echoesReasoningContent && message.toolCalls.isNotEmpty() -> put(REASONING_CONTENT, "")
+                        }
 
                         if (message.toolCalls.isNotEmpty()) {
                             putJsonArray("tool_calls") {

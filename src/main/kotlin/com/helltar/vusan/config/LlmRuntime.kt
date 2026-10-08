@@ -196,6 +196,7 @@ private fun compatibleRuntime(config: LlmProviderConfig.OpenAiCompatible, http: 
                     endpoint = config.endpoint,
                     statelessReasoning = official,
                     explicitPromptCaching = official,
+                    echoesReasoningContent = !official,
                     label = "OpenAI-compatible",
                 ),
             ),

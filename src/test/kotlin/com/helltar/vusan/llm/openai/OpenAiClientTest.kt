@@ -66,6 +66,7 @@ class OpenAiClientTest {
         statelessReasoning: Boolean = true,
         explicitPromptCaching: Boolean = true,
         streamed: Boolean = false,
+        echoesReasoningContent: Boolean = false,
     ): OpenAiClient {
         val engine =
             MockEngine { request ->
@@ -81,6 +82,7 @@ class OpenAiClientTest {
             streamed = streamed,
             statelessReasoning = statelessReasoning,
             explicitPromptCaching = explicitPromptCaching,
+            echoesReasoningContent = echoesReasoningContent,
         )
     }
 
@@ -203,6 +205,20 @@ class OpenAiClientTest {
 
         client(reply = COMPLETION_REPLY, endpoint = OpenAiEndpoint.COMPLETIONS).complete(MODEL, request(*basic, turn, Message.User("next")))
         assertFalse(sent.last().getValue("messages").jsonArray.any { "reasoning_content" in it.jsonObject })
+    }
+
+    // deepseek refuses a tool call of the turn that carries no `reasoning_content`, and one written by the
+    // provider a fallback took over from has none of its own
+    @Test
+    fun `a call another endpoint wrote carries an empty reasoning to a server that echoes it`() = runBlocking {
+        val foreign = Message.Assistant(listOf(Part.ToolCall("call-1", "lookUp", buildJsonObject { put("query", "cats") })))
+        val turn = arrayOf(*basic, foreign, Message.ToolResults(listOf(ToolResult("call-1", "lookUp", "found"))))
+
+        client(reply = COMPLETION_REPLY, endpoint = OpenAiEndpoint.COMPLETIONS, echoesReasoningContent = true).complete(MODEL, request(*turn))
+        assertEquals("", sent.last().getValue("messages").jsonArray[2].jsonObject.getValue("reasoning_content").jsonPrimitive.content)
+
+        client(reply = COMPLETION_REPLY, endpoint = OpenAiEndpoint.COMPLETIONS).complete(MODEL, request(*turn))
+        assertFalse("reasoning_content" in sent.last().getValue("messages").jsonArray[2].jsonObject)
     }
 
     // both are refused in a request that defines no tools, and the choice keeps the replayed calls valid
