@@ -81,14 +81,14 @@ suspend fun main() = coroutineScope {
 
         // signing in is the codex CLI's job, so the only thing left at startup is to fail loudly when
         // nobody has run `codex login` here, then validate the selected model and its capabilities
-        // before the first user turn hits an opaque backend error. the reported client version goes in
+        // before the first user turn hits an opaque backend error. the claimed client version goes in
         // first, because it decides how much of the model catalog that validation is shown.
         // the subscription may be the primary, the fallback or a role's; whichever it is, it is the one signed-in account.
         val codexAuth =
             listOfNotNull(config.llmProvider, config.llmFallback, config.vision, config.addressing?.provider)
                 .firstNotNullOfOrNull { it as? LlmProviderConfig.Codex }
                 ?.let { codex ->
-                    pinCodexClientVersion(codex.clientVersion)
+                    claimCodexClientVersion(http, codex.clientVersion)
                     CodexAuthStore(http, codex.authFile)
                 }
 

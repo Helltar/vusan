@@ -193,12 +193,14 @@ Older catalog responses without capability metadata retain the compatible image-
 
 **When a brand-new model is missing.** That list is filtered by the Codex client version Vusan
 claims, so a model released alongside a newer CLI is absent from it and startup rejects it as one the
-plan does not offer. Vusan claims the newest CLI it knows of, and the installed one when that is
-newer, so upgrading `codex` on the host usually settles it. Where there is no CLI to upgrade — a
-container, most often — claim a version yourself:
+plan does not offer. At startup Vusan claims the newest version it can find: the one this build knows
+of, the `codex` installed on the host, and the latest release on GitHub, read where the CLI's own
+update check reads it. The startup log says which one won. So a container with no CLI at all follows
+Codex releases on its own, and only a host that cannot reach `api.github.com` is left with the version
+this build knows of. To pin a version yourself, on such a host or when the automatic choice is wrong:
 
 ```dotenv
-CODEX_CLIENT_VERSION=0.160.1
+CODEX_CLIENT_VERSION=0.162.0
 ```
 
 It has to look like a Codex CLI version, and anything else stops startup. One older than the model

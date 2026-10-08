@@ -17,6 +17,7 @@ import kotlin.time.measureTime
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFailsWith
+import kotlin.test.assertFalse
 import kotlin.test.assertNotNull
 import kotlin.test.assertNull
 import kotlin.test.assertTrue
@@ -261,8 +262,10 @@ class CodexCatalogTest {
     }
 
     @Test
-    fun `a pinned client version is what the catalog request claims`() = runBlocking {
+    fun `a pinned client version is what the catalog request claims, and nobody else is asked`() = runBlocking {
         var version: String? = null
+        var gitHubAsked = false
+        var cliAsked = false
 
         val http =
             Http.createClient(
@@ -273,13 +276,60 @@ class CodexCatalogTest {
             )
 
         try {
-            pinCodexClientVersion("0.199.0")
+            claimCodexClientVersion(Http.createClient(MockEngine { gitHubAsked = true; respondJson("{}") }), "0.199.0") {
+                cliAsked = true
+                null
+            }
             fetchCodexModels(http, store())
         } finally {
-            pinCodexClientVersion(null)
+            claimFloor()
         }
 
         assertEquals("0.199.0", version)
+        assertFalse(gitHubAsked)
+        assertFalse(cliAsked)
+    }
+
+    @Test
+    fun `the latest GitHub release is read from its tag`() = runBlocking {
+        var url: String? = null
+
+        val http =
+            Http.createClient(
+                MockEngine { request ->
+                    url = request.url.toString()
+                    respondJson("""{"tag_name":"rust-v0.162.0","name":"0.162.0","prerelease":false}""")
+                },
+            )
+
+        assertEquals("0.162.0", fetchLatestCodexRelease(http))
+        assertEquals("https://api.github.com/repos/openai/codex/releases/latest", url)
+    }
+
+    @Test
+    fun `a GitHub release that cannot be read is skipped`() = runBlocking {
+        val rateLimited = Http.createClient(MockEngine { respondJson("""{"message":"rate limited"}""", HttpStatusCode.Forbidden) })
+        val unversioned = Http.createClient(MockEngine { respondJson("""{"tag_name":"nightly"}""") })
+
+        assertNull(fetchLatestCodexRelease(rateLimited))
+        assertNull(fetchLatestCodexRelease(unversioned))
+    }
+
+    @Test
+    fun `startup claims the newest version any source offers`() = runBlocking {
+        try {
+            claimCodexClientVersion(gitHub("0.199.0"), null) { "0.170.0" }
+            assertEquals("0.199.0", codexClientVersion())
+
+            claimCodexClientVersion(gitHub("0.170.0"), null) { "0.199.1" }
+            assertEquals("0.199.1", codexClientVersion())
+
+            // neither source beats the floor this build ships, so the floor is what is claimed
+            claimCodexClientVersion(gitHub("0.100.0"), null) { "0.99.0" }
+            assertTrue(codexClientVersion() isNewerThan "0.100.0", codexClientVersion())
+        } finally {
+            claimFloor()
+        }
     }
 
     @Test
@@ -418,6 +468,12 @@ private fun comparable(version: String): String = version.split('.').joinToStrin
 private fun codex(model: String, envPrefix: String = "LLM") = LlmProviderConfig.Codex(model = model, requestTimeout = 120.seconds, envPrefix = envPrefix)
 
 private fun catalogClient(body: String) = Http.createClient(MockEngine { respondJson(body) })
+
+private fun gitHub(version: String) = Http.createClient(MockEngine { respondJson("""{"tag_name":"rust-v$version"}""") })
+
+/** Back to what an unclaimed process reports, so the tests after this one read the floor again. */
+private suspend fun claimFloor() =
+    claimCodexClientVersion(Http.createClient(MockEngine { respondJson("{}", HttpStatusCode.NotFound) }), null) { null }
 
 private fun MockRequestHandleScope.respondJson(body: String, status: HttpStatusCode = HttpStatusCode.OK) =
     respond(

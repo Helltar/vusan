@@ -336,13 +336,13 @@ data class AppConfig(
             return tier.takeUnless { it == ServiceTier.DEFAULT }
         }
 
-        // the catalog Codex answers with is filtered by this, so it is how an operator reaches a model
-        // that needs a newer CLI than this build ships a floor for, without waiting for a release.
+        // the catalog Codex answers with is filtered by the claimed client version, and this pins it: for
+        // a host that cannot ask github for the latest release, or when the automatic choice is wrong.
         private fun resolveCodexClientVersion(): String? {
             val raw = readEnv("CODEX_CLIENT_VERSION")?.trim() ?: return null
 
             return raw.takeIf { CODEX_VERSION.matches(it) }
-                ?: error("Unsupported CODEX_CLIENT_VERSION=[$raw]. Expected a Codex CLI version such as 0.160.1")
+                ?: error("Unsupported CODEX_CLIENT_VERSION=[$raw]. Expected a Codex CLI version such as 0.162.0")
         }
 
         private inline fun <reified T : Enum<T>> enumOrNull(raw: String): T? =
