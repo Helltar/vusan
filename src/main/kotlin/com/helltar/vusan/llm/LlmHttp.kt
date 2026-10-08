@@ -93,7 +93,8 @@ internal suspend fun HttpClient.postEventStream(
             val channel = response.bodyAsChannel()
 
             while (!channel.isClosedForRead) {
-                val line = channel.readUTF8Line() ?: break
+                // the event stream spec ends a line with LF, CRLF or a bare CR; the default mode drops the last
+                val line = channel.readLine(LineEnding.Lenient) ?: break
                 if (!line.startsWith(SSE_DATA_PREFIX)) continue
 
                 val payload = line.removePrefix(SSE_DATA_PREFIX).trim()
