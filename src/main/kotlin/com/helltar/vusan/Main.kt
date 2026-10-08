@@ -83,9 +83,9 @@ suspend fun main() = coroutineScope {
         // nobody has run `codex login` here, then validate the selected model and its capabilities
         // before the first user turn hits an opaque backend error. the reported client version goes in
         // first, because it decides how much of the model catalog that validation is shown.
-        // the subscription may be the primary or the fallback; whichever it is, it is the one signed-in account.
+        // the subscription may be the primary, the fallback or a role's; whichever it is, it is the one signed-in account.
         val codexAuth =
-            listOfNotNull(config.llmProvider, config.llmFallback)
+            listOfNotNull(config.llmProvider, config.llmFallback, config.vision, config.addressing?.provider)
                 .firstNotNullOfOrNull { it as? LlmProviderConfig.Codex }
                 ?.let { codex ->
                     pinCodexClientVersion(codex.clientVersion)
