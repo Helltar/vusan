@@ -121,7 +121,7 @@ that is who owns writing them, not because only `agent/` reads them. No other ar
   writes (`CodexAuth`). `VisionRuntime` resolves separately which model looks at
   images: the `VISION_*` model when configured, the chat model when it accepts images, and nothing at all
   otherwise — which leaves the vision tools and sticker catalog unavailable.
-- **`stt/`** — OpenAI speech-to-text client (`OpenAiWhisperClient`, default model `gpt-4o-transcribe`); used for voice
+- **`stt/`** — OpenAI speech-to-text client (`OpenAiWhisperClient`, default model `gpt-transcribe`); used for voice
   transcription and for the sound of a video the vision tool watches, opt-in via `OPENAI_STT_API_KEY`.
 - **`i18n/`** — user-facing message strings: the `Messages` interface, and one implementation per `Language` in a file
   of its own (English, Ukrainian, Russian, Spanish). `Language.ofText` reads the language off the message itself —

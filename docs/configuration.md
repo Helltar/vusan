@@ -440,7 +440,7 @@ voice message.
 
 | Variable                          | Default             | Description                               |
 |-----------------------------------|---------------------|-------------------------------------------|
-| `OPENAI_STT_MODEL`                | `gpt-4o-transcribe` | Speech-to-text model.                     |
+| `OPENAI_STT_MODEL`                | `gpt-transcribe`    | Speech-to-text model.                     |
 
 Vusan transcribes up to five minutes. Past that length a voice message is refused, and a video is
 watched without its sound.
