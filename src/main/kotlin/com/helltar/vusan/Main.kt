@@ -158,7 +158,7 @@ suspend fun main() = coroutineScope {
         val stickerCatalog =
             vision
                 ?.takeIf { config.stickersEnabled }
-                ?.let { StickerCatalog(telegramClient, ImageVisionClient(it.client, it.model)) }
+                ?.let { StickerCatalog(telegramClient, ImageVisionClient(it.client, it.model, it.options)) }
 
         val contextWindowPolicy = ContextWindowPolicy(llm.model)
         val groupLogDigester = groupLog?.let { LlmGroupLogDigester(client, llm.model, llm.compactionOptions) }

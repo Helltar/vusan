@@ -1,6 +1,7 @@
 package com.helltar.vusan.tools.vision
 
 import com.helltar.vusan.llm.FakeLlmClient
+import com.helltar.vusan.llm.RequestOptions
 import com.helltar.vusan.llm.TEST_MODEL
 import com.helltar.vusan.request.AttachedFile
 import com.helltar.vusan.request.AttachedFileKind
@@ -242,8 +243,8 @@ class VisionToolsTest {
         transcriber: VideoAudioTranscriber? = null,
     ): VisionTools =
         VisionTools(
-            client = ImageVisionClient(executor, TEST_MODEL),
-            videoClient = VideoVisionClient(executor, TEST_MODEL, sampler, transcriber),
+            client = ImageVisionClient(executor, TEST_MODEL, RequestOptions()),
+            videoClient = VideoVisionClient(executor, TEST_MODEL, RequestOptions(), sampler, transcriber),
             attachedFile = attachedFile,
         )
 

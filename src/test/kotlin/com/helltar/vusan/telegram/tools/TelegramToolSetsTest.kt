@@ -1,5 +1,6 @@
 package com.helltar.vusan.telegram.tools
 
+import com.helltar.vusan.llm.RequestOptions
 import com.helltar.vusan.tools.ToolSet
 import com.helltar.vusan.outbox.BotOutbox
 import com.helltar.vusan.request.ChatCapabilities
@@ -27,7 +28,7 @@ class TelegramToolSetsTest {
             arrayOf(TelegramClient::class.java)
         ) { _, method, _ -> error("the tool sets must not call Telegram to be built: ${method.name}") } as TelegramClient
 
-    private val catalog = StickerCatalog(client, ImageVisionClient(FakeLlmClient(), TEST_MODEL))
+    private val catalog = StickerCatalog(client, ImageVisionClient(FakeLlmClient(), TEST_MODEL, RequestOptions()))
 
     @Test
     fun `an unrestricted chat gets both of telegram's own tool sets`() {

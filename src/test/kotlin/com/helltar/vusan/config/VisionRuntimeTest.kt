@@ -3,6 +3,7 @@ package com.helltar.vusan.config
 import com.helltar.vusan.infra.Http
 import com.helltar.vusan.llm.FakeLlmClient
 import com.helltar.vusan.llm.LlmProvider
+import com.helltar.vusan.llm.ReasoningEffort
 import com.helltar.vusan.llm.openai.OpenAiEndpoint
 import io.ktor.client.engine.mock.MockEngine
 import kotlin.test.Test
@@ -87,6 +88,27 @@ class VisionRuntimeTest {
 
         assertSame(wrapped, vision?.client)
         assertFalse(vision?.ownClient == true)
+    }
+
+    // a picture is looked at once, so it is worth no cache write; on the chat model a look keeps the model's
+    // own effort rather than the one tuned for turns, and a vision model of its own gets the one set for it
+    @Test
+    fun `a look is cached nowhere and carries the effort set for vision`() {
+        val chat = resolveLlmRuntime(LlmProviderConfig.OpenAi(apiKey = "key", model = "gpt-5.6-sol", reasoningEffort = ReasoningEffort.XHIGH, requestTimeout = TIMEOUT))
+        val onChat = resolveVisionRuntime(config = null, chat = chat)
+
+        assertEquals(false, onChat?.options?.cachePrompt)
+        assertNull(onChat?.options?.reasoningEffort)
+        assertEquals("vusan-vision", onChat?.options?.promptCacheKey)
+
+        val own =
+            resolveVisionRuntime(
+                config = LlmProviderConfig.Anthropic(apiKey = "key", model = "claude-haiku-5-5", reasoningEffort = ReasoningEffort.LOW, requestTimeout = TIMEOUT),
+                chat = compatibleChat(),
+            )
+
+        assertEquals(ReasoningEffort.LOW, own?.options?.reasoningEffort)
+        assertEquals(false, own?.options?.cachePrompt)
     }
 
     private fun openAiChat(model: String): LlmRuntime =

@@ -114,7 +114,7 @@ class ToolRegistryFactory(
     private val imageDownloadClient = ImageDownloadClient(fileDownloadClient)
     private val elevenLabsTts = config.elevenLabsTts
     private val openAiImage = config.openAiImage
-    private val imageVisionClient = vision?.let { ImageVisionClient(it.client, it.model) }
+    private val imageVisionClient = vision?.let { ImageVisionClient(it.client, it.model, it.options) }
     private val telegramChannelClient = TelegramChannelClient(fileDownloadClient)
     private val ytDlpRunner = YtDlpRunner(config.ytDlpCookiesFile)
     private val ytDlpClient = YtDlpClient(ytDlpRunner)
@@ -124,7 +124,7 @@ class ToolRegistryFactory(
         TelegramChannelTools(
             TelegramChannelReader(
                 telegramChannelClient,
-                vision?.let { TelegramChannelImageDescriber(it.client, it.model) },
+                vision?.let { TelegramChannelImageDescriber(it.client, it.model, it.options) },
             ),
         )
 
@@ -193,6 +193,7 @@ class ToolRegistryFactory(
             VideoVisionClient(
                 client = it.client,
                 model = it.model,
+                options = it.options,
                 transcriber =
                     config.openAiStt?.let { stt -> WhisperVideoAudioTranscriber(OpenAiWhisperClient(http, stt), stt) },
             )

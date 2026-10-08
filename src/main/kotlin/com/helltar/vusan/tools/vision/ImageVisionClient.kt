@@ -5,6 +5,7 @@ import com.helltar.vusan.llm.LlmClient
 import com.helltar.vusan.llm.LlmModel
 import com.helltar.vusan.llm.Message
 import com.helltar.vusan.llm.Part
+import com.helltar.vusan.llm.RequestOptions
 import com.helltar.vusan.request.AttachedFile
 
 /** What [ImageVisionClient.describe] answers when the model returns nothing at all. */
@@ -13,6 +14,7 @@ internal const val EMPTY_VISION_DESCRIPTION = "Vision returned an empty descript
 class ImageVisionClient(
     private val client: LlmClient,
     private val model: LlmModel,
+    private val options: RequestOptions,
 ) {
 
     suspend fun describe(image: AttachedFile, bytes: ByteArray, focus: String): String {
@@ -55,5 +57,6 @@ class ImageVisionClient(
                     ),
                 ),
             ),
+            options = options,
         )
 }

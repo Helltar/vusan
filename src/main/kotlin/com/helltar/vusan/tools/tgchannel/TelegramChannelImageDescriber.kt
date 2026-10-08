@@ -5,6 +5,7 @@ import com.helltar.vusan.llm.LlmClient
 import com.helltar.vusan.llm.LlmModel
 import com.helltar.vusan.llm.Message
 import com.helltar.vusan.llm.Part
+import com.helltar.vusan.llm.RequestOptions
 import com.helltar.vusan.common.limitTo
 
 private const val MAX_TELEGRAM_CHANNEL_IMAGE_BYTES = 8 * 1024 * 1024
@@ -12,6 +13,7 @@ private const val MAX_TELEGRAM_CHANNEL_IMAGE_BYTES = 8 * 1024 * 1024
 class TelegramChannelImageDescriber(
     private val client: LlmClient,
     private val model: LlmModel,
+    private val options: RequestOptions,
 ) {
 
     suspend fun describe(image: TelegramChannelImage, post: TelegramChannelPost, focus: String): String {
@@ -63,5 +65,6 @@ class TelegramChannelImageDescriber(
                     ),
                 ),
             ),
+            options = options,
         )
 }

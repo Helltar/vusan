@@ -6,6 +6,7 @@ import com.helltar.vusan.infra.Db
 import com.helltar.vusan.infra.tables.TelegramChatStickersTable
 import com.helltar.vusan.infra.tables.TelegramStickerSetsTable
 import com.helltar.vusan.infra.tables.TelegramStickersTable
+import com.helltar.vusan.llm.RequestOptions
 import com.helltar.vusan.outbox.BotOutbox
 import com.helltar.vusan.request.requestContext
 import com.helltar.vusan.request.testChat
@@ -362,7 +363,7 @@ class StickerCatalogTest {
     }
 
     private fun catalog(client: FakeStickerClient, visionAnswer: String) =
-        StickerCatalog(client.proxy, ImageVisionClient(FakeLlmClient(visionAnswer), TEST_MODEL))
+        StickerCatalog(client.proxy, ImageVisionClient(FakeLlmClient(visionAnswer), TEST_MODEL, RequestOptions()))
 
     // the worker is the production entry point; one pass is done once no sticker is waiting on vision.
     private suspend fun awaitDescriptionPass(catalog: StickerCatalog) =

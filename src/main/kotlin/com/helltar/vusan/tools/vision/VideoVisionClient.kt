@@ -5,6 +5,7 @@ import com.helltar.vusan.llm.LlmClient
 import com.helltar.vusan.llm.LlmModel
 import com.helltar.vusan.llm.Message
 import com.helltar.vusan.llm.Part
+import com.helltar.vusan.llm.RequestOptions
 import com.helltar.vusan.common.xmlBlock
 import com.helltar.vusan.request.AttachedFile
 
@@ -15,6 +16,7 @@ import com.helltar.vusan.request.AttachedFile
 class VideoVisionClient(
     private val client: LlmClient,
     private val model: LlmModel,
+    private val options: RequestOptions,
     private val sampler: VideoSampler = FfmpegVideoSampler(),
     private val transcriber: VideoAudioTranscriber? = null,
 ) {
@@ -120,6 +122,7 @@ class VideoVisionClient(
                 ),
                 Message.User(listOf(text) + images),
             ),
+            options = options,
         )
     }
 
