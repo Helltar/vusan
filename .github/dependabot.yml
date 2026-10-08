@@ -12,8 +12,8 @@ updates:
       - gradle
     # one pull request per ecosystem per week instead of one per dependency: fewer CI runs, one
     # merge, and no textual conflict between bumps that sit on adjacent lines of the version catalog.
-    # majors stay outside the group on purpose — koog and telegrambots each need their own audit
-    # before landing, which cannot happen inside a pull request that also moves five patch versions.
+    # majors stay outside the group on purpose — telegrambots, ktor and exposed each need their own
+    # audit before landing, which cannot happen inside a pull request that also moves five patch versions.
     groups:
       gradle:
         patterns:
