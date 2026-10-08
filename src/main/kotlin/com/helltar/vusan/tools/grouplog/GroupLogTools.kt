@@ -1,6 +1,6 @@
 package com.helltar.vusan.tools.grouplog
 
-import com.helltar.vusan.tools.LLMDescription
+import com.helltar.vusan.tools.Arg
 import com.helltar.vusan.tools.Tool
 import com.helltar.vusan.tools.ToolSet
 import com.helltar.vusan.agent.grouplog.GroupLogReader
@@ -21,11 +21,10 @@ class GroupLogTools(
     // with the number instead.
     private val maxWindow = repository.retentionDays.days
 
-    @Tool
-    @LLMDescription(GroupLogToolDescriptions.READ_GROUP_LOG)
+    @Tool(GroupLogToolDescriptions.READ_GROUP_LOG)
     suspend fun readGroupLog(
-        @LLMDescription(GroupLogToolDescriptions.READ_GROUP_LOG_WINDOW) window: String,
-        @LLMDescription(GroupLogToolDescriptions.READ_GROUP_LOG_AUTHOR) author: String? = null,
+        @Arg(GroupLogToolDescriptions.READ_GROUP_LOG_WINDOW) window: String,
+        @Arg(GroupLogToolDescriptions.READ_GROUP_LOG_AUTHOR) author: String? = null,
     ): String = suspendToolGuard {
         if (context.chat.isPrivate)
             return@suspendToolGuard "No group chat log in a private chat — this conversation is already your history."
@@ -46,8 +45,7 @@ class GroupLogTools(
         )
     }
 
-    @Tool
-    @LLMDescription(GroupLogToolDescriptions.CLEAR_GROUP_LOG)
+    @Tool(GroupLogToolDescriptions.CLEAR_GROUP_LOG)
     suspend fun clearGroupLog(): String = suspendToolGuard {
         if (context.chat.isPrivate)
             return@suspendToolGuard "No group chat log in a private chat — use `/clear` to wipe this conversation."

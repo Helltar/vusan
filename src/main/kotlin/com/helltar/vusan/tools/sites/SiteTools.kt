@@ -1,6 +1,6 @@
 package com.helltar.vusan.tools.sites
 
-import com.helltar.vusan.tools.LLMDescription
+import com.helltar.vusan.tools.Arg
 import com.helltar.vusan.tools.Tool
 import com.helltar.vusan.tools.ToolSet
 import com.helltar.vusan.tools.requireToolText
@@ -24,10 +24,9 @@ class SiteTools(
     private val sandbox: SandboxClient.PersonSandbox,
 ) : ToolSet {
 
-    @Tool
-    @LLMDescription(SiteToolDescriptions.PUBLISH_SITE)
+    @Tool(SiteToolDescriptions.PUBLISH_SITE)
     suspend fun publishSite(
-        @LLMDescription(SiteToolDescriptions.DIRECTORY)
+        @Arg(SiteToolDescriptions.DIRECTORY)
         directory: String,
     ): String = suspendToolGuard {
         val path = directory.requireToolText("Directory", MAX_PATH_CHARS)
@@ -35,8 +34,7 @@ class SiteTools(
         listOfNotNull(describePublished(site), missingIndex(site, path)).joinToString("\n")
     }
 
-    @Tool
-    @LLMDescription(SiteToolDescriptions.SITE_STATUS)
+    @Tool(SiteToolDescriptions.SITE_STATUS)
     suspend fun siteStatus(): String = suspendToolGuard {
         val site = sandbox.publishedSite()
             ?: return@suspendToolGuard "Nothing is published. Build the files in the sandbox, then publish that directory."
@@ -53,8 +51,7 @@ class SiteTools(
         }
     }
 
-    @Tool
-    @LLMDescription(SiteToolDescriptions.UNPUBLISH_SITE)
+    @Tool(SiteToolDescriptions.UNPUBLISH_SITE)
     suspend fun unpublishSite(): String = suspendToolGuard {
         if (sandbox.unpublishSite()) {
             "The site is offline and its address returns nothing. The sandbox files were kept; publishing again gives a new address."

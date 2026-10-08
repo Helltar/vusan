@@ -1,6 +1,6 @@
 package com.helltar.vusan.tools.vision
 
-import com.helltar.vusan.tools.LLMDescription
+import com.helltar.vusan.tools.Arg
 import com.helltar.vusan.tools.Tool
 import com.helltar.vusan.tools.ToolSet
 import com.helltar.vusan.common.rethrowIfCancellation
@@ -16,10 +16,9 @@ class VisionTools(
     private val attachedFile: AttachedFile?,
 ) : ToolSet {
 
-    @Tool
-    @LLMDescription(VisionToolDescriptions.DESCRIBE_IMAGE)
+    @Tool(VisionToolDescriptions.DESCRIBE_IMAGE)
     suspend fun describeImage(
-        @LLMDescription(VisionToolDescriptions.FOCUS)
+        @Arg(VisionToolDescriptions.FOCUS)
         focus: String = "",
     ): String = suspendToolGuard {
         val image = attachedFile ?: return@suspendToolGuard "No image is attached in this turn."
@@ -40,10 +39,9 @@ class VisionTools(
         client.describe(image, bytes, focus)
     }
 
-    @Tool
-    @LLMDescription(VisionToolDescriptions.DESCRIBE_VIDEO)
+    @Tool(VisionToolDescriptions.DESCRIBE_VIDEO)
     suspend fun describeVideo(
-        @LLMDescription(VisionToolDescriptions.VIDEO_FOCUS)
+        @Arg(VisionToolDescriptions.VIDEO_FOCUS)
         focus: String = "",
     ): String = suspendToolGuard {
         val video = attachedFile ?: return@suspendToolGuard "No video is attached in this turn."

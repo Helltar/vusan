@@ -1,6 +1,6 @@
 package com.helltar.vusan.tools.youtube
 
-import com.helltar.vusan.tools.LLMDescription
+import com.helltar.vusan.tools.Arg
 import com.helltar.vusan.tools.Tool
 import com.helltar.vusan.tools.ToolSet
 import com.helltar.vusan.outbox.BotOutbox
@@ -11,10 +11,9 @@ import com.helltar.vusan.tools.suspendToolGuard
 @Suppress("unused")
 class YouTubeMusicTools(private val client: YtDlpClient, private val outbox: BotOutbox) : ToolSet {
 
-    @Tool
-    @LLMDescription(YouTubeMusicToolDescriptions.PLAY_FULL_TRACK)
+    @Tool(YouTubeMusicToolDescriptions.PLAY_FULL_TRACK)
     suspend fun playFullTrack(
-        @LLMDescription(YouTubeMusicToolDescriptions.PLAY_FULL_TRACK_QUERY)
+        @Arg(YouTubeMusicToolDescriptions.PLAY_FULL_TRACK_QUERY)
         query: String,
     ): String = suspendToolGuard {
         when (val result = client.downloadTrack(query)) {

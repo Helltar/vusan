@@ -1,6 +1,6 @@
 package com.helltar.vusan.tools.reaction
 
-import com.helltar.vusan.tools.LLMDescription
+import com.helltar.vusan.tools.Arg
 import com.helltar.vusan.tools.Tool
 import com.helltar.vusan.tools.ToolSet
 import com.helltar.vusan.outbox.ALLOWED_REACTION_EMOJI
@@ -13,14 +13,13 @@ import com.helltar.vusan.tools.suspendToolGuard
 @Suppress("unused")
 class ReactionTools(private val context: RequestContext, private val outbox: BotOutbox) : ToolSet {
 
-    @Tool
-    @LLMDescription(ReactionToolDescriptions.SET_REACTION)
+    @Tool(ReactionToolDescriptions.SET_REACTION)
     suspend fun setReaction(
-        @LLMDescription(ReactionToolDescriptions.EMOJI)
+        @Arg(ReactionToolDescriptions.EMOJI)
         emoji: String? = null,
-        @LLMDescription(ReactionToolDescriptions.TARGET_REPLIED_MESSAGE)
+        @Arg(ReactionToolDescriptions.TARGET_REPLIED_MESSAGE)
         targetRepliedMessage: Boolean = false,
-        @LLMDescription(ReactionToolDescriptions.MESSAGE_ID)
+        @Arg(ReactionToolDescriptions.MESSAGE_ID)
         messageId: String? = null,
     ): String = suspendToolGuard {
         val trimmedEmoji = emoji?.trim()

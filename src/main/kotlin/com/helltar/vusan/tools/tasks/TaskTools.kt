@@ -1,6 +1,6 @@
 package com.helltar.vusan.tools.tasks
 
-import com.helltar.vusan.tools.LLMDescription
+import com.helltar.vusan.tools.Arg
 import com.helltar.vusan.tools.Tool
 import com.helltar.vusan.tools.ToolSet
 import com.helltar.vusan.request.ChatRef
@@ -19,16 +19,15 @@ class TaskTools(
     private val maxTasksPerUser: Int,
 ) : ToolSet {
 
-    @Tool
-    @LLMDescription(TaskToolDescriptions.SCHEDULE_TASK)
+    @Tool(TaskToolDescriptions.SCHEDULE_TASK)
     suspend fun scheduleTask(
-        @LLMDescription(TaskToolDescriptions.SCHEDULE_PROMPT)
+        @Arg(TaskToolDescriptions.SCHEDULE_PROMPT)
         prompt: String,
-        @LLMDescription(TaskToolDescriptions.SCHEDULE_SPEC)
+        @Arg(TaskToolDescriptions.SCHEDULE_SPEC)
         schedule: String,
-        @LLMDescription(TaskToolDescriptions.SCHEDULE_TIMEZONE)
+        @Arg(TaskToolDescriptions.SCHEDULE_TIMEZONE)
         timezone: String? = null,
-        @LLMDescription(TaskToolDescriptions.SCHEDULE_TITLE)
+        @Arg(TaskToolDescriptions.SCHEDULE_TITLE)
         title: String? = null,
     ): String = suspendToolGuard {
         val owner = context.user
@@ -75,8 +74,7 @@ class TaskTools(
         "Scheduled task id=$id, fires=${formatFire(plan.firstFire, tz)} (${plan.recurrence.display})."
     }
 
-    @Tool
-    @LLMDescription(TaskToolDescriptions.LIST_TASKS)
+    @Tool(TaskToolDescriptions.LIST_TASKS)
     suspend fun listTasks(): String = suspendToolGuard {
         val owner = context.user
         val scopedChat = scopedChat()
@@ -92,18 +90,17 @@ class TaskTools(
         }.trimEnd()
     }
 
-    @Tool
-    @LLMDescription(TaskToolDescriptions.EDIT_TASK)
+    @Tool(TaskToolDescriptions.EDIT_TASK)
     suspend fun editTask(
-        @LLMDescription(TaskToolDescriptions.EDIT_ID)
+        @Arg(TaskToolDescriptions.EDIT_ID)
         id: Long,
-        @LLMDescription(TaskToolDescriptions.EDIT_PROMPT)
+        @Arg(TaskToolDescriptions.EDIT_PROMPT)
         prompt: String? = null,
-        @LLMDescription(TaskToolDescriptions.EDIT_SCHEDULE)
+        @Arg(TaskToolDescriptions.EDIT_SCHEDULE)
         schedule: String? = null,
-        @LLMDescription(TaskToolDescriptions.EDIT_TIMEZONE)
+        @Arg(TaskToolDescriptions.EDIT_TIMEZONE)
         timezone: String? = null,
-        @LLMDescription(TaskToolDescriptions.EDIT_TITLE)
+        @Arg(TaskToolDescriptions.EDIT_TITLE)
         title: String? = null,
     ): String = suspendToolGuard {
         val owner = context.user
@@ -177,10 +174,9 @@ class TaskTools(
                 "repeat=${edited.recurrence.display}, status=${if (edited.paused) "paused" else "active"})."
     }
 
-    @Tool
-    @LLMDescription(TaskToolDescriptions.PAUSE_TASK)
+    @Tool(TaskToolDescriptions.PAUSE_TASK)
     suspend fun pauseTask(
-        @LLMDescription(TaskToolDescriptions.PAUSE_ID)
+        @Arg(TaskToolDescriptions.PAUSE_ID)
         id: Long,
     ): String = suspendToolGuard {
         val owner = context.user
@@ -199,10 +195,9 @@ class TaskTools(
         "Paused task id=$id (next=${formatFire(existing.nextFireAt, existing.timezone)})."
     }
 
-    @Tool
-    @LLMDescription(TaskToolDescriptions.RESUME_TASK)
+    @Tool(TaskToolDescriptions.RESUME_TASK)
     suspend fun resumeTask(
-        @LLMDescription(TaskToolDescriptions.RESUME_ID)
+        @Arg(TaskToolDescriptions.RESUME_ID)
         id: Long,
     ): String = suspendToolGuard {
         val owner = context.user
@@ -226,10 +221,9 @@ class TaskTools(
         "Resumed task id=$id (next=${formatFire(nextFireAt, existing.timezone)})."
     }
 
-    @Tool
-    @LLMDescription(TaskToolDescriptions.CANCEL_TASK)
+    @Tool(TaskToolDescriptions.CANCEL_TASK)
     suspend fun cancelTask(
-        @LLMDescription(TaskToolDescriptions.CANCEL_ID)
+        @Arg(TaskToolDescriptions.CANCEL_ID)
         id: Long,
     ): String = suspendToolGuard {
         val owner = context.user

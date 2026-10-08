@@ -1,6 +1,6 @@
 package com.helltar.vusan.tools.quiz
 
-import com.helltar.vusan.tools.LLMDescription
+import com.helltar.vusan.tools.Arg
 import com.helltar.vusan.tools.Tool
 import com.helltar.vusan.tools.ToolSet
 import com.helltar.vusan.outbox.BotOutbox
@@ -10,18 +10,17 @@ import com.helltar.vusan.tools.suspendToolGuard
 @Suppress("unused")
 class QuizTools(private val outbox: BotOutbox) : ToolSet {
 
-    @Tool
-    @LLMDescription(QuizToolDescriptions.CREATE_QUIZ)
+    @Tool(QuizToolDescriptions.CREATE_QUIZ)
     suspend fun createQuiz(
-        @LLMDescription(QuizToolDescriptions.QUESTION)
+        @Arg(QuizToolDescriptions.QUESTION)
         question: String,
-        @LLMDescription(QuizToolDescriptions.OPTIONS)
+        @Arg(QuizToolDescriptions.OPTIONS)
         options: List<String>,
-        @LLMDescription(QuizToolDescriptions.CORRECT_OPTION_INDEX)
+        @Arg(QuizToolDescriptions.CORRECT_OPTION_INDEX)
         correctOptionIndex: Int,
-        @LLMDescription(QuizToolDescriptions.EXPLANATION)
+        @Arg(QuizToolDescriptions.EXPLANATION)
         explanation: String? = null,
-        @LLMDescription(QuizToolDescriptions.IS_ANONYMOUS)
+        @Arg(QuizToolDescriptions.IS_ANONYMOUS)
         isAnonymous: Boolean = false,
     ): String = suspendToolGuard {
         val quiz =

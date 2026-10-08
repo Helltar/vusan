@@ -1,6 +1,6 @@
 package com.helltar.vusan.tools.files
 
-import com.helltar.vusan.tools.LLMDescription
+import com.helltar.vusan.tools.Arg
 import com.helltar.vusan.tools.Tool
 import com.helltar.vusan.tools.ToolSet
 import com.helltar.vusan.common.sanitizeFilename
@@ -20,12 +20,11 @@ class FileTools(
     private val outbox: BotOutbox,
 ) : ToolSet {
 
-    @Tool
-    @LLMDescription(FileToolDescriptions.SEND_FILE)
+    @Tool(FileToolDescriptions.SEND_FILE)
     suspend fun sendFile(
-        @LLMDescription(FileToolDescriptions.CONTENT)
+        @Arg(FileToolDescriptions.CONTENT)
         content: String,
-        @LLMDescription(FileToolDescriptions.FILENAME)
+        @Arg(FileToolDescriptions.FILENAME)
         filename: String,
     ): String = suspendToolGuard {
         require(content.isNotEmpty()) { "File content must not be empty" }
@@ -37,12 +36,11 @@ class FileTools(
         """File "$safeName" ready (${content.length} chars) and will be sent."""
     }
 
-    @Tool
-    @LLMDescription(FileToolDescriptions.DOWNLOAD_FILE)
+    @Tool(FileToolDescriptions.DOWNLOAD_FILE)
     suspend fun downloadFile(
-        @LLMDescription(FileToolDescriptions.DOWNLOAD_URL)
+        @Arg(FileToolDescriptions.DOWNLOAD_URL)
         url: String,
-        @LLMDescription(FileToolDescriptions.DOWNLOAD_FILENAME)
+        @Arg(FileToolDescriptions.DOWNLOAD_FILENAME)
         filename: String = "",
     ): String = suspendToolGuard {
         val target = url.requireToolText("Download URL", MAX_URL_CHARS)

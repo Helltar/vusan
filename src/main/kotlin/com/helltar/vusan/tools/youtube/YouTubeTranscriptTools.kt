@@ -1,6 +1,6 @@
 package com.helltar.vusan.tools.youtube
 
-import com.helltar.vusan.tools.LLMDescription
+import com.helltar.vusan.tools.Arg
 import com.helltar.vusan.tools.Tool
 import com.helltar.vusan.tools.ToolSet
 import com.helltar.vusan.common.limitTo
@@ -13,10 +13,9 @@ private const val MAX_TRANSCRIPT_CHARS = 24_000
 @Suppress("unused")
 class YouTubeTranscriptTools(private val client: YouTubeTranscriptClient) : ToolSet {
 
-    @Tool
-    @LLMDescription(YouTubeTranscriptToolDescriptions.READ_TRANSCRIPT)
+    @Tool(YouTubeTranscriptToolDescriptions.READ_TRANSCRIPT)
     suspend fun readYouTubeTranscript(
-        @LLMDescription(YouTubeTranscriptToolDescriptions.READ_TRANSCRIPT_QUERY)
+        @Arg(YouTubeTranscriptToolDescriptions.READ_TRANSCRIPT_QUERY)
         query: String,
     ): String = suspendToolGuard {
         when (val result = client.fetchTranscript(query)) {

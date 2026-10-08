@@ -1,6 +1,6 @@
 package com.helltar.vusan.tools.message
 
-import com.helltar.vusan.tools.LLMDescription
+import com.helltar.vusan.tools.Arg
 import com.helltar.vusan.tools.Tool
 import com.helltar.vusan.tools.ToolSet
 import com.helltar.vusan.agent.TurnNarrator
@@ -23,10 +23,9 @@ class MessageTools(
     private val narrator: TurnNarrator? = null,
 ) : ToolSet {
 
-    @Tool
-    @LLMDescription(MessageToolDescriptions.SEND_MESSAGE)
+    @Tool(MessageToolDescriptions.SEND_MESSAGE)
     suspend fun sendMessage(
-        @LLMDescription(MessageToolDescriptions.TEXT)
+        @Arg(MessageToolDescriptions.TEXT)
         text: String,
     ): String = suspendToolGuard {
         val trimmed = text.requireToolText("Message text", MAX_MESSAGE_CHARS)
@@ -40,10 +39,9 @@ class MessageTools(
         }
     }
 
-    @Tool
-    @LLMDescription(MessageToolDescriptions.SEND_RICH_MESSAGE)
+    @Tool(MessageToolDescriptions.SEND_RICH_MESSAGE)
     suspend fun sendRichMessage(
-        @LLMDescription(MessageToolDescriptions.RICH_MARKDOWN)
+        @Arg(MessageToolDescriptions.RICH_MARKDOWN)
         markdown: String,
     ): String = suspendToolGuard {
         val trimmed = markdown.requireToolText("Rich message", MAX_RICH_MESSAGE_CHARS)
@@ -56,10 +54,9 @@ class MessageTools(
         }
     }
 
-    @Tool
-    @LLMDescription(MessageToolDescriptions.ANNOUNCE_PLAN)
+    @Tool(MessageToolDescriptions.ANNOUNCE_PLAN)
     suspend fun announcePlan(
-        @LLMDescription(MessageToolDescriptions.PLAN_TEXT)
+        @Arg(MessageToolDescriptions.PLAN_TEXT)
         text: String,
     ): String = suspendToolGuard {
         val trimmed = text.requireToolText("Plan", MAX_ANNOUNCEMENT_CHARS)
@@ -88,8 +85,7 @@ class MessageTools(
         }
     }
 
-    @Tool
-    @LLMDescription(MessageToolDescriptions.REPLY_IN_PRIVATE_MESSAGES)
+    @Tool(MessageToolDescriptions.REPLY_IN_PRIVATE_MESSAGES)
     suspend fun replyInPrivateMessages(): String = suspendToolGuard {
         outbox.useDirectMessages()
         "Subsequent replies will be sent to the user's private chat."

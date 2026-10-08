@@ -1,6 +1,6 @@
 package com.helltar.vusan.tools.voice
 
-import com.helltar.vusan.tools.LLMDescription
+import com.helltar.vusan.tools.Arg
 import com.helltar.vusan.tools.Tool
 import com.helltar.vusan.tools.ToolSet
 import com.helltar.vusan.common.rethrowIfCancellation
@@ -20,10 +20,9 @@ class VideoNoteTools(
     private val renderer: VideoNoteRenderer = FfmpegVideoNoteRenderer(),
 ) : ToolSet {
 
-    @Tool
-    @LLMDescription(VideoNoteToolDescriptions.SPEAK_AS_VIDEO_NOTE)
+    @Tool(VideoNoteToolDescriptions.SPEAK_AS_VIDEO_NOTE)
     suspend fun speakAsVideoNote(
-        @LLMDescription(VideoNoteToolDescriptions.TEXT)
+        @Arg(VideoNoteToolDescriptions.TEXT)
         text: String,
     ): String = suspendToolGuard {
         val trimmed = text.trim()

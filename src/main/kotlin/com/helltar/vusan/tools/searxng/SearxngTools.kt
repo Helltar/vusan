@@ -1,6 +1,6 @@
 package com.helltar.vusan.tools.searxng
 
-import com.helltar.vusan.tools.LLMDescription
+import com.helltar.vusan.tools.Arg
 import com.helltar.vusan.tools.Tool
 import com.helltar.vusan.tools.ToolSet
 import com.helltar.vusan.common.limitTo
@@ -20,18 +20,17 @@ class SearxngTools(
     private val outbox: BotOutbox,
 ) : ToolSet {
 
-    @Tool
-    @LLMDescription(SearxngToolDescriptions.META_SEARCH)
+    @Tool(SearxngToolDescriptions.META_SEARCH)
     suspend fun metaSearch(
-        @LLMDescription(SearxngToolDescriptions.META_SEARCH_QUERY)
+        @Arg(SearxngToolDescriptions.META_SEARCH_QUERY)
         query: String,
-        @LLMDescription(SearxngToolDescriptions.META_SEARCH_MAX_RESULTS)
+        @Arg(SearxngToolDescriptions.META_SEARCH_MAX_RESULTS)
         maxResults: Int = 6,
-        @LLMDescription(SearxngToolDescriptions.META_SEARCH_CATEGORIES)
+        @Arg(SearxngToolDescriptions.META_SEARCH_CATEGORIES)
         categories: String = "general",
-        @LLMDescription(SearxngToolDescriptions.META_SEARCH_TIME_RANGE)
+        @Arg(SearxngToolDescriptions.META_SEARCH_TIME_RANGE)
         timeRange: String = "",
-        @LLMDescription(SearxngToolDescriptions.META_SEARCH_LANGUAGE)
+        @Arg(SearxngToolDescriptions.META_SEARCH_LANGUAGE)
         language: String = "",
     ): String = suspendToolGuard {
         val response =
@@ -101,12 +100,11 @@ class SearxngTools(
         }.trim().limitTo(MAX_SEARCH_OUTPUT_CHARS)
     }
 
-    @Tool
-    @LLMDescription(SearxngToolDescriptions.META_SEARCH_IMAGES)
+    @Tool(SearxngToolDescriptions.META_SEARCH_IMAGES)
     suspend fun metaSearchImages(
-        @LLMDescription(SearxngToolDescriptions.META_SEARCH_IMAGES_QUERY)
+        @Arg(SearxngToolDescriptions.META_SEARCH_IMAGES_QUERY)
         query: String,
-        @LLMDescription(SearxngToolDescriptions.META_SEARCH_IMAGES_MAX_RESULTS)
+        @Arg(SearxngToolDescriptions.META_SEARCH_IMAGES_MAX_RESULTS)
         maxResults: Int = 5,
     ): String = suspendToolGuard {
         outbox.photosRefusedReply()?.let { return@suspendToolGuard it }

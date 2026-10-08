@@ -1,6 +1,6 @@
 package com.helltar.vusan.tools.memory
 
-import com.helltar.vusan.tools.LLMDescription
+import com.helltar.vusan.tools.Arg
 import com.helltar.vusan.tools.Tool
 import com.helltar.vusan.tools.ToolSet
 import com.helltar.vusan.agent.memory.MemoryOwner
@@ -18,12 +18,11 @@ private const val NO_PERSONAL_MEMORY =
 @Suppress("unused")
 class MemoryTools(private val memory: MemoryRepository, private val context: RequestContext) : ToolSet {
 
-    @Tool
-    @LLMDescription(MemoryToolDescriptions.REMEMBER_ABOUT_ME)
+    @Tool(MemoryToolDescriptions.REMEMBER_ABOUT_ME)
     suspend fun rememberAboutMe(
-        @LLMDescription(MemoryToolDescriptions.REMEMBER_ABOUT_ME_DETAIL)
+        @Arg(MemoryToolDescriptions.REMEMBER_ABOUT_ME_DETAIL)
         detail: String,
-        @LLMDescription(MemoryToolDescriptions.REPLACES_ID)
+        @Arg(MemoryToolDescriptions.REPLACES_ID)
         replacesId: Long = 0,
     ): String = suspendToolGuard {
         if (!context.sender.isPerson) return@suspendToolGuard NO_PERSONAL_MEMORY
@@ -31,12 +30,11 @@ class MemoryTools(private val memory: MemoryRepository, private val context: Req
         save(context.user.memoryOwner, "your personal memory", detail, replacesId)
     }
 
-    @Tool
-    @LLMDescription(MemoryToolDescriptions.REMEMBER_ABOUT_GROUP)
+    @Tool(MemoryToolDescriptions.REMEMBER_ABOUT_GROUP)
     suspend fun rememberAboutGroup(
-        @LLMDescription(MemoryToolDescriptions.REMEMBER_ABOUT_GROUP_DETAIL)
+        @Arg(MemoryToolDescriptions.REMEMBER_ABOUT_GROUP_DETAIL)
         detail: String,
-        @LLMDescription(MemoryToolDescriptions.REPLACES_ID)
+        @Arg(MemoryToolDescriptions.REPLACES_ID)
         replacesId: Long = 0,
     ): String = suspendToolGuard {
         if (context.chat.isPrivate)
@@ -45,10 +43,9 @@ class MemoryTools(private val memory: MemoryRepository, private val context: Req
         save(context.chatRef.memoryOwner, "this group's memory", detail, replacesId)
     }
 
-    @Tool
-    @LLMDescription(MemoryToolDescriptions.FORGET_MEMORY)
+    @Tool(MemoryToolDescriptions.FORGET_MEMORY)
     suspend fun forgetMemory(
-        @LLMDescription(MemoryToolDescriptions.FORGET_MEMORY_ID)
+        @Arg(MemoryToolDescriptions.FORGET_MEMORY_ID)
         id: Long,
     ): String = suspendToolGuard {
         if (memory.forget(id, context.user, context.chatRef))
@@ -57,8 +54,7 @@ class MemoryTools(private val memory: MemoryRepository, private val context: Req
             "No memory #$id found in your memory or this chat's memory."
     }
 
-    @Tool
-    @LLMDescription(MemoryToolDescriptions.FORGET_EVERYTHING_ABOUT_ME)
+    @Tool(MemoryToolDescriptions.FORGET_EVERYTHING_ABOUT_ME)
     suspend fun forgetEverythingAboutMe(): String = suspendToolGuard {
         if (!context.sender.isPerson) return@suspendToolGuard NO_PERSONAL_MEMORY
 

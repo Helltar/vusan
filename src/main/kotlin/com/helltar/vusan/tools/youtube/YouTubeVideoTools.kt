@@ -1,6 +1,6 @@
 package com.helltar.vusan.tools.youtube
 
-import com.helltar.vusan.tools.LLMDescription
+import com.helltar.vusan.tools.Arg
 import com.helltar.vusan.tools.Tool
 import com.helltar.vusan.tools.ToolSet
 import com.helltar.vusan.common.sanitizeFilename
@@ -11,10 +11,9 @@ import com.helltar.vusan.tools.suspendToolGuard
 @Suppress("unused")
 class YouTubeVideoTools(private val client: YtDlpClient, private val outbox: BotOutbox) : ToolSet {
 
-    @Tool
-    @LLMDescription(YouTubeVideoToolDescriptions.DOWNLOAD_VIDEO)
+    @Tool(YouTubeVideoToolDescriptions.DOWNLOAD_VIDEO)
     suspend fun downloadVideo(
-        @LLMDescription(YouTubeVideoToolDescriptions.DOWNLOAD_VIDEO_QUERY)
+        @Arg(YouTubeVideoToolDescriptions.DOWNLOAD_VIDEO_QUERY)
         query: String,
     ): String = suspendToolGuard {
         when (val result = client.downloadVideo(query)) {

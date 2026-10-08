@@ -1,6 +1,6 @@
 package com.helltar.vusan.tools.codexsearch
 
-import com.helltar.vusan.tools.LLMDescription
+import com.helltar.vusan.tools.Arg
 import com.helltar.vusan.tools.Tool
 import com.helltar.vusan.tools.ToolSet
 import com.helltar.vusan.common.collapseWhitespaceAndCap
@@ -12,10 +12,9 @@ import com.helltar.vusan.tools.suspendToolGuard
 @Suppress("unused")
 class CodexSearchTools(private val client: CodexSearchClient) : ToolSet {
 
-    @Tool
-    @LLMDescription(CodexSearchToolDescriptions.ANSWER_FROM_WEB)
+    @Tool(CodexSearchToolDescriptions.ANSWER_FROM_WEB)
     suspend fun answerFromWeb(
-        @LLMDescription(CodexSearchToolDescriptions.ANSWER_FROM_WEB_QUESTION)
+        @Arg(CodexSearchToolDescriptions.ANSWER_FROM_WEB_QUESTION)
         question: String,
     ): String = suspendToolGuard {
         val answer = client.search(question.requireToolText("Question", MAX_QUESTION_CHARS))

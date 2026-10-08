@@ -1,6 +1,6 @@
 package com.helltar.vusan.tools.giphy
 
-import com.helltar.vusan.tools.LLMDescription
+import com.helltar.vusan.tools.Arg
 import com.helltar.vusan.tools.Tool
 import com.helltar.vusan.tools.ToolSet
 import com.helltar.vusan.common.collapseWhitespaceAndCap
@@ -24,12 +24,11 @@ class GiphyTools(private val client: GiphyClient, private val outbox: BotOutbox)
     private val candidates = ConcurrentHashMap<String, String>()
     private val sent = ConcurrentHashMap.newKeySet<String>()
 
-    @Tool
-    @LLMDescription(GiphyToolDescriptions.SEARCH_GIFS)
+    @Tool(GiphyToolDescriptions.SEARCH_GIFS)
     suspend fun searchGifs(
-        @LLMDescription(GiphyToolDescriptions.QUERY)
+        @Arg(GiphyToolDescriptions.QUERY)
         query: String,
-        @LLMDescription(GiphyToolDescriptions.RATING)
+        @Arg(GiphyToolDescriptions.RATING)
         rating: String = "g",
     ): String = suspendToolGuard {
         val found =
@@ -51,10 +50,9 @@ class GiphyTools(private val client: GiphyClient, private val outbox: BotOutbox)
         xmlBlock("gif_candidates", lines) + "\nNothing was sent. Call `sendGif` with the id of the one that fits, or search again."
     }
 
-    @Tool
-    @LLMDescription(GiphyToolDescriptions.SEND_GIF)
+    @Tool(GiphyToolDescriptions.SEND_GIF)
     suspend fun sendGif(
-        @LLMDescription(GiphyToolDescriptions.ID)
+        @Arg(GiphyToolDescriptions.ID)
         id: String,
     ): String = suspendToolGuard {
         val key = id.trim()

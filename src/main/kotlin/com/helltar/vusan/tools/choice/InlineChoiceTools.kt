@@ -1,6 +1,6 @@
 package com.helltar.vusan.tools.choice
 
-import com.helltar.vusan.tools.LLMDescription
+import com.helltar.vusan.tools.Arg
 import com.helltar.vusan.tools.Tool
 import com.helltar.vusan.tools.ToolSet
 import com.helltar.vusan.outbox.BotOutbox
@@ -16,12 +16,11 @@ class InlineChoiceTools(
     private val currentHistoryRevision: suspend (scope: ConversationScope) -> Long,
 ) : ToolSet {
 
-    @Tool
-    @LLMDescription(InlineChoiceToolDescriptions.ASK_WITH_BUTTONS)
+    @Tool(InlineChoiceToolDescriptions.ASK_WITH_BUTTONS)
     suspend fun askWithButtons(
-        @LLMDescription(InlineChoiceToolDescriptions.QUESTION)
+        @Arg(InlineChoiceToolDescriptions.QUESTION)
         question: String,
-        @LLMDescription(InlineChoiceToolDescriptions.OPTIONS)
+        @Arg(InlineChoiceToolDescriptions.OPTIONS)
         options: List<String>,
     ): String = suspendToolGuard {
         val ownerId = context.sender.id

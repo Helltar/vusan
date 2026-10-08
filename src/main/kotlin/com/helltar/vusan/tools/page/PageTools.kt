@@ -1,6 +1,6 @@
 package com.helltar.vusan.tools.page
 
-import com.helltar.vusan.tools.LLMDescription
+import com.helltar.vusan.tools.Arg
 import com.helltar.vusan.tools.Tool
 import com.helltar.vusan.tools.ToolSet
 import com.helltar.vusan.common.xmlBlock
@@ -13,12 +13,11 @@ private const val MAX_URL_CHARS = 2_048
 @Suppress("unused")
 class PageTools(private val reader: PageReader) : ToolSet {
 
-    @Tool
-    @LLMDescription(PageToolDescriptions.READ_PAGE)
+    @Tool(PageToolDescriptions.READ_PAGE)
     suspend fun readPage(
-        @LLMDescription(PageToolDescriptions.URL)
+        @Arg(PageToolDescriptions.URL)
         url: String,
-        @LLMDescription(PageToolDescriptions.OFFSET)
+        @Arg(PageToolDescriptions.OFFSET)
         offset: Int = 0,
     ): String = suspendToolGuard {
         val target = url.requireToolText("URL", MAX_URL_CHARS)

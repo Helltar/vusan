@@ -1,6 +1,6 @@
 package com.helltar.vusan.tools.catalog
 
-import com.helltar.vusan.tools.LLMDescription
+import com.helltar.vusan.tools.Arg
 import com.helltar.vusan.tools.Tool
 import com.helltar.vusan.tools.ToolSet
 import com.helltar.vusan.tools.ToolCatalog
@@ -10,10 +10,9 @@ import com.helltar.vusan.tools.suspendToolGuard
 @Suppress("unused")
 class CatalogTools(private val catalog: ToolCatalog) : ToolSet {
 
-    @Tool
-    @LLMDescription(CatalogToolDescriptions.LOAD_TOOLS)
+    @Tool(CatalogToolDescriptions.LOAD_TOOLS)
     suspend fun loadTools(
-        @LLMDescription(CatalogToolDescriptions.GROUPS)
+        @Arg(CatalogToolDescriptions.GROUPS)
         groups: String,
     ): String = suspendToolGuard {
         val result = catalog.load(groups.requireToolText("Groups", MAX_GROUPS_CHARS).split(","))

@@ -1,6 +1,6 @@
 package com.helltar.vusan.tools.tgchannel
 
-import com.helltar.vusan.tools.LLMDescription
+import com.helltar.vusan.tools.Arg
 import com.helltar.vusan.tools.Tool
 import com.helltar.vusan.tools.ToolSet
 import com.helltar.vusan.tasks.Recurrence
@@ -12,20 +12,19 @@ private val MAX_WINDOW = 30.days
 @Suppress("unused")
 class TelegramChannelTools(private val reader: TelegramChannelReader) : ToolSet {
 
-    @Tool
-    @LLMDescription(TelegramChannelToolDescriptions.READ_TELEGRAM_CHANNEL_POSTS)
+    @Tool(TelegramChannelToolDescriptions.READ_TELEGRAM_CHANNEL_POSTS)
     suspend fun readTelegramChannelPosts(
-        @LLMDescription(TelegramChannelToolDescriptions.CHANNEL)
+        @Arg(TelegramChannelToolDescriptions.CHANNEL)
         channel: String,
-        @LLMDescription(TelegramChannelToolDescriptions.WINDOW)
+        @Arg(TelegramChannelToolDescriptions.WINDOW)
         window: String = "",
-        @LLMDescription(TelegramChannelToolDescriptions.QUERY)
+        @Arg(TelegramChannelToolDescriptions.QUERY)
         query: String = "",
-        @LLMDescription(TelegramChannelToolDescriptions.MAX_POSTS)
+        @Arg(TelegramChannelToolDescriptions.MAX_POSTS)
         maxPosts: Int = 0,
-        @LLMDescription(TelegramChannelToolDescriptions.DESCRIBE_IMAGES)
+        @Arg(TelegramChannelToolDescriptions.DESCRIBE_IMAGES)
         describeImages: Boolean = true,
-        @LLMDescription(TelegramChannelToolDescriptions.IMAGE_FOCUS)
+        @Arg(TelegramChannelToolDescriptions.IMAGE_FOCUS)
         imageFocus: String = "",
     ): String = suspendToolGuard {
         val trimmedWindow = window.trim()

@@ -1,6 +1,6 @@
 package com.helltar.vusan.tools.klipy
 
-import com.helltar.vusan.tools.LLMDescription
+import com.helltar.vusan.tools.Arg
 import com.helltar.vusan.tools.Tool
 import com.helltar.vusan.tools.ToolSet
 import com.helltar.vusan.common.collapseWhitespaceAndCap
@@ -35,12 +35,11 @@ class KlipyTools(
     private val candidates = ConcurrentHashMap<String, Candidate>()
     private val sent = ConcurrentHashMap.newKeySet<String>()
 
-    @Tool
-    @LLMDescription(KlipyToolDescriptions.SEARCH_GIFS)
+    @Tool(KlipyToolDescriptions.SEARCH_GIFS)
     suspend fun searchGifs(
-        @LLMDescription(KlipyToolDescriptions.QUERY)
+        @Arg(KlipyToolDescriptions.QUERY)
         query: String,
-        @LLMDescription(KlipyToolDescriptions.KIND)
+        @Arg(KlipyToolDescriptions.KIND)
         kind: String = "gif",
     ): String = suspendToolGuard {
         val wanted = kindOf(kind)
@@ -66,10 +65,9 @@ class KlipyTools(
         xmlBlock("gif_candidates", lines) + "\nNothing was sent. Call `sendGif` with the id of the one that fits, or search again."
     }
 
-    @Tool
-    @LLMDescription(KlipyToolDescriptions.SEND_GIF)
+    @Tool(KlipyToolDescriptions.SEND_GIF)
     suspend fun sendGif(
-        @LLMDescription(KlipyToolDescriptions.ID)
+        @Arg(KlipyToolDescriptions.ID)
         id: String,
     ): String = suspendToolGuard {
         val key = id.trim()

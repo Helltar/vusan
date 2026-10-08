@@ -779,7 +779,7 @@ A symptom-to-source map for finding the right file fast. Paths are under
 | Vusan does not remember yesterday in a group, or remembers it wrong | `diary entry written` lines in the log, then `agent/presence/Diary.kt` (which day is written, the fifteen-message floor, how many entries a turn is shown) + `agent/presence/DiaryWriter.kt` (the instructions) + `agent/SystemPrompt.kt` (the `<diary>` contract) |
 | Voice/audio not transcribed | `telegram/inbound/VoiceTranscriber.kt` + `stt/OpenAiWhisperClient.kt` (needs `OPENAI_STT_API_KEY`); for a video's sound `tools/vision/VideoAudioTranscriber.kt` |
 | Vusan cannot see what is in a video | `tools/vision/VisionTools.kt` (`describeVideo` guards and the preview-frame fallback), `tools/vision/VideoVisionClient.kt` (frames + transcript prompt), `tools/vision/VideoSampler.kt` (ffmpeg), `telegram/inbound/ReplyContext.kt` (which media becomes an `AttachedFile`) |
-| Web search picks the wrong provider, or results are thin | the `@LLMDescription` text that ranks them: `tools/tavily/TavilyToolDescriptions.kt` (`webSearch`, the default), `tools/searxng/SearxngToolDescriptions.kt` (`metaSearch`, the fallback) and `tools/codexsearch/CodexSearchToolDescriptions.kt` (`answerFromWeb`, a researched answer on the ChatGPT plan) |
+| Web search picks the wrong provider, or results are thin | the `@Tool` description text that ranks them: `tools/tavily/TavilyToolDescriptions.kt` (`webSearch`, the default), `tools/searxng/SearxngToolDescriptions.kt` (`metaSearch`, the fallback) and `tools/codexsearch/CodexSearchToolDescriptions.kt` (`answerFromWeb`, a researched answer on the ChatGPT plan) |
 | A linked page reads as empty, as navigation, or in the wrong alphabet | `tools/page/PageReader.kt` (which elements are dropped, where the content root is looked for, the charset the download declared) + `tools/tavily/TavilyToolDescriptions.kt` and `tools/page/PageToolDescriptions.kt` (Tavily's `extractPageContent` reads first, `readPage` is the fallback) |
 | Image search sends nothing, or sends irrelevant pictures | `tools/images/ImageSearchDelivery.kt` (candidate retries, size caps, media group) + `tools/images/ImageDownloadClient.kt` (user agent, format/dimension checks); for relevance, `SearxngTools.IMAGE_ENGINES` and `TavilyTools.imageExcludedDomains` |
 | A selfie shows a stranger instead of the bot's avatar | `tools/imagegen/SelfImage.kt` (which reference photo is read at startup, and the prompt that keeps the face while dropping the rest of it) + `tools/imagegen/ImageGenToolDescriptions.SELF_PORTRAIT` (whether the model sets the flag at all) |
@@ -808,9 +808,9 @@ A symptom-to-source map for finding the right file fast. Paths are under
 A new agent tool typically touches these, in order:
 
 1. **`tools/<feature>/<Feature>Tools.kt`** — `class <Feature>Tools(...) : ToolSet` whose constructor takes the
-   `BotOutbox` and/or a client; each method is `@Tool @LLMDescription(...) suspend fun … = suspendToolGuard { … }`.
+   `BotOutbox` and/or a client; each method is `@Tool(...) suspend fun … = suspendToolGuard { … }`, its arguments `@Arg(...)`.
 2. **`tools/<feature>/<Feature>ToolDescriptions.kt`** — an `internal object` of `const val` descriptions referenced by
-   the `@LLMDescription` annotations (see the convention in `AGENTS.md`).
+   the `@Tool` and `@Arg` descriptions (see the convention in `AGENTS.md`).
 3. *(optional)* **`<Feature>Client.kt`** / **`<Feature>Models.kt`** — the external I/O and its DTOs.
 4. **`tools/ToolRegistryFactory.kt`** — register it in `buildCatalog`; wrap construction in the `optional(...)` helper
    when it depends on an API key that may be unset. Register it under a `ToolGroup` when a turn rarely needs it, and

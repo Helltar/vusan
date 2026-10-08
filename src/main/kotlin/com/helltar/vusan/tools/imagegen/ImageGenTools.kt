@@ -1,6 +1,6 @@
 package com.helltar.vusan.tools.imagegen
 
-import com.helltar.vusan.tools.LLMDescription
+import com.helltar.vusan.tools.Arg
 import com.helltar.vusan.tools.Tool
 import com.helltar.vusan.tools.ToolSet
 import com.helltar.vusan.common.rethrowIfCancellation
@@ -21,14 +21,13 @@ class ImageGenTools(
     private val selfImage: SelfImage? = null,
 ) : ToolSet {
 
-    @Tool
-    @LLMDescription(ImageGenToolDescriptions.GENERATE_IMAGE)
+    @Tool(ImageGenToolDescriptions.GENERATE_IMAGE)
     suspend fun generateImage(
-        @LLMDescription(ImageGenToolDescriptions.PROMPT)
+        @Arg(ImageGenToolDescriptions.PROMPT)
         prompt: String,
-        @LLMDescription(ImageGenToolDescriptions.ORIENTATION)
+        @Arg(ImageGenToolDescriptions.ORIENTATION)
         orientation: String = "square",
-        @LLMDescription(ImageGenToolDescriptions.SELF_PORTRAIT)
+        @Arg(ImageGenToolDescriptions.SELF_PORTRAIT)
         selfPortrait: Boolean = false,
     ): String = suspendToolGuard {
         val trimmed = prompt.trim()
@@ -72,14 +71,13 @@ class ImageGenTools(
         "Image queued ($size, ${bytes.size} bytes). Do not add a separate user-facing confirmation."
     }
 
-    @Tool
-    @LLMDescription(ImageGenToolDescriptions.EDIT_IMAGE)
+    @Tool(ImageGenToolDescriptions.EDIT_IMAGE)
     suspend fun editImage(
-        @LLMDescription(ImageGenToolDescriptions.EDIT_PROMPT)
+        @Arg(ImageGenToolDescriptions.EDIT_PROMPT)
         prompt: String,
-        @LLMDescription(ImageGenToolDescriptions.EDIT_ORIENTATION)
+        @Arg(ImageGenToolDescriptions.EDIT_ORIENTATION)
         orientation: String = "auto",
-        @LLMDescription(ImageGenToolDescriptions.EDIT_WITH_YOURSELF)
+        @Arg(ImageGenToolDescriptions.EDIT_WITH_YOURSELF)
         withYourself: Boolean = false,
     ): String = suspendToolGuard {
         val trimmed = prompt.trim()

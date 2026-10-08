@@ -1,6 +1,6 @@
 package com.helltar.vusan.tools.tavily
 
-import com.helltar.vusan.tools.LLMDescription
+import com.helltar.vusan.tools.Arg
 import com.helltar.vusan.tools.Tool
 import com.helltar.vusan.tools.ToolSet
 import com.helltar.vusan.common.limitTo
@@ -20,16 +20,15 @@ class TavilyTools(
     private val outbox: BotOutbox,
 ) : ToolSet {
 
-    @Tool
-    @LLMDescription(TavilyToolDescriptions.WEB_SEARCH)
+    @Tool(TavilyToolDescriptions.WEB_SEARCH)
     suspend fun webSearch(
-        @LLMDescription(TavilyToolDescriptions.WEB_SEARCH_QUERY)
+        @Arg(TavilyToolDescriptions.WEB_SEARCH_QUERY)
         query: String,
-        @LLMDescription(TavilyToolDescriptions.WEB_SEARCH_MAX_RESULTS)
+        @Arg(TavilyToolDescriptions.WEB_SEARCH_MAX_RESULTS)
         maxResults: Int = 5,
-        @LLMDescription(TavilyToolDescriptions.WEB_SEARCH_TOPIC)
+        @Arg(TavilyToolDescriptions.WEB_SEARCH_TOPIC)
         topic: String = "general",
-        @LLMDescription(TavilyToolDescriptions.WEB_SEARCH_TIME_RANGE)
+        @Arg(TavilyToolDescriptions.WEB_SEARCH_TIME_RANGE)
         timeRange: String = "",
     ): String = suspendToolGuard {
         val response =
@@ -69,12 +68,11 @@ class TavilyTools(
         }.trim().limitTo(MAX_SEARCH_OUTPUT_CHARS)
     }
 
-    @Tool
-    @LLMDescription(TavilyToolDescriptions.SEARCH_IMAGES)
+    @Tool(TavilyToolDescriptions.SEARCH_IMAGES)
     suspend fun searchImages(
-        @LLMDescription(TavilyToolDescriptions.SEARCH_IMAGES_QUERY)
+        @Arg(TavilyToolDescriptions.SEARCH_IMAGES_QUERY)
         query: String,
-        @LLMDescription(TavilyToolDescriptions.SEARCH_IMAGES_MAX_RESULTS)
+        @Arg(TavilyToolDescriptions.SEARCH_IMAGES_MAX_RESULTS)
         maxResults: Int = 5,
     ): String = suspendToolGuard {
         outbox.photosRefusedReply()?.let { return@suspendToolGuard it }
@@ -104,10 +102,9 @@ class TavilyTools(
         )
     }
 
-    @Tool
-    @LLMDescription(TavilyToolDescriptions.EXTRACT_PAGE_CONTENT)
+    @Tool(TavilyToolDescriptions.EXTRACT_PAGE_CONTENT)
     suspend fun extractPageContent(
-        @LLMDescription(TavilyToolDescriptions.EXTRACT_PAGE_URL)
+        @Arg(TavilyToolDescriptions.EXTRACT_PAGE_URL)
         url: String,
     ): String = suspendToolGuard {
         val response = client.extract(url)

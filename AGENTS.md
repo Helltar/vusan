@@ -228,10 +228,10 @@ chat capabilities. Nothing under `tools/` may name a messenger, and
   one with `toolFailure { }`. A parameter with a default or a nullable type is
   optional for the model; the rest are required in the schema it reads.
 - Use `requireToolText(label, maxChars)` for required text args when it fits.
-- `@LLMDescription` values are all-or-nothing per module: constants only, never
-  mixed with inline strings, ordered by tool method order. Split a concatenated
-  one at sentence boundaries — each `+` chunk is one full sentence ending in its
-  period, never wrapped mid-sentence.
+- The `@Tool(description)` and `@Arg(description)` values are all-or-nothing per
+  module: constants only, never mixed with inline strings, ordered by tool method
+  order. Split a concatenated one at sentence boundaries — each `+` chunk is one
+  full sentence ending in its period, never wrapped mid-sentence.
 - In description text, backtick exact parameter values, tags, commands,
   enum-like values and formats (`current_chat`, `daily HH:MM`, `Europe/Kyiv`).
   Tool return text carrying answer material is imperative ("Use these

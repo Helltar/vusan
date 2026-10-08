@@ -1,6 +1,6 @@
 package com.helltar.vusan.telegram.tools
 
-import com.helltar.vusan.tools.LLMDescription
+import com.helltar.vusan.tools.Arg
 import com.helltar.vusan.tools.Tool
 import com.helltar.vusan.tools.ToolSet
 import com.helltar.vusan.common.rethrowIfCancellation
@@ -36,12 +36,11 @@ class ChatFileTools(
     private val outbox: BotOutbox,
 ) : ToolSet {
 
-    @Tool
-    @LLMDescription(ChatFileToolDescriptions.SEND_CHAT_FILE)
+    @Tool(ChatFileToolDescriptions.SEND_CHAT_FILE)
     suspend fun sendChatFile(
-        @LLMDescription(ChatFileToolDescriptions.CHAT_FILE_ID)
+        @Arg(ChatFileToolDescriptions.CHAT_FILE_ID)
         fileId: String,
-        @LLMDescription(ChatFileToolDescriptions.CHAT_FILENAME)
+        @Arg(ChatFileToolDescriptions.CHAT_FILENAME)
         filename: String = "",
     ): String = suspendToolGuard {
         val id = fileId.requireToolText("File id", MAX_FILE_ID_CHARS)

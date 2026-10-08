@@ -1,6 +1,6 @@
 package com.helltar.vusan.tools.tasks
 
-import com.helltar.vusan.tools.LLMDescription
+import com.helltar.vusan.tools.Arg
 import com.helltar.vusan.tools.Tool
 import com.helltar.vusan.tools.ToolSet
 import com.helltar.vusan.request.ConversationScope
@@ -25,16 +25,15 @@ class FollowUpTools(
     private val maxFollowUpsPerUser: Int,
 ) : ToolSet {
 
-    @Tool
-    @LLMDescription(FollowUpToolDescriptions.SCHEDULE_FOLLOW_UP)
+    @Tool(FollowUpToolDescriptions.SCHEDULE_FOLLOW_UP)
     suspend fun scheduleFollowUp(
-        @LLMDescription(FollowUpToolDescriptions.PROMPT)
+        @Arg(FollowUpToolDescriptions.PROMPT)
         prompt: String,
-        @LLMDescription(FollowUpToolDescriptions.AT)
+        @Arg(FollowUpToolDescriptions.AT)
         at: String,
-        @LLMDescription(FollowUpToolDescriptions.TIMEZONE)
+        @Arg(FollowUpToolDescriptions.TIMEZONE)
         timezone: String? = null,
-        @LLMDescription(FollowUpToolDescriptions.TITLE)
+        @Arg(FollowUpToolDescriptions.TITLE)
         title: String? = null,
     ): String = suspendToolGuard {
         val owner = context.user

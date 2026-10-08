@@ -26,15 +26,18 @@ import kotlin.reflect.full.memberFunctions
 import kotlin.reflect.full.valueParameters
 import kotlin.reflect.jvm.isAccessible
 
-/** Marks a method of a [ToolSet] as a tool the model may call. It has to return a `String`. */
+/**
+ * Marks a method of a [ToolSet] as a tool the model may call, with the [description] the model reads
+ * about it — the tool's whole interface, besides its arguments. The method has to return a `String`.
+ */
 @Target(AnnotationTarget.FUNCTION)
 @Retention(AnnotationRetention.RUNTIME)
-annotation class Tool
+annotation class Tool(val description: String)
 
-/** What the model reads about a tool or one of its arguments — the tool's whole interface. */
-@Target(AnnotationTarget.FUNCTION, AnnotationTarget.VALUE_PARAMETER, AnnotationTarget.CLASS)
+/** What the model reads about one argument of a tool. */
+@Target(AnnotationTarget.VALUE_PARAMETER)
 @Retention(AnnotationRetention.RUNTIME)
-annotation class LLMDescription(val value: String)
+annotation class Arg(val description: String)
 
 /** A class whose [Tool]-annotated methods are offered to the model. */
 interface ToolSet
@@ -79,7 +82,7 @@ fun ToolSet.toolFunctions(): List<ToolFunction> =
 
 private fun toolFunction(instance: ToolSet, function: KFunction<*>): ToolFunction {
     val name = function.name
-    val description = requireNotNull(function.findAnnotation<LLMDescription>()?.value) { "tool $name has no description" }
+    val description = requireNotNull(function.findAnnotation<Tool>()).description
 
     require(function.returnType.classifier == String::class) { "tool $name must return a String" }
 
@@ -101,9 +104,12 @@ private fun toolFunction(instance: ToolSet, function: KFunction<*>): ToolFunctio
                         put(
                             parameter.parameterName,
                             buildJsonObject {
-                                put("type", requireNotNull(parameter.schemaType()))
+                                val type = requireNotNull(parameter.schemaType())
+
+                                // a nullable parameter may be sent as null, and the schema says so
+                                if (parameter.type.isMarkedNullable) putJsonArray("type") { add(type); add("null") } else put("type", type)
                                 if (parameter.type.classifier == List::class) put("items", buildJsonObject { put("type", "string") })
-                                parameter.findAnnotation<LLMDescription>()?.let { put("description", it.value) }
+                                parameter.findAnnotation<Arg>()?.let { put("description", it.description) }
                             },
                         )
                     }

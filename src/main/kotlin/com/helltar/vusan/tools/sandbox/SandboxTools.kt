@@ -1,6 +1,6 @@
 package com.helltar.vusan.tools.sandbox
 
-import com.helltar.vusan.tools.LLMDescription
+import com.helltar.vusan.tools.Arg
 import com.helltar.vusan.tools.Tool
 import com.helltar.vusan.tools.ToolSet
 import com.helltar.vusan.common.rethrowIfCancellation
@@ -36,12 +36,11 @@ class SandboxTools(
 
     private var attachmentsHandled = false
 
-    @Tool
-    @LLMDescription(SandboxToolDescriptions.RUN_COMMAND)
+    @Tool(SandboxToolDescriptions.RUN_COMMAND)
     suspend fun runCommand(
-        @LLMDescription(SandboxToolDescriptions.COMMAND)
+        @Arg(SandboxToolDescriptions.COMMAND)
         command: String,
-        @LLMDescription(SandboxToolDescriptions.TIMEOUT_SECONDS)
+        @Arg(SandboxToolDescriptions.TIMEOUT_SECONDS)
         timeoutSeconds: Int = 0,
     ): String = suspendToolGuard {
         val script = command.requireToolText("Command", MAX_COMMAND_CHARS)
@@ -51,14 +50,13 @@ class SandboxTools(
         listOfNotNull(note, describeCommand(result)).joinToString("\n")
     }
 
-    @Tool
-    @LLMDescription(SandboxToolDescriptions.READ_COMMAND)
+    @Tool(SandboxToolDescriptions.READ_COMMAND)
     suspend fun readSandboxCommand(
-        @LLMDescription(SandboxToolDescriptions.READ_JOB_ID)
+        @Arg(SandboxToolDescriptions.READ_JOB_ID)
         jobId: String = "",
-        @LLMDescription(SandboxToolDescriptions.OFFSET)
+        @Arg(SandboxToolDescriptions.OFFSET)
         offset: Long = 0,
-        @LLMDescription(SandboxToolDescriptions.WAIT_SECONDS)
+        @Arg(SandboxToolDescriptions.WAIT_SECONDS)
         waitSeconds: Int = 10,
     ): String = suspendToolGuard {
         require(offset >= 0) { "Offset must not be negative" }
@@ -72,21 +70,19 @@ class SandboxTools(
         }
     }
 
-    @Tool
-    @LLMDescription(SandboxToolDescriptions.CANCEL_COMMAND)
+    @Tool(SandboxToolDescriptions.CANCEL_COMMAND)
     suspend fun cancelSandboxCommand(
-        @LLMDescription(SandboxToolDescriptions.JOB_ID)
+        @Arg(SandboxToolDescriptions.JOB_ID)
         jobId: String,
     ): String = suspendToolGuard {
         describeCommand(sandbox.cancelCommand(checkedJobId(jobId)))
     }
 
-    @Tool
-    @LLMDescription(SandboxToolDescriptions.WRITE_FILE)
+    @Tool(SandboxToolDescriptions.WRITE_FILE)
     suspend fun writeSandboxFile(
-        @LLMDescription(SandboxToolDescriptions.WRITE_PATH)
+        @Arg(SandboxToolDescriptions.WRITE_PATH)
         path: String,
-        @LLMDescription(SandboxToolDescriptions.WRITE_CONTENT)
+        @Arg(SandboxToolDescriptions.WRITE_CONTENT)
         content: String,
     ): String = suspendToolGuard {
         val target = path.requireToolText("Path", MAX_PATH_CHARS)
@@ -96,10 +92,9 @@ class SandboxTools(
         listOfNotNull(note, "Wrote `$target` (${content.length} chars). Use sendFromSandbox to deliver it.").joinToString("\n")
     }
 
-    @Tool
-    @LLMDescription(SandboxToolDescriptions.DELETE_FILE)
+    @Tool(SandboxToolDescriptions.DELETE_FILE)
     suspend fun deleteSandboxFile(
-        @LLMDescription(SandboxToolDescriptions.DELETE_PATH)
+        @Arg(SandboxToolDescriptions.DELETE_PATH)
         path: String,
     ): String = suspendToolGuard {
         val target = path.requireToolText("Path", MAX_PATH_CHARS)
@@ -107,19 +102,17 @@ class SandboxTools(
         "Deleted `$target`. Everything else was kept, and running commands were left alone."
     }
 
-    @Tool
-    @LLMDescription(SandboxToolDescriptions.RESET_SANDBOX)
+    @Tool(SandboxToolDescriptions.RESET_SANDBOX)
     suspend fun resetSandbox(): String = suspendToolGuard {
         sandbox.reset()
         "The sandbox is empty again. Every file and installed dependency is gone, and so is any site published from it; the next command starts in a new home."
     }
 
-    @Tool
-    @LLMDescription(SandboxToolDescriptions.SEND_FILES)
+    @Tool(SandboxToolDescriptions.SEND_FILES)
     suspend fun sendFromSandbox(
-        @LLMDescription(SandboxToolDescriptions.SEND_PATHS)
+        @Arg(SandboxToolDescriptions.SEND_PATHS)
         paths: List<String>,
-        @LLMDescription(SandboxToolDescriptions.SEND_AS)
+        @Arg(SandboxToolDescriptions.SEND_AS)
         sendAs: String = "",
     ): String = suspendToolGuard {
         require(paths.isNotEmpty()) { "At least one path is required" }

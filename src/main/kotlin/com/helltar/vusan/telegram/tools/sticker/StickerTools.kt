@@ -1,6 +1,6 @@
 package com.helltar.vusan.telegram.tools.sticker
 
-import com.helltar.vusan.tools.LLMDescription
+import com.helltar.vusan.tools.Arg
 import com.helltar.vusan.tools.Tool
 import com.helltar.vusan.tools.ToolSet
 import com.helltar.vusan.outbox.BotOutbox
@@ -16,12 +16,11 @@ class StickerTools(
     private val outbox: BotOutbox,
 ) : ToolSet {
 
-    @Tool
-    @LLMDescription(StickerToolDescriptions.SEARCH_STICKERS)
+    @Tool(StickerToolDescriptions.SEARCH_STICKERS)
     suspend fun searchStickers(
-        @LLMDescription(StickerToolDescriptions.SEARCH_QUERY)
+        @Arg(StickerToolDescriptions.SEARCH_QUERY)
         query: String,
-        @LLMDescription(StickerToolDescriptions.MAX_RESULTS)
+        @Arg(StickerToolDescriptions.MAX_RESULTS)
         maxResults: Int = DEFAULT_SEARCH_RESULTS,
     ): String = suspendToolGuard {
         val cleanedQuery = query.requireToolText("query", MAX_QUERY_CHARS)
@@ -36,10 +35,9 @@ class StickerTools(
                 matches.joinToString("\n", transform = StickerEntry::catalogLine)
     }
 
-    @Tool
-    @LLMDescription(StickerToolDescriptions.SEND_STICKER)
+    @Tool(StickerToolDescriptions.SEND_STICKER)
     suspend fun sendSticker(
-        @LLMDescription(StickerToolDescriptions.STICKER_ID)
+        @Arg(StickerToolDescriptions.STICKER_ID)
         id: Long,
     ): String = suspendToolGuard {
         val fileId =

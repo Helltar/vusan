@@ -1,6 +1,6 @@
 package com.helltar.vusan.tools.catalog
 
-import com.helltar.vusan.tools.LLMDescription
+import com.helltar.vusan.tools.Arg
 import com.helltar.vusan.tools.Tool
 import com.helltar.vusan.tools.ToolSet
 import com.helltar.vusan.tools.ToolCatalog
@@ -16,17 +16,15 @@ import kotlinx.coroutines.runBlocking
 @Suppress("unused")
 private class DrawTestTools : ToolSet {
 
-    @Tool
-    @LLMDescription("Draws a picture from a description.")
-    fun drawTestPicture(@LLMDescription("What to draw.") subject: String): String = subject
+    @Tool("Draws a picture from a description.")
+    fun drawTestPicture(@Arg("What to draw.") subject: String): String = subject
 }
 
 @Suppress("unused")
 private class SpeakTestTools : ToolSet {
 
-    @Tool
-    @LLMDescription("Says text out loud.")
-    fun speakTestText(@LLMDescription("The text to say.") text: String): String = text
+    @Tool("Says text out loud.")
+    fun speakTestText(@Arg("The text to say.") text: String): String = text
 }
 
 class CatalogToolsTest {

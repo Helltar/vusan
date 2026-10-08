@@ -1,6 +1,6 @@
 package com.helltar.vusan.tools.poll
 
-import com.helltar.vusan.tools.LLMDescription
+import com.helltar.vusan.tools.Arg
 import com.helltar.vusan.tools.Tool
 import com.helltar.vusan.tools.ToolSet
 import com.helltar.vusan.outbox.BotOutbox
@@ -10,16 +10,15 @@ import com.helltar.vusan.tools.suspendToolGuard
 @Suppress("unused")
 class PollTools(private val outbox: BotOutbox) : ToolSet {
 
-    @Tool
-    @LLMDescription(PollToolDescriptions.CREATE_POLL)
+    @Tool(PollToolDescriptions.CREATE_POLL)
     suspend fun createPoll(
-        @LLMDescription(PollToolDescriptions.QUESTION)
+        @Arg(PollToolDescriptions.QUESTION)
         question: String,
-        @LLMDescription(PollToolDescriptions.OPTIONS)
+        @Arg(PollToolDescriptions.OPTIONS)
         options: List<String>,
-        @LLMDescription(PollToolDescriptions.IS_ANONYMOUS)
+        @Arg(PollToolDescriptions.IS_ANONYMOUS)
         isAnonymous: Boolean = true,
-        @LLMDescription(PollToolDescriptions.ALLOWS_MULTIPLE_ANSWERS)
+        @Arg(PollToolDescriptions.ALLOWS_MULTIPLE_ANSWERS)
         allowsMultipleAnswers: Boolean = false,
     ): String = suspendToolGuard {
         val poll =

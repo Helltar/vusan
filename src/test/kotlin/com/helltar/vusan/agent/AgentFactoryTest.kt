@@ -16,7 +16,7 @@ import com.helltar.vusan.llm.toolCallReply
 import com.helltar.vusan.outbox.BotOutbox
 import com.helltar.vusan.outbox.BotOutput
 import com.helltar.vusan.request.testScope
-import com.helltar.vusan.tools.LLMDescription
+import com.helltar.vusan.tools.Arg
 import com.helltar.vusan.tools.Tool
 import com.helltar.vusan.tools.ToolCatalog
 import com.helltar.vusan.tools.ToolGroup
@@ -38,28 +38,24 @@ import kotlin.test.assertTrue
 @Suppress("unused")
 private class ProbeTools(private val outbox: BotOutbox) : ToolSet {
 
-    @Tool
-    @LLMDescription("Sends text to the user.")
-    fun sendMessage(@LLMDescription("The text.") text: String): String {
+    @Tool("Sends text to the user.")
+    fun sendMessage(@Arg("The text.") text: String): String {
         outbox.enqueueText(text)
         return "Delivered."
     }
 
-    @Tool
-    @LLMDescription("Looks something up.")
-    fun lookUp(@LLMDescription("What.") query: String): String = "found: $query"
+    @Tool("Looks something up.")
+    fun lookUp(@Arg("What.") query: String): String = "found: $query"
 
-    @Tool
-    @LLMDescription("Always fails.")
-    suspend fun explode(@LLMDescription("Why.") reason: String): String = suspendToolGuard { error("boom: $reason") }
+    @Tool("Always fails.")
+    suspend fun explode(@Arg("Why.") reason: String): String = suspendToolGuard { error("boom: $reason") }
 }
 
 @Suppress("unused")
 private class DrawTools : ToolSet {
 
-    @Tool
-    @LLMDescription("Draws a picture.")
-    fun draw(@LLMDescription("What.") subject: String): String = "drew $subject"
+    @Tool("Draws a picture.")
+    fun draw(@Arg("What.") subject: String): String = "drew $subject"
 }
 
 class AgentFactoryTest {

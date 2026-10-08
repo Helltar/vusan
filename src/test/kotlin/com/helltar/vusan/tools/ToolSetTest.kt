@@ -18,22 +18,19 @@ import kotlin.test.assertTrue
 @Suppress("unused", "FunctionOnlyReturningConstant")
 private class SampleTools : ToolSet {
 
-    @Tool
-    @LLMDescription("Creates a poll.")
+    @Tool("Creates a poll.")
     fun createPoll(
-        @LLMDescription("The question.") question: String,
-        @LLMDescription("The options.") options: List<String>,
+        @Arg("The question.") question: String,
+        @Arg("The options.") options: List<String>,
         isAnonymous: Boolean = true,
         maxVotes: Int = 1,
     ): String = "$question ${options.joinToString("|")} $isAnonymous $maxVotes"
 
-    @Tool
-    @LLMDescription("Looks something up.")
-    suspend fun lookUp(@LLMDescription("What to find.") query: String, limit: Long, focus: String? = null): String =
+    @Tool("Looks something up.")
+    suspend fun lookUp(@Arg("What to find.") query: String, limit: Long, focus: String? = null): String =
         "$query $limit ${focus ?: "none"}"
 
-    @Tool
-    @LLMDescription("Takes nothing.")
+    @Tool("Takes nothing.")
     fun ping(): String = "pong"
 
     fun notATool(): String = "hidden"
@@ -42,8 +39,7 @@ private class SampleTools : ToolSet {
 @Suppress("FunctionOnlyReturningConstant")
 private class BadReturnTools : ToolSet {
 
-    @Tool
-    @LLMDescription("Returns the wrong type.")
+    @Tool("Returns the wrong type.")
     fun count(): Int = 1
 }
 
@@ -75,6 +71,9 @@ class ToolSetTest {
         assertEquals("integer", properties.getValue("maxVotes").jsonObject.getValue("type").jsonPrimitive.content)
         assertEquals("The question.", properties.getValue("question").jsonObject.getValue("description").jsonPrimitive.content)
         assertEquals(listOf("question", "options"), poll.parameters.getValue("required").jsonArray.map { it.jsonPrimitive.content })
+
+        val focus = tool("lookUp").parameters.getValue("properties").jsonObject.getValue("focus").jsonObject
+        assertEquals(listOf("string", "null"), focus.getValue("type").jsonArray.map { it.jsonPrimitive.content }, "a nullable parameter may be sent as null")
     }
 
     @Test

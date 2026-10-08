@@ -1,6 +1,6 @@
 package com.helltar.vusan.tools.voice
 
-import com.helltar.vusan.tools.LLMDescription
+import com.helltar.vusan.tools.Arg
 import com.helltar.vusan.tools.Tool
 import com.helltar.vusan.tools.ToolSet
 import com.helltar.vusan.common.rethrowIfCancellation
@@ -17,10 +17,9 @@ class VoiceTools(
     private val outbox: BotOutbox,
 ) : ToolSet {
 
-    @Tool
-    @LLMDescription(VoiceToolDescriptions.SPEAK_WITH_VOICE)
+    @Tool(VoiceToolDescriptions.SPEAK_WITH_VOICE)
     suspend fun speakWithVoice(
-        @LLMDescription(VoiceToolDescriptions.TEXT)
+        @Arg(VoiceToolDescriptions.TEXT)
         text: String,
     ): String = suspendToolGuard {
         val trimmed = text.trim()

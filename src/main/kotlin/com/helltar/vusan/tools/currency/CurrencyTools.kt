@@ -1,6 +1,6 @@
 package com.helltar.vusan.tools.currency
 
-import com.helltar.vusan.tools.LLMDescription
+import com.helltar.vusan.tools.Arg
 import com.helltar.vusan.tools.Tool
 import com.helltar.vusan.tools.ToolSet
 import com.helltar.vusan.tools.suspendToolGuard
@@ -8,12 +8,11 @@ import com.helltar.vusan.tools.suspendToolGuard
 @Suppress("unused")
 class CurrencyTools(private val client: ExchangeRateClient) : ToolSet {
 
-    @Tool
-    @LLMDescription(CurrencyToolDescriptions.GET_EXCHANGE_RATE)
+    @Tool(CurrencyToolDescriptions.GET_EXCHANGE_RATE)
     suspend fun getExchangeRate(
-        @LLMDescription(CurrencyToolDescriptions.BASE)
+        @Arg(CurrencyToolDescriptions.BASE)
         base: String,
-        @LLMDescription(CurrencyToolDescriptions.TARGET)
+        @Arg(CurrencyToolDescriptions.TARGET)
         target: String,
     ): String = suspendToolGuard {
         val response = client.latest(base)
