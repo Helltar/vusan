@@ -653,9 +653,14 @@ said, with no mention at all. A small separate model decides whether each such m
 Vusan; everything that calls it outright is answered exactly as before, without asking that model.
 
 ```dotenv
-ADDRESSING_MODEL=gpt-5.6-luna
+ADDRESSING_ENABLED=true
+ADDRESSING_MODEL=gpt-6-luna
 ADDRESSING_NAMES=robin,robbie
 ```
+
+It is off until `ADDRESSING_ENABLED=true` turns it on, and then needs a model of its own and the
+[group log](#group-log): either missing stops startup. A model set without the switch only
+earns a startup `WARN`.
 
 Like a vision model, it runs on the chat provider with the chat key, address and timeout unless
 `ADDRESSING_PROVIDER` names a provider of its own, read like the chat one under the `ADDRESSING_`
@@ -663,7 +668,8 @@ prefix; its effort and window are its own either way.
 
 | Variable                             | Default            | Description                                                                              |
 |--------------------------------------|--------------------|------------------------------------------------------------------------------------------|
-| `ADDRESSING_MODEL`                   | —                  | Turns the feature on: the model that decides, never the chat model.                      |
+| `ADDRESSING_ENABLED`                 | `false`            | Turns the feature on; needs `ADDRESSING_MODEL` and the group log.                        |
+| `ADDRESSING_MODEL`                   | —                  | The model that decides, never the chat model.                                            |
 | `ADDRESSING_NAMES`                   | from the profile   | Spellings the chat uses, comma-separated.                                                |
 | `ADDRESSING_PROVIDER`                | the chat provider  | `openai`, `anthropic`, `openai-compatible` or `codex`.                                   |
 | `ADDRESSING_API_KEY`                 | —                  | Its own key. Required with `ADDRESSING_PROVIDER`, except on `codex`.                     |

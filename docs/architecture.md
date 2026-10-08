@@ -186,7 +186,7 @@ A normal user message travels:
    is ephemeral itself, and `dispatch` turns any ephemeral message that is not a command into a private note to write
    in the open (`TelegramDelivery.sendForSenderOnly`), since the agent's own delivery is not ephemeral and a public
    answer to a private message would leak it. On the text, caption and album paths a group message `shouldHandle` turned away gets one more look when
-   `ADDRESSING_MODEL` is set: `TelegramBotRunner.acceptance` builds an `AmbientCandidate`
+   `ADDRESSING_ENABLED` is on: `TelegramBotRunner.acceptance` builds an `AmbientCandidate`
    (`telegram/inbound/AmbientCandidates.kt` — typed text or a caption only, never an edit, forward, command, bot or
    channel post) and asks `agent/addressing/AmbientAddressing`. That puts it to a classifier model of its own only when
    the message names the bot, its author has a turn under way (`AgentRunner.hasTurnUnderWay`), or the bot spoke within

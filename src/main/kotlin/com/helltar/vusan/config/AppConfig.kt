@@ -50,6 +50,8 @@ data class AppConfig(
         require(agentMaxModelCalls >= AgentFactory.MIN_MODEL_CALLS) { "AGENT_MAX_MODEL_CALLS must be at least ${AgentFactory.MIN_MODEL_CALLS}" }
         require(maxConcurrentTurns > 0) { "MAX_CONCURRENT_TURNS must be positive" }
         require(regolithUrl == null || !regolithToken.isNullOrBlank()) { "Sandbox API authentication is required" }
+        // the classifier reads the lines around a message, and the bot's own recent ones, from the transcript
+        require(addressing == null || groupLog.enabled) { "ADDRESSING_ENABLED needs the group log, which GROUP_LOG_ENABLED=false turns off" }
     }
 
     companion object {
@@ -182,8 +184,22 @@ data class AppConfig(
             )
         }
 
+        // answering without a mention changes how the bot behaves in a group and was measured on small openai
+        // models only, so it waits for the operator's switch; it never runs on the chat model, so the switch
+        // needs a model, and a model set without the switch is named rather than silently ignored.
         private fun resolveAddressing(chat: LlmProviderConfig): AddressingConfig? {
-            val provider = resolveRole(ADDRESSING_PREFIX, chat) ?: return null
+            if (readBooleanEnv("ADDRESSING_ENABLED") != true) {
+                if (readEnv("ADDRESSING_MODEL") != null) {
+                    log.warn { "ADDRESSING_MODEL is set but ADDRESSING_ENABLED is not true, so answering without a mention stays off" }
+                }
+
+                return null
+            }
+
+            val provider =
+                requireNotNull(resolveRole(ADDRESSING_PREFIX, chat)) {
+                    "ADDRESSING_MODEL is required when ADDRESSING_ENABLED is true: the verdicts run on a model of their own"
+                }
 
             return AddressingConfig(
                 provider = provider,

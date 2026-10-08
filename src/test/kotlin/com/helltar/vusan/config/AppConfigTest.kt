@@ -108,6 +108,19 @@ class AppConfigTest {
         assertEquals(null, parsePositiveLongEnv("LLM_CONTEXT_WINDOW_TOKENS", null))
     }
 
+    // the switch on with the transcript off would leave the feature with nothing to judge a message by
+    @Test
+    fun `answering without a mention stops the startup without the group log`() {
+        val addressing =
+            AddressingConfig(
+                provider = LlmProviderConfig.OpenAi(apiKey = "key", model = "gpt-6-luna", requestTimeout = 30.seconds, envPrefix = "ADDRESSING"),
+                names = emptyList(),
+            )
+
+        assertFailsWith<IllegalArgumentException> { config(addressing = addressing, groupLog = GroupLogConfig(enabled = false)) }
+        config(addressing = addressing)
+    }
+
     // a service reached without its secret is a misconfiguration, never a service reached anonymously
     @Test
     fun `a sandbox url without a token stops the startup`() {
@@ -117,8 +130,12 @@ class AppConfigTest {
     private fun config(
         agentMaxModelCalls: Int = 70,
         regolithUrl: String? = null,
+        addressing: AddressingConfig? = null,
+        groupLog: GroupLogConfig = GroupLogConfig(),
     ): AppConfig =
         AppConfig(
+            addressing = addressing,
+            groupLog = groupLog,
             agentMaxModelCalls = agentMaxModelCalls,
             accessPolicy = AccessPolicy(allowed = setOf("telegram:1")),
             appearance = null,

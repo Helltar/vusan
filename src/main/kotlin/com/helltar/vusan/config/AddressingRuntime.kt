@@ -12,7 +12,8 @@ import io.ktor.client.*
 
 /**
  * Ambient addressing: answering a group message that calls the bot by name, or follows up on its answer,
- * without a mention, a reply or a command. `ADDRESSING_MODEL` is the whole switch.
+ * without a mention, a reply or a command. `ADDRESSING_ENABLED` is the switch, and it needs
+ * `ADDRESSING_MODEL`.
  *
  * [names] are the spellings the chat uses besides the bot's own display name; empty means the ones
  * derived from its profile.

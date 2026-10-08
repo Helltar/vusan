@@ -127,11 +127,11 @@ suspend fun main() = coroutineScope {
         // read once and shared: the runner matches mentions against it, the agent is told its own handle.
         val botProfile = telegramClient.botProfile()
 
-        // the classifier's context and the bot's own recent lines both come from the group transcript, so
-        // without one there is nothing to judge a message against and the feature stays off.
+        // the classifier's context and the bot's own recent lines both come from the group transcript, which
+        // the config guarantees whenever the feature is on.
         val ambient =
             config.addressing?.let { addressing ->
-                val transcript = groupLog ?: return@let null
+                val transcript = checkNotNull(groupLog) { "answering without a mention needs the group log" }
                 val runtime = resolveAddressingRuntime(addressing.copy(provider = addressing.provider.preflighted(http, codexAuth)), codexAuth)
                 addressingClient = runtime.client
 
