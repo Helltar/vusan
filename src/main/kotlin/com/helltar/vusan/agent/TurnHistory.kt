@@ -61,6 +61,7 @@ internal fun assistantTextForHistory(outputs: List<OutboxItem>, comment: String?
 private val TEXT_DUPLICATING_TOOLS =
     setOf(
         MessageTools::sendMessage.name,
+        MessageTools::sendMessageNow.name,
         MessageTools::sendRichMessage.name,
         MessageTools::announcePlan.name,
         InlineChoiceTools::askWithButtons.name,

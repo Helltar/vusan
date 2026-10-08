@@ -39,6 +39,16 @@ internal object MessageToolDescriptions {
         "What you are about to do, in one or two sentences. " +
                 "Must be non-empty."
 
+    const val SEND_MESSAGE_NOW =
+        "Sends a message to the user immediately, while your turn keeps running, and it stays in the chat. " +
+                "Use it during long work for something worth reading before the rest is done: the address of a first working version, a finding that changes what you will do next, one step finished in a job of several. " +
+                "A few per turn at most; everything else waits for the end, and the final answer still goes through `sendMessage` or a plain reply, without repeating what was sent this way. " +
+                "Format with Telegram HTML tags only, never Markdown."
+
+    const val NOW_TEXT =
+        "The message to send now, in the user's language. " +
+                "Must be non-empty."
+
     const val REPLY_IN_PRIVATE_MESSAGES =
         "Switches the reply target so all subsequent queued messages and media are sent to the user's private chat with the bot instead of the current chat. " +
                 "Use when the user explicitly asks for something to be sent in DMs, privately, or in personal messages, especially from a group. " +

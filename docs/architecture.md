@@ -346,6 +346,11 @@ A normal user message travels:
       carries it like any other assistant text. One announcement per turn (`BotOutbox.hasDelivered`): a second would
       rewrite what the user has already read. A turn with no live status — a scheduled run — queues the words with the
       rest of the reply instead.
+    - **A result worth reading early** — `sendMessageNow` (`MessageTools`) posts a message of its own through
+      `TurnNarrator.send`, which stays in the chat, and takes the status bubble down and up again so it sits under the
+      newest message. It is recorded as a delivered item that is an answer rather than an announcement
+      (`BotOutbox.hasAnswered`), so the turn owes no further delivery; a few per turn, and queued like any text when
+      nobody is watching.
     - **HTML and its fallbacks** — text and captions go out with Telegram's `HTML` parse mode; `agent/SystemPrompt.kt`
       instructs the agent to use only the supported tags and escape `<`/`>`/`&`. Models still slip in `<br>`, and
       cheaper ones answer in Markdown code anyway, so `TelegramSendFallbacks` repairs what maps onto HTML one to one
@@ -806,6 +811,7 @@ A symptom-to-source map for finding the right file fast. Paths are under
 | A long build dies on the context limit, or the model loses track of what it wrote earlier in the turn | `agent/TurnCompaction.kt` (`foldedToFit`: which result batches are folded, and which arguments dropped) + `agent/AgentTurn.kt` (`foldToFit`, run before every request) + `agent/AgentFactory.kt` (the ceiling, from the context budget) |
 | The bot announces what it will do and then goes quiet | `agent/AgentTurn.kt` (`PROMISE_NUDGE`, and `record`, which notes what ran after `announcePlan`) + `agent/SystemPrompt.kt` (the contract line that says an announcement is followed by the work) |
 | Two searches in one batch ran one after the other, or a tool ran alongside one it should have waited for | `tools/ToolSet.kt` (`@Tool(readOnly = true)`, the only thing that lets a call run beside its neighbours) + `agent/AgentTurn.kt` (`executeBatch` and `runs`) |
+| An interim message never arrives, arrives twice, or leaves the status bubble above it | `tools/message/MessageTools.sendMessageNow` + `telegram/TurnStatus.kt` (`send`, which posts it and moves the bubble) + `outbox/BotOutbox.kt` (`recordDelivered` with `announcement = false`, `hasAnswered`) |
 | A spent subscription still ends turns in "come back later", or the bot never returns to it | `llm/FallbackLlmClient.kt` (the outage deadline, the single probe back) + `agent/ProviderErrors.providerOutage` (the patterns and the reset time read from the body), then `LLM_FALLBACK_*` in [`configuration.md`](configuration.md#a-second-provider-behind-the-first) |
 | The reply to a failed turn says nothing about what the provider did | `agent/AgentRunner.providerErrorReply` (which error body earns which canned reply: a content-policy refusal, a spent usage limit, a dead key, a 429/503 overload) + `i18n/Messages.kt` (the strings) |
 | You need to see exactly what the model was sent this turn | `agent/PromptDump.kt` (the whole request rendered per message) — `agent/AgentTurn.kt` renders it before every model call and is switched by the `PromptDump` logger in [`logback.xml`](../src/main/resources/logback.xml) |

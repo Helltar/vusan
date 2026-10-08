@@ -116,6 +116,8 @@ Or run it on JDK 21, with `ffmpeg` and `yt-dlp` on `PATH`:
 - **Its own sandbox** — runs code, builds projects, converts media and analyzes data, then sends
   the results. Each person gets a private Linux home that persists across chats, and the bot edits
   what it built there in place rather than rewriting it.
+- **Keeps you posted** — says what it is about to do before a long job, and sends a first working
+  version or a finding worth knowing while the rest is still in progress.
 - **Web pages** — puts a page, game or small app it built on the internet at your own address, and
   hands you the link.
 - **Images** — draws from descriptions, edits your pictures, and merges several into one.

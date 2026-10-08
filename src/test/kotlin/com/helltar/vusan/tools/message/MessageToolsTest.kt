@@ -175,12 +175,66 @@ class MessageToolsTest {
         assertTrue(outbox.redirectToPrivate)
     }
 
+    // an interim message is an answer the turn already gave: in the chat now, recorded for the history, and
+    // not a promise that leaves the turn owing a delivery
+    @Test
+    fun `sendMessageNow goes out through the live chat and counts as delivered`() = runBlocking {
+        val outbox = BotOutbox()
+        val narrator = RecordingNarrator(reaches = true)
+
+        val result = MessageTools(outbox, narrator).sendMessageNow("  First version is up  ")
+
+        assertTrue(result.startsWith("Sent"))
+        assertEquals(listOf("First version is up"), narrator.sent)
+
+        val item = outbox.pending.single()
+
+        assertTrue(item.delivered)
+        assertFalse(item.announcement)
+        assertTrue(outbox.hasAnswered)
+        assertFalse(outbox.hasQueuedOutput, "nothing is left to send")
+        assertFalse(outbox.hasAnnounced, "an interim message is not the plan")
+        assertEquals("First version is up", assertIs<BotOutput.Text>(item.output).text)
+    }
+
+    @Test
+    fun `sendMessageNow queues the text when nobody is watching, and is rationed`() = runBlocking {
+        val queued = MessageTools(BotOutbox(), narrator = null).sendMessageNow("First version is up")
+        assertTrue(queued.contains("queued"))
+
+        val outbox = BotOutbox()
+        val tools = MessageTools(outbox, RecordingNarrator(reaches = true))
+
+        repeat(3) { assertTrue(tools.sendMessageNow("step $it").startsWith("Sent")) }
+
+        assertTrue(tools.sendMessageNow("step 4").contains("already sent"))
+        assertEquals(3, outbox.pending.size)
+    }
+
+    @Test
+    fun `announcePlan is still allowed after an interim message`() = runBlocking {
+        val outbox = BotOutbox()
+        val tools = MessageTools(outbox, RecordingNarrator(reaches = true))
+
+        tools.sendMessageNow("a finding")
+
+        assertTrue(tools.announcePlan("now the build").startsWith("Sent"))
+        assertTrue(outbox.hasAnnounced)
+    }
+
     private class RecordingNarrator(private val reaches: Boolean) : TurnNarrator {
 
         val said = mutableListOf<String>()
+        val sent = mutableListOf<String>()
 
         override suspend fun say(text: String): Boolean {
             if (reaches) said += text
+
+            return reaches
+        }
+
+        override suspend fun send(text: String): Boolean {
+            if (reaches) sent += text
 
             return reaches
         }

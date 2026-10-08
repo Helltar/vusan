@@ -17,10 +17,15 @@ private const val MAX_RICH_MESSAGE_CHARS = 32768
 // and the answer is not due yet.
 private const val MAX_ANNOUNCEMENT_CHARS = 500
 
+// interim messages are for a result worth reading early; more than this is the turn narrating itself
+private const val MAX_INTERIM_MESSAGES = 3
+
 class MessageTools(
     private val outbox: BotOutbox,
     private val narrator: TurnNarrator? = null,
 ) : ToolSet {
+
+    private var interimSent = 0
 
     @Tool(MessageToolDescriptions.SEND_MESSAGE)
     suspend fun sendMessage(
@@ -61,7 +66,7 @@ class MessageTools(
         val trimmed = text.requireToolText("Plan", MAX_ANNOUNCEMENT_CHARS)
 
         when {
-            outbox.hasDelivered ->
+            outbox.hasAnnounced ->
                 "You have already announced this turn's plan and the user is reading it. " +
                     "Get on with the work and report the result at the end."
 
@@ -77,6 +82,35 @@ class MessageTools(
             outbox.enqueueText(trimmed, announcement = true) ->
                 "This turn has no live chat to announce into, so the text was queued with the rest of the reply. " +
                     "Do not announce anything else; write the result into the same reply."
+
+            else ->
+                "Message limit reached: ${BotOutbox.MAX_TEXT_MESSAGES} separate messages are already queued for this reply. " +
+                    "Do not send more; finish your turn now."
+        }
+    }
+
+    @Tool(MessageToolDescriptions.SEND_MESSAGE_NOW)
+    suspend fun sendMessageNow(
+        @Arg(MessageToolDescriptions.NOW_TEXT)
+        text: String,
+    ): String = suspendToolGuard {
+        val trimmed = text.requireToolText("Message text", MAX_MESSAGE_CHARS)
+
+        when {
+            interimSent >= MAX_INTERIM_MESSAGES ->
+                "You have already sent $MAX_INTERIM_MESSAGES messages this way in this turn. " +
+                    "Finish the work and put the rest into your final answer."
+
+            // in the chat now, and recorded as an answer the turn gave rather than a promise it made
+            narrator?.send(trimmed) == true -> {
+                interimSent++
+                outbox.recordDelivered(trimmed, announcement = false)
+                "Sent. The user is reading it now; do not repeat it in your final answer."
+            }
+
+            // nobody is watching this turn go by, so the words travel with the answer instead
+            outbox.enqueueText(trimmed) ->
+                "This turn has no live chat to send into, so the text was queued with the rest of the reply."
 
             else ->
                 "Message limit reached: ${BotOutbox.MAX_TEXT_MESSAGES} separate messages are already queued for this reply. " +

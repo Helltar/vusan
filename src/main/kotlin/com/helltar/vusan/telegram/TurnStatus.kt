@@ -7,6 +7,7 @@ import com.helltar.vusan.common.rethrowIfCancellation
 import com.helltar.vusan.i18n.Messages
 import com.helltar.vusan.telegram.callback.turnStopCallbackData
 import com.helltar.vusan.telegram.delivery.ChatTarget
+import com.helltar.vusan.telegram.delivery.TelegramOutputSender
 import com.helltar.vusan.telegram.delivery.deleteChatMessage
 import com.helltar.vusan.telegram.delivery.editTextMessage
 import com.helltar.vusan.telegram.delivery.isEntityParseError
@@ -81,7 +82,8 @@ internal fun activityStatusLabel(activity: ToolActivity, messages: Messages): St
  * It opens lazily, on the first named activity or the first thing the model says, and unlike a draft or
  * a chat action it does not expire, so it is written only when something actually changes. [finish]
  * removes it, unless the model put its own words in it: those stay in the chat as the message they
- * already were, without the status line under them and without the button.
+ * already were, without the status line under them and without the button. A message the model sends
+ * mid-turn ([send]) is a message of its own, and the status moves back under it.
  */
 internal class TurnStatus(
     private val client: TelegramClient,
@@ -130,6 +132,40 @@ internal class TurnStatus(
             // nothing reached the chat, so the caller still owes the user these words: forget them here
             // and let it queue them the ordinary way.
             render().also { delivered -> if (!delivered) announcement = previous }
+        }
+
+    override suspend fun send(text: String): Boolean =
+        edits.withLock {
+            val posted =
+                runCatching { withContext(NonCancellable) { TelegramOutputSender.sendText(client, target, text, replyParameters(anchor)) } }
+                    .recoverCatching { error ->
+                        error.rethrowIfCancellation()
+
+                        // whatever it was answering is gone; the message still has something to say
+                        if (!error.isReplyMessageNotFound()) throw error
+
+                        anchor = null
+                        withContext(NonCancellable) { TelegramOutputSender.sendText(client, target, text, replyParameters = null) }
+                    }
+                    .onFailure { error ->
+                        error.rethrowIfCancellation()
+                        log.warn { "an interim message was rejected in chat=${target.chatId}: ${error.message}" }
+                    }
+                    .isSuccess
+
+            if (!posted) return false
+
+            // the status bubble belongs under the newest message: taken down here and raised again at
+            // once, carrying the plan and the running line with it
+            messageId?.let { id ->
+                messageId = null
+                shown = null
+                runCatching { withContext(NonCancellable) { deleteChatMessage(client, target.chatId, id) } }
+                    .onFailure { error -> error.rethrowIfCancellation() }
+                render()
+            }
+
+            true
         }
 
     suspend fun finish() {

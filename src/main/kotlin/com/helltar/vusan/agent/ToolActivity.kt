@@ -55,6 +55,7 @@ enum class ToolActivity {
 // an exchange rate — where a caption would flash by before it could be read.
 private val TOOL_ACTIVITIES: Map<String, ToolActivity> = buildMap {
     put(MessageTools::sendMessage.name, ToolActivity.WRITING)
+    put(MessageTools::sendMessageNow.name, ToolActivity.WRITING)
     put(MessageTools::sendRichMessage.name, ToolActivity.WRITING)
     put(TavilyTools::webSearch.name, ToolActivity.SEARCHING_WEB)
     put(SearxngTools::metaSearch.name, ToolActivity.SEARCHING_WEB)
