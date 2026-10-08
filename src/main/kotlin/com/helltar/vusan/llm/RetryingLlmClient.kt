@@ -2,8 +2,10 @@ package com.helltar.vusan.llm
 
 import com.helltar.vusan.common.rethrowIfCancellation
 import io.github.oshai.kotlinlogging.KotlinLogging
+import io.ktor.client.network.sockets.SocketTimeoutException
 import kotlinx.coroutines.delay
 import java.io.IOException
+import java.net.ConnectException
 import kotlin.time.Duration
 import kotlin.time.Duration.Companion.seconds
 
@@ -40,8 +42,8 @@ internal fun isRepeatableFailure(failure: Throwable): Boolean {
 
 private fun Throwable?.isDroppedConnection(): Boolean =
     generateSequence(this) { it.cause }.any {
-        it is IOException && it !is io.ktor.client.network.sockets.SocketTimeoutException ||
-                it is java.net.ConnectException ||
+        it is IOException && it !is SocketTimeoutException ||
+                it is ConnectException ||
                 it.message?.contains("connection reset", ignoreCase = true) == true
     }
 
