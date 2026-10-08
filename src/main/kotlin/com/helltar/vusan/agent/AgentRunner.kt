@@ -20,7 +20,7 @@ import com.helltar.vusan.outbox.OutboxItem
 import com.helltar.vusan.request.ChatRef
 import com.helltar.vusan.request.ConversationScope
 import com.helltar.vusan.request.RequestContext
-import com.helltar.vusan.tools.ToolRegistryFactory
+import com.helltar.vusan.tools.ToolCatalogFactory
 import io.github.oshai.kotlinlogging.KotlinLogging
 import java.time.Instant
 import java.time.ZoneId
@@ -88,7 +88,7 @@ data class AgentResult(
 
 class AgentRunner(
     private val agentFactory: AgentFactory,
-    private val toolRegistryFactory: ToolRegistryFactory,
+    private val toolCatalogFactory: ToolCatalogFactory,
     private val conversation: ConversationRepository,
     private val memory: MemoryRepository,
     private val conversationCompactor: ConversationCompactor,
@@ -204,7 +204,7 @@ class AgentRunner(
 
         val outbox = BotOutbox(context.chat.capabilities)
         val toolBudget = TurnToolBudget(agentFactory.liveToolResultMaxTokens)
-        val toolCatalog = toolRegistryFactory.buildCatalog(context, outbox, toolBudget, narrator)
+        val toolCatalog = toolCatalogFactory.buildCatalog(context, outbox, toolBudget, narrator)
 
         val currentTurn =
             currentTurnPrompt(
@@ -342,7 +342,7 @@ class AgentRunner(
     }
 
     // the catalog is worth its tokens only where the reply can actually carry a sticker: a group that
-    // forbids them keeps StickerTools out of the registry, so an index here would offer the model a
+    // forbids them keeps StickerTools out of the catalog, so an index here would offer the model a
     // shortlist it has no tool to send.
     private suspend fun stickerCatalogFor(context: RequestContext): String? =
         stickerCatalog

@@ -56,7 +56,7 @@ class ContextWindowPolicy(model: LlmModel) {
     // as well as latin.
     val liveToolResultMaxChars: Int = agentReserveTokens * ESTIMATED_BYTES_PER_TOKEN / ESTIMATED_BYTES_PER_CHAR
 
-    // [tools] is what the request actually carries, which on a `ToolCatalog` is less than the registry
+    // [tools] is what the request actually carries, which on a `ToolCatalog` is less than the catalog
     // holds: a group loaded mid-run widens it, and that widening is spent from the agent reserve like any
     // other thing a run piles up. Counting every deferred schema here instead would give the history a
     // budget it never gets back.

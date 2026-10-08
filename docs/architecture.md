@@ -35,7 +35,7 @@ that is who owns writing them, not because only `agent/` reads them. No other ar
   list, and works out what each one says; `AgentTurns`, also at the root, takes it from there — the reply context, the
   `AgentRequest`, the progress indicator, the delivery and its fallback — so a turn started by a message and one started
   by a button follow the same path; `telegram/tools/` holds the tools only Telegram can implement — resending by
-  `file_id`, and the sticker catalog — which reach the registry through the shared `PlatformToolSets` port rather than
+  `file_id`, and the sticker catalog — which reach the catalog through the shared `PlatformToolSets` port rather than
   being registered centrally; `telegram/inbound/` normalizes an update into agent input; `telegram/delivery/`
   sends agent results back, including HTML-formatting, opt-in rich-message, reply-anchor, media/document, media-group,
   and private-message fallbacks; `telegram/callback/` owns the inline-button flows — `CallbackRouter` validates a
@@ -72,10 +72,10 @@ that is who owns writing them, not because only `agent/` reads them. No other ar
   writing in and now and then reacts or says something. Neither is a turn — no history, no tools, one model call each —
   and both are off unless switched on; see [Background and side flows](#background-and-side-flows).
 - **`tools/`** — agent-callable tools, one subpackage per capability (search, voice, vision, scheduled tasks, …).
-  `ToolRegistryFactory` owns clients and builds a per-request `ToolCatalog` from required tools, optional tools whose
+  `ToolCatalogFactory` owns clients and builds a per-request `ToolCatalog` from required tools, optional tools whose
   env/config is present, and whatever the turn's messenger adds through the `PlatformToolSets` port — a tool only one
   messenger can implement lives in that adapter, so the factory never names one. The catalog splits what is registered
-  from what the request carries: a set registered under a `ToolGroup` is in the registry from the first step, but its
+  from what the request carries: a set registered under a `ToolGroup` is in the catalog from the first step, but its
   schemas are withheld until the model calls `loadTools` (`tools/catalog/`), which the `<tool_groups>` menu in the
   turn prompt tells it about. Deferring is what keeps the schemas of a dozen rarely-used capabilities out of the
   conversation budget; a call is resolved against everything registered, so a tool named before its group is loaded
@@ -242,9 +242,9 @@ A normal user message travels:
    moves every system message into the top-level system field regardless of where it sat. In a group the turn also carries what that chat lets the bot post, read through
    `telegram/ChatProfiles.kt`: one cached `getChat` + `getChatMember` pair yields the chat description, the permissions
    binding a bot that is a plain member (an administrator is bound by none of them, slow mode included), and the
-   slow-mode delay. `ChatCapabilities` travels in `RequestContext.chat` and reaches three places — `ToolRegistryFactory` leaves
+   slow-mode delay. `ChatCapabilities` travels in `RequestContext.chat` and reaches three places — `ToolCatalogFactory` leaves
    out the tools whose output the chat would refuse, so the model cannot spend an image generation or a download on
-   something undeliverable; `BotOutbox` refuses a queued output the chat does not accept, because registry gating alone
+   something undeliverable; `BotOutbox` refuses a queued output the chat does not accept, because catalog gating alone
    proves nothing about the *mixed-output* paths (a text-first search queues photos, the sandbox sends whatever files
    it was asked for), and those tools report the refusal to the model rather than claiming a send nobody will see —
    image search checks first and never queries its provider at all; and `<message_context>` names the rest so the agent
@@ -505,7 +505,7 @@ A normal user message travels:
   `STICKERS_ENABLED=false` leaves the catalog out entirely, vision or not. A background worker then describes each sticker's thumbnail once through the vision model and caches the result
   by `file_unique_id`. `AgentRunner` puts at most 16 ready-to-send entries into the current user turn: recently used
   individual stickers first, then frequent ones, with spare room filled round-robin across every described set the chat
-  knows. A group that forbids stickers gets no index at all, matching the registry: the tools are gated on the same
+  knows. A group that forbids stickers gets no index at all, matching the catalog: the tools are gated on the same
   capability, so a shortlist there would be an offer with no tool behind it. `searchStickers` searches the descriptions
   and emoji across that full chat-scoped collection, while `sendSticker` accepts only an id belonging to it and resends
   the matching `file_id`. Without a vision runtime the catalog is never constructed and neither tool is registered,
@@ -683,7 +683,7 @@ generation or `ELEVENLABS_API_KEY` is configured, the two things that use it) `r
 `SELF_IMAGE_FILE` when set, otherwise whatever avatar loader startup hands it — for Telegram, one
 `getUserProfilePhotos` on the bot's own id (`telegram/BotAvatar.kt`), and a failure there is a warning rather than a
 failed startup → (only with a vision runtime) the `StickerCatalog`, then `TelegramToolSets` over it and the client,
-`ToolRegistryFactory`, `AgentFactory`, `AgentRunner` → create `TaskMenuHandler` and `InlineChoiceHandler`, and
+`ToolCatalogFactory`, `AgentFactory`, `AgentRunner` → create `TaskMenuHandler` and `InlineChoiceHandler`, and
 optionally enable voice transcription → start `TelegramBotRunner`, which builds its own `AgentTurns` and
 `CallbackRouter` over those, and launch `TaskScheduler`, the sticker description worker and — where switched on — the
 `Diary` and `Initiative` loops, then block on the runner job
@@ -811,13 +811,13 @@ A symptom-to-source map for finding the right file fast. Paths are under
 | A linked page reads as empty, as navigation, or in the wrong alphabet | `tools/page/PageReader.kt` (which elements are dropped, where the content root is looked for, the charset the download declared) + `tools/tavily/TavilyToolDescriptions.kt` and `tools/page/PageToolDescriptions.kt` (Tavily's `extractPageContent` reads first, `readPage` is the fallback) |
 | Image search sends nothing, or sends irrelevant pictures | `tools/images/ImageSearchDelivery.kt` (candidate retries, size caps, media group) + `tools/images/ImageDownloadClient.kt` (user agent, format/dimension checks); for relevance, `SearxngTools.IMAGE_ENGINES` and `TavilyTools.imageExcludedDomains` |
 | A selfie shows a stranger instead of the bot's avatar | `tools/imagegen/SelfImage.kt` (which reference photo is read at startup, and the prompt that keeps the face while dropping the rest of it) + `tools/imagegen/ImageGenToolDescriptions.SELF_PORTRAIT` (whether the model sets the flag at all) |
-| Vusan sends a voice message instead of a round video, or offers no round video at all | `tools/voice/VideoNoteTools.kt` (synthesize → render → outbox, and the voice fallback when the render fails) + `tools/voice/VideoNoteRenderer.kt` (the ffmpeg graph; the waveform box stays inside the circle Telegram crops to) + `tools/ToolRegistryFactory.kt` (needs `ELEVENLABS_API_KEY`, `can_send_video_notes`, and a `SelfImage` reference photo) |
+| Vusan sends a voice message instead of a round video, or offers no round video at all | `tools/voice/VideoNoteTools.kt` (synthesize → render → outbox, and the voice fallback when the render fails) + `tools/voice/VideoNoteRenderer.kt` (the ffmpeg graph; the waveform box stays inside the circle Telegram crops to) + `tools/ToolCatalogFactory.kt` (needs `ELEVENLABS_API_KEY`, `can_send_video_notes`, and a `SelfImage` reference photo) |
 | Vusan answers about a whole message when the user quoted one part of it | `telegram/inbound/ReplyContext.kt` (`quotedFragmentOrNull`, what the sender selected) + `agent/TurnInput.kt` (the `<quoted_fragment>` block, and when it is left out) + `agent/SystemPrompt.kt` (what the block means) |
 | Vusan does not know what a reply is about, or cannot edit a picture it made itself | `telegram/AgentTurns.kt` (the reply summary and replied file are built for every reply) + `telegram/inbound/ReplyContext.kt` (`replySummaryOrNull`, who the `author` is, `repliedAttachedFileOrNull`) + `agent/TurnInput.kt` (the `<reply_context>` block itself) |
 | A rich message reads as empty, `unknown`, or loses its structure | `telegram/inbound/RichMessageText.kt` (block tree → rich markdown), then `MessageMetadata.contentTypeName`/`textSnippetOrNull` and `ReplyContext.repliedTextOrNull` |
 | Scheduled task fires late, not at all, or reports "missed"/"failed" | `tasks/TaskScheduler.kt` (polling, lateness, retries) + `tasks/Recurrence.kt` (next-run math) |
 | A chat's tasks all went paused on their own, or one keeps firing into a chat the bot was removed from | `telegram/BotMembership.kt` (the `my_chat_member` path) + `telegram/delivery/TelegramErrors.kt` (`isChatUnreachable`) + `tasks/TaskScheduler.kt` (`parkTasksOfUnreachableChat`) |
-| A tool is missing in one group but present elsewhere, or a chat restriction is stale | `telegram/ChatProfiles.kt` (`capabilitiesOf`, the cache and its `forget`) + `tools/ToolRegistryFactory.buildCatalog` (which capability gates which tool) + `telegram/tools/TelegramToolSets.kt` (the same gate for Telegram's own tools) |
+| A tool is missing in one group but present elsewhere, or a chat restriction is stale | `telegram/ChatProfiles.kt` (`capabilitiesOf`, the cache and its `forget`) + `tools/ToolCatalogFactory.buildCatalog` (which capability gates which tool) + `telegram/tools/TelegramToolSets.kt` (the same gate for Telegram's own tools) |
 | The model answers that it cannot draw, speak, schedule or publish something it has tools for | `tools/ToolCatalog.kt` (which groups are deferred, and the `loadTools` menu) + `agent/TurnPrompt.kt` (`<tool_groups>`, the menu it reads) + `agent/SystemPrompt.kt` (the rule that sends it to `loadTools`) + `agent/AgentTurn.kt` (`run`, which reads the visible tools afresh for every request, so a group loaded mid-turn is offered from the next one) |
 | Tool results come back truncated or empty part-way through a turn | `agent/ContextWindowPolicy.kt` (how large the reserve is for this model) + `agent/TurnToolBudget.kt` (what is left of it) + `agent/AgentTurn.kt` (`boundedToolText`, which truncates and then omits) |
 | A conversation loads the same group on every turn, or keeps offering one it no longer uses | `tools/LoadedToolGroups.kt` (per-scope memory, its cap and its LRU order) — it is process memory, so a restart empties it |
@@ -828,7 +828,7 @@ A symptom-to-source map for finding the right file fast. Paths are under
 | An env var has no effect | `config/AppConfig.kt` (parsing) — and check it is documented in [`configuration.md`](configuration.md) + [`.env.example`](../.env.example) |
 | Model / provider / request-timeout selection, or prompt-cache misses | `config/<Vendor>Provider.kt` (one provider's runtime: client, model, options — and its startup check of the model against the vendor) + `config/LlmRuntime.kt` and `config/ModelPreflight.kt` (the dispatch to it) + `llm/openai/OpenAiPromptCaching.kt` (GPT-5.6+: implicit caching with an explicit breakpoint on the system prefix, and none for a prompt that never repeats) + `llm/anthropic/AnthropicClient.kt` (the request-level breakpoint and the hour-long one on the system block); `cacheReadTokens` and `cacheWriteTokens` on each turn's usage line say what was read and written |
 | "Sign in again" replies, ChatGPT-subscription auth, or a rejected `LLM_MODEL` on `codex` | `config/CodexAuth.kt` (token load/refresh/persist) + `config/CodexCatalog.kt` (which models the plan offers) + `config/CodexHttpClient.kt` (per-request bearer and account headers) |
-| `describeImage`/`describeVideo` missing from the tool list | `config/VisionRuntime.kt` (chat model vs `VISION_MODEL`), then `tools/ToolRegistryFactory.kt` (registration is skipped when there is no vision runtime) |
+| `describeImage`/`describeVideo` missing from the tool list | `config/VisionRuntime.kt` (chat model vs `VISION_MODEL`), then `tools/ToolCatalogFactory.kt` (registration is skipped when there is no vision runtime) |
 | Garbled or empty tool calls from a flaky model | `agent/AgentTurn.kt` (`execute`: the empty-arguments guard and the unknown-tool answer) + `tools/ToolSet.kt` (decoding the arguments, and the complaint a missing or wrong-shaped one earns) |
 
 ## Adding a tool
@@ -840,7 +840,7 @@ A new agent tool typically touches these, in order:
 2. **`tools/<feature>/<Feature>ToolDescriptions.kt`** — an `internal object` of `const val` descriptions referenced by
    the `@Tool` and `@Arg` descriptions (see the convention in `AGENTS.md`).
 3. *(optional)* **`<Feature>Client.kt`** / **`<Feature>Models.kt`** — the external I/O and its DTOs.
-4. **`tools/ToolRegistryFactory.kt`** — register it in `buildCatalog`; wrap construction in the `optional(...)` helper
+4. **`tools/ToolCatalogFactory.kt`** — register it in `buildCatalog`; wrap construction in the `optional(...)` helper
    when it depends on an API key that may be unset. Register it under a `ToolGroup` when a turn rarely needs it, and
    leave it visible when the model may need it without being asked for it by name; a new group also needs its one-line
    summary in `tools/ToolCatalog.kt`, since that line is all the model reads before loading it. A tool only one messenger can implement goes to that adapter's

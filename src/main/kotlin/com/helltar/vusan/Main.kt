@@ -39,7 +39,7 @@ import com.helltar.vusan.telegram.callback.InlineChoiceHandler
 import com.helltar.vusan.telegram.callback.TaskMenuHandler
 import com.helltar.vusan.telegram.delivery.TelegramDelivery
 import com.helltar.vusan.telegram.inbound.VoiceTranscriber
-import com.helltar.vusan.tools.ToolRegistryFactory
+import com.helltar.vusan.tools.ToolCatalogFactory
 import com.helltar.vusan.tools.imagegen.resolveSelfImage
 import com.helltar.vusan.telegram.tools.TelegramToolSets
 import com.helltar.vusan.telegram.tools.sticker.StickerCatalog
@@ -163,8 +163,8 @@ suspend fun main() = coroutineScope {
         val contextWindowPolicy = ContextWindowPolicy(llm.model)
         val groupLogDigester = groupLog?.let { LlmGroupLogDigester(client, llm.model, llm.compactionOptions) }
 
-        val toolRegistryFactory =
-            ToolRegistryFactory(
+        val toolCatalogFactory =
+            ToolCatalogFactory(
                 http, publicHttp, TelegramToolSets(telegramClient, stickerCatalog), config, conversation, memory,
                 tasks, vision, groupLog, groupLogDigester, contextWindowPolicy.liveToolResultMaxChars, codexAuth,
                 selfImage,
@@ -196,7 +196,7 @@ suspend fun main() = coroutineScope {
 
         val agentRunner =
             AgentRunner(
-                agentFactory, toolRegistryFactory, conversation, memory, conversationCompactor,
+                agentFactory, toolCatalogFactory, conversation, memory, conversationCompactor,
                 config.chatHistory, stickerCatalog?.let { catalog -> catalog::indexBlockFor },
                 groupLog, { fallbackInUse()?.model }, config.maxConcurrentTurns,
                 diary = diary?.let { it::blockFor },
@@ -256,7 +256,7 @@ suspend fun main() = coroutineScope {
                 ),
             )
 
-        logStartup(config, llm, fallback, vision, ambient?.botNames, toolRegistryFactory.availableToolNames)
+        logStartup(config, llm, fallback, vision, ambient?.botNames, toolCatalogFactory.availableToolNames)
         logPresence(config, groupLogOn = groupLog != null)
 
         val botJob = botRunner.start(this)

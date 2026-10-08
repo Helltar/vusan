@@ -136,7 +136,7 @@ what they describe:
 
 - [`docs/architecture.md`](docs/architecture.md): lifecycle, package/layer moves,
   delivery policy, scheduler behavior, startup wiring, or core orchestrators
-  (`AgentRunner`, `AgentFactory`, `ToolRegistryFactory`, `TelegramDelivery`,
+  (`AgentRunner`, `AgentFactory`, `ToolCatalogFactory`, `TelegramDelivery`,
   `TelegramOutputSender`, `TaskScheduler`).
 - [`docs/configuration.md`](docs/configuration.md) and
   [`.env.example`](.env.example): env var additions, removals,
@@ -213,18 +213,18 @@ what they describe:
 Layout: `tools/<feature>/<Feature>Tools.kt` (the `ToolSet` surface),
 `<Feature>ToolDescriptions.kt` (a local `internal object *ToolDescriptions`), optional
 client/model files for external I/O, registration in
-[`ToolRegistryFactory`](src/main/kotlin/com/helltar/vusan/tools/ToolRegistryFactory.kt),
+[`ToolCatalogFactory`](src/main/kotlin/com/helltar/vusan/tools/ToolCatalogFactory.kt),
 then docs per the triggers above. Registration also decides whether the tool's schemas ride
 in every request or wait for `loadTools`: a set registered under a `ToolGroup` in
 [`ToolCatalog`](src/main/kotlin/com/helltar/vusan/tools/ToolCatalog.kt) is registered all
 the same, only offered later. Group what a turn rarely needs; leave visible what the model
 may need without being asked for it by name. A tool needing an optional key is registered
-through `ToolRegistryFactory.optional(...)`, which disables it with a warning
+through `ToolCatalogFactory.optional(...)`, which disables it with a warning
 rather than failing startup.
 
 A tool only one messenger can implement — Telegram's `file_id`, its sticker sets —
 is not registered there at all: it lives in that adapter (`telegram/tools/`) and
-reaches the registry through the `PlatformToolSets` port, gated there on the same
+reaches the catalog through the `PlatformToolSets` port, gated there on the same
 chat capabilities. Nothing under `tools/` may name a messenger, and
 `PlatformBoundaryTest`'s allowlist is empty — keep it that way.
 

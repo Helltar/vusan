@@ -4,7 +4,7 @@ package com.helltar.vusan.request
  * What the bot is allowed to put into one chat, and how fast. Groups can forbid whole content kinds,
  * and a bot that is a plain member is bound by that like anyone else — but it only finds out when a
  * send is rejected, after the turn that produced it has already been paid for. Resolving this up front
- * lets the tools that would be refused stay out of the agent's registry and the rest be explained to it.
+ * lets the tools that would be refused stay out of the agent's catalog and the rest be explained to it.
  *
  * Every field defaults to allowed: a lookup that failed, or a chat nobody restricted, must never read
  * as the bot having lost an ability.

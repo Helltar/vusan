@@ -73,7 +73,7 @@ import io.github.oshai.kotlinlogging.KotlinLogging
 import io.ktor.client.*
 import kotlin.time.Duration.Companion.seconds
 
-class ToolRegistryFactory(
+class ToolCatalogFactory(
     http: HttpClient,
     publicHttp: HttpClient,
     // whatever the messenger this turn came from adds to the shared tools, built per turn

@@ -5,7 +5,7 @@ import com.helltar.vusan.request.ChatCapabilities
 /**
  * Whether this chat would accept [output] at all.
  *
- * `ToolRegistryFactory` already keeps a tool the chat would refuse out of the registry, but that is
+ * `ToolCatalogFactory` already keeps a tool the chat would refuse out of the catalog, but that is
  * not proof every queued output is deliverable: a text-first search tool queues photos, and the
  * sandbox sends whatever files it was asked for, both through paths no capability gates. This is
  * the check that covers those, and any path written later.
