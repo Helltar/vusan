@@ -69,7 +69,8 @@ Preserve the package boundaries in [`docs/architecture.md`](docs/architecture.md
   messenger, no `AppConfig`. Every call to a model goes through its `LlmClient`
   with its `Message` model; a field one API grew lives in that API's client
   (`llm/openai/`, `llm/anthropic/`), never in a request rewrite outside it, and a
-  reasoning block a provider returned is kept raw and replayed to it verbatim.
+  reasoning block an endpoint returned is kept raw and replayed verbatim to that
+  endpoint alone.
   Behavior on the wire is proven by a test over a mock engine, not by reading
   the request builder.
 - Avoid thin abstractions and one-off helper objects. Add an abstraction only

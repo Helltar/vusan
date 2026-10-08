@@ -45,7 +45,8 @@ that is who owns writing them, not because only `agent/` reads them. No other ar
   and a client per wire protocol under `llm/openai/` (the Responses and Chat Completions APIs, which also cover the Codex
   backend and any OpenAI-compatible server) and `llm/anthropic/` (the Messages API). The package knows nothing about the
   bot: `RetryingLlmClient` repeats a call the provider fumbled, `FallbackLlmClient` hands every call to a second provider
-  while the first is out, and the reasoning blocks a provider returns are kept raw and replayed to it verbatim. The
+  while the first is out, and the reasoning blocks an endpoint returns are kept raw and replayed verbatim to that endpoint
+  alone — the platform, the Codex backend and a compatible server speak one protocol, and none reads another's. The
   clients own their data shapes — adding a field the API grew is one line, and a block type a reply carries that nobody
   reads yet is skipped with a warning rather than failing the call.
 - **`agent/`** — agent orchestration. `AgentRunner` serializes the turns of one conversation, assembles
@@ -276,14 +277,16 @@ A normal user message travels:
       the same prompt is declined again — and the runner answers with the content-policy reply;
     - a turn that ends having delivered nothing — no `sendMessage`, media, or reaction, and empty assistant text (flaky
       providers return an empty completion after a batch of tool results) — gets one nudge to actually deliver before
-      finishing, so a full turn of research does not collapse into silence. An ambient turn is exempt on its first
+      finishing, so a full turn of research does not collapse into silence; when the next call is the last, the
+      wrap-up below takes its place, so the nudge never pushes a turn past its limit. An ambient turn is exempt on its first
       reply only (`owesDelivery`): the system prompt lets it end at once, empty and with no tool calls, when the
       message turns out to be for someone else or already answered, while an empty reply after tools is still the
       flaky provider and still nudged.
 
    It also lands a turn that runs long instead of letting it crash. `AGENT_MAX_MODEL_CALLS` bounds the model calls one
    turn may make, and the last of them is reserved: once a batch of tool results would be answered by that call, the
-   results go to a wrap-up request carrying no tools at all — the model cannot spend the call on one more search, and
+   results go to a wrap-up request in which no tool may be called — the tools stay defined, since the calls the turn
+   made are replayed with them — so the model cannot spend the call on one more search, and
    its answer, written from what it gathered and saying what it could not finish, is queued into the outbox like any
    other message, so it survives even a turn that already reacted or sent something (trailing agent text is otherwise
    dropped as duplicate chatter). Without that, a research turn would die with every search it paid for still
@@ -593,8 +596,8 @@ A normal user message travels:
   breakpoints (`llm/openai/OpenAiPromptCaching`): the stable system block, and the last user message when the request
   carries tools, which keeps the system prompt and tool schemas reusable while leaving history, memory and tool results
   out of billable cache writes. Reasoning comes back encrypted (`store: false`) and is replayed verbatim through the tool
-  loop. `anthropic` asks for `thinking: adaptive` with `block_binding: drop_block` under its beta header — a thinking
-  block is bound to the tools and messages before it, and `loadTools` and the wrap-up move the tool list mid-turn, so an
+  loop; a model that does not reason — the gpt-4 family, read off the id — is asked for none and takes no effort. `anthropic` asks for `thinking: adaptive` with `block_binding: drop_block` under its beta header — a thinking
+  block is bound to the tools and messages before it, and `loadTools` widens the tool list mid-turn, so an
   account the API holds to that check gets the stale block dropped rather than a 400 — sends the configured
   `output_config.effort`, the model's whole output ceiling as `max_tokens`, and two cache breakpoints: the request-level
   one the API places on the last block, which every iteration of the loop reads back, and one on the system block,
@@ -615,13 +618,14 @@ A normal user message travels:
   subscription's usage windows off every response. Signing in, out, and device-code stay the CLI's job; this bridge
   requires file-backed credentials and cannot read the OS keyring. `CODEX_SERVICE_TIER` rides along as the Responses
   `service_tier` field and in the `x-codex-routing-hint` header the CLI sends beside it, both fixed for the process at
-  startup.
+  startup, on the chat model alone: a vision or addressing model on the plan runs at the standard tier.
 
   The backend accepts streaming requests only (`stream=false` and `store=true` are both rejected), and its final
   `response.completed` event carries an empty `output`. So the client streams the call and folds the
   `response.output_item.done` items back into the response object the non-streaming API would have returned
-  (`llm/openai/ResponsesStream`), preserving a non-empty completed output if the backend supplies one and rejecting
-  failed, incomplete, or cancelled terminal events. Codex requests use `store=false` and explicitly request encrypted
+  (`llm/openai/ResponsesStream`), preserving a non-empty completed output if the backend supplies one, folding an
+  incomplete one the same way so a reply cut at the output ceiling reads as one, and rejecting failed or cancelled
+  terminal events. Codex requests use `store=false` and explicitly request encrypted
   reasoning content, so reasoning items can be echoed through a stateless multi-step tool loop. Every completed call is
   logged with its cache share and where its prefix drifted, and counted towards the subscription's next step.
 

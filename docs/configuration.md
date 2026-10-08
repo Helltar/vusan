@@ -95,7 +95,8 @@ banned, and startup says so in the log.
 server behind `LLM_BASE_URL` speaks, since a third-party server may offer either. `openai` and
 `codex` always speak the Responses API, the one where tools work alongside reasoning.
 `LLM_REASONING_EFFORT` applies to every provider. Which efforts work depends on the model: `codex`
-and `anthropic` check yours at startup, `openai` and `openai-compatible` on the first turn. On
+and `anthropic` check yours at startup, `openai` and `openai-compatible` on the first turn, except
+that an effort for an `openai` model that does not reason — the gpt-4 family — stops startup. On
 `anthropic` the values are `low` to `max` (`none` and `minimal` stop startup), and a model from
 before Claude 4.6 — one the API serves under a dated id such as `claude-haiku-4-5-20251001` — takes
 no effort at all. Every other Claude model thinks adaptively on every turn here, Opus 4.7 and 4.8
@@ -203,7 +204,9 @@ needs hides it again, so use the release the model shipped with.
 
 **A faster serving tier.** `CODEX_SERVICE_TIER=priority` buys roughly the speed-up the Codex CLI
 offers as `/fast`, at the price of spending the plan's allowance quicker. It is off unless you set
-it, and startup fails if the chosen model does not offer the tier, so check the model first:
+it, applies to the chat model and its fallback alone — a vision or addressing model on the plan runs
+at the standard tier — and startup fails if the chosen model does not offer the tier, so check the
+model first:
 
 ```dotenv
 CODEX_SERVICE_TIER=priority
@@ -489,7 +492,9 @@ the tools, as on every other provider.
 Vision lets the agent inspect photos, sampled video frames and images in Telegram channel posts. It
 also lets Vusan learn the sticker sets a chat uses, search them by meaning, and choose replies from
 them. These features need a model that accepts images. By default that is the chat model itself, so
-an `openai`, `anthropic` or `codex` setup needs nothing extra.
+an `openai`, `anthropic` or `codex` setup needs nothing extra. A look runs there at the model's own
+default effort rather than `LLM_REASONING_EFFORT`, which is tuned for turns, and caches nothing,
+since a picture is looked at once.
 
 When the chat model cannot accept images, `VISION_MODEL` runs vision on a model of its own and the
 chat model keeps answering everything else. On its own the model runs on the chat provider with the
@@ -651,8 +656,10 @@ ADDRESSING_NAMES=robin,robbie
 | `ADDRESSING_PROVIDER` | the chat provider | `openai`, `anthropic` or `openai-compatible` with its own key under `ADDRESSING_`, or `codex`. |
 | `ADDRESSING_NAMES`    | from the profile  | Spellings the chat uses, comma-separated.                                   |
 
-The model gets the least reasoning its API offers unless `ADDRESSING_REASONING_EFFORT` says
-otherwise: a yes-or-no over a few lines of chat needs none, and every token of it is latency. The
+The model gets the least reasoning it is known to take unless `ADDRESSING_REASONING_EFFORT` says
+otherwise: `none` on `openai`, the lowest the plan's catalog lists on `codex`, `low` on `anthropic`,
+and its own default on `openai-compatible`, whose models are anyone's guess. A yes-or-no over a few
+lines of chat needs no reasoning, and every token of it is latency. The
 verdicts were measured on small OpenAI models — `gpt-5.6-luna` made the fewest wrong calls of eight
 and no false yes at all.
 
