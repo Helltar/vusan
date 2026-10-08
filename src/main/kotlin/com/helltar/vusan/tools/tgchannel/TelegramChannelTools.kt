@@ -11,7 +11,7 @@ private val MAX_WINDOW = 30.days
 
 class TelegramChannelTools(private val reader: TelegramChannelReader) : ToolSet {
 
-    @Tool(TelegramChannelToolDescriptions.READ_TELEGRAM_CHANNEL_POSTS)
+    @Tool(TelegramChannelToolDescriptions.READ_TELEGRAM_CHANNEL_POSTS, readOnly = true)
     suspend fun readTelegramChannelPosts(
         @Arg(TelegramChannelToolDescriptions.CHANNEL)
         channel: String,

@@ -266,8 +266,13 @@ A normal user message travels:
    budget before later LLM calls; the runner opens that bound as a `TurnToolBudget` the loop spends and the
    `checkContextBudget` tool reports, so a turn can narrow a long read instead of discovering the ceiling by getting an
    empty result back. Once a quarter of the reserve is left the run states it without being asked, once, in a note that
-   follows the batch of tool results — nothing may come between an assistant's tool call and that call's result. The loop
-   (`agent/AgentTurn.kt`) guards against flaky models in three ways:
+   follows the batch of tool results — nothing may come between an assistant's tool call and that call's result. The calls
+   of one batch run in order, except that read-only ones standing next to each other (`@Tool(readOnly = true)`: a
+   search, a page, a file read) run side by side; results are recorded in batch order either way. A turn whose own
+   pile of results would no longer fit the window has its oldest result batches folded into a stub before the next
+   request, together with the long arguments they answered (`agent/TurnCompaction.kt`), the latest batch and the stored
+   history never — so a long build goes on instead of dying on the context limit. The loop
+   (`agent/AgentTurn.kt`) guards against flaky models in four ways:
     - a tool call that arrives with no arguments at all for a tool that takes them (flaky models emit empty-arg siblings
       when they try to call tools in parallel) is answered with a validation error instead of being executed, so the run
       stays clean and the follow-up request stays well-formed. A call that provides some arguments and omits a required
@@ -283,7 +288,10 @@ A normal user message travels:
       wrap-up below takes its place, so the nudge never pushes a turn past its limit. An ambient turn is exempt on its first
       reply only (`owesDelivery`): the system prompt lets it end at once, empty and with no tool calls, when the
       message turns out to be for someone else or already answered, while an empty reply after tools is still the
-      flaky provider and still nudged.
+      flaky provider and still nudged;
+    - a turn that announced its plan (`announcePlan`) and then ended without a single tool call after it is sent back
+      to the work once (`PROMISE_NUDGE`): the announcement reached the chat, so the user is waiting on exactly what it
+      promised, and "I'll build it now" followed by silence is the one reading worse than an error.
 
    It also lands a turn that runs long instead of letting it crash. `AGENT_MAX_MODEL_CALLS` bounds the model calls one
    turn may make, and the last of them is reserved: once a batch of tool results would be answered by that call, the
@@ -795,6 +803,9 @@ A symptom-to-source map for finding the right file fast. Paths are under
 | A turn's plan reaches the chat only after the work it announced, or arrives twice | `tools/message/MessageTools.announcePlan` (the tool and its one-per-turn rule) + `telegram/TurnStatus.kt` (`say`, and what survives `finish`) + `outbox/BotOutbox.kt` (`recordDelivered`, `hasDelivered`) + `telegram/delivery/TelegramDelivery.dispatch` (skipping an item already in the chat) |
 | The typing indicator or the turn's status message is wrong, stale, or missing | `telegram/TelegramProgress.kt` (both tickers, and `statusGraceFor`, the per-activity gate deciding which turns get a message at all) + `telegram/TurnStatus.kt` (the message itself, the emoji beside each activity, its stop button, and how it ends) + `agent/ToolActivity.kt` (which tool means what) + `i18n/Messages.progressLabel` (the words) + `telegram/delivery/TelegramDelivery.chatActionFor` (the action) |
 | A long research turn ends in the generic error reply or is answered mid-way | `agent/AgentTurn.kt` (`maxModelCalls`, `outOfModelCalls` and the wrap-up that lands the turn) + `agent/AgentRunner.kt` (delivering what the outbox holds when a run fails) |
+| A long build dies on the context limit, or the model loses track of what it wrote earlier in the turn | `agent/TurnCompaction.kt` (`foldedToFit`: which result batches are folded, and which arguments dropped) + `agent/AgentTurn.kt` (`foldToFit`, run before every request) + `agent/AgentFactory.kt` (the ceiling, from the context budget) |
+| The bot announces what it will do and then goes quiet | `agent/AgentTurn.kt` (`PROMISE_NUDGE`, and `record`, which notes what ran after `announcePlan`) + `agent/SystemPrompt.kt` (the contract line that says an announcement is followed by the work) |
+| Two searches in one batch ran one after the other, or a tool ran alongside one it should have waited for | `tools/ToolSet.kt` (`@Tool(readOnly = true)`, the only thing that lets a call run beside its neighbours) + `agent/AgentTurn.kt` (`executeBatch` and `runs`) |
 | A spent subscription still ends turns in "come back later", or the bot never returns to it | `llm/FallbackLlmClient.kt` (the outage deadline, the single probe back) + `agent/ProviderErrors.providerOutage` (the patterns and the reset time read from the body), then `LLM_FALLBACK_*` in [`configuration.md`](configuration.md#a-second-provider-behind-the-first) |
 | The reply to a failed turn says nothing about what the provider did | `agent/AgentRunner.providerErrorReply` (which error body earns which canned reply: a content-policy refusal, a spent usage limit, a dead key, a 429/503 overload) + `i18n/Messages.kt` (the strings) |
 | You need to see exactly what the model was sent this turn | `agent/PromptDump.kt` (the whole request rendered per message) — `agent/AgentTurn.kt` renders it before every model call and is switched by the `PromptDump` logger in [`logback.xml`](../src/main/resources/logback.xml) |

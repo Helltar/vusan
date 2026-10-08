@@ -7,7 +7,7 @@ import com.helltar.vusan.tools.suspendToolGuard
 
 class CurrencyTools(private val client: ExchangeRateClient) : ToolSet {
 
-    @Tool(CurrencyToolDescriptions.GET_EXCHANGE_RATE)
+    @Tool(CurrencyToolDescriptions.GET_EXCHANGE_RATE, readOnly = true)
     suspend fun getExchangeRate(
         @Arg(CurrencyToolDescriptions.BASE)
         base: String,

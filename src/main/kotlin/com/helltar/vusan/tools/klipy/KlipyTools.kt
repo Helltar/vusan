@@ -34,7 +34,7 @@ class KlipyTools(
     private val candidates = ConcurrentHashMap<String, Candidate>()
     private val sent = ConcurrentHashMap.newKeySet<String>()
 
-    @Tool(KlipyToolDescriptions.SEARCH_GIFS)
+    @Tool(KlipyToolDescriptions.SEARCH_GIFS, readOnly = true)
     suspend fun searchGifs(
         @Arg(KlipyToolDescriptions.QUERY)
         query: String,

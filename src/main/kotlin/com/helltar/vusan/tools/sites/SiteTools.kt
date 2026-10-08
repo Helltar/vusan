@@ -33,7 +33,7 @@ class SiteTools(
         listOfNotNull(describePublished(site), missingIndex(site, path)).joinToString("\n")
     }
 
-    @Tool(SiteToolDescriptions.SITE_STATUS)
+    @Tool(SiteToolDescriptions.SITE_STATUS, readOnly = true)
     suspend fun siteStatus(): String = suspendToolGuard {
         val site = sandbox.publishedSite()
             ?: return@suspendToolGuard "Nothing is published. Build the files in the sandbox, then publish that directory."

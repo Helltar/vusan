@@ -29,10 +29,15 @@ import kotlin.reflect.jvm.isAccessible
 /**
  * Marks a method of a [ToolSet] as a tool the model may call, with the [description] the model reads
  * about it — the tool's whole interface, besides its arguments. The method has to return a `String`.
+ *
+ * [readOnly] says the tool changes nothing — no output queued, no file written, no state the next
+ * call reads — so the loop may run it alongside the other read-only calls of the same batch instead of
+ * one after another. A tool that only looks something up qualifies; a tool whose result lands in the
+ * chat or in the sandbox does not, however harmless, because its order against the batch is its meaning.
  */
 @Target(AnnotationTarget.FUNCTION)
 @Retention(AnnotationRetention.RUNTIME)
-annotation class Tool(val description: String)
+annotation class Tool(val description: String, val readOnly: Boolean = false)
 
 /** What the model reads about one argument of a tool. */
 @Target(AnnotationTarget.VALUE_PARAMETER)
@@ -56,6 +61,8 @@ class ToolFunction internal constructor(
     val description: String,
     val parameters: JsonObject,
     val requiredParameters: List<String>,
+    /** Whether the loop may run this call alongside the other read-only calls of its batch. */
+    val readOnly: Boolean,
     private val invoke: suspend (JsonObject) -> String,
 ) {
 
@@ -82,7 +89,8 @@ fun ToolSet.toolFunctions(): List<ToolFunction> =
 
 private fun toolFunction(instance: ToolSet, function: KFunction<*>): ToolFunction {
     val name = function.name
-    val description = requireNotNull(function.findAnnotation<Tool>()).description
+    val annotation = requireNotNull(function.findAnnotation<Tool>())
+    val description = annotation.description
 
     require(function.returnType.classifier == String::class) { "tool $name must return a String" }
 
@@ -118,7 +126,7 @@ private fun toolFunction(instance: ToolSet, function: KFunction<*>): ToolFunctio
             putJsonArray("required") { required.forEach { add(it) } }
         }
 
-    return ToolFunction(name, description, schema, required) { arguments ->
+    return ToolFunction(name, description, schema, required, annotation.readOnly) { arguments ->
         val values =
             buildMap {
                 put(requireNotNull(function.instanceParameter) { "tool $name is not a method" }, instance)

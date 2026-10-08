@@ -15,7 +15,7 @@ class StickerTools(
     private val outbox: BotOutbox,
 ) : ToolSet {
 
-    @Tool(StickerToolDescriptions.SEARCH_STICKERS)
+    @Tool(StickerToolDescriptions.SEARCH_STICKERS, readOnly = true)
     suspend fun searchStickers(
         @Arg(StickerToolDescriptions.SEARCH_QUERY)
         query: String,

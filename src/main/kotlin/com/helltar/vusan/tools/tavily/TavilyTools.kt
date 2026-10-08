@@ -19,7 +19,7 @@ class TavilyTools(
     private val outbox: BotOutbox,
 ) : ToolSet {
 
-    @Tool(TavilyToolDescriptions.WEB_SEARCH)
+    @Tool(TavilyToolDescriptions.WEB_SEARCH, readOnly = true)
     suspend fun webSearch(
         @Arg(TavilyToolDescriptions.WEB_SEARCH_QUERY)
         query: String,
@@ -101,7 +101,7 @@ class TavilyTools(
         )
     }
 
-    @Tool(TavilyToolDescriptions.EXTRACT_PAGE_CONTENT)
+    @Tool(TavilyToolDescriptions.EXTRACT_PAGE_CONTENT, readOnly = true)
     suspend fun extractPageContent(
         @Arg(TavilyToolDescriptions.EXTRACT_PAGE_URL)
         url: String,

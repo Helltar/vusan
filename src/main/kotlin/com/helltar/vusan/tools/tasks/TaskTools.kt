@@ -73,7 +73,7 @@ class TaskTools(
         "Scheduled task id=$id, fires=${formatFire(plan.firstFire, tz)} (${plan.recurrence.display})."
     }
 
-    @Tool(TaskToolDescriptions.LIST_TASKS)
+    @Tool(TaskToolDescriptions.LIST_TASKS, readOnly = true)
     suspend fun listTasks(): String = suspendToolGuard {
         val owner = context.user
         val scopedChat = scopedChat()

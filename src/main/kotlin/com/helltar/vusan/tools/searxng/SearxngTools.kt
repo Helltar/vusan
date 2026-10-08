@@ -19,7 +19,7 @@ class SearxngTools(
     private val outbox: BotOutbox,
 ) : ToolSet {
 
-    @Tool(SearxngToolDescriptions.META_SEARCH)
+    @Tool(SearxngToolDescriptions.META_SEARCH, readOnly = true)
     suspend fun metaSearch(
         @Arg(SearxngToolDescriptions.META_SEARCH_QUERY)
         query: String,

@@ -97,9 +97,13 @@ class BotOutbox(val capabilities: ChatCapabilities = ChatCapabilities.UNRESTRICT
         return true
     }
 
-    /** Whether the turn already put something in the chat itself; an announcement is allowed one. */
+    /** Whether the turn already put something in the chat itself. */
     val hasDelivered: Boolean
         get() = items.any { it.delivered }
+
+    /** Whether the turn already announced its plan; a second announcement would rewrite what the user read. */
+    val hasAnnounced: Boolean
+        get() = items.any { it.delivered && it.announcement }
 
     /**
      * Whether anything is waiting to be sent. An announcement is not: it was a promise of an answer, so
@@ -108,11 +112,16 @@ class BotOutbox(val capabilities: ChatCapabilities = ChatCapabilities.UNRESTRICT
     val hasQueuedOutput: Boolean
         get() = items.any { !it.delivered && !it.announcement }
 
+    /** Whether the turn has an answer for the user at all, waiting to be sent or already in the chat. */
+    val hasAnswered: Boolean
+        get() = items.any { !it.announcement }
+
     // records text the turn already put in the chat itself, so it reaches the history and the group
     // transcript the same way a queued message does. never refused and never routed to a private chat:
-    // it is already sent, and refusing it here would only lose it from the history.
-    fun recordDelivered(text: String) {
-        items += OutboxItem(BotOutput.Text(text), toPrivate = false, delivered = true, announcement = true)
+    // it is already sent, and refusing it here would only lose it from the history. an announcement is a
+    // promise of an answer still to come; anything else delivered this way is an answer in its own right.
+    fun recordDelivered(text: String, announcement: Boolean = true) {
+        items += OutboxItem(BotOutput.Text(text), toPrivate = false, delivered = true, announcement = announcement)
     }
 
     // opt-in rich messages never coalesce — each is a deliberate structured send — but they share the

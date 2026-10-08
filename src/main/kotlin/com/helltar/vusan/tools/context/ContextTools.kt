@@ -8,6 +8,6 @@ import com.helltar.vusan.tools.suspendToolGuard
 
 class ContextTools(private val budget: TurnToolBudget) : ToolSet {
 
-    @Tool(ContextToolDescriptions.CHECK_CONTEXT_BUDGET)
+    @Tool(ContextToolDescriptions.CHECK_CONTEXT_BUDGET, readOnly = true)
     suspend fun checkContextBudget(): String = suspendToolGuard { budget.report() }
 }

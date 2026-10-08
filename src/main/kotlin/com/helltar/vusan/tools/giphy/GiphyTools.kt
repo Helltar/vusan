@@ -23,7 +23,7 @@ class GiphyTools(private val client: GiphyClient, private val outbox: BotOutbox)
     private val candidates = ConcurrentHashMap<String, String>()
     private val sent = ConcurrentHashMap.newKeySet<String>()
 
-    @Tool(GiphyToolDescriptions.SEARCH_GIFS)
+    @Tool(GiphyToolDescriptions.SEARCH_GIFS, readOnly = true)
     suspend fun searchGifs(
         @Arg(GiphyToolDescriptions.QUERY)
         query: String,

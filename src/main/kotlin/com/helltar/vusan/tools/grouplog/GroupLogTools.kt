@@ -20,7 +20,7 @@ class GroupLogTools(
     // with the number instead.
     private val maxWindow = repository.retentionDays.days
 
-    @Tool(GroupLogToolDescriptions.READ_GROUP_LOG)
+    @Tool(GroupLogToolDescriptions.READ_GROUP_LOG, readOnly = true)
     suspend fun readGroupLog(
         @Arg(GroupLogToolDescriptions.READ_GROUP_LOG_WINDOW) window: String,
         @Arg(GroupLogToolDescriptions.READ_GROUP_LOG_AUTHOR) author: String? = null,

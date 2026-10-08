@@ -92,6 +92,10 @@ class AgentFactory(
                 addAll(conversation.turns.toMessages())
             }
 
+        // what the request may measure before the turn's own results are folded: the window less what the
+        // answer and the estimate's own error are reserved
+        val budget = preparation.tokenBudget
+
         return AgentTurn(
             client = client,
             model = model,
@@ -101,6 +105,7 @@ class AgentFactory(
             outbox = outbox,
             toolBudget = toolBudget,
             maxModelCalls = maxModelCalls,
+            promptTokenCeiling = budget.contextWindowTokens - budget.responseReserveTokens - budget.safetyReserveTokens,
             scope = scope,
             mayStaySilent = mayStaySilent,
             toolEvents = toolEvents,

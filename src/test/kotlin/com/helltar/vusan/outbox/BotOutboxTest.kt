@@ -58,6 +58,7 @@ class BotOutboxTest {
         outbox.recordDelivered("I will build the game")
 
         assertTrue(outbox.hasDelivered)
+        assertTrue(outbox.hasAnnounced)
         assertTrue(outbox.enqueueText("here it is"))
 
         val texts = outbox.pending.map { assertIs<BotOutput.Text>(it.output).text }

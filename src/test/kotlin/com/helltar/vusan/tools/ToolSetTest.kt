@@ -13,6 +13,7 @@ import kotlin.test.Test
 import kotlin.test.assertContains
 import kotlin.test.assertEquals
 import kotlin.test.assertFailsWith
+import kotlin.test.assertFalse
 import kotlin.test.assertTrue
 
 @Suppress("FunctionOnlyReturningConstant")
@@ -26,7 +27,7 @@ private class SampleTools : ToolSet {
         maxVotes: Int = 1,
     ): String = "$question ${options.joinToString("|")} $isAnonymous $maxVotes"
 
-    @Tool("Looks something up.")
+    @Tool("Looks something up.", readOnly = true)
     suspend fun lookUp(@Arg("What to find.") query: String, limit: Long, focus: String? = null): String =
         "$query $limit ${focus ?: "none"}"
 
@@ -74,6 +75,13 @@ class ToolSetTest {
 
         val focus = tool("lookUp").parameters.getValue("properties").jsonObject.getValue("focus").jsonObject
         assertEquals(listOf("string", "null"), focus.getValue("type").jsonArray.map { it.jsonPrimitive.content }, "a nullable parameter may be sent as null")
+    }
+
+    @Test
+    fun `a tool is read-only only when its annotation says so`() {
+        assertTrue(tool("lookUp").readOnly)
+        assertFalse(tool("createPoll").readOnly)
+        assertFalse(tool("ping").readOnly)
     }
 
     @Test

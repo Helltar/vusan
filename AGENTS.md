@@ -235,6 +235,10 @@ chat capabilities. Nothing under `tools/` may name a messenger, and
   one with `toolFailure { }`. A parameter with a default or a nullable type is
   optional for the model; the rest are required in the schema it reads.
 - Use `requireToolText(label, maxChars)` for required text args when it fits.
+- A tool that changes nothing — no output queued, no file written, no state a later
+  call reads — is `@Tool(..., readOnly = true)`, and the loop runs such calls of one
+  batch side by side. Anything whose order against the batch is its meaning stays
+  sequential, however harmless.
 - The `@Tool(description)` and `@Arg(description)` values are all-or-nothing per
   module: constants only, never mixed with inline strings, ordered by tool method
   order. Split a concatenated one at sentence boundaries — each `+` chunk is one

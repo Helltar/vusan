@@ -22,7 +22,11 @@ import com.helltar.vusan.tools.ToolGroup
 import com.helltar.vusan.tools.ToolSet
 import com.helltar.vusan.tools.suspendToolGuard
 import com.helltar.vusan.tools.toolCatalog
+import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.runBlocking
+import kotlinx.coroutines.withTimeoutOrNull
+import java.util.concurrent.atomic.AtomicInteger
+import kotlin.time.Duration.Companion.milliseconds
 import kotlinx.serialization.json.buildJsonObject
 import kotlinx.serialization.json.put
 import kotlin.test.Test
@@ -33,7 +37,24 @@ import kotlin.test.assertFalse
 import kotlin.test.assertIs
 import kotlin.test.assertTrue
 
-private class ProbeTools(private val outbox: BotOutbox) : ToolSet {
+// where calls that run side by side meet: each waits a moment for the other, and says whether it came
+private class Rendezvous(private val expected: Int) {
+
+    private val waiting = AtomicInteger()
+    private val met = CompletableDeferred<Unit>()
+
+    suspend fun meet(): Boolean {
+        if (waiting.incrementAndGet() == expected) met.complete(Unit)
+
+        return try {
+            withTimeoutOrNull(300.milliseconds) { met.await() } != null
+        } finally {
+            waiting.decrementAndGet()
+        }
+    }
+}
+
+private class ProbeTools(private val outbox: BotOutbox, private val rendezvous: Rendezvous = Rendezvous(2)) : ToolSet {
 
     @Tool("Sends text to the user.")
     fun sendMessage(@Arg("The text.") text: String): String {
@@ -41,8 +62,17 @@ private class ProbeTools(private val outbox: BotOutbox) : ToolSet {
         return "Delivered."
     }
 
+    @Tool("Says what comes next.")
+    fun announcePlan(@Arg("The plan.") text: String): String {
+        outbox.recordDelivered(text)
+        return "Sent."
+    }
+
     @Tool("Looks something up.")
     fun lookUp(@Arg("What.") query: String): String = "found: $query"
+
+    @Tool("Looks something up without touching anything.", readOnly = true)
+    suspend fun lookUpTogether(@Arg("What.") query: String): String = if (rendezvous.meet()) "together: $query" else "alone: $query"
 
     @Tool("Always fails.")
     suspend fun explode(@Arg("Why.") reason: String): String = suspendToolGuard { error("boom: $reason") }
@@ -124,6 +154,78 @@ class AgentTurnTest {
             assertEquals("lookUp", event.toolName)
             assertEquals("""{"query":"cats"}""", event.args)
         }
+
+    @Test
+    fun `read-only calls standing together run side by side, and the results keep the batch order`() =
+        run(toolCallReply(call("lookUpTogether", "a", "query" to "a"), call("lookUpTogether", "b", "query" to "b")), textReply("ok")) { run, _ ->
+            val results = assertIs<Message.ToolResults>(run.client.requests[1].messages.last()).results
+
+            assertEquals(listOf("together: a", "together: b"), results.map { it.output })
+            assertEquals(listOf("a", "b"), results.map { it.callId })
+            assertEquals(listOf("a", "b"), run.events.map { it.toolCallId })
+        }
+
+    // a call that may change something keeps its place in the batch, so the reads on either side of it
+    // run one at a time
+    @Test
+    fun `a call that is not read-only keeps the batch in order`() =
+        run(
+            toolCallReply(call("lookUpTogether", "a", "query" to "a"), call("lookUp", "x", "query" to "x"), call("lookUpTogether", "b", "query" to "b")),
+            textReply("ok"),
+        ) { run, _ ->
+            val results = assertIs<Message.ToolResults>(run.client.requests[1].messages.last()).results
+
+            assertEquals(listOf("alone: a", "found: x", "alone: b"), results.map { it.output })
+        }
+
+    // the announcement reached the chat, so a turn that stops there leaves the user waiting on a promise
+    @Test
+    fun `a turn that announced its plan and stopped is sent back to the work once`() =
+        run(toolCallReply(call("announcePlan", args = arrayOf("text" to "building it"))), textReply("ok"), textReply("done")) { run, answer ->
+            assertEquals("done", answer)
+            assertEquals(3, run.client.requests.size)
+            assertEquals(PROMISE_NUDGE, (run.client.requests[2].messages.last() as Message.User).text)
+        }
+
+    @Test
+    fun `a turn that announced its plan and then worked is not nudged`() =
+        run(
+            toolCallReply(call("announcePlan", args = arrayOf("text" to "building it"))),
+            toolCallReply(call("sendMessage", args = arrayOf("text" to "built"))),
+            textReply(""),
+        ) { run, _ ->
+            assertEquals(3, run.client.requests.size)
+            assertFalse(run.client.requests.any { request -> request.messages.any { it is Message.User && it.text == PROMISE_NUDGE } })
+        }
+
+    // three calls with long arguments outgrow a 16k window: before the request that follows, the oldest
+    // batches are folded away, the latest kept whole, so the turn goes on instead of overflowing
+    @Test
+    fun `a turn whose own pile outgrows the window has its oldest results folded before the next request`() {
+        val long = "y".repeat(20_000)
+
+        run(
+            toolCallReply(call("lookUp", "c1", "query" to long)),
+            toolCallReply(call("lookUp", "c2", "query" to long)),
+            toolCallReply(call("lookUp", "c3", "query" to long)),
+            textReply("done"),
+        ) { run, answer ->
+            assertEquals("done", answer)
+
+            val last = run.client.requests.last().messages
+            val results = last.filterIsInstance<Message.ToolResults>().map { it.results.single() }
+
+            assertEquals(listOf("c1", "c2", "c3"), results.map { it.callId })
+            assertEquals(FOLDED_RESULT, results[0].output)
+            assertEquals(FOLDED_RESULT, results[1].output)
+            // the run's own budget already cut the latest result down; folding never touches it
+            assertFalse(results[2].output == FOLDED_RESULT, "the latest batch is never folded")
+
+            val calls = last.filterIsInstance<Message.Assistant>().flatMap { it.toolCalls }
+            assertTrue("_dropped" in calls[0].arguments)
+            assertTrue("query" in calls[2].arguments)
+        }
+    }
 
     @Test
     fun `a tool that fails answers the model with its message and is recorded as an error`() =

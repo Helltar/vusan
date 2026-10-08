@@ -8,8 +8,8 @@ package com.helltar.vusan.agent
  * and then omitted entirely, so a turn can keep calling tools and learn nothing from them. The
  * strategy spends it, `checkContextBudget` reports it.
  *
- * A turn executes its tool calls one after another, so the field only has to be visible across the
- * coroutine hops between them, not atomic against a concurrent spender.
+ * Read-only calls of one batch run side by side, so spending is serialized; the field itself is read
+ * across the coroutine hops between calls.
  */
 class TurnToolBudget(val totalTokens: Int) {
 
@@ -24,7 +24,7 @@ class TurnToolBudget(val totalTokens: Int) {
         get() = percentLeft <= LOW_PERCENT
 
     fun spend(tokens: Int) {
-        remainingTokens = (remainingTokens - tokens).coerceAtLeast(0)
+        synchronized(this) { remainingTokens = (remainingTokens - tokens).coerceAtLeast(0) }
     }
 
     private companion object {
