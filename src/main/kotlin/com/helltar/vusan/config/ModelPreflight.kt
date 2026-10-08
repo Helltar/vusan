@@ -38,7 +38,7 @@ private val json = Json { ignoreUnknownKeys = true }
 suspend fun LlmProviderConfig.preflighted(http: HttpClient, codexAuth: CodexAuthStore?): LlmProviderConfig =
     when (this) {
         is LlmProviderConfig.OpenAi -> {
-            verifyModel(http, "OpenAI", model, OPENAI_MODELS_PAGE, OPENAI_MODELS_URL) { bearerAuth(apiKey) }
+            verifyModel(http, "OpenAI", this, OPENAI_MODELS_PAGE, OPENAI_MODELS_URL) { bearerAuth(apiKey) }
             this
         }
 
@@ -49,7 +49,7 @@ suspend fun LlmProviderConfig.preflighted(http: HttpClient, codexAuth: CodexAuth
 
 private suspend fun anthropicPreflight(http: HttpClient, config: LlmProviderConfig.Anthropic): LlmProviderConfig.Anthropic {
     val facts =
-        verifyModel(http, "Anthropic", config.model, ANTHROPIC_MODELS_PAGE, ANTHROPIC_MODELS_URL) {
+        verifyModel(http, "Anthropic", config, ANTHROPIC_MODELS_PAGE, ANTHROPIC_MODELS_URL) {
             header("x-api-key", config.apiKey)
             header("anthropic-version", ANTHROPIC_API_VERSION)
         } ?: return config
@@ -65,7 +65,7 @@ private suspend fun anthropicPreflight(http: HttpClient, config: LlmProviderConf
         val offered = (effort?.get(configured.requestValue) as? JsonObject)?.supported
 
         check(offered != false && takesEffort != false) {
-            "LLM_REASONING_EFFORT=[${configured.requestValue}] is not an effort ${config.model} takes. " +
+            "${config.envPrefix}_REASONING_EFFORT=[${configured.requestValue}] is not an effort ${config.model} takes. " +
                     "Supported values: ${effort.supportedEfforts().joinToString().ifEmpty { "none" }}"
         }
     }
@@ -83,15 +83,16 @@ private val JsonObject.supported: Boolean?
 private fun JsonObject?.supportedEfforts(): List<String> =
     ReasoningEffort.entries.map { it.requestValue }.filter { (this?.get(it) as? JsonObject)?.supported == true }
 
-/** The vendor's model object when it serves [model], `null` when it could not be asked, an error when it does not. */
+/** The vendor's model object when it serves the configured model, `null` when it could not be asked, an error when it does not. */
 private suspend fun verifyModel(
     http: HttpClient,
     provider: String,
-    model: String,
+    config: LlmProviderConfig,
     modelsPage: String,
     modelsUrl: String,
     authorize: HttpRequestBuilder.() -> Unit,
 ): JsonObject? {
+    val model = config.model
     val response =
         runCatching {
             http.get("$modelsUrl/${model.trim().encodeURLPathPart()}") {
@@ -105,7 +106,7 @@ private suspend fun verifyModel(
         }
 
     check(response.status != HttpStatusCode.NotFound) {
-        "LLM_MODEL=[$model] is not a model $provider serves this key. Check the id at $modelsPage"
+        "${config.envPrefix}_MODEL=[$model] is not a model $provider serves this key. Check the id at $modelsPage"
     }
 
     if (!response.status.isSuccess()) {
@@ -131,7 +132,7 @@ private suspend fun codexPreflight(http: HttpClient, config: LlmProviderConfig.C
 
     log.info { "Codex: signed in to ChatGPT${plan?.let { " (plan=[$it])" }.orEmpty()} auth=[${config.authFile}]" }
 
-    val discovered = verifyCodexModel(http, store, config.model) ?: return config
+    val discovered = verifyCodexModel(http, store, config) ?: return config
 
     log.info { "Codex: model=[${discovered.id}] (${discovered.displayName})" }
 

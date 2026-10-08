@@ -30,9 +30,9 @@ class AppConfigTest {
     @Test
     fun `a mistyped number stops the startup instead of restoring the default`() {
         // the digit-oh typo is the whole point: it used to read as "unset" and bring back the default
-        val failure = assertFailsWith<IllegalStateException> { parseIntEnv("AGENT_MAX_ITERATIONS", "7O") }
+        val failure = assertFailsWith<IllegalStateException> { parseIntEnv("AGENT_MAX_MODEL_CALLS", "7O") }
 
-        assertContains(failure.message.orEmpty(), "AGENT_MAX_ITERATIONS")
+        assertContains(failure.message.orEmpty(), "AGENT_MAX_MODEL_CALLS")
         assertContains(failure.message.orEmpty(), "7O")
 
         assertFailsWith<IllegalStateException> { parseIntEnv("MAX_TASKS_PER_USER", "many") }
@@ -96,6 +96,16 @@ class AppConfigTest {
     @Test
     fun `a number that parses but cannot work is rejected too`() {
         assertFailsWith<IllegalArgumentException> { config(agentMaxModelCalls = 2) }
+    }
+
+    // a role reads the same settings under its own prefix, so the message has to say which one was wrong
+    @Test
+    fun `a zero timeout or window names the variable it came from`() {
+        val failure = assertFailsWith<IllegalArgumentException> { parsePositiveLongEnv("VISION_REQUEST_TIMEOUT_SECONDS", "0") }
+
+        assertEquals("VISION_REQUEST_TIMEOUT_SECONDS=[0] must be positive", failure.message)
+        assertEquals(400_000L, parsePositiveLongEnv("LLM_CONTEXT_WINDOW_TOKENS", "400000"))
+        assertEquals(null, parsePositiveLongEnv("LLM_CONTEXT_WINDOW_TOKENS", null))
     }
 
     // a service reached without its secret is a misconfiguration, never a service reached anonymously

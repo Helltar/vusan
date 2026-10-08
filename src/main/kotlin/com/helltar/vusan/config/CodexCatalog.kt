@@ -202,8 +202,8 @@ internal fun applyCodexModelMetadata(
 
     if (configuredEffort != null && supportedEfforts != null) {
         require(configuredEffort in supportedEfforts) {
-            "LLM_REASONING_EFFORT=[${configuredEffort.requestValue}] is not supported by " +
-                    "LLM_MODEL=[${model.id}]. Supported values: " +
+            "${config.envPrefix}_REASONING_EFFORT=[${configuredEffort.requestValue}] is not supported by " +
+                    "${config.envPrefix}_MODEL=[${model.id}]. Supported values: " +
                     supportedEfforts.sorted().joinToString { it.requestValue }
         }
     }
@@ -214,7 +214,7 @@ internal fun applyCodexModelMetadata(
     if (configuredTier != null && supportedTiers != null) {
         require(configuredTier.requestValue in supportedTiers) {
             "CODEX_SERVICE_TIER=[${configuredTier.requestValue}] is not supported by " +
-                    "LLM_MODEL=[${model.id}]. Supported values: " +
+                    "${config.envPrefix}_MODEL=[${model.id}]. Supported values: " +
                     supportedTiers.sorted().joinToString().ifEmpty { "none" }
         }
     }
@@ -234,7 +234,9 @@ internal fun applyCodexModelMetadata(
  * a working bot down — a wrong model name still surfaces on the first turn. A model the account
  * plainly cannot run *is* fatal, because that is the confusing failure worth catching early.
  */
-suspend fun verifyCodexModel(http: HttpClient, auth: CodexAuthStore, model: String): CodexModel? {
+suspend fun verifyCodexModel(http: HttpClient, auth: CodexAuthStore, config: LlmProviderConfig.Codex): CodexModel? {
+    val model = config.model
+
     val catalog =
         runCatching { fetchCodexModels(http, auth) }
             .getOrElse { e ->
@@ -254,7 +256,7 @@ suspend fun verifyCodexModel(http: HttpClient, auth: CodexAuthStore, model: Stri
     checkNotNull(match) {
         // the catalog is filtered by the version we claim, so a model too new for it is missing rather
         // than refused — worth naming here, since the list alone reads as an entitlement problem.
-        "LLM_MODEL=[$model] is not available on this ChatGPT subscription. " +
+        "${config.envPrefix}_MODEL=[$model] is not available on this ChatGPT subscription. " +
                 "Available models: ${catalog.map { it.id }.sorted().joinToString()}. " +
                 "Models newer than client_version=[${codexClientVersion()}] are hidden from that list."
     }

@@ -106,11 +106,11 @@ private fun anthropicRuntime(config: LlmProviderConfig.Anthropic, http: HttpClie
     val effort = config.reasoningEffort
 
     require(effort == null || effort in ANTHROPIC_EFFORTS) {
-        "LLM_REASONING_EFFORT=[${effort?.requestValue}] is not an effort Anthropic takes. Supported values: " +
+        "${config.envPrefix}_REASONING_EFFORT=[${effort?.requestValue}] is not an effort Anthropic takes. Supported values: " +
                 ANTHROPIC_EFFORTS.joinToString { it.requestValue }
     }
     require(effort == null || takesEffort) {
-        "LLM_REASONING_EFFORT does not apply to $id: a Claude model from before adaptive thinking takes no effort"
+        "${config.envPrefix}_REASONING_EFFORT does not apply to $id: a Claude model from before adaptive thinking takes no effort"
     }
 
     val model =

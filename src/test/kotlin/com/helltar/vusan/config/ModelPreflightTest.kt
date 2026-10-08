@@ -49,12 +49,12 @@ class ModelPreflightTest {
     }
 
     @Test
-    fun `a model the provider does not know stops the startup`() = runBlocking {
-        val config = LlmProviderConfig.OpenAi(apiKey = "sk-test", model = "gpt-9-nope", requestTimeout = timeout)
+    fun `a model the provider does not know stops the startup, naming the variable it came from`() = runBlocking {
+        val config = LlmProviderConfig.OpenAi(apiKey = "sk-test", model = "gpt-9-nope", requestTimeout = timeout, envPrefix = "ADDRESSING")
 
         val failure = assertFailsWith<IllegalStateException> { config.preflighted(http(HttpStatusCode.NotFound), codexAuth = null) }
 
-        assertContains(failure.message.orEmpty(), "gpt-9-nope")
+        assertContains(failure.message.orEmpty(), "ADDRESSING_MODEL=[gpt-9-nope]")
     }
 
     @Test

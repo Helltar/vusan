@@ -202,7 +202,8 @@ data class AppConfig(
             return chat.withModel(
                 model = model,
                 reasoningEffort = resolveReasoningEffort(prefix),
-                contextWindowTokens = readLongEnv("${prefix}_CONTEXT_WINDOW_TOKENS"),
+                contextWindowTokens = readPositiveLongEnv("${prefix}_CONTEXT_WINDOW_TOKENS"),
+                envPrefix = prefix,
             )
         }
 
@@ -229,10 +230,10 @@ data class AppConfig(
         private fun resolveLlmProvider(prefix: String, fallbackTimeout: Duration?): LlmProviderConfig {
             val raw = requireEnv("${prefix}_PROVIDER")
 
-            val contextWindowTokens = readLongEnv("${prefix}_CONTEXT_WINDOW_TOKENS")
+            val contextWindowTokens = readPositiveLongEnv("${prefix}_CONTEXT_WINDOW_TOKENS")
 
             val requestTimeout =
-                readLongEnv("${prefix}_REQUEST_TIMEOUT_SECONDS")?.seconds
+                readPositiveLongEnv("${prefix}_REQUEST_TIMEOUT_SECONDS")?.seconds
                     ?: fallbackTimeout
                     ?: DEFAULT_LLM_REQUEST_TIMEOUT_SECONDS.seconds
 
@@ -249,6 +250,7 @@ data class AppConfig(
                     authFile = defaultCodexAuthFile(readEnv("CODEX_HOME")),
                     requestTimeout = requestTimeout,
                     contextWindowTokens = contextWindowTokens,
+                    envPrefix = prefix,
                 )
             }
 
@@ -261,6 +263,7 @@ data class AppConfig(
                     reasoningEffort = resolveReasoningEffort(prefix),
                     requestTimeout = requestTimeout,
                     contextWindowTokens = contextWindowTokens,
+                    envPrefix = prefix,
                 )
             }
 
@@ -272,6 +275,7 @@ data class AppConfig(
                         reasoningEffort = resolveReasoningEffort(prefix),
                         requestTimeout = requestTimeout,
                         contextWindowTokens = contextWindowTokens,
+                        envPrefix = prefix,
                     )
 
                 "anthropic" ->
@@ -281,6 +285,7 @@ data class AppConfig(
                         reasoningEffort = resolveReasoningEffort(prefix),
                         requestTimeout = requestTimeout,
                         contextWindowTokens = contextWindowTokens,
+                        envPrefix = prefix,
                     )
 
                 else ->
@@ -337,7 +342,7 @@ data class AppConfig(
 
         private fun readIntEnv(env: String): Int? = parseIntEnv(env, readEnv(env))
 
-        private fun readLongEnv(env: String): Long? = parseLongEnv(env, readEnv(env))
+        private fun readPositiveLongEnv(env: String): Long? = parsePositiveLongEnv(env, readEnv(env))
 
         private fun readBooleanEnv(env: String): Boolean? = parseBooleanEnv(env, readEnv(env))
 
@@ -352,6 +357,9 @@ internal fun parseIntEnv(env: String, raw: String?): Int? =
 
 internal fun parseLongEnv(env: String, raw: String?): Long? =
     raw?.let { it.trim().toLongOrNull() ?: error("$env=[$it] is not a whole number") }
+
+internal fun parsePositiveLongEnv(env: String, raw: String?): Long? =
+    parseLongEnv(env, raw)?.also { require(it > 0L) { "$env=[$it] must be positive" } }
 
 // case-insensitive on purpose: `toBooleanStrictOrNull` on its own rejects `False` and `TRUE`, and reading
 // those as "unset" would leave the feature running in whichever state the default happens to be.

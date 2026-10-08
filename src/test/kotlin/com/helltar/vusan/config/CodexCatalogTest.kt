@@ -334,7 +334,7 @@ class CodexCatalogTest {
     fun `verifyCodexModel accepts a model the subscription offers`() = runBlocking {
         val http = catalogClient("""{"models":[{"slug":"gpt-5.6-terra","display_name":"Terra","context_window":400000}]}""")
 
-        val model = verifyCodexModel(http, store(), "GPT-5.6-Terra")
+        val model = verifyCodexModel(http, store(), codex("GPT-5.6-Terra"))
 
         assertEquals("gpt-5.6-terra", model?.id)
         assertEquals(400_000L, model?.contextWindowTokens)
@@ -344,9 +344,9 @@ class CodexCatalogTest {
     fun `verifyCodexModel rejects a platform-only model and lists what is available`() = runBlocking {
         val http = catalogClient("""{"models":[{"slug":"gpt-5.6-terra","display_name":"Terra"}]}""")
 
-        val error = assertFailsWith<IllegalStateException> { verifyCodexModel(http, store(), "gpt-4.1") }
+        val error = assertFailsWith<IllegalStateException> { verifyCodexModel(http, store(), codex("gpt-4.1", envPrefix = "VISION")) }
 
-        assertTrue("gpt-4.1" in error.message.orEmpty(), error.message.orEmpty())
+        assertTrue("VISION_MODEL=[gpt-4.1]" in error.message.orEmpty(), error.message.orEmpty())
         assertTrue("gpt-5.6-terra" in error.message.orEmpty(), error.message.orEmpty())
     }
 
@@ -354,12 +354,12 @@ class CodexCatalogTest {
     fun `verifyCodexModel skips the check when the catalog cannot be read`() = runBlocking {
         val http = Http.createClient(MockEngine { respondJson("""{"detail":"nope"}""", HttpStatusCode.NotFound) })
 
-        assertNull(verifyCodexModel(http, store(), "gpt-5.6-terra"))
+        assertNull(verifyCodexModel(http, store(), codex("gpt-5.6-terra")))
     }
 
     @Test
     fun `verifyCodexModel skips the check when the catalog is empty`() = runBlocking {
-        assertNull(verifyCodexModel(catalogClient("""{"models":[]}"""), store(), "gpt-5.6-terra"))
+        assertNull(verifyCodexModel(catalogClient("""{"models":[]}"""), store(), codex("gpt-5.6-terra")))
     }
 
     @Test
@@ -371,7 +371,7 @@ class CodexCatalogTest {
             )
 
         val error =
-            assertFailsWith<CodexAuthException> { verifyCodexModel(catalogClient("""{"models":[]}"""), store, "any") }
+            assertFailsWith<CodexAuthException> { verifyCodexModel(catalogClient("""{"models":[]}"""), store, codex("any")) }
 
         assertTrue("codex login" in error.message.orEmpty(), error.message.orEmpty())
     }
@@ -396,6 +396,8 @@ private fun codexModel(
 
 /** Zero-padded so plain string ordering matches version ordering, independently of production code. */
 private fun comparable(version: String): String = version.split('.').joinToString(".") { it.padStart(5, '0') }
+
+private fun codex(model: String, envPrefix: String = "LLM") = LlmProviderConfig.Codex(model = model, requestTimeout = 120.seconds, envPrefix = envPrefix)
 
 private fun catalogClient(body: String) = Http.createClient(MockEngine { respondJson(body) })
 

@@ -32,8 +32,11 @@ sealed interface LlmProviderConfig {
     val requestTimeout: Duration
     val contextWindowTokens: Long?
 
+    /** The prefix of the variables this was read from, `LLM` or a role's, which a startup error names. */
+    val envPrefix: String
+
     /** This configuration pointed at [model], for a role that runs on the chat provider with a model of its own. */
-    fun withModel(model: String, reasoningEffort: ReasoningEffort?, contextWindowTokens: Long?): LlmProviderConfig
+    fun withModel(model: String, reasoningEffort: ReasoningEffort?, contextWindowTokens: Long?, envPrefix: String): LlmProviderConfig
 
     data class OpenAi(
         val apiKey: String,
@@ -41,6 +44,7 @@ sealed interface LlmProviderConfig {
         override val reasoningEffort: ReasoningEffort? = null,
         override val requestTimeout: Duration,
         override val contextWindowTokens: Long? = null,
+        override val envPrefix: String = DEFAULT_ENV_PREFIX,
     ) : LlmProviderConfig {
 
         init {
@@ -49,8 +53,8 @@ sealed interface LlmProviderConfig {
             requireSane(requestTimeout, contextWindowTokens)
         }
 
-        override fun withModel(model: String, reasoningEffort: ReasoningEffort?, contextWindowTokens: Long?): OpenAi =
-            copy(model = model, reasoningEffort = reasoningEffort, contextWindowTokens = contextWindowTokens)
+        override fun withModel(model: String, reasoningEffort: ReasoningEffort?, contextWindowTokens: Long?, envPrefix: String): OpenAi =
+            copy(model = model, reasoningEffort = reasoningEffort, contextWindowTokens = contextWindowTokens, envPrefix = envPrefix)
     }
 
     /**
@@ -65,6 +69,7 @@ sealed interface LlmProviderConfig {
         override val contextWindowTokens: Long? = null,
         val maxOutputTokens: Int? = null,
         val takesEffort: Boolean? = null,
+        override val envPrefix: String = DEFAULT_ENV_PREFIX,
     ) : LlmProviderConfig {
 
         init {
@@ -73,8 +78,15 @@ sealed interface LlmProviderConfig {
             requireSane(requestTimeout, contextWindowTokens)
         }
 
-        override fun withModel(model: String, reasoningEffort: ReasoningEffort?, contextWindowTokens: Long?): Anthropic =
-            copy(model = model, reasoningEffort = reasoningEffort, contextWindowTokens = contextWindowTokens, maxOutputTokens = null, takesEffort = null)
+        override fun withModel(model: String, reasoningEffort: ReasoningEffort?, contextWindowTokens: Long?, envPrefix: String): Anthropic =
+            copy(
+                model = model,
+                reasoningEffort = reasoningEffort,
+                contextWindowTokens = contextWindowTokens,
+                maxOutputTokens = null,
+                takesEffort = null,
+                envPrefix = envPrefix,
+            )
     }
 
     /**
@@ -89,6 +101,7 @@ sealed interface LlmProviderConfig {
         override val reasoningEffort: ReasoningEffort? = null,
         override val requestTimeout: Duration,
         override val contextWindowTokens: Long? = null,
+        override val envPrefix: String = DEFAULT_ENV_PREFIX,
     ) : LlmProviderConfig {
 
         init {
@@ -98,8 +111,8 @@ sealed interface LlmProviderConfig {
             requireSane(requestTimeout, contextWindowTokens)
         }
 
-        override fun withModel(model: String, reasoningEffort: ReasoningEffort?, contextWindowTokens: Long?): OpenAiCompatible =
-            copy(model = model, reasoningEffort = reasoningEffort, contextWindowTokens = contextWindowTokens)
+        override fun withModel(model: String, reasoningEffort: ReasoningEffort?, contextWindowTokens: Long?, envPrefix: String): OpenAiCompatible =
+            copy(model = model, reasoningEffort = reasoningEffort, contextWindowTokens = contextWindowTokens, envPrefix = envPrefix)
     }
 
     /**
@@ -128,6 +141,7 @@ sealed interface LlmProviderConfig {
         val authFile: Path = defaultCodexAuthFile(),
         override val requestTimeout: Duration,
         override val contextWindowTokens: Long? = null,
+        override val envPrefix: String = DEFAULT_ENV_PREFIX,
     ) : LlmProviderConfig {
 
         init {
@@ -135,10 +149,12 @@ sealed interface LlmProviderConfig {
             requireSane(requestTimeout, contextWindowTokens)
         }
 
-        override fun withModel(model: String, reasoningEffort: ReasoningEffort?, contextWindowTokens: Long?): Codex =
-            copy(model = model, reasoningEffort = reasoningEffort, contextWindowTokens = contextWindowTokens, verbosity = null)
+        override fun withModel(model: String, reasoningEffort: ReasoningEffort?, contextWindowTokens: Long?, envPrefix: String): Codex =
+            copy(model = model, reasoningEffort = reasoningEffort, contextWindowTokens = contextWindowTokens, verbosity = null, envPrefix = envPrefix)
     }
 }
+
+private const val DEFAULT_ENV_PREFIX = "LLM"
 
 private fun requireSane(requestTimeout: Duration, contextWindowTokens: Long?) {
     require(requestTimeout.isPositive()) { "the request timeout must be positive" }
