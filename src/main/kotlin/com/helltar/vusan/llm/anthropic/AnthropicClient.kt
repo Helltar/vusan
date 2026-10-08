@@ -9,7 +9,7 @@ import com.helltar.vusan.llm.ReasoningEffort
 import com.helltar.vusan.llm.Reply
 import com.helltar.vusan.llm.StopReason
 import com.helltar.vusan.llm.TokenUsage
-import com.helltar.vusan.llm.postJson
+import com.helltar.vusan.llm.postEventStream
 import io.github.oshai.kotlinlogging.KotlinLogging
 import io.ktor.client.*
 import kotlinx.serialization.json.JsonArray
@@ -36,7 +36,9 @@ val ANTHROPIC_EFFORTS: Set<ReasoningEffort> =
  *
  * - `max_tokens` is the model's whole output ceiling. The API requires the field, a model that thinks
  *   before every answer spends part of it on thinking, and output is billed on what is generated, not
- *   on what was allowed.
+ *   on what was allowed. Every call is streamed and folded back into one message, as the vendor's SDKs
+ *   do at a ceiling this size: a stream's socket timeout trips on a stall, where a connection that idles
+ *   through a long think is dropped at the API's edge.
  * - `thinking: adaptive` for every model that takes an effort (that generation also stopped thinking
  *   without it on Opus 4.7 and 4.8), with `block_binding: drop_block` under its beta header: a thinking
  *   block is bound to the system prompt, the tools and every message before it, and the agent moves the
@@ -71,10 +73,11 @@ class AnthropicClient(
         )
 
     override suspend fun complete(model: LlmModel, request: ChatRequest): Reply {
-        val body = messagesRequest(model, request)
-        val response = http.postJson(label, reasoningSource, body, headers)
+        val folder = MessagesStreamFolder(label)
 
-        return parse(response)
+        http.postEventStream(label, reasoningSource, messagesRequest(model, request), headers, folder::accept)
+
+        return parse(folder.response())
     }
 
     override fun close() = http.close()
@@ -92,6 +95,7 @@ class AnthropicClient(
         return buildJsonObject {
             put("model", model.id)
             put("max_tokens", options.maxOutputTokens ?: model.maxOutputTokens ?: DEFAULT_MAX_TOKENS)
+            put("stream", true)
 
             if (system.isNotEmpty()) {
                 putJsonArray("system") {
@@ -290,6 +294,6 @@ class AnthropicClient(
     }
 }
 
-private fun JsonObject.string(name: String): String? = (this[name] as? JsonPrimitive)?.contentOrNull
+internal fun JsonObject.string(name: String): String? = (this[name] as? JsonPrimitive)?.contentOrNull
 
-private fun JsonObject.int(name: String): Int? = (this[name] as? JsonPrimitive)?.intOrNull
+internal fun JsonObject.int(name: String): Int? = (this[name] as? JsonPrimitive)?.intOrNull

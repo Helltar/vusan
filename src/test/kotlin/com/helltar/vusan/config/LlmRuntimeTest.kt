@@ -7,6 +7,7 @@ import com.helltar.vusan.llm.Message
 import com.helltar.vusan.llm.ReasoningEffort
 import com.helltar.vusan.llm.RequestOptions
 import com.helltar.vusan.llm.ToolDefinition
+import com.helltar.vusan.llm.anthropic.messageEventStream
 import com.helltar.vusan.llm.openai.OpenAiEndpoint
 import io.ktor.client.*
 import io.ktor.client.engine.mock.*
@@ -145,7 +146,7 @@ class LlmRuntimeTest {
 
     @Test
     fun `an anthropic runtime asks for adaptive thinking, the effort, the ceiling and two breakpoints`() = runBlocking {
-        val runtime = resolveLlmRuntime(anthropic(effort = ReasoningEffort.HIGH), http = http(ANTHROPIC_REPLY))
+        val runtime = resolveLlmRuntime(anthropic(effort = ReasoningEffort.HIGH), http = http(messageEventStream(ANTHROPIC_REPLY), contentType = "text/event-stream"))
 
         assertEquals("Anthropic", runtime.providerLabel)
         assertEquals(1_000_000, runtime.model.contextWindowTokens)
@@ -179,7 +180,7 @@ class LlmRuntimeTest {
         assertTrue(anthropicTakesEffort("claude-opus-4-7"))
         assertTrue(anthropicTakesEffort("claude-haiku-5-5"))
 
-        val runtime = resolveLlmRuntime(anthropic(model = "claude-haiku-4-5-20251001"), http = http(ANTHROPIC_REPLY))
+        val runtime = resolveLlmRuntime(anthropic(model = "claude-haiku-4-5-20251001"), http = http(messageEventStream(ANTHROPIC_REPLY), contentType = "text/event-stream"))
         assertFalse(runtime.model.takesEffort)
 
         runtime.client.complete(runtime.model, request(runtime.chatOptions))

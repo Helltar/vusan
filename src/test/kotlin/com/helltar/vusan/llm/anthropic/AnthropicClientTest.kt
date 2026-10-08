@@ -50,12 +50,18 @@ class AnthropicClientTest {
     private val sent = mutableListOf<JsonObject>()
     private var sentHeaders: Headers? = null
 
+    // a reply is streamed the way the api streams it; a failure is the error body the api sends instead of a stream
     private fun client(reply: String = REPLY, status: HttpStatusCode = HttpStatusCode.OK): AnthropicClient {
         val engine =
             MockEngine { request ->
                 sent += Json.parseToJsonElement(request.body.toByteArray().decodeToString()).jsonObject
                 sentHeaders = request.headers
-                respond(reply, status, headersOf(HttpHeaders.ContentType, ContentType.Application.Json.toString()))
+
+                if (status.isSuccess()) {
+                    respond(messageEventStream(reply), status, headersOf(HttpHeaders.ContentType, ContentType.Text.EventStream.toString()))
+                } else {
+                    respond(reply, status, headersOf(HttpHeaders.ContentType, ContentType.Application.Json.toString()))
+                }
             }
 
         return AnthropicClient(HttpClient(engine), apiKey = "key")
@@ -67,7 +73,7 @@ class AnthropicClientTest {
         ChatRequest(messages.toList(), tools, options)
 
     @Test
-    fun `a chat request carries the ceiling, adaptive thinking with drop_block, the effort and two breakpoints`() = runBlocking {
+    fun `a chat request streams, carries the ceiling, adaptive thinking with drop_block, the effort and two breakpoints`() = runBlocking {
         client().complete(MODEL, request(*basic, options = RequestOptions(reasoningEffort = ReasoningEffort.HIGH)))
 
         val body = sent.single()
@@ -76,6 +82,7 @@ class AnthropicClientTest {
         assertEquals("adaptive", body.getValue("thinking").jsonObject.getValue("type").jsonPrimitive.content)
         assertEquals("drop_block", body.getValue("thinking").jsonObject.getValue("block_binding").jsonObject.getValue("prefix_mismatch_behavior").jsonPrimitive.content)
         assertEquals("high", body.getValue("output_config").jsonObject.getValue("effort").jsonPrimitive.content)
+        assertEquals(true, body.getValue("stream").jsonPrimitive.content.toBoolean())
         assertEquals("ephemeral", body.getValue("cache_control").jsonObject.getValue("type").jsonPrimitive.content)
         assertNull(body.getValue("cache_control").jsonObject["ttl"], "the tail keeps the five-minute default")
 

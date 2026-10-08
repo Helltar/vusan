@@ -604,7 +604,9 @@ A normal user message travels:
   `output_config.effort`, the model's whole output ceiling as `max_tokens`, and two cache breakpoints: the request-level
   one the API places on the last block, which every iteration of the loop reads back, and an hour-long one on the
   system block, which the next turn — whose history is replayed from storage in another shape — still reads, and which
-  outlives the quiet stretches between a chat's messages. A Claude model from
+  outlives the quiet stretches between a chat's messages. Every call is streamed and folded back into one message
+  (`llm/anthropic/AnthropicStream`), as the vendor's SDKs do at a ceiling this size, so a stall trips the socket
+  timeout where a connection idling through a long think would be dropped at the API's edge. A Claude model from
   before 4.6, which the API serves under a dated id, gets neither thinking nor an effort. `openai-compatible` speaks
   either OpenAI API under `LLM_BASE_URL` (`LLM_OPENAI_ENDPOINT`), sees images only when the server's model list says
   the model takes them (with its window and its efforts, DeepSeek's states all three), disables parallel tool calls
