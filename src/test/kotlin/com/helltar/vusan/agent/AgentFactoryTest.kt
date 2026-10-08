@@ -4,6 +4,7 @@ import com.helltar.vusan.agent.conversation.ChatRole
 import com.helltar.vusan.agent.conversation.ChatTurn
 import com.helltar.vusan.agent.conversation.PromptConversation
 import com.helltar.vusan.agent.conversation.toolCallArgsForStorage
+import com.helltar.vusan.config.codexSessionLabel
 import com.helltar.vusan.llm.ChatRequest
 import com.helltar.vusan.llm.Message
 import com.helltar.vusan.llm.RequestOptions
@@ -64,6 +65,17 @@ class AgentFactoryTest {
     @Test
     fun `each conversation caches under a key of its own`() {
         assertEquals("vusan-${testScope().toString().hashCode().toUInt().toString(16)}", firstRequest().options.promptCacheKey)
+    }
+
+    // the codex call lines carry the session the cache key folds into; a turn logging the same is what ties
+    // a turn to its calls
+    @Test
+    fun `a turn is logged under the session its calls carry`() {
+        val options = RequestOptions(promptCacheKey = "vusan")
+        val factory = AgentFactory(ScriptedLlmClient(), TEST_MODEL, options, maxModelCalls = 20)
+        val key = requireNotNull(options.forConversation(testScope().toString()).promptCacheKey)
+
+        assertEquals(codexSessionLabel(key), factory.sessionLogLabel(testScope()))
     }
 
     @Test

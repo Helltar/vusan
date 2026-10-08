@@ -5,6 +5,7 @@ import com.helltar.vusan.agent.conversation.ChatTurn
 import com.helltar.vusan.agent.conversation.PromptConversation
 import com.helltar.vusan.agent.conversation.toolCallArgsForStorage
 import com.helltar.vusan.common.xmlBlock
+import com.helltar.vusan.config.codexSessionLabel
 import com.helltar.vusan.llm.LlmClient
 import com.helltar.vusan.llm.LlmModel
 import com.helltar.vusan.llm.Message
@@ -66,7 +67,7 @@ class AgentFactory(
     }
 
     /** What this conversation's model calls are labelled with in the log, when the provider names sessions. */
-    fun sessionLogLabel(scope: ConversationScope): String? = options.forConversation(scope.toString()).promptCacheKey
+    fun sessionLogLabel(scope: ConversationScope): String? = options.forConversation(scope.toString()).promptCacheKey?.let(::codexSessionLabel)
 
     /** The reserve one run may spend on tool results, from which the runner opens its [TurnToolBudget]. */
     val liveToolResultMaxTokens: Int

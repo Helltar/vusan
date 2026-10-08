@@ -80,6 +80,15 @@ class ProviderErrorReplyTest {
         assertEquals(EnglishMessages.signInRequiredReply, EnglishMessages.providerErrorReply(error(401, ""), now))
     }
 
+    // a region the provider does not serve or a model the key may not use is not a dead sign-in
+    @Test
+    fun `a forbidden request is not taken for a dead sign-in`() {
+        val forbidden = error(403, """{"error":{"type":"permission_error"}}""")
+
+        assertEquals(EnglishMessages.fallbackErrorReply, EnglishMessages.providerErrorReply(forbidden, now))
+        assertNull(forbidden.providerOutage(now))
+    }
+
     // a refused request is not an outage: the streaming endpoint answers 200 and puts the refusal in
     // the body, so nothing but the code in it says the turn is over.
     @Test

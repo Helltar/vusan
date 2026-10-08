@@ -58,8 +58,10 @@ internal fun Throwable.providerError(): LlmException? =
 private val LlmException.text: String
     get() = body.orEmpty()
 
+// a 403 alone says nothing about the sign-in: a region the provider does not serve, a model the key may
+// not use, a cloudflare challenge on the codex backend
 private val LlmException.unauthorized: Boolean
-    get() = status == 401 || status == 403 || UNAUTHORIZED_REGEX.containsMatchIn(text)
+    get() = status == 401 || UNAUTHORIZED_REGEX.containsMatchIn(text)
 
 /** Which canned reply a provider error earns, from its status and its body. */
 internal fun Messages.providerErrorReply(error: LlmException, now: Instant = Instant.now()): String =

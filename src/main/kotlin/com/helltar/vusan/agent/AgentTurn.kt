@@ -46,8 +46,8 @@ class ModelRefusal(val reason: String?) : RuntimeException("the model declined t
  *   text (flaky providers return an empty completion after a batch of tool results) — gets one nudge to
  *   actually deliver before finishing, so a full turn of research does not collapse into silence.
  *
- * Landing: the last model call of the turn is reserved for a wrap-up request carrying no tools at all,
- * so the model cannot spend it on one more search, and its answer — written from what it gathered,
+ * Landing: the last model call of the turn is reserved for a wrap-up request in which no tool may be
+ * called, so the model cannot spend it on one more search, and its answer — written from what it gathered,
  * saying what it could not finish — is queued into the outbox like any other message, so it survives even
  * a turn that already reacted or sent something (trailing agent text is otherwise dropped as duplicate
  * chatter). Without that, a research turn would die with every search it paid for still unanswered.
@@ -91,8 +91,12 @@ class AgentTurn internal constructor(
 
                 if (!owesDelivery(message, nudged, outbox.hasQueuedOutput, silenceAllowed)) return message.text
 
+                messages.dropTrailingSilentAssistant()
+
+                // the nudge is a model call like any other, and the last one is the wrap-up's
+                if (outOfModelCalls(calls, maxModelCalls)) return wrapUp(messages)
+
                 nudged = true
-                messages.dropTrailingEmptyAssistant()
                 messages += Message.User(DELIVER_NUDGE)
                 continue
             }
@@ -123,12 +127,12 @@ class AgentTurn internal constructor(
         }
     }
 
-    private suspend fun request(messages: List<Message>, tools: List<ToolDefinition>): Reply {
+    private suspend fun request(messages: List<Message>, tools: List<ToolDefinition>, mayCallTools: Boolean = true): Reply {
         logPromptDump(messages, model.id, tools.map { it.name })
         calls++
 
         // a copy: the list grows as the turn goes on, and a client may keep the request it was handed
-        val reply = client.complete(model, ChatRequest(messages.toList(), tools, options))
+        val reply = client.complete(model, ChatRequest(messages.toList(), tools, options, mayCallTools))
 
         reply.usage?.let(tokenUsage)
 
@@ -147,7 +151,9 @@ class AgentTurn internal constructor(
         log.warn { "model calls spent for $scope (limit $maxModelCalls); answering with what the turn already gathered" }
 
         messages += Message.User(TOOL_BUDGET_WRAP_UP)
-        val answer = request(messages, tools = emptyList()).message.text
+
+        // the tools stay defined, since the calls the turn made are replayed with them, but none may be called
+        val answer = request(messages, catalog.visibleDefinitions(), mayCallTools = false).message.text
 
         // queue it rather than leave it as the run's trailing text: a turn that already reacted or sent a
         // message has that text dropped as duplicate chatter, and here it is the whole answer.
@@ -280,9 +286,9 @@ internal fun owesDelivery(
 // (so nothing more is coming this turn) and no plain text to fall back on as a caption.
 internal fun Message.Assistant.deliveredNothing(): Boolean = toolCalls.isEmpty() && text.isBlank()
 
-// an empty reply leaves an assistant message with no parts, which openai rejects on the next request as
-// a message with neither content nor tool calls; drop it before re-requesting. a blank-text reply stays:
-// it still serializes to a valid string content.
-internal fun MutableList<Message>.dropTrailingEmptyAssistant() {
-    while (lastOrNull().let { it is Message.Assistant && it.parts.isEmpty() }) removeAt(lastIndex)
+// a reply that delivered nothing is dropped before the nudge re-requests: openai refuses an assistant
+// message with neither content nor tool calls, and anthropic one whose content is left empty — which is
+// what a blank text block becomes there — or ends in a thinking block.
+internal fun MutableList<Message>.dropTrailingSilentAssistant() {
+    while ((lastOrNull() as? Message.Assistant)?.deliveredNothing() == true) removeAt(lastIndex)
 }

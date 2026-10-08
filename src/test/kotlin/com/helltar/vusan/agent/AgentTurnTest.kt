@@ -213,7 +213,8 @@ class AgentTurnTest {
             assertEquals(3, run.client.requests.size)
 
             val wrapUp = run.client.requests[2]
-            assertEquals(emptyList(), wrapUp.toolNames)
+            assertEquals(run.client.requests[1].toolNames, wrapUp.toolNames, "the tools stay defined for the calls the turn replays")
+            assertFalse(wrapUp.mayCallTools)
             assertContains((wrapUp.messages.last() as Message.User).text, "used up its tool budget")
             assertIs<Message.ToolResults>(wrapUp.messages[wrapUp.messages.lastIndex - 1])
 
@@ -276,18 +277,37 @@ class AgentTurnTest {
         assertFalse(owesDelivery(empty, nudged = false, outboxHasOutput = false, silenceAllowed = true))
     }
 
+    // anthropic refuses an assistant turn left empty, which is what a blank text block becomes there
     @Test
-    fun `only trailing empty assistants are dropped before the nudge re-request`() {
-        val messages = mutableListOf<Message>(Message.User("hello"), Message.Assistant("earlier"), Message.User("ok then"), Message.Assistant(emptyList()))
+    fun `a trailing reply that delivered nothing is dropped before the nudge, whatever it holds`() {
+        val thinking = Part.Reasoning("https://api.anthropic.com/v1/messages", buildJsonObject { put("type", "thinking") })
 
-        messages.dropTrailingEmptyAssistant()
+        val messages =
+            mutableListOf<Message>(
+                Message.User("hello"),
+                Message.Assistant("earlier"),
+                Message.User("ok then"),
+                Message.Assistant(emptyList()),
+                Message.Assistant(""),
+                Message.Assistant(listOf(thinking, Part.Text("  "))),
+            )
+
+        messages.dropTrailingSilentAssistant()
 
         assertEquals(listOf(Message.User("hello"), Message.Assistant("earlier"), Message.User("ok then")), messages)
-
-        val kept = mutableListOf<Message>(Message.User("ok"), Message.Assistant(""))
-        kept.dropTrailingEmptyAssistant()
-        assertEquals(2, kept.size, "a blank-text reply still serializes to a valid string content")
     }
+
+    // the nudge is a model call, and the last one is the wrap-up's: past it the turn would make one more
+    @Test
+    fun `an empty reply on the last call before the wrap-up goes to the wrap-up instead of a nudge`() =
+        run(toolCallReply(call("lookUp", args = arrayOf("query" to "a"))), textReply(""), textReply("what I found"), maxModelCalls = 3) { run, answer ->
+            assertEquals("what I found", answer)
+            assertEquals(3, run.client.requests.size)
+
+            val last = run.client.requests[2]
+            assertContains((last.messages.last() as Message.User).text, "used up its tool budget")
+            assertFalse(last.messages.any { it is Message.Assistant && it.deliveredNothing() }, "the empty reply is not replayed")
+        }
 
     @Test
     fun `the last model call is reserved for the wrap-up`() {
