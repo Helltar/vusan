@@ -211,6 +211,27 @@ class MessageToolsTest {
         assertEquals(3, outbox.pending.size)
     }
 
+    // the live status sits in the chat the turn runs in; a reply the user asked to have in private
+    // goes there with the rest instead of surfacing in the group
+    @Test
+    fun `a reply routed to private messages keeps the plan and interim messages out of the chat`() = runBlocking {
+        val outbox = BotOutbox()
+        val narrator = RecordingNarrator(reaches = true)
+        val tools = MessageTools(outbox, narrator)
+
+        tools.replyInPrivateMessages()
+
+        assertTrue(tools.announcePlan("compiling your report").contains("private chat"))
+        assertTrue(tools.sendMessageNow("the first page").contains("private chat"))
+
+        assertTrue(narrator.said.isEmpty())
+        assertTrue(narrator.sent.isEmpty())
+        // queued text coalesces into one private message carrying both
+        val queued = assertIs<BotOutput.Text>(outbox.pending.single().output).text
+        assertTrue(outbox.pending.single().toPrivate && !outbox.pending.single().delivered)
+        assertTrue("compiling your report" in queued && "the first page" in queued)
+    }
+
     @Test
     fun `announcePlan is still allowed after an interim message`() = runBlocking {
         val outbox = BotOutbox()

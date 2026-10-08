@@ -70,6 +70,12 @@ class MessageTools(
                 "You have already announced this turn's plan and the user is reading it. " +
                     "Get on with the work and report the result at the end."
 
+            // a reply the user asked to have in private must not surface in the chat the turn runs in, which
+            // is where the live status is; the words travel to the private chat with the rest instead.
+            outbox.redirectToPrivate && outbox.enqueueText(trimmed, announcement = true) ->
+                "This reply goes to the user's private chat, so the plan was queued with it rather than shown here. " +
+                    "Do not announce anything else; write the result into the same reply."
+
             // the turn has a live status to write into, and what it says is in the chat right now.
             narrator?.say(trimmed) == true -> {
                 outbox.recordDelivered(trimmed)
@@ -100,6 +106,11 @@ class MessageTools(
             interimSent >= MAX_INTERIM_MESSAGES ->
                 "You have already sent $MAX_INTERIM_MESSAGES messages this way in this turn. " +
                     "Finish the work and put the rest into your final answer."
+
+            // a reply the user asked to have in private must not surface in the chat the turn runs in; the
+            // words travel to the private chat with the rest instead
+            outbox.redirectToPrivate && outbox.enqueueText(trimmed) ->
+                "This reply goes to the user's private chat, so the text was queued with the rest of it rather than sent here."
 
             // in the chat now, and recorded as an answer the turn gave rather than a promise it made
             narrator?.send(trimmed) == true -> {
