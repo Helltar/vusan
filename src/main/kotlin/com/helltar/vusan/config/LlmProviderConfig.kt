@@ -23,6 +23,10 @@ enum class ServiceTier {
 /**
  * One model and how to reach it, as a deployment configured it. The chat model, its fallback, the
  * vision model and the addressing model are each one of these, read from their own variable prefix.
+ *
+ * [seesImages] and [efforts] are what the vendor said of the model at startup, where it said anything:
+ * whether it takes images, and which efforts it takes. A role reads them here instead of asking which
+ * provider it is on — `null` is "nobody said", and each provider's runtime fills in its own assumption.
  */
 sealed interface LlmProviderConfig {
 
@@ -33,11 +37,16 @@ sealed interface LlmProviderConfig {
     // reply, instead of waiting out the engine's quarter-hour default while the bot stays silent.
     val requestTimeout: Duration
     val contextWindowTokens: Long?
+    val seesImages: Boolean?
+    val efforts: Set<ReasoningEffort>?
 
     /** The prefix of the variables this was read from, `LLM` or a role's, which a startup error names. */
     val envPrefix: String
 
-    /** This configuration pointed at [model], for a role that runs on the chat provider with a model of its own. */
+    /**
+     * This configuration pointed at [model], for a role that runs on the chat provider with a model of
+     * its own. What the vendor said of the chat model is left behind: the role's is another model.
+     */
     fun withModel(model: String, reasoningEffort: ReasoningEffort?, contextWindowTokens: Long?, envPrefix: String): LlmProviderConfig
 
     data class OpenAi(
@@ -46,6 +55,8 @@ sealed interface LlmProviderConfig {
         override val reasoningEffort: ReasoningEffort? = null,
         override val requestTimeout: Duration,
         override val contextWindowTokens: Long? = null,
+        override val seesImages: Boolean? = null,
+        override val efforts: Set<ReasoningEffort>? = null,
         override val envPrefix: String = DEFAULT_ENV_PREFIX,
     ) : LlmProviderConfig {
 
@@ -56,7 +67,14 @@ sealed interface LlmProviderConfig {
         }
 
         override fun withModel(model: String, reasoningEffort: ReasoningEffort?, contextWindowTokens: Long?, envPrefix: String): OpenAi =
-            copy(model = model, reasoningEffort = reasoningEffort, contextWindowTokens = contextWindowTokens, envPrefix = envPrefix)
+            copy(
+                model = model,
+                reasoningEffort = reasoningEffort,
+                contextWindowTokens = contextWindowTokens,
+                seesImages = null,
+                efforts = null,
+                envPrefix = envPrefix,
+            )
     }
 
     /**
@@ -71,6 +89,8 @@ sealed interface LlmProviderConfig {
         override val contextWindowTokens: Long? = null,
         val maxOutputTokens: Int? = null,
         val takesEffort: Boolean? = null,
+        override val seesImages: Boolean? = null,
+        override val efforts: Set<ReasoningEffort>? = null,
         override val envPrefix: String = DEFAULT_ENV_PREFIX,
     ) : LlmProviderConfig {
 
@@ -87,6 +107,8 @@ sealed interface LlmProviderConfig {
                 contextWindowTokens = contextWindowTokens,
                 maxOutputTokens = null,
                 takesEffort = null,
+                seesImages = null,
+                efforts = null,
                 envPrefix = envPrefix,
             )
     }
@@ -105,7 +127,8 @@ sealed interface LlmProviderConfig {
         override val reasoningEffort: ReasoningEffort? = null,
         override val requestTimeout: Duration,
         override val contextWindowTokens: Long? = null,
-        val seesImages: Boolean? = null,
+        override val seesImages: Boolean? = null,
+        override val efforts: Set<ReasoningEffort>? = null,
         override val envPrefix: String = DEFAULT_ENV_PREFIX,
     ) : LlmProviderConfig {
 
@@ -117,13 +140,21 @@ sealed interface LlmProviderConfig {
         }
 
         override fun withModel(model: String, reasoningEffort: ReasoningEffort?, contextWindowTokens: Long?, envPrefix: String): OpenAiCompatible =
-            copy(model = model, reasoningEffort = reasoningEffort, contextWindowTokens = contextWindowTokens, seesImages = null, envPrefix = envPrefix)
+            copy(
+                model = model,
+                reasoningEffort = reasoningEffort,
+                contextWindowTokens = contextWindowTokens,
+                seesImages = null,
+                efforts = null,
+                envPrefix = envPrefix,
+            )
     }
 
     /**
      * A ChatGPT subscription reached through the credentials `codex login` writes, instead of an
      * API key. There is no `apiKey` here on purpose: the bearer token is resolved per request from
-     * `~/.codex/auth.json`, because it expires and is rotated behind our back.
+     * `~/.codex/auth.json`, because it expires and is rotated behind our back. [seesImages] and [efforts]
+     * are the plan's catalog entry for the model, filled in by the preflight.
      */
     data class Codex(
         override val model: String,
@@ -139,9 +170,8 @@ sealed interface LlmProviderConfig {
         val imageGeneration: Boolean = true,
         // whether the plan may also answer a web search, which draws on the same allowance as the turns
         val webSearch: Boolean = true,
-        val supportsVision: Boolean = true,
-        // the efforts the catalog lists for the model, when it lists any
-        val supportedEfforts: Set<ReasoningEffort>? = null,
+        override val seesImages: Boolean? = null,
+        override val efforts: Set<ReasoningEffort>? = null,
         // the Codex CLI version reported to the backend, which decides how much of the model catalog it
         // answers with. `null` leaves that to the installed CLI, or to this build's floor without one.
         val clientVersion: String? = null,
@@ -164,8 +194,8 @@ sealed interface LlmProviderConfig {
                 contextWindowTokens = contextWindowTokens,
                 serviceTier = null,
                 verbosity = null,
-                supportsVision = true,
-                supportedEfforts = null,
+                seesImages = null,
+                efforts = null,
                 envPrefix = envPrefix,
             )
     }

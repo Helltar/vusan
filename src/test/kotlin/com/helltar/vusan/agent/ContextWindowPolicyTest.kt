@@ -1,7 +1,6 @@
 package com.helltar.vusan.agent
 
 import com.helltar.vusan.llm.LlmModel
-import com.helltar.vusan.llm.LlmProvider
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertTrue
@@ -63,7 +62,7 @@ class ContextWindowPolicyTest {
     }
 
     private fun model(contextLength: Long): LlmModel =
-        LlmModel(provider = LlmProvider.OPENAI, id = "test", contextWindowTokens = contextLength)
+        LlmModel(id = "test", contextWindowTokens = contextLength)
 }
 
 // the tool caps its own output at this size, so it is the worst single result the run budget must absorb.

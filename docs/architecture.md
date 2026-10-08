@@ -116,9 +116,10 @@ that is who owns writing them, not because only `agent/` reads them. No other ar
   declared in `infra/Schema.kt` into SQLite's own `PRAGMA user_version`. Nothing is inferred by comparing declarations
   to what is there, and nothing is migrated in code: a database of any other version — from before versions existed, or
   from a newer build — stops startup instead of being reshaped, and is moved by hand.
-- **`config/`** — `.env` parsing (`AppConfig`), LLM provider/model resolution (`LlmRuntime`), the startup check of
-  every configured model against its vendor (`ModelPreflight`), and the ChatGPT subscription credentials the Codex CLI
-  writes (`CodexAuth`). `VisionRuntime` resolves separately which model looks at
+- **`config/`** — `.env` parsing (`AppConfig`), LLM provider/model resolution (`LlmRuntime`) and the startup check of
+  every configured model against its vendor (`ModelPreflight`), both of which dispatch to one file per provider
+  (`OpenAiProvider`, `AnthropicProvider`, `OpenAiCompatibleProvider`, `CodexProvider`), and the ChatGPT subscription
+  credentials the Codex CLI writes (`CodexAuth`). `VisionRuntime` resolves separately which model looks at
   images: the `VISION_*` model when configured, the chat model when it accepts images, and nothing at all
   otherwise — which leaves the vision tools and sticker catalog unavailable.
 - **`stt/`** — OpenAI speech-to-text client (`OpenAiWhisperClient`, default model `gpt-transcribe`); used for voice
@@ -586,11 +587,17 @@ A normal user message travels:
   (`tools/context/`) is how the model reads it before deciding how much to ask for, and `TurnToolBudget.report()` is the
   single wording both that tool and the run's own low-reserve notice state it in.
 - **LLM provider resolution** — `config/LlmRuntime.resolveLlmRuntime` turns a `LlmProviderConfig` into an `LlmRuntime`:
-  the client, the model as the bot needs to know it (`llm/LlmModel`: wire id, window, output ceiling, whether it sees
-  and whether it takes an effort), and the options a turn and a history recap send. There is no model catalog: a
-  deployment names a model, and `config/ModelPreflight` asks the vendor about it at startup — OpenAI confirms the id,
-  Anthropic also states the window, the ceiling and what the model takes (adaptive thinking, which efforts), and those
-  replace the runtime's assumptions; Codex reads the account's own catalog. `openai` always speaks the Responses API, the
+  the client, the model as the bot needs to know it (`llm/LlmModel`: wire id, window, output ceiling, whether it sees,
+  whether it takes an effort and which ones its vendor lists), and the options a turn and a history recap send. Each
+  provider is one file, `config/<Vendor>Provider.kt`, holding its runtime builder and its startup check; the two
+  dispatchers (`resolveLlmRuntime`, `ModelPreflight.preflighted`) and the name `AppConfig` reads are all that names
+  them, and a new provider is one more such file plus its client under `llm/<vendor>/`. There is no model catalog: a
+  deployment names a model, and the provider's check asks the vendor about it at startup — OpenAI confirms the id,
+  Anthropic also states the window, the ceiling and what the model takes (adaptive thinking, which efforts, images),
+  and those replace the runtime's assumptions; Codex reads the account's own catalog. What the vendor said goes back
+  into the config as facts (`seesImages`, `efforts`) that the roles read without knowing the provider: vision stops the
+  startup on a model its vendor calls blind, and addressing sends the least effort listed, asking the model once where
+  nothing is. `openai` always speaks the Responses API, the
   one where tools work alongside reasoning, with the conversation's own `prompt_cache_key` — reads match the prefixes
   most recently written under a key, and one key for the whole deployment would let busy chats evict each other; recaps
   keep a single shared key, their tool-free prefix being identical everywhere — and, from GPT-5.6 on, the cache options
@@ -612,8 +619,9 @@ A normal user message travels:
   the model takes them (with its window and its efforts, DeepSeek's states all three), disables parallel tool calls
   because third-party models garble the siblings, and gets none of the OpenAI-only fields unless the base URL is the
   official API. A server there that thinks aloud in `reasoning_content` (DeepSeek) refuses a tool call of the turn
-  without it, so a call the provider before a fallback wrote carries an empty one. A vision or an addressing model is one more `LlmProviderConfig`, read from its own prefix
-  (`VISION_`, `ADDRESSING_`) and resolved the same way; by default it runs on the chat provider with the chat key.
+  without it, so a call the provider before a fallback wrote carries an empty one. A vision or an addressing model is
+  one more `LlmProviderConfig`, read from its own prefix (`VISION_`, `ADDRESSING_`) and resolved the same way; by default
+  it runs on the chat provider with the chat key.
 - **ChatGPT subscription (`codex`)** — the same OpenAI client pointed at the Codex backend's Responses API, with no API
   key. `config/CodexAuth.CodexAuthStore` owns the credentials `codex login` writes to `~/.codex/auth.json` (or
   `$CODEX_HOME`). `AppConfig` resolves that path into the Codex provider config, and the store rereads the file per
@@ -818,7 +826,7 @@ A symptom-to-source map for finding the right file fast. Paths are under
 | `/clear` reports success but history survives | `agent/AgentRunner.kt` (`clearConversation` and the turn lock that also guards the append) + `tools/conversation/ConversationTools.kt` (agent path) + `agent/conversation/ConversationRepository.kt` (shared storage operation) |
 | An agent choice button does nothing, repeats, reaches the wrong user, loses the photo, or its answer replies to the bot's own question | `tools/choice/InlineChoiceTools.kt` (tool contract) + `telegram/callback/InlineChoiceHandler.kt` (callback ownership/consumption, origin message id, parked attachment) + `telegram/AgentTurns.kt` (the follow-up turn and its reply anchor) |
 | An env var has no effect | `config/AppConfig.kt` (parsing) — and check it is documented in [`configuration.md`](configuration.md) + [`.env.example`](../.env.example) |
-| Model / provider / request-timeout selection, or prompt-cache misses | `config/LlmRuntime.kt` (provider → client/model/params) + `config/ModelPreflight.kt` (what the vendor says about the model at startup) + `llm/openai/OpenAiPromptCaching.kt` (GPT-5.6+: implicit caching with an explicit breakpoint on the system prefix, and none for a prompt that never repeats) + `llm/anthropic/AnthropicClient.kt` (the request-level breakpoint and the hour-long one on the system block); `cacheReadTokens` and `cacheWriteTokens` on each turn's usage line say what was read and written |
+| Model / provider / request-timeout selection, or prompt-cache misses | `config/<Vendor>Provider.kt` (one provider's runtime: client, model, options — and its startup check of the model against the vendor) + `config/LlmRuntime.kt` and `config/ModelPreflight.kt` (the dispatch to it) + `llm/openai/OpenAiPromptCaching.kt` (GPT-5.6+: implicit caching with an explicit breakpoint on the system prefix, and none for a prompt that never repeats) + `llm/anthropic/AnthropicClient.kt` (the request-level breakpoint and the hour-long one on the system block); `cacheReadTokens` and `cacheWriteTokens` on each turn's usage line say what was read and written |
 | "Sign in again" replies, ChatGPT-subscription auth, or a rejected `LLM_MODEL` on `codex` | `config/CodexAuth.kt` (token load/refresh/persist) + `config/CodexCatalog.kt` (which models the plan offers) + `config/CodexHttpClient.kt` (per-request bearer and account headers) |
 | `describeImage`/`describeVideo` missing from the tool list | `config/VisionRuntime.kt` (chat model vs `VISION_MODEL`), then `tools/ToolRegistryFactory.kt` (registration is skipped when there is no vision runtime) |
 | Garbled or empty tool calls from a flaky model | `agent/AgentTurn.kt` (`execute`: the empty-arguments guard and the unknown-tool answer) + `tools/ToolSet.kt` (decoding the arguments, and the complaint a missing or wrong-shaped one earns) |

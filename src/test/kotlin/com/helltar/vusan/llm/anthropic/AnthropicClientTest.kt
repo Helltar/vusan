@@ -2,7 +2,6 @@ package com.helltar.vusan.llm.anthropic
 
 import com.helltar.vusan.llm.ChatRequest
 import com.helltar.vusan.llm.LlmModel
-import com.helltar.vusan.llm.LlmProvider
 import com.helltar.vusan.llm.Message
 import com.helltar.vusan.llm.Part
 import com.helltar.vusan.llm.ReasoningEffort
@@ -28,8 +27,8 @@ import kotlin.test.assertFalse
 import kotlin.test.assertNull
 import kotlin.test.assertTrue
 
-private val MODEL = LlmModel(LlmProvider.ANTHROPIC, "claude-opus-5-5", contextWindowTokens = 1_000_000, maxOutputTokens = 128_000)
-private val DATED_MODEL = LlmModel(LlmProvider.ANTHROPIC, "claude-haiku-4-5-20251001", contextWindowTokens = 200_000, maxOutputTokens = 64_000, takesEffort = false)
+private val MODEL = LlmModel("claude-opus-5-5", contextWindowTokens = 1_000_000, maxOutputTokens = 128_000)
+private val DATED_MODEL = LlmModel("claude-haiku-4-5-20251001", contextWindowTokens = 200_000, maxOutputTokens = 64_000, takesEffort = false)
 
 private val TOOL =
     ToolDefinition("lookUp", "Looks something up.", Json.parseToJsonElement("""{"type":"object","properties":{"query":{"type":"string"}},"required":["query"]}""").jsonObject)

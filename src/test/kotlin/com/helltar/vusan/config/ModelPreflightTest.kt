@@ -19,6 +19,7 @@ import kotlin.time.Duration.Companion.seconds
 private const val ANTHROPIC_MODEL =
     """{"type":"model","id":"claude-opus-5-5","display_name":"Claude Opus 5.5","max_input_tokens":1000000,"max_tokens":128000,
        "capabilities":{"effort":{"supported":true,"low":{"supported":true},"medium":{"supported":true},"high":{"supported":true},"xhigh":{"supported":true},"max":{"supported":true}},
+                       "image_input":{"supported":true},
                        "thinking":{"supported":true,"types":{"enabled":{"supported":false},"adaptive":{"supported":true},"disabled":{"supported":false}}}}}"""
 
 private const val ANTHROPIC_OLD_MODEL =
@@ -86,6 +87,8 @@ class ModelPreflightTest {
         assertEquals(1_000_000, checked.contextWindowTokens)
         assertEquals(128_000, checked.maxOutputTokens)
         assertEquals(true, checked.takesEffort)
+        assertEquals(true, checked.seesImages)
+        assertEquals(ReasoningEffort.entries.toSet() - ReasoningEffort.NONE - ReasoningEffort.MINIMAL, checked.efforts)
     }
 
     @Test
@@ -104,6 +107,8 @@ class ModelPreflightTest {
 
         assertEquals(false, checked.takesEffort)
         assertEquals(64_000, checked.maxOutputTokens)
+        assertEquals(emptySet(), checked.efforts)
+        assertNull(checked.seesImages, "a list that says nothing about images leaves the question open")
 
         val withEffort = plain.copy(reasoningEffort = ReasoningEffort.LOW)
         val failure = assertFailsWith<IllegalStateException> { withEffort.preflighted(http(HttpStatusCode.OK, ANTHROPIC_OLD_MODEL), codexAuth = null) }
@@ -129,9 +134,11 @@ class ModelPreflightTest {
         assertEquals("Bearer key", authorization?.get("Authorization"))
         assertEquals(true, flash.seesImages)
         assertEquals(1_048_576, flash.contextWindowTokens)
+        assertEquals(setOf(ReasoningEffort.LOW, ReasoningEffort.HIGH, ReasoningEffort.MAX), flash.efforts)
 
         val pro = assertIs<LlmProviderConfig.OpenAiCompatible>(compatible("deepseek-v4-pro").preflighted(http(HttpStatusCode.OK, DEEPSEEK_MODELS), codexAuth = null))
         assertEquals(false, pro.seesImages)
+        assertNull(pro.efforts)
     }
 
     @Test

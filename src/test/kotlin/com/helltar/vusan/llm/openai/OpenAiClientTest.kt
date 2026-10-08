@@ -3,7 +3,6 @@ package com.helltar.vusan.llm.openai
 import com.helltar.vusan.llm.ChatRequest
 import com.helltar.vusan.llm.LlmException
 import com.helltar.vusan.llm.LlmModel
-import com.helltar.vusan.llm.LlmProvider
 import com.helltar.vusan.llm.Message
 import com.helltar.vusan.llm.Part
 import com.helltar.vusan.llm.ReasoningEffort
@@ -30,8 +29,8 @@ import kotlin.test.assertFalse
 import kotlin.test.assertNull
 import kotlin.test.assertTrue
 
-private val MODEL = LlmModel(LlmProvider.OPENAI, "gpt-5.6-sol", contextWindowTokens = 1_050_000)
-private val OLD_MODEL = LlmModel(LlmProvider.OPENAI, "gpt-5.4-mini", contextWindowTokens = 400_000)
+private val MODEL = LlmModel("gpt-5.6-sol", contextWindowTokens = 1_050_000)
+private val OLD_MODEL = LlmModel("gpt-5.4-mini", contextWindowTokens = 400_000)
 
 private val TOOL =
     ToolDefinition(

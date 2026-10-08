@@ -1,6 +1,6 @@
 package com.helltar.vusan.llm
 
-internal val TEST_MODEL = LlmModel(LlmProvider.OPENAI, "test", contextWindowTokens = 16_384)
+internal val TEST_MODEL = LlmModel("test", contextWindowTokens = 16_384)
 
 /**
  * A client that answers every call with the same text and remembers what it was asked, for the callers

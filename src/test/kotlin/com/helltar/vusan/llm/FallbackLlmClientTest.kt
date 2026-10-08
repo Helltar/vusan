@@ -17,8 +17,8 @@ import kotlin.time.Duration.Companion.hours
 import kotlin.time.Duration.Companion.minutes
 import kotlin.time.toJavaDuration
 
-private val PRIMARY_MODEL = LlmModel(LlmProvider.OPENAI, "gpt-5.6-sol", 1_050_000)
-private val FALLBACK_MODEL = LlmModel(LlmProvider.ANTHROPIC, "claude-opus-5-5", 1_000_000)
+private val PRIMARY_MODEL = LlmModel("gpt-5.6-sol", 1_050_000)
+private val FALLBACK_MODEL = LlmModel("claude-opus-5-5", 1_000_000)
 private val FALLBACK_OPTIONS = RequestOptions(reasoningEffort = ReasoningEffort.HIGH)
 
 private const val USAGE_LIMIT_BODY = """{"error":{"type":"usage_limit_reached","resets_in_seconds":7200}}"""

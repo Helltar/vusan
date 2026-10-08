@@ -73,6 +73,12 @@ Preserve the package boundaries in [`docs/architecture.md`](docs/architecture.md
   endpoint alone.
   Behavior on the wire is proven by a test over a mock engine, not by reading
   the request builder.
+- A model provider is three things: a client under `llm/<vendor>/`, a config
+  class in `config/LlmProviderConfig.kt`, and `config/<Vendor>Provider.kt` with
+  its runtime and its startup check, plus the name `AppConfig` reads. What a
+  model can do — its window, whether it sees, which efforts it takes — travels
+  as facts on `LlmProviderConfig` and `LlmModel`; the roles, the agent and the
+  fallback read those and never name a provider.
 - Avoid thin abstractions and one-off helper objects. Add an abstraction only
   when it removes real complexity or matches an existing local pattern.
 

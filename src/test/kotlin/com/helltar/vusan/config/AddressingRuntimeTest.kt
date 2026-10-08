@@ -29,10 +29,13 @@ class AddressingRuntimeTest {
                 val model = Regex(""""model":"([^"]+)"""").find(body)?.groupValues?.get(1).orEmpty()
                 asked += body
 
-                if (model in refusingNone && "\"effort\":\"none\"" in body) {
-                    respond("""{"error":{"message":"Unsupported value: 'none'","param":"reasoning.effort","code":"unsupported_value"}}""", HttpStatusCode.BadRequest, JSON)
-                } else {
-                    respond(OK_REPLY, HttpStatusCode.OK, JSON)
+                when {
+                    model in refusingNone && "\"effort\":\"none\"" in body ->
+                        respond("""{"error":{"message":"Unsupported value: 'none'","param":"reasoning.effort","code":"unsupported_value"}}""", HttpStatusCode.BadRequest, JSON)
+
+                    // a backend that streams, as codex does, answers with events
+                    "\"stream\":true" in body -> respond(OK_STREAM, HttpStatusCode.OK, headersOf(HttpHeaders.ContentType, ContentType.Text.EventStream.toString()))
+                    else -> respond(OK_REPLY, HttpStatusCode.OK, JSON)
                 }
             },
         )
@@ -56,10 +59,15 @@ class AddressingRuntimeTest {
         assertTrue(asked.isEmpty(), "and is not asked")
     }
 
+    // what a vendor listed at startup — anthropic's model list, the plan's catalog, deepseek's list — is
+    // taken without asking; a model nobody listed is asked, whichever api it is on
     @Test
-    fun `a verdict gets the least reasoning its api is known to take`() {
-        assertEquals(ReasoningEffort.LOW, effortOf(anthropic("claude-haiku-5-5")))
+    fun `a verdict gets the least reasoning its vendor lists, and asks where nothing is listed`() {
+        val listed = setOf(ReasoningEffort.LOW, ReasoningEffort.MEDIUM, ReasoningEffort.HIGH)
+
+        assertEquals(ReasoningEffort.LOW, effortOf(anthropic("claude-haiku-5-5").copy(efforts = listed)))
         assertNull(effortOf(anthropic("claude-haiku-4-5-20251001")), "a dated claude model takes no effort")
+        assertTrue(asked.isEmpty(), "a listed floor is not asked about")
 
         val compatible =
             LlmProviderConfig.OpenAiCompatible(
@@ -70,17 +78,14 @@ class AddressingRuntimeTest {
                 requestTimeout = TIMEOUT,
             )
 
-        assertNull(effortOf(compatible), "a compatible server's models are left to their own default")
-    }
+        assertEquals(ReasoningEffort.LOW, effortOf(compatible.copy(efforts = listed)))
+        assertEquals(ReasoningEffort.NONE, effortOf(compatible), "a server that lists no efforts is asked")
 
-    // `none` is rarely among what a codex model takes, and a 400 there would silence addressing for good
-    @Test
-    fun `a codex model gets the least the plan's catalog lists, and its own default without one`() {
-        val auth = CodexAuthStore(Http.createClient(MockEngine { error("no calls expected") }))
-        val listed = setOf(ReasoningEffort.LOW, ReasoningEffort.MEDIUM, ReasoningEffort.HIGH)
+        val auth = CodexAuthStore(Http.createClient(MockEngine { error("no refresh expected") }))
 
-        assertEquals(ReasoningEffort.LOW, effortOf(LlmProviderConfig.Codex(model = "gpt-5.6-luna", supportedEfforts = listed, requestTimeout = TIMEOUT), auth))
-        assertNull(effortOf(LlmProviderConfig.Codex(model = "gpt-5.6-luna", requestTimeout = TIMEOUT), auth))
+        assertEquals(ReasoningEffort.LOW, effortOf(LlmProviderConfig.Codex(model = "gpt-5.6-luna", efforts = listed, requestTimeout = TIMEOUT), auth))
+        assertEquals(ReasoningEffort.NONE, effortOf(LlmProviderConfig.Codex(model = "gpt-5.6-luna", requestTimeout = TIMEOUT), auth), "a model the catalog did not list is asked")
+        assertNull(effortOf(LlmProviderConfig.Codex(model = "gpt-5.6-luna", efforts = emptySet(), requestTimeout = TIMEOUT), auth), "a catalog that lists no choice leaves the default")
     }
 
     @Test
@@ -95,5 +100,7 @@ class AddressingRuntimeTest {
 
         const val OK_REPLY =
             """{"id":"r","object":"response","status":"completed","model":"m","output":[{"type":"message","role":"assistant","content":[{"type":"output_text","text":"ok"}]}],"usage":{"input_tokens":1,"output_tokens":1}}"""
+
+        val OK_STREAM = "data: {\"type\":\"response.completed\",\"response\":$OK_REPLY}\n\n"
     }
 }

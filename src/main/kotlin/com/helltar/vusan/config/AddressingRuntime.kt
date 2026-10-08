@@ -49,18 +49,18 @@ suspend fun resolveAddressingRuntime(config: AddressingConfig, codexAuth: CodexA
     return AddressingRuntime(
         client = runtime.client,
         model = runtime.model,
-        options = options.copy(reasoningEffort = config.provider.reasoningEffort ?: config.provider.leastEffort(runtime, options)),
+        options = options.copy(reasoningEffort = config.provider.reasoningEffort ?: runtime.leastEffort(options)),
     )
 }
 
-// a compatible server's models are anyone's guess, so theirs keep their own default, and a codex model
-// takes what the plan's catalog lists
-private suspend fun LlmProviderConfig.leastEffort(runtime: LlmRuntime, options: RequestOptions): ReasoningEffort? =
-    when (this) {
-        is LlmProviderConfig.OpenAi -> runtime.takeIf { it.model.takesEffort }?.openAiLeastEffort(options)
-        is LlmProviderConfig.Anthropic -> ReasoningEffort.LOW.takeIf { runtime.model.takesEffort }
-        is LlmProviderConfig.Codex -> supportedEfforts?.minOrNull()
-        is LlmProviderConfig.OpenAiCompatible -> null
+// the least the model takes: the least its vendor listed at startup — the plan's catalog, anthropic's and
+// deepseek's model lists all state them — and where nobody listed any, what the model itself says when
+// asked once. a model that takes no effort at all is sent none.
+private suspend fun LlmRuntime.leastEffort(options: RequestOptions): ReasoningEffort? =
+    when {
+        !model.takesEffort -> null
+        model.efforts != null -> model.efforts.minOrNull()
+        else -> probeLeastEffort(options)
     }
 
 /**
@@ -71,7 +71,7 @@ private suspend fun LlmProviderConfig.leastEffort(runtime: LlmRuntime, options: 
  * 400 — and every one of them took `low`. A check that could not be made at all settles on `low` too,
  * since a refused effort would fail every verdict while a needless one only slows them.
  */
-private suspend fun LlmRuntime.openAiLeastEffort(options: RequestOptions): ReasoningEffort {
+private suspend fun LlmRuntime.probeLeastEffort(options: RequestOptions): ReasoningEffort {
     val probe = ChatRequest(listOf(Message.User("Reply with: ok")), options = options.copy(reasoningEffort = ReasoningEffort.NONE, maxOutputTokens = PROBE_OUTPUT_TOKENS))
 
     return try {

@@ -220,9 +220,9 @@ internal fun applyCodexModelMetadata(
 
     return config.copy(
         contextWindowTokens = config.contextWindowTokens ?: model.contextWindowTokens,
-        supportsVision = model.supportsVision,
+        seesImages = model.supportsVision,
         verbosity = model.defaultVerbosity,
-        supportedEfforts = supportedEfforts,
+        efforts = supportedEfforts,
     )
 }
 

@@ -1,11 +1,5 @@
 package com.helltar.vusan.llm
 
-/** The wire protocol a model is spoken to over. */
-enum class LlmProvider {
-    OPENAI,
-    ANTHROPIC
-}
-
 /**
  * A model as this bot needs to know it: what to call it on the wire, how much it holds, and what it
  * can do. Nothing here is a vendor catalog; a deployment names a model, and startup asks the vendor
@@ -13,14 +7,16 @@ enum class LlmProvider {
  *
  * [takesEffort] says whether the model can be told how hard to think — on Anthropic that is also what
  * decides whether `thinking: adaptive` is sent at all, since both arrived with the same generation.
+ * [efforts] are the ones its vendor lists, where it lists any: the least of them is what a yes-or-no
+ * job sends. `null` where nobody said, empty where the vendor said there is nothing to choose.
  */
 data class LlmModel(
-    val provider: LlmProvider,
     val id: String,
     val contextWindowTokens: Long,
     val maxOutputTokens: Int? = null,
     val seesImages: Boolean = true,
     val takesEffort: Boolean = true,
+    val efforts: Set<ReasoningEffort>? = null,
 ) {
 
     init {

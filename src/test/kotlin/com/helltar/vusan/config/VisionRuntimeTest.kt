@@ -2,7 +2,6 @@ package com.helltar.vusan.config
 
 import com.helltar.vusan.infra.Http
 import com.helltar.vusan.llm.FakeLlmClient
-import com.helltar.vusan.llm.LlmProvider
 import com.helltar.vusan.llm.ReasoningEffort
 import com.helltar.vusan.llm.openai.OpenAiEndpoint
 import io.ktor.client.engine.mock.MockEngine
@@ -39,7 +38,7 @@ class VisionRuntimeTest {
 
     @Test
     fun `vision stays off when the codex catalog marks the chat model text only`() {
-        assertNull(resolveVisionRuntime(config = null, chat = codexChat(supportsVision = false)))
+        assertNull(resolveVisionRuntime(config = null, chat = codexChat(seesImages = false)))
     }
 
     // the server behind LLM_BASE_URL can serve anything, so a compatible chat model sees only when its
@@ -71,7 +70,6 @@ class VisionRuntimeTest {
             )
 
         assertEquals("gpt-5.4-mini", vision?.model?.id)
-        assertEquals(LlmProvider.OPENAI, vision?.model?.provider)
         assertEquals(true, vision?.ownClient)
     }
 
@@ -91,7 +89,7 @@ class VisionRuntimeTest {
         val failure = assertFailsWith<IllegalArgumentException> { resolveVisionRuntime(config = textOnly, chat = compatibleChat()) }
         assertContains(failure.message.orEmpty(), "VISION_MODEL=[deepseek-v4-pro]")
 
-        val codexTextOnly = LlmProviderConfig.Codex(model = "text-model", supportsVision = false, requestTimeout = TIMEOUT, envPrefix = "VISION")
+        val codexTextOnly = LlmProviderConfig.Codex(model = "text-model", seesImages = false, requestTimeout = TIMEOUT, envPrefix = "VISION")
         assertFailsWith<IllegalArgumentException> { resolveVisionRuntime(config = codexTextOnly, chat = compatibleChat()) }
     }
 
@@ -161,9 +159,9 @@ class VisionRuntimeTest {
             ),
         )
 
-    private fun codexChat(supportsVision: Boolean = true): LlmRuntime =
+    private fun codexChat(seesImages: Boolean = true): LlmRuntime =
         resolveLlmRuntime(
-            LlmProviderConfig.Codex(model = "gpt-5.6-terra", supportsVision = supportsVision, requestTimeout = TIMEOUT),
+            LlmProviderConfig.Codex(model = "gpt-5.6-terra", seesImages = seesImages, requestTimeout = TIMEOUT),
             codexAuth = CodexAuthStore(Http.createClient(MockEngine { error("no calls expected") })),
         )
 

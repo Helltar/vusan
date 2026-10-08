@@ -21,9 +21,10 @@ data class VisionRuntime(
  * Picks the model that looks at images. `VISION_MODEL` gives vision a model of its own, so a chat model
  * that cannot see (`deepseek-v4-pro`, most local models) does not take the bot's eyes away with it; a
  * model named for the role is taken at its word about seeing, unless its own vendor said at startup that
- * it takes no images — then the startup stops, rather than every look failing. Without one, vision rides
- * on the chat model, and a chat model that cannot see leaves vision off entirely — `null` here means the
- * vision tools are never registered, which beats offering the agent a tool whose every call fails.
+ * it takes no images (`seesImages == false`, however the vendor put it) — then the startup stops, rather
+ * than every look failing. Without one, vision rides on the chat model, and a chat model that cannot see
+ * leaves vision off entirely — `null` here means the vision tools are never registered, which beats
+ * offering the agent a tool whose every call fails.
  */
 fun resolveVisionRuntime(config: LlmProviderConfig?, chat: LlmRuntime, codexAuth: CodexAuthStore? = null): VisionRuntime? {
     // riding on the chat model, a look keeps the model's own effort rather than the one tuned for turns;
@@ -34,7 +35,7 @@ fun resolveVisionRuntime(config: LlmProviderConfig?, chat: LlmRuntime, codexAuth
         }
     }
 
-    require(!config.saidToBeBlind) {
+    require(config.seesImages != false) {
         "${config.envPrefix}_MODEL=[${config.model}] takes no images, by its own vendor's word; " +
                 "name one that does, or leave ${config.envPrefix}_MODEL unset to look with the chat model"
     }
@@ -43,15 +44,6 @@ fun resolveVisionRuntime(config: LlmProviderConfig?, chat: LlmRuntime, codexAuth
 
     return VisionRuntime(own.providerLabel, own.client, own.model.copy(seesImages = true), own.visionOptions(), ownClient = true)
 }
-
-// only a compatible server's model list and the codex catalog say so; nobody else states it either way
-private val LlmProviderConfig.saidToBeBlind: Boolean
-    get() =
-        when (this) {
-            is LlmProviderConfig.OpenAiCompatible -> seesImages == false
-            is LlmProviderConfig.Codex -> !supportsVision
-            is LlmProviderConfig.OpenAi, is LlmProviderConfig.Anthropic -> false
-        }
 
 private fun LlmRuntime.visionOptions(): RequestOptions =
     chatOptions.copy(cachePrompt = false, promptCacheKey = chatOptions.promptCacheKey?.let { VISION_CACHE_KEY })

@@ -139,7 +139,7 @@ class CodexCatalogTest {
         val configured = applyCodexModelMetadata(config, model)
 
         assertEquals(128_000L, configured.contextWindowTokens)
-        assertTrue(!configured.supportsVision)
+        assertEquals(false, configured.seesImages)
     }
 
     @Test
@@ -385,13 +385,13 @@ class CodexCatalogTest {
                 codexModel(supportsVision = false, supportedEfforts = setOf(ReasoningEffort.LOW, ReasoningEffort.HIGH), supportedServiceTiers = setOf("priority")),
             )
 
-        assertEquals(setOf(ReasoningEffort.LOW, ReasoningEffort.HIGH), chat.supportedEfforts)
+        assertEquals(setOf(ReasoningEffort.LOW, ReasoningEffort.HIGH), chat.efforts)
 
         val role = chat.withModel("gpt-5.6-luna", reasoningEffort = null, contextWindowTokens = null, envPrefix = "ADDRESSING")
 
         assertNull(role.serviceTier)
-        assertNull(role.supportedEfforts)
-        assertTrue(role.supportsVision, "the role's own catalog entry says whether it sees, not the chat model's")
+        assertNull(role.efforts)
+        assertNull(role.seesImages, "the role's own catalog entry says whether it sees, not the chat model's")
     }
 }
 

@@ -2,7 +2,6 @@ package com.helltar.vusan.agent.conversation
 
 import com.helltar.vusan.llm.FakeLlmClient
 import com.helltar.vusan.llm.LlmModel
-import com.helltar.vusan.llm.LlmProvider
 import com.helltar.vusan.llm.Message
 import java.time.Instant
 import kotlin.test.Test
@@ -15,7 +14,7 @@ class ConversationCompactorTest {
     @Test
     fun `compactor merges previous recap and events into a persisted checkpoint`() = runBlocking {
         val executor = FakeLlmClient("- User prefers tea\n- Open thread: movie night")
-        val model = LlmModel(LlmProvider.OPENAI, "test", contextWindowTokens = 16_384)
+        val model = LlmModel("test", contextWindowTokens = 16_384)
         val compactor = LlmConversationCompactor(executor, model)
         val interaction =
             ConversationInteraction(
@@ -41,7 +40,7 @@ class ConversationCompactorTest {
     @Test
     fun `a long reply context does not push the request out of the compaction source`() = runBlocking {
         val executor = FakeLlmClient("- Booking a flight")
-        val model = LlmModel(LlmProvider.OPENAI, "test", contextWindowTokens = 16_384)
+        val model = LlmModel("test", contextWindowTokens = 16_384)
         val compactor = LlmConversationCompactor(executor, model)
         val storedEntry =
             buildString {

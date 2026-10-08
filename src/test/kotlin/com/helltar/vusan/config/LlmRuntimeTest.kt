@@ -2,7 +2,6 @@ package com.helltar.vusan.config
 
 import com.helltar.vusan.infra.Http
 import com.helltar.vusan.llm.ChatRequest
-import com.helltar.vusan.llm.LlmProvider
 import com.helltar.vusan.llm.Message
 import com.helltar.vusan.llm.ReasoningEffort
 import com.helltar.vusan.llm.RequestOptions
@@ -75,7 +74,7 @@ class LlmRuntimeTest {
         LlmProviderConfig.OpenAiCompatible(baseUrl = baseUrl, apiKey = "key", model = "deepseek-chat", endpoint = endpoint, reasoningEffort = effort, requestTimeout = TIMEOUT, contextWindowTokens = window)
 
     private fun codex(effort: ReasoningEffort? = null, verbosity: String? = null, tier: ServiceTier? = null, vision: Boolean = true, window: Long? = null) =
-        LlmProviderConfig.Codex(model = "gpt-5.6-terra", reasoningEffort = effort, serviceTier = tier, verbosity = verbosity, supportsVision = vision, requestTimeout = TIMEOUT, contextWindowTokens = window)
+        LlmProviderConfig.Codex(model = "gpt-5.6-terra", reasoningEffort = effort, serviceTier = tier, verbosity = verbosity, seesImages = vision, requestTimeout = TIMEOUT, contextWindowTokens = window)
 
     private fun codexAuth() = CodexAuthStore(Http.createClient(MockEngine { error("no refresh expected") }))
 
@@ -86,7 +85,6 @@ class LlmRuntimeTest {
         val runtime = resolveLlmRuntime(openAi(effort = ReasoningEffort.XHIGH), http = http(RESPONSES_REPLY))
 
         assertEquals("OpenAI", runtime.providerLabel)
-        assertEquals(LlmProvider.OPENAI, runtime.model.provider)
         assertEquals(1_050_000, runtime.model.contextWindowTokens)
         assertTrue(runtime.model.seesImages)
         assertEquals("xhigh", runtime.reasoningEffort)
