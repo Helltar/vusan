@@ -11,7 +11,9 @@ enum class ServiceTier {
     DEFAULT,
     FLEX,
     SCALE,
-    PRIORITY;
+    PRIORITY,
+    FAST,
+    ULTRAFAST;
 
     /** The value a request carries, which is also the id the Codex model catalog lists it under. */
     val requestValue: String
