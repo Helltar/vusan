@@ -238,6 +238,54 @@ class SandboxToolsTest {
     }
 
     @Test
+    fun `a file is read with line numbers, by range, and says where to continue`() = runBlocking {
+        val files = mapOf("notes.txt" to "one\ntwo\nthree\n".toByteArray())
+
+        val whole = tools(files = files).readSandboxFile("notes.txt")
+        assertContains(whole, "lines 1–3 of 3")
+        assertContains(whole, "2\ttwo")
+        assertFalse("Continue" in whole)
+
+        val range = tools(files = files).readSandboxFile("notes.txt", fromLine = 2, lineCount = 1)
+        assertContains(range, "lines 2–2 of 3")
+        assertContains(range, "Continue with fromLine=3")
+        assertFalse("three" in range)
+
+        assertContains(toolFailure { tools(files = files).readSandboxFile("notes.txt", fromLine = 9) }, "no line 9")
+    }
+
+    @Test
+    fun `an edit replaces one exact passage and writes the file back`() = runBlocking {
+        val files = mapOf("index.html" to "<h1>Hi</h1>\n<p>old</p>\n".toByteArray())
+
+        val result = tools(files = files).editSandboxFile("index.html", "<p>old</p>", "<p>new</p>")
+
+        assertContains(result, "replaced 1 occurrence")
+        assertEquals("index.html", writes.single().first)
+        assertEquals("<h1>Hi</h1>\n<p>new</p>\n", writes.single().second.decodeToString())
+    }
+
+    @Test
+    fun `an edit refuses a passage that is missing or ambiguous, unless every occurrence is meant`() = runBlocking {
+        val files = mapOf("a.txt" to "x\nx\n".toByteArray())
+
+        assertContains(toolFailure { tools(files = files).editSandboxFile("a.txt", "nope", "y") }, "does not occur")
+        assertContains(toolFailure { tools(files = files).editSandboxFile("a.txt", "x", "y") }, "occurs 2 times")
+        assertTrue(writes.isEmpty(), "a refused edit writes nothing")
+
+        assertContains(tools(files = files).editSandboxFile("a.txt", "x", "y", replaceAll = true), "replaced 2 occurrence")
+        assertEquals("y\ny\n", writes.single().second.decodeToString())
+    }
+
+    @Test
+    fun `a binary file is neither read nor edited`() = runBlocking {
+        val files = mapOf("a.bin" to byteArrayOf(1, 0, 2))
+
+        assertContains(toolFailure { tools(files = files).readSandboxFile("a.bin") }, "not a text file")
+        assertContains(toolFailure { tools(files = files).editSandboxFile("a.bin", "a", "b") }, "not a text file")
+    }
+
+    @Test
     fun `sending picks media kinds and reports missing files`() = runBlocking {
         val outbox = BotOutbox()
         val files = mapOf("cover.png" to byteArrayOf(1), "clip.gif" to byteArrayOf(3), "project.zip" to byteArrayOf(2))

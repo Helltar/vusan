@@ -16,7 +16,7 @@ internal object SandboxToolDescriptions {
                 "Use `sendFromSandbox` to deliver finished files to the user."
 
     const val COMMAND =
-        "The command interpreted by `bash`; use `writeSandboxFile` for substantial file contents."
+        "The command interpreted by `bash`; use `writeSandboxFile` for substantial file contents, `readSandboxFile` to read a file and `editSandboxFile` to change part of one."
 
     const val TIMEOUT_SECONDS =
         "Execution time limit in seconds; omit it for the default."
@@ -46,7 +46,8 @@ internal object SandboxToolDescriptions {
 
     const val WRITE_FILE =
         "Writes a complete UTF-8 text file in the sandbox, creating missing parent directories. " +
-                "Use for source code, configuration, and documents; an existing file is replaced. " +
+                "Use for new source code, configuration, and documents; an existing file is replaced. " +
+                "To change part of an existing file, use `editSandboxFile` instead of rewriting it. " +
                 "Files are not delivered to the user until `sendFromSandbox` is called."
 
     const val WRITE_PATH =
@@ -54,6 +55,39 @@ internal object SandboxToolDescriptions {
 
     const val WRITE_CONTENT =
         "The complete file contents, not a patch or fragment."
+
+    const val READ_FILE =
+        "Reads a UTF-8 text file from the sandbox, with line numbers, optionally one range of lines. " +
+                "Use it before editing a file, to check what a command wrote, or to quote a file in an answer. " +
+                "A long file comes back in parts: the result says where it stopped, and the next call continues from that line. " +
+                "Binary files and files over 2 MB are refused; inspect those with `runCommand`."
+
+    const val READ_PATH =
+        "Path relative to the home, for example `project/index.html`."
+
+    const val READ_FROM_LINE =
+        "First line to read, counted from `1`; defaults to the start of the file."
+
+    const val READ_LINE_COUNT =
+        "How many lines to read from there; `0`, the default, reads to the end of the file or to the size cap."
+
+    const val EDIT_FILE =
+        "Replaces one exact passage of a sandbox text file with another, leaving the rest of the file as it is. " +
+                "The passage must match the file exactly, whitespace and indentation included, and must occur once — include a line before and after it to make it unique, or set `replaceAll` to change every occurrence. " +
+                "Read the file first; the result says how many occurrences were replaced. " +
+                "Use it for every change to an existing file instead of rewriting the file with `writeSandboxFile`."
+
+    const val EDIT_PATH =
+        "Path relative to the home, for example `project/index.html`."
+
+    const val EDIT_FIND =
+        "The exact text to replace, copied from the file: several lines are fine, and it must not be empty."
+
+    const val EDIT_REPLACE =
+        "The text to put in its place; empty removes the passage."
+
+    const val EDIT_REPLACE_ALL =
+        "`true` replaces every occurrence of the passage; `false`, the default, requires it to occur exactly once."
 
     const val DELETE_FILE =
         "Deletes one exact file or directory from this person's sandbox; directories are removed recursively. " +

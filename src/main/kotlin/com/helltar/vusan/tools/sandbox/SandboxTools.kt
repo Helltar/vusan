@@ -16,6 +16,10 @@ import java.util.UUID
 
 private const val MAX_COMMAND_CHARS = 16_000
 private const val MAX_CONTENT_CHARS = 400_000
+
+// a text file the model reads or edits whole; bigger ones are for the shell
+private const val MAX_TEXT_FILE_BYTES = 2 * 1024 * 1024
+private const val MAX_READ_CHARS = 60_000
 private const val MAX_PATH_CHARS = 400
 private const val MAX_SEND_FILES = 10
 private const val MAX_JOB_ID_CHARS = 64
@@ -49,7 +53,7 @@ class SandboxTools(
         listOfNotNull(note, describeCommand(result)).joinToString("\n")
     }
 
-    @Tool(SandboxToolDescriptions.READ_COMMAND)
+    @Tool(SandboxToolDescriptions.READ_COMMAND, readOnly = true)
     suspend fun readSandboxCommand(
         @Arg(SandboxToolDescriptions.READ_JOB_ID)
         jobId: String = "",
@@ -89,6 +93,73 @@ class SandboxTools(
         val note = placeAttachments()
         sandbox.writeFile(target, content.toByteArray(Charsets.UTF_8))
         listOfNotNull(note, "Wrote `$target` (${content.length} chars). Use sendFromSandbox to deliver it.").joinToString("\n")
+    }
+
+    @Tool(SandboxToolDescriptions.READ_FILE, readOnly = true)
+    suspend fun readSandboxFile(
+        @Arg(SandboxToolDescriptions.READ_PATH)
+        path: String,
+        @Arg(SandboxToolDescriptions.READ_FROM_LINE)
+        fromLine: Int = 1,
+        @Arg(SandboxToolDescriptions.READ_LINE_COUNT)
+        lineCount: Int = 0,
+    ): String = suspendToolGuard {
+        val target = path.requireToolText("Path", MAX_PATH_CHARS)
+        require(fromLine >= 1) { "fromLine starts at 1" }
+        require(lineCount >= 0) { "lineCount must not be negative" }
+
+        val lines = sandbox.readText(target).removeSuffix("\n").lines()
+        require(fromLine <= lines.size) { "`$target` has ${lines.size} line(s), so there is no line $fromLine" }
+
+        val wanted = lines.drop(fromLine - 1).let { rest -> if (lineCount == 0) rest else rest.take(lineCount) }
+        val numbered = StringBuilder()
+        var shown = 0
+
+        // the cap is on what the model reads, not on the file: the result says where to pick up
+        for ((offset, line) in wanted.withIndex()) {
+            val entry = "${fromLine + offset}\t$line\n"
+            if (numbered.length + entry.length > MAX_READ_CHARS) break
+            numbered.append(entry)
+            shown++
+        }
+
+        val last = fromLine + shown - 1
+        val more = if (last < lines.size) " Continue with fromLine=${last + 1}." else ""
+
+        "`$target`: lines $fromLine–$last of ${lines.size}.$more\n${xmlBlock("file_content", numbered.toString().trimEnd('\n'))}"
+    }
+
+    @Tool(SandboxToolDescriptions.EDIT_FILE)
+    suspend fun editSandboxFile(
+        @Arg(SandboxToolDescriptions.EDIT_PATH)
+        path: String,
+        @Arg(SandboxToolDescriptions.EDIT_FIND)
+        find: String,
+        @Arg(SandboxToolDescriptions.EDIT_REPLACE)
+        replace: String,
+        @Arg(SandboxToolDescriptions.EDIT_REPLACE_ALL)
+        replaceAll: Boolean = false,
+    ): String = suspendToolGuard {
+        val target = path.requireToolText("Path", MAX_PATH_CHARS)
+        require(find.isNotEmpty()) { "`find` must not be empty" }
+        require(find != replace) { "`find` and `replace` are the same text, so there is nothing to change" }
+
+        val text = sandbox.readText(target)
+        val occurrences = text.countOf(find)
+
+        require(occurrences > 0) {
+            "`find` does not occur in `$target`; read the file and copy the passage exactly, whitespace included"
+        }
+        require(replaceAll || occurrences == 1) {
+            "`find` occurs $occurrences times in `$target`; include a line before or after it to make it unique, or set replaceAll"
+        }
+
+        val edited = if (replaceAll) text.replace(find, replace) else text.replaceFirst(find, replace)
+        sandbox.writeFile(target, edited.toByteArray(Charsets.UTF_8))
+
+        val replaced = if (replaceAll) occurrences else 1
+
+        "Edited `$target`: replaced $replaced occurrence(s), ${find.lines().size} line(s) became ${replace.lines().size}; the file is now ${edited.lines().size} line(s)."
     }
 
     @Tool(SandboxToolDescriptions.DELETE_FILE)
@@ -195,6 +266,26 @@ class SandboxTools(
             "The attached file `$name` could not be placed in the sandbox: ${it.message}."
         }
     }
+}
+
+// a file the model reads or edits is text, decoded whole; a NUL byte says it is not, and the shell is the tool for it
+private suspend fun SandboxClient.PersonSandbox.readText(path: String): String {
+    val bytes = readFile(path, MAX_TEXT_FILE_BYTES)
+    require(bytes.none { it == 0.toByte() }) { "`$path` is not a text file; inspect it with `runCommand`" }
+
+    return bytes.toString(Charsets.UTF_8)
+}
+
+private fun String.countOf(part: String): Int {
+    var count = 0
+    var at = indexOf(part)
+
+    while (at >= 0) {
+        count++
+        at = indexOf(part, at + part.length)
+    }
+
+    return count
 }
 
 private fun sandboxFilename(path: String): String = path.substringAfterLast('/').sanitizeFilename().ifBlank { "file" }

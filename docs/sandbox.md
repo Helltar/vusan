@@ -69,6 +69,10 @@ instead of keeping its own copy.
 - **Paths** — relative to the home, `/home/sandbox`. `writeSandboxFile` replaces a file atomically
   and creates parent directories; `deleteSandboxFile` removes one exact path, recursively for a
   directory, and leaves running commands alone.
+- **Reading and editing** — `readSandboxFile` returns a text file with line numbers, a range of lines
+  at a time, and says where to continue; `editSandboxFile` replaces one exact passage, which has to
+  occur once unless every occurrence is meant, so a change to a long file costs the passage rather than
+  the whole file. Both refuse binary files and files over 2 MB, which the shell handles.
 - **`resetSandbox`** — deletes the sandbox with its home; the next command starts in an empty one.
   For a home too full, too broken or too tangled to repair file by file. A site published from it
   goes down with it, and its address is never served again.
