@@ -4,7 +4,6 @@ import com.helltar.vusan.agent.conversation.ChatRole
 import com.helltar.vusan.agent.conversation.ChatTurn
 import com.helltar.vusan.agent.conversation.PromptConversation
 import com.helltar.vusan.agent.conversation.toolCallArgsForStorage
-import com.helltar.vusan.config.codexSessionLabel
 import com.helltar.vusan.llm.ChatRequest
 import com.helltar.vusan.llm.Message
 import com.helltar.vusan.llm.RequestOptions
@@ -21,6 +20,7 @@ import kotlinx.serialization.json.put
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertIs
+import kotlin.test.assertNull
 
 class AgentFactoryTest {
 
@@ -67,15 +67,15 @@ class AgentFactoryTest {
         assertEquals("vusan-${testScope().toString().hashCode().toUInt().toString(16)}", firstRequest().options.promptCacheKey)
     }
 
-    // the codex call lines carry the session the cache key folds into; a turn logging the same is what ties
-    // a turn to its calls
+    // a provider's call lines name the conversation by its cache key; a turn logging the same is what ties
+    // a turn to its calls, and a provider without a key names none
     @Test
-    fun `a turn is logged under the session its calls carry`() {
+    fun `a turn is logged under the cache key its calls carry`() {
         val options = RequestOptions(promptCacheKey = "vusan")
         val factory = AgentFactory(ScriptedLlmClient(), TEST_MODEL, options, maxModelCalls = 20)
-        val key = requireNotNull(options.forConversation(testScope().toString()).promptCacheKey)
 
-        assertEquals(codexSessionLabel(key), factory.sessionLogLabel(testScope()))
+        assertEquals(options.forConversation(testScope().toString()).promptCacheKey, factory.conversationCacheKey(testScope()))
+        assertNull(AgentFactory(ScriptedLlmClient(), TEST_MODEL, RequestOptions(), maxModelCalls = 20).conversationCacheKey(testScope()))
     }
 
     @Test

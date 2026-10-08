@@ -23,7 +23,6 @@ internal const val CODEX_ORIGINATOR = "codex_cli_rs"
 
 private const val CODEX_ROUTING_HINT_HEADER = "x-codex-routing-hint"
 private const val CODEX_SESSION_ID_HEADER = "session-id"
-private const val SESSION_LOG_CHARS = 8
 private const val PERCENT = 100
 
 private val log = KotlinLogging.logger {}
@@ -87,12 +86,6 @@ internal fun codexSessionId(requestBody: Any): String? {
 private fun sessionIdOf(cacheKey: String): String = UUID.nameUUIDFromBytes(cacheKey.toByteArray()).toString()
 
 /**
- * The label a conversation's model calls carry in the log, see [codexCallSummary]: the start of the
- * session id its cache key folds into. A turn logs the same label, which is what ties a call to a chat.
- */
-internal fun codexSessionLabel(cacheKey: String): String = sessionIdOf(cacheKey).take(SESSION_LOG_CHARS)
-
-/**
  * What is done with every completed Codex call: its tokens are counted towards the subscription's next
  * step, the call is logged with its cache share and where its prefix drifted, and a reply from another
  * model than the one asked for is noticed — once per model, since it is a fact about the deployment.
@@ -105,7 +98,7 @@ internal fun codexCallObserver(limits: CodexLimits): (request: JsonObject, respo
         countUsage(response, limits)
 
         val cacheKey = (request["prompt_cache_key"] as? JsonPrimitive)?.contentOrNull
-        val driftNote = cacheKey?.let { " " + drift.describe(codexSessionLabel(it), request) }.orEmpty()
+        val driftNote = cacheKey?.let { " " + drift.describe(it, request) }.orEmpty()
 
         log.info { "codex call: ${codexCallSummary(request, response)}$driftNote" }
 
@@ -134,10 +127,10 @@ internal fun servedModelMismatch(request: JsonObject, response: JsonObject): Str
  * and how many tools rode along.
  *
  * The limits line next to it adds calls up between two changes of the allowance, which hides exactly
- * what a cache question asks: which call of which conversation missed. The session is the one sent in
- * `session-id`, shortened, so a conversation's calls can be followed without naming anybody; the tool
- * count is there because a group loaded mid-turn changes the front of the request and takes the cached
- * prefix with it.
+ * what a cache question asks: which call of which conversation missed. The conversation is named by its
+ * cache key, a hash the turn logs as well, so its calls can be followed without naming anybody; the
+ * tool count is there because a group loaded mid-turn changes the front of the request and takes the
+ * cached prefix with it.
  */
 internal fun codexCallSummary(request: JsonObject, response: JsonObject): String {
     val usage = response["usage"] as? JsonObject
@@ -150,7 +143,7 @@ internal fun codexCallSummary(request: JsonObject, response: JsonObject): String
 
     val cacheKey = (request["prompt_cache_key"] as? JsonPrimitive)?.contentOrNull
 
-    return "session=[${cacheKey?.let(::codexSessionLabel) ?: "none"}] " +
+    return "cacheKey=[${cacheKey ?: "none"}] " +
             "input=[$input] cached=[$cached] cachedPercent=[$cachedPercent] " +
             "output=[${usage.long("output_tokens")}] tools=[${(request["tools"] as? JsonArray)?.size ?: 0}]"
 }
