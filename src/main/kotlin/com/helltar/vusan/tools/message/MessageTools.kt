@@ -20,6 +20,10 @@ private const val MAX_ANNOUNCEMENT_CHARS = 500
 // interim messages are for a result worth reading early; more than this is the turn narrating itself
 private const val MAX_INTERIM_MESSAGES = 3
 
+private const val QUEUE_FULL =
+    "Message limit reached: ${BotOutbox.MAX_TEXT_MESSAGES} separate messages are already queued for this reply. " +
+        "Do not send more; finish your turn now."
+
 class MessageTools(
     private val outbox: BotOutbox,
     private val narrator: TurnNarrator? = null,
@@ -71,10 +75,15 @@ class MessageTools(
                     "Get on with the work and report the result at the end."
 
             // a reply the user asked to have in private must not surface in the chat the turn runs in, which
-            // is where the live status is; the words travel to the private chat with the rest instead.
-            outbox.redirectToPrivate && outbox.enqueueText(trimmed, announcement = true) ->
-                "This reply goes to the user's private chat, so the plan was queued with it rather than shown here. " +
-                    "Do not announce anything else; write the result into the same reply."
+            // is where the live status is; the words travel to the private chat with the rest instead, and a
+            // full queue refuses them rather than letting them through to the chat.
+            outbox.redirectToPrivate ->
+                if (outbox.enqueueText(trimmed, announcement = true)) {
+                    "This reply goes to the user's private chat, so the plan was queued with it rather than shown here. " +
+                        "Do not announce anything else; write the result into the same reply."
+                } else {
+                    QUEUE_FULL
+                }
 
             // the turn has a live status to write into, and what it says is in the chat right now.
             narrator?.say(trimmed) == true -> {
@@ -89,9 +98,7 @@ class MessageTools(
                 "This turn has no live chat to announce into, so the text was queued with the rest of the reply. " +
                     "Do not announce anything else; write the result into the same reply."
 
-            else ->
-                "Message limit reached: ${BotOutbox.MAX_TEXT_MESSAGES} separate messages are already queued for this reply. " +
-                    "Do not send more; finish your turn now."
+            else -> QUEUE_FULL
         }
     }
 
@@ -108,9 +115,14 @@ class MessageTools(
                     "Finish the work and put the rest into your final answer."
 
             // a reply the user asked to have in private must not surface in the chat the turn runs in; the
-            // words travel to the private chat with the rest instead
-            outbox.redirectToPrivate && outbox.enqueueText(trimmed) ->
-                "This reply goes to the user's private chat, so the text was queued with the rest of it rather than sent here."
+            // words travel to the private chat with the rest instead, and a full queue refuses them rather
+            // than letting them through to the chat
+            outbox.redirectToPrivate ->
+                if (outbox.enqueueText(trimmed)) {
+                    "This reply goes to the user's private chat, so the text was queued with the rest of it rather than sent here."
+                } else {
+                    QUEUE_FULL
+                }
 
             // in the chat now, and recorded as an answer the turn gave rather than a promise it made
             narrator?.send(trimmed) == true -> {
@@ -123,9 +135,7 @@ class MessageTools(
             outbox.enqueueText(trimmed) ->
                 "This turn has no live chat to send into, so the text was queued with the rest of the reply."
 
-            else ->
-                "Message limit reached: ${BotOutbox.MAX_TEXT_MESSAGES} separate messages are already queued for this reply. " +
-                    "Do not send more; finish your turn now."
+            else -> QUEUE_FULL
         }
     }
 

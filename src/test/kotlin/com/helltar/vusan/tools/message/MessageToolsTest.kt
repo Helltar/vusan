@@ -232,6 +232,24 @@ class MessageToolsTest {
         assertTrue("compiling your report" in queued && "the first page" in queued)
     }
 
+    // a full queue must refuse the words, never let them fall through to the chat
+    @Test
+    fun `a private reply whose queue is full refuses the plan and the interim message outright`() = runBlocking {
+        val outbox = BotOutbox()
+        val narrator = RecordingNarrator(reaches = true)
+        val tools = MessageTools(outbox, narrator)
+
+        tools.replyInPrivateMessages()
+        repeat(BotOutbox.MAX_TEXT_MESSAGES) { assertTrue(outbox.enqueueRichMessage("# part $it")) }
+
+        assertTrue(tools.announcePlan("compiling your report").startsWith("Message limit reached"))
+        assertTrue(tools.sendMessageNow("the first page").startsWith("Message limit reached"))
+
+        assertTrue(narrator.said.isEmpty())
+        assertTrue(narrator.sent.isEmpty())
+        assertEquals(BotOutbox.MAX_TEXT_MESSAGES, outbox.pending.size)
+    }
+
     @Test
     fun `announcePlan is still allowed after an interim message`() = runBlocking {
         val outbox = BotOutbox()
