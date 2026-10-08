@@ -655,8 +655,8 @@ A normal user message travels:
 ## Startup
 
 `Main.kt` wires everything in order: load `AppConfig` → connect `Db` → create the `Http` client → (only with
-`LLM_PROVIDER=codex`) build the `CodexAuthStore` → preflight every configured model (`config/ModelPreflight`): the Codex one
-proves the ChatGPT session works and fills the context window in from the account's model catalog, an OpenAI one is
+a model on `codex` — the chat, its fallback or a role) build the `CodexAuthStore` → preflight every configured model
+(`config/ModelPreflight`): the Codex one proves the ChatGPT session works and fills the context window in from the account's model catalog, an OpenAI one is
 confirmed against the vendor's list, an Anthropic one also brings its window and what it takes back, so a typo fails here
 → create the LLM runtime, whose client everything downstream then shares — wrapped in `llm/FallbackLlmClient` when
 `LLM_FALLBACK_PROVIDER` names a second runtime, so a spent subscription hands every call to it until the deadline its
