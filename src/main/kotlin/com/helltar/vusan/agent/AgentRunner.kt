@@ -1,9 +1,5 @@
 package com.helltar.vusan.agent
 
-import com.helltar.vusan.agent.grouplog.GroupLogEntry
-import com.helltar.vusan.agent.grouplog.GroupLogRepository
-import com.helltar.vusan.agent.grouplog.renderGroupLog
-import com.helltar.vusan.agent.grouplog.withoutExchangesWith
 import com.helltar.vusan.agent.conversation.*
 import com.helltar.vusan.agent.memory.MemoryRepository
 import com.helltar.vusan.agent.memory.memoryOwner
@@ -23,81 +19,21 @@ import com.helltar.vusan.request.RequestContext
 import com.helltar.vusan.tools.ToolCatalogFactory
 import io.github.oshai.kotlinlogging.KotlinLogging
 import java.time.Instant
-import java.time.ZoneId
 import java.time.temporal.ChronoUnit
-
-// `<recent_chat>` rides along on every group turn, so it is budgeted for cheapness, not for detail:
-// enough to know what is being talked about, never enough to answer a recap question on its own.
-private const val RECENT_CHAT_MAX_CHARS = 1_000
-private const val RECENT_CHAT_LINE_CHARS = 120
-private const val RECENT_CHAT_OVERFETCH = 3
-
-// the slice of what the group was just saying that a turn carries: enough to follow a question with no
-// subject, bounded so it stays a glance rather than a transcript.
-private const val RECENT_CHAT_MESSAGES = 15
-private const val RECENT_CHAT_MINUTES = 60L
 
 private const val EMERGENCY_SUMMARY_MAX_CHARS = 1_500
 private const val LOG_REPLY_MAX_CHARS = 300
 private const val PROVIDER_ERROR_LOG_MAX_CHARS = 300
-
-/**
- * What `<recent_chat>` shows of [entries], oldest first.
- *
- * An ordinary turn leaves out the person's own exchanges with the bot, which it replays as history, and
- * [entries] already lack the message itself. A turn nobody called the bot into keeps those exchanges and
- * ends right before the message: nothing but the order of the lines says whether a bare "which one?"
- * follows the bot's last reply or somebody else's line in between, and history carries no such order.
- * A message the log has not recorded yet leaves the slice uncut.
- */
-internal fun recentChatSlice(
-    entries: List<GroupLogEntry>,
-    senderId: String,
-    messageId: String?,
-    ambient: Boolean,
-): List<GroupLogEntry> {
-    if (!ambient) return entries.withoutExchangesWith(senderId).takeLast(RECENT_CHAT_MESSAGES)
-
-    val at = entries.indexOfFirst { messageId != null && it.messageId == messageId }
-    val before = if (at >= 0) entries.take(at) else entries
-
-    return before.takeLast(RECENT_CHAT_MESSAGES)
-}
-
-/**
- * One turn to run: where it came from, and the two texts it is made of.
- *
- * [prompt] is what the model is shown and [conversationEntry] what history keeps, which are not the
- * same string — a turn's prompt carries context the stored exchange has no reason to repeat.
- */
-data class AgentRequest(
-    val context: RequestContext,
-    val prompt: String,
-    val conversationEntry: String,
-)
-
-data class AgentResult(
-    val outputs: List<OutboxItem>,
-    val comment: String?,
-    val commentToPrivate: Boolean = false,
-    // the run ended in an error and produced no answer: `comment` is the canned failure reply. `outputs`
-    // may still hold what the turn put in the chat before it broke, which delivery records without
-    // sending again.
-    val failed: Boolean = false,
-)
 
 class AgentRunner(
     private val agentFactory: AgentFactory,
     private val toolCatalogFactory: ToolCatalogFactory,
     private val conversation: ConversationRepository,
     private val memory: MemoryRepository,
-    private val conversationCompactor: ConversationCompactor,
+    conversationCompactor: ConversationCompactor,
     private val conversationConfig: ConversationConfig = ConversationConfig(),
-    // what the chat's sticker shortlist looks like, if this deployment has one. a function rather than
-    // the catalog itself: the catalog resends by `file_id`, which is one messenger's own model, and the
-    // runner has no business holding something that needs a client to exist.
-    private val stickerCatalog: (suspend (ChatRef) -> String?)? = null,
-    private val groupLog: GroupLogRepository? = null,
+    // what the chat around a turn adds to its prompt: the diary, the recent chat, the sticker shortlist
+    private val surroundings: TurnSurroundings = TurnSurroundings(),
     // which model is answering when it is not the one the system prompt names, so a turn served by the
     // fallback provider does not claim to be the primary.
     private val fallbackModelInUse: () -> String? = { null },
@@ -105,10 +41,9 @@ class AgentRunner(
     // be served at once, and each turn is an LLM call with its tools behind it. no default — a runner
     // quietly serving one turn at a time is not something to discover under load.
     maxConcurrentTurns: Int,
-    // what the bot wrote down about this chat's last few days, if this deployment keeps a diary.
-    private val diary: (suspend (ChatRef) -> String?)? = null,
 ) {
 
+    private val planner = ConversationPlanner(conversation, conversationCompactor)
     private val admission = TurnAdmission(maxConcurrentTurns)
 
     // the lock is taken before a place, in every path: a turn that holds a place is running and waits
@@ -214,17 +149,16 @@ class AgentRunner(
                 previousExchangeAt = conversation.lastInteractionAt(context.scope),
                 userMemory = userMemory,
                 chatMemory = chatMemory,
-                diary = diaryFor(context),
-                recentChat = recentChatFor(context),
-                stickerCatalog = stickerCatalogFor(context),
+                diary = surroundings.diaryFor(context),
+                recentChat = surroundings.recentChatFor(context),
+                stickerCatalog = surroundings.stickerCatalogFor(context),
                 toolGroups = toolCatalog.menu(),
                 fallbackModel = fallbackModelInUse(),
             )
 
         val preparation = agentFactory.prepare(toolCatalog, currentTurn)
 
-        val conversationPlan =
-            conversationPlanForPrompt(context.scope, preparation.tokenBudget.conversationTokens)
+        val conversationPlan = planner.planForPrompt(context.scope, preparation.tokenBudget.conversationTokens)
         val plannedInputTokens = preparation.tokenBudget.fixedPromptTokens + conversationPlan.estimatedTokens
 
         log.info {
@@ -341,106 +275,6 @@ class AgentRunner(
         return AgentResult(outputs, comment, outbox.redirectToPrivate)
     }
 
-    // the catalog is worth its tokens only where the reply can actually carry a sticker: a group that
-    // forbids them keeps StickerTools out of the catalog, so an index here would offer the model a
-    // shortlist it has no tool to send.
-    private suspend fun stickerCatalogFor(context: RequestContext): String? =
-        stickerCatalog
-            ?.takeIf { context.chat.capabilities.stickersAndAnimations }
-            ?.invoke(context.chatRef)
-
-    // a group's days belong to the group: a private chat has its history instead, and no diary.
-    private suspend fun diaryFor(context: RequestContext): String? {
-        val entries = diary?.takeIf { !context.chat.isPrivate } ?: return null
-
-        return try {
-            entries(context.chatRef)
-        } catch (e: Throwable) {
-            e.rethrowIfCancellation()
-            log.warn(e) { "failed to load the diary for chat=${context.chat.id}" }
-            null
-        }
-    }
-
-    // what the group was saying just before this turn. in a group the bot only ever sees the messages
-    // addressed to it, so without this a question like "and what do you think?" arrives with no subject.
-    // the triggering message is left out — the model is already being shown it as the request itself.
-    private suspend fun recentChatFor(context: RequestContext): String? {
-        val repository = groupLog?.takeIf { !context.chat.isPrivate } ?: return null
-
-        val entries =
-            try {
-                repository.recent(
-                    chat = context.chatRef,
-                    // over-fetch: dropping this user's own exchanges below must not thin the slice out.
-                    limit = RECENT_CHAT_MESSAGES * RECENT_CHAT_OVERFETCH,
-                    since = Instant.now().minus(RECENT_CHAT_MINUTES, ChronoUnit.MINUTES),
-                    // an ambient slice is cut at the message instead, so it has to be there to cut at.
-                    excludeMessageId = context.messageId.takeUnless { context.ambient },
-                )
-            } catch (e: Throwable) {
-                e.rethrowIfCancellation()
-                log.warn(e) { "failed to load the recent chat slice for chat=${context.chat.id}" }
-                return null
-            }
-
-        val recent = recentChatSlice(entries, context.sender.id, context.messageId, context.ambient)
-
-        return renderGroupLog(recent, ZoneId.systemDefault(), RECENT_CHAT_LINE_CHARS, RECENT_CHAT_MAX_CHARS)
-            .text
-            .takeIf { it.isNotBlank() }
-    }
-
-    // at most one recap per turn: it is an extra LLM round trip in front of the user's reply. whatever
-    // is still over budget stays out of this prompt and gets its own recap on a later turn.
-    private suspend fun conversationPlanForPrompt(scope: ConversationScope, tokenBudget: Int): ConversationPlan {
-        val snapshot = conversation.load(scope)
-        val plan = planFor(snapshot, tokenBudget)
-
-        if (plan.compactablePrefix.isEmpty()) return plan
-
-        val compacted =
-            try {
-                conversationCompactor.compact(snapshot.summary, plan.compactablePrefix)
-            } catch (e: Throwable) {
-                e.rethrowIfCancellation()
-                log.warn {
-                    "history recap failed for $scope: " +
-                            e.message?.collapseWhitespaceAndCap(PROVIDER_ERROR_LOG_MAX_CHARS).orEmpty()
-                }
-                return plan
-            } ?: return plan
-
-        val stored =
-            conversation.storeSummary(
-                scope = scope,
-                expectedThroughMessageId = snapshot.summarizedThroughMessageId,
-                throughMessageId = compacted.throughMessageId,
-                content = compacted.summary,
-            )
-
-        if (!stored) {
-            log.warn {
-                "history recap checkpoint changed before store for $scope; keeping the raw history"
-            }
-            return plan
-        }
-
-        log.info {
-            "history recap stored: $scope interactions=${compacted.interactionCount} " +
-                    "throughMessage=${compacted.throughMessageId} chars=${compacted.summary.length}"
-        }
-
-        return planFor(conversation.load(scope), tokenBudget)
-    }
-
-    private fun planFor(snapshot: ConversationSnapshot, tokenBudget: Int): ConversationPlan =
-        planConversation(
-            snapshot = snapshot,
-            tokenBudget = tokenBudget,
-            maxRecentInteractions = MAX_RECENT_INTERACTIONS,
-        )
-
     private suspend fun runAgentWithConversation(
         scope: ConversationScope,
         currentTurn: String,
@@ -528,11 +362,6 @@ class AgentRunner(
 
     private companion object {
         val log = KotlinLogging.logger {}
-
-        // the count a recap is triggered by, not what the prompt ends up carrying — a window too small
-        // for these still fits only what its token budget allows. kept well above that budget on a
-        // large window, where a low count buys nothing and only pays for recaps.
-        const val MAX_RECENT_INTERACTIONS = 40
 
         // how many turns may wait behind the one a conversation is running before the next is told to
         // hold on.

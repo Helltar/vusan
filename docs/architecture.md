@@ -54,14 +54,17 @@ that is who owns writing them, not because only `agent/` reads them. No other ar
   layer appends or clears turns behind a running turn's back. What it orchestrates sits beside it, one file per concern:
   `TurnPrompt` renders the blocks the model is shown for this turn, `TurnInput` writes the ones the request itself
   arrives in — what it replies to, the quoted fragment, the attachment, an album, a transcript, a pressed choice — so
-  every adapter fills in the tags the contract describes instead of spelling its own, `TurnHistory` decides what the finished turn leaves
+  every adapter fills in the tags the contract describes instead of spelling its own, `TurnSurroundings` reads what the chat around
+  the turn adds to it — the group's diary, the slice of what the group was just saying, the sticker shortlist — each only
+  where it applies, `TurnHistory` decides what the finished turn leaves
   behind, and `ProviderErrors` reads a provider's refusal out of the status and body the client kept and picks the
   reply it earns — and, for `llm/FallbackLlmClient`, how long the primary is out for, which is also what `TurnPrompt`'s
   `<current_model>` block and the status message's fallback line read to say who is answering. `AgentFactory` builds
   the `AgentTurn` (system prompt + history + tools over the model client) and budgets its model context, and
   `AgentTurn` is the agent loop itself; `SystemPrompt` keeps the deployment's customizable personality and the
   fixed delivery/tool contract in separate XML-delimited blocks. `agent/conversation/` groups turns into complete
-  interactions, persists raw history, and maintains its semantic recap, all keyed by a `ConversationScope` — one
+  interactions, persists raw history and maintains its semantic recap; `ConversationPlanner` picks what of it a prompt
+  carries, recapping first when it does not fit. All of it is keyed by a `ConversationScope` — one
   person in one chat, so a private exchange can never be replayed as that person's own words inside a group, and what
   travels between chats is durable memory rather than raw turns; `agent/memory/` stores that memory under a
   `MemoryOwner` (one person, or one group), which survives a history clear and is injected as
@@ -467,7 +470,7 @@ A normal user message travels:
   looks for chats people wrote in yesterday that have no entry for that day, and has `DiaryWriter` write one from the
   day's transcript: first person, in the deployment's own personality, with the two entries before it for continuity.
   Only a closed day is written, for the reason only a closed day is digested, and a day of fewer than fifteen messages
-  gets none. A day whose writer keeps failing is given up on after three tries. `AgentRunner` then puts the newest three
+  gets none. A day whose writer keeps failing is given up on after three tries. `TurnSurroundings` then puts the newest three
   entries of the past week into every turn in that group as `<diary>` — defused like the transcript they came from —
   and `Initiative` reads the same block. Entries live in `chat_diary`, a week at most (`Maintenance`), and
   `GroupLogRepository.clear` drops them with the transcript they were written from. Unlike a digest, an entry is written
@@ -516,7 +519,7 @@ A normal user message travels:
   pull in more than three new sets a day, and the bot as a whole no more than six, so the worst day is bounded whatever
   the number of chats. None of the gates applies to a set already known from elsewhere, which costs nothing to offer.
   `STICKERS_ENABLED=false` leaves the catalog out entirely, vision or not. A background worker then describes each sticker's thumbnail once through the vision model and caches the result
-  by `file_unique_id`. `AgentRunner` puts at most 16 ready-to-send entries into the current user turn: recently used
+  by `file_unique_id`. `TurnSurroundings` puts at most 16 ready-to-send entries into the current user turn: recently used
   individual stickers first, then frequent ones, with spare room filled round-robin across every described set the chat
   knows. A group that forbids stickers gets no index at all, matching the catalog: the tools are gated on the same
   capability, so a shortlist there would be an offer with no tool behind it. `searchStickers` searches the descriptions
@@ -584,8 +587,8 @@ A normal user message travels:
   style?") would be gone by the time the answer runs. `AgentTurns` parks the turn's `AttachedFile` in the handler
   whenever the turn queued a choice, and clears that slot on any other turn; the selection turn picks it back up and
   re-announces it as `<attached_file>`.
-- **History compaction** — `agent/conversation/ConversationPlan.planConversation` token-budgets complete recent
-  interactions. `LlmConversationCompactor` rewrites the previous recap plus the next omitted interaction prefix into a
+- **History compaction** — `agent/conversation/ConversationPlanner` picks the history a prompt carries:
+  `ConversationPlan.planConversation` token-budgets complete recent interactions, and `LlmConversationCompactor` rewrites the previous recap plus the next omitted interaction prefix into a
   standalone semantic recap and advances a database checkpoint only after that model call succeeds. It runs at most once
   per turn, because it is an extra LLM round trip in front of the user's reply; a prefix that still does not fit stays
   out of the prompt and gets its own recap on a later turn. Failed compaction never deletes source rows. Raw transcript
@@ -815,10 +818,10 @@ A symptom-to-source map for finding the right file fast. Paths are under
 | A spent subscription still ends turns in "come back later", or the bot never returns to it | `llm/FallbackLlmClient.kt` (the outage deadline, the single probe back) + `agent/ProviderErrors.providerOutage` (the patterns and the reset time read from the body), then `LLM_FALLBACK_*` in [`configuration.md`](configuration.md#a-second-provider-behind-the-first) |
 | The reply to a failed turn says nothing about what the provider did | `agent/AgentRunner.providerErrorReply` (which error body earns which canned reply: a content-policy refusal, a spent usage limit, a dead key, a 429/503 overload) + `i18n/Messages.kt` (the strings) |
 | You need to see exactly what the model was sent this turn | `agent/PromptDump.kt` (the whole request rendered per message) — `agent/AgentTurn.kt` renders it before every model call and is switched by the `PromptDump` logger in [`logback.xml`](../src/main/resources/logback.xml) |
-| Vusan forgets context or the history recap looks wrong | `agent/conversation/ConversationPlan.kt` (budget/selection) + `agent/conversation/ConversationCompactor.kt` (semantic recap) + `agent/conversation/ConversationRepository.kt` (storage/checkpoint) |
+| Vusan forgets context or the history recap looks wrong | `agent/conversation/ConversationPlanner.kt` (one recap per turn, and what a failed or raced recap leaves) + `agent/conversation/ConversationPlan.kt` (budget/selection) + `agent/conversation/ConversationCompactor.kt` (semantic recap) + `agent/conversation/ConversationRepository.kt` (storage/checkpoint) |
 | Nobody's answers to a quiz reach the agent, or the wrong option is named | `telegram/PollRegistry.kt` (what a sent poll stores, and for how long) + `telegram/inbound/GroupLogEntries.kt` (`PollAnswer.toGroupLogEntry`) + `tools/quiz/QuizTools.kt` / `tools/poll/PollTools.kt` (`isAnonymous`, which decides whether Telegram reports votes at all) |
 | A group recap misses messages, or `readGroupLog` returns too little | `telegram/TelegramBotRunner.recordGroupLog` + `telegram/inbound/GroupLogEntries.kt` (what gets recorded at all), then `agent/grouplog/GroupLogReader.kt` (window budget, day split, digest cache) and `agent/grouplog/GroupLogRepository.kt` (retention and the per-chat row cap) |
-| Vusan misreads what "that" refers to in a group, or parrots the group's chatter | `agent/AgentRunner.recentChatFor` (the `<recent_chat>` slice and its caps) + `agent/SystemPrompt.kt` (the `<recent_chat>` contract) |
+| Vusan misreads what "that" refers to in a group, or parrots the group's chatter | `agent/TurnSurroundings.recentChatFor` (the `<recent_chat>` slice and its caps) + `agent/SystemPrompt.kt` (the `<recent_chat>` contract) |
 | A channel recap misses posts, quotes the wrong text, or costs too much vision | `tools/tgchannel/TelegramChannelReader.kt` (the `?before=` walk, the window cutoff, the size budget, and which posts get vision) + `tools/tgchannel/TelegramChannelParser.kt` (own text vs the quote of a replied-to post, reactions, media kinds) |
 | Vusan speaks up in a group too often, too rarely, or at the wrong moment | `initiative look` and `initiative skip` lines in the log (what it decided and why, or which gate kept it out), then `agent/presence/Initiative.kt` (the gates, the pause, the day's budget) + `agent/presence/InitiativeMind.kt` (what it is told it may do, and what counts as a readable decision) |
 | Vusan does not remember yesterday in a group, or remembers it wrong | `diary entry written` lines in the log, then `agent/presence/Diary.kt` (which day is written, the fifteen-message floor, how many entries a turn is shown) + `agent/presence/DiaryWriter.kt` (the instructions) + `agent/SystemPrompt.kt` (the `<diary>` contract) |

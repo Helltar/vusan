@@ -1,12 +1,17 @@
 package com.helltar.vusan.agent
 
 import com.helltar.vusan.agent.grouplog.GroupLogEntry
+import com.helltar.vusan.request.ChatCapabilities
+import com.helltar.vusan.request.ChatRef
+import com.helltar.vusan.request.requestContext
 import com.helltar.vusan.request.testChat
+import kotlinx.coroutines.runBlocking
 import java.time.Instant
 import kotlin.test.Test
 import kotlin.test.assertEquals
+import kotlin.test.assertNull
 
-class RecentChatSliceTest {
+class TurnSurroundingsTest {
 
     @Test
     fun `an ordinary turn leaves out the exchange its history already replays`() {
@@ -47,6 +52,39 @@ class RecentChatSliceTest {
         val entries = listOf(bot("because the news came first", "2"), person("3", ALICE, "lol"))
 
         assertEquals(entries, recentChatSlice(entries, senderId = BOB, messageId = "4", ambient = true))
+    }
+
+    @Test
+    fun `a private chat is given neither a diary nor a recent chat`() = runBlocking {
+        val surroundings =
+            TurnSurroundings(
+                groupLog = null,
+                diary = { error("the diary is not asked for a private chat") },
+                stickerCatalog = { "<sticker_catalog>\n#1 penguin waving\n</sticker_catalog>" },
+            )
+        val context = requestContext(isPrivate = true)
+
+        assertNull(surroundings.diaryFor(context))
+        assertNull(surroundings.recentChatFor(context))
+        assertEquals("<sticker_catalog>\n#1 penguin waving\n</sticker_catalog>", surroundings.stickerCatalogFor(context))
+    }
+
+    @Test
+    fun `a group is given its own diary, and a diary that fails is left out`() = runBlocking {
+        val asked = mutableListOf<ChatRef>()
+        val context = requestContext(chatId = -100, isPrivate = false)
+
+        assertEquals("the ferry won", TurnSurroundings(diary = { chat -> asked += chat; "the ferry won" }).diaryFor(context))
+        assertEquals(listOf(testChat(-100)), asked)
+        assertNull(TurnSurroundings(diary = { error("no entries today") }).diaryFor(context))
+    }
+
+    @Test
+    fun `a chat that forbids stickers is offered no shortlist`() = runBlocking {
+        val surroundings = TurnSurroundings(stickerCatalog = { error("the shortlist is not asked for") })
+        val forbidding = ChatCapabilities.UNRESTRICTED.copy(stickersAndAnimations = false)
+
+        assertNull(surroundings.stickerCatalogFor(requestContext(isPrivate = false, capabilities = forbidding)))
     }
 
     private fun person(messageId: String, senderId: String, text: String) =

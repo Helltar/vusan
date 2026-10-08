@@ -2,6 +2,7 @@ package com.helltar.vusan
 
 import com.helltar.vusan.agent.AgentFactory
 import com.helltar.vusan.agent.AgentRunner
+import com.helltar.vusan.agent.TurnSurroundings
 import com.helltar.vusan.agent.addressing.AmbientAddressing
 import com.helltar.vusan.agent.addressing.LlmAddressingClassifier
 import com.helltar.vusan.agent.ContextWindowPolicy
@@ -197,9 +198,9 @@ suspend fun main() = coroutineScope {
         val agentRunner =
             AgentRunner(
                 agentFactory, toolCatalogFactory, conversation, memory, conversationCompactor,
-                config.chatHistory, stickerCatalog?.let { catalog -> catalog::indexBlockFor },
-                groupLog, { fallbackInUse()?.model }, config.maxConcurrentTurns,
-                diary = diary?.let { it::blockFor },
+                config.chatHistory,
+                TurnSurroundings(groupLog, diary?.let { it::blockFor }, stickerCatalog?.let { it::indexBlockFor }),
+                { fallbackInUse()?.model }, config.maxConcurrentTurns,
             )
 
         // answers to a poll are read back through the group transcript, so without one there is
