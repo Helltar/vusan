@@ -47,8 +47,10 @@ val ANTHROPIC_EFFORTS: Set<ReasoningEffort> =
  * - Two cache breakpoints when the caller asks for caching: the request-level one, which the API places
  *   on the last block and which every iteration of a tool loop reads back, and one on the last system
  *   block, the prefix every request of the deployment shares — the next turn replays its history from
- *   storage in another shape, so the automatic one alone misses then. Both default to the five-minute
- *   TTL, as the API requires of the pair.
+ *   storage in another shape, so the automatic one alone misses then. The system one is kept an hour,
+ *   which outlives the quiet stretches between a chat's messages at twice the write price instead of
+ *   1.25×; the tail stays on the five-minute default, and that order — the longer TTL first — is the one
+ *   the API allows.
  * - Unknown content block types are skipped with a warning rather than failing the call.
  */
 class AnthropicClient(
@@ -98,7 +100,7 @@ class AnthropicClient(
                             buildJsonObject {
                                 put("type", "text")
                                 put("text", message.text)
-                                if (options.cachePrompt && index == system.lastIndex) put("cache_control", EPHEMERAL)
+                                if (options.cachePrompt && index == system.lastIndex) put("cache_control", SYSTEM_PREFIX_CACHE)
                             },
                         )
                     }
@@ -283,6 +285,7 @@ class AnthropicClient(
         private const val DEFAULT_MAX_TOKENS = 16_000
 
         private val EPHEMERAL = buildJsonObject { put("type", "ephemeral") }
+        private val SYSTEM_PREFIX_CACHE = buildJsonObject { put("type", "ephemeral"); put("ttl", "1h") }
         private val log = KotlinLogging.logger {}
     }
 }

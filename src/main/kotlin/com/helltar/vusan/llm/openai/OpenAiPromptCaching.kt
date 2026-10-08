@@ -9,62 +9,58 @@ import kotlinx.serialization.json.contentOrNull
 import kotlinx.serialization.json.put
 
 /**
- * Marks the two prefixes a turn re-sends, well inside the four cache writes a request may make: the
- * system instructions, stable for the life of the deployment, and the last user message, stable for
- * every iteration of one agent run — the tool loop re-sends the whole history on each of them.
+ * What a request on the GPT-5.6 generation says about its prompt cache, the generation where the
+ * platform stopped deciding alone.
  *
- * GPT-5.6-era caching puts its implicit breakpoint at the latest user or tool message, with no fallback
- * to an earlier matching prefix, which in an agent's request is after the changing history, time, memory
- * and tool results: zero reads, repeated writes, a stable system prompt notwithstanding. Explicit mode
- * says where to cut instead. OpenAI reads from the longest matching prefix, so the turn that grew the
- * history still reads the system one. A tool-free request — the history recap — marks the system
- * block alone: its user message never repeats, so marking it would buy a write nobody reads. Older
- * models keep automatic caching, and a body with nothing to mark is left as it was, because `explicit`
- * mode without a marked block disables caching outright.
+ * Implicit mode is the one an agent's loop wants: the platform puts a breakpoint after the latest
+ * eligible message — a user message, or the last of a run of tool results — and looks back from there
+ * over the twenty message endings before it and the end of the opening developer block. So every
+ * iteration reads the tool results the one before it appended, and the next turn, whose history is
+ * replayed from storage in another shape, still reads the system prefix. An explicit breakpoint stays
+ * on that developer block all the same: the first two explicit breakpoints are looked up whatever a long
+ * turn pushed out of the lookback window. Measured live on 2026-10-08 (gpt-5.6-luna, a three-call turn):
+ * reads of 0 → 2512 → 2561, against 0 → 2512 → 2512 with explicit breakpoints alone.
+ *
+ * A prompt that never repeats — the history recap, a look at a picture — gets explicit mode with nothing
+ * marked, which the API documents as no caching at all; left to the implicit mode, the platform writes
+ * the whole prompt at a quarter over the input price for a read nobody makes. Older models know neither
+ * field and keep their own automatic caching, and a body with no developer block has nothing to mark and
+ * is left to the platform's default, which is the implicit mode.
  */
-internal fun withExplicitPromptCacheBreakpoints(body: JsonObject): JsonObject {
+internal fun withPromptCacheOptions(body: JsonObject, cachePrompt: Boolean): JsonObject {
     val model = (body["model"] as? JsonPrimitive)?.contentOrNull ?: return body
-    if (!supportsExplicitOpenAiPromptCaching(model)) return body
-
-    val markCurrentTurn = (body["tools"] as? JsonArray)?.isNotEmpty() == true
+    if (!takesOpenAiPromptCacheOptions(model)) return body
+    if (!cachePrompt) return JsonObject(body + ("prompt_cache_options" to EXPLICIT_MODE))
 
     val marked =
         (body["input"] as? JsonArray)
-            ?.let { markCachedPrefixes(it, "input_text", markCurrentTurn) }
+            ?.let { markSystemBlock(it, "input_text") }
             ?.let { "input" to it }
             ?: (body["messages"] as? JsonArray)
-                ?.let { markCachedPrefixes(it, "text", markCurrentTurn) }
+                ?.let { markSystemBlock(it, "text") }
                 ?.let { "messages" to it }
             ?: return body
 
-    return JsonObject(body + marked + ("prompt_cache_options" to EXPLICIT_CACHE_CONTROL))
+    return JsonObject(body + marked + ("prompt_cache_options" to IMPLICIT_MODE))
 }
 
-/** Explicit breakpoints arrived with the GPT-5.6 generation; a generation's first models carry no minor version. */
-internal fun supportsExplicitOpenAiPromptCaching(model: String): Boolean {
+/** The cache options arrived with the GPT-5.6 generation; a generation's first models carry no minor version. */
+internal fun takesOpenAiPromptCacheOptions(model: String): Boolean {
     val version = GPT_MODEL_VERSION.find(model.trim().lowercase()) ?: return false
     val major = version.groupValues[1].toInt()
     val minor = version.groupValues[2].toIntOrNull() ?: 0
 
-    return major > EXPLICIT_CACHING_MAJOR || major == EXPLICIT_CACHING_MAJOR && minor >= EXPLICIT_CACHING_MINOR
+    return major > CACHE_OPTIONS_MAJOR || major == CACHE_OPTIONS_MAJOR && minor >= CACHE_OPTIONS_MINOR
 }
 
-private fun markCachedPrefixes(messages: JsonArray, textBlockType: String, markCurrentTurn: Boolean): JsonArray? {
-    val systemIndex = messages.indexOfFirst { it.role == "developer" || it.role == "system" }
-    val currentTurnIndex = if (markCurrentTurn) messages.indexOfLast { it.role == "user" } else -1
+// the breakpoint goes on the last text block of the first developer or system message: the prefix every
+// request of the deployment shares, and the one the lookup is sure to reach
+private fun markSystemBlock(messages: JsonArray, textBlockType: String): JsonArray? {
+    val index = messages.indexOfFirst { it.role == "developer" || it.role == "system" }.takeIf { it >= 0 } ?: return null
+    val message = messages[index] as? JsonObject ?: return null
+    val content = markLastTextBlock(message["content"], textBlockType) ?: return null
 
-    val marked = messages.toMutableList()
-    var markedAny = false
-
-    for (index in setOf(systemIndex, currentTurnIndex).filter { it >= 0 }) {
-        val message = marked[index] as? JsonObject ?: continue
-        val content = markLastTextBlock(message["content"], textBlockType) ?: continue
-
-        marked[index] = JsonObject(message + ("content" to content))
-        markedAny = true
-    }
-
-    return if (markedAny) JsonArray(marked) else null
+    return JsonArray(messages.mapIndexed { position, value -> if (position == index) JsonObject(message + ("content" to content)) else value })
 }
 
 private val JsonElement.role: String?
@@ -85,9 +81,11 @@ private fun markLastTextBlock(content: JsonElement?, textBlockType: String): Jso
     return JsonArray(blocks.mapIndexed { blockIndex, value -> if (blockIndex == index) markedTextBlock(block) else value })
 }
 
-private fun markedTextBlock(block: JsonObject): JsonObject = JsonObject(block + ("prompt_cache_breakpoint" to EXPLICIT_CACHE_CONTROL))
+private fun markedTextBlock(block: JsonObject): JsonObject = JsonObject(block + ("prompt_cache_breakpoint" to EXPLICIT_BREAKPOINT))
 
-private const val EXPLICIT_CACHING_MAJOR = 5
-private const val EXPLICIT_CACHING_MINOR = 6
+private const val CACHE_OPTIONS_MAJOR = 5
+private const val CACHE_OPTIONS_MINOR = 6
 private val GPT_MODEL_VERSION = Regex("""^gpt-(\d+)(?:\.(\d+))?""")
-private val EXPLICIT_CACHE_CONTROL = buildJsonObject { put("mode", "explicit") }
+private val EXPLICIT_BREAKPOINT = buildJsonObject { put("mode", "explicit") }
+private val EXPLICIT_MODE = buildJsonObject { put("mode", "explicit") }
+private val IMPLICIT_MODE = buildJsonObject { put("mode", "implicit") }

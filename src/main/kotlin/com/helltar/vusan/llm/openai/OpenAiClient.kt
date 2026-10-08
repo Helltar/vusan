@@ -42,8 +42,9 @@ enum class OpenAiEndpoint {
  * streaming requests only: the call streams and the events are folded back into the one response object
  * the plain API would have returned, so nothing above notices. [statelessReasoning] asks the Responses
  * API not to store the conversation and to hand reasoning back encrypted, which is what lets a tool
- * loop echo it; a third-party server may know neither field. [explicitPromptCaching] marks the two
- * prefixes a turn re-sends — the platform's GPT-5.6-era caching reads nothing without it.
+ * loop echo it; a third-party server may know neither field. [explicitPromptCaching] states the GPT-5.6
+ * generation's cache options — the platform's own fields, which a third-party server may not know: the
+ * implicit mode with a breakpoint on the system prefix, or no caching for a prompt that never repeats.
  * [echoesReasoningContent] is for a Chat Completions server that thinks aloud in `reasoning_content` and
  * wants it back on every tool call of a turn, as DeepSeek does: a call another endpoint wrote — the
  * provider a fallback took over from — then carries an empty one, since none at all is a 400.
@@ -138,7 +139,7 @@ class OpenAiClient(
                 if (streamed) put("stream", true)
             }
 
-        return if (explicitPromptCaching && options.cachePrompt) withExplicitPromptCacheBreakpoints(body) else body
+        return if (explicitPromptCaching) withPromptCacheOptions(body, options.cachePrompt) else body
     }
 
     private fun responsesItems(message: Message): List<JsonObject> =
@@ -266,10 +267,13 @@ class OpenAiClient(
             stopReason = stopReason,
             usage =
                 usage?.let {
+                    val details = it["input_tokens_details"] as? JsonObject
+
                     TokenUsage(
                         inputTokens = it.int("input_tokens"),
                         outputTokens = it.int("output_tokens"),
-                        cacheReadTokens = (it["input_tokens_details"] as? JsonObject)?.int("cached_tokens"),
+                        cacheReadTokens = details?.int("cached_tokens"),
+                        cacheWriteTokens = details?.int("cache_write_tokens"),
                     )
                 },
             model = response.string("model"),
@@ -349,7 +353,7 @@ class OpenAiClient(
                 options.maxOutputTokens?.let { put("max_completion_tokens", it) }
             }
 
-        return if (explicitPromptCaching && options.cachePrompt) withExplicitPromptCacheBreakpoints(body) else body
+        return if (explicitPromptCaching) withPromptCacheOptions(body, options.cachePrompt) else body
     }
 
     private fun completionMessages(message: Message): List<JsonObject> =

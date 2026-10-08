@@ -77,10 +77,12 @@ class AnthropicClientTest {
         assertEquals("drop_block", body.getValue("thinking").jsonObject.getValue("block_binding").jsonObject.getValue("prefix_mismatch_behavior").jsonPrimitive.content)
         assertEquals("high", body.getValue("output_config").jsonObject.getValue("effort").jsonPrimitive.content)
         assertEquals("ephemeral", body.getValue("cache_control").jsonObject.getValue("type").jsonPrimitive.content)
+        assertNull(body.getValue("cache_control").jsonObject["ttl"], "the tail keeps the five-minute default")
 
         val system = body.getValue("system").jsonArray.single().jsonObject
         assertEquals("stable instructions", system.getValue("text").jsonPrimitive.content)
         assertEquals("ephemeral", system.getValue("cache_control").jsonObject.getValue("type").jsonPrimitive.content)
+        assertEquals("1h", system.getValue("cache_control").jsonObject.getValue("ttl").jsonPrimitive.content)
 
         val tool = body.getValue("tools").jsonArray.single().jsonObject
         assertEquals(TOOL.parameters, tool.getValue("input_schema").jsonObject)

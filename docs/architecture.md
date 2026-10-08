@@ -593,16 +593,18 @@ A normal user message travels:
   replace the runtime's assumptions; Codex reads the account's own catalog. `openai` always speaks the Responses API, the
   one where tools work alongside reasoning, with the conversation's own `prompt_cache_key` — reads match the prefixes
   most recently written under a key, and one key for the whole deployment would let busy chats evict each other; recaps
-  keep a single shared key, their tool-free prefix being identical everywhere — and, from GPT-5.6 on, two explicit cache
-  breakpoints (`llm/openai/OpenAiPromptCaching`): the stable system block, and the last user message when the request
-  carries tools, which keeps the system prompt and tool schemas reusable while leaving history, memory and tool results
-  out of billable cache writes. Reasoning comes back encrypted (`store: false`) and is replayed verbatim through the tool
+  keep a single shared key, their tool-free prefix being identical everywhere — and, from GPT-5.6 on, the cache options
+  stated outright (`llm/openai/OpenAiPromptCaching`): the platform's implicit mode, under which each iteration of the loop
+  reads the tool results the one before it added, plus an explicit breakpoint on the stable system block, which the next
+  turn still reads however its history was replayed; a prompt that never repeats, the recap, asks for no caching at all.
+  Reasoning comes back encrypted (`store: false`) and is replayed verbatim through the tool
   loop; a model that does not reason — the gpt-4 family, read off the id — is asked for none and takes no effort. `anthropic` asks for `thinking: adaptive` with `block_binding: drop_block` under its beta header — a thinking
   block is bound to the tools and messages before it, and `loadTools` widens the tool list mid-turn, so an
   account the API holds to that check gets the stale block dropped rather than a 400 — sends the configured
   `output_config.effort`, the model's whole output ceiling as `max_tokens`, and two cache breakpoints: the request-level
-  one the API places on the last block, which every iteration of the loop reads back, and one on the system block,
-  which the next turn — whose history is replayed from storage in another shape — still reads. A Claude model from
+  one the API places on the last block, which every iteration of the loop reads back, and an hour-long one on the
+  system block, which the next turn — whose history is replayed from storage in another shape — still reads, and which
+  outlives the quiet stretches between a chat's messages. A Claude model from
   before 4.6, which the API serves under a dated id, gets neither thinking nor an effort. `openai-compatible` speaks
   either OpenAI API under `LLM_BASE_URL` (`LLM_OPENAI_ENDPOINT`), sees images only when the server's model list says
   the model takes them (with its window and its efforts, DeepSeek's states all three), disables parallel tool calls
@@ -814,7 +816,7 @@ A symptom-to-source map for finding the right file fast. Paths are under
 | `/clear` reports success but history survives | `agent/AgentRunner.kt` (`clearConversation` and the turn lock that also guards the append) + `tools/conversation/ConversationTools.kt` (agent path) + `agent/conversation/ConversationRepository.kt` (shared storage operation) |
 | An agent choice button does nothing, repeats, reaches the wrong user, loses the photo, or its answer replies to the bot's own question | `tools/choice/InlineChoiceTools.kt` (tool contract) + `telegram/callback/InlineChoiceHandler.kt` (callback ownership/consumption, origin message id, parked attachment) + `telegram/AgentTurns.kt` (the follow-up turn and its reply anchor) |
 | An env var has no effect | `config/AppConfig.kt` (parsing) — and check it is documented in [`configuration.md`](configuration.md) + [`.env.example`](../.env.example) |
-| Model / provider / request-timeout selection, or prompt-cache misses | `config/LlmRuntime.kt` (provider → client/model/params) + `config/ModelPreflight.kt` (what the vendor says about the model at startup) + `llm/openai/OpenAiPromptCaching.kt` (GPT-5.6+ explicit cache breakpoints on the system prefix and the current turn) + `llm/anthropic/AnthropicClient.kt` (the request-level breakpoint and the one on the system block); `cacheReadTokens` and `cacheWriteTokens` on each turn's usage line say what was read and written |
+| Model / provider / request-timeout selection, or prompt-cache misses | `config/LlmRuntime.kt` (provider → client/model/params) + `config/ModelPreflight.kt` (what the vendor says about the model at startup) + `llm/openai/OpenAiPromptCaching.kt` (GPT-5.6+: implicit caching with an explicit breakpoint on the system prefix, and none for a prompt that never repeats) + `llm/anthropic/AnthropicClient.kt` (the request-level breakpoint and the hour-long one on the system block); `cacheReadTokens` and `cacheWriteTokens` on each turn's usage line say what was read and written |
 | "Sign in again" replies, ChatGPT-subscription auth, or a rejected `LLM_MODEL` on `codex` | `config/CodexAuth.kt` (token load/refresh/persist) + `config/CodexCatalog.kt` (which models the plan offers) + `config/CodexHttpClient.kt` (per-request bearer and account headers) |
 | `describeImage`/`describeVideo` missing from the tool list | `config/VisionRuntime.kt` (chat model vs `VISION_MODEL`), then `tools/ToolRegistryFactory.kt` (registration is skipped when there is no vision runtime) |
 | Garbled or empty tool calls from a flaky model | `agent/AgentTurn.kt` (`execute`: the empty-arguments guard and the unknown-tool answer) + `tools/ToolSet.kt` (decoding the arguments, and the complaint a missing or wrong-shaped one earns) |

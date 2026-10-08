@@ -98,7 +98,7 @@ class LlmRuntimeTest {
         assertEquals("vusan", wire.body.getValue("prompt_cache_key").jsonPrimitive.content)
         assertEquals("xhigh", wire.body.getValue("reasoning").jsonObject.getValue("effort").jsonPrimitive.content)
         assertEquals(false, wire.body.getValue("store").jsonPrimitive.content.toBoolean())
-        assertEquals("explicit", wire.body.getValue("prompt_cache_options").jsonObject.getValue("mode").jsonPrimitive.content)
+        assertEquals("implicit", wire.body.getValue("prompt_cache_options").jsonObject.getValue("mode").jsonPrimitive.content)
     }
 
     @Test
@@ -107,8 +107,10 @@ class LlmRuntimeTest {
 
         runtime.client.complete(runtime.model, request(runtime.compactionOptions, tools = emptyList()))
 
-        assertEquals("vusan-recap", sent.single().body.getValue("prompt_cache_key").jsonPrimitive.content)
-        assertNull(sent.single().body["prompt_cache_options"])
+        val body = sent.single().body
+        assertEquals("vusan-recap", body.getValue("prompt_cache_key").jsonPrimitive.content)
+        assertEquals("explicit", body.getValue("prompt_cache_options").jsonObject.getValue("mode").jsonPrimitive.content)
+        assertFalse(body.getValue("input").jsonArray.any { item -> item.jsonObject.getValue("content").jsonArray.any { "prompt_cache_breakpoint" in it.jsonObject } })
     }
 
     @Test
@@ -161,7 +163,7 @@ class LlmRuntimeTest {
         assertEquals("high", wire.body.getValue("output_config").jsonObject.getValue("effort").jsonPrimitive.content)
         assertEquals(128_000, wire.body.getValue("max_tokens").jsonPrimitive.content.toInt())
         assertEquals("ephemeral", wire.body.getValue("cache_control").jsonObject.getValue("type").jsonPrimitive.content)
-        assertTrue(wire.body.getValue("system").jsonArray.single().jsonObject.containsKey("cache_control"))
+        assertEquals("1h", wire.body.getValue("system").jsonArray.single().jsonObject.getValue("cache_control").jsonObject.getValue("ttl").jsonPrimitive.content)
         sent.clear()
 
         runtime.client.complete(runtime.model, request(runtime.compactionOptions, tools = emptyList()))

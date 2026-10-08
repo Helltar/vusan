@@ -47,7 +47,7 @@ private const val RESPONSES_REPLY =
          {"type":"message","id":"msg-1","role":"assistant","status":"completed","content":[{"type":"output_text","text":"ok","annotations":[]}]},
          {"type":"function_call","id":"fc-1","call_id":"call-1","name":"lookUp","arguments":"{\"query\":\"cats\"}","status":"completed"}
        ],
-       "usage":{"input_tokens":120,"input_tokens_details":{"cached_tokens":100},"output_tokens":30}}"""
+       "usage":{"input_tokens":120,"input_tokens_details":{"cached_tokens":100,"cache_write_tokens":7},"output_tokens":30}}"""
 
 private const val COMPLETION_REPLY =
     """{"id":"chatcmpl-1","object":"chat.completion","created":0,"model":"deepseek-chat",
@@ -139,6 +139,7 @@ class OpenAiClientTest {
         assertEquals(120, reply.usage?.inputTokens)
         assertEquals(30, reply.usage?.outputTokens)
         assertEquals(100, reply.usage?.cacheReadTokens)
+        assertEquals(7, reply.usage?.cacheWriteTokens)
     }
 
     // the call a cut response ends in may be cut too, so the ceiling is reported over the calls
@@ -256,31 +257,31 @@ class OpenAiClientTest {
         assertTrue(content[1].getValue("image_url").jsonPrimitive.content.startsWith("data:image/png;base64,AQID"))
     }
 
-    // gpt-5.6 reads nothing from the cache without explicit breakpoints; the two prefixes a turn re-sends get one
+    // the implicit mode caches each iteration's tool results for the next; the system block is marked so that
+    // a turn longer than the lookback window still reads the one prefix every request shares
     @Test
-    fun `a gpt-5_6 request with tools marks the system block and the current turn`() = runBlocking {
+    fun `a gpt-5_6 request asks for implicit caching and marks the system block alone`() = runBlocking {
         client().complete(MODEL, request(*basic))
+
+        val body = sent.single()
+        assertEquals("implicit", body.getValue("prompt_cache_options").jsonObject.getValue("mode").jsonPrimitive.content)
+
+        val input = body.getValue("input").jsonArray.map { it.jsonObject }
+        assertTrue(input[0].getValue("content").jsonArray.single().jsonObject.containsKey("prompt_cache_breakpoint"))
+        assertFalse(input[1].getValue("content").jsonArray.single().jsonObject.containsKey("prompt_cache_breakpoint"))
+    }
+
+    // explicit mode with nothing marked is how the api spells "cache nothing"; the implicit default would write
+    // the whole prompt for a read nobody makes
+    @Test
+    fun `a prompt that never repeats asks for explicit caching with nothing marked`() = runBlocking {
+        client().complete(MODEL, request(*basic, options = RequestOptions(cachePrompt = false)))
 
         val body = sent.single()
         assertEquals("explicit", body.getValue("prompt_cache_options").jsonObject.getValue("mode").jsonPrimitive.content)
 
         val input = body.getValue("input").jsonArray.map { it.jsonObject }
-        assertTrue(input[0].getValue("content").jsonArray.single().jsonObject.containsKey("prompt_cache_breakpoint"))
-        assertTrue(input[1].getValue("content").jsonArray.single().jsonObject.containsKey("prompt_cache_breakpoint"))
-    }
-
-    @Test
-    fun `a tool-free request marks the system block alone, and a recap marks nothing`() = runBlocking {
-        val client = client()
-        client.complete(MODEL, request(*basic, tools = emptyList()))
-
-        val input = sent.single().getValue("input").jsonArray.map { it.jsonObject }
-        assertTrue(input[0].getValue("content").jsonArray.single().jsonObject.containsKey("prompt_cache_breakpoint"))
-        assertFalse(input[1].getValue("content").jsonArray.single().jsonObject.containsKey("prompt_cache_breakpoint"))
-        sent.clear()
-
-        client.complete(MODEL, request(*basic, options = RequestOptions(cachePrompt = false)))
-        assertNull(sent.single()["prompt_cache_options"])
+        assertFalse(input.any { item -> item.getValue("content").jsonArray.any { "prompt_cache_breakpoint" in it.jsonObject } })
     }
 
     @Test
@@ -296,13 +297,13 @@ class OpenAiClientTest {
     }
 
     @Test
-    fun `explicit caching starts with the gpt-5_6 generation, minor version or not`() {
-        assertTrue(supportsExplicitOpenAiPromptCaching("gpt-5.6-sol"))
-        assertTrue(supportsExplicitOpenAiPromptCaching("gpt-6-luna"))
-        assertTrue(supportsExplicitOpenAiPromptCaching("gpt-6.1-sol"))
-        assertFalse(supportsExplicitOpenAiPromptCaching("gpt-5.5"))
-        assertFalse(supportsExplicitOpenAiPromptCaching("gpt-5.4-mini"))
-        assertFalse(supportsExplicitOpenAiPromptCaching("o3"))
+    fun `the cache options start with the gpt-5_6 generation, minor version or not`() {
+        assertTrue(takesOpenAiPromptCacheOptions("gpt-5.6-sol"))
+        assertTrue(takesOpenAiPromptCacheOptions("gpt-6-luna"))
+        assertTrue(takesOpenAiPromptCacheOptions("gpt-6.1-sol"))
+        assertFalse(takesOpenAiPromptCacheOptions("gpt-5.5"))
+        assertFalse(takesOpenAiPromptCacheOptions("gpt-5.4-mini"))
+        assertFalse(takesOpenAiPromptCacheOptions("o3"))
     }
 
     @Test
