@@ -135,6 +135,8 @@ sealed interface LlmProviderConfig {
         // whether the plan may also answer a web search, which draws on the same allowance as the turns
         val webSearch: Boolean = true,
         val supportsVision: Boolean = true,
+        // the efforts the catalog lists for the model, when it lists any
+        val supportedEfforts: Set<ReasoningEffort>? = null,
         // the Codex CLI version reported to the backend, which decides how much of the model catalog it
         // answers with. `null` leaves that to the installed CLI, or to this build's floor without one.
         val clientVersion: String? = null,
@@ -149,8 +151,17 @@ sealed interface LlmProviderConfig {
             requireSane(requestTimeout, contextWindowTokens)
         }
 
+        // the serving tier is the chat's: a role spends the same allowance, and its model may not be served at it
         override fun withModel(model: String, reasoningEffort: ReasoningEffort?, contextWindowTokens: Long?, envPrefix: String): Codex =
-            copy(model = model, reasoningEffort = reasoningEffort, contextWindowTokens = contextWindowTokens, verbosity = null, envPrefix = envPrefix)
+            copy(
+                model = model,
+                reasoningEffort = reasoningEffort,
+                contextWindowTokens = contextWindowTokens,
+                serviceTier = null,
+                verbosity = null,
+                supportedEfforts = null,
+                envPrefix = envPrefix,
+            )
     }
 }
 

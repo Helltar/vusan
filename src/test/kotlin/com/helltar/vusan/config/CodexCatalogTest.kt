@@ -375,6 +375,23 @@ class CodexCatalogTest {
 
         assertTrue("codex login" in error.message.orEmpty(), error.message.orEmpty())
     }
+
+    // a role runs a model of its own on the same plan: what the catalog said of the chat model is not its
+    @Test
+    fun `a role on the codex chat provider keeps neither the tier nor what the catalog said of the chat model`() {
+        val chat =
+            applyCodexModelMetadata(
+                LlmProviderConfig.Codex(model = "gpt-5.6-terra", serviceTier = ServiceTier.PRIORITY, requestTimeout = 120.seconds),
+                codexModel(supportedEfforts = setOf(ReasoningEffort.LOW, ReasoningEffort.HIGH), supportedServiceTiers = setOf("priority")),
+            )
+
+        assertEquals(setOf(ReasoningEffort.LOW, ReasoningEffort.HIGH), chat.supportedEfforts)
+
+        val role = chat.withModel("gpt-5.6-luna", reasoningEffort = null, contextWindowTokens = null, envPrefix = "ADDRESSING")
+
+        assertNull(role.serviceTier)
+        assertNull(role.supportedEfforts)
+    }
 }
 
 private fun codexModel(

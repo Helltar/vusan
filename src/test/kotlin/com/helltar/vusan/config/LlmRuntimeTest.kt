@@ -118,6 +118,14 @@ class LlmRuntimeTest {
         assertEquals(32_768, resolveLlmRuntime(compatible(window = 32_768)).model.contextWindowTokens)
     }
 
+    // the gpt-4 family does not reason: it is asked for no encrypted reasoning, and an effort for it is a mistake
+    @Test
+    fun `an openai model that does not reason takes no effort`() {
+        assertFalse(resolveLlmRuntime(openAi(model = "gpt-4.1-mini")).model.takesEffort)
+        assertTrue(resolveLlmRuntime(openAi(model = "gpt-5.6-sol")).model.takesEffort)
+        assertFailsWith<IllegalArgumentException> { resolveLlmRuntime(openAi(model = "gpt-4.1", effort = ReasoningEffort.LOW)) }
+    }
+
     @Test
     fun `each conversation gets a prompt cache key of its own`() {
         val base = resolveLlmRuntime(openAi()).chatOptions

@@ -102,7 +102,6 @@ fun codexRequestHeaders(credentials: CodexCredentials): Map<String, String> =
         credentials.accountId?.let { put("ChatGPT-Account-ID", it) }
     }
 
-
 /** A model the signed-in ChatGPT account may actually run through Codex. */
 data class CodexModel(
     val id: String,
@@ -223,6 +222,7 @@ internal fun applyCodexModelMetadata(
         contextWindowTokens = config.contextWindowTokens ?: model.contextWindowTokens,
         supportsVision = model.supportsVision,
         verbosity = model.defaultVerbosity,
+        supportedEfforts = supportedEfforts,
     )
 }
 

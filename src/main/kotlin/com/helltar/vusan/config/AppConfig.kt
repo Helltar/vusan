@@ -243,7 +243,8 @@ data class AppConfig(
                 return LlmProviderConfig.Codex(
                     model = requireEnv("${prefix}_MODEL"),
                     reasoningEffort = resolveReasoningEffort(prefix),
-                    serviceTier = resolveCodexServiceTier(),
+                    // the tier is the chat's: a role spends the same allowance, and its model may not be served at it
+                    serviceTier = resolveCodexServiceTier().takeIf { prefix == LLM_PREFIX || prefix == LLM_FALLBACK_PREFIX },
                     imageGeneration = readBooleanEnv("CODEX_IMAGE_GENERATION_ENABLED") ?: true,
                     webSearch = readBooleanEnv("CODEX_WEB_SEARCH_ENABLED") ?: true,
                     clientVersion = resolveCodexClientVersion(),

@@ -2,7 +2,6 @@ package com.helltar.vusan.config
 
 import com.helltar.vusan.llm.LlmClient
 import com.helltar.vusan.llm.LlmModel
-import com.helltar.vusan.llm.LlmProvider
 import com.helltar.vusan.llm.ReasoningEffort
 import com.helltar.vusan.llm.RequestOptions
 
@@ -35,26 +34,30 @@ data class AddressingRuntime(
  * and a verdict that has to arrive in about a second was measured on small OpenAI models only — a large
  * reasoning model would be slow here, and DeepSeek got one message in twelve wrong. A yes-or-no over a
  * few lines of chat needs no reasoning, and every token of it is latency, so unless the deployment asks
- * for an effort the model gets the least its API offers.
+ * for an effort the model gets the least its API is known to offer it.
  */
 fun resolveAddressingRuntime(config: AddressingConfig, codexAuth: CodexAuthStore? = null): AddressingRuntime {
     val runtime = resolveLlmRuntime(config.provider, codexAuth)
-
-    val leastEffort =
-        when (runtime.model.provider) {
-            LlmProvider.OPENAI -> ReasoningEffort.NONE
-            LlmProvider.ANTHROPIC -> ReasoningEffort.LOW.takeIf { runtime.model.takesEffort }
-        }
 
     return AddressingRuntime(
         client = runtime.client,
         model = runtime.model,
         options =
             runtime.chatOptions.copy(
-                reasoningEffort = config.provider.reasoningEffort ?: leastEffort,
+                reasoningEffort = config.provider.reasoningEffort ?: config.provider.leastEffort(runtime.model),
                 promptCacheKey = runtime.chatOptions.promptCacheKey?.let { ADDRESSING_CACHE_KEY },
             ),
     )
 }
+
+// where the least is not known, the model's own default is left alone: a compatible server's models are
+// anyone's guess, and a codex model takes only what the plan's catalog lists, `none` rarely among it.
+private fun LlmProviderConfig.leastEffort(model: LlmModel): ReasoningEffort? =
+    when (this) {
+        is LlmProviderConfig.OpenAi -> ReasoningEffort.NONE.takeIf { model.takesEffort }
+        is LlmProviderConfig.Anthropic -> ReasoningEffort.LOW.takeIf { model.takesEffort }
+        is LlmProviderConfig.Codex -> supportedEfforts?.minOrNull()
+        is LlmProviderConfig.OpenAiCompatible -> null
+    }
 
 private const val ADDRESSING_CACHE_KEY = "vusan-addressing"
