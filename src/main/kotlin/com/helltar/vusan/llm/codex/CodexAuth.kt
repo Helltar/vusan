@@ -13,14 +13,7 @@ import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
-import kotlinx.serialization.json.Json
-import kotlinx.serialization.json.JsonElement
-import kotlinx.serialization.json.JsonObject
-import kotlinx.serialization.json.JsonPrimitive
-import kotlinx.serialization.json.contentOrNull
-import kotlinx.serialization.json.jsonObject
-import kotlinx.serialization.json.jsonPrimitive
-import kotlinx.serialization.json.longOrNull
+import kotlinx.serialization.json.*
 import java.nio.file.AtomicMoveNotSupportedException
 import java.nio.file.Files
 import java.nio.file.Path
@@ -30,12 +23,8 @@ import java.nio.file.attribute.PosixFilePermission
 import java.nio.file.attribute.PosixFilePermissions
 import java.security.MessageDigest
 import java.time.Instant
-import java.util.Base64
-import kotlin.io.path.Path
-import kotlin.io.path.createDirectories
-import kotlin.io.path.isReadable
-import kotlin.io.path.readText
-import kotlin.io.path.writeText
+import java.util.*
+import kotlin.io.path.*
 import kotlin.time.Duration.Companion.hours
 import kotlin.time.Duration.Companion.minutes
 
@@ -124,7 +113,7 @@ private data class CodexRefreshResponse(
     @SerialName("access_token") val accessToken: String? = null,
     @SerialName("refresh_token") val refreshToken: String? = null,
     // the endpoint reports when it will accept the next refresh and refuses anything sooner. logged
-    // rather than honoured until a real value shows what shape it arrives in.
+    // rather than honored until a real value shows what shape it arrives in.
     @SerialName("earliest_refresh_at") val earliestRefreshAt: JsonElement? = null,
 )
 
@@ -457,7 +446,7 @@ internal fun String.claimString(name: String): String? {
 private fun String.jwtClaims(): JsonObject? =
     runCatching {
         val payload = split('.').getOrNull(1) ?: return null
-        val decoded = java.util.Base64.getUrlDecoder().decode(payload.padBase64())
+        val decoded = Base64.getUrlDecoder().decode(payload.padBase64())
         authJson.parseToJsonElement(decoded.decodeToString()).jsonObject
     }.getOrNull()
 

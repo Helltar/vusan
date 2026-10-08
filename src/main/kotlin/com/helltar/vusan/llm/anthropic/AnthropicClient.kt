@@ -1,28 +1,10 @@
 package com.helltar.vusan.llm.anthropic
 
-import com.helltar.vusan.llm.ChatRequest
-import com.helltar.vusan.llm.LlmClient
-import com.helltar.vusan.llm.LlmModel
-import com.helltar.vusan.llm.Message
-import com.helltar.vusan.llm.Part
-import com.helltar.vusan.llm.ReasoningEffort
-import com.helltar.vusan.llm.Reply
-import com.helltar.vusan.llm.StopReason
-import com.helltar.vusan.llm.TokenUsage
-import com.helltar.vusan.llm.postEventStream
+import com.helltar.vusan.llm.*
 import io.github.oshai.kotlinlogging.KotlinLogging
 import io.ktor.client.*
-import kotlinx.serialization.json.JsonArray
-import kotlinx.serialization.json.JsonObject
-import kotlinx.serialization.json.JsonPrimitive
-import kotlinx.serialization.json.add
-import kotlinx.serialization.json.buildJsonObject
-import kotlinx.serialization.json.contentOrNull
-import kotlinx.serialization.json.intOrNull
-import kotlinx.serialization.json.put
-import kotlinx.serialization.json.putJsonArray
-import kotlinx.serialization.json.putJsonObject
-import java.util.Base64
+import kotlinx.serialization.json.*
+import java.util.*
 
 /** The efforts the Messages API takes; `none` and `minimal` are OpenAI's words. */
 val ANTHROPIC_EFFORTS: Set<ReasoningEffort> =
@@ -57,8 +39,8 @@ val ANTHROPIC_EFFORTS: Set<ReasoningEffort> =
  */
 class AnthropicClient(
     private val http: HttpClient,
-    private val apiKey: String,
-    private val baseUrl: String = DEFAULT_BASE_URL,
+    apiKey: String,
+    baseUrl: String = DEFAULT_BASE_URL,
     private val label: String = "Anthropic",
 ) : LlmClient {
 

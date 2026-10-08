@@ -46,7 +46,7 @@ data class QuietHours(val from: Int, val until: Int) {
     }
 
     operator fun contains(hour: Int): Boolean =
-        if (from <= until) hour in from until until else hour >= from || hour < until
+        if (from <= until) hour in from until until else hour !in until..<from
 
     companion object {
         // the constructor reads this, so it has to exist before the default below is built
