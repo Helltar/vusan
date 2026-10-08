@@ -500,11 +500,9 @@ since a picture is looked at once.
 
 When the chat model cannot accept images, `VISION_MODEL` runs vision on a model of its own and the
 chat model keeps answering everything else. On its own the model runs on the chat provider with the
-chat key, address and timeout, and takes `VISION_REASONING_EFFORT` and
-`VISION_CONTEXT_WINDOW_TOKENS` rather than the chat's. With `VISION_PROVIDER` it is a provider of its
-own, read like the chat one from the same variables under its prefix (`VISION_API_KEY`,
-`VISION_BASE_URL`, `VISION_OPENAI_ENDPOINT`, `VISION_REASONING_EFFORT`,
-`VISION_REQUEST_TIMEOUT_SECONDS`, `VISION_CONTEXT_WINDOW_TOKENS`):
+chat key, address and timeout; with `VISION_PROVIDER` it is a provider of its own, read like the chat
+one from the same variables under the `VISION_` prefix. Either way its effort and window are its
+own, never the chat's:
 
 ```dotenv
 LLM_PROVIDER=openai-compatible
@@ -517,10 +515,16 @@ VISION_MODEL=gpt-5.4-mini
 VISION_API_KEY=sk-proj-qwerty
 ```
 
-| Variable           | Default           | Description                                                              |
-|--------------------|-------------------|--------------------------------------------------------------------------|
-| `VISION_MODEL`     | —                 | Enables a separate vision model; it is taken at its word about seeing.   |
-| `VISION_PROVIDER`  | the chat provider | `openai`, `anthropic` or `openai-compatible` with its own key, or `codex`. |
+| Variable                         | Default           | Description                                                                          |
+|----------------------------------|-------------------|--------------------------------------------------------------------------------------|
+| `VISION_MODEL`                   | —                 | Enables a vision model of its own.                                                   |
+| `VISION_PROVIDER`                | the chat provider | `openai`, `anthropic`, `openai-compatible` or `codex`.                               |
+| `VISION_API_KEY`                 | —                 | Its own key. Required with `VISION_PROVIDER`, except on `codex`.                     |
+| `VISION_BASE_URL`                | —                 | Server address. Required with `VISION_PROVIDER=openai-compatible`, unused otherwise. |
+| `VISION_OPENAI_ENDPOINT`         | `completions`     | `completions` or `responses`, for `VISION_PROVIDER=openai-compatible`.               |
+| `VISION_REASONING_EFFORT`        | model default     | Reasoning depth of every look, the values `LLM_REASONING_EFFORT` takes.              |
+| `VISION_REQUEST_TIMEOUT_SECONDS` | the chat's        | Seconds one look may hang. Read with `VISION_PROVIDER` only.                         |
+| `VISION_CONTEXT_WINDOW_TOKENS`   | model metadata    | Context size override.                                                               |
 
 An `openai-compatible` model sees only when the server's own model list says it takes images:
 DeepSeek's says so of `deepseek-flash`, which then needs no vision model of its own, and not of
@@ -540,9 +544,7 @@ deployment that would rather not pay for that turns it off:
 | `STICKERS_ENABLED` | `true`  | Set to `false` to learn no sticker sets and offer no sticker replies. |
 
 With no vision at all, a startup `WARN` says so and Vusan answers without looking at attachments;
-Telegram channel posts still come back, as text only. Vision calls run on the chat's
-`LLM_REQUEST_TIMEOUT_SECONDS` unless `VISION_PROVIDER` is set and `VISION_REQUEST_TIMEOUT_SECONDS`
-gives them their own.
+Telegram channel posts still come back, as text only.
 
 ## Sandbox
 
@@ -655,11 +657,21 @@ ADDRESSING_MODEL=gpt-5.6-luna
 ADDRESSING_NAMES=robin,robbie
 ```
 
-| Variable              | Default           | Description                                                                 |
-|-----------------------|-------------------|-----------------------------------------------------------------------------|
-| `ADDRESSING_MODEL`    | —                 | Turns the feature on: the model that decides, never the chat model.         |
-| `ADDRESSING_PROVIDER` | the chat provider | `openai`, `anthropic` or `openai-compatible` with its own key under `ADDRESSING_`, or `codex`. |
-| `ADDRESSING_NAMES`    | from the profile  | Spellings the chat uses, comma-separated.                                   |
+Like a vision model, it runs on the chat provider with the chat key, address and timeout unless
+`ADDRESSING_PROVIDER` names a provider of its own, read like the chat one under the `ADDRESSING_`
+prefix; its effort and window are its own either way.
+
+| Variable                             | Default            | Description                                                                              |
+|--------------------------------------|--------------------|------------------------------------------------------------------------------------------|
+| `ADDRESSING_MODEL`                   | —                  | Turns the feature on: the model that decides, never the chat model.                      |
+| `ADDRESSING_NAMES`                   | from the profile   | Spellings the chat uses, comma-separated.                                                |
+| `ADDRESSING_PROVIDER`                | the chat provider  | `openai`, `anthropic`, `openai-compatible` or `codex`.                                   |
+| `ADDRESSING_API_KEY`                 | —                  | Its own key. Required with `ADDRESSING_PROVIDER`, except on `codex`.                     |
+| `ADDRESSING_BASE_URL`                | —                  | Server address. Required with `ADDRESSING_PROVIDER=openai-compatible`, unused otherwise. |
+| `ADDRESSING_OPENAI_ENDPOINT`         | `completions`      | `completions` or `responses`, for `ADDRESSING_PROVIDER=openai-compatible`.               |
+| `ADDRESSING_REASONING_EFFORT`        | the least it takes | Reasoning depth of every verdict; see below for what the least is.                       |
+| `ADDRESSING_REQUEST_TIMEOUT_SECONDS` | the chat's         | Seconds one verdict may hang. Read with `ADDRESSING_PROVIDER` only.                      |
+| `ADDRESSING_CONTEXT_WINDOW_TOKENS`   | model metadata     | Context size override.                                                                   |
 
 The model gets the least reasoning it is known to take unless `ADDRESSING_REASONING_EFFORT` says
 otherwise: on `openai` `none` where the model takes it and `low` where it does not — OpenAI's models
