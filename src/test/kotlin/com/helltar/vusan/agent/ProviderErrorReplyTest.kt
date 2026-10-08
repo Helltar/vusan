@@ -131,6 +131,11 @@ class ProviderErrorReplyTest {
         val unanswered = assertNotNull(error(null, "connection reset").providerOutage(now))
         assertEquals(now.plusSeconds(120), unanswered.until)
 
+        // the client has already made it again by now, so every attempt failed
+        for (status in listOf(500, 502, 504)) {
+            assertEquals(now.plusSeconds(120), assertNotNull(error(status, "server_error").providerOutage(now)).until)
+        }
+
         val signedOut = assertNotNull(error(401, "token_expired").providerOutage(now))
         assertEquals(now.plusSeconds(1800), signedOut.until)
     }

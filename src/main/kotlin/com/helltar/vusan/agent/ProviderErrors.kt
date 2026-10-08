@@ -19,6 +19,9 @@ import kotlin.time.toJavaDuration
 // 429 (rate limit) and 503 or 529 (an overloaded server) are transient — the provider asks us to back off.
 private val TRANSIENT_STATUSES = setOf(429, 503, 529)
 
+// a server error the client already made again: by the time one is read here, every attempt failed
+private val SERVER_ERROR_STATUSES = setOf(500, 502, 504)
+
 private val CONTEXT_OVERFLOW_REGEX =
     Regex(
         "context[_ ]length|context window|maximum context|too many (input )?tokens|" +
@@ -94,10 +97,11 @@ internal fun Throwable.isContextOverflow(): Boolean =
  *
  * A spent allowance and a dead sign-in mean every call is refused until something outside the bot
  * changes, so they keep the provider out for the deadline the body names, or [DEFAULT_PROVIDER_OUTAGE]
- * without one. A rate limit, an overloaded server or a call that never got an answer usually passes in
- * seconds, so those keep it out for [TRANSIENT_OUTAGE] only — long enough that a blip does not flip every
- * call back and forth, short enough that the fallback is not paid for after the blip is over. A content
- * refusal is not an outage at all: it repeats on any provider.
+ * without one. A rate limit, an overloaded server, a server error that outlasted its repeats or a call
+ * that never got an answer usually passes in seconds or minutes, so those keep it out for
+ * [TRANSIENT_OUTAGE] only — long enough that a blip does not flip every call back and forth, short enough
+ * that the fallback is not paid for after the blip is over. A content refusal is not an outage at all: it
+ * repeats on any provider.
  */
 internal fun Throwable.providerOutage(now: Instant = Instant.now()): ProviderOutage? {
     if (generateSequence(this) { it.cause }.any { it is CodexAuthException }) return now.outageFor(DEFAULT_PROVIDER_OUTAGE)
@@ -112,7 +116,7 @@ internal fun Throwable.providerOutage(now: Instant = Instant.now()): ProviderOut
                 ?: now.outageFor(DEFAULT_PROVIDER_OUTAGE)
 
         error.unauthorized -> now.outageFor(DEFAULT_PROVIDER_OUTAGE)
-        error.status in TRANSIENT_STATUSES -> now.outageFor(TRANSIENT_OUTAGE)
+        error.status in TRANSIENT_STATUSES || error.status in SERVER_ERROR_STATUSES -> now.outageFor(TRANSIENT_OUTAGE)
         // the request never got an answer to read a status out of: a timeout, a dropped connection, a name
         // that does not resolve
         error.status == null -> now.outageFor(TRANSIENT_OUTAGE)

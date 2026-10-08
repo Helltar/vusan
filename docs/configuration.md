@@ -262,11 +262,11 @@ the key after that.
 
 A call the provider's server fumbled — a `5xx`, an overloaded server, a stream cut short — is made up
 to three times in all, a second or two apart, on any provider and with or without a fallback. What
-still fails goes to the fallback when it is one of the failures below; a plain `500`, `502` or `504`
-that keeps failing ends in an error reply instead.
+still fails is the fallback's when it is one of the failures below.
 
 These failures switch: the plan's usage limit, credentials it no longer accepts, a rate limit, an
-overloaded server (`503`, `529`), a connection that timed out or dropped. The call that
+overloaded server (`503`, `529`), a server error that kept failing (`500`, `502`, `504`), a
+connection that timed out or dropped. The call that
 ran into it is repeated on the fallback with the fallback's own model, so the turn finishes instead
 of ending in an error reply, and every later call — turns, history recaps, group-log digests, vision
 on the chat model — goes the same way for as long as the primary is held out. How long that is
