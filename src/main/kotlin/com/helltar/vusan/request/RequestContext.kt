@@ -106,7 +106,7 @@ data class RequestContext(
  * The key names the platform as well as the person, because the numbers of two messengers say nothing
  * about each other: an unqualified `1234` would hand somebody else's home and published site to
  * whoever matched the number. Only Telegram has one so far, and a sender from anywhere else gets none
- * rather than a key that could collide. See notes/second-platform.md.
+ * rather than a key that could collide.
  *
  * It travels no further than the sandbox server, which takes it as the alias it files a sandbox under
  * and builds nothing public from it.

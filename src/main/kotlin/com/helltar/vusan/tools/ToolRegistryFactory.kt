@@ -94,7 +94,7 @@ class ToolRegistryFactory(
 
     // what each conversation already loaded, so its next turn opens with the same tool array: that
     // array is part of the cached prompt prefix, and rebuilding it every turn costs more than the
-    // schemas the catalog saves. See notes/tool-catalog.md.
+    // schemas the catalog saves.
     private val loadedGroups = LoadedToolGroups()
 
     val availableToolNames: List<String> by lazy {
