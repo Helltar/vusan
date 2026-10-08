@@ -657,8 +657,10 @@ ADDRESSING_NAMES=robin,robbie
 | `ADDRESSING_NAMES`    | from the profile  | Spellings the chat uses, comma-separated.                                   |
 
 The model gets the least reasoning it is known to take unless `ADDRESSING_REASONING_EFFORT` says
-otherwise: `none` on `openai`, the lowest the plan's catalog lists on `codex`, `low` on `anthropic`,
-and its own default on `openai-compatible`, whose models are anyone's guess. A yes-or-no over a few
+otherwise: on `openai` `none` where the model takes it and `low` where it does not — OpenAI's models
+disagree on that and nothing lists it, so the model is asked once at startup with a request of a few
+tokens; on `codex` the lowest the plan's catalog lists; `low` on `anthropic`; and its own default on
+`openai-compatible`, whose models are anyone's guess. A yes-or-no over a few
 lines of chat needs no reasoning, and every token of it is latency. The
 verdicts were measured on small OpenAI models — `gpt-5.6-luna` made the fewest wrong calls of eight
 and no false yes at all.
