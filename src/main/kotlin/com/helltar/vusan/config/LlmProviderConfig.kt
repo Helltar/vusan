@@ -90,8 +90,9 @@ sealed interface LlmProviderConfig {
     }
 
     /**
-     * Any server that speaks the OpenAI API, DeepSeek included. It never claims vision on its own: the
-     * server behind [baseUrl] may serve anything, so a chat model here needs a vision model of its own.
+     * Any server that speaks the OpenAI API, DeepSeek included. The server behind [baseUrl] may serve
+     * anything, so a model here [seesImages] only when the server's own model list said so at startup;
+     * without that word a chat model here needs a vision model of its own.
      */
     data class OpenAiCompatible(
         val baseUrl: String,
@@ -101,6 +102,7 @@ sealed interface LlmProviderConfig {
         override val reasoningEffort: ReasoningEffort? = null,
         override val requestTimeout: Duration,
         override val contextWindowTokens: Long? = null,
+        val seesImages: Boolean = false,
         override val envPrefix: String = DEFAULT_ENV_PREFIX,
     ) : LlmProviderConfig {
 
@@ -112,7 +114,7 @@ sealed interface LlmProviderConfig {
         }
 
         override fun withModel(model: String, reasoningEffort: ReasoningEffort?, contextWindowTokens: Long?, envPrefix: String): OpenAiCompatible =
-            copy(model = model, reasoningEffort = reasoningEffort, contextWindowTokens = contextWindowTokens, envPrefix = envPrefix)
+            copy(model = model, reasoningEffort = reasoningEffort, contextWindowTokens = contextWindowTokens, seesImages = false, envPrefix = envPrefix)
     }
 
     /**

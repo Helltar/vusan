@@ -173,7 +173,7 @@ private fun compatibleRuntime(config: LlmProviderConfig.OpenAiCompatible, http: 
             provider = LlmProvider.OPENAI,
             id = config.model.trim(),
             contextWindowTokens = config.contextWindowTokens ?: ContextWindowPolicy.DEFAULT_CONTEXT_WINDOW_TOKENS,
-            seesImages = false,
+            seesImages = config.seesImages,
             // only the platform itself is known to refuse reasoning fields to a model that does not reason
             takesEffort = !official || openAiReasons(config.model.trim()),
         )

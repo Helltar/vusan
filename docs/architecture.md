@@ -257,8 +257,9 @@ A normal user message travels:
    the `AgentTurn`. Every turn is capped on the way into that recap prompt, and a user turn budgets its
    `<user_message>` first: reply metadata and a quoted fragment are written ahead of the request and can outrun the cap
    between them, so capping from the front alone would recap what the user was replying to and not what they asked.
-   An Anthropic model's window comes from the vendor's model list at startup and an OpenAI model's is assumed to be
-   its generation's; `LLM_CONTEXT_WINDOW_TOKENS` supplies a compatible server's or overrides either.
+   An Anthropic model's window comes from the vendor's model list at startup, a compatible server's from that server's
+   list where it states one, and an OpenAI model's is assumed to be its generation's; `LLM_CONTEXT_WINDOW_TOKENS`
+   supplies what nobody stated or overrides any of them.
 5. **Act** — during the agent loop, tools run and push results into the request's `BotOutbox`; tool calls/results are
    recorded for history. Live textual tool results share a cumulative bound derived from the reserved agent-growth
    budget before later LLM calls; the runner opens that bound as a `TurnToolBudget` the loop spends and the
@@ -603,7 +604,8 @@ A normal user message travels:
   one the API places on the last block, which every iteration of the loop reads back, and one on the system block,
   which the next turn — whose history is replayed from storage in another shape — still reads. A Claude model from
   before 4.6, which the API serves under a dated id, gets neither thinking nor an effort. `openai-compatible` speaks
-  either OpenAI API under `LLM_BASE_URL` (`LLM_OPENAI_ENDPOINT`), never claims vision, disables parallel tool calls
+  either OpenAI API under `LLM_BASE_URL` (`LLM_OPENAI_ENDPOINT`), sees images only when the server's model list says
+  the model takes them (with its window and its efforts, DeepSeek's states all three), disables parallel tool calls
   because third-party models garble the siblings, and gets none of the OpenAI-only fields unless the base URL is the
   official API. A server there that thinks aloud in `reasoning_content` (DeepSeek) refuses a tool call of the turn
   without it, so a call the provider before a fallback wrote carries an empty one. A vision or an addressing model is one more `LlmProviderConfig`, read from its own prefix
@@ -656,8 +658,10 @@ A normal user message travels:
 
 `Main.kt` wires everything in order: load `AppConfig` → connect `Db` → create the `Http` client → (only with
 a model on `codex` — the chat, its fallback or a role) build the `CodexAuthStore` → preflight every configured model
-(`config/ModelPreflight`): the Codex one proves the ChatGPT session works and fills the context window in from the account's model catalog, an OpenAI one is
-confirmed against the vendor's list, an Anthropic one also brings its window and what it takes back, so a typo fails here
+(`config/ModelPreflight`): the Codex one proves the ChatGPT session works and fills the context window in from the
+account's model catalog, an OpenAI one is confirmed against the vendor's list, an Anthropic one also brings its window
+and what it takes back, and a compatible one reads whatever its server's list states — whether it sees, its window, its
+efforts — so a typo fails here
 → create the LLM runtime, whose client everything downstream then shares — wrapped in `llm/FallbackLlmClient` when
 `LLM_FALLBACK_PROVIDER` names a second runtime, so a spent subscription hands every call to it until the deadline its
 refusal named → build repositories, context policy, conversation compactor, the

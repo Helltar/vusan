@@ -9,9 +9,11 @@ import kotlin.test.Test
 import kotlin.test.assertContains
 import kotlin.test.assertEquals
 import kotlin.test.assertFailsWith
+import kotlin.test.assertFalse
 import kotlin.test.assertIs
 import kotlin.test.assertNull
 import kotlin.test.assertSame
+import kotlin.test.assertTrue
 import kotlin.time.Duration.Companion.seconds
 
 private const val ANTHROPIC_MODEL =
@@ -22,6 +24,12 @@ private const val ANTHROPIC_MODEL =
 private const val ANTHROPIC_OLD_MODEL =
     """{"type":"model","id":"claude-haiku-4-5-20251001","display_name":"Claude Haiku 4.5","max_input_tokens":200000,"max_tokens":64000,
        "capabilities":{"effort":{"supported":false},"thinking":{"supported":true,"types":{"enabled":{"supported":true},"adaptive":{"supported":false},"disabled":{"supported":true}}}}}"""
+
+private const val DEEPSEEK_MODELS =
+    """{"object":"list","data":[
+         {"id":"deepseek-flash","object":"model","context_window":1048576,"max_output_tokens":393216,"input_modalities":["text","image"],
+          "effort":{"supported_levels":["low","high","max"],"default_level":"high"}},
+         {"id":"deepseek-v4-pro","object":"model","context_window":1048576,"input_modalities":["text"]}]}"""
 
 class ModelPreflightTest {
 
@@ -102,11 +110,51 @@ class ModelPreflightTest {
         assertContains(failure.message.orEmpty(), "low")
     }
 
+    private fun compatible(model: String, effort: ReasoningEffort? = null, window: Long? = null) =
+        LlmProviderConfig.OpenAiCompatible(
+            baseUrl = "https://api.deepseek.com/",
+            apiKey = "key",
+            model = model,
+            reasoningEffort = effort,
+            requestTimeout = timeout,
+            contextWindowTokens = window,
+        )
+
+    // deepseek's own list says flash takes images, so it sees without a vision model of its own
     @Test
-    fun `a compatible server is not asked at all`() = runBlocking {
-        val config = LlmProviderConfig.OpenAiCompatible(baseUrl = "https://example.test", apiKey = "key", model = "any", requestTimeout = timeout)
+    fun `a compatible server's list says whether the model sees and how much it holds`() = runBlocking {
+        val flash = assertIs<LlmProviderConfig.OpenAiCompatible>(compatible("deepseek-flash").preflighted(http(HttpStatusCode.OK, DEEPSEEK_MODELS), codexAuth = null))
+
+        assertEquals("https://api.deepseek.com/v1/models", asked)
+        assertEquals("Bearer key", authorization?.get("Authorization"))
+        assertTrue(flash.seesImages)
+        assertEquals(1_048_576, flash.contextWindowTokens)
+
+        val pro = assertIs<LlmProviderConfig.OpenAiCompatible>(compatible("deepseek-v4-pro").preflighted(http(HttpStatusCode.OK, DEEPSEEK_MODELS), codexAuth = null))
+        assertFalse(pro.seesImages)
+    }
+
+    @Test
+    fun `an effort the server's list does not offer stops the startup, and a configured window wins`() = runBlocking {
+        val failure =
+            assertFailsWith<IllegalStateException> {
+                compatible("deepseek-flash", effort = ReasoningEffort.MEDIUM).preflighted(http(HttpStatusCode.OK, DEEPSEEK_MODELS), codexAuth = null)
+            }
+
+        assertContains(failure.message.orEmpty(), "LLM_REASONING_EFFORT=[medium]")
+        assertContains(failure.message.orEmpty(), "low, high, max")
+
+        val windowed = compatible("deepseek-flash", effort = ReasoningEffort.HIGH, window = 100_000).preflighted(http(HttpStatusCode.OK, DEEPSEEK_MODELS), codexAuth = null)
+        assertEquals(100_000, windowed.contextWindowTokens)
+    }
+
+    // a compatible server may serve no list, or answer to an alias it never lists
+    @Test
+    fun `a server without a list, or one that does not list the model, leaves the config alone`() = runBlocking {
+        val config = compatible("local-model")
 
         assertSame(config, config.preflighted(http(HttpStatusCode.NotFound), codexAuth = null))
-        assertNull(asked)
+        assertSame(config, config.preflighted(http(HttpStatusCode.OK, DEEPSEEK_MODELS), codexAuth = null))
+        assertSame(config, config.preflighted(http(HttpStatusCode.OK, "<html>not a list</html>"), codexAuth = null))
     }
 }

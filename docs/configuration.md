@@ -95,8 +95,9 @@ banned, and startup says so in the log.
 server behind `LLM_BASE_URL` speaks, since a third-party server may offer either. `openai` and
 `codex` always speak the Responses API, the one where tools work alongside reasoning.
 `LLM_REASONING_EFFORT` applies to every provider. Which efforts work depends on the model: `codex`
-and `anthropic` check yours at startup, `openai` and `openai-compatible` on the first turn, except
-that an effort for an `openai` model that does not reason — the gpt-4 family — stops startup. On
+and `anthropic` check yours at startup, and so does `openai-compatible` when its server lists the
+model's efforts, as DeepSeek's does; `openai` checks on the first turn, except that an effort for a
+model that does not reason — the gpt-4 family — stops startup. On
 `anthropic` the values are `low` to `max` (`none` and `minimal` stop startup), and a model from
 before Claude 4.6 — one the API serves under a dated id such as `claude-haiku-4-5-20251001` — takes
 no effort at all. Every other Claude model thinks adaptively on every turn here, Opus 4.7 and 4.8
@@ -105,10 +106,11 @@ included, while a dated one runs without thinking; without an effort each runs a
 timeout for slow local servers and heavy reasoning models: a Fable turn at a high effort can run
 for minutes.
 
-Set `LLM_CONTEXT_WINDOW_TOKENS` whenever an `openai-compatible` model has a different window, since
-such a server states none and the bot assumes 16,384 tokens. An `openai` model is assumed to have the
-window of OpenAI's current generation, 1,050,000 tokens; an `anthropic` model's is read from
-Anthropic's model list at startup. The variable overrides any of them. Vusan reserves part of that
+An `openai-compatible` model's window is read at startup from the server's model list when the list
+states one, as DeepSeek's does; otherwise the bot assumes 16,384 tokens, so set
+`LLM_CONTEXT_WINDOW_TOKENS` whenever such a model has a different window. An `openai` model is assumed
+to have the window of OpenAI's current generation, 1,050,000 tokens; an `anthropic` model's is read
+from Anthropic's model list at startup. The variable overrides any of them. Vusan reserves part of that
 window for the response, tool results and estimation error, then fits only complete conversation
 interactions into the remainder.
 
@@ -520,10 +522,11 @@ VISION_API_KEY=sk-proj-qwerty
 | `VISION_MODEL`     | —                 | Enables a separate vision model; it is taken at its word about seeing.   |
 | `VISION_PROVIDER`  | the chat provider | `openai`, `anthropic` or `openai-compatible` with its own key, or `codex`. |
 
-`openai-compatible` never claims vision on its own, because the server behind `LLM_BASE_URL` may
-serve anything — so with it vision stays off until `VISION_MODEL` is set, even when the model itself
-does accept images. A vision model always wins when it is set, even where the chat model could have
-looked at the picture itself.
+An `openai-compatible` model sees only when the server's own model list says it takes images:
+DeepSeek's says so of `deepseek-flash`, which then needs no vision model of its own, and not of
+`deepseek-v4-pro`. A server that lists nothing of the kind may serve anything, so with it vision stays
+off until `VISION_MODEL` is set, even when the model itself does accept images. A vision model always
+wins when it is set, even where the chat model could have looked at the picture itself.
 
 Sticker replies come with vision and stay off without it. They are the one thing here that spends
 on its own: a set a chat keeps using is pulled in and each of its stickers is described once, up to

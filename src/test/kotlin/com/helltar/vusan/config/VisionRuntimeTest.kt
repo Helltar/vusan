@@ -40,10 +40,24 @@ class VisionRuntimeTest {
         assertNull(resolveVisionRuntime(config = null, chat = codexChat(supportsVision = false)))
     }
 
-    // the server behind LLM_BASE_URL can serve anything, so a compatible chat model never claims to see
+    // the server behind LLM_BASE_URL can serve anything, so a compatible chat model sees only when its
+    // server's own model list said so at startup, as deepseek's does of flash
     @Test
-    fun `an openai-compatible chat model never claims vision on its own`() {
+    fun `an openai-compatible chat model sees only on its server's word`() {
         assertNull(resolveVisionRuntime(config = null, chat = compatibleChat()))
+
+        val sighted =
+            resolveLlmRuntime(
+                LlmProviderConfig.OpenAiCompatible(
+                    baseUrl = "https://api.deepseek.com",
+                    apiKey = "key",
+                    model = "deepseek-flash",
+                    requestTimeout = TIMEOUT,
+                    seesImages = true,
+                ),
+            )
+
+        assertEquals(sighted.model, resolveVisionRuntime(config = null, chat = sighted)?.model)
     }
 
     @Test
