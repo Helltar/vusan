@@ -1,291 +1,373 @@
 package com.helltar.vusan.agent
 
-import ai.koog.agents.core.environment.ReceivedToolResult
-import ai.koog.agents.core.environment.ToolResultKind
-import ai.koog.agents.core.tools.ToolRegistry
-import ai.koog.prompt.message.AttachmentContent
-import ai.koog.prompt.message.AttachmentSource
-import ai.koog.prompt.message.Message
-import ai.koog.prompt.message.MessagePart
-import ai.koog.prompt.message.RequestMetaInfo
-import ai.koog.prompt.message.ResponseMetaInfo
-import ai.koog.serialization.JSONObject
-import ai.koog.serialization.JSONPrimitive
-import ai.koog.utils.time.KoogClock
-import com.helltar.vusan.agent.conversation.toolCallArgsForStorage
+import com.helltar.vusan.agent.conversation.ChatRole
+import com.helltar.vusan.agent.conversation.ChatTurn
+import com.helltar.vusan.agent.conversation.PromptConversation
+import com.helltar.vusan.llm.ChatRequest
+import com.helltar.vusan.llm.LlmProvider
+import com.helltar.vusan.llm.Message
+import com.helltar.vusan.llm.Part
+import com.helltar.vusan.llm.RequestOptions
+import com.helltar.vusan.llm.ScriptedLlmClient
+import com.helltar.vusan.llm.TEST_MODEL
+import com.helltar.vusan.llm.TokenUsage
+import com.helltar.vusan.llm.textReply
+import com.helltar.vusan.llm.toolCallReply
 import com.helltar.vusan.outbox.BotOutbox
-import com.helltar.vusan.tools.poll.PollTools
+import com.helltar.vusan.outbox.BotOutput
+import com.helltar.vusan.request.testScope
+import com.helltar.vusan.tools.LLMDescription
+import com.helltar.vusan.tools.Tool
+import com.helltar.vusan.tools.ToolCatalog
+import com.helltar.vusan.tools.ToolGroup
+import com.helltar.vusan.tools.ToolSet
+import com.helltar.vusan.tools.suspendToolGuard
+import com.helltar.vusan.tools.toolCatalog
+import kotlinx.coroutines.runBlocking
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.buildJsonObject
 import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.put
-import kotlinx.serialization.json.jsonPrimitive
 import kotlin.test.Test
+import kotlin.test.assertContains
 import kotlin.test.assertEquals
 import kotlin.test.assertFalse
+import kotlin.test.assertIs
 import kotlin.test.assertTrue
+
+@Suppress("unused")
+private class ProbeTools(private val outbox: BotOutbox) : ToolSet {
+
+    @Tool
+    @LLMDescription("Sends text to the user.")
+    fun sendMessage(@LLMDescription("The text.") text: String): String {
+        outbox.enqueueText(text)
+        return "Delivered."
+    }
+
+    @Tool
+    @LLMDescription("Looks something up.")
+    fun lookUp(@LLMDescription("What.") query: String): String = "found: $query"
+
+    @Tool
+    @LLMDescription("Always fails.")
+    suspend fun explode(@LLMDescription("Why.") reason: String): String = suspendToolGuard { error("boom: $reason") }
+}
+
+@Suppress("unused")
+private class DrawTools : ToolSet {
+
+    @Tool
+    @LLMDescription("Draws a picture.")
+    fun draw(@LLMDescription("What.") subject: String): String = "drew $subject"
+}
 
 class AgentFactoryTest {
 
-    private val meta = ResponseMetaInfo.create(KoogClock.System)
+    private fun call(name: String, id: String = "c-$name", vararg args: Pair<String, String>) =
+        Part.ToolCall(id, name, buildJsonObject { args.forEach { (k, v) -> put(k, v) } })
 
-    private fun assistant(vararg parts: MessagePart.ResponsePart) =
-        Message.Assistant(parts = parts.toList(), metaInfo = meta)
+    private class Run(
+        val client: ScriptedLlmClient,
+        val outbox: BotOutbox = BotOutbox(),
+        val events: MutableList<ToolEvent> = mutableListOf(),
+        val usages: MutableList<TokenUsage> = mutableListOf(),
+    )
 
-    private fun user(text: String) =
-        Message.User(parts = listOf(MessagePart.Text(text)), metaInfo = RequestMetaInfo.create(KoogClock.System))
+    private fun run(
+        vararg replies: com.helltar.vusan.llm.Reply,
+        maxModelCalls: Int = 20,
+        history: List<ChatTurn> = emptyList(),
+        mayStaySilent: Boolean = false,
+        catalog: (BotOutbox) -> ToolCatalog = { outbox -> toolCatalog { tools(ProbeTools(outbox)); tools(ToolGroup.IMAGE_GENERATION, DrawTools()) } },
+        block: (Run, String) -> Unit,
+    ) = runBlocking {
+        val run = Run(ScriptedLlmClient(*replies))
+        val factory = AgentFactory(run.client, TEST_MODEL, RequestOptions(promptCacheKey = "vusan"), maxModelCalls = maxModelCalls)
+        val tools = catalog(run.outbox)
+        val preparation = factory.prepare(tools, "the request")
+        val budget = TurnToolBudget(factory.liveToolResultMaxTokens)
+
+        val answer =
+            factory.build(
+                scope = testScope(),
+                conversation = PromptConversation(summary = null, turns = history),
+                preparation = preparation,
+                outbox = run.outbox,
+                toolBudget = budget,
+                toolEvents = run.events::add,
+                tokenUsage = run.usages::add,
+                mayStaySilent = mayStaySilent,
+            ).run("the request")
+
+        block(run, answer)
+    }
+
+    private val ChatRequest.toolNames: List<String>
+        get() = tools.map { it.name }
 
     @Test
-    fun `empty assistant message delivered nothing`() {
-        assertTrue(assistant().deliveredNothing())
+    fun `a plain answer ends the turn after one call`() =
+        run(textReply("hello there")) { run, answer ->
+            assertEquals("hello there", answer)
+            assertEquals(1, run.client.requests.size)
+
+            val request = run.client.requests.single()
+            assertIs<Message.System>(request.messages.first())
+            assertEquals("the request", (request.messages.last() as Message.User).text)
+            assertEquals("vusan-${testScope().toString().hashCode().toUInt().toString(16)}", request.options.promptCacheKey)
+        }
+
+    @Test
+    fun `a tool call is run and its result answered before the next call`() =
+        run(toolCallReply(call("lookUp", args = arrayOf("query" to "cats"))), textReply("cats are fine")) { run, answer ->
+            assertEquals("cats are fine", answer)
+            assertEquals(2, run.client.requests.size)
+
+            val results = assertIs<Message.ToolResults>(run.client.requests[1].messages.last())
+            assertEquals("found: cats", results.results.single().output)
+            assertEquals("c-lookUp", results.results.single().callId)
+            assertFalse(results.results.single().isError)
+
+            val event = run.events.single()
+            assertEquals("lookUp", event.toolName)
+            assertEquals("""{"query":"cats"}""", event.args)
+        }
+
+    @Test
+    fun `a tool that fails answers the model with its message and is recorded as an error`() =
+        run(toolCallReply(call("explode", args = arrayOf("reason" to "test"))), textReply("sorry")) { run, _ ->
+            val result = assertIs<Message.ToolResults>(run.client.requests[1].messages.last()).results.single()
+
+            assertTrue(result.isError)
+            assertContains(result.output, "boom: test")
+            assertTrue(run.events.single().isError)
+        }
+
+    // the guard exists for one observed shape: a sibling call in a garbled parallel batch arriving with
+    // no arguments at all, for a tool that takes them
+    @Test
+    fun `a call with no arguments at all is turned away without running`() =
+        run(toolCallReply(call("lookUp")), textReply("ok")) { run, _ ->
+            val result = assertIs<Message.ToolResults>(run.client.requests[1].messages.last()).results.single()
+
+            assertTrue(result.isError)
+            assertContains(result.output, "takes: query")
+        }
+
+    @Test
+    fun `a call to a tool nobody registered is answered with the names that exist`() =
+        run(toolCallReply(call("noSuchTool")), textReply("ok")) { run, _ ->
+            val result = assertIs<Message.ToolResults>(run.client.requests[1].messages.last()).results.single()
+
+            assertTrue(result.isError)
+            assertContains(result.output, "lookUp")
+        }
+
+    @Test
+    fun `a group loaded mid-turn is offered from the next request on`() =
+        run(toolCallReply(call("loadTools", args = arrayOf("groups" to "image_generation"))), toolCallReply(call("draw", args = arrayOf("subject" to "a cat"))), textReply("done")) { run, _ ->
+            assertFalse("draw" in run.client.requests[0].toolNames)
+            assertTrue("draw" in run.client.requests[1].toolNames)
+            assertEquals("drew a cat", assertIs<Message.ToolResults>(run.client.requests[2].messages.last()).results.single().output)
+        }
+
+    @Test
+    fun `an empty reply with nothing delivered is nudged once`() =
+        run(textReply(""), textReply("here it is")) { run, answer ->
+            assertEquals("here it is", answer)
+            assertEquals(2, run.client.requests.size)
+
+            val second = run.client.requests[1].messages
+            assertFalse(second.any { it is Message.Assistant && it.parts.isEmpty() }, "the empty assistant is dropped before the nudge")
+            assertContains((second.last() as Message.User).text, "Deliver your answer now")
+        }
+
+    @Test
+    fun `an empty reply that stays empty after the nudge ends the turn`() =
+        run(textReply(""), textReply("")) { run, answer ->
+            assertEquals("", answer)
+            assertEquals(2, run.client.requests.size)
+        }
+
+    @Test
+    fun `an empty reply after a delivery tool is not nudged`() =
+        run(toolCallReply(call("sendMessage", args = arrayOf("text" to "hi"))), textReply("")) { run, answer ->
+            assertEquals("", answer)
+            assertEquals(2, run.client.requests.size)
+            assertTrue(run.outbox.hasQueuedOutput)
+        }
+
+    @Test
+    fun `a turn allowed to stay silent may end empty on its first reply only`() =
+        run(textReply(""), mayStaySilent = true) { run, _ -> assertEquals(1, run.client.requests.size) }
+
+    @Test
+    fun `a turn allowed to stay silent is still nudged after a tool round`() =
+        run(toolCallReply(call("lookUp", args = arrayOf("query" to "x"))), textReply(""), textReply("found it"), mayStaySilent = true) { run, answer ->
+            assertEquals("found it", answer)
+            assertEquals(3, run.client.requests.size)
+        }
+
+    // the last model call is the wrap-up's: it carries no tools, and its text goes to the outbox
+    @Test
+    fun `a turn that runs out of model calls is landed with a tool-free wrap-up`() =
+        run(
+            toolCallReply(call("lookUp", id = "1", args = arrayOf("query" to "a"))),
+            toolCallReply(call("lookUp", id = "2", args = arrayOf("query" to "b"))),
+            textReply("here is what I found"),
+            maxModelCalls = 3,
+        ) { run, answer ->
+            assertEquals("here is what I found", answer)
+            assertEquals(3, run.client.requests.size)
+
+            val wrapUp = run.client.requests[2]
+            assertEquals(emptyList(), wrapUp.toolNames)
+            assertContains((wrapUp.messages.last() as Message.User).text, "used up its tool budget")
+            assertIs<Message.ToolResults>(wrapUp.messages[wrapUp.messages.lastIndex - 1])
+
+            val queued = run.outbox.pending.map { it.output }.filterIsInstance<BotOutput.Text>()
+            assertEquals("here is what I found", queued.single().text)
+        }
+
+    @Test
+    fun `usage of every call is reported`() =
+        run(
+            com.helltar.vusan.llm.Reply(Message.Assistant(listOf(call("lookUp", args = arrayOf("query" to "a")))), com.helltar.vusan.llm.StopReason.TOOL_CALLS, TokenUsage(10, 2, 8, 1)),
+            com.helltar.vusan.llm.Reply(Message.Assistant("ok"), com.helltar.vusan.llm.StopReason.END, TokenUsage(20, 3)),
+        ) { run, _ ->
+            assertEquals(listOf(TokenUsage(10, 2, 8, 1), TokenUsage(20, 3)), run.usages)
+        }
+
+    @Test
+    fun `stored history is replayed with tool batches grouped the way the apis want them`() {
+        val turns =
+            listOf(
+                ChatTurn(ChatRole.USER, "find two things"),
+                ChatTurn(ChatRole.TOOL_CALL, """{"query":"a"}""", toolCallId = "1", toolName = "lookUp"),
+                ChatTurn(ChatRole.TOOL_CALL, """{"query":"b"}""", toolCallId = "2", toolName = "lookUp"),
+                ChatTurn(ChatRole.TOOL_RESULT, "found a", toolCallId = "1", toolName = "lookUp"),
+                ChatTurn(ChatRole.TOOL_RESULT, "found b", toolCallId = "2", toolName = "lookUp", toolIsError = true),
+                ChatTurn(ChatRole.ASSISTANT, "both found"),
+            )
+
+        val messages = turns.toMessages()
+
+        assertEquals(4, messages.size)
+        assertEquals(listOf("1", "2"), assertIs<Message.Assistant>(messages[1]).toolCalls.map { it.id })
+        assertEquals("a", assertIs<Message.Assistant>(messages[1]).toolCalls.first().arguments.getValue("query").let { Json.encodeToString(kotlinx.serialization.json.JsonElement.serializer(), it).trim('"') })
+        assertEquals(listOf(false, true), assertIs<Message.ToolResults>(messages[2]).results.map { it.isError })
+        assertEquals("both found", assertIs<Message.Assistant>(messages[3]).text)
     }
 
     @Test
-    fun `blank text delivered nothing`() {
-        assertTrue(assistant(MessagePart.Text("   \n ")).deliveredNothing())
-    }
+    fun `history reaches the request between the system prompt and the current turn`() =
+        run(
+            textReply("ok"),
+            history = listOf(ChatTurn(ChatRole.USER, "earlier question"), ChatTurn(ChatRole.ASSISTANT, "earlier answer")),
+        ) { run, _ ->
+            val messages = run.client.requests.single().messages
+
+            assertIs<Message.System>(messages[0])
+            assertEquals("earlier question", assertIs<Message.User>(messages[1]).text)
+            assertEquals("earlier answer", assertIs<Message.Assistant>(messages[2]).text)
+            assertEquals("the request", assertIs<Message.User>(messages[3]).text)
+        }
 
     @Test
-    fun `non-blank text counts as a deliverable caption`() {
-        assertFalse(assistant(MessagePart.Text("here you go")).deliveredNothing())
-    }
-
-    @Test
-    fun `a pending tool call is not nothing`() {
-        val call = MessagePart.Tool.Call(id = "1", tool = "sendMessage", args = """{"text":"hi"}""")
-        assertFalse(assistant(call).deliveredNothing())
-    }
-
-    @Test
-    fun `a tool call alongside blank text is not nothing`() {
-        val call = MessagePart.Tool.Call(id = "1", tool = "webSearch", args = "{}")
-        assertFalse(assistant(MessagePart.Text(""), call).deliveredNothing())
+    fun `delivered nothing means no tool call and no text`() {
+        assertTrue(Message.Assistant(emptyList()).deliveredNothing())
+        assertTrue(Message.Assistant("   \n ").deliveredNothing())
+        assertFalse(Message.Assistant("here you go").deliveredNothing())
+        assertFalse(Message.Assistant(listOf(call("sendMessage"))).deliveredNothing())
+        assertFalse(Message.Assistant(listOf(Part.Text(""), call("lookUp"))).deliveredNothing())
     }
 
     @Test
     fun `an empty reply with nothing queued is nudged to deliver once`() {
-        assertTrue(owesDelivery(assistant(), nudged = false, outboxHasOutput = false, silenceAllowed = false))
-        assertFalse(owesDelivery(assistant(), nudged = true, outboxHasOutput = false, silenceAllowed = false))
-        assertFalse(owesDelivery(assistant(), nudged = false, outboxHasOutput = true, silenceAllowed = false))
+        val empty = Message.Assistant(emptyList())
+
+        assertTrue(owesDelivery(empty, nudged = false, outboxHasOutput = false, silenceAllowed = false))
+        assertFalse(owesDelivery(empty, nudged = true, outboxHasOutput = false, silenceAllowed = false))
+        assertFalse(owesDelivery(empty, nudged = false, outboxHasOutput = true, silenceAllowed = false))
+        assertFalse(owesDelivery(empty, nudged = false, outboxHasOutput = false, silenceAllowed = true))
     }
 
     @Test
-    fun `a reply allowed to stay silent is not nudged`() {
-        // an ambient turn that saw the message was not for it; the runner only allows this on the first reply
-        assertFalse(owesDelivery(assistant(), nudged = false, outboxHasOutput = false, silenceAllowed = true))
+    fun `only trailing empty assistants are dropped before the nudge re-request`() {
+        val messages = mutableListOf<Message>(Message.User("hello"), Message.Assistant("earlier"), Message.User("ok then"), Message.Assistant(emptyList()))
+
+        messages.dropTrailingEmptyAssistant()
+
+        assertEquals(listOf(Message.User("hello"), Message.Assistant("earlier"), Message.User("ok then")), messages)
+
+        val kept = mutableListOf<Message>(Message.User("ok"), Message.Assistant(""))
+        kept.dropTrailingEmptyAssistant()
+        assertEquals(2, kept.size, "a blank-text reply still serializes to a valid string content")
     }
 
     @Test
-    fun `trailing empty assistant is dropped before the nudge re-request`() {
-        val turn = user("ok then")
-        assertEquals(listOf(turn), listOf(turn, assistant()).withoutTrailingEmptyAssistant())
+    fun `the last model call is reserved for the wrap-up`() {
+        assertFalse(outOfModelCalls(callsMade = 1, maxModelCalls = 3))
+        assertTrue(outOfModelCalls(callsMade = 2, maxModelCalls = 3))
+        assertFalse(outOfModelCalls(callsMade = 50, maxModelCalls = 60))
+        assertTrue(outOfModelCalls(callsMade = 59, maxModelCalls = 60))
     }
 
     @Test
-    fun `assistant with text is kept`() {
-        val messages = listOf(user("ok then"), assistant(MessagePart.Text("ok")))
-        assertEquals(messages, messages.withoutTrailingEmptyAssistant())
-    }
+    fun `a tool result within the cap is left alone and a long one is cut with a notice`() {
+        val short = "x".repeat(100)
+        assertEquals(short, short.boundedToolText(500))
 
-    @Test
-    fun `assistant with blank text is kept - it still serializes to string content`() {
-        val messages = listOf(user("ok then"), assistant(MessagePart.Text("")))
-        assertEquals(messages, messages.withoutTrailingEmptyAssistant())
-    }
-
-    @Test
-    fun `assistant with a tool call is kept`() {
-        val call = MessagePart.Tool.Call(id = "1", tool = "setReaction", args = """{"emoji":"😉"}""")
-        val messages = listOf(user("ok then"), assistant(call))
-        assertEquals(messages, messages.withoutTrailingEmptyAssistant())
-    }
-
-    @Test
-    fun `a run with iterations to spare keeps calling tools`() {
-        assertFalse(outOfToolBudget(iterations = 2, maxIterations = 60))
-        assertFalse(outOfToolBudget(iterations = 55, maxIterations = 60))
-    }
-
-    @Test
-    fun `the last iterations are reserved for the wrap-up`() {
-        assertTrue(outOfToolBudget(iterations = 56, maxIterations = 60))
-        assertTrue(outOfToolBudget(iterations = 60, maxIterations = 60))
-    }
-
-    // a tool round costs two iterations, so the check may first see an already thinned budget; whenever it
-    // does, the wrap-up request and nodeFinish must both still fit under the limit.
-    @Test
-    fun `landing always leaves room for the wrap-up request and the finish node`() {
-        val maxIterations = 60
-        val landing = (1..maxIterations).first { outOfToolBudget(it, maxIterations) }
-
-        assertTrue(maxIterations - landing >= 2)
-    }
-
-    @Test
-    fun `only the trailing empty assistant is dropped`() {
-        val earlier = listOf(user("hello"), assistant(MessagePart.Text("earlier reply")), user("ok then"))
-        assertEquals(earlier, (earlier + assistant()).withoutTrailingEmptyAssistant())
-    }
-
-    // koog fills `parts` for every tool that ran, and that is what reaches the LLM, so a cap read off
-    // `output` alone bounds nothing.
-    @Test
-    fun `a tool result is bounded through the parts the model actually receives`() {
         val long = "x".repeat(5_000)
-        val bounded = toolResult(output = long, parts = listOf(MessagePart.Text(long))).boundedForLiveContext(500)
-
-        assertEquals(1_500, bounded.output.length)
-        assertEquals(1_500, (bounded.parts?.single() as MessagePart.Text).text.length)
+        val bounded = long.boundedToolText(500)
+        assertEquals(1_500, bounded.length)
+        assertTrue(bounded.endsWith("[tool result truncated for the model context]"))
     }
 
-    @Test
-    fun `the budget is spent on the text the model receives, not on the unused output`() {
-        val result = toolResult(output = "x".repeat(300), parts = listOf(MessagePart.Text("y".repeat(30))))
-
-        assertEquals(10, result.liveContextTokens)
-        assertEquals(100, toolResult(output = "x".repeat(300), parts = null).liveContextTokens)
-    }
-
-    // the estimator reads bytes, so the same number of characters is not the same cost, and a budget
-    // spent in characters charged cyrillic half of what it puts in the prompt.
+    // the estimator reads bytes, so a token budget buys half the cyrillic characters it buys latin ones
     @Test
     fun `cyrillic costs the run budget more than latin of the same length`() {
-        val latin = toolResult(output = "a".repeat(300), parts = listOf(MessagePart.Text("a".repeat(300))))
-        val cyrillic = toolResult(output = "я".repeat(300), parts = listOf(MessagePart.Text("я".repeat(300))))
+        val latin = "a".repeat(3_000).boundedToolText(500)
+        val cyrillic = "ж".repeat(3_000).boundedToolText(500)
 
-        assertEquals(100, latin.liveContextTokens)
-        assertEquals(200, cyrillic.liveContextTokens)
-    }
-
-    @Test
-    fun `the same token budget buys fewer cyrillic characters than latin ones`() {
-        val latin = toolResult(output = "a".repeat(3_000), parts = null).boundedForLiveContext(500)
-        val cyrillic = toolResult(output = "я".repeat(3_000), parts = null).boundedForLiveContext(500)
-
-        assertEquals(1_500, latin.output.length)
-        assertEquals(750, cyrillic.output.length)
-    }
-
-    @Test
-    fun `a tool result within the cap is left alone`() {
-        val result = toolResult(output = "short", parts = listOf(MessagePart.Text("short")))
-
-        assertEquals(result, result.boundedForLiveContext(500))
-    }
-
-    // an image cannot be shortened, only dropped, and dropping it would answer a different question.
-    @Test
-    fun `a non-text part survives the cap untouched`() {
-        val image =
-            MessagePart.Attachment(
-                AttachmentSource.Image(AttachmentContent.URL("https://example.invalid/a.png"), format = "png"),
-            )
-        val long = "x".repeat(5_000)
-
-        val bounded = toolResult(output = long, parts = listOf(image, MessagePart.Text(long))).boundedForLiveContext(500)
-
-        assertEquals(image, bounded.parts?.first())
-        assertEquals(1_500, (bounded.parts?.last() as MessagePart.Text).text.length)
+        assertTrue(cyrillic.length < latin.length)
+        assertTrue(estimateTokens(cyrillic) <= 500 + 20)
     }
 
     @Test
     fun `a cap too small for the truncation notice omits the result instead`() {
-        val bounded = toolResult(output = "x".repeat(300), parts = listOf(MessagePart.Text("x".repeat(300))))
-            .boundedForLiveContext(5)
-
-        assertTrue(bounded.output.startsWith("[tool result omitted"))
-        assertTrue((bounded.parts?.single() as MessagePart.Text).text.startsWith("[tool result omitted"))
-    }
-
-    // koog's JSONObject.toString() escapes nothing, and the storage layer drops anything it cannot
-    // parse — so a quoted shell argument used to leave history with `{}` and no record of the call.
-    @Test
-    fun `tool args survive a quote on the way into history`() {
-        val command = """printf "sample""""
-        val json = JSONObject(mapOf("command" to JSONPrimitive(command))).toToolArgsJson()
-
-        assertEquals(json, toolCallArgsForStorage(json), "the storage layer could not parse the args back")
-        assertEquals(command, Json.parseToJsonElement(json).jsonObject.getValue("command").jsonPrimitive.content)
+        assertTrue("x".repeat(400).boundedToolText(3).startsWith("[tool result omitted"))
     }
 
     @Test
-    fun `tool args survive a backslash and a newline too`() {
-        val args = JSONObject(mapOf("path" to JSONPrimitive("""C:\tmp"""), "text" to JSONPrimitive("one\ntwo")))
+    fun `a reasoning part of another provider is kept in the message`() {
+        val message = Message.Assistant(listOf(Part.Reasoning(LlmProvider.ANTHROPIC, buildJsonObject { put("type", "thinking") }), Part.Text("ok")))
 
-        val json = args.toToolArgsJson()
-
-        assertEquals(json, toolCallArgsForStorage(json))
-        assertTrue(json.contains("""C:\\tmp"""), "backslash was not escaped: $json")
-        assertTrue(json.contains("""one\ntwo"""), "newline was not escaped: $json")
+        assertEquals("ok", message.text)
+        assertFalse(message.deliveredNothing())
     }
 
-    // the guard exists for one observed shape: a sibling call in a garbled parallel batch arriving with
-    // no arguments at all.
     @Test
-    fun `a call with no arguments at all is turned away`() {
-        val call = MessagePart.Tool.Call(id = "c1", tool = "createPoll", args = "{}")
+    fun `stored tool arguments that do not parse replay as none`() {
+        val turns = listOf(ChatTurn(ChatRole.TOOL_CALL, "not json", toolCallId = "1", toolName = "lookUp"), ChatTurn(ChatRole.TOOL_RESULT, "r", toolCallId = "1", toolName = "lookUp"))
 
+        assertEquals(0, assertIs<Message.Assistant>(turns.toMessages()[0]).toolCalls.single().arguments.size)
+    }
+
+    @Test
+    fun `garbled call message names the arguments the model has to send`() {
         assertEquals(
-            listOf("question", "options", "isAnonymous", "allowsMultipleAnswers"),
-            call.missingRequiredArgs(pollRegistry),
+            "Tool `createPoll` was called with no arguments at all; it takes: question, options. Reissue it as a single, complete call with its arguments.",
+            garbledCallMessage("createPoll", listOf("question", "options")),
         )
     }
 
-    // koog's generated schema marks kotlin-defaulted parameters required, and koog itself decodes the
-    // call into their defaults, so leaving them out is an ordinary call and not a garbled one.
     @Test
-    fun `a call that omits only defaulted arguments runs`() {
-        val call =
-            MessagePart.Tool.Call(
-                id = "c2",
-                tool = "createPoll",
-                args = """{"question":"Tea or coffee?","options":["tea","coffee"]}""",
-            )
+    fun `tool args are stored as the json the model sent`() {
+        val json = """{"command":"printf \"sample\"","path":"C:\\tmp"}"""
+        val parsed = Json.parseToJsonElement(json).jsonObject
 
-        assertEquals(emptyList(), call.missingRequiredArgs(pollRegistry))
+        assertEquals(parsed, Json.parseToJsonElement(parsed.toString()).jsonObject)
     }
-
-    @Test
-    fun `a call to a tool the registry does not have is left to koog`() {
-        val call = MessagePart.Tool.Call(id = "c3", tool = "noSuchTool", args = "{}")
-
-        assertEquals(emptyList(), call.missingRequiredArgs(pollRegistry))
-    }
-
-    private val pollRegistry = ToolRegistry { tools(PollTools(BotOutbox())) }
-
-    // koog keeps a provider's cache figures in the metadata, under that provider's own names
-    @Test
-    fun `token usage reads the cache figures koog keeps in the metadata`() {
-        val anthropic =
-            ResponseMetaInfo.create(
-                KoogClock.System,
-                totalTokensCount = 15,
-                inputTokensCount = 10,
-                outputTokensCount = 5,
-                metadata = buildJsonObject {
-                    put("cacheReadInputTokens", 9_000)
-                    put("cacheCreationInputTokens", 400)
-                },
-            )
-        val google =
-            ResponseMetaInfo.create(KoogClock.System, inputTokensCount = 10, metadata = buildJsonObject { put("cachedContentTokenCount", 7_000) })
-
-        assertEquals(TokenUsage(10, 5, 15, cacheReadTokens = 9_000, cacheWriteTokens = 400), tokenUsageOf(anthropic))
-        assertEquals(TokenUsage(10, null, null, cacheReadTokens = 7_000, cacheWriteTokens = null), tokenUsageOf(google))
-        assertEquals(TokenUsage(null, null, null), tokenUsageOf(ResponseMetaInfo.Empty))
-    }
-
-    private fun toolResult(output: String, parts: List<MessagePart.ContentPart>?) =
-        ReceivedToolResult(
-            id = "call-1",
-            tool = "searchWeb",
-            toolArgs = JSONObject(emptyMap()),
-            toolDescription = null,
-            output = output,
-            resultKind = ToolResultKind.Success,
-            result = null,
-            parts = parts,
-        )
 }

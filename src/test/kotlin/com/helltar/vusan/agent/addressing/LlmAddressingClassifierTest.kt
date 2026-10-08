@@ -1,8 +1,8 @@
 package com.helltar.vusan.agent.addressing
 
-import ai.koog.prompt.params.LLMParams
-import com.helltar.vusan.tools.vision.FakePromptExecutor
-import com.helltar.vusan.tools.vision.TEST_MODEL
+import com.helltar.vusan.llm.RequestOptions
+import com.helltar.vusan.llm.FakeLlmClient
+import com.helltar.vusan.llm.TEST_MODEL
 import kotlinx.coroutines.runBlocking
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.jsonArray
@@ -102,8 +102,8 @@ class LlmAddressingClassifierTest {
 
     @Test
     fun `the classifier sends the wording and the state and reads the verdict back`() = runBlocking {
-        val executor = FakePromptExecutor(response = """{"addressed": true}""")
-        val classifier = LlmAddressingClassifier(executor, TEST_MODEL, LLMParams())
+        val executor = FakeLlmClient(response = """{"addressed": true}""")
+        val classifier = LlmAddressingClassifier(executor, TEST_MODEL, RequestOptions())
 
         val verdict =
             classifier.isAddressed(

@@ -1,10 +1,10 @@
 package com.helltar.vusan.tools.vision
 
-import ai.koog.prompt.dsl.prompt
-import ai.koog.prompt.executor.model.PromptExecutor
-import ai.koog.prompt.llm.LLModel
-import ai.koog.prompt.message.AttachmentContent
-import ai.koog.prompt.message.AttachmentSource
+import com.helltar.vusan.llm.ChatRequest
+import com.helltar.vusan.llm.LlmClient
+import com.helltar.vusan.llm.LlmModel
+import com.helltar.vusan.llm.Message
+import com.helltar.vusan.llm.Part
 import com.helltar.vusan.common.xmlBlock
 import com.helltar.vusan.request.AttachedFile
 
@@ -13,8 +13,8 @@ import com.helltar.vusan.request.AttachedFile
  * speech when speech-to-text is configured.
  */
 class VideoVisionClient(
-    private val promptExecutor: PromptExecutor,
-    private val model: LLModel,
+    private val client: LlmClient,
+    private val model: LlmModel,
     private val sampler: VideoSampler = FfmpegVideoSampler(),
     private val transcriber: VideoAudioTranscriber? = null,
 ) {
@@ -60,30 +60,21 @@ class VideoVisionClient(
         transcript: String?,
         focus: String,
     ): String {
-        val description =
-            promptExecutor.execute(buildPrompt(video, frames, samplingNote, transcript, focus), model)
-                .textContent()
-                .trim()
+        val description = client.complete(model, buildRequest(video, frames, samplingNote, transcript, focus)).message.text.trim()
 
         return description.ifBlank { "Vision returned an empty description for the video." }
     }
 
-    private fun buildPrompt(
+    private fun buildRequest(
         video: AttachedFile,
         frames: List<ByteArray>,
         samplingNote: String,
         transcript: String?,
         focus: String,
-    ) =
-        prompt("vusan-video-vision") {
-            system(
-                "You describe videos for a chat assistant, working from still frames taken out of one. " +
-                        "Be concise, factual, and avoid guessing identities. " +
-                        "Mention visible text if any. Reply in the user's language when clear.",
-            )
-            user {
-                text(
-                    buildString {
+    ): ChatRequest {
+        val text =
+            Part.Text(
+                buildString {
                         appendLine("Describe this video for answering the user's request.")
                         appendLine(samplingNote)
                         appendLine("Cover the subject, what happens, scene changes, and any visible text.")
@@ -115,21 +106,22 @@ class VideoVisionClient(
                             appendLine()
                             appendLine(xmlBlock("audio_transcript", it))
                         }
-                    },
-                )
+                },
+            )
 
-                frames.forEachIndexed { index, frame ->
-                    image(
-                        AttachmentSource.Image(
-                            content = AttachmentContent.Binary.Bytes(frame),
-                            format = "jpeg",
-                            mimeType = "image/jpeg",
-                            fileName = "frame-${index + 1}.jpg",
-                        ),
-                    )
-                }
-            }
-        }
+        val images = frames.mapIndexed { index, frame -> Part.Image(frame, "image/jpeg", "frame-${index + 1}.jpg") }
+
+        return ChatRequest(
+            listOf(
+                Message.System(
+                    "You describe videos for a chat assistant, working from still frames taken out of one. " +
+                            "Be concise, factual, and avoid guessing identities. " +
+                            "Mention visible text if any. Reply in the user's language when clear.",
+                ),
+                Message.User(listOf(text) + images),
+            ),
+        )
+    }
 
     private fun samplingNote(durationSeconds: Int?, frameCount: Int): String =
         durationSeconds

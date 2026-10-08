@@ -1,17 +1,17 @@
 package com.helltar.vusan.tools.tgchannel
 
-import ai.koog.prompt.dsl.prompt
-import ai.koog.prompt.executor.model.PromptExecutor
-import ai.koog.prompt.llm.LLModel
-import ai.koog.prompt.message.AttachmentContent
-import ai.koog.prompt.message.AttachmentSource
+import com.helltar.vusan.llm.ChatRequest
+import com.helltar.vusan.llm.LlmClient
+import com.helltar.vusan.llm.LlmModel
+import com.helltar.vusan.llm.Message
+import com.helltar.vusan.llm.Part
 import com.helltar.vusan.common.limitTo
 
 private const val MAX_TELEGRAM_CHANNEL_IMAGE_BYTES = 8 * 1024 * 1024
 
 class TelegramChannelImageDescriber(
-    private val promptExecutor: PromptExecutor,
-    private val model: LLModel,
+    private val client: LlmClient,
+    private val model: LlmModel,
 ) {
 
     suspend fun describe(image: TelegramChannelImage, post: TelegramChannelPost, focus: String): String {
@@ -19,24 +19,23 @@ class TelegramChannelImageDescriber(
             return "Image is too large for vision (${image.bytes.size} bytes, limit $MAX_TELEGRAM_CHANNEL_IMAGE_BYTES)."
         }
 
-        val description = promptExecutor
-            .execute(buildPrompt(image, post, focus), model)
-            .textContent()
-            .trim()
+        val description = client.complete(model, buildRequest(image, post, focus)).message.text.trim()
 
         return description.ifBlank { "Vision returned an empty description for this image." }
     }
 
-    private fun buildPrompt(image: TelegramChannelImage, post: TelegramChannelPost, focus: String) =
-        prompt("vusan-telegram-channel-image-vision") {
-            system(
-                "You describe images embedded in public Telegram channel posts for a chat assistant. " +
-                        "Be concise, factual, and avoid guessing identities. Mention visible text if any. " +
-                        "Reply in the user's language when clear.",
-            )
-            user {
-                text(
-                    buildString {
+    private fun buildRequest(image: TelegramChannelImage, post: TelegramChannelPost, focus: String) =
+        ChatRequest(
+            listOf(
+                Message.System(
+                    "You describe images embedded in public Telegram channel posts for a chat assistant. " +
+                            "Be concise, factual, and avoid guessing identities. Mention visible text if any. " +
+                            "Reply in the user's language when clear.",
+                ),
+                Message.User(
+                    listOf(
+                        Part.Text(
+                            buildString {
                         appendLine("Describe this Telegram channel post image for later summarization/evaluation.")
                         appendLine("Focus on project visuals, UI, screenshots, visible text, quality signals, and anything relevant to the user's request.")
                         appendLine("Keep it concise.")
@@ -59,15 +58,10 @@ class TelegramChannelImageDescriber(
                         appendLine("- mime_type: ${image.mimeType}")
                         appendLine("- filename: ${image.filename}")
                     },
-                )
-                image(
-                    AttachmentSource.Image(
-                        content = AttachmentContent.Binary.Bytes(image.bytes),
-                        format = image.mimeType.substringAfter('/', "jpeg"),
-                        mimeType = image.mimeType,
-                        fileName = image.filename,
+                        ),
+                        Part.Image(image.bytes, image.mimeType, image.filename),
                     ),
-                )
-            }
-        }
+                ),
+            ),
+        )
 }

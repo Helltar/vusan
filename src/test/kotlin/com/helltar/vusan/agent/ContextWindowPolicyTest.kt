@@ -1,7 +1,7 @@
 package com.helltar.vusan.agent
 
-import ai.koog.prompt.llm.LLMProvider
-import ai.koog.prompt.llm.LLModel
+import com.helltar.vusan.llm.LlmModel
+import com.helltar.vusan.llm.LlmProvider
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertTrue
@@ -30,13 +30,6 @@ class ContextWindowPolicyTest {
                     budget.agentReserveTokens +
                     budget.safetyReserveTokens <= budget.contextWindowTokens,
         )
-    }
-
-    @Test
-    fun `unknown compatible model gets a conservative default window`() {
-        val policy = ContextWindowPolicy(model(contextLength = null))
-
-        assertEquals(16_384, policy.contextWindowTokens)
     }
 
     @Test
@@ -69,8 +62,8 @@ class ContextWindowPolicyTest {
         assertTrue(policy.liveToolResultMaxChars < budget.agentReserveTokens * ESTIMATED_BYTES_PER_TOKEN)
     }
 
-    private fun model(contextLength: Long?): LLModel =
-        LLModel(provider = LLMProvider.OpenAI, id = "test", contextLength = contextLength)
+    private fun model(contextLength: Long): LlmModel =
+        LlmModel(provider = LlmProvider.OPENAI, id = "test", contextWindowTokens = contextLength)
 }
 
 // the tool caps its own output at this size, so it is the worst single result the run budget must absorb.

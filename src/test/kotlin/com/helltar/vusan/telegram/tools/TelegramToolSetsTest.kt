@@ -1,14 +1,14 @@
 package com.helltar.vusan.telegram.tools
 
-import ai.koog.agents.core.tools.reflect.ToolSet
+import com.helltar.vusan.tools.ToolSet
 import com.helltar.vusan.outbox.BotOutbox
 import com.helltar.vusan.request.ChatCapabilities
 import com.helltar.vusan.request.requestContext
 import com.helltar.vusan.telegram.tools.sticker.StickerCatalog
 import com.helltar.vusan.telegram.tools.sticker.StickerTools
-import com.helltar.vusan.tools.vision.FakePromptExecutor
+import com.helltar.vusan.llm.FakeLlmClient
 import com.helltar.vusan.tools.vision.ImageVisionClient
-import com.helltar.vusan.tools.vision.TEST_MODEL
+import com.helltar.vusan.llm.TEST_MODEL
 import java.lang.reflect.Proxy
 import kotlin.test.Test
 import kotlin.test.assertEquals
@@ -27,7 +27,7 @@ class TelegramToolSetsTest {
             arrayOf(TelegramClient::class.java)
         ) { _, method, _ -> error("the tool sets must not call Telegram to be built: ${method.name}") } as TelegramClient
 
-    private val catalog = StickerCatalog(client, ImageVisionClient(FakePromptExecutor(), TEST_MODEL))
+    private val catalog = StickerCatalog(client, ImageVisionClient(FakeLlmClient(), TEST_MODEL))
 
     @Test
     fun `an unrestricted chat gets both of telegram's own tool sets`() {

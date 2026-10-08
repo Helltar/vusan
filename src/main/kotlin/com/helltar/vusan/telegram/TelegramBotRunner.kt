@@ -2,7 +2,7 @@ package com.helltar.vusan.telegram
 
 import com.helltar.heartbeat.Heartbeat
 import com.helltar.vusan.agent.AgentRunner
-import com.helltar.vusan.agent.FallbackInUse
+import com.helltar.vusan.llm.FallbackInUse
 import com.helltar.vusan.agent.addressing.AmbientAddressing
 import com.helltar.vusan.agent.grouplog.GroupLogRepository
 import com.helltar.vusan.agent.albumContextBlock

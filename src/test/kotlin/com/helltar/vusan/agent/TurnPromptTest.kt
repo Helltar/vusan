@@ -113,9 +113,9 @@ class TurnPromptTest {
         assertTrue(prompt.endsWith("hello"))
     }
 
-    // both used to be a second system message. that reads as a higher-priority instruction, and koog
-    // hoists every system message into the top-level system field on Anthropic and Google, so neither
-    // would have stayed where it was put.
+    // both used to be a second system message. that reads as a higher-priority instruction, and the
+    // anthropic api takes every system message into its top-level system field, so neither would have
+    // stayed where it was put.
     @Test
     fun `the clock and the sticker index ride in the turn, ahead of the request`() {
         val prompt =

@@ -1,8 +1,8 @@
 # AGENTS.md
 
 Root instruction file for coding agents on Vusan, a Telegram AI agent built on
-[Koog](https://github.com/JetBrains/koog),
-[TelegramBots](https://github.com/rubenlagus/TelegramBots), and Exposed/SQLite.
+[TelegramBots](https://github.com/rubenlagus/TelegramBots), Exposed/SQLite, and its own
+`llm/` layer over the OpenAI and Anthropic APIs.
 It applies to the whole repository; `CLAUDE.md` is just the one-line `@AGENTS.md`
 import that points Claude Code here. Keep this file short and actionable —
 product docs go in `README.md` or `docs/`. Prefer clean removals over
@@ -65,6 +65,13 @@ Preserve the package boundaries in [`docs/architecture.md`](docs/architecture.md
 - Env vars are parsed in `AppConfig.Companion` via private `readEnv` (optional,
   with a fallback or `null`) and `requireEnv` (required). Never call
   `System.getenv` directly.
+- `llm/` is the model layer and knows nothing about the bot: no outbox, no
+  messenger, no `AppConfig`. Every call to a model goes through its `LlmClient`
+  with its `Message` model; a field one API grew lives in that API's client
+  (`llm/openai/`, `llm/anthropic/`), never in a request rewrite outside it, and a
+  reasoning block a provider returned is kept raw and replayed to it verbatim.
+  Behavior on the wire is proven by a test over a mock engine, not by reading
+  the request builder.
 - Avoid thin abstractions and one-off helper objects. Add an abstraction only
   when it removes real complexity or matches an existing local pattern.
 
@@ -214,11 +221,12 @@ reaches the registry through the `PlatformToolSets` port, gated there on the sam
 chat capabilities. Nothing under `tools/` may name a messenger, and
 `PlatformBoundaryTest`'s allowlist is empty — keep it that way.
 
-- Every Koog tool method returning `String` is wrapped in `suspendToolGuard { ... }`
+- Every `@Tool` method returns `String` and is wrapped in `suspendToolGuard { ... }`
   from [`tools/ToolGuard.kt`](src/main/kotlin/com/helltar/vusan/tools/ToolGuard.kt);
-  no broad `try/catch` for the same behavior. It throws koog's `ToolException`, so
-  the call is recorded as failed and the model still reads the message as the
-  result; test one with `toolFailure { }`.
+  no broad `try/catch` for the same behavior. It throws `ToolFailure`, so the call
+  is recorded as failed and the model still reads the message as the result; test
+  one with `toolFailure { }`. A parameter with a default or a nullable type is
+  optional for the model; the rest are required in the schema it reads.
 - Use `requireToolText(label, maxChars)` for required text args when it fits.
 - `@LLMDescription` values are all-or-nothing per module: constants only, never
   mixed with inline strings, ordered by tool method order. Split a concatenated

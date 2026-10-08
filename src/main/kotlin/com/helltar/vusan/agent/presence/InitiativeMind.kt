@@ -1,9 +1,10 @@
 package com.helltar.vusan.agent.presence
 
-import ai.koog.prompt.dsl.prompt
-import ai.koog.prompt.executor.model.PromptExecutor
-import ai.koog.prompt.llm.LLModel
-import ai.koog.prompt.params.LLMParams
+import com.helltar.vusan.llm.ChatRequest
+import com.helltar.vusan.llm.LlmClient
+import com.helltar.vusan.llm.LlmModel
+import com.helltar.vusan.llm.Message
+import com.helltar.vusan.llm.RequestOptions
 import com.helltar.vusan.common.collapseWhitespaceAndCap
 import com.helltar.vusan.common.xmlBlock
 import com.helltar.vusan.outbox.ALLOWED_REACTION_EMOJI
@@ -57,23 +58,26 @@ interface InitiativeMind {
 }
 
 class LlmInitiativeMind(
-    private val promptExecutor: PromptExecutor,
-    private val model: LLModel,
-    private val params: LLMParams,
+    private val client: LlmClient,
+    private val model: LlmModel,
+    private val options: RequestOptions,
     private val personality: String,
 ) : InitiativeMind {
 
     override suspend fun decide(input: InitiativeInput): InitiativeDecision? {
-        val response =
-            promptExecutor.execute(
-                prompt(id = "vusan-initiative", params = params) {
-                    system("${xmlBlock("personality", personality)}\n\n$INITIATIVE_INSTRUCTIONS")
-                    user(initiativeState(input))
-                },
+        val reply =
+            client.complete(
                 model,
+                ChatRequest(
+                    listOf(
+                        Message.System("${xmlBlock("personality", personality)}\n\n$INITIATIVE_INSTRUCTIONS"),
+                        Message.User(initiativeState(input)),
+                    ),
+                    options = options,
+                ),
             )
 
-        return parseInitiativeDecision(response.textContent())
+        return parseInitiativeDecision(reply.message.text)
     }
 }
 

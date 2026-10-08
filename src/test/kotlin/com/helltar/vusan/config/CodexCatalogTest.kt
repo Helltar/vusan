@@ -1,7 +1,7 @@
 package com.helltar.vusan.config
 
-import ai.koog.prompt.executor.clients.openai.base.models.ServiceTier
 import com.helltar.vusan.infra.Http
+import com.helltar.vusan.llm.ReasoningEffort
 import io.ktor.client.engine.mock.*
 import io.ktor.http.*
 import io.ktor.utils.io.*

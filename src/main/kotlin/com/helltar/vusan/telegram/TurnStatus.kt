@@ -1,6 +1,6 @@
 package com.helltar.vusan.telegram
 
-import com.helltar.vusan.agent.FallbackInUse
+import com.helltar.vusan.llm.FallbackInUse
 import com.helltar.vusan.agent.ToolActivity
 import com.helltar.vusan.agent.TurnNarrator
 import com.helltar.vusan.common.rethrowIfCancellation

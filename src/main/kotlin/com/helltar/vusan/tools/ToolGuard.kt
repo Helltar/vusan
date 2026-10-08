@@ -1,20 +1,20 @@
 package com.helltar.vusan.tools
 
-import ai.koog.agents.core.tools.ToolException
 import com.helltar.vusan.common.rethrowIfCancellation
 import io.github.oshai.kotlinlogging.KotlinLogging
 
 private val log = KotlinLogging.logger("ToolGuard")
 
 /**
- * Turns whatever a tool throws into the failure koog reports for that call.
+ * A tool that did not do what it was asked, with the message the model reads as the call's result.
  *
- * The message reaches the model as the tool's result either way — that is the point of the guard, the
- * model has to read what went wrong and try something else. Rethrowing as [ToolException] rather than
- * returning the text is what also makes koog record the call as failed: text returned normally is a
- * success to it, so the run's events and the stored history both said `ok` for a tool that did not work,
- * and a recap built from that history read the failure as an accomplished step.
+ * Thrown rather than returned so the agent records the call as failed: text returned normally is a
+ * success, and the run's events and the stored history would then say `ok` for a tool that did not work,
+ * and a recap built from that history would read the failure as an accomplished step.
  */
+class ToolFailure(message: String) : RuntimeException(message)
+
+/** Turns whatever a tool throws into the [ToolFailure] the agent reports for that call. */
 suspend fun suspendToolGuard(block: suspend () -> String): String =
     try {
         block()
@@ -27,7 +27,7 @@ suspend fun suspendToolGuard(block: suspend () -> String): String =
             log.warn(t) { "tool failed" }
         }
 
-        throw ToolException.ValidationFailure("Tool failed: ${t.message ?: t::class.simpleName}")
+        throw ToolFailure("Tool failed: ${t.message ?: t::class.simpleName}")
     }
 
 fun String.requireToolText(label: String, maxChars: Int): String {

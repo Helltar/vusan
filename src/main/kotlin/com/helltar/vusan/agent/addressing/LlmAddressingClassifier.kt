@@ -1,9 +1,10 @@
 package com.helltar.vusan.agent.addressing
 
-import ai.koog.prompt.dsl.prompt
-import ai.koog.prompt.executor.model.PromptExecutor
-import ai.koog.prompt.llm.LLModel
-import ai.koog.prompt.params.LLMParams
+import com.helltar.vusan.llm.ChatRequest
+import com.helltar.vusan.llm.LlmClient
+import com.helltar.vusan.llm.LlmModel
+import com.helltar.vusan.llm.Message
+import com.helltar.vusan.llm.RequestOptions
 import com.helltar.vusan.common.limitTo
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.add
@@ -23,22 +24,25 @@ import kotlinx.serialization.json.putJsonObject
  * against a measurement.
  */
 class LlmAddressingClassifier(
-    private val promptExecutor: PromptExecutor,
-    private val model: LLModel,
-    private val params: LLMParams,
+    private val client: LlmClient,
+    private val model: LlmModel,
+    private val options: RequestOptions,
 ) : AddressingClassifier {
 
     override suspend fun isAddressed(input: AddressingInput): Boolean? {
-        val response =
-            promptExecutor.execute(
-                prompt(id = "vusan-addressing", params = params) {
-                    system(addressingSystemPrompt(input.botNames, busy = input.botBusyFor != null))
-                    user(addressingState(input).toString())
-                },
+        val reply =
+            client.complete(
                 model,
+                ChatRequest(
+                    listOf(
+                        Message.System(addressingSystemPrompt(input.botNames, busy = input.botBusyFor != null)),
+                        Message.User(addressingState(input).toString()),
+                    ),
+                    options = options,
+                ),
             )
 
-        return parseAddressingVerdict(response.textContent())
+        return parseAddressingVerdict(reply.message.text)
     }
 }
 

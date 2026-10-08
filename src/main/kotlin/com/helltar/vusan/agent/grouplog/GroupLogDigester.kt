@@ -1,9 +1,10 @@
 package com.helltar.vusan.agent.grouplog
 
-import ai.koog.prompt.dsl.prompt
-import ai.koog.prompt.executor.model.PromptExecutor
-import ai.koog.prompt.llm.LLModel
-import ai.koog.prompt.params.LLMParams
+import com.helltar.vusan.llm.ChatRequest
+import com.helltar.vusan.llm.LlmClient
+import com.helltar.vusan.llm.LlmModel
+import com.helltar.vusan.llm.Message
+import com.helltar.vusan.llm.RequestOptions
 import com.helltar.vusan.common.limitTo
 import com.helltar.vusan.common.xmlBlock
 import io.github.oshai.kotlinlogging.KotlinLogging
@@ -22,31 +23,28 @@ interface GroupLogDigester {
 }
 
 class LlmGroupLogDigester(
-    private val promptExecutor: PromptExecutor,
-    private val model: LLModel,
-    private val chatParams: LLMParams = LLMParams(),
+    private val client: LlmClient,
+    private val model: LlmModel,
+    private val options: RequestOptions = RequestOptions(),
 ) : GroupLogDigester {
 
     override suspend fun digest(day: LocalDate, transcript: String): String? {
         if (transcript.isBlank()) return null
 
-        val response =
-            promptExecutor.execute(
-                prompt(id = "vusan-chat-log-digest", params = chatParams) {
-                    system(DIGEST_SYSTEM_PROMPT)
-                    user("Day: $day\n\n${xmlBlock("chat_transcript", transcript)}")
-                },
+        val reply =
+            client.complete(
                 model,
+                ChatRequest(
+                    listOf(Message.System(DIGEST_SYSTEM_PROMPT), Message.User("Day: $day\n\n${xmlBlock("chat_transcript", transcript)}")),
+                    options = options,
+                ),
             )
 
-        val digest =
-            response.textContent().trim().limitTo(MAX_DIGEST_CHARS).takeIf { it.isNotBlank() } ?: return null
-
-        val meta = response.metaInfo
+        val digest = reply.message.text.trim().limitTo(MAX_DIGEST_CHARS).takeIf { it.isNotBlank() } ?: return null
 
         log.info {
             "chat log digest generated: day=$day chars=${digest.length} " +
-                    "inputTokens=${meta.inputTokensCount ?: "n/a"} outputTokens=${meta.outputTokensCount ?: "n/a"}"
+                    "inputTokens=${reply.usage?.inputTokens ?: "n/a"} outputTokens=${reply.usage?.outputTokens ?: "n/a"}"
         }
 
         return digest

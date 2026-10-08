@@ -17,10 +17,6 @@ repositories {
 dependencies {
     implementation(kotlin("reflect"))
 
-    implementation(libs.koog.agents)
-    implementation(libs.koog.google.client)
-    implementation(libs.koog.deepseek.client)
-
     implementation(libs.telegrambots.client)
     implementation(libs.telegrambots.longpolling)
     implementation(libs.heartbeat)

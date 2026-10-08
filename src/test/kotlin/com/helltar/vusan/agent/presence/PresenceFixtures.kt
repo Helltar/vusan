@@ -2,7 +2,6 @@ package com.helltar.vusan.agent.presence
 
 import com.helltar.vusan.agent.grouplog.GroupLogEntry
 import com.helltar.vusan.config.AppConfig
-import com.helltar.vusan.config.HostedLlmProvider
 import com.helltar.vusan.config.LlmProviderConfig
 import com.helltar.vusan.request.AccessPolicy
 import com.helltar.vusan.request.ChatRef
@@ -35,7 +34,7 @@ internal fun bot(text: String, at: Instant, chat: ChatRef = CHAT) =
 
 internal fun testConfig(dbPath: String) =
     AppConfig(
-        agentMaxIterations = 70,
+        agentMaxModelCalls = 70,
         accessPolicy = AccessPolicy(),
         appearance = null,
         databasePath = dbPath,
@@ -44,9 +43,8 @@ internal fun testConfig(dbPath: String) =
         giphyApiKey = null,
         klipyApiKey = null,
         llmProvider =
-            LlmProviderConfig.Hosted(
-                provider = HostedLlmProvider.OPENAI,
-                apiKey = "test",
+            LlmProviderConfig.OpenAi(
+                    apiKey = "test",
                 model = "test",
                 requestTimeout = 60.seconds,
             ),
@@ -54,7 +52,6 @@ internal fun testConfig(dbPath: String) =
         openAiImageApiKey = null,
         openAiImage = null,
         openAiStt = null,
-        openAiVision = null,
         personality = null,
         regolithToken = null,
         regolithUrl = null,

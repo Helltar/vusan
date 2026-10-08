@@ -1,11 +1,7 @@
 package com.helltar.vusan
 
-import ai.koog.prompt.executor.llms.MultiLLMPromptExecutor
-import ai.koog.prompt.executor.model.PromptExecutor
 import com.helltar.vusan.agent.AgentFactory
 import com.helltar.vusan.agent.AgentRunner
-import com.helltar.vusan.agent.FallbackInUse
-import com.helltar.vusan.agent.FallbackPromptExecutor
 import com.helltar.vusan.agent.addressing.AmbientAddressing
 import com.helltar.vusan.agent.addressing.LlmAddressingClassifier
 import com.helltar.vusan.agent.ContextWindowPolicy
@@ -20,7 +16,11 @@ import com.helltar.vusan.agent.presence.DiaryRepository
 import com.helltar.vusan.agent.presence.Initiative
 import com.helltar.vusan.agent.presence.LlmDiaryWriter
 import com.helltar.vusan.agent.presence.LlmInitiativeMind
+import com.helltar.vusan.agent.providerOutage
 import com.helltar.vusan.config.*
+import com.helltar.vusan.llm.FallbackInUse
+import com.helltar.vusan.llm.FallbackLlmClient
+import com.helltar.vusan.llm.LlmClient
 import com.helltar.vusan.infra.Db
 import com.helltar.vusan.infra.Http
 import com.helltar.vusan.infra.Maintenance
@@ -65,9 +65,9 @@ suspend fun main() = coroutineScope {
 
     var http: HttpClient? = null
     var publicHttp: HttpClient? = null
-    var executor: PromptExecutor? = null
-    var visionExecutor: AutoCloseable? = null
-    var addressingExecutor: AutoCloseable? = null
+    var chatClient: LlmClient? = null
+    var visionClient: LlmClient? = null
+    var addressingClient: LlmClient? = null
 
     try {
         Db.connect(config)
@@ -92,45 +92,35 @@ suspend fun main() = coroutineScope {
                     CodexAuthStore(http, codex.authFile)
                 }
 
-        listOfNotNull(config.llmProvider, config.llmFallback)
-            .filterIsInstance<LlmProviderConfig.Hosted>()
-            .forEach {
-                when (it.provider) {
-                    HostedLlmProvider.OPENAI -> verifyOpenAiModel(http, it.apiKey, it.model)
-                    HostedLlmProvider.ANTHROPIC -> verifyAnthropicModel(http, it.apiKey, it.model)
-                    HostedLlmProvider.GOOGLE, HostedLlmProvider.DEEPSEEK -> Unit
-                }
-            }
-        config.openAiVision?.let { verifyOpenAiModel(http, it.apiKey, it.model) }
-        config.addressing?.let { verifyOpenAiModel(http, it.apiKey, it.model) }
-
-        val llm = resolveLlmRuntime(codexPreflight(config.llmProvider, http, codexAuth), codexAuth)
+        // every configured model is asked about at the vendor before the first turn, so a typo fails here
+        val llm = resolveLlmRuntime(config.llmProvider.preflighted(http, codexAuth), codexAuth)
 
         // a second provider stands behind the first for when it is out — a spent subscription, above all,
-        // or a key whose credit ran dry with the subscription behind it. it wraps the executor so that
+        // or a key whose credit ran dry with the subscription behind it. it wraps the client so that
         // every call the bot makes is covered, and so a turn that runs into the limit finishes on the
         // fallback instead of ending in "come back later".
-        val fallback = config.llmFallback?.let { resolveLlmRuntime(codexPreflight(it, http, codexAuth), codexAuth) }
-        val fallbackExecutor =
+        val fallback = config.llmFallback?.let { resolveLlmRuntime(it.preflighted(http, codexAuth), codexAuth) }
+        val fallbackClient =
             fallback?.let {
-                FallbackPromptExecutor(
-                    primary = MultiLLMPromptExecutor(llm.model.provider to llm.client),
+                FallbackLlmClient(
+                    primary = llm.client,
                     primaryLabel = llm.providerLabel,
-                    fallback = MultiLLMPromptExecutor(it.model.provider to it.client),
+                    fallback = it.client,
                     fallbackLabel = it.providerLabel,
                     fallbackModel = it.model,
-                    fallbackParams = it.chatParams,
+                    fallbackOptions = it.chatOptions,
+                    outageOf = { failure, now -> failure.providerOutage(now) },
                 )
             }
 
         // what the turn and its status ask to find out whether the primary is answering right now.
-        val fallbackInUse: () -> FallbackInUse? = { fallbackExecutor?.fallbackInUse }
-        val chatExecutor = fallbackExecutor ?: MultiLLMPromptExecutor(llm.model.provider to llm.client)
-        executor = chatExecutor
-        val vision = resolveVisionRuntime(config.openAiVision, llm, chatExecutor, config.llmProvider.requestTimeout)
+        val fallbackInUse: () -> FallbackInUse? = { fallbackClient?.fallbackInUse }
+        val client: LlmClient = fallbackClient ?: llm.client
+        chatClient = client
+        val vision = resolveVisionRuntime(config.vision?.preflighted(http, codexAuth), llm.copy(client = client), codexAuth)
 
-        // a vision model of its own comes with a second executor to close; otherwise vision rides on the chat one
-        visionExecutor = vision?.executor?.takeIf { it !== chatExecutor }
+        // a vision model of its own comes with a second client to close; otherwise vision rides on the chat one
+        visionClient = vision?.takeIf { it.ownClient }?.client
 
         val telegramClient = OkHttpTelegramClient(config.telegramBotToken)
 
@@ -142,11 +132,11 @@ suspend fun main() = coroutineScope {
         val ambient =
             config.addressing?.let { addressing ->
                 val transcript = groupLog ?: return@let null
-                val runtime = resolveAddressingRuntime(addressing, config.llmProvider.requestTimeout)
-                addressingExecutor = runtime.executor
+                val runtime = resolveAddressingRuntime(addressing.copy(provider = addressing.provider.preflighted(http, codexAuth)), codexAuth)
+                addressingClient = runtime.client
 
                 AmbientAddressing(
-                    LlmAddressingClassifier(runtime.executor, runtime.model, runtime.params),
+                    LlmAddressingClassifier(runtime.client, runtime.model, runtime.options),
                     transcript,
                     botProfile.addressingNames(addressing.names),
                 )
@@ -168,10 +158,10 @@ suspend fun main() = coroutineScope {
         val stickerCatalog =
             vision
                 ?.takeIf { config.stickersEnabled }
-                ?.let { StickerCatalog(telegramClient, ImageVisionClient(it.executor, it.model)) }
+                ?.let { StickerCatalog(telegramClient, ImageVisionClient(it.client, it.model)) }
 
         val contextWindowPolicy = ContextWindowPolicy(llm.model)
-        val groupLogDigester = groupLog?.let { LlmGroupLogDigester(chatExecutor, llm.model, llm.compactionParams) }
+        val groupLogDigester = groupLog?.let { LlmGroupLogDigester(client, llm.model, llm.compactionOptions) }
 
         val toolRegistryFactory =
             ToolRegistryFactory(
@@ -182,14 +172,14 @@ suspend fun main() = coroutineScope {
 
         val agentFactory =
             AgentFactory(
-                chatExecutor, llm.model, llm.chatParams,
+                client, llm.model, llm.chatOptions,
                 config.personality, botProfile.username, botProfile.displayName,
-                maxIterations = config.agentMaxIterations,
+                maxModelCalls = config.agentMaxModelCalls,
                 contextWindowPolicy = contextWindowPolicy,
             )
 
         val conversationCompactor =
-            LlmConversationCompactor(chatExecutor, llm.model, llm.compactionParams, contextWindowPolicy)
+            LlmConversationCompactor(client, llm.model, llm.compactionOptions, contextWindowPolicy)
 
         // both read whole stretches of a group's transcript with nobody having asked, so each is a
         // switch of its own, and neither looks into a chat the allowlist no longer names.
@@ -199,7 +189,7 @@ suspend fun main() = coroutineScope {
         val diary =
             groupLog?.takeIf { config.diaryEnabled }?.let {
                 Diary(
-                    LlmDiaryWriter(chatExecutor, llm.model, llm.compactionParams, personality),
+                    LlmDiaryWriter(client, llm.model, llm.compactionOptions, personality),
                     DiaryRepository(), it, isAllowedChat,
                 )
             }
@@ -232,7 +222,7 @@ suspend fun main() = coroutineScope {
                 val transcript = groupLog ?: return@let null
 
                 Initiative(
-                    LlmInitiativeMind(chatExecutor, llm.model, llm.compactionParams, personality),
+                    LlmInitiativeMind(client, llm.model, llm.compactionOptions, personality),
                     transcript, delivery, initiativeConfig, isAllowedChat,
                     isAnswering = agentRunner::hasTurnUnderWayIn,
                     diary = diary?.let { it::blockFor },
@@ -286,9 +276,9 @@ suspend fun main() = coroutineScope {
             schedulerJob.cancelAndJoin()
         }
     } finally {
-        visionExecutor?.close()
-        addressingExecutor?.close()
-        executor?.close()
+        visionClient?.close()
+        addressingClient?.close()
+        chatClient?.close()
         http?.close()
         publicHttp?.close()
         Db.disconnect()
@@ -308,33 +298,6 @@ private fun createVoiceTranscriber(http: HttpClient, config: AppConfig): VoiceTr
             }
 
     return VoiceTranscriber(OpenAiWhisperClient(http, sttConfig), sttConfig)
-}
-
-/**
- * Prove the ChatGPT session works before the bot starts taking messages, then apply the context
- * window and capabilities advertised by the account's own model catalog.
- *
- * Reading the token here also forces a refresh on a stale `auth.json`, so a host that has been idle
- * for days fails at startup with a "run `codex login`" message instead of on someone's first turn.
- */
-private suspend fun codexPreflight(
-    config: LlmProviderConfig,
-    http: HttpClient,
-    auth: CodexAuthStore?,
-): LlmProviderConfig {
-    if (auth == null || config !is LlmProviderConfig.Codex) return config
-
-    val plan = auth.planType()
-
-    log.info {
-        "Codex: signed in to ChatGPT${plan?.let { " (plan=[$it])" }.orEmpty()} auth=[${config.authFile}]"
-    }
-
-    val discovered = verifyCodexModel(http, auth, config.model) ?: return config
-
-    log.info { "Codex: model=[${discovered.id}] (${discovered.displayName})" }
-
-    return applyCodexModelMetadata(config, discovered)
 }
 
 private fun logPresence(config: AppConfig, groupLogOn: Boolean) {
@@ -377,18 +340,20 @@ private fun logStartup(
     log.info {
         "LLM: provider=[${llm.providerLabel}] model=[${llm.model.id}]" +
                 llm.reasoningEffort?.let { " reasoningEffort=[$it]" }.orEmpty() +
-                llm.serviceTier?.let { " serviceTier=[${it.requestValue}]" }.orEmpty()
+                llm.serviceTier?.let { " serviceTier=[$it]" }.orEmpty()
     }
 
     fallback?.let { log.info { "LLM fallback: provider=[${it.providerLabel}] model=[${it.model.id}]" } }
 
-    if (llm.model.contextLength == null) {
+    // openai and anthropic models carry a window of their own; a codex catalog that could not be read or a
+    // third-party server leave the policy on its conservative default
+    if (config.llmProvider.contextWindowTokens == null && llm.model.contextWindowTokens == ContextWindowPolicy.DEFAULT_CONTEXT_WINDOW_TOKENS) {
         log.warn {
             "Model context size unknown: using conservative fallback " +
                     "[${ContextWindowPolicy.DEFAULT_CONTEXT_WINDOW_TOKENS}] — set LLM_CONTEXT_WINDOW_TOKENS for this model"
         }
     } else {
-        log.info { "Model context window: tokens=${llm.model.contextLength}" }
+        log.info { "Model context window: tokens=${llm.model.contextWindowTokens}" }
     }
 
     if (vision != null) {
@@ -397,7 +362,7 @@ private fun logStartup(
     } else {
         log.warn {
             "Vision disabled: model=[${llm.model.id}] cannot read images — " +
-                    "set OPENAI_VISION_API_KEY to run vision on a separate model"
+                    "set VISION_MODEL to run vision on a model of its own"
         }
     }
 
@@ -405,7 +370,7 @@ private fun logStartup(
         if (ambientNames == null) {
             log.warn { "Ambient addressing off: it reads the group log, and GROUP_LOG_ENABLED=false" }
         } else {
-            log.info { "Ambient addressing: model=[${it.model}] names=[${ambientNames.joinToString(", ")}]" }
+            log.info { "Ambient addressing: model=[${it.provider.model}] names=[${ambientNames.joinToString(", ")}]" }
         }
     }
 

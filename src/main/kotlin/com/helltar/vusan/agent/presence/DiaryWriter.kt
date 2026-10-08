@@ -1,9 +1,10 @@
 package com.helltar.vusan.agent.presence
 
-import ai.koog.prompt.dsl.prompt
-import ai.koog.prompt.executor.model.PromptExecutor
-import ai.koog.prompt.llm.LLModel
-import ai.koog.prompt.params.LLMParams
+import com.helltar.vusan.llm.ChatRequest
+import com.helltar.vusan.llm.LlmClient
+import com.helltar.vusan.llm.LlmModel
+import com.helltar.vusan.llm.Message
+import com.helltar.vusan.llm.RequestOptions
 import com.helltar.vusan.common.limitTo
 import com.helltar.vusan.common.xmlBlock
 import io.github.oshai.kotlinlogging.KotlinLogging
@@ -24,30 +25,32 @@ interface DiaryWriter {
 }
 
 class LlmDiaryWriter(
-    private val promptExecutor: PromptExecutor,
-    private val model: LLModel,
-    private val params: LLMParams,
+    private val client: LlmClient,
+    private val model: LlmModel,
+    private val options: RequestOptions,
     private val personality: String,
 ) : DiaryWriter {
 
     override suspend fun write(day: LocalDate, transcript: String, earlier: List<DiaryEntry>): String? {
         if (transcript.isBlank()) return null
 
-        val response =
-            promptExecutor.execute(
-                prompt(id = "vusan-diary", params = params) {
-                    system("${xmlBlock("personality", personality)}\n\n$DIARY_INSTRUCTIONS")
-                    user(diaryRequest(day, transcript, earlier))
-                },
+        val reply =
+            client.complete(
                 model,
+                ChatRequest(
+                    listOf(
+                        Message.System("${xmlBlock("personality", personality)}\n\n$DIARY_INSTRUCTIONS"),
+                        Message.User(diaryRequest(day, transcript, earlier)),
+                    ),
+                    options = options,
+                ),
             )
 
-        val entry = response.textContent().trim().limitTo(MAX_ENTRY_CHARS).takeIf { it.isNotBlank() } ?: return null
-        val meta = response.metaInfo
+        val entry = reply.message.text.trim().limitTo(MAX_ENTRY_CHARS).takeIf { it.isNotBlank() } ?: return null
 
         log.info {
             "diary entry generated: day=[$day] chars=[${entry.length}] " +
-                    "inputTokens=[${meta.inputTokensCount ?: "n/a"}] outputTokens=[${meta.outputTokensCount ?: "n/a"}]"
+                    "inputTokens=[${reply.usage?.inputTokens ?: "n/a"}] outputTokens=[${reply.usage?.outputTokens ?: "n/a"}]"
         }
 
         return entry

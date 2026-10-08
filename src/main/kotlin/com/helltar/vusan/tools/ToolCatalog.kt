@@ -1,10 +1,6 @@
 package com.helltar.vusan.tools
 
-import ai.koog.agents.core.tools.ToolBase
-import ai.koog.agents.core.tools.ToolDescriptor
-import ai.koog.agents.core.tools.ToolRegistry
-import ai.koog.agents.core.tools.reflect.ToolSet
-import ai.koog.agents.core.tools.reflect.asTools
+import com.helltar.vusan.llm.ToolDefinition
 import com.helltar.vusan.tools.catalog.CatalogTools
 
 /**
@@ -42,9 +38,9 @@ data class ToolLoadResult(
 /**
  * The tools of one turn, split into what the model is shown and what it can ask for.
  *
- * The registry holds everything from the first step: koog resolves a call against it and not against
- * the descriptors the request carried, so a tool the model names before loading its group still runs.
- * Only what [visibleDescriptors] returns is sent, and it widens as [load] is called.
+ * Everything registered runs from the first step: a call is resolved against [tools] and not against
+ * the definitions the request carried, so a tool the model names before loading its group still runs.
+ * Only what [visibleDefinitions] returns is sent, and it widens as [load] is called.
  *
  * [preloaded] is what this conversation asked for on an earlier turn, offered again from the first
  * request — see [LoadedToolGroups] for why. A group that is no longer registered at all, because the
@@ -56,9 +52,9 @@ class ToolCatalog internal constructor(
     private val onLoad: (List<ToolGroup>) -> Unit = {},
 ) {
 
-    private val alwaysVisible: List<ToolBase<*, *>> = entries.filter { it.group == null }.flatMap { it.tools }
+    private val alwaysVisible: List<ToolFunction> = entries.filter { it.group == null }.flatMap { it.tools }
 
-    private val deferred: Map<ToolGroup, List<ToolBase<*, *>>> =
+    private val deferred: Map<ToolGroup, List<ToolFunction>> =
         entries.filter { it.group != null }
             .groupBy({ checkNotNull(it.group) }, { it.tools })
             .mapValues { (_, sets) -> sets.flatten() }
@@ -68,13 +64,18 @@ class ToolCatalog internal constructor(
     // the loader has nothing to offer when every group this turn registered is gone with the optional
     // service or chat capability behind it, or is already loaded — and an empty menu is one more
     // schema for nothing.
-    private val loader: List<ToolBase<*, *>> =
-        if (deferred.keys.all { it in loaded }) emptyList() else CatalogTools(this).let { it::class.asTools(it) }
+    private val loader: List<ToolFunction> =
+        if (deferred.keys.all { it in loaded }) emptyList() else CatalogTools(this).toolFunctions()
 
     private val byGroupName: Map<String, ToolGroup> = deferred.keys.associateBy { it.groupName }
 
-    val registry: ToolRegistry =
-        ToolRegistry { tools(alwaysVisible + deferred.values.flatten() + loader) }
+    /** Every tool this turn may run, offered or not. */
+    val tools: List<ToolFunction> = alwaysVisible + deferred.values.flatten() + loader
+
+    private val byName: Map<String, ToolFunction> = tools.associateBy { it.name }
+
+    /** The tool a call names, whether or not its group has been loaded, or `null` for a name nothing answers to. */
+    fun find(name: String): ToolFunction? = byName[name]
 
     /** Bumped whenever [load] widens the visible set, so a run can tell when to re-send its tool list. */
     var revision: Int = 0
@@ -82,8 +83,8 @@ class ToolCatalog internal constructor(
 
     // registration order, not load order: the tool array is part of the cached prefix on every provider,
     // so two turns that loaded the same groups in a different order must still produce the same request.
-    fun visibleDescriptors(): List<ToolDescriptor> =
-        (alwaysVisible + loader + deferred.filterKeys { it in loaded }.values.flatten()).map { it.descriptor }
+    fun visibleDefinitions(): List<ToolDefinition> =
+        (alwaysVisible + loader + deferred.filterKeys { it in loaded }.values.flatten()).map { it.definition }
 
     /** The menu of what is still loadable, or null when this turn has nothing left to offer. */
     fun menu(): String? =
@@ -112,7 +113,7 @@ class ToolCatalog internal constructor(
 }
 
 /** One registered tool set and the group, if any, the model has to load before it is offered. */
-class CatalogEntry internal constructor(val group: ToolGroup?, val tools: List<ToolBase<*, *>>)
+class CatalogEntry internal constructor(val group: ToolGroup?, val tools: List<ToolFunction>)
 
 class ToolCatalogBuilder internal constructor() {
 
@@ -120,12 +121,12 @@ class ToolCatalogBuilder internal constructor() {
 
     /** Registers [set] as always visible. */
     fun tools(set: ToolSet) {
-        entries += CatalogEntry(null, set.toolList())
+        entries += CatalogEntry(null, set.toolFunctions())
     }
 
-    /** Registers [set] behind [group]: in the registry from the start, in the request once loaded. */
+    /** Registers [set] behind [group]: runnable from the start, in the request once loaded. */
     fun tools(group: ToolGroup, set: ToolSet) {
-        entries += CatalogEntry(group, set.toolList())
+        entries += CatalogEntry(group, set.toolFunctions())
     }
 
     internal fun build(preloaded: Set<ToolGroup>, onLoad: (List<ToolGroup>) -> Unit): ToolCatalog =
@@ -137,5 +138,3 @@ fun toolCatalog(
     onLoad: (List<ToolGroup>) -> Unit = {},
     build: ToolCatalogBuilder.() -> Unit,
 ): ToolCatalog = ToolCatalogBuilder().apply(build).build(preloaded, onLoad)
-
-private fun ToolSet.toolList(): List<ToolBase<*, *>> = this::class.asTools(this)

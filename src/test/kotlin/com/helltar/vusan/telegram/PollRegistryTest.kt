@@ -1,7 +1,6 @@
 package com.helltar.vusan.telegram
 
 import com.helltar.vusan.config.AppConfig
-import com.helltar.vusan.config.HostedLlmProvider
 import com.helltar.vusan.config.LlmProviderConfig
 import com.helltar.vusan.infra.Db
 import com.helltar.vusan.outbox.BotOutput
@@ -107,7 +106,7 @@ class PollRegistryTest {
 
     private fun testConfig(dbPath: String) =
         AppConfig(
-            agentMaxIterations = 70,
+            agentMaxModelCalls = 70,
             accessPolicy = AccessPolicy(),
             appearance = null,
             databasePath = dbPath,
@@ -115,9 +114,8 @@ class PollRegistryTest {
             elevenLabsTts = null,
             giphyApiKey = null,
             klipyApiKey = null,
-            llmProvider = LlmProviderConfig.Hosted(
-                provider = HostedLlmProvider.OPENAI,
-                apiKey = "test",
+            llmProvider = LlmProviderConfig.OpenAi(
+                    apiKey = "test",
                 model = "test",
                 requestTimeout = 60.seconds,
             ),
@@ -125,7 +123,6 @@ class PollRegistryTest {
             openAiImageApiKey = null,
             openAiImage = null,
             openAiStt = null,
-            openAiVision = null,
             regolithToken = null,
             regolithUrl = null,
             searxngUrl = null,

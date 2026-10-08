@@ -3,7 +3,7 @@ package com.helltar.vusan.telegram
 import com.helltar.vusan.agent.AgentRequest
 import com.helltar.vusan.agent.AgentResult
 import com.helltar.vusan.agent.AgentRunner
-import com.helltar.vusan.agent.FallbackInUse
+import com.helltar.vusan.llm.FallbackInUse
 import com.helltar.vusan.agent.attachedFileContextBlock
 import com.helltar.vusan.agent.formatAgentInput
 import com.helltar.vusan.agent.formatConversationInput

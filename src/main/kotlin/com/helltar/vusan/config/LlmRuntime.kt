@@ -1,591 +1,227 @@
 package com.helltar.vusan.config
 
-import ai.koog.http.client.HttpClientFactoryResolver
-import ai.koog.prompt.executor.clients.ConnectionTimeoutConfig
-import ai.koog.prompt.executor.clients.LLMClient
-import ai.koog.prompt.executor.clients.LLModelDefinitions
-import ai.koog.prompt.executor.clients.anthropic.AnthropicCacheControl
-import ai.koog.prompt.executor.clients.anthropic.AnthropicClientSettings
-import ai.koog.prompt.executor.clients.anthropic.AnthropicLLMClient
-import ai.koog.prompt.executor.clients.anthropic.AnthropicModels
-import ai.koog.prompt.executor.clients.anthropic.AnthropicParams
-import ai.koog.prompt.executor.clients.deepseek.DeepSeekClientSettings
-import ai.koog.prompt.executor.clients.deepseek.DeepSeekLLMClient
-import ai.koog.prompt.executor.clients.deepseek.DeepSeekModels
-import ai.koog.prompt.executor.clients.deepseek.DeepSeekParams
-import ai.koog.prompt.executor.clients.google.GoogleClientSettings
-import ai.koog.prompt.executor.clients.google.GoogleLLMClient
-import ai.koog.prompt.executor.clients.google.GoogleModels
-import ai.koog.prompt.executor.clients.google.GoogleParams
-import ai.koog.prompt.executor.clients.openai.OpenAIChatParams
-import ai.koog.prompt.executor.clients.openai.OpenAIClientSettings
-import ai.koog.prompt.executor.clients.openai.OpenAILLMClient
-import ai.koog.prompt.executor.clients.openai.OpenAIModels
-import ai.koog.prompt.executor.clients.openai.OpenAIResponsesParams
-import ai.koog.prompt.executor.clients.openai.base.models.ServiceTier
-import ai.koog.prompt.executor.clients.openai.models.OpenAIInclude
-import ai.koog.prompt.llm.LLMCapability
-import ai.koog.prompt.llm.LLMProvider
-import ai.koog.prompt.llm.LLModel
-import ai.koog.prompt.params.LLMParams
-import kotlinx.serialization.json.JsonElement
-import kotlinx.serialization.json.JsonObject
-import kotlinx.serialization.json.JsonPrimitive
-import kotlinx.serialization.json.buildJsonObject
-import kotlinx.serialization.json.contentOrNull
-import kotlinx.serialization.json.put
-import kotlinx.serialization.json.putJsonObject
-import kotlin.reflect.full.memberProperties
-import kotlin.reflect.jvm.javaField
-import kotlin.time.Duration
+import com.helltar.vusan.agent.ContextWindowPolicy
+import com.helltar.vusan.llm.LlmClient
+import com.helltar.vusan.llm.LlmModel
+import com.helltar.vusan.llm.LlmProvider
+import com.helltar.vusan.llm.RequestOptions
+import com.helltar.vusan.llm.RetryingLlmClient
+import com.helltar.vusan.llm.anthropic.ANTHROPIC_EFFORTS
+import com.helltar.vusan.llm.anthropic.AnthropicClient
+import com.helltar.vusan.llm.llmHttpClient
+import com.helltar.vusan.llm.openai.OpenAiClient
+import com.helltar.vusan.llm.openai.OpenAiEndpoint
+import io.ktor.client.*
 
 private const val OPENAI_API_BASE_URL = "https://api.openai.com"
+private const val OPENAI_API_PATH = "/v1"
 
 // what every OpenAI model since gpt-5.5 lists on its model page (checked 2026-09-17 for the 5.6 and 6
-// generations), and what the catalog gives gpt-5.5 itself. a newer model is assumed to keep it, and
-// LLM_CONTEXT_WINDOW_TOKENS says otherwise when one does not.
-private const val UNCATALOGUED_OPENAI_CONTEXT_WINDOW = 1_050_000L
-private const val UNCATALOGUED_OPENAI_MAX_OUTPUT = 128_000L
+// generations); OpenAI's model list reports no window, so this is assumed and LLM_CONTEXT_WINDOW_TOKENS
+// says otherwise when a model does not keep it.
+private const val OPENAI_CONTEXT_WINDOW = 1_050_000L
+private const val OPENAI_MAX_OUTPUT = 128_000
 
-// what every claude model since opus 4.7 lists on the models overview (checked 2026-09-24 for opus 5.5 and
-// fable 5.1), and what the catalog gives claude-opus-5 itself.
-private const val UNCATALOGUED_ANTHROPIC_CONTEXT_WINDOW = 1_000_000L
-private const val UNCATALOGUED_ANTHROPIC_MAX_OUTPUT = 128_000L
+// what every Claude model since Opus 4.7 lists, and what the vendor's model list confirms at startup
+private const val ANTHROPIC_CONTEXT_WINDOW = 1_000_000L
+private const val ANTHROPIC_MAX_OUTPUT = 128_000
 
-private const val OPENAI_PROMPT_CACHE_KEY = "vusan"
-private const val OPENAI_COMPACTION_CACHE_KEY = "vusan-recap"
-private const val COMPLETIONS_REASONING_EFFORT = "reasoning_effort"
-private const val RESPONSES_REASONING = "reasoning"
-private const val RESPONSES_REASONING_EFFORT = "effort"
-private const val RESPONSES_TEXT = "text"
-private const val RESPONSES_TEXT_VERBOSITY = "verbosity"
-private const val ANTHROPIC_THINKING = "thinking"
-private const val ANTHROPIC_OUTPUT_CONFIG = "output_config"
-private const val ANTHROPIC_EFFORT = "effort"
-private const val HEX_RADIX = 16
-
-data class LlmRuntime(
-    val providerLabel: String,
-    val client: LLMClient,
-    val model: LLModel,
-    val chatParams: LLMParams,
-    // a history recap is a tool-free prompt with its own stable prefix, so it gets its own cache key
-    // instead of diluting the chat prefix OpenAI keeps warm for every turn.
-    val compactionParams: LLMParams = chatParams,
-)
+private const val PROMPT_CACHE_KEY = "vusan"
+private const val COMPACTION_CACHE_KEY = "vusan-recap"
 
 /**
- * The same params with a prompt cache key of this conversation's own.
- *
- * Cache reads match the most recently written prefixes under a key, so one key for the whole
- * deployment means busy chats evict each other; a key per conversation gives each its own window and
- * is what the Codex CLI does with its thread id. The conversation is hashed rather than named: the
- * key only routes a request, a collision costs nothing because a read still needs an exact prefix
- * match, and there is no reason to hand a provider a messenger's user id.
- *
- * A provider that was given no key keeps none — `prompt_cache_key` is an OpenAI extension, and a
- * third-party compatible server has no business receiving it.
+ * One configured model, ready to call: the client, the model it is for, and the options a turn and a
+ * history recap send with it. The recap gets no prompt caching and its own cache key — its body never
+ * repeats, so a cache write would buy a read nobody makes, and a shared key would dilute the chat's.
  */
-fun LLMParams.forConversation(conversation: String): LLMParams =
-    when (this) {
-        is OpenAIChatParams -> promptCacheKey?.let { copy(promptCacheKey = it.scoped(conversation)) } ?: this
-        is OpenAIResponsesParams -> promptCacheKey?.let { copy(promptCacheKey = it.scoped(conversation)) } ?: this
-        else -> this
-    }
+data class LlmRuntime(
+    val providerLabel: String,
+    val client: LlmClient,
+    val model: LlmModel,
+    val chatOptions: RequestOptions,
+    val compactionOptions: RequestOptions = chatOptions.copy(cachePrompt = false),
+)
 
-/** The log label of [conversation]'s model calls under these params, or `null` when they carry no cache key. */
-fun LLMParams.sessionLogLabel(conversation: String): String? =
-    when (val scoped = forConversation(conversation)) {
-        is OpenAIChatParams -> scoped.promptCacheKey
-        is OpenAIResponsesParams -> scoped.promptCacheKey
-        else -> null
-    }?.let(::codexSessionLabel)
-
-private fun String.scoped(conversation: String): String =
-    "$this-${conversation.hashCode().toUInt().toString(HEX_RADIX)}"
-
-// the effort only ever reaches the model through the request params, so read it back from there
-// instead of carrying the provider config around just to report it.
+/** The effort every chat call carries, as the request spells it, or `null` for the model's own default. */
 val LlmRuntime.reasoningEffort: String?
-    get() {
-        val extra = chatParams.additionalProperties ?: return null
+    get() = chatOptions.reasoningEffort?.requestValue
 
-        val effort =
-            when (chatParams) {
-                is OpenAIChatParams -> extra[COMPLETIONS_REASONING_EFFORT]
-                is OpenAIResponsesParams -> (extra[RESPONSES_REASONING] as? JsonObject)?.get(RESPONSES_REASONING_EFFORT)
-                is AnthropicParams -> (extra[ANTHROPIC_OUTPUT_CONFIG] as? JsonObject)?.get(ANTHROPIC_EFFORT)
-                else -> null
-            }
+/** The serving tier every chat call asks for, or `null` for the standard one. */
+val LlmRuntime.serviceTier: String?
+    get() = chatOptions.serviceTier
 
-        return (effort as? JsonPrimitive)?.contentOrNull
-    }
-
-// same as the effort above: the tier reaches the model through the request params and nowhere else.
-val LlmRuntime.serviceTier: ServiceTier?
-    get() = (chatParams as? OpenAIResponsesParams)?.serviceTier
-
-fun resolveLlmRuntime(config: LlmProviderConfig, codexAuth: CodexAuthStore? = null): LlmRuntime =
-    resolveProviderRuntime(config, codexAuth).let { it.copy(client = it.client.repeatingTransientFailures()) }
-
-private fun resolveProviderRuntime(config: LlmProviderConfig, codexAuth: CodexAuthStore?): LlmRuntime {
-    val timeoutConfig = connectionTimeouts(config.requestTimeout)
-
-    return when (config) {
-        is LlmProviderConfig.Hosted -> resolveHostedRuntime(config, timeoutConfig)
+/**
+ * Builds the runtime for [config]. [http] is for tests, which hand in a client over a mock engine; a
+ * deployment leaves it to the resolver, which gives a Codex runtime the client that signs its requests.
+ */
+fun resolveLlmRuntime(config: LlmProviderConfig, codexAuth: CodexAuthStore? = null, http: HttpClient? = null): LlmRuntime =
+    when (config) {
+        is LlmProviderConfig.OpenAi -> openAiRuntime(config, http ?: llmHttpClient(config.requestTimeout))
+        is LlmProviderConfig.Anthropic -> anthropicRuntime(config, http ?: llmHttpClient(config.requestTimeout))
+        is LlmProviderConfig.OpenAiCompatible -> compatibleRuntime(config, http ?: llmHttpClient(config.requestTimeout))
 
         is LlmProviderConfig.Codex ->
-            resolveCodexRuntime(
-                config = config,
-                timeoutConfig = timeoutConfig,
-                auth = requireNotNull(codexAuth) { "LLM_PROVIDER=codex needs a CodexAuthStore" },
-            )
-
-        is LlmProviderConfig.OpenAiCompatible ->
-            LlmRuntime(
-                providerLabel = "OpenAI-compatible (${config.baseUrl}, ${config.endpoint.name.lowercase()})",
-                client =
-                    openAiClient(
-                        apiKey = config.apiKey,
-                        settings = OpenAIClientSettings(config.baseUrl, timeoutConfig),
-                        explicitPromptCaching = config.openAiCacheKey(OPENAI_PROMPT_CACHE_KEY) != null,
-                    ),
-                model = openAiCompatibleModel(config),
-                chatParams = openAiCompatibleParams(config, config.openAiCacheKey(OPENAI_PROMPT_CACHE_KEY)),
-                compactionParams = openAiCompatibleParams(config, config.openAiCacheKey(OPENAI_COMPACTION_CACHE_KEY)),
+            codexRuntime(
+                config,
+                auth = requireNotNull(codexAuth) { "a codex provider needs a CodexAuthStore" },
+                http = http ?: llmHttpClient(config.requestTimeout, codexRequestPlugin(codexAuth, codexRoutingHint(config.model, config.serviceTier))),
             )
     }
+
+// responses is the one endpoint where tools work alongside reasoning, and every turn here carries tools;
+// a conversation gets a cache key of its own, and the gpt-5.6 generation its explicit breakpoints.
+private fun openAiRuntime(config: LlmProviderConfig.OpenAi, http: HttpClient): LlmRuntime {
+    val model =
+        LlmModel(
+            provider = LlmProvider.OPENAI,
+            id = config.model.trim(),
+            contextWindowTokens = config.contextWindowTokens ?: OPENAI_CONTEXT_WINDOW,
+            maxOutputTokens = OPENAI_MAX_OUTPUT,
+        )
+
+    val options = RequestOptions(reasoningEffort = config.reasoningEffort, promptCacheKey = PROMPT_CACHE_KEY)
+
+    return LlmRuntime(
+        providerLabel = "OpenAI",
+        client =
+            RetryingLlmClient(
+                OpenAiClient(
+                    http = http,
+                    baseUrl = OPENAI_API_BASE_URL + OPENAI_API_PATH,
+                    apiKey = config.apiKey,
+                    endpoint = OpenAiEndpoint.RESPONSES,
+                    statelessReasoning = true,
+                    explicitPromptCaching = true,
+                ),
+            ),
+        model = model,
+        chatOptions = options,
+        compactionOptions = options.copy(promptCacheKey = COMPACTION_CACHE_KEY, cachePrompt = false),
+    )
 }
 
-// the koog client picks the endpoint from the params type and refuses to send params whose endpoint the
-// model does not declare, so the two are resolved together.
-private fun openAiCompatibleModel(config: LlmProviderConfig.OpenAiCompatible): LLModel =
-    LLModel(
-        provider = LLMProvider.OpenAI,
-        id = config.model,
-        contextLength = config.contextWindowTokens,
-        capabilities =
-            buildList {
-                add(LLMCapability.Completion)
-                add(LLMCapability.Temperature)
-                add(LLMCapability.Schema.JSON.Standard)
-                add(LLMCapability.Tools)
-
-                when (config.endpoint) {
-                    OpenAiEndpoint.COMPLETIONS -> add(LLMCapability.OpenAIEndpoint.Completions)
-
-                    OpenAiEndpoint.RESPONSES -> {
-                        add(LLMCapability.OpenAIEndpoint.Responses)
-                        // without Thinking the client drops the reasoning items the model returns, so a
-                        // reasoning model would re-derive its thinking on every tool result.
-                        add(LLMCapability.Thinking)
-                    }
-                }
-            },
-    )
-
-// parallel tool calls stay off on both endpoints: third-party models garble the sibling calls of a batch,
-// and the agent executes tool calls sequentially anyway.
-private fun openAiCompatibleParams(config: LlmProviderConfig.OpenAiCompatible, promptCacheKey: String?): LLMParams =
-
-    when (config.endpoint) {
-        OpenAiEndpoint.COMPLETIONS ->
-            OpenAIChatParams(
-                additionalProperties = completionsReasoning(config.reasoningEffort),
-                parallelToolCalls = false,
-                promptCacheKey = promptCacheKey,
-            )
-
-        OpenAiEndpoint.RESPONSES ->
-            OpenAIResponsesParams(
-                additionalProperties = responsesReasoning(config.reasoningEffort),
-                parallelToolCalls = false,
-                promptCacheKey = promptCacheKey,
-            )
-    }
-
-// the codex backend speaks the Responses API, so the ordinary openai client drives it once the token
-// and the account header are resolved per request and the path drops the `v1` prefix the CLI does not
-// use. the api key is a placeholder: CodexHttpClientFactory replaces the Authorization header on every
-// call, and koog will not build a client without some non-blank value here.
-private fun resolveCodexRuntime(
-    config: LlmProviderConfig.Codex,
-    timeoutConfig: ConnectionTimeoutConfig,
-    auth: CodexAuthStore,
-): LlmRuntime =
-    LlmRuntime(
-        providerLabel = "ChatGPT subscription (Codex)",
-        client =
-            OpenAILLMClient(
-                apiKey = "codex-oauth",
-                settings =
-                    OpenAIClientSettings(
-                        baseUrl = CODEX_BACKEND_BASE_URL,
-                        timeoutConfig = timeoutConfig,
-                        responsesAPIPath = "responses",
-                    ),
-                httpClientFactory =
-                    LenientDecodingHttpClientFactory(
-                        codexHttpClientFactory(auth, codexRoutingHint(config.model, config.serviceTier)),
-                    ),
-            ),
-        model = codexModel(config),
-        chatParams = codexParams(config, OPENAI_PROMPT_CACHE_KEY),
-        compactionParams = codexParams(config, OPENAI_COMPACTION_CACHE_KEY),
-    )
-
-private fun codexModel(config: LlmProviderConfig.Codex): LLModel =
-    LLModel(
-        provider = LLMProvider.OpenAI,
-        id = config.model,
-        contextLength = config.contextWindowTokens,
-        capabilities =
-            buildList {
-                add(LLMCapability.Completion)
-                add(LLMCapability.Temperature)
-                add(LLMCapability.Schema.JSON.Standard)
-                add(LLMCapability.Tools)
-                if (config.supportsVision) add(LLMCapability.Vision.Image)
-                add(LLMCapability.OpenAIEndpoint.Responses)
-                // codex models are reasoning models, and without Thinking the client drops the reasoning
-                // items they echo back, so each tool result would re-derive the whole chain of thought.
-                add(LLMCapability.Thinking)
-            },
-    )
-
-private fun codexParams(config: LlmProviderConfig.Codex, promptCacheKey: String): LLMParams =
-    OpenAIResponsesParams(
-        additionalProperties =
-            (responsesReasoning(config.reasoningEffort).orEmpty() + responsesVerbosity(config.verbosity).orEmpty())
-                .takeIf { it.isNotEmpty() },
-        include = listOf(OpenAIInclude.REASONING_ENCRYPTED_CONTENT),
-        parallelToolCalls = false,
-        promptCacheKey = promptCacheKey,
-        serviceTier = config.serviceTier,
-    )
-
-// koog's typed effort fields hold only its own enum, which stops at `high`, so the effort rides in the
-// params' additional properties instead: koog merges those into the request body, and unlike the typed
-// fields they are not gated on `LLMCapability.Thinking`. the merge only fills a key koog left empty, so
-// setting its typed `reasoningEffort` or `reasoning` as well would drop this value without a word.
-private fun completionsReasoning(effort: ReasoningEffort?): Map<String, JsonElement>? =
-    effort?.let { mapOf(COMPLETIONS_REASONING_EFFORT to JsonPrimitive(it.requestValue)) }
-
-private fun responsesReasoning(effort: ReasoningEffort?): Map<String, JsonElement>? =
-    effort?.let { value ->
-        mapOf(RESPONSES_REASONING to buildJsonObject { put(RESPONSES_REASONING_EFFORT, value.requestValue) })
-    }
-
-// rides beside the effort for the same reason: koog has no field for it. a structured-output call sets
-// `text` itself and koog's merge keeps its own, which costs that one call the verbosity and nothing else.
-private fun responsesVerbosity(verbosity: String?): Map<String, JsonElement>? =
-    verbosity?.let { value ->
-        mapOf(RESPONSES_TEXT to buildJsonObject { put(RESPONSES_TEXT_VERBOSITY, value) })
-    }
-
-// koog's `AnthropicThinking` knows only `enabled` with a budget and `disabled`, and its `AnthropicOutputConfig`
-// only a format, so both ride in the additional properties like the OpenAI effort does, and koog merges
-// them into the request. a structured-output call sets `output_config` itself and koog's merge keeps its
-// own, which would cost that one call the effort; no call here asks for a schema.
-//
-// `adaptive` is what every model since 4.6 does when `thinking` is omitted, except 4.7 and 4.8, which
-// then do not think at all; naming it costs the others nothing. `block_binding` is what keeps a turn
-// alive on an account the api holds to its history-editing check: `loadTools` widens the tool list and
-// the wrap-up drops it under thinking blocks the same turn replays, which binds them to a prefix that
-// no longer exists, and `drop_block` has the api drop those blocks instead of refusing the request.
-private fun anthropicReasoning(model: LLModel, effort: ReasoningEffort?): Map<String, JsonElement>? {
-    if (!anthropicThinksAdaptively(model)) {
-        require(effort == null) {
-            "LLM_REASONING_EFFORT does not apply to ${model.id}: a Claude model from before adaptive thinking takes no effort"
-        }
-
-        return null
-    }
+private fun anthropicRuntime(config: LlmProviderConfig.Anthropic, http: HttpClient): LlmRuntime {
+    val id = config.model.trim()
+    val takesEffort = config.takesEffort ?: anthropicTakesEffort(id)
+    val effort = config.reasoningEffort
 
     require(effort == null || effort in ANTHROPIC_EFFORTS) {
         "LLM_REASONING_EFFORT=[${effort?.requestValue}] is not an effort Anthropic takes. Supported values: " +
                 ANTHROPIC_EFFORTS.joinToString { it.requestValue }
     }
-
-    return buildMap {
-        put(
-            ANTHROPIC_THINKING,
-            buildJsonObject {
-                put("type", "adaptive")
-                putJsonObject("block_binding") { put("prefix_mismatch_behavior", "drop_block") }
-            },
-        )
-        effort?.let { put(ANTHROPIC_OUTPUT_CONFIG, buildJsonObject { put(ANTHROPIC_EFFORT, it.requestValue) }) }
+    require(effort == null || takesEffort) {
+        "LLM_REASONING_EFFORT does not apply to $id: a Claude model from before adaptive thinking takes no effort"
     }
+
+    val model =
+        LlmModel(
+            provider = LlmProvider.ANTHROPIC,
+            id = id,
+            contextWindowTokens = config.contextWindowTokens ?: ANTHROPIC_CONTEXT_WINDOW,
+            maxOutputTokens = config.maxOutputTokens ?: ANTHROPIC_MAX_OUTPUT,
+            takesEffort = takesEffort,
+        )
+
+    return LlmRuntime(
+        providerLabel = "Anthropic",
+        client = RetryingLlmClient(AnthropicClient(http, config.apiKey)),
+        model = model,
+        chatOptions = RequestOptions(reasoningEffort = effort),
+    )
 }
 
 /**
- * Whether [model] is from the generation that thinks adaptively and takes an effort.
+ * Whether a Claude model thinks adaptively and takes an effort, when the vendor's list was not asked.
  *
- * Both arrived with Claude 4.6, the release that also stopped dating model ids: every model the API
- * still serves under a dated snapshot id (`claude-haiku-4-5-20251001`) refuses `adaptive` and `effort`
- * with a 400, and every undated one takes both (checked against `GET /v1/models` on 2026-10-08). The
- * id is the wire id, so a dated alias the catalog pins an undated name to counts as dated too.
+ * Both arrived with Claude 4.6, the release that also stopped dating model ids: every model the API still
+ * serves under a dated snapshot id (`claude-haiku-4-5-20251001`) refuses `adaptive` and `effort` with a
+ * 400, and every undated one takes both (checked against `GET /v1/models` on 2026-10-08).
  */
-internal fun anthropicThinksAdaptively(model: LLModel): Boolean = !DATED_ANTHROPIC_MODEL_ID.containsMatchIn(anthropicApiId(model))
+internal fun anthropicTakesEffort(modelId: String): Boolean = !DATED_ANTHROPIC_MODEL_ID.containsMatchIn(modelId)
 
 private val DATED_ANTHROPIC_MODEL_ID = Regex("""-\d{8}$""")
 
-private val ANTHROPIC_EFFORTS =
-    setOf(ReasoningEffort.LOW, ReasoningEffort.MEDIUM, ReasoningEffort.HIGH, ReasoningEffort.XHIGH, ReasoningEffort.MAX)
+// parallel tool calls stay off: third-party models garble the sibling calls of a batch, and the agent
+// executes tool calls sequentially anyway. the cache key is an openai extension, so it travels only to
+// openai itself and not to a server that may reject unknown fields; the same goes for `store` and the
+// encrypted reasoning the responses api hands back on request.
+private fun compatibleRuntime(config: LlmProviderConfig.OpenAiCompatible, http: HttpClient): LlmRuntime {
+    val baseUrl = config.baseUrl.trim().trimEnd('/')
+    val official = baseUrl.equals(OPENAI_API_BASE_URL, ignoreCase = true)
 
-// prompt_cache_key is an openai extension, so do not leak it to arbitrary compatible servers that may
-// reject unknown fields.
-private fun LlmProviderConfig.OpenAiCompatible.openAiCacheKey(key: String): String? =
-    key.takeIf { baseUrl.trim().trimEnd('/').equals(OPENAI_API_BASE_URL, ignoreCase = true) }
+    val model =
+        LlmModel(
+            provider = LlmProvider.OPENAI,
+            id = config.model.trim(),
+            contextWindowTokens = config.contextWindowTokens ?: ContextWindowPolicy.DEFAULT_CONTEXT_WINDOW_TOKENS,
+            seesImages = false,
+        )
 
-// both request and socket timeouts default to 900 s in the koog client; cap them so a stalled LLM
-// call fails fast and the agent can deliver an error reply instead of leaving the bot silent.
-internal fun connectionTimeouts(requestTimeout: Duration): ConnectionTimeoutConfig =
-    ConnectionTimeoutConfig(
-        requestTimeoutMillis = requestTimeout.inWholeMilliseconds,
-        socketTimeoutMillis = requestTimeout.inWholeMilliseconds,
-    )
+    val options =
+        RequestOptions(
+            reasoningEffort = config.reasoningEffort,
+            parallelToolCalls = false,
+            promptCacheKey = PROMPT_CACHE_KEY.takeIf { official },
+        )
 
-// the catalog carries models that speak only one of the two OpenAI endpoints — every `codex` and `pro`
-// entry is Responses-only — and params of the wrong kind make the client refuse the model on its first
-// call rather than at startup, so a deployment looks configured and then answers nothing. Koog picks the
-// endpoint itself when handed plain LLMParams, but the prompt cache key rides on the endpoint-specific
-// params, so the choice is made here. Completions stays the default wherever a model speaks both.
-internal fun openAiHostedParams(model: LLModel, promptCacheKey: String, effort: ReasoningEffort? = null): LLMParams =
-    if (model.supports(LLMCapability.OpenAIEndpoint.Completions))
-        OpenAIChatParams(promptCacheKey = promptCacheKey, additionalProperties = completionsReasoning(effort))
-    else
-        OpenAIResponsesParams(promptCacheKey = promptCacheKey, additionalProperties = responsesReasoning(effort))
-
-private fun resolveHostedRuntime(config: LlmProviderConfig.Hosted, timeoutConfig: ConnectionTimeoutConfig): LlmRuntime =
-
-    when (config.provider) {
-        HostedLlmProvider.OPENAI -> {
-            val model =
-                openAiModel(config.model)
-                    .forReasoningEffort(config.reasoningEffort)
-                    .withContextOverride(config.contextWindowTokens)
-
-            LlmRuntime(
-                providerLabel = "OpenAI",
-                client =
-                    openAiClient(
-                        apiKey = config.apiKey,
-                        settings = OpenAIClientSettings(timeoutConfig = timeoutConfig),
-                        explicitPromptCaching = true,
-                    ),
-                model = model,
-                chatParams = openAiHostedParams(model, OPENAI_PROMPT_CACHE_KEY, config.reasoningEffort),
-                compactionParams = openAiHostedParams(model, OPENAI_COMPACTION_CACHE_KEY, config.reasoningEffort),
-            )
-        }
-
-        HostedLlmProvider.ANTHROPIC -> {
-            val model = anthropicModel(config.model).withContextOverride(config.contextWindowTokens)
-            // the API requires max_tokens, and koog sends 2048 when it is unset, which a model that thinks
-            // before every answer can spend before the answer starts. the ceiling costs nothing: output is
-            // billed and rate-limited on what is generated, not on what was allowed.
-            val maxTokens = model.maxOutputTokens?.toInt()
-            val reasoning = anthropicReasoning(model, config.reasoningEffort)
-
-            LlmRuntime(
-                providerLabel = "Anthropic",
-                client =
-                    AnthropicLLMClient(
-                        apiKey = config.apiKey,
-                        settings = anthropicClientSettings(model, timeoutConfig),
-                        httpClientFactory = AnthropicHttpClientFactory(HttpClientFactoryResolver.resolve()),
-                    ),
-                model = model,
-                // Anthropic caches nothing on its own: without a control every step of a turn re-reads the
-                // whole prompt at full price. The request-level one lets the API place the breakpoint on the
-                // last cacheable block, which is what an agent loop wants — each iteration appends and reads
-                // back everything before it; the transport adds a second one on the system block, which is
-                // what the next turn still reads. The recap keeps none: its body never repeats, so the write
-                // would buy a read nobody makes.
-                chatParams =
-                    AnthropicParams(
-                        maxTokens = maxTokens,
-                        cacheControl = AnthropicCacheControl.Default,
-                        additionalProperties = reasoning,
-                    ),
-                compactionParams = AnthropicParams(maxTokens = maxTokens, additionalProperties = reasoning),
-            )
-        }
-
-        HostedLlmProvider.GOOGLE ->
-            LlmRuntime(
-                providerLabel = "Google",
-                client = GoogleLLMClient(config.apiKey, GoogleClientSettings(timeoutConfig = timeoutConfig)),
-                model = resolveModel(GoogleModels, "Google", config.model).withContextOverride(config.contextWindowTokens),
-                chatParams = GoogleParams(),
-            )
-
-        HostedLlmProvider.DEEPSEEK ->
-            LlmRuntime(
-                providerLabel = "DeepSeek",
-                client = DeepSeekLLMClient(config.apiKey, DeepSeekClientSettings(timeoutConfig = timeoutConfig)),
-                model = resolveModel(DeepSeekModels, "DeepSeek", config.model).withContextOverride(config.contextWindowTokens),
-                chatParams = DeepSeekParams(),
-            )
-    }
-
-private fun openAiClient(
-    apiKey: String,
-    settings: OpenAIClientSettings,
-    explicitPromptCaching: Boolean,
-): OpenAILLMClient {
-    val transport = HttpClientFactoryResolver.resolve()
-
-    return OpenAILLMClient(
-        apiKey = apiKey,
-        settings = settings,
-        httpClientFactory =
-            LenientDecodingHttpClientFactory(
-                if (explicitPromptCaching) OpenAiPromptCachingHttpClientFactory(transport) else transport,
+    return LlmRuntime(
+        providerLabel = "OpenAI-compatible ($baseUrl, ${config.endpoint.name.lowercase()})",
+        client =
+            RetryingLlmClient(
+                OpenAiClient(
+                    http = http,
+                    baseUrl = baseUrl + OPENAI_API_PATH,
+                    apiKey = config.apiKey,
+                    endpoint = config.endpoint,
+                    statelessReasoning = official,
+                    explicitPromptCaching = official,
+                    label = "OpenAI-compatible",
+                ),
             ),
+        model = model,
+        chatOptions = options,
+        compactionOptions = options.copy(promptCacheKey = COMPACTION_CACHE_KEY.takeIf { official }, cachePrompt = false),
     )
 }
 
-private val openAiModelsByKey: Map<String, LLModel> by lazy {
-    OpenAIModels.Chat::class.memberProperties
-        .asSequence()
-        .filter { it.returnType.classifier == LLModel::class }
-        .mapNotNull { it.javaField?.get(OpenAIModels.Chat) as? LLModel }
-        .associateBy { it.id.lowercase() }
-}
+// the codex backend speaks the responses api, streaming only, without an api key: the http client stamps a
+// currently valid chatgpt token on every request. the catalog's context window and vision verdict arrive
+// in the config, filled in by the preflight.
+private fun codexRuntime(config: LlmProviderConfig.Codex, auth: CodexAuthStore, http: HttpClient): LlmRuntime {
+    val model =
+        LlmModel(
+            provider = LlmProvider.OPENAI,
+            id = config.model.trim(),
+            contextWindowTokens = config.contextWindowTokens ?: ContextWindowPolicy.DEFAULT_CONTEXT_WINDOW_TOKENS,
+            seesImages = config.supportsVision,
+        )
 
-/** The catalog's entry for [rawValue], or `null` when koog has not heard of the model. */
-internal fun cataloguedOpenAiModel(rawValue: String): LLModel? = openAiModelsByKey[normalizeModelKey(rawValue)]
+    val options =
+        RequestOptions(
+            reasoningEffort = config.reasoningEffort,
+            verbosity = config.verbosity,
+            serviceTier = config.serviceTier?.requestValue,
+            parallelToolCalls = false,
+            promptCacheKey = PROMPT_CACHE_KEY,
+        )
 
-/**
- * The OpenAI model to run, from the catalog when it is there and declared here when it is not.
- *
- * Koog's catalog trails OpenAI's releases, and a model it has not heard of is not a model that does
- * not exist: every chat model OpenAI has shipped for a long while reasons, sees images, calls tools and
- * speaks the Responses API, which is the one endpoint where tools work for it. So a newer id is given
- * exactly that shape, the way `openai-compatible` declares its models, and startup asks OpenAI whether
- * the id exists rather than the catalog. The context window is the last catalogued generation's, since
- * OpenAI's model list does not report one; `LLM_CONTEXT_WINDOW_TOKENS` overrides it.
- */
-internal fun openAiModel(rawValue: String): LLModel =
-    cataloguedOpenAiModel(rawValue) ?: uncataloguedOpenAiModel(rawValue.trim())
-
-private fun uncataloguedOpenAiModel(id: String): LLModel =
-    LLModel(
-        provider = LLMProvider.OpenAI,
-        id = id,
-        contextLength = UNCATALOGUED_OPENAI_CONTEXT_WINDOW,
-        maxOutputTokens = UNCATALOGUED_OPENAI_MAX_OUTPUT,
-        capabilities =
-            listOf(
-                LLMCapability.Completion,
-                LLMCapability.Temperature,
-                LLMCapability.Schema.JSON.Standard,
-                LLMCapability.Tools,
-                LLMCapability.Vision.Image,
-                LLMCapability.OpenAIEndpoint.Responses,
-                LLMCapability.Thinking,
+    return LlmRuntime(
+        providerLabel = "ChatGPT subscription (Codex)",
+        client =
+            RetryingLlmClient(
+                OpenAiClient(
+                    http = http,
+                    baseUrl = CODEX_BACKEND_BASE_URL,
+                    apiKey = null,
+                    endpoint = OpenAiEndpoint.RESPONSES,
+                    streamed = true,
+                    statelessReasoning = true,
+                    label = "Codex",
+                    onResponse = codexCallObserver(auth.limits),
+                ),
             ),
+        model = model,
+        chatOptions = options,
+        compactionOptions = options.copy(promptCacheKey = COMPACTION_CACHE_KEY, cachePrompt = false),
     )
-
-// the catalog pins older models to dated snapshots, so an id is recognised by either name.
-private val anthropicApiIds: Map<LLModel, String> by lazy { AnthropicClientSettings().modelVersionsMap }
-
-/** The catalog's entry for [rawValue], by its alias or its dated id, or `null` when koog has not heard of the model. */
-internal fun cataloguedAnthropicModel(rawValue: String): LLModel? {
-    val key = normalizeModelKey(rawValue)
-
-    return AnthropicModels.models.firstOrNull { model ->
-        normalizeModelKey(model.id) == key || anthropicApiIds[model]?.let(::normalizeModelKey) == key
-    }
-}
-
-/**
- * The Claude model to run, from the catalog when it is there and declared here when it is not.
- *
- * The same reasoning as [openAiModel]: koog's catalog trails Anthropic's releases, and every model
- * since Opus 4.7 has the same shape — tools, images, documents, thinking, prompt caching, a 1M window
- * and 128K of output — so a newer id is given that shape, and startup asks Anthropic whether it exists.
- * It declares no `Temperature`: sampling parameters are refused outright from Opus 4.7 on.
- */
-internal fun anthropicModel(rawValue: String): LLModel =
-    cataloguedAnthropicModel(rawValue) ?: uncataloguedAnthropicModel(rawValue.trim())
-
-private fun uncataloguedAnthropicModel(id: String): LLModel =
-    LLModel(
-        provider = LLMProvider.Anthropic,
-        id = id,
-        contextLength = UNCATALOGUED_ANTHROPIC_CONTEXT_WINDOW,
-        maxOutputTokens = UNCATALOGUED_ANTHROPIC_MAX_OUTPUT,
-        capabilities =
-            listOf(
-                LLMCapability.Completion,
-                LLMCapability.Schema.JSON.Basic,
-                LLMCapability.Schema.JSON.Standard,
-                LLMCapability.Tools,
-                LLMCapability.Vision.Image,
-                LLMCapability.Document,
-                // the thinking blocks a turn produces are replayed with it, and koog refuses to replay them
-                // for a model that does not declare it.
-                LLMCapability.Thinking,
-                LLMCapability.PromptCaching,
-            ),
-    )
-
-/**
- * Settings for a client that sends [model] and nothing else.
- *
- * Koog finds the id it puts on the wire by looking the whole model up in `modelVersionsMap`, so the
- * default map fails a model the catalog lacks, and also a catalogued one whose context window was
- * overridden, since that makes it a different model. The entry is therefore the model exactly as the
- * runtime passes it, under the id the catalog pins it to or its own.
- */
-internal fun anthropicClientSettings(model: LLModel, timeoutConfig: ConnectionTimeoutConfig): AnthropicClientSettings =
-    AnthropicClientSettings(modelVersionsMap = mapOf(model to anthropicApiId(model)), timeoutConfig = timeoutConfig)
-
-/** The id the API knows [model] by: the dated snapshot the catalog pins it to, or its own. */
-private fun anthropicApiId(model: LLModel): String =
-    anthropicApiIds.entries.firstOrNull { it.key.id == model.id }?.value ?: model.id
-
-internal fun resolveModel(definitions: LLModelDefinitions, providerLabel: String, rawValue: String): LLModel {
-    val key = normalizeModelKey(rawValue)
-
-    return requireNotNull(definitions.models.firstOrNull { normalizeModelKey(it.id) == key }) {
-        "Unsupported $providerLabel model '$rawValue'. Supported values: " +
-                definitions.models.map { it.id }.sorted().joinToString()
-    }
-}
-
-private fun normalizeModelKey(value: String): String =
-    value
-        .trim()
-        .lowercase()
-        .replace('_', '-')
-
-private fun LLModel.withContextOverride(contextWindowTokens: Long?): LLModel =
-    contextWindowTokens?.let { copy(contextLength = it) } ?: this
-
-/**
- * The same model as it has to be described once an effort is asked of it.
- *
- * OpenAI refuses function tools alongside a `reasoning_effort` on `/v1/chat/completions` — *"To use
- * function tools, use /v1/responses or set reasoning_effort to 'none'"* — and every turn here carries
- * tools, so a configured effort is what moves a model that speaks both endpoints onto responses. The
- * capability goes with it rather than the params alone, because the two are one decision:
- * [openAiHostedParams] reads the endpoint back off the model. `Thinking` comes along because responses
- * echoes reasoning items, and koog drops them without it, leaving every tool result to re-derive the
- * whole chain. A model that speaks only completions is left where it is: there is no endpoint to move
- * it to, and koog would refuse params its model does not declare.
- *
- * No effort at all is the model's own default, and that is an effort too: gpt-5.6 refuses tools on
- * completions with nothing configured, so a reasoning model moves unless it is told `none`.
- */
-private fun LLModel.forReasoningEffort(effort: ReasoningEffort?): LLModel {
-    val reasons = if (effort == null) supports(LLMCapability.Thinking) else effort != ReasoningEffort.NONE
-    val moves = reasons && supports(LLMCapability.OpenAIEndpoint.Responses)
-    if (!moves) return this
-
-    return copy(capabilities = (capabilities.orEmpty() - LLMCapability.OpenAIEndpoint.Completions + LLMCapability.Thinking).distinct())
 }

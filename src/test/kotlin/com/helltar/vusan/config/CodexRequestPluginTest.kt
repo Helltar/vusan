@@ -1,13 +1,11 @@
 package com.helltar.vusan.config
 
-import ai.koog.http.client.ktor.KtorKoogHttpClient
 import com.helltar.vusan.infra.Http
 import io.ktor.client.*
 import io.ktor.client.engine.mock.*
+import io.ktor.client.request.*
 import io.ktor.http.*
-import kotlinx.coroutines.flow.toList
 import kotlinx.coroutines.runBlocking
-import kotlinx.serialization.json.Json
 import java.nio.file.Files
 import java.nio.file.Path
 import java.time.Instant
@@ -17,6 +15,7 @@ import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertNotEquals
 import kotlin.test.assertNull
+import kotlin.test.assertTrue
 
 class CodexRequestPluginTest {
 
@@ -45,39 +44,36 @@ class CodexRequestPluginTest {
         assertNull(sentHeaders("not json")["session-id"])
     }
 
-    // goes through koog's own ktor client, the way a model call does, so the body reaches the plugin in
-    // the shape it has in production.
+    @Test
+    fun `every request carries the token, the account and the whitelisted originator`() = runBlocking {
+        val headers = sentHeaders("""{"model":"m"}""")
+
+        assertTrue(headers["Authorization"].orEmpty().startsWith("Bearer header."))
+        assertEquals("acct-1", headers["ChatGPT-Account-ID"])
+        assertEquals(CODEX_ORIGINATOR, headers["originator"])
+        assertEquals("model=m", headers["x-codex-routing-hint"])
+        assertTrue(headers["User-Agent"].orEmpty().startsWith("$CODEX_ORIGINATOR/"))
+    }
+
+    // through a ktor client the way a model call goes, with the body as a string, which is what the
+    // plugin reads the cache key out of.
     private suspend fun sentHeaders(body: String): Headers {
         var sent: Headers? = null
 
         val engine =
             MockEngine { request ->
                 sent = request.headers
-                respond("data: [DONE]\n\n", headers = headersOf(HttpHeaders.ContentType, "text/event-stream"))
+                respond("{}", headers = headersOf(HttpHeaders.ContentType, ContentType.Application.Json.toString()))
             }
 
         val auth = CodexAuthStore(Http.createClient(MockEngine { error("no refresh expected") }), signedInAuthFile())
 
-        KtorKoogHttpClient.Factory(baseClient = HttpClient(engine) { install(codexRequestPlugin(auth, "model=m")) })
-            .create(
-                clientName = "codex",
-                baseUrl = "https://codex.example.test",
-                headers = emptyMap(),
-                queryParameters = emptyMap(),
-                requestTimeoutMillis = 5_000,
-                connectTimeoutMillis = 5_000,
-                socketTimeoutMillis = 5_000,
-                json = Json,
-            )
-            .use { client ->
-                client.lines(
-                    path = "responses",
-                    requestBody = body,
-                    requestBodyType = String::class,
-                    parameters = emptyMap(),
-                    headers = emptyMap(),
-                ).toList()
+        HttpClient(engine) { install(codexRequestPlugin(auth, "model=m")) }.use { client ->
+            client.post("https://codex.example.test/responses") {
+                contentType(ContentType.Application.Json)
+                setBody(body)
             }
+        }
 
         return checkNotNull(sent)
     }

@@ -1,7 +1,7 @@
 package com.helltar.vusan.telegram
 
 import com.helltar.vusan.agent.AgentRequest
-import com.helltar.vusan.agent.FallbackInUse
+import com.helltar.vusan.llm.FallbackInUse
 import com.helltar.vusan.agent.ToolActivity
 import com.helltar.vusan.common.rethrowIfCancellation
 import com.helltar.vusan.i18n.Messages

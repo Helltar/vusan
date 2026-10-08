@@ -1,9 +1,10 @@
 package com.helltar.vusan.agent.conversation
 
-import ai.koog.prompt.dsl.prompt
-import ai.koog.prompt.executor.model.PromptExecutor
-import ai.koog.prompt.llm.LLModel
-import ai.koog.prompt.params.LLMParams
+import com.helltar.vusan.llm.ChatRequest
+import com.helltar.vusan.llm.LlmClient
+import com.helltar.vusan.llm.LlmModel
+import com.helltar.vusan.llm.Message
+import com.helltar.vusan.llm.RequestOptions
 import com.helltar.vusan.agent.ContextWindowPolicy
 import com.helltar.vusan.agent.estimateTokens
 import com.helltar.vusan.common.collapseWhitespaceAndCap
@@ -31,9 +32,9 @@ interface ConversationCompactor {
 }
 
 class LlmConversationCompactor(
-    private val promptExecutor: PromptExecutor,
-    private val model: LLModel,
-    private val chatParams: LLMParams = LLMParams(),
+    private val client: LlmClient,
+    private val model: LlmModel,
+    private val options: RequestOptions = RequestOptions(),
     private val contextWindowPolicy: ContextWindowPolicy = ContextWindowPolicy(model),
 ) : ConversationCompactor {
 
@@ -53,21 +54,17 @@ class LlmConversationCompactor(
                 add(xmlBlock("conversation_events", source))
             }.joinToString("\n\n")
 
-        val response =
-            promptExecutor.execute(
-                prompt(id = "vusan-history-compaction", params = chatParams) {
-                    system(COMPACTION_SYSTEM_PROMPT)
-                    user(request)
-                },
+        val reply =
+            client.complete(
                 model,
+                ChatRequest(listOf(Message.System(COMPACTION_SYSTEM_PROMPT), Message.User(request)), options = options),
             )
 
-        val summary = response.textContent().trim().limitTo(MAX_SUMMARY_CHARS).takeIf { it.isNotBlank() } ?: return null
-        val meta = response.metaInfo
+        val summary = reply.message.text.trim().limitTo(MAX_SUMMARY_CHARS).takeIf { it.isNotBlank() } ?: return null
 
         log.info {
             "history recap generated: interactions=${batch.size} chars=${summary.length} " +
-                    "inputTokens=${meta.inputTokensCount ?: "n/a"} outputTokens=${meta.outputTokensCount ?: "n/a"}"
+                    "inputTokens=${reply.usage?.inputTokens ?: "n/a"} outputTokens=${reply.usage?.outputTokens ?: "n/a"}"
         }
 
         return CompactedConversation(

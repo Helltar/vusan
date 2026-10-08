@@ -3,8 +3,8 @@ package com.helltar.vusan.tools.codexsearch
 import com.helltar.vusan.config.CODEX_BACKEND_BASE_URL
 import com.helltar.vusan.config.CodexAuthStore
 import com.helltar.vusan.config.codexRequestHeaders
-import com.helltar.vusan.config.collectStreamedResponse
 import com.helltar.vusan.config.countUsage
+import com.helltar.vusan.llm.openai.collectStreamedResponse
 import io.ktor.client.*
 import io.ktor.client.plugins.*
 import io.ktor.client.request.*
@@ -61,7 +61,7 @@ class CodexSearchClient(
 
         auth.limits.observe { response.headers[it] }
 
-        val completed = collectStreamedResponse(response.bodyAsText().lines(), json, CLIENT_NAME)
+        val completed = collectStreamedResponse(response.bodyAsText().lines(), CLIENT_NAME)
         countUsage(completed, auth.limits)
 
         val output = (completed["output"] as? JsonArray).orEmpty().filterIsInstance<JsonObject>()

@@ -1,8 +1,8 @@
 package com.helltar.vusan.tools.grouplog
 
-import ai.koog.agents.core.tools.annotations.LLMDescription
-import ai.koog.agents.core.tools.annotations.Tool
-import ai.koog.agents.core.tools.reflect.ToolSet
+import com.helltar.vusan.tools.LLMDescription
+import com.helltar.vusan.tools.Tool
+import com.helltar.vusan.tools.ToolSet
 import com.helltar.vusan.agent.grouplog.GroupLogReader
 import com.helltar.vusan.agent.grouplog.GroupLogRepository
 import com.helltar.vusan.request.RequestContext

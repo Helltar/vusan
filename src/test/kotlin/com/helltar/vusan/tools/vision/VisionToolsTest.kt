@@ -1,5 +1,7 @@
 package com.helltar.vusan.tools.vision
 
+import com.helltar.vusan.llm.FakeLlmClient
+import com.helltar.vusan.llm.TEST_MODEL
 import com.helltar.vusan.request.AttachedFile
 import com.helltar.vusan.request.AttachedFileKind
 import kotlinx.coroutines.runBlocking
@@ -13,7 +15,7 @@ class VisionToolsTest {
 
     @Test
     fun `describeImage returns no-image message when no image is attached`() = runBlocking {
-        val executor = FakePromptExecutor()
+        val executor = FakeLlmClient()
         val tools = visionTools(executor, attachedFile = null)
 
         val result = tools.describeImage("text")
@@ -29,7 +31,7 @@ class VisionToolsTest {
             loaded = true
             byteArrayOf(1)
         }
-        val executor = FakePromptExecutor()
+        val executor = FakeLlmClient()
         val tools = visionTools(executor, file)
 
         val result = tools.describeImage("")
@@ -46,7 +48,7 @@ class VisionToolsTest {
             loaded = true
             byteArrayOf(1)
         }
-        val executor = FakePromptExecutor()
+        val executor = FakeLlmClient()
         val tools = visionTools(executor, file)
 
         val result = tools.describeImage("objects")
@@ -59,7 +61,7 @@ class VisionToolsTest {
     @Test
     fun `describeImage runs the vision prompt with the focus and returns its text`() = runBlocking {
         val file = attachedFile { byteArrayOf(1, 2, 3) }
-        val executor = FakePromptExecutor(response = "A cat on a chair.")
+        val executor = FakeLlmClient(response = "A cat on a chair.")
         val tools = visionTools(executor, file)
 
         val result = tools.describeImage("visible text")
@@ -71,7 +73,7 @@ class VisionToolsTest {
 
     @Test
     fun `describeVideo returns no-video message when nothing is attached`() = runBlocking {
-        val executor = FakePromptExecutor()
+        val executor = FakeLlmClient()
         val tools = visionTools(executor, attachedFile = null)
 
         val result = tools.describeVideo("what happens")
@@ -82,7 +84,7 @@ class VisionToolsTest {
 
     @Test
     fun `describeVideo points an image attachment at describeImage`() = runBlocking {
-        val executor = FakePromptExecutor()
+        val executor = FakeLlmClient()
         val tools = visionTools(executor, attachedFile { byteArrayOf(1) })
 
         val result = tools.describeVideo("")
@@ -94,7 +96,7 @@ class VisionToolsTest {
 
     @Test
     fun `describeVideo describes sampled frames and appends the transcript`() = runBlocking {
-        val executor = FakePromptExecutor(response = "A dog jumps into a pool.")
+        val executor = FakeLlmClient(response = "A dog jumps into a pool.")
         val sampler = FakeVideoSampler(frames = listOf(byteArrayOf(1), byteArrayOf(2), byteArrayOf(3)))
 
         val tools =
@@ -118,7 +120,7 @@ class VisionToolsTest {
 
     @Test
     fun `describeVideo says the sound is unavailable when transcription is off`() = runBlocking {
-        val executor = FakePromptExecutor()
+        val executor = FakeLlmClient()
         val tools = visionTools(executor, videoAttachment(), transcriber = null)
 
         val result = tools.describeVideo("")
@@ -130,7 +132,7 @@ class VisionToolsTest {
     // a telegram gif carries no audio stream, so extraction there can only ever fail.
     @Test
     fun `describeVideo skips the audio pass for a gif`() = runBlocking {
-        val executor = FakePromptExecutor()
+        val executor = FakeLlmClient()
         val sampler = FakeVideoSampler()
 
         val tools =
@@ -149,7 +151,7 @@ class VisionToolsTest {
 
     @Test
     fun `describeVideo keeps going when the audio cannot be transcribed`() = runBlocking {
-        val executor = FakePromptExecutor()
+        val executor = FakeLlmClient()
         val tools = visionTools(executor, videoAttachment(), transcriber = { _, _ -> null })
 
         val result = tools.describeVideo("")
@@ -160,7 +162,7 @@ class VisionToolsTest {
 
     @Test
     fun `describeVideo samples at a fixed interval when the duration is unknown`() = runBlocking {
-        val executor = FakePromptExecutor()
+        val executor = FakeLlmClient()
         val sampler = FakeVideoSampler(frames = listOf(byteArrayOf(1), byteArrayOf(2)))
         val tools = visionTools(executor, videoAttachment(durationSeconds = null), sampler)
 
@@ -172,7 +174,7 @@ class VisionToolsTest {
 
     @Test
     fun `describeVideo reports a video ffmpeg could not read`() = runBlocking {
-        val executor = FakePromptExecutor()
+        val executor = FakeLlmClient()
         val tools = visionTools(executor, videoAttachment(), sampler = FakeVideoSampler(frames = emptyList()))
 
         val result = tools.describeVideo("")
@@ -184,7 +186,7 @@ class VisionToolsTest {
     @Test
     fun `describeVideo falls back to the preview frame of an oversize video`() = runBlocking {
         var videoLoaded = false
-        val executor = FakePromptExecutor(response = "A blurry street at night.")
+        val executor = FakeLlmClient(response = "A blurry street at night.")
         val sampler = FakeVideoSampler(frames = listOf(byteArrayOf(1)))
 
         val video =
@@ -208,7 +210,7 @@ class VisionToolsTest {
 
     @Test
     fun `describeVideo explains an oversize video with no preview frame`() = runBlocking {
-        val executor = FakePromptExecutor()
+        val executor = FakeLlmClient()
         val video = videoAttachment(fileSizeBytes = (25 * 1024 * 1024).toLong())
 
         val result = visionTools(executor, video).describeVideo("")
@@ -219,7 +221,7 @@ class VisionToolsTest {
 
     @Test
     fun `describeVideo falls back to the preview frame when the download fails`() = runBlocking {
-        val executor = FakePromptExecutor()
+        val executor = FakeLlmClient()
 
         val video =
             videoAttachment(
@@ -234,7 +236,7 @@ class VisionToolsTest {
     }
 
     private fun visionTools(
-        executor: FakePromptExecutor,
+        executor: FakeLlmClient,
         attachedFile: AttachedFile?,
         sampler: VideoSampler = FakeVideoSampler(),
         transcriber: VideoAudioTranscriber? = null,

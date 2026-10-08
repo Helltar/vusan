@@ -1,13 +1,11 @@
 package com.helltar.vusan.agent
 
-import ai.koog.prompt.Prompt
-import ai.koog.prompt.message.AttachmentContent
-import ai.koog.prompt.message.AttachmentSource
-import ai.koog.prompt.message.Message
-import ai.koog.prompt.message.MessagePart
-import ai.koog.prompt.message.RequestMetaInfo
-import ai.koog.prompt.message.ResponseMetaInfo
-import ai.koog.utils.time.KoogClock
+import com.helltar.vusan.llm.LlmProvider
+import com.helltar.vusan.llm.Message
+import com.helltar.vusan.llm.Part
+import com.helltar.vusan.llm.ToolResult
+import kotlinx.serialization.json.buildJsonObject
+import kotlinx.serialization.json.put
 import kotlin.test.Test
 import kotlin.test.assertContains
 import kotlin.test.assertFalse
@@ -15,21 +13,15 @@ import kotlin.test.assertTrue
 
 class PromptDumpTest {
 
-    private val requestMeta = RequestMetaInfo.create(KoogClock.System)
-    private val responseMeta = ResponseMetaInfo.create(KoogClock.System)
-
-    private fun promptOf(vararg messages: Message) =
-        Prompt(messages = messages.toList(), id = "dump-test")
-
     @Test
     fun `every message is dumped in order with its role`() {
         val dump =
             renderPromptDump(
-                prompt =
-                    promptOf(
-                        Message.System("you are a parrot", requestMeta),
-                        Message.User("<sticker_catalog>#7 a waving cat</sticker_catalog>\n\nsend one", requestMeta),
-                        Message.Assistant("here it is", responseMeta),
+                messages =
+                    listOf(
+                        Message.System("you are a parrot"),
+                        Message.User("<sticker_catalog>#7 a waving cat</sticker_catalog>\n\nsend one"),
+                        Message.Assistant("here it is"),
                     ),
                 model = "test-model",
                 tools = listOf("searchStickers", "sendSticker"),
@@ -45,16 +37,12 @@ class PromptDumpTest {
 
     @Test
     fun `tool calls and their results keep name, id and output`() {
-        val call = MessagePart.Tool.Call(id = "c1", tool = "searchStickers", args = """{"query":"cat"}""")
-        val result = MessagePart.Tool.Result(id = "c1", tool = "searchStickers", output = "#7 a waving cat")
+        val call = Part.ToolCall(id = "c1", name = "searchStickers", arguments = buildJsonObject { put("query", "cat") })
+        val result = ToolResult(callId = "c1", name = "searchStickers", output = "#7 a waving cat")
 
         val dump =
             renderPromptDump(
-                prompt =
-                    promptOf(
-                        Message.Assistant(parts = listOf(call), metaInfo = responseMeta),
-                        Message.User(parts = listOf(result), metaInfo = requestMeta),
-                    ),
+                messages = listOf(Message.Assistant(listOf(call)), Message.ToolResults(listOf(result))),
                 model = "test-model",
                 tools = emptyList(),
             )
@@ -64,26 +52,21 @@ class PromptDumpTest {
         assertContains(dump, "#7 a waving cat")
     }
 
+    // an image is megabytes of base64 and a reasoning block is the provider's; neither belongs in a log
     @Test
-    fun `binary attachments are reduced to their size`() {
-        val attachment =
-            MessagePart.Attachment(
-                AttachmentSource.Image(
-                    content = AttachmentContent.Binary.Bytes(ByteArray(64) { 7 }),
-                    format = "png",
-                    mimeType = "image/png",
-                    fileName = "frame.png",
-                ),
-            )
+    fun `images are reduced to their size and reasoning to its presence`() {
+        val image = Part.Image(ByteArray(64) { 7 }, "image/png", "frame.png")
+        val reasoning = Part.Reasoning(LlmProvider.OPENAI, buildJsonObject { put("encrypted_content", "x".repeat(200)) })
 
         val dump =
             renderPromptDump(
-                prompt = promptOf(Message.User(parts = listOf(attachment), metaInfo = requestMeta)),
+                messages = listOf(Message.User(listOf(image)), Message.Assistant(listOf(reasoning, Part.Text("done")))),
                 model = "test-model",
                 tools = emptyList(),
             )
 
-        assertContains(dump, "[attachment image/png name=frame.png] 64 bytes")
+        assertContains(dump, "[image image/png name=frame.png] 64 bytes")
+        assertContains(dump, "[reasoning openai]")
         assertFalse(dump.contains(Regex("[A-Za-z0-9+/]{40,}")))
     }
 }

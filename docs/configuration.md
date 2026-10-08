@@ -12,7 +12,7 @@ than tidiness: it runs commands the model writes and holds a Docker socket to do
 publishes faces the internet, so it is never handed the bot's secrets.
 
 **How values are read.** Booleans take `true` or `false` in any case and nothing else. A value that
-is set but unreadable — `AGENT_MAX_ITERATIONS=7O`, `GROUP_LOG_ENABLED=off`, a zero timeout, an ID
+is set but unreadable — `AGENT_MAX_MODEL_CALLS=7O`, `GROUP_LOG_ENABLED=off`, a zero timeout, an ID
 that is not a number — stops startup with a message naming the variable and what it was given,
 rather than falling back to the default: writing the variable down at all says the default was not
 wanted.
@@ -69,19 +69,17 @@ banned, and startup says so in the log.
 |---------------------|-------------------------------------|
 | `openai`            | `gpt-5.6-sol`                       |
 | `anthropic`         | `claude-opus-5-5`                   |
-| `google`            | `gemini-2.5-flash`                  |
-| `deepseek`          | `deepseek-v4-pro`                   |
 | `openai-compatible` | any model id the server understands |
 | `codex`             | any model the ChatGPT plan offers   |
 
-- **The four native providers** — each talks to its vendor's own API. `google` and `deepseek`
-  accept only model ids their built-in catalog knows, and an unrecognized id fails at startup
-  listing the supported ones. `openai` and `anthropic` take any id: one the catalog knows comes with
-  its metadata, a newer one is assumed to be what the vendor's current models are — a reasoning
-  model that sees images and calls tools — and is checked against the vendor's own model list at
-  startup, so a typo still fails there rather than on the first message.
+- **`openai` and `anthropic`** — each talks to its vendor's own API and takes any model id the vendor
+  serves: startup asks the vendor's model list about it, so a typo fails there rather than on the
+  first message. Anthropic's list also states the model's window, output ceiling and what it takes,
+  and Vusan reads those from there; OpenAI's states nothing, so an OpenAI model is assumed to be what
+  the current generation is — a reasoning model that sees images and calls tools.
 - **`openai-compatible`** — any OpenAI-compatible server, remote or local, taking whatever model
-  string it serves.
+  string it serves. DeepSeek is one (`LLM_BASE_URL=https://api.deepseek.com`), and so is a local
+  llama.cpp or Ollama.
 - **`codex`** — a ChatGPT subscription instead of an API key; see
   [ChatGPT subscription](#chatgpt-subscription).
 
@@ -94,12 +92,10 @@ banned, and startup says so in the log.
 | `LLM_CONTEXT_WINDOW_TOKENS`   | model metadata or `16384` | Context size override.                                                          |
 
 `LLM_OPENAI_ENDPOINT` is for `openai-compatible` alone: it says which of the two OpenAI APIs the
-server behind `LLM_BASE_URL` speaks, since a third-party server may offer either. `openai` picks the
-endpoint itself, from the catalog for a model it knows and Responses for a newer one.
-`LLM_REASONING_EFFORT` applies to `openai`, `openai-compatible`, `codex` and `anthropic`. Which
-efforts work depends on the model, and only `codex` checks yours at startup. On `openai` it also
-decides the endpoint: OpenAI refuses tools alongside reasoning on the completions API, and every
-turn here carries tools, so a reasoning model runs on Responses unless the effort is `none`. On
+server behind `LLM_BASE_URL` speaks, since a third-party server may offer either. `openai` and
+`codex` always speak the Responses API, the one where tools work alongside reasoning.
+`LLM_REASONING_EFFORT` applies to every provider. Which efforts work depends on the model: `codex`
+and `anthropic` check yours at startup, `openai` and `openai-compatible` on the first turn. On
 `anthropic` the values are `low` to `max` (`none` and `minimal` stop startup), and a model from
 before Claude 4.6 — one the API serves under a dated id such as `claude-haiku-4-5-20251001` — takes
 no effort at all. Claude models think adaptively on every turn here, Opus 4.7 and 4.8 included;
@@ -108,11 +104,12 @@ without an effort each runs at its own default, which is `medium` on Opus 5.5 an
 timeout for slow local servers and heavy reasoning models: a Fable turn at a high effort can run
 for minutes.
 
-Set `LLM_CONTEXT_WINDOW_TOKENS` whenever an `openai-compatible` model has a different window. A
-model newer than the catalog is assumed to keep the window of its vendor's current generation —
-1,050,000 tokens on `openai`, 1,000,000 on `anthropic` — which the variable overrides. Vusan
-reserves part of that window for the response, tool results and estimation error, then fits only
-complete conversation interactions into the remainder.
+Set `LLM_CONTEXT_WINDOW_TOKENS` whenever an `openai-compatible` model has a different window, since
+such a server states none and the bot assumes 16,384 tokens. An `openai` model is assumed to have the
+window of OpenAI's current generation, 1,050,000 tokens; an `anthropic` model's is read from
+Anthropic's model list at startup. The variable overrides any of them. Vusan reserves part of that
+window for the response, tool results and estimation error, then fits only complete conversation
+interactions into the remainder.
 
 Third-party servers all take the same shape, with `LLM_PROVIDER=openai-compatible`:
 
@@ -354,7 +351,7 @@ with a `WARN` log and Vusan keeps running.
 | `ELEVENLABS_API_KEY`    | Voice messages and round video messages   | See [Voice output](#voice-output)          |
 | `OPENAI_STT_API_KEY`    | Voice input, sound of a video             | Reuse your OpenAI key                      |
 | `OPENAI_IMAGE_API_KEY`  | Image generation                          | Reuse your OpenAI key; optional on `codex` |
-| `OPENAI_VISION_API_KEY` | Vision on a chat model that cannot see    | See [Vision](#vision)                      |
+| `VISION_MODEL`          | Vision on a chat model that cannot see    | See [Vision](#vision)                      |
 | `REGOLITH_URL`          | Shell sandbox                           | See [Sandbox](#sandbox)                |
 
 ### GIFs, memes and clips
@@ -489,29 +486,34 @@ the tools, as on every other provider.
 Vision lets the agent inspect photos, sampled video frames and images in Telegram channel posts. It
 also lets Vusan learn the sticker sets a chat uses, search them by meaning, and choose replies from
 them. These features need a model that accepts images. By default that is the chat model itself, so
-an `openai`, `anthropic`, `google` or `codex` setup needs nothing extra.
+an `openai`, `anthropic` or `codex` setup needs nothing extra.
 
-When the chat model cannot accept images, `OPENAI_VISION_API_KEY` runs vision on its own OpenAI
-model, the way `OPENAI_STT_API_KEY` runs speech on one, and the chat model keeps answering
-everything else:
+When the chat model cannot accept images, `VISION_MODEL` runs vision on a model of its own and the
+chat model keeps answering everything else. On its own the model runs on the chat provider with the
+chat key; with `VISION_PROVIDER` it is a provider of its own, read like the chat one from the same
+variables under its prefix (`VISION_API_KEY`, `VISION_BASE_URL`, `VISION_OPENAI_ENDPOINT`,
+`VISION_REASONING_EFFORT`, `VISION_REQUEST_TIMEOUT_SECONDS`, `VISION_CONTEXT_WINDOW_TOKENS`):
 
 ```dotenv
-LLM_PROVIDER=deepseek
+LLM_PROVIDER=openai-compatible
+LLM_BASE_URL=https://api.deepseek.com
 LLM_MODEL=deepseek-v4-pro
 LLM_API_KEY=sk-qwerty
 
-OPENAI_VISION_API_KEY=sk-proj-qwerty
+VISION_PROVIDER=openai
+VISION_MODEL=gpt-5.4-mini
+VISION_API_KEY=sk-proj-qwerty
 ```
 
-| Variable                | Default        | Description                                                        |
-|-------------------------|----------------|--------------------------------------------------------------------|
-| `OPENAI_VISION_API_KEY` | —              | Enables a separate vision model. Can reuse your OpenAI key.        |
-| `OPENAI_VISION_MODEL`   | `gpt-5.4-mini` | OpenAI model that reads the images; a newer id than the catalog is assumed to. |
+| Variable           | Default           | Description                                                              |
+|--------------------|-------------------|--------------------------------------------------------------------------|
+| `VISION_MODEL`     | —                 | Enables a separate vision model; it is taken at its word about seeing.   |
+| `VISION_PROVIDER`  | the chat provider | `openai`, `anthropic`, `openai-compatible` or `codex`, with its own key. |
 
-DeepSeek models cannot see, and `openai-compatible` never claims it either, because the server
-behind `LLM_BASE_URL` may serve anything — so with either one vision stays off until this key is
-set, even when the model itself does accept images. The key always wins when it is set, even where
-the chat model could have looked at the picture itself.
+`openai-compatible` never claims vision on its own, because the server behind `LLM_BASE_URL` may
+serve anything — so with it vision stays off until `VISION_MODEL` is set, even when the model itself
+does accept images. A vision model always wins when it is set, even where the chat model could have
+looked at the picture itself.
 
 Sticker replies come with vision and stay off without it. They are the one thing here that spends
 on its own: a set a chat keeps using is pulled in and each of its stickers is described once, up to
@@ -633,15 +635,20 @@ said, with no mention at all. A small separate model decides whether each such m
 Vusan; everything that calls it outright is answered exactly as before, without asking that model.
 
 ```dotenv
-OPENAI_ADDRESSING_API_KEY=sk-proj-qwerty
+ADDRESSING_MODEL=gpt-5.6-luna
 ADDRESSING_NAMES=robin,robbie
 ```
 
-| Variable                    | Default          | Description                                                     |
-|-----------------------------|------------------|-----------------------------------------------------------------|
-| `OPENAI_ADDRESSING_API_KEY` | —                | Turns the feature on. Can reuse your OpenAI key.                |
-| `OPENAI_ADDRESSING_MODEL`   | `gpt-5.6-luna`   | OpenAI model that decides; never the chat model.                |
-| `ADDRESSING_NAMES`          | from the profile | Spellings the chat uses, comma-separated.                       |
+| Variable              | Default           | Description                                                                 |
+|-----------------------|-------------------|-----------------------------------------------------------------------------|
+| `ADDRESSING_MODEL`    | —                 | Turns the feature on: the model that decides, never the chat model.         |
+| `ADDRESSING_PROVIDER` | the chat provider | `openai`, `anthropic`, `openai-compatible` or `codex`, with its own key under `ADDRESSING_`. |
+| `ADDRESSING_NAMES`    | from the profile  | Spellings the chat uses, comma-separated.                                   |
+
+The model gets the least reasoning its API offers unless `ADDRESSING_REASONING_EFFORT` says
+otherwise: a yes-or-no over a few lines of chat needs none, and every token of it is latency. The
+verdicts were measured on small OpenAI models — `gpt-5.6-luna` made the fewest wrong calls of eight
+and no false yes at all.
 
 - **Names** — the bot's Telegram name is always one of them. Without `ADDRESSING_NAMES` the other is
   its handle minus the `bot` ending, so `@robinbot` answers to «robin». A name matches at the start of
@@ -798,14 +805,15 @@ same commands plain, since a client hides an ephemeral command where nothing is 
 One turn may call tools repeatedly — search, read a page, search again — before it answers. The loop
 has a ceiling, so a model looping on a broken tool stops costing tokens instead of running forever.
 
-| Variable               | Default | Description              |
-|------------------------|---------|--------------------------|
-| `AGENT_MAX_ITERATIONS` | `200`   | Steps one turn may take. |
+| Variable                | Default | Description                        |
+|-------------------------|---------|------------------------------------|
+| `AGENT_MAX_MODEL_CALLS` | `100`   | Model calls one turn may make.     |
 
-A tool round is two steps, so the default allows close to a hundred tool calls: enough to build a
-project in the sandbox, run it, fix it and send the result, or to research a question across many
-sources. Reaching the ceiling is not an error: the last steps are reserved for a wrap-up in which
-the agent answers from what it gathered and says which parts it could not finish. What bounds the
+Every round of tool calls costs one model call, so the default allows close to a hundred tool
+rounds: enough to build a project in the sandbox, run it, fix it and send the result, or to research
+a question across many sources. Reaching the ceiling is not an error: the last call is reserved for
+a wrap-up in which the agent answers from what it gathered and says which parts it could not finish.
+Three is the least that works — a request, a wrap-up and the nudge in between. What bounds the
 cost of a long turn is not this number but the budget for tool results, which the agent can check
 with `checkContextBudget`; lower this only to keep a cheap model from wandering.
 

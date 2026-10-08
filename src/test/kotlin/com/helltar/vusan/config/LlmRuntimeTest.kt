@@ -1,723 +1,292 @@
 package com.helltar.vusan.config
 
-import ai.koog.http.client.ktor.KtorKoogHttpClient
-import ai.koog.prompt.Prompt
-import ai.koog.prompt.executor.clients.anthropic.AnthropicCacheControl
-import ai.koog.prompt.executor.clients.anthropic.AnthropicLLMClient
-import ai.koog.prompt.executor.clients.anthropic.AnthropicModels
-import ai.koog.prompt.executor.clients.anthropic.AnthropicParams
-import ai.koog.prompt.executor.clients.openai.OpenAIChatParams
-import ai.koog.prompt.executor.clients.openai.OpenAIModels
-import ai.koog.prompt.executor.clients.openai.OpenAIResponsesParams
-import ai.koog.prompt.executor.clients.openai.base.models.ServiceTier
-import ai.koog.prompt.executor.clients.openai.models.OpenAIInclude
-import ai.koog.prompt.llm.LLMCapability
-import ai.koog.prompt.llm.LLMProvider
-import ai.koog.prompt.message.Message
-import ai.koog.prompt.message.RequestMetaInfo
-import ai.koog.prompt.params.LLMParams
 import com.helltar.vusan.infra.Http
-import com.sun.net.httpserver.HttpServer
+import com.helltar.vusan.llm.ChatRequest
+import com.helltar.vusan.llm.LlmProvider
+import com.helltar.vusan.llm.Message
+import com.helltar.vusan.llm.ReasoningEffort
+import com.helltar.vusan.llm.RequestOptions
+import com.helltar.vusan.llm.ToolDefinition
+import com.helltar.vusan.llm.openai.OpenAiEndpoint
 import io.ktor.client.*
 import io.ktor.client.engine.mock.*
 import io.ktor.http.*
 import kotlinx.coroutines.runBlocking
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonObject
-import kotlinx.serialization.json.int
+import kotlinx.serialization.json.buildJsonObject
 import kotlinx.serialization.json.jsonArray
 import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.jsonPrimitive
-import java.net.InetSocketAddress
-import java.util.concurrent.atomic.AtomicReference
+import kotlinx.serialization.json.put
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFailsWith
 import kotlin.test.assertFalse
-import kotlin.test.assertIs
 import kotlin.test.assertNotEquals
-import kotlin.test.assertNotNull
 import kotlin.test.assertNull
 import kotlin.test.assertTrue
 import kotlin.time.Duration.Companion.seconds
 
+private const val RESPONSES_REPLY =
+    """{"id":"r","object":"response","status":"completed","model":"gpt-5.6-sol","output":[{"type":"message","role":"assistant","content":[{"type":"output_text","text":"ok"}]}],"usage":{"input_tokens":1,"output_tokens":1}}"""
+
+private const val COMPLETION_REPLY =
+    """{"id":"c","object":"chat.completion","model":"m","choices":[{"index":0,"finish_reason":"stop","message":{"role":"assistant","content":"ok"}}],"usage":{"prompt_tokens":1,"completion_tokens":1}}"""
+
+private const val ANTHROPIC_REPLY =
+    """{"id":"m","type":"message","role":"assistant","model":"claude-opus-5-5","content":[{"type":"text","text":"ok"}],"stop_reason":"end_turn","usage":{"input_tokens":1,"output_tokens":1}}"""
+
+private const val CODEX_STREAM =
+    "data: {\"type\":\"response.output_item.done\",\"item\":{\"type\":\"message\",\"role\":\"assistant\",\"content\":[{\"type\":\"output_text\",\"text\":\"ok\"}]}}\n\n" +
+            "data: {\"type\":\"response.completed\",\"response\":{\"id\":\"r\",\"status\":\"completed\",\"model\":\"gpt-5.6-terra\",\"output\":[],\"usage\":{\"input_tokens\":1,\"output_tokens\":1}}}\n\n"
+
+/**
+ * What each provider's runtime puts on the wire, read off a mock engine: the resolver's choices — endpoint,
+ * options, model shape — matter only as the request they produce.
+ */
 class LlmRuntimeTest {
 
-    @Test
-    fun `openAiModel resolves configured model names`() {
-        assertEquals(OpenAIModels.Chat.GPT5_4Nano, openAiModel("gpt-5.4-nano"))
-        assertEquals(OpenAIModels.Chat.GPT5_4Mini, openAiModel("GPT-5.4-MINI"))
-        assertEquals(OpenAIModels.Chat.GPT4_1, openAiModel("gpt_4.1"))
-    }
+    private class Wire(val url: String, val headers: Headers, val body: JsonObject)
 
-    // koog's catalog trails OpenAI's releases; a model it has not heard of is declared as what every
-    // recent OpenAI model is, rather than refused.
-    @Test
-    fun `openAiModel declares a model the catalog does not know as a responses reasoning model that sees`() {
-        assertNull(cataloguedOpenAiModel("gpt-6-luna"))
+    private val sent = mutableListOf<Wire>()
 
-        val model = openAiModel(" gpt-6-luna ")
-
-        assertEquals("gpt-6-luna", model.id)
-        assertEquals(LLMProvider.OpenAI, model.provider)
-        assertEquals(1_050_000L, model.contextLength)
-        assertEquals(128_000L, model.maxOutputTokens)
-        assertTrue(model.supports(LLMCapability.Tools))
-        assertTrue(model.supports(LLMCapability.Vision.Image))
-        assertTrue(model.supports(LLMCapability.Thinking))
-        assertTrue(model.supports(LLMCapability.OpenAIEndpoint.Responses))
-        assertFalse(model.supports(LLMCapability.OpenAIEndpoint.Completions))
-        assertIs<OpenAIResponsesParams>(openAiHostedParams(model, "vusan"))
-    }
-
-    @Test
-    fun `a hosted openai runtime carries the configured effort and context override`() {
-        val runtime =
-            resolveLlmRuntime(
-                LlmProviderConfig.Hosted(
-                    provider = HostedLlmProvider.OPENAI,
-                    apiKey = "key",
-                    model = "gpt-5.6-luna",
-                    reasoningEffort = ReasoningEffort.XHIGH,
-                    requestTimeout = 120.seconds,
-                    contextWindowTokens = 272_000,
-                ),
-            )
-
-        assertEquals("xhigh", runtime.reasoningEffort)
-        assertEquals(272_000L, runtime.model.contextLength)
-    }
-
-    // verified against the API on 2026-09-17: gpt-5.4-mini with an effort and one tool answers 400 on
-    // /v1/chat/completions ("To use function tools, use /v1/responses or set reasoning_effort to
-    // 'none'") and returns the tool call on /v1/responses.
-    @Test
-    fun `an effort moves a model that speaks both endpoints onto responses, with thinking`() {
-        val catalogued = assertNotNull(cataloguedOpenAiModel("gpt-5.4-mini"))
-
-        assertTrue(catalogued.supports(LLMCapability.OpenAIEndpoint.Completions), "the premise of this test is gone")
-
-        val runtime = hostedOpenAi("gpt-5.4-mini", ReasoningEffort.MEDIUM)
-
-        assertIs<OpenAIResponsesParams>(runtime.chatParams)
-        assertIs<OpenAIResponsesParams>(runtime.compactionParams)
-        assertFalse(runtime.model.supports(LLMCapability.OpenAIEndpoint.Completions))
-        assertTrue(runtime.model.supports(LLMCapability.Thinking), "responses drops echoed reasoning without it")
-        assertEquals(1, runtime.model.capabilities.orEmpty().count { it == LLMCapability.Thinking })
-    }
-
-    // `none` is the other way out the refusal names, and it keeps the cheaper endpoint.
-    @Test
-    fun `an effort of none leaves the model on completions`() {
-        val runtime = hostedOpenAi("gpt-5.4-mini", ReasoningEffort.NONE)
-
-        assertIs<OpenAIChatParams>(runtime.chatParams)
-        assertEquals("none", runtime.reasoningEffort)
-    }
-
-    // verified against the API on 2026-09-24: with a tool and no reasoning_effort, gpt-5.6-sol and
-    // gpt-5.6-luna answer /v1/chat/completions with the same refusal, while gpt-5.5 and older still call
-    // the tool there. the catalog has spoken both endpoints for gpt-5.6 since koog 1.3.0.
-    @Test
-    fun `no effort at all moves a reasoning model onto responses too`() {
-        val catalogued = assertNotNull(cataloguedOpenAiModel("gpt-5.6-sol"))
-
-        assertTrue(catalogued.supports(LLMCapability.OpenAIEndpoint.Completions), "the premise of this test is gone")
-
-        val runtime = hostedOpenAi("gpt-5.6-sol", effort = null)
-
-        assertIs<OpenAIResponsesParams>(runtime.chatParams)
-        assertIs<OpenAIResponsesParams>(runtime.compactionParams)
-        assertFalse(runtime.model.supports(LLMCapability.OpenAIEndpoint.Completions))
-        assertNull(runtime.reasoningEffort, "the model's own default is what runs")
-    }
-
-    @Test
-    fun `a model that does not reason stays on completions without an effort`() {
-        assertIs<OpenAIChatParams>(hostedOpenAi("gpt-4.1", effort = null).chatParams)
-    }
-
-    private fun hostedOpenAi(model: String, effort: ReasoningEffort?): LlmRuntime =
-        resolveLlmRuntime(
-            LlmProviderConfig.Hosted(
-                provider = HostedLlmProvider.OPENAI,
-                apiKey = "key",
-                model = model,
-                reasoningEffort = effort,
-                requestTimeout = 120.seconds,
-            ),
+    private fun http(reply: String, contentType: String = ContentType.Application.Json.toString()): HttpClient =
+        HttpClient(
+            MockEngine { request ->
+                sent += Wire(request.url.toString(), request.headers, Json.parseToJsonElement(request.body.toByteArray().decodeToString()).jsonObject)
+                respond(reply, headers = headersOf(HttpHeaders.ContentType, contentType))
+            },
         )
 
-    @Test
-    fun `a responses-only model is not handed chat completions params`() {
-        assertIs<OpenAIResponsesParams>(openAiHostedParams(openAiModel("gpt-5-pro"), "vusan"))
-        assertIs<OpenAIResponsesParams>(openAiHostedParams(openAiModel("gpt-5-codex"), "vusan"))
-        assertIs<OpenAIChatParams>(openAiHostedParams(openAiModel("gpt-5.4-mini"), "vusan"))
-    }
+    private val tool = ToolDefinition("lookUp", "Looks up.", buildJsonObject { put("type", "object") })
+
+    private fun request(options: RequestOptions, tools: List<ToolDefinition> = listOf(tool)) =
+        ChatRequest(listOf(Message.System("stable instructions"), Message.User("current request")), tools, options)
+
+    private fun openAi(model: String = "gpt-5.6-sol", effort: ReasoningEffort? = null, window: Long? = null) =
+        LlmProviderConfig.OpenAi(apiKey = "key", model = model, reasoningEffort = effort, requestTimeout = TIMEOUT, contextWindowTokens = window)
+
+    private fun anthropic(model: String = "claude-opus-5-5", effort: ReasoningEffort? = null, window: Long? = null, takesEffort: Boolean? = null) =
+        LlmProviderConfig.Anthropic(apiKey = "key", model = model, reasoningEffort = effort, requestTimeout = TIMEOUT, contextWindowTokens = window, takesEffort = takesEffort)
+
+    private fun compatible(baseUrl: String = "https://example.test", endpoint: OpenAiEndpoint = OpenAiEndpoint.COMPLETIONS, effort: ReasoningEffort? = null, window: Long? = null) =
+        LlmProviderConfig.OpenAiCompatible(baseUrl = baseUrl, apiKey = "key", model = "deepseek-chat", endpoint = endpoint, reasoningEffort = effort, requestTimeout = TIMEOUT, contextWindowTokens = window)
+
+    private fun codex(effort: ReasoningEffort? = null, verbosity: String? = null, tier: ServiceTier? = null, vision: Boolean = true, window: Long? = null) =
+        LlmProviderConfig.Codex(model = "gpt-5.6-terra", reasoningEffort = effort, serviceTier = tier, verbosity = verbosity, supportsVision = vision, requestTimeout = TIMEOUT, contextWindowTokens = window)
+
+    private fun codexAuth() = CodexAuthStore(Http.createClient(MockEngine { error("no refresh expected") }))
+
+    // --- openai ---
 
     @Test
-    fun `the prompt cache key survives either endpoint`() {
-        val responses = openAiHostedParams(openAiModel("gpt-5-pro"), "vusan-recap")
-        val chat = openAiHostedParams(openAiModel("gpt-5.4-mini"), "vusan-recap")
+    fun `an openai runtime speaks responses with its own cache key, stateless reasoning and the effort`() = runBlocking {
+        val runtime = resolveLlmRuntime(openAi(effort = ReasoningEffort.XHIGH), http = http(RESPONSES_REPLY))
 
-        assertEquals("vusan-recap", assertIs<OpenAIResponsesParams>(responses).promptCacheKey)
-        assertEquals("vusan-recap", assertIs<OpenAIChatParams>(chat).promptCacheKey)
-    }
-
-    // koog refuses the model on its first call, not at startup, so a catalog entry that speaks only one
-    // endpoint would leave a deployment looking configured and answering nothing.
-    @Test
-    fun `every openai model is given params its own endpoint accepts`() {
-        val endpointModels =
-            OpenAIModels.models.filter {
-                it.supports(LLMCapability.OpenAIEndpoint.Completions) ||
-                        it.supports(LLMCapability.OpenAIEndpoint.Responses)
-            }
-
-        assertTrue(endpointModels.isNotEmpty(), "the catalog declared no endpoint capabilities at all")
-
-        endpointModels.forEach { model ->
-            when (openAiHostedParams(model, "vusan")) {
-                is OpenAIChatParams ->
-                    assertTrue(
-                        model.supports(LLMCapability.OpenAIEndpoint.Completions),
-                        "${model.id} was given chat params but does not speak completions",
-                    )
-
-                is OpenAIResponsesParams ->
-                    assertTrue(
-                        model.supports(LLMCapability.OpenAIEndpoint.Responses),
-                        "${model.id} was given responses params but does not speak responses",
-                    )
-
-                else -> Unit
-            }
-        }
-    }
-
-    @Test
-    fun `resolveModel matches a native provider catalog case-insensitively`() {
-        val model = resolveModel(AnthropicModels, "Anthropic", "CLAUDE-SONNET-4-5")
-        assertEquals("claude-sonnet-4-5", model.id)
-        assertEquals(LLMProvider.Anthropic, model.provider)
-    }
-
-    @Test
-    fun `resolveModel rejects unknown native model names`() {
-        assertFailsWith<IllegalArgumentException> {
-            resolveModel(AnthropicModels, "Anthropic", "claude-unknown")
-        }
-    }
-
-    @Test
-    fun `hosted anthropic provider uses the native client and provider`() {
-        val runtime = anthropic()
-
-        assertEquals(LLMProvider.Anthropic, runtime.model.provider)
-        assertEquals("claude-sonnet-4-5", runtime.model.id)
-    }
-
-    // the same promise as for OpenAI: a model newer than koog's catalog is declared, not refused
-    @Test
-    fun `anthropicModel declares a model the catalog does not know as a thinking model that sees`() {
-        assertNull(cataloguedAnthropicModel("claude-opus-5-5"))
-
-        val model = anthropicModel(" claude-opus-5-5 ")
-
-        assertEquals("claude-opus-5-5", model.id)
-        assertEquals(LLMProvider.Anthropic, model.provider)
-        assertEquals(1_000_000L, model.contextLength)
-        assertEquals(128_000L, model.maxOutputTokens)
-        assertTrue(model.supports(LLMCapability.Tools))
-        assertTrue(model.supports(LLMCapability.Vision.Image))
-        assertTrue(model.supports(LLMCapability.Thinking))
-        assertFalse(model.supports(LLMCapability.Temperature), "sampling parameters are refused from Opus 4.7 on")
-    }
-
-    @Test
-    fun `an anthropic model is found by its dated id as well as its alias`() {
-        assertEquals(AnthropicModels.Haiku_4_5, anthropicModel("claude-haiku-4-5-20251001"))
-        assertEquals(AnthropicModels.Haiku_4_5, anthropicModel("CLAUDE-HAIKU-4-5"))
-    }
-
-    // koog sends 2048 when nothing is asked for, which a model that always thinks can spend on thinking
-    @Test
-    fun `anthropic prompts ask for the model's whole output ceiling`() {
-        val runtime = anthropic()
-
-        assertEquals(64_000, assertIs<AnthropicParams>(runtime.chatParams).maxTokens)
-        assertEquals(64_000, assertIs<AnthropicParams>(runtime.compactionParams).maxTokens)
-    }
-
-    // koog finds the id it sends by looking the whole model up, so a model it has no entry for, or one a
-    // context override made different, is refused on its first call rather than at startup.
-    @Test
-    fun `the anthropic client sends the model it was given under the id the api knows`() = runBlocking {
-        val declared = sentAnthropicRequests(anthropic("claude-opus-5-5"))
-        val overridden = sentAnthropicRequests(anthropic("claude-haiku-4-5", contextWindowTokens = 65_536))
-
-        assertEquals("claude-opus-5-5", declared.first().getValue("model").jsonPrimitive.content)
-        assertEquals(128_000, declared.first().getValue("max_tokens").jsonPrimitive.int)
-        assertEquals("claude-haiku-4-5-20251001", overridden.first().getValue("model").jsonPrimitive.content)
-    }
-
-    // a model that thinks on every turn hands its thinking back with each tool round, and koog refuses to
-    // replay a thinking block for a model that does not declare it can think.
-    @Test
-    fun `a declared anthropic model replays the thinking it was sent`() = runBlocking {
-        val followUp = sentAnthropicRequests(anthropic("claude-opus-5-5")).last()
-
-        val replayed =
-            followUp.getValue("messages").jsonArray
-                .flatMap { it.jsonObject.getValue("content").jsonArray }
-                .map { it.jsonObject }
-                .single { it.getValue("type").jsonPrimitive.content == "thinking" }
-
-        assertEquals("sig-1", replayed.getValue("signature").jsonPrimitive.content)
-    }
-
-    // Anthropic caches nothing implicitly, so without this every step of a turn is billed in full.
-    @Test
-    fun `anthropic chat prompts ask for caching and the recap does not`() {
-        val runtime = anthropic()
-
-        assertEquals(AnthropicCacheControl.Default, assertIs<AnthropicParams>(runtime.chatParams).cacheControl)
-        assertNull(assertIs<AnthropicParams>(runtime.compactionParams).cacheControl)
-    }
-
-    // the automatic breakpoint sits on the last block, which the next turn's replayed history no longer
-    // matches; the system block is the prefix every request shares, so it gets a breakpoint of its own.
-    @Test
-    fun `an anthropic chat request marks its system block for the cache and the recap does not`() = runBlocking {
-        val runtime = anthropic("claude-opus-5-5")
-
-        val chat = sentAnthropicRequests(runtime).first()
-        val recap = sentAnthropicRequests(runtime, runtime.compactionParams).first()
-
-        assertEquals("ephemeral", chat.systemBlock().getValue("cache_control").jsonObject.getValue("type").jsonPrimitive.content)
-        assertEquals("ephemeral", chat.getValue("cache_control").jsonObject.getValue("type").jsonPrimitive.content)
-        assertNull(recap.systemBlock()["cache_control"])
-        assertNull(recap["cache_control"])
-    }
-
-    // koog's typed thinking knows no `adaptive` and its output config no effort, so both ride in the
-    // additional properties, which koog merges into the request body.
-    @Test
-    fun `an anthropic model since 4_6 is asked to think adaptively and told what to do with a stale thinking block`() {
-        for (id in listOf("claude-opus-5-5", "claude-opus-4-7", "claude-sonnet-4-6", "claude-fable-5")) {
-            val extra = assertNotNull(assertIs<AnthropicParams>(anthropic(id).chatParams).additionalProperties, id)
-            val thinking = assertNotNull(extra["thinking"], id).jsonObject
-
-            assertEquals("adaptive", thinking.getValue("type").jsonPrimitive.content, id)
-            assertEquals(
-                "drop_block",
-                thinking.getValue("block_binding").jsonObject.getValue("prefix_mismatch_behavior").jsonPrimitive.content,
-                id,
-            )
-            assertNull(extra["output_config"], "no effort was configured for $id")
-        }
-    }
-
-    @Test
-    fun `the configured effort reaches anthropic as the request's output config`() {
-        val runtime = anthropic("claude-opus-5-5", reasoningEffort = ReasoningEffort.XHIGH)
-
-        val chat = assertNotNull(assertIs<AnthropicParams>(runtime.chatParams).additionalProperties)
-        val recap = assertNotNull(assertIs<AnthropicParams>(runtime.compactionParams).additionalProperties)
-
-        assertEquals("xhigh", chat.getValue("output_config").jsonObject.getValue("effort").jsonPrimitive.content)
-        assertEquals(chat["output_config"], recap["output_config"])
+        assertEquals("OpenAI", runtime.providerLabel)
+        assertEquals(LlmProvider.OPENAI, runtime.model.provider)
+        assertEquals(1_050_000, runtime.model.contextWindowTokens)
+        assertTrue(runtime.model.seesImages)
         assertEquals("xhigh", runtime.reasoningEffort)
+
+        runtime.client.complete(runtime.model, request(runtime.chatOptions))
+
+        val wire = sent.single()
+        assertEquals("https://api.openai.com/v1/responses", wire.url)
+        assertEquals("Bearer key", wire.headers["Authorization"])
+        assertEquals("vusan", wire.body.getValue("prompt_cache_key").jsonPrimitive.content)
+        assertEquals("xhigh", wire.body.getValue("reasoning").jsonObject.getValue("effort").jsonPrimitive.content)
+        assertEquals(false, wire.body.getValue("store").jsonPrimitive.content.toBoolean())
+        assertEquals("explicit", wire.body.getValue("prompt_cache_options").jsonObject.getValue("mode").jsonPrimitive.content)
+    }
+
+    @Test
+    fun `the recap keeps its own key and asks for no caching`() = runBlocking {
+        val runtime = resolveLlmRuntime(openAi(), http = http(RESPONSES_REPLY))
+
+        runtime.client.complete(runtime.model, request(runtime.compactionOptions, tools = emptyList()))
+
+        assertEquals("vusan-recap", sent.single().body.getValue("prompt_cache_key").jsonPrimitive.content)
+        assertNull(sent.single().body["prompt_cache_options"])
+    }
+
+    @Test
+    fun `a configured context window overrides the assumed one`() {
+        assertEquals(200_000, resolveLlmRuntime(openAi(window = 200_000)).model.contextWindowTokens)
+        assertEquals(50_000, resolveLlmRuntime(anthropic(window = 50_000)).model.contextWindowTokens)
+        assertEquals(32_768, resolveLlmRuntime(compatible(window = 32_768)).model.contextWindowTokens)
+    }
+
+    @Test
+    fun `each conversation gets a prompt cache key of its own`() {
+        val base = resolveLlmRuntime(openAi()).chatOptions
+
+        val one = base.forConversation("telegram:1@-100").promptCacheKey
+        val again = base.forConversation("telegram:1@-100").promptCacheKey
+        val other = base.forConversation("telegram:2@-100").promptCacheKey
+
+        assertEquals(one, again)
+        assertNotEquals(one, other)
+        assertTrue(one.orEmpty().startsWith("vusan-"))
+    }
+
+    // --- anthropic ---
+
+    @Test
+    fun `an anthropic runtime asks for adaptive thinking, the effort, the ceiling and two breakpoints`() = runBlocking {
+        val runtime = resolveLlmRuntime(anthropic(effort = ReasoningEffort.HIGH), http = http(ANTHROPIC_REPLY))
+
+        assertEquals("Anthropic", runtime.providerLabel)
+        assertEquals(1_000_000, runtime.model.contextWindowTokens)
+        assertEquals(128_000, runtime.model.maxOutputTokens)
+        assertTrue(runtime.model.takesEffort)
+        assertNull(runtime.chatOptions.promptCacheKey)
+
+        runtime.client.complete(runtime.model, request(runtime.chatOptions))
+
+        val wire = sent.single()
+        assertEquals("https://api.anthropic.com/v1/messages", wire.url)
+        assertEquals("key", wire.headers["x-api-key"])
+        assertEquals("thinking-binding-controls-2026-08-01", wire.headers["anthropic-beta"])
+        assertEquals("adaptive", wire.body.getValue("thinking").jsonObject.getValue("type").jsonPrimitive.content)
+        assertEquals("high", wire.body.getValue("output_config").jsonObject.getValue("effort").jsonPrimitive.content)
+        assertEquals(128_000, wire.body.getValue("max_tokens").jsonPrimitive.content.toInt())
+        assertEquals("ephemeral", wire.body.getValue("cache_control").jsonObject.getValue("type").jsonPrimitive.content)
+        assertTrue(wire.body.getValue("system").jsonArray.single().jsonObject.containsKey("cache_control"))
+        sent.clear()
+
+        runtime.client.complete(runtime.model, request(runtime.compactionOptions, tools = emptyList()))
+        assertNull(sent.single().body["cache_control"])
+        assertEquals("high", sent.single().body.getValue("output_config").jsonObject.getValue("effort").jsonPrimitive.content)
     }
 
     // the api refuses `adaptive` and `effort` on every model it still serves under a dated snapshot id
     @Test
-    fun `a claude model from before adaptive thinking is sent neither thinking nor effort`() {
-        for (id in listOf("claude-haiku-4-5", "claude-haiku-4-5-20251001", "claude-sonnet-4-5", "claude-opus-4-5")) {
-            assertFalse(anthropicThinksAdaptively(anthropicModel(id)), id)
-            assertNull(assertIs<AnthropicParams>(anthropic(id).chatParams).additionalProperties, id)
-        }
+    fun `a claude model under a dated id takes neither thinking nor an effort`() = runBlocking {
+        assertFalse(anthropicTakesEffort("claude-haiku-4-5-20251001"))
+        assertFalse(anthropicTakesEffort("claude-sonnet-4-5-20250929"))
+        assertTrue(anthropicTakesEffort("claude-opus-4-7"))
+        assertTrue(anthropicTakesEffort("claude-haiku-5-5"))
 
-        assertTrue(anthropicThinksAdaptively(anthropicModel("claude-haiku-5-5")))
-        assertFailsWith<IllegalArgumentException> { anthropic("claude-haiku-4-5", reasoningEffort = ReasoningEffort.HIGH) }
+        val runtime = resolveLlmRuntime(anthropic(model = "claude-haiku-4-5-20251001"), http = http(ANTHROPIC_REPLY))
+        assertFalse(runtime.model.takesEffort)
+
+        runtime.client.complete(runtime.model, request(runtime.chatOptions))
+        assertNull(sent.single().body["thinking"])
+
+        assertFailsWith<IllegalArgumentException> { resolveLlmRuntime(anthropic(model = "claude-haiku-4-5-20251001", effort = ReasoningEffort.HIGH)) }
+    }
+
+    @Test
+    fun `what the vendor's list said about a model wins over the assumption`() {
+        val runtime = resolveLlmRuntime(anthropic(model = "claude-haiku-4-5-20251001", takesEffort = true, window = 200_000).copy(maxOutputTokens = 64_000))
+
+        assertTrue(runtime.model.takesEffort)
+        assertEquals(64_000, runtime.model.maxOutputTokens)
     }
 
     @Test
     fun `an effort anthropic does not take fails at startup rather than on the first turn`() {
         for (effort in listOf(ReasoningEffort.NONE, ReasoningEffort.MINIMAL)) {
-            assertFailsWith<IllegalArgumentException>(effort.name) { anthropic("claude-opus-5-5", reasoningEffort = effort) }
+            assertFailsWith<IllegalArgumentException>(effort.name) { resolveLlmRuntime(anthropic(effort = effort)) }
         }
     }
 
-    @Test
-    fun `anthropic requests carry the thinking, the effort and the beta header on the wire`() = runBlocking {
-        val runtime = anthropic("claude-opus-5-5", reasoningEffort = ReasoningEffort.HIGH)
-
-        val request = sentAnthropicRequestsWithHeaders(runtime, runtime.chatParams).first()
-
-        assertEquals("thinking-binding-controls-2026-08-01", request.headers["anthropic-beta"])
-        assertEquals("adaptive", request.body.getValue("thinking").jsonObject.getValue("type").jsonPrimitive.content)
-        assertEquals("high", request.body.getValue("output_config").jsonObject.getValue("effort").jsonPrimitive.content)
-        assertEquals(128_000, request.body.getValue("max_tokens").jsonPrimitive.int)
-    }
-
-    private fun JsonObject.systemBlock(): JsonObject = getValue("system").jsonArray.single().jsonObject
+    // --- openai-compatible ---
 
     @Test
-    fun `each conversation gets a prompt cache key of its own`() {
-        val base = openAiCompatible(baseUrl = "https://api.openai.com").chatParams
+    fun `a compatible runtime speaks completions under its base url, parallel calls off, no openai extras`() = runBlocking {
+        val runtime = resolveLlmRuntime(compatible(effort = ReasoningEffort.HIGH), http = http(COMPLETION_REPLY))
 
-        val one = assertIs<OpenAIChatParams>(base.forConversation("telegram:1@-100")).promptCacheKey
-        val again = assertIs<OpenAIChatParams>(base.forConversation("telegram:1@-100")).promptCacheKey
-        val other = assertIs<OpenAIChatParams>(base.forConversation("telegram:2@-100")).promptCacheKey
+        assertEquals("OpenAI-compatible (https://example.test, completions)", runtime.providerLabel)
+        assertEquals(16_384, runtime.model.contextWindowTokens, "a server whose window nobody declared runs on the policy's default")
+        assertFalse(runtime.model.seesImages)
 
-        assertEquals(one, again)
-        assertTrue(one != other)
-        assertTrue(one.orEmpty().startsWith("vusan-"))
-    }
+        runtime.client.complete(runtime.model, request(runtime.chatOptions))
 
-    // the key is an OpenAI extension: a server that was not given one must not be handed one now
-    @Test
-    fun `a conversation key is not invented for a provider without one`() {
-        val params = openAiCompatible().chatParams
-
-        assertNull(assertIs<OpenAIChatParams>(params.forConversation("telegram:1@-100")).promptCacheKey)
+        val wire = sent.single()
+        assertEquals("https://example.test/v1/chat/completions", wire.url)
+        assertEquals(false, wire.body.getValue("parallel_tool_calls").jsonPrimitive.content.toBoolean())
+        assertEquals("high", wire.body.getValue("reasoning_effort").jsonPrimitive.content)
+        assertNull(wire.body["prompt_cache_key"])
+        assertNull(wire.body["store"])
+        assertNull(wire.body["prompt_cache_options"])
     }
 
     @Test
-    fun `the responses endpoint scopes its cache key the same way`() {
-        val base =
-            openAiCompatible(baseUrl = "https://api.openai.com", endpoint = OpenAiEndpoint.RESPONSES).chatParams
+    fun `a compatible runtime targets the responses endpoint on request`() = runBlocking {
+        val runtime = resolveLlmRuntime(compatible(endpoint = OpenAiEndpoint.RESPONSES), http = http(RESPONSES_REPLY))
 
-        val scoped = assertIs<OpenAIResponsesParams>(base.forConversation("telegram:1@-100"))
+        runtime.client.complete(runtime.model, request(runtime.chatOptions))
 
-        assertTrue(scoped.promptCacheKey.orEmpty().startsWith("vusan-"))
-        assertTrue(scoped.promptCacheKey != "vusan")
+        assertEquals("https://example.test/v1/responses", sent.single().url)
+        assertNull(sent.single().body["include"], "a third-party server may not know the field")
     }
 
     @Test
-    fun `openai-compatible provider disables parallel tool calls`() {
-        // third-party models (e.g. DeepSeek) garble parallel tool calls; the runtime must force
-        // one tool call per turn so the provider never serializes a corrupt parallel batch.
-        val runtime = openAiCompatible()
+    fun `the official api behind the compatible provider gets the openai extras`() = runBlocking {
+        val runtime = resolveLlmRuntime(compatible(baseUrl = "https://api.openai.com/", endpoint = OpenAiEndpoint.RESPONSES), http = http(RESPONSES_REPLY))
 
-        val params = assertIs<OpenAIChatParams>(runtime.chatParams)
-        assertEquals(false, params.parallelToolCalls)
-        assertTrue(runtime.model.supports(LLMCapability.OpenAIEndpoint.Completions))
-        assertFalse(runtime.model.supports(LLMCapability.Thinking))
+        runtime.client.complete(runtime.model, request(runtime.chatOptions))
+
+        assertEquals("https://api.openai.com/v1/responses", sent.single().url)
+        assertEquals("vusan", sent.single().body.getValue("prompt_cache_key").jsonPrimitive.content)
+        assertEquals(false, sent.single().body.getValue("store").jsonPrimitive.content.toBoolean())
     }
 
-    @Test
-    fun `openai-compatible provider targets the responses endpoint on request`() {
-        // koog reads the endpoint off the params type, and refuses params whose endpoint the model
-        // does not declare — so both have to move together.
-        val runtime = openAiCompatible(endpoint = OpenAiEndpoint.RESPONSES)
-
-        val params = assertIs<OpenAIResponsesParams>(runtime.chatParams)
-        assertEquals(false, params.parallelToolCalls)
-        assertNull(params.reasoning)
-        assertTrue(runtime.model.supports(LLMCapability.OpenAIEndpoint.Responses))
-        assertFalse(runtime.model.supports(LLMCapability.OpenAIEndpoint.Completions))
-        assertTrue(runtime.model.supports(LLMCapability.Thinking))
-    }
-
-    // koog's own effort enum stops at `high`, so a higher effort travels outside it, and only koog's
-    // serializer decides whether it lands in the body; so the body is read where it leaves the client.
-    // the harness replies the way real servers do, repeating the effort, so the reply is read back too.
-    @Test
-    fun `an effort above high survives the round trip on every endpoint`() = runBlocking {
-        val completions = sentOpenAiRequest(openAiCompatible(reasoningEffort = ReasoningEffort.MAX))
-
-        val responses =
-            sentOpenAiRequest(
-                openAiCompatible(endpoint = OpenAiEndpoint.RESPONSES, reasoningEffort = ReasoningEffort.XHIGH),
-            )
-
-        val subscription = sentOpenAiRequest(codex(reasoningEffort = ReasoningEffort.XHIGH))
-
-        assertEquals("max", completions.getValue("reasoning_effort").jsonPrimitive.content)
-        assertEquals("xhigh", responses.getValue("reasoning").jsonObject.getValue("effort").jsonPrimitive.content)
-        assertEquals("xhigh", subscription.getValue("reasoning").jsonObject.getValue("effort").jsonPrimitive.content)
-    }
-
-    // the harness mirrors the runtime's transport; this sends the runtime's own client to a local server
-    // instead, so a runtime that stops decoding leniently fails here even where the harness would not.
-    @Test
-    fun `the runtime client reads back a reply that repeats an effort above high`() = runBlocking {
-        val sent = AtomicReference<String>()
-        val server = HttpServer.create(InetSocketAddress("127.0.0.1", 0), 0)
-
-        server.createContext("/") { exchange ->
-            val body = exchange.requestBody.readBytes().decodeToString().also(sent::set)
-            val reply = openAiReplyTo(body, responses = true).toByteArray()
-
-            exchange.responseHeaders.add("Content-Type", "application/json")
-            exchange.sendResponseHeaders(200, reply.size.toLong())
-            exchange.responseBody.use { it.write(reply) }
-        }
-
-        server.start()
-
-        try {
-            val runtime =
-                openAiCompatible(
-                    baseUrl = "http://127.0.0.1:${server.address.port}",
-                    endpoint = OpenAiEndpoint.RESPONSES,
-                    reasoningEffort = ReasoningEffort.MAX,
-                )
-
-            val prompt = Prompt.build("echo", params = runtime.chatParams) { user("current request") }
-
-            runtime.client.execute(prompt, runtime.model, emptyList())
-        } finally {
-            server.stop(0)
-        }
-
-        val request = Json.parseToJsonElement(assertNotNull(sent.get(), "nothing reached the server")).jsonObject
-
-        assertEquals("max", request.getValue("reasoning").jsonObject.getValue("effort").jsonPrimitive.content)
-    }
+    // --- codex ---
 
     @Test
-    fun `runtime reports the reasoning effort of either endpoint`() {
-        assertEquals("none", openAiCompatible(reasoningEffort = ReasoningEffort.NONE).reasoningEffort)
-        assertEquals(
-            "high",
-            openAiCompatible(endpoint = OpenAiEndpoint.RESPONSES, reasoningEffort = ReasoningEffort.HIGH).reasoningEffort,
-        )
-        assertEquals("max", codex(reasoningEffort = ReasoningEffort.MAX).reasoningEffort)
-        assertNull(openAiCompatible().reasoningEffort)
-    }
-
-    @Test
-    fun `official OpenAI compatible endpoint uses the prompt cache key`() {
-        val completions =
-            openAiCompatible(baseUrl = "https://API.openai.com/")
-                .let { assertIs<OpenAIChatParams>(it.chatParams) }
-
-        val responses =
-            openAiCompatible(baseUrl = "https://api.openai.com", endpoint = OpenAiEndpoint.RESPONSES)
-                .let { assertIs<OpenAIResponsesParams>(it.chatParams) }
-
-        assertEquals("vusan", completions.promptCacheKey)
-        assertEquals("vusan", responses.promptCacheKey)
-    }
-
-    @Test
-    fun `third-party OpenAI compatible endpoint omits the OpenAI cache key`() {
-        val params = openAiCompatible().let { assertIs<OpenAIChatParams>(it.chatParams) }
-
-        assertNull(params.promptCacheKey)
-    }
-
-    @Test
-    fun `configured context window overrides compatible and native model metadata`() {
-        val compatible = openAiCompatible(contextWindowTokens = 32_768)
-        val native =
+    fun `a codex runtime streams the responses api without an api key and with the catalog's options`() = runBlocking {
+        val runtime =
             resolveLlmRuntime(
-                LlmProviderConfig.Hosted(
-                    provider = HostedLlmProvider.ANTHROPIC,
-                    apiKey = "key",
-                    model = "claude-sonnet-4-5",
-                    requestTimeout = 120.seconds,
-                    contextWindowTokens = 65_536,
-                ),
+                codex(effort = ReasoningEffort.XHIGH, verbosity = "low", tier = ServiceTier.PRIORITY, vision = false, window = 272_000),
+                codexAuth = codexAuth(),
+                http = http(CODEX_STREAM, contentType = "text/event-stream"),
             )
 
-        assertEquals(32_768L, compatible.model.contextLength)
-        assertEquals(65_536L, native.model.contextLength)
+        assertEquals("ChatGPT subscription (Codex)", runtime.providerLabel)
+        assertEquals(272_000, runtime.model.contextWindowTokens)
+        assertFalse(runtime.model.seesImages)
+        assertEquals("priority", runtime.serviceTier)
+
+        val reply = runtime.client.complete(runtime.model, request(runtime.chatOptions))
+
+        assertEquals("ok", reply.message.text)
+        val wire = sent.single()
+        assertEquals("$CODEX_BACKEND_BASE_URL/responses", wire.url)
+        assertNull(wire.headers["Authorization"], "the plugin signs the request, not the client; the test client has no plugin")
+        assertEquals(true, wire.body.getValue("stream").jsonPrimitive.content.toBoolean())
+        assertEquals(false, wire.body.getValue("store").jsonPrimitive.content.toBoolean())
+        assertEquals("xhigh", wire.body.getValue("reasoning").jsonObject.getValue("effort").jsonPrimitive.content)
+        assertEquals("low", wire.body.getValue("text").jsonObject.getValue("verbosity").jsonPrimitive.content)
+        assertEquals("priority", wire.body.getValue("service_tier").jsonPrimitive.content)
+        assertEquals("vusan", wire.body.getValue("prompt_cache_key").jsonPrimitive.content)
+        assertEquals(false, wire.body.getValue("parallel_tool_calls").jsonPrimitive.content.toBoolean())
     }
 
     @Test
-    fun `codex provider targets the responses endpoint with reasoning enabled`() {
-        val runtime = codex()
-
-        assertEquals("gpt-5.6-terra", runtime.model.id)
-        assertEquals(LLMProvider.OpenAI, runtime.model.provider)
-        assertTrue(runtime.model.supports(LLMCapability.OpenAIEndpoint.Responses))
-        assertTrue(runtime.model.supports(LLMCapability.Thinking))
-        assertTrue(runtime.model.supports(LLMCapability.Tools))
-        assertTrue(runtime.model.supports(LLMCapability.Vision.Image))
-        assertIs<OpenAIResponsesParams>(runtime.chatParams)
+    fun `a codex runtime needs the signed-in account`() {
+        assertFailsWith<IllegalArgumentException> { resolveLlmRuntime(codex()) }
     }
 
     @Test
     fun `codex chat and compaction prompts use separate cache keys`() {
-        val runtime = codex()
+        val runtime = resolveLlmRuntime(codex(), codexAuth = codexAuth())
 
-        val chat = assertIs<OpenAIResponsesParams>(runtime.chatParams)
-        val compaction = assertIs<OpenAIResponsesParams>(runtime.compactionParams)
-
-        assertNotNull(chat.promptCacheKey)
-        assertTrue(chat.promptCacheKey != compaction.promptCacheKey)
-        assertFalse(chat.parallelToolCalls == true)
-        assertEquals(listOf(OpenAIInclude.REASONING_ENCRYPTED_CONTENT), chat.include)
-        assertEquals(listOf(OpenAIInclude.REASONING_ENCRYPTED_CONTENT), compaction.include)
+        assertEquals("vusan", runtime.chatOptions.promptCacheKey)
+        assertEquals("vusan-recap", runtime.compactionOptions.promptCacheKey)
+        assertFalse(runtime.compactionOptions.cachePrompt)
     }
 
     @Test
-    fun `codex model omits vision when the catalog marks it text only`() {
-        val runtime = codex(supportsVision = false)
-
-        assertFalse(runtime.model.supports(LLMCapability.Vision.Image))
+    fun `a configured serving tier reaches the routing hint`() {
+        assertEquals("model=gpt-5.6-terra", codexRoutingHint("gpt-5.6-terra", null))
+        assertEquals("model=gpt-5.6-terra;tier=priority", codexRoutingHint("gpt-5.6-terra", ServiceTier.PRIORITY))
     }
-
-    @Test
-    fun `codex provider requires an auth store`() {
-        assertFailsWith<IllegalArgumentException> {
-            resolveLlmRuntime(
-                LlmProviderConfig.Codex(model = "gpt-5.6-terra", requestTimeout = 120.seconds),
-                codexAuth = null,
-            )
-        }
-    }
-
-    @Test
-    fun `codex provider carries the configured context window`() {
-        assertEquals(400_000L, codex(contextWindowTokens = 400_000).model.contextLength)
-    }
-
-    @Test
-    fun `the catalog's verbosity is sent beside the effort`() = runBlocking {
-        val sent = sentOpenAiRequest(codex(reasoningEffort = ReasoningEffort.XHIGH, verbosity = "low"))
-
-        assertEquals("low", sent.getValue("text").jsonObject.getValue("verbosity").jsonPrimitive.content)
-        assertEquals("xhigh", sent.getValue("reasoning").jsonObject.getValue("effort").jsonPrimitive.content)
-    }
-
-    @Test
-    fun `no verbosity is sent when the catalog named none`() = runBlocking {
-        assertNull(sentOpenAiRequest(codex())["text"]?.jsonObject?.get("verbosity"))
-    }
-
-    // a turn logs this label and every model call of it logs the one read off the wire, so they must agree.
-    @Test
-    fun `a conversation's log label is the one its calls carry`() = runBlocking {
-        val runtime = codex()
-        val scoped = runtime.copy(chatParams = runtime.chatParams.forConversation("chat-1/user-2"))
-        val sent = sentOpenAiRequest(scoped)
-
-        val label = assertNotNull(runtime.chatParams.sessionLogLabel("chat-1/user-2"))
-
-        assertEquals(label, codexSessionId(sent.toString())?.take(label.length))
-        assertNotEquals(label, runtime.chatParams.sessionLogLabel("chat-1/user-3"))
-    }
-
-    @Test
-    fun `codex asks for no serving tier by default`() {
-        assertNull(assertIs<OpenAIResponsesParams>(codex().chatParams).serviceTier)
-        assertEquals("model=gpt-5.6-terra", codexRoutingHint("gpt-5.6-terra", serviceTier = null))
-    }
-
-    @Test
-    fun `a configured serving tier reaches both the request params and the routing hint`() {
-        val runtime = codex(serviceTier = ServiceTier.PRIORITY)
-
-        assertEquals(ServiceTier.PRIORITY, assertIs<OpenAIResponsesParams>(runtime.chatParams).serviceTier)
-        // a history recap is billed against the same allowance, so it travels on the same tier
-        assertEquals(ServiceTier.PRIORITY, assertIs<OpenAIResponsesParams>(runtime.compactionParams).serviceTier)
-        assertEquals(
-            "model=gpt-5.6-terra;tier=priority",
-            codexRoutingHint("gpt-5.6-terra", ServiceTier.PRIORITY),
-        )
-    }
-
-    private fun anthropic(
-        model: String = "claude-sonnet-4-5",
-        contextWindowTokens: Long? = null,
-        reasoningEffort: ReasoningEffort? = null,
-    ): LlmRuntime =
-        resolveLlmRuntime(
-            LlmProviderConfig.Hosted(
-                provider = HostedLlmProvider.ANTHROPIC,
-                apiKey = "key",
-                model = model,
-                reasoningEffort = reasoningEffort,
-                requestTimeout = 120.seconds,
-                contextWindowTokens = contextWindowTokens,
-            ),
-        )
-
-    private class SentAnthropicRequest(val headers: Headers, val body: JsonObject)
-
-    private suspend fun sentAnthropicRequests(runtime: LlmRuntime, params: LLMParams = runtime.chatParams): List<JsonObject> =
-        sentAnthropicRequestsWithHeaders(runtime, params).map { it.body }
-
-    /**
-     * The two requests koog's Anthropic client sends for [runtime]'s model through the settings and the
-     * transport the runtime builds: a first request, answered the way a model that always thinks answers
-     * — an empty thinking block ahead of the text — and a follow-up that carries that answer back.
-     */
-    private suspend fun sentAnthropicRequestsWithHeaders(runtime: LlmRuntime, params: LLMParams): List<SentAnthropicRequest> {
-        val sent = mutableListOf<SentAnthropicRequest>()
-
-        val engine =
-            MockEngine { request ->
-                sent += SentAnthropicRequest(request.headers, Json.parseToJsonElement(request.body.toByteArray().decodeToString()).jsonObject)
-                respond(ANTHROPIC_THINKING_REPLY, headers = headersOf(HttpHeaders.ContentType, ContentType.Application.Json.toString()))
-            }
-
-        val client =
-            AnthropicLLMClient(
-                apiKey = "key",
-                settings = anthropicClientSettings(runtime.model, connectionTimeouts(120.seconds)),
-                httpClientFactory = AnthropicHttpClientFactory(KtorKoogHttpClient.Factory(HttpClient(engine))),
-            )
-
-        val prompt =
-            Prompt.build("wire", params = params) {
-                system("the operational contract")
-                user("current request")
-            }
-        val answer = client.execute(prompt, runtime.model, emptyList())
-
-        client.execute(prompt.withMessages { it + answer + Message.User("next request", RequestMetaInfo.Empty) }, runtime.model, emptyList())
-
-        return sent
-    }
-
-    private fun codex(
-        contextWindowTokens: Long? = null,
-        supportsVision: Boolean = true,
-        reasoningEffort: ReasoningEffort? = null,
-        serviceTier: ServiceTier? = null,
-        verbosity: String? = null,
-    ): LlmRuntime =
-        resolveLlmRuntime(
-            LlmProviderConfig.Codex(
-                model = "gpt-5.6-terra",
-                reasoningEffort = reasoningEffort,
-                requestTimeout = 120.seconds,
-                contextWindowTokens = contextWindowTokens,
-                supportsVision = supportsVision,
-                serviceTier = serviceTier,
-                verbosity = verbosity,
-            ),
-            codexAuth = CodexAuthStore(Http.createClient(MockEngine { error("no calls expected") })),
-        )
-
-    private fun openAiCompatible(
-        baseUrl: String = "https://example.test",
-        endpoint: OpenAiEndpoint = OpenAiEndpoint.COMPLETIONS,
-        reasoningEffort: ReasoningEffort? = null,
-        contextWindowTokens: Long? = null,
-    ): LlmRuntime =
-        resolveLlmRuntime(
-            LlmProviderConfig.OpenAiCompatible(
-                baseUrl = baseUrl,
-                apiKey = "key",
-                model = "deepseek-chat",
-                endpoint = endpoint,
-                reasoningEffort = reasoningEffort,
-                requestTimeout = 120.seconds,
-                contextWindowTokens = contextWindowTokens,
-            ),
-        )
 
     private companion object {
-        const val ANTHROPIC_THINKING_REPLY =
-            """{"id":"msg_1","type":"message","role":"assistant","model":"claude-opus-5-5",""" +
-                    """"content":[{"type":"thinking","thinking":"","signature":"sig-1"},{"type":"text","text":"ok"}],""" +
-                    """"stop_reason":"end_turn","stop_sequence":null,"usage":{"input_tokens":10,"output_tokens":5}}"""
+        val TIMEOUT = 120.seconds
     }
 }

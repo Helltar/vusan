@@ -1,8 +1,8 @@
 package com.helltar.vusan.tools
 
-import ai.koog.agents.core.tools.annotations.LLMDescription
-import ai.koog.agents.core.tools.annotations.Tool
-import ai.koog.agents.core.tools.reflect.ToolSet
+import com.helltar.vusan.tools.LLMDescription
+import com.helltar.vusan.tools.Tool
+import com.helltar.vusan.tools.ToolSet
 import kotlin.test.Test
 import kotlin.test.assertContains
 import kotlin.test.assertEquals
@@ -43,14 +43,14 @@ class ToolCatalogTest {
             tools(ToolGroup.VOICE_REPLIES, SpeakTestTools())
         }
 
-    private fun ToolCatalog.visibleNames(): List<String> = visibleDescriptors().map { it.name }
+    private fun ToolCatalog.visibleNames(): List<String> = visibleDefinitions().map { it.name }
 
     @Test
     fun `a deferred group is registered but not offered until it is loaded`() {
         val catalog = catalog()
 
         assertEquals(listOf("sendTestMessage", "loadTools"), catalog.visibleNames())
-        assertContains(catalog.registry.tools.map { it.name }, "drawTestPicture")
+        assertContains(catalog.tools.map { it.name }, "drawTestPicture")
     }
 
     @Test
@@ -123,7 +123,7 @@ class ToolCatalogTest {
 
         assertNull(catalog.menu())
         assertEquals(listOf("sendTestMessage"), catalog.visibleNames())
-        assertEquals(listOf("sendTestMessage"), catalog.registry.tools.map { it.name })
+        assertEquals(listOf("sendTestMessage"), catalog.tools.map { it.name })
     }
 
     // what the conversation loaded last time is offered again from the first request: a tool array
@@ -180,7 +180,7 @@ class ToolCatalogTest {
 
         assertNull(catalog.menu())
         assertEquals(listOf("sendTestMessage", "drawTestPicture"), catalog.visibleNames())
-        assertFalse("loadTools" in catalog.registry.tools.map { it.name })
+        assertFalse("loadTools" in catalog.tools.map { it.name })
     }
 
     @Test

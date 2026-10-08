@@ -1,6 +1,6 @@
 package com.helltar.vusan.telegram.tools
 
-import ai.koog.agents.core.tools.reflect.ToolSet
+import com.helltar.vusan.tools.ToolSet
 import com.helltar.vusan.outbox.BotOutbox
 import com.helltar.vusan.request.RequestContext
 import com.helltar.vusan.telegram.tools.sticker.StickerCatalog

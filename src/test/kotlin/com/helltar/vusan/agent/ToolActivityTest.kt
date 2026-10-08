@@ -6,7 +6,7 @@ import kotlin.test.assertNull
 
 class ToolActivityTest {
 
-    // literal names mirror what Koog reports for each @Tool method; if a tool is renamed, the map's
+    // literal names mirror the name each @Tool method is called by; if a tool is renamed, the map's
     // method reference follows automatically but this test fails, flagging the runtime-name change.
     @Test
     fun `maps a tool to what it is busy with`() {

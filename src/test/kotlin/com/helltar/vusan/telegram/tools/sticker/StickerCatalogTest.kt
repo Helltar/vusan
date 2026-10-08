@@ -1,7 +1,6 @@
 package com.helltar.vusan.telegram.tools.sticker
 
 import com.helltar.vusan.config.AppConfig
-import com.helltar.vusan.config.HostedLlmProvider
 import com.helltar.vusan.config.LlmProviderConfig
 import com.helltar.vusan.infra.Db
 import com.helltar.vusan.infra.tables.TelegramChatStickersTable
@@ -10,9 +9,9 @@ import com.helltar.vusan.infra.tables.TelegramStickersTable
 import com.helltar.vusan.outbox.BotOutbox
 import com.helltar.vusan.request.requestContext
 import com.helltar.vusan.request.testChat
-import com.helltar.vusan.tools.vision.FakePromptExecutor
+import com.helltar.vusan.llm.FakeLlmClient
 import com.helltar.vusan.tools.vision.ImageVisionClient
-import com.helltar.vusan.tools.vision.TEST_MODEL
+import com.helltar.vusan.llm.TEST_MODEL
 import kotlinx.coroutines.cancelAndJoin
 import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.delay
@@ -363,7 +362,7 @@ class StickerCatalogTest {
     }
 
     private fun catalog(client: FakeStickerClient, visionAnswer: String) =
-        StickerCatalog(client.proxy, ImageVisionClient(FakePromptExecutor(visionAnswer), TEST_MODEL))
+        StickerCatalog(client.proxy, ImageVisionClient(FakeLlmClient(visionAnswer), TEST_MODEL))
 
     // the worker is the production entry point; one pass is done once no sticker is waiting on vision.
     private suspend fun awaitDescriptionPass(catalog: StickerCatalog) =
@@ -507,7 +506,7 @@ class StickerCatalogTest {
 
     private fun testConfig(dbPath: String) =
         AppConfig(
-            agentMaxIterations = 70,
+            agentMaxModelCalls = 70,
             accessPolicy = AccessPolicy(allowed = setOf("telegram:1")),
             appearance = null,
             databasePath = dbPath,
@@ -516,8 +515,7 @@ class StickerCatalogTest {
             giphyApiKey = null,
             klipyApiKey = null,
             llmProvider =
-                LlmProviderConfig.Hosted(
-                    provider = HostedLlmProvider.OPENAI,
+                LlmProviderConfig.OpenAi(
                     apiKey = "test",
                     model = "test",
                     requestTimeout = 60.seconds,
@@ -526,7 +524,6 @@ class StickerCatalogTest {
             openAiImageApiKey = null,
             openAiImage = null,
             openAiStt = null,
-            openAiVision = null,
             regolithToken = null,
             regolithUrl = null,
             searxngUrl = null,

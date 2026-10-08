@@ -1,30 +1,21 @@
 package com.helltar.vusan.agent.conversation
 
-import ai.koog.agents.core.tools.ToolDescriptor
-import ai.koog.prompt.Prompt
-import ai.koog.prompt.dsl.ModerationResult
-import ai.koog.prompt.executor.model.PromptExecutor
-import ai.koog.prompt.llm.LLMProvider
-import ai.koog.prompt.llm.LLModel
-import ai.koog.prompt.message.Message
-import ai.koog.prompt.message.MessagePart
-import ai.koog.prompt.message.ResponseMetaInfo
-import ai.koog.prompt.streaming.StreamFrame
-import ai.koog.utils.time.KoogClock
+import com.helltar.vusan.llm.FakeLlmClient
+import com.helltar.vusan.llm.LlmModel
+import com.helltar.vusan.llm.LlmProvider
+import com.helltar.vusan.llm.Message
 import java.time.Instant
 import kotlin.test.Test
 import kotlin.test.assertContains
 import kotlin.test.assertEquals
-import kotlinx.coroutines.flow.Flow
-import kotlinx.coroutines.flow.emptyFlow
 import kotlinx.coroutines.runBlocking
 
 class ConversationCompactorTest {
 
     @Test
     fun `compactor merges previous recap and events into a persisted checkpoint`() = runBlocking {
-        val executor = CapturingPromptExecutor("- User prefers tea\n- Open thread: movie night")
-        val model = LLModel(LLMProvider.OpenAI, "test", contextLength = 16_384)
+        val executor = FakeLlmClient("- User prefers tea\n- Open thread: movie night")
+        val model = LlmModel(LlmProvider.OPENAI, "test", contextWindowTokens = 16_384)
         val compactor = LlmConversationCompactor(executor, model)
         val interaction =
             ConversationInteraction(
@@ -42,15 +33,15 @@ class ConversationCompactorTest {
 
         assertEquals("- User prefers tea\n- Open thread: movie night", result?.summary)
         assertEquals(7, result?.throughMessageId)
-        assertContains(checkNotNull(executor.lastPrompt).messages.last().textContent(), "<previous_recap>")
-        assertContains(checkNotNull(executor.lastPrompt).messages.last().textContent(), "<conversation_events>")
+        assertContains((checkNotNull(executor.lastRequest).messages.last() as Message.User).text, "<previous_recap>")
+        assertContains((checkNotNull(executor.lastRequest).messages.last() as Message.User).text, "<conversation_events>")
     }
 
     // a stored user entry is context first and request last, and the context alone can outrun the cap.
     @Test
     fun `a long reply context does not push the request out of the compaction source`() = runBlocking {
-        val executor = CapturingPromptExecutor("- Booking a flight")
-        val model = LLModel(LLMProvider.OpenAI, "test", contextLength = 16_384)
+        val executor = FakeLlmClient("- Booking a flight")
+        val model = LlmModel(LlmProvider.OPENAI, "test", contextWindowTokens = 16_384)
         val compactor = LlmConversationCompactor(executor, model)
         val storedEntry =
             buildString {
@@ -78,37 +69,9 @@ class ConversationCompactorTest {
 
         compactor.compact(null, listOf(interaction))
 
-        val source = checkNotNull(executor.lastPrompt).messages.last().textContent()
+        val source = (checkNotNull(executor.lastRequest).messages.last() as Message.User).text
 
         assertContains(source, "book the Tuesday flight instead")
         assertContains(source, "- author: olena", message = "the context in front of the request is kept too")
-    }
-
-    private class CapturingPromptExecutor(private val answer: String) : PromptExecutor() {
-        var lastPrompt: Prompt? = null
-
-        override suspend fun execute(
-            prompt: Prompt,
-            model: LLModel,
-            tools: List<ToolDescriptor>,
-        ): Message.Assistant {
-            lastPrompt = prompt
-
-            return Message.Assistant(
-                parts = listOf(MessagePart.Text(answer)),
-                metaInfo = ResponseMetaInfo.create(KoogClock.System),
-            )
-        }
-
-        override fun executeStreaming(
-            prompt: Prompt,
-            model: LLModel,
-            tools: List<ToolDescriptor>,
-        ): Flow<StreamFrame> = emptyFlow()
-
-        override suspend fun moderate(prompt: Prompt, model: LLModel): ModerationResult =
-            error("not used")
-
-        override fun close() = Unit
     }
 }

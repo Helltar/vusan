@@ -50,7 +50,7 @@ enum class ToolActivity {
     MANAGING_TASKS
 }
 
-// tool names arrive from Koog's onToolCallStarting (the @Tool method name). method references keep
+// tool names arrive from the agent loop as the @Tool method name. method references keep
 // this map in sync with renames. tools left out are the instant ones — a poll, a reaction, a sticker,
 // an exchange rate — where a caption would flash by before it could be read.
 private val TOOL_ACTIVITIES: Map<String, ToolActivity> = buildMap {

@@ -1,8 +1,8 @@
 package com.helltar.vusan.tools.catalog
 
-import ai.koog.agents.core.tools.annotations.LLMDescription
-import ai.koog.agents.core.tools.annotations.Tool
-import ai.koog.agents.core.tools.reflect.ToolSet
+import com.helltar.vusan.tools.LLMDescription
+import com.helltar.vusan.tools.Tool
+import com.helltar.vusan.tools.ToolSet
 import com.helltar.vusan.tools.ToolCatalog
 import com.helltar.vusan.tools.ToolGroup
 import com.helltar.vusan.tools.toolCatalog
@@ -46,7 +46,7 @@ class CatalogToolsTest {
         assertContains(result, "`image_generation`")
         assertContains(result, "`voice_replies`")
         assertContains(result, "drawTestPicture, speakTestText")
-        assertContains(catalog.visibleDescriptors().map { it.name }, "speakTestText")
+        assertContains(catalog.visibleDefinitions().map { it.name }, "speakTestText")
     }
 
     // the tools of a group that did load are still worth having, so the call reports the bad name
@@ -68,7 +68,7 @@ class CatalogToolsTest {
 
         assertContains(message, "no tool group is named teleportation")
         assertContains(message, "image_generation, voice_replies")
-        assertTrue(catalog.visibleDescriptors().map { it.name }.none { it == "drawTestPicture" })
+        assertTrue(catalog.visibleDefinitions().map { it.name }.none { it == "drawTestPicture" })
     }
 
     @Test

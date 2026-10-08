@@ -1,13 +1,13 @@
 package com.helltar.vusan.agent
 
-import ai.koog.http.client.KoogHttpClientException
-import ai.koog.prompt.executor.clients.LLMClientException
 import com.helltar.vusan.i18n.EnglishMessages
 import com.helltar.vusan.i18n.Language
 import com.helltar.vusan.i18n.Messages
+import com.helltar.vusan.llm.LlmException
 import java.time.Instant
 import kotlin.test.Test
 import kotlin.test.assertEquals
+import kotlin.test.assertNotNull
 import kotlin.test.assertNull
 import kotlin.test.assertTrue
 import kotlin.time.Duration.Companion.minutes
@@ -28,31 +28,31 @@ class ProviderErrorReplyTest {
         error.type=usage_limit_reached
         """.trimIndent()
 
+    private fun error(status: Int?, body: String) = LlmException("OpenAI", status, body)
+
     @Test
-    fun `the streaming path's exception counts as a provider error`() {
-        val failure =
-            IllegalStateException("agent node failed", KoogHttpClientException("OpenAILLMClient", 429, usageLimitBody))
+    fun `a provider error is found wherever it sits in the cause chain`() {
+        val failure = IllegalStateException("turn failed", error(429, usageLimitBody))
 
-        val message = failure.providerErrorMessage()
-
-        assertTrue(message != null && "usage_limit_reached" in message, message.orEmpty())
+        assertEquals(429, failure.providerError()?.status)
+        assertTrue("usage_limit_reached" in assertNotNull(failure.providerError()).message.orEmpty())
     }
 
     @Test
     fun `a plain failure carries no provider error`() {
-        assertNull(IllegalStateException("no route to host").providerErrorMessage())
+        assertNull(IllegalStateException("no route to host").providerError())
     }
 
     @Test
     fun `a spent subscription is answered with the wait it reported`() {
-        val reply = EnglishMessages.providerErrorReply(usageLimitBody, now)
+        val reply = EnglishMessages.providerErrorReply(error(429, usageLimitBody), now)
 
         assertEquals("Usage limit reached, resets in about 10min, try again then", reply)
     }
 
     @Test
     fun `a spent subscription without a reset time stays vague`() {
-        val reply = EnglishMessages.providerErrorReply("Status code: 429\ninsufficient_quota", now)
+        val reply = EnglishMessages.providerErrorReply(error(429, "insufficient_quota"), now)
 
         assertEquals(EnglishMessages.subscriptionLimitReply(null), reply)
         assertTrue("try again later" in reply, reply)
@@ -69,17 +69,15 @@ class ProviderErrorReplyTest {
     }
 
     @Test
-    fun `an ordinary rate limit asks for a retry instead`() {
-        val reply = EnglishMessages.providerErrorReply("Status code: 429\nrate_limit_exceeded", now)
-
-        assertEquals(EnglishMessages.overloadedReply, reply)
+    fun `an ordinary rate limit and an overloaded server ask for a retry instead`() {
+        assertEquals(EnglishMessages.overloadedReply, EnglishMessages.providerErrorReply(error(429, "rate_limit_exceeded"), now))
+        assertEquals(EnglishMessages.overloadedReply, EnglishMessages.providerErrorReply(error(529, """{"type":"overloaded_error"}"""), now))
     }
 
     @Test
     fun `an expired key asks for a new sign-in`() {
-        val message = LLMClientException("OpenAILLMClient", "Status code: 401\ntoken_expired").message.orEmpty()
-
-        assertEquals(EnglishMessages.signInRequiredReply, EnglishMessages.providerErrorReply(message, now))
+        assertEquals(EnglishMessages.signInRequiredReply, EnglishMessages.providerErrorReply(error(401, "token_expired"), now))
+        assertEquals(EnglishMessages.signInRequiredReply, EnglishMessages.providerErrorReply(error(401, ""), now))
     }
 
     // a refused request is not an outage: the streaming endpoint answers 200 and puts the refusal in
@@ -89,17 +87,13 @@ class ProviderErrorReplyTest {
         val body =
             """{"type":"error","error":{"type":"invalid_request","code":"cyber_policy",""" +
                     """"message":"This request was flagged as a security risk. Try rephrasing it."}}"""
-        val message = LLMClientException("OpenAILLMClient", "Status code: 200 Error body: $body").message.orEmpty()
 
-        assertEquals(EnglishMessages.contentPolicyReply, EnglishMessages.providerErrorReply(message, now))
+        assertEquals(EnglishMessages.contentPolicyReply, EnglishMessages.providerErrorReply(error(200, body), now))
     }
 
     @Test
     fun `a moderation refusal on any provider reads the same`() {
-        assertEquals(
-            EnglishMessages.contentPolicyReply,
-            EnglishMessages.providerErrorReply("Status code: 400\ncontent_policy_violation", now),
-        )
+        assertEquals(EnglishMessages.contentPolicyReply, EnglishMessages.providerErrorReply(error(400, "content_policy_violation"), now))
     }
 
     @Test
@@ -111,10 +105,34 @@ class ProviderErrorReplyTest {
 
     @Test
     fun `an unrecognized provider error falls back`() {
-        assertEquals(
-            EnglishMessages.fallbackErrorReply,
-            EnglishMessages.providerErrorReply("Status code: 500\nserver_error", now),
-        )
+        assertEquals(EnglishMessages.fallbackErrorReply, EnglishMessages.providerErrorReply(error(500, "server_error"), now))
+    }
+
+    @Test
+    fun `a context overflow is recognized by what the provider says`() {
+        assertTrue(error(400, "This model's maximum context length is 128000 tokens").isContextOverflow())
+        assertTrue(error(400, """{"error":{"message":"prompt is too long: 1050000 tokens"}}""").isContextOverflow())
+        assertTrue(!error(400, "unknown parameter").isContextOverflow())
+    }
+
+    @Test
+    fun `an outage is read off the status and the body`() {
+        assertNull(error(400, "content_policy_violation").providerOutage(now), "a refusal repeats on any provider")
+        assertNull(error(400, "unknown parameter").providerOutage(now), "a bad request is the bot's own")
+
+        val spent = assertNotNull(error(429, usageLimitBody).providerOutage(now))
+        assertEquals(now.plusSeconds(600), spent.until)
+        assertTrue(spent.deadlineNamed)
+
+        val rateLimited = assertNotNull(error(429, "rate_limit_exceeded").providerOutage(now))
+        assertEquals(now.plusSeconds(120), rateLimited.until)
+        assertTrue(!rateLimited.deadlineNamed)
+
+        val unanswered = assertNotNull(error(null, "connection reset").providerOutage(now))
+        assertEquals(now.plusSeconds(120), unanswered.until)
+
+        val signedOut = assertNotNull(error(401, "token_expired").providerOutage(now))
+        assertEquals(now.plusSeconds(1800), signedOut.until)
     }
 
     @Test
@@ -124,14 +142,14 @@ class ProviderErrorReplyTest {
 
     @Test
     fun `a json body spells the reset the same way`() {
-        val body = """{"error":{"type":"usage_limit_reached","resets_in_seconds":2910}}"""
+        val body = """{"error":{"type":"usage_limit_reached","resets_in_seconds":7200,"resets_at":1000900}}"""
 
-        assertEquals(2910.seconds, usageLimitResetIn(body, now))
+        assertEquals(7200.seconds, usageLimitResetIn(body, now))
     }
 
     @Test
     fun `an epoch deadline is read as the remaining wait`() {
-        assertEquals(15.minutes, usageLimitResetIn("error.resets_at=1000900", now))
+        assertEquals(900.seconds, usageLimitResetIn("error.resets_at=1000900", now))
     }
 
     @Test
@@ -139,23 +157,22 @@ class ProviderErrorReplyTest {
         assertNull(usageLimitResetIn("error.resets_at=999000", now))
     }
 
-    // a millisecond deadline read as seconds would promise a wait of decades, so it is dropped.
     @Test
     fun `an implausible deadline is ignored`() {
-        assertNull(usageLimitResetIn("error.resets_at=1000600000", now))
+        // milliseconds misread as seconds would promise a wait of decades
+        assertNull(usageLimitResetIn("error.resets_in_seconds=1700000000", now))
     }
 
-    // the backend spells a missing value `<null>` rather than omitting the key
     @Test
     fun `a reset the backend left empty yields no wait`() {
         val body = "error.resets_at=<null>\nerror.resets_in_seconds=<null>\nerror.type=usage_limit_reached"
 
         assertNull(usageLimitResetIn(body, now))
-        assertEquals(EnglishMessages.subscriptionLimitReply(null), EnglishMessages.providerErrorReply(body, now))
+        assertEquals(EnglishMessages.subscriptionLimitReply(null), EnglishMessages.providerErrorReply(error(429, body), now))
     }
 
     @Test
     fun `a body that says nothing about the reset yields no wait`() {
-        assertNull(usageLimitResetIn("Status code: 429\nusage_limit_reached", now))
+        assertNull(usageLimitResetIn("usage_limit_reached", now))
     }
 }

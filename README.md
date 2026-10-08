@@ -157,7 +157,7 @@ Or run it on JDK 21, with `ffmpeg` and `yt-dlp` on `PATH`:
 
 ## Stack
 
-Built on [Koog](https://github.com/JetBrains/koog) — JetBrains' Kotlin agent framework — with
-[TelegramBots](https://github.com/rubenlagus/TelegramBots) for Telegram and Exposed/SQLite for
-storage. Works with OpenAI, Anthropic, Google, DeepSeek, any OpenAI-compatible server, or a ChatGPT
-subscription instead of a paid API key — see [configuration.md](docs/configuration.md#llm-provider).
+Kotlin, with [TelegramBots](https://github.com/rubenlagus/TelegramBots) for Telegram, Exposed/SQLite
+for storage, and its own thin clients for the OpenAI and Anthropic APIs. Works with OpenAI, Anthropic,
+any OpenAI-compatible server (DeepSeek among them), or a ChatGPT subscription instead of a paid API
+key — see [configuration.md](docs/configuration.md#llm-provider).

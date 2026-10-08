@@ -1,7 +1,7 @@
 package com.helltar.vusan.agent
 
-import ai.koog.agents.core.tools.ToolDescriptor
-import ai.koog.prompt.llm.LLModel
+import com.helltar.vusan.llm.LlmModel
+import com.helltar.vusan.llm.ToolDefinition
 import kotlin.math.ceil
 
 // bytes/3 deliberately overestimates typical latin text while staying useful for cyrillic, CJK,
@@ -33,12 +33,9 @@ data class ContextTokenBudget(
         (((fixedPromptTokens + conversationTokens).toLong() * 100L) / contextWindowTokens).toInt().coerceIn(0, 100)
 }
 
-class ContextWindowPolicy(model: LLModel) {
+class ContextWindowPolicy(model: LlmModel) {
 
-    val contextWindowTokens: Int =
-        (model.contextLength ?: DEFAULT_CONTEXT_WINDOW_TOKENS)
-            .coerceIn(1L, Int.MAX_VALUE.toLong())
-            .toInt()
+    val contextWindowTokens: Int = model.contextWindowTokens.coerceIn(1L, Int.MAX_VALUE.toLong()).toInt()
 
     // room the agent may grow into during a run: tool results, retries, and the nudge exchange.
     // the ceiling bounds what one run may pile up, not what the window can hold — every later
@@ -63,8 +60,8 @@ class ContextWindowPolicy(model: LLModel) {
     // holds: a group loaded mid-run widens it, and that widening is spent from the agent reserve like any
     // other thing a run piles up. Counting every deferred schema here instead would give the history a
     // budget it never gets back.
-    fun budget(systemPrompt: String, currentTurn: String, tools: List<ToolDescriptor>): ContextTokenBudget {
-        val toolText = tools.joinToString("\n") { it.toString() }
+    fun budget(systemPrompt: String, currentTurn: String, tools: List<ToolDefinition>): ContextTokenBudget {
+        val toolText = tools.joinToString("\n") { "${it.name} ${it.description} ${it.parameters}" }
         val fixedPromptTokens =
             estimateTokens(systemPrompt) +
                     estimateTokens(currentTurn) +

@@ -1,6 +1,5 @@
 package com.helltar.vusan.config
 
-import ai.koog.prompt.executor.clients.openai.base.models.ServiceTier
 import io.github.oshai.kotlinlogging.KotlinLogging
 import io.ktor.client.*
 import io.ktor.client.call.*
@@ -16,6 +15,7 @@ import kotlinx.serialization.json.jsonPrimitive
 import java.util.concurrent.TimeUnit
 import kotlin.time.Duration
 import kotlin.time.Duration.Companion.seconds
+import com.helltar.vusan.llm.ReasoningEffort
 
 private val log = KotlinLogging.logger {}
 
@@ -102,9 +102,6 @@ fun codexRequestHeaders(credentials: CodexCredentials): Map<String, String> =
         credentials.accountId?.let { put("ChatGPT-Account-ID", it) }
     }
 
-/** The value a tier travels as, which is also the id the model catalog lists it under. */
-internal val ServiceTier.requestValue: String
-    get() = name.lowercase()
 
 /** A model the signed-in ChatGPT account may actually run through Codex. */
 data class CodexModel(

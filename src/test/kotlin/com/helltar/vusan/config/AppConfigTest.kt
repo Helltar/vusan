@@ -95,7 +95,7 @@ class AppConfigTest {
 
     @Test
     fun `a number that parses but cannot work is rejected too`() {
-        assertFailsWith<IllegalArgumentException> { config(agentMaxIterations = 0) }
+        assertFailsWith<IllegalArgumentException> { config(agentMaxModelCalls = 2) }
     }
 
     // a service reached without its secret is a misconfiguration, never a service reached anonymously
@@ -105,11 +105,11 @@ class AppConfigTest {
     }
 
     private fun config(
-        agentMaxIterations: Int = 70,
+        agentMaxModelCalls: Int = 70,
         regolithUrl: String? = null,
     ): AppConfig =
         AppConfig(
-            agentMaxIterations = agentMaxIterations,
+            agentMaxModelCalls = agentMaxModelCalls,
             accessPolicy = AccessPolicy(allowed = setOf("telegram:1")),
             appearance = null,
             databasePath = "data/db/vusan.db",
@@ -118,8 +118,7 @@ class AppConfigTest {
             giphyApiKey = null,
             klipyApiKey = null,
             llmProvider =
-                LlmProviderConfig.Hosted(
-                    provider = HostedLlmProvider.OPENAI,
+                LlmProviderConfig.OpenAi(
                     apiKey = "key",
                     model = "gpt-5.4-mini",
                     requestTimeout = 120.seconds,
@@ -128,7 +127,6 @@ class AppConfigTest {
             openAiImageApiKey = null,
             openAiImage = null,
             openAiStt = null,
-            openAiVision = null,
             personality = null,
             regolithToken = null,
             regolithUrl = regolithUrl,

@@ -13,8 +13,8 @@ import java.time.format.DateTimeFormatter
  *
  * All of it rides in one user-role message, including the clock and the sticker index. A second
  * system message would read as a higher-priority instruction — wrong for context assembled out of
- * what people sent — and koog's Anthropic and Google clients hoist every system message into the
- * top-level system field anyway, so a block placed here would not stay here on those providers.
+ * what people sent — and the Anthropic API takes every system message into its top-level system
+ * field anyway, so a block placed here would not stay here on that provider.
  */
 internal fun currentTurnPrompt(
     userInput: String,

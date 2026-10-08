@@ -1,30 +1,16 @@
 package com.helltar.vusan.config
 
-import ai.koog.http.client.KoogHttpClient
-import ai.koog.http.client.KoogHttpClientException
-import ai.koog.http.client.ktor.KtorKoogHttpClient
-import ai.koog.prompt.executor.clients.openai.base.models.ServiceTier
 import io.github.oshai.kotlinlogging.KotlinLogging
-import io.ktor.client.*
-import io.ktor.client.engine.cio.*
 import io.ktor.client.plugins.api.*
 import io.ktor.http.*
-import kotlinx.coroutines.flow.Flow
-import kotlinx.coroutines.flow.emitAll
-import kotlinx.coroutines.flow.flow
-import kotlinx.coroutines.flow.toList
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonArray
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.JsonPrimitive
 import kotlinx.serialization.json.contentOrNull
-import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.longOrNull
-import kotlinx.serialization.serializer
 import java.util.UUID
 import java.util.concurrent.atomic.AtomicReference
-import kotlin.reflect.KClass
-import kotlin.reflect.full.createType
 
 internal const val CODEX_BACKEND_BASE_URL = "https://chatgpt.com/backend-api/codex"
 
@@ -37,7 +23,6 @@ internal const val CODEX_ORIGINATOR = "codex_cli_rs"
 
 private const val CODEX_ROUTING_HINT_HEADER = "x-codex-routing-hint"
 private const val CODEX_SESSION_ID_HEADER = "session-id"
-private const val SSE_DATA_PREFIX = "data:"
 private const val SESSION_LOG_CHARS = 8
 private const val PERCENT = 100
 
@@ -52,20 +37,12 @@ internal fun codexRoutingHint(model: String, serviceTier: ServiceTier?): String 
     "model=$model" + serviceTier?.let { ";tier=${it.requestValue}" }.orEmpty()
 
 /**
- * The Koog HTTP factory Codex requests go through: a Ktor client that stamps a currently-valid ChatGPT
- * token on every outgoing request, wrapped so the backend's streaming-only contract stays invisible to
- * the rest of Koog.
+ * Signs every request to the Codex backend with a currently valid ChatGPT token and the headers
+ * Cloudflare checks, and reads the subscription's usage windows off every response.
  *
- * Auth is attached by a Ktor plugin rather than through Koog's per-request headers because those do not
- * survive to the wire on the raw-lines path this bridge depends on, and because Koog otherwise freezes
- * `Authorization` at construction from a `String` api key — which cannot work for a token that expires.
+ * A token expires and is rotated behind our back, so it is read per request rather than fixed when the
+ * client is built.
  */
-internal fun codexHttpClientFactory(auth: CodexAuthStore, routingHint: String): KoogHttpClient.Factory =
-    CodexHttpClientFactory(
-        delegate = KtorKoogHttpClient.Factory(baseClient = HttpClient(CIO) { install(codexRequestPlugin(auth, routingHint)) }),
-        limits = auth.limits,
-    )
-
 internal fun codexRequestPlugin(auth: CodexAuthStore, routingHint: String): ClientPlugin<Unit> =
     createClientPlugin("CodexAuth") {
         onRequest { request, content ->
@@ -115,173 +92,29 @@ private fun sessionIdOf(cacheKey: String): String = UUID.nameUUIDFromBytes(cache
  */
 internal fun codexSessionLabel(cacheKey: String): String = sessionIdOf(cacheKey).take(SESSION_LOG_CHARS)
 
-private class CodexHttpClientFactory(
-    private val delegate: KoogHttpClient.Factory,
-    private val limits: CodexLimits,
-) : KoogHttpClient.Factory {
+/**
+ * What is done with every completed Codex call: its tokens are counted towards the subscription's next
+ * step, the call is logged with its cache share and where its prefix drifted, and a reply from another
+ * model than the one asked for is noticed — once per model, since it is a fact about the deployment.
+ */
+internal fun codexCallObserver(limits: CodexLimits): (request: JsonObject, response: JsonObject) -> Unit {
+    val drift = CodexPrefixDrift()
+    val lastReportedModel = AtomicReference<String?>(null)
 
-    override fun create(
-        clientName: String,
-        baseUrl: String,
-        headers: Map<String, String>,
-        queryParameters: Map<String, String>,
-        requestTimeoutMillis: Long,
-        connectTimeoutMillis: Long,
-        socketTimeoutMillis: Long,
-        json: Json,
-    ): KoogHttpClient =
-        CodexHttpClient(
-            delegate =
-                delegate.create(
-                    clientName = clientName,
-                    baseUrl = baseUrl,
-                    // drop the placeholder key koog derived an Authorization header from. Ktor installs it
-                    // as a default request header, which a per-request header does not displace, so leaving
-                    // it here sends `Bearer codex-oauth` and the backend rejects an unparseable token.
-                    headers = headers.filterKeys { !it.equals("Authorization", ignoreCase = true) },
-                    queryParameters = queryParameters,
-                    requestTimeoutMillis = requestTimeoutMillis,
-                    connectTimeoutMillis = connectTimeoutMillis,
-                    socketTimeoutMillis = socketTimeoutMillis,
-                    json = json,
-                ),
-            json = json,
-            limits = limits,
-        )
-}
-
-private class CodexHttpClient(
-    private val delegate: KoogHttpClient,
-    private val json: Json,
-    private val limits: CodexLimits,
-) : KoogHttpClient {
-
-    override val clientName: String = delegate.clientName
-
-    private val lastReportedModel = AtomicReference<String?>(null)
-    private val drift = CodexPrefixDrift()
-
-    override suspend fun <R : Any> get(
-        path: String,
-        responseType: KClass<R>,
-        parameters: Map<String, String>,
-        headers: Map<String, String>,
-    ): R = delegate.get(path, responseType, parameters, headers)
-
-    /**
-     * Answer an ordinary non-streaming call by streaming it and reassembling the result.
-     *
-     * The Codex backend accepts nothing else: `stream=false` is rejected with "Stream must be set to
-     * true" and `store=true` with "Store must be set to false". Bridging here rather than in a custom
-     * `LLMClient` keeps Koog's own response parsing — tool calls, reasoning items, usage — in play, and
-     * leaves the agent loop unaware that this provider streams at all.
-     */
-    override suspend fun <T : Any, R : Any> post(
-        path: String,
-        requestBody: T,
-        requestBodyType: KClass<T>,
-        responseType: KClass<R>,
-        parameters: Map<String, String>,
-        headers: Map<String, String>,
-    ): R {
-        if (requestBody !is String)
-            return delegate.post(path, requestBody, requestBodyType, responseType, parameters, headers)
-
-        val lines =
-            delegate.lines(
-                path = path,
-                requestBody = forceStreamingRequest(requestBody, json),
-                requestBodyType = String::class,
-                parameters = parameters,
-                headers = headers + mapOf("Accept" to "text/event-stream"),
-            )
-
-        val response = collectStreamedResponse(lines.toList(), json, clientName)
+    return { request, response ->
         countUsage(response, limits)
-        log.info { "codex call: ${codexCallSummary(requestBody, response, json)}${prefixDrift(requestBody)}" }
-        warnOnAnotherModel(requestBody, response)
-        val completed = response.toString()
 
-        @Suppress("UNCHECKED_CAST")
+        val cacheKey = (request["prompt_cache_key"] as? JsonPrimitive)?.contentOrNull
+        val driftNote = cacheKey?.let { " " + drift.describe(codexSessionLabel(it), request) }.orEmpty()
 
-        return json.decodeFromString(serializer(responseType.createType()), completed) as R
-    }
+        log.info { "codex call: ${codexCallSummary(request, response)}$driftNote" }
 
-    override fun <T : Any, R : Any, O : Any> sse(
-        path: String,
-        requestBody: T,
-        requestBodyType: KClass<T>,
-        dataFilter: (String?) -> Boolean,
-        decodeStreamingResponse: (String) -> R,
-        processStreamingChunk: (R) -> O?,
-        parameters: Map<String, String>,
-        headers: Map<String, String>,
-    ): Flow<O> =
-        flow {
-            emitAll(
-                delegate.sse(
-                    path = path,
-                    requestBody = streamingBodyOrOriginal(requestBody),
-                    requestBodyType = requestBodyType,
-                    dataFilter = dataFilter,
-                    decodeStreamingResponse = decodeStreamingResponse,
-                    processStreamingChunk = processStreamingChunk,
-                    parameters = parameters,
-                    headers = headers,
-                ),
-            )
-        }
-
-    override fun <T : Any> lines(
-        path: String,
-        requestBody: T,
-        requestBodyType: KClass<T>,
-        parameters: Map<String, String>,
-        headers: Map<String, String>,
-    ): Flow<String> =
-        flow {
-            emitAll(
-                delegate.lines(
-                    path = path,
-                    requestBody = streamingBodyOrOriginal(requestBody),
-                    requestBodyType = requestBodyType,
-                    parameters = parameters,
-                    headers = headers,
-                ),
-            )
-        }
-
-    override fun close() = delegate.close()
-
-    private fun prefixDrift(requestBody: String): String {
-        val request = runCatching { json.parseToJsonElement(requestBody) as? JsonObject }.getOrNull() ?: return ""
-        val cacheKey = (request["prompt_cache_key"] as? JsonPrimitive)?.contentOrNull ?: return ""
-
-        return " " + drift.describe(codexSessionLabel(cacheKey), request)
-    }
-
-    // the backend may answer from a model other than the one asked for, and says so only here. once per
-    // model is enough: it is a fact about the deployment, not about a call.
-    private fun warnOnAnotherModel(requestBody: String, response: JsonObject) {
-        val served = servedModelMismatch(requestBody, response, json) ?: return
-
-        if (lastReportedModel.getAndSet(served) != served) {
-            log.warn { "codex answered from another model than the one requested: served=[$served]" }
+        servedModelMismatch(request, response)?.let { served ->
+            if (lastReportedModel.getAndSet(served) != served) {
+                log.warn { "codex answered from another model than the one requested: served=[$served]" }
+            }
         }
     }
-
-    @Suppress("UNCHECKED_CAST")
-    private fun <T : Any> streamingBodyOrOriginal(requestBody: T): T =
-        if (requestBody is String) forceStreamingRequest(requestBody, json) as T else requestBody
-}
-
-/** The backend rejects any other combination, so set both rather than trusting the caller. */
-internal fun forceStreamingRequest(requestBody: String, json: Json = Json): String {
-    val root = runCatching { json.parseToJsonElement(requestBody) as? JsonObject }.getOrNull() ?: return requestBody
-
-    return JsonObject(
-        root + mapOf("stream" to JsonPrimitive(true), "store" to JsonPrimitive(false)),
-    ).toString()
 }
 
 /**
@@ -289,12 +122,8 @@ internal fun forceStreamingRequest(requestBody: String, json: Json = Json): Stri
  *
  * A dated or suffixed name of the requested model is the same model, so only a different family counts.
  */
-internal fun servedModelMismatch(requestBody: String, response: JsonObject, json: Json = Json): String? {
-    val requested =
-        runCatching { (json.parseToJsonElement(requestBody) as? JsonObject)?.get("model") }.getOrNull()
-            ?.let { (it as? JsonPrimitive)?.contentOrNull }
-            ?: return null
-
+internal fun servedModelMismatch(request: JsonObject, response: JsonObject): String? {
+    val requested = (request["model"] as? JsonPrimitive)?.contentOrNull ?: return null
     val served = (response["model"] as? JsonPrimitive)?.contentOrNull?.takeIf { it.isNotBlank() } ?: return null
 
     return served.takeUnless { it.startsWith(requested, ignoreCase = true) }
@@ -310,8 +139,7 @@ internal fun servedModelMismatch(requestBody: String, response: JsonObject, json
  * count is there because a group loaded mid-turn changes the front of the request and takes the cached
  * prefix with it.
  */
-internal fun codexCallSummary(requestBody: String, response: JsonObject, json: Json = Json): String {
-    val request = runCatching { json.parseToJsonElement(requestBody) as? JsonObject }.getOrNull()
+internal fun codexCallSummary(request: JsonObject, response: JsonObject): String {
     val usage = response["usage"] as? JsonObject
 
     fun JsonObject?.long(name: String): Long = (this?.get(name) as? JsonPrimitive)?.longOrNull ?: 0L
@@ -320,11 +148,11 @@ internal fun codexCallSummary(requestBody: String, response: JsonObject, json: J
     val cached = (usage?.get("input_tokens_details") as? JsonObject).long("cached_tokens")
     val cachedPercent = if (input > 0) cached * PERCENT / input else 0
 
-    val cacheKey = (request?.get("prompt_cache_key") as? JsonPrimitive)?.contentOrNull
+    val cacheKey = (request["prompt_cache_key"] as? JsonPrimitive)?.contentOrNull
 
     return "session=[${cacheKey?.let(::codexSessionLabel) ?: "none"}] " +
             "input=[$input] cached=[$cached] cachedPercent=[$cachedPercent] " +
-            "output=[${usage.long("output_tokens")}] tools=[${(request?.get("tools") as? JsonArray)?.size ?: 0}]"
+            "output=[${usage.long("output_tokens")}] tools=[${(request["tools"] as? JsonArray)?.size ?: 0}]"
 }
 
 /** Counts a completed response's tokens towards the subscription's next step, see [CodexLimits]. */
@@ -338,45 +166,4 @@ internal fun countUsage(response: JsonObject, limits: CodexLimits) {
         cachedInputTokens = (usage["input_tokens_details"] as? JsonObject)?.long("cached_tokens") ?: 0L,
         outputTokens = usage.long("output_tokens"),
     )
-}
-
-/**
- * Fold a Responses API event stream back into the single response object the non-streaming API would
- * have returned.
- *
- * The final `response.completed` event carries the envelope — status, model, usage — but the Codex
- * backend leaves its `output` array empty, so the items are collected from `response.output_item.done`
- * as they arrive and spliced back in. Everything the agent depends on rides in those items: assistant
- * text, tool calls, and the reasoning items a tool loop has to echo back.
- */
-internal fun collectStreamedResponse(lines: List<String>, json: Json, clientName: String): JsonObject {
-    var envelope: JsonObject? = null
-    val output = mutableListOf<kotlinx.serialization.json.JsonElement>()
-
-    for (line in lines) {
-        if (!line.startsWith(SSE_DATA_PREFIX)) continue
-
-        val payload = line.removePrefix(SSE_DATA_PREFIX).trim()
-        if (payload.isEmpty() || payload == "[DONE]") continue
-
-        val event = runCatching { json.parseToJsonElement(payload).jsonObject }.getOrNull() ?: continue
-
-        when ((event["type"] as? JsonPrimitive)?.contentOrNull) {
-            "response.output_item.done" -> event["item"]?.let { output.add(it) }
-            "response.completed" -> envelope = event["response"] as? JsonObject
-            "response.failed", "response.incomplete", "response.cancelled", "error" ->
-                throw KoogHttpClientException(clientName, 200, payload)
-        }
-    }
-
-    val response =
-        envelope
-            ?: throw KoogHttpClientException(clientName, 200, "Codex stream ended without a completed response")
-
-    val completedOutput =
-        output.takeIf { it.isNotEmpty() }?.let(::JsonArray)
-            ?: (response["output"] as? JsonArray)
-            ?: JsonArray(emptyList())
-
-    return JsonObject(response + mapOf("output" to completedOutput))
 }

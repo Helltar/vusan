@@ -98,7 +98,7 @@ class ToolRegistryFactory(
     private val loadedGroups = LoadedToolGroups()
 
     val availableToolNames: List<String> by lazy {
-        buildCatalog(TOOL_NAME_PROBE_CONTEXT, BotOutbox(), TurnToolBudget(0)).registry.tools.map { it.name }.sorted()
+        buildCatalog(TOOL_NAME_PROBE_CONTEXT, BotOutbox(), TurnToolBudget(0)).tools.map { it.name }.sorted()
     }
 
     // one chat log read may not eat the whole run's tool budget: the model still has to fit its own
@@ -114,7 +114,7 @@ class ToolRegistryFactory(
     private val imageDownloadClient = ImageDownloadClient(fileDownloadClient)
     private val elevenLabsTts = config.elevenLabsTts
     private val openAiImage = config.openAiImage
-    private val imageVisionClient = vision?.let { ImageVisionClient(it.executor, it.model) }
+    private val imageVisionClient = vision?.let { ImageVisionClient(it.client, it.model) }
     private val telegramChannelClient = TelegramChannelClient(fileDownloadClient)
     private val ytDlpRunner = YtDlpRunner(config.ytDlpCookiesFile)
     private val ytDlpClient = YtDlpClient(ytDlpRunner)
@@ -124,7 +124,7 @@ class ToolRegistryFactory(
         TelegramChannelTools(
             TelegramChannelReader(
                 telegramChannelClient,
-                vision?.let { TelegramChannelImageDescriber(it.executor, it.model) },
+                vision?.let { TelegramChannelImageDescriber(it.client, it.model) },
             ),
         )
 
@@ -191,7 +191,7 @@ class ToolRegistryFactory(
     private val videoVisionClient =
         vision?.let {
             VideoVisionClient(
-                promptExecutor = it.executor,
+                client = it.client,
                 model = it.model,
                 transcriber =
                     config.openAiStt?.let { stt -> WhisperVideoAudioTranscriber(OpenAiWhisperClient(http, stt), stt) },

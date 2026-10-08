@@ -1,6 +1,8 @@
 package com.helltar.vusan.config
 
-import ai.koog.prompt.executor.clients.openai.base.models.ServiceTier
+import com.helltar.vusan.agent.AgentFactory
+import com.helltar.vusan.llm.ReasoningEffort
+import com.helltar.vusan.llm.openai.OpenAiEndpoint
 import com.helltar.vusan.request.AccessPolicy
 import com.helltar.vusan.request.Platform
 import com.helltar.vusan.request.UserRef
@@ -15,7 +17,7 @@ import kotlin.time.Duration.Companion.seconds
 data class AppConfig(
     val accessPolicy: AccessPolicy,
     val addressing: AddressingConfig? = null,
-    val agentMaxIterations: Int,
+    val agentMaxModelCalls: Int,
     val appearance: String?,
     val chatHistory: ConversationConfig = ConversationConfig(),
     val databasePath: String,
@@ -32,7 +34,7 @@ data class AppConfig(
     val openAiImage: OpenAiImageConfig?,
     val openAiImageApiKey: String?,
     val openAiStt: OpenAiSttConfig?,
-    val openAiVision: OpenAiVisionConfig?,
+    val vision: LlmProviderConfig? = null,
     val personality: String?,
     val regolithToken: String?,
     val regolithUrl: String?,
@@ -45,16 +47,18 @@ data class AppConfig(
 ) {
 
     init {
-        require(agentMaxIterations > 0) { "AGENT_MAX_ITERATIONS must be positive" }
+        require(agentMaxModelCalls >= AgentFactory.MIN_MODEL_CALLS) { "AGENT_MAX_MODEL_CALLS must be at least ${AgentFactory.MIN_MODEL_CALLS}" }
         require(maxConcurrentTurns > 0) { "MAX_CONCURRENT_TURNS must be positive" }
         require(regolithUrl == null || !regolithToken.isNullOrBlank()) { "Sandbox API authentication is required" }
     }
 
     companion object {
-        private const val DEFAULT_AGENT_MAX_ITERATIONS = 200
+        private const val DEFAULT_AGENT_MAX_MODEL_CALLS = 100
         private const val DEFAULT_LLM_REQUEST_TIMEOUT_SECONDS = 300L
         private const val LLM_PREFIX = "LLM"
         private const val LLM_FALLBACK_PREFIX = "LLM_FALLBACK"
+        private const val VISION_PREFIX = "VISION"
+        private const val ADDRESSING_PREFIX = "ADDRESSING"
         private const val DEFAULT_MAX_CONCURRENT_TURNS = 8
 
         private val dotenv = dotenv { ignoreIfMissing = true }
@@ -64,15 +68,15 @@ data class AppConfig(
         fun fromEnv(): AppConfig {
             val elevenLabsKey = readEnv("ELEVENLABS_API_KEY")
             val openAiImageKey = readEnv("OPENAI_IMAGE_API_KEY")
-            val llmProvider = resolveLlmProvider()
+            val llmProvider = resolveLlmProvider(LLM_PREFIX, fallbackTimeout = null)
             val llmFallback = resolveLlmFallback(llmProvider)
             val imageRoute = resolveImageRoute(openAiImageKey != null, llmProvider)
             val regolithUrl = readEnv("REGOLITH_URL")
 
             return AppConfig(
                 accessPolicy = AccessPolicy(allowed = readIdSetEnv("ALLOWED_IDS"), banned = readIdSetEnv("BANNED_IDS")),
-                addressing = resolveAddressing(),
-                agentMaxIterations = readIntEnv("AGENT_MAX_ITERATIONS") ?: DEFAULT_AGENT_MAX_ITERATIONS,
+                addressing = resolveAddressing(llmProvider),
+                agentMaxModelCalls = readIntEnv("AGENT_MAX_MODEL_CALLS") ?: DEFAULT_AGENT_MAX_MODEL_CALLS,
                 appearance = resolveAppearance(),
                 databasePath = readEnv("DB_FILE") ?: "data/db/vusan.db",
                 diaryEnabled = readBooleanEnv("DIARY_ENABLED") ?: true,
@@ -85,7 +89,7 @@ data class AppConfig(
                 maxConcurrentTurns = readIntEnv("MAX_CONCURRENT_TURNS") ?: DEFAULT_MAX_CONCURRENT_TURNS,
                 openAiImageApiKey = openAiImageKey,
                 openAiStt = resolveOpenAiStt(),
-                openAiVision = resolveOpenAiVision(),
+                vision = resolveRole(VISION_PREFIX, llmProvider),
                 personality = resolvePersonality(),
                 regolithToken = regolithUrl?.let { readServiceToken("REGOLITH", readEnv("REGOLITH_TOKEN")) },
                 regolithUrl = regolithUrl,
@@ -178,22 +182,27 @@ data class AppConfig(
             )
         }
 
-        private fun resolveOpenAiVision(): OpenAiVisionConfig? {
-            val key = readEnv("OPENAI_VISION_API_KEY") ?: return null
+        private fun resolveAddressing(chat: LlmProviderConfig): AddressingConfig? {
+            val provider = resolveRole(ADDRESSING_PREFIX, chat) ?: return null
 
-            return OpenAiVisionConfig(
-                apiKey = key,
-                model = readEnv("OPENAI_VISION_MODEL") ?: OpenAiVisionConfig.DEFAULT_MODEL,
+            return AddressingConfig(
+                provider = provider,
+                names = readEnv("ADDRESSING_NAMES")?.split(',')?.map(String::trim)?.filter(String::isNotEmpty).orEmpty(),
             )
         }
 
-        private fun resolveAddressing(): AddressingConfig? {
-            val key = readEnv("OPENAI_ADDRESSING_API_KEY") ?: return null
+        // a model for one job — looking at pictures, judging whether a message was for the bot — named under
+        // its own prefix. `<ROLE>_MODEL` is the switch; without `<ROLE>_PROVIDER` the model runs on the chat
+        // provider with its key, and with it the role is a provider of its own, read like the chat one.
+        private fun resolveRole(prefix: String, chat: LlmProviderConfig): LlmProviderConfig? {
+            val model = readEnv("${prefix}_MODEL") ?: return null
 
-            return AddressingConfig(
-                apiKey = key,
-                model = readEnv("OPENAI_ADDRESSING_MODEL") ?: AddressingConfig.DEFAULT_MODEL,
-                names = readEnv("ADDRESSING_NAMES")?.split(',')?.map(String::trim)?.filter(String::isNotEmpty).orEmpty(),
+            if (readEnv("${prefix}_PROVIDER") != null) return resolveLlmProvider(prefix, fallbackTimeout = chat.requestTimeout)
+
+            return chat.withModel(
+                model = model,
+                reasoningEffort = resolveReasoningEffort(prefix),
+                contextWindowTokens = readLongEnv("${prefix}_CONTEXT_WINDOW_TOKENS"),
             )
         }
 
@@ -201,8 +210,6 @@ data class AppConfig(
         // it says are the feature's own numbers, and live with it.
         private fun resolveInitiative(): InitiativeConfig? =
             InitiativeConfig().takeIf { readBooleanEnv("INITIATIVE_ENABLED") != false }
-
-        private fun resolveLlmProvider(): LlmProviderConfig = resolveLlmProvider(LLM_PREFIX, fallbackTimeout = null)
 
         // the same settings again under LLM_FALLBACK_, a second provider that answers while the first is
         // out. a subscription may stand on either side, but not both: the CODEX_* settings and the signed-in
@@ -257,21 +264,28 @@ data class AppConfig(
                 )
             }
 
-            val hosted =
-                runCatching { HostedLlmProvider.valueOf(provider.uppercase()) }.getOrNull()
-                    ?: error(
-                        "Unsupported ${prefix}_PROVIDER=[$provider]. " +
-                                "Supported values: openai, anthropic, google, deepseek, openai-compatible, codex",
+            return when (provider) {
+                "openai" ->
+                    LlmProviderConfig.OpenAi(
+                        apiKey = requireEnv("${prefix}_API_KEY"),
+                        model = requireEnv("${prefix}_MODEL"),
+                        reasoningEffort = resolveReasoningEffort(prefix),
+                        requestTimeout = requestTimeout,
+                        contextWindowTokens = contextWindowTokens,
                     )
 
-            return LlmProviderConfig.Hosted(
-                provider = hosted,
-                apiKey = requireEnv("${prefix}_API_KEY"),
-                model = requireEnv("${prefix}_MODEL"),
-                reasoningEffort = resolveReasoningEffort(prefix),
-                requestTimeout = requestTimeout,
-                contextWindowTokens = contextWindowTokens,
-            )
+                "anthropic" ->
+                    LlmProviderConfig.Anthropic(
+                        apiKey = requireEnv("${prefix}_API_KEY"),
+                        model = requireEnv("${prefix}_MODEL"),
+                        reasoningEffort = resolveReasoningEffort(prefix),
+                        requestTimeout = requestTimeout,
+                        contextWindowTokens = contextWindowTokens,
+                    )
+
+                else ->
+                    error("Unsupported ${prefix}_PROVIDER=[$provider]. Supported values: openai, anthropic, openai-compatible, codex")
+            }
         }
 
         private fun resolveOpenAiEndpoint(prefix: String): OpenAiEndpoint {

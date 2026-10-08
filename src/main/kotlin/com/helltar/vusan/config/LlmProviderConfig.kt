@@ -1,68 +1,105 @@
 package com.helltar.vusan.config
 
-import ai.koog.prompt.executor.clients.openai.base.models.ServiceTier
+import com.helltar.vusan.llm.ReasoningEffort
+import com.helltar.vusan.llm.openai.OpenAiEndpoint
 import java.nio.file.Path
 import kotlin.time.Duration
 
-enum class HostedLlmProvider {
-    OPENAI,
-    ANTHROPIC,
-    GOOGLE,
-    DEEPSEEK
-}
+/** The serving tiers OpenAI's Responses API takes; `default` means none was chosen. */
+enum class ServiceTier {
+    AUTO,
+    DEFAULT,
+    FLEX,
+    SCALE,
+    PRIORITY;
 
-/** Which OpenAI HTTP API a request goes to: `/v1/chat/completions` or `/v1/responses`. */
-enum class OpenAiEndpoint {
-    COMPLETIONS,
-    RESPONSES
-}
-
-/**
- * How hard a reasoning model thinks before it answers, named the way the API spells it.
- *
- * Vusan's own rather than koog's, whose enum stops at `high` while the API already takes `xhigh` and
- * `max`. Which of these a model accepts is up to the model. The Codex CLI's `ultra` and `persistent`
- * are left out on purpose: the CLI turns both into other values before it builds a request, so neither
- * reaches a backend as it is spelled.
- */
-enum class ReasoningEffort {
-    NONE,
-    MINIMAL,
-    LOW,
-    MEDIUM,
-    HIGH,
-    XHIGH,
-    MAX;
-
-    /** The value a request carries, which is also how the Codex model catalog lists it. */
+    /** The value a request carries, which is also the id the Codex model catalog lists it under. */
     val requestValue: String
         get() = name.lowercase()
 }
 
+/**
+ * One model and how to reach it, as a deployment configured it. The chat model, its fallback, the
+ * vision model and the addressing model are each one of these, read from their own variable prefix.
+ */
 sealed interface LlmProviderConfig {
 
+    val model: String
+    val reasoningEffort: ReasoningEffort?
+
     // caps how long a single LLM HTTP call may hang before it fails and the agent surfaces an error
-    // reply, instead of waiting out the provider client's 15-minute default while the bot stays silent.
+    // reply, instead of waiting out the engine's quarter-hour default while the bot stays silent.
     val requestTimeout: Duration
     val contextWindowTokens: Long?
 
-    data class Hosted(
-        val provider: HostedLlmProvider,
+    /** This configuration pointed at [model], for a role that runs on the chat provider with a model of its own. */
+    fun withModel(model: String, reasoningEffort: ReasoningEffort?, contextWindowTokens: Long?): LlmProviderConfig
+
+    data class OpenAi(
         val apiKey: String,
-        val model: String,
-        // honoured by openai alone, which is the one native provider whose request carries an effort.
-        val reasoningEffort: ReasoningEffort? = null,
+        override val model: String,
+        override val reasoningEffort: ReasoningEffort? = null,
         override val requestTimeout: Duration,
         override val contextWindowTokens: Long? = null,
     ) : LlmProviderConfig {
+
         init {
-            require(apiKey.isNotBlank()) { "LLM_API_KEY must not be blank" }
-            require(model.isNotBlank()) { "LLM_MODEL must not be blank" }
-            require(requestTimeout.isPositive()) { "LLM_REQUEST_TIMEOUT_SECONDS must be positive" }
-            require(contextWindowTokens == null || contextWindowTokens > 0L) {
-                "LLM_CONTEXT_WINDOW_TOKENS must be positive"
-            }
+            require(apiKey.isNotBlank()) { "the api key must not be blank" }
+            require(model.isNotBlank()) { "the model must not be blank" }
+            requireSane(requestTimeout, contextWindowTokens)
         }
+
+        override fun withModel(model: String, reasoningEffort: ReasoningEffort?, contextWindowTokens: Long?): OpenAi =
+            copy(model = model, reasoningEffort = reasoningEffort, contextWindowTokens = contextWindowTokens)
+    }
+
+    /**
+     * [maxOutputTokens] and [takesEffort] are what the vendor's model list said at startup, when it
+     * answered; a configuration built without asking leaves them to the runtime's defaults.
+     */
+    data class Anthropic(
+        val apiKey: String,
+        override val model: String,
+        override val reasoningEffort: ReasoningEffort? = null,
+        override val requestTimeout: Duration,
+        override val contextWindowTokens: Long? = null,
+        val maxOutputTokens: Int? = null,
+        val takesEffort: Boolean? = null,
+    ) : LlmProviderConfig {
+
+        init {
+            require(apiKey.isNotBlank()) { "the api key must not be blank" }
+            require(model.isNotBlank()) { "the model must not be blank" }
+            requireSane(requestTimeout, contextWindowTokens)
+        }
+
+        override fun withModel(model: String, reasoningEffort: ReasoningEffort?, contextWindowTokens: Long?): Anthropic =
+            copy(model = model, reasoningEffort = reasoningEffort, contextWindowTokens = contextWindowTokens, maxOutputTokens = null, takesEffort = null)
+    }
+
+    /**
+     * Any server that speaks the OpenAI API, DeepSeek included. It never claims vision on its own: the
+     * server behind [baseUrl] may serve anything, so a chat model here needs a vision model of its own.
+     */
+    data class OpenAiCompatible(
+        val baseUrl: String,
+        val apiKey: String,
+        override val model: String,
+        val endpoint: OpenAiEndpoint = OpenAiEndpoint.COMPLETIONS,
+        override val reasoningEffort: ReasoningEffort? = null,
+        override val requestTimeout: Duration,
+        override val contextWindowTokens: Long? = null,
+    ) : LlmProviderConfig {
+
+        init {
+            require(baseUrl.isNotBlank()) { "the base url must not be blank" }
+            require(apiKey.isNotBlank()) { "the api key must not be blank (use any non-empty value if the server ignores it)" }
+            require(model.isNotBlank()) { "the model must not be blank" }
+            requireSane(requestTimeout, contextWindowTokens)
+        }
+
+        override fun withModel(model: String, reasoningEffort: ReasoningEffort?, contextWindowTokens: Long?): OpenAiCompatible =
+            copy(model = model, reasoningEffort = reasoningEffort, contextWindowTokens = contextWindowTokens)
     }
 
     /**
@@ -71,8 +108,8 @@ sealed interface LlmProviderConfig {
      * `~/.codex/auth.json`, because it expires and is rotated behind our back.
      */
     data class Codex(
-        val model: String,
-        val reasoningEffort: ReasoningEffort? = null,
+        override val model: String,
+        override val reasoningEffort: ReasoningEffort? = null,
         // the plan's faster serving tier. it is not free: the same allowance is spent quicker, so it stays
         // off unless the operator asks for it.
         val serviceTier: ServiceTier? = null,
@@ -92,32 +129,18 @@ sealed interface LlmProviderConfig {
         override val requestTimeout: Duration,
         override val contextWindowTokens: Long? = null,
     ) : LlmProviderConfig {
-        init {
-            require(model.isNotBlank()) { "LLM_MODEL must not be blank" }
-            require(requestTimeout.isPositive()) { "LLM_REQUEST_TIMEOUT_SECONDS must be positive" }
-            require(contextWindowTokens == null || contextWindowTokens > 0L) {
-                "LLM_CONTEXT_WINDOW_TOKENS must be positive"
-            }
-        }
-    }
 
-    data class OpenAiCompatible(
-        val baseUrl: String,
-        val apiKey: String,
-        val model: String,
-        val endpoint: OpenAiEndpoint = OpenAiEndpoint.COMPLETIONS,
-        val reasoningEffort: ReasoningEffort? = null,
-        override val requestTimeout: Duration,
-        override val contextWindowTokens: Long? = null,
-    ) : LlmProviderConfig {
         init {
-            require(baseUrl.isNotBlank()) { "LLM_BASE_URL must not be blank" }
-            require(apiKey.isNotBlank()) { "LLM_API_KEY must not be blank (use any non-empty value if the local server ignores it)" }
-            require(model.isNotBlank()) { "LLM_MODEL must not be blank" }
-            require(requestTimeout.isPositive()) { "LLM_REQUEST_TIMEOUT_SECONDS must be positive" }
-            require(contextWindowTokens == null || contextWindowTokens > 0L) {
-                "LLM_CONTEXT_WINDOW_TOKENS must be positive"
-            }
+            require(model.isNotBlank()) { "the model must not be blank" }
+            requireSane(requestTimeout, contextWindowTokens)
         }
+
+        override fun withModel(model: String, reasoningEffort: ReasoningEffort?, contextWindowTokens: Long?): Codex =
+            copy(model = model, reasoningEffort = reasoningEffort, contextWindowTokens = contextWindowTokens, verbosity = null)
     }
+}
+
+private fun requireSane(requestTimeout: Duration, contextWindowTokens: Long?) {
+    require(requestTimeout.isPositive()) { "the request timeout must be positive" }
+    require(contextWindowTokens == null || contextWindowTokens > 0L) { "the context window must be positive" }
 }

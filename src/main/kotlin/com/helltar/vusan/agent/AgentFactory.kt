@@ -1,43 +1,31 @@
 package com.helltar.vusan.agent
 
-import ai.koog.agents.core.agent.AIAgent
-import ai.koog.agents.core.agent.config.AIAgentConfig
-import ai.koog.agents.core.agent.entity.AIAgentGraphStrategy
-import ai.koog.agents.core.agent.context.AIAgentGraphContextBase
-import ai.koog.agents.core.agent.entity.AIAgentNodeBase
-import ai.koog.agents.core.dsl.builder.node
-import ai.koog.agents.core.dsl.builder.strategy
-import ai.koog.agents.core.dsl.extension.*
-import ai.koog.agents.core.environment.ReceivedToolResult
-import ai.koog.agents.core.environment.ToolResultKind
-import ai.koog.agents.core.tools.ToolRegistry
-import ai.koog.agents.features.eventHandler.feature.EventHandler
-import ai.koog.prompt.dsl.prompt
-import ai.koog.prompt.executor.model.PromptExecutor
-import ai.koog.prompt.llm.LLModel
-import ai.koog.prompt.message.Message
-import ai.koog.prompt.message.MessagePart
-import ai.koog.prompt.message.ResponseMetaInfo
-import ai.koog.prompt.params.LLMParams
-import ai.koog.serialization.JSONObject
-import ai.koog.serialization.kotlinx.toKotlinxJsonObject
 import com.helltar.vusan.agent.conversation.ChatRole
+import com.helltar.vusan.agent.conversation.ChatTurn
 import com.helltar.vusan.agent.conversation.PromptConversation
 import com.helltar.vusan.agent.conversation.toolCallArgsForStorage
 import com.helltar.vusan.common.collapseWhitespaceAndCap
-import com.helltar.vusan.config.forConversation
-import com.helltar.vusan.config.sessionLogLabel
 import com.helltar.vusan.common.limitTo
+import com.helltar.vusan.common.rethrowIfCancellation
 import com.helltar.vusan.common.xmlBlock
+import com.helltar.vusan.llm.ChatRequest
+import com.helltar.vusan.llm.LlmClient
+import com.helltar.vusan.llm.LlmModel
+import com.helltar.vusan.llm.Message
+import com.helltar.vusan.llm.Part
+import com.helltar.vusan.llm.RequestOptions
+import com.helltar.vusan.llm.StopReason
+import com.helltar.vusan.llm.TokenUsage
+import com.helltar.vusan.llm.ToolDefinition
+import com.helltar.vusan.llm.ToolResult
+import com.helltar.vusan.llm.llmJson
 import com.helltar.vusan.outbox.BotOutbox
 import com.helltar.vusan.request.ConversationScope
 import com.helltar.vusan.tools.ToolCatalog
+import com.helltar.vusan.tools.ToolFailure
 import io.github.oshai.kotlinlogging.KotlinLogging
-import kotlinx.serialization.json.JsonPrimitive
-import kotlinx.serialization.json.intOrNull
-
-// the strategy is built outside the class, so it cannot reach AgentFactory's own logger
-private val strategyLog = KotlinLogging.logger("AgentStrategy")
+import kotlinx.serialization.json.JsonObject
+import kotlinx.serialization.json.jsonObject
 
 data class ToolEvent(
     val toolCallId: String,
@@ -47,57 +35,33 @@ data class ToolEvent(
     val isError: Boolean,
 )
 
-data class TokenUsage(
-    val inputTokens: Int?,
-    val outputTokens: Int?,
-    val totalTokens: Int?,
-    // what the provider served from its prompt cache and what it wrote to it, where it says so
-    val cacheReadTokens: Int? = null,
-    val cacheWriteTokens: Int? = null,
-)
-
-/**
- * The usage of one model call, cache figures included.
- *
- * Koog keeps the cache breakdown out of its typed usage and puts what a provider reports into the
- * metadata under the provider's own names: Anthropic's reads and writes, Google's reads. OpenAI's
- * `cached_tokens` is parsed and then dropped on the way to `ResponseMetaInfo`, so nothing shows there.
- */
-internal fun tokenUsageOf(meta: ResponseMetaInfo): TokenUsage {
-    val metadata = meta.metadata
-
-    fun count(key: String): Int? = (metadata?.get(key) as? JsonPrimitive)?.intOrNull
-
-    return TokenUsage(
-        inputTokens = meta.inputTokensCount,
-        outputTokens = meta.outputTokensCount,
-        totalTokens = meta.totalTokensCount,
-        cacheReadTokens = count("cacheReadInputTokens") ?: count("cachedContentTokenCount"),
-        cacheWriteTokens = count("cacheCreationInputTokens"),
-    )
-}
-
 data class AgentPromptPreparation(
     val toolCatalog: ToolCatalog,
     val systemPrompt: String,
     val tokenBudget: ContextTokenBudget,
 )
 
+/**
+ * Builds the turns of this deployment: the system prompt, the budget the history has to fit, and an
+ * [AgentTurn] over the model client with a conversation's history and tools.
+ */
 class AgentFactory(
-    private val promptExecutor: PromptExecutor,
-    private val model: LLModel,
-    private val chatParams: LLMParams = LLMParams(),
+    private val client: LlmClient,
+    private val model: LlmModel,
+    private val options: RequestOptions = RequestOptions(),
     private val personality: String? = null,
     // the bot's own Telegram handle: inbound sanitizing strips the mention before the prompt is
     // built, so without this the model never sees the name people call it by.
     private val botUsername: String? = null,
     private val botDisplayName: String? = null,
-    // Koog counts graph nodes here, not LLM calls: one tool round is an execute plus a send-results
-    // node, so the ceiling on tool calls is roughly half of this. the last few are spent landing a
-    // turn that runs long (see `outOfToolBudget`) instead of crashing it.
-    private val maxIterations: Int,
+    // model calls one turn may make, the last of them reserved for landing a turn that runs long
+    private val maxModelCalls: Int,
     private val contextWindowPolicy: ContextWindowPolicy = ContextWindowPolicy(model),
 ) {
+
+    init {
+        require(maxModelCalls >= MIN_MODEL_CALLS) { "a turn needs at least $MIN_MODEL_CALLS model calls" }
+    }
 
     // the catalog is built before the turn text, not here: what it defers goes into that text as
     // `<tool_groups>`, and the budget below has to weigh the finished prompt.
@@ -112,13 +76,13 @@ class AgentFactory(
                 contextWindowPolicy.budget(
                     systemPrompt = systemPrompt,
                     currentTurn = currentTurn,
-                    tools = toolCatalog.visibleDescriptors(),
+                    tools = toolCatalog.visibleDefinitions(),
                 ),
         )
     }
 
     /** What this conversation's model calls are labelled with in the log, when the provider names sessions. */
-    fun sessionLogLabel(scope: ConversationScope): String? = chatParams.sessionLogLabel(scope.toString())
+    fun sessionLogLabel(scope: ConversationScope): String? = options.forConversation(scope.toString()).promptCacheKey
 
     /** The reserve one run may spend on tool results, from which the runner opens its [TurnToolBudget]. */
     val liveToolResultMaxTokens: Int
@@ -135,340 +99,279 @@ class AgentFactory(
         onToolStarting: (activity: ToolActivity?) -> Unit = {},
         // a turn nobody called the bot into outright may end without a word; see `owesDelivery`.
         mayStaySilent: Boolean = false,
-    ): AIAgent<String, String> {
-        val seededPrompt =
-            prompt(id = "vusan-turn-$scope", params = chatParams.forConversation(scope.toString())) {
-                system(preparation.systemPrompt)
+    ): AgentTurn {
+        val history =
+            buildList {
+                add(Message.System(preparation.systemPrompt))
                 // the recap is written from quoted events, so it can carry a delimiter out of them.
-                conversation.summary?.let { user(xmlBlock("conversation_recap", it.neutralizePromptBlocks())) }
-
-                conversation.turns.forEach { turn ->
-                    when (turn.role) {
-                        ChatRole.USER -> user(turn.content)
-                        ChatRole.ASSISTANT -> assistant(turn.content)
-
-                        ChatRole.TOOL_CALL ->
-                            toolCall(
-                                tool = checkNotNull(turn.toolName) { "TOOL_CALL row without toolName" },
-                                args = toolCallArgsForStorage(turn.content),
-                                id = checkNotNull(turn.toolCallId) { "TOOL_CALL row without toolCallId" },
-                            )
-
-                        ChatRole.TOOL_RESULT ->
-                            toolResult(
-                                tool = checkNotNull(turn.toolName) { "TOOL_RESULT row without toolName" },
-                                output = turn.content,
-                                id = checkNotNull(turn.toolCallId) { "TOOL_RESULT row without toolCallId" },
-                                isError = turn.toolIsError ?: false,
-                            )
-                    }
-                }
+                conversation.summary?.let { add(Message.User(xmlBlock("conversation_recap", it.neutralizePromptBlocks()))) }
+                addAll(conversation.turns.toMessages())
             }
 
-        val agentConfig =
-            AIAgentConfig(
-                prompt = seededPrompt,
-                model = model,
-                maxAgentIterations = maxIterations,
-            )
+        return AgentTurn(
+            client = client,
+            model = model,
+            options = options.forConversation(scope.toString()),
+            history = history,
+            catalog = preparation.toolCatalog,
+            outbox = outbox,
+            toolBudget = toolBudget,
+            maxModelCalls = maxModelCalls,
+            scope = scope,
+            mayStaySilent = mayStaySilent,
+            toolEvents = toolEvents,
+            tokenUsage = tokenUsage,
+            onToolStarting = onToolStarting,
+        )
+    }
 
-        return AIAgent(
-            promptExecutor = promptExecutor,
-            agentConfig = agentConfig,
-            strategy =
-                vusanSingleRunStrategy(
-                    outbox, preparation.toolCatalog, toolBudget, maxIterations, scope, mayStaySilent,
-                ),
-            toolRegistry = preparation.toolCatalog.registry,
-            id = "vusan-turn-$scope",
-        ) {
-            install(EventHandler) {
-                var seq = 0
+    companion object {
+        // a request, a wrap-up and the nudge in between
+        const val MIN_MODEL_CALLS = 3
+    }
+}
 
-                // koog dispatches a tool event here but emits no INFO line of its own, so log every call
-                // ourselves (name + capped args) — uniform across all tools, not just those that self-log.
-                fun record(toolCallId: String?, toolName: String, toolArgs: JSONObject, output: String, isError: Boolean) {
-                    val args = toolArgs.toToolArgsJson()
+/**
+ * One turn of the agent: the model is asked, its tool calls are run and answered, and so on until it
+ * replies without one — or until the turn runs out of model calls and is landed instead.
+ *
+ * Guards against flaky models, in two places:
+ * - a tool call that arrives with no arguments at all for a tool that takes them (flaky models emit
+ *   empty-arg siblings when they try to call tools in parallel) is answered with a validation error
+ *   instead of being executed, so the follow-up request stays well-formed and the model reissues it;
+ * - a turn that ends having delivered nothing — no `sendMessage`, media or reaction, and empty assistant
+ *   text (flaky providers return an empty completion after a batch of tool results) — gets one nudge to
+ *   actually deliver before finishing, so a full turn of research does not collapse into silence.
+ *
+ * Landing: the last model call of the turn is reserved for a wrap-up request carrying no tools at all,
+ * so the model cannot spend it on one more search, and its answer — written from what it gathered,
+ * saying what it could not finish — is queued into the outbox like any other message, so it survives even
+ * a turn that already reacted or sent something (trailing agent text is otherwise dropped as duplicate
+ * chatter). Without that, a research turn would die with every search it paid for still unanswered.
+ */
+class AgentTurn internal constructor(
+    private val client: LlmClient,
+    private val model: LlmModel,
+    private val options: RequestOptions,
+    private val history: List<Message>,
+    private val catalog: ToolCatalog,
+    private val outbox: BotOutbox,
+    private val toolBudget: TurnToolBudget,
+    private val maxModelCalls: Int,
+    private val scope: ConversationScope,
+    private val mayStaySilent: Boolean,
+    private val toolEvents: (ToolEvent) -> Unit,
+    private val tokenUsage: (TokenUsage) -> Unit,
+    private val onToolStarting: (activity: ToolActivity?) -> Unit,
+) {
 
-                    log.info {
-                        "tool call: name=[$toolName] error=$isError " +
-                                "args=[${args.collapseWhitespaceAndCap(TOOL_LOG_ARGS_MAX_CHARS).orEmpty()}]"
-                    }
+    private var calls = 0
+    private var eventSeq = 0
 
-                    toolEvents(
-                        ToolEvent(
-                            toolCallId = toolCallId ?: "$toolName-${seq++}",
-                            toolName = toolName,
-                            args = args,
-                            output = output,
-                            isError = isError,
-                        ),
-                    )
-                }
+    /** Runs the turn for [currentTurn] and returns the model's closing text, which may be empty. */
+    suspend fun run(currentTurn: String): String {
+        val messages = history.toMutableList()
+        messages += Message.User(currentTurn)
 
-                onLLMCallStarting { ctx ->
-                    logPromptDump(ctx.prompt, ctx.model.id, ctx.tools)
-                }
+        var nudged = false
+        var lowBudgetWarned = false
 
-                onLLMCallCompleted { ctx ->
-                    ctx.response?.let { response ->
-                        // a safety classifier declined the request: the reply is empty and a retry of the
-                        // same prompt is declined again, so the log has to say why the turn ends without a word.
-                        if (response.finishReason == REFUSAL_FINISH_REASON) {
-                            log.warn { "model declined the request for $scope: finishReason=[${response.finishReason}]" }
-                        }
+        while (true) {
+            val reply = request(messages, catalog.visibleDefinitions())
+            messages += reply
 
-                        tokenUsage(tokenUsageOf(response.metaInfo))
-                    }
-                }
+            if (reply.toolCalls.isEmpty()) {
+                // a turn nobody called the bot into may end in silence, but only on its first reply: a
+                // model that sees the message was not for it says nothing before it calls anything.
+                val silenceAllowed = mayStaySilent && calls == 1
 
-                onToolCallStarting { ctx ->
-                    onToolStarting(toolActivityFor(ctx.toolName))
-                }
+                if (!owesDelivery(reply, nudged, outbox.hasQueuedOutput, silenceAllowed)) return reply.text
 
-                onToolCallCompleted { ctx ->
-                    record(ctx.toolCallId, ctx.toolName, ctx.toolArgs, ctx.toolResult?.toString().orEmpty(), false)
-                }
+                nudged = true
+                messages.dropTrailingEmptyAssistant()
+                messages += Message.User(DELIVER_NUDGE)
+                continue
+            }
 
-                onToolCallFailed { ctx ->
-                    record(ctx.toolCallId, ctx.toolName, ctx.toolArgs, ctx.message, true)
-                }
+            // this batch still runs — it is already paid for, and it may carry the delivery call — but once
+            // the budget is this thin the results go to the wrap-up instead of buying another tool round.
+            messages += Message.ToolResults(reply.toolCalls.map { execute(it) })
 
-                onToolValidationFailed { ctx ->
-                    record(ctx.toolCallId, ctx.toolName, ctx.toolArgs, ctx.message, true)
-                }
+            if (outOfModelCalls(calls, maxModelCalls)) return wrapUp(messages)
+
+            // the model has to hear that the reserve is running out without being asked, or it spends the rest
+            // of the turn on reads that come back cut in half. once per run, and after the results rather than
+            // before them: nothing may come between an assistant's tool call and that call's result.
+            if (!lowBudgetWarned && toolBudget.isLow) {
+                lowBudgetWarned = true
+                log.info { "tool result budget low for $scope: ${toolBudget.remainingTokens} of ${toolBudget.totalTokens} tokens left" }
+                messages += Message.User(toolBudget.report())
             }
         }
     }
 
+    private suspend fun request(messages: List<Message>, tools: List<ToolDefinition>): Message.Assistant {
+        logPromptDump(messages, model.id, tools.map { it.name })
+        calls++
+
+        // a copy: the list grows as the turn goes on, and a client may keep the request it was handed
+        val reply = client.complete(model, ChatRequest(messages.toList(), tools, options))
+
+        reply.usage?.let(tokenUsage)
+
+        // a safety classifier declined the request: the reply is empty and a retry of the same prompt is
+        // declined again, so the log has to say why the turn ends without a word.
+        if (reply.stopReason == StopReason.REFUSAL) log.warn { "model declined the request for $scope" }
+        if (reply.stopReason == StopReason.MAX_TOKENS) log.warn { "model hit its output ceiling for $scope" }
+
+        return reply.message
+    }
+
+    private suspend fun wrapUp(messages: MutableList<Message>): String {
+        log.warn { "model calls spent for $scope (limit $maxModelCalls); answering with what the turn already gathered" }
+
+        messages += Message.User(TOOL_BUDGET_WRAP_UP)
+        val answer = request(messages, tools = emptyList()).text
+
+        // queue it rather than leave it as the run's trailing text: a turn that already reacted or sent a
+        // message has that text dropped as duplicate chatter, and here it is the whole answer.
+        if (answer.isNotBlank() && !outbox.enqueueText(answer)) {
+            log.warn { "no room left in the outbox for the wrap-up answer for $scope" }
+        }
+
+        return answer
+    }
+
+    private suspend fun execute(call: Part.ToolCall): ToolResult {
+        val tool = catalog.find(call.name)
+        val args = call.arguments.toString()
+
+        onToolStarting(toolActivityFor(call.name))
+
+        val (output, isError) =
+            when {
+                tool == null ->
+                    "There is no tool named `${call.name}`. The tools you can call are: ${catalog.tools.joinToString { it.name }}." to true
+
+                call.arguments.isEmpty() && tool.requiredParameters.isNotEmpty() ->
+                    garbledCallMessage(tool.name, tool.requiredParameters) to true
+
+                else -> runTool(tool.name) { tool.call(call.arguments) }
+            }
+
+        log.info { "tool call: name=[${call.name}] error=$isError args=[${args.collapseWhitespaceAndCap(TOOL_LOG_ARGS_MAX_CHARS).orEmpty()}]" }
+
+        toolEvents(
+            ToolEvent(
+                toolCallId = call.id.ifBlank { "${call.name}-${eventSeq++}" },
+                toolName = call.name,
+                args = args,
+                output = output,
+                isError = isError,
+            ),
+        )
+
+        // the model sees a result bounded to what is left of the run's reserve; history keeps it whole
+        val bounded = output.boundedToolText(toolBudget.remainingTokens)
+        toolBudget.spend(estimateTokens(bounded))
+
+        return ToolResult(call.id, call.name, bounded, isError)
+    }
+
+    // every failure becomes the result the model reads: the guard's own message, a decoding complaint about
+    // the arguments, or the bare fact for anything else — which also goes to the log with its trace, since
+    // a tool that throws past its guard points at a bug.
+    private suspend fun runTool(name: String, block: suspend () -> String): Pair<String, Boolean> =
+        try {
+            block() to false
+        } catch (e: ToolFailure) {
+            e.message.orEmpty() to true
+        } catch (e: IllegalArgumentException) {
+            "Tool `$name` rejected its arguments: ${e.message}" to true
+        } catch (t: Throwable) {
+            t.rethrowIfCancellation()
+            log.error(t) { "tool $name failed outside its guard" }
+            "Tool `$name` failed: ${t.message ?: t::class.simpleName}" to true
+        }
+
     private companion object {
         const val TOOL_LOG_ARGS_MAX_CHARS = 300
-        const val REFUSAL_FINISH_REASON = "refusal"
         val log = KotlinLogging.logger {}
     }
 }
 
 /**
- * Serializes tool-call arguments for the log and for history.
- *
- * Not `JSONObject.toString()`: koog's own implementation interpolates raw content between quotes and
- * escapes nothing, neither keys nor values, so one quote or backslash in an argument makes the whole
- * object unparseable — and `toolCallArgsForStorage`, which parses it back, then keeps `{}` and the
- * later turns of the run no longer know what the call was for.
+ * Stored turns as the messages a request carries. Tool calls of one batch share the assistant message
+ * that made them, and their results share the one message that answers them, the way both APIs want it.
  */
-internal fun JSONObject.toToolArgsJson(): String = toKotlinxJsonObject().toString()
+internal fun List<ChatTurn>.toMessages(): List<Message> =
+    buildList {
+        val pendingResults = mutableListOf<ToolResult>()
 
-// mirrors Koog's built-in singleRunStrategy, but routes any assistant message without tool calls
-// to nodeFinish — including empty responses. the default strategy uses `onTextMessage { true }`,
-// which requires at least one non-empty `MessagePart.Text`; the model often emits an empty
-// assistant with `finishReason=stop` after replying through the `sendMessage` tool, leaving no
-// matching edge and triggering AIAgentStuckInTheNodeException.
-//
-// recovery: a model can also end its turn having delivered nothing at all — no `sendMessage`, no
-// media, no reaction, and empty assistant text — which would leave the user with total silence
-// despite a full turn of research. flaky OpenAI-compatible providers do this routinely, returning
-// an empty completion after a batch of tool results. when that happens we nudge the model once to
-// actually deliver, then let the normal edges finish. built per run so the strategy can read the
-// live `outbox` to tell whether anything was delivered.
-//
-// landing: the last iterations of the run are reserved for a wrap-up request. koog otherwise throws
-// AIAgentMaxNumberOfIterationsReachedException the moment the limit is passed, and a research turn
-// dies with every search it paid for still unanswered.
-private fun vusanSingleRunStrategy(
-    outbox: BotOutbox,
-    catalog: ToolCatalog,
-    toolBudget: TurnToolBudget,
-    maxIterations: Int,
-    scope: ConversationScope,
-    mayStaySilent: Boolean,
-): AIAgentGraphStrategy<String, String> =
-    strategy<String, String>("single_run") {
-        var nudged = false
-        var toolBudgetSpent = false
-        var lowBudgetNoticeDue = false
-        var lowBudgetWarned = false
-        var sentToolRevision = -1
-
-        // koog seeds the run with every descriptor in the registry, and a deferred group's schemas would
-        // ride along in every request from there on. narrowing is a session write, so it happens once per
-        // widening rather than per request: before the first call, and after a batch that loaded a group.
-        suspend fun AIAgentGraphContextBase.sendVisibleTools() {
-            if (sentToolRevision == catalog.revision) return
-            sentToolRevision = catalog.revision
-            llm.writeSession { tools = catalog.visibleDescriptors() }
+        fun flushResults() {
+            if (pendingResults.isNotEmpty()) add(Message.ToolResults(pendingResults.toList()))
+            pendingResults.clear()
         }
 
-        fun undelivered(msg: Message.Assistant, silenceAllowed: Boolean = false): Boolean =
-            owesDelivery(msg, nudged, outbox.hasQueuedOutput, silenceAllowed)
+        for (turn in this@toMessages) {
+            when (turn.role) {
+                ChatRole.USER -> {
+                    flushResults()
+                    add(Message.User(turn.content))
+                }
 
-        val nodeNarrowTools by node<String, String>("narrowVisibleTools") { message ->
-            sendVisibleTools()
-            message
-        }
+                ChatRole.ASSISTANT -> {
+                    flushResults()
+                    add(Message.Assistant(turn.content))
+                }
 
-        val nodeCallLLM by nodeLLMRequest()
+                ChatRole.TOOL_CALL -> {
+                    val call =
+                        Part.ToolCall(
+                            id = checkNotNull(turn.toolCallId) { "TOOL_CALL row without toolCallId" },
+                            name = checkNotNull(turn.toolName) { "TOOL_CALL row without toolName" },
+                            arguments = storedToolArgs(turn.content),
+                        )
 
-        val nodeExecuteTool by node<ToolCalls, ReceivedToolResults>("executeValidToolCalls") { toolCalls ->
-            // this batch still runs — it is already paid for, and it may carry the delivery call — but once
-            // the budget is this thin the results go to the wrap-up instead of buying another tool round.
-            toolBudgetSpent = stateManager.withStateLock { outOfToolBudget(it.iterations, maxIterations) }
+                    val previous = lastOrNull() as? Message.Assistant
 
-            val results =
-                toolCalls.toolCalls.map { call ->
-                    val missing = call.missingRequiredArgs(llm.toolRegistry)
-
-                    if (missing.isEmpty()) {
-                        val result = environment.executeTool(call).boundedForLiveContext(toolBudget.remainingTokens)
-                        toolBudget.spend(result.liveContextTokens)
-                        result
+                    if (pendingResults.isEmpty() && previous != null && previous.parts.all { it is Part.ToolCall }) {
+                        set(lastIndex, Message.Assistant(previous.parts + call))
                     } else {
-                        garbledToolCallResult(call, missing)
+                        flushResults()
+                        add(Message.Assistant(listOf(call)))
                     }
                 }
 
-            // a `loadTools` call in this batch widened what the model may call; the next request carries it
-            sendVisibleTools()
-
-            // the model has to hear that the reserve is running out without asking, or it spends the rest
-            // of the turn on reads that come back cut in half. once per run: repeating the notice would
-            // spend the very budget it is warning about.
-            lowBudgetNoticeDue = !lowBudgetWarned && toolBudget.isLow
-            if (lowBudgetNoticeDue) lowBudgetWarned = true
-
-            ReceivedToolResults(results)
-        }
-
-        val nodeSendToolResult by nodeLLMSendToolResults()
-
-        // what nodeSendToolResult does, plus the budget notice — which has to follow the results rather
-        // than precede them, since nothing may come between an assistant's tool call and that call's result.
-        val nodeSendToolResultLowBudget by
-            node<ReceivedToolResults, Message.Assistant>("sendToolResultsWithBudgetNotice") { results ->
-                strategyLog.info {
-                    "tool result budget low for $scope: ${toolBudget.remainingTokens} of " +
-                            "${toolBudget.totalTokens} tokens left"
-                }
-
-                llm.writeSession {
-                    appendPrompt {
-                        user { results.toolResults.forEach { result -> toolResult(result.toMessagePart()) } }
-                        user(toolBudget.report())
-                    }
-
-                    requestLLM()
-                }
-            }
-
-        // the turn is out of iterations: answer from what it already gathered. the request carries no tools
-        // at all, so the model cannot spend the reserve on one more search, and its text becomes the reply.
-        val nodeWrapUp by node<ReceivedToolResults, String>("wrapUpWithoutTools") { results ->
-            strategyLog.warn {
-                "tool budget spent for $scope (limit $maxIterations iterations); " +
-                        "answering with what the turn already gathered"
-            }
-
-            val answer =
-                llm.writeSession {
-                    appendPrompt {
-                        user { results.toolResults.forEach { result -> toolResult(result.toMessagePart()) } }
-                        user(TOOL_BUDGET_WRAP_UP)
-                    }
-
-                    requestLLMWithoutTools()
-                }.textContent()
-
-            // queue it rather than leave it as the run's trailing text: a turn that already reacted or sent a
-            // message has that text dropped as duplicate chatter, and here it is the whole answer.
-            if (answer.isNotBlank() && !outbox.enqueueText(answer)) {
-                strategyLog.warn { "no room left in the outbox for the wrap-up answer for $scope" }
-            }
-
-            answer
-        }
-
-        val nodeNudgeDeliver by node<Message.Assistant, Message.Assistant>("nudgeDeliver") {
-            nudged = true
-
-            llm.writeSession {
-                rewritePrompt { prompt -> prompt.withMessages { it.withoutTrailingEmptyAssistant() } }
-                appendPrompt { user(DELIVER_NUDGE) }
-                requestLLM()
+                ChatRole.TOOL_RESULT ->
+                    pendingResults +=
+                        ToolResult(
+                            callId = checkNotNull(turn.toolCallId) { "TOOL_RESULT row without toolCallId" },
+                            name = checkNotNull(turn.toolName) { "TOOL_RESULT row without toolName" },
+                            output = turn.content,
+                            isError = turn.toolIsError ?: false,
+                        )
             }
         }
 
-        fun <I> finishWhenNoToolCalls(node: AIAgentNodeBase<I, Message.Assistant>) {
-            edge(
-                node forwardTo nodeFinish
-                        onCondition { msg -> msg.parts.none { it is MessagePart.Tool.Call } }
-                        transformed { msg -> msg.textContent() },
-            )
-        }
-
-        edge(nodeStart forwardTo nodeNarrowTools)
-        edge(nodeNarrowTools forwardTo nodeCallLLM)
-        edge(nodeCallLLM forwardTo nodeExecuteTool onToolCalls { true })
-        edge(nodeCallLLM forwardTo nodeNudgeDeliver onCondition { undelivered(it, silenceAllowed = mayStaySilent) })
-        finishWhenNoToolCalls(nodeCallLLM)
-
-        edge(nodeExecuteTool forwardTo nodeWrapUp onCondition { toolBudgetSpent })
-        edge(nodeExecuteTool forwardTo nodeSendToolResultLowBudget onCondition { lowBudgetNoticeDue })
-        edge(nodeExecuteTool forwardTo nodeSendToolResult)
-        edge(nodeSendToolResult forwardTo nodeExecuteTool onToolCalls { true })
-        edge(nodeSendToolResult forwardTo nodeNudgeDeliver onCondition { undelivered(it) })
-        finishWhenNoToolCalls(nodeSendToolResult)
-
-        edge(nodeSendToolResultLowBudget forwardTo nodeExecuteTool onToolCalls { true })
-        edge(nodeSendToolResultLowBudget forwardTo nodeNudgeDeliver onCondition { undelivered(it) })
-        finishWhenNoToolCalls(nodeSendToolResultLowBudget)
-
-        edge(nodeWrapUp forwardTo nodeFinish)
-
-        edge(nodeNudgeDeliver forwardTo nodeExecuteTool onToolCalls { true })
-        finishWhenNoToolCalls(nodeNudgeDeliver)
+        flushResults()
     }
+
+// the stored arguments are the json the model sent, bounded; whatever does not read as an object replays as none
+private fun storedToolArgs(content: String): JsonObject =
+    runCatching { llmJson.parseToJsonElement(toolCallArgsForStorage(content)).jsonObject }.getOrDefault(JsonObject(emptyMap()))
 
 private const val TRUNCATION_NOTICE = "\n[tool result truncated for the model context]"
 private const val OMITTED_NOTICE = "[tool result omitted: model context budget exhausted]"
 
-// what this result will cost the prompt. `parts` is what koog forwards to the LLM whenever it is set —
-// and ToolBase.encodeResultToParts sets it, to a single Text part, for every tool that ran — so
-// `output` is only the live text on the paths that never reached the tool at all.
-internal val ReceivedToolResult.liveContextTokens: Int
-    get() =
-        parts?.sumOf { part -> (part as? MessagePart.Text)?.let { estimateTokens(it.text) } ?: 0 }
-            ?: estimateTokens(output)
-
 /**
- * Caps what this tool result contributes to the prompt, in estimated tokens.
+ * Caps a tool result to what is left of the run's reserve, in estimated tokens.
  *
- * Both carriers are bounded: `ReceivedToolResult.toMessagePart` reads `parts ?: [Text(output)]`, so
- * bounding one of them alone leaves the other free to overrun the budget. Non-text parts are left
- * untouched — an image cannot be shortened, only dropped, and dropping it would silently answer a
- * different question than the tool was asked.
+ * How many characters a token budget buys depends on the text, because the estimator reads bytes: a
+ * cyrillic character spends two where a latin one spends one. Measuring the text being cut keeps both
+ * honest, and whatever the cut still overshoots the caller charges back at the real estimate.
  */
-internal fun ReceivedToolResult.boundedForLiveContext(maxTokens: Int): ReceivedToolResult {
-    if (liveContextTokens <= maxTokens) return this
-
-    val bounded = copy(output = output.boundedToolText(maxTokens))
-    val parts = parts ?: return bounded
-    var remaining = maxTokens
-
-    return bounded.copy(
-        parts =
-            parts.map { part ->
-                if (part !is MessagePart.Text) return@map part
-
-                val text = part.text.boundedToolText(remaining)
-                remaining = (remaining - estimateTokens(text)).coerceAtLeast(0)
-                part.copy(text = text)
-            },
-    )
-}
-
-// how many characters a token budget buys depends on the text, because the estimator reads bytes: a
-// cyrillic character spends two where a latin one spends one. Measuring the text being cut keeps both
-// honest, and whatever the cut still overshoots the caller charges back at the real estimate.
-private fun String.boundedToolText(maxTokens: Int): String {
+internal fun String.boundedToolText(maxTokens: Int): String {
     if (estimateTokens(this) <= maxTokens) return this
 
     val maxChars =
@@ -479,13 +382,15 @@ private fun String.boundedToolText(maxTokens: Int): String {
     return limitTo(maxChars - TRUNCATION_NOTICE.length) + TRUNCATION_NOTICE
 }
 
-// koog counts one iteration per node execution, nodeStart and nodeFinish included, and throws the
-// moment the count passes the limit. the wrap-up needs two of them (the no-tools request and
-// nodeFinish); the spare covers the odd pass the nudge path adds.
-private const val WRAP_UP_ITERATIONS = 4
+// the last call is the wrap-up's, so a batch of tool results after the one before it goes to the wrap-up
+// rather than buying another round the turn could not answer.
+private const val WRAP_UP_MODEL_CALLS = 1
 
-internal fun outOfToolBudget(iterations: Int, maxIterations: Int): Boolean =
-    maxIterations - iterations <= WRAP_UP_ITERATIONS
+internal fun outOfModelCalls(callsMade: Int, maxModelCalls: Int): Boolean = maxModelCalls - callsMade <= WRAP_UP_MODEL_CALLS
+
+internal fun garbledCallMessage(tool: String, required: List<String>): String =
+    "Tool `$tool` was called with no arguments at all; it takes: ${required.joinToString(", ")}. " +
+            "Reissue it as a single, complete call with its arguments."
 
 private const val TOOL_BUDGET_WRAP_UP =
     "This turn has used up its tool budget — no further tool calls will run, and this is your last reply. " +
@@ -502,10 +407,6 @@ private const val DELIVER_NUDGE =
 // call to execute, no caption text) and the outbox holds nothing to send. an announced plan does not count
 // as delivering — that is the promise, not the answer. nudged at most once, to avoid looping on a
 // stubbornly empty model.
-//
-// a turn nobody called the bot into may end in silence, but only on its first reply: a model that sees the
-// message was not for it says nothing before it calls anything, while an empty reply after a round of tools
-// is the flaky provider the nudge exists for, and silence then would throw the work away.
 internal fun owesDelivery(
     reply: Message.Assistant,
     nudged: Boolean,
@@ -516,49 +417,11 @@ internal fun owesDelivery(
 
 // true when the assistant ended its turn with nothing for the user: no tool call left to execute
 // (so nothing more is coming this turn) and no plain text to fall back on as a caption.
-internal fun Message.Assistant.deliveredNothing(): Boolean =
-    parts.none { it is MessagePart.Tool.Call } && textContent().isBlank()
+internal fun Message.Assistant.deliveredNothing(): Boolean = toolCalls.isEmpty() && text.isBlank()
 
-// requestLLM appends the model reply to the session prompt, so an empty reply leaves an assistant
-// message with no parts there. on the wire that becomes `{"role":"assistant"}` — no content, no
-// tool_calls — which openai rejects with 400 on the next request; drop it before re-requesting.
-// a blank-text reply stays: it still serializes to a valid string content.
-internal fun List<Message>.withoutTrailingEmptyAssistant(): List<Message> =
-    dropLastWhile { it is Message.Assistant && it.parts.isEmpty() }
-
-// flaky OpenAI-compatible models garble parallel tool calls: sibling calls in the same batch arrive
-// with empty `{}` args. Only that shape is caught, and only for a tool that takes arguments at all.
-// Checking the declared parameters one at a time would reject far more than it should: koog's
-// generated schema lists every parameter as required, Kotlin defaults included, so a call that simply
-// left `isAnonymous` out was turned away even though koog decodes it into the default without
-// complaint. A call that omits a genuinely required argument still fails in koog's own decoding,
-// which answers the model with the parse error.
-internal fun MessagePart.Tool.Call.missingRequiredArgs(registry: ToolRegistry): List<String> {
-    val required = registry.getToolOrNull(tool)?.descriptor?.requiredParameters.orEmpty()
-    if (required.isEmpty()) return emptyList()
-
-    val provided = runCatching { argsJson.keys }.getOrDefault(emptySet())
-    if (provided.isNotEmpty()) return emptyList()
-
-    return required.map { it.name }
+// an empty reply leaves an assistant message with no parts, which openai rejects on the next request as
+// a message with neither content nor tool calls; drop it before re-requesting. a blank-text reply stays:
+// it still serializes to a valid string content.
+internal fun MutableList<Message>.dropTrailingEmptyAssistant() {
+    while (lastOrNull().let { it is Message.Assistant && it.parts.isEmpty() }) removeAt(lastIndex)
 }
-
-// synthesize a ValidationError result for a garbled call instead of handing it to the executor,
-// which would throw a reflection exception that Koog logs as an ERROR with a full stack trace. this
-// still satisfies the tool_call id (keeping the follow-up LLM request well-formed) and tells the
-// model to reissue a complete call.
-private fun garbledToolCallResult(call: MessagePart.Tool.Call, missing: List<String>): ReceivedToolResult {
-    val names = missing.joinToString(", ")
-
-    return ReceivedToolResult(
-        id = call.id,
-        tool = call.tool,
-        toolArgs = JSONObject(emptyMap()),
-        toolDescription = null,
-        output = "Tool `${call.tool}` was called with no arguments at all; it takes: $names. " +
-                "Reissue it as a single, complete call with its arguments.",
-        resultKind = ToolResultKind.ValidationError(IllegalArgumentException("Missing required argument(s): $names")),
-        result = null,
-    )
-}
-

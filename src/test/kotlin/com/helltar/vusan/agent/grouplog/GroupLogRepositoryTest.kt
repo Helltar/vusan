@@ -2,7 +2,6 @@ package com.helltar.vusan.agent.grouplog
 
 import com.helltar.vusan.config.AppConfig
 import com.helltar.vusan.config.GroupLogConfig
-import com.helltar.vusan.config.HostedLlmProvider
 import com.helltar.vusan.config.LlmProviderConfig
 import com.helltar.vusan.infra.Db
 import java.nio.file.Files
@@ -350,7 +349,7 @@ class GroupLogRepositoryTest {
 
     private fun testConfig(dbPath: String) =
         AppConfig(
-            agentMaxIterations = 70,
+            agentMaxModelCalls = 70,
             accessPolicy = AccessPolicy(),
             appearance = null,
             databasePath = dbPath,
@@ -359,8 +358,7 @@ class GroupLogRepositoryTest {
             giphyApiKey = null,
             klipyApiKey = null,
             llmProvider =
-                LlmProviderConfig.Hosted(
-                    provider = HostedLlmProvider.OPENAI,
+                LlmProviderConfig.OpenAi(
                     apiKey = "test",
                     model = "test",
                     requestTimeout = 60.seconds,
@@ -369,7 +367,6 @@ class GroupLogRepositoryTest {
             openAiImageApiKey = null,
             openAiImage = null,
             openAiStt = null,
-            openAiVision = null,
             regolithToken = null,
             regolithUrl = null,
             searxngUrl = null,

@@ -10,9 +10,8 @@ class ImageRouteTest {
     private val codex = LlmProviderConfig.Codex(model = "gpt-5.6-terra", requestTimeout = 120.seconds)
 
     private val apiKeyProvider =
-        LlmProviderConfig.Hosted(
-            provider = HostedLlmProvider.OPENAI,
-            apiKey = "key",
+        LlmProviderConfig.OpenAi(
+                    apiKey = "key",
             model = "gpt-5.4-mini",
             requestTimeout = 120.seconds,
         )

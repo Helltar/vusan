@@ -1,53 +1,41 @@
 package com.helltar.vusan.agent
 
-import ai.koog.agents.core.tools.ToolDescriptor
-import ai.koog.prompt.Prompt
-import ai.koog.prompt.message.AttachmentContent
-import ai.koog.prompt.message.MessagePart
+import com.helltar.vusan.llm.Message
+import com.helltar.vusan.llm.Part
 import io.github.oshai.kotlinlogging.KotlinLogging
 
 // every message of the request, uncut, in the order the provider receives it. raw user content and
 // tool output ride along, so this stays off until PROMPT_DUMP_LEVEL=DEBUG asks for it.
 private val log = KotlinLogging.logger("PromptDump")
 
-internal fun logPromptDump(prompt: Prompt, model: String, tools: List<ToolDescriptor>) {
-    log.debug { renderPromptDump(prompt, model, tools.map { it.name }) }
+internal fun logPromptDump(messages: List<Message>, model: String, tools: List<String>) {
+    log.debug { renderPromptDump(messages, model, tools) }
 }
 
-internal fun renderPromptDump(prompt: Prompt, model: String, tools: List<String>): String =
+internal fun renderPromptDump(messages: List<Message>, model: String, tools: List<String>): String =
     buildString {
-        append("llm request: model=[$model] messages=${prompt.messages.size} tools=[${tools.joinToString(", ")}]")
+        append("llm request: model=[$model] messages=${messages.size} tools=[${tools.joinToString(", ")}]")
 
-        prompt.messages.forEach { message ->
-            append("\n\n--- ${message.role.name.lowercase()} ---\n")
-            append(message.parts.joinToString("\n", transform = ::renderPart))
+        messages.forEach { message ->
+            when (message) {
+                is Message.System -> append("\n\n--- system ---\n").append(message.text)
+                is Message.User -> append("\n\n--- user ---\n").append(message.parts.joinToString("\n", transform = ::renderPart))
+                is Message.Assistant -> append("\n\n--- assistant ---\n").append(message.parts.joinToString("\n", transform = ::renderPart))
+
+                is Message.ToolResults ->
+                    append("\n\n--- tool results ---\n").append(
+                        message.results.joinToString("\n") { "[tool result ${it.name} id=${it.callId} error=${it.isError}]\n${it.output}" },
+                    )
+            }
         }
     }
 
-private fun renderPart(part: MessagePart): String =
-
+// an image is sent base64-encoded; the bytes are megabytes of noise, so only their size is logged, and a
+// reasoning block is the provider's to read, so only its presence is.
+private fun renderPart(part: Part): String =
     when (part) {
-        is MessagePart.Text -> part.text
-        is MessagePart.Reasoning -> "[reasoning] ${part.content.joinToString("\n")}"
-        is MessagePart.Attachment -> renderAttachment(part)
-        is MessagePart.Tool.Call -> "[tool call ${part.tool} id=${part.id}] ${part.args}"
-
-        is MessagePart.Tool.Result ->
-            "[tool result ${part.tool} id=${part.id} error=${part.isError}]\n" +
-                    part.parts.joinToString("\n", transform = ::renderPart)
+        is Part.Text -> part.text
+        is Part.Reasoning -> "[reasoning ${part.provider.name.lowercase()}]"
+        is Part.Image -> "[image ${part.mimeType} name=${part.fileName.orEmpty()}] ${part.bytes.size} bytes"
+        is Part.ToolCall -> "[tool call ${part.name} id=${part.id}] ${part.arguments}"
     }
-
-// binary attachments are sent base64-encoded; the bytes are megabytes of noise, so only their size
-// is logged, while text and URL sources are shown as the model gets them.
-private fun renderAttachment(part: MessagePart.Attachment): String {
-    val source = part.source
-    val content =
-        when (val attached = source.content) {
-            is AttachmentContent.PlainText -> attached.text
-            is AttachmentContent.URL -> attached.url
-            is AttachmentContent.Binary.Bytes -> "${attached.data.size} bytes"
-            is AttachmentContent.Binary.Base64 -> "${attached.base64.length} base64 chars"
-        }
-
-    return "[attachment ${source.mimeType} name=${source.fileName.orEmpty()}] $content"
-}

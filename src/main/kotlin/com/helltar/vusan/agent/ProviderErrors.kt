@@ -1,13 +1,9 @@
 package com.helltar.vusan.agent
 
-import ai.koog.http.client.KoogHttpClientException
-import ai.koog.prompt.executor.clients.LLMClientException
 import com.helltar.vusan.config.CodexAuthException
 import com.helltar.vusan.i18n.Messages
-import io.ktor.client.network.sockets.ConnectTimeoutException
-import io.ktor.client.network.sockets.SocketTimeoutException
-import io.ktor.client.plugins.HttpRequestTimeoutException
-import java.io.IOException
+import com.helltar.vusan.llm.LlmException
+import com.helltar.vusan.llm.ProviderOutage
 import java.time.Instant
 import kotlin.time.Duration
 import kotlin.time.Duration.Companion.days
@@ -15,14 +11,14 @@ import kotlin.time.Duration.Companion.minutes
 import kotlin.time.Duration.Companion.seconds
 import kotlin.time.toJavaDuration
 
-// what a provider failure means, read out of the message koog folded the status and the error body
-// into. a provider says why it refused in prose that varies by endpoint and by vendor, so every rule
-// here is a pattern rather than a status code, and each earns a different canned reply: a wait, a
-// sign-in, a differently worded request, or nothing but the fallback.
+// what a provider failure means, read out of the status and the body the client kept. a provider says why
+// it refused in prose that varies by endpoint and by vendor, so most rules here are a pattern over the
+// body rather than a status code, and each earns a different canned reply: a wait, a sign-in, a
+// differently worded request, or nothing but the fallback.
 
-// the provider's HTTP status is embedded in the client exception message ("Status code: 429").
-// 429 (rate limit / quota) and 503 (service overloaded) are transient — the provider asks us to back off.
-private val TRANSIENT_STATUS_REGEX = Regex("""Status code:\s*(429|503)""")
+// 429 (rate limit) and 503 or 529 (an overloaded server) are transient — the provider asks us to back off.
+private val TRANSIENT_STATUSES = setOf(429, 503, 529)
+
 private val CONTEXT_OVERFLOW_REGEX =
     Regex(
         "context[_ ]length|context window|maximum context|too many (input )?tokens|" +
@@ -40,10 +36,7 @@ private val SUBSCRIPTION_LIMIT_REGEX =
     )
 
 private val UNAUTHORIZED_REGEX =
-    Regex(
-        "\\b401\\b|missing_authorization_header|token_expired|invalid_api_key|unauthorized",
-        RegexOption.IGNORE_CASE,
-    )
+    Regex("missing_authorization_header|token_expired|invalid_api_key|authentication_error|unauthorized", RegexOption.IGNORE_CASE)
 
 // the provider refused the request itself over its content policy, and reports it in the error body:
 // the status is whatever the endpoint felt like, a flagged streaming call even comes back as 200. there
@@ -55,28 +48,23 @@ private val CONTENT_POLICY_REGEX =
         RegexOption.IGNORE_CASE,
     )
 
-/**
- * The provider failure inside [this], as the message koog built for it.
- *
- * Koog raises one of two types depending on which layer refused the call — the client wrapper, or the
- * raw HTTP/SSE path the Codex bridge streams over — and both fold the status code and the error body
- * into their message.
- */
-internal fun Throwable.providerErrorMessage(): String? =
-    generateSequence(this) { it.cause }
-        .firstOrNull { it is LLMClientException || it is KoogHttpClientException }
-        ?.message
+/** The provider failure inside [this], wherever in the cause chain the client raised it. */
+internal fun Throwable.providerError(): LlmException? =
+    generateSequence(this) { it.cause }.filterIsInstance<LlmException>().firstOrNull()
 
-/** Which canned reply a provider error earns, from the status and the error body koog embedded in it. */
-internal fun Messages.providerErrorReply(providerError: String, now: Instant = Instant.now()): String =
+private val LlmException.text: String
+    get() = body.orEmpty()
+
+private val LlmException.unauthorized: Boolean
+    get() = status == 401 || status == 403 || UNAUTHORIZED_REGEX.containsMatchIn(text)
+
+/** Which canned reply a provider error earns, from its status and its body. */
+internal fun Messages.providerErrorReply(error: LlmException, now: Instant = Instant.now()): String =
     when {
-        CONTENT_POLICY_REGEX.containsMatchIn(providerError) -> contentPolicyReply
-
-        SUBSCRIPTION_LIMIT_REGEX.containsMatchIn(providerError) ->
-            subscriptionLimitReply(usageLimitResetIn(providerError, now))
-
-        UNAUTHORIZED_REGEX.containsMatchIn(providerError) -> signInRequiredReply
-        TRANSIENT_STATUS_REGEX.containsMatchIn(providerError) -> overloadedReply
+        CONTENT_POLICY_REGEX.containsMatchIn(error.text) -> contentPolicyReply
+        SUBSCRIPTION_LIMIT_REGEX.containsMatchIn(error.text) -> subscriptionLimitReply(usageLimitResetIn(error.text, now))
+        error.unauthorized -> signInRequiredReply
+        error.status in TRANSIENT_STATUSES -> overloadedReply
         else -> fallbackErrorReply
     }
 
@@ -99,39 +87,35 @@ private fun Regex.longIn(text: String): Long? =
     find(text)?.groupValues?.get(1)?.toLongOrNull()
 
 internal fun Throwable.isContextOverflow(): Boolean =
-    providerErrorMessage()?.let(CONTEXT_OVERFLOW_REGEX::containsMatchIn) == true
-
-/**
- * A provider that is out [until] a deadline. [deadlineNamed] is true only when the provider stated that
- * deadline itself; otherwise it is merely when the next probe is due, and no promise to anybody.
- */
-internal class ProviderOutage(val until: Instant, val deadlineNamed: Boolean)
+    providerError()?.text?.let(CONTEXT_OVERFLOW_REGEX::containsMatchIn) == true
 
 /**
  * How long the provider behind [this] is out for, or `null` when the failure is not the provider's.
  *
  * A spent allowance and a dead sign-in mean every call is refused until something outside the bot
  * changes, so they keep the provider out for the deadline the body names, or [DEFAULT_PROVIDER_OUTAGE]
- * without one. A rate limit, an overloaded server or a dropped connection usually passes in seconds,
- * so those keep it out for [TRANSIENT_OUTAGE] only — long enough that a blip does not flip every
- * call back and forth, short enough that the fallback is not paid for after the blip is over. A
- * content refusal is not an outage at all: it repeats on any provider.
+ * without one. A rate limit, an overloaded server or a call that never got an answer usually passes in
+ * seconds, so those keep it out for [TRANSIENT_OUTAGE] only — long enough that a blip does not flip every
+ * call back and forth, short enough that the fallback is not paid for after the blip is over. A content
+ * refusal is not an outage at all: it repeats on any provider.
  */
 internal fun Throwable.providerOutage(now: Instant = Instant.now()): ProviderOutage? {
-    if (causes().any { it is CodexAuthException }) return now.outageFor(DEFAULT_PROVIDER_OUTAGE)
+    if (generateSequence(this) { it.cause }.any { it is CodexAuthException }) return now.outageFor(DEFAULT_PROVIDER_OUTAGE)
 
-    val message = providerErrorMessage()
+    val error = providerError() ?: return null
 
     return when {
-        message != null && CONTENT_POLICY_REGEX.containsMatchIn(message) -> null
+        CONTENT_POLICY_REGEX.containsMatchIn(error.text) -> null
 
-        message != null && SUBSCRIPTION_LIMIT_REGEX.containsMatchIn(message) ->
-            usageLimitResetIn(message, now)?.let { now.outageFor(it, deadlineNamed = true) }
+        SUBSCRIPTION_LIMIT_REGEX.containsMatchIn(error.text) ->
+            usageLimitResetIn(error.text, now)?.let { now.outageFor(it, deadlineNamed = true) }
                 ?: now.outageFor(DEFAULT_PROVIDER_OUTAGE)
 
-        message != null && UNAUTHORIZED_REGEX.containsMatchIn(message) -> now.outageFor(DEFAULT_PROVIDER_OUTAGE)
-        message != null && TRANSIENT_STATUS_REGEX.containsMatchIn(message) -> now.outageFor(TRANSIENT_OUTAGE)
-        isNetworkFailure() -> now.outageFor(TRANSIENT_OUTAGE)
+        error.unauthorized -> now.outageFor(DEFAULT_PROVIDER_OUTAGE)
+        error.status in TRANSIENT_STATUSES -> now.outageFor(TRANSIENT_OUTAGE)
+        // the request never got an answer to read a status out of: a timeout, a dropped connection, a name
+        // that does not resolve
+        error.status == null -> now.outageFor(TRANSIENT_OUTAGE)
         else -> null
     }
 }
@@ -141,12 +125,3 @@ private fun Instant.outageFor(duration: Duration, deadlineNamed: Boolean = false
 
 private val DEFAULT_PROVIDER_OUTAGE = 30.minutes
 private val TRANSIENT_OUTAGE = 2.minutes
-
-private fun Throwable.causes(): Sequence<Throwable> = generateSequence(this) { it.cause }
-
-// the request never got an answer to read a status out of: a timeout on either side of the socket, a
-// refused or dropped connection, a name that does not resolve.
-private fun Throwable.isNetworkFailure(): Boolean =
-    causes().any {
-        it is IOException || it is HttpRequestTimeoutException || it is ConnectTimeoutException || it is SocketTimeoutException
-    }

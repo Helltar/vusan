@@ -1,50 +1,30 @@
 package com.helltar.vusan.config
 
-import ai.koog.prompt.executor.clients.openai.OpenAIClientSettings
-import ai.koog.prompt.executor.clients.openai.OpenAILLMClient
-import ai.koog.prompt.executor.llms.MultiLLMPromptExecutor
-import ai.koog.prompt.executor.model.PromptExecutor
-import ai.koog.prompt.llm.LLMCapability
-import ai.koog.prompt.llm.LLModel
-import kotlin.time.Duration
+import com.helltar.vusan.llm.LlmClient
+import com.helltar.vusan.llm.LlmModel
 
-/** The model that looks at images and video frames, with the executor that reaches it. */
+/** The model that looks at images and video frames, with the client that reaches it. */
 data class VisionRuntime(
     val providerLabel: String,
-    val executor: PromptExecutor,
-    val model: LLModel,
+    val client: LlmClient,
+    val model: LlmModel,
+    // whether the client is the chat's own, which the caller closes once, or one of vision's to close too
+    val ownClient: Boolean,
 )
 
 /**
- * Picks the model that looks at images. `OPENAI_VISION_API_KEY` gives vision an OpenAI model of its own,
- * the way `OPENAI_STT_API_KEY` does for speech, so a chat model that cannot see (DeepSeek, most local
- * models) does not take the bot's eyes away with it. Without that key vision rides on the chat model, and
- * a chat model that cannot see leaves vision off entirely — `null` here means the vision tools are never
- * registered, which beats offering the agent a tool whose every call fails.
+ * Picks the model that looks at images. `VISION_MODEL` gives vision a model of its own, so a chat model
+ * that cannot see (DeepSeek, most local models) does not take the bot's eyes away with it; a model named
+ * for the role is taken at its word about seeing, whatever its provider. Without one, vision rides on
+ * the chat model, and a chat model that cannot see leaves vision off entirely — `null` here means the
+ * vision tools are never registered, which beats offering the agent a tool whose every call fails.
  */
-fun resolveVisionRuntime(
-    config: OpenAiVisionConfig?,
-    chat: LlmRuntime,
-    chatExecutor: PromptExecutor,
-    requestTimeout: Duration,
-): VisionRuntime? {
+fun resolveVisionRuntime(config: LlmProviderConfig?, chat: LlmRuntime, codexAuth: CodexAuthStore? = null): VisionRuntime? {
     if (config == null) {
-        return chat
-            .takeIf { it.model.supports(LLMCapability.Vision.Image) }
-            ?.let { VisionRuntime(it.providerLabel, chatExecutor, it.model) }
+        return chat.takeIf { it.model.seesImages }?.let { VisionRuntime(it.providerLabel, it.client, it.model, ownClient = false) }
     }
 
-    val model = openAiModel(config.model)
+    val own = resolveLlmRuntime(config, codexAuth)
 
-    require(model.supports(LLMCapability.Vision.Image)) {
-        "OPENAI_VISION_MODEL=[${config.model}] cannot read images"
-    }
-
-    val client = OpenAILLMClient(config.apiKey, OpenAIClientSettings(timeoutConfig = connectionTimeouts(requestTimeout)))
-
-    return VisionRuntime(
-        providerLabel = "OpenAI",
-        executor = MultiLLMPromptExecutor(model.provider to client),
-        model = model,
-    )
+    return VisionRuntime(own.providerLabel, own.client, own.model.copy(seesImages = true), ownClient = true)
 }

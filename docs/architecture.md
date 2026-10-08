@@ -40,16 +40,24 @@ that is who owns writing them, not because only `agent/` reads them. No other ar
   and private-message fallbacks; `telegram/callback/` owns the inline-button flows — `CallbackRouter` validates a
   pressed button and picks its flow, `TaskMenuHandler` runs the deterministic `/tasks` UI, and `InlineChoiceHandler` the
   agent-created choice buttons, whose selection becomes an agent input.
-- **`agent/`** — agent orchestration on top of Koog. `AgentRunner` serializes the turns of one conversation, assembles
+- **`llm/`** — the model layer: one `LlmClient` interface, the `Message`/`Part` model every caller builds, `RequestOptions`,
+  and a client per wire protocol under `llm/openai/` (the Responses and Chat Completions APIs, which also cover the Codex
+  backend and any OpenAI-compatible server) and `llm/anthropic/` (the Messages API). The package knows nothing about the
+  bot: `RetryingLlmClient` repeats a call the provider fumbled, `FallbackLlmClient` hands every call to a second provider
+  while the first is out, and the reasoning blocks a provider returns are kept raw and replayed to it verbatim. The
+  clients own their data shapes — adding a field the API grew is one line, and a block type a reply carries that nobody
+  reads yet is skipped with a warning rather than failing the call.
+- **`agent/`** — agent orchestration. `AgentRunner` serializes the turns of one conversation, assembles
   the current user turn (chat metadata + durable memory + request), and owns every history write for it, so no other
   layer appends or clears turns behind a running turn's back. What it orchestrates sits beside it, one file per concern:
   `TurnPrompt` renders the blocks the model is shown for this turn, `TurnInput` writes the ones the request itself
   arrives in — what it replies to, the quoted fragment, the attachment, an album, a transcript, a pressed choice — so
   every adapter fills in the tags the contract describes instead of spelling its own, `TurnHistory` decides what the finished turn leaves
-  behind, `ProviderErrors` reads a provider's refusal out of the message koog wrapped it in and picks the reply it
-  earns, and `FallbackPromptExecutor` is the executor wrapper that hands every call to a second provider while the
-  first is out, which is also what `TurnPrompt`'s `<current_model>` block and the status message's fallback line read
-  to say who is answering. `AgentFactory` builds the `AIAgent` (system prompt + history + tools) and budgets its model context; `SystemPrompt` keeps the deployment's customizable personality and the
+  behind, and `ProviderErrors` reads a provider's refusal out of the status and body the client kept and picks the
+  reply it earns — and, for `llm/FallbackLlmClient`, how long the primary is out for, which is also what `TurnPrompt`'s
+  `<current_model>` block and the status message's fallback line read to say who is answering. `AgentFactory` builds
+  the `AgentTurn` (system prompt + history + tools over the model client) and budgets its model context, and
+  `AgentTurn` is the agent loop itself; `SystemPrompt` keeps the deployment's customizable personality and the
   fixed delivery/tool contract in separate XML-delimited blocks. `agent/conversation/` groups turns into complete
   interactions, persists raw history, and maintains its semantic recap, all keyed by a `ConversationScope` — one
   person in one chat, so a private exchange can never be replayed as that person's own words inside a group, and what
@@ -68,8 +76,8 @@ that is who owns writing them, not because only `agent/` reads them. No other ar
   from what the request carries: a set registered under a `ToolGroup` is in the registry from the first step, but its
   schemas are withheld until the model calls `loadTools` (`tools/catalog/`), which the `<tool_groups>` menu in the
   turn prompt tells it about. Deferring is what keeps the schemas of a dozen rarely-used capabilities out of the
-  conversation budget; koog resolves a call against the registry, so a tool named before its group is loaded still
-  runs. `LoadedToolGroups` then keeps the last few groups a conversation loaded and offers them again from its next
+  conversation budget; a call is resolved against everything registered, so a tool named before its group is loaded
+  still runs. `LoadedToolGroups` then keeps the last few groups a conversation loaded and offers them again from its next
   first request: the tool array is part of the prompt prefix providers cache, so a set that changes every turn would
   cost more than the schemas it saved. See the Features section of the [README](../README.md). `tools/images/` is not a tool surface
   but the pipeline every image search shares: download a provider's candidates, drop what Telegram would refuse, and
@@ -226,8 +234,8 @@ A normal user message travels:
    bot's last reply or somebody else's line in between, and the replayed history carries no such order.
    `<current_time>` and the chat's `<sticker_catalog>` ride in that same user turn rather than in a system message of
    their own: a system message reads as a higher-priority instruction, which is wrong for context assembled out of what
-   people sent, and koog's Anthropic and Google clients hoist every system message into the top-level system field
-   regardless of where it sat. In a group the turn also carries what that chat lets the bot post, read through
+   people sent, and the Anthropic API takes every system message into its top-level system field regardless of where
+   it sat. In a group the turn also carries what that chat lets the bot post, read through
    `telegram/ChatProfiles.kt`: one cached `getChat` + `getChatMember` pair yields the chat description, the permissions
    binding a bot that is a plain member (an administrator is bound by none of them, slow mode included), and the
    slow-mode delay. `ChatCapabilities` travels in `RequestContext.chat` and reaches three places — `ToolRegistryFactory` leaves
@@ -243,23 +251,23 @@ A normal user message travels:
    reserve rather than from the history budget. The history planner reserves room for output, future tool calls, and estimation error,
    then admits only complete interactions. If an older prefix no longer fits or exceeds the configured recent count,
    `LlmConversationCompactor` merges it into the persisted `<conversation_recap>` before `AgentFactory.build` creates
-   the Koog `AIAgent`. Every turn is capped on the way into that recap prompt, and a user turn budgets its
+   the `AgentTurn`. Every turn is capped on the way into that recap prompt, and a user turn budgets its
    `<user_message>` first: reply metadata and a quoted fragment are written ahead of the request and can outrun the cap
    between them, so capping from the front alone would recap what the user was replying to and not what they asked.
-   Native catalog context sizes are used automatically; `LLM_CONTEXT_WINDOW_TOKENS` supplies a missing value or
-   overrides stale model metadata.
+   An Anthropic model's window comes from the vendor's model list at startup and an OpenAI model's is assumed to be
+   its generation's; `LLM_CONTEXT_WINDOW_TOKENS` supplies a compatible server's or overrides either.
 5. **Act** — during the agent loop, tools run and push results into the request's `BotOutbox`; tool calls/results are
    recorded for history. Live textual tool results share a cumulative bound derived from the reserved agent-growth
    budget before later LLM calls; the runner opens that bound as a `TurnToolBudget` the strategy spends and the
    `checkContextBudget` tool reports, so a turn can narrow a long read instead of discovering the ceiling by getting an
    empty result back. Once a quarter of the reserve is left the run states it without being asked, once, in a note that
-   follows the batch of tool results — nothing may come between an assistant's tool call and that call's result. The custom `single_run` strategy (`AgentFactory`) guards against flaky models in two
-   ways:
+   follows the batch of tool results — nothing may come between an assistant's tool call and that call's result. The loop
+   (`AgentTurn` in `agent/AgentFactory.kt`) guards against flaky models in two ways:
     - a tool call that arrives with no arguments at all for a tool that takes them (flaky models emit empty-arg siblings
-      when they try to call tools in parallel) is short-circuited into a `ValidationError` result instead of being
-      executed, so the run stays clean and the follow-up request stays well-formed. Only that shape: koog's generated
-      schema lists Kotlin-defaulted parameters as required too, so checking them one by one turned away ordinary calls
-      that koog decodes into the defaults;
+      when they try to call tools in parallel) is answered with a validation error instead of being executed, so the run
+      stays clean and the follow-up request stays well-formed. A call that provides some arguments and omits a required
+      one is answered by the decoder's own complaint, and one that names a tool nothing answers to with the names that
+      exist; every one of them is a result the model reads, never a crashed turn;
     - a turn that ends having delivered nothing — no `sendMessage`, media, or reaction, and empty assistant text (flaky
       providers return an empty completion after a batch of tool results) — gets one nudge to actually deliver before
       finishing, so a full turn of research does not collapse into silence. An ambient turn is exempt on its first
@@ -267,13 +275,13 @@ A normal user message travels:
       message turns out to be for someone else or already answered, while an empty reply after tools is still the
       flaky provider and still nudged.
 
-   It also lands a turn that runs long instead of letting it crash. Koog counts one iteration per graph node and throws
-   `AIAgentMaxNumberOfIterationsReachedException` the moment `AGENT_MAX_ITERATIONS` is passed, which would throw away
-   every search the turn already paid for. The strategy reads that live counter as each tool batch executes and, once
-   only the reserve is left, sends the results to a wrap-up request carrying no tools at all: the model cannot spend the
-   reserve on one more search, and its answer — written from what it gathered, saying what it could not finish — is
-   queued into the outbox like any other message, so it survives even a turn that already reacted or sent something
-   (trailing agent text is otherwise dropped as duplicate chatter).
+   It also lands a turn that runs long instead of letting it crash. `AGENT_MAX_MODEL_CALLS` bounds the model calls one
+   turn may make, and the last of them is reserved: once a batch of tool results would be answered by that call, the
+   results go to a wrap-up request carrying no tools at all — the model cannot spend the call on one more search, and
+   its answer, written from what it gathered and saying what it could not finish, is queued into the outbox like any
+   other message, so it survives even a turn that already reacted or sent something (trailing agent text is otherwise
+   dropped as duplicate chatter). Without that, a research turn would die with every search it paid for still
+   unanswered.
 6. **Collect** — `AgentRunner` persists the produced history as one interaction through `ConversationRepository` while
    it still holds the turn lock. Delivery tools whose payload already became assistant history are omitted; other tool
    events are stored as bounded complete call/result pairs. Only the newest two interactions replay those raw pairs,
@@ -287,7 +295,7 @@ A normal user message travels:
 7. **Deliver** — `TelegramDelivery.send` routes each `BotOutput` to the chat, or to the user's private chat when a tool
    requested it, anchoring replies to the original message.
     - **Live progress** — an indicator runs through the whole turn (`telegram/TelegramProgress.kt`, `withLiveProgress`).
-      Koog's `onToolCallStarting` resolves the running tool to a neutral `ToolActivity` (`agent/ToolActivity.kt`, keyed
+      The loop resolves each tool it is about to run to a neutral `ToolActivity` (`agent/ToolActivity.kt`, keyed
       by `@Tool` method references), and the Telegram layer renders it two ways: as a chat action (`chatActionFor`, e.g.
       `upload_photo` while an image generates) and, once there is something to name, as the turn's status message
       (`telegram/TurnStatus.kt`, the words of `Messages.progressLabel` behind an emoji per activity). Only one is on
@@ -567,49 +575,49 @@ A normal user message travels:
   lives in `agent/TurnToolBudget.kt`: the strategy charges each result against it, `checkContextBudget`
   (`tools/context/`) is how the model reads it before deciding how much to ask for, and `TurnToolBudget.report()` is the
   single wording both that tool and the run's own low-reserve notice state it in.
-- **LLM provider resolution** — `config/LlmRuntime.resolveLlmRuntime` turns `AppConfig.llmProvider` into a Koog
-  client/model/params triple. Native clients cover OpenAI, Anthropic, Google, and DeepSeek — models are matched against
-  each client's predefined catalog, except that OpenAI and Anthropic also take an id newer than koog's catalog, declared
-  with the shape of their current generation (`openAiModel`, `anthropicModel`) and checked against the vendor's own
-  model list at startup (`config/HostedModelCheck`). `openai-compatible` keeps a hand-declared model for any other server (llama.cpp,
-  Ollama, …), with a configurable context size. Its endpoint capability and params type are declared as a pair
-  (`OpenAIChatParams` → `/v1/chat/completions`, `OpenAIResponsesParams` → `/v1/responses`), because the Koog client
-  reads the route off the params type and rejects params the model does not declare an endpoint for. Direct OpenAI
-  requests carry a `prompt_cache_key` of their own conversation, since reads match the prefixes most recently written
-  under a key and one key for the whole deployment would let busy chats evict each other; history recaps keep a single
-  shared key, their tool-free prefix being identical everywhere. For GPT-5.6 and later, `config/OpenAiPromptCaching`
-  marks two explicit breakpoints — the stable system/developer block, and the last user message when the request
-  carries tools — which keeps the system prompt and tool schemas reusable while leaving history, memory and tool
-  results out of billable cache writes. The adapter exists because Koog 1.3.0 cannot represent OpenAI's explicit
-  breakpoint fields itself. Anthropic caches nothing implicitly, so its chat params ask for request-level
-  `cache_control`, which the API places on the last block, and `config/AnthropicHttpClient` marks the system block on
-  the wire as well — the one prefix the next turn, whose history is replayed from storage, still shares; the recap asks
-  for none. The same transport adds the `anthropic-beta` header for `thinking.block_binding`, which lets the API drop a
-  thinking block whose conversation changed (the tool array moves under `loadTools` and the wrap-up) rather than refuse
-  the request. Its params carry `thinking: adaptive` and the configured `output_config.effort` in the additional
-  properties koog merges into the request, for every model from Claude 4.6 on (`anthropicThinksAdaptively`), and ask
-  for the model's whole output ceiling as `max_tokens`, which koog otherwise sets to 2048 — less than a model that
-  always thinks may spend before it answers.
-- **ChatGPT subscription (`codex`)** — the same Koog OpenAI client pointed at the Codex backend's Responses API, with no
-  API key. `config/CodexAuth.CodexAuthStore` owns the credentials `codex login` writes to `~/.codex/auth.json` (or
+- **LLM provider resolution** — `config/LlmRuntime.resolveLlmRuntime` turns a `LlmProviderConfig` into an `LlmRuntime`:
+  the client, the model as the bot needs to know it (`llm/LlmModel`: wire id, window, output ceiling, whether it sees
+  and whether it takes an effort), and the options a turn and a history recap send. There is no model catalog: a
+  deployment names a model, and `config/ModelPreflight` asks the vendor about it at startup — OpenAI confirms the id,
+  Anthropic also states the window, the ceiling and what the model takes (adaptive thinking, which efforts), and those
+  replace the runtime's assumptions; Codex reads the account's own catalog. `openai` always speaks the Responses API, the
+  one where tools work alongside reasoning, with the conversation's own `prompt_cache_key` — reads match the prefixes
+  most recently written under a key, and one key for the whole deployment would let busy chats evict each other; recaps
+  keep a single shared key, their tool-free prefix being identical everywhere — and, from GPT-5.6 on, two explicit cache
+  breakpoints (`llm/openai/OpenAiPromptCaching`): the stable system block, and the last user message when the request
+  carries tools, which keeps the system prompt and tool schemas reusable while leaving history, memory and tool results
+  out of billable cache writes. Reasoning comes back encrypted (`store: false`) and is replayed verbatim through the tool
+  loop. `anthropic` asks for `thinking: adaptive` with `block_binding: drop_block` under its beta header — a thinking
+  block is bound to the tools and messages before it, and `loadTools` and the wrap-up move the tool list mid-turn, so an
+  account the API holds to that check gets the stale block dropped rather than a 400 — sends the configured
+  `output_config.effort`, the model's whole output ceiling as `max_tokens`, and two cache breakpoints: the request-level
+  one the API places on the last block, which every iteration of the loop reads back, and one on the system block,
+  which the next turn — whose history is replayed from storage in another shape — still reads. A Claude model from
+  before 4.6, which the API serves under a dated id, gets neither thinking nor an effort. `openai-compatible` speaks
+  either OpenAI API under `LLM_BASE_URL` (`LLM_OPENAI_ENDPOINT`), never claims vision, disables parallel tool calls
+  because third-party models garble the siblings, and gets none of the OpenAI-only fields unless the base URL is the
+  official API. A vision or an addressing model is one more `LlmProviderConfig`, read from its own prefix
+  (`VISION_`, `ADDRESSING_`) and resolved the same way; by default it runs on the chat provider with the chat key.
+- **ChatGPT subscription (`codex`)** — the same OpenAI client pointed at the Codex backend's Responses API, with no API
+  key. `config/CodexAuth.CodexAuthStore` owns the credentials `codex login` writes to `~/.codex/auth.json` (or
   `$CODEX_HOME`). `AppConfig` resolves that path into the Codex provider config, and the store rereads the file per
   request so an external login, logout, sandbox switch, or CLI refresh takes effect without a restart. It refreshes
   OAuth sessions a few minutes before expiry and replaces the file atomically through an owner-only temporary file,
   preserving CLI-owned fields and refusing to overwrite a version that changed during refresh. A mutex keeps concurrent
-  bot turns from spending the same single-use refresh token. Because Koog bakes the `Authorization` header into the
-  client at construction, `config/CodexHttpClient` re-resolves the bearer token and account header on every request
-  instead. Signing in, out, and device-code stay the CLI's job; this bridge requires file-backed credentials and cannot
-  read the OS keyring. `CODEX_SERVICE_TIER` rides along as the Responses `service_tier` field and in the
-  `x-codex-routing-hint` header the CLI sends beside it, both fixed for the process at startup.
+  bot turns from spending the same single-use refresh token. A Ktor plugin (`config/CodexHttpClient.codexRequestPlugin`)
+  stamps the current bearer token, the account header and the headers Cloudflare checks on every request, and reads the
+  subscription's usage windows off every response. Signing in, out, and device-code stay the CLI's job; this bridge
+  requires file-backed credentials and cannot read the OS keyring. `CODEX_SERVICE_TIER` rides along as the Responses
+  `service_tier` field and in the `x-codex-routing-hint` header the CLI sends beside it, both fixed for the process at
+  startup.
 
   The backend accepts streaming requests only (`stream=false` and `store=true` are both rejected), and its final
-  `response.completed` event carries an empty `output`. So `CodexHttpClient` answers Koog's ordinary non-streaming
-  `post` by streaming the call and folding the `response.output_item.done` items back into the response object the
-  non-streaming API would have returned, while preserving a non-empty completed output if the backend supplies one and
-  rejecting failed, incomplete, or cancelled terminal events. Codex requests use `store=false` and explicitly request
-  encrypted reasoning content, so reasoning items can be echoed through a stateless multi-step tool loop. Bridging at
-  the transport keeps Koog's own parsing of tool calls, reasoning items and usage, and leaves `AgentRunner` unaware
-  that this provider streams.
+  `response.completed` event carries an empty `output`. So the client streams the call and folds the
+  `response.output_item.done` items back into the response object the non-streaming API would have returned
+  (`llm/openai/ResponsesStream`), preserving a non-empty completed output if the backend supplies one and rejecting
+  failed, incomplete, or cancelled terminal events. Codex requests use `store=false` and explicitly request encrypted
+  reasoning content, so reasoning items can be echoed through a stateless multi-step tool loop. Every completed call is
+  logged with its cache share and where its prefix drifted, and counted towards the subscription's next step.
 
   Model discovery runs at startup through `config/CodexCatalog`: the account's own catalog decides which ids and context
   window are valid, since Codex and the Platform API expose different model sets. Input modalities decide whether the
@@ -636,11 +644,12 @@ A normal user message travels:
 ## Startup
 
 `Main.kt` wires everything in order: load `AppConfig` → connect `Db` → create the `Http` client → (only with
-`LLM_PROVIDER=codex`) build the `CodexAuthStore` and run `codexPreflight`, which proves the ChatGPT session works and
-fills the context window in from the account's model catalog before any message is served → (only for an `openai` or
-`anthropic` model koog's catalog lacks) ask the vendor whether the id exists, so a typo fails here → create the LLM runtime,
-whose executor everything downstream then shares — wrapped in `agent/FallbackPromptExecutor` when `LLM_FALLBACK_PROVIDER`
-names a second runtime, so a spent subscription hands every call to it until the deadline its refusal named → build repositories, context policy, conversation compactor, the
+`LLM_PROVIDER=codex`) build the `CodexAuthStore` → preflight every configured model (`config/ModelPreflight`): the Codex one
+proves the ChatGPT session works and fills the context window in from the account's model catalog, an OpenAI one is
+confirmed against the vendor's list, an Anthropic one also brings its window and what it takes back, so a typo fails here
+→ create the LLM runtime, whose client everything downstream then shares — wrapped in `llm/FallbackLlmClient` when
+`LLM_FALLBACK_PROVIDER` names a second runtime, so a spent subscription hands every call to it until the deadline its
+refusal named → build repositories, context policy, conversation compactor, the
 Telegram client and its `BotProfile` — one `getMe` call shared by the runner, which matches mentions against it, and `AgentFactory`, which puts the handle in the system prompt → (only when image
 generation or `ELEVENLABS_API_KEY` is configured, the two things that use it) `resolveSelfImage`
 (`tools/imagegen/SelfImage.kt`), which reads the reference photo self-portraits and round video messages are drawn from:
@@ -757,10 +766,10 @@ A symptom-to-source map for finding the right file fast. Paths are under
 | Wrong language in a canned reply (busy/error/voice/start/task menu) | `i18n/Language.kt` (`ofText` on the message, `fromCode` on the client) + `telegram/inbound/MessageMetadata.kt` (`Message.language`) + the `i18n/*Messages.kt` files (the strings) |
 | A turn's plan reaches the chat only after the work it announced, or arrives twice | `tools/message/MessageTools.announcePlan` (the tool and its one-per-turn rule) + `telegram/TurnStatus.kt` (`say`, and what survives `finish`) + `outbox/BotOutbox.kt` (`recordDelivered`, `hasDelivered`) + `telegram/delivery/TelegramDelivery.dispatch` (skipping an item already in the chat) |
 | The typing indicator or the turn's status message is wrong, stale, or missing | `telegram/TelegramProgress.kt` (both tickers, and `statusGraceFor`, the per-activity gate deciding which turns get a message at all) + `telegram/TurnStatus.kt` (the message itself, the emoji beside each activity, its stop button, and how it ends) + `agent/ToolActivity.kt` (which tool means what) + `i18n/Messages.progressLabel` (the words) + `telegram/delivery/TelegramDelivery.chatActionFor` (the action) |
-| A long research turn ends in the generic error reply or is answered mid-way | `agent/AgentFactory.kt` (`maxIterations`, `outOfToolBudget` and the wrap-up node that lands the turn) + `agent/AgentRunner.kt` (delivering what the outbox holds when a run fails) |
-| A spent subscription still ends turns in "come back later", or the bot never returns to it | `agent/FallbackPromptExecutor.kt` (which failures switch, the outage deadline, the single probe back) + `agent/ProviderErrors.providerOutage` (the patterns and the reset time read from the body), then `LLM_FALLBACK_*` in [`configuration.md`](configuration.md#a-second-provider-behind-the-first) |
+| A long research turn ends in the generic error reply or is answered mid-way | `agent/AgentFactory.kt` (`maxModelCalls`, `outOfModelCalls` and the wrap-up that lands the turn) + `agent/AgentRunner.kt` (delivering what the outbox holds when a run fails) |
+| A spent subscription still ends turns in "come back later", or the bot never returns to it | `llm/FallbackLlmClient.kt` (the outage deadline, the single probe back) + `agent/ProviderErrors.providerOutage` (the patterns and the reset time read from the body), then `LLM_FALLBACK_*` in [`configuration.md`](configuration.md#a-second-provider-behind-the-first) |
 | The reply to a failed turn says nothing about what the provider did | `agent/AgentRunner.providerErrorReply` (which error body earns which canned reply: a content-policy refusal, a spent usage limit, a dead key, a 429/503 overload) + `i18n/Messages.kt` (the strings) |
-| You need to see exactly what the model was sent this turn | `agent/PromptDump.kt` (the whole request rendered per message) — it hangs on koog's `onLLMCallStarting` in `agent/AgentFactory.kt` and is switched by the `PromptDump` logger in [`logback.xml`](../src/main/resources/logback.xml) |
+| You need to see exactly what the model was sent this turn | `agent/PromptDump.kt` (the whole request rendered per message) — `AgentTurn` in `agent/AgentFactory.kt` renders it before every model call and is switched by the `PromptDump` logger in [`logback.xml`](../src/main/resources/logback.xml) |
 | Vusan forgets context or the history recap looks wrong | `agent/conversation/ConversationPlan.kt` (budget/selection) + `agent/conversation/ConversationCompactor.kt` (semantic recap) + `agent/conversation/ConversationRepository.kt` (storage/checkpoint) |
 | Nobody's answers to a quiz reach the agent, or the wrong option is named | `telegram/PollRegistry.kt` (what a sent poll stores, and for how long) + `telegram/inbound/GroupLogEntries.kt` (`PollAnswer.toGroupLogEntry`) + `tools/quiz/QuizTools.kt` / `tools/poll/PollTools.kt` (`isAnonymous`, which decides whether Telegram reports votes at all) |
 | A group recap misses messages, or `readGroupLog` returns too little | `telegram/TelegramBotRunner.recordGroupLog` + `telegram/inbound/GroupLogEntries.kt` (what gets recorded at all), then `agent/grouplog/GroupLogReader.kt` (window budget, day split, digest cache) and `agent/grouplog/GroupLogRepository.kt` (retention and the per-chat row cap) |

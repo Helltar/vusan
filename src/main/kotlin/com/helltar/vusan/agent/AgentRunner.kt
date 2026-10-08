@@ -7,6 +7,7 @@ import com.helltar.vusan.agent.grouplog.withoutExchangesWith
 import com.helltar.vusan.agent.conversation.*
 import com.helltar.vusan.agent.memory.MemoryRepository
 import com.helltar.vusan.agent.memory.memoryOwner
+import com.helltar.vusan.llm.TokenUsage
 import com.helltar.vusan.common.collapseWhitespaceAndCap
 import com.helltar.vusan.common.limitTo
 import com.helltar.vusan.common.rethrowIfCancellation
@@ -504,7 +505,7 @@ class AgentRunner(
             return messages.signInRequiredReply
         }
 
-        val providerError = e.providerErrorMessage()
+        val providerError = e.providerError()
 
         if (providerError == null) {
             log.error(e) { "agent.run failed for chat=${context.chat.id} user=${context.sender.id}" }
@@ -513,7 +514,7 @@ class AgentRunner(
 
         log.warn {
             "agent.run provider error for chat=${context.chat.id} user=${context.sender.id}: " +
-                    providerError.collapseWhitespaceAndCap(PROVIDER_ERROR_LOG_MAX_CHARS)
+                    providerError.message?.collapseWhitespaceAndCap(PROVIDER_ERROR_LOG_MAX_CHARS)
         }
 
         return messages.providerErrorReply(providerError)
