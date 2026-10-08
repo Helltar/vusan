@@ -34,6 +34,7 @@ import kotlinx.serialization.json.JsonPrimitive
 import kotlinx.serialization.json.buildJsonObject
 import kotlinx.serialization.json.contentOrNull
 import kotlinx.serialization.json.put
+import kotlinx.serialization.json.putJsonObject
 import kotlin.reflect.full.memberProperties
 import kotlin.reflect.jvm.javaField
 import kotlin.time.Duration
@@ -58,6 +59,9 @@ private const val RESPONSES_REASONING = "reasoning"
 private const val RESPONSES_REASONING_EFFORT = "effort"
 private const val RESPONSES_TEXT = "text"
 private const val RESPONSES_TEXT_VERBOSITY = "verbosity"
+private const val ANTHROPIC_THINKING = "thinking"
+private const val ANTHROPIC_OUTPUT_CONFIG = "output_config"
+private const val ANTHROPIC_EFFORT = "effort"
 private const val HEX_RADIX = 16
 
 data class LlmRuntime(
@@ -110,6 +114,7 @@ val LlmRuntime.reasoningEffort: String?
             when (chatParams) {
                 is OpenAIChatParams -> extra[COMPLETIONS_REASONING_EFFORT]
                 is OpenAIResponsesParams -> (extra[RESPONSES_REASONING] as? JsonObject)?.get(RESPONSES_REASONING_EFFORT)
+                is AnthropicParams -> (extra[ANTHROPIC_OUTPUT_CONFIG] as? JsonObject)?.get(ANTHROPIC_EFFORT)
                 else -> null
             }
 
@@ -278,6 +283,57 @@ private fun responsesVerbosity(verbosity: String?): Map<String, JsonElement>? =
         mapOf(RESPONSES_TEXT to buildJsonObject { put(RESPONSES_TEXT_VERBOSITY, value) })
     }
 
+// koog's `AnthropicThinking` knows only `enabled` with a budget and `disabled`, and its `AnthropicOutputConfig`
+// only a format, so both ride in the additional properties like the OpenAI effort does, and koog merges
+// them into the request. a structured-output call sets `output_config` itself and koog's merge keeps its
+// own, which would cost that one call the effort; no call here asks for a schema.
+//
+// `adaptive` is what every model since 4.6 does when `thinking` is omitted, except 4.7 and 4.8, which
+// then do not think at all; naming it costs the others nothing. `block_binding` is what keeps a turn
+// alive on an account the api holds to its history-editing check: `loadTools` widens the tool list and
+// the wrap-up drops it under thinking blocks the same turn replays, which binds them to a prefix that
+// no longer exists, and `drop_block` has the api drop those blocks instead of refusing the request.
+private fun anthropicReasoning(model: LLModel, effort: ReasoningEffort?): Map<String, JsonElement>? {
+    if (!anthropicThinksAdaptively(model)) {
+        require(effort == null) {
+            "LLM_REASONING_EFFORT does not apply to ${model.id}: a Claude model from before adaptive thinking takes no effort"
+        }
+
+        return null
+    }
+
+    require(effort == null || effort in ANTHROPIC_EFFORTS) {
+        "LLM_REASONING_EFFORT=[${effort?.requestValue}] is not an effort Anthropic takes. Supported values: " +
+                ANTHROPIC_EFFORTS.joinToString { it.requestValue }
+    }
+
+    return buildMap {
+        put(
+            ANTHROPIC_THINKING,
+            buildJsonObject {
+                put("type", "adaptive")
+                putJsonObject("block_binding") { put("prefix_mismatch_behavior", "drop_block") }
+            },
+        )
+        effort?.let { put(ANTHROPIC_OUTPUT_CONFIG, buildJsonObject { put(ANTHROPIC_EFFORT, it.requestValue) }) }
+    }
+}
+
+/**
+ * Whether [model] is from the generation that thinks adaptively and takes an effort.
+ *
+ * Both arrived with Claude 4.6, the release that also stopped dating model ids: every model the API
+ * still serves under a dated snapshot id (`claude-haiku-4-5-20251001`) refuses `adaptive` and `effort`
+ * with a 400, and every undated one takes both (checked against `GET /v1/models` on 2026-10-08). The
+ * id is the wire id, so a dated alias the catalog pins an undated name to counts as dated too.
+ */
+internal fun anthropicThinksAdaptively(model: LLModel): Boolean = !DATED_ANTHROPIC_MODEL_ID.containsMatchIn(anthropicApiId(model))
+
+private val DATED_ANTHROPIC_MODEL_ID = Regex("""-\d{8}$""")
+
+private val ANTHROPIC_EFFORTS =
+    setOf(ReasoningEffort.LOW, ReasoningEffort.MEDIUM, ReasoningEffort.HIGH, ReasoningEffort.XHIGH, ReasoningEffort.MAX)
+
 // prompt_cache_key is an openai extension, so do not leak it to arbitrary compatible servers that may
 // reject unknown fields.
 private fun LlmProviderConfig.OpenAiCompatible.openAiCacheKey(key: String): String? =
@@ -331,18 +387,30 @@ private fun resolveHostedRuntime(config: LlmProviderConfig.Hosted, timeoutConfig
             // before every answer can spend before the answer starts. the ceiling costs nothing: output is
             // billed and rate-limited on what is generated, not on what was allowed.
             val maxTokens = model.maxOutputTokens?.toInt()
+            val reasoning = anthropicReasoning(model, config.reasoningEffort)
 
             LlmRuntime(
                 providerLabel = "Anthropic",
-                client = AnthropicLLMClient(config.apiKey, anthropicClientSettings(model, timeoutConfig)),
+                client =
+                    AnthropicLLMClient(
+                        apiKey = config.apiKey,
+                        settings = anthropicClientSettings(model, timeoutConfig),
+                        httpClientFactory = AnthropicHttpClientFactory(HttpClientFactoryResolver.resolve()),
+                    ),
                 model = model,
                 // Anthropic caches nothing on its own: without a control every step of a turn re-reads the
                 // whole prompt at full price. The request-level one lets the API place the breakpoint on the
                 // last cacheable block, which is what an agent loop wants — each iteration appends and reads
-                // back everything before it. The recap keeps none: its body never repeats, so the write
+                // back everything before it; the transport adds a second one on the system block, which is
+                // what the next turn still reads. The recap keeps none: its body never repeats, so the write
                 // would buy a read nobody makes.
-                chatParams = AnthropicParams(maxTokens = maxTokens, cacheControl = AnthropicCacheControl.Default),
-                compactionParams = AnthropicParams(maxTokens = maxTokens),
+                chatParams =
+                    AnthropicParams(
+                        maxTokens = maxTokens,
+                        cacheControl = AnthropicCacheControl.Default,
+                        additionalProperties = reasoning,
+                    ),
+                compactionParams = AnthropicParams(maxTokens = maxTokens, additionalProperties = reasoning),
             )
         }
 
@@ -474,11 +542,12 @@ private fun uncataloguedAnthropicModel(id: String): LLModel =
  * overridden, since that makes it a different model. The entry is therefore the model exactly as the
  * runtime passes it, under the id the catalog pins it to or its own.
  */
-internal fun anthropicClientSettings(model: LLModel, timeoutConfig: ConnectionTimeoutConfig): AnthropicClientSettings {
-    val apiId = anthropicApiIds.entries.firstOrNull { it.key.id == model.id }?.value ?: model.id
+internal fun anthropicClientSettings(model: LLModel, timeoutConfig: ConnectionTimeoutConfig): AnthropicClientSettings =
+    AnthropicClientSettings(modelVersionsMap = mapOf(model to anthropicApiId(model)), timeoutConfig = timeoutConfig)
 
-    return AnthropicClientSettings(modelVersionsMap = mapOf(model to apiId), timeoutConfig = timeoutConfig)
-}
+/** The id the API knows [model] by: the dated snapshot the catalog pins it to, or its own. */
+private fun anthropicApiId(model: LLModel): String =
+    anthropicApiIds.entries.firstOrNull { it.key.id == model.id }?.value ?: model.id
 
 internal fun resolveModel(definitions: LLModelDefinitions, providerLabel: String, rawValue: String): LLModel {
     val key = normalizeModelKey(rawValue)

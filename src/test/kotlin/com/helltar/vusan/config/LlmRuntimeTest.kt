@@ -15,6 +15,7 @@ import ai.koog.prompt.llm.LLMCapability
 import ai.koog.prompt.llm.LLMProvider
 import ai.koog.prompt.message.Message
 import ai.koog.prompt.message.RequestMetaInfo
+import ai.koog.prompt.params.LLMParams
 import com.helltar.vusan.infra.Http
 import com.sun.net.httpserver.HttpServer
 import io.ktor.client.*
@@ -284,6 +285,84 @@ class LlmRuntimeTest {
         assertNull(assertIs<AnthropicParams>(runtime.compactionParams).cacheControl)
     }
 
+    // the automatic breakpoint sits on the last block, which the next turn's replayed history no longer
+    // matches; the system block is the prefix every request shares, so it gets a breakpoint of its own.
+    @Test
+    fun `an anthropic chat request marks its system block for the cache and the recap does not`() = runBlocking {
+        val runtime = anthropic("claude-opus-5-5")
+
+        val chat = sentAnthropicRequests(runtime).first()
+        val recap = sentAnthropicRequests(runtime, runtime.compactionParams).first()
+
+        assertEquals("ephemeral", chat.systemBlock().getValue("cache_control").jsonObject.getValue("type").jsonPrimitive.content)
+        assertEquals("ephemeral", chat.getValue("cache_control").jsonObject.getValue("type").jsonPrimitive.content)
+        assertNull(recap.systemBlock()["cache_control"])
+        assertNull(recap["cache_control"])
+    }
+
+    // koog's typed thinking knows no `adaptive` and its output config no effort, so both ride in the
+    // additional properties, which koog merges into the request body.
+    @Test
+    fun `an anthropic model since 4_6 is asked to think adaptively and told what to do with a stale thinking block`() {
+        for (id in listOf("claude-opus-5-5", "claude-opus-4-7", "claude-sonnet-4-6", "claude-fable-5")) {
+            val extra = assertNotNull(assertIs<AnthropicParams>(anthropic(id).chatParams).additionalProperties, id)
+            val thinking = assertNotNull(extra["thinking"], id).jsonObject
+
+            assertEquals("adaptive", thinking.getValue("type").jsonPrimitive.content, id)
+            assertEquals(
+                "drop_block",
+                thinking.getValue("block_binding").jsonObject.getValue("prefix_mismatch_behavior").jsonPrimitive.content,
+                id,
+            )
+            assertNull(extra["output_config"], "no effort was configured for $id")
+        }
+    }
+
+    @Test
+    fun `the configured effort reaches anthropic as the request's output config`() {
+        val runtime = anthropic("claude-opus-5-5", reasoningEffort = ReasoningEffort.XHIGH)
+
+        val chat = assertNotNull(assertIs<AnthropicParams>(runtime.chatParams).additionalProperties)
+        val recap = assertNotNull(assertIs<AnthropicParams>(runtime.compactionParams).additionalProperties)
+
+        assertEquals("xhigh", chat.getValue("output_config").jsonObject.getValue("effort").jsonPrimitive.content)
+        assertEquals(chat["output_config"], recap["output_config"])
+        assertEquals("xhigh", runtime.reasoningEffort)
+    }
+
+    // the api refuses `adaptive` and `effort` on every model it still serves under a dated snapshot id
+    @Test
+    fun `a claude model from before adaptive thinking is sent neither thinking nor effort`() {
+        for (id in listOf("claude-haiku-4-5", "claude-haiku-4-5-20251001", "claude-sonnet-4-5", "claude-opus-4-5")) {
+            assertFalse(anthropicThinksAdaptively(anthropicModel(id)), id)
+            assertNull(assertIs<AnthropicParams>(anthropic(id).chatParams).additionalProperties, id)
+        }
+
+        assertTrue(anthropicThinksAdaptively(anthropicModel("claude-haiku-5-5")))
+        assertFailsWith<IllegalArgumentException> { anthropic("claude-haiku-4-5", reasoningEffort = ReasoningEffort.HIGH) }
+    }
+
+    @Test
+    fun `an effort anthropic does not take fails at startup rather than on the first turn`() {
+        for (effort in listOf(ReasoningEffort.NONE, ReasoningEffort.MINIMAL)) {
+            assertFailsWith<IllegalArgumentException>(effort.name) { anthropic("claude-opus-5-5", reasoningEffort = effort) }
+        }
+    }
+
+    @Test
+    fun `anthropic requests carry the thinking, the effort and the beta header on the wire`() = runBlocking {
+        val runtime = anthropic("claude-opus-5-5", reasoningEffort = ReasoningEffort.HIGH)
+
+        val request = sentAnthropicRequestsWithHeaders(runtime, runtime.chatParams).first()
+
+        assertEquals("thinking-binding-controls-2026-08-01", request.headers["anthropic-beta"])
+        assertEquals("adaptive", request.body.getValue("thinking").jsonObject.getValue("type").jsonPrimitive.content)
+        assertEquals("high", request.body.getValue("output_config").jsonObject.getValue("effort").jsonPrimitive.content)
+        assertEquals(128_000, request.body.getValue("max_tokens").jsonPrimitive.int)
+    }
+
+    private fun JsonObject.systemBlock(): JsonObject = getValue("system").jsonArray.single().jsonObject
+
     @Test
     fun `each conversation gets a prompt cache key of its own`() {
         val base = openAiCompatible(baseUrl = "https://api.openai.com").chatParams
@@ -543,28 +622,38 @@ class LlmRuntimeTest {
         )
     }
 
-    private fun anthropic(model: String = "claude-sonnet-4-5", contextWindowTokens: Long? = null): LlmRuntime =
+    private fun anthropic(
+        model: String = "claude-sonnet-4-5",
+        contextWindowTokens: Long? = null,
+        reasoningEffort: ReasoningEffort? = null,
+    ): LlmRuntime =
         resolveLlmRuntime(
             LlmProviderConfig.Hosted(
                 provider = HostedLlmProvider.ANTHROPIC,
                 apiKey = "key",
                 model = model,
+                reasoningEffort = reasoningEffort,
                 requestTimeout = 120.seconds,
                 contextWindowTokens = contextWindowTokens,
             ),
         )
 
+    private class SentAnthropicRequest(val headers: Headers, val body: JsonObject)
+
+    private suspend fun sentAnthropicRequests(runtime: LlmRuntime, params: LLMParams = runtime.chatParams): List<JsonObject> =
+        sentAnthropicRequestsWithHeaders(runtime, params).map { it.body }
+
     /**
-     * The two bodies koog's Anthropic client sends for [runtime]'s model through the settings the runtime
-     * builds: a first request, answered the way a model that always thinks answers — an empty thinking
-     * block ahead of the text — and a follow-up that carries that answer back.
+     * The two requests koog's Anthropic client sends for [runtime]'s model through the settings and the
+     * transport the runtime builds: a first request, answered the way a model that always thinks answers
+     * — an empty thinking block ahead of the text — and a follow-up that carries that answer back.
      */
-    private suspend fun sentAnthropicRequests(runtime: LlmRuntime): List<JsonObject> {
-        val sent = mutableListOf<JsonObject>()
+    private suspend fun sentAnthropicRequestsWithHeaders(runtime: LlmRuntime, params: LLMParams): List<SentAnthropicRequest> {
+        val sent = mutableListOf<SentAnthropicRequest>()
 
         val engine =
             MockEngine { request ->
-                sent += Json.parseToJsonElement(request.body.toByteArray().decodeToString()).jsonObject
+                sent += SentAnthropicRequest(request.headers, Json.parseToJsonElement(request.body.toByteArray().decodeToString()).jsonObject)
                 respond(ANTHROPIC_THINKING_REPLY, headers = headersOf(HttpHeaders.ContentType, ContentType.Application.Json.toString()))
             }
 
@@ -572,10 +661,14 @@ class LlmRuntimeTest {
             AnthropicLLMClient(
                 apiKey = "key",
                 settings = anthropicClientSettings(runtime.model, connectionTimeouts(120.seconds)),
-                httpClientFactory = KtorKoogHttpClient.Factory(HttpClient(engine)),
+                httpClientFactory = AnthropicHttpClientFactory(KtorKoogHttpClient.Factory(HttpClient(engine))),
             )
 
-        val prompt = Prompt.build("wire", params = runtime.chatParams) { user("current request") }
+        val prompt =
+            Prompt.build("wire", params = params) {
+                system("the operational contract")
+                user("current request")
+            }
         val answer = client.execute(prompt, runtime.model, emptyList())
 
         client.execute(prompt.withMessages { it + answer + Message.User("next request", RequestMetaInfo.Empty) }, runtime.model, emptyList())

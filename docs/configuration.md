@@ -96,12 +96,17 @@ banned, and startup says so in the log.
 `LLM_OPENAI_ENDPOINT` is for `openai-compatible` alone: it says which of the two OpenAI APIs the
 server behind `LLM_BASE_URL` speaks, since a third-party server may offer either. `openai` picks the
 endpoint itself, from the catalog for a model it knows and Responses for a newer one.
-`LLM_REASONING_EFFORT` applies to `openai`, `openai-compatible` and `codex`. Which efforts work
-depends on the model, and only `codex` checks yours at startup. On `openai` it also decides the
-endpoint: OpenAI refuses tools alongside reasoning on the completions API, and every turn here
-carries tools, so a reasoning model runs on Responses unless the effort is `none`. Give
-`LLM_BASE_URL` no `/v1` — the API path is appended for you. Raise the timeout for slow local
-servers and heavy reasoning models.
+`LLM_REASONING_EFFORT` applies to `openai`, `openai-compatible`, `codex` and `anthropic`. Which
+efforts work depends on the model, and only `codex` checks yours at startup. On `openai` it also
+decides the endpoint: OpenAI refuses tools alongside reasoning on the completions API, and every
+turn here carries tools, so a reasoning model runs on Responses unless the effort is `none`. On
+`anthropic` the values are `low` to `max` (`none` and `minimal` stop startup), and a model from
+before Claude 4.6 — one the API serves under a dated id such as `claude-haiku-4-5-20251001` — takes
+no effort at all. Claude models think adaptively on every turn here, Opus 4.7 and 4.8 included;
+without an effort each runs at its own default, which is `medium` on Opus 5.5 and Haiku 5.5 and
+`high` on the others. Give `LLM_BASE_URL` no `/v1` — the API path is appended for you. Raise the
+timeout for slow local servers and heavy reasoning models: a Fable turn at a high effort can run
+for minutes.
 
 Set `LLM_CONTEXT_WINDOW_TOKENS` whenever an `openai-compatible` model has a different window. A
 model newer than the catalog is assumed to keep the window of its vendor's current generation —

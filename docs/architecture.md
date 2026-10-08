@@ -582,9 +582,14 @@ A normal user message travels:
   carries tools — which keeps the system prompt and tool schemas reusable while leaving history, memory and tool
   results out of billable cache writes. The adapter exists because Koog 1.3.0 cannot represent OpenAI's explicit
   breakpoint fields itself. Anthropic caches nothing implicitly, so its chat params ask for request-level
-  `cache_control` and let the API place the breakpoint; the recap asks for none. Its chat and recap params both ask for the
-  model's whole output ceiling as `max_tokens`, which koog otherwise sets to 2048 — less than a model that always thinks
-  may spend before it answers.
+  `cache_control`, which the API places on the last block, and `config/AnthropicHttpClient` marks the system block on
+  the wire as well — the one prefix the next turn, whose history is replayed from storage, still shares; the recap asks
+  for none. The same transport adds the `anthropic-beta` header for `thinking.block_binding`, which lets the API drop a
+  thinking block whose conversation changed (the tool array moves under `loadTools` and the wrap-up) rather than refuse
+  the request. Its params carry `thinking: adaptive` and the configured `output_config.effort` in the additional
+  properties koog merges into the request, for every model from Claude 4.6 on (`anthropicThinksAdaptively`), and ask
+  for the model's whole output ceiling as `max_tokens`, which koog otherwise sets to 2048 — less than a model that
+  always thinks may spend before it answers.
 - **ChatGPT subscription (`codex`)** — the same Koog OpenAI client pointed at the Codex backend's Responses API, with no
   API key. `config/CodexAuth.CodexAuthStore` owns the credentials `codex login` writes to `~/.codex/auth.json` (or
   `$CODEX_HOME`). `AppConfig` resolves that path into the Codex provider config, and the store rereads the file per
