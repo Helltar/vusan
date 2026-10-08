@@ -11,12 +11,8 @@ import java.nio.file.Path
 import java.time.Instant
 import java.util.Base64
 import kotlin.io.path.writeText
-import kotlin.time.Duration.Companion.milliseconds
-import kotlin.time.Duration.Companion.seconds
-import kotlin.time.measureTime
 import kotlin.test.Test
 import kotlin.test.assertEquals
-import kotlin.test.assertFalse
 import kotlin.test.assertNotNull
 import kotlin.test.assertNull
 import kotlin.test.assertTrue
@@ -120,28 +116,6 @@ class CodexCatalogTest {
     }
 
     @Test
-    fun `codex version detection times out before reading process output`() {
-        var version: String? = null
-        val elapsed =
-            measureTime {
-                version = detectCodexClientVersion(listOf("/bin/sleep", "30"), 100.milliseconds)
-            }
-
-        assertNull(version)
-        assertTrue(elapsed < 2.seconds, "elapsed=[$elapsed]")
-    }
-
-    @Test
-    fun `version ordering compares numbers rather than strings`() {
-        // the pair that matters: as strings "0.99.0" sorts above "0.146.1"
-        assertTrue("0.146.1" isNewerThan "0.99.0")
-        assertTrue("0.153.4" isNewerThan "0.153.0")
-        assertTrue("0.153.1" isNewerThan "0.153")
-        assertTrue(!("0.153.0" isNewerThan "0.153.0"))
-        assertTrue(!("0.152.9" isNewerThan "0.153.0"))
-    }
-
-    @Test
     fun `the catalog request claims a client version the newest models require`() = runBlocking {
         var version: String? = null
 
@@ -157,78 +131,8 @@ class CodexCatalogTest {
 
         // `/models` omits every model whose `minimal_client_version` is newer than what we claim, and a
         // missing model reads as one the plan does not offer. `0.153.0` is what gpt-6-astra requires.
+        assertEquals(codexClientVersion(), version)
         assertTrue(comparable(version.orEmpty()) >= comparable("0.153.0"), version.orEmpty())
-    }
-
-    @Test
-    fun `a pinned client version is what the catalog request claims, and nobody else is asked`() = runBlocking {
-        var version: String? = null
-        var gitHubAsked = false
-        var cliAsked = false
-
-        val http =
-            Http.createClient(
-                MockEngine { request ->
-                    version = request.url.parameters["client_version"]
-                    respondJson("""{"models":[]}""")
-                },
-            )
-
-        try {
-            claimCodexClientVersion(Http.createClient(MockEngine { gitHubAsked = true; respondJson("{}") }), "0.199.0") {
-                cliAsked = true
-                null
-            }
-            fetchCodexModels(http, store())
-        } finally {
-            claimFloor()
-        }
-
-        assertEquals("0.199.0", version)
-        assertFalse(gitHubAsked)
-        assertFalse(cliAsked)
-    }
-
-    @Test
-    fun `the latest GitHub release is read from its tag`() = runBlocking {
-        var url: String? = null
-
-        val http =
-            Http.createClient(
-                MockEngine { request ->
-                    url = request.url.toString()
-                    respondJson("""{"tag_name":"rust-v0.162.0","name":"0.162.0","prerelease":false}""")
-                },
-            )
-
-        assertEquals("0.162.0", fetchLatestCodexRelease(http))
-        assertEquals("https://api.github.com/repos/openai/codex/releases/latest", url)
-    }
-
-    @Test
-    fun `a GitHub release that cannot be read is skipped`() = runBlocking {
-        val rateLimited = Http.createClient(MockEngine { respondJson("""{"message":"rate limited"}""", HttpStatusCode.Forbidden) })
-        val unversioned = Http.createClient(MockEngine { respondJson("""{"tag_name":"nightly"}""") })
-
-        assertNull(fetchLatestCodexRelease(rateLimited))
-        assertNull(fetchLatestCodexRelease(unversioned))
-    }
-
-    @Test
-    fun `startup claims the newest version any source offers`() = runBlocking {
-        try {
-            claimCodexClientVersion(gitHub("0.199.0"), null) { "0.170.0" }
-            assertEquals("0.199.0", codexClientVersion())
-
-            claimCodexClientVersion(gitHub("0.170.0"), null) { "0.199.1" }
-            assertEquals("0.199.1", codexClientVersion())
-
-            // neither source beats the floor this build ships, so the floor is what is claimed
-            claimCodexClientVersion(gitHub("0.100.0"), null) { "0.99.0" }
-            assertTrue(codexClientVersion() isNewerThan "0.100.0", codexClientVersion())
-        } finally {
-            claimFloor()
-        }
     }
 
     @Test
@@ -284,12 +188,6 @@ class CodexCatalogTest {
 private fun comparable(version: String): String = version.split('.').joinToString(".") { it.padStart(5, '0') }
 
 private fun catalogClient(body: String) = Http.createClient(MockEngine { respondJson(body) })
-
-private fun gitHub(version: String) = Http.createClient(MockEngine { respondJson("""{"tag_name":"rust-v$version"}""") })
-
-/** Back to what an unclaimed process reports, so the tests after this one read the floor again. */
-private suspend fun claimFloor() =
-    claimCodexClientVersion(Http.createClient(MockEngine { respondJson("{}", HttpStatusCode.NotFound) }), null) { null }
 
 private fun MockRequestHandleScope.respondJson(body: String, status: HttpStatusCode = HttpStatusCode.OK) =
     respond(

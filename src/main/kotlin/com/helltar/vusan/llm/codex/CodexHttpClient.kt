@@ -27,6 +27,28 @@ private const val PERCENT = 100
 
 private val log = KotlinLogging.logger {}
 
+/** Whitelisted `codex_cli_rs/<version>` shape, with the real caller named in the trailing comment. */
+internal fun codexUserAgent(): String = "$CODEX_ORIGINATOR/${codexClientVersion()} (Vusan)"
+
+/**
+ * The two headers Cloudflare checks on every host Codex talks to, `auth.openai.com` included — the CLI
+ * puts them on its auth route as well. Shared so a second caller cannot quietly omit one and fail only
+ * once deployed to a VPS.
+ */
+internal fun codexCloudflareHeaders(): Map<String, String> =
+    mapOf(
+        "originator" to CODEX_ORIGINATOR,
+        "User-Agent" to codexUserAgent(),
+    )
+
+/** Everything a plain HTTP call to the Codex backend needs: the token plus the Cloudflare headers. */
+fun codexRequestHeaders(credentials: CodexCredentials): Map<String, String> =
+    buildMap {
+        put("Authorization", "Bearer ${credentials.accessToken}")
+        putAll(codexCloudflareHeaders())
+        credentials.accountId?.let { put("ChatGPT-Account-ID", it) }
+    }
+
 /**
  * What the CLI tells the backend to route a turn on: the model, plus the serving tier when one is asked
  * for. The tier is honoured without it today — it travels in the request body — but this is how Codex
