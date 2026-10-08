@@ -3,6 +3,7 @@ package com.helltar.vusan.config
 import com.helltar.vusan.llm.LlmClient
 import com.helltar.vusan.llm.LlmModel
 import com.helltar.vusan.llm.RequestOptions
+import com.helltar.vusan.llm.codex.CodexAuthStore
 
 /**
  * The model that looks at images and video frames, with the client that reaches it and the [options]

@@ -1,4 +1,4 @@
-package com.helltar.vusan.config
+package com.helltar.vusan.llm.codex
 
 import com.helltar.vusan.common.collapseWhitespaceAndCap
 import com.helltar.vusan.common.rethrowIfCancellation

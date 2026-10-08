@@ -1,6 +1,6 @@
 package com.helltar.vusan.tools.codexsearch
 
-import com.helltar.vusan.config.CodexAuthStore
+import com.helltar.vusan.llm.codex.CodexAuthStore
 import com.helltar.vusan.infra.Http
 import com.helltar.vusan.tools.toolFailure
 import io.ktor.client.engine.mock.*

@@ -8,6 +8,9 @@ import com.helltar.vusan.llm.RequestOptions
 import com.helltar.vusan.llm.ToolDefinition
 import com.helltar.vusan.llm.anthropic.messageEventStream
 import com.helltar.vusan.llm.openai.OpenAiEndpoint
+import com.helltar.vusan.llm.codex.CODEX_BACKEND_BASE_URL
+import com.helltar.vusan.llm.codex.CodexAuthStore
+import com.helltar.vusan.llm.codex.codexRoutingHint
 import io.ktor.client.*
 import io.ktor.client.engine.mock.*
 import io.ktor.http.*
@@ -292,7 +295,7 @@ class LlmRuntimeTest {
     @Test
     fun `a configured serving tier reaches the routing hint`() {
         assertEquals("model=gpt-5.6-terra", codexRoutingHint("gpt-5.6-terra", null))
-        assertEquals("model=gpt-5.6-terra;tier=priority", codexRoutingHint("gpt-5.6-terra", ServiceTier.PRIORITY))
+        assertEquals("model=gpt-5.6-terra;tier=priority", codexRoutingHint("gpt-5.6-terra", "priority"))
     }
 
     private companion object {

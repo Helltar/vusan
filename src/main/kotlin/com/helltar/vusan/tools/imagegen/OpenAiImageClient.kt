@@ -1,9 +1,9 @@
 package com.helltar.vusan.tools.imagegen
 
 import com.helltar.vusan.common.rethrowIfCancellation
-import com.helltar.vusan.config.CodexAuthStore
+import com.helltar.vusan.llm.codex.CodexAuthStore
 import com.helltar.vusan.config.OpenAiImageConfig
-import com.helltar.vusan.config.codexRequestHeaders
+import com.helltar.vusan.llm.codex.codexRequestHeaders
 import com.helltar.vusan.infra.HttpStatusException
 import io.ktor.client.*
 import io.ktor.client.call.*

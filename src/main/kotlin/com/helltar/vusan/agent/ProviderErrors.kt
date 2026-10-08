@@ -1,6 +1,6 @@
 package com.helltar.vusan.agent
 
-import com.helltar.vusan.config.CodexAuthException
+import com.helltar.vusan.llm.codex.CodexAuthException
 import com.helltar.vusan.i18n.Messages
 import com.helltar.vusan.llm.LlmException
 import com.helltar.vusan.llm.ProviderOutage

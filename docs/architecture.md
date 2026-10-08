@@ -43,7 +43,9 @@ that is who owns writing them, not because only `agent/` reads them. No other ar
   agent-created choice buttons, whose selection becomes an agent input.
 - **`llm/`** — the model layer: one `LlmClient` interface, the `Message`/`Part` model every caller builds, `RequestOptions`,
   and a client per wire protocol under `llm/openai/` (the Responses and Chat Completions APIs, which also cover the Codex
-  backend and any OpenAI-compatible server) and `llm/anthropic/` (the Messages API). The package knows nothing about the
+  backend and any OpenAI-compatible server) and `llm/anthropic/` (the Messages API), plus `llm/codex/`: what the Codex backend needs beside the protocol —
+  the credentials `codex login` writes, the headers Cloudflare checks, the subscription's usage windows and the
+  account's model catalog. The package knows nothing about the
   bot: `RetryingLlmClient` repeats a call the provider fumbled, `FallbackLlmClient` hands every call to a second provider
   while the first is out, and the reasoning blocks an endpoint returns are kept raw and replayed verbatim to that endpoint
   alone — the platform, the Codex backend and a compatible server speak one protocol, and none reads another's. The
@@ -121,8 +123,7 @@ that is who owns writing them, not because only `agent/` reads them. No other ar
   from a newer build — stops startup instead of being reshaped, and is moved by hand.
 - **`config/`** — `.env` parsing (`AppConfig`), LLM provider/model resolution (`LlmRuntime`) and the startup check of
   every configured model against its vendor (`ModelPreflight`), both of which dispatch to one file per provider
-  (`OpenAiProvider`, `AnthropicProvider`, `OpenAiCompatibleProvider`, `CodexProvider`), and the ChatGPT subscription
-  credentials the Codex CLI writes (`CodexAuth`). `VisionRuntime` resolves separately which model looks at
+  (`OpenAiProvider`, `AnthropicProvider`, `OpenAiCompatibleProvider`, `CodexProvider`). `VisionRuntime` resolves separately which model looks at
   images: the `VISION_*` model when configured, the chat model when it accepts images, and nothing at all
   otherwise — which leaves the vision tools and sticker catalog unavailable.
 - **`stt/`** — OpenAI speech-to-text client (`OpenAiWhisperClient`, default model `gpt-transcribe`); used for voice
@@ -639,12 +640,12 @@ A normal user message travels:
   one more `LlmProviderConfig`, read from its own prefix (`VISION_`, `ADDRESSING_`) and resolved the same way; by default
   it runs on the chat provider with the chat key.
 - **ChatGPT subscription (`codex`)** — the same OpenAI client pointed at the Codex backend's Responses API, with no API
-  key. `config/CodexAuth.CodexAuthStore` owns the credentials `codex login` writes to `~/.codex/auth.json` (or
+  key. `llm/codex/CodexAuth.CodexAuthStore` owns the credentials `codex login` writes to `~/.codex/auth.json` (or
   `$CODEX_HOME`). `AppConfig` resolves that path into the Codex provider config, and the store rereads the file per
   request so an external login, logout, sandbox switch, or CLI refresh takes effect without a restart. It refreshes
   OAuth sessions a few minutes before expiry and replaces the file atomically through an owner-only temporary file,
   preserving CLI-owned fields and refusing to overwrite a version that changed during refresh. A mutex keeps concurrent
-  bot turns from spending the same single-use refresh token. A Ktor plugin (`config/CodexHttpClient.codexRequestPlugin`)
+  bot turns from spending the same single-use refresh token. A Ktor plugin (`llm/codex/CodexHttpClient.codexRequestPlugin`)
   stamps the current bearer token, the account header and the headers Cloudflare checks on every request, and reads the
   subscription's usage windows off every response. Signing in, out, and device-code stay the CLI's job; this bridge
   requires file-backed credentials and cannot read the OS keyring. `CODEX_SERVICE_TIER` rides along as the Responses
@@ -660,8 +661,8 @@ A normal user message travels:
   reasoning content, so reasoning items can be echoed through a stateless multi-step tool loop. Every completed call is
   logged with its cache share and where its prefix drifted, and counted towards the subscription's next step.
 
-  Model discovery runs at startup through `config/CodexCatalog`: the account's own catalog decides which ids and context
-  window are valid, since Codex and the Platform API expose different model sets. Input modalities decide whether the
+  Model discovery runs at startup through `llm/codex/CodexCatalog`, and `config/CodexProvider` holds the configured model
+  against it: the account's own catalog decides which ids and context window are valid, since Codex and the Platform API expose different model sets. Input modalities decide whether the
   model may be reused for vision, advertised reasoning efforts validate `LLM_REASONING_EFFORT`, and advertised service
   tiers validate `CODEX_SERVICE_TIER`; older catalog entries without those fields keep the compatibility defaults. A
   catalog that cannot be read is a warning, not a failure — the endpoint is undocumented, so a shape change there must
@@ -847,7 +848,7 @@ A symptom-to-source map for finding the right file fast. Paths are under
 | An agent choice button does nothing, repeats, reaches the wrong user, loses the photo, or its answer replies to the bot's own question | `tools/choice/InlineChoiceTools.kt` (tool contract) + `telegram/callback/InlineChoiceHandler.kt` (callback ownership/consumption, origin message id, parked attachment) + `telegram/AgentTurns.kt` (the follow-up turn and its reply anchor) |
 | An env var has no effect | `config/AppConfig.kt` (parsing) — and check it is documented in [`configuration.md`](configuration.md) + [`.env.example`](../.env.example) |
 | Model / provider / request-timeout selection, or prompt-cache misses | `config/<Vendor>Provider.kt` (one provider's runtime: client, model, options — and its startup check of the model against the vendor) + `config/LlmRuntime.kt` and `config/ModelPreflight.kt` (the dispatch to it) + `llm/openai/OpenAiPromptCaching.kt` (GPT-5.6+: implicit caching with an explicit breakpoint on the system prefix, and none for a prompt that never repeats) + `llm/anthropic/AnthropicClient.kt` (the request-level breakpoint and the hour-long one on the system block); `cacheReadTokens` and `cacheWriteTokens` on each turn's usage line say what was read and written |
-| "Sign in again" replies, ChatGPT-subscription auth, or a rejected `LLM_MODEL` on `codex` | `config/CodexAuth.kt` (token load/refresh/persist) + `config/CodexCatalog.kt` (which models the plan offers) + `config/CodexHttpClient.kt` (per-request bearer and account headers) |
+| "Sign in again" replies, ChatGPT-subscription auth, or a rejected `LLM_MODEL` on `codex` | `llm/codex/CodexAuth.kt` (token load/refresh/persist) + `llm/codex/CodexCatalog.kt` (which models the plan offers) + `config/CodexProvider.kt` (the configured model held against them) + `llm/codex/CodexHttpClient.kt` (per-request bearer and account headers) |
 | `describeImage`/`describeVideo` missing from the tool list | `config/VisionRuntime.kt` (chat model vs `VISION_MODEL`), then `tools/ToolCatalogFactory.kt` (registration is skipped when there is no vision runtime) |
 | Garbled or empty tool calls from a flaky model | `agent/AgentTurn.kt` (`execute`: the empty-arguments guard and the unknown-tool answer) + `tools/ToolSet.kt` (decoding the arguments, and the complaint a missing or wrong-shaped one earns) |
 

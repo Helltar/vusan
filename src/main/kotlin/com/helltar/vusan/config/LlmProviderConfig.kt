@@ -2,6 +2,7 @@ package com.helltar.vusan.config
 
 import com.helltar.vusan.llm.ReasoningEffort
 import com.helltar.vusan.llm.openai.OpenAiEndpoint
+import com.helltar.vusan.llm.codex.defaultCodexAuthFile
 import java.nio.file.Path
 import kotlin.time.Duration
 

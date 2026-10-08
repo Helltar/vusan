@@ -1,4 +1,4 @@
-package com.helltar.vusan.config
+package com.helltar.vusan.llm.codex
 
 import com.helltar.vusan.infra.Http
 import io.ktor.client.engine.mock.*

@@ -1,4 +1,4 @@
-package com.helltar.vusan.config
+package com.helltar.vusan.llm.codex
 
 import io.github.oshai.kotlinlogging.KotlinLogging
 import java.time.Instant

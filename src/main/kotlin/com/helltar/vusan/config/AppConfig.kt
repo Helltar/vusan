@@ -6,6 +6,8 @@ import com.helltar.vusan.llm.openai.OpenAiEndpoint
 import com.helltar.vusan.request.AccessPolicy
 import com.helltar.vusan.request.Platform
 import com.helltar.vusan.request.UserRef
+import com.helltar.vusan.llm.codex.CODEX_VERSION
+import com.helltar.vusan.llm.codex.defaultCodexAuthFile
 import io.github.cdimascio.dotenv.dotenv
 import io.github.oshai.kotlinlogging.KotlinLogging
 import kotlin.io.path.Path

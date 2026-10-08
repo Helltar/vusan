@@ -19,6 +19,8 @@ import com.helltar.vusan.agent.presence.LlmDiaryWriter
 import com.helltar.vusan.agent.presence.LlmInitiativeMind
 import com.helltar.vusan.agent.providerOutage
 import com.helltar.vusan.config.*
+import com.helltar.vusan.llm.codex.CodexAuthStore
+import com.helltar.vusan.llm.codex.claimCodexClientVersion
 import com.helltar.vusan.llm.FallbackInUse
 import com.helltar.vusan.llm.FallbackLlmClient
 import com.helltar.vusan.llm.LlmClient

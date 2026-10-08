@@ -1,4 +1,4 @@
-package com.helltar.vusan.config
+package com.helltar.vusan.llm.codex
 
 import kotlinx.serialization.json.JsonArray
 import kotlinx.serialization.json.JsonElement

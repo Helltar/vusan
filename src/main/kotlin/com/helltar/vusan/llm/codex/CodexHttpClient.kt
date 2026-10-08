@@ -1,4 +1,4 @@
-package com.helltar.vusan.config
+package com.helltar.vusan.llm.codex
 
 import io.github.oshai.kotlinlogging.KotlinLogging
 import io.ktor.client.plugins.api.*
@@ -32,8 +32,8 @@ private val log = KotlinLogging.logger {}
  * for. The tier is honoured without it today — it travels in the request body — but this is how Codex
  * itself asks, and on this endpoint matching the CLI is what keeps working.
  */
-internal fun codexRoutingHint(model: String, serviceTier: ServiceTier?): String =
-    "model=$model" + serviceTier?.let { ";tier=${it.requestValue}" }.orEmpty()
+internal fun codexRoutingHint(model: String, serviceTier: String?): String =
+    "model=$model" + serviceTier?.let { ";tier=$it" }.orEmpty()
 
 /**
  * Signs every request to the Codex backend with a currently valid ChatGPT token and the headers

@@ -1,9 +1,9 @@
 package com.helltar.vusan.tools.codexsearch
 
-import com.helltar.vusan.config.CODEX_BACKEND_BASE_URL
-import com.helltar.vusan.config.CodexAuthStore
-import com.helltar.vusan.config.codexRequestHeaders
-import com.helltar.vusan.config.countUsage
+import com.helltar.vusan.llm.codex.CODEX_BACKEND_BASE_URL
+import com.helltar.vusan.llm.codex.CodexAuthStore
+import com.helltar.vusan.llm.codex.codexRequestHeaders
+import com.helltar.vusan.llm.codex.countUsage
 import com.helltar.vusan.llm.openai.collectStreamedResponse
 import io.ktor.client.*
 import io.ktor.client.plugins.*

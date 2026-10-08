@@ -35,7 +35,7 @@ import com.helltar.vusan.tools.grouplog.GroupLogTools
 import com.helltar.vusan.tools.context.ContextTools
 import com.helltar.vusan.tools.conversation.ConversationTools
 import com.helltar.vusan.tools.imagegen.ImageGenTools
-import com.helltar.vusan.config.CodexAuthStore
+import com.helltar.vusan.llm.codex.CodexAuthStore
 import com.helltar.vusan.config.ImageRoute
 import com.helltar.vusan.tools.imagegen.ImageAuth
 import com.helltar.vusan.tools.imagegen.OpenAiImageClient

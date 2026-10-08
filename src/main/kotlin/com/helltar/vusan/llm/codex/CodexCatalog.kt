@@ -1,4 +1,4 @@
-package com.helltar.vusan.config
+package com.helltar.vusan.llm.codex
 
 import io.github.oshai.kotlinlogging.KotlinLogging
 import io.ktor.client.*
@@ -245,76 +245,4 @@ private fun JsonElement?.reasoningEfforts(): Set<ReasoningEffort>? {
     // an unfamiliar non-empty shape is metadata drift, so skip validation instead of rejecting a
     // working model. an explicit empty array still means that no selectable effort is supported.
     return efforts.takeIf { it.isNotEmpty() || values.isEmpty() }
-}
-
-internal fun applyCodexModelMetadata(
-    config: LlmProviderConfig.Codex,
-    model: CodexModel,
-): LlmProviderConfig.Codex {
-    val configuredEffort = config.reasoningEffort
-    val supportedEfforts = model.supportedReasoningEfforts
-
-    if (configuredEffort != null && supportedEfforts != null) {
-        require(configuredEffort in supportedEfforts) {
-            "${config.envPrefix}_REASONING_EFFORT=[${configuredEffort.requestValue}] is not supported by " +
-                    "${config.envPrefix}_MODEL=[${model.id}]. Supported values: " +
-                    supportedEfforts.sorted().joinToString { it.requestValue }
-        }
-    }
-
-    val configuredTier = config.serviceTier
-    val supportedTiers = model.supportedServiceTiers
-
-    if (configuredTier != null && supportedTiers != null) {
-        require(configuredTier.requestValue in supportedTiers) {
-            "CODEX_SERVICE_TIER=[${configuredTier.requestValue}] is not supported by " +
-                    "${config.envPrefix}_MODEL=[${model.id}]. Supported values: " +
-                    supportedTiers.sorted().joinToString().ifEmpty { "none" }
-        }
-    }
-
-    return config.copy(
-        contextWindowTokens = config.contextWindowTokens ?: model.contextWindowTokens,
-        seesImages = model.supportsVision,
-        verbosity = model.defaultVerbosity,
-        efforts = supportedEfforts,
-    )
-}
-
-/**
- * Check the configured model against the account's catalog before the first turn.
- *
- * Returns the catalog entry when it matches, `null` when the catalog could not be read. A missing
- * catalog is not fatal: `/models` is an undocumented endpoint, and a shape change there must not take
- * a working bot down — a wrong model name still surfaces on the first turn. A model the account
- * plainly cannot run *is* fatal, because that is the confusing failure worth catching early.
- */
-suspend fun verifyCodexModel(http: HttpClient, auth: CodexAuthStore, config: LlmProviderConfig.Codex): CodexModel? {
-    val model = config.model
-
-    val catalog =
-        runCatching { fetchCodexModels(http, auth) }
-            .getOrElse { e ->
-                if (e is CodexAuthException) throw e
-
-                log.warn { "Codex: could not read the model catalog (${e.message}); skipping the model check" }
-                return null
-            }
-
-    if (catalog.isEmpty()) {
-        log.warn { "Codex: the model catalog came back empty; skipping the model check" }
-        return null
-    }
-
-    val match = catalog.firstOrNull { it.id.equals(model.trim(), ignoreCase = true) }
-
-    checkNotNull(match) {
-        // the catalog is filtered by the version we claim, so a model too new for it is missing rather
-        // than refused — worth naming here, since the list alone reads as an entitlement problem.
-        "${config.envPrefix}_MODEL=[$model] is not available on this ChatGPT subscription. " +
-                "Available models: ${catalog.map { it.id }.sorted().joinToString()}. " +
-                "Models newer than client_version=[${codexClientVersion()}] are hidden from that list."
-    }
-
-    return match
 }

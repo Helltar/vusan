@@ -7,7 +7,7 @@ import com.helltar.vusan.llm.TokenUsage
 import com.helltar.vusan.common.collapseWhitespaceAndCap
 import com.helltar.vusan.common.limitTo
 import com.helltar.vusan.common.rethrowIfCancellation
-import com.helltar.vusan.config.CodexAuthException
+import com.helltar.vusan.llm.codex.CodexAuthException
 import com.helltar.vusan.config.ConversationConfig
 import com.helltar.vusan.i18n.Messages
 import com.helltar.vusan.outbox.BotOutbox

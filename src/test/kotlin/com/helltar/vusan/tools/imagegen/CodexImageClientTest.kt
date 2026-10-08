@@ -1,6 +1,6 @@
 package com.helltar.vusan.tools.imagegen
 
-import com.helltar.vusan.config.CodexAuthStore
+import com.helltar.vusan.llm.codex.CodexAuthStore
 import com.helltar.vusan.config.ImageRoute
 import com.helltar.vusan.config.OpenAiImageConfig
 import com.helltar.vusan.infra.Http
