@@ -7,7 +7,6 @@ import com.helltar.vusan.tools.ToolCatalog
 import com.helltar.vusan.tools.requireToolText
 import com.helltar.vusan.tools.suspendToolGuard
 
-@Suppress("unused")
 class CatalogTools(private val catalog: ToolCatalog) : ToolSet {
 
     @Tool(CatalogToolDescriptions.LOAD_TOOLS)

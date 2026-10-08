@@ -15,7 +15,7 @@ import kotlin.test.assertEquals
 import kotlin.test.assertFailsWith
 import kotlin.test.assertTrue
 
-@Suppress("unused", "FunctionOnlyReturningConstant")
+@Suppress("FunctionOnlyReturningConstant")
 private class SampleTools : ToolSet {
 
     @Tool("Creates a poll.")

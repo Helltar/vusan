@@ -9,7 +9,6 @@ import com.helltar.vusan.request.RequestContext
 import com.helltar.vusan.tools.requireToolText
 import com.helltar.vusan.tools.suspendToolGuard
 
-@Suppress("unused")
 class StickerTools(
     private val catalog: StickerCatalog,
     private val context: RequestContext,

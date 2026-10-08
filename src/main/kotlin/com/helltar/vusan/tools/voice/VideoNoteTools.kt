@@ -11,7 +11,6 @@ import com.helltar.vusan.tools.suspendToolGuard
 import com.helltar.vusan.tools.voice.VoiceTools.Companion.VOICE_TOOLS_MAX_CHARS
 import io.github.oshai.kotlinlogging.KotlinLogging
 
-@Suppress("unused")
 class VideoNoteTools(
     private val client: ElevenLabsTtsClient,
     private val config: ElevenLabsTtsConfig,

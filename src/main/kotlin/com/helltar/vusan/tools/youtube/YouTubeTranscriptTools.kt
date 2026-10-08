@@ -10,7 +10,6 @@ import kotlin.time.Duration.Companion.seconds
 
 private const val MAX_TRANSCRIPT_CHARS = 24_000
 
-@Suppress("unused")
 class YouTubeTranscriptTools(private val client: YouTubeTranscriptClient) : ToolSet {
 
     @Tool(YouTubeTranscriptToolDescriptions.READ_TRANSCRIPT)

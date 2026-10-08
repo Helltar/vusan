@@ -18,7 +18,6 @@ import java.time.Instant
  * the scheduler waits behind its group: nobody asks to be checked on, and a tool the model has to
  * load first for something nobody asked for is a tool it never calls.
  */
-@Suppress("unused")
 class FollowUpTools(
     private val repo: TasksRepository,
     private val context: RequestContext,

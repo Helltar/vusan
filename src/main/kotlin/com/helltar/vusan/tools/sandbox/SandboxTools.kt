@@ -26,7 +26,6 @@ private val ANIMATION_EXTENSIONS = setOf("gif", "mp4")
 private const val SEND_AS_DOCUMENT = "document"
 private const val SEND_AS_ANIMATION = "animation"
 
-@Suppress("unused")
 class SandboxTools(
     // shared with every other tool of the turn, so a reset here is a reset for them too
     private val sandbox: SandboxClient.PersonSandbox,

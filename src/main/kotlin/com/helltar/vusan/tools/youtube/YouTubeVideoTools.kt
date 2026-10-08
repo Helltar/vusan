@@ -8,7 +8,6 @@ import com.helltar.vusan.outbox.BotOutbox
 import com.helltar.vusan.outbox.BotOutput
 import com.helltar.vusan.tools.suspendToolGuard
 
-@Suppress("unused")
 class YouTubeVideoTools(private val client: YtDlpClient, private val outbox: BotOutbox) : ToolSet {
 
     @Tool(YouTubeVideoToolDescriptions.DOWNLOAD_VIDEO)

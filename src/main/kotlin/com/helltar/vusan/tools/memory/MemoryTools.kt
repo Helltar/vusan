@@ -15,7 +15,6 @@ private const val NO_PERSONAL_MEMORY =
     "Telegram delivers this sender under an account shared with other people, so there is no personal " +
         "memory here. Group memory still works; say so instead of saving the detail."
 
-@Suppress("unused")
 class MemoryTools(private val memory: MemoryRepository, private val context: RequestContext) : ToolSet {
 
     @Tool(MemoryToolDescriptions.REMEMBER_ABOUT_ME)

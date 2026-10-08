@@ -30,7 +30,6 @@ internal const val MAX_TELEGRAM_FILE_MB = 20
  * other messenger has the concept — so this is separate from [FileTools], whose sending and public
  * downloading work anywhere.
  */
-@Suppress("unused")
 class ChatFileTools(
     private val telegram: TelegramClient,
     private val outbox: BotOutbox,

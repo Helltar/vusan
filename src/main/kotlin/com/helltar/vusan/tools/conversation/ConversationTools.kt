@@ -6,7 +6,6 @@ import com.helltar.vusan.agent.conversation.ConversationRepository
 import com.helltar.vusan.request.RequestContext
 import com.helltar.vusan.tools.suspendToolGuard
 
-@Suppress("unused")
 class ConversationTools(private val history: ConversationRepository, private val context: RequestContext) : ToolSet {
 
     @Tool(ConversationToolDescriptions.CLEAR_CONVERSATION)

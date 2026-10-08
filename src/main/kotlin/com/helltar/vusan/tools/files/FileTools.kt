@@ -14,7 +14,6 @@ private const val MAX_URL_CHARS = 2_000
 private const val BYTES_PER_KB = 1024.0
 private const val BYTES_PER_MB = BYTES_PER_KB * 1024
 
-@Suppress("unused")
 class FileTools(
     private val downloads: FileDownloadClient,
     private val outbox: BotOutbox,

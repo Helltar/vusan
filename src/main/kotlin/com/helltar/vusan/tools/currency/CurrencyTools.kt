@@ -5,7 +5,6 @@ import com.helltar.vusan.tools.Tool
 import com.helltar.vusan.tools.ToolSet
 import com.helltar.vusan.tools.suspendToolGuard
 
-@Suppress("unused")
 class CurrencyTools(private val client: ExchangeRateClient) : ToolSet {
 
     @Tool(CurrencyToolDescriptions.GET_EXCHANGE_RATE)

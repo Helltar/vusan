@@ -13,7 +13,6 @@ import com.helltar.vusan.tools.images.photosRefusedReply
 import com.helltar.vusan.tools.suspendToolGuard
 import io.github.oshai.kotlinlogging.KotlinLogging
 
-@Suppress("unused")
 class SearxngTools(
     private val client: SearxngClient,
     private val imageDownloader: ImageDownloadClient,

@@ -18,7 +18,6 @@ import java.util.concurrent.ConcurrentHashMap
  * A tool set lives for one turn, and so do the candidates: [sendGif] takes only an id a search of
  * this turn returned, and takes each of them once.
  */
-@Suppress("unused")
 class GiphyTools(private val client: GiphyClient, private val outbox: BotOutbox) : ToolSet {
 
     private val candidates = ConcurrentHashMap<String, String>()

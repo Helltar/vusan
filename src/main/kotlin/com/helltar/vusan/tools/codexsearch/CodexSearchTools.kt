@@ -9,7 +9,6 @@ import com.helltar.vusan.common.xmlBlock
 import com.helltar.vusan.tools.requireToolText
 import com.helltar.vusan.tools.suspendToolGuard
 
-@Suppress("unused")
 class CodexSearchTools(private val client: CodexSearchClient) : ToolSet {
 
     @Tool(CodexSearchToolDescriptions.ANSWER_FROM_WEB)

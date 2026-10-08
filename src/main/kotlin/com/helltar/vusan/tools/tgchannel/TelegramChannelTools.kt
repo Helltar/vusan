@@ -9,7 +9,6 @@ import kotlin.time.Duration.Companion.days
 
 private val MAX_WINDOW = 30.days
 
-@Suppress("unused")
 class TelegramChannelTools(private val reader: TelegramChannelReader) : ToolSet {
 
     @Tool(TelegramChannelToolDescriptions.READ_TELEGRAM_CHANNEL_POSTS)

@@ -25,7 +25,6 @@ import java.util.concurrent.ConcurrentHashMap
  * this turn returned, and takes each of them once. Candidates are listed in the order the provider
  * ranked them, and a file goes out under the address the provider gave for it.
  */
-@Suppress("unused")
 class KlipyTools(
     private val client: KlipyClient,
     private val downloads: FileDownloadClient,

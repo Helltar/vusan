@@ -17,7 +17,6 @@ private const val MAX_RICH_MESSAGE_CHARS = 32768
 // and the answer is not due yet.
 private const val MAX_ANNOUNCEMENT_CHARS = 500
 
-@Suppress("unused")
 class MessageTools(
     private val outbox: BotOutbox,
     private val narrator: TurnNarrator? = null,

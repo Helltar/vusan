@@ -10,7 +10,6 @@ import com.helltar.vusan.tools.suspendToolGuard
 internal const val MAX_PAGE_TEXT_CHARS = 16_000
 private const val MAX_URL_CHARS = 2_048
 
-@Suppress("unused")
 class PageTools(private val reader: PageReader) : ToolSet {
 
     @Tool(PageToolDescriptions.READ_PAGE)

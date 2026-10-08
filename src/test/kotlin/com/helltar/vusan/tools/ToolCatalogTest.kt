@@ -10,21 +10,18 @@ import kotlin.test.assertFalse
 import kotlin.test.assertNull
 import kotlin.test.assertTrue
 
-@Suppress("unused")
 private class CoreTestTools : ToolSet {
 
     @Tool("Sends text to the user.")
     fun sendTestMessage(@Arg("The text to send.") text: String): String = text
 }
 
-@Suppress("unused")
 private class DrawTestTools : ToolSet {
 
     @Tool("Draws a picture from a description.")
     fun drawTestPicture(@Arg("What to draw.") subject: String): String = subject
 }
 
-@Suppress("unused")
 private class SpeakTestTools : ToolSet {
 
     @Tool("Says text out loud.")

@@ -9,7 +9,6 @@ import com.helltar.vusan.request.ConversationScope
 import com.helltar.vusan.request.RequestContext
 import com.helltar.vusan.tools.suspendToolGuard
 
-@Suppress("unused")
 class InlineChoiceTools(
     private val context: RequestContext,
     private val outbox: BotOutbox,

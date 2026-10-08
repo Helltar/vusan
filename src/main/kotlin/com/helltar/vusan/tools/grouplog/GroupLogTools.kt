@@ -10,7 +10,6 @@ import com.helltar.vusan.tasks.Recurrence
 import com.helltar.vusan.tools.suspendToolGuard
 import kotlin.time.Duration.Companion.days
 
-@Suppress("unused")
 class GroupLogTools(
     private val repository: GroupLogRepository,
     private val reader: GroupLogReader,

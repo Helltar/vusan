@@ -10,7 +10,6 @@ import com.helltar.vusan.outbox.normalizeReactionEmoji
 import com.helltar.vusan.request.RequestContext
 import com.helltar.vusan.tools.suspendToolGuard
 
-@Suppress("unused")
 class ReactionTools(private val context: RequestContext, private val outbox: BotOutbox) : ToolSet {
 
     @Tool(ReactionToolDescriptions.SET_REACTION)

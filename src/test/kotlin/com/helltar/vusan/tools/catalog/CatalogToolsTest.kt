@@ -13,14 +13,12 @@ import kotlin.test.assertEquals
 import kotlin.test.assertTrue
 import kotlinx.coroutines.runBlocking
 
-@Suppress("unused")
 private class DrawTestTools : ToolSet {
 
     @Tool("Draws a picture from a description.")
     fun drawTestPicture(@Arg("What to draw.") subject: String): String = subject
 }
 
-@Suppress("unused")
 private class SpeakTestTools : ToolSet {
 
     @Tool("Says text out loud.")

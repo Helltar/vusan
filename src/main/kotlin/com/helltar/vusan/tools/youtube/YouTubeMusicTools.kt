@@ -8,7 +8,6 @@ import com.helltar.vusan.outbox.BotOutput
 import com.helltar.vusan.common.sanitizeFilename
 import com.helltar.vusan.tools.suspendToolGuard
 
-@Suppress("unused")
 class YouTubeMusicTools(private val client: YtDlpClient, private val outbox: BotOutbox) : ToolSet {
 
     @Tool(YouTubeMusicToolDescriptions.PLAY_FULL_TRACK)

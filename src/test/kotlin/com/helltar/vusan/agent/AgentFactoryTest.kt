@@ -35,7 +35,6 @@ import kotlin.test.assertFalse
 import kotlin.test.assertIs
 import kotlin.test.assertTrue
 
-@Suppress("unused")
 private class ProbeTools(private val outbox: BotOutbox) : ToolSet {
 
     @Tool("Sends text to the user.")
@@ -51,7 +50,6 @@ private class ProbeTools(private val outbox: BotOutbox) : ToolSet {
     suspend fun explode(@Arg("Why.") reason: String): String = suspendToolGuard { error("boom: $reason") }
 }
 
-@Suppress("unused")
 private class DrawTools : ToolSet {
 
     @Tool("Draws a picture.")

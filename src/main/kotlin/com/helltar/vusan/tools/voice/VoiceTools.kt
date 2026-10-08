@@ -10,7 +10,6 @@ import com.helltar.vusan.outbox.BotOutput
 import com.helltar.vusan.tools.suspendToolGuard
 import io.github.oshai.kotlinlogging.KotlinLogging
 
-@Suppress("unused")
 class VoiceTools(
     private val client: ElevenLabsTtsClient,
     private val config: ElevenLabsTtsConfig,

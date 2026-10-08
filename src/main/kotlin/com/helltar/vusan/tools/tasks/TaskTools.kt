@@ -12,7 +12,6 @@ import com.helltar.vusan.tools.suspendToolGuard
 import java.time.Instant
 import java.time.ZoneId
 
-@Suppress("unused")
 class TaskTools(
     private val repo: TasksRepository,
     private val context: RequestContext,

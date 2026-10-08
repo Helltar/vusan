@@ -6,7 +6,6 @@ import com.helltar.vusan.agent.TurnToolBudget
 import com.helltar.vusan.agent.report
 import com.helltar.vusan.tools.suspendToolGuard
 
-@Suppress("unused")
 class ContextTools(private val budget: TurnToolBudget) : ToolSet {
 
     @Tool(ContextToolDescriptions.CHECK_CONTEXT_BUDGET)

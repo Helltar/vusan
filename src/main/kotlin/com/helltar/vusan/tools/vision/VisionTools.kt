@@ -9,7 +9,6 @@ import com.helltar.vusan.request.AttachedFileKind
 import com.helltar.vusan.tools.suspendToolGuard
 import io.github.oshai.kotlinlogging.KotlinLogging
 
-@Suppress("unused")
 class VisionTools(
     private val client: ImageVisionClient,
     private val videoClient: VideoVisionClient,

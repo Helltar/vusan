@@ -13,7 +13,6 @@ import com.helltar.vusan.tools.images.photosRefusedReply
 import com.helltar.vusan.tools.suspendToolGuard
 import io.ktor.http.*
 
-@Suppress("unused")
 class TavilyTools(
     private val client: TavilyClient,
     private val imageDownloader: ImageDownloadClient,

@@ -7,7 +7,6 @@ import com.helltar.vusan.outbox.BotOutbox
 import com.helltar.vusan.outbox.BotOutput
 import com.helltar.vusan.tools.suspendToolGuard
 
-@Suppress("unused")
 class QuizTools(private val outbox: BotOutbox) : ToolSet {
 
     @Tool(QuizToolDescriptions.CREATE_QUIZ)
