@@ -15,6 +15,7 @@ symptom to the file that owns it, and beats searching the tree.
 Telegram ──► telegram/ ──► agent/ ◄──► tools/ ──► external services
                 │            │           │
                 │            │           └─ writes outputs into ─► outbox/
+                │            ├─ asks the model through ─► llm/ ──► model providers
                 │            ├─ reads/stores the dialogue via ─► agent/conversation/ ─► infra/
                 │            └─ reads/stores memory via ──► agent/memory/ ──► infra/
                 ├─ records every group message into ─► agent/grouplog/ ─► infra/
@@ -114,9 +115,10 @@ that is who owns writing them, not because only `agent/` reads them. No other ar
   declared in `infra/Schema.kt` into SQLite's own `PRAGMA user_version`. Nothing is inferred by comparing declarations
   to what is there, and nothing is migrated in code: a database of any other version — from before versions existed, or
   from a newer build — stops startup instead of being reshaped, and is moved by hand.
-- **`config/`** — `.env` parsing (`AppConfig`), LLM provider/model resolution (`LlmRuntime`), and the ChatGPT
-  subscription credentials the Codex CLI writes (`CodexAuth`). `VisionRuntime` resolves separately which model looks at
-  images: the `OPENAI_VISION_*` model when configured, the chat model when it accepts images, and nothing at all
+- **`config/`** — `.env` parsing (`AppConfig`), LLM provider/model resolution (`LlmRuntime`), the startup check of
+  every configured model against its vendor (`ModelPreflight`), and the ChatGPT subscription credentials the Codex CLI
+  writes (`CodexAuth`). `VisionRuntime` resolves separately which model looks at
+  images: the `VISION_*` model when configured, the chat model when it accepts images, and nothing at all
   otherwise — which leaves the vision tools and sticker catalog unavailable.
 - **`stt/`** — OpenAI speech-to-text client (`OpenAiWhisperClient`, default model `gpt-4o-transcribe`); used for voice
   transcription and for the sound of a video the vision tool watches, opt-in via `OPENAI_STT_API_KEY`.
@@ -183,7 +185,7 @@ A normal user message travels:
    is ephemeral itself, and `dispatch` turns any ephemeral message that is not a command into a private note to write
    in the open (`TelegramDelivery.sendForSenderOnly`), since the agent's own delivery is not ephemeral and a public
    answer to a private message would leak it. On the text, caption and album paths a group message `shouldHandle` turned away gets one more look when
-   `OPENAI_ADDRESSING_API_KEY` is set: `TelegramBotRunner.acceptance` builds an `AmbientCandidate`
+   `ADDRESSING_MODEL` is set: `TelegramBotRunner.acceptance` builds an `AmbientCandidate`
    (`telegram/inbound/AmbientCandidates.kt` — typed text or a caption only, never an edit, forward, command, bot or
    channel post) and asks `agent/addressing/AmbientAddressing`. That puts it to a classifier model of its own only when
    the message names the bot, its author has a turn under way (`AgentRunner.hasTurnUnderWay`), or the bot spoke within
@@ -234,8 +236,8 @@ A normal user message travels:
    bot's last reply or somebody else's line in between, and the replayed history carries no such order.
    `<current_time>` and the chat's `<sticker_catalog>` ride in that same user turn rather than in a system message of
    their own: a system message reads as a higher-priority instruction, which is wrong for context assembled out of what
-   people sent, and the Anthropic API takes every system message into its top-level system field regardless of where
-   it sat. In a group the turn also carries what that chat lets the bot post, read through
+   people sent, and the Messages API has no system role inside the conversation, so `llm/anthropic/AnthropicClient`
+   moves every system message into the top-level system field regardless of where it sat. In a group the turn also carries what that chat lets the bot post, read through
    `telegram/ChatProfiles.kt`: one cached `getChat` + `getChatMember` pair yields the chat description, the permissions
    binding a bot that is a plain member (an administrator is bound by none of them, slow mode included), and the
    slow-mode delay. `ChatCapabilities` travels in `RequestContext.chat` and reaches three places — `ToolRegistryFactory` leaves
@@ -258,11 +260,11 @@ A normal user message travels:
    its generation's; `LLM_CONTEXT_WINDOW_TOKENS` supplies a compatible server's or overrides either.
 5. **Act** — during the agent loop, tools run and push results into the request's `BotOutbox`; tool calls/results are
    recorded for history. Live textual tool results share a cumulative bound derived from the reserved agent-growth
-   budget before later LLM calls; the runner opens that bound as a `TurnToolBudget` the strategy spends and the
+   budget before later LLM calls; the runner opens that bound as a `TurnToolBudget` the loop spends and the
    `checkContextBudget` tool reports, so a turn can narrow a long read instead of discovering the ceiling by getting an
    empty result back. Once a quarter of the reserve is left the run states it without being asked, once, in a note that
    follows the batch of tool results — nothing may come between an assistant's tool call and that call's result. The loop
-   (`AgentTurn` in `agent/AgentFactory.kt`) guards against flaky models in two ways:
+   (`agent/AgentTurn.kt`) guards against flaky models in two ways:
     - a tool call that arrives with no arguments at all for a tool that takes them (flaky models emit empty-arg siblings
       when they try to call tools in parallel) is answered with a validation error instead of being executed, so the run
       stays clean and the follow-up request stays well-formed. A call that provides some arguments and omits a required
@@ -569,10 +571,10 @@ A normal user message travels:
   user/assistant history is not mislabeled as an assistant instruction. An initial context-overflow failure retries once
   with recap only, but never after a tool ran, which avoids duplicated actions.
 - **Live tool-result budget** — `ContextWindowPolicy.liveToolResultMaxChars` caps everything the tools return during one
-  run, converting the agent reserve back to characters at the same ratio `estimateHistoryTokens` reads them. It scales
+  run, converting the agent reserve back to characters at the same ratio `estimateTokens` reads them. It scales
   with the window on purpose: a fixed ceiling starves a large-window model, since a single full-length YouTube
   transcript would consume the whole run and leave later tool results with nothing. What is left of it during a run
-  lives in `agent/TurnToolBudget.kt`: the strategy charges each result against it, `checkContextBudget`
+  lives in `agent/TurnToolBudget.kt`: the loop charges each result against it, `checkContextBudget`
   (`tools/context/`) is how the model reads it before deciding how much to ask for, and `TurnToolBudget.report()` is the
   single wording both that tool and the run's own low-reserve notice state it in.
 - **LLM provider resolution** — `config/LlmRuntime.resolveLlmRuntime` turns a `LlmProviderConfig` into an `LlmRuntime`:
@@ -625,7 +627,7 @@ A normal user message travels:
   tiers validate `CODEX_SERVICE_TIER`; older catalog entries without those fields keep the compatibility defaults. A
   catalog that cannot be read is a warning, not a failure — the endpoint is undocumented, so a shape change there must
   not take a working bot down — but a model the account plainly cannot run stops startup with the list of ones it can.
-  `OPENAI_VISION_API_KEY` still explicitly selects a separate OpenAI vision model.
+  A `VISION_MODEL` still selects a separate vision model, on the subscription or, with `VISION_PROVIDER`, elsewhere.
 
   The same session also covers image generation. `resolveImageRoute` picks `PLATFORM` whenever `OPENAI_IMAGE_API_KEY`
   is set and `CODEX` otherwise, so a paid key keeps billing separately instead of spending the conversation's own
@@ -734,8 +736,9 @@ sends one directory's path, the server snapshots it out of the sandbox and answe
   person's in every chat.
 - **The bot never builds the URL, and never learns how it was chosen.** The server picks an address that says nothing
   about the sandbox or the person, keeps it while the site is up, and hands it back from the publish call.
-- **The one check worth making locally**: a directory with no `index.html` at its top publishes fine and its link then
-  opens nothing, so the tool lists the directory first and says so rather than handing over a dead link.
+- **The one mistake worth a warning**: a directory with no `index.html` at its top publishes fine and its link then
+  opens nothing. The server reports it as `hasIndex` on the publish answer, and the tool says so rather than handing
+  over a dead link; nothing here lists the directory to find out.
 - **Whether publishing exists at all** is the server's answer, not a setting here: `GET /v1/info` reports it, and a server
   without a pages role refuses the call in its own words.
 
@@ -766,10 +769,10 @@ A symptom-to-source map for finding the right file fast. Paths are under
 | Wrong language in a canned reply (busy/error/voice/start/task menu) | `i18n/Language.kt` (`ofText` on the message, `fromCode` on the client) + `telegram/inbound/MessageMetadata.kt` (`Message.language`) + the `i18n/*Messages.kt` files (the strings) |
 | A turn's plan reaches the chat only after the work it announced, or arrives twice | `tools/message/MessageTools.announcePlan` (the tool and its one-per-turn rule) + `telegram/TurnStatus.kt` (`say`, and what survives `finish`) + `outbox/BotOutbox.kt` (`recordDelivered`, `hasDelivered`) + `telegram/delivery/TelegramDelivery.dispatch` (skipping an item already in the chat) |
 | The typing indicator or the turn's status message is wrong, stale, or missing | `telegram/TelegramProgress.kt` (both tickers, and `statusGraceFor`, the per-activity gate deciding which turns get a message at all) + `telegram/TurnStatus.kt` (the message itself, the emoji beside each activity, its stop button, and how it ends) + `agent/ToolActivity.kt` (which tool means what) + `i18n/Messages.progressLabel` (the words) + `telegram/delivery/TelegramDelivery.chatActionFor` (the action) |
-| A long research turn ends in the generic error reply or is answered mid-way | `agent/AgentFactory.kt` (`maxModelCalls`, `outOfModelCalls` and the wrap-up that lands the turn) + `agent/AgentRunner.kt` (delivering what the outbox holds when a run fails) |
+| A long research turn ends in the generic error reply or is answered mid-way | `agent/AgentTurn.kt` (`maxModelCalls`, `outOfModelCalls` and the wrap-up that lands the turn) + `agent/AgentRunner.kt` (delivering what the outbox holds when a run fails) |
 | A spent subscription still ends turns in "come back later", or the bot never returns to it | `llm/FallbackLlmClient.kt` (the outage deadline, the single probe back) + `agent/ProviderErrors.providerOutage` (the patterns and the reset time read from the body), then `LLM_FALLBACK_*` in [`configuration.md`](configuration.md#a-second-provider-behind-the-first) |
 | The reply to a failed turn says nothing about what the provider did | `agent/AgentRunner.providerErrorReply` (which error body earns which canned reply: a content-policy refusal, a spent usage limit, a dead key, a 429/503 overload) + `i18n/Messages.kt` (the strings) |
-| You need to see exactly what the model was sent this turn | `agent/PromptDump.kt` (the whole request rendered per message) — `AgentTurn` in `agent/AgentFactory.kt` renders it before every model call and is switched by the `PromptDump` logger in [`logback.xml`](../src/main/resources/logback.xml) |
+| You need to see exactly what the model was sent this turn | `agent/PromptDump.kt` (the whole request rendered per message) — `agent/AgentTurn.kt` renders it before every model call and is switched by the `PromptDump` logger in [`logback.xml`](../src/main/resources/logback.xml) |
 | Vusan forgets context or the history recap looks wrong | `agent/conversation/ConversationPlan.kt` (budget/selection) + `agent/conversation/ConversationCompactor.kt` (semantic recap) + `agent/conversation/ConversationRepository.kt` (storage/checkpoint) |
 | Nobody's answers to a quiz reach the agent, or the wrong option is named | `telegram/PollRegistry.kt` (what a sent poll stores, and for how long) + `telegram/inbound/GroupLogEntries.kt` (`PollAnswer.toGroupLogEntry`) + `tools/quiz/QuizTools.kt` / `tools/poll/PollTools.kt` (`isAnonymous`, which decides whether Telegram reports votes at all) |
 | A group recap misses messages, or `readGroupLog` returns too little | `telegram/TelegramBotRunner.recordGroupLog` + `telegram/inbound/GroupLogEntries.kt` (what gets recorded at all), then `agent/grouplog/GroupLogReader.kt` (window budget, day split, digest cache) and `agent/grouplog/GroupLogRepository.kt` (retention and the per-chat row cap) |
@@ -790,18 +793,18 @@ A symptom-to-source map for finding the right file fast. Paths are under
 | Scheduled task fires late, not at all, or reports "missed"/"failed" | `tasks/TaskScheduler.kt` (polling, lateness, retries) + `tasks/Recurrence.kt` (next-run math) |
 | A chat's tasks all went paused on their own, or one keeps firing into a chat the bot was removed from | `telegram/BotMembership.kt` (the `my_chat_member` path) + `telegram/delivery/TelegramErrors.kt` (`isChatUnreachable`) + `tasks/TaskScheduler.kt` (`parkTasksOfUnreachableChat`) |
 | A tool is missing in one group but present elsewhere, or a chat restriction is stale | `telegram/ChatProfiles.kt` (`capabilitiesOf`, the cache and its `forget`) + `tools/ToolRegistryFactory.buildCatalog` (which capability gates which tool) + `telegram/tools/TelegramToolSets.kt` (the same gate for Telegram's own tools) |
-| The model answers that it cannot draw, speak, schedule or publish something it has tools for | `tools/ToolCatalog.kt` (which groups are deferred, and the `loadTools` menu) + `agent/TurnPrompt.kt` (`<tool_groups>`, the menu it reads) + `agent/SystemPrompt.kt` (the rule that sends it to `loadTools`) + `agent/AgentFactory.kt` (`sendVisibleTools`, which re-sends the tool list after a group is loaded) |
-| Tool results come back truncated or empty part-way through a turn | `agent/ContextWindowPolicy.kt` (how large the reserve is for this model) + `agent/TurnToolBudget.kt` (what is left of it) + `agent/AgentFactory.kt` (`boundedForLiveContext`, which truncates and then omits) |
+| The model answers that it cannot draw, speak, schedule or publish something it has tools for | `tools/ToolCatalog.kt` (which groups are deferred, and the `loadTools` menu) + `agent/TurnPrompt.kt` (`<tool_groups>`, the menu it reads) + `agent/SystemPrompt.kt` (the rule that sends it to `loadTools`) + `agent/AgentTurn.kt` (`run`, which reads the visible tools afresh for every request, so a group loaded mid-turn is offered from the next one) |
+| Tool results come back truncated or empty part-way through a turn | `agent/ContextWindowPolicy.kt` (how large the reserve is for this model) + `agent/TurnToolBudget.kt` (what is left of it) + `agent/AgentTurn.kt` (`boundedToolText`, which truncates and then omits) |
 | A conversation loads the same group on every turn, or keeps offering one it no longer uses | `tools/LoadedToolGroups.kt` (per-scope memory, its cap and its LRU order) — it is process memory, so a restart empties it |
 | `/tasks` or a plain-language task pause/resume/cancel fails | `telegram/callback/TaskMenuHandler.kt` (rendering, ownership, callbacks) + `tools/tasks/TaskTools.kt` (agent path) + `tasks/TasksRepository.kt` (shared scoped state changes) |
 | `/stop` does not stop anything, or a turn leaves its status message on screen | `agent/RunningTurns.kt` (what is registered and cancelled) + `agent/AgentRunner.kt` (`stop`, and the lock the command must not take) + `telegram/AgentTurns.kt` (the notice on cancellation) + `telegram/TelegramProgress.kt` (closing the status on the way out) + `telegram/callback/TurnStopHandler.kt` (the button and whose turn it may stop) |
 | `/clear` reports success but history survives | `agent/AgentRunner.kt` (`clearConversation` and the turn lock that also guards the append) + `tools/conversation/ConversationTools.kt` (agent path) + `agent/conversation/ConversationRepository.kt` (shared storage operation) |
 | An agent choice button does nothing, repeats, reaches the wrong user, loses the photo, or its answer replies to the bot's own question | `tools/choice/InlineChoiceTools.kt` (tool contract) + `telegram/callback/InlineChoiceHandler.kt` (callback ownership/consumption, origin message id, parked attachment) + `telegram/AgentTurns.kt` (the follow-up turn and its reply anchor) |
 | An env var has no effect | `config/AppConfig.kt` (parsing) — and check it is documented in [`configuration.md`](configuration.md) + [`.env.example`](../.env.example) |
-| Model / provider / request-timeout selection or OpenAI prompt-cache misses | `config/LlmRuntime.kt` (provider → client/model/params) + `config/OpenAiPromptCaching.kt` (GPT-5.6+ explicit cache breakpoints on the system prefix and the current turn) |
+| Model / provider / request-timeout selection, or prompt-cache misses | `config/LlmRuntime.kt` (provider → client/model/params) + `config/ModelPreflight.kt` (what the vendor says about the model at startup) + `llm/openai/OpenAiPromptCaching.kt` (GPT-5.6+ explicit cache breakpoints on the system prefix and the current turn) + `llm/anthropic/AnthropicClient.kt` (the request-level breakpoint and the one on the system block); `cacheReadTokens` and `cacheWriteTokens` on each turn's usage line say what was read and written |
 | "Sign in again" replies, ChatGPT-subscription auth, or a rejected `LLM_MODEL` on `codex` | `config/CodexAuth.kt` (token load/refresh/persist) + `config/CodexCatalog.kt` (which models the plan offers) + `config/CodexHttpClient.kt` (per-request bearer and account headers) |
-| `describeImage`/`describeVideo` missing from the tool list | `config/VisionRuntime.kt` (chat model vs `OPENAI_VISION_API_KEY`), then `tools/ToolRegistryFactory.kt` (registration is skipped when there is no vision runtime) |
-| Garbled or empty tool-call crashes from a flaky model | `agent/AgentFactory.kt` — `vusanSingleRunStrategy` and `missingRequiredArgs` short-circuit them |
+| `describeImage`/`describeVideo` missing from the tool list | `config/VisionRuntime.kt` (chat model vs `VISION_MODEL`), then `tools/ToolRegistryFactory.kt` (registration is skipped when there is no vision runtime) |
+| Garbled or empty tool calls from a flaky model | `agent/AgentTurn.kt` (`execute`: the empty-arguments guard and the unknown-tool answer) + `tools/ToolSet.kt` (decoding the arguments, and the complaint a missing or wrong-shaped one earns) |
 
 ## Adding a tool
 

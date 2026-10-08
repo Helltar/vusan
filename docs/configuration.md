@@ -98,8 +98,8 @@ server behind `LLM_BASE_URL` speaks, since a third-party server may offer either
 and `anthropic` check yours at startup, `openai` and `openai-compatible` on the first turn. On
 `anthropic` the values are `low` to `max` (`none` and `minimal` stop startup), and a model from
 before Claude 4.6 — one the API serves under a dated id such as `claude-haiku-4-5-20251001` — takes
-no effort at all. Claude models think adaptively on every turn here, Opus 4.7 and 4.8 included;
-without an effort each runs at its own default, which is `medium` on Opus 5.5 and Haiku 5.5 and
+no effort at all. Every other Claude model thinks adaptively on every turn here, Opus 4.7 and 4.8
+included, while a dated one runs without thinking; without an effort each runs at its own default, which is `medium` on Opus 5.5 and Haiku 5.5 and
 `high` on the others. Give `LLM_BASE_URL` no `/v1` — the API path is appended for you. Raise the
 timeout for slow local servers and heavy reasoning models: a Fable turn at a high effort can run
 for minutes.
@@ -173,7 +173,7 @@ no refresh token: Vusan uses it while it is fresh and asks for a replacement as 
 instead of failing a request after it expires.
 
 **What the plan's catalog decides.** The models your plan actually offers are read at startup, and
-five settings are checked against that list:
+six settings are checked against that list:
 
 - **`LLM_MODEL`** — startup fails with the available ids if it does not match. Codex and the OpenAI
   Platform API expose different model sets, so a Platform-only id would otherwise fail on the first
@@ -182,6 +182,7 @@ five settings are checked against that list:
   images.
 - **`LLM_REASONING_EFFORT`** — an effort the model does not offer stops startup instead of a turn.
 - **The context window** — comes from there too, so `LLM_CONTEXT_WINDOW_TOKENS` is only an override.
+- **`CODEX_SERVICE_TIER`** — a tier the model is not served at stops startup.
 - **How wordy replies are** — the model's default verbosity is taken from there and sent with every
   request, the way the Codex CLI does it. Without a catalog the backend's own, wordier default applies.
 
@@ -259,12 +260,13 @@ the key after that.
 `LLM_FALLBACK_REQUEST_TIMEOUT_SECONDS` and `LLM_FALLBACK_CONTEXT_WINDOW_TOKENS` mean what their
 `LLM_` counterparts mean; the timeout follows the primary's when unset.
 
-A call the provider's server fumbled — a `5xx`, an overloaded server, a stream cut short — is first
-made again, up to three times within a few seconds, on any provider and with or without a fallback.
-What survives that, and what a repeat cannot fix, is the fallback's.
+A call the provider's server fumbled — a `5xx`, an overloaded server, a stream cut short — is made up
+to three times in all, a second or two apart, on any provider and with or without a fallback. What
+still fails goes to the fallback when it is one of the failures below; a plain `500`, `502` or `504`
+that keeps failing ends in an error reply instead.
 
-Any failure that is the provider's switches: the plan's usage limit, credentials it no longer
-accepts, a rate limit, an overloaded server, a connection that timed out or dropped. The call that
+These failures switch: the plan's usage limit, credentials it no longer accepts, a rate limit, an
+overloaded server (`503`, `529`), a connection that timed out or dropped. The call that
 ran into it is repeated on the fallback with the fallback's own model, so the turn finishes instead
 of ending in an error reply, and every later call — turns, history recaps, group-log digests, vision
 on the chat model — goes the same way for as long as the primary is held out. How long that is
@@ -490,9 +492,11 @@ an `openai`, `anthropic` or `codex` setup needs nothing extra.
 
 When the chat model cannot accept images, `VISION_MODEL` runs vision on a model of its own and the
 chat model keeps answering everything else. On its own the model runs on the chat provider with the
-chat key; with `VISION_PROVIDER` it is a provider of its own, read like the chat one from the same
-variables under its prefix (`VISION_API_KEY`, `VISION_BASE_URL`, `VISION_OPENAI_ENDPOINT`,
-`VISION_REASONING_EFFORT`, `VISION_REQUEST_TIMEOUT_SECONDS`, `VISION_CONTEXT_WINDOW_TOKENS`):
+chat key, address and timeout, and takes `VISION_REASONING_EFFORT` and
+`VISION_CONTEXT_WINDOW_TOKENS` rather than the chat's. With `VISION_PROVIDER` it is a provider of its
+own, read like the chat one from the same variables under its prefix (`VISION_API_KEY`,
+`VISION_BASE_URL`, `VISION_OPENAI_ENDPOINT`, `VISION_REASONING_EFFORT`,
+`VISION_REQUEST_TIMEOUT_SECONDS`, `VISION_CONTEXT_WINDOW_TOKENS`):
 
 ```dotenv
 LLM_PROVIDER=openai-compatible
@@ -508,7 +512,7 @@ VISION_API_KEY=sk-proj-qwerty
 | Variable           | Default           | Description                                                              |
 |--------------------|-------------------|--------------------------------------------------------------------------|
 | `VISION_MODEL`     | —                 | Enables a separate vision model; it is taken at its word about seeing.   |
-| `VISION_PROVIDER`  | the chat provider | `openai`, `anthropic`, `openai-compatible` or `codex`, with its own key. |
+| `VISION_PROVIDER`  | the chat provider | `openai`, `anthropic` or `openai-compatible` with its own key, or `codex`. |
 
 `openai-compatible` never claims vision on its own, because the server behind `LLM_BASE_URL` may
 serve anything — so with it vision stays off until `VISION_MODEL` is set, even when the model itself
@@ -525,8 +529,9 @@ deployment that would rather not pay for that turns it off:
 | `STICKERS_ENABLED` | `true`  | Set to `false` to learn no sticker sets and offer no sticker replies. |
 
 With no vision at all, a startup `WARN` says so and Vusan answers without looking at attachments;
-Telegram channel posts still come back, as text only. Vision calls share the
-`LLM_REQUEST_TIMEOUT_SECONDS` budget.
+Telegram channel posts still come back, as text only. Vision calls run on the chat's
+`LLM_REQUEST_TIMEOUT_SECONDS` unless `VISION_PROVIDER` is set and `VISION_REQUEST_TIMEOUT_SECONDS`
+gives them their own.
 
 ## Sandbox
 
@@ -544,8 +549,8 @@ These are the bot's side of it, and belong in `.env`:
 | `REGOLITH_URL`   | —       | Address of the Regolith server. Unset means the tools do not exist. |
 | `REGOLITH_TOKEN` | —       | Its API token, the same value the server was started with.          |
 
-Both a URL and a token must be present, or the sandbox tools are not registered and the bot never
-mentions them. The token takes 32 to 256 printable characters, and `openssl rand -hex 32` makes one
+Without `REGOLITH_URL` the sandbox tools are not registered and the bot never mentions them; a URL
+without a valid token stops startup. The token takes 32 to 256 printable characters, and `openssl rand -hex 32` makes one
 both sides accept. Regolith's default address reaches only its own machine, so
 [the sandbox guide](sandbox.md#pointing-the-bot-at-it) shows which address to give the bot.
 
@@ -642,7 +647,7 @@ ADDRESSING_NAMES=robin,robbie
 | Variable              | Default           | Description                                                                 |
 |-----------------------|-------------------|-----------------------------------------------------------------------------|
 | `ADDRESSING_MODEL`    | —                 | Turns the feature on: the model that decides, never the chat model.         |
-| `ADDRESSING_PROVIDER` | the chat provider | `openai`, `anthropic`, `openai-compatible` or `codex`, with its own key under `ADDRESSING_`. |
+| `ADDRESSING_PROVIDER` | the chat provider | `openai`, `anthropic` or `openai-compatible` with its own key under `ADDRESSING_`, or `codex`. |
 | `ADDRESSING_NAMES`    | from the profile  | Spellings the chat uses, comma-separated.                                   |
 
 The model gets the least reasoning its API offers unless `ADDRESSING_REASONING_EFFORT` says
@@ -827,11 +832,11 @@ Where the database lives, and the one external binary that needs a credential of
 | `YT_DLP_COOKIES_FILE` | —                  | Cookies for YouTube videos that ask for a login.   |
 
 In Docker that directory is `data/` beside the compose file, and `VUSAN_HOST_DIR` in `.env` moves
-it. It is a plain directory rather than a named volume for the same reason the published site tree
-is: everything in it is yours to handle. The database is a file you can copy for a backup, and
+it. It is a plain directory rather than a named volume because everything in it is yours to handle.
+The database is a file you can copy for a backup, and
 `SELF_IMAGE_FILE`, `APPEARANCE_FILE` and `YT_DLP_COOKIES_FILE` are files you put there. Create it
 before the first start — `mkdir -p data` — because a bind mount Docker creates comes out owned by
-`root` while the bot runs as uid 1000, the same on all three services.
+`root` while the bot runs as uid 1000.
 
 `VUSAN_IMAGE` in the same file picks the image the bot runs, `ghcr.io/helltar/vusan:latest` when
 unset — set it to pin a release tag or to run a build of your own.
