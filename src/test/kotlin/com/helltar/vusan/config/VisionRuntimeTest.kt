@@ -7,7 +7,9 @@ import com.helltar.vusan.llm.ReasoningEffort
 import com.helltar.vusan.llm.openai.OpenAiEndpoint
 import io.ktor.client.engine.mock.MockEngine
 import kotlin.test.Test
+import kotlin.test.assertContains
 import kotlin.test.assertEquals
+import kotlin.test.assertFailsWith
 import kotlin.test.assertFalse
 import kotlin.test.assertNull
 import kotlin.test.assertSame
@@ -73,7 +75,27 @@ class VisionRuntimeTest {
         assertEquals(true, vision?.ownClient)
     }
 
-    // a model named for the role is taken at its word about seeing, whatever its provider says of itself
+    // a vision model the vendor itself says is blind would fail every look, so the startup says so instead
+    @Test
+    fun `a vision model its vendor says takes no images stops the startup`() {
+        val textOnly =
+            LlmProviderConfig.OpenAiCompatible(
+                baseUrl = "https://api.deepseek.com",
+                apiKey = "key",
+                model = "deepseek-v4-pro",
+                requestTimeout = TIMEOUT,
+                seesImages = false,
+                envPrefix = "VISION",
+            )
+
+        val failure = assertFailsWith<IllegalArgumentException> { resolveVisionRuntime(config = textOnly, chat = compatibleChat()) }
+        assertContains(failure.message.orEmpty(), "VISION_MODEL=[deepseek-v4-pro]")
+
+        val codexTextOnly = LlmProviderConfig.Codex(model = "text-model", supportsVision = false, requestTimeout = TIMEOUT, envPrefix = "VISION")
+        assertFailsWith<IllegalArgumentException> { resolveVisionRuntime(config = codexTextOnly, chat = compatibleChat()) }
+    }
+
+    // a model named for the role is taken at its word about seeing when nothing says otherwise
     @Test
     fun `a compatible model named for vision is assumed to see`() {
         val vision =

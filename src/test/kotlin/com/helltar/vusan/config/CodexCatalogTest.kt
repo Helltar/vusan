@@ -382,7 +382,7 @@ class CodexCatalogTest {
         val chat =
             applyCodexModelMetadata(
                 LlmProviderConfig.Codex(model = "gpt-5.6-terra", serviceTier = ServiceTier.PRIORITY, requestTimeout = 120.seconds),
-                codexModel(supportedEfforts = setOf(ReasoningEffort.LOW, ReasoningEffort.HIGH), supportedServiceTiers = setOf("priority")),
+                codexModel(supportsVision = false, supportedEfforts = setOf(ReasoningEffort.LOW, ReasoningEffort.HIGH), supportedServiceTiers = setOf("priority")),
             )
 
         assertEquals(setOf(ReasoningEffort.LOW, ReasoningEffort.HIGH), chat.supportedEfforts)
@@ -391,6 +391,7 @@ class CodexCatalogTest {
 
         assertNull(role.serviceTier)
         assertNull(role.supportedEfforts)
+        assertTrue(role.supportsVision, "the role's own catalog entry says whether it sees, not the chat model's")
     }
 }
 

@@ -526,7 +526,9 @@ An `openai-compatible` model sees only when the server's own model list says it 
 DeepSeek's says so of `deepseek-flash`, which then needs no vision model of its own, and not of
 `deepseek-v4-pro`. A server that lists nothing of the kind may serve anything, so with it vision stays
 off until `VISION_MODEL` is set, even when the model itself does accept images. A vision model always
-wins when it is set, even where the chat model could have looked at the picture itself.
+wins when it is set, even where the chat model could have looked at the picture itself, and is taken
+at its word about seeing — unless its own server's list or the plan's catalog says it takes no images,
+which stops startup instead of failing every look.
 
 Sticker replies come with vision and stay off without it. They are the one thing here that spends
 on its own: a set a chat keeps using is pulled in and each of its stickers is described once, up to

@@ -127,11 +127,11 @@ class ModelPreflightTest {
 
         assertEquals("https://api.deepseek.com/v1/models", asked)
         assertEquals("Bearer key", authorization?.get("Authorization"))
-        assertTrue(flash.seesImages)
+        assertEquals(true, flash.seesImages)
         assertEquals(1_048_576, flash.contextWindowTokens)
 
         val pro = assertIs<LlmProviderConfig.OpenAiCompatible>(compatible("deepseek-v4-pro").preflighted(http(HttpStatusCode.OK, DEEPSEEK_MODELS), codexAuth = null))
-        assertFalse(pro.seesImages)
+        assertEquals(false, pro.seesImages)
     }
 
     @Test
