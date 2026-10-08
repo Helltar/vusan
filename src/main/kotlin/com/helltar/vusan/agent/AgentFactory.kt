@@ -17,6 +17,7 @@ import ai.koog.prompt.executor.model.PromptExecutor
 import ai.koog.prompt.llm.LLModel
 import ai.koog.prompt.message.Message
 import ai.koog.prompt.message.MessagePart
+import ai.koog.prompt.message.ResponseMetaInfo
 import ai.koog.prompt.params.LLMParams
 import ai.koog.serialization.JSONObject
 import ai.koog.serialization.kotlinx.toKotlinxJsonObject
@@ -32,6 +33,8 @@ import com.helltar.vusan.outbox.BotOutbox
 import com.helltar.vusan.request.ConversationScope
 import com.helltar.vusan.tools.ToolCatalog
 import io.github.oshai.kotlinlogging.KotlinLogging
+import kotlinx.serialization.json.JsonPrimitive
+import kotlinx.serialization.json.intOrNull
 
 // the strategy is built outside the class, so it cannot reach AgentFactory's own logger
 private val strategyLog = KotlinLogging.logger("AgentStrategy")
@@ -48,7 +51,31 @@ data class TokenUsage(
     val inputTokens: Int?,
     val outputTokens: Int?,
     val totalTokens: Int?,
+    // what the provider served from its prompt cache and what it wrote to it, where it says so
+    val cacheReadTokens: Int? = null,
+    val cacheWriteTokens: Int? = null,
 )
+
+/**
+ * The usage of one model call, cache figures included.
+ *
+ * Koog keeps the cache breakdown out of its typed usage and puts what a provider reports into the
+ * metadata under the provider's own names: Anthropic's reads and writes, Google's reads. OpenAI's
+ * `cached_tokens` is parsed and then dropped on the way to `ResponseMetaInfo`, so nothing shows there.
+ */
+internal fun tokenUsageOf(meta: ResponseMetaInfo): TokenUsage {
+    val metadata = meta.metadata
+
+    fun count(key: String): Int? = (metadata?.get(key) as? JsonPrimitive)?.intOrNull
+
+    return TokenUsage(
+        inputTokens = meta.inputTokensCount,
+        outputTokens = meta.outputTokensCount,
+        totalTokens = meta.totalTokensCount,
+        cacheReadTokens = count("cacheReadInputTokens") ?: count("cachedContentTokenCount"),
+        cacheWriteTokens = count("cacheCreationInputTokens"),
+    )
+}
 
 data class AgentPromptPreparation(
     val toolCatalog: ToolCatalog,
@@ -184,8 +211,14 @@ class AgentFactory(
                 }
 
                 onLLMCallCompleted { ctx ->
-                    ctx.response?.metaInfo?.let { meta ->
-                        tokenUsage(TokenUsage(meta.inputTokensCount, meta.outputTokensCount, meta.totalTokensCount))
+                    ctx.response?.let { response ->
+                        // a safety classifier declined the request: the reply is empty and a retry of the
+                        // same prompt is declined again, so the log has to say why the turn ends without a word.
+                        if (response.finishReason == REFUSAL_FINISH_REASON) {
+                            log.warn { "model declined the request for $scope: finishReason=[${response.finishReason}]" }
+                        }
+
+                        tokenUsage(tokenUsageOf(response.metaInfo))
                     }
                 }
 
@@ -210,6 +243,7 @@ class AgentFactory(
 
     private companion object {
         const val TOOL_LOG_ARGS_MAX_CHARS = 300
+        const val REFUSAL_FINISH_REASON = "refusal"
         val log = KotlinLogging.logger {}
     }
 }

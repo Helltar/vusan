@@ -16,7 +16,9 @@ import com.helltar.vusan.agent.conversation.toolCallArgsForStorage
 import com.helltar.vusan.outbox.BotOutbox
 import com.helltar.vusan.tools.poll.PollTools
 import kotlinx.serialization.json.Json
+import kotlinx.serialization.json.buildJsonObject
 import kotlinx.serialization.json.jsonObject
+import kotlinx.serialization.json.put
 import kotlinx.serialization.json.jsonPrimitive
 import kotlin.test.Test
 import kotlin.test.assertEquals
@@ -252,6 +254,28 @@ class AgentFactoryTest {
     }
 
     private val pollRegistry = ToolRegistry { tools(PollTools(BotOutbox())) }
+
+    // koog keeps a provider's cache figures in the metadata, under that provider's own names
+    @Test
+    fun `token usage reads the cache figures koog keeps in the metadata`() {
+        val anthropic =
+            ResponseMetaInfo.create(
+                KoogClock.System,
+                totalTokensCount = 15,
+                inputTokensCount = 10,
+                outputTokensCount = 5,
+                metadata = buildJsonObject {
+                    put("cacheReadInputTokens", 9_000)
+                    put("cacheCreationInputTokens", 400)
+                },
+            )
+        val google =
+            ResponseMetaInfo.create(KoogClock.System, inputTokensCount = 10, metadata = buildJsonObject { put("cachedContentTokenCount", 7_000) })
+
+        assertEquals(TokenUsage(10, 5, 15, cacheReadTokens = 9_000, cacheWriteTokens = 400), tokenUsageOf(anthropic))
+        assertEquals(TokenUsage(10, null, null, cacheReadTokens = 7_000, cacheWriteTokens = null), tokenUsageOf(google))
+        assertEquals(TokenUsage(null, null, null), tokenUsageOf(ResponseMetaInfo.Empty))
+    }
 
     private fun toolResult(output: String, parts: List<MessagePart.ContentPart>?) =
         ReceivedToolResult(

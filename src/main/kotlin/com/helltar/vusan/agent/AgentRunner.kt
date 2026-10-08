@@ -544,6 +544,8 @@ private fun tokenUsageLogSummary(usages: List<TokenUsage>): String {
     return "calls=${usages.size} promptTokens=${promptTokens ?: "n/a"} " +
             "minPromptTokens=${inputs.minOrNull() ?: "n/a"} maxPromptTokens=${inputs.maxOrNull() ?: "n/a"} " +
             "inputTokens=${usages.map { it.inputTokens }.sumOrNa()} " +
+            "cacheReadTokens=${usages.map { it.cacheReadTokens }.sumOrNa()} " +
+            "cacheWriteTokens=${usages.map { it.cacheWriteTokens }.sumOrNa()} " +
             "outputTokens=${usages.map { it.outputTokens }.sumOrNa()} " +
             "runTotal=${usages.map { it.totalTokens }.sumOrNa()}"
 }
