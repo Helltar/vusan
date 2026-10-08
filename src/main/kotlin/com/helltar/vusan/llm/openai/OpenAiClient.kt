@@ -3,7 +3,6 @@ package com.helltar.vusan.llm.openai
 import com.helltar.vusan.llm.ChatRequest
 import com.helltar.vusan.llm.LlmClient
 import com.helltar.vusan.llm.LlmModel
-import com.helltar.vusan.llm.LlmProvider
 import com.helltar.vusan.llm.Message
 import com.helltar.vusan.llm.Part
 import com.helltar.vusan.llm.Reply
@@ -62,18 +61,28 @@ class OpenAiClient(
 
     private val headers: Map<String, String> = apiKey?.let { mapOf("Authorization" to "Bearer $it") }.orEmpty()
 
+    private val url =
+        when (endpoint) {
+            OpenAiEndpoint.RESPONSES -> "$baseUrl/responses"
+            OpenAiEndpoint.COMPLETIONS -> "$baseUrl/chat/completions"
+        }
+
+    // what the reasoning this client returns is tagged with, and the only reasoning it replays: the platform,
+    // the codex backend and a compatible server all speak this protocol, and none reads another's
+    private val reasoningSource = url
+
     override suspend fun complete(model: LlmModel, request: ChatRequest): Reply =
         when (endpoint) {
             OpenAiEndpoint.RESPONSES -> {
                 val body = responsesRequest(model, request)
-                val response = if (streamed) streamResponses(body) else http.postJson(label, "$baseUrl/responses", body, headers)
+                val response = if (streamed) streamResponses(body) else http.postJson(label, url, body, headers)
                 onResponse(body, response)
                 parseResponses(response)
             }
 
             OpenAiEndpoint.COMPLETIONS -> {
                 val body = completionsRequest(model, request)
-                val response = http.postJson(label, "$baseUrl/chat/completions", body, headers)
+                val response = http.postJson(label, url, body, headers)
                 onResponse(body, response)
                 parseCompletion(response)
             }
@@ -104,18 +113,22 @@ class OpenAiClient(
                             )
                         }
                     }
+
+                    // both are refused in a request that defines no tools
+                    if (!request.mayCallTools) put("tool_choice", "none")
+                    options.parallelToolCalls?.let { put("parallel_tool_calls", it) }
                 }
 
-                options.parallelToolCalls?.let { put("parallel_tool_calls", it) }
                 options.reasoningEffort?.let { putJsonObject("reasoning") { put("effort", it.requestValue) } }
                 options.verbosity?.let { putJsonObject("text") { put("verbosity", it) } }
                 options.serviceTier?.let { put("service_tier", it) }
                 options.promptCacheKey?.let { put("prompt_cache_key", it) }
                 options.maxOutputTokens?.let { put("max_output_tokens", it) }
 
+                // a model that does not reason refuses the encrypted reasoning it would never write
                 if (statelessReasoning) {
                     put("store", false)
-                    putJsonArray("include") { add("reasoning.encrypted_content") }
+                    if (model.takesEffort) putJsonArray("include") { add("reasoning.encrypted_content") }
                 }
 
                 if (streamed) put("stream", true)
@@ -177,7 +190,7 @@ class OpenAiClient(
                     is Part.Text -> texts += buildJsonObject { put("type", "output_text"); put("text", part.text) }
 
                     is Part.Reasoning ->
-                        if (part.provider == LlmProvider.OPENAI) {
+                        if (part.source == reasoningSource) {
                             flushTexts()
                             add(part.raw)
                         }
@@ -214,7 +227,7 @@ class OpenAiClient(
     private suspend fun streamResponses(body: JsonObject): JsonObject {
         val folder = ResponsesStreamFolder(label)
 
-        http.postEventStream(label, "$baseUrl/responses", body, headers, folder::accept)
+        http.postEventStream(label, url, body, headers, folder::accept)
 
         return folder.response()
     }
@@ -262,7 +275,7 @@ class OpenAiClient(
 
     private fun outputParts(item: JsonObject): List<Part> =
         when (val type = item.string("type")) {
-            "reasoning" -> listOf(Part.Reasoning(LlmProvider.OPENAI, item))
+            "reasoning" -> listOf(Part.Reasoning(reasoningSource, item))
             "message" -> messageTexts(item).map { (text, _) -> Part.Text(text) }
 
             "function_call" ->
@@ -321,9 +334,11 @@ class OpenAiClient(
                             )
                         }
                     }
+
+                    if (!request.mayCallTools) put("tool_choice", "none")
+                    options.parallelToolCalls?.let { put("parallel_tool_calls", it) }
                 }
 
-                options.parallelToolCalls?.let { put("parallel_tool_calls", it) }
                 options.reasoningEffort?.let { put("reasoning_effort", it.requestValue) }
                 options.serviceTier?.let { put("service_tier", it) }
                 options.promptCacheKey?.let { put("prompt_cache_key", it) }
@@ -374,7 +389,7 @@ class OpenAiClient(
 
                         // a server that thinks between tool calls wants its thoughts back with the call
                         message.parts.filterIsInstance<Part.Reasoning>()
-                            .firstOrNull { it.provider == LlmProvider.OPENAI }
+                            .firstOrNull { it.source == reasoningSource }
                             ?.raw?.get(REASONING_CONTENT)
                             ?.let { put(REASONING_CONTENT, it) }
 
@@ -414,7 +429,7 @@ class OpenAiClient(
         val parts =
             buildList {
                 message?.get(REASONING_CONTENT)?.takeIf { it !is JsonNull }?.let { reasoning ->
-                    add(Part.Reasoning(LlmProvider.OPENAI, buildJsonObject { put(REASONING_CONTENT, reasoning) }))
+                    add(Part.Reasoning(reasoningSource, buildJsonObject { put(REASONING_CONTENT, reasoning) }))
                 }
 
                 message?.string("content")?.takeIf { it.isNotEmpty() }?.let { add(Part.Text(it)) }

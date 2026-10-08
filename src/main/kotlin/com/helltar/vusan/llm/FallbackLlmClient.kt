@@ -89,11 +89,18 @@ class FallbackLlmClient(
         fallback.close()
     }
 
-    // the fallback speaks with its own options, but the prompt cache key is the conversation's, not the
-    // provider's: keeping it lets the fallback build a warm prefix per conversation the same way.
+    // the fallback speaks with its own options, but what the caller asked of this one call stays: the
+    // conversation's cache key, which lets the fallback build a warm prefix per conversation the same way,
+    // whether the prompt is worth caching at all, and an output ceiling of the call's own.
     private suspend fun onFallback(request: ChatRequest): Reply {
-        val key = request.options.promptCacheKey
-        val options = if (key != null && fallbackOptions.promptCacheKey != null) fallbackOptions.copy(promptCacheKey = key) else fallbackOptions
+        val asked = request.options
+
+        val options =
+            fallbackOptions.copy(
+                promptCacheKey = fallbackOptions.promptCacheKey?.let { asked.promptCacheKey ?: it },
+                cachePrompt = asked.cachePrompt,
+                maxOutputTokens = asked.maxOutputTokens ?: fallbackOptions.maxOutputTokens,
+            )
 
         return fallback.complete(fallbackModel, request.copy(options = options))
     }

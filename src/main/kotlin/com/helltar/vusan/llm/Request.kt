@@ -65,10 +65,16 @@ data class ToolDefinition(
     val parameters: JsonObject,
 )
 
+/**
+ * [mayCallTools] `false` keeps [tools] in the request while the model may call none of them: a request
+ * replaying tool calls has to define the tools on Anthropic, and the tool list is part of the cached
+ * prefix on both APIs, so dropping it to forbid a call would cost a 400 or a cache miss.
+ */
 data class ChatRequest(
     val messages: List<Message>,
     val tools: List<ToolDefinition> = emptyList(),
     val options: RequestOptions = RequestOptions(),
+    val mayCallTools: Boolean = true,
 ) {
 
     init {

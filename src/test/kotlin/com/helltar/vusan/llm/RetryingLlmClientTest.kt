@@ -1,5 +1,7 @@
 package com.helltar.vusan.llm
 
+import io.ktor.client.network.sockets.SocketTimeoutException
+import io.ktor.client.plugins.HttpRequestTimeoutException
 import kotlinx.coroutines.runBlocking
 import java.io.IOException
 import kotlin.test.Test
@@ -29,7 +31,8 @@ class RetryingLlmClientTest {
         assertFalse(isRepeatableFailure(error(500, """{"error":{"code":"cyber_policy"}}""")))
         assertFalse(isRepeatableFailure(error(400, "unknown parameter")))
         assertFalse(isRepeatableFailure(error(401, "token_expired")))
-        assertFalse(isRepeatableFailure(error(null, "timed out", io.ktor.client.network.sockets.SocketTimeoutException("timed out"))))
+        assertFalse(isRepeatableFailure(error(null, "timed out", SocketTimeoutException("timed out"))))
+        assertFalse(isRepeatableFailure(error(null, "request timeout", HttpRequestTimeoutException("https://api.openai.com/v1/responses", 300_000))))
         assertFalse(isRepeatableFailure(IllegalStateException("not a provider failure")))
     }
 

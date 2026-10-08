@@ -75,6 +75,21 @@ class FallbackLlmClientTest {
         assertEquals("vusan-abc", fallback.calls.single().first.options.promptCacheKey)
     }
 
+    // a recap asks for no caching and a call may cap its own output; the fallback's options must undo neither
+    @Test
+    fun `what the caller asked of one call reaches the fallback`() = runBlocking {
+        val primary = Scripted("x", failWith = LlmException("Codex", 429, USAGE_LIMIT_BODY))
+        val fallback = Scripted("y")
+
+        client(primary, fallback, TickingClock(start))
+            .complete(PRIMARY_MODEL, ChatRequest(listOf(Message.User("hi")), options = RequestOptions(cachePrompt = false, maxOutputTokens = 300)))
+
+        val options = fallback.calls.single().first.options
+        assertFalse(options.cachePrompt)
+        assertEquals(300, options.maxOutputTokens)
+        assertEquals(ReasoningEffort.HIGH, options.reasoningEffort, "the effort stays the fallback's own")
+    }
+
     @Test
     fun `the primary is left alone until the deadline it named, then probed once`() = runBlocking {
         val clock = TickingClock(start)

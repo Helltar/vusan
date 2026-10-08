@@ -14,13 +14,16 @@ sealed interface Part {
     ) : Part
 
     /**
-     * A reasoning block exactly as its provider returned it, replayed to that provider untouched.
+     * A reasoning block exactly as the endpoint at [source] returned it, replayed to that endpoint
+     * untouched.
      *
-     * Both APIs bind a block to the model that wrote it — an encrypted payload on OpenAI, a signed one
-     * on Anthropic — and want it back verbatim within the same turn, so nothing here reads into it. A
-     * client skips a block another provider wrote.
+     * Both APIs bind a block to whoever wrote it — an encrypted payload on OpenAI, a signed one on
+     * Anthropic — and want it back verbatim within the same turn, so nothing here reads into it. A client
+     * skips a block another endpoint wrote: what the Codex backend encrypted means nothing to the
+     * platform, and a field one compatible server added is an item of no known type to the next — which
+     * a fallback taking over mid-turn would otherwise send.
      */
-    data class Reasoning(val provider: LlmProvider, val raw: JsonObject) : Part
+    data class Reasoning(val source: String, val raw: JsonObject) : Part
 
     data class ToolCall(
         val id: String,

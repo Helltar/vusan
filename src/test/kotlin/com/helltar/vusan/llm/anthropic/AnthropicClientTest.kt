@@ -24,6 +24,7 @@ import kotlinx.serialization.json.put
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFailsWith
+import kotlin.test.assertFalse
 import kotlin.test.assertNull
 import kotlin.test.assertTrue
 
@@ -156,7 +157,7 @@ class AnthropicClientTest {
 
     @Test
     fun `a blank assistant text and a foreign reasoning block are left out of the replay`() = runBlocking {
-        val assistant = Message.Assistant(listOf(Part.Reasoning(LlmProvider.OPENAI, buildJsonObject { put("type", "reasoning") }), Part.Text("  "), Part.Text("real")))
+        val assistant = Message.Assistant(listOf(Part.Reasoning("https://api.openai.com/v1/responses", buildJsonObject { put("type", "reasoning") }), Part.Text("  "), Part.Text("real")))
 
         client().complete(MODEL, request(*basic, assistant, Message.User("next")))
 
@@ -190,6 +191,20 @@ class AnthropicClientTest {
 
         val cut = client(reply = REPLY.replace(""""stop_reason":"tool_use"""", """"stop_reason":"max_tokens"""").replace("""{"type":"tool_use","id":"toolu-1","name":"lookUp","input":{"query":"cats"}},""", ""))
         assertEquals(StopReason.MAX_TOKENS, cut.complete(MODEL, request(*basic)).stopReason)
+    }
+
+    // tool blocks in the messages are a 400 unless the tools are defined, so a request that forbids a call
+    // keeps them and says so
+    @Test
+    fun `a request that may call no tool keeps the tools and sets the choice to none`() = runBlocking {
+        client().complete(MODEL, ChatRequest(basic.toList(), listOf(TOOL), mayCallTools = false))
+
+        val body = sent.single()
+        assertEquals("lookUp", body.getValue("tools").jsonArray.single().jsonObject.getValue("name").jsonPrimitive.content)
+        assertEquals("none", body.getValue("tool_choice").jsonObject.getValue("type").jsonPrimitive.content)
+
+        client().complete(MODEL, ChatRequest(basic.toList(), listOf(TOOL)))
+        assertFalse("tool_choice" in sent.last())
     }
 
     @Test

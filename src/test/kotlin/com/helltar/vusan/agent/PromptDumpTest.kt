@@ -1,6 +1,5 @@
 package com.helltar.vusan.agent
 
-import com.helltar.vusan.llm.LlmProvider
 import com.helltar.vusan.llm.Message
 import com.helltar.vusan.llm.Part
 import com.helltar.vusan.llm.ToolResult
@@ -56,7 +55,7 @@ class PromptDumpTest {
     @Test
     fun `images are reduced to their size and reasoning to its presence`() {
         val image = Part.Image(ByteArray(64) { 7 }, "image/png", "frame.png")
-        val reasoning = Part.Reasoning(LlmProvider.OPENAI, buildJsonObject { put("encrypted_content", "x".repeat(200)) })
+        val reasoning = Part.Reasoning("https://api.openai.com/v1/responses", buildJsonObject { put("encrypted_content", "x".repeat(200)) })
 
         val dump =
             renderPromptDump(
@@ -66,7 +65,7 @@ class PromptDumpTest {
             )
 
         assertContains(dump, "[image image/png name=frame.png] 64 bytes")
-        assertContains(dump, "[reasoning openai]")
+        assertContains(dump, "[reasoning from https://api.openai.com/v1/responses]")
         assertFalse(dump.contains(Regex("[A-Za-z0-9+/]{40,}")))
     }
 }

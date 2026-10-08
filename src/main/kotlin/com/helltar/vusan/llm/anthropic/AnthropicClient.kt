@@ -3,7 +3,6 @@ package com.helltar.vusan.llm.anthropic
 import com.helltar.vusan.llm.ChatRequest
 import com.helltar.vusan.llm.LlmClient
 import com.helltar.vusan.llm.LlmModel
-import com.helltar.vusan.llm.LlmProvider
 import com.helltar.vusan.llm.Message
 import com.helltar.vusan.llm.Part
 import com.helltar.vusan.llm.ReasoningEffort
@@ -41,8 +40,10 @@ val ANTHROPIC_EFFORTS: Set<ReasoningEffort> =
  * - `thinking: adaptive` for every model that takes an effort (that generation also stopped thinking
  *   without it on Opus 4.7 and 4.8), with `block_binding: drop_block` under its beta header: a thinking
  *   block is bound to the system prompt, the tools and every message before it, and the agent moves the
- *   tool list mid-turn — `loadTools` widens it, the wrap-up drops it — so an account the API holds to
- *   that check would otherwise get a 400 where it now gets the stale block dropped.
+ *   tool list mid-turn — `loadTools` widens it — so an account the API holds to that check would
+ *   otherwise get a 400 where it now gets the stale block dropped.
+ * - A request whose model may call no tool keeps them defined, with `tool_choice: none`: tool blocks in
+ *   the messages are a 400 without them.
  * - Two cache breakpoints when the caller asks for caching: the request-level one, which the API places
  *   on the last block and which every iteration of a tool loop reads back, and one on the last system
  *   block, the prefix every request of the deployment shares — the next turn replays its history from
@@ -57,6 +58,9 @@ class AnthropicClient(
     private val label: String = "Anthropic",
 ) : LlmClient {
 
+    // what the reasoning blocks this client returns are tagged with, and the only ones it replays
+    private val reasoningSource = "$baseUrl/v1/messages"
+
     private val headers =
         mapOf(
             "x-api-key" to apiKey,
@@ -66,7 +70,7 @@ class AnthropicClient(
 
     override suspend fun complete(model: LlmModel, request: ChatRequest): Reply {
         val body = messagesRequest(model, request)
-        val response = http.postJson(label, "$baseUrl/v1/messages", body, headers)
+        val response = http.postJson(label, reasoningSource, body, headers)
 
         return parse(response)
     }
@@ -115,6 +119,8 @@ class AnthropicClient(
                         )
                     }
                 }
+
+                if (!request.mayCallTools) putJsonObject("tool_choice") { put("type", "none") }
             }
 
             if (model.takesEffort) {
@@ -168,7 +174,7 @@ class AnthropicClient(
                             when (part) {
                                 // a blank text block is a 400, and a model that answered through a tool often left one
                                 is Part.Text -> if (part.text.isNotBlank()) add(textBlock(part.text))
-                                is Part.Reasoning -> if (part.provider == LlmProvider.ANTHROPIC) add(part.raw)
+                                is Part.Reasoning -> if (part.source == reasoningSource) add(part.raw)
 
                                 is Part.ToolCall ->
                                     add(
@@ -213,7 +219,7 @@ class AnthropicClient(
 
                 when (val type = block.string("type")) {
                     "text" -> Part.Text(block.string("text").orEmpty())
-                    "thinking", "redacted_thinking" -> Part.Reasoning(LlmProvider.ANTHROPIC, block)
+                    "thinking", "redacted_thinking" -> Part.Reasoning(reasoningSource, block)
 
                     "tool_use" ->
                         Part.ToolCall(

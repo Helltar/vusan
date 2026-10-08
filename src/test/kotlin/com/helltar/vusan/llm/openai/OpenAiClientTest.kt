@@ -131,7 +131,7 @@ class OpenAiClientTest {
         assertEquals("cats", call.arguments.getValue("query").jsonPrimitive.content)
 
         val reasoning = reply.message.parts.filterIsInstance<Part.Reasoning>().single()
-        assertEquals(LlmProvider.OPENAI, reasoning.provider)
+        assertEquals("https://api.openai.com/v1/responses", reasoning.source)
         assertEquals("opaque", reasoning.raw.getValue("encrypted_content").jsonPrimitive.content)
 
         assertEquals(120, reply.usage?.inputTokens)
@@ -183,12 +183,52 @@ class OpenAiClientTest {
 
     @Test
     fun `a reasoning block another provider wrote is not replayed`() = runBlocking {
-        val foreign = Message.Assistant(listOf(Part.Reasoning(LlmProvider.ANTHROPIC, buildJsonObject { put("type", "thinking") }), Part.Text("ok")))
+        val foreign = Message.Assistant(listOf(Part.Reasoning("https://api.anthropic.com/v1/messages", buildJsonObject { put("type", "thinking") }), Part.Text("ok")))
 
         client().complete(MODEL, request(*basic, foreign, Message.User("next")))
 
         val types = sent.single().getValue("input").jsonArray.map { it.jsonObject.getValue("type").jsonPrimitive.content }
         assertEquals(listOf("message", "message", "message", "message"), types)
+    }
+
+    // the same protocol is not the same reader: a fallback taking over mid-turn replays the other's reasoning
+    @Test
+    fun `reasoning another endpoint of the same protocol wrote is not replayed either`() = runBlocking {
+        val codex = Part.Reasoning("https://chatgpt.com/backend-api/codex/responses", buildJsonObject { put("type", "reasoning"); put("encrypted_content", "theirs") })
+        val compatible = Part.Reasoning("https://api.deepseek.com/v1/chat/completions", buildJsonObject { put("reasoning_content", "theirs") })
+        val turn = Message.Assistant(listOf(codex, compatible, Part.Text("ok")))
+
+        client().complete(MODEL, request(*basic, turn, Message.User("next")))
+        assertFalse(sent.last().getValue("input").jsonArray.any { it.jsonObject["type"]?.jsonPrimitive?.content == "reasoning" })
+
+        client(reply = COMPLETION_REPLY, endpoint = OpenAiEndpoint.COMPLETIONS).complete(MODEL, request(*basic, turn, Message.User("next")))
+        assertFalse(sent.last().getValue("messages").jsonArray.any { "reasoning_content" in it.jsonObject })
+    }
+
+    // both are refused in a request that defines no tools, and the choice keeps the replayed calls valid
+    @Test
+    fun `the tool choice and parallel calls travel only beside the tools`() = runBlocking {
+        val options = RequestOptions(parallelToolCalls = false)
+
+        for (endpoint in OpenAiEndpoint.entries) {
+            val reply = if (endpoint == OpenAiEndpoint.RESPONSES) RESPONSES_REPLY else COMPLETION_REPLY
+
+            client(reply = reply, endpoint = endpoint).complete(MODEL, request(*basic, tools = emptyList(), options = options))
+            assertFalse("parallel_tool_calls" in sent.last(), "$endpoint")
+            assertFalse("tool_choice" in sent.last(), "$endpoint")
+
+            client(reply = reply, endpoint = endpoint).complete(MODEL, ChatRequest(basic.toList(), listOf(TOOL), options, mayCallTools = false))
+            assertEquals(false, sent.last().getValue("parallel_tool_calls").jsonPrimitive.content.toBoolean(), "$endpoint")
+            assertEquals("none", sent.last().getValue("tool_choice").jsonPrimitive.content, "$endpoint")
+        }
+    }
+
+    @Test
+    fun `a model that does not reason is not asked for encrypted reasoning`() = runBlocking {
+        client().complete(MODEL.copy(id = "gpt-4.1", takesEffort = false), request(*basic))
+
+        assertEquals(false, sent.single().getValue("store").jsonPrimitive.content.toBoolean())
+        assertFalse("include" in sent.single())
     }
 
     @Test
@@ -310,6 +350,21 @@ class OpenAiClientTest {
         assertEquals(StopReason.END, reply.stopReason)
         assertEquals(5, reply.usage?.inputTokens)
         assertEquals(true, sent.single().getValue("stream").jsonPrimitive.content.toBoolean())
+    }
+
+    @Test
+    fun `a stream cut short folds like a completed one and says why`() = runBlocking {
+        val stream =
+            """
+            data: {"type":"response.output_item.done","item":{"type":"function_call","call_id":"call-1","name":"lookUp","arguments":"{\"query\":\"ca"}}
+
+            data: {"type":"response.incomplete","response":{"id":"r","status":"incomplete","incomplete_details":{"reason":"max_output_tokens"},"model":"gpt-5.6-sol","output":[]}}
+            """.trimIndent()
+
+        val reply = client(reply = stream, streamed = true, explicitPromptCaching = false).complete(MODEL, request(*basic))
+
+        assertEquals(StopReason.MAX_TOKENS, reply.stopReason)
+        assertEquals("lookUp", reply.message.toolCalls.single().name)
     }
 
     @Test

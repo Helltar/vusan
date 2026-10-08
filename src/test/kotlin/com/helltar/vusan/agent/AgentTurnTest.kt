@@ -2,7 +2,6 @@ package com.helltar.vusan.agent
 
 import com.helltar.vusan.agent.conversation.PromptConversation
 import com.helltar.vusan.llm.ChatRequest
-import com.helltar.vusan.llm.LlmProvider
 import com.helltar.vusan.llm.Message
 import com.helltar.vusan.llm.Part
 import com.helltar.vusan.llm.Reply
@@ -326,7 +325,7 @@ class AgentTurnTest {
 
     @Test
     fun `a reasoning part of another provider is kept in the message`() {
-        val message = Message.Assistant(listOf(Part.Reasoning(LlmProvider.ANTHROPIC, buildJsonObject { put("type", "thinking") }), Part.Text("ok")))
+        val message = Message.Assistant(listOf(Part.Reasoning("https://api.anthropic.com/v1/messages", buildJsonObject { put("type", "thinking") }), Part.Text("ok")))
 
         assertEquals("ok", message.text)
         assertFalse(message.deliveredNothing())

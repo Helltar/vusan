@@ -18,8 +18,9 @@ private const val SSE_DATA_PREFIX = "data:"
  * The final `response.completed` event carries the envelope — status, model, usage — but the Codex
  * backend leaves its `output` array empty, so the items are collected from `response.output_item.done`
  * as they arrive and spliced back in. Everything the agent depends on rides in those items: assistant
- * text, tool calls, and the reasoning items a tool loop has to echo back. A failed, incomplete or
- * cancelled stream is an error rather than an empty reply.
+ * text, tool calls, and the reasoning items a tool loop has to echo back. An incomplete stream is a
+ * response cut short — by the output ceiling or a content filter — and folds like a completed one, its
+ * `incomplete_details` saying why; a failed or cancelled stream is an error rather than an empty reply.
  */
 class ResponsesStreamFolder(private val label: String) {
 
@@ -29,8 +30,8 @@ class ResponsesStreamFolder(private val label: String) {
     fun accept(event: JsonObject) {
         when (event.string("type")) {
             "response.output_item.done" -> event["item"]?.let(output::add)
-            "response.completed" -> envelope = event["response"] as? JsonObject
-            "response.failed", "response.incomplete", "response.cancelled", "error" ->
+            "response.completed", "response.incomplete" -> envelope = event["response"] as? JsonObject
+            "response.failed", "response.cancelled", "error" ->
                 throw LlmException(label, STREAM_ERROR_STATUS, event.toString())
         }
     }

@@ -35,7 +35,7 @@ internal fun renderPromptDump(messages: List<Message>, model: String, tools: Lis
 private fun renderPart(part: Part): String =
     when (part) {
         is Part.Text -> part.text
-        is Part.Reasoning -> "[reasoning ${part.provider.name.lowercase()}]"
+        is Part.Reasoning -> "[reasoning from ${part.source}]"
         is Part.Image -> "[image ${part.mimeType} name=${part.fileName.orEmpty()}] ${part.bytes.size} bytes"
         is Part.ToolCall -> "[tool call ${part.name} id=${part.id}] ${part.arguments}"
     }
