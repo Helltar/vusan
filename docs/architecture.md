@@ -264,12 +264,16 @@ A normal user message travels:
    `checkContextBudget` tool reports, so a turn can narrow a long read instead of discovering the ceiling by getting an
    empty result back. Once a quarter of the reserve is left the run states it without being asked, once, in a note that
    follows the batch of tool results — nothing may come between an assistant's tool call and that call's result. The loop
-   (`agent/AgentTurn.kt`) guards against flaky models in two ways:
+   (`agent/AgentTurn.kt`) guards against flaky models in three ways:
     - a tool call that arrives with no arguments at all for a tool that takes them (flaky models emit empty-arg siblings
       when they try to call tools in parallel) is answered with a validation error instead of being executed, so the run
       stays clean and the follow-up request stays well-formed. A call that provides some arguments and omits a required
       one is answered by the decoder's own complaint, and one that names a tool nothing answers to with the names that
       exist; every one of them is a result the model reads, never a crashed turn;
+    - a reply the output ceiling cut short runs none of its tool calls, since the last of them may have been cut with
+      it and reads like a whole one: each is answered with the reason, and the model reissues it smaller. A reply the
+      model or a provider's classifier declined ends the turn (`ModelRefusal`) — what it holds is not an answer, and
+      the same prompt is declined again — and the runner answers with the content-policy reply;
     - a turn that ends having delivered nothing — no `sendMessage`, media, or reaction, and empty assistant text (flaky
       providers return an empty completion after a batch of tool results) — gets one nudge to actually deliver before
       finishing, so a full turn of research does not collapse into silence. An ambient turn is exempt on its first

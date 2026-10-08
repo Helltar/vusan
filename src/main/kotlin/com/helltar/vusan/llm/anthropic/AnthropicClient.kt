@@ -240,6 +240,12 @@ class AnthropicClient(
                 else -> if (message.toolCalls.isNotEmpty()) StopReason.TOOL_CALLS else StopReason.OTHER
             }
 
+        // set only on a refusal, and either field may be missing from it
+        val refusal =
+            (response["stop_details"] as? JsonObject)
+                ?.let { listOfNotNull(it.string("category"), it.string("explanation")).joinToString(": ") }
+                ?.takeIf { it.isNotEmpty() }
+
         val usage = response["usage"] as? JsonObject
 
         return Reply(
@@ -255,6 +261,7 @@ class AnthropicClient(
                     )
                 },
             model = response.string("model"),
+            refusal = refusal,
         )
     }
 

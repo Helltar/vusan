@@ -177,8 +177,16 @@ class AnthropicClientTest {
 
     @Test
     fun `a refusal and an output ceiling are read off the stop reason`() = runBlocking {
-        val refused = client(reply = REPLY.replace(""""stop_reason":"tool_use"""", """"stop_reason":"refusal"""").replace("""{"type":"tool_use","id":"toolu-1","name":"lookUp","input":{"query":"cats"}},""", ""))
-        assertEquals(StopReason.REFUSAL, refused.complete(MODEL, request(*basic)).stopReason)
+        val refused =
+            client(
+                reply =
+                    REPLY
+                        .replace(""""stop_reason":"tool_use"""", """"stop_reason":"refusal","stop_details":{"type":"refusal","category":"cyber","explanation":null}""")
+                        .replace("""{"type":"tool_use","id":"toolu-1","name":"lookUp","input":{"query":"cats"}},""", ""),
+            ).complete(MODEL, request(*basic))
+
+        assertEquals(StopReason.REFUSAL, refused.stopReason)
+        assertEquals("cyber", refused.refusal)
 
         val cut = client(reply = REPLY.replace(""""stop_reason":"tool_use"""", """"stop_reason":"max_tokens"""").replace("""{"type":"tool_use","id":"toolu-1","name":"lookUp","input":{"query":"cats"}},""", ""))
         assertEquals(StopReason.MAX_TOKENS, cut.complete(MODEL, request(*basic)).stopReason)

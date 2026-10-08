@@ -222,16 +222,22 @@ class OpenAiClient(
     private fun parseResponses(response: JsonObject): Reply {
         val items = (response["output"] as? JsonArray).orEmpty().filterIsInstance<JsonObject>()
         val parts = items.flatMap(::outputParts)
-        val refused = items.filter { it.string("type") == "message" }.flatMap(::messageTexts).any { (_, isRefusal) -> isRefusal }
+        val refusals =
+            items
+                .filter { it.string("type") == "message" }
+                .flatMap(::messageTexts)
+                .filter { (_, isRefusal) -> isRefusal }
+                .map { (text, _) -> text }
 
         val message = Message.Assistant(parts)
         val incompleteReason = (response["incomplete_details"] as? JsonObject)?.string("reason")
 
+        // a response cut short says so whatever it holds: a call it ends in may be cut too
         val stopReason =
             when {
-                message.toolCalls.isNotEmpty() -> StopReason.TOOL_CALLS
                 incompleteReason == "max_output_tokens" -> StopReason.MAX_TOKENS
-                refused -> StopReason.REFUSAL
+                incompleteReason == "content_filter" || refusals.isNotEmpty() -> StopReason.REFUSAL
+                message.toolCalls.isNotEmpty() -> StopReason.TOOL_CALLS
                 response.string("status") == "completed" -> StopReason.END
                 else -> StopReason.OTHER
             }
@@ -250,6 +256,7 @@ class OpenAiClient(
                     )
                 },
             model = response.string("model"),
+            refusal = refusals.joinToString(" ").takeIf { it.isNotBlank() } ?: incompleteReason?.takeIf { it == "content_filter" },
         )
     }
 

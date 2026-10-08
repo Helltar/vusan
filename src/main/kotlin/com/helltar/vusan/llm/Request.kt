@@ -83,10 +83,10 @@ enum class StopReason {
     /** The model wants its tool calls answered. */
     TOOL_CALLS,
 
-    /** The output ceiling cut the answer short. */
+    /** The output ceiling cut the answer short, a tool call's arguments as much as its text. */
     MAX_TOKENS,
 
-    /** A safety classifier declined the request; a retry of the same prompt is declined again. */
+    /** The model or a safety classifier declined the request; a retry of the same prompt is declined again. */
     REFUSAL,
 
     OTHER
@@ -110,6 +110,8 @@ data class Reply(
     val usage: TokenUsage? = null,
     /** The model the provider says answered, when it says. */
     val model: String? = null,
+    /** Why the request was declined, when the provider says: a policy category, or the model's own words. */
+    val refusal: String? = null,
 )
 
 /** One model behind one API. Every call the bot makes goes through this. */

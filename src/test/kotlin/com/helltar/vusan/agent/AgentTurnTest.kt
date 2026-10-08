@@ -29,6 +29,7 @@ import kotlinx.serialization.json.put
 import kotlin.test.Test
 import kotlin.test.assertContains
 import kotlin.test.assertEquals
+import kotlin.test.assertFailsWith
 import kotlin.test.assertFalse
 import kotlin.test.assertIs
 import kotlin.test.assertTrue
@@ -71,9 +72,10 @@ class AgentTurnTest {
         maxModelCalls: Int = 20,
         mayStaySilent: Boolean = false,
         catalog: (BotOutbox) -> ToolCatalog = { outbox -> toolCatalog { tools(ProbeTools(outbox)); tools(ToolGroup.IMAGE_GENERATION, DrawTools()) } },
+        // passed in by a test that has to look at the run after it throws
+        run: Run = Run(ScriptedLlmClient(*replies)),
         block: (Run, String) -> Unit,
     ) = runBlocking {
-        val run = Run(ScriptedLlmClient(*replies))
         val factory = AgentFactory(run.client, TEST_MODEL, RequestOptions(promptCacheKey = "vusan"), maxModelCalls = maxModelCalls)
         val tools = catalog(run.outbox)
         val preparation = factory.prepare(tools, "the request")
@@ -219,6 +221,33 @@ class AgentTurnTest {
             val queued = run.outbox.pending.map { it.output }.filterIsInstance<BotOutput.Text>()
             assertEquals("here is what I found", queued.single().text)
         }
+
+    @Test
+    fun `a reply cut at the output ceiling runs none of its calls and tells the model why`() =
+        run(
+            Reply(Message.Assistant(listOf(call("sendMessage", args = arrayOf("text" to "half an ans")))), StopReason.MAX_TOKENS),
+            textReply("the whole answer"),
+        ) { run, answer ->
+            assertEquals("the whole answer", answer)
+            assertFalse(run.outbox.hasQueuedOutput, "the cut call never ran")
+            assertTrue(run.events.isEmpty(), "a call that never ran leaves no history")
+
+            val result = assertIs<Message.ToolResults>(run.client.requests[1].messages.last()).results.single()
+            assertTrue(result.isError)
+            assertContains(result.output, "output limit")
+        }
+
+    @Test
+    fun `a declined reply ends the turn without running its calls`() {
+        val declined = Run(ScriptedLlmClient(Reply(Message.Assistant(listOf(call("sendMessage", args = arrayOf("text" to "partial")))), StopReason.REFUSAL, refusal = "cyber")))
+
+        val refusal = assertFailsWith<ModelRefusal> { run(run = declined) { _, _ -> } }
+
+        assertEquals("cyber", refusal.reason)
+        assertEquals(1, declined.client.requests.size, "a refusal is not nudged: the same prompt is declined again")
+        assertFalse(declined.outbox.hasQueuedOutput)
+        assertTrue(declined.events.isEmpty())
+    }
 
     @Test
     fun `usage of every call is reported`() =

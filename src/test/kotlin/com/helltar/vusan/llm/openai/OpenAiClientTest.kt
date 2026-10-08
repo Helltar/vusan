@@ -139,6 +139,27 @@ class OpenAiClientTest {
         assertEquals(100, reply.usage?.cacheReadTokens)
     }
 
+    // the call a cut response ends in may be cut too, so the ceiling is reported over the calls
+    @Test
+    fun `a responses reply cut short or filtered says so even when it carries calls`() = runBlocking {
+        val incomplete =
+            RESPONSES_REPLY.replace(""""model":"gpt-5.6-sol","status":"completed"""", """"model":"gpt-5.6-sol","status":"incomplete","incomplete_details":{"reason":"max_output_tokens"}""")
+
+        assertEquals(StopReason.MAX_TOKENS, client(reply = incomplete).complete(MODEL, request(*basic)).stopReason)
+
+        val filtered = client(reply = incomplete.replace("max_output_tokens", "content_filter")).complete(MODEL, request(*basic))
+
+        assertEquals(StopReason.REFUSAL, filtered.stopReason)
+        assertEquals("content_filter", filtered.refusal)
+
+        val declined =
+            client(reply = RESPONSES_REPLY.replace("""{"type":"output_text","text":"ok","annotations":[]}""", """{"type":"refusal","refusal":"I can't help with that."}"""))
+                .complete(MODEL, request(*basic))
+
+        assertEquals(StopReason.REFUSAL, declined.stopReason)
+        assertEquals("I can't help with that.", declined.refusal)
+    }
+
     // a tool loop sends the reply back: reasoning items verbatim, function calls as items, results as outputs
     @Test
     fun `an assistant turn and its tool results replay in the shape the api returned them`() = runBlocking {

@@ -274,7 +274,8 @@ depends on the failure: a usage limit until the deadline the refusal named, a de
 an hour, a rate limit or an outage for two minutes, long enough that a blip does not flip every call
 back and forth and short enough that the fallback is not paid for once it has passed. Then one call
 probes the primary again, and the bot returns to it or waits another round. A content refusal is not
-an outage — it repeats on any provider — and reaches the user as it always did.
+an outage — it repeats on any provider — whether the provider answers it with an error or the model
+declines in its reply, and the user is asked to word the request differently.
 
 While the fallback is answering, the status message a turn puts up names it, so the chat shows which
 model is behind the reply rather than only the log. When the primary ran out of its usage limit and

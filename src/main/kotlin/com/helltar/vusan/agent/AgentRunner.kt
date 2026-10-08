@@ -505,6 +505,12 @@ class AgentRunner(
             return messages.signInRequiredReply
         }
 
+        // a refusal comes back as an answer, not an error, so it carries no provider error to read
+        generateSequence(e) { it.cause }.filterIsInstance<ModelRefusal>().firstOrNull()?.let { refusal ->
+            log.warn { "model declined the request for chat=${context.chat.id} user=${context.sender.id}: reason=[${refusal.reason.orEmpty()}]" }
+            return messages.contentPolicyReply
+        }
+
         val providerError = e.providerError()
 
         if (providerError == null) {

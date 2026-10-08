@@ -8,6 +8,7 @@ import com.helltar.vusan.llm.LlmClient
 import com.helltar.vusan.llm.LlmModel
 import com.helltar.vusan.llm.Message
 import com.helltar.vusan.llm.Part
+import com.helltar.vusan.llm.Reply
 import com.helltar.vusan.llm.RequestOptions
 import com.helltar.vusan.llm.StopReason
 import com.helltar.vusan.llm.TokenUsage
@@ -26,6 +27,12 @@ data class ToolEvent(
     val output: String,
     val isError: Boolean,
 )
+
+/**
+ * The model, or a safety classifier in front of it, declined the turn's request; [reason] is the
+ * provider's when it gave one. Asking again with the same prompt is declined again.
+ */
+class ModelRefusal(val reason: String?) : RuntimeException("the model declined the request" + reason?.let { ": $it" }.orEmpty())
 
 /**
  * One turn of the agent: the model is asked, its tool calls are run and answered, and so on until it
@@ -74,14 +81,15 @@ class AgentTurn internal constructor(
 
         while (true) {
             val reply = request(messages, catalog.visibleDefinitions())
-            messages += reply
+            val message = reply.message
+            messages += message
 
-            if (reply.toolCalls.isEmpty()) {
+            if (message.toolCalls.isEmpty()) {
                 // a turn nobody called the bot into may end in silence, but only on its first reply: a
                 // model that sees the message was not for it says nothing before it calls anything.
                 val silenceAllowed = mayStaySilent && calls == 1
 
-                if (!owesDelivery(reply, nudged, outbox.hasQueuedOutput, silenceAllowed)) return reply.text
+                if (!owesDelivery(message, nudged, outbox.hasQueuedOutput, silenceAllowed)) return message.text
 
                 nudged = true
                 messages.dropTrailingEmptyAssistant()
@@ -91,7 +99,16 @@ class AgentTurn internal constructor(
 
             // this batch still runs — it is already paid for, and it may carry the delivery call — but once
             // the budget is this thin the results go to the wrap-up instead of buying another tool round.
-            messages += Message.ToolResults(reply.toolCalls.map { execute(it) })
+            // a batch the output ceiling cut short does not: its last call may have been cut with it, and
+            // reads like a whole one, so the model is told why none ran and reissues what it needs.
+            val results =
+                if (reply.stopReason == StopReason.MAX_TOKENS) {
+                    message.toolCalls.map(::cutOffResult)
+                } else {
+                    message.toolCalls.map { execute(it) }
+                }
+
+            messages += Message.ToolResults(results)
 
             if (outOfModelCalls(calls, maxModelCalls)) return wrapUp(messages)
 
@@ -106,7 +123,7 @@ class AgentTurn internal constructor(
         }
     }
 
-    private suspend fun request(messages: List<Message>, tools: List<ToolDefinition>): Message.Assistant {
+    private suspend fun request(messages: List<Message>, tools: List<ToolDefinition>): Reply {
         logPromptDump(messages, model.id, tools.map { it.name })
         calls++
 
@@ -115,19 +132,22 @@ class AgentTurn internal constructor(
 
         reply.usage?.let(tokenUsage)
 
-        // a safety classifier declined the request: the reply is empty and a retry of the same prompt is
-        // declined again, so the log has to say why the turn ends without a word.
-        if (reply.stopReason == StopReason.REFUSAL) log.warn { "model declined the request for $scope" }
-        if (reply.stopReason == StopReason.MAX_TOKENS) log.warn { "model hit its output ceiling for $scope" }
+        // what a declined reply holds is not an answer — a classifier may have stopped it mid-call — and the
+        // same prompt is declined again, so the turn ends here and the runner says why.
+        if (reply.stopReason == StopReason.REFUSAL) throw ModelRefusal(reply.refusal)
 
-        return reply.message
+        if (reply.stopReason == StopReason.MAX_TOKENS) {
+            log.warn { "model hit its output ceiling for $scope; ${reply.message.toolCalls.size} tool call(s) in the reply will not run" }
+        }
+
+        return reply
     }
 
     private suspend fun wrapUp(messages: MutableList<Message>): String {
         log.warn { "model calls spent for $scope (limit $maxModelCalls); answering with what the turn already gathered" }
 
         messages += Message.User(TOOL_BUDGET_WRAP_UP)
-        val answer = request(messages, tools = emptyList()).text
+        val answer = request(messages, tools = emptyList()).message.text
 
         // queue it rather than leave it as the run's trailing text: a turn that already reacted or sent a
         // message has that text dropped as duplicate chatter, and here it is the whole answer.
@@ -222,6 +242,12 @@ internal fun String.boundedToolText(maxTokens: Int): String {
 private const val WRAP_UP_MODEL_CALLS = 1
 
 internal fun outOfModelCalls(callsMade: Int, maxModelCalls: Int): Boolean = maxModelCalls - callsMade <= WRAP_UP_MODEL_CALLS
+
+private fun cutOffResult(call: Part.ToolCall): ToolResult = ToolResult(call.id, call.name, CUT_OFF_CALL, isError = true)
+
+private const val CUT_OFF_CALL =
+    "Your reply reached the output limit before this call was complete, so it did not run. " +
+            "Reissue it with shorter arguments, splitting long content across several calls."
 
 internal fun garbledCallMessage(tool: String, required: List<String>): String =
     "Tool `$tool` was called with no arguments at all; it takes: ${required.joinToString(", ")}. " +
