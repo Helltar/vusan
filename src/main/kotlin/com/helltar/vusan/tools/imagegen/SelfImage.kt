@@ -1,13 +1,10 @@
 package com.helltar.vusan.tools.imagegen
 
 import com.helltar.vusan.common.isEffectivelyBlank
-import io.github.oshai.kotlinlogging.KotlinLogging
 import kotlin.io.path.Path
 import kotlin.io.path.isReadable
 import kotlin.io.path.name
 import kotlin.io.path.readBytes
-
-private val log = KotlinLogging.logger("SelfImage")
 
 /**
  * What a picture of the bot itself is built from.
@@ -35,16 +32,8 @@ internal suspend fun resolveSelfImage(
     val reference = file?.let { readReferenceFile(it) } ?: loadAvatar()
     val notes = appearance?.takeUnless { it.isEffectivelyBlank() }
 
-    if (reference == null && notes == null) {
-        log.warn {
-            "Self-portraits: no reference photo and no APPEARANCE_FILE — a picture of the bot itself " +
-                    "shows a different person every time"
-        }
-
-        return null
-    }
-
-    return SelfImage(reference, notes)
+    // with neither there is nothing to hold a face still with, which the startup summary says
+    return if (reference == null && notes == null) null else SelfImage(reference, notes)
 }
 
 /**
@@ -102,8 +91,6 @@ private fun readReferenceFile(path: String): SourceImage {
     val bytes = file.readBytes()
 
     require(bytes.isNotEmpty()) { "SELF_IMAGE_FILE=[$path] is empty" }
-
-    log.info { "Self-portrait reference: SELF_IMAGE_FILE=[$path] (${bytes.size} bytes)" }
 
     return SourceImage(bytes, file.name, contentType)
 }

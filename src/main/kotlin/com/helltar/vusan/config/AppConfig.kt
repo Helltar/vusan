@@ -21,6 +21,8 @@ data class AppConfig(
     val addressing: AddressingConfig? = null,
     val agentMaxModelCalls: Int,
     val appearance: String?,
+    // the files the two above were read from, for the startup summary to name
+    val appearanceFile: String? = null,
     val chatHistory: ConversationConfig = ConversationConfig(),
     val databasePath: String,
     val diaryEnabled: Boolean = true,
@@ -37,6 +39,7 @@ data class AppConfig(
     val openAiStt: OpenAiSttConfig?,
     val vision: LlmProviderConfig? = null,
     val personality: String?,
+    val personalityFile: String? = null,
     val regolithToken: String?,
     val regolithUrl: String?,
     val searxngUrl: String?,
@@ -70,6 +73,8 @@ data class AppConfig(
 
         fun fromEnv(): AppConfig {
             val elevenLabsKey = readEnv("ELEVENLABS_API_KEY")
+            val personalityFile = readEnv("PERSONALITY_FILE")
+            val appearanceFile = readEnv("APPEARANCE_FILE")
             val llmProvider = resolveLlmProvider(LLM_PREFIX, fallbackTimeout = null)
             val llmFallback = resolveLlmFallback(llmProvider)
             val regolithUrl = readEnv("REGOLITH_URL")
@@ -78,7 +83,8 @@ data class AppConfig(
                 accessPolicy = AccessPolicy(allowed = readIdSetEnv("ALLOWED_IDS"), banned = readIdSetEnv("BANNED_IDS")),
                 addressing = resolveAddressing(llmProvider),
                 agentMaxModelCalls = readIntEnv("AGENT_MAX_MODEL_CALLS") ?: DEFAULT_AGENT_MAX_MODEL_CALLS,
-                appearance = resolveAppearance(),
+                appearance = appearanceFile?.let(::readAppearance),
+                appearanceFile = appearanceFile,
                 databasePath = readEnv("DB_FILE") ?: "data/db/vusan.db",
                 diaryEnabled = readBooleanEnv("DIARY_ENABLED") ?: true,
                 elevenLabsApiKey = elevenLabsKey,
@@ -91,7 +97,8 @@ data class AppConfig(
                 image = resolveImageProvider(),
                 openAiStt = resolveOpenAiStt(),
                 vision = resolveRole(VISION_PREFIX, llmProvider),
-                personality = resolvePersonality(),
+                personality = personalityFile?.let(::readPersonality),
+                personalityFile = personalityFile,
                 regolithToken = regolithUrl?.let { readServiceToken("REGOLITH", readEnv("REGOLITH_TOKEN")) },
                 regolithUrl = regolithUrl,
                 searxngUrl = readEnv("SEARXNG_URL"),
@@ -127,42 +134,23 @@ data class AppConfig(
             )
         }
 
-        private fun resolvePersonality(): String? {
-            val path =
-                readEnv("PERSONALITY_FILE")
-                    ?: run {
-                        log.info { "Personality: built-in default (no PERSONALITY_FILE set)" }
-                        return null
-                    }
-
+        // a blank file reads as no personality, which the startup summary names; an unreadable one stops startup
+        private fun readPersonality(path: String): String? {
             val file = Path(path)
 
             require(file.isReadable()) { "PERSONALITY_FILE=[$path] does not exist or is not readable" }
 
-            val text = file.readText().trim().ifBlank { null }
-
-            if (text == null) {
-                log.warn { "Personality: PERSONALITY_FILE=[$path] is blank — falling back to built-in default" }
-            } else {
-                log.info { "Personality: PERSONALITY_FILE=[$path] (${text.length} chars)" }
-            }
-
-            return text
+            return file.readText().trim().ifBlank { null }
         }
 
         // what the bot looks like, kept out of the personality block on purpose: it is written for the
         // image model, and a chat model handed a physical description tends to recite it.
-        private fun resolveAppearance(): String? {
-            val text =
-                readEnv("APPEARANCE_FILE")?.let { path ->
-                    val file = Path(path)
+        private fun readAppearance(path: String): String? {
+            val file = Path(path)
 
-                    require(file.isReadable()) { "APPEARANCE_FILE=[$path] does not exist or is not readable" }
+            require(file.isReadable()) { "APPEARANCE_FILE=[$path] does not exist or is not readable" }
 
-                    file.readText()
-                }
-
-            return text?.trim()?.ifBlank { null }?.also { log.info { "Appearance: ${it.length} chars" } }
+            return file.readText().trim().ifBlank { null }
         }
 
         private fun resolveOpenAiStt(): OpenAiSttConfig? {

@@ -107,7 +107,7 @@ internal class TelegramBotRunner(
 
     fun start(scope: CoroutineScope): Job {
         log.info {
-            "Bot started as ${profile.username ?: profile.userId}, allowed ids=${accessPolicy.allowed.sorted()}"
+            "Bot started: as=[${profile.username ?: profile.userId}] allowedIds=[${accessPolicy.allowed.sorted().joinToString(", ")}]"
         }
 
         if (accessPolicy.allowed.isEmpty()) {
@@ -118,7 +118,7 @@ internal class TelegramBotRunner(
         }
 
         if (accessPolicy.banned.isNotEmpty()) {
-            log.info { "Banned ids=${accessPolicy.banned.sorted()}" }
+            log.info { "Banned: ids=[${accessPolicy.banned.sorted().joinToString(", ")}]" }
 
             // an id on both lists is a config mistake worth naming: the ban wins, silently.
             accessPolicy.contradictory.takeIf { it.isNotEmpty() }?.let {

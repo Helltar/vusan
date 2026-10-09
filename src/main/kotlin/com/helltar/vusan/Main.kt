@@ -43,6 +43,7 @@ import com.helltar.vusan.telegram.callback.TaskMenuHandler
 import com.helltar.vusan.telegram.delivery.TelegramDelivery
 import com.helltar.vusan.telegram.inbound.VoiceTranscriber
 import com.helltar.vusan.tools.ToolCatalogFactory
+import com.helltar.vusan.tools.imagegen.SelfImage
 import com.helltar.vusan.tools.imagegen.resolveSelfImage
 import com.helltar.vusan.telegram.tools.TelegramToolSets
 import com.helltar.vusan.telegram.tools.sticker.StickerCatalog
@@ -269,7 +270,7 @@ suspend fun main() = coroutineScope {
 
         logStartup(
             config, llm, fallback, vision, ambient?.botNames, toolCatalogFactory.availableToolNames, imagePlan,
-            hasSelfPortrait = selfImage?.reference != null, groupLogOn = groupLog != null,
+            selfImage, groupLogOn = groupLog != null,
         )
 
         val botJob = botRunner.start(this)
@@ -305,8 +306,8 @@ private fun appVersion(): String = AppConfig::class.java.`package`?.implementati
 private fun createVoiceTranscriber(http: HttpClient, config: AppConfig): VoiceTranscriber? =
     config.openAiStt?.let { VoiceTranscriber(OpenAiWhisperClient(http, it), it) }
 
-// one line per capability, in the order an operator reads it: which model, how much room it has, what it
-// can see, what it draws and speaks with, what it reaches on the web, where it runs commands, what it keeps
+// one line per capability, in the order an operator reads it: who it is, which model, how much room it has,
+// what it can see, what it draws and speaks with, what it reaches on the web, where it runs commands, what it keeps
 // of a group and does there unasked, where it writes, and what it can call. a capability that is simply
 // not configured is `off (VAR not set)` at info, in the same shape as the ones that are on; a warning is
 // kept for what is configured and still cannot work.
@@ -319,10 +320,22 @@ private fun logStartup(
     toolNames: List<String>,
     // the subscription plan behind the pictures, when the plan serves nothing else
     imagePlan: String?,
-    // whether the bot has a face to put into a round video message
-    hasSelfPortrait: Boolean,
+    // what a picture of the bot itself is built from, resolved only where something can use it
+    selfImage: SelfImage?,
     groupLogOn: Boolean,
 ) {
+    when {
+        config.personality != null -> log.info { "Personality: file=[${config.personalityFile}] chars=[${config.personality.length}]" }
+        config.personalityFile != null -> log.warn { "Personality: built-in — PERSONALITY_FILE=[${config.personalityFile}] is blank" }
+        else -> log.info { "Personality: built-in (PERSONALITY_FILE not set)" }
+    }
+
+    when {
+        config.appearance != null -> log.info { "Appearance: file=[${config.appearanceFile}] chars=[${config.appearance.length}]" }
+        config.appearanceFile != null -> log.warn { "Appearance: off — APPEARANCE_FILE=[${config.appearanceFile}] is blank" }
+        else -> log.info { "Appearance: off (APPEARANCE_FILE not set)" }
+    }
+
     log.info {
         "LLM: provider=[${llm.providerLabel}] model=[${llm.model.id}]" +
                 llm.reasoningEffort?.let { " reasoningEffort=[$it]" }.orEmpty() +
@@ -369,8 +382,26 @@ private fun logStartup(
     log.info {
         config.elevenLabsTts?.let { tts ->
             "Voice: provider=[elevenlabs] model=[${tts.model}] voice=[${tts.voiceId}] " +
-                    "roundVideo=[${if (hasSelfPortrait) "on" else "off — no reference photo"}]"
+                    "roundVideo=[${if (selfImage?.reference != null) "on" else "off — no reference photo"}]"
         } ?: "Voice: off (ELEVENLABS_API_KEY not set)"
+    }
+
+    // the face a picture of the bot is held still with: the operator's file, else the platform avatar
+    val reference = selfImage?.reference
+
+    when {
+        reference != null ->
+            log.info {
+                "Self-portrait: source=[${if (config.selfImageFile != null) "SELF_IMAGE_FILE" else "avatar"}] " +
+                        "name=[${reference.filename}] bytes=[${reference.bytes.size}]"
+            }
+
+        selfImage != null -> log.info { "Self-portrait: appearance only — no reference photo" }
+
+        config.image != null ->
+            log.warn { "Self-portrait: off — no reference photo and no APPEARANCE_FILE; a picture of the bot shows a different person every time" }
+
+        else -> log.info { "Self-portrait: off — nothing draws or films it" }
     }
 
     log.info { config.openAiStt?.let { "Voice input: model=[${it.model}]" } ?: "Voice input: off (OPENAI_STT_API_KEY not set)" }
