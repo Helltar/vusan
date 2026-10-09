@@ -16,7 +16,7 @@ sealed interface ImageProviderConfig {
     /** The OpenAI image API, billed per image against [apiKey]. */
     data class OpenAi(
         val apiKey: String,
-        override val model: String = DEFAULT_MODEL,
+        override val model: String = ImageProviderConfig.DEFAULT_MODEL,
         override val quality: String = ImageProviderConfig.DEFAULT_QUALITY,
     ) : ImageProviderConfig {
 
@@ -26,10 +26,6 @@ sealed interface ImageProviderConfig {
             require(apiKey.isNotBlank()) { "IMAGE_API_KEY must not be blank" }
             requireSane(model, quality)
         }
-
-        companion object {
-            const val DEFAULT_MODEL = "gpt-image-2.5-flare"
-        }
     }
 
     /** The Codex backend, metered against the ChatGPT subscription signed in at [authFile]. */
@@ -37,7 +33,7 @@ sealed interface ImageProviderConfig {
         val authFile: Path = defaultCodexAuthFile(),
         // the Codex CLI version claimed to the backend; `null` leaves it to the installed CLI or this build's floor
         val clientVersion: String? = null,
-        override val model: String = DEFAULT_MODEL,
+        override val model: String = ImageProviderConfig.DEFAULT_MODEL,
         override val quality: String = ImageProviderConfig.DEFAULT_QUALITY,
     ) : ImageProviderConfig {
 
@@ -46,15 +42,12 @@ sealed interface ImageProviderConfig {
         init {
             requireSane(model, quality)
         }
-
-        companion object {
-            // the codex backend renders with gpt-image-2 and does not offer the platform catalog, so the
-            // default follows the provider rather than being one shared constant
-            const val DEFAULT_MODEL = "gpt-image-2"
-        }
     }
 
     companion object {
+        // one default for both: the codex backend takes the platform's current model too, measured
+        // live on a plus plan on 2026-10-09, even though the CLI itself still asks for gpt-image-2
+        const val DEFAULT_MODEL = "gpt-image-2.5-flare"
         const val DEFAULT_QUALITY = "medium"
 
         // xhigh and max are gpt-image-2.5 only; older models top out at high and reject the rest,

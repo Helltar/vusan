@@ -457,7 +457,7 @@ from [Appearance](#appearance) as its subject.
 |------------------|--------------------------------------------|------------------------------------------------------------------------|
 | `IMAGE_PROVIDER` | unset                                      | `openai` or `codex`.                                                   |
 | `IMAGE_API_KEY`  |                                            | The key `openai` renders with.                                         |
-| `IMAGE_MODEL`    | `gpt-image-2.5-flare` / `gpt-image-2` on `codex` | Image model.                                                     |
+| `IMAGE_MODEL`    | `gpt-image-2.5-flare`                      | Image model, on either provider.                                       |
 | `IMAGE_QUALITY`  | `medium`                                   | Rendering quality: `low`, `medium`, `high`, `xhigh`, `max`, or `auto`. |
 
 `xhigh` and `max` render only on the `gpt-image-2.5` models; every earlier model stops at `high`
@@ -480,9 +480,7 @@ older ones fall back to the nearest size they have rather than failing. Finished
 JPEG, because Telegram re-encodes every photo it delivers anyway and the smaller upload is what keeps
 a `max`-quality picture inside Telegram's own size limit.
 
-On `codex` leave `IMAGE_MODEL` unset: the subscription's own client renders with `gpt-image-2`, the one
-model id known to work there, and startup warns about any other. Three differences are worth knowing
-before relying on `codex`: images count against your ChatGPT
+Three differences are worth knowing before relying on `codex`: images count against your ChatGPT
 usage limit, so a heavy image day can exhaust the same quota that answers messages when the chat runs
 there too; the model chooses its own output dimensions, so the requested aspect ratio is a hint rather
 than a guarantee; and it filters the way ChatGPT does, with no strictness to choose.

@@ -7,10 +7,9 @@ import kotlin.test.assertFailsWith
 class ImageProviderConfigTest {
 
     @Test
-    fun `each provider brings its own default model`() {
-        // the codex backend renders with gpt-image-2 and does not serve the platform catalog
+    fun `both providers default to the same current model`() {
         assertEquals("gpt-image-2.5-flare", ImageProviderConfig.OpenAi(apiKey = "sk-test").model)
-        assertEquals("gpt-image-2", ImageProviderConfig.Codex().model)
+        assertEquals("gpt-image-2.5-flare", ImageProviderConfig.Codex().model)
     }
 
     @Test

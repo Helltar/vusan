@@ -392,11 +392,6 @@ private fun logStartup(
             "Images: provider=[${image.name}]" + imagePlan?.let { " plan=[$it]" }.orEmpty() +
                     " model=[${image.model}] quality=[${image.quality}]"
         }
-
-        // the plan's own client renders with one model; another id reaches a backend nobody has asked
-        if (image is ImageProviderConfig.Codex && image.model != ImageProviderConfig.Codex.DEFAULT_MODEL) {
-            log.warn { "Images: the subscription's own client renders with ${ImageProviderConfig.Codex.DEFAULT_MODEL}; model=[${image.model}] is untested there" }
-        }
     }
 
     log.info { "Database: [${config.databasePath}]" }
