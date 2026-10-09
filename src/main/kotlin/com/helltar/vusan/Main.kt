@@ -94,12 +94,9 @@ suspend fun main() = coroutineScope {
                 CodexAuthStore(http, signIn.authFile)
             }
 
-        // a plan that only draws has no model to preflight, so its sign-in is proven here instead
-        if (codexAuth != null && config.codexRoles().isEmpty()) {
-            val plan = codexAuth.planType()
-
-            log.info { "Codex: signed in to ChatGPT${plan?.let { " (plan=[$it])" }.orEmpty()}; pictures run on the plan" }
-        }
+        // a plan that only draws has no model to preflight, so its sign-in is proven here instead, and the
+        // plan is named beside the pictures in the startup summary rather than on a line of its own
+        val imagePlan = codexAuth?.takeIf { config.codexRoles().isEmpty() }?.planType()
 
         // every configured model is asked about at the vendor before the first turn, so a typo fails here
         val llm = resolveLlmRuntime(config.llmProvider.preflighted(http, codexAuth), codexAuth)
@@ -270,7 +267,7 @@ suspend fun main() = coroutineScope {
                 ),
             )
 
-        logStartup(config, llm, fallback, vision, ambient?.botNames, toolCatalogFactory.availableToolNames)
+        logStartup(config, llm, fallback, vision, ambient?.botNames, toolCatalogFactory.availableToolNames, imagePlan)
         logPresence(config, groupLogOn = groupLog != null)
 
         val botJob = botRunner.start(this)
@@ -350,6 +347,8 @@ private fun logStartup(
     vision: VisionRuntime?,
     ambientNames: List<String>?,
     toolNames: List<String>,
+    // the subscription plan behind the pictures, when the plan serves nothing else
+    imagePlan: String?,
 ) {
     log.info {
         "LLM: provider=[${llm.providerLabel}] model=[${llm.model.id}]" +
@@ -388,8 +387,16 @@ private fun logStartup(
         }
     }
 
-    config.image?.let {
-        log.info { "Images: provider=[${it.name}] model=[${it.model}] quality=[${it.quality}]" }
+    config.image?.let { image ->
+        log.info {
+            "Images: provider=[${image.name}]" + imagePlan?.let { " plan=[$it]" }.orEmpty() +
+                    " model=[${image.model}] quality=[${image.quality}]"
+        }
+
+        // the plan's own client renders with one model; another id reaches a backend nobody has asked
+        if (image is ImageProviderConfig.Codex && image.model != ImageProviderConfig.Codex.DEFAULT_MODEL) {
+            log.warn { "Images: the subscription's own client renders with ${ImageProviderConfig.Codex.DEFAULT_MODEL}; model=[${image.model}] is untested there" }
+        }
     }
 
     log.info { "Database: [${config.databasePath}]" }

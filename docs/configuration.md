@@ -480,7 +480,9 @@ older ones fall back to the nearest size they have rather than failing. Finished
 JPEG, because Telegram re-encodes every photo it delivers anyway and the smaller upload is what keeps
 a `max`-quality picture inside Telegram's own size limit.
 
-Three differences are worth knowing before relying on `codex`: images count against your ChatGPT
+On `codex` leave `IMAGE_MODEL` unset: the subscription's own client renders with `gpt-image-2`, the one
+model id known to work there, and startup warns about any other. Three differences are worth knowing
+before relying on `codex`: images count against your ChatGPT
 usage limit, so a heavy image day can exhaust the same quota that answers messages when the chat runs
 there too; the model chooses its own output dimensions, so the requested aspect ratio is a hint rather
 than a guarantee; and it filters the way ChatGPT does, with no strictness to choose.
