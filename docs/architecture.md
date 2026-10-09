@@ -487,13 +487,15 @@ A normal user message travels:
   answering reads to a look as one nobody answered, and a line of its own would land beside the answer; and
   something left of the day's budget. A look a gate turned away cost no model call, so it is tried again five to ten
   minutes later rather than after a whole pause. A look that passes sends `InitiativeMind` up to sixty lines of the last six
-  hours, the diary block, how much it has already said today, and — from `GroupLogRepository.authorActivity` — the
-  people who used to write here and have not for three days. The lines a person wrote since the last look — or since the bot's own last line, when that came later: answering
+  hours, the diary block, the chat's sticker shortlist while a line of its own is still open today, how much it has
+  already said today, and — from `GroupLogRepository.authorActivity` — the people who used to write here and have not
+  for three days. The lines a person wrote since the last look — or since the bot's own last line, when that came later: answering
   someone is having read the chat up to there — carry a number, and a number is the only way to point at a message: message ids are never shown, so a decision cannot reach
   past what the look put in front of it. The answer is one JSON object — `silent`, `react` (one emoji from Telegram's
-  free set on one numbered line) or `say` (one short plain-text line, optionally a reply to a numbered line) — and
-  anything unreadable, failed or slower than ninety seconds is silence. What it writes is bounded per chat per day
-  (four lines, twenty reactions) and its own lines are at least ninety minutes apart, so a lively hour
+  free set on one numbered line), `say` (one short plain-text line, optionally a reply to a numbered line) or `sticker`
+  (one entry of the chat's `<sticker_catalog>`, the shortlist a turn is shown, optionally under a numbered line; an id
+  the catalog cannot resolve sends nothing) — and anything unreadable, failed or slower than ninety seconds is silence.
+  What it writes is bounded per chat per day (four lines, a sticker being one, twenty reactions) and its own lines are at least ninety minutes apart, so a lively hour
   cannot take the whole day's count; a decision over either bound is dropped. The line goes out
   through `OutputDelivery.deliverUnprompted`, so it lands in the group transcript like any other bot line and a reply to
   it starts an ordinary turn with that line as `<reply_context>`. A chat that turns the bot away is left alone until a
@@ -520,7 +522,8 @@ A normal user message travels:
   pull in more than three new sets a day, and the bot as a whole no more than six, so the worst day is bounded whatever
   the number of chats. None of the gates applies to a set already known from elsewhere, which costs nothing to offer.
   `STICKERS_ENABLED=false` leaves the catalog out entirely, vision or not. A background worker then describes each sticker's thumbnail once through the vision model and caches the result
-  by `file_unique_id`. `TurnSurroundings` puts at most 16 ready-to-send entries into the current user turn: recently used
+  by `file_unique_id`. `TurnSurroundings` puts at most 16 ready-to-send entries into the current user turn, and an initiative look
+  is shown the same block: recently used
   individual stickers first, then frequent ones, with spare room filled round-robin across every described set the chat
   knows. A group that forbids stickers gets no index at all, matching the catalog: the tools are gated on the same
   capability, so a shortlist there would be an offer with no tool behind it. `searchStickers` searches the descriptions

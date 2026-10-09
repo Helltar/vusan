@@ -1,5 +1,6 @@
 package com.helltar.vusan.telegram.tools.sticker
 
+import com.helltar.vusan.agent.presence.StickerShortlist
 import com.helltar.vusan.agent.neutralizePromptBlocks
 import com.helltar.vusan.common.collapseWhitespaceAndCap
 import com.helltar.vusan.common.rethrowIfCancellation
@@ -157,7 +158,7 @@ private fun String.matchesSearchWord(queryWord: String): Boolean =
 class StickerCatalog(
     private val client: TelegramClient,
     private val vision: ImageVisionClient,
-) {
+) : StickerShortlist {
 
     /** Record a sticker seen in a chat, pulling in its set once that set has earned it. */
     suspend fun observe(chatId: Long, sticker: Sticker) {
@@ -217,7 +218,7 @@ class StickerCatalog(
      * keyed by the Telegram chat id and takes the qualified reference only to convert it here, at the
      * one place a shared caller reaches in.
      */
-    suspend fun indexBlockFor(chat: ChatRef): String? = indexBlockFor(chat.telegramChatId)
+    override suspend fun indexBlockFor(chat: ChatRef): String? = indexBlockFor(chat.telegramChatId)
 
     private suspend fun indexBlockFor(chatId: Long): String? {
         val entries = describedEntriesFor(chatId)
@@ -264,7 +265,7 @@ class StickerCatalog(
             .map { it.entry }
     }
 
-    suspend fun fileIdFor(chat: ChatRef, id: Long): String? = fileIdFor(chat.telegramChatId, id)
+    override suspend fun fileIdFor(chat: ChatRef, id: Long): String? = fileIdFor(chat.telegramChatId, id)
 
     private suspend fun fileIdFor(chatId: Long, id: Long): String? = dbTransaction {
         val setNames = chatSetNames(chatId)

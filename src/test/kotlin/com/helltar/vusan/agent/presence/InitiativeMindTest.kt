@@ -25,6 +25,11 @@ class InitiativeMindTest {
             InitiativeDecision.Say(text = "take the ferry", replyTo = 2, why = "they asked the room"),
             parseInitiativeDecision("""{"action":"say","text":"take the ferry","reply_to":2,"why":"they asked the room"}"""),
         )
+
+        assertEquals(
+            InitiativeDecision.Sticker(id = 42, replyTo = 3, why = "the joke landed"),
+            parseInitiativeDecision("""{"action": "sticker", "id": 42, "reply_to": 3, "why": "the joke landed"}"""),
+        )
     }
 
     @Test
@@ -39,6 +44,7 @@ class InitiativeMindTest {
         assertNull(parseInitiativeDecision("""{"action": "react", "emoji": "😁"}"""))
         assertNull(parseInitiativeDecision("""{"action": "react", "target": 3}"""))
         assertNull(parseInitiativeDecision("""{"action": "say", "text": "  "}"""))
+        assertNull(parseInitiativeDecision("""{"action": "sticker", "reply_to": 2}"""))
         assertNull(parseInitiativeDecision("""{"action": "sing", "text": "la"}"""))
         assertNull(parseInitiativeDecision("""{"action": "say", "text": "unterminated"""))
         assertNull(parseInitiativeDecision("nothing to add"))
@@ -86,10 +92,19 @@ class InitiativeMindTest {
         assertTrue("<quiet_lately>\ncarol — last wrote 5 days ago\n</quiet_lately>" in full)
     }
 
+    @Test
+    fun `the sticker shortlist appears as the catalog wrote it, only when the chat has one`() {
+        val block = "<sticker_catalog>\n#3 penguin waving\n</sticker_catalog>"
+
+        assertFalse("<sticker_catalog>" in initiativeState(input()))
+        assertTrue(block in initiativeState(input(stickerCatalog = block)))
+    }
+
     private fun input(
         maySpeak: Boolean = true,
         diary: String? = null,
         quietLately: List<String> = emptyList(),
+        stickerCatalog: String? = null,
     ) =
         InitiativeInput(
             now = ZonedDateTime.parse("2026-10-04T12:15:00Z"),
@@ -98,5 +113,6 @@ class InitiativeMindTest {
             maySpeak = maySpeak,
             diary = diary,
             quietLately = quietLately,
+            stickerCatalog = stickerCatalog,
         )
 }

@@ -36,8 +36,18 @@ import kotlin.time.TimeSource
 import kotlin.time.toJavaDuration
 
 /**
+ * The stickers a chat has, as a look is shown them and as delivery sends them. The messenger's catalog
+ * answers both: a look reads an id out of the block it was shown and hands that id back here, so
+ * nothing in this package holds a sticker's own identity.
+ */
+interface StickerShortlist {
+    suspend fun indexBlockFor(chat: ChatRef): String?
+    suspend fun fileIdFor(chat: ChatRef, id: Long): String?
+}
+
+/**
  * The bot looking over a group nobody called it into, and now and then doing something about it: an
- * emoji on a message, a line of its own, or — most of the time — nothing.
+ * emoji on a message, a line or a sticker of its own, or — most of the time — nothing.
  *
  * Code decides whether to look, a model decides what comes of it. A chat is looked at only while people
  * are writing in it, after a pause drawn at random around the configured interval, outside the quiet
@@ -60,6 +70,7 @@ class Initiative(
     private val isAllowed: (ChatRef) -> Boolean,
     private val isAnswering: (ChatRef) -> Boolean = { false },
     private val diary: (suspend (ChatRef) -> String?)? = null,
+    private val stickers: StickerShortlist? = null,
     private val zone: ZoneId = ZoneId.systemDefault(),
     private val clock: () -> Instant = Instant::now,
     private val random: Random = Random.Default,
@@ -184,7 +195,9 @@ class Initiative(
                 saidToday = state.said,
                 maySpeak = maySpeak,
                 diary = diary?.invoke(chat),
+                // both are only for a line of its own, so a spent day pays for neither
                 quietLately = if (maySpeak) quietLately(chat, now) else emptyList(),
+                stickerCatalog = if (maySpeak) stickers?.indexBlockFor(chat) else null,
             )
 
         val started = TimeSource.Monotonic.markNow()
@@ -256,7 +269,32 @@ class Initiative(
                             " chars=[${text.length}] text=[${text.collapseWhitespaceAndCap(MAX_LOGGED_TEXT_CHARS)}]"
                 }
             }
+
+            is InitiativeDecision.Sticker -> sticker(chat, state, glance, decision, maySpeak)
         }
+
+    // a sticker is a message in the chat, so it is a line of the day, gap and count included
+    private suspend fun sticker(
+        chat: ChatRef,
+        state: ChatState,
+        glance: Glance,
+        decision: InitiativeDecision.Sticker,
+        maySpeak: Boolean,
+    ): String {
+        if (!maySpeak) return "action=[sticker] result=[over budget]"
+
+        // an id the shortlist never listed, or a chat with no shortlist at all, sends nothing
+        val fileId =
+            stickers?.fileIdFor(chat, decision.id)
+                ?: return "action=[sticker] result=[no such sticker] id=[${decision.id}]"
+        val anchor = decision.replyTo?.let(glance::messageIdOf)
+
+        state.said++
+        state.lastSaidAt = clock()
+        send(chat, BotOutput.Sticker(fileId, catalogId = decision.id), anchor)
+
+        return "action=[sticker] id=[${decision.id}]" + anchor?.let { " msg=[$it]" }.orEmpty()
+    }
 
     private suspend fun send(chat: ChatRef, output: BotOutput, anchor: String?) {
         if (delivery.deliverUnprompted(Destination(chat), listOf(output), anchor).isUnreachable) {

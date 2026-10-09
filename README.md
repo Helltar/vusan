@@ -83,8 +83,8 @@ Or run it on JDK 21, with `ffmpeg` and `yt-dlp` on `PATH`:
 ### At home in a group
 
 - **Called by name** — answers when you say its name or follow up, no mention needed.
-- **Speaks up on its own** — now and then reacts to a message or drops a line without being
-  called, and notices when someone has gone quiet.
+- **Speaks up on its own** — now and then reacts to a message, drops a line or a sticker without
+  being called, and notices when someone has gone quiet.
 - **What the group said** — recaps the whole conversation and answers questions about who said what.
 - **Diary** — writes down what each day in a group was like and picks up yesterday's thread.
 - **Each person apart** — keeps everyone's conversation, memory and sandbox their own in one chat.

@@ -229,6 +229,7 @@ suspend fun main() = coroutineScope {
                     transcript, delivery, initiativeConfig, isAllowedChat,
                     isAnswering = agentRunner::hasTurnUnderWayIn,
                     diary = diary?.let { it::blockFor },
+                    stickers = stickerCatalog,
                 )
             }
 

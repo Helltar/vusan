@@ -117,6 +117,53 @@ class InitiativeTest {
     }
 
     @Test
+    fun `a sticker from the shortlist goes out under the message it answers`() = runBlocking {
+        val delivery = FakeDelivery()
+        val mind = FakeMind(InitiativeDecision.Sticker(id = 3, replyTo = 2))
+
+        val ids = lookWith(initiative(mind, delivery, stickers = FakeShortlist(mapOf(3L to "file-3"))))
+
+        assertEquals(listOf(Sent(CHAT, BotOutput.Sticker("file-3", catalogId = 3), anchor = ids[1])), delivery.sent)
+        assertTrue("#3" in mind.inputs.single().stickerCatalog.orEmpty())
+    }
+
+    @Test
+    fun `a sticker the shortlist does not list is not sent`() = runBlocking {
+        val delivery = FakeDelivery()
+        val shortlist = FakeShortlist(mapOf(3L to "file-3"))
+
+        lookWith(initiative(FakeMind(InitiativeDecision.Sticker(id = 9)), delivery, stickers = shortlist))
+
+        assertTrue(delivery.sent.isEmpty())
+    }
+
+    @Test
+    fun `a chat without a shortlist is shown none and sends none`() = runBlocking {
+        val delivery = FakeDelivery()
+        val mind = FakeMind(InitiativeDecision.Sticker(id = 3))
+
+        lookWith(initiative(mind, delivery))
+
+        assertNull(mind.inputs.single().stickerCatalog)
+        assertTrue(delivery.sent.isEmpty())
+    }
+
+    // a sticker is a message in the chat, so it spends the day's lines, and a spent day is not even shown the catalog
+    @Test
+    fun `a sticker is a line of the day, and a spent day is shown no shortlist`() = runBlocking {
+        val delivery = FakeDelivery()
+        val mind = FakeMind(InitiativeDecision.Sticker(id = 3))
+        val initiative = initiative(mind, delivery, maxMessagesPerDay = 1, stickers = FakeShortlist(mapOf(3L to "file-3")))
+
+        lookWith(initiative)
+        lookAgain(initiative)
+
+        assertEquals(listOf(true, false), mind.inputs.map { it.maySpeak })
+        assertEquals(listOf(false, true), mind.inputs.map { it.stickerCatalog == null })
+        assertEquals(1, delivery.sent.size)
+    }
+
+    @Test
     fun `only lines people wrote since the last look carry a number`() = runBlocking {
         val mind = FakeMind(InitiativeDecision.Silent())
 
@@ -315,6 +362,7 @@ class InitiativeTest {
         quietHours: QuietHours = QuietHours(from = 0, until = 0),
         isAllowed: (ChatRef) -> Boolean = { true },
         isAnswering: (ChatRef) -> Boolean = { false },
+        stickers: StickerShortlist? = null,
     ) =
         Initiative(
             mind = mind,
@@ -323,6 +371,7 @@ class InitiativeTest {
             config = InitiativeConfig(INTERVAL_MINUTES, maxMessagesPerDay, quietHours),
             isAllowed = isAllowed,
             isAnswering = isAnswering,
+            stickers = stickers,
             zone = ZoneOffset.UTC,
             clock = { now },
             random = Random(1),
@@ -348,6 +397,15 @@ class InitiativeTest {
 
             return outcome
         }
+    }
+
+    private class FakeShortlist(private val stickers: Map<Long, String>) : StickerShortlist {
+
+        override suspend fun indexBlockFor(chat: ChatRef): String? =
+            stickers.keys.takeIf { it.isNotEmpty() }
+                ?.joinToString("\n", "<sticker_catalog>\n", "\n</sticker_catalog>") { "#$it penguin waving" }
+
+        override suspend fun fileIdFor(chat: ChatRef, id: Long): String? = stickers[id]
     }
 
     private class FakeMind(

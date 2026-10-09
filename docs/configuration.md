@@ -743,8 +743,9 @@ It needs the group log; with `GROUP_LOG_ENABLED=false` it stays off, and startup
 ## Initiative
 
 In a group Vusan normally speaks only when spoken to. With this on, it also looks over a chat people
-are writing in and, now and then, puts an emoji on a message or says a line of its own — a joke on
-what was just said, an opinion, a question about someone who has gone quiet. Most looks end with
+are writing in and, now and then, puts an emoji on a message, says a line of its own — a joke on
+what was just said, an opinion, a question about someone who has gone quiet — or answers a joke with a
+sticker the chat uses. Most looks end with
 nothing, which is the point: it is meant to feel like a member of the chat, not a notification.
 
 ```dotenv
@@ -763,11 +764,13 @@ has: how often it looks and how much it says are fixed.
 - **What is sent** — up to sixty lines of the chat's last six hours, with names, to the chat
   model, with nobody having asked. Everything else Vusan does sends a group's messages somewhere
   only when it is addressed, which is why this has a switch. With the [diary](#diary) on, its entries
-  go along, as do the names of people who used to write in the chat and have not for three days.
-- **How often it writes** — at most four lines of its own in one chat a day, at least ninety minutes
-  apart. A reaction is not held back by that.
-- **What it may do** — nothing, one reaction, or one short message, optionally as a reply. Reactions
-  have a ceiling of twenty per chat a day beside the message limit.
+  go along, as do the names of people who used to write in the chat and have not for three days, and
+  the chat's sticker shortlist when it has one.
+- **How often it writes** — at most four lines of its own in one chat a day, a sticker counting as one,
+  at least ninety minutes apart. A reaction is not held back by that.
+- **What it may do** — nothing, one reaction, one short message or one sticker from the chat's own
+  catalog, optionally as a reply. Reactions have a ceiling of twenty per chat a day beside the message
+  limit.
 - **Quiet hours** — it does not look at all from one to eight in the morning, on the bot's own clock.
 - **Telling it to stop** — it reads the chat it is about to speak into, and is told to stay out when
   someone asked it to be quiet. For a hard stop, turn the switch off.
@@ -784,9 +787,9 @@ initiative look: chat=[telegram:-100123] fresh=[4] said=[1/4] reacted=[0/20] act
 initiative skip: chat=[telegram:-100123] reason=[already talking] fresh=[5]
 ```
 
-`action` is `silent`, `react`, `say` or `reply`, and `why` is the model's own short reason, there so a
-day of looks can be read without opening the chat. A decision that was not carried out says so in
-`result` (`over budget`, `no such target`, `emoji not allowed`, `no readable decision`). `skip` names
+`action` is `silent`, `react`, `say`, `reply` or `sticker`, and `why` is the model's own short reason, there
+so a day of looks can be read without opening the chat. A decision that was not carried out says so in
+`result` (`over budget`, `no such target`, `no such sticker`, `emoji not allowed`, `no readable decision`). `skip` names
 the gate that kept it from looking: `quiet`, `already talking` or `budget spent`.
 
 It needs the group log; with `GROUP_LOG_ENABLED=false` it stays off, and startup says so.
