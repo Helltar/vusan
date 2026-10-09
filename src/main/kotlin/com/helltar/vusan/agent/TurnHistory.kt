@@ -31,7 +31,8 @@ internal fun extractFinalComment(answer: String, outputs: List<OutboxItem>): Str
                         it.output is BotOutput.Text ||
                         it.output is BotOutput.RichMessage ||
                         it.output is BotOutput.InlineChoice ||
-                        it.output is BotOutput.Reaction
+                        it.output is BotOutput.Reaction ||
+                        it.output is BotOutput.Sticker
             }
         }
 
