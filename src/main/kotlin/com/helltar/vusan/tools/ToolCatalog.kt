@@ -21,7 +21,6 @@ enum class ToolGroup(val summary: String) {
     POLLS("create a poll or a quiz in the chat and follow who answered what"),
     GIFS("find and send a ready-made GIF and, where the deployment has them, a meme picture or a short clip"),
     TELEGRAM_CHANNELS("recap a public channel by day or week, search its posts, and read the pictures in them"),
-    CURRENCY("live exchange rates"),
     FILE_TRANSFERS("send a document to the chat, or download a link into a file");
 
     val groupName: String = name.lowercase()

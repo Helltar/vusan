@@ -33,7 +33,7 @@ class LoadedToolGroupsTest {
         val groups = LoadedToolGroups()
         val scope = testScope(userId = 1)
 
-        groups.remember(scope, listOf(ToolGroup.CURRENCY))
+        groups.remember(scope, listOf(ToolGroup.FILE_TRANSFERS))
         groups.remember(scope, listOf(ToolGroup.POLLS))
         groups.remember(scope, listOf(ToolGroup.GIFS))
         groups.remember(scope, listOf(ToolGroup.YOUTUBE))
@@ -46,13 +46,13 @@ class LoadedToolGroupsTest {
         val groups = LoadedToolGroups()
         val scope = testScope(userId = 1)
 
-        groups.remember(scope, listOf(ToolGroup.CURRENCY))
+        groups.remember(scope, listOf(ToolGroup.FILE_TRANSFERS))
         groups.remember(scope, listOf(ToolGroup.POLLS))
         groups.remember(scope, listOf(ToolGroup.GIFS))
-        groups.remember(scope, listOf(ToolGroup.CURRENCY))
+        groups.remember(scope, listOf(ToolGroup.FILE_TRANSFERS))
         groups.remember(scope, listOf(ToolGroup.YOUTUBE))
 
-        assertEquals(setOf(ToolGroup.GIFS, ToolGroup.CURRENCY, ToolGroup.YOUTUBE), groups.of(scope))
+        assertEquals(setOf(ToolGroup.GIFS, ToolGroup.FILE_TRANSFERS, ToolGroup.YOUTUBE), groups.of(scope))
     }
 
     @Test

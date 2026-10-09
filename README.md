@@ -107,7 +107,6 @@ Or run it on JDK 21, with `ffmpeg` and `yt-dlp` on `PATH`:
 - **Image search** — finds pictures on the web and sends them.
 - **Telegram channels** — recaps public channel posts by day or week, searches by keyword, and reads
   memes and screenshots.
-- **Currency** — live exchange rates.
 - **YouTube video and audio** — finds videos by name or link and sends the video or audio track.
 - **YouTube transcripts** — summarizes videos and answers questions using their subtitles.
 

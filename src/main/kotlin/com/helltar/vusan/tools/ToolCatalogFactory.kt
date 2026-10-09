@@ -21,8 +21,6 @@ import com.helltar.vusan.tasks.TasksRepository
 import com.helltar.vusan.tools.choice.InlineChoiceTools
 import com.helltar.vusan.tools.codexsearch.CodexSearchClient
 import com.helltar.vusan.tools.codexsearch.CodexSearchTools
-import com.helltar.vusan.tools.currency.CurrencyTools
-import com.helltar.vusan.tools.currency.ExchangeRateClient
 import com.helltar.vusan.tools.files.FileDownloadClient
 import com.helltar.vusan.tools.files.FileTools
 import com.helltar.vusan.tools.giphy.GiphyClient
@@ -107,7 +105,6 @@ class ToolCatalogFactory(
             GroupLogReader(it, groupLogDigester, budgetChars = (toolResultMaxChars / 2).coerceIn(4_000, 24_000))
         }
 
-    private val currency = CurrencyTools(ExchangeRateClient(http))
     private val fileDownloadClient = FileDownloadClient(publicHttp)
     private val pageReader = PageReader(fileDownloadClient)
     private val imageDownloadClient = ImageDownloadClient(fileDownloadClient)
@@ -225,7 +222,6 @@ class ToolCatalogFactory(
             tools(InlineChoiceTools(context, outbox, conversation::revision))
             tools(MemoryTools(memory, context))
             tools(FollowUpTools(tasks, context, TasksRepository.MAX_FOLLOW_UPS_PER_USER))
-            tools(ToolGroup.CURRENCY, currency)
             tools(ToolGroup.TELEGRAM_CHANNELS, telegramChannel)
             tools(ToolGroup.YOUTUBE, youTubeTranscript)
 

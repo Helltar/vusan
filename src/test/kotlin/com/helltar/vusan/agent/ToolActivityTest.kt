@@ -35,7 +35,7 @@ class ToolActivityTest {
     fun `instant and unknown tools name no activity`() {
         assertNull(toolActivityFor("setReaction"))
         assertNull(toolActivityFor("createPoll"))
-        assertNull(toolActivityFor("getExchangeRate"))
+        assertNull(toolActivityFor("teleport"))
         assertNull(toolActivityFor("toolThatNeverExisted"))
     }
 }
