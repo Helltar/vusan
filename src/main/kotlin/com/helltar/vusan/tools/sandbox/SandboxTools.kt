@@ -162,16 +162,6 @@ class SandboxTools(
         "Edited `$target`: replaced $replaced occurrence(s), ${find.lines().size} line(s) became ${replace.lines().size}; the file is now ${edited.lines().size} line(s)."
     }
 
-    @Tool(SandboxToolDescriptions.DELETE_FILE)
-    suspend fun deleteSandboxFile(
-        @Arg(SandboxToolDescriptions.DELETE_PATH)
-        path: String,
-    ): String = suspendToolGuard {
-        val target = path.requireToolText("Path", MAX_PATH_CHARS)
-        sandbox.deleteFile(target)
-        "Deleted `$target`. Everything else was kept, and running commands were left alone."
-    }
-
     @Tool(SandboxToolDescriptions.RESET_SANDBOX)
     suspend fun resetSandbox(): String = suspendToolGuard {
         sandbox.reset()

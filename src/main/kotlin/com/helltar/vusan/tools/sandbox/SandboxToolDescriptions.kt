@@ -89,22 +89,13 @@ internal object SandboxToolDescriptions {
     const val EDIT_REPLACE_ALL =
         "`true` replaces every occurrence of the passage; `false`, the default, requires it to occur exactly once."
 
-    const val DELETE_FILE =
-        "Deletes one exact file or directory from this person's sandbox; directories are removed recursively. " +
-                "Use to remove unwanted files, and to free space when the home disk is full. " +
-                "Running commands are left alone. " +
-                "Deletion is permanent, so select only paths the user wants removed."
-
-    const val DELETE_PATH =
-        "An exact path relative to the home, such as `project/build`; no globs, and not the home itself."
-
     const val RESET_SANDBOX =
         "Empties this person's sandbox completely and starts it over as a new, empty home. " +
                 "Use when the user asks to wipe or reset their sandbox, or when its home is beyond saving. " +
                 "Anything still running in it is stopped. " +
                 "Every file, project and installed dependency is removed permanently and cannot be recovered afterwards. " +
                 "A site published from it is taken down with it and its address is never served again, so say so before resetting while a site is up. " +
-                "Use `deleteSandboxFile` instead when only some files should go."
+                "Use `rm` through `runCommand` instead when only some files should go."
 
     const val SEND_FILES =
         "Sends finished files from the sandbox to the chat: images as photos, GIFs as animations, videos as videos, and other files as documents, unless `sendAs` asks for something else. " +

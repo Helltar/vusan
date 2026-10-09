@@ -86,10 +86,6 @@ class SandboxClient(
             }
         }
 
-        suspend fun deleteFile(path: String) {
-            call { sandbox().files.delete(path, recursive = true) }
-        }
-
         /** Deletes the sandbox with its home; the next use creates an empty one for this person. */
         suspend fun reset() {
             call { sandbox().delete() }

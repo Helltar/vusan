@@ -45,7 +45,6 @@ private fun MockRequestHandleScope.problem(status: HttpStatusCode, body: String)
 
 class SandboxToolsTest {
     private val context = requestContext(chatId = 55L, userId = 55L)
-    private val deletions = mutableListOf<String>()
     private val writes = mutableListOf<Pair<String, ByteArray>>()
     private var creations = 0
     private var resets = 0
@@ -95,11 +94,6 @@ class SandboxToolsTest {
 
                 path.endsWith("/files/content") -> files[wanted]?.let { respond(it, HttpStatusCode.OK) }
                     ?: problem(HttpStatusCode.NotFound, problemDocument("not_found", 404, "Not found", "No such file"))
-
-                path.endsWith("/files") && request.method == HttpMethod.Delete -> {
-                    deletions += wanted
-                    respond("", HttpStatusCode.NoContent)
-                }
 
                 else -> error("Unexpected request: ${request.method.value} $path")
             }
@@ -343,19 +337,6 @@ class SandboxToolsTest {
     }
 
     @Test
-    fun `cleanup deletes one exact path without uploading attachments`() = runBlocking {
-        val attached = AttachedFile(
-            name = "unused.csv", fileSizeBytes = 1, mimeType = "text/csv", kind = AttachedFileKind.OTHER,
-            loadBytes = { error("Cleanup must not download attachments") },
-        )
-        val result = tools(attached = listOf(attached)).deleteSandboxFile("project/build output")
-        assertEquals(listOf("project/build output"), deletions)
-        assertTrue(writes.isEmpty())
-        assertContains(result, "Deleted")
-        assertContains(result, "running commands were left alone")
-    }
-
-    @Test
     fun `a reset empties the sandbox without touching single paths`() = runBlocking {
         val attached = AttachedFile(
             name = "unused.csv", fileSizeBytes = 1, mimeType = "text/csv", kind = AttachedFileKind.OTHER,
@@ -363,7 +344,7 @@ class SandboxToolsTest {
         )
         val result = tools(attached = listOf(attached)).resetSandbox()
         assertEquals(1, resets)
-        assertTrue(deletions.isEmpty() && writes.isEmpty())
+        assertTrue(writes.isEmpty())
         assertContains(result, "empty again")
     }
 

@@ -67,8 +67,7 @@ instead of keeping its own copy.
   `inbox/<unique-id>/<filename>` before the first command that might want them, and the tool result
   names every exact path. Repeated filenames never overwrite.
 - **Paths** — relative to the home, `/home/sandbox`. `writeSandboxFile` replaces a file atomically
-  and creates parent directories; `deleteSandboxFile` removes one exact path, recursively for a
-  directory, and leaves running commands alone.
+  and creates parent directories; removing a file is `rm` in `runCommand`.
 - **Reading and editing** — `readSandboxFile` returns a text file with line numbers, a range of lines
   at a time, and says where to continue; `editSandboxFile` replaces one exact passage, which has to
   occur once unless every occurrence is meant, so a change to a long file costs the passage rather than
