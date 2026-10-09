@@ -672,10 +672,11 @@ A normal user message travels:
   not take a working bot down — but a model the account plainly cannot run stops startup with the list of ones it can.
   A `VISION_MODEL` still selects a separate vision model, on the subscription or, with `VISION_PROVIDER`, elsewhere.
 
-  The same session also covers image generation. `resolveImageRoute` picks `PLATFORM` whenever `OPENAI_IMAGE_API_KEY`
-  is set and `CODEX` otherwise, so a paid key keeps billing separately instead of spending the conversation's own
-  subscription allowance; `CODEX_IMAGE_GENERATION_ENABLED=false` drops the `CODEX` route, leaving only the key, as
-  on every other provider. `OpenAiImageClient` takes an `ImageAuth` telling it which: the generation call differs only
+  The same session also covers image generation when `IMAGE_PROVIDER=codex`. Pictures have a provider of their own
+  (`config/ImageProviderConfig`: `openai` with a key, or `codex` on the subscription), and the subscription is signed in
+  once for every use it has — `AppConfig.codexSignIn` names the file whether the plan is the chat, a role or the
+  pictures alone, and a plan that only draws proves its sign-in at startup in place of a model preflight.
+  `OpenAiImageClient` takes an `ImageAuth` telling it which: the generation call differs only
   by URL and credentials, but the edit call genuinely forks — the Platform endpoint takes a multipart upload while the
   Codex one takes JSON with the source inlined as a data URL and infers the output size from it. The fork extends to
   what each request may carry: only the Platform one sends the `low` moderation setting, jpeg output, and high

@@ -1,8 +1,7 @@
 package com.helltar.vusan.tools.imagegen
 
 import com.helltar.vusan.llm.codex.CodexAuthStore
-import com.helltar.vusan.config.ImageRoute
-import com.helltar.vusan.config.OpenAiImageConfig
+import com.helltar.vusan.config.ImageProviderConfig
 import com.helltar.vusan.infra.Http
 import io.ktor.client.engine.mock.*
 import io.ktor.http.*
@@ -28,7 +27,7 @@ import kotlin.test.assertTrue
 class CodexImageClientTest {
 
     private val config =
-        OpenAiImageConfig(model = "gpt-image-2", quality = "low", route = ImageRoute.CODEX)
+        ImageProviderConfig.Codex(model = "gpt-image-2", quality = "low")
 
     @Test
     fun `generate targets the codex backend with the chatgpt session`() = runBlocking {

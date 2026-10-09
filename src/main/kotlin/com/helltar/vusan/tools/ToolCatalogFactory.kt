@@ -33,7 +33,7 @@ import com.helltar.vusan.tools.grouplog.GroupLogTools
 import com.helltar.vusan.tools.context.ContextTools
 import com.helltar.vusan.tools.imagegen.ImageGenTools
 import com.helltar.vusan.llm.codex.CodexAuthStore
-import com.helltar.vusan.config.ImageRoute
+import com.helltar.vusan.config.ImageProviderConfig
 import com.helltar.vusan.tools.imagegen.ImageAuth
 import com.helltar.vusan.tools.imagegen.OpenAiImageClient
 import com.helltar.vusan.tools.imagegen.SelfImage
@@ -109,7 +109,7 @@ class ToolCatalogFactory(
     private val pageReader = PageReader(fileDownloadClient)
     private val imageDownloadClient = ImageDownloadClient(fileDownloadClient)
     private val elevenLabsTts = config.elevenLabsTts
-    private val openAiImage = config.openAiImage
+    private val image = config.image
     private val imageVisionClient = vision?.let { ImageVisionClient(it.client, it.model, it.options) }
     private val telegramChannelClient = TelegramChannelClient(fileDownloadClient)
     private val ytDlpRunner = YtDlpRunner(config.ytDlpCookiesFile)
@@ -166,16 +166,14 @@ class ToolCatalogFactory(
                     log.warn { "No reference photo — the round video message tool is disabled" }
             }
 
-    private val openAiImageClient =
-        when (openAiImage?.route) {
-            ImageRoute.CODEX ->
+    private val imageClient =
+        when (image) {
+            null -> null
+            is ImageProviderConfig.OpenAi -> OpenAiImageClient(http, ImageAuth.ApiKey(image.apiKey))
+
+            is ImageProviderConfig.Codex ->
                 codexAuth?.let { OpenAiImageClient(http, ImageAuth.Codex(it)) }
                     ?: null.also { log.warn { "Codex auth unavailable — image generation/editing tools disabled" } }
-
-            ImageRoute.PLATFORM, null ->
-                optional("OPENAI_IMAGE_API_KEY", config.openAiImageApiKey, "image generation/editing tools") {
-                    OpenAiImageClient(http, ImageAuth.ApiKey(it))
-                }
         }
 
     private val sandboxClient =
@@ -283,8 +281,8 @@ class ToolCatalogFactory(
             // visible rather than grouped: pictures are drawn and edited daily on the live deployment, and
             // a group used that often is loaded again after every restart and in every new conversation,
             // which rebuilds the cached prefix far more often than its two schemas cost to carry.
-            if (chat.photos && openAiImageClient != null && openAiImage != null) {
-                tools(ImageGenTools(openAiImageClient, openAiImage, outbox, context.attachedFiles, selfImage))
+            if (chat.photos && imageClient != null && image != null) {
+                tools(ImageGenTools(imageClient, image, outbox, context.attachedFiles, selfImage))
             }
 
             platformTools.of(context, outbox).forEach { tools(it) }

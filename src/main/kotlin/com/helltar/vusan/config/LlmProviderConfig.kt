@@ -166,9 +166,6 @@ sealed interface LlmProviderConfig {
         // how wordy the catalog says this model should be by default. the backend's own default is a step
         // wordier than what the CLI asks for, so the catalog's value is sent the way the CLI sends it.
         val verbosity: String? = null,
-        // whether image generation may run on the plan when no OPENAI_IMAGE_API_KEY is set. every other
-        // route waits for its key, so this is the one that has to be switched off rather than left unset.
-        val imageGeneration: Boolean = true,
         // whether the plan may also answer a web search, which draws on the same allowance as the turns
         val webSearch: Boolean = true,
         override val seesImages: Boolean? = null,

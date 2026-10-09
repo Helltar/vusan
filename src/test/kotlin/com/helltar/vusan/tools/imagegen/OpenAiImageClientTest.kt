@@ -1,6 +1,6 @@
 package com.helltar.vusan.tools.imagegen
 
-import com.helltar.vusan.config.OpenAiImageConfig
+import com.helltar.vusan.config.ImageProviderConfig
 import com.helltar.vusan.infra.Http
 import io.ktor.client.engine.mock.*
 import io.ktor.client.request.forms.*
@@ -22,7 +22,7 @@ import kotlin.test.assertTrue
 
 class OpenAiImageClientTest {
 
-    private val config = OpenAiImageConfig(model = "gpt-image-1.5", quality = "medium")
+    private val config = ImageProviderConfig.OpenAi(apiKey = "sk-test", model = "gpt-image-1.5", quality = "medium")
 
     private fun source(filename: String, contentType: String, bytes: ByteArray = byteArrayOf(5, 6, 7)) =
         SourceImage(bytes, filename, contentType)
@@ -226,7 +226,7 @@ class OpenAiImageClientTest {
     }
 
     private suspend fun editFormText(
-        config: OpenAiImageConfig,
+        config: ImageProviderConfig,
         images: List<SourceImage> = listOf(source("photo.png", "image/png")),
     ): String {
         val encoded = Base64.getEncoder().encodeToString(byteArrayOf(1, 2))

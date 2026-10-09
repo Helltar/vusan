@@ -2,7 +2,7 @@ package com.helltar.vusan.tools.imagegen
 
 import com.helltar.vusan.common.rethrowIfCancellation
 import com.helltar.vusan.llm.codex.CodexAuthStore
-import com.helltar.vusan.config.OpenAiImageConfig
+import com.helltar.vusan.config.ImageProviderConfig
 import com.helltar.vusan.llm.codex.codexRequestHeaders
 import com.helltar.vusan.infra.HttpStatusException
 import io.ktor.client.*
@@ -57,7 +57,7 @@ sealed interface ImageAuth {
 
     data class ApiKey(val key: String) : ImageAuth {
         init {
-            require(key.isNotBlank()) { "OPENAI_IMAGE_API_KEY must not be blank" }
+            require(key.isNotBlank()) { "IMAGE_API_KEY must not be blank" }
         }
     }
 
@@ -67,7 +67,7 @@ sealed interface ImageAuth {
 
 class OpenAiImageClient(private val http: HttpClient, private val auth: ImageAuth) {
 
-    suspend fun generate(prompt: String, size: String, config: OpenAiImageConfig): ByteArray {
+    suspend fun generate(prompt: String, size: String, config: ImageProviderConfig): ByteArray {
         require(prompt.isNotBlank()) { "Prompt must not be blank" }
 
         val response: OpenAiImageResponse =
@@ -104,7 +104,7 @@ class OpenAiImageClient(private val http: HttpClient, private val auth: ImageAut
         prompt: String,
         images: List<SourceImage>,
         size: String,
-        config: OpenAiImageConfig,
+        config: ImageProviderConfig,
     ): ByteArray {
         require(prompt.isNotBlank()) { "Prompt must not be blank" }
         require(images.isNotEmpty()) { "At least one source image is required" }
@@ -125,7 +125,7 @@ class OpenAiImageClient(private val http: HttpClient, private val auth: ImageAut
         prompt: String,
         images: List<SourceImage>,
         size: String,
-        config: OpenAiImageConfig,
+        config: ImageProviderConfig,
     ): OpenAiImageResponse =
         http.submitFormWithBinaryData(
             url = "$PLATFORM_BASE_URL/edits",
@@ -164,7 +164,7 @@ class OpenAiImageClient(private val http: HttpClient, private val auth: ImageAut
     private suspend fun editViaCodex(
         prompt: String,
         images: List<SourceImage>,
-        config: OpenAiImageConfig,
+        config: ImageProviderConfig,
     ): OpenAiImageResponse =
         http.post("$CODEX_BASE_URL/edits") {
             authorize()

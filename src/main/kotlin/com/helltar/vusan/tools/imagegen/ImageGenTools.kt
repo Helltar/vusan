@@ -4,7 +4,7 @@ import com.helltar.vusan.tools.Arg
 import com.helltar.vusan.tools.Tool
 import com.helltar.vusan.tools.ToolSet
 import com.helltar.vusan.common.rethrowIfCancellation
-import com.helltar.vusan.config.OpenAiImageConfig
+import com.helltar.vusan.config.ImageProviderConfig
 import com.helltar.vusan.outbox.BotOutbox
 import com.helltar.vusan.outbox.BotOutput
 import com.helltar.vusan.request.AttachedFile
@@ -14,7 +14,7 @@ import io.github.oshai.kotlinlogging.KotlinLogging
 
 class ImageGenTools(
     private val client: OpenAiImageClient,
-    private val config: OpenAiImageConfig,
+    private val config: ImageProviderConfig,
     private val outbox: BotOutbox,
     private val attachedFiles: List<AttachedFile> = emptyList(),
     private val selfImage: SelfImage? = null,

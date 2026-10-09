@@ -1,6 +1,6 @@
 package com.helltar.vusan.tools.imagegen
 
-import com.helltar.vusan.config.OpenAiImageConfig
+import com.helltar.vusan.config.ImageProviderConfig
 import com.helltar.vusan.infra.Http
 import com.helltar.vusan.outbox.BotOutbox
 import com.helltar.vusan.outbox.BotOutput
@@ -24,7 +24,7 @@ import kotlin.test.assertTrue
 
 class ImageGenToolsTest {
 
-    private val config = OpenAiImageConfig(model = "gpt-image-1.5", quality = "medium")
+    private val config = ImageProviderConfig.OpenAi(apiKey = "sk-test", model = "gpt-image-1.5", quality = "medium")
     private val imageBytes = byteArrayOf(4, 2, 0)
 
     // records the `size` of the last request the tool issued, so orientation mapping can be asserted.
@@ -51,7 +51,7 @@ class ImageGenToolsTest {
     private fun tools(
         outbox: BotOutbox,
         probe: SizeProbe = SizeProbe(),
-        config: OpenAiImageConfig = this.config,
+        config: ImageProviderConfig = this.config,
     ): ImageGenTools {
         val encoded = Base64.getEncoder().encodeToString(imageBytes)
         val http =

@@ -33,8 +33,7 @@ data class AppConfig(
     val llmProvider: LlmProviderConfig,
     val llmFallback: LlmProviderConfig? = null,
     val maxConcurrentTurns: Int,
-    val openAiImage: OpenAiImageConfig?,
-    val openAiImageApiKey: String?,
+    val image: ImageProviderConfig?,
     val openAiStt: OpenAiSttConfig?,
     val vision: LlmProviderConfig? = null,
     val personality: String?,
@@ -71,10 +70,8 @@ data class AppConfig(
 
         fun fromEnv(): AppConfig {
             val elevenLabsKey = readEnv("ELEVENLABS_API_KEY")
-            val openAiImageKey = readEnv("OPENAI_IMAGE_API_KEY")
             val llmProvider = resolveLlmProvider(LLM_PREFIX, fallbackTimeout = null)
             val llmFallback = resolveLlmFallback(llmProvider)
-            val imageRoute = resolveImageRoute(openAiImageKey != null, llmProvider)
             val regolithUrl = readEnv("REGOLITH_URL")
 
             return AppConfig(
@@ -91,7 +88,7 @@ data class AppConfig(
                 llmProvider = llmProvider,
                 llmFallback = llmFallback,
                 maxConcurrentTurns = readIntEnv("MAX_CONCURRENT_TURNS") ?: DEFAULT_MAX_CONCURRENT_TURNS,
-                openAiImageApiKey = openAiImageKey,
+                image = resolveImageProvider(),
                 openAiStt = resolveOpenAiStt(),
                 vision = resolveRole(VISION_PREFIX, llmProvider),
                 personality = resolvePersonality(),
@@ -125,15 +122,6 @@ data class AppConfig(
                         ElevenLabsTtsConfig(
                             model = readEnv("ELEVENLABS_TTS_MODEL") ?: ElevenLabsTtsConfig.DEFAULT_MODEL,
                             voiceId = readEnv("ELEVENLABS_VOICE_ID") ?: ElevenLabsTtsConfig.DEFAULT_VOICE_ID,
-                        )
-                    },
-
-                openAiImage =
-                    imageRoute?.let { route ->
-                        OpenAiImageConfig(
-                            model = readEnv("OPENAI_IMAGE_MODEL") ?: defaultImageModel(route),
-                            quality = readEnv("OPENAI_IMAGE_QUALITY") ?: OpenAiImageConfig.DEFAULT_QUALITY,
-                            route = route,
                         )
                     },
             )
@@ -263,7 +251,6 @@ data class AppConfig(
                     reasoningEffort = resolveReasoningEffort(prefix),
                     // the tier is the chat's: a role spends the same allowance, and its model may not be served at it
                     serviceTier = resolveCodexServiceTier().takeIf { prefix == LLM_PREFIX || prefix == LLM_FALLBACK_PREFIX },
-                    imageGeneration = readBooleanEnv("CODEX_IMAGE_GENERATION_ENABLED") ?: true,
                     webSearch = readBooleanEnv("CODEX_WEB_SEARCH_ENABLED") ?: true,
                     clientVersion = resolveCodexClientVersion(),
                     authFile = defaultCodexAuthFile(readEnv("CODEX_HOME")),
@@ -336,6 +323,33 @@ data class AppConfig(
                     ?: error("Unsupported CODEX_SERVICE_TIER=[$raw]. Supported values: ${supportedValues<ServiceTier>()}")
 
             return tier.takeUnless { it == ServiceTier.DEFAULT }
+        }
+
+        // pictures have a provider of their own: a key for the api, or the subscription signed in through
+        // CODEX_HOME whether or not the chat runs there. nothing switches on without one.
+        private fun resolveImageProvider(): ImageProviderConfig? {
+            val provider = readEnv("IMAGE_PROVIDER")?.trim()?.lowercase() ?: return null
+            val model = readEnv("IMAGE_MODEL")
+            val quality = readEnv("IMAGE_QUALITY") ?: ImageProviderConfig.DEFAULT_QUALITY
+
+            return when (provider) {
+                "openai" ->
+                    ImageProviderConfig.OpenAi(
+                        apiKey = requireEnv("IMAGE_API_KEY"),
+                        model = model ?: ImageProviderConfig.OpenAi.DEFAULT_MODEL,
+                        quality = quality,
+                    )
+
+                "codex" ->
+                    ImageProviderConfig.Codex(
+                        authFile = defaultCodexAuthFile(readEnv("CODEX_HOME")),
+                        clientVersion = resolveCodexClientVersion(),
+                        model = model ?: ImageProviderConfig.Codex.DEFAULT_MODEL,
+                        quality = quality,
+                    )
+
+                else -> error("Unsupported IMAGE_PROVIDER=[$provider]. Supported values: openai, codex")
+            }
         }
 
         // the catalog Codex answers with is filtered by the claimed client version, and this pins it: for

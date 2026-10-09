@@ -25,7 +25,7 @@ Five values, and Vusan runs:
 ALLOWED_IDS=123456789,-1001234567890
 TELEGRAM_BOT_TOKEN=1234567890:qwerty
 LLM_PROVIDER=openai
-LLM_MODEL=gpt-5.6-sol
+LLM_MODEL=gpt-6.1-sol
 LLM_API_KEY=sk-proj-qwerty
 ```
 
@@ -67,7 +67,7 @@ banned, and startup says so in the log.
 
 | `LLM_PROVIDER`      | Example `LLM_MODEL`                 |
 |---------------------|-------------------------------------|
-| `openai`            | `gpt-5.6-sol`                       |
+| `openai`            | `gpt-6.1-sol`                       |
 | `anthropic`         | `claude-opus-5-5`                   |
 | `openai-compatible` | any model id the server understands |
 | `codex`             | any model the ChatGPT plan offers   |
@@ -141,7 +141,7 @@ paid API key. There is no `LLM_API_KEY`: the credentials come from the
 
 ```dotenv
 LLM_PROVIDER=codex
-LLM_MODEL=gpt-5.6-terra
+LLM_MODEL=gpt-6-astra
 ```
 
 Sign in as the user that runs the bot:
@@ -216,13 +216,9 @@ model first:
 CODEX_SERVICE_TIER=priority
 ```
 
-**Pictures on the plan.** Without `OPENAI_IMAGE_API_KEY`, [image generation](#image-generation)
-runs on the subscription too, from the same allowance. Switch it off to leave the drawing tools out,
-as on any other provider without a key; setting the key still brings them back, on its own bill:
-
-```dotenv
-CODEX_IMAGE_GENERATION_ENABLED=false
-```
+**Pictures on the plan.** [Image generation](#image-generation) can run on the subscription too, from
+the same allowance, with `IMAGE_PROVIDER=codex` — whether or not the chat itself runs on `codex`; the
+account is the one `CODEX_HOME` points at.
 
 **Web search on the plan.** The subscription also answers a [web search](#web-search) of its own,
 `answerFromWeb`, with no search key at all. Each search draws on the same allowance as the turns, and
@@ -253,10 +249,10 @@ direction, but not on both sides, since the `CODEX_*` settings and the signed-in
 
 ```dotenv
 LLM_PROVIDER=codex
-LLM_MODEL=gpt-5.6-sol
+LLM_MODEL=gpt-6-astra
 
 LLM_FALLBACK_PROVIDER=openai
-LLM_FALLBACK_MODEL=gpt-5.6-sol
+LLM_FALLBACK_MODEL=gpt-6.1-sol
 LLM_FALLBACK_API_KEY=sk-proj-qwerty
 ```
 
@@ -293,9 +289,9 @@ truth instead of the one the system prompt names.
 
 Pick a fallback that can do what the primary does: one that sees images if the chat model does,
 because vision rides on the same switch, and one whose context window is not much smaller, because
-the history is planned against the primary's. Image generation does not follow: on the Codex route it
-spends the same subscription and fails with it until the window resets, so a deployment that wants
-pictures through the outage sets `OPENAI_IMAGE_API_KEY`, which sends every picture to the API.
+the history is planned against the primary's. Image generation does not follow: it has a provider of
+its own, and on `IMAGE_PROVIDER=codex` it spends the same subscription and fails with it until the
+window resets, so a deployment that wants pictures through the outage draws on `IMAGE_PROVIDER=openai`.
 
 ## How many requests at once
 
@@ -360,7 +356,7 @@ with a `WARN` log and Vusan keeps running.
 | `KLIPY_API_KEY`         | GIF, meme and clip lookup                 | KLIPY; used instead of Giphy when both are set |
 | `ELEVENLABS_API_KEY`    | Voice messages and round video messages   | See [Voice output](#voice-output)          |
 | `OPENAI_STT_API_KEY`    | Voice input, sound of a video             | Reuse your OpenAI key                      |
-| `OPENAI_IMAGE_API_KEY`  | Image generation                          | Reuse your OpenAI key; optional on `codex` |
+| `IMAGE_PROVIDER`        | Image generation                          | `openai` with `IMAGE_API_KEY`, or `codex`; see [Image generation](#image-generation) |
 | `VISION_MODEL`          | Vision on a chat model that cannot see    | See [Vision](#vision)                      |
 | `REGOLITH_URL`          | Shell sandbox                           | See [Sandbox](#sandbox)                |
 
@@ -449,16 +445,20 @@ watched without its sound.
 
 ### Image generation
 
-`OPENAI_IMAGE_API_KEY` enables the `generateImage` and `editImage` tools (OpenAI
-`/v1/images/generations`). It can reuse your OpenAI key. The agent picks the aspect ratio per
-request; the model and quality are operator-controlled so generation cost stays predictable. A
-picture of the bot itself goes to `/v1/images/edits` instead, with the reference photo from
-[Appearance](#appearance) as its subject.
+`IMAGE_PROVIDER` enables the `generateImage` and `editImage` tools and says who renders: `openai` is
+the OpenAI image API (`/v1/images/generations`), billed per image against `IMAGE_API_KEY`, which can
+reuse your OpenAI key; `codex` is the ChatGPT subscription signed in through `CODEX_HOME`, with no key
+at all and whatever the chat itself runs on. Without a provider the tools stay out. The agent picks the
+aspect ratio per request; the model and quality are operator-controlled so generation cost stays
+predictable. A picture of the bot itself goes to the edit endpoint instead, with the reference photo
+from [Appearance](#appearance) as its subject.
 
-| Variable                  | Default                                    | Description                                                            |
-|---------------------------|--------------------------------------------|------------------------------------------------------------------------|
-| `OPENAI_IMAGE_MODEL`      | `gpt-image-1.5` / `gpt-image-2` on `codex` | Image model.                                                           |
-| `OPENAI_IMAGE_QUALITY`    | `medium`                                   | Rendering quality: `low`, `medium`, `high`, `xhigh`, `max`, or `auto`. |
+| Variable         | Default                                    | Description                                                            |
+|------------------|--------------------------------------------|------------------------------------------------------------------------|
+| `IMAGE_PROVIDER` | unset                                      | `openai` or `codex`.                                                   |
+| `IMAGE_API_KEY`  |                                            | The key `openai` renders with.                                         |
+| `IMAGE_MODEL`    | `gpt-image-2.5-flare` / `gpt-image-2` on `codex` | Image model.                                                     |
+| `IMAGE_QUALITY`  | `medium`                                   | Rendering quality: `low`, `medium`, `high`, `xhigh`, `max`, or `auto`. |
 
 `xhigh` and `max` render only on the `gpt-image-2.5` models; every earlier model stops at `high`
 and fails the request if you ask for more. Quality drives the price per image, so raise it
@@ -480,16 +480,10 @@ older ones fall back to the nearest size they have rather than failing. Finished
 JPEG, because Telegram re-encodes every photo it delivers anyway and the smaller upload is what keeps
 a `max`-quality picture inside Telegram's own size limit.
 
-On `LLM_PROVIDER=codex` the key is optional: with none set, both tools run on the ChatGPT
-subscription instead. Setting `OPENAI_IMAGE_API_KEY` always wins, because it bills separately rather
-than spending the same subscription allowance the conversation itself runs on. Three differences are
-worth knowing before relying on the subscription route: images count against your ChatGPT usage
-limit, so a heavy image day can exhaust the same quota that answers messages; the model chooses its
-own output dimensions, so the requested aspect ratio is a hint rather than a guarantee; and it
-filters the way ChatGPT does, with no strictness to choose.
-
-`CODEX_IMAGE_GENERATION_ENABLED=false` takes the subscription route away, so only a key enables
-the tools, as on every other provider.
+Three differences are worth knowing before relying on `codex`: images count against your ChatGPT
+usage limit, so a heavy image day can exhaust the same quota that answers messages when the chat runs
+there too; the model chooses its own output dimensions, so the requested aspect ratio is a hint rather
+than a guarantee; and it filters the way ChatGPT does, with no strictness to choose.
 
 ### Vision
 
@@ -513,7 +507,7 @@ LLM_MODEL=deepseek-v4-pro
 LLM_API_KEY=sk-qwerty
 
 VISION_PROVIDER=openai
-VISION_MODEL=gpt-5.4-mini
+VISION_MODEL=gpt-6-luna
 VISION_API_KEY=sk-proj-qwerty
 ```
 

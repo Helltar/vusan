@@ -86,14 +86,20 @@ suspend fun main() = coroutineScope {
         // nobody has run `codex login` here, then validate the selected model and its capabilities
         // before the first user turn hits an opaque backend error. the claimed client version goes in
         // first, because it decides how much of the model catalog that validation is shown.
-        // the subscription may be the primary, the fallback or a role's; whichever it is, it is the one signed-in account.
+        // the subscription may be the primary, the fallback, a role's or only the pictures'; whichever it is,
+        // it is the one signed-in account.
         val codexAuth =
-            listOfNotNull(config.llmProvider, config.llmFallback, config.vision, config.addressing?.provider)
-                .firstNotNullOfOrNull { it as? LlmProviderConfig.Codex }
-                ?.let { codex ->
-                    claimCodexClientVersion(http, codex.clientVersion)
-                    CodexAuthStore(http, codex.authFile)
-                }
+            config.codexSignIn()?.let { signIn ->
+                claimCodexClientVersion(http, signIn.clientVersion)
+                CodexAuthStore(http, signIn.authFile)
+            }
+
+        // a plan that only draws has no model to preflight, so its sign-in is proven here instead
+        if (codexAuth != null && config.codexRoles().isEmpty()) {
+            val plan = codexAuth.planType()
+
+            log.info { "Codex: signed in to ChatGPT${plan?.let { " (plan=[$it])" }.orEmpty()}; pictures run on the plan" }
+        }
 
         // every configured model is asked about at the vendor before the first turn, so a typo fails here
         val llm = resolveLlmRuntime(config.llmProvider.preflighted(http, codexAuth), codexAuth)
@@ -149,7 +155,7 @@ suspend fun main() = coroutineScope {
         // hold on its own — so the reference is read once, here, and only where it can be used at all:
         // the self-portrait it edits, and the round video message it puts in the circle.
         val selfImage =
-            if (config.openAiImage != null || config.elevenLabsApiKey != null)
+            if (config.image != null || config.elevenLabsApiKey != null)
                 resolveSelfImage(config.selfImageFile, config.appearance) {
                     telegramClient.profilePhotoReference(botProfile.userId)
                 }
@@ -382,8 +388,8 @@ private fun logStartup(
         }
     }
 
-    config.openAiImage?.let {
-        log.info { "Images: route=[${it.route.name.lowercase()}] model=[${it.model}] quality=[${it.quality}]" }
+    config.image?.let {
+        log.info { "Images: provider=[${it.name}] model=[${it.model}] quality=[${it.quality}]" }
     }
 
     log.info { "Database: [${config.databasePath}]" }

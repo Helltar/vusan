@@ -1,5 +1,6 @@
 package com.helltar.vusan.config
 
+import java.nio.file.Path
 import com.helltar.vusan.agent.ContextWindowPolicy
 import com.helltar.vusan.llm.LlmModel
 import com.helltar.vusan.llm.RequestOptions
@@ -20,6 +21,21 @@ import io.github.oshai.kotlinlogging.KotlinLogging
 import io.ktor.client.*
 
 private val log = KotlinLogging.logger("ModelPreflight")
+
+/** Where the one signed-in ChatGPT account is read from, and the CLI version claimed for it. */
+internal data class CodexSignIn(val authFile: Path, val clientVersion: String?)
+
+/** Every model role this deployment runs on the plan: the chat, its fallback, vision, addressing. */
+internal fun AppConfig.codexRoles(): List<LlmProviderConfig.Codex> =
+    listOfNotNull(llmProvider, llmFallback, vision, addressing?.provider).filterIsInstance<LlmProviderConfig.Codex>()
+
+/**
+ * The plan's sign-in, wherever the plan is used — a model role, or image generation alone. One account
+ * serves all of them, so the first configured use names the file and the version.
+ */
+internal fun AppConfig.codexSignIn(): CodexSignIn? =
+    codexRoles().firstOrNull()?.let { CodexSignIn(it.authFile, it.clientVersion) }
+        ?: (image as? ImageProviderConfig.Codex)?.let { CodexSignIn(it.authFile, it.clientVersion) }
 
 /**
  * A ChatGPT subscription through the Codex backend, which speaks the Responses API, streaming only,
