@@ -66,7 +66,6 @@ import com.helltar.vusan.tools.voice.ElevenLabsTtsClient
 import com.helltar.vusan.tools.voice.VideoNoteTools
 import com.helltar.vusan.tools.voice.VoiceTools
 import com.helltar.vusan.tools.youtube.*
-import io.github.oshai.kotlinlogging.KotlinLogging
 import io.ktor.client.*
 import kotlin.time.Duration.Companion.seconds
 
@@ -125,12 +124,12 @@ class ToolCatalogFactory(
         )
 
     private val tavilyClient =
-        optional("TAVILY_API_KEY", config.tavilyApiKey, "Tavily web search tool") {
+        config.tavilyApiKey?.let {
             TavilyClient(http, it)
         }
 
     private val searxngClient =
-        optional("SEARXNG_URL", config.searxngUrl, "SearXNG web/image search tools") {
+        config.searxngUrl?.let {
             SearxngClient(http, it)
         }
 
@@ -143,41 +142,36 @@ class ToolCatalogFactory(
             ?.let { codex -> codexAuth?.let { CodexSearchClient(http, it, codex.model) } }
 
     private val giphyClient =
-        optional("GIPHY_API_KEY", config.giphyApiKey, "Giphy GIF tool") {
+        config.giphyApiKey?.let {
             GiphyClient(http, it)
         }
 
     private val klipyClient =
-        optional("KLIPY_API_KEY", config.klipyApiKey, "KLIPY GIF, meme and clip tool") {
+        config.klipyApiKey?.let {
             KlipyClient(http, it)
         }
 
     private val elevenLabsTtsClient =
-        optional("ELEVENLABS_API_KEY", config.elevenLabsApiKey, "voice/TTS tool") {
+        config.elevenLabsApiKey?.let {
             ElevenLabsTtsClient(http, it)
         }
 
     // the round video message is the portrait plus the voice, so without a reference photo there is
     // nothing to put in the circle and the tool is left out rather than sending an empty one.
-    private val selfPortrait =
-        selfImage?.reference?.bytes
-            ?: null.also {
-                if (elevenLabsTtsClient != null)
-                    log.warn { "No reference photo — the round video message tool is disabled" }
-            }
+    private val selfPortrait = selfImage?.reference?.bytes
 
     private val imageClient =
         when (image) {
             null -> null
             is ImageProviderConfig.OpenAi -> OpenAiImageClient(http, ImageAuth.ApiKey(image.apiKey))
 
+            // the plan is signed in for the pictures alone when nothing else runs on it
             is ImageProviderConfig.Codex ->
-                codexAuth?.let { OpenAiImageClient(http, ImageAuth.Codex(it)) }
-                    ?: null.also { log.warn { "Codex auth unavailable — image generation/editing tools disabled" } }
+                OpenAiImageClient(http, ImageAuth.Codex(requireNotNull(codexAuth) { "a codex image provider needs the plan's sign-in" }))
         }
 
     private val sandboxClient =
-        optional("REGOLITH_URL", config.regolithUrl, "sandbox shell tools") {
+        config.regolithUrl?.let {
             SandboxClient(http, it, requireNotNull(config.regolithToken))
         }
 
@@ -289,15 +283,6 @@ class ToolCatalogFactory(
         }
     }
 
-    private fun <T> optional(envName: String, key: String?, toolDescription: String, build: (String) -> T): T? {
-        if (key == null) {
-            log.warn { "$envName not set — $toolDescription disabled" }
-            return null
-        }
-
-        return build(key)
-    }
-
     private companion object {
         // an ordinary person in an ordinary chat, because that is what the startup list is read as: what
         // this deployment can do. A sender that is not one person withholds exactly the tools whose
@@ -308,6 +293,5 @@ class ToolCatalogFactory(
                 chat = ChatContext(id = "1", isPrivate = true),
                 sender = SenderContext(id = "1"),
             )
-        val log = KotlinLogging.logger {}
     }
 }

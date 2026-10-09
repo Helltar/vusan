@@ -218,9 +218,10 @@ then docs per the triggers above. Registration also decides whether the tool's s
 in every request or wait for `loadTools`: a set registered under a `ToolGroup` in
 [`ToolCatalog`](src/main/kotlin/com/helltar/vusan/tools/ToolCatalog.kt) is registered all
 the same, only offered later. Group what a turn rarely needs; leave visible what the model
-may need without being asked for it by name. A tool needing an optional key is registered
-through `ToolCatalogFactory.optional(...)`, which disables it with a warning
-rather than failing startup.
+may need without being asked for it by name. A tool needing an optional key is registered only when
+the key is set (`config.fooApiKey?.let { … }`), never failing startup; `Main.logStartup`
+says what is on and off, one line per capability in one shape, so a missing optional
+key is an info line there and not a warning.
 
 A tool only one messenger can implement — Telegram's `file_id`, its sticker sets —
 is not registered there at all: it lives in that adapter (`telegram/tools/`) and

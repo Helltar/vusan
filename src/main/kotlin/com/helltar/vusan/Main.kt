@@ -267,8 +267,10 @@ suspend fun main() = coroutineScope {
                 ),
             )
 
-        logStartup(config, llm, fallback, vision, ambient?.botNames, toolCatalogFactory.availableToolNames, imagePlan)
-        logPresence(config, groupLogOn = groupLog != null)
+        logStartup(
+            config, llm, fallback, vision, ambient?.botNames, toolCatalogFactory.availableToolNames, imagePlan,
+            hasSelfPortrait = selfImage?.reference != null, groupLogOn = groupLog != null,
+        )
 
         val botJob = botRunner.start(this)
         val schedulerJob = scheduler.launchIn(this)
@@ -300,46 +302,14 @@ suspend fun main() = coroutineScope {
 // (`./gradlew run`) has no manifest, so it says so instead of inventing a number.
 private fun appVersion(): String = AppConfig::class.java.`package`?.implementationVersion ?: "dev"
 
-private fun createVoiceTranscriber(http: HttpClient, config: AppConfig): VoiceTranscriber? {
-    val sttConfig =
-        config.openAiStt
-            ?: run {
-                log.warn { "OPENAI_STT_API_KEY not set — voice message transcription and video sound disabled" }
-                return null
-            }
+private fun createVoiceTranscriber(http: HttpClient, config: AppConfig): VoiceTranscriber? =
+    config.openAiStt?.let { VoiceTranscriber(OpenAiWhisperClient(http, it), it) }
 
-    return VoiceTranscriber(OpenAiWhisperClient(http, sttConfig), sttConfig)
-}
-
-private fun logPresence(config: AppConfig, groupLogOn: Boolean) {
-    val initiative = config.initiative
-
-    if (!groupLogOn) {
-        if (config.diaryEnabled || initiative != null) {
-            log.warn { "Diary and initiative are off: both read the group log, and GROUP_LOG_ENABLED=false" }
-        }
-
-        return
-    }
-
-    if (config.diaryEnabled) {
-        log.info { "Diary: on — each group's closed day is written up by the chat model" }
-    } else {
-        log.info { "Diary: off (DIARY_ENABLED=false)" }
-    }
-
-    if (initiative == null) {
-        log.info { "Initiative: off (INITIATIVE_ENABLED=false)" }
-    } else {
-        log.info {
-            "Initiative: interval=[${initiative.intervalMinutes}m] maxMessagesPerDay=[${initiative.maxMessagesPerDay}] " +
-                    "quietHours=[${initiative.quietHours.from}-${initiative.quietHours.until}]"
-        }
-    }
-}
-
-// ordered as an operator reads it: which model, how much room it has, what it may spend, what it can
-// see, what it draws with, where it writes, and what it can call.
+// one line per capability, in the order an operator reads it: which model, how much room it has, what it
+// can see, what it draws and speaks with, what it reaches on the web, where it runs commands, what it keeps
+// of a group and does there unasked, where it writes, and what it can call. a capability that is simply
+// not configured is `off (VAR not set)` at info, in the same shape as the ones that are on; a warning is
+// kept for what is configured and still cannot work.
 private fun logStartup(
     config: AppConfig,
     llm: LlmRuntime,
@@ -349,6 +319,9 @@ private fun logStartup(
     toolNames: List<String>,
     // the subscription plan behind the pictures, when the plan serves nothing else
     imagePlan: String?,
+    // whether the bot has a face to put into a round video message
+    hasSelfPortrait: Boolean,
+    groupLogOn: Boolean,
 ) {
     log.info {
         "LLM: provider=[${llm.providerLabel}] model=[${llm.model.id}]" +
@@ -356,7 +329,10 @@ private fun logStartup(
                 llm.serviceTier?.let { " serviceTier=[$it]" }.orEmpty()
     }
 
-    fallback?.let { log.info { "LLM fallback: provider=[${it.providerLabel}] model=[${it.model.id}]" } }
+    log.info {
+        fallback?.let { "LLM fallback: provider=[${it.providerLabel}] model=[${it.model.id}]" }
+            ?: "LLM fallback: off (LLM_FALLBACK_PROVIDER not set)"
+    }
 
     // openai and anthropic models carry a window of their own; a codex catalog that could not be read or a
     // third-party server leave the policy on its conservative default
@@ -371,26 +347,76 @@ private fun logStartup(
 
     if (vision != null) {
         log.info { "Vision: provider=[${vision.providerLabel}] model=[${vision.model.id}]" }
-        if (!config.stickersEnabled) log.info { "Stickers: off (STICKERS_ENABLED=false)" }
     } else {
-        log.warn {
-            "Vision disabled: model=[${llm.model.id}] cannot read images — " +
-                    "set VISION_MODEL to run vision on a model of its own"
+        log.warn { "Vision: off — model=[${llm.model.id}] cannot read images; set VISION_MODEL to run vision on a model of its own" }
+    }
+
+    log.info {
+        when {
+            !config.stickersEnabled -> "Stickers: off (STICKERS_ENABLED=false)"
+            vision == null -> "Stickers: off — the catalog describes stickers through vision"
+            else -> "Stickers: on"
         }
     }
 
-    config.addressing?.let {
-        if (ambientNames == null) {
-            log.warn { "Ambient addressing off: it reads the group log, and GROUP_LOG_ENABLED=false" }
-        } else {
-            log.info { "Ambient addressing: model=[${it.provider.model}] names=[${ambientNames.joinToString(", ")}]" }
-        }
-    }
-
-    config.image?.let { image ->
-        log.info {
+    log.info {
+        config.image?.let { image ->
             "Images: provider=[${image.name}]" + imagePlan?.let { " plan=[$it]" }.orEmpty() +
                     " model=[${image.model}] quality=[${image.quality}]"
+        } ?: "Images: off (IMAGE_PROVIDER not set)"
+    }
+
+    log.info {
+        config.elevenLabsTts?.let { tts ->
+            "Voice: provider=[elevenlabs] model=[${tts.model}] voice=[${tts.voiceId}] " +
+                    "roundVideo=[${if (hasSelfPortrait) "on" else "off — no reference photo"}]"
+        } ?: "Voice: off (ELEVENLABS_API_KEY not set)"
+    }
+
+    log.info { config.openAiStt?.let { "Voice input: model=[${it.model}]" } ?: "Voice input: off (OPENAI_STT_API_KEY not set)" }
+
+    val searches =
+        buildList {
+            if (config.tavilyApiKey != null) add("tavily")
+            if (config.searxngUrl != null) add("searxng")
+            // the plan answers a search when it is the chat or the one behind it, the rule the catalog follows
+            if (listOfNotNull(config.llmProvider, config.llmFallback).filterIsInstance<LlmProviderConfig.Codex>().any { it.webSearch }) add("codex")
+        }
+
+    log.info {
+        if (searches.isEmpty()) "Web search: off (TAVILY_API_KEY and SEARXNG_URL not set)"
+        else "Web search: providers=[${searches.joinToString(", ")}]"
+    }
+
+    log.info {
+        when {
+            config.klipyApiKey != null -> "GIFs: provider=[klipy]"
+            config.giphyApiKey != null -> "GIFs: provider=[giphy]"
+            else -> "GIFs: off (KLIPY_API_KEY and GIPHY_API_KEY not set)"
+        }
+    }
+
+    log.info { config.regolithUrl?.let { "Sandbox: url=[$it]" } ?: "Sandbox: off (REGOLITH_URL not set)" }
+    log.info { if (groupLogOn) "Group log: on retentionDays=[${config.groupLog.retentionDays}]" else "Group log: off (GROUP_LOG_ENABLED=false)" }
+
+    log.info {
+        config.addressing?.let { "Ambient addressing: model=[${it.provider.model}] names=[${ambientNames.orEmpty().joinToString(", ")}]" }
+            ?: "Ambient addressing: off (ADDRESSING_ENABLED not true)"
+    }
+
+    if (!groupLogOn && (config.diaryEnabled || config.initiative != null)) {
+        log.warn { "Diary and initiative: off — both read the group log, and GROUP_LOG_ENABLED=false" }
+    } else {
+        log.info {
+            if (config.diaryEnabled) "Diary: on — each group's closed day is written up by the chat model"
+            else "Diary: off (DIARY_ENABLED=false)"
+        }
+
+        log.info {
+            config.initiative?.let {
+                "Initiative: interval=[${it.intervalMinutes}m] maxMessagesPerDay=[${it.maxMessagesPerDay}] " +
+                        "quietHours=[${it.quietHours.from}-${it.quietHours.until}]"
+            } ?: "Initiative: off (INITIATIVE_ENABLED=false)"
         }
     }
 
