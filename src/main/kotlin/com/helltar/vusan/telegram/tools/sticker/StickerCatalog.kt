@@ -47,6 +47,7 @@ import org.telegram.telegrambots.meta.api.objects.stickers.Sticker
 import org.telegram.telegrambots.meta.generics.TelegramClient
 import java.time.Instant
 import java.util.Locale
+import kotlin.random.Random
 import kotlin.time.Duration.Companion.hours
 import kotlin.time.Duration.Companion.milliseconds
 import kotlin.time.Duration.Companion.seconds
@@ -59,10 +60,13 @@ private const val REGULAR_STICKER = "regular"
 private const val MAX_STICKERS_PER_SET = 60
 
 // the prompt keeps a small ready-to-send selection; the search tool reaches the full chat catalog
-// when none of these fits. half of the shortlist is reserved for recent individual stickers, then
-// frequent ones and a round-robin fallback across known sets fill what remains.
-private const val MAX_INDEX_ENTRIES = 16
-private const val RECENT_INDEX_ENTRIES = MAX_INDEX_ENTRIES / 2
+// when none of these fits. a few slots go to what the chat itself reached for lately, the rest is
+// drawn afresh for every turn from everything the chat's sets hold, a set the chat uses often weighing
+// more — so two turns see different stickers and the bot's taste is not the group's favourites. what
+// the bot itself sent lately is left out, so it cannot keep reaching for the same one.
+private const val MAX_INDEX_ENTRIES = 24
+private const val RECENT_INDEX_ENTRIES = 6
+private const val REMEMBERED_SENDS_PER_CHAT = 20
 private const val MAX_DESCRIPTION_CHARS = 90
 
 // pulling in a set is the only expensive thing here — up to MAX_STICKERS_PER_SET vision calls, paid
@@ -108,28 +112,43 @@ private val REFUSAL_REGEX =
     )
 
 /**
- * Take from each source in turn until [limit] is reached, so a long source cannot crowd out a short one.
- * Sources are drawn in the order given, and one that runs out simply drops out of the rotation.
+ * Draw up to [limit] items without replacement. Each pick chooses a source with a probability
+ * proportional to its weight plus one — a source nobody weighted still gets its turn — and then a
+ * random item of that source; a source that runs out leaves the draw. [sources] are consumed.
  */
-internal fun <T> roundRobin(sources: List<List<T>>, limit: Int): List<T> {
+internal fun <T> weightedDraw(
+    sources: Map<String, MutableList<T>>,
+    weights: Map<String, Int>,
+    limit: Int,
+    random: Random,
+): List<T> {
     require(limit >= 0) { "limit must not be negative" }
 
-    val queues = sources.map { it.iterator() }.filter { it.hasNext() }
+    val open = sources.filterValues { it.isNotEmpty() }.toMutableMap()
 
     return buildList {
-        while (size < limit) {
-            val before = size
+        while (size < limit && open.isNotEmpty()) {
+            val chosen = pickWeighted(open.keys, weights, random)
+            val items = open.getValue(chosen)
 
-            for (queue in queues) {
-                if (size >= limit) break
-                if (queue.hasNext()) add(queue.next())
-            }
-
-            // every source is exhausted, so the result is simply smaller than the limit
-            if (size == before) break
+            add(items.removeAt(random.nextInt(items.size)))
+            if (items.isEmpty()) open.remove(chosen)
         }
     }
 }
+
+private fun pickWeighted(names: Set<String>, weights: Map<String, Int>, random: Random): String {
+    var roll = random.nextInt(names.sumOf { it.weight(weights) })
+
+    for (name in names) {
+        roll -= name.weight(weights)
+        if (roll < 0) return name
+    }
+
+    return names.last()
+}
+
+private fun String.weight(weights: Map<String, Int>): Int = (weights[this] ?: 0) + 1
 
 internal data class StickerEntry(val id: Long, val setName: String, val emoji: String?, val description: String)
 
@@ -158,7 +177,12 @@ private fun String.matchesSearchWord(queryWord: String): Boolean =
 class StickerCatalog(
     private val client: TelegramClient,
     private val vision: ImageVisionClient,
+    private val random: Random = Random.Default,
 ) : StickerShortlist {
+
+    // what the bot itself sent, per chat, newest last. process memory on purpose: a restart losing it
+    // costs at most one repeat
+    private val sentLately = HashMap<Long, ArrayDeque<Long>>()
 
     /** Record a sticker seen in a chat, pulling in its set once that set has earned it. */
     suspend fun observe(chatId: Long, sticker: Sticker) {
@@ -266,6 +290,20 @@ class StickerCatalog(
     }
 
     override suspend fun fileIdFor(chat: ChatRef, id: Long): String? = fileIdFor(chat.telegramChatId, id)
+
+    /** Note a sticker the bot sent into [chatId], so the shortlist stops offering it for a while. */
+    fun recordSent(chatId: Long, id: Long) {
+        synchronized(sentLately) {
+            val sent = sentLately.getOrPut(chatId) { ArrayDeque() }
+
+            sent.remove(id)
+            sent.addLast(id)
+            while (sent.size > REMEMBERED_SENDS_PER_CHAT) sent.removeFirst()
+        }
+    }
+
+    private fun sentLatelyIn(chatId: Long): Set<Long> =
+        synchronized(sentLately) { sentLately[chatId]?.toSet().orEmpty() }
 
     private suspend fun fileIdFor(chatId: Long, id: Long): String? = dbTransaction {
         val setNames = chatSetNames(chatId)
@@ -621,35 +659,38 @@ class StickerCatalog(
         val catalog = describedCatalogFor(chatId)
         if (catalog.stickers.isEmpty()) return emptyList()
 
-        val usage = stickerUsageFor(chatId)
+        val left = sentLatelyIn(chatId)
         val knownByUniqueId = catalog.stickers.associateBy { it.fileUniqueId }
         val selected = linkedMapOf<Long, KnownSticker>()
 
-        usage
+        // what the chat itself reached for lately: the stickers people are using right now
+        stickerUsageFor(chatId)
             .sortedWith(compareByDescending<StickerUsage> { it.lastSeenAt }.thenByDescending { it.seenCount })
             .mapNotNull { knownByUniqueId[it.fileUniqueId] }
+            .filterNot { it.entry.id in left }
             .take(RECENT_INDEX_ENTRIES)
             .forEach { selected[it.entry.id] = it }
 
-        usage
-            .sortedWith(compareByDescending<StickerUsage> { it.seenCount }.thenByDescending { it.lastSeenAt })
-            .mapNotNull { knownByUniqueId[it.fileUniqueId] }
-            .forEach { known ->
-                if (selected.size < MAX_INDEX_ENTRIES) selected[known.entry.id] = known
-            }
+        // the rest is a fresh draw from everything the chat's sets hold, a set the chat uses often
+        // weighing more, so a popular set shows up more while every set keeps a chance
+        val remainingBySet =
+            catalog.stickers
+                .filterNot { it.entry.id in selected || it.entry.id in left }
+                .groupBy { it.entry.setName }
+                .mapValues { (_, stickers) -> stickers.toMutableList() }
 
-        if (selected.size < MAX_INDEX_ENTRIES) {
-            val bySet = catalog.stickers.groupBy { it.entry.setName }
-            val remainingBySet =
-                catalog.setNames.map { setName ->
-                    bySet[setName].orEmpty().filterNot { it.entry.id in selected }
-                }
-
-            roundRobin(remainingBySet, MAX_INDEX_ENTRIES - selected.size)
-                .forEach { selected[it.entry.id] = it }
-        }
+        weightedDraw(remainingBySet, setWeightsFor(chatId), MAX_INDEX_ENTRIES - selected.size, random)
+            .forEach { selected[it.entry.id] = it }
 
         return selected.values.map { it.entry }
+    }
+
+    // how often the chat reached for each of its sets, the weight a set carries in the draw
+    private suspend fun setWeightsFor(chatId: Long): Map<String, Int> = dbTransaction {
+        TelegramChatStickerSetsTable
+            .select(TelegramChatStickerSetsTable.setName, TelegramChatStickerSetsTable.seenCount)
+            .where { TelegramChatStickerSetsTable.chatId eq chatId }
+            .associate { it[TelegramChatStickerSetsTable.setName] to it[TelegramChatStickerSetsTable.seenCount] }
     }
 
     private suspend fun describedCatalogFor(chatId: Long): DescribedCatalog = dbTransaction {

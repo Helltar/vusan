@@ -522,10 +522,11 @@ A normal user message travels:
   pull in more than three new sets a day, and the bot as a whole no more than six, so the worst day is bounded whatever
   the number of chats. None of the gates applies to a set already known from elsewhere, which costs nothing to offer.
   `STICKERS_ENABLED=false` leaves the catalog out entirely, vision or not. A background worker then describes each sticker's thumbnail once through the vision model and caches the result
-  by `file_unique_id`. `TurnSurroundings` puts at most 16 ready-to-send entries into the current user turn, and an initiative look
-  is shown the same block: recently used
-  individual stickers first, then frequent ones, with spare room filled round-robin across every described set the chat
-  knows. A group that forbids stickers gets no index at all, matching the catalog: the tools are gated on the same
+  by `file_unique_id`. `TurnSurroundings` puts 24 ready-to-send entries into the current user turn, and an initiative look is shown
+  the same block: six stickers the chat itself reached for lately, then a draw from everything the chat's sets hold, a
+  set the chat uses often weighing more. The draw is fresh for every turn — the block rides in the user turn, outside the
+  cached prefix — and leaves out what the bot sent there lately, which `TelegramDelivery` reports back to the catalog
+  and the catalog keeps in memory. A group that forbids stickers gets no index at all, matching the catalog: the tools are gated on the same
   capability, so a shortlist there would be an offer with no tool behind it. `searchStickers` searches the descriptions
   and emoji across that full chat-scoped collection, while `sendSticker` accepts only an id belonging to it and resends
   the matching `file_id`. Without a vision runtime the catalog is never constructed and neither tool is registered,

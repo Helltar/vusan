@@ -3,6 +3,7 @@ package com.helltar.vusan.telegram.tools.sticker
 import com.helltar.vusan.config.AppConfig
 import com.helltar.vusan.config.LlmProviderConfig
 import com.helltar.vusan.infra.Db
+import com.helltar.vusan.infra.tables.TelegramChatStickerSetsTable
 import com.helltar.vusan.infra.tables.TelegramChatStickersTable
 import com.helltar.vusan.infra.tables.TelegramStickerSetsTable
 import com.helltar.vusan.infra.tables.TelegramStickersTable
@@ -18,6 +19,7 @@ import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.withTimeout
+import kotlin.random.Random
 import org.jetbrains.exposed.v1.core.eq
 import org.jetbrains.exposed.v1.jdbc.select
 import org.jetbrains.exposed.v1.jdbc.selectAll
@@ -181,63 +183,96 @@ class StickerCatalogTest {
     }
 
     @Test
-    fun `every set the chat uses is represented in the index`() = runBlocking {
+    fun `the index draws from every set the chat uses, not only the front of the list`() = runBlocking {
         val packs = listOf("pack_one", "pack_two", "pack_three")
         val client = FakeStickerClient(setOf = emptyList())
-        val catalog = catalog(client, visionAnswer = "penguin waving")
+        val catalog = catalog(client, visionAnswer = "unused")
 
         packs.forEach { pack ->
-            client.setOf = (1..2).map { sticker("$pack-$it", set = pack) }
+            client.setOf = (1..20).map { sticker("$pack-$it", set = pack) }
             catalog.learn(sticker("$pack-1", set = pack))
         }
 
-        awaitDescriptionPass(catalog)
+        describeStored { "penguin waving" }
 
-        val index = assertNotNull(catalog.indexBlockFor(testChat(CHAT)))
-        val shown = shownIds(index).map { setNameOf(it) }.toSet()
+        val shown = shownIds(assertNotNull(catalog.indexBlockFor(testChat(CHAT))))
 
-        // how the index is shared once it overflows is pinned by RoundRobinTest, which does not
-        // have to wait on a vision pass per sticker
-        assertEquals(packs.toSet(), shown)
+        assertEquals(24, shown.size)
+        assertEquals(packs.toSet(), shown.map { setNameOf(it) }.toSet())
+    }
+
+    // the block rides in the user turn, outside the cached prefix, so a fresh draw per turn costs nothing
+    @Test
+    fun `the index is drawn afresh, so two turns see different stickers`() = runBlocking {
+        val stickers = (1..60).map { sticker("a$it") }
+        val client = FakeStickerClient(setOf = stickers)
+        val catalog = catalog(client, visionAnswer = "unused")
+
+        catalog.learn(stickers.first())
+        describeStored { "penguin waving" }
+
+        val first = shownIds(assertNotNull(catalog.indexBlockFor(testChat(CHAT))))
+        val second = shownIds(assertNotNull(catalog.indexBlockFor(testChat(CHAT))))
+
+        assertEquals(24, first.size)
+        assertTrue(first.toSet() != second.toSet(), "two draws: $first / $second")
     }
 
     @Test
-    fun `the short index keeps a frequently used sticker ahead of arbitrary set entries`() = runBlocking {
-        val stickers = (1..20).map { sticker("a$it") }
+    fun `what the chat just used is in the index, what the bot sent lately is not`() = runBlocking {
+        val stickers = (1..60).map { sticker("a$it") }
         val client = FakeStickerClient(setOf = stickers)
         val catalog = catalog(client, visionAnswer = "unused")
 
         catalog.learn(stickers.first())
         catalog.observe(CHAT, stickers.last())
-        describeStored { uniqueId -> "description for $uniqueId" }
+        describeStored { "penguin waving" }
 
-        Db.dbTransaction {
-            TelegramChatStickersTable.update({ TelegramChatStickersTable.fileUniqueId eq stickers.last().fileUniqueId }) {
-                it[seenCount] = 50
-                it[lastSeenAt] = Instant.EPOCH
-            }
+        val justUsed = stickerId(stickers.last().fileUniqueId)
+        assertTrue(justUsed in shownIds(assertNotNull(catalog.indexBlockFor(testChat(CHAT)))))
+
+        catalog.recordSent(CHAT, justUsed)
+        val afterSending = shownIds(assertNotNull(catalog.indexBlockFor(testChat(CHAT))))
+
+        assertEquals(24, afterSending.size)
+        assertTrue(justUsed !in afterSending)
+    }
+
+    @Test
+    fun `a set the chat reaches for often is drawn more than one it barely uses`() = runBlocking {
+        val client = FakeStickerClient(setOf = emptyList())
+        val catalog = catalog(client, visionAnswer = "unused")
+
+        listOf("popular", "rare").forEach { pack ->
+            client.setOf = (1..60).map { sticker("$pack-$it", set = pack) }
+            catalog.learn(sticker("$pack-1", set = pack))
         }
 
-        val index = assertNotNull(catalog.indexBlockFor(testChat(CHAT)))
-        val shown = shownIds(index)
+        describeStored { "penguin waving" }
+        Db.dbTransaction {
+            TelegramChatStickerSetsTable.update({ TelegramChatStickerSetsTable.setName eq "popular" }) { it[seenCount] = 50 }
+            TelegramChatStickerSetsTable.update({ TelegramChatStickerSetsTable.setName eq "rare" }) { it[seenCount] = 1 }
+        }
 
-        assertEquals(16, shown.size)
-        assertTrue(stickerId(stickers.last().fileUniqueId) in shown, index)
+        val drawn = (1..10).flatMap { shownIds(assertNotNull(catalog.indexBlockFor(testChat(CHAT)))) }.map { setNameOf(it) }
+
+        assertTrue(drawn.count { it == "popular" } > drawn.count { it == "rare" } * 3, drawn.groupingBy { it }.eachCount().toString())
     }
 
     @Test
     fun `sticker search reaches past the short index and stays scoped to the chat`() = runBlocking {
-        val stickers = (1..20).map { sticker("a$it") }
+        val stickers = (1..60).map { sticker("a$it") }
         val client = FakeStickerClient(setOf = stickers)
         val catalog = catalog(client, visionAnswer = "unused")
 
         catalog.learn(stickers.first())
-        describeStored { uniqueId ->
-            if (uniqueId == stickers.last().fileUniqueId) "sleepy fox refusing to wake up" else "penguin waving"
-        }
+        describeStored { "penguin waving" }
 
-        val hiddenId = stickerId(stickers.last().fileUniqueId)
-        assertTrue(hiddenId !in shownIds(assertNotNull(catalog.indexBlockFor(testChat(CHAT)))))
+        // whatever this draw left out is what search has to reach
+        val shown = shownIds(assertNotNull(catalog.indexBlockFor(testChat(CHAT))))
+        val hidden = stickers.first { stickerId(it.fileUniqueId) !in shown }
+        val hiddenId = stickerId(hidden.fileUniqueId)
+        describeStored { uniqueId -> if (uniqueId == hidden.fileUniqueId) "sleepy fox refusing to wake up" else "penguin waving" }
 
         val tools = StickerTools(catalog, requestContext(chatId = CHAT), BotOutbox())
         val result = tools.searchStickers("sleepy fox")
@@ -363,7 +398,7 @@ class StickerCatalogTest {
     }
 
     private fun catalog(client: FakeStickerClient, visionAnswer: String) =
-        StickerCatalog(client.proxy, ImageVisionClient(FakeLlmClient(visionAnswer), TEST_MODEL, RequestOptions()))
+        StickerCatalog(client.proxy, ImageVisionClient(FakeLlmClient(visionAnswer), TEST_MODEL, RequestOptions()), Random(1))
 
     // the worker is the production entry point; one pass is done once no sticker is waiting on vision.
     private suspend fun awaitDescriptionPass(catalog: StickerCatalog) =

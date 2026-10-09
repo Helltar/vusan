@@ -137,12 +137,15 @@ private fun Attribution.headerText(messages: Messages): String =
  * [onStickerRejected] is told the catalog id of a sticker Telegram would not accept. It is a hint, not
  * a verdict: the catalog schedules an early re-read of that set rather than deleting anything here,
  * because a send can fail for reasons that say nothing about the sticker (restricted chat, rate limit).
+ * [onStickerSent] is told the chat and catalog id of every sticker that did go out, which is how the
+ * catalog keeps the shortlist from offering the same one again soon.
  */
 class TelegramDelivery(
     private val client: TelegramClient,
     private val onStickerRejected: (suspend (Long) -> Unit)? = null,
     private val groupLog: GroupLogRepository? = null,
     private val polls: PollRegistry? = null,
+    private val onStickerSent: ((chatId: Long, catalogId: Long) -> Unit)? = null,
 ) : OutputDelivery {
 
     private data class DeliveryTarget(val chat: ChatTarget, val replyToMessageId: Long? = null) {
@@ -444,12 +447,14 @@ class TelegramDelivery(
     ): ItemDeliveryOutcome {
         try {
             sendOutgoing(deliveryTarget, item, caption, messages, pollRegistry)
+            noteStickerSent(item, deliveryTarget)
             return ItemDeliveryOutcome.Ok
         } catch (e: Throwable) {
             e.rethrowIfCancellation()
 
             if (!routedToPrivate && deliveryTarget.replyToMessageId != null && e.isReplyMessageNotFound()) {
                 runCatching { sendOutgoing(currentChatTarget, item, caption, messages, pollRegistry) }
+                    .onSuccess { noteStickerSent(item, currentChatTarget) }
                     .onFailure { retryError ->
                         retryError.rethrowIfCancellation()
 
@@ -516,6 +521,10 @@ class TelegramDelivery(
             it.rethrowIfCancellation()
             log.warn(it) { "failed to record a bot message in the chat log for chat=$chatId" }
         }
+    }
+
+    private fun noteStickerSent(item: BotOutput, target: DeliveryTarget) {
+        if (item is BotOutput.Sticker) onStickerSent?.invoke(target.chatId, item.catalogId)
     }
 
     private suspend fun reportRejectedSticker(catalogId: Long) {

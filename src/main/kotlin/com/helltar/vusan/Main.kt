@@ -209,7 +209,11 @@ suspend fun main() = coroutineScope {
         // nothing to record them into and no reason to remember the polls either.
         val polls = groupLog?.let { PollRegistry() }
 
-        val delivery = TelegramDelivery(telegramClient, stickerCatalog?.let { it::recheckSetOf }, groupLog, polls)
+        val delivery =
+            TelegramDelivery(
+                telegramClient, stickerCatalog?.let { it::recheckSetOf }, groupLog, polls,
+                onStickerSent = stickerCatalog?.let { it::recordSent },
+            )
         val voiceTranscriber = createVoiceTranscriber(http, config)
         val chatProfiles = ChatProfiles(telegramClient, botProfile.userId)
         val taskMenu = TaskMenuHandler(telegramClient, tasks, TasksRepository.MAX_TASKS_PER_USER)
