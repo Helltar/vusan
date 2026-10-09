@@ -120,6 +120,31 @@ class RequestContextBlockTest {
     private fun promptWithPreviousExchange(ago: Duration): String =
         context().toPromptBlock(previousExchangeAt = Instant.now().minus(ago))
 
+    // a message that waited behind the person's previous turn reads, in history, as if it came after the
+    // reply that turn delivered.
+    @Test
+    fun `a message written before the previous reply reached the chat says so`() {
+        val prompt =
+            context(writtenAt = Instant.now().minus(Duration.ofMinutes(7)))
+                .toPromptBlock(previousExchangeAt = Instant.now().minusSeconds(1))
+
+        assertTrue(prompt.contains("Timing:\n- before_your_last_reply: the sender wrote this while you were still working"))
+    }
+
+    @Test
+    fun `a message written after the previous reply has no timing line`() {
+        val prompt =
+            context(writtenAt = Instant.now().minusSeconds(1))
+                .toPromptBlock(previousExchangeAt = Instant.now().minus(Duration.ofMinutes(7)))
+
+        assertFalse(prompt.contains("Timing:"))
+    }
+
+    @Test
+    fun `a turn no message started has no timing line`() {
+        assertFalse(context().toPromptBlock(previousExchangeAt = Instant.now()).contains("Timing:"))
+    }
+
     @Test
     fun `a message nobody tagged the bot in says so`() {
         val chat = ChatContext(id = "-100", isPrivate = false)
@@ -132,5 +157,6 @@ class RequestContextBlockTest {
         chat: ChatContext = ChatContext(id = "1", isPrivate = true),
         sender: SenderContext = SenderContext(id = "2"),
         ambient: Boolean = false,
-    ) = RequestContext(platform = Platform.TELEGRAM, chat = chat, sender = sender, ambient = ambient)
+        writtenAt: Instant? = null,
+    ) = RequestContext(platform = Platform.TELEGRAM, chat = chat, sender = sender, ambient = ambient, writtenAt = writtenAt)
 }

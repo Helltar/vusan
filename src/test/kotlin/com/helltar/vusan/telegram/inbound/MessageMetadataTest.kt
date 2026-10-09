@@ -4,6 +4,7 @@ import com.fasterxml.jackson.databind.ObjectMapper
 import com.helltar.vusan.i18n.Language
 import com.helltar.vusan.request.ChatCapabilities
 import com.helltar.vusan.request.ChatProfile
+import java.time.Instant
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFalse
@@ -303,6 +304,12 @@ class MessageMetadataTest {
         assertEquals(Language.ENGLISH, message("""$sender, "text": "where are you"""").language)
         assertEquals(Language.ENGLISH, message(sender).language)
         assertEquals(Language.DEFAULT, message(""""text": "where are you"""").language)
+    }
+
+    @Test
+    fun `a message is written at its last edit`() {
+        assertEquals(Instant.ofEpochSecond(1774000000), message().writtenAt)
+        assertEquals(Instant.ofEpochSecond(1774000090), message(""""edit_date": 1774000090""").writtenAt)
     }
 
     private fun messageIn(chat: String): Message = message(chat = chat)

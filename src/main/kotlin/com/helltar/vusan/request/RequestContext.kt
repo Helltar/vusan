@@ -1,6 +1,7 @@
 package com.helltar.vusan.request
 
 import com.helltar.vusan.i18n.Language
+import java.time.Instant
 
 /**
  * The conversation a turn is happening in: what identifies it, what it is, and what it currently lets
@@ -73,6 +74,11 @@ data class RequestContext(
      * turned away without a word when the conversation has no room for it.
      */
     val ambient: Boolean = false,
+    /**
+     * When the sender wrote the message being answered — its last edit, if it was edited — or `null`
+     * when nothing sent one. A turn may start long after it, behind the person's previous turn.
+     */
+    val writtenAt: Instant? = null,
 ) {
 
     /**

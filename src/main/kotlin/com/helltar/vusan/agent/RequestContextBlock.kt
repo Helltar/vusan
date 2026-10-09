@@ -40,6 +40,17 @@ internal fun RequestContext.toPromptBlock(previousExchangeAt: Instant? = null): 
             sender.languageCode?.asMetadataValue()?.let { add("- client_language: $it") }
             previousExchangeAt?.let(::elapsedSinceOrNull)?.let { add("- last_exchange: $it") }
 
+            // history alone puts the message after that reply, which is the one order it was not written in.
+            if (writtenBefore(previousExchangeAt)) {
+                add("")
+                add("Timing:")
+                add(
+                    "- before_your_last_reply: the sender wrote this while you were still working on the last " +
+                            "exchange in your history, and your reply reached the chat only after it, so they had " +
+                            "not seen that reply yet",
+                )
+            }
+
             if (ambient) {
                 add("")
                 add("Addressing:")
@@ -65,6 +76,12 @@ private fun elapsedSinceOrNull(previous: Instant): String? {
         else -> "over a year ago"
     }
 }
+
+// the previous exchange is stored when its turn ends, so a message written before that waited behind it.
+// a messenger's dates may be whole seconds: a message written within a second after the reply counts as
+// well, and its author could not have read that reply either.
+private fun RequestContext.writtenBefore(previousExchangeAt: Instant?): Boolean =
+    writtenAt != null && previousExchangeAt != null && previousExchangeAt.isAfter(writtenAt)
 
 private fun Long.agoIn(unit: String): String =
     "$this $unit${if (this == 1L) "" else "s"} ago"

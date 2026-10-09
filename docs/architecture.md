@@ -231,8 +231,11 @@ A normal user message travels:
    and places it with `<message_context>` immediately before the current request in one user-role turn. That
    metadata also carries
    `last_exchange` — how long ago this user last spoke with Vusan in this chat — but only once the gap is long enough to
-   be worth noticing, so ordinary back-and-forth stays free of it. In a group the turn also carries `<recent_chat>`: a
-   hard-capped slice of what the chat was saying just before, so a question with no subject ("and what do you think?")
+   be worth noticing, so ordinary back-and-forth stays free of it. When the message was written before that exchange
+   was stored — it waited in the line behind the turn that produced it — the metadata also carries
+   `before_your_last_reply` (from `RequestContext.writtenAt`): replayed history alone puts the message after a reply its
+   author had not seen yet, and the agent answers it again instead of letting that reply stand. In a group the turn
+   also carries `<recent_chat>`: a hard-capped slice of what the chat was saying just before, so a question with no subject ("and what do you think?")
    still has one, and — where the deployment keeps a [diary](#background-and-side-flows) — `<diary>`, the bot's own
    entries about the chat's last three written-up days. `<recent_chat>` leaves out the triggering message and this user's own exchanges with the bot, both of which the
    prompt already carries — the first as the request itself, the second as replayed `user`/`assistant` turns. Other

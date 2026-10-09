@@ -34,6 +34,7 @@ import com.helltar.vusan.telegram.inbound.replySummaryOrNull
 import com.helltar.vusan.telegram.inbound.replyToMessageIdOrNull
 import com.helltar.vusan.telegram.inbound.toChatContext
 import com.helltar.vusan.telegram.inbound.toSenderContext
+import com.helltar.vusan.telegram.inbound.writtenAt
 import io.github.oshai.kotlinlogging.KotlinLogging
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.NonCancellable
@@ -127,6 +128,7 @@ internal class AgentTurns(
                         attachedFiles = attachedFiles,
                         language = message.language,
                         ambient = ambient,
+                        writtenAt = message.writtenAt,
                     ),
                 prompt = agentInput,
                 conversationEntry = conversationInput,

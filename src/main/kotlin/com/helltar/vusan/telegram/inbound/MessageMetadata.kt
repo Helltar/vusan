@@ -12,6 +12,7 @@ import org.telegram.telegrambots.meta.api.objects.message.Message
 import org.telegram.telegrambots.meta.api.objects.messageorigin.*
 import org.telegram.telegrambots.meta.api.objects.photo.PhotoSize
 import org.telegram.telegrambots.meta.api.objects.stickers.Sticker
+import java.time.Instant
 
 private const val MAX_METADATA_VALUE_CHARS = 500
 
@@ -27,6 +28,10 @@ internal val Message.chatIdLong: Long
 
 internal val Message.messageIdLong: Long
     get() = messageId.toLong()
+
+// an edit rewrote the text, so the edit is when the words being answered were written.
+internal val Message.writtenAt: Instant?
+    get() = (editDate ?: date)?.let { Instant.ofEpochSecond(it.toLong()) }
 
 /**
  * The forum topic this message is in, or `null` when it is not in one.
