@@ -392,8 +392,9 @@ private fun logStartup(
     when {
         reference != null ->
             log.info {
-                "Self-portrait: source=[${if (config.selfImageFile != null) "SELF_IMAGE_FILE" else "avatar"}] " +
-                        "name=[${reference.filename}] bytes=[${reference.bytes.size}]"
+                val source = config.selfImageFile?.let { "file=[$it]" } ?: "avatar=[${reference.filename}]"
+
+                "Self-portrait: $source bytes=[${reference.bytes.size}]"
             }
 
         selfImage != null -> log.info { "Self-portrait: appearance only — no reference photo" }
