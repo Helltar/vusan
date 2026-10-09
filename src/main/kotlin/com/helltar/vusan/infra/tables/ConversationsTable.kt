@@ -17,7 +17,7 @@ object ConversationsTable : Table("conversations") {
     val revision = long("revision").default(0)
 
     // the recap standing in for the turns compacted away; null until there is one, and again after a
-    // clear. a clear keeps the revision: it counts wipes, and it must never go backwards.
+    // clear. a clear keeps the revision: it counts wipes, and it must never go backward.
     val summary = text("summary").nullable()
 
     // the last message the summary covers, `0` when there is none. a watermark rather than a foreign

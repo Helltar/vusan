@@ -48,7 +48,7 @@ data class RequestOptions(
      * means busy chats evict each other; a key per conversation gives each its own window. The
      * conversation is hashed rather than named: the key only routes a request, a collision costs
      * nothing because a read still needs an exact prefix match, and a messenger's user id has no
-     * business travelling to a provider. Options without a key keep none.
+     * business traveling to a provider. Options without a key keep none.
      */
     fun forConversation(conversation: String): RequestOptions =
         promptCacheKey?.let { copy(promptCacheKey = "$it-${conversation.hashCode().toUInt().toString(HEX_RADIX)}") } ?: this

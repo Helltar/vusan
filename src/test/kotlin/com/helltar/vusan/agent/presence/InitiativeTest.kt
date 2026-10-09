@@ -286,7 +286,7 @@ class InitiativeTest {
     }
 
     @Test
-    fun `a chat that turned the bot away is left alone afterwards`() = runBlocking {
+    fun `a chat that turned the bot away is left alone afterward`() = runBlocking {
         val delivery = FakeDelivery(outcome = DeliveryOutcome.Unreachable)
         val mind = FakeMind(InitiativeDecision.Say("the ferry is the better plan"))
         val initiative = initiative(mind, delivery)

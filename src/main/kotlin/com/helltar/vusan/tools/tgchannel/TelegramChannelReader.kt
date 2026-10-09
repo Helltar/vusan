@@ -18,7 +18,7 @@ import kotlin.time.Duration
 /**
  * Reads a public channel's posts, optionally only those inside a time window or matching a search.
  *
- * One preview page carries twenty posts, so anything wider walks `?before=` backwards: with a window
+ * One preview page carries twenty posts, so anything wider walks `?before=` backward: with a window
  * until a page ends older than the cutoff, otherwise until enough posts are in hand or Telegram stops
  * offering an earlier batch. A day of a very busy channel is about five requests.
  *
@@ -237,7 +237,7 @@ class TelegramChannelReader(
         }
 
     // the count above the block covers every post the walk kept, while the block under it may hold
-    // fewer; labelling it keeps "how many did they post" off a tally of visible entries.
+    // fewer; labeling it keeps "how many did they post" off a tally of visible entries.
     private fun header(
         reference: TelegramChannelReference,
         walk: Walk,

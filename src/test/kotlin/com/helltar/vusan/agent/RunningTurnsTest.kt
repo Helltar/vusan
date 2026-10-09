@@ -12,7 +12,7 @@ import kotlin.test.assertTrue
 class RunningTurnsTest {
 
     @Test
-    fun `a running turn is cancelled by its key, and the block unwinds`() = runBlocking {
+    fun `a running turn is canceled by its key, and the block unwinds`() = runBlocking {
         val turns = RunningTurns<String>()
         val started = CompletableDeferred<Unit>()
         var cleanedUp = false

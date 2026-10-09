@@ -15,7 +15,7 @@ import org.telegram.telegrambots.meta.generics.TelegramClient
 /**
  * Where a pressed button goes. Every flow validates the same three things — the query carries a message,
  * the presser is allowed here, and the button is one this build still knows — before its own handler gets
- * it; what differs afterwards is that a task-menu action and a stop are answered on the spot, while an
+ * it; what differs afterward is that a task-menu action and a stop are answered on the spot, while an
  * inline choice becomes the user's next agent turn.
  */
 internal class CallbackRouter(

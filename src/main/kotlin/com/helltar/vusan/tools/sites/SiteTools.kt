@@ -16,7 +16,7 @@ private const val MAX_PATH_CHARS = 400
  * Putting what someone built in their sandbox on the public internet.
  *
  * Publishing is a snapshot the Regolith server takes of one directory: the files leave the sandbox
- * at that moment and the site stays as it was, whatever happens in the sandbox afterwards.
+ * at that moment and the site stays as it was, whatever happens in the sandbox afterward.
  */
 class SiteTools(
     // the turn's own handle: the files come from the sandbox its commands ran in

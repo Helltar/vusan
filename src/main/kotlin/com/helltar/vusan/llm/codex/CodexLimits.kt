@@ -70,7 +70,7 @@ class CodexLimits {
         }
     }
 
-    /** Counts one model call's tokens towards the next step. */
+    /** Counts one model call's tokens toward the next step. */
     fun countCall(inputTokens: Long, cachedInputTokens: Long, outputTokens: Long) {
         synchronized(this) {
             spent =
@@ -83,7 +83,7 @@ class CodexLimits {
         }
     }
 
-    /** Counts one picture drawn or edited through the subscription towards the next step. */
+    /** Counts one picture drawn or edited through the subscription toward the next step. */
     fun countImage() {
         synchronized(this) { spent = spent.copy(images = spent.images + 1) }
     }

@@ -263,7 +263,7 @@ internal class TurnStatus(
         statusMessageText(announcement, label, fallbackInUse()?.let { messages.fallbackModelNote(it.model, it.primaryBackIn) })
 
     // a write in flight when the turn ends must still finish. `/stop`, or simply the turn being over,
-    // cancels the collector this runs in, and a send cancelled mid-flight can still have created the
+    // cancels the collector this runs in, and a send canceled mid-flight can still have created the
     // message — leaving an id nobody holds and a status bubble nothing will ever take down.
     private suspend fun push(text: String): String =
         withContext(NonCancellable) {

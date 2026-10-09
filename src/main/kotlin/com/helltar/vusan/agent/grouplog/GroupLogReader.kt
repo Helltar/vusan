@@ -198,7 +198,7 @@ class GroupLogReader(
             ?: "No messages recorded between ${stamp(from)} and ${stamp(now)}."
 
     // the count spans the whole window while the transcript under it may be a subset, so the number
-    // is labelled as the exact one. without that a "how many" answer becomes a tally of visible lines.
+    // is labeled as the exact one. without that a "how many" answer becomes a tally of visible lines.
     private fun header(from: Instant, now: Instant, total: Long, author: String?): String =
         buildString {
             append("Chat log for this group.")

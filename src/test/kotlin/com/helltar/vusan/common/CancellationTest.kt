@@ -15,7 +15,7 @@ import kotlin.test.assertNull
 import kotlin.test.assertTrue
 
 /**
- * Rethrowing what must not be swallowed, and running a block where being cancelled is somebody's
+ * Rethrowing what must not be swallowed, and running a block where being canceled is somebody's
  * decision rather than the end of the caller.
  *
  * [runInOwnJob] is written for the shape the task scheduler fires in: a loop that has more to do, and

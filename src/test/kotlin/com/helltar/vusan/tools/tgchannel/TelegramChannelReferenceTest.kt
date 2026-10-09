@@ -15,7 +15,7 @@ class TelegramChannelReferenceTest {
     }
 
     @Test
-    fun `webPreviewUrl carries the search and the backwards cursor`() {
+    fun `webPreviewUrl carries the search and the backward cursor`() {
         val reference = TelegramChannelReference.parse("example_channel")
 
         assertEquals("https://t.me/s/example_channel", reference.webPreviewUrl())

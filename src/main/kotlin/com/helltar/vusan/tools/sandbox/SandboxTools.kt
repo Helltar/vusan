@@ -312,7 +312,7 @@ private fun describeCommand(result: CommandResult): String = buildString {
     when (result.status) {
         CommandStatus.RUNNING -> appendLine("The command is still running. Read it again with readSandboxCommand.")
         CommandStatus.TIMED_OUT -> appendLine("It ran past its time limit and was stopped; files were kept.")
-        CommandStatus.CANCELLED -> appendLine("It was cancelled with every process it started; files were kept.")
+        CommandStatus.CANCELED -> appendLine("It was canceled with every process it started; files were kept.")
         CommandStatus.INTERRUPTED ->
             appendLine("The sandbox stopped under it (${result.reason ?: "reason unknown"}); files were kept. Check the project before retrying.")
         else -> Unit

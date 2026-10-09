@@ -62,7 +62,7 @@ private const val MAX_STICKERS_PER_SET = 60
 // the prompt keeps a small ready-to-send selection; the search tool reaches the full chat catalog
 // when none of these fits. a few slots go to what the chat itself reached for lately, the rest is
 // drawn afresh for every turn from everything the chat's sets hold, a set the chat uses often weighing
-// more — so two turns see different stickers and the bot's taste is not the group's favourites. what
+// more — so two turns see different stickers and the bot's taste is not the group's favorites. what
 // the bot itself sent lately is left out, so it cannot keep reaching for the same one.
 private const val MAX_INDEX_ENTRIES = 24
 private const val RECENT_INDEX_ENTRIES = 6

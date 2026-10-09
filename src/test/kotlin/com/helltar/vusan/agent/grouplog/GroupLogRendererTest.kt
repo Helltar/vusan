@@ -56,7 +56,7 @@ class GroupLogRendererTest {
     }
 
     @Test
-    fun `a bot row is labelled bot and does not stutter its descriptor`() {
+    fun `a bot row is labeled bot and does not stutter its descriptor`() {
         val text = entry(text = "done", kind = GroupLogEntry.BOT_KIND, username = null, name = null)
         val media = entry(text = null, kind = GroupLogEntry.BOT_KIND, descriptor = "photo", username = null, name = null)
 

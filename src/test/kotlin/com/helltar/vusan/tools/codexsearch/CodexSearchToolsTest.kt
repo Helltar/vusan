@@ -59,13 +59,13 @@ class CodexSearchToolsTest {
                         content.let { checkNotNull(it) }.jsonArray[0].jsonObject["text"]?.jsonPrimitive?.content,
                     )
 
-                    respondStream(SEARCH_CALL, message("It is 40 metres tall."))
+                    respondStream(SEARCH_CALL, message("It is 40 meters tall."))
                 },
             )
 
         val result = tools(http).answerFromWeb("  how tall is the lighthouse ")
 
-        assertContains(result, "<web_answer>\nIt is 40 metres tall.\n</web_answer>")
+        assertContains(result, "<web_answer>\nIt is 40 meters tall.\n</web_answer>")
     }
 
     @Test
@@ -91,7 +91,7 @@ class CodexSearchToolsTest {
 
     @Test
     fun `an answer written without a search is a failure`() = runBlocking {
-        val http = Http.createClient(MockEngine { respondStream(message("Probably 40 metres.")) })
+        val http = Http.createClient(MockEngine { respondStream(message("Probably 40 meters.")) })
 
         val failure = toolFailure { tools(http).answerFromWeb("how tall is the lighthouse") }
 

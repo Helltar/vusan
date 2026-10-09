@@ -98,7 +98,7 @@ class ToolSetTest {
     }
 
     @Test
-    fun `a number spelt as text and a text spelt as a number are both read`() = runBlocking {
+    fun `a number spelled as text and a text spelled as a number are both read`() = runBlocking {
         assertEquals("Tea? a|b false 3", tool("createPoll").call(args("""{"question":"Tea?","options":["a","b"],"isAnonymous":"false","maxVotes":"3"}""")))
         assertEquals("5 7 none", tool("lookUp").call(args("""{"query":5,"limit":7}""")))
     }

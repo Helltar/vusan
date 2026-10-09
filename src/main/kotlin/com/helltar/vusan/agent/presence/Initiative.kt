@@ -146,7 +146,7 @@ class Initiative(
         val entries = groupLog.recent(chat, CONTEXT_LINES, since = now - CONTEXT_MAX_AGE)
 
         // a line of its own is proof it was here, whoever that line was for: what stands above it has
-        // been read, and reacting to it afterwards looks like noticing a message it already answered past
+        // been read, and reacting to it afterward looks like noticing a message it already answered past
         val seenUntil =
             entries.filterNot { it.isFromPerson }.maxOfOrNull { it.sentAt }
                 ?.takeIf { it.isAfter(state.lastLookAt) }

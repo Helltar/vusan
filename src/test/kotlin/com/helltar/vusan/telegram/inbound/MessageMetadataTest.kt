@@ -18,7 +18,7 @@ import org.telegram.telegrambots.meta.api.objects.stickers.Sticker
 class MessageMetadataTest {
 
     @Test
-    fun `each chat flavour gets its own prompt label`() {
+    fun `each chat flavor gets its own prompt label`() {
         assertEquals("private", messageIn("""{"id": 5, "type": "private"}""").promptChatType())
         assertEquals("group", messageIn("""{"id": -100, "type": "group"}""").promptChatType())
         assertEquals("supergroup", messageIn("""{"id": -100, "type": "supergroup"}""").promptChatType())
@@ -112,9 +112,9 @@ class MessageMetadataTest {
     @Test
     fun `an audio track is named by its artist and title, and by its length when it has neither`() {
         assertEquals(
-            "Marta Vane - Slow Harbour",
+            "Marta Vane - Slow Harbor",
             message(""""audio": {"file_id": "a", "file_unique_id": "au", "duration": 200,
-                "performer": "Marta Vane", "title": "Slow Harbour"}""").groupLogDescriptor()
+                "performer": "Marta Vane", "title": "Slow Harbor"}""").groupLogDescriptor()
         )
 
         assertEquals(
@@ -182,7 +182,7 @@ class MessageMetadataTest {
     }
 
     @Test
-    fun `an external reply is summarised by its media, then its story or poll`() {
+    fun `an external reply is summarized by its media, then its story or poll`() {
         assertEquals("video", externalReply(""""video": {"file_id": "v", "file_unique_id": "vu"}""").summaryTypeNameOrNull())
         assertEquals("story", externalReply(""""story": {"id": 3, "chat": {"id": -100, "type": "channel"}}""").summaryTypeNameOrNull())
         assertEquals("poll", externalReply(""""poll": {"id": "p", "question": "Tea or coffee?"}""").summaryTypeNameOrNull())

@@ -182,7 +182,7 @@ class TaskScheduler(
         val request = scheduledAgentRequest(task, attempt, chatProfileFor(task))
 
         // `/stop` ends a turn by naming its conversation, and a fire runs under the same name as the
-        // user's own turns there. without a job of its own to be cancelled, the coroutine the stop
+        // user's own turns there. without a job of its own to be canceled, the coroutine the stop
         // reaches is the scheduler's loop, and every later task with it.
         return runInOwnJob { deliverTurn(task, request) } ?: FireOutcome.Stopped
     }

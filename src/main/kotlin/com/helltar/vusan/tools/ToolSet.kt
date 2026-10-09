@@ -52,7 +52,7 @@ interface ToolSet
  * it with the arguments the model sent.
  *
  * Arguments are decoded from the JSON the model wrote by the method's own parameter types: text, whole
- * and decimal numbers, booleans and lists of text, each tolerant of a number spelt as text. A parameter
+ * and decimal numbers, booleans and lists of text, each tolerant of a number spelled as text. A parameter
  * with a default value or a nullable type is optional for the model; a missing required one, or a value
  * of the wrong shape, is an [IllegalArgumentException] the agent answers the call with.
  */

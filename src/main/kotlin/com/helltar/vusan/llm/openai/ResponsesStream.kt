@@ -20,7 +20,7 @@ private const val SSE_DATA_PREFIX = "data:"
  * as they arrive and spliced back in. Everything the agent depends on rides in those items: assistant
  * text, tool calls, and the reasoning items a tool loop has to echo back. An incomplete stream is a
  * response cut short — by the output ceiling or a content filter — and folds like a completed one, its
- * `incomplete_details` saying why; a failed or cancelled stream is an error rather than an empty reply.
+ * `incomplete_details` saying why; a failed or canceled stream is an error rather than an empty reply.
  */
 class ResponsesStreamFolder(private val label: String) {
 

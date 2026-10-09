@@ -51,7 +51,7 @@ class AppConfigTest {
     }
 
     @Test
-    fun `a boolean spelt some other way never reads as the default`() {
+    fun `a boolean spelled some other way never reads as the default`() {
         // silently defaulting here left the group transcript recording after it was asked to stop
         listOf("0", "1", "no", "yes", "off", "on", "disabled").forEach { raw ->
             val failure = assertFailsWith<IllegalStateException> { parseBooleanEnv("GROUP_LOG_ENABLED", raw) }

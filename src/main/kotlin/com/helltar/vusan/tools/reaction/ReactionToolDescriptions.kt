@@ -4,7 +4,7 @@ internal object ReactionToolDescriptions {
 
     const val SET_REACTION =
         """Sets a Telegram reaction (an emoji "like") on a message in the current chat. """ +
-                "Use this instead of `sendMessage` when a short emotional acknowledgement is more natural than a textual reply (jokes, cute photos, mild surprise, agreement, sympathy) — a reaction does not produce a message in the chat, it only attaches an emoji to the target message. " +
+                "Use this instead of `sendMessage` when a short emotional acknowledgment is more natural than a textual reply (jokes, cute photos, mild surprise, agreement, sympathy) — a reaction does not produce a message in the chat, it only attaches an emoji to the target message. " +
                 "Always pass the `emoji` argument — there is no default emoji and the call fails without it. " +
                 "Target resolution: by default the reaction goes on the user's own current message. " +
                 """Set `targetRepliedMessage` to `true` when the user is replying to someone and wants that earlier message reacted to (e.g. the user replies to someone's joke and writes "react to it"). """ +

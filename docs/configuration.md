@@ -304,7 +304,7 @@ still working starts with the previous answer already known. Up to three wait th
 told to hold on.
 
 `MAX_CONCURRENT_TURNS` is the other half: how many *different* people Vusan serves at once. Waiting
-messages do not count towards it. Every request is a model
+messages do not count toward it. Every request is a model
 call with whatever tools it decides to run, so the number to match is what your provider accepts at
 once, not what the machine could hold.
 

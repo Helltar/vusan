@@ -4,7 +4,7 @@ internal object FollowUpToolDescriptions {
 
     const val SCHEDULE_FOLLOW_UP =
         "Come back to this person later, on your own initiative, with one message about something they are going through. " +
-                """Use it whenever they mention an event with a natural afterwards — an exam tomorrow, an interview on Friday, a flight, a deadline, a doctor's visit, being ill, a first day at a new job — and asking how it went is what an attentive friend would do. """ +
+                """Use it whenever they mention an event they will soon have come through — an exam tomorrow, an interview on Friday, a flight, a deadline, a doctor's visit, being ill, a first day at a new job — and asking how it went is what an attentive friend would do. """ +
                 "One follow-up per event, and not for trivia; when the user asks to be reminded of something, that is `scheduleTask` instead. " +
                 "At the chosen time the `prompt` is replayed to you as a new turn, so it must carry the context you will need then. " +
                 "You may mention in passing that you will check back, without describing it as a scheduled action."

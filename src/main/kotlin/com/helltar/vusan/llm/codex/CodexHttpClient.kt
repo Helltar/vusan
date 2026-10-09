@@ -51,7 +51,7 @@ fun codexRequestHeaders(credentials: CodexCredentials): Map<String, String> =
 
 /**
  * What the CLI tells the backend to route a turn on: the model, plus the serving tier when one is asked
- * for. The tier is honoured without it today — it travels in the request body — but this is how Codex
+ * for. The tier is honored without it today — it travels in the request body — but this is how Codex
  * itself asks, and on this endpoint matching the CLI is what keeps working.
  */
 internal fun codexRoutingHint(model: String, serviceTier: String?): String =
@@ -108,7 +108,7 @@ internal fun codexSessionId(requestBody: Any): String? {
 private fun sessionIdOf(cacheKey: String): String = UUID.nameUUIDFromBytes(cacheKey.toByteArray()).toString()
 
 /**
- * What is done with every completed Codex call: its tokens are counted towards the subscription's next
+ * What is done with every completed Codex call: its tokens are counted toward the subscription's next
  * step, the call is logged with its cache share and where its prefix drifted, and a reply from another
  * model than the one asked for is noticed — once per model, since it is a fact about the deployment.
  */
@@ -170,7 +170,7 @@ internal fun codexCallSummary(request: JsonObject, response: JsonObject): String
             "output=[${usage.long("output_tokens")}] tools=[${(request["tools"] as? JsonArray)?.size ?: 0}]"
 }
 
-/** Counts a completed response's tokens towards the subscription's next step, see [CodexLimits]. */
+/** Counts a completed response's tokens toward the subscription's next step, see [CodexLimits]. */
 internal fun countUsage(response: JsonObject, limits: CodexLimits) {
     val usage = response["usage"] as? JsonObject ?: return
 

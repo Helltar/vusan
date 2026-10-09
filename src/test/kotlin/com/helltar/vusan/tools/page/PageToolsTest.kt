@@ -47,7 +47,7 @@ class PageToolsTest {
     }
 
     @Test
-    fun `the charset declared by the server is honoured`() = runBlocking {
+    fun `the charset declared by the server is honored`() = runBlocking {
         val html = "<html><body><p>Привіт, світе</p></body></html>".toByteArray(charset("windows-1251"))
 
         val result = tools { respond(html, headers = headersOf(HttpHeaders.ContentType, "text/html; charset=windows-1251")) }.readPage(PAGE_URL)

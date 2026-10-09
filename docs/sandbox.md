@@ -90,7 +90,7 @@ Every command is a fresh shell starting at the home.
 - **Long commands do not block** — the call returns in about ten seconds with a job id, and the agent
   reads more output from the byte offset it was given or cancels the job. Output is recorded on the
   server, so nothing is lost between reads.
-- **Cancelling** stops that command and every process it started, background servers included; other
+- **Canceling** stops that command and every process it started, background servers included; other
   commands keep running.
 - **History outlives the chat** — asking for recent commands with an empty job id works after
   `/clear`.

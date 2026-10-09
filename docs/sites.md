@@ -32,7 +32,7 @@ publish call. Limits, retention and what a site may hold are configured on the s
 ## What publishing is
 
 A **snapshot**, taken when the tool is called. The files leave the sandbox at that moment, and the
-site stays exactly as it was published however much the sandbox changes afterwards — which also means
+site stays exactly as it was published however much the sandbox changes afterward — which also means
 changing a page means publishing again. One person has one site: publishing replaces everything that
 was there before, so the directory must hold every file the page needs. Several projects live as
 folders inside it, reachable at `/name/`.

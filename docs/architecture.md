@@ -340,10 +340,10 @@ A normal user message travels:
       normal turn never opens one, leaving the chat action to say the same thing the way a person typing does. The
       clock runs from the start of the turn, so a run of quick searches adds up. Once a message is open every activity
       fills it, light or not, since naming the next step is the edit it would make anyway (`showActivity`'s `mayOpen`).
-      Its writes are `NonCancellable`, because a send cancelled in flight can still have created the message, leaving a
+      Its writes are `NonCancellable`, because a send canceled in flight can still have created the message, leaving a
       bubble whose id nobody holds. `finish` deletes it, or, when the model put its own words in it, edits those words
       to stand alone without the running line and without the button; either way that happens in `withLiveProgress`'s
-      `finally`, so a turn cancelled by `/stop` still takes its bubble off the screen. In a slow-mode group the bot's messages are rationed, so an activity alone never opens one — only words
+      `finally`, so a turn canceled by `/stop` still takes its bubble off the screen. In a slow-mode group the bot's messages are rationed, so an activity alone never opens one — only words
       the model chose to send do.
     - **Announcing a plan before the work** — every output a tool produces is queued and delivered when the turn is
       over, which for a long turn means the plan arrives after the thing it planned. `announcePlan` (`MessageTools`) is
@@ -413,7 +413,7 @@ A normal user message travels:
 - **Task scheduler** — `TaskScheduler.launchIn` polls the task store every 30 seconds. Due tasks run through
   `AgentRunner.handleScheduled` (waits for the user lock instead of bailing), each fire in a job of its own
   (`common/runInOwnJob`): a fire is registered in `RunningTurns` under the conversation it belongs to, so `/stop` and
-  the stop button reach it like any turn, and without a job to be cancelled the one they would end is the scheduler's
+  the stop button reach it like any turn, and without a job to be canceled the one they would end is the scheduler's
   own loop. A stopped fire is not a failure — it is not retried, the chat gets the same "stopped" notice a stopped
   turn does, and the recurrence moves on. Fires are delivered through the
   `delivery/OutputDelivery` port, which is what keeps `tasks/` free of any messenger: it addresses a `Destination`
@@ -425,12 +425,12 @@ A normal user message travels:
   delivers nothing, so it is repeated up to `MAX_ATTEMPTS` times with a short backoff, the retry prompt telling the
   agent that the earlier attempt delivered nothing; a failed *delivery* is never repeated, since part of the answer may
   already be in the chat. Once the attempts are spent the chat gets a "failed" notice. Either way the task is
-  advanced afterwards — or deleted, when the recurrence has no fire left — so a persistent error cannot re-fire it on
+  advanced afterward — or deleted, when the recurrence has no fire left — so a persistent error cannot re-fire it on
   every poll tick. A task that has fired for the last time is removed rather than kept switched off: `/tasks` never
   listed one and nothing else reads one. A tick reads every due task
   at once and fires them one after another, which leaves the owner of a task waiting behind a long fire time to pause,
   retime or delete it: each task is read again (`TasksRepository.findDue(id, now)`) at the moment it would fire and
-  skipped if it is no longer due, and the advance afterwards is conditional on the fire time the run started from, so a
+  skipped if it is no longer due, and the advance afterward is conditional on the fire time the run started from, so a
   schedule its owner changed meanwhile is not overwritten. A chat the bot cannot write
   to at all is the exception to that advance: rather than rescheduling one task, `TasksRepository.pauseAllInChat` pauses
   every task in that chat at once, because otherwise each of them would run a full agent turn on every fire and only
@@ -666,10 +666,10 @@ A normal user message travels:
   `response.completed` event carries an empty `output`. So the client streams the call and folds the
   `response.output_item.done` items back into the response object the non-streaming API would have returned
   (`llm/openai/ResponsesStream`), preserving a non-empty completed output if the backend supplies one, folding an
-  incomplete one the same way so a reply cut at the output ceiling reads as one, and rejecting failed or cancelled
+  incomplete one the same way so a reply cut at the output ceiling reads as one, and rejecting failed or canceled
   terminal events. Codex requests use `store=false` and explicitly request encrypted
   reasoning content, so reasoning items can be echoed through a stateless multi-step tool loop. Every completed call is
-  logged with its cache share and where its prefix drifted, and counted towards the subscription's next step.
+  logged with its cache share and where its prefix drifted, and counted toward the subscription's next step.
 
   Model discovery runs at startup through `llm/codex/CodexCatalog`, and `config/CodexProvider` holds the configured model
   against it: the account's own catalog decides which ids and context window are valid, since Codex and the Platform API expose different model sets. Input modalities decide whether the
@@ -776,7 +776,7 @@ history still uses `(userId, chatId)`; only the files and the commands running i
   the sandbox; while their site is up, retention leaves both alone. Processes do not outlive an idle stop;
   files do.
 
-See [the sandbox guide](sandbox.md) for behaviour, setup and limits.
+See [the sandbox guide](sandbox.md) for behavior, setup and limits.
 
 ## Publishing to the web
 
@@ -825,7 +825,7 @@ A symptom-to-source map for finding the right file fast. Paths are under
 | A long research turn ends in the generic error reply or is answered mid-way | `agent/AgentTurn.kt` (`maxModelCalls`, `outOfModelCalls` and the wrap-up that lands the turn) + `agent/AgentRunner.kt` (delivering what the outbox holds when a run fails) |
 | A long build dies on the context limit, or the model loses track of what it wrote earlier in the turn | `agent/TurnCompaction.kt` (`foldedToFit`: which result batches are folded, and which arguments dropped) + `agent/AgentTurn.kt` (`foldToFit`, run before every request) + `agent/AgentFactory.kt` (the ceiling, from the context budget) |
 | The bot announces what it will do and then goes quiet | `agent/AgentTurn.kt` (`PROMISE_NUDGE`, and `record`, which notes what ran after `announcePlan`) + `agent/SystemPrompt.kt` (the contract line that says an announcement is followed by the work) |
-| Two searches in one batch ran one after the other, or a tool ran alongside one it should have waited for | `tools/ToolSet.kt` (`@Tool(readOnly = true)`, the only thing that lets a call run beside its neighbours) + `agent/AgentTurn.kt` (`executeBatch` and `runs`) |
+| Two searches in one batch ran one after the other, or a tool ran alongside one it should have waited for | `tools/ToolSet.kt` (`@Tool(readOnly = true)`, the only thing that lets a call run beside its neighbors) + `agent/AgentTurn.kt` (`executeBatch` and `runs`) |
 | An interim message never arrives, arrives twice, or leaves the status bubble above it | `tools/message/MessageTools.sendMessageNow` + `telegram/TurnStatus.kt` (`send`, which posts it and moves the bubble) + `outbox/BotOutbox.kt` (`recordDelivered` with `announcement = false`, `hasAnswered`) |
 | A spent subscription still ends turns in "come back later", or the bot never returns to it | `llm/FallbackLlmClient.kt` (the outage deadline, the single probe back) + `agent/ProviderErrors.providerOutage` (the patterns and the reset time read from the body), then `LLM_FALLBACK_*` in [`configuration.md`](configuration.md#a-second-provider-behind-the-first) |
 | The reply to a failed turn says nothing about what the provider did | `agent/AgentRunner.providerErrorReply` (which error body earns which canned reply: a content-policy refusal, a spent usage limit, a dead key, a 429/503 overload) + `i18n/Messages.kt` (the strings) |
@@ -854,7 +854,7 @@ A symptom-to-source map for finding the right file fast. Paths are under
 | Tool results come back truncated or empty part-way through a turn | `agent/ContextWindowPolicy.kt` (how large the reserve is for this model) + `agent/TurnToolBudget.kt` (what is left of it) + `agent/AgentTurn.kt` (`boundedToolText`, which truncates and then omits) |
 | A conversation loads the same group on every turn, or keeps offering one it no longer uses | `tools/LoadedToolGroups.kt` (per-scope memory, its cap and its LRU order) — it is process memory, so a restart empties it |
 | `/tasks` or a plain-language task pause/resume/cancel fails | `telegram/callback/TaskMenuHandler.kt` (rendering, ownership, callbacks) + `tools/tasks/TaskTools.kt` (agent path) + `tasks/TasksRepository.kt` (shared scoped state changes) |
-| `/stop` does not stop anything, or a turn leaves its status message on screen | `agent/RunningTurns.kt` (what is registered and cancelled) + `agent/AgentRunner.kt` (`stop`, and the lock the command must not take) + `telegram/AgentTurns.kt` (the notice on cancellation) + `telegram/TelegramProgress.kt` (closing the status on the way out) + `telegram/callback/TurnStopHandler.kt` (the button and whose turn it may stop) |
+| `/stop` does not stop anything, or a turn leaves its status message on screen | `agent/RunningTurns.kt` (what is registered and canceled) + `agent/AgentRunner.kt` (`stop`, and the lock the command must not take) + `telegram/AgentTurns.kt` (the notice on cancellation) + `telegram/TelegramProgress.kt` (closing the status on the way out) + `telegram/callback/TurnStopHandler.kt` (the button and whose turn it may stop) |
 | `/clear` reports success but history survives | `agent/AgentRunner.kt` (`clearConversation` and the turn lock that also guards the append) + `agent/conversation/ConversationRepository.kt` (shared storage operation) |
 | An agent choice button does nothing, repeats, reaches the wrong user, loses the photo, or its answer replies to the bot's own question | `tools/choice/InlineChoiceTools.kt` (tool contract) + `telegram/callback/InlineChoiceHandler.kt` (callback ownership/consumption, origin message id, parked attachment) + `telegram/AgentTurns.kt` (the follow-up turn and its reply anchor) |
 | An env var has no effect | `config/AppConfig.kt` (parsing) — and check it is documented in [`configuration.md`](configuration.md) + [`.env.example`](../.env.example) |

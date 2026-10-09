@@ -89,7 +89,7 @@ class FfmpegVideoNoteRenderer(
     }
 
     private companion object {
-        // the portrait is cropped square at this size and only zoomed down to the frame afterwards, so the
+        // the portrait is cropped square at this size and only zoomed down to the frame afterward, so the
         // moving crop has pixels left to move into instead of upscaling what it already showed.
         const val SOURCE_SIZE = 640
         const val FRAME_RATE = 25
@@ -102,7 +102,7 @@ class FfmpegVideoNoteRenderer(
         const val WAVE_Y = 240
 
         // the band is Telegram's own voice-message shape: separate bars mirrored around a thin rail.
-        // showwaves draws one column per bar into a tiny frame, the nearest-neighbour upscale turns each
+        // showwaves draws one column per bar into a tiny frame, the nearest-neighbor upscale turns each
         // column into a solid block, and the comb in `geq` cuts the gaps between the blocks back out.
         const val BAR_COUNT = 24
         const val BAR_PITCH = WAVE_WIDTH / BAR_COUNT

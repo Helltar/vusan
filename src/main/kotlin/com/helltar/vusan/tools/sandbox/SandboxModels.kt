@@ -3,7 +3,7 @@ package com.helltar.vusan.tools.sandbox
 import kotlin.time.Instant
 
 /** How a command ended, as the tools describe it to the model. */
-enum class CommandStatus { RUNNING, COMPLETED, TIMED_OUT, CANCELLED, INTERRUPTED }
+enum class CommandStatus { RUNNING, COMPLETED, TIMED_OUT, CANCELED, INTERRUPTED }
 
 /** A session limit that explains a failed command; the sandbox as a whole hit it, not one process. */
 enum class CommandLimit { OUT_OF_MEMORY, TOO_MANY_PROCESSES }

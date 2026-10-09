@@ -185,7 +185,7 @@ internal class TelegramBotRunner(
                 if (pendingAlbums.isEmpty()) {
                     updates.receiveCatching().getOrNull() ?: break
                 } else {
-                    // select resolves receive vs timeout atomically; cancelling a suspended receive
+                    // select resolves receive vs timeout atomically; canceling a suspended receive
                     // (as withTimeout would) can drop an element already taken from the channel.
                     // null on both quiet-period timeout and channel close; either way the buffered
                     // albums are complete, and a closed channel exits on the next iteration.

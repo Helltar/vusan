@@ -235,7 +235,7 @@ class TaskTools(
         if (!repo.deleteForUser(owner, id, scopedChat))
             return@suspendToolGuard "Task id=$id is no longer available."
 
-        "Cancelled task id=$id (${formatFire(existing.nextFireAt, existing.timezone)}, ${existing.recurrence.display})."
+        "Canceled task id=$id (${formatFire(existing.nextFireAt, existing.timezone)}, ${existing.recurrence.display})."
     }
 
     private fun scopedChat(): ChatRef? =

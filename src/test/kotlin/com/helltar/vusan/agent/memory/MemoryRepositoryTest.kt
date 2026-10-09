@@ -75,7 +75,7 @@ class MemoryRepositoryTest {
         val owner = testUser(100).memoryOwner
 
         repo.add(owner, "likes tea")
-        val old = repo.add(owner, "lives by the harbour")
+        val old = repo.add(owner, "lives by the harbor")
         val replacement = repo.replace(owner, old, "lives by the lighthouse")
 
         assertTrue(replacement != null && replacement != old)
