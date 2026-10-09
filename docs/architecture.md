@@ -349,14 +349,18 @@ A normal user message travels:
       over, which for a long turn means the plan arrives after the thing it planned. `announcePlan` (`MessageTools`) is
       the way out: it writes into the live status through `TurnNarrator` — a neutral interface in `agent/`, so no
       Telegram type reaches `tools/` — and then records the text in the outbox as an already `delivered` `OutboxItem`.
-      Delivery skips such an item instead of sending it twice, while still writing its transcript row, and the history
-      carries it like any other assistant text. One announcement per turn (`BotOutbox.hasDelivered`): a second would
+      Delivery skips such an item instead of sending it twice, and the history carries it like any other assistant
+      text. Its transcript row is written the moment the words are in the chat — `TurnStatus` reports them and
+      `AgentTurns` hands them to `TelegramDelivery.recordPostedMidTurn` — not by delivery: stamped at the end, the row
+      would sit after messages written while the work ran, and a turn queued behind this one reads the transcript
+      before that delivery is over. One announcement per turn (`BotOutbox.hasDelivered`): a second would
       rewrite what the user has already read. A turn with no live status — a scheduled run — queues the words with the
       rest of the reply instead.
     - **A result worth reading early** — `sendMessageNow` (`MessageTools`) posts a message of its own through
       `TurnNarrator.send`, which stays in the chat, and takes the status bubble down and up again so it sits under the
       newest message. It is recorded as a delivered item that is an answer rather than an announcement
-      (`BotOutbox.hasAnswered`), so the turn owes no further delivery; a few per turn, and queued like any text when
+      (`BotOutbox.hasAnswered`), so the turn owes no further delivery, and reaches the transcript the same way the plan
+      does; a few per turn, and queued like any text when
       nobody is watching.
     - **HTML and its fallbacks** — text and captions go out with Telegram's `HTML` parse mode; `agent/SystemPrompt.kt`
       instructs the agent to use only the supported tags and escape `<`/`>`/`&`. Models still slip in `<br>`, and

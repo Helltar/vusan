@@ -3,11 +3,18 @@ package com.helltar.vusan.telegram
 import com.helltar.vusan.agent.ToolActivity
 import com.helltar.vusan.i18n.Language
 import com.helltar.vusan.i18n.Messages
+import com.helltar.vusan.telegram.delivery.ChatTarget
+import java.lang.reflect.Proxy
+import java.util.concurrent.CompletableFuture
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertNull
 import kotlin.test.assertTrue
 import kotlin.time.Duration.Companion.minutes
+import kotlinx.coroutines.runBlocking
+import org.telegram.telegrambots.meta.api.methods.send.SendMessage
+import org.telegram.telegrambots.meta.api.objects.message.Message
+import org.telegram.telegrambots.meta.generics.TelegramClient
 
 class TurnStatusTest {
 
@@ -52,6 +59,54 @@ class TurnStatusTest {
             Messages.of(Language.ENGLISH).fallbackModelNote("gpt-5.4-mini", primaryBackIn = 135.minutes),
         )
     }
+
+    // what the status reports is what the transcript records as said: a plan the chat refused was never
+    // read by anyone, and the tool queues those words with the answer instead.
+    @Test
+    fun `only words that reached the chat are reported as posted`() = runBlocking {
+        val posted = mutableListOf<String>()
+
+        statusOver(chatAccepting(true), posted).apply {
+            say("I will build the game")
+            send("halfway there")
+        }
+
+        assertEquals(listOf("I will build the game", "halfway there"), posted)
+
+        posted.clear()
+
+        statusOver(chatAccepting(false), posted).apply {
+            say("I will build the game")
+            send("halfway there")
+        }
+
+        assertTrue(posted.isEmpty())
+    }
+
+    private fun statusOver(client: TelegramClient, posted: MutableList<String>) =
+        TurnStatus(
+            client = client,
+            target = ChatTarget(-7),
+            ownerId = 2,
+            replyToMessageId = 77,
+            messages = Messages.of(Language.ENGLISH),
+            activityOpensIt = true,
+            onPosted = { posted += it },
+        )
+
+    private fun chatAccepting(accepts: Boolean): TelegramClient =
+        Proxy.newProxyInstance(
+            TelegramClient::class.java.classLoader,
+            arrayOf(TelegramClient::class.java),
+        ) { _, method, args ->
+            check(method.name == "executeAsync") { "unexpected client call: ${method.name}" }
+
+            when {
+                !accepts -> CompletableFuture.failedFuture<Any>(IllegalStateException("Bad Request: chat not found"))
+                args.single() is SendMessage -> CompletableFuture.completedFuture(Message().apply { messageId = 1 })
+                else -> CompletableFuture.completedFuture(true)
+            }
+        } as TelegramClient
 
     @Test
     fun `nothing to say yields no message`() {

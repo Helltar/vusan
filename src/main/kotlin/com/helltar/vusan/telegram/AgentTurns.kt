@@ -213,7 +213,11 @@ internal class AgentTurns(
             // so a tool can say what the turn is about to do while it still matters; delivery then shows
             // its own per-item action.
             val result =
-                client.withLiveProgress(request, fallbackInUse) { setActivity, status ->
+                client.withLiveProgress(
+                    request = request,
+                    fallbackInUse = fallbackInUse,
+                    onPosted = { text -> delivery.recordPostedMidTurn(context, text) },
+                ) { setActivity, status ->
                     if (waitForTurn)
                         agent.handleQueued(request, setActivity, status)
                     else

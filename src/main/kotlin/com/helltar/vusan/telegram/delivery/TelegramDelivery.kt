@@ -17,6 +17,7 @@ import com.helltar.vusan.i18n.Language
 import com.helltar.vusan.i18n.Messages
 import com.helltar.vusan.outbox.BotOutput
 import com.helltar.vusan.outbox.OutboxItem
+import com.helltar.vusan.request.RequestContext
 import com.helltar.vusan.telegram.PollRegistry
 import com.helltar.vusan.telegram.api
 import com.helltar.vusan.telegram.telegramChatId
@@ -225,6 +226,25 @@ class TelegramDelivery(
     }
 
     /**
+     * Writes into the group transcript what [context]'s turn put in the chat while it was still running
+     * — its announced plan, an interim message — at the moment it appeared. Left to the turn's delivery,
+     * it would carry the time the turn ended, and a turn queued behind this one reads the transcript
+     * before that delivery is over.
+     */
+    suspend fun recordPostedMidTurn(context: RequestContext, text: String) {
+        if (context.chat.isPrivate) return
+
+        recordBotMessage(
+            chatId = context.chatRef.telegramChatId,
+            routedToPrivate = false,
+            senderPrivateChatId = null,
+            text = text,
+            descriptor = null,
+            answering = context.messageId?.telegramMessageId,
+        )
+    }
+
+    /**
      * [message] is the bot's own question, the one the buttons are on. The answer belongs under
      * [originMessageId], the message the exchange started from, and falls back to the question itself only
      * when there was none — a question asked by a turn with no message behind it.
@@ -347,19 +367,8 @@ class TelegramDelivery(
 
         for ((index, item) in result.outputs.withIndex()) {
             // the turn already put this in the chat while it was still running (a plan it announced
-            // before starting the work). it still belongs to the transcript; sending it would repeat it.
-            if (item.delivered) {
-                recordBotMessage(
-                    chatId = currentChatTarget.chatId,
-                    routedToPrivate = false,
-                    senderPrivateChatId = senderPrivateChatId,
-                    text = item.output.groupLogText(),
-                    descriptor = null,
-                    answering = originTarget.replyToMessageId,
-                )
-
-                continue
-            }
+            // before starting the work), and into the transcript at that moment; sending it would repeat it.
+            if (item.delivered) continue
 
             if (sentAnything) delay(INTER_MESSAGE_DELAY)
 

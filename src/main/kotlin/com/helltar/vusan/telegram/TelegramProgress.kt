@@ -79,11 +79,12 @@ internal fun statusGraceFor(activity: ToolActivity): Duration =
 internal suspend fun <T> TelegramClient.withLiveProgress(
     request: AgentRequest,
     fallbackInUse: () -> FallbackInUse? = { null },
+    onPosted: suspend (text: String) -> Unit = {},
     block: suspend (setActivity: (ToolActivity?) -> Unit, status: TurnStatus) -> T,
 ): T =
     coroutineScope {
         val activity = MutableStateFlow<ToolActivity?>(null)
-        val status = statusFor(request, fallbackInUse)
+        val status = statusFor(request, fallbackInUse, onPosted)
         val started = TimeSource.Monotonic.markNow()
 
         val actionTicker =
@@ -140,7 +141,11 @@ internal suspend fun <T> TelegramClient.withLiveProgress(
 private val RequestContext.chatTarget: ChatTarget
     get() = ChatTarget(chatRef.telegramChatId, telegramThreadId(chat.threadId))
 
-private fun TelegramClient.statusFor(request: AgentRequest, fallbackInUse: () -> FallbackInUse?): TurnStatus =
+private fun TelegramClient.statusFor(
+    request: AgentRequest,
+    fallbackInUse: () -> FallbackInUse?,
+    onPosted: suspend (text: String) -> Unit,
+): TurnStatus =
     TurnStatus(
         client = this,
         target = request.context.chatTarget,
@@ -149,6 +154,7 @@ private fun TelegramClient.statusFor(request: AgentRequest, fallbackInUse: () ->
         messages = Messages.of(request.context.language),
         activityOpensIt = request.context.chat.capabilities.slowModeSeconds == 0,
         fallbackInUse = fallbackInUse,
+        onPosted = onPosted,
     )
 
 private suspend fun TelegramClient.indicateChatAction(target: ChatTarget, action: ActionType) {

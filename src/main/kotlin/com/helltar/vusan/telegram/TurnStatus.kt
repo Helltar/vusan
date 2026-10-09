@@ -97,6 +97,8 @@ internal class TurnStatus(
     // which model is answering while the usual provider is out, and when that provider said it would be
     // back, so a turn served by the fallback says so where it is happening rather than only in the log.
     private val fallbackInUse: () -> FallbackInUse? = { null },
+    // words the model put in the chat while the turn still runs, told the moment they are there.
+    private val onPosted: suspend (text: String) -> Unit = {},
 ) : TurnNarrator {
 
     // a turn writes from two places — the tool that narrates, and the collector following the activity —
@@ -124,17 +126,31 @@ internal class TurnStatus(
             if (messageId == null && !(mayOpen && activityOpensIt)) false else render()
         }
 
-    override suspend fun say(text: String): Boolean =
-        edits.withLock {
-            val previous = announcement
-            announcement = text
+    override suspend fun say(text: String): Boolean {
+        val delivered =
+            edits.withLock {
+                val previous = announcement
+                announcement = text
 
-            // nothing reached the chat, so the caller still owes the user these words: forget them here
-            // and let it queue them the ordinary way.
-            render().also { delivered -> if (!delivered) announcement = previous }
-        }
+                // nothing reached the chat, so the caller still owes the user these words: forget them here
+                // and let it queue them the ordinary way.
+                render().also { delivered -> if (!delivered) announcement = previous }
+            }
 
-    override suspend fun send(text: String): Boolean =
+        if (delivered) onPosted(text)
+
+        return delivered
+    }
+
+    override suspend fun send(text: String): Boolean {
+        val posted = post(text)
+
+        if (posted) onPosted(text)
+
+        return posted
+    }
+
+    private suspend fun post(text: String): Boolean =
         edits.withLock {
             val posted =
                 runCatching { withContext(NonCancellable) { TelegramOutputSender.sendText(client, target, text, replyParameters(anchor)) } }
