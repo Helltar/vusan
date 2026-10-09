@@ -95,10 +95,10 @@ class TurnPromptTest {
                 context(),
                 userMemory = emptyList(),
                 chatMemory = emptyList(),
-                toolGroups = "- `image_generation` — draw a picture",
+                toolGroups = "- `gifs` — send a gif",
             )
 
-        assertContains(prompt, "<tool_groups>\n- `image_generation` — draw a picture\n</tool_groups>")
+        assertContains(prompt, "<tool_groups>\n- `gifs` — send a gif\n</tool_groups>")
         assertTrue(prompt.indexOf("<tool_groups>") < prompt.indexOf("draw me a cat"))
     }
 

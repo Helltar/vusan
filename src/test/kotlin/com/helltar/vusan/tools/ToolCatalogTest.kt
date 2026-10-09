@@ -33,7 +33,7 @@ class ToolCatalogTest {
     private fun catalog(): ToolCatalog =
         toolCatalog {
             tools(CoreTestTools())
-            tools(ToolGroup.IMAGE_GENERATION, DrawTestTools())
+            tools(ToolGroup.GIFS, DrawTestTools())
             tools(ToolGroup.VOICE_REPLIES, SpeakTestTools())
         }
 
@@ -52,9 +52,9 @@ class ToolCatalogTest {
         val catalog = catalog()
         val before = catalog.revision
 
-        val result = catalog.load(listOf(" Image_Generation "))
+        val result = catalog.load(listOf(" Gifs "))
 
-        assertEquals(listOf(ToolGroup.IMAGE_GENERATION), result.groups)
+        assertEquals(listOf(ToolGroup.GIFS), result.groups)
         assertEquals(listOf("drawTestPicture"), result.toolNames)
         assertTrue(result.unknown.isEmpty())
         assertContains(catalog.visibleNames(), "drawTestPicture")
@@ -66,10 +66,10 @@ class ToolCatalogTest {
     @Test
     fun `loading the same group twice reports it without widening again`() {
         val catalog = catalog()
-        catalog.load(listOf("image_generation"))
+        catalog.load(listOf("gifs"))
         val revision = catalog.revision
 
-        val result = catalog.load(listOf("image_generation"))
+        val result = catalog.load(listOf("gifs"))
 
         assertEquals(listOf("drawTestPicture"), result.toolNames)
         assertEquals(revision, catalog.revision)
@@ -78,8 +78,8 @@ class ToolCatalogTest {
     // the tool array is part of the cached prefix, so it may not depend on the order groups were loaded
     @Test
     fun `the visible order follows registration, not the order the groups were loaded`() {
-        val loadedInMenuOrder = catalog().apply { load(listOf("image_generation", "voice_replies")) }
-        val loadedInReverse = catalog().apply { load(listOf("voice_replies", "image_generation")) }
+        val loadedInMenuOrder = catalog().apply { load(listOf("gifs", "voice_replies")) }
+        val loadedInReverse = catalog().apply { load(listOf("voice_replies", "gifs")) }
 
         assertEquals(
             listOf("sendTestMessage", "loadTools", "drawTestPicture", "speakTestText"),
@@ -93,9 +93,9 @@ class ToolCatalogTest {
         val catalog = catalog()
         val visible = catalog.visibleNames()
 
-        val result = catalog.load(listOf("image_generation", "teleportation", ""))
+        val result = catalog.load(listOf("gifs", "teleportation", ""))
 
-        assertEquals(listOf(ToolGroup.IMAGE_GENERATION), result.groups)
+        assertEquals(listOf(ToolGroup.GIFS), result.groups)
         assertEquals(listOf("teleportation"), result.unknown)
         assertEquals(visible + "drawTestPicture", catalog.visibleNames())
     }
@@ -104,7 +104,7 @@ class ToolCatalogTest {
     fun `the menu describes every group this turn registered and nothing else`() {
         val menu = catalog().menu().orEmpty()
 
-        assertContains(menu, "- `image_generation` — ${ToolGroup.IMAGE_GENERATION.summary}")
+        assertContains(menu, "- `gifs` — ${ToolGroup.GIFS.summary}")
         assertContains(menu, "- `voice_replies` — ${ToolGroup.VOICE_REPLIES.summary}")
         assertFalse("youtube" in menu)
     }
@@ -125,15 +125,15 @@ class ToolCatalogTest {
     @Test
     fun `a preloaded group is offered from the start and drops out of the menu`() {
         val catalog =
-            toolCatalog(preloaded = setOf(ToolGroup.IMAGE_GENERATION)) {
+            toolCatalog(preloaded = setOf(ToolGroup.GIFS)) {
                 tools(CoreTestTools())
-                tools(ToolGroup.IMAGE_GENERATION, DrawTestTools())
+                tools(ToolGroup.GIFS, DrawTestTools())
                 tools(ToolGroup.VOICE_REPLIES, SpeakTestTools())
             }
 
         assertContains(catalog.visibleNames(), "drawTestPicture")
         assertEquals(listOf("voice_replies"), catalog.groupNames())
-        assertFalse("image_generation" in catalog.menu().orEmpty())
+        assertFalse("gifs" in catalog.menu().orEmpty())
     }
 
     // a group the chat no longer has must not be resurrected by what an earlier turn remembered
@@ -142,11 +142,11 @@ class ToolCatalogTest {
         val catalog =
             toolCatalog(preloaded = setOf(ToolGroup.YOUTUBE)) {
                 tools(CoreTestTools())
-                tools(ToolGroup.IMAGE_GENERATION, DrawTestTools())
+                tools(ToolGroup.GIFS, DrawTestTools())
             }
 
         assertEquals(listOf("sendTestMessage", "loadTools"), catalog.visibleNames())
-        assertEquals(listOf("image_generation"), catalog.groupNames())
+        assertEquals(listOf("gifs"), catalog.groupNames())
     }
 
     @Test
@@ -155,21 +155,21 @@ class ToolCatalogTest {
         val catalog =
             toolCatalog(onLoad = { loaded += it }) {
                 tools(CoreTestTools())
-                tools(ToolGroup.IMAGE_GENERATION, DrawTestTools())
+                tools(ToolGroup.GIFS, DrawTestTools())
             }
 
-        catalog.load(listOf("image_generation"))
+        catalog.load(listOf("gifs"))
         catalog.load(listOf("teleportation"))
 
-        assertEquals(listOf(ToolGroup.IMAGE_GENERATION), loaded)
+        assertEquals(listOf(ToolGroup.GIFS), loaded)
     }
 
     @Test
     fun `a catalog whose every group is preloaded offers no loader`() {
         val catalog =
-            toolCatalog(preloaded = setOf(ToolGroup.IMAGE_GENERATION)) {
+            toolCatalog(preloaded = setOf(ToolGroup.GIFS)) {
                 tools(CoreTestTools())
-                tools(ToolGroup.IMAGE_GENERATION, DrawTestTools())
+                tools(ToolGroup.GIFS, DrawTestTools())
             }
 
         assertNull(catalog.menu())
@@ -180,7 +180,7 @@ class ToolCatalogTest {
     @Test
     fun `group names are the lowercase spelling the model is told to use`() {
         assertEquals(
-            listOf("image_generation", "voice_replies"),
+            listOf("gifs", "voice_replies"),
             catalog().groupNames(),
         )
     }

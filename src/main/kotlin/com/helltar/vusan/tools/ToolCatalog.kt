@@ -14,7 +14,6 @@ import com.helltar.vusan.tools.catalog.CatalogTools
  */
 enum class ToolGroup(val summary: String) {
 
-    IMAGE_GENERATION("draw a picture from a description, edit a picture the user sent, or merge several into one"),
     VOICE_REPLIES("answer out loud with a voice message, or with a round video message of the bot's own face"),
     YOUTUBE("find a video by name or link, send the video or its audio track, or answer from its subtitles"),
     SCHEDULED_TASKS("run something later, once or on a repeating schedule, and list, pause, edit or cancel what is scheduled"),

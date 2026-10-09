@@ -286,11 +286,11 @@ class ToolCatalogFactory(
                     )
             }
 
+            // visible rather than grouped: pictures are drawn and edited daily on the live deployment, and
+            // a group used that often is loaded again after every restart and in every new conversation,
+            // which rebuilds the cached prefix far more often than its two schemas cost to carry.
             if (chat.photos && openAiImageClient != null && openAiImage != null) {
-                tools(
-                    ToolGroup.IMAGE_GENERATION,
-                    ImageGenTools(openAiImageClient, openAiImage, outbox, context.attachedFiles, selfImage),
-                )
+                tools(ImageGenTools(openAiImageClient, openAiImage, outbox, context.attachedFiles, selfImage))
             }
 
             platformTools.of(context, outbox).forEach { tools(it) }

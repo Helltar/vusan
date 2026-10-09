@@ -12,9 +12,9 @@ class LoadedToolGroupsTest {
         val groups = LoadedToolGroups()
         val scope = testScope(userId = 1)
 
-        groups.remember(scope, listOf(ToolGroup.IMAGE_GENERATION))
+        groups.remember(scope, listOf(ToolGroup.YOUTUBE))
 
-        assertEquals(setOf(ToolGroup.IMAGE_GENERATION), groups.of(scope))
+        assertEquals(setOf(ToolGroup.YOUTUBE), groups.of(scope))
     }
 
     @Test

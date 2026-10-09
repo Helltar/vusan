@@ -100,7 +100,7 @@ class AgentTurnTest {
         vararg replies: Reply,
         maxModelCalls: Int = 20,
         mayStaySilent: Boolean = false,
-        catalog: (BotOutbox) -> ToolCatalog = { outbox -> toolCatalog { tools(ProbeTools(outbox)); tools(ToolGroup.IMAGE_GENERATION, DrawTools()) } },
+        catalog: (BotOutbox) -> ToolCatalog = { outbox -> toolCatalog { tools(ProbeTools(outbox)); tools(ToolGroup.GIFS, DrawTools()) } },
         // passed in by a test that has to look at the run after it throws
         run: Run = Run(ScriptedLlmClient(*replies)),
         block: (Run, String) -> Unit,
@@ -259,7 +259,7 @@ class AgentTurnTest {
 
     @Test
     fun `a group loaded mid-turn is offered from the next request on`() =
-        run(toolCallReply(call("loadTools", args = arrayOf("groups" to "image_generation"))), toolCallReply(call("draw", args = arrayOf("subject" to "a cat"))), textReply("done")) { run, _ ->
+        run(toolCallReply(call("loadTools", args = arrayOf("groups" to "gifs"))), toolCallReply(call("draw", args = arrayOf("subject" to "a cat"))), textReply("done")) { run, _ ->
             assertFalse("draw" in run.client.requests[0].toolNames)
             assertTrue("draw" in run.client.requests[1].toolNames)
             assertEquals("drew a cat", assertIs<Message.ToolResults>(run.client.requests[2].messages.last()).results.single().output)

@@ -9,6 +9,6 @@ internal object CatalogToolDescriptions {
                 "Loading a group twice is harmless."
 
     const val GROUPS =
-        "Comma-separated group names, spelled exactly as `<tool_groups>` lists them, for example `image_generation` or `voice_replies,scheduled_tasks`. " +
+        "Comma-separated group names, spelled exactly as `<tool_groups>` lists them, for example `youtube` or `voice_replies,scheduled_tasks`. " +
                 "Name every group the task needs in one call."
 }

@@ -29,7 +29,7 @@ class CatalogToolsTest {
 
     private fun catalog(): ToolCatalog =
         toolCatalog {
-            tools(ToolGroup.IMAGE_GENERATION, DrawTestTools())
+            tools(ToolGroup.GIFS, DrawTestTools())
             tools(ToolGroup.VOICE_REPLIES, SpeakTestTools())
         }
 
@@ -37,9 +37,9 @@ class CatalogToolsTest {
     fun `loadTools loads every named group at once and names what it loaded`() = runBlocking {
         val catalog = catalog()
 
-        val result = CatalogTools(catalog).loadTools("image_generation, voice_replies")
+        val result = CatalogTools(catalog).loadTools("gifs, voice_replies")
 
-        assertContains(result, "`image_generation`")
+        assertContains(result, "`gifs`")
         assertContains(result, "`voice_replies`")
         assertContains(result, "drawTestPicture, speakTestText")
         assertContains(catalog.visibleDefinitions().map { it.name }, "speakTestText")
@@ -49,7 +49,7 @@ class CatalogToolsTest {
     // alongside them instead of failing the whole batch.
     @Test
     fun `loadTools loads what it recognizes and reports the rest`() = runBlocking {
-        val result = CatalogTools(catalog()).loadTools("image_generation,teleportation")
+        val result = CatalogTools(catalog()).loadTools("gifs,teleportation")
 
         assertContains(result, "drawTestPicture")
         assertContains(result, "no such group: teleportation")
@@ -63,7 +63,7 @@ class CatalogToolsTest {
         val message = toolFailure { CatalogTools(catalog).loadTools("teleportation") }
 
         assertContains(message, "no tool group is named teleportation")
-        assertContains(message, "image_generation, voice_replies")
+        assertContains(message, "gifs, voice_replies")
         assertTrue(catalog.visibleDefinitions().map { it.name }.none { it == "drawTestPicture" })
     }
 
