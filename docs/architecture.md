@@ -27,7 +27,7 @@ Telegram ──► telegram/ ──► agent/ ◄──► tools/ ──► exte
 `agent/` and `tools/` point both ways, and are one layer rather than two: the runner has to name the tool sets it
 recognizes (`ToolActivity` maps a tool's own method reference to what the chat is shown while it runs, so a rename
 cannot silently break the mapping), and a tool reads the store its capability is about — `MemoryTools` the memory
-repository, `GroupLogTools` the transcript, `ConversationTools` the dialogue. Those stores sit under `agent/` because
+repository, `GroupLogTools` the transcript. Those stores sit under `agent/` because
 that is who owns writing them, not because only `agent/` reads them. No other arrow here is bidirectional.
 
 - **`telegram/`** — Telegram I/O, split by direction. `TelegramBotRunner` at the root receives updates (text, voice,
@@ -568,10 +568,9 @@ A normal user message travels:
   command was sent from**, and sends a localized confirmation. Their history in other chats, and everyone else's in this
   one, are untouched: the wipe is as narrow as the conversation it belongs to, which is what keeps `/clear` in a group
   from destroying context that is not the caller's. It deliberately leaves long-term memory and scheduled tasks
-  unchanged, matching the agent-callable `clearConversation` tool. Both paths also advance that conversation's persisted
-  history revision, which invalidates unanswered choices created before the clear. The command goes through
-  `AgentRunner.clearConversation` so it waits for the conversation's turn lock; a turn already running would otherwise
-  persist itself after the wipe. The tool runs inside a turn and so keeps calling the repository directly. The persisted
+  unchanged. The clear also advances that conversation's persisted history revision, which invalidates unanswered
+  choices created before it. The command goes through `AgentRunner.clearConversation` so it waits for the
+  conversation's turn lock; a turn already running would otherwise persist itself after the wipe. The persisted
   semantic recap is deleted with the raw transcript.
 - **Agent-created inline choices** — `askWithButtons` enqueues a plain-text question plus two to ten answer buttons.
   Callback data carries the intended user id, history revision, option index, and the id of the user message the
@@ -844,7 +843,7 @@ A symptom-to-source map for finding the right file fast. Paths are under
 | A conversation loads the same group on every turn, or keeps offering one it no longer uses | `tools/LoadedToolGroups.kt` (per-scope memory, its cap and its LRU order) — it is process memory, so a restart empties it |
 | `/tasks` or a plain-language task pause/resume/cancel fails | `telegram/callback/TaskMenuHandler.kt` (rendering, ownership, callbacks) + `tools/tasks/TaskTools.kt` (agent path) + `tasks/TasksRepository.kt` (shared scoped state changes) |
 | `/stop` does not stop anything, or a turn leaves its status message on screen | `agent/RunningTurns.kt` (what is registered and cancelled) + `agent/AgentRunner.kt` (`stop`, and the lock the command must not take) + `telegram/AgentTurns.kt` (the notice on cancellation) + `telegram/TelegramProgress.kt` (closing the status on the way out) + `telegram/callback/TurnStopHandler.kt` (the button and whose turn it may stop) |
-| `/clear` reports success but history survives | `agent/AgentRunner.kt` (`clearConversation` and the turn lock that also guards the append) + `tools/conversation/ConversationTools.kt` (agent path) + `agent/conversation/ConversationRepository.kt` (shared storage operation) |
+| `/clear` reports success but history survives | `agent/AgentRunner.kt` (`clearConversation` and the turn lock that also guards the append) + `agent/conversation/ConversationRepository.kt` (shared storage operation) |
 | An agent choice button does nothing, repeats, reaches the wrong user, loses the photo, or its answer replies to the bot's own question | `tools/choice/InlineChoiceTools.kt` (tool contract) + `telegram/callback/InlineChoiceHandler.kt` (callback ownership/consumption, origin message id, parked attachment) + `telegram/AgentTurns.kt` (the follow-up turn and its reply anchor) |
 | An env var has no effect | `config/AppConfig.kt` (parsing) — and check it is documented in [`configuration.md`](configuration.md) + [`.env.example`](../.env.example) |
 | Model / provider / request-timeout selection, or prompt-cache misses | `config/<Vendor>Provider.kt` (one provider's runtime: client, model, options — and its startup check of the model against the vendor) + `config/LlmRuntime.kt` and `config/ModelPreflight.kt` (the dispatch to it) + `llm/openai/OpenAiPromptCaching.kt` (GPT-5.6+: implicit caching with an explicit breakpoint on the system prefix, and none for a prompt that never repeats) + `llm/anthropic/AnthropicClient.kt` (the request-level breakpoint and the hour-long one on the system block); `cacheReadTokens` and `cacheWriteTokens` on each turn's usage line say what was read and written |

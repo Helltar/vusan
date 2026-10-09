@@ -33,7 +33,6 @@ import com.helltar.vusan.tools.klipy.KlipyTools
 import com.helltar.vusan.tools.klipy.deliverableIn
 import com.helltar.vusan.tools.grouplog.GroupLogTools
 import com.helltar.vusan.tools.context.ContextTools
-import com.helltar.vusan.tools.conversation.ConversationTools
 import com.helltar.vusan.tools.imagegen.ImageGenTools
 import com.helltar.vusan.llm.codex.CodexAuthStore
 import com.helltar.vusan.config.ImageRoute
@@ -224,7 +223,6 @@ class ToolCatalogFactory(
             tools(MessageTools(outbox, narrator))
             tools(ContextTools(toolBudget))
             tools(InlineChoiceTools(context, outbox, conversation::revision))
-            tools(ConversationTools(conversation, context))
             tools(MemoryTools(memory, context))
             tools(FollowUpTools(tasks, context, TasksRepository.MAX_FOLLOW_UPS_PER_USER))
             tools(ToolGroup.CURRENCY, currency)

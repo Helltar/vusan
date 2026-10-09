@@ -123,7 +123,6 @@ class AgentRunner(
     // take the same lock or a turn already in flight would append itself back into the wiped history.
     // the lock is keyed by what it guards, one conversation, so the same person writing in two chats is
     // served in both instead of being told the bot is busy.
-    // `clearConversation` runs inside a turn and must keep using the repository directly.
     suspend fun clearConversation(scope: ConversationScope) {
         conversationLocks.withLock(scope) { conversation.clear(scope) }
     }
