@@ -34,6 +34,15 @@ class TurnCompactionTest {
         assertNull(turn.foldedToFit(ceilingTokens = 100_000, turnStart))
     }
 
+    // the shelf still holds a folded result under its label, so the stub keeps the label and says so
+    @Test
+    fun `a labeled result folds to the stub under the same label`() {
+        val labeled = turn.toMutableList().also { it[5] = Message.ToolResults(listOf(ToolResult("c1", "lookUp", "[#1] $long"))) }
+        val folded = labeled.foldedToFit(ceilingTokens = 300, turnStart) ?: error("nothing folded")
+
+        assertEquals("[#1] $FOLDED_RESULT", assertIs<Message.ToolResults>(folded[5]).results.single().output)
+    }
+
     @Test
     fun `the oldest results are folded first, with the long arguments they answered, and the latest batch never`() {
         val tokens = turn.sumOf(::estimateTokens)

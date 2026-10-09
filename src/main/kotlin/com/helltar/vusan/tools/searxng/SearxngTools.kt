@@ -19,7 +19,7 @@ class SearxngTools(
     private val outbox: BotOutbox,
 ) : ToolSet {
 
-    @Tool(SearxngToolDescriptions.META_SEARCH, readOnly = true)
+    @Tool(SearxngToolDescriptions.META_SEARCH, readOnly = true, copiedToSandbox = true)
     suspend fun metaSearch(
         @Arg(SearxngToolDescriptions.META_SEARCH_QUERY)
         query: String,
@@ -105,8 +105,10 @@ class SearxngTools(
         query: String,
         @Arg(SearxngToolDescriptions.META_SEARCH_IMAGES_MAX_RESULTS)
         maxResults: Int = 5,
+        @Arg(SearxngToolDescriptions.META_SEARCH_IMAGES_SEND)
+        send: Boolean = true,
     ): String = suspendToolGuard {
-        outbox.photosRefusedReply()?.let { return@suspendToolGuard it }
+        if (send) outbox.photosRefusedReply()?.let { return@suspendToolGuard it }
 
         val response = client.search(query = query, engines = IMAGE_ENGINES)
 
@@ -120,6 +122,7 @@ class SearxngTools(
             candidates = candidates,
             limit = maxResults.coerceIn(1, MAX_IMAGE_RESULTS),
             outbox = outbox,
+            send = send,
         )
     }
 

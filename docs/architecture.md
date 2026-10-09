@@ -54,7 +54,8 @@ that is who owns writing them, not because only `agent/` reads them. No other ar
 - **`agent/`** — agent orchestration. `AgentRunner` serializes the turns of one conversation, assembles
   the current user turn (chat metadata + durable memory + request), and owns every history write for it, so no other
   layer appends or clears turns behind a running turn's back. What it orchestrates sits beside it, one file per concern:
-  `TurnPrompt` renders the blocks the model is shown for this turn, `TurnInput` writes the ones the request itself
+  `TurnPrompt` renders the blocks the model is shown for this turn, `TurnShelf` keeps what the turn's tool calls made
+  under the labels later calls take it by, `TurnInput` writes the ones the request itself
   arrives in — what it replies to, the quoted fragment, the attachment, an album, a transcript, a pressed choice — so
   every adapter fills in the tags the contract describes instead of spelling its own, `TurnSurroundings` reads what the chat around
   the turn adds to it — the group's diary, the slice of what the group was just saying, the sticker shortlist — each only
@@ -102,7 +103,9 @@ that is who owns writing them, not because only `agent/` reads them. No other ar
   adapter has to look the chat up for), `ChatCapabilities` (what the chat lets the bot post, and its slow mode —
   defaulting to unrestricted so a failed lookup never removes an ability), and `AttachedFile` (photo, video, or document, from the
   current message or a replied-to message, that vision (`describeImage`, `describeVideo`) and the sandbox
-  (`runCommand` or `writeSandboxFile`, which copies it into a unique `inbox/` path) can lazily download). Its `kind`
+  (which copies it into the turn's own directory under `turns/`) can lazily download; the same type
+  carries a file a tool names by reference — one another call made, or one in the sandbox, read only when its bytes
+  are wanted). Its `kind`
   (`IMAGE`/`VIDEO`/`OTHER`) decides which of those tools accepts it; a video also carries its duration and a loader for
   Telegram's own thumbnail.
 - **`delivery/`** — the shared output address and port: a `Destination` (chat plus optional thread — an anchor is not
@@ -249,12 +252,15 @@ A normal user message travels:
    moves every system message into the top-level system field regardless of where it sat. In a group the turn also carries what that chat lets the bot post, read through
    `telegram/ChatProfiles.kt`: one cached `getChat` + `getChatMember` pair yields the chat description, the permissions
    binding a bot that is a plain member (an administrator is bound by none of them, slow mode included), and the
-   slow-mode delay. `ChatCapabilities` travels in `RequestContext.chat` and reaches three places — `ToolCatalogFactory` leaves
-   out the tools whose output the chat would refuse, so the model cannot spend an image generation or a download on
-   something undeliverable; `BotOutbox` refuses a queued output the chat does not accept, because catalog gating alone
-   proves nothing about the *mixed-output* paths (a text-first search queues photos, the sandbox sends whatever files
-   it was asked for), and those tools report the refusal to the model rather than claiming a send nobody will see —
-   image search checks first and never queries its provider at all; and `<message_context>` names the rest so the agent
+   slow-mode delay. `ChatCapabilities` travels in `RequestContext.chat` and reaches three places — a tool that makes
+   something is registered whatever the chat accepts, since with `send` it is a producer first, and checks the chat
+   itself before producing for a send the chat would drop (`refusedByChat` in `tools/CallShelf.kt`), so the model
+   cannot spend an image generation or a download on something undeliverable and can still make it for a later call,
+   while `ToolCatalogFactory` leaves out only what does nothing but post (reactions, polls, GIFs by address); `BotOutbox`
+   refuses a queued output the chat does not accept, because that alone proves nothing about the *mixed-output* paths
+   (a text-first search queues photos, the sandbox sends whatever files it was asked for), and those tools report the
+   refusal to the model rather than claiming a send nobody will see — image search checks first and never queries its
+   provider at all; and `<message_context>` names the rest so the agent
    knows why and answers in one message under slow mode. Anything the lookup could not answer counts as unrestricted, since guessing "forbidden" would strip
    real abilities. The runner builds the per-request tool catalog before the turn text, because what the catalog
    defers goes into that text as `<tool_groups>`; `AgentFactory.prepare` then estimates the fixed
@@ -275,8 +281,18 @@ A normal user message travels:
    empty result back. Once a quarter of the reserve is left the run states it without being asked, once, in a note that
    follows the batch of tool results — nothing may come between an assistant's tool call and that call's result. The calls
    of one batch run in order, except that read-only ones standing next to each other (`@Tool(readOnly = true)`: a
-   search, a page, a file read) run side by side; results are recorded in batch order either way. A turn whose own
-   pile of results would no longer fit the window has its oldest result batches folded into a stub before the next
+   search, a page, a file read) run side by side; results are recorded in batch order either way. Every call also
+   takes a place on the turn's shelf (`agent/TurnShelf.kt`) before its run starts, so what one call makes another can
+   take: its result reaches the model under a label, `[#3]`, with the files it kept listed under it as `#3/1`, and the
+   request's attachments are `#0/1` on. An `AttachedFile` parameter takes a label or `sandbox:<path>`, and so does a
+   text parameter that declares `@Arg(takesReference = true)` — opt-in, so a value that merely reads like a reference
+   anywhere else arrives as written; the decoder in `tools/ToolSet.kt` resolves both through the call's `CallShelf`, and
+   the text is the result whole, not the copy the budget cut for the model, which a cut result says. A call may only take
+   what came before it, and one that takes an earlier call of its own read-only run waits for that call. A tool that
+   makes a file keeps it with `keepOnShelf` whether or not it sends it, and `send: false` keeps it without delivering
+   it. History stores results without their labels, which mean nothing to the next turn. A turn whose own
+   pile of results would no longer fit the window has its oldest result batches folded into a stub — under the result's
+   own label, since the shelf still holds the whole of it there — before the next
    request, together with the long arguments they answered (`agent/TurnCompaction.kt`), the latest batch and the stored
    history never — so a long build goes on instead of dying on the context limit. The loop
    (`agent/AgentTurn.kt`) guards against flaky models in four ways:
@@ -766,9 +782,15 @@ history still uses `(userId, chatId)`; only the files and the commands running i
   server as its own reason plus that wait, everything else as the server's own sentence; no answer at all reads
   as temporarily unavailable.
 - **`SandboxTools`** — the model-facing surface: run, read, cancel, write, delete, reset, send. It copies each of
-  the turn's attachments into its own `inbox/<unique-id>/<name>` before the first command that might want them,
-  once per turn, and renders a command as text the model can act on — the exit code, and the session limit that explains it
-  when the memory or process cap is what killed it.
+  the turn's files into a directory of the turn's own before the first command that might want them, and renders a
+  command as text the model can act on — the exit code, and the session limit that explains it
+  when the memory or process cap is what killed it. Before every call that writes or runs, `TurnShelf.copyToSandbox`
+  brings `turns/<yyMMdd-HHmmss>/` up to date: the request's attachments as `00-1-<name>` on the first copy, every file a
+  call kept as `05-1-<name>`, and the text of the answers their tools mark `@Tool(copiedToSandbox = true)` — searches,
+  pages, transcripts, what vision saw — as `03-<tool>.txt`. The first copy of a turn also removes all but the last three
+  turns' directories: a turn often picks up the one before it, and the rest would only fill a home of a fixed size. The
+  mark is opt-in on purpose: the group log, tasks and memory never reach a home that outlives the turn and can be
+  published, unless the model writes them there itself.
 - **What the bot does not decide** — the sandbox image, memory, home size, idle stop, retention and network
   policy all belong to the server. The bot reads `GET /v1/info` for the limits it must respect, and trims a
   requested timeout to that ceiling instead of keeping a copy of the number.
@@ -843,13 +865,13 @@ A symptom-to-source map for finding the right file fast. Paths are under
 | A linked page reads as empty, as navigation, or in the wrong alphabet | `tools/page/PageReader.kt` (which elements are dropped, where the content root is looked for, the charset the download declared) + `tools/tavily/TavilyToolDescriptions.kt` and `tools/page/PageToolDescriptions.kt` (Tavily's `extractPageContent` reads first, `readPage` is the fallback) |
 | Image search sends nothing, or sends irrelevant pictures | `tools/images/ImageSearchDelivery.kt` (candidate retries, size caps, media group) + `tools/images/ImageDownloadClient.kt` (user agent, format/dimension checks); for relevance, `SearxngTools.IMAGE_ENGINES` and `TavilyTools.imageExcludedDomains` |
 | A selfie shows a stranger instead of the bot's avatar | `tools/imagegen/SelfImage.kt` (which reference photo is read at startup, and the prompt that keeps the face while dropping the rest of it) + `tools/imagegen/ImageGenToolDescriptions.SELF_PORTRAIT` (whether the model sets the flag at all) |
-| Vusan sends a voice message instead of a round video, or offers no round video at all | `tools/voice/VideoNoteTools.kt` (synthesize → render → outbox, and the voice fallback when the render fails) + `tools/voice/VideoNoteRenderer.kt` (the ffmpeg graph; the waveform box stays inside the circle Telegram crops to) + `tools/ToolCatalogFactory.kt` (needs `ELEVENLABS_API_KEY`, `can_send_video_notes`, and a `SelfImage` reference photo) |
+| Vusan sends a voice message instead of a round video, or offers no round video at all | `tools/voice/VideoNoteTools.kt` (synthesize → render → outbox, and the voice fallback when the render fails) + `tools/voice/VideoNoteRenderer.kt` (the ffmpeg graph; the waveform box stays inside the circle Telegram crops to) + `tools/ToolCatalogFactory.kt` (needs `ELEVENLABS_API_KEY` and a `SelfImage` reference photo; `can_send_video_notes` is checked by the tool at the send) |
 | Vusan answers about a whole message when the user quoted one part of it | `telegram/inbound/ReplyContext.kt` (`quotedFragmentOrNull`, what the sender selected) + `agent/TurnInput.kt` (the `<quoted_fragment>` block, and when it is left out) + `agent/SystemPrompt.kt` (what the block means) |
 | Vusan does not know what a reply is about, or cannot edit a picture it made itself | `telegram/AgentTurns.kt` (the reply summary and replied file are built for every reply) + `telegram/inbound/ReplyContext.kt` (`replySummaryOrNull`, who the `author` is, `repliedAttachedFileOrNull`) + `agent/TurnInput.kt` (the `<reply_context>` block itself) |
 | A rich message reads as empty, `unknown`, or loses its structure | `telegram/inbound/RichMessageText.kt` (block tree → rich markdown), then `MessageMetadata.contentTypeName`/`textSnippetOrNull` and `ReplyContext.repliedTextOrNull` |
 | Scheduled task fires late, not at all, or reports "missed"/"failed" | `tasks/TaskScheduler.kt` (polling, lateness, retries) + `tasks/Recurrence.kt` (next-run math) |
 | A chat's tasks all went paused on their own, or one keeps firing into a chat the bot was removed from | `telegram/BotMembership.kt` (the `my_chat_member` path) + `telegram/delivery/TelegramErrors.kt` (`isChatUnreachable`) + `tasks/TaskScheduler.kt` (`parkTasksOfUnreachableChat`) |
-| A tool is missing in one group but present elsewhere, or a chat restriction is stale | `telegram/ChatProfiles.kt` (`capabilitiesOf`, the cache and its `forget`) + `tools/ToolCatalogFactory.buildCatalog` (which capability gates which tool) + `telegram/tools/TelegramToolSets.kt` (the same gate for Telegram's own tools) |
+| A tool is missing in one group but present elsewhere, or a chat restriction is stale | `telegram/ChatProfiles.kt` (`capabilitiesOf`, the cache and its `forget`) + `tools/ToolCatalogFactory.buildCatalog` (what is still gated at registration: reactions, polls, GIFs) + `telegram/tools/TelegramToolSets.kt` (the sticker gate) + `tools/CallShelf.kt` (`refusedByChat`, what a producing tool answers at a send the chat refuses) |
 | The model answers that it cannot speak, schedule or publish something it has tools for | `tools/ToolCatalog.kt` (which groups are deferred, and the `loadTools` menu) + `agent/TurnPrompt.kt` (`<tool_groups>`, the menu it reads) + `agent/SystemPrompt.kt` (the rule that sends it to `loadTools`) + `agent/AgentTurn.kt` (`run`, which reads the visible tools afresh for every request, so a group loaded mid-turn is offered from the next one) |
 | Tool results come back truncated or empty part-way through a turn | `agent/ContextWindowPolicy.kt` (how large the reserve is for this model) + `agent/TurnToolBudget.kt` (what is left of it) + `agent/AgentTurn.kt` (`boundedToolText`, which truncates and then omits) |
 | A conversation loads the same group on every turn, or keeps offering one it no longer uses | `tools/LoadedToolGroups.kt` (per-scope memory, its cap and its LRU order) — it is process memory, so a restart empties it |
@@ -861,6 +883,7 @@ A symptom-to-source map for finding the right file fast. Paths are under
 | Model / provider / request-timeout selection, or prompt-cache misses | `config/<Vendor>Provider.kt` (one provider's runtime: client, model, options — and its startup check of the model against the vendor) + `config/LlmRuntime.kt` and `config/ModelPreflight.kt` (the dispatch to it) + `llm/openai/OpenAiPromptCaching.kt` (GPT-5.6+: implicit caching with an explicit breakpoint on the system prefix, and none for a prompt that never repeats) + `llm/anthropic/AnthropicClient.kt` (the request-level breakpoint and the hour-long one on the system block); `cacheReadTokens` and `cacheWriteTokens` on each turn's usage line say what was read and written |
 | "Sign in again" replies, ChatGPT-subscription auth, or a rejected `LLM_MODEL` on `codex` | `llm/codex/CodexAuth.kt` (token load/refresh/persist) + `llm/codex/CodexCatalog.kt` (which models the plan offers) + `llm/codex/CodexClientVersion.kt` (the CLI version that catalog is filtered by) + `config/CodexProvider.kt` (the configured model held against them) + `llm/codex/CodexHttpClient.kt` (per-request bearer and account headers) |
 | `describeImage`/`describeVideo` missing from the tool list | `config/VisionRuntime.kt` (chat model vs `VISION_MODEL`), then `tools/ToolCatalogFactory.kt` (registration is skipped when there is no vision runtime) |
+| A label or `sandbox:` reference resolves to the wrong thing or to nothing, or a file one call made is missing from the next call or from `turns/` | `agent/TurnShelf.kt` (labels, what resolves and what waits, `copyToSandbox`) + `tools/ToolSet.kt` (`decodeArgument`, and `takesReference`) + `tools/CallShelf.kt` (`keepOnShelf`) + `tools/sandbox/SandboxTools.kt` (`prepare`, before the work) |
 | Garbled or empty tool calls from a flaky model | `agent/AgentTurn.kt` (`execute`: the empty-arguments guard and the unknown-tool answer) + `tools/ToolSet.kt` (decoding the arguments, and the complaint a missing or wrong-shaped one earns) |
 
 ## Adding a tool
@@ -877,7 +900,13 @@ A new agent tool typically touches these, in order:
    leave it visible when the model may need it without being asked for it by name; a new group also needs its one-line
    summary in `tools/ToolCatalog.kt`, since that line is all the model reads before loading it. A tool only one messenger can implement goes to that adapter's
    `PlatformToolSets` instead (`telegram/tools/TelegramToolSets.kt`), gated there on the same chat capability.
-5. **Docs** — add the capability to the Features section of the [README](../README.md); document setup requirements and
+5. **Files and results between tools** — a parameter that takes a file is an `AttachedFile` (or a list of them),
+   which the model names by label or `sandbox:` path, and which falls back to the request's attachment when omitted; a
+   tool that makes a file calls `keepOnShelf` whether or not it sends it, and takes `send` when a file made without
+   delivering it is worth having. A text parameter that carries a body worth not retyping — a message, a script, a
+   file's contents — may declare `@Arg(takesReference = true)` and say so in its description. Mark an answer that is
+   material to work on `copiedToSandbox`.
+6. **Docs** — add the capability to the Features section of the [README](../README.md); document setup requirements and
    implicit dependencies in [`configuration.md`](configuration.md), and add any new env vars to both that file and
    [`.env.example`](../.env.example).
 

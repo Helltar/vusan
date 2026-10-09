@@ -12,7 +12,7 @@ private const val MAX_TRANSCRIPT_CHARS = 24_000
 
 class YouTubeTranscriptTools(private val client: YouTubeTranscriptClient) : ToolSet {
 
-    @Tool(YouTubeTranscriptToolDescriptions.READ_TRANSCRIPT, readOnly = true)
+    @Tool(YouTubeTranscriptToolDescriptions.READ_TRANSCRIPT, readOnly = true, copiedToSandbox = true)
     suspend fun readYouTubeTranscript(
         @Arg(YouTubeTranscriptToolDescriptions.READ_TRANSCRIPT_QUERY)
         query: String,

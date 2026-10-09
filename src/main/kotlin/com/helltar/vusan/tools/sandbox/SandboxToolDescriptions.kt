@@ -12,7 +12,7 @@ internal object SandboxToolDescriptions {
                 "The machine reaches the public internet for downloads and package installs, and nothing private. " +
                 "Each command is a fresh shell started at the home, and nothing is sourced before it, `~/.profile` included: put `cd project && ...` and any environment setup into the command itself. " +
                 "A long command returns a job ID and keeps running; collect it with `readSandboxCommand` rather than waiting. " +
-                "Attached files are copied into `inbox/` before the command; the tool result gives their exact paths. " +
+                "Attached files, and the files this turn's other tools made, are copied into the turn's own directory under `turns/` before the command; the tool result gives their exact paths. " +
                 "Use `sendFromSandbox` to deliver finished files to the user."
 
     const val COMMAND =
@@ -54,7 +54,8 @@ internal object SandboxToolDescriptions {
         "Path relative to the home, for example `project/main.py`."
 
     const val WRITE_CONTENT =
-        "The complete file contents, not a patch or fragment."
+        "The complete file contents, not a patch or fragment. " +
+                "A label (`#4`) instead writes the whole text that earlier result holds."
 
     const val READ_FILE =
         "Reads a UTF-8 text file from the sandbox, with line numbers, optionally one range of lines. " +

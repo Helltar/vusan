@@ -31,6 +31,8 @@ class AgentFactory(
     // built, so without this the model never sees the name people call it by.
     private val botUsername: String? = null,
     private val botDisplayName: String? = null,
+    // whether this deployment has a sandbox at all; the prompt says nothing about one where it does not
+    private val sandbox: Boolean = false,
     // model calls one turn may make, the last of them reserved for landing a turn that runs long
     private val maxModelCalls: Int,
     private val contextWindowPolicy: ContextWindowPolicy = ContextWindowPolicy(model),
@@ -44,7 +46,7 @@ class AgentFactory(
     // `<tool_groups>`, and the budget below has to weigh the finished prompt.
     fun prepare(toolCatalog: ToolCatalog, currentTurn: String): AgentPromptPreparation {
         val systemPrompt =
-            systemPromptFor(personality ?: DEFAULT_PERSONALITY, model.id, botUsername, botDisplayName)
+            systemPromptFor(personality ?: DEFAULT_PERSONALITY, model.id, botUsername, botDisplayName, sandbox)
 
         return AgentPromptPreparation(
             toolCatalog = toolCatalog,
@@ -76,6 +78,7 @@ class AgentFactory(
         onToolStarting: (activity: ToolActivity?) -> Unit = {},
         // a turn nobody called the bot into outright may end without a word; see `owesDelivery`.
         mayStaySilent: Boolean = false,
+        shelf: TurnShelf,
     ): AgentTurn {
         val history =
             buildList {
@@ -104,6 +107,7 @@ class AgentFactory(
             toolEvents = toolEvents,
             tokenUsage = tokenUsage,
             onToolStarting = onToolStarting,
+            shelf = shelf,
         )
     }
 

@@ -4,6 +4,8 @@ import com.helltar.vusan.common.limitTo
 import com.helltar.vusan.common.rethrowIfCancellation
 import com.helltar.vusan.outbox.BotOutbox
 import com.helltar.vusan.outbox.BotOutput
+import com.helltar.vusan.tools.keepOnShelf
+import com.helltar.vusan.tools.keptNotSent
 import io.github.oshai.kotlinlogging.KotlinLogging
 
 const val MAX_IMAGE_RESULTS = 10
@@ -37,19 +39,22 @@ internal fun BotOutbox.photosRefusedReply(): String? =
 data class FoundImage(val url: String, val description: String? = null)
 
 /**
- * Downloads [candidates] in order, keeps up to [limit] the chat can show as a photo, queues them as a
- * single photo or a media group, and returns the text the tool reports back to the model.
+ * Downloads [candidates] in order, keeps up to [limit] the chat can show as a photo on the turn's shelf,
+ * queues them as a single photo or a media group unless [send] is off, and returns the text the tool
+ * reports back to the model.
  *
- * A chat that refuses photos is answered before the first download: the images are the whole point of
- * the call, and fetching megabytes of them to have the send rejected costs the turn for nothing.
+ * A chat that refuses photos is answered before the first download when they are to be sent: the images
+ * are the whole point of the call, and fetching megabytes of them to have the send rejected costs the
+ * turn for nothing.
  */
 suspend fun ImageDownloadClient.deliverImageResults(
     query: String,
     candidates: List<FoundImage>,
     limit: Int,
     outbox: BotOutbox,
+    send: Boolean = true,
 ): String {
-    outbox.photosRefusedReply()?.let { return it }
+    if (send) outbox.photosRefusedReply()?.let { return it }
 
     if (candidates.isEmpty()) {
         log.warn { "provider returned no image candidates query=[$query]" }
@@ -95,20 +100,21 @@ suspend fun ImageDownloadClient.deliverImageResults(
 
     val photos = delivered.map { (photo, _) -> photo }
     val descriptions = delivered.map { (_, description) -> description?.trim()?.takeIf { it.isNotBlank() } }
+    val labels = photos.map { keepOnShelf(it.filename, it.bytes) }
 
-    log.info { "queued ${photos.size} image(s) for delivery after $attempts attempt(s) query=[$query]" }
+    if (send) {
+        log.info { "queued ${photos.size} image(s) for delivery after $attempts attempt(s) query=[$query]" }
 
-    if (photos.size == 1) {
-        outbox.enqueue(photos.single())
-    } else {
-        outbox.enqueue(BotOutput.PhotoGroup(photos))
+        if (photos.size == 1) outbox.enqueue(photos.single()) else outbox.enqueue(BotOutput.PhotoGroup(photos))
     }
 
     return buildString {
-        if (photos.size == 1)
-            appendLine("""Sent 1 image for "$query".""")
-        else
-            appendLine("""Sent ${photos.size} images for "$query".""")
+        when {
+            !send && labels.all { it == null } -> appendLine(keptNotSent("""The images for "$query"""", label = null))
+            !send -> appendLine("""Kept ${labels.count { it != null }} image(s) for "$query" without sending them: a later call takes each by its label, listed below.""")
+            photos.size == 1 -> appendLine("""Sent 1 image for "$query".""")
+            else -> appendLine("""Sent ${photos.size} images for "$query".""")
+        }
 
         if (descriptions.any { it != null }) {
             appendLine("Image contents (use to answer if the user asks what is in the photo; rewrite in the user's language):")

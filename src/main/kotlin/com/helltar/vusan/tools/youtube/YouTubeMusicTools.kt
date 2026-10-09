@@ -6,6 +6,9 @@ import com.helltar.vusan.tools.ToolSet
 import com.helltar.vusan.outbox.BotOutbox
 import com.helltar.vusan.outbox.BotOutput
 import com.helltar.vusan.common.sanitizeFilename
+import com.helltar.vusan.tools.keepOnShelf
+import com.helltar.vusan.tools.keptNotSent
+import com.helltar.vusan.tools.refusedByChat
 import com.helltar.vusan.tools.suspendToolGuard
 
 class YouTubeMusicTools(private val client: YtDlpClient, private val outbox: BotOutbox) : ToolSet {
@@ -14,7 +17,12 @@ class YouTubeMusicTools(private val client: YtDlpClient, private val outbox: Bot
     suspend fun playFullTrack(
         @Arg(YouTubeMusicToolDescriptions.PLAY_FULL_TRACK_QUERY)
         query: String,
+        @Arg(YouTubeMusicToolDescriptions.SEND)
+        send: Boolean = true,
     ): String = suspendToolGuard {
+        if (send && !outbox.capabilities.audios)
+            return@suspendToolGuard refusedByChat("audio files")
+
         when (val result = client.downloadTrack(query)) {
             is YtDlpResult.NotFound -> """No track found on YouTube for "$query"."""
 
@@ -29,6 +37,9 @@ class YouTubeMusicTools(private val client: YtDlpClient, private val outbox: Bot
             is YtDlpResult.Success -> {
                 val track = result.value
                 val filename = "${track.performer} - ${track.title}".sanitizeFilename().ifBlank { "track" } + ".m4a"
+                val label = keepOnShelf(filename, track.bytes)
+
+                if (!send) return@suspendToolGuard keptNotSent("The track \"${track.title}\" by ${track.performer}", label)
 
                 outbox.enqueue(
                     BotOutput.Audio(

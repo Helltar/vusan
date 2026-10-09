@@ -5,6 +5,7 @@ import com.helltar.vusan.agent.grouplog.GroupLogReader
 import com.helltar.vusan.agent.grouplog.GroupLogRepository
 import com.helltar.vusan.agent.conversation.ConversationRepository
 import com.helltar.vusan.agent.TurnNarrator
+import com.helltar.vusan.agent.TurnShelf
 import com.helltar.vusan.agent.TurnToolBudget
 import com.helltar.vusan.agent.memory.MemoryRepository
 import com.helltar.vusan.config.AppConfig
@@ -55,6 +56,8 @@ import com.helltar.vusan.tools.tgchannel.TelegramChannelClient
 import com.helltar.vusan.tools.tgchannel.TelegramChannelImageDescriber
 import com.helltar.vusan.tools.tgchannel.TelegramChannelReader
 import com.helltar.vusan.tools.tgchannel.TelegramChannelTools
+import com.helltar.vusan.tools.speech.SpeechTools
+import com.helltar.vusan.tools.vision.FfmpegVideoSampler
 import com.helltar.vusan.tools.vision.ImageVisionClient
 import com.helltar.vusan.tools.vision.VideoVisionClient
 import com.helltar.vusan.tools.vision.VisionTools
@@ -94,7 +97,7 @@ class ToolCatalogFactory(
     private val loadedGroups = LoadedToolGroups()
 
     val availableToolNames: List<String> by lazy {
-        buildCatalog(TOOL_NAME_PROBE_CONTEXT, BotOutbox(), TurnToolBudget(0)).tools.map { it.name }.sorted()
+        buildCatalog(TOOL_NAME_PROBE_CONTEXT, BotOutbox(), TurnToolBudget(0), TurnShelf()).tools.map { it.name }.sorted()
     }
 
     // one chat log read may not eat the whole run's tool budget: the model still has to fit its own
@@ -175,23 +178,29 @@ class ToolCatalogFactory(
             SandboxClient(http, it, requireNotNull(config.regolithToken))
         }
 
-    // the key that enables voice transcription also hands a video's sound to the vision tool
+    // the key that enables voice transcription also transcribes any recording a turn can name, and hands
+    // a video's sound to the vision tool; one ffmpeg pass serves both
+    private val whisper = config.openAiStt?.let { OpenAiWhisperClient(http, it) }
+    private val videoSampler = FfmpegVideoSampler()
+
     private val videoVisionClient =
         vision?.let {
             VideoVisionClient(
                 client = it.client,
                 model = it.model,
                 options = it.options,
+                sampler = videoSampler,
                 transcriber =
-                    config.openAiStt?.let { stt -> WhisperVideoAudioTranscriber(OpenAiWhisperClient(http, stt), stt) },
+                    config.openAiStt?.let { stt -> whisper?.let { WhisperVideoAudioTranscriber(it, stt) } },
             )
         }
 
     /**
-     * A tool the chat would refuse is left out rather than registered and rejected at delivery: producing
-     * its output costs a download, an image generation, or a speech synthesis first, and the model cannot
-     * spend any of that on a tool it was never offered. Text-first tools stay registered even when the
-     * chat bans pictures — they still answer, just without the extras.
+     * A tool that makes something is registered whatever the chat accepts: with `send` it is a producer
+     * first, and a picture or a voice the chat refuses is still what the next call or the sandbox works on.
+     * What the chat refuses is checked at the send instead, by the tool and before anything is downloaded,
+     * drawn or synthesized for it, since the model would pay for that and then see it dropped. Only what
+     * does nothing but post — reactions, polls, GIFs by address — is left out here.
      *
      * A set registered with a [ToolGroup] is registered all the same; the group only decides whether its
      * schemas ride along in every request or wait for `loadTools`. Group what a turn rarely needs, and
@@ -201,6 +210,8 @@ class ToolCatalogFactory(
         context: RequestContext,
         outbox: BotOutbox,
         toolBudget: TurnToolBudget,
+        // the one the turn runs its tools in, so a reference resolves against what the tools here kept
+        shelf: TurnShelf,
         narrator: TurnNarrator? = null,
     ): ToolCatalog {
         val chat = context.chat.capabilities
@@ -220,9 +231,9 @@ class ToolCatalogFactory(
             tools(ToolGroup.SCHEDULED_TASKS, TaskTools(repo = tasks, context, TasksRepository.MAX_TASKS_PER_USER))
 
             if (chat.reactions) tools(ReactionTools(context, outbox))
-            if (chat.audios) tools(ToolGroup.YOUTUBE, YouTubeMusicTools(ytDlpClient, outbox))
-            if (chat.videos) tools(ToolGroup.YOUTUBE, YouTubeVideoTools(ytDlpClient, outbox))
-            if (chat.documents) tools(ToolGroup.FILE_TRANSFERS, FileTools(fileDownloadClient, outbox))
+            tools(ToolGroup.YOUTUBE, YouTubeMusicTools(ytDlpClient, outbox))
+            tools(ToolGroup.YOUTUBE, YouTubeVideoTools(ytDlpClient, outbox))
+            tools(ToolGroup.FILE_TRANSFERS, FileTools(fileDownloadClient, outbox))
 
             if (chat.polls) {
                 tools(ToolGroup.POLLS, QuizTools(outbox))
@@ -238,7 +249,8 @@ class ToolCatalogFactory(
                     // one handle for the turn: a site is published from the sandbox the commands ran in,
                     // and a reset by either set is seen by the other.
                     val sandbox = client.sandboxOf(person)
-                    tools(SandboxTools(sandbox, outbox, context.attachedFiles))
+                    shelf.connectSandbox(sandbox)
+                    tools(SandboxTools(sandbox, outbox, shelf))
                     // publishing belongs to the same server: it answers `not_implemented` when it has
                     // no pages role, and says so to the model rather than the tool being missing.
                     tools(ToolGroup.WEB_PUBLISHING, SiteTools(sandbox))
@@ -262,20 +274,17 @@ class ToolCatalogFactory(
                 tools(VisionTools(imageVisionClient, videoVisionClient, context.attachedFile))
             }
 
-            if (elevenLabsTtsClient != null && elevenLabsTts != null) {
-                if (chat.voiceNotes) tools(ToolGroup.VOICE_REPLIES, VoiceTools(elevenLabsTtsClient, elevenLabsTts, outbox))
+            whisper?.let { tools(SpeechTools(it, context.attachedFile, videoSampler)) }
 
-                if (chat.videoNotes && selfPortrait != null)
-                    tools(
-                        ToolGroup.VOICE_REPLIES,
-                        VideoNoteTools(elevenLabsTtsClient, elevenLabsTts, selfPortrait, outbox),
-                    )
+            if (elevenLabsTtsClient != null && elevenLabsTts != null) {
+                tools(ToolGroup.VOICE_REPLIES, VoiceTools(elevenLabsTtsClient, elevenLabsTts, outbox))
+                selfPortrait?.let { tools(ToolGroup.VOICE_REPLIES, VideoNoteTools(elevenLabsTtsClient, elevenLabsTts, it, outbox)) }
             }
 
             // visible rather than grouped: pictures are drawn and edited daily on the live deployment, and
             // a group used that often is loaded again after every restart and in every new conversation,
             // which rebuilds the cached prefix far more often than its two schemas cost to carry.
-            if (chat.photos && imageClient != null && image != null) {
+            if (imageClient != null && image != null) {
                 tools(ImageGenTools(imageClient, image, outbox, context.attachedFiles, selfImage))
             }
 

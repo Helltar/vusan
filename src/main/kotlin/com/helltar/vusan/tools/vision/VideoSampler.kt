@@ -16,8 +16,11 @@ interface VideoSampler {
     /** Up to [maxFrames] frames as JPEG bytes, in chronological order; empty when nothing could be read. */
     suspend fun sampleFrames(video: ByteArray, durationSeconds: Int?, maxFrames: Int): List<ByteArray>
 
-    /** The audio track as mono 16 kHz m4a, or null when the video is silent or ffmpeg failed. */
-    suspend fun extractAudio(video: ByteArray): ByteArray?
+    /**
+     * The audio track as mono 16 kHz m4a, at most its first [maxSeconds] when given, or null when the
+     * media is silent or ffmpeg failed. An audio file goes through the same way as a video.
+     */
+    suspend fun extractAudio(video: ByteArray, maxSeconds: Int? = null): ByteArray?
 }
 
 class FfmpegVideoSampler(
@@ -49,22 +52,18 @@ class FfmpegVideoSampler(
             .orEmpty()
     }
 
-    override suspend fun extractAudio(video: ByteArray): ByteArray? =
+    override suspend fun extractAudio(video: ByteArray, maxSeconds: Int?): ByteArray? =
         withWorkDir(video, "audio") { input, workDir ->
             val output = workDir.resolve("audio.m4a")
 
             val command =
-                listOf(
-                    "-hide_banner", "-nostdin", "-y",
-                    "-i", input.toString(),
-                    "-vn",
-                    "-ac", AUDIO_CHANNELS,
-                    "-ar", AUDIO_SAMPLE_RATE,
+                buildList {
+                    addAll(listOf("-hide_banner", "-nostdin", "-y", "-i", input.toString()))
+                    maxSeconds?.let { addAll(listOf("-t", it.toString())) }
+                    addAll(listOf("-vn", "-ac", AUDIO_CHANNELS, "-ar", AUDIO_SAMPLE_RATE))
                     // aac is ffmpeg's own encoder, so this works on builds without any external codec
-                    "-c:a", "aac",
-                    "-b:a", AUDIO_BITRATE,
-                    output.toString(),
-                )
+                    addAll(listOf("-c:a", "aac", "-b:a", AUDIO_BITRATE, output.toString()))
+                }
 
             // a video with no audio stream fails the run, which is the same "no transcript" answer
             if (!runFfmpeg(command, ffmpegPath, timeout)) null else output.readBytesOrNull()

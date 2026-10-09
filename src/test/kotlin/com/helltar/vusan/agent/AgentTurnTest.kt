@@ -14,6 +14,7 @@ import com.helltar.vusan.llm.textReply
 import com.helltar.vusan.llm.toolCallReply
 import com.helltar.vusan.outbox.BotOutbox
 import com.helltar.vusan.outbox.BotOutput
+import com.helltar.vusan.request.AttachedFile
 import com.helltar.vusan.request.testScope
 import com.helltar.vusan.tools.Arg
 import com.helltar.vusan.tools.Tool
@@ -21,6 +22,7 @@ import com.helltar.vusan.tools.ToolCatalog
 import com.helltar.vusan.tools.ToolGroup
 import com.helltar.vusan.tools.ToolSet
 import com.helltar.vusan.tools.suspendToolGuard
+import com.helltar.vusan.tools.keepOnShelf
 import com.helltar.vusan.tools.toolCatalog
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.runBlocking
@@ -78,6 +80,22 @@ private class ProbeTools(private val outbox: BotOutbox, private val rendezvous: 
     suspend fun explode(@Arg("Why.") reason: String): String = suspendToolGuard { error("boom: $reason") }
 }
 
+// one call makes a file and keeps it, a later one takes it by its label
+private class MakeAndTakeTools : ToolSet {
+
+    @Tool("Draws a picture and keeps it.")
+    suspend fun sketch(@Arg("What.") subject: String): String {
+        keepOnShelf("$subject.png", byteArrayOf(1, 2, 3))
+        return "sketched $subject"
+    }
+
+    @Tool("Looks at a file.")
+    suspend fun inspect(@Arg("Which.") file: AttachedFile): String = "saw ${file.name}, ${file.loadBytes().size} bytes"
+
+    @Tool("Repeats text.")
+    fun echo(@Arg("What.", takesReference = true) text: String): String = "echo: $text"
+}
+
 private class DrawTools : ToolSet {
 
     @Tool("Draws a picture.")
@@ -120,6 +138,7 @@ class AgentTurnTest {
                 toolEvents = run.events::add,
                 tokenUsage = run.usages::add,
                 mayStaySilent = mayStaySilent,
+                shelf = TurnShelf(),
             ).run("the request")
 
         block(run, answer)
@@ -127,6 +146,35 @@ class AgentTurnTest {
 
     private val ChatRequest.toolNames: List<String>
         get() = tools.map { it.name }
+
+    @Test
+    fun `a file one call made is what a later call takes by its label`() =
+        run(
+            toolCallReply(call("sketch", args = arrayOf("subject" to "cat"))),
+            toolCallReply(call("inspect", args = arrayOf("file" to "#1/1")), call("echo", args = arrayOf("text" to "#1"))),
+            textReply("done"),
+            catalog = { toolCatalog { tools(MakeAndTakeTools()) } },
+        ) { run, _ ->
+            val made = assertIs<Message.ToolResults>(run.client.requests[1].messages.last()).results.single().output
+            val taken = assertIs<Message.ToolResults>(run.client.requests[2].messages.last()).results.map { it.output }
+
+            assertEquals("[#1] sketched cat\n[#1/1] cat.png — image, 3 B", made)
+            assertEquals(listOf("[#2] saw cat.png, 3 bytes", "[#3] echo: sketched cat"), taken)
+            assertEquals("sketched cat", run.events.first().output, "history keeps the result without its label")
+        }
+
+    @Test
+    fun `a reference to nothing is answered with what went wrong`() =
+        run(
+            toolCallReply(call("inspect", args = arrayOf("file" to "#7/1"))),
+            textReply("done"),
+            catalog = { toolCatalog { tools(MakeAndTakeTools()) } },
+        ) { run, _ ->
+            val result = assertIs<Message.ToolResults>(run.client.requests[1].messages.last()).results.single()
+
+            assertTrue(result.isError)
+            assertContains(result.output, "rejected its arguments")
+        }
 
     @Test
     fun `a plain answer ends the turn after one call`() =
@@ -146,7 +194,7 @@ class AgentTurnTest {
             assertEquals(2, run.client.requests.size)
 
             val results = assertIs<Message.ToolResults>(run.client.requests[1].messages.last())
-            assertEquals("found: cats", results.results.single().output)
+            assertEquals("[#1] found: cats", results.results.single().output)
             assertEquals("c-lookUp", results.results.single().callId)
             assertFalse(results.results.single().isError)
 
@@ -160,7 +208,7 @@ class AgentTurnTest {
         run(toolCallReply(call("lookUpTogether", "a", "query" to "a"), call("lookUpTogether", "b", "query" to "b")), textReply("ok")) { run, _ ->
             val results = assertIs<Message.ToolResults>(run.client.requests[1].messages.last()).results
 
-            assertEquals(listOf("together: a", "together: b"), results.map { it.output })
+            assertEquals(listOf("[#1] together: a", "[#2] together: b"), results.map { it.output })
             assertEquals(listOf("a", "b"), results.map { it.callId })
             assertEquals(listOf("a", "b"), run.events.map { it.toolCallId })
         }
@@ -175,7 +223,7 @@ class AgentTurnTest {
         ) { run, _ ->
             val results = assertIs<Message.ToolResults>(run.client.requests[1].messages.last()).results
 
-            assertEquals(listOf("alone: a", "found: x", "alone: b"), results.map { it.output })
+            assertEquals(listOf("[#1] alone: a", "[#2] found: x", "[#3] alone: b"), results.map { it.output })
         }
 
     // the announcement reached the chat, so a turn that stops there leaves the user waiting on a promise
@@ -216,10 +264,11 @@ class AgentTurnTest {
             val results = last.filterIsInstance<Message.ToolResults>().map { it.results.single() }
 
             assertEquals(listOf("c1", "c2", "c3"), results.map { it.callId })
-            assertEquals(FOLDED_RESULT, results[0].output)
-            assertEquals(FOLDED_RESULT, results[1].output)
+            // folded under the labels the shelf still answers to
+            assertEquals("[#1] $FOLDED_RESULT", results[0].output)
+            assertEquals("[#2] $FOLDED_RESULT", results[1].output)
             // the run's own budget already cut the latest result down; folding never touches it
-            assertFalse(results[2].output == FOLDED_RESULT, "the latest batch is never folded")
+            assertFalse(results[2].output.endsWith(FOLDED_RESULT), "the latest batch is never folded")
 
             val calls = last.filterIsInstance<Message.Assistant>().flatMap { it.toolCalls }
             assertTrue("_dropped" in calls[0].arguments)
@@ -262,7 +311,7 @@ class AgentTurnTest {
         run(toolCallReply(call("loadTools", args = arrayOf("groups" to "gifs"))), toolCallReply(call("draw", args = arrayOf("subject" to "a cat"))), textReply("done")) { run, _ ->
             assertFalse("draw" in run.client.requests[0].toolNames)
             assertTrue("draw" in run.client.requests[1].toolNames)
-            assertEquals("drew a cat", assertIs<Message.ToolResults>(run.client.requests[2].messages.last()).results.single().output)
+            assertEquals("[#2] drew a cat", assertIs<Message.ToolResults>(run.client.requests[2].messages.last()).results.single().output)
         }
 
     @Test

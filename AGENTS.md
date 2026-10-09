@@ -240,6 +240,16 @@ chat capabilities. Nothing under `tools/` may name a messenger, and
   call reads — is `@Tool(..., readOnly = true)`, and the loop runs such calls of one
   batch side by side. Anything whose order against the batch is its meaning stays
   sequential, however harmless.
+- Results travel between tools by reference, resolved by the loop and the argument
+  decoder, never by a tool: a parameter that takes a file is an `AttachedFile` (or a
+  list), which the model names by label (`#3/1`) or `sandbox:<path>` and which falls
+  back to the request's attachment when left out. A tool that makes a file calls
+  `keepOnShelf` whether or not it sends it — so it is not read-only — and takes `send`
+  where a file made without delivering it is worth having. A text parameter takes a
+  reference only when it declares `@Arg(takesReference = true)` and its description says
+  so — a body worth not retyping, never a path or a query. `copiedToSandbox` is opt-in
+  for answers that are material to work on, never for what is about other people or
+  the bot's own records.
 - The `@Tool(description)` and `@Arg(description)` values are all-or-nothing per
   module: constants only, never mixed with inline strings, ordered by tool method
   order. Split a concatenated one at sentence boundaries — each `+` chunk is one

@@ -13,12 +13,12 @@ import com.helltar.vusan.llm.TEST_MODEL
 import java.lang.reflect.Proxy
 import kotlin.test.Test
 import kotlin.test.assertEquals
-import kotlin.test.assertTrue
 import org.telegram.telegrambots.meta.generics.TelegramClient
 
 /**
- * The registry stopped gating Telegram's own tools when it stopped knowing about them, so the gate has
- * to hold here instead: a chat that refuses a kind of content must not be offered the tool that sends it.
+ * The registry stopped gating Telegram's own tools when it stopped knowing about them, so the gate on the
+ * sticker catalog has to hold here instead. The file tool is offered whatever the chat accepts: `send=false`
+ * fetches a file for another tool, and the tool itself refuses a send the chat would drop.
  */
 class TelegramToolSetsTest {
 
@@ -39,9 +39,9 @@ class TelegramToolSetsTest {
     }
 
     @Test
-    fun `a chat that forbids documents is not offered resending by file id`() {
+    fun `a chat that forbids documents still gets the file tool, which refuses at the send`() {
         assertEquals(
-            listOf(StickerTools::class),
+            listOf(ChatFileTools::class, StickerTools::class),
             toolSetsFor(ChatCapabilities(documents = false)).map { it::class },
         )
     }
@@ -63,9 +63,10 @@ class TelegramToolSetsTest {
     }
 
     @Test
-    fun `a chat that allows neither gets nothing`() {
-        assertTrue(
-            toolSetsFor(ChatCapabilities(documents = false, stickersAndAnimations = false)).isEmpty(),
+    fun `a chat that forbids both keeps only the file tool`() {
+        assertEquals(
+            listOf(ChatFileTools::class),
+            toolSetsFor(ChatCapabilities(documents = false, stickersAndAnimations = false)).map { it::class },
         )
     }
 

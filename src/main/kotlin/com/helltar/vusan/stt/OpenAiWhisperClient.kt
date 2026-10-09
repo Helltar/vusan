@@ -13,7 +13,8 @@ private const val TRANSCRIPTION_TIMEOUT_MILLIS = 120_000L
 
 class OpenAiWhisperClient(private val http: HttpClient, private val config: OpenAiSttConfig) {
 
-    suspend fun transcribe(audio: ByteArray, fileName: String, mimeType: String?): String {
+    /** [language] is an ISO-639-1 code the speech is in, when the caller knows it better than detection would. */
+    suspend fun transcribe(audio: ByteArray, fileName: String, mimeType: String?, language: String? = null): String {
         require(audio.isNotEmpty()) { "Audio bytes must not be empty" }
         require(fileName.isNotBlank()) { "File name must not be blank" }
 
@@ -29,6 +30,7 @@ class OpenAiWhisperClient(private val http: HttpClient, private val config: Open
                 formData = formData {
                     append("model", config.model)
                     append("response_format", "json")
+                    language?.let { append("language", it) }
                     append(
                         key = "file",
                         value = audio,

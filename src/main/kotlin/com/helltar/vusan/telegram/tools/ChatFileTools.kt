@@ -13,6 +13,9 @@ import com.helltar.vusan.telegram.downloadFileById
 import com.helltar.vusan.tools.files.FileTools
 import com.helltar.vusan.tools.files.asFileSize
 import com.helltar.vusan.tools.files.hasFileExtension
+import com.helltar.vusan.tools.keepOnShelf
+import com.helltar.vusan.tools.keptNotSent
+import com.helltar.vusan.tools.refusedByChat
 import com.helltar.vusan.tools.requireToolText
 import com.helltar.vusan.tools.suspendToolGuard
 import org.telegram.telegrambots.meta.generics.TelegramClient
@@ -41,8 +44,13 @@ class ChatFileTools(
         fileId: String,
         @Arg(ChatFileToolDescriptions.CHAT_FILENAME)
         filename: String = "",
+        @Arg(ChatFileToolDescriptions.CHAT_SEND)
+        send: Boolean = true,
     ): String = suspendToolGuard {
         val id = fileId.requireToolText("File id", MAX_FILE_ID_CHARS)
+
+        if (send && !outbox.capabilities.documents)
+            return@suspendToolGuard refusedByChat("documents")
 
         val file =
             runCatching { telegram.downloadFileById(id) }
@@ -63,6 +71,9 @@ class ChatFileTools(
                 }
 
         val name = chatFilename(filename, file.path)
+        val label = keepOnShelf(name, file.bytes)
+
+        if (!send) return@suspendToolGuard keptNotSent("\"$name\" (${file.bytes.size.toLong().asFileSize()})", label)
 
         outbox.enqueue(BotOutput.Document(bytes = file.bytes, filename = name))
 

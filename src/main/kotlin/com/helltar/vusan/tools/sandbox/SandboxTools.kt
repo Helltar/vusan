@@ -1,5 +1,6 @@
 package com.helltar.vusan.tools.sandbox
 
+import com.helltar.vusan.agent.TurnShelf
 import com.helltar.vusan.tools.Arg
 import com.helltar.vusan.tools.Tool
 import com.helltar.vusan.tools.ToolSet
@@ -8,11 +9,9 @@ import com.helltar.vusan.common.sanitizeFilename
 import com.helltar.vusan.common.xmlBlock
 import com.helltar.vusan.outbox.BotOutbox
 import com.helltar.vusan.outbox.BotOutput
-import com.helltar.vusan.request.AttachedFile
 import com.helltar.vusan.tools.requireToolText
 import com.helltar.vusan.tools.suspendToolGuard
 import java.util.Locale
-import java.util.UUID
 
 private const val MAX_COMMAND_CHARS = 16_000
 private const val MAX_CONTENT_CHARS = 400_000
@@ -23,7 +22,6 @@ private const val MAX_READ_CHARS = 60_000
 private const val MAX_PATH_CHARS = 400
 private const val MAX_SEND_FILES = 10
 private const val MAX_JOB_ID_CHARS = 64
-private const val MAX_ATTACHMENT_BYTES = 20 * 1024 * 1024
 private val IMAGE_EXTENSIONS = setOf("png", "jpg", "jpeg", "webp", "bmp")
 private val VIDEO_EXTENSIONS = setOf("mp4", "mov", "m4v", "webm")
 private val ANIMATION_EXTENSIONS = setOf("gif", "mp4")
@@ -34,10 +32,10 @@ class SandboxTools(
     // shared with every other tool of the turn, so a reset here is a reset for them too
     private val sandbox: SandboxClient.PersonSandbox,
     private val outbox: BotOutbox,
-    private val attachedFiles: List<AttachedFile> = emptyList(),
+    // the request's attachments and what the turn's other calls made, which reach the turn's own
+    // directory here before the next piece of work
+    private val shelf: TurnShelf,
 ) : ToolSet {
-
-    private var attachmentsHandled = false
 
     @Tool(SandboxToolDescriptions.RUN_COMMAND)
     suspend fun runCommand(
@@ -48,7 +46,7 @@ class SandboxTools(
     ): String = suspendToolGuard {
         val script = command.requireToolText("Command", MAX_COMMAND_CHARS)
         require(timeoutSeconds >= 0) { "Timeout must not be negative" }
-        val note = placeAttachments()
+        val note = prepare()
         val result = sandbox.exec(script, timeoutSeconds.takeIf { it > 0 })
         listOfNotNull(note, describeCommand(result)).joinToString("\n")
     }
@@ -85,12 +83,12 @@ class SandboxTools(
     suspend fun writeSandboxFile(
         @Arg(SandboxToolDescriptions.WRITE_PATH)
         path: String,
-        @Arg(SandboxToolDescriptions.WRITE_CONTENT)
+        @Arg(SandboxToolDescriptions.WRITE_CONTENT, takesReference = true)
         content: String,
     ): String = suspendToolGuard {
-        val target = path.requireToolText("Path", MAX_PATH_CHARS)
+        val target = path.requireToolText("Path", MAX_PATH_CHARS).sandboxPath()
         require(content.length <= MAX_CONTENT_CHARS) { "File content must be at most $MAX_CONTENT_CHARS characters" }
-        val note = placeAttachments()
+        val note = prepare()
         sandbox.writeFile(target, content.toByteArray(Charsets.UTF_8))
         listOfNotNull(note, "Wrote `$target` (${content.length} chars). Use sendFromSandbox to deliver it.").joinToString("\n")
     }
@@ -104,7 +102,7 @@ class SandboxTools(
         @Arg(SandboxToolDescriptions.READ_LINE_COUNT)
         lineCount: Int = 0,
     ): String = suspendToolGuard {
-        val target = path.requireToolText("Path", MAX_PATH_CHARS)
+        val target = path.requireToolText("Path", MAX_PATH_CHARS).sandboxPath()
         require(fromLine >= 1) { "fromLine starts at 1" }
         require(lineCount >= 0) { "lineCount must not be negative" }
 
@@ -140,10 +138,11 @@ class SandboxTools(
         @Arg(SandboxToolDescriptions.EDIT_REPLACE_ALL)
         replaceAll: Boolean = false,
     ): String = suspendToolGuard {
-        val target = path.requireToolText("Path", MAX_PATH_CHARS)
+        val target = path.requireToolText("Path", MAX_PATH_CHARS).sandboxPath()
         require(find.isNotEmpty()) { "`find` must not be empty" }
         require(find != replace) { "`find` and `replace` are the same text, so there is nothing to change" }
 
+        val note = prepare()
         val text = sandbox.readText(target)
         val occurrences = text.countOf(find)
 
@@ -159,7 +158,10 @@ class SandboxTools(
 
         val replaced = if (replaceAll) occurrences else 1
 
-        "Edited `$target`: replaced $replaced occurrence(s), ${find.lines().size} line(s) became ${replace.lines().size}; the file is now ${edited.lines().size} line(s)."
+        listOfNotNull(
+            note,
+            "Edited `$target`: replaced $replaced occurrence(s), ${find.lines().size} line(s) became ${replace.lines().size}; the file is now ${edited.lines().size} line(s).",
+        ).joinToString("\n")
     }
 
     @Tool(SandboxToolDescriptions.RESET_SANDBOX)
@@ -177,12 +179,13 @@ class SandboxTools(
     ): String = suspendToolGuard {
         require(paths.isNotEmpty()) { "At least one path is required" }
         require(paths.size <= MAX_SEND_FILES) { "At most $MAX_SEND_FILES files per call" }
-        val wanted = paths.map { it.requireToolText("Path", MAX_PATH_CHARS) }.distinct()
+        val wanted = paths.map { it.requireToolText("Path", MAX_PATH_CHARS).sandboxPath() }.distinct()
         val kind = sendAs.trim().lowercase()
         require(kind in setOf("", SEND_AS_DOCUMENT, SEND_AS_ANIMATION)) { "sendAs must be `document`, `animation` or empty" }
         require(kind != SEND_AS_ANIMATION || wanted.all { sandboxFilename(it).extension in ANIMATION_EXTENSIONS }) {
             "Only `.gif` and `.mp4` files can be sent as an animation"
         }
+        val note = prepare()
         val photos = mutableListOf<BotOutput.Photo>()
         val others = mutableListOf<Pair<BotOutput, String>>()
         val sent = mutableListOf<String>()
@@ -227,35 +230,18 @@ class SandboxTools(
         val queued = sent - refused.toSet()
 
         buildString {
+            note?.let(::appendLine)
             if (queued.isNotEmpty()) appendLine("Sending ${queued.size} file(s): ${queued.joinToString(", ")}. Say what they are; do not paste their contents.")
             if (refused.isNotEmpty()) appendLine("This chat does not accept these, so they were not sent: ${refused.joinToString(", ")}.")
             if (failed.isNotEmpty()) appendLine("Not sent: ${failed.joinToString(", ")}.")
         }.trim()
     }
 
-    private suspend fun placeAttachments(): String? {
-        if (attachmentsHandled || attachedFiles.isEmpty()) return null
-        attachmentsHandled = true
-
-        return attachedFiles.map { placeAttachment(it) }.joinToString("\n")
-    }
-
-    // a directory per file rather than per turn: the items of one album may well share a name.
-    private suspend fun placeAttachment(file: AttachedFile): String {
-        val name = file.name.sanitizeFilename().ifBlank { "attachment" }
-        if ((file.fileSizeBytes ?: 0) > MAX_ATTACHMENT_BYTES) return "The attached file `$name` exceeds the 20 MB input limit."
-
-        return runCatching {
-            val bytes = file.loadBytes()
-            require(bytes.size <= MAX_ATTACHMENT_BYTES) { "Attachment exceeds the 20 MB input limit" }
-            val path = "inbox/${UUID.randomUUID()}/$name"
-            sandbox.writeFile(path, bytes)
-            "The attached file is in the sandbox at `$path`."
-        }.getOrElse {
-            it.rethrowIfCancellation()
-            "The attached file `$name` could not be placed in the sandbox: ${it.message}."
-        }
-    }
+    // before any work here, so a command finds the turn's files where the result of this call says they are
+    private suspend fun prepare(): String? =
+        shelf.copyToSandbox()
+            .takeIf { it.isNotEmpty() }
+            ?.let { "This turn's files are in the sandbox: ${it.joinToString(", ")}." }
 }
 
 // a file the model reads or edits is text, decoded whole; a NUL byte says it is not, and the shell is the tool for it

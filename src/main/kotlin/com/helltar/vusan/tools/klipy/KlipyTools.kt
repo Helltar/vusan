@@ -12,6 +12,8 @@ import com.helltar.vusan.request.ChatCapabilities
 import com.helltar.vusan.tools.files.FileDownloadClient
 import com.helltar.vusan.tools.files.FileDownloadResult
 import com.helltar.vusan.tools.files.MAX_DOWNLOAD_BYTES
+import com.helltar.vusan.tools.keepOnShelf
+import com.helltar.vusan.tools.keptNotSent
 import com.helltar.vusan.tools.requireToolText
 import com.helltar.vusan.tools.suspendToolGuard
 import io.github.oshai.kotlinlogging.KotlinLogging
@@ -68,9 +70,18 @@ class KlipyTools(
     suspend fun sendGif(
         @Arg(KlipyToolDescriptions.ID)
         id: String,
+        @Arg(KlipyToolDescriptions.SEND)
+        send: Boolean = true,
     ): String = suspendToolGuard {
         val key = id.trim()
         val candidate = requireNotNull(candidates[key]) { "unknown id [$key]: pass an id that `searchGifs` returned in this turn" }
+
+        // nothing is shared yet, so nothing is reported: what reaches the chat later is the turn's own work
+        if (!send) {
+            val file = candidate.downloaded(candidate.kind.maxBytes)
+
+            return@suspendToolGuard keptNotSent("The ${candidate.kind.value}", keepOnShelf(file.filename, file.bytes))
+        }
 
         require(sent.add(key)) { "this one is already sent in this turn" }
 
@@ -94,13 +105,27 @@ class KlipyTools(
             "unknown kind [$value]: use ${KlipyKind.entries.joinToString(", ") { "`${it.value}`" }}"
         }
 
-    // a GIF goes out by its address; a picture and a video are kinds the outbox takes only as bytes.
+    // a GIF goes out by its address; a picture and a video are kinds the outbox takes only as bytes, and
+    // what was fetched anyway is kept for the calls after this one.
     private suspend fun Candidate.output(): BotOutput =
         when (kind) {
             KlipyKind.GIF -> BotOutput.Animation(url)
-            KlipyKind.MEME -> downloaded(MAX_MEME_BYTES).let { BotOutput.Photo(it.bytes, it.filename) }
-            KlipyKind.CLIP -> downloaded(MAX_DOWNLOAD_BYTES).let { BotOutput.Video(it.bytes, it.filename) }
+
+            KlipyKind.MEME ->
+                downloaded(kind.maxBytes).let {
+                    keepOnShelf(it.filename, it.bytes)
+                    BotOutput.Photo(it.bytes, it.filename)
+                }
+
+            KlipyKind.CLIP ->
+                downloaded(kind.maxBytes).let {
+                    keepOnShelf(it.filename, it.bytes)
+                    BotOutput.Video(it.bytes, it.filename)
+                }
         }
+
+    private val KlipyKind.maxBytes: Long
+        get() = if (this == KlipyKind.MEME) MAX_MEME_BYTES else MAX_DOWNLOAD_BYTES
 
     private suspend fun Candidate.downloaded(maxBytes: Long): FileDownloadResult.Success =
         when (val result = downloads.download(url, maxBytes = maxBytes)) {

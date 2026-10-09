@@ -6,7 +6,7 @@ import com.helltar.vusan.llm.ToolDefinition
 import kotlinx.serialization.json.buildJsonObject
 import kotlinx.serialization.json.put
 
-internal const val FOLDED_RESULT = "[result dropped to make room in the context; call the tool again if it is still needed]"
+internal const val FOLDED_RESULT = "[result dropped to make room in the context; its label still holds the whole of it for any argument that takes a label, or call the tool again]"
 
 // what a message costs beyond its text: the role, the ids, the framing the provider adds
 private const val MESSAGE_OVERHEAD_TOKENS = 12
@@ -70,9 +70,12 @@ private fun estimateTokens(part: Part): Int =
         is Part.Image -> part.bytes.size / ESTIMATED_BYTES_PER_TOKEN
     }
 
-private fun Message.ToolResults.isFolded(): Boolean = results.all { it.output == FOLDED_RESULT }
+private fun Message.ToolResults.isFolded(): Boolean = results.all { it.output.endsWith(FOLDED_RESULT) }
 
-private fun Message.ToolResults.folded(): Message.ToolResults = Message.ToolResults(results.map { it.copy(output = FOLDED_RESULT) })
+// the stub keeps the result's label: the shelf still holds the whole of it there, so a later call can take
+// it without the tool running again
+private fun Message.ToolResults.folded(): Message.ToolResults =
+    Message.ToolResults(results.map { result -> result.copy(output = result.output.resultLabelOrNull()?.let { "[$it] $FOLDED_RESULT" } ?: FOLDED_RESULT) })
 
 // the call stays answered under its id; only what it carried goes, and the stub says it ran as issued
 private fun Message.Assistant.withFoldedArguments(): Message.Assistant =

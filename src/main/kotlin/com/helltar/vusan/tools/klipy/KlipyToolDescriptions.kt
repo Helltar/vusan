@@ -21,4 +21,8 @@ internal object KlipyToolDescriptions {
 
     const val ID =
         "The candidate's id, exactly as `searchGifs` returned it."
+
+    const val SEND =
+        "Whether it goes to the chat; `true` by default. " +
+                "`false` fetches it for a later call instead, another tool or the sandbox, which takes it by the label the result names."
 }

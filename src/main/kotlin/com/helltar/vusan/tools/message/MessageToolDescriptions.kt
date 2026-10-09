@@ -12,7 +12,8 @@ internal object MessageToolDescriptions {
 
     const val TEXT =
         "Full text of the message to send to the user. " +
-                "Must be non-empty."
+                "Must be non-empty. " +
+                "A label (`#4`) or `sandbox:<path>` instead sends the whole text it names, such as a report written in the sandbox."
 
     const val SEND_RICH_MESSAGE =
         "Sends a large, structured reply as a Telegram rich message (Bot API 10.1). " +
@@ -25,7 +26,8 @@ internal object MessageToolDescriptions {
         "Message body in GitHub-Flavored Markdown: " +
                 "`#` to `######` headings, `**bold**`, `*italic*`, `~~strikethrough~~`, `` `code` ``, `||spoiler||`, `[text](url)` links, " +
                 "`-` / `1.` lists, `- [ ]` / `- [x]` task items, `>` quotes, `---` divider, fenced code blocks, and `| a | b |` tables with a `| --- | --- |` separator row. " +
-                "Must be non-empty; up to 32768 characters."
+                "Must be non-empty; up to 32768 characters. " +
+                "A label (`#4`) or `sandbox:<path>` instead sends the whole text it names, such as a report written in the sandbox."
 
     const val ANNOUNCE_PLAN =
         "Tells the user what you are about to do, before you start doing it. " +

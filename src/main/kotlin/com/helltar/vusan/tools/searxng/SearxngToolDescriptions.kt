@@ -48,4 +48,8 @@ internal object SearxngToolDescriptions {
         "How many images to return, from 1 to 10. " +
                 "Prefer 3 to 5. " +
                 "When 2 or more images are returned they are sent as a single media group."
+
+    const val META_SEARCH_IMAGES_SEND =
+        "Whether the images go to the chat; `true` by default. " +
+                "`false` keeps them for a later call instead, another tool or the sandbox, which takes each by the label the result names."
 }

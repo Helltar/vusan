@@ -9,6 +9,9 @@ import com.helltar.vusan.outbox.BotOutbox
 import com.helltar.vusan.outbox.BotOutput
 import com.helltar.vusan.request.AttachedFile
 import com.helltar.vusan.request.AttachedFileKind
+import com.helltar.vusan.tools.keepOnShelf
+import com.helltar.vusan.tools.keptNotSent
+import com.helltar.vusan.tools.refusedByChat
 import com.helltar.vusan.tools.suspendToolGuard
 import io.github.oshai.kotlinlogging.KotlinLogging
 
@@ -28,6 +31,8 @@ class ImageGenTools(
         orientation: String = "square",
         @Arg(ImageGenToolDescriptions.SELF_PORTRAIT)
         selfPortrait: Boolean = false,
+        @Arg(ImageGenToolDescriptions.SEND)
+        send: Boolean = true,
     ): String = suspendToolGuard {
         val trimmed = prompt.trim()
 
@@ -37,6 +42,9 @@ class ImageGenTools(
         if (trimmed.length > IMAGE_PROMPT_MAX_CHARS)
             return@suspendToolGuard "Image prompt is ${trimmed.length} characters, " +
                     "which exceeds the $IMAGE_PROMPT_MAX_CHARS-character limit. Shorten it and try again."
+
+        if (send && !outbox.capabilities.photos)
+            return@suspendToolGuard refusedByChat("photos")
 
         val size = orientation.toImageSize(config.model)
         val self = selfImage?.takeIf { selfPortrait }
@@ -65,7 +73,12 @@ class ImageGenTools(
                     return@suspendToolGuard "Image generation failed: ${e.message ?: e::class.simpleName}"
                 }
 
-        outbox.enqueue(BotOutput.Photo(bytes = bytes, filename = imageFilename(bytes)))
+        val name = imageFilename(bytes)
+        val label = keepOnShelf(name, bytes)
+
+        if (!send) return@suspendToolGuard keptNotSent("The image ($size, ${bytes.size} bytes)", label)
+
+        outbox.enqueue(BotOutput.Photo(bytes = bytes, filename = name))
 
         "Image queued ($size, ${bytes.size} bytes). Do not add a separate user-facing confirmation."
     }
@@ -78,8 +91,13 @@ class ImageGenTools(
         orientation: String = "auto",
         @Arg(ImageGenToolDescriptions.EDIT_WITH_YOURSELF)
         withYourself: Boolean = false,
+        @Arg(ImageGenToolDescriptions.EDIT_IMAGES)
+        images: List<AttachedFile> = emptyList(),
+        @Arg(ImageGenToolDescriptions.EDIT_SEND)
+        send: Boolean = true,
     ): String = suspendToolGuard {
         val trimmed = prompt.trim()
+        val candidates = images.ifEmpty { attachedFiles }
 
         if (trimmed.isEmpty())
             return@suspendToolGuard "Edit instruction is empty — describe the change to make."
@@ -88,17 +106,20 @@ class ImageGenTools(
             return@suspendToolGuard "Edit instruction is ${trimmed.length} characters, " +
                     "which exceeds the $IMAGE_PROMPT_MAX_CHARS-character limit. Shorten it and try again."
 
-        val images = attachedFiles.filter { it.kind == AttachedFileKind.IMAGE }
+        if (send && !outbox.capabilities.photos)
+            return@suspendToolGuard refusedByChat("photos")
 
-        if (images.isEmpty())
-            return@suspendToolGuard attachedFiles.firstOrNull()
-                ?.let { "The attached file `${it.name}` is not an image, so it can't be edited." }
-                ?: "No image is attached in this turn — ask the user to send or reply to one."
+        val pictures = candidates.filter { it.kind == AttachedFileKind.IMAGE }
 
-        val editable = images.mapNotNull { file -> file.editContentTypeOrNull()?.let { file to it } }
+        if (pictures.isEmpty())
+            return@suspendToolGuard candidates.firstOrNull()
+                ?.let { "`${it.name}` is not an image, so it can't be edited." }
+                ?: "No image is attached in this turn — ask the user to send or reply to one, or name one."
+
+        val editable = pictures.mapNotNull { file -> file.editContentTypeOrNull()?.let { file to it } }
 
         if (editable.isEmpty())
-            return@suspendToolGuard "`${images.first().name}` is not a supported image type for editing — " +
+            return@suspendToolGuard "`${pictures.first().name}` is not a supported image type for editing — " +
                     "use a PNG, JPEG, or WebP image."
 
         val self = selfImage?.reference?.takeIf { withYourself }
@@ -124,7 +145,7 @@ class ImageGenTools(
             uploadBytes += bytes.size
 
             if (uploadBytes > MAX_EDIT_TOTAL_BYTES)
-                return@suspendToolGuard "The attached images add up to more than $MAX_EDIT_TOTAL_BYTES bytes — " +
+                return@suspendToolGuard "The images add up to more than $MAX_EDIT_TOTAL_BYTES bytes — " +
                         "ask the user which of them the edit is about."
 
             sources += SourceImage(bytes, file.name, contentType)
@@ -151,7 +172,12 @@ class ImageGenTools(
                     return@suspendToolGuard "Image edit failed: ${e.message ?: e::class.simpleName}"
                 }
 
-        outbox.enqueue(BotOutput.Photo(bytes = bytes, filename = imageFilename(bytes)))
+        val name = imageFilename(bytes)
+        val label = keepOnShelf(name, bytes)
+
+        if (!send) return@suspendToolGuard keptNotSent("The edited image ($size, ${bytes.size} bytes)", label)
+
+        outbox.enqueue(BotOutput.Photo(bytes = bytes, filename = name))
 
         "Edited image queued (${sources.size} source image(s), $size, ${bytes.size} bytes). " +
                 "Do not add a separate user-facing confirmation."

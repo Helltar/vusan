@@ -1,8 +1,11 @@
 package com.helltar.vusan.telegram.tools
 
+import com.helltar.vusan.agent.TurnShelf
 import com.helltar.vusan.outbox.BotOutbox
 import com.helltar.vusan.outbox.BotOutput
+import com.helltar.vusan.request.ChatCapabilities
 import kotlinx.coroutines.runBlocking
+import kotlinx.coroutines.withContext
 import org.telegram.telegrambots.meta.api.methods.GetFile
 import org.telegram.telegrambots.meta.api.objects.ApiResponse
 import org.telegram.telegrambots.meta.api.objects.File
@@ -70,6 +73,21 @@ class ChatFileToolsTest {
         assertTrue(outbox.pending.isEmpty())
         assertContains(reply, "made-up-id")
         assertContains(reply, "file_unique_id")
+    }
+
+    // fetching for a chat that refuses documents would be dropped at the send, so it is answered before the
+    // fetch; kept for a later call, the file is fetched and queued nowhere
+    @Test
+    fun `a chat that refuses documents is answered before the fetch, unless the file is kept instead`() = runBlocking {
+        val outbox = BotOutbox(ChatCapabilities(documents = false))
+        val tools = tools(outbox)
+
+        assertContains(tools.sendChatFile(fileId = "CAACAgIAAxkBAAE"), "does not accept documents")
+
+        val kept = withContext(TurnShelf().open()) { tools.sendChatFile(fileId = "CAACAgIAAxkBAAE", send = false) }
+
+        assertContains(kept, "`#1/1`")
+        assertTrue(outbox.pending.isEmpty())
     }
 
     private fun assertContentEqualsBytes(expected: ByteArray, actual: ByteArray) {

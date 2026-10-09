@@ -34,11 +34,15 @@ internal object ImageGenToolDescriptions {
                 "Say how the shot is framed and what you are doing in it — where you are looking, close-up or full height, mid-turn, over the shoulder, caught laughing — because whatever you leave out is copied from that photo, and every picture ends up the same head at the same angle. " +
                 "Leave it `false` (the default) for every picture that is not of you."
 
+    const val SEND =
+        "Whether the picture goes to the chat; `true` by default. " +
+                "`false` keeps it for a later call instead, another tool or the sandbox, which takes it by the label the result names."
+
     const val EDIT_IMAGE =
-        "Edit the image or images attached to this turn (a photo the user sent, an album of them, or a replied-to image) and send the result as one photo. " +
+        "Edit the image or images attached to this turn (a photo the user sent, an album of them, or a replied-to image), or the ones `images` names, and send the result as one photo. " +
                 """Use when the user asks to change, modify, fix, retouch, add to, remove from, restyle, or recolor an image they provided ("remove the background", "add a hat to the cat", "make it look like winter", "turn this into a watercolor"). """ +
                 """When several images are attached it edits them into a single picture, so it is also the tool for "merge these", "put us in one photo", "add this logo to that poster", or a collage. """ +
-                "This requires an attached image: if none is present, ask the user to send or reply to one instead of calling this tool. " +
+                "This requires an image: if none is attached or was made this turn, ask the user to send or reply to one instead of calling this tool. " +
                 "To create a brand-new picture from scratch use `generateImage`; to answer questions about what is visible use `describeImage`; for data-driven charts use `runCommand`. " +
                 "After a successful call, do not send a separate confirmation; the edited image is delivered automatically. " +
                 "Use `sendMessage` only if the user explicitly asked for accompanying text or if the tool fails."
@@ -61,4 +65,11 @@ internal object ImageGenToolDescriptions {
                 "and the attached images are the scene you are placed into. " +
                 "Write the `prompt` about where you are in that scene and what you are doing there. " +
                 "Leave it `false` (the default) for an ordinary edit of the user's own images."
+
+    const val EDIT_IMAGES =
+        "Optional images to edit instead of the attachments, in order: files earlier calls made (`#3/1`) or files in the sandbox (`sandbox:out/poster.png`)."
+
+    const val EDIT_SEND =
+        "Whether the edited picture goes to the chat; `true` by default. " +
+                "`false` keeps it for a later call instead, another tool or the sandbox, which takes it by the label the result names."
 }

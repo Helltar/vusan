@@ -17,4 +17,8 @@ internal object ChatFileToolDescriptions {
     const val CHAT_FILENAME =
         "Optional file name including extension, for example `sticker.webp` or `photo.jpg`. " +
                 "Leave empty to keep the name Telegram reports; a name given without an extension takes Telegram's own."
+
+    const val CHAT_SEND =
+        "Whether the file goes to the chat; `true` by default. " +
+                "`false` fetches it for a later call instead, another tool or the sandbox, which takes it by the label the result names."
 }

@@ -12,7 +12,7 @@ private const val MAX_URL_CHARS = 2_048
 
 class PageTools(private val reader: PageReader) : ToolSet {
 
-    @Tool(PageToolDescriptions.READ_PAGE, readOnly = true)
+    @Tool(PageToolDescriptions.READ_PAGE, readOnly = true, copiedToSandbox = true)
     suspend fun readPage(
         @Arg(PageToolDescriptions.URL)
         url: String,

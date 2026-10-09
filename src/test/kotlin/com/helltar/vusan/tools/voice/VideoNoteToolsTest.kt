@@ -1,19 +1,23 @@
 package com.helltar.vusan.tools.voice
 
+import com.helltar.vusan.agent.TurnShelf
 import com.helltar.vusan.config.ElevenLabsTtsConfig
 import com.helltar.vusan.infra.Http
 import com.helltar.vusan.outbox.BotOutbox
 import com.helltar.vusan.outbox.BotOutput
+import com.helltar.vusan.request.ChatCapabilities
 import io.ktor.client.engine.mock.*
 import io.ktor.http.*
 import io.ktor.utils.io.*
 import kotlin.test.Test
+import kotlin.test.assertContains
 import kotlin.test.assertContentEquals
 import kotlin.test.assertEquals
 import kotlin.test.assertFalse
 import kotlin.test.assertIs
 import kotlin.test.assertTrue
 import kotlinx.coroutines.runBlocking
+import kotlinx.coroutines.withContext
 
 class VideoNoteToolsTest {
 
@@ -67,10 +71,28 @@ class VideoNoteToolsTest {
                 error("render must not run")
             }
 
-        val result = tools.speakAsVideoNote("a".repeat(VoiceTools.VOICE_TOOLS_MAX_CHARS + 1))
+        val result = tools.speakAsVideoNote("a".repeat(VideoNoteTools.VIDEO_NOTE_MAX_CHARS + 1))
 
-        assertTrue(result.contains("exceeds the ${VoiceTools.VOICE_TOOLS_MAX_CHARS}-character limit"))
+        assertTrue(result.contains("exceeds the ${VideoNoteTools.VIDEO_NOTE_MAX_CHARS}-character limit"))
         assertFalse(synthesized)
+        assertTrue(outbox.pending.isEmpty())
+    }
+
+    // producing for a chat that refuses the kind would be paid for and then dropped, so it is answered first;
+    // kept for a later call, the same words are synthesized and queued nowhere
+    @Test
+    fun `a chat that refuses round videos is answered before synthesizing, unless the video is kept instead`() = runBlocking {
+        val outbox = BotOutbox(ChatCapabilities(videoNotes = false))
+        var synthesized = 0
+        val tools = videoNoteTools(outbox, onSynthesize = { synthesized++ }) { _, _ -> byteArrayOf(4) }
+
+        assertContains(tools.speakAsVideoNote("Hello there"), "does not accept round video messages")
+        assertEquals(0, synthesized)
+
+        val kept = withContext(TurnShelf().open()) { tools.speakAsVideoNote("Hello there", send = false) }
+
+        assertEquals(1, synthesized)
+        assertContains(kept, "`#1/1`")
         assertTrue(outbox.pending.isEmpty())
     }
 

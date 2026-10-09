@@ -11,7 +11,7 @@ import com.helltar.vusan.tools.suspendToolGuard
 
 class CodexSearchTools(private val client: CodexSearchClient) : ToolSet {
 
-    @Tool(CodexSearchToolDescriptions.ANSWER_FROM_WEB, readOnly = true)
+    @Tool(CodexSearchToolDescriptions.ANSWER_FROM_WEB, readOnly = true, copiedToSandbox = true)
     suspend fun answerFromWeb(
         @Arg(CodexSearchToolDescriptions.ANSWER_FROM_WEB_QUESTION)
         question: String,

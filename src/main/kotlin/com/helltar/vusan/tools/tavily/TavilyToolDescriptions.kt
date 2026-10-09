@@ -45,6 +45,10 @@ internal object TavilyToolDescriptions {
                 "The provider hands back about 5 candidates per call whatever is asked, so a larger request usually arrives short; the result says how many were sent. " +
                 "When 2 or more images are sent they go as a single media group."
 
+    const val SEARCH_IMAGES_SEND =
+        "Whether the images go to the chat; `true` by default. " +
+                "`false` keeps them for a later call instead, another tool or the sandbox, which takes each by the label the result names."
+
     const val EXTRACT_PAGE_CONTENT =
         "Fetch and extract the full text content of a web page by URL into your own context, through a service that renders the page first. " +
                 "This is the default page reader — use it to read a search result in full, to answer or summarize a page the user linked, or to quote it. " +

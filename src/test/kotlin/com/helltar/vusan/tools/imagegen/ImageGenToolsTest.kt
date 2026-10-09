@@ -6,10 +6,13 @@ import com.helltar.vusan.outbox.BotOutbox
 import com.helltar.vusan.outbox.BotOutput
 import com.helltar.vusan.request.AttachedFile
 import com.helltar.vusan.request.AttachedFileKind
+import com.helltar.vusan.request.ChatCapabilities
 import io.ktor.client.engine.mock.*
 import io.ktor.http.*
 import io.ktor.http.content.*
+import com.helltar.vusan.agent.TurnShelf
 import kotlinx.coroutines.runBlocking
+import kotlinx.coroutines.withContext
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.jsonPrimitive
@@ -20,6 +23,8 @@ import kotlin.test.assertContentEquals
 import kotlin.test.assertEquals
 import kotlin.test.assertFalse
 import kotlin.test.assertIs
+import kotlin.test.assertNotNull
+import kotlin.test.assertNull
 import kotlin.test.assertTrue
 
 class ImageGenToolsTest {
@@ -140,6 +145,51 @@ class ImageGenToolsTest {
         assertEquals("image.png", photo.filename)
         assertContentEquals(imageBytes, photo.bytes)
         assertContains(result, "Image queued")
+    }
+
+    // what a later call is to take must not reach the chat on the way
+    @Test
+    fun `a picture made with send off is kept for the turn and queued nowhere`() = runBlocking {
+        val outbox = BotOutbox()
+        val shelf = TurnShelf()
+        val call = shelf.open()
+
+        val result = withContext(call) { tools(outbox).generateImage("a neon city skyline", send = false) }
+        call.close(result)
+
+        assertTrue(outbox.pending.isEmpty())
+        assertContains(result, "`#1/1`")
+        assertContentEquals(imageBytes, shelf.open().file("#1/1").loadBytes())
+    }
+
+    // drawing for a chat that refuses photos would be paid for and dropped, so it is answered before the
+    // provider is called; kept for a later call, the picture is drawn all the same
+    @Test
+    fun `a chat that refuses photos is answered before generating, unless the picture is kept instead`() = runBlocking {
+        val outbox = BotOutbox(ChatCapabilities(photos = false))
+        val probe = SizeProbe()
+        val tools = tools(outbox, probe)
+
+        assertContains(tools.generateImage("a neon city skyline"), "does not accept photos")
+        assertNull(probe.size)
+
+        val kept = withContext(TurnShelf().open()) { tools.generateImage("a neon city skyline", send = false) }
+
+        assertContains(kept, "`#1/1`")
+        assertNotNull(probe.size)
+        assertTrue(outbox.pending.isEmpty())
+    }
+
+    @Test
+    fun `editImage edits the images it is named instead of the attachments`() = runBlocking {
+        val outbox = BotOutbox()
+        val probe = EditProbe()
+        val named = imageAttachment(name = "found.png", mimeType = "image/png")
+
+        editTools(outbox, imageAttachment(name = "attached.jpg"), probe = probe).editImage("add a hat", images = listOf(named))
+
+        assertEquals(listOf("found.png"), probe.filenames())
+        assertIs<BotOutput.Photo>(outbox.pending.single().output)
     }
 
     @Test

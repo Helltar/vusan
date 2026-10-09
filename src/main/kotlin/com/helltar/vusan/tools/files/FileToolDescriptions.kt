@@ -9,7 +9,8 @@ internal object FileToolDescriptions {
                 "After calling this tool, write a short natural comment for the user; the file will be sent automatically."
 
     const val CONTENT =
-        "Full text content of the file, already formatted (e.g. markdown body, plain text, CSV, JSON, code)."
+        "Full text content of the file, already formatted (e.g. markdown body, plain text, CSV, JSON, code). " +
+                "A label (`#4`) or `sandbox:<path>` instead sends the whole text it names."
 
     const val FILENAME =
         "Desired file name including extension, for example `article.md`, `notes.txt`, or `data.csv`. " +
@@ -31,4 +32,8 @@ internal object FileToolDescriptions {
     const val DOWNLOAD_FILENAME =
         "Optional file name including extension, for example `report.pdf` or `page.html`. " +
                 "Leave empty to keep the name the server reports or the one in the URL."
+
+    const val DOWNLOAD_SEND =
+        "Whether the file goes to the chat; `true` by default. " +
+                "`false` keeps it for a later call instead, another tool or the sandbox, which takes it by the label the result names."
 }

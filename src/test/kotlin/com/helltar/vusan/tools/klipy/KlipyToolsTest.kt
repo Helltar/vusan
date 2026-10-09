@@ -1,5 +1,6 @@
 package com.helltar.vusan.tools.klipy
 
+import com.helltar.vusan.agent.TurnShelf
 import com.helltar.vusan.infra.Http
 import com.helltar.vusan.outbox.BotOutbox
 import com.helltar.vusan.outbox.BotOutput
@@ -12,6 +13,7 @@ import io.ktor.client.plugins.*
 import io.ktor.client.request.*
 import io.ktor.http.*
 import kotlinx.coroutines.runBlocking
+import kotlinx.coroutines.withContext
 import kotlin.test.Test
 import kotlin.test.assertContains
 import kotlin.test.assertContentEquals
@@ -74,6 +76,24 @@ class KlipyToolsTest {
         assertContentEquals(CLIP_BYTES, assertIs<BotOutput.Video>(video).bytes)
         assertTrue(requests.any { it.url.encodedPath == "/api/v1/test-key/static-memes/search" })
         assertTrue(requests.any { it.url.encodedPath == "/api/v1/test-key/clips/share/slow-clap--v1" })
+    }
+
+    // kept for a later call, nothing reaches the chat and nothing counts as shared yet
+    @Test
+    fun `a clip fetched with send off is kept for the turn, queued nowhere and not reported`() = runBlocking {
+        val outbox = BotOutbox()
+        val tools = tools(outbox)
+        val shelf = TurnShelf()
+        val call = shelf.open()
+
+        tools.searchGifs("slow morning", kind = "clip")
+        val result = withContext(call) { tools.sendGif("slow-clap--v1", send = false) }
+        call.close(result)
+
+        assertTrue(outbox.pending.isEmpty())
+        assertContains(result, "`#1/1`")
+        assertContentEquals(CLIP_BYTES, shelf.open().file("#1/1").loadBytes())
+        assertFalse(requests.any { "/share/" in it.url.encodedPath })
     }
 
     @Test

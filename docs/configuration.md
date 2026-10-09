@@ -355,7 +355,7 @@ with a `WARN` log and Vusan keeps running.
 | `GIPHY_API_KEY`         | GIF lookup                                | Giphy                                      |
 | `KLIPY_API_KEY`         | GIF, meme and clip lookup                 | KLIPY; used instead of Giphy when both are set |
 | `ELEVENLABS_API_KEY`    | Voice messages and round video messages   | See [Voice output](#voice-output)          |
-| `OPENAI_STT_API_KEY`    | Voice input, sound of a video             | Reuse your OpenAI key                      |
+| `OPENAI_STT_API_KEY`    | Voice input, sound of a video, transcribing any recording | Reuse your OpenAI key      |
 | `IMAGE_PROVIDER`        | Image generation                          | `openai` with `IMAGE_API_KEY`, or `codex`; see [Image generation](#image-generation) |
 | `VISION_MODEL`          | Vision on a chat model that cannot see    | See [Vision](#vision)                      |
 | `REGOLITH_URL`          | Shell sandbox                           | See [Sandbox](#sandbox)                |
@@ -440,8 +440,10 @@ voice message.
 |-----------------------------------|---------------------|-------------------------------------------|
 | `OPENAI_STT_MODEL`                | `gpt-transcribe`    | Speech-to-text model.                     |
 
-Vusan transcribes up to five minutes. Past that length a voice message is refused, and a video is
-watched without its sound.
+Vusan hears the first five minutes of anything. A voice message longer than that is refused, and of a
+video she watches, or any other recording she is handed, only those minutes are transcribed. The same
+key lets Vusan transcribe any recording a turn can name, not only the one a message arrives as: an
+audio or video file someone sent, a track or video she fetched, or a piece she cut out in the sandbox.
 
 ### Image generation
 

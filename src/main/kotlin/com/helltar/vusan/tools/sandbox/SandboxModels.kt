@@ -1,5 +1,6 @@
 package com.helltar.vusan.tools.sandbox
 
+import com.helltar.vusan.tools.SANDBOX_REFERENCE_PREFIX
 import kotlin.time.Instant
 
 /** How a command ended, as the tools describe it to the model. */
@@ -39,3 +40,7 @@ data class PublishedSite(
     val until: Instant,
     val hasIndex: Boolean,
 )
+
+// other tools take a sandbox file as `sandbox:<path>`, and the model may write it the same way here, where
+// every path already is one.
+internal fun String.sandboxPath(): String = removePrefix(SANDBOX_REFERENCE_PREFIX)

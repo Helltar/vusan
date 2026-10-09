@@ -34,6 +34,7 @@ class AgentFactoryTest {
                 toolBudget = TurnToolBudget(factory.liveToolResultMaxTokens),
                 toolEvents = {},
                 tokenUsage = {},
+                shelf = TurnShelf(),
             ).run("the request")
 
             client.requests.single()

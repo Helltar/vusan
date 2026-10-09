@@ -33,7 +33,7 @@ class MessageTools(
 
     @Tool(MessageToolDescriptions.SEND_MESSAGE)
     suspend fun sendMessage(
-        @Arg(MessageToolDescriptions.TEXT)
+        @Arg(MessageToolDescriptions.TEXT, takesReference = true)
         text: String,
     ): String = suspendToolGuard {
         val trimmed = text.requireToolText("Message text", MAX_MESSAGE_CHARS)
@@ -49,7 +49,7 @@ class MessageTools(
 
     @Tool(MessageToolDescriptions.SEND_RICH_MESSAGE)
     suspend fun sendRichMessage(
-        @Arg(MessageToolDescriptions.RICH_MARKDOWN)
+        @Arg(MessageToolDescriptions.RICH_MARKDOWN, takesReference = true)
         markdown: String,
     ): String = suspendToolGuard {
         val trimmed = markdown.requireToolText("Rich message", MAX_RICH_MESSAGE_CHARS)

@@ -11,4 +11,8 @@ internal object YouTubeMusicToolDescriptions {
     const val PLAY_FULL_TRACK_QUERY =
         "Song title, artist, or both — used as a YouTube search query. " +
                 "Examples: `Imagine Dragons Believer`, `Bohemian Rhapsody Queen`, `Daft Punk One More Time`."
+
+    const val SEND =
+        "Whether the track goes to the chat; `true` by default. " +
+                "`false` keeps it for a later call instead, another tool or the sandbox, which takes it by the label the result names."
 }

@@ -12,4 +12,8 @@ internal object YouTubeVideoToolDescriptions {
     const val DOWNLOAD_VIDEO_QUERY =
         "A YouTube search query (title, topic, or both) or a direct YouTube URL. " +
                 "Examples: `cat playing piano`, `SpaceX Starship launch`, `https://www.youtube.com/watch?v=dQw4w9WgXcQ`."
+
+    const val SEND =
+        "Whether the video goes to the chat; `true` by default. " +
+                "`false` keeps it for a later call instead, another tool or the sandbox, which takes it by the label the result names."
 }

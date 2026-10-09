@@ -23,6 +23,7 @@ import io.github.oshai.kotlinlogging.KotlinLogging
 import kotlinx.coroutines.async
 import kotlinx.coroutines.awaitAll
 import kotlinx.coroutines.coroutineScope
+import kotlinx.coroutines.withContext
 
 data class ToolEvent(
     val toolCallId: String,
@@ -83,6 +84,8 @@ class AgentTurn internal constructor(
     private val toolEvents: (ToolEvent) -> Unit,
     private val tokenUsage: (TokenUsage) -> Unit,
     private val onToolStarting: (activity: ToolActivity?) -> Unit,
+    // what the turn's calls produced, under the labels a later call takes them by
+    private val shelf: TurnShelf,
 ) {
 
     private var calls = 0
@@ -209,21 +212,24 @@ class AgentTurn internal constructor(
 
     // read-only calls standing next to each other run side by side, everything else in order; the results
     // are recorded in batch order either way, so the budget and the events read as if it ran one by one.
+    // every call takes its label before any of its run starts, so the numbers follow the batch too.
     private suspend fun executeBatch(batch: List<Part.ToolCall>): List<ToolResult> {
-        val outcomes = mutableListOf<Pair<Part.ToolCall, Outcome>>()
+        val outcomes = mutableListOf<Triple<Part.ToolCall, TurnShelf.Call, Outcome>>()
 
         for (run in batch.runs()) {
+            val opened = run.map { call -> call to shelf.open() }
+
             val performed =
-                if (run.size > 1) {
-                    coroutineScope { run.map { call -> async { perform(call) } }.awaitAll() }
+                if (opened.size > 1) {
+                    coroutineScope { opened.map { (call, slot) -> async { perform(call, slot) } }.awaitAll() }
                 } else {
-                    listOf(perform(run.single()))
+                    opened.map { (call, slot) -> perform(call, slot) }
                 }
 
-            outcomes += run.zip(performed)
+            outcomes += opened.zip(performed) { (call, slot), outcome -> Triple(call, slot, outcome) }
         }
 
-        return outcomes.map { (call, outcome) -> record(call, outcome) }
+        return outcomes.map { (call, slot, outcome) -> record(call, slot, outcome) }
     }
 
     private fun List<Part.ToolCall>.runs(): List<List<Part.ToolCall>> {
@@ -241,7 +247,10 @@ class AgentTurn internal constructor(
         return runs
     }
 
-    private suspend fun perform(call: Part.ToolCall): Outcome {
+    // the tool runs inside its slot on the shelf: that is what its arguments' references resolve against
+    // and where the files it keeps land. the slot is closed whatever happened, since a later call of the
+    // same run may be waiting on it.
+    private suspend fun perform(call: Part.ToolCall, slot: TurnShelf.Call): Outcome {
         val tool = catalog.find(call.name)
 
         onToolStarting(toolActivityFor(call.name))
@@ -254,15 +263,17 @@ class AgentTurn internal constructor(
                 call.arguments.isEmpty() && tool.requiredParameters.isNotEmpty() ->
                     garbledCallMessage(tool.name, tool.requiredParameters) to true
 
-                else -> runTool(tool.name) { tool.call(call.arguments) }
+                else -> runTool(tool.name) { withContext(slot) { tool.call(call.arguments) } }
             }
 
-        log.info { "tool call: name=[${call.name}] error=$isError args=[${call.arguments.toString().collapseWhitespaceAndCap(TOOL_LOG_ARGS_MAX_CHARS).orEmpty()}]" }
+        slot.close(output, call.name, copiesText = tool?.copiedToSandbox == true && !isError)
+
+        log.info { "tool call: name=[${call.name}] #${slot.number} error=$isError args=[${call.arguments.toString().collapseWhitespaceAndCap(TOOL_LOG_ARGS_MAX_CHARS).orEmpty()}]" }
 
         return Outcome(output, isError)
     }
 
-    private fun record(call: Part.ToolCall, outcome: Outcome): ToolResult {
+    private fun record(call: Part.ToolCall, slot: TurnShelf.Call, outcome: Outcome): ToolResult {
         if (call.name == MessageTools::announcePlan.name) announced = true else workedSinceAnnouncement = announced
 
         toolEvents(
@@ -275,11 +286,13 @@ class AgentTurn internal constructor(
             ),
         )
 
-        // the model sees a result bounded to what is left of the run's reserve; history keeps it whole
+        // the model sees a result bounded to what is left of the run's reserve, under the label a later call
+        // takes it by; history keeps it whole and unlabeled, since the label means nothing to the next turn
         val bounded = outcome.output.boundedToolText(toolBudget.remainingTokens)
-        toolBudget.spend(estimateTokens(bounded))
+        val labeled = slot.labeled(bounded, cut = bounded != outcome.output)
+        toolBudget.spend(estimateTokens(labeled))
 
-        return ToolResult(call.id, call.name, bounded, outcome.isError)
+        return ToolResult(call.id, call.name, labeled, outcome.isError)
     }
 
     // every failure becomes the result the model reads: the guard's own message, a decoding complaint about

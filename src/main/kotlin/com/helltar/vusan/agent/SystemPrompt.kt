@@ -114,17 +114,47 @@ private fun runtimeSection(modelId: String, botUsername: String?, botDisplayName
         }
     }
 
+/**
+ * How one call's result becomes another's input. It says the mechanism and never what to build with it:
+ * a model that knows labels, references and `send` composes the rest on its own. A deployment without
+ * a sandbox is told nothing about one, rather than offered paths that would only fail.
+ */
+private fun passingResultsSection(sandbox: Boolean): String =
+    buildString {
+        append(
+            """# Passing results between tools
+
+- Every tool result opens with its label, `[#3]`, numbered in the order of this turn's calls. The files a call made are listed under it as `#3/1`, `#3/2`, and the files attached to the request are `#0/1`, `#0/2`, in order.
+""",
+        )
+
+        if (sandbox) {
+            append("- An argument that takes a file takes one of these labels, or `sandbox:<path>` for a file in the sandbox, instead of the attachment. A text argument whose description says so takes a result's label or `sandbox:<path>` for the whole text it names, even where your copy was cut short.\n")
+        } else {
+            append("- An argument that takes a file takes one of these labels instead of the attachment. A text argument whose description says so takes a result's label for the whole text it names, even where your copy was cut short.\n")
+        }
+
+        append("- A tool that makes a file keeps it under its label whether or not it sends it. Where a tool takes `send`, `false` makes the file without delivering it, for a later call to take.\n")
+
+        if (sandbox) {
+            append("- Whenever you work in the sandbox, this turn's files reach a directory of its own there first, `turns/<when>/`: the request's attachments as `00-1-<name>`, every file a call made as `05-1-<name>`, and what searches, pages, transcripts and vision found as `03-<tool>.txt`, whole. The result of that sandbox call names each path. The last three turns' directories are kept and older ones removed, so move anything worth keeping.\n")
+        }
+
+        append("- A call can only take what came before it. Labels last for this turn alone.")
+    }
+
 /** Compose the full system prompt from separately delimited personality and operational blocks. */
 internal fun systemPromptFor(
     personality: String,
     modelId: String,
     botUsername: String? = null,
     botDisplayName: String? = null,
+    sandbox: Boolean = false,
 ): String =
     "${xmlBlock("personality", personality)}\n\n" +
             xmlBlock(
                 "operational_contract",
-                "$OPERATIONAL_CONTRACT\n\n${runtimeSection(modelId, botUsername, botDisplayName)}",
+                "$OPERATIONAL_CONTRACT\n\n${passingResultsSection(sandbox)}\n\n${runtimeSection(modelId, botUsername, botDisplayName)}",
             )
 
 // the block names the contract above enumerates, kept next to it so the two cannot drift apart.

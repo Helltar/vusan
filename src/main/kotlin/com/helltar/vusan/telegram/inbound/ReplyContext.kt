@@ -6,6 +6,8 @@ import com.helltar.vusan.common.limitTo
 import com.helltar.vusan.common.sanitizeFilename
 import com.helltar.vusan.request.AttachedFile
 import com.helltar.vusan.request.AttachedFileKind
+import com.helltar.vusan.request.attachedFileKindOf
+import com.helltar.vusan.request.isAnimationFile
 import com.helltar.vusan.telegram.downloadFileBytes
 import org.telegram.telegrambots.meta.api.objects.Document
 import org.telegram.telegrambots.meta.api.objects.ExternalReplyInfo
@@ -119,7 +121,7 @@ private fun VideoNote.toAttachedFile(client: TelegramClient, caption: String?): 
 
 private fun Document.toAttachedFile(client: TelegramClient, caption: String?): AttachedFile {
     val safeName = (fileName ?: "file").sanitizeFilename().ifBlank { "file" }
-    val kind = documentKind(mimeType, safeName)
+    val kind = attachedFileKindOf(safeName, mimeType)
 
     if (kind == AttachedFileKind.VIDEO) {
         return videoAttachedFile(
@@ -131,6 +133,7 @@ private fun Document.toAttachedFile(client: TelegramClient, caption: String?): A
             mimeType = mimeType,
             durationSeconds = null,
             thumbnailFileId = thumbnail?.fileId,
+            isAnimation = isAnimationFile(safeName, mimeType),
         )
     }
 
@@ -171,21 +174,6 @@ private fun videoAttachedFile(
 
 private fun String?.orVideoName(fileUniqueId: String): String =
     this?.sanitizeFilename()?.takeIf { it.isNotBlank() } ?: "video-$fileUniqueId.mp4"
-
-private fun documentKind(mimeType: String?, name: String): AttachedFileKind {
-    val extension = name.substringAfterLast('.', "").lowercase()
-
-    return when {
-        mimeType?.startsWith("image/") == true || extension in IMAGE_EXTENSIONS -> AttachedFileKind.IMAGE
-        mimeType?.startsWith("video/") == true || extension in VIDEO_EXTENSIONS -> AttachedFileKind.VIDEO
-        else -> AttachedFileKind.OTHER
-    }
-}
-
-private val IMAGE_EXTENSIONS = setOf("png", "jpg", "jpeg", "webp", "gif", "bmp")
-
-private val VIDEO_EXTENSIONS =
-    setOf("mp4", "m4v", "mov", "mkv", "webm", "avi", "wmv", "flv", "mpeg", "mpg", "3gp", "ogv")
 
 private fun Message.toReplySummary(botUserId: Long): RepliedMessageSummary? =
     replyToMessage?.summarizeInternalReply(botUserId)

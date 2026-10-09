@@ -1,6 +1,8 @@
 package com.helltar.vusan.tools
 
 import com.helltar.vusan.llm.ToolDefinition
+import com.helltar.vusan.request.AttachedFile
+import kotlinx.coroutines.currentCoroutineContext
 import kotlinx.serialization.json.JsonArray
 import kotlinx.serialization.json.JsonElement
 import kotlinx.serialization.json.JsonNull
@@ -34,15 +36,27 @@ import kotlin.reflect.jvm.isAccessible
  * call reads — so the loop may run it alongside the other read-only calls of the same batch instead of
  * one after another. A tool that only looks something up qualifies; a tool whose result lands in the
  * chat or in the sandbox does not, however harmless, because its order against the batch is its meaning.
+ *
+ * [copiedToSandbox] says the tool's answer is material to work on — what a search found, a page, a
+ * transcript, what vision saw — so the sandbox gets its text in the turn's directory along with the files the turn
+ * made. It is opt-in: an answer about other people or the bot's own records, or a mere confirmation,
+ * stays out of a home that outlives the turn and can be published.
  */
 @Target(AnnotationTarget.FUNCTION)
 @Retention(AnnotationRetention.RUNTIME)
-annotation class Tool(val description: String, val readOnly: Boolean = false)
+annotation class Tool(val description: String, val readOnly: Boolean = false, val copiedToSandbox: Boolean = false)
 
-/** What the model reads about one argument of a tool. */
+/**
+ * What the model reads about one argument of a tool.
+ *
+ * [takesReference] lets a text argument be given as a label (`#4`) or `sandbox:<path>` instead, and the
+ * decoder hands the tool the whole text it names. It is opt-in, for the arguments that carry a body of
+ * text worth not retyping — a message, a script to voice, a file's contents — so a value that merely
+ * reads like a reference anywhere else arrives as written. The description says so to the model.
+ */
 @Target(AnnotationTarget.VALUE_PARAMETER)
 @Retention(AnnotationRetention.RUNTIME)
-annotation class Arg(val description: String)
+annotation class Arg(val description: String, val takesReference: Boolean = false)
 
 /** A class whose [Tool]-annotated methods are offered to the model. */
 interface ToolSet
@@ -52,9 +66,11 @@ interface ToolSet
  * it with the arguments the model sent.
  *
  * Arguments are decoded from the JSON the model wrote by the method's own parameter types: text, whole
- * and decimal numbers, booleans and lists of text, each tolerant of a number spelled as text. A parameter
- * with a default value or a nullable type is optional for the model; a missing required one, or a value
- * of the wrong shape, is an [IllegalArgumentException] the agent answers the call with.
+ * and decimal numbers, booleans and lists of text, each tolerant of a number spelled as text, and files,
+ * which the model names by reference. A text value that is a reference is replaced by what it points at,
+ * through the [CallShelf] of the call, where the parameter [Arg.takesReference]. A parameter with a default value or a nullable type is
+ * optional for the model; a missing required one, or a value of the wrong shape, is an
+ * [IllegalArgumentException] the agent answers the call with.
  */
 class ToolFunction internal constructor(
     val name: String,
@@ -63,6 +79,8 @@ class ToolFunction internal constructor(
     val requiredParameters: List<String>,
     /** Whether the loop may run this call alongside the other read-only calls of its batch. */
     val readOnly: Boolean,
+    /** Whether the text it answers with is copied into the turn's directory in the sandbox for the work there. */
+    val copiedToSandbox: Boolean,
     private val invoke: suspend (JsonObject) -> String,
 ) {
 
@@ -116,6 +134,7 @@ private fun toolFunction(instance: ToolSet, function: KFunction<*>): ToolFunctio
 
                                 // a nullable parameter may be sent as null, and the schema says so
                                 if (parameter.type.isMarkedNullable) putJsonArray("type") { add(type); add("null") } else put("type", type)
+                                // a list of files is a list of references, which are text like any other
                                 if (parameter.type.classifier == List::class) put("items", buildJsonObject { put("type", "string") })
                                 parameter.findAnnotation<Arg>()?.let { put("description", it.description) }
                             },
@@ -126,7 +145,7 @@ private fun toolFunction(instance: ToolSet, function: KFunction<*>): ToolFunctio
             putJsonArray("required") { required.forEach { add(it) } }
         }
 
-    return ToolFunction(name, description, schema, required, annotation.readOnly) { arguments ->
+    return ToolFunction(name, description, schema, required, annotation.readOnly, annotation.copiedToSandbox) { arguments ->
         val values =
             buildMap {
                 put(requireNotNull(function.instanceParameter) { "tool $name is not a method" }, instance)
@@ -157,30 +176,47 @@ private fun toolFunction(instance: ToolSet, function: KFunction<*>): ToolFunctio
 private val KParameter.parameterName: String
     get() = requireNotNull(name) { "a tool parameter has no name" }
 
+private val KParameter.listElement
+    get() = type.arguments.singleOrNull()?.type?.classifier
+
 private fun KParameter.schemaType(): String? =
     when (type.classifier) {
-        String::class -> "string"
+        String::class, AttachedFile::class -> "string"
         Int::class, Long::class -> "integer"
         Double::class, Float::class -> "number"
         Boolean::class -> "boolean"
-        List::class -> if (type.arguments.singleOrNull()?.type?.classifier == String::class) "array" else null
+        List::class -> if (listElement == String::class || listElement == AttachedFile::class) "array" else null
         else -> null
     }
 
-private fun decodeArgument(parameter: KParameter, raw: JsonElement): Any {
+private suspend fun decodeArgument(parameter: KParameter, raw: JsonElement): Any {
     val name = parameter.parameterName
     val primitive = raw as? JsonPrimitive
+    val references = currentCoroutineContext()[CallShelf]
 
     fun bad(): Nothing = throw IllegalArgumentException("argument `$name` has the wrong shape: ${raw.toString().take(ARGUMENT_PREVIEW_CHARS)}")
 
+    val takesReference = parameter.findAnnotation<Arg>()?.takesReference == true
+
+    suspend fun text(value: String): String = references?.takeIf { takesReference }?.textOrNull(value) ?: value
+
+    suspend fun file(value: String): AttachedFile =
+        requireNotNull(references) { "argument `$name` takes a file, and no file can be named here" }.file(value)
+
     return when (parameter.type.classifier) {
-        String::class -> primitive?.content ?: raw.toString()
+        String::class -> text(primitive?.content ?: raw.toString())
+        AttachedFile::class -> file(primitive?.content ?: bad())
         Int::class -> primitive?.intOrNull ?: primitive?.contentOrNull?.trim()?.toIntOrNull() ?: bad()
         Long::class -> primitive?.longOrNull ?: primitive?.contentOrNull?.trim()?.toLongOrNull() ?: bad()
         Double::class -> primitive?.doubleOrNull ?: primitive?.contentOrNull?.trim()?.toDoubleOrNull() ?: bad()
         Float::class -> (primitive?.doubleOrNull ?: primitive?.contentOrNull?.trim()?.toDoubleOrNull())?.toFloat() ?: bad()
         Boolean::class -> primitive?.booleanOrNull ?: primitive?.contentOrNull?.trim()?.toBooleanStrictOrNull() ?: bad()
-        List::class -> (raw as? JsonArray)?.map { (it as? JsonPrimitive)?.content ?: it.toString() } ?: bad()
+        List::class -> {
+            val items = (raw as? JsonArray)?.map { (it as? JsonPrimitive)?.content ?: it.toString() } ?: bad()
+
+            if (parameter.listElement == AttachedFile::class) items.map { file(it) } else items.map { text(it) }
+        }
+
         else -> bad()
     }
 }

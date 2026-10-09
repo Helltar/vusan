@@ -1,5 +1,6 @@
 package com.helltar.vusan.tools.sandbox
 
+import com.helltar.vusan.agent.TurnShelf
 import com.helltar.vusan.infra.Http
 import com.helltar.vusan.outbox.BotOutbox
 import com.helltar.vusan.outbox.BotOutput
@@ -8,6 +9,7 @@ import com.helltar.vusan.request.AttachedFileKind
 import com.helltar.vusan.request.ChatCapabilities
 import com.helltar.vusan.request.personKeyOrNull
 import com.helltar.vusan.request.requestContext
+import com.helltar.vusan.tools.keepOnShelf
 import com.helltar.vusan.tools.toolFailure
 import io.ktor.client.engine.mock.*
 import io.ktor.http.*
@@ -19,6 +21,10 @@ import kotlin.test.assertIs
 import kotlin.test.assertNotEquals
 import kotlin.test.assertTrue
 import kotlinx.coroutines.runBlocking
+import kotlinx.coroutines.withContext
+import java.time.Instant
+import java.time.ZoneId
+import java.time.format.DateTimeFormatter
 
 private const val JOB = "9b7f0d2c4e6a418d93f5c0b1a2d3e4f5"
 private const val EXITED = """{"type":"exited","exitCode":0}"""
@@ -37,6 +43,17 @@ private fun recordedOutput(text: String, complete: Boolean, offset: Long, exec: 
     return """{"frames":$frames,"nextOffset":$end,"complete":$complete,"exec":$exec}"""
 }
 
+private val TURN_START: Instant = Instant.parse("2026-10-10T09:30:00Z")
+
+// named the way the shelf names it, in whatever zone the tests run in
+private val TURN_DIRECTORY = "turns/" + DateTimeFormatter.ofPattern("yyMMdd-HHmmss").format(TURN_START.atZone(ZoneId.systemDefault()))
+
+private fun directoryListing(names: List<String>): String =
+    names.joinToString(",", prefix = "{\"path\":\"/home/sandbox/turns\",\"entries\":[", postfix = "]}") { name ->
+        "{\"path\":\"/home/sandbox/turns/$name\",\"name\":\"$name\",\"type\":\"directory\",\"size\":0," +
+            "\"modifiedAt\":\"2026-09-13T12:00:00Z\",\"mode\":493}"
+    }
+
 private fun MockRequestHandleScope.json(body: String) =
     respond(body, HttpStatusCode.OK, headersOf(HttpHeaders.ContentType, "application/json"))
 
@@ -46,6 +63,7 @@ private fun MockRequestHandleScope.problem(status: HttpStatusCode, body: String)
 class SandboxToolsTest {
     private val context = requestContext(chatId = 55L, userId = 55L)
     private val writes = mutableListOf<Pair<String, ByteArray>>()
+    private val deletes = mutableListOf<String>()
     private var creations = 0
     private var resets = 0
 
@@ -58,6 +76,9 @@ class SandboxToolsTest {
         files: Map<String, ByteArray> = emptyMap(),
         attached: List<AttachedFile> = emptyList(),
         outbox: BotOutbox = BotOutbox(),
+        // the directories already under `turns/`; none at all is a home that never had one
+        turnDirectories: List<String>? = null,
+        shelf: TurnShelf = TurnShelf(attached, startedAt = TURN_START),
     ): SandboxTools {
         val engine = MockEngine { request ->
             val path = request.url.encodedPath
@@ -92,6 +113,16 @@ class SandboxToolsTest {
                     json("""{"path":"/home/sandbox/$wanted","name":"file","type":"file","size":1,"modifiedAt":"2026-09-13T12:00:00Z","mode":420}""")
                 }
 
+                path.endsWith("/files/entries") ->
+                    turnDirectories
+                        ?.let { names -> json(directoryListing(names)) }
+                        ?: problem(HttpStatusCode.NotFound, problemDocument("not_found", 404, "Not found", "No such directory"))
+
+                path.endsWith("/files") && request.method == HttpMethod.Delete -> {
+                    deletes += wanted + if (request.url.parameters["recursive"] == "true") " recursively" else ""
+                    respond("", HttpStatusCode.NoContent)
+                }
+
                 path.endsWith("/files/content") -> files[wanted]?.let { respond(it, HttpStatusCode.OK) }
                     ?: problem(HttpStatusCode.NotFound, problemDocument("not_found", 404, "Not found", "No such file"))
 
@@ -99,11 +130,37 @@ class SandboxToolsTest {
             }
         }
 
-        return SandboxTools(
-            SandboxClient(Http.createClient(engine), "http://regolith:8080", "test-token").sandboxOf(requireNotNull(context.personKeyOrNull)),
-            outbox,
-            attached,
-        )
+        val sandbox = SandboxClient(Http.createClient(engine), "http://regolith:8080", "test-token").sandboxOf(requireNotNull(context.personKeyOrNull))
+        shelf.connectSandbox(sandbox)
+
+        return SandboxTools(sandbox, outbox, shelf)
+    }
+
+    // what another call made this turn is in the sandbox before the command that may want it runs
+    @Test
+    fun `a command finds what the turn made in the turn's own directory, written once`() = runBlocking {
+        val shelf = TurnShelf(startedAt = TURN_START)
+        val maker = shelf.open()
+        withContext(maker) { keepOnShelf("speech.mp3", byteArrayOf(4, 2)) }
+        maker.close("The speech kept as `#1/1`.", "speakWithVoice")
+
+        val tools = tools(shelf = shelf)
+        val result = tools.runCommand("ls turns")
+
+        assertEquals(listOf("$TURN_DIRECTORY/01-1-speech.mp3"), writes.map { it.first })
+        assertContains(result, "This turn's files are in the sandbox: `$TURN_DIRECTORY/01-1-speech.mp3`.")
+
+        tools.runCommand("ls turns")
+
+        assertEquals(1, writes.size, "a file already copied is not written again")
+    }
+
+    // a turn often picks up the one before it, so the last few stay; the rest would fill a fixed-size home
+    @Test
+    fun `the first copy of a turn keeps the two turns before it and removes the older ones`() = runBlocking {
+        tools(turnDirectories = listOf("260101-090000", "260102-090000", "260103-090000", "260104-090000")).runCommand("ls")
+
+        assertEquals(listOf("turns/260101-090000 recursively", "turns/260102-090000 recursively"), deletes)
     }
 
     @Test
@@ -167,23 +224,23 @@ class SandboxToolsTest {
     }
 
     @Test
-    fun `attachments get unique paths and are copied once per turn`() = runBlocking {
+    fun `attachments reach the turn's directory once per turn, and a later turn gets its own`() = runBlocking {
         val attached = AttachedFile(
             name = "orders.csv", fileSizeBytes = 9, mimeType = "text/csv", kind = AttachedFileKind.OTHER,
             loadBytes = { "id,total\n".toByteArray() },
         )
         val firstTurn = tools(attached = listOf(attached))
-        val result = firstTurn.runCommand("ls inbox")
+        val result = firstTurn.runCommand("ls turns")
         val firstPath = writes.single().first
-        assertTrue(firstPath.startsWith("inbox/") && firstPath.endsWith("/orders.csv"))
+        assertEquals("$TURN_DIRECTORY/00-1-orders.csv", firstPath)
         assertContains(result, firstPath)
-        firstTurn.runCommand("ls inbox")
+        firstTurn.runCommand("ls turns")
         assertEquals(1, writes.size)
-        tools(attached = listOf(attached)).writeSandboxFile("notes.txt", "review the totals")
+        tools(shelf = TurnShelf(listOf(attached), startedAt = TURN_START.plusSeconds(60))).writeSandboxFile("notes.txt", "review the totals")
         assertNotEquals(firstPath, writes[1].first)
     }
 
-    // two items of one album may carry the same name, so each gets a directory of its own.
+    // two items of one album may carry the same name, so each gets a number of its own.
     @Test
     fun `every attachment of an album is copied, each to its own path`() = runBlocking {
         val album = listOf("photo.jpg", "photo.jpg", "notes.txt").map { name ->
@@ -193,10 +250,9 @@ class SandboxToolsTest {
             )
         }
         val sandbox = tools(attached = album)
-        val result = sandbox.runCommand("ls inbox")
+        val result = sandbox.runCommand("ls turns")
         val paths = writes.map { it.first }
-        assertEquals(3, paths.distinct().size)
-        assertEquals(listOf("photo.jpg", "photo.jpg", "notes.txt"), paths.map { it.substringAfterLast('/') })
+        assertEquals(listOf("00-1-photo.jpg", "00-2-photo.jpg", "00-3-notes.txt"), paths.map { it.substringAfterLast('/') })
         paths.forEach { assertContains(result, it) }
         sandbox.writeSandboxFile("notes.md", "done")
         assertEquals(4, writes.size)
@@ -215,9 +271,9 @@ class SandboxToolsTest {
                 loadBytes = { byteArrayOf(1) },
             ),
         )
-        val result = tools(attached = album).runCommand("ls inbox")
-        assertContains(result, "`huge.bin` exceeds the 20 MB input limit")
-        assertTrue(writes.single().first.endsWith("/small.txt"))
+        val result = tools(attached = album).runCommand("ls turns")
+        assertContains(result, "`huge.bin` is over the 20 MB an attachment may bring in")
+        assertTrue(writes.single().first.endsWith("/00-2-small.txt"))
         assertContains(result, writes.single().first)
     }
 

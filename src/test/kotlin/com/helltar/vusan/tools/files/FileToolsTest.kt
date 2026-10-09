@@ -1,12 +1,15 @@
 package com.helltar.vusan.tools.files
 
+import com.helltar.vusan.agent.TurnShelf
 import com.helltar.vusan.infra.Http
 import com.helltar.vusan.outbox.BotOutbox
 import com.helltar.vusan.outbox.BotOutput
+import com.helltar.vusan.request.ChatCapabilities
 import com.helltar.vusan.tools.toolFailure
 import io.ktor.client.engine.mock.*
 import io.ktor.http.*
 import kotlinx.coroutines.runBlocking
+import kotlinx.coroutines.withContext
 import kotlin.test.Test
 import kotlin.test.assertContains
 import kotlin.test.assertEquals
@@ -34,6 +37,23 @@ class FileToolsTest {
         val doc = assertIs<BotOutput.Document>(outbox.pending.single().output)
         assertEquals("article.md", doc.filename)
         assertEquals(content, doc.bytes.toString(Charsets.UTF_8))
+    }
+
+    // a chat that refuses documents still gets a written file on the shelf, and a download for it is not started
+    @Test
+    fun `a chat that refuses documents keeps a written file for later and downloads nothing to send`() = runBlocking {
+        val outbox = BotOutbox(ChatCapabilities(documents = false))
+        var downloads = 0
+        val tools = tools(outbox) { downloads++; respond("x") }
+
+        val written = withContext(TurnShelf().open()) { tools.sendFile(content = "notes", filename = "notes.txt") }
+
+        assertContains(written, "does not accept documents")
+        assertContains(written, "`#1/1`")
+        assertTrue(outbox.pending.isEmpty())
+
+        assertContains(tools.downloadFile("http://$PUBLIC_HOST/report.pdf"), "does not accept documents")
+        assertEquals(0, downloads)
     }
 
     @Test

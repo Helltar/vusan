@@ -6,13 +6,15 @@ import com.helltar.vusan.stt.OpenAiWhisperClient
 import io.github.oshai.kotlinlogging.KotlinLogging
 
 /**
- * Turns the audio track of a video into text. Every failure — a silent video, a length over the
- * speech-to-text budget, a provider error — is a `null`, because the sampled frames alone still
- * answer the request.
+ * Turns the audio track of a video into text. Every failure — a silent video, a provider error — is a
+ * `null`, because the sampled frames alone still answer the request.
  */
-fun interface VideoAudioTranscriber {
+interface VideoAudioTranscriber {
 
-    suspend fun transcribeOrNull(audio: ByteArray, durationSeconds: Int?): String?
+    /** The most of a track that is heard, in seconds: the rest is cut away before the provider sees it, so it is never paid for. */
+    val maxSeconds: Int
+
+    suspend fun transcribeOrNull(audio: ByteArray): String?
 }
 
 class WhisperVideoAudioTranscriber(
@@ -20,17 +22,10 @@ class WhisperVideoAudioTranscriber(
     private val config: OpenAiSttConfig,
 ) : VideoAudioTranscriber {
 
-    override suspend fun transcribeOrNull(audio: ByteArray, durationSeconds: Int?): String? {
+    override val maxSeconds: Int = OpenAiSttConfig.MAX_DURATION_SECONDS.toInt()
+
+    override suspend fun transcribeOrNull(audio: ByteArray): String? {
         if (audio.isEmpty()) return null
-
-        if (durationSeconds != null && durationSeconds > OpenAiSttConfig.MAX_DURATION_SECONDS) {
-            log.info {
-                "video audio left untranscribed: duration=[${durationSeconds}s] " +
-                        "over max=[${OpenAiSttConfig.MAX_DURATION_SECONDS}s]"
-            }
-
-            return null
-        }
 
         return runCatching { whisper.transcribe(audio, AUDIO_FILE_NAME, AUDIO_MIME_TYPE) }
             .onFailure {

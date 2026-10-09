@@ -218,7 +218,7 @@ class TurnInputTest {
 
         assertContains(block, "0 photo(s), 0 video(s), 2 other file(s)")
         assertContains(block, "All of them are attached: `report.txt`, `totals.csv`")
-        assertContains(block, "copies every attached item into `inbox/`")
+        assertContains(block, "copies every attached item into the turn's own directory under `turns/`")
         assertFalse(block.contains("`editImage`"))
         assertFalse(block.contains("`describeImage`"))
     }
@@ -243,7 +243,7 @@ class TurnInputTest {
         val block = albumContextBlock(itemCount = 2, photoCount = 2, videoCount = 0, attachedFiles = emptyList())
 
         assertContains(block, "None of the items is available as an attached file")
-        assertFalse(block.contains("`inbox/`"))
+        assertFalse(block.contains("`turns/`"))
     }
 
     @Test

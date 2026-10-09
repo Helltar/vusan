@@ -7,6 +7,7 @@ import com.helltar.vusan.tools.requireToolText
 import com.helltar.vusan.tools.suspendToolGuard
 import com.helltar.vusan.tools.sandbox.PublishedSite
 import com.helltar.vusan.tools.sandbox.SandboxClient
+import com.helltar.vusan.tools.sandbox.sandboxPath
 import kotlin.time.Clock
 import kotlin.time.Instant
 
@@ -28,7 +29,7 @@ class SiteTools(
         @Arg(SiteToolDescriptions.DIRECTORY)
         directory: String,
     ): String = suspendToolGuard {
-        val path = directory.requireToolText("Directory", MAX_PATH_CHARS)
+        val path = directory.requireToolText("Directory", MAX_PATH_CHARS).sandboxPath()
         val site = sandbox.publishSite(path)
         listOfNotNull(describePublished(site), missingIndex(site, path)).joinToString("\n")
     }

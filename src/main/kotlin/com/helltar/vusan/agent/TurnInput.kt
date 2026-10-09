@@ -109,7 +109,7 @@ internal fun attachedFileContextBlock(file: AttachedFile): String =
 
             when (file.kind) {
                 AttachedFileKind.IMAGE -> {
-                    append("The sandbox command or file-writing tool copies this file into `inbox/` and returns its exact path. ")
+                    append("The sandbox command or file-writing tool copies this file into the turn's own directory under `turns/` and returns its exact path. ")
                     append("It is an image: call `describeImage` to answer about what is visible, or work on it with `runCommand` (resize, filter, colors, dimensions).")
                 }
 
@@ -120,11 +120,11 @@ internal fun attachedFileContextBlock(file: AttachedFile): String =
                         append("It is a GIF: a short soundless loop, usually thrown into a chat as a reaction rather than as something to review. Call `describeVideo` only when the user asks what is in it, and never narrate it unasked.")
                     else {
                         append("It is a video: call `describeVideo` when your answer depends on what happens in it or what is said in it. ")
-                        append("To convert, cut or re-encode it, use the sandbox; its command or file-writing tool copies the file into `inbox/` and returns its exact path.")
+                        append("To convert, cut or re-encode it, use the sandbox; its command or file-writing tool copies the file into the turn's own directory under `turns/` and returns its exact path.")
                     }
 
                 AttachedFileKind.OTHER -> {
-                    append("The sandbox command or file-writing tool copies this file into `inbox/` and returns its exact path. ")
+                    append("The sandbox command or file-writing tool copies this file into the turn's own directory under `turns/` and returns its exact path. ")
                     append("Read it there with `runCommand` instead of asking the user to resend it.")
                 }
             }
@@ -169,7 +169,7 @@ internal fun albumContextBlock(
             else
                 append("All of them are attached: $names. ")
 
-            append("The sandbox command or file-writing tool copies every attached item into `inbox/` and returns each exact path. ")
+            append("The sandbox command or file-writing tool copies every attached item into the turn's own directory under `turns/` and returns each exact path. ")
 
             if (attachedImages > 1)
                 append(

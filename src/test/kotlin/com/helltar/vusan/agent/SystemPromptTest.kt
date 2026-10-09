@@ -46,6 +46,20 @@ class SystemPromptTest {
         assertFalse("</tool_groups>" in prompt)
     }
 
+    // a deployment without a sandbox would only be offered references that fail
+    @Test
+    fun `the sandbox is named only to a deployment that has one`() {
+        val with = systemPromptFor("Custom personality", MODEL_ID, sandbox = true)
+        val without = systemPromptFor("Custom personality", MODEL_ID)
+
+        assertContains(with, "# Passing results between tools")
+        assertContains(with, "`sandbox:<path>`")
+        assertContains(with, "`turns/<when>/`")
+        assertContains(without, "# Passing results between tools")
+        assertFalse("sandbox:" in without)
+        assertFalse("turns/" in without)
+    }
+
     @Test
     fun `system prompt separates personality from the operational contract`() {
         val prompt = systemPromptFor("  Custom personality  ", MODEL_ID)

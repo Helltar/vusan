@@ -249,6 +249,22 @@ class ReplyContextTest {
         assertNotNull(file.loadThumbnailBytes)
     }
 
+    // a gif that arrives as a bare document, with no `animation` beside it, is the same soundless loop
+    @Test
+    fun `toAttachedFileOrNull maps a gif document as an animation`() {
+        val message =
+            message(
+                """
+                "document": {"file_id": "doc-2", "file_unique_id": "u5", "file_name": "loop.gif", "mime_type": "image/gif"}
+                """
+            )
+
+        val file = assertNotNull(message.toAttachedFileOrNull(unusedClient))
+
+        assertEquals(AttachedFileKind.VIDEO, file.kind)
+        assertTrue(file.isAnimation)
+    }
+
     @Test
     fun `toAttachedFileOrNull keeps a photo an image`() {
         val message =
@@ -287,7 +303,7 @@ class ReplyContextTest {
         assertTrue(block.contains("duration: 42s"))
         assertTrue(block.contains("`describeVideo`"))
         // a video is worth re-encoding as well as watching, so it is offered to both
-        assertTrue(block.contains("`inbox/`"))
+        assertTrue(block.contains("`turns/`"))
         assertTrue(block.contains("returns its exact path"))
     }
 

@@ -28,5 +28,10 @@ internal object VoiceToolDescriptions {
     const val TEXT =
         "The exact words to speak, in natural prose, in the user's language. " +
                 "Up to $VOICE_TOOLS_MAX_CHARS characters total, including any audio tags. " +
-                "No SSML, no markdown."
+                "No SSML, no markdown. " +
+                "A label (`#4`) or `sandbox:<path>` instead speaks the whole text it names."
+
+    const val SEND =
+        "Whether the voice message goes to the chat; `true` by default. " +
+                "`false` keeps it for a later call instead, another tool or the sandbox, which takes it by the label the result names."
 }

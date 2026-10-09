@@ -24,7 +24,9 @@ class TelegramToolSets(
         val chat = context.chat.capabilities
 
         return buildList {
-            if (chat.documents) add(ChatFileTools(client, outbox))
+            // whatever the chat accepts: `send=false` fetches a file for another tool, and a send into a chat
+            // that refuses documents is answered by the tool before it fetches anything
+            add(ChatFileTools(client, outbox))
             if (chat.stickersAndAnimations) stickers?.let { add(StickerTools(it, context, outbox)) }
         }
     }

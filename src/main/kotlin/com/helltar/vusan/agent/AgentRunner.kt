@@ -138,7 +138,8 @@ class AgentRunner(
 
         val outbox = BotOutbox(context.chat.capabilities)
         val toolBudget = TurnToolBudget(agentFactory.liveToolResultMaxTokens)
-        val toolCatalog = toolCatalogFactory.buildCatalog(context, outbox, toolBudget, narrator)
+        val shelf = TurnShelf(context.attachedFiles)
+        val toolCatalog = toolCatalogFactory.buildCatalog(context, outbox, toolBudget, shelf, narrator)
 
         val currentTurn =
             currentTurnPrompt(
@@ -201,6 +202,7 @@ class AgentRunner(
                     tokenUsages = tokenUsages,
                     onToolStarting = onToolStarting,
                     mayStaySilent = context.ambient,
+                    shelf = shelf,
                 )
             } catch (e: Throwable) {
                 e.rethrowIfCancellation()
@@ -285,6 +287,7 @@ class AgentRunner(
         tokenUsages: MutableList<TokenUsage>,
         onToolStarting: (activity: ToolActivity?) -> Unit,
         mayStaySilent: Boolean,
+        shelf: TurnShelf,
     ): String {
         suspend fun run(prompt: PromptConversation): String =
             agentFactory
@@ -298,6 +301,7 @@ class AgentRunner(
                     tokenUsage = tokenUsages::add,
                     onToolStarting = onToolStarting,
                     mayStaySilent = mayStaySilent,
+                    shelf = shelf,
                 )
                 .run(currentTurn)
 

@@ -7,6 +7,9 @@ import com.helltar.vusan.common.sanitizeFilename
 import com.helltar.vusan.outbox.BotOutbox
 import com.helltar.vusan.outbox.BotOutput
 import com.helltar.vusan.tools.requireToolText
+import com.helltar.vusan.tools.keepOnShelf
+import com.helltar.vusan.tools.keptNotSent
+import com.helltar.vusan.tools.refusedByChat
 import com.helltar.vusan.tools.suspendToolGuard
 import java.util.Locale
 
@@ -21,7 +24,7 @@ class FileTools(
 
     @Tool(FileToolDescriptions.SEND_FILE)
     suspend fun sendFile(
-        @Arg(FileToolDescriptions.CONTENT)
+        @Arg(FileToolDescriptions.CONTENT, takesReference = true)
         content: String,
         @Arg(FileToolDescriptions.FILENAME)
         filename: String,
@@ -29,8 +32,12 @@ class FileTools(
         require(content.isNotEmpty()) { "File content must not be empty" }
 
         val safeName = filename.sanitizeFilename().ifBlank { "file.txt" }
+        val bytes = content.toByteArray(Charsets.UTF_8)
 
-        outbox.enqueue(BotOutput.Document(bytes = content.toByteArray(Charsets.UTF_8), filename = safeName))
+        val label = keepOnShelf(safeName, bytes)
+
+        if (!outbox.enqueue(BotOutput.Document(bytes = bytes, filename = safeName)))
+            return@suspendToolGuard "This chat does not accept documents, so it was not sent. " + keptNotSent("""File "$safeName"""", label)
 
         """File "$safeName" ready (${content.length} chars) and will be sent."""
     }
@@ -41,11 +48,20 @@ class FileTools(
         url: String,
         @Arg(FileToolDescriptions.DOWNLOAD_FILENAME)
         filename: String = "",
+        @Arg(FileToolDescriptions.DOWNLOAD_SEND)
+        send: Boolean = true,
     ): String = suspendToolGuard {
         val target = url.requireToolText("Download URL", MAX_URL_CHARS)
 
+        if (send && !outbox.capabilities.documents)
+            return@suspendToolGuard refusedByChat("documents")
+
         when (val result = downloads.download(target, filename)) {
             is FileDownloadResult.Success -> {
+                val label = keepOnShelf(result.filename, result.bytes)
+
+                if (!send) return@suspendToolGuard keptNotSent("\"${result.filename}\" (${result.bytes.size.toLong().asFileSize()})", label)
+
                 outbox.enqueue(BotOutput.Document(bytes = result.bytes, filename = result.filename))
 
                 """Downloaded "${result.filename}" (${result.bytes.size.toLong().asFileSize()}) and it will be sent."""

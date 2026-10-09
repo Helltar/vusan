@@ -15,15 +15,17 @@ class VisionTools(
     private val attachedFile: AttachedFile?,
 ) : ToolSet {
 
-    @Tool(VisionToolDescriptions.DESCRIBE_IMAGE)
+    @Tool(VisionToolDescriptions.DESCRIBE_IMAGE, readOnly = true, copiedToSandbox = true)
     suspend fun describeImage(
         @Arg(VisionToolDescriptions.FOCUS)
         focus: String = "",
+        @Arg(VisionToolDescriptions.IMAGE_FILE)
+        file: AttachedFile? = null,
     ): String = suspendToolGuard {
-        val image = attachedFile ?: return@suspendToolGuard "No image is attached in this turn."
+        val image = file ?: attachedFile ?: return@suspendToolGuard "No image is attached in this turn, and none was named."
 
         if (image.kind != AttachedFileKind.IMAGE)
-            return@suspendToolGuard "The attached file `${image.name}` is not an image, so it can't be described visually."
+            return@suspendToolGuard "`${image.name}` is not an image, so it can't be described visually."
 
         image.fileSizeBytes?.let {
             if (it > MAX_IMAGE_BYTES)
@@ -38,21 +40,23 @@ class VisionTools(
         client.describe(image, bytes, focus)
     }
 
-    @Tool(VisionToolDescriptions.DESCRIBE_VIDEO)
+    @Tool(VisionToolDescriptions.DESCRIBE_VIDEO, readOnly = true, copiedToSandbox = true)
     suspend fun describeVideo(
         @Arg(VisionToolDescriptions.VIDEO_FOCUS)
         focus: String = "",
+        @Arg(VisionToolDescriptions.VIDEO_FILE)
+        file: AttachedFile? = null,
     ): String = suspendToolGuard {
-        val video = attachedFile ?: return@suspendToolGuard "No video is attached in this turn."
+        val video = file ?: attachedFile ?: return@suspendToolGuard "No video is attached in this turn, and none was named."
 
         when (video.kind) {
             AttachedFileKind.VIDEO -> Unit
 
             AttachedFileKind.IMAGE ->
-                return@suspendToolGuard "The attached file `${video.name}` is an image, not a video — use `describeImage` for it."
+                return@suspendToolGuard "`${video.name}` is an image, not a video — use `describeImage` for it."
 
             AttachedFileKind.OTHER ->
-                return@suspendToolGuard "The attached file `${video.name}` is not a video, so there is nothing to watch."
+                return@suspendToolGuard "`${video.name}` is not a video, so there is nothing to watch."
         }
 
         val oversize = video.fileSizeBytes != null && video.fileSizeBytes > MAX_VIDEO_BYTES

@@ -19,7 +19,7 @@ class TavilyTools(
     private val outbox: BotOutbox,
 ) : ToolSet {
 
-    @Tool(TavilyToolDescriptions.WEB_SEARCH, readOnly = true)
+    @Tool(TavilyToolDescriptions.WEB_SEARCH, readOnly = true, copiedToSandbox = true)
     suspend fun webSearch(
         @Arg(TavilyToolDescriptions.WEB_SEARCH_QUERY)
         query: String,
@@ -73,8 +73,10 @@ class TavilyTools(
         query: String,
         @Arg(TavilyToolDescriptions.SEARCH_IMAGES_MAX_RESULTS)
         maxResults: Int = 5,
+        @Arg(TavilyToolDescriptions.SEARCH_IMAGES_SEND)
+        send: Boolean = true,
     ): String = suspendToolGuard {
-        outbox.photosRefusedReply()?.let { return@suspendToolGuard it }
+        if (send) outbox.photosRefusedReply()?.let { return@suspendToolGuard it }
 
         val capped = maxResults.coerceIn(1, MAX_IMAGE_RESULTS)
 
@@ -98,10 +100,11 @@ class TavilyTools(
             candidates = candidates,
             limit = capped,
             outbox = outbox,
+            send = send,
         )
     }
 
-    @Tool(TavilyToolDescriptions.EXTRACT_PAGE_CONTENT, readOnly = true)
+    @Tool(TavilyToolDescriptions.EXTRACT_PAGE_CONTENT, readOnly = true, copiedToSandbox = true)
     suspend fun extractPageContent(
         @Arg(TavilyToolDescriptions.EXTRACT_PAGE_URL)
         url: String,

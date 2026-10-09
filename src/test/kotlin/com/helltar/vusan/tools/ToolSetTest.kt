@@ -1,6 +1,9 @@
 package com.helltar.vusan.tools
 
+import com.helltar.vusan.request.AttachedFile
+import com.helltar.vusan.request.AttachedFileKind
 import kotlinx.coroutines.runBlocking
+import kotlinx.coroutines.withContext
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.buildJsonObject
@@ -137,4 +140,73 @@ class ToolSetTest {
 
         assertEquals("q 1|two true 1", result)
     }
+
+    @Test
+    fun `a text argument that is a reference arrives as what it points at`() = runBlocking {
+        val tool = ReferenceTools().toolFunctions().single { it.name == "say" }
+
+        assertEquals("the whole earlier answer", withContext(FakeReferences) { tool.call(args("""{"text":"#1"}""")) })
+        assertEquals("as written", withContext(FakeReferences) { tool.call(args("""{"text":"as written"}""")) })
+        assertEquals("#1", tool.call(args("""{"text":"#1"}""")))
+    }
+
+    // references are opt-in: anywhere else a value that reads like one is meant as written
+    @Test
+    fun `a text argument that does not take references keeps the value as written`() = runBlocking {
+        val tool = ReferenceTools().toolFunctions().single { it.name == "open" }
+
+        assertEquals("#1", withContext(FakeReferences) { tool.call(args("""{"path":"#1"}""")) })
+    }
+
+    @Test
+    fun `a file argument takes a reference, alone or in a list`() = runBlocking {
+        val tools = ReferenceTools().toolFunctions()
+
+        assertEquals("cat.png", withContext(FakeReferences) { tools.single { it.name == "look" }.call(args("""{"file":"#1/1"}""")) })
+        assertEquals("cat.png,cat.png", withContext(FakeReferences) { tools.single { it.name == "merge" }.call(args("""{"files":["#1/1","#1/1"]}""")) })
+        assertEquals("nothing", withContext(FakeReferences) { tools.single { it.name == "look" }.call(args("""{}""")) })
+    }
+
+    @Test
+    fun `a file argument outside a turn has nothing to resolve against`() = runBlocking {
+        val tool = ReferenceTools().toolFunctions().single { it.name == "look" }
+
+        assertContains(assertFailsWith<IllegalArgumentException> { tool.call(args("""{"file":"#1/1"}""")) }.message.orEmpty(), "file")
+    }
+
+    @Test
+    fun `a file parameter reads to the model as text`() {
+        val schema = ReferenceTools().toolFunctions().single { it.name == "merge" }.parameters
+
+        assertEquals("array", schema["properties"]!!.jsonObject["files"]!!.jsonObject["type"]!!.jsonPrimitive.content)
+    }
+}
+
+@Suppress("FunctionOnlyReturningConstant")
+private class ReferenceTools : ToolSet {
+
+    @Tool("Says something.")
+    fun say(@Arg("What.", takesReference = true) text: String): String = text
+
+    @Tool("Opens a path.")
+    fun open(@Arg("Where.") path: String): String = path
+
+    @Tool("Looks at a file.")
+    fun look(@Arg("Which.") file: AttachedFile? = null): String = file?.name ?: "nothing"
+
+    @Tool("Merges files.")
+    fun merge(@Arg("Which.") files: List<AttachedFile>): String = files.joinToString(",") { it.name }
+}
+
+private object FakeReferences : CallShelf {
+
+    override suspend fun textOrNull(value: String): String? = if (value == "#1") "the whole earlier answer" else null
+
+    override suspend fun file(value: String): AttachedFile {
+        require(value == "#1/1") { "no file `$value`" }
+
+        return AttachedFile(name = "cat.png", fileSizeBytes = 1, mimeType = "image/png", kind = AttachedFileKind.IMAGE, loadBytes = { byteArrayOf(1) })
+    }
+
+    override suspend fun keep(name: String, bytes: ByteArray): String? = null
 }

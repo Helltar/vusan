@@ -30,11 +30,12 @@ class VideoVisionClient(
         }
 
         // telegram serves a GIF as a video with no audio stream at all, so extraction there can only
-        // fail — skip the ffmpeg pass instead of paying for it once per GIF.
+        // fail — skip the ffmpeg pass instead of paying for it once per GIF. the track is cut to the
+        // transcriber's budget on the way out, so a video of any length, known or not, costs the same.
         val transcript =
             transcriber
                 ?.takeUnless { video.isAnimation }
-                ?.let { stt -> sampler.extractAudio(bytes)?.let { stt.transcribeOrNull(it, video.durationSeconds) } }
+                ?.let { stt -> sampler.extractAudio(bytes, stt.maxSeconds)?.let { stt.transcribeOrNull(it) } }
 
         val description = execute(video, frames, samplingNote(video.durationSeconds, frames.size), transcript, focus)
 

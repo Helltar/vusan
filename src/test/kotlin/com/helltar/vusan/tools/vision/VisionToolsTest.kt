@@ -21,7 +21,7 @@ class VisionToolsTest {
 
         val result = tools.describeImage("text")
 
-        assertEquals("No image is attached in this turn.", result)
+        assertEquals("No image is attached in this turn, and none was named.", result)
         assertEquals(0, executor.callCount)
     }
 
@@ -37,7 +37,7 @@ class VisionToolsTest {
 
         val result = tools.describeImage("")
 
-        assertEquals("The attached file `data.csv` is not an image, so it can't be described visually.", result)
+        assertEquals("`data.csv` is not an image, so it can't be described visually.", result)
         assertEquals(false, loaded)
         assertEquals(0, executor.callCount)
     }
@@ -79,7 +79,7 @@ class VisionToolsTest {
 
         val result = tools.describeVideo("what happens")
 
-        assertEquals("No video is attached in this turn.", result)
+        assertEquals("No video is attached in this turn, and none was named.", result)
         assertEquals(0, executor.callCount)
     }
 
@@ -105,7 +105,7 @@ class VisionToolsTest {
                 executor = executor,
                 attachedFile = videoAttachment(),
                 sampler = sampler,
-                transcriber = { _, _ -> "look at him go" },
+                transcriber = transcriber { "look at him go" },
             )
 
         val result = tools.describeVideo("what happens")
@@ -141,7 +141,7 @@ class VisionToolsTest {
                 executor = executor,
                 attachedFile = videoAttachment(isAnimation = true),
                 sampler = sampler,
-                transcriber = { _, _ -> error("transcription must not run for a gif") },
+                transcriber = transcriber { error("transcription must not run for a gif") },
             )
 
         tools.describeVideo("")
@@ -153,7 +153,7 @@ class VisionToolsTest {
     @Test
     fun `describeVideo keeps going when the audio cannot be transcribed`() = runBlocking {
         val executor = FakeLlmClient()
-        val tools = visionTools(executor, videoAttachment(), transcriber = { _, _ -> null })
+        val tools = visionTools(executor, videoAttachment(), transcriber = transcriber { null })
 
         val result = tools.describeVideo("")
 
@@ -236,6 +236,24 @@ class VisionToolsTest {
         assertContains(executor.promptText, "only the preview frame")
     }
 
+    // a video of any length, known or not, pays for the same first minutes of speech
+    @Test
+    fun `describeVideo cuts the sound to the transcriber's budget before it is transcribed`() = runBlocking {
+        val sampler = FakeVideoSampler()
+        val tools = visionTools(FakeLlmClient(), videoAttachment(durationSeconds = null), sampler, transcriber(budgetSeconds = 300) { "words" })
+
+        tools.describeVideo("")
+
+        assertEquals(300, sampler.receivedMaxSeconds)
+    }
+
+    private fun transcriber(budgetSeconds: Int = 300, answer: suspend () -> String?): VideoAudioTranscriber =
+        object : VideoAudioTranscriber {
+            override val maxSeconds: Int = budgetSeconds
+
+            override suspend fun transcribeOrNull(audio: ByteArray): String? = answer()
+        }
+
     private fun visionTools(
         executor: FakeLlmClient,
         attachedFile: AttachedFile?,
@@ -293,14 +311,18 @@ class VisionToolsTest {
         var audioRequested = false
             private set
 
+        var receivedMaxSeconds: Int? = null
+            private set
+
         override suspend fun sampleFrames(video: ByteArray, durationSeconds: Int?, maxFrames: Int): List<ByteArray> {
             receivedDurationSeconds = durationSeconds
 
             return frames
         }
 
-        override suspend fun extractAudio(video: ByteArray): ByteArray? {
+        override suspend fun extractAudio(video: ByteArray, maxSeconds: Int?): ByteArray? {
             audioRequested = true
+            receivedMaxSeconds = maxSeconds
 
             return audio
         }

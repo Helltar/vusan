@@ -63,9 +63,16 @@ instead of keeping its own copy.
 
 ## Files
 
-- **Attachments** — every file the message carried, an album's included, each copied to its own
-  `inbox/<unique-id>/<filename>` before the first command that might want them, and the tool result
-  names every exact path. Repeated filenames never overwrite.
+- **The turn's own directory** — before every command, write, edit or send, the turn's files reach
+  `turns/<yyMMdd-HHmmss>/`, named by when the turn started: every file the message carried, an album's
+  included, as `00-1-<name>`; whatever the agent's other tools made — a picture it drew, speech it voiced,
+  a video or track it fetched — as `05-1-<name>`; and what searches, pages, transcripts and vision found
+  as `03-<tool>.txt`. The tool result names each path, and repeated filenames never overwrite. The last
+  three turns' directories are kept and older ones removed; the group's transcript, tasks and memory are
+  never copied there.
+- **Back out to the other tools** — any file in the home can be handed to the agent's other tools as
+  `sandbox:<path>`: a cut piece of video to watch, frames to look at, a recording to transcribe, a
+  picture to edit, a text for the voice to read.
 - **Paths** — relative to the home, `/home/sandbox`. `writeSandboxFile` replaces a file atomically
   and creates parent directories; removing a file is `rm` in `runCommand`.
 - **Reading and editing** — `readSandboxFile` returns a text file with line numbers, a range of lines
@@ -118,6 +125,8 @@ own:
 | File write through a tool | 400 000 characters of text |
 | Files out of the sandbox | 10 files and 50 MB per call |
 | Attachment into the sandbox | 20 MB |
+| What the turn made, into `turns/` | 50 MB per file; a turn keeps at most 200 MB of files for its tools in all; the last three turns' directories |
+| A file handed back to a tool as `sandbox:<path>` | 50 MB, or 1 MB where it stands in for text |
 | Home size, memory, CPU, processes | The server's per-sandbox settings |
 
 A home is a fixed-size disk: when it fills, commands fail with `No space left on device` and the fix

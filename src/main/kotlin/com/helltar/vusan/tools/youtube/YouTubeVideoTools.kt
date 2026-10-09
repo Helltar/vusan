@@ -6,6 +6,9 @@ import com.helltar.vusan.tools.ToolSet
 import com.helltar.vusan.common.sanitizeFilename
 import com.helltar.vusan.outbox.BotOutbox
 import com.helltar.vusan.outbox.BotOutput
+import com.helltar.vusan.tools.keepOnShelf
+import com.helltar.vusan.tools.keptNotSent
+import com.helltar.vusan.tools.refusedByChat
 import com.helltar.vusan.tools.suspendToolGuard
 
 class YouTubeVideoTools(private val client: YtDlpClient, private val outbox: BotOutbox) : ToolSet {
@@ -14,7 +17,12 @@ class YouTubeVideoTools(private val client: YtDlpClient, private val outbox: Bot
     suspend fun downloadVideo(
         @Arg(YouTubeVideoToolDescriptions.DOWNLOAD_VIDEO_QUERY)
         query: String,
+        @Arg(YouTubeVideoToolDescriptions.SEND)
+        send: Boolean = true,
     ): String = suspendToolGuard {
+        if (send && !outbox.capabilities.videos)
+            return@suspendToolGuard refusedByChat("videos")
+
         when (val result = client.downloadVideo(query)) {
             is YtDlpResult.NotFound -> """No video found on YouTube for "$query"."""
 
@@ -29,6 +37,9 @@ class YouTubeVideoTools(private val client: YtDlpClient, private val outbox: Bot
             is YtDlpResult.Success -> {
                 val video = result.value
                 val filename = video.title.sanitizeFilename().ifBlank { "video" } + ".mp4"
+                val label = keepOnShelf(filename, video.bytes)
+
+                if (!send) return@suspendToolGuard keptNotSent("The video \"${video.title}\"", label)
 
                 outbox.enqueue(
                     BotOutput.Video(

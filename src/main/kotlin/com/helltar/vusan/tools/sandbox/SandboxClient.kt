@@ -1,7 +1,9 @@
 package com.helltar.vusan.tools.sandbox
 
+import com.helltar.vusan.agent.ShelfSandbox
 import com.helltar.vusan.common.rethrowIfCancellation
 import io.ktor.client.HttpClient
+import io.reified.regolith.protocol.EntryType
 import io.reified.regolith.protocol.ErrorCodes
 import io.reified.regolith.protocol.ExecInfo
 import io.reified.regolith.protocol.ExecRequest
@@ -46,7 +48,7 @@ class SandboxClient(
     fun sandboxOf(person: String): PersonSandbox = PersonSandbox(person)
 
     /** One person's sandbox, for as long as the work that asked for it lasts. */
-    inner class PersonSandbox internal constructor(private val person: String) {
+    inner class PersonSandbox internal constructor(private val person: String) : ShelfSandbox {
 
         // created or found by the alias on first use; a reset forgets it, so the next use makes a new one.
         @Volatile
@@ -84,6 +86,25 @@ class SandboxClient(
                     if (e.code == ErrorCodes.PAYLOAD_TOO_LARGE) error("File exceeds the remaining transfer limit") else throw e
                 }
             }
+        }
+
+        override suspend fun read(path: String, maxBytes: Int): ByteArray = readFile(path, maxBytes)
+
+        override suspend fun write(path: String, bytes: ByteArray) = writeFile(path, bytes)
+
+        override suspend fun directories(path: String): List<String> =
+            call {
+                try {
+                    sandbox().files.list(path)
+                } catch (e: RegolithException) {
+                    if (e.code == ErrorCodes.NOT_FOUND) emptyList() else throw e
+                }
+            }
+                .filter { it.type == EntryType.DIRECTORY }
+                .map { it.name }
+
+        override suspend fun deleteDirectory(path: String) {
+            call { sandbox().files.delete(path, recursive = true) }
         }
 
         /** Deletes the sandbox with its home; the next use creates an empty one for this person. */
