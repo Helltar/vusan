@@ -4,6 +4,7 @@ import com.helltar.vusan.common.rethrowIfCancellation
 import io.github.oshai.kotlinlogging.KotlinLogging
 import java.time.Clock
 import java.time.Instant
+import java.util.concurrent.atomic.AtomicBoolean
 import kotlin.time.Duration
 import kotlin.time.toKotlinDuration
 import java.time.Duration as JavaDuration
@@ -45,6 +46,9 @@ class FallbackLlmClient(
     @Volatile
     private var primaryOutage: ProviderOutage? = null
 
+    // past the deadline one call tries the primary; the rest stay on the fallback until it has answered
+    private val probing = AtomicBoolean(false)
+
     /** What is answering right now while the primary is out, or `null` when it is the primary's turn. */
     val fallbackInUse: FallbackInUse?
         get() {
@@ -64,6 +68,7 @@ class FallbackLlmClient(
         val known = primaryOutage
 
         if (known != null && known.until.isAfter(now)) return onFallback(request)
+        if (known != null && !probing.compareAndSet(false, true)) return onFallback(request)
 
         if (known != null) log.info { "probing $primaryLabel again after its outage" }
 
@@ -81,6 +86,8 @@ class FallbackLlmClient(
             }
 
             onFallback(request)
+        } finally {
+            if (known != null) probing.set(false)
         }
     }
 
