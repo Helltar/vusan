@@ -25,6 +25,9 @@ class HtmlReplyDocumentTest {
         val doc = htmlReplyDocument("<script>alert(1)</script>")
         assertContains(doc, "Content-Security-Policy")
         assertContains(doc, "default-src 'none'")
+        // an image is the one tag that would fetch from outside when the file is opened: a beacon under injection
+        assertContains(doc, "img-src data:")
+        assertTrue("https:" !in doc.substringAfter("Content-Security-Policy").substringBefore(">"))
         // the markup is embedded verbatim; the CSP, not escaping, is what neutralizes it.
         assertTrue("<script>alert(1)</script>" in doc)
     }

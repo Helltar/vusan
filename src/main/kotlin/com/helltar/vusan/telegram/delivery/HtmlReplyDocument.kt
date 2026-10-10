@@ -17,7 +17,7 @@ internal fun htmlReplyDocument(body: String): String =
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src 'unsafe-inline'; img-src data: https:">
+<meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src 'unsafe-inline'; img-src data:">
 <title>$REPLY_DOCUMENT_TITLE</title>
 <style>
 :root { color-scheme: light dark; --bg:#ffffff; --fg:#1c1c1e; --muted:#8a8a8e; --link:#0a7cff; --code-bg:#f2f2f7; --quote:#c7c7cc; }
