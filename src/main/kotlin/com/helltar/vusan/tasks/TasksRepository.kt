@@ -1,5 +1,6 @@
 package com.helltar.vusan.tasks
 
+import io.github.oshai.kotlinlogging.KotlinLogging
 import com.helltar.vusan.i18n.Language
 import com.helltar.vusan.infra.Db.dbTransaction
 import com.helltar.vusan.infra.tables.ScheduledTasksTable
@@ -13,7 +14,6 @@ import org.jetbrains.exposed.v1.jdbc.selectAll
 import org.jetbrains.exposed.v1.jdbc.update
 import java.time.Instant
 import java.time.ZoneId
-import java.time.ZoneOffset
 
 class TasksRepository {
 
@@ -62,7 +62,7 @@ class TasksRepository {
             .selectAll()
             .where { dueCondition(now) }
             .orderBy(ScheduledTasksTable.nextFireAt to SortOrder.ASC)
-            .map { it.toScheduledTask() }
+            .mapNotNull { it.dueTaskOrNull() }
     }
 
     /**
@@ -75,7 +75,7 @@ class TasksRepository {
             .selectAll()
             .where { (ScheduledTasksTable.id eq id) and dueCondition(now) }
             .firstOrNull()
-            ?.toScheduledTask()
+            ?.dueTaskOrNull()
     }
 
     suspend fun findForUser(owner: UserRef, id: Long, chat: ChatRef? = null): ScheduledTask? = dbTransaction {
@@ -180,9 +180,15 @@ class TasksRepository {
     private fun firedTaskCondition(id: Long, firedAt: Instant): Op<Boolean> =
         (ScheduledTasksTable.id eq id) and (ScheduledTasksTable.nextFireAt eq firedAt)
 
+    // a row moved by hand can hold a schedule nothing here reads; firing it on a guessed one would run the
+    // task at the wrong time, so it stays due, is named in the log, and is skipped until the row is fixed
+    private fun ResultRow.dueTaskOrNull(): ScheduledTask? =
+        runCatching { toScheduledTask() }
+            .onFailure { log.error(it) { "task id=${this[ScheduledTasksTable.id].value} cannot be read and is skipped" } }
+            .getOrNull()
+
     private fun ResultRow.toScheduledTask(): ScheduledTask {
-        val tzRaw = this[ScheduledTasksTable.timezone]
-        val tz = runCatching { ZoneId.of(tzRaw) }.getOrDefault(ZoneOffset.UTC)
+        val tz = ZoneId.of(this[ScheduledTasksTable.timezone])
 
         return ScheduledTask(
             id = this[ScheduledTasksTable.id].value,
@@ -193,7 +199,10 @@ class TasksRepository {
                 ),
             prompt = this[ScheduledTasksTable.prompt],
             title = this[ScheduledTasksTable.title],
-            recurrence = Recurrence.parse(this[ScheduledTasksTable.recurrence]) ?: Recurrence.Once,
+            recurrence =
+                checkNotNull(Recurrence.parse(this[ScheduledTasksTable.recurrence])) {
+                    "unreadable recurrence [${this[ScheduledTasksTable.recurrence]}]"
+                },
             timezone = tz,
             creatorMessageId = this[ScheduledTasksTable.creatorMessageId],
             creatorThreadId = this[ScheduledTasksTable.creatorThreadId],
@@ -227,6 +236,8 @@ class TasksRepository {
         // a morning brief, a weekly digest and a few reminders fit, a runaway turn does not.
         const val MAX_TASKS_PER_USER = 10
         const val MAX_FOLLOW_UPS_PER_USER = 3
+
+        private val log = KotlinLogging.logger {}
     }
 }
 
