@@ -19,6 +19,12 @@ private const val PAGE_LIMIT = 4 * 1024 * 1024L
 // they are where the content is, and the boilerplate tags are removed from inside them too.
 private const val BOILERPLATE_TAGS = "script, style, noscript, template, svg, iframe, nav, header, footer, aside, form"
 private const val CONTENT_ROOTS = "article, main, [role=main]"
+
+// what the page hides from a reader and would show a model: the `hidden` attribute, `aria-hidden`, or an
+// inline style that takes the element off the screen. a stylesheet can hide more, which only a browser
+// would know; these are the forms an instruction planted for a model is written in.
+private const val HIDDEN_ELEMENTS =
+    "[hidden], [aria-hidden=true], [style*=display:none], [style*=display: none], [style*=visibility:hidden], [style*=visibility: hidden]"
 private const val BLOCK_TAGS =
     "p, div, section, article, main, h1, h2, h3, h4, h5, h6, ul, ol, pre, blockquote, table, tr, dd, dt, figcaption, hr"
 
@@ -65,6 +71,7 @@ class PageReader(private val downloader: FileDownloadClient) {
 
     private fun htmlToText(document: Document): PageContent {
         document.select(BOILERPLATE_TAGS).remove()
+        document.select(HIDDEN_ELEMENTS).remove()
         val root = document.selectFirst(CONTENT_ROOTS) ?: document.body() ?: document
 
         return PageContent.Text(

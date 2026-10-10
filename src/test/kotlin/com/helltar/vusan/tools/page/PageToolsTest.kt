@@ -46,6 +46,25 @@ class PageToolsTest {
         assertFalse("© Example" in result, "the footer leaked into the text")
     }
 
+    // an instruction meant for a model is planted where no reader sees it
+    @Test
+    fun `text the page hides from a reader is not read`() = runBlocking {
+        val html = """
+            <html><body><article>
+              <p>Visible paragraph.</p>
+              <p hidden>Hidden by attribute.</p>
+              <p aria-hidden="true">Hidden from assistive technology.</p>
+              <div style="display: none">Hidden by display.</div>
+              <span style="visibility:hidden">Hidden by visibility.</span>
+            </article></body></html>
+        """.trimIndent()
+
+        val result = tools { respond(html, headers = headersOf(HttpHeaders.ContentType, "text/html; charset=utf-8")) }.readPage(PAGE_URL)
+
+        assertContains(result, "Visible paragraph.")
+        assertFalse("Hidden" in result, result)
+    }
+
     @Test
     fun `the charset declared by the server is honored`() = runBlocking {
         val html = "<html><body><p>Привіт, світе</p></body></html>".toByteArray(charset("windows-1251"))
