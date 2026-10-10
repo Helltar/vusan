@@ -3,6 +3,7 @@ package com.helltar.vusan.agent.presence
 import com.helltar.vusan.agent.grouplog.AuthorActivity
 import com.helltar.vusan.agent.grouplog.GroupLogEntry
 import com.helltar.vusan.agent.grouplog.GroupLogRepository
+import com.helltar.vusan.agent.neutralizePromptBlocks
 import com.helltar.vusan.common.collapseWhitespaceAndCap
 import com.helltar.vusan.common.escapeHtml
 import com.helltar.vusan.common.limitTo
@@ -401,14 +402,19 @@ private const val UNKNOWN_AUTHOR = "someone"
 private val GroupLogEntry.isFromPerson: Boolean
     get() = kind != GroupLogEntry.BOT_KIND
 
+// the name, the forwarded channel and the words are all somebody's own text, and the glance goes into
+// a prompt of its own: defused like the transcript a turn is shown, so nobody opens a block in it
 private fun GroupLogEntry.glanceAuthor(): String =
-    if (isFromPerson) senderUsername ?: senderName ?: UNKNOWN_AUTHOR else OWN_AUTHOR
+    (if (isFromPerson) senderUsername ?: senderName ?: UNKNOWN_AUTHOR else OWN_AUTHOR).neutralizePromptBlocks()
 
 private fun GroupLogEntry.glanceContent(): String? {
     val label = descriptor?.let { if (isFromPerson) "[$kind $it]" else "[$it]" }
     val forward = forwardFrom?.let { "[forward from $it]" }
 
-    return listOfNotNull(forward, label, text?.limitTo(MAX_LINE_CHARS)).joinToString(" ").takeIf { it.isNotBlank() }
+    return listOfNotNull(forward, label, text?.limitTo(MAX_LINE_CHARS))
+        .joinToString(" ")
+        .neutralizePromptBlocks()
+        .takeIf { it.isNotBlank() }
 }
 
 private operator fun Instant.minus(duration: Duration): Instant = minus(duration.toJavaDuration())
