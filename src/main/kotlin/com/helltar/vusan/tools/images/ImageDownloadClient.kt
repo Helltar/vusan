@@ -1,6 +1,7 @@
 package com.helltar.vusan.tools.images
 
 import com.helltar.vusan.common.imageDimensions
+import com.helltar.vusan.common.sniffedImageMimeType
 import com.helltar.vusan.tools.files.FileDownloadClient
 import com.helltar.vusan.tools.files.FileDownloadResult
 import io.github.oshai.kotlinlogging.KotlinLogging
@@ -19,7 +20,7 @@ class ImageDownloadClient(private val downloader: FileDownloadClient) {
         if (result !is FileDownloadResult.Success) return null
         val bytes = result.bytes
 
-        if (!looksLikeImage(bytes)) {
+        if (sniffedImageMimeType(bytes) == null) {
             log.info { "download: response is not an image, skipping" }
             return null
         }
@@ -41,22 +42,6 @@ class ImageDownloadClient(private val downloader: FileDownloadClient) {
         val ratio = max(width, height).toDouble() / min(width, height)
 
         return ratio <= MAX_ASPECT_RATIO
-    }
-
-    private fun looksLikeImage(bytes: ByteArray): Boolean {
-        if (bytes.size < 12) return false
-
-        fun b(i: Int) =
-            bytes[i].toInt() and 0xFF
-
-        return when {
-            b(0) == 0xFF && b(1) == 0xD8 && b(2) == 0xFF -> true
-            b(0) == 0x89 && b(1) == 0x50 && b(2) == 0x4E && b(3) == 0x47 -> true
-            b(0) == 0x47 && b(1) == 0x49 && b(2) == 0x46 && b(3) == 0x38 -> true
-            b(0) == 0x52 && b(1) == 0x49 && b(2) == 0x46 && b(3) == 0x46 && b(8) == 0x57 && b(9) == 0x45 && b(10) == 0x42 && b(11) == 0x50 -> true
-            b(0) == 0x42 && b(1) == 0x4D -> true
-            else -> false
-        }
     }
 
     private companion object {

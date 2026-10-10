@@ -1,12 +1,12 @@
 package com.helltar.vusan.agent
 
+import com.helltar.vusan.common.mimeTypeOfName
 import com.helltar.vusan.common.rethrowIfCancellation
 import com.helltar.vusan.common.sanitizeFilename
 import com.helltar.vusan.request.AttachedFile
 import com.helltar.vusan.request.AttachedFileKind
 import com.helltar.vusan.request.attachedFileKindOf
 import com.helltar.vusan.request.isAnimationFile
-import com.helltar.vusan.request.mimeTypeOfName
 import com.helltar.vusan.tools.CallShelf
 import com.helltar.vusan.tools.SANDBOX_REFERENCE_PREFIX
 import io.github.oshai.kotlinlogging.KotlinLogging

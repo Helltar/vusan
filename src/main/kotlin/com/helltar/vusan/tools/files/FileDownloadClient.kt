@@ -1,5 +1,6 @@
 package com.helltar.vusan.tools.files
 
+import com.helltar.vusan.common.extensionOfMime
 import com.helltar.vusan.common.sanitizeFilename
 import com.helltar.vusan.infra.isPublicDestination
 import io.github.oshai.kotlinlogging.KotlinLogging
@@ -225,32 +226,13 @@ private fun HttpResponse.contentDispositionFilename(): String =
         ?.sanitizeFilename()
         .orEmpty()
 
-// ktor's ContentType.fileExtensions() walks a reverse mime map and answers text/html with "acgi",
-// so name the common types by hand; anything else falls back to its subtype when that reads like an
-// extension, which covers pdf/zip/json/png and leaves compound subtypes (octet-stream) unnamed.
-private val EXTENSION_BY_MIME =
-    mapOf(
-        "text/html" to "html",
-        "text/plain" to "txt",
-        "text/markdown" to "md",
-        "text/javascript" to "js",
-        "image/jpeg" to "jpg",
-        "image/svg+xml" to "svg",
-        "audio/mpeg" to "mp3",
-        "application/javascript" to "js",
-        "application/x-tar" to "tar",
-        "application/gzip" to "gz",
-        "application/msword" to "doc",
-        "application/vnd.openxmlformats-officedocument.wordprocessingml.document" to "docx",
-        "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" to "xlsx",
-        "application/vnd.openxmlformats-officedocument.presentationml.presentation" to "pptx",
-    )
-
 private fun String.withExtensionFor(contentType: ContentType?): String {
     if (hasFileExtension || contentType == null) return this
 
     val mime = "${contentType.contentType}/${contentType.contentSubtype}".lowercase()
-    val extension = EXTENSION_BY_MIME[mime] ?: contentType.contentSubtype.lowercase().takeIf { it.looksLikeExtension }
+    // a type nothing names falls back to its subtype when that reads like an extension, which covers
+    // pdf/zip/json and leaves compound subtypes (octet-stream) unnamed
+    val extension = extensionOfMime(mime) ?: contentType.contentSubtype.lowercase().takeIf { it.looksLikeExtension }
 
     return if (extension == null) this else "$this.$extension"
 }

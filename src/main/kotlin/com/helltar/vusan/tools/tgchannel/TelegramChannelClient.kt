@@ -1,5 +1,7 @@
 package com.helltar.vusan.tools.tgchannel
 
+import com.helltar.vusan.common.extensionOfMime
+import com.helltar.vusan.common.mimeTypeOfName
 import com.helltar.vusan.tools.files.FileDownloadClient
 import com.helltar.vusan.tools.files.FileDownloadResult
 
@@ -36,7 +38,8 @@ class TelegramChannelClient(private val downloader: FileDownloadClient) {
 
         val contentType =
             response.contentType?.lowercase()
-                ?: guessMimeType(url)
+                ?: mimeTypeOfName(url.substringBefore('?'))
+                ?: "image/jpeg"
 
         check(contentType.startsWith("image/")) { "Telegram media is not an image ($contentType)" }
 
@@ -48,23 +51,8 @@ class TelegramChannelClient(private val downloader: FileDownloadClient) {
         )
     }
 
-    private fun guessMimeType(url: String): String =
-
-        when (url.substringBefore('?').substringAfterLast('.', "").lowercase()) {
-            "png" -> "image/png"
-            "webp" -> "image/webp"
-            "gif" -> "image/gif"
-            else -> "image/jpeg"
-        }
-
     private fun filenameFromUrl(url: String, mimeType: String): String {
-        val extension =
-            when (mimeType) {
-                "image/png" -> "png"
-                "image/webp" -> "webp"
-                "image/gif" -> "gif"
-                else -> "jpg"
-            }
+        val extension = extensionOfMime(mimeType) ?: "jpg"
 
         val base =
             url.substringBefore('?')

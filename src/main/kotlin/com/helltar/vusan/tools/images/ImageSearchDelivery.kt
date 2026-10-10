@@ -1,7 +1,9 @@
 package com.helltar.vusan.tools.images
 
+import com.helltar.vusan.common.extensionOfMime
 import com.helltar.vusan.common.limitTo
 import com.helltar.vusan.common.rethrowIfCancellation
+import com.helltar.vusan.common.sniffedImageMimeType
 import com.helltar.vusan.outbox.BotOutbox
 import com.helltar.vusan.outbox.BotOutput
 import com.helltar.vusan.tools.keepOnShelf
@@ -63,7 +65,6 @@ suspend fun ImageDownloadClient.deliverImageResults(
 
     val delivered = mutableListOf<Pair<BotOutput.Photo, String?>>()
     var attempts = 0
-    var oversize = 0
 
     for (candidate in candidates) {
         if (delivered.size >= limit || attempts >= limit * ATTEMPTS_PER_IMAGE) break
@@ -78,22 +79,13 @@ suspend fun ImageDownloadClient.deliverImageResults(
                 }
                 .getOrNull() ?: continue
 
-        if (bytes.size > MAX_PHOTO_BYTES) {
-            oversize++
-            log.warn { "image exceeds $MAX_PHOTO_BYTES bytes (got ${bytes.size}) query=[$query] url=[${candidate.url}]" }
-            continue
-        }
-
-        val filename = imageFilename(query, delivered.size, candidate.url)
+        val filename = imageFilename(query, delivered.size, bytes)
 
         delivered += BotOutput.Photo(bytes = bytes, filename = filename) to candidate.description
     }
 
     if (delivered.isEmpty()) {
-        log.warn {
-            "none of $attempts candidate(s) usable " +
-                    "(oversize=$oversize, rest not images or failed to download) query=[$query]"
-        }
+        log.warn { "none of $attempts candidate(s) usable (not images, too large or failed to download) query=[$query]" }
 
         return """Found image URLs for "$query" but failed to download any."""
     }
@@ -128,13 +120,10 @@ suspend fun ImageDownloadClient.deliverImageResults(
     }.trim()
 }
 
-private fun imageFilename(query: String, index: Int, url: String): String {
-    val extension =
-        url.substringAfterLast('.', missingDelimiterValue = "jpg")
-            .substringBefore('?')
-            .lowercase()
-            .take(4)
-            .ifBlank { "jpg" }
+// the extension comes off the bytes, never the address: a CDN URL ends in a query or a bare path, and a
+// name with a wrong one puts the picture on the shelf as something no image tool takes
+private fun imageFilename(query: String, index: Int, bytes: ByteArray): String {
+    val extension = sniffedImageMimeType(bytes)?.let(::extensionOfMime) ?: "jpg"
 
     val base =
         query.replace(Regex("[^A-Za-z0-9_]+"), "_")

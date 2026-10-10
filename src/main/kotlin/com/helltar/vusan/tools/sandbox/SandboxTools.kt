@@ -9,6 +9,9 @@ import com.helltar.vusan.common.sanitizeFilename
 import com.helltar.vusan.common.xmlBlock
 import com.helltar.vusan.outbox.BotOutbox
 import com.helltar.vusan.outbox.BotOutput
+import com.helltar.vusan.request.AttachedFileKind
+import com.helltar.vusan.request.attachedFileKindOf
+import com.helltar.vusan.request.isAnimationFile
 import com.helltar.vusan.tools.requireToolText
 import com.helltar.vusan.tools.suspendToolGuard
 import java.util.Locale
@@ -22,8 +25,6 @@ private const val MAX_READ_CHARS = 60_000
 private const val MAX_PATH_CHARS = 400
 private const val MAX_SEND_FILES = 10
 private const val MAX_JOB_ID_CHARS = 64
-private val IMAGE_EXTENSIONS = setOf("png", "jpg", "jpeg", "webp", "bmp")
-private val VIDEO_EXTENSIONS = setOf("mp4", "mov", "m4v", "webm")
 private val ANIMATION_EXTENSIONS = setOf("gif", "mp4")
 private const val SEND_AS_DOCUMENT = "document"
 private const val SEND_AS_ANIMATION = "animation"
@@ -268,14 +269,15 @@ private fun sandboxFilename(path: String): String = path.substringAfterLast('/')
 
 private val String.extension: String get() = substringAfterLast('.', "").lowercase()
 
-// the extension decides unless the model asked for a kind: a GIF from a chat is a soundless mp4, and
-// only the model knows that the mp4 it made from one is meant to loop rather than play as a video.
+// the name decides unless the model asked for a kind: a GIF from a chat is a soundless mp4, and only
+// the model knows that the mp4 it made from one is meant to loop rather than play as a video. a video
+// the chat cannot play as one comes back as a document through the sender's own fallback.
 private fun sandboxOutput(name: String, bytes: ByteArray, kind: String): BotOutput =
     when {
         kind == SEND_AS_DOCUMENT -> BotOutput.Document(bytes = bytes, filename = name)
-        kind == SEND_AS_ANIMATION || name.extension == "gif" -> BotOutput.Animation(bytes = bytes, filename = name)
-        name.extension in IMAGE_EXTENSIONS -> BotOutput.Photo(bytes = bytes, filename = name)
-        name.extension in VIDEO_EXTENSIONS -> BotOutput.Video(bytes = bytes, filename = name)
+        kind == SEND_AS_ANIMATION || isAnimationFile(name, mimeType = null) -> BotOutput.Animation(bytes = bytes, filename = name)
+        attachedFileKindOf(name, mimeType = null) == AttachedFileKind.IMAGE -> BotOutput.Photo(bytes = bytes, filename = name)
+        attachedFileKindOf(name, mimeType = null) == AttachedFileKind.VIDEO -> BotOutput.Video(bytes = bytes, filename = name)
         else -> BotOutput.Document(bytes = bytes, filename = name)
     }
 
