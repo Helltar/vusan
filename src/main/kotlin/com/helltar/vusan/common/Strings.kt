@@ -1,5 +1,7 @@
 package com.helltar.vusan.common
 
+import java.util.Locale
+
 private const val ELLIPSIS = "..."
 private const val MAX_FILENAME_CHARS = 120
 
@@ -75,6 +77,17 @@ private fun String.takeWholeChars(n: Int): String {
 
     return substring(0, safeEnd)
 }
+
+/** A size people read: bytes under a kilobyte, whole kilobytes, then megabytes to one decimal. */
+fun Long.asFileSize(): String =
+    when {
+        this >= BYTES_PER_MB -> String.format(Locale.ROOT, "%.1f MB", this / BYTES_PER_MB)
+        this >= BYTES_PER_KB -> String.format(Locale.ROOT, "%.0f KB", this / BYTES_PER_KB)
+        else -> "$this B"
+    }
+
+private const val BYTES_PER_KB = 1024.0
+private const val BYTES_PER_MB = BYTES_PER_KB * 1024
 
 /** Escapes the four characters Telegram's `HTML` parse mode reads as markup. */
 fun String.escapeHtml(): String =

@@ -1,5 +1,6 @@
 package com.helltar.vusan.tools.files
 
+import com.helltar.vusan.common.asFileSize
 import com.helltar.vusan.tools.Arg
 import com.helltar.vusan.tools.Tool
 import com.helltar.vusan.tools.ToolSet
@@ -11,11 +12,8 @@ import com.helltar.vusan.tools.keepOnShelf
 import com.helltar.vusan.tools.keptNotSent
 import com.helltar.vusan.tools.refusedByChat
 import com.helltar.vusan.tools.suspendToolGuard
-import java.util.Locale
 
 private const val MAX_URL_CHARS = 2_000
-private const val BYTES_PER_KB = 1024.0
-private const val BYTES_PER_MB = BYTES_PER_KB * 1024
 
 class FileTools(
     private val downloads: FileDownloadClient,
@@ -76,9 +74,3 @@ class FileTools(
         }
     }
 }
-
-internal fun Long.asFileSize(): String =
-    if (this >= BYTES_PER_MB)
-        String.format(Locale.ROOT, "%.1f MB", this / BYTES_PER_MB)
-    else
-        String.format(Locale.ROOT, "%.0f KB", this / BYTES_PER_KB)

@@ -12,7 +12,7 @@ import com.helltar.vusan.telegram.delivery.isFileTooBig
 import com.helltar.vusan.telegram.delivery.isWrongFileIdentifier
 import com.helltar.vusan.telegram.downloadFileById
 import com.helltar.vusan.tools.files.FileTools
-import com.helltar.vusan.tools.files.asFileSize
+import com.helltar.vusan.common.asFileSize
 import com.helltar.vusan.tools.files.hasFileExtension
 import com.helltar.vusan.tools.keepOnShelf
 import com.helltar.vusan.tools.keptNotSent

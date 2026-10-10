@@ -1,5 +1,6 @@
 package com.helltar.vusan.agent
 
+import com.helltar.vusan.common.asFileSize
 import com.helltar.vusan.request.PlatformLimits
 import com.helltar.vusan.common.mimeTypeOfName
 import com.helltar.vusan.common.rethrowIfCancellation
@@ -17,7 +18,6 @@ import kotlinx.coroutines.sync.withLock
 import java.time.Instant
 import java.time.ZoneId
 import java.time.format.DateTimeFormatter
-import java.util.Locale
 
 /**
  * Everything one turn's tools produced, under the labels the model reads, so that what one call made
@@ -362,12 +362,6 @@ private fun AttachedFile.describe(): String {
             else -> "file"
         }
 
-    return fileSizeBytes?.let { "$kind, ${it.readableSize()}" } ?: kind
+    return fileSizeBytes?.let { "$kind, ${it.asFileSize()}" } ?: kind
 }
 
-private fun Long.readableSize(): String =
-    when {
-        this < 1024 -> "$this B"
-        this < 1024 * 1024 -> "${this / 1024} KB"
-        else -> String.format(Locale.ROOT, "%.1f MB", this / (1024.0 * 1024.0))
-    }

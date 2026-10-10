@@ -1,6 +1,6 @@
 package com.helltar.vusan.tools.sandbox
 
-import com.helltar.vusan.tools.files.asFileSize
+import com.helltar.vusan.common.asFileSize
 import com.helltar.vusan.agent.ShelfSandbox
 import com.helltar.vusan.common.rethrowIfCancellation
 import io.ktor.client.HttpClient
