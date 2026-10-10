@@ -79,10 +79,17 @@ class TurnSurroundings(
     // the catalog is worth its tokens only where the reply can actually carry a sticker: a group that
     // forbids them keeps StickerTools out of the catalog, so an index here would offer the model a
     // shortlist it has no tool to send.
-    suspend fun stickerCatalogFor(context: RequestContext): String? =
-        stickerCatalog
-            ?.takeIf { context.chat.capabilities.stickersAndAnimations }
-            ?.invoke(context.chatRef)
+    suspend fun stickerCatalogFor(context: RequestContext): String? {
+        val catalog = stickerCatalog?.takeIf { context.chat.capabilities.stickersAndAnimations } ?: return null
+
+        return try {
+            catalog(context.chatRef)
+        } catch (e: Throwable) {
+            e.rethrowIfCancellation()
+            log.warn(e) { "failed to load the sticker shortlist for chat=${context.chat.id}" }
+            null
+        }
+    }
 
     private companion object {
         val log = KotlinLogging.logger {}
