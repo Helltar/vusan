@@ -1,5 +1,6 @@
 package com.helltar.vusan.stt
 
+import com.helltar.vusan.config.OPENAI_API_BASE_URL
 import com.helltar.vusan.common.sanitizeFilename
 import com.helltar.vusan.config.OpenAiSttConfig
 import io.ktor.client.*
@@ -26,7 +27,7 @@ class OpenAiWhisperClient(private val http: HttpClient, private val config: Open
 
         val response: WhisperTranscriptionResponse =
             http.submitFormWithBinaryData(
-                url = "https://api.openai.com/v1/audio/transcriptions",
+                url = "$OPENAI_API_BASE_URL/v1/audio/transcriptions",
                 formData = formData {
                     append("model", config.model)
                     append("response_format", "json")

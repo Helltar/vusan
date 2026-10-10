@@ -1,5 +1,6 @@
 package com.helltar.vusan.tools.imagegen
 
+import com.helltar.vusan.config.OPENAI_API_BASE_URL
 import com.helltar.vusan.common.rethrowIfCancellation
 import com.helltar.vusan.llm.codex.CodexAuthStore
 import com.helltar.vusan.config.ImageProviderConfig
@@ -16,7 +17,7 @@ import java.util.*
 import kotlin.time.Duration.Companion.minutes
 import kotlinx.serialization.json.Json
 
-private const val PLATFORM_BASE_URL = "https://api.openai.com/v1/images"
+private const val PLATFORM_BASE_URL = "$OPENAI_API_BASE_URL/v1/images"
 private const val CODEX_BASE_URL = "https://chatgpt.com/backend-api/codex/images"
 private val IMAGE_TIMEOUT = 5.minutes
 
