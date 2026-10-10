@@ -1,10 +1,9 @@
 package com.helltar.vusan.llm.codex
 
+import com.helltar.vusan.llm.string
 import kotlinx.serialization.json.JsonArray
 import kotlinx.serialization.json.JsonElement
 import kotlinx.serialization.json.JsonObject
-import kotlinx.serialization.json.JsonPrimitive
-import kotlinx.serialization.json.contentOrNull
 
 /**
  * Where a conversation's request stops repeating the one before it.
@@ -27,7 +26,8 @@ internal class CodexPrefixDrift {
     /** The part of a call's log line that places [request] against the previous one of [session]. */
     fun describe(session: String, request: JsonObject): String {
         val items = request.prefixItems()
-        val current = items.map { it.toString().hashCode() }
+        // the element's own hash, not its serialization's: an input image is megabytes of base64
+        val current = items.map { it.hashCode() }
         val previous = synchronized(lastSeen) { lastSeen.put(session, current) }
 
         val summary = "items=[${items.size}]"
@@ -57,16 +57,14 @@ private fun JsonElement.kindLabel(index: Int): String {
     if (index == 0) return "tools"
 
     val item = this as? JsonObject ?: return "item"
-    val type = item.text("type") ?: "message"
-    val role = item.text("role") ?: return type
+    val type = item.string("type") ?: "message"
+    val role = item.string("role") ?: return type
 
     val opening =
-        ((item["content"] as? JsonArray)?.firstOrNull() as? JsonObject)?.text("text")
+        ((item["content"] as? JsonArray)?.firstOrNull() as? JsonObject)?.string("text")
             ?.let { OPENING_TAG.matchAt(it.trimStart(), 0)?.value }
 
     return listOfNotNull("$type/$role", opening).joinToString(" ")
 }
-
-private fun JsonObject.text(name: String): String? = (this[name] as? JsonPrimitive)?.contentOrNull
 
 private val OPENING_TAG = Regex("<[a-z_]{1,40}>")

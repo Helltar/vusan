@@ -20,7 +20,7 @@ class RetryingLlmClientTest {
         assertTrue(isRepeatableFailure(error(503, "upstream unavailable")))
         assertTrue(isRepeatableFailure(error(500, "")))
         assertTrue(isRepeatableFailure(error(200, """{"type":"response.failed","error":{"code":"server_is_overloaded"}}""")))
-        assertTrue(isRepeatableFailure(error(null, "stream ended without a completed response")))
+        assertTrue(isRepeatableFailure(LlmException("test", status = null, body = "stream ended early", cutShort = true)))
         assertTrue(isRepeatableFailure(error(null, "reset", IOException("Connection reset"))))
     }
 

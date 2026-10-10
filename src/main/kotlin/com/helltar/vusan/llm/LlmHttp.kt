@@ -8,6 +8,7 @@ import io.ktor.client.plugins.api.*
 import io.ktor.client.request.*
 import io.ktor.client.statement.*
 import io.ktor.http.*
+import io.ktor.util.AttributeKey
 import io.ktor.utils.io.*
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonObject
@@ -40,6 +41,26 @@ fun llmHttpClient(requestTimeout: Duration, plugin: ClientPlugin<Unit>? = null):
 private const val CONNECT_TIMEOUT_MILLIS = 10_000L
 private const val SSE_DATA_PREFIX = "data:"
 
+/** The conversation a request belongs to, for a plugin that files requests per conversation without reading the body back. */
+internal val PROMPT_CACHE_KEY = AttributeKey<String>("promptCacheKey")
+
+// a stream that ended in an error event answered with a 200, so the status alone says nothing
+internal const val STREAM_ERROR_STATUS = 200
+
+/** The JSON of one `data:` line of an event stream, or `null` for any other line, an empty one and `[DONE]`. */
+internal fun String.ssePayloadOrNull(): JsonObject? {
+    if (!startsWith(SSE_DATA_PREFIX)) return null
+
+    val payload = removePrefix(SSE_DATA_PREFIX).trim()
+    if (payload.isEmpty() || payload == "[DONE]") return null
+
+    return runCatching { llmJson.parseToJsonElement(payload).jsonObject }.getOrNull()
+}
+
+private fun HttpRequestBuilder.carryPromptCacheKey(body: JsonObject) {
+    body.string("prompt_cache_key")?.let { attributes.put(PROMPT_CACHE_KEY, it) }
+}
+
 /**
  * Posts [body] and reads the answer as JSON, turning anything but a 2xx — and anything that never
  * answered — into an [LlmException] the rules downstream can read a status and a body out of.
@@ -55,6 +76,7 @@ internal suspend fun HttpClient.postJson(
             post(url) {
                 contentType(ContentType.Application.Json)
                 headers.forEach { (name, value) -> header(name, value) }
+                carryPromptCacheKey(body)
                 setBody(body.toString())
             }
         } catch (e: Throwable) {
@@ -95,12 +117,7 @@ internal suspend fun HttpClient.postEventStream(
             while (!channel.isClosedForRead) {
                 // the event stream spec ends a line with LF, CRLF or a bare CR; the default mode drops the last
                 val line = channel.readLine(LineEnding.Lenient) ?: break
-                if (!line.startsWith(SSE_DATA_PREFIX)) continue
-
-                val payload = line.removePrefix(SSE_DATA_PREFIX).trim()
-                if (payload.isEmpty() || payload == "[DONE]") continue
-
-                runCatching { llmJson.parseToJsonElement(payload).jsonObject }.getOrNull()?.let(onEvent)
+                line.ssePayloadOrNull()?.let(onEvent)
             }
         }
     } catch (e: Throwable) {
@@ -119,5 +136,6 @@ private suspend fun HttpClient.prepareStatement(url: String, body: JsonObject, h
         contentType(ContentType.Application.Json)
         accept(ContentType.Text.EventStream)
         headers.forEach { (name, value) -> header(name, value) }
+        carryPromptCacheKey(body)
         setBody(body.toString())
     }

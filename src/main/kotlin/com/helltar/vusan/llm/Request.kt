@@ -137,6 +137,8 @@ class LlmException(
     val status: Int?,
     val body: String?,
     cause: Throwable? = null,
+    // a stream the provider ended before its completion event: the one failure a folder raises itself
+    val cutShort: Boolean = false,
 ) : RuntimeException(describe(provider, status, body), cause) {
 
     private companion object {

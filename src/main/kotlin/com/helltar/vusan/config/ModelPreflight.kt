@@ -1,5 +1,6 @@
 package com.helltar.vusan.config
 
+import com.helltar.vusan.llm.llmJson
 import com.helltar.vusan.common.rethrowIfCancellation
 import com.helltar.vusan.llm.codex.CodexAuthStore
 import io.github.oshai.kotlinlogging.KotlinLogging
@@ -8,14 +9,12 @@ import io.ktor.client.plugins.*
 import io.ktor.client.request.*
 import io.ktor.client.statement.*
 import io.ktor.http.*
-import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonArray
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.jsonObject
 
 private val log = KotlinLogging.logger("ModelPreflight")
 
-internal val preflightJson = Json { ignoreUnknownKeys = true }
 
 /**
  * Asks the vendor about the configured model before the first turn, so a typo fails at startup with
@@ -67,7 +66,7 @@ internal suspend fun verifyModel(
 
     log.info { "$provider: model=[$model] confirmed against the vendor's model list" }
 
-    return runCatching { preflightJson.parseToJsonElement(response.bodyAsText()).jsonObject }.getOrNull()
+    return runCatching { llmJson.parseToJsonElement(response.bodyAsText()).jsonObject }.getOrNull()
 }
 
 /** The entries of a server's `GET /models`, or `null` when it could not be asked or serves no such list. */
@@ -89,7 +88,7 @@ internal suspend fun listedModels(http: HttpClient, label: String, url: String, 
         return null
     }
 
-    val data = runCatching { preflightJson.parseToJsonElement(response.bodyAsText()).jsonObject["data"] as? JsonArray }.getOrNull()
+    val data = runCatching { llmJson.parseToJsonElement(response.bodyAsText()).jsonObject["data"] as? JsonArray }.getOrNull()
 
     if (data == null) log.warn { "$label: what its model list answered is not a list of models; keeping the assumptions" }
 

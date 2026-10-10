@@ -1,5 +1,8 @@
 package com.helltar.vusan.llm.anthropic
 
+import com.helltar.vusan.llm.STREAM_ERROR_STATUS
+import com.helltar.vusan.llm.string
+import com.helltar.vusan.llm.int
 import com.helltar.vusan.llm.LlmException
 import com.helltar.vusan.llm.llmJson
 import io.github.oshai.kotlinlogging.KotlinLogging
@@ -44,7 +47,7 @@ class MessagesStreamFolder(private val label: String) {
 
     /** The message the stream amounted to, or an error when it never finished. */
     fun response(): JsonObject {
-        val response = envelope?.takeIf { stopped } ?: throw LlmException(label, status = null, body = "stream ended without a completed response")
+        val response = envelope?.takeIf { stopped } ?: throw LlmException(label, status = null, body = "stream ended without a completed response", cutShort = true)
 
         return JsonObject(response + ("content" to JsonArray(blocks.values.map(::JsonObject))))
     }
@@ -85,7 +88,6 @@ class MessagesStreamFolder(private val label: String) {
 
     private companion object {
         // a stream that ends in an error event answered 200 before it said anything went wrong
-        const val STREAM_ERROR_STATUS = 200
         const val INPUT_PREVIEW_CHARS = 200
 
         val log = KotlinLogging.logger {}

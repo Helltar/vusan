@@ -12,8 +12,7 @@ import kotlin.time.Duration.Companion.seconds
 // a server that tripped over this one request, or a stream that was cut before it finished: the same
 // call a second later usually goes through.
 private val REPEATABLE_STATUSES = setOf(500, 502, 503, 504)
-private val REPEATABLE_BODY_REGEX =
-    Regex("server_error|overloaded|stream ended without a completed response", RegexOption.IGNORE_CASE)
+private val REPEATABLE_BODY_REGEX = Regex("server_error|overloaded", RegexOption.IGNORE_CASE)
 
 // what a repeat cannot fix, whatever status it came with: a spent allowance names its own deadline and
 // belongs to the fallback at once, and a refused request is refused again.
@@ -35,7 +34,8 @@ internal fun isRepeatableFailure(failure: Throwable): Boolean {
     if (failure !is LlmException) return false
     if (failure.body?.let(FINAL_BODY_REGEX::containsMatchIn) == true) return false
 
-    return failure.status in REPEATABLE_STATUSES ||
+    return failure.cutShort ||
+            failure.status in REPEATABLE_STATUSES ||
             failure.body?.let(REPEATABLE_BODY_REGEX::containsMatchIn) == true ||
             failure.status == null && failure.cause.isDroppedConnection()
 }

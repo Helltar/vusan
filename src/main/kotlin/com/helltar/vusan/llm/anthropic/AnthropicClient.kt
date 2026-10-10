@@ -1,5 +1,7 @@
 package com.helltar.vusan.llm.anthropic
 
+import com.helltar.vusan.llm.string
+import com.helltar.vusan.llm.int
 import com.helltar.vusan.llm.*
 import io.github.oshai.kotlinlogging.KotlinLogging
 import io.ktor.client.*
@@ -276,6 +278,4 @@ class AnthropicClient(
     }
 }
 
-internal fun JsonObject.string(name: String): String? = (this[name] as? JsonPrimitive)?.contentOrNull
 
-internal fun JsonObject.int(name: String): Int? = (this[name] as? JsonPrimitive)?.intOrNull

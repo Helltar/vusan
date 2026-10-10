@@ -1,5 +1,7 @@
 package com.helltar.vusan.llm.openai
 
+import com.helltar.vusan.llm.string
+import com.helltar.vusan.llm.int
 import com.helltar.vusan.llm.ChatRequest
 import com.helltar.vusan.llm.LlmClient
 import com.helltar.vusan.llm.LlmModel
@@ -511,6 +513,4 @@ class OpenAiClient(
 
 private fun Part.Image.dataUrl(): String = "data:$mimeType;base64,${Base64.getEncoder().encodeToString(bytes)}"
 
-internal fun JsonObject.string(name: String): String? = (this[name] as? JsonPrimitive)?.contentOrNull
 
-internal fun JsonObject.int(name: String): Int? = (this[name] as? JsonPrimitive)?.intOrNull

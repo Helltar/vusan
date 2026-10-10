@@ -1,14 +1,14 @@
 package com.helltar.vusan.llm.codex
 
+import com.helltar.vusan.llm.long
+import com.helltar.vusan.llm.PROMPT_CACHE_KEY
 import io.github.oshai.kotlinlogging.KotlinLogging
 import io.ktor.client.plugins.api.*
 import io.ktor.http.*
-import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonArray
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.JsonPrimitive
 import kotlinx.serialization.json.contentOrNull
-import kotlinx.serialization.json.longOrNull
 import java.util.UUID
 import java.util.concurrent.atomic.AtomicReference
 
@@ -66,28 +66,23 @@ internal fun codexRoutingHint(model: String, serviceTier: String?): String =
  */
 internal fun codexRequestPlugin(auth: CodexAuthStore, routingHint: String): ClientPlugin<Unit> =
     createClientPlugin("CodexAuth") {
-        onRequest { request, content ->
+        onRequest { request, _ ->
             val credentials = auth.credentials()
 
+            // the client's own defaults for these two are replaced, not joined
             request.headers.remove(HttpHeaders.Authorization)
-            request.headers.append(HttpHeaders.Authorization, "Bearer ${credentials.accessToken}")
-            request.headers.append("originator", CODEX_ORIGINATOR)
-            request.headers.append(CODEX_ROUTING_HINT_HEADER, routingHint)
-
-            // the whitelist is matched on the User-Agent shape too, so lead with the
-            // CLI token and installed version, then say who is really calling.
             request.headers.remove(HttpHeaders.UserAgent)
-            request.headers.append(HttpHeaders.UserAgent, codexUserAgent())
-
-            credentials.accountId?.let { request.headers.append("ChatGPT-Account-ID", it) }
-            codexSessionId(content)?.let { request.headers.append(CODEX_SESSION_ID_HEADER, it) }
+            codexRequestHeaders(credentials).forEach { (name, value) -> request.headers.append(name, value) }
+            request.headers.append(CODEX_ROUTING_HINT_HEADER, routingHint)
+            request.attributes.getOrNull(PROMPT_CACHE_KEY)?.let { request.headers.append(CODEX_SESSION_ID_HEADER, sessionIdOf(it)) }
         }
 
         onResponse { response -> auth.limits.observe { response.headers[it] } }
     }
 
 /**
- * The session a request is filed under, derived from the conversation's `prompt_cache_key`.
+ * The session a request is filed under, derived from the conversation's `prompt_cache_key`, which the
+ * request carries as an attribute so nothing here reads the body back.
  *
  * On this backend the key alone reads almost nothing back: requests are spread over machines, and the
  * `session-id` header is what keeps a conversation on the one that holds its prefix. Probed live on
@@ -96,16 +91,7 @@ internal fun codexRequestPlugin(auth: CodexAuthStore, routingHint: String): Clie
  * `x-client-request-id` and a replayed `x-codex-turn-state` changed nothing on their own. The CLI sends a
  * UUID here, so the key is folded into one rather than sent as it is.
  */
-internal fun codexSessionId(requestBody: Any): String? {
-    if (requestBody !is String) return null
-
-    val root = runCatching { Json.parseToJsonElement(requestBody) as? JsonObject }.getOrNull()
-    val cacheKey = (root?.get("prompt_cache_key") as? JsonPrimitive)?.contentOrNull
-
-    return cacheKey?.let(::sessionIdOf)
-}
-
-private fun sessionIdOf(cacheKey: String): String = UUID.nameUUIDFromBytes(cacheKey.toByteArray()).toString()
+internal fun sessionIdOf(cacheKey: String): String = UUID.nameUUIDFromBytes(cacheKey.toByteArray()).toString()
 
 /**
  * What is done with every completed Codex call: its tokens are counted toward the subscription's next
@@ -157,28 +143,24 @@ internal fun servedModelMismatch(request: JsonObject, response: JsonObject): Str
 internal fun codexCallSummary(request: JsonObject, response: JsonObject): String {
     val usage = response["usage"] as? JsonObject
 
-    fun JsonObject?.long(name: String): Long = (this?.get(name) as? JsonPrimitive)?.longOrNull ?: 0L
-
-    val input = usage.long("input_tokens")
-    val cached = (usage?.get("input_tokens_details") as? JsonObject).long("cached_tokens")
+    val input = usage?.long("input_tokens") ?: 0L
+    val cached = (usage?.get("input_tokens_details") as? JsonObject)?.long("cached_tokens") ?: 0L
     val cachedPercent = if (input > 0) cached * PERCENT / input else 0
 
     val cacheKey = (request["prompt_cache_key"] as? JsonPrimitive)?.contentOrNull
 
     return "cacheKey=[${cacheKey ?: "none"}] " +
             "input=[$input] cached=[$cached] cachedPercent=[$cachedPercent] " +
-            "output=[${usage.long("output_tokens")}] tools=[${(request["tools"] as? JsonArray)?.size ?: 0}]"
+            "output=[${usage?.long("output_tokens") ?: 0L}] tools=[${(request["tools"] as? JsonArray)?.size ?: 0}]"
 }
 
 /** Counts a completed response's tokens toward the subscription's next step, see [CodexLimits]. */
 internal fun countUsage(response: JsonObject, limits: CodexLimits) {
     val usage = response["usage"] as? JsonObject ?: return
 
-    fun JsonObject.long(name: String): Long = (this[name] as? JsonPrimitive)?.longOrNull ?: 0L
-
     limits.countCall(
-        inputTokens = usage.long("input_tokens"),
+        inputTokens = usage.long("input_tokens") ?: 0L,
         cachedInputTokens = (usage["input_tokens_details"] as? JsonObject)?.long("cached_tokens") ?: 0L,
-        outputTokens = usage.long("output_tokens"),
+        outputTokens = usage.long("output_tokens") ?: 0L,
     )
 }

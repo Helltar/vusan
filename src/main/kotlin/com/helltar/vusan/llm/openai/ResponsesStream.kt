@@ -1,5 +1,9 @@
 package com.helltar.vusan.llm.openai
 
+import com.helltar.vusan.llm.ssePayloadOrNull
+import com.helltar.vusan.llm.STREAM_ERROR_STATUS
+import com.helltar.vusan.llm.string
+import com.helltar.vusan.llm.int
 import com.helltar.vusan.llm.LlmException
 import com.helltar.vusan.llm.llmJson
 import kotlinx.serialization.json.JsonArray
@@ -8,8 +12,6 @@ import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.jsonObject
 
 // a stream that ends in an error event answered 200 before it said anything went wrong
-private const val STREAM_ERROR_STATUS = 200
-private const val SSE_DATA_PREFIX = "data:"
 
 /**
  * Folds a Responses API event stream back into the single response object the non-streaming API would
@@ -38,7 +40,7 @@ class ResponsesStreamFolder(private val label: String) {
 
     /** The response the stream amounted to, or an error when it never completed. */
     fun response(): JsonObject {
-        val response = envelope ?: throw LlmException(label, status = null, body = "stream ended without a completed response")
+        val response = envelope ?: throw LlmException(label, status = null, body = "stream ended without a completed response", cutShort = true)
 
         val completedOutput =
             output.takeIf { it.isNotEmpty() }?.let(::JsonArray)
@@ -54,12 +56,7 @@ fun collectStreamedResponse(lines: List<String>, label: String): JsonObject {
     val folder = ResponsesStreamFolder(label)
 
     for (line in lines) {
-        if (!line.startsWith(SSE_DATA_PREFIX)) continue
-
-        val payload = line.removePrefix(SSE_DATA_PREFIX).trim()
-        if (payload.isEmpty() || payload == "[DONE]") continue
-
-        runCatching { llmJson.parseToJsonElement(payload).jsonObject }.getOrNull()?.let(folder::accept)
+        line.ssePayloadOrNull()?.let(folder::accept)
     }
 
     return folder.response()

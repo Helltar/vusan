@@ -1,11 +1,14 @@
 package com.helltar.vusan.llm.codex
 
 import com.helltar.vusan.infra.Http
+import com.helltar.vusan.llm.llmJson
+import com.helltar.vusan.llm.postJson
 import io.ktor.client.*
 import io.ktor.client.engine.mock.*
 import io.ktor.client.request.*
 import io.ktor.http.*
 import kotlinx.coroutines.runBlocking
+import kotlinx.serialization.json.jsonObject
 import java.nio.file.Files
 import java.nio.file.Path
 import java.time.Instant
@@ -41,7 +44,6 @@ class CodexRequestPluginTest {
     @Test
     fun `a request without a cache key names no session`() = runBlocking {
         assertNull(sentHeaders("""{"model":"m"}""")["session-id"])
-        assertNull(sentHeaders("not json")["session-id"])
     }
 
     @Test
@@ -55,8 +57,8 @@ class CodexRequestPluginTest {
         assertTrue(headers["User-Agent"].orEmpty().startsWith("$CODEX_ORIGINATOR/"))
     }
 
-    // through a ktor client the way a model call goes, with the body as a string, which is what the
-    // plugin reads the cache key out of.
+    // through the same call a model makes, which is where the cache key becomes the request's attribute
+    // the plugin reads
     private suspend fun sentHeaders(body: String): Headers {
         var sent: Headers? = null
 
@@ -69,10 +71,7 @@ class CodexRequestPluginTest {
         val auth = CodexAuthStore(Http.createClient(MockEngine { error("no refresh expected") }), signedInAuthFile())
 
         HttpClient(engine) { install(codexRequestPlugin(auth, "model=m")) }.use { client ->
-            client.post("https://codex.example.test/responses") {
-                contentType(ContentType.Application.Json)
-                setBody(body)
-            }
+            client.postJson("codex", "https://codex.example.test/responses", llmJson.parseToJsonElement(body).jsonObject, emptyMap())
         }
 
         return checkNotNull(sent)

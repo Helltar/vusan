@@ -1,5 +1,6 @@
 package com.helltar.vusan.tools.codexsearch
 
+import com.helltar.vusan.llm.string
 import com.helltar.vusan.llm.codex.CODEX_BACKEND_BASE_URL
 import com.helltar.vusan.llm.codex.CodexAuthStore
 import com.helltar.vusan.llm.codex.codexRequestHeaders
@@ -149,6 +150,5 @@ class CodexSearchClient(
         fun String.withoutTracking(): String =
             tracking.replace(this) { match -> if (match.groupValues[2].isEmpty()) "" else match.groupValues[1] }
 
-        fun JsonObject.string(name: String): String? = (this[name] as? JsonPrimitive)?.contentOrNull
     }
 }
