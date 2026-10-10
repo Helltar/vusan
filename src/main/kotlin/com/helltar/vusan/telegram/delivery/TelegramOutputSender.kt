@@ -139,6 +139,7 @@ internal object TelegramOutputSender {
             e.rethrowIfCancellation()
             rethrowIfReplyNotFound(e, replyParameters)
             rethrowIfRateLimited(e)
+            rethrowIfChatUnreachable(e)
             log.warn(e) { "sendRichMessage failed for chat=${target.chatId}, resending as a $MARKDOWN_DOCUMENT_FILENAME file" }
             sendMarkdownDocument(client, target, markdown, replyParameters)
         }.getOrThrow()
@@ -517,6 +518,7 @@ internal object TelegramOutputSender {
         }.recoverCatching { e ->
             e.rethrowIfCancellation()
             rethrowIfReplyNotFound(e, replyParameters)
+            rethrowIfRateLimited(e)
             rethrowIfChatUnreachable(e)
 
             // a recipient can refuse voice and video messages from anyone outside their contacts, which
@@ -542,28 +544,24 @@ internal object TelegramOutputSender {
         replyParameters: ReplyParameters?,
         quiz: BotOutput.Quiz,
         onPollSent: (suspend (String) -> Unit)?,
-    ) = sendOrFallback(
-        target = target,
-        replyParameters = replyParameters,
-        failureMessage = "sendQuiz failed",
-        send = {
-            client.api<Message> {
-                executeAsync(
-                    SendPoll.builder()
-                        .chatId(target.chatId)
-                        .messageThreadId(target.messageThreadId)
-                        .question(quiz.question)
-                        .options(quiz.options.map(::InputPollOption))
-                        .type("quiz")
-                        .correctOptionIds(listOf(quiz.correctOptionIndex))
-                        .explanation(quiz.explanation)
-                        .isAnonymous(quiz.isAnonymous)
-                        .replyParameters(replyParameters)
-                        .build(),
-                )
-            }.reportPoll(onPollSent)
-        },
-    )
+    ) {
+        // a poll has no shape to fall back to: a refusal is the item's own failure, which the delivery reports
+        client.api<Message> {
+            executeAsync(
+                SendPoll.builder()
+                    .chatId(target.chatId)
+                    .messageThreadId(target.messageThreadId)
+                    .question(quiz.question)
+                    .options(quiz.options.map(::InputPollOption))
+                    .type("quiz")
+                    .correctOptionIds(listOf(quiz.correctOptionIndex))
+                    .explanation(quiz.explanation)
+                    .isAnonymous(quiz.isAnonymous)
+                    .replyParameters(replyParameters)
+                    .build(),
+            )
+        }.reportPoll(onPollSent)
+    }
 
     private suspend fun sendPoll(
         client: TelegramClient,
@@ -571,27 +569,22 @@ internal object TelegramOutputSender {
         replyParameters: ReplyParameters?,
         poll: BotOutput.Poll,
         onPollSent: (suspend (String) -> Unit)?,
-    ) = sendOrFallback(
-        target = target,
-        replyParameters = replyParameters,
-        failureMessage = "sendPoll failed",
-        send = {
-            client.api<Message> {
-                executeAsync(
-                    SendPoll.builder()
-                        .chatId(target.chatId)
-                        .messageThreadId(target.messageThreadId)
-                        .question(poll.question)
-                        .options(poll.options.map(::InputPollOption))
-                        .type("regular")
-                        .isAnonymous(poll.isAnonymous)
-                        .allowMultipleAnswers(poll.allowsMultipleAnswers)
-                        .replyParameters(replyParameters)
-                        .build(),
-                )
-            }.reportPoll(onPollSent)
-        },
-    )
+    ) {
+        client.api<Message> {
+            executeAsync(
+                SendPoll.builder()
+                    .chatId(target.chatId)
+                    .messageThreadId(target.messageThreadId)
+                    .question(poll.question)
+                    .options(poll.options.map(::InputPollOption))
+                    .type("regular")
+                    .isAnonymous(poll.isAnonymous)
+                    .allowMultipleAnswers(poll.allowsMultipleAnswers)
+                    .replyParameters(replyParameters)
+                    .build(),
+            )
+        }.reportPoll(onPollSent)
+    }
 
     // the id lives on the poll inside the sent message, and only a send that really produced one has
     // it: a fallback that turned the poll into text leaves nothing to match an answer against.
