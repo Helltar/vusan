@@ -152,7 +152,11 @@ A normal user message travels:
    runner buffers them until that album has been quiet for `ALBUM_QUIET_PERIOD` (or hits the ten-item cap) and handles
    the batch as one gallery message: the caption may sit on any album part, every inspectable item becomes an
    `AttachedFile` on the turn, the sandbox and image editing take them all, and the agent is told that vision sees only
-   the first. `/start`, `/tasks`, `/clear` and `/stop` take direct paths in `TelegramCommands` that never enter the agent
+   the first. Plain text messages one person sends in a row — a message the client split at its length cap, a thought
+   typed as several messages — are buffered the same way (`LINES_QUIET_PERIOD`, per sender, chat and topic) and, when
+   any of them calls the bot, answered as one turn under the last of them (`handleTextBatch`); a run nobody addressed
+   is handled line by line as before, so ambient addressing judges what it always did. A command, a reply, a forward or
+   a media message from that person flushes their waiting lines first, so nothing is answered out of order. `/start`, `/tasks`, `/clear` and `/stop` take direct paths in `TelegramCommands` that never enter the agent
    loop, once the runner has accepted the message like any other; so do task-menu callback queries. Every pressed button reaches `CallbackRouter`,
    which rechecks the allowlist and picks the flow: an agent-created inline-choice callback is validated and consumed by
    `InlineChoiceHandler`, and its selected option then enters the agent loop as the user's next turn. Callback data no

@@ -104,8 +104,12 @@ internal fun User.toSenderContext(): SenderContext =
         displayName = displayName(firstName, lastName),
         username = userName,
         languageCode = languageCode,
-        isPerson = id !in SHARED_SENDER_IDS,
+        isPerson = isPerson,
     )
+
+/** Whether this sender is one human, rather than the account many anonymous admins or channels post under. */
+internal val User.isPerson: Boolean
+    get() = id !in SHARED_SENDER_IDS
 
 // the bot api models chat flavors as flags on `Chat` and `Message` rather than distinct types,
 // so the prompt label is assembled from those flags.

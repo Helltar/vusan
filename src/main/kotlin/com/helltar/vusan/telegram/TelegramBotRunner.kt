@@ -34,8 +34,10 @@ import com.helltar.vusan.telegram.inbound.ambientCandidateOrNull
 import com.helltar.vusan.telegram.inbound.captionedPartOrNull
 import com.helltar.vusan.telegram.inbound.chatIdLong
 import com.helltar.vusan.telegram.inbound.describeIncomingSticker
+import com.helltar.vusan.telegram.inbound.forumTopicIdOrNull
 import com.helltar.vusan.telegram.inbound.isBotCommand
 import com.helltar.vusan.telegram.inbound.isEphemeral
+import com.helltar.vusan.telegram.inbound.isPerson
 import com.helltar.vusan.telegram.inbound.isPrivateChat
 import com.helltar.vusan.telegram.inbound.language
 import com.helltar.vusan.telegram.inbound.leadingBotCommandOrNull
@@ -43,6 +45,7 @@ import com.helltar.vusan.telegram.inbound.logDenied
 import com.helltar.vusan.telegram.inbound.logIncoming
 import com.helltar.vusan.telegram.inbound.messageIdLong
 import com.helltar.vusan.telegram.inbound.messageTextOrNull
+import com.helltar.vusan.telegram.inbound.realReplyOrNull
 import com.helltar.vusan.telegram.inbound.sanitizeUserText
 import com.helltar.vusan.telegram.inbound.senderIdOrNull
 import com.helltar.vusan.telegram.inbound.shouldHandle
@@ -174,29 +177,44 @@ internal class TelegramBotRunner(
     // opt-in only for select's onTimeout clause, experimental but long-stable.
     @OptIn(ExperimentalCoroutinesApi::class)
     private suspend fun processUpdates(updates: ReceiveChannel<Update>, profile: BotProfile) = supervisorScope {
-        // each album waits for its own quiet period: a deployment with a few busy chats never has the whole
-        // stream go quiet, and an album judged by that would wait on everybody else's messages
-        val pendingAlbums = linkedMapOf<String, PendingAlbum>()
+        // each album, and each person's run of lines, waits for a quiet period of its own: a deployment with
+        // a few busy chats never has the whole stream go quiet, and a batch judged by that would wait on
+        // everybody else's messages
+        val pending = linkedMapOf<String, PendingBatch>()
 
-        fun flush(albums: Collection<PendingAlbum>) {
-            albums.forEach { album -> launchHandling(album.parts.first()) { handleGalleryUpdate(album.parts, profile) } }
+        // lines one person sent in a row are one message to the agent when any of them calls the bot. a run
+        // nobody addressed is handled line by line, as it was, so ambient addressing judges what it always did
+        fun flushLines(parts: List<Message>) {
+            if (parts.size > 1 && parts.any { shouldHandle(it, profile.userId, profile.username) })
+                launchHandling(parts.last()) { handleTextBatch(parts, profile) }
+            else
+                parts.forEach { part -> launchHandling(part) { dispatch(part, profile) } }
+        }
+
+        fun flush(batches: Collection<PendingBatch>) {
+            batches.forEach { batch ->
+                when (batch.kind) {
+                    PendingBatch.Kind.ALBUM -> launchHandling(batch.parts.first()) { handleGalleryUpdate(batch.parts, profile) }
+                    PendingBatch.Kind.LINES -> flushLines(batch.parts)
+                }
+            }
         }
 
         fun flushDue() {
-            val due = pendingAlbums.filterValues { it.dueAtNanos <= System.nanoTime() }
-            due.keys.forEach(pendingAlbums::remove)
+            val due = pending.filterValues { it.dueAtNanos <= System.nanoTime() }
+            due.keys.forEach(pending::remove)
             flush(due.values)
         }
 
         while (isActive) {
             val update =
-                if (pendingAlbums.isEmpty()) {
+                if (pending.isEmpty()) {
                     updates.receiveCatching().getOrNull() ?: break
                 } else {
                     // select resolves receive vs timeout atomically; canceling a suspended receive
                     // (as withTimeout would) can drop an element already taken from the channel.
                     // null on both the earliest deadline and channel close.
-                    val wait = (pendingAlbums.values.minOf { it.dueAtNanos } - System.nanoTime()).nanoseconds
+                    val wait = (pending.values.minOf { it.dueAtNanos } - System.nanoTime()).nanoseconds
 
                     select {
                         updates.onReceiveCatching { it.getOrNull() }
@@ -256,31 +274,56 @@ internal class TelegramBotRunner(
             recordGroupLog(message)
             learnSticker(message)
 
-            val albumKey = message.mediaGroupId?.let { "${message.chatIdLong}:$it" }
+            // whatever else one person sends comes after the lines of theirs still waiting
+            val linesKey = message.linesKeyOrNull()
+            val joinsLines = linesKey != null && message.joinsTextBatch()
 
-            if (albumKey == null) {
-                launchHandling(message) { dispatch(message, profile) }
-                continue
-            }
+            if (linesKey != null && !joinsLines) pending.remove(linesKey)?.let { flush(listOf(it)) }
 
-            val album = pendingAlbums.getOrPut(albumKey, ::PendingAlbum)
-            album.parts += message
-            album.dueAtNanos = System.nanoTime() + ALBUM_QUIET_PERIOD.inWholeNanoseconds
+            val albumKey = message.mediaGroupId?.let { "album:${message.chatIdLong}:$it" }
 
-            if (album.parts.size >= MAX_ALBUM_PARTS) {
-                pendingAlbums.remove(albumKey)
-                launchHandling(message) { handleGalleryUpdate(album.parts, profile) }
+            when {
+                albumKey != null -> {
+                    val album = pending.getOrPut(albumKey) { PendingBatch(PendingBatch.Kind.ALBUM) }
+                    album.parts += message
+                    album.dueAtNanos = System.nanoTime() + ALBUM_QUIET_PERIOD.inWholeNanoseconds
+
+                    if (album.parts.size >= MAX_ALBUM_PARTS) {
+                        pending.remove(albumKey)
+                        launchHandling(message) { handleGalleryUpdate(album.parts, profile) }
+                    }
+                }
+
+                joinsLines -> {
+                    val lines = pending.getOrPut(linesKey) { PendingBatch(PendingBatch.Kind.LINES) }
+                    lines.parts += message
+                    lines.dueAtNanos = System.nanoTime() + LINES_QUIET_PERIOD.inWholeNanoseconds
+
+                    if (lines.parts.size >= MAX_LINES_PARTS) {
+                        pending.remove(linesKey)
+                        flushLines(lines.parts)
+                    }
+                }
+
+                else -> launchHandling(message) { dispatch(message, profile) }
             }
         }
 
-        flush(pendingAlbums.values)
+        flush(pending.values)
     }
 
-    // the parts of one gallery seen so far, and when it counts as complete unless another part arrives
-    private class PendingAlbum {
+    // the parts of one gallery, or one person's run of lines, seen so far, and when the batch counts as
+    // complete unless another part arrives
+    private class PendingBatch(val kind: Kind) {
         val parts = mutableListOf<Message>()
         var dueAtNanos = 0L
+
+        enum class Kind { ALBUM, LINES }
     }
+
+    // one person's lines in one chat and topic; a message without a sender of its own has no run to join
+    private fun Message.linesKeyOrNull(): String? =
+        senderIdOrNull()?.let { "lines:$chatIdLong:${forumTopicIdOrNull ?: 0}:$it" }
 
     // the group transcript has to be recorded before [shouldHandle] gets a say, because the messages
     // worth recapping later are exactly the ones nobody addressed to the bot. this also sits ahead of
@@ -397,6 +440,28 @@ internal class TelegramBotRunner(
             command == null -> handleTextUpdate(message, content, profile)
             commands.recognizes(command, profile) -> if (message.isAccepted(profile)) commands.handle(command, message)
         }
+    }
+
+    // several plain texts one person sent in a row — a message the client split at its length cap, a thought
+    // typed as several messages — answered as one, under the last of them. the first part that calls the
+    // bot is what addressing reads, and the parts before the anchor are claimed with it, so a redelivery of
+    // any of them starts nothing
+    private suspend fun handleTextBatch(parts: List<Message>, botProfile: BotProfile) {
+        val anchor = parts.last()
+        val addressedPart = parts.first { shouldHandle(it, botProfile.userId, botProfile.username) }
+        val acceptance = anchor.acceptance(botProfile, captionSource = addressedPart) ?: return
+
+        parts.dropLast(1).forEach { answeredMessages.markAnswered(it.chatIdLong, it.messageIdLong, Instant.now()) }
+
+        val userText =
+            parts.mapNotNull { it.messageTextOrNull() }
+                .joinToString("\n") { sanitizeUserText(it, botProfile.userId, botProfile.username) }
+                .trim()
+                .ifBlank { MENTION_ONLY_PROMPT }
+
+        log.info { "${parts.size} lines answered as one: chat=${anchor.chatIdLong} msgs=${parts.map { it.messageIdLong }}" }
+
+        turns.dispatchToAgent(anchor, userText, botProfile, inputKind = "text batch", ambient = acceptance.ambient)
     }
 
     private suspend fun handleTextUpdate(message: Message, content: MessageText, botProfile: BotProfile) {
@@ -657,6 +722,12 @@ internal class TelegramBotRunner(
         // a group is treated as complete once the update stream stays quiet this long.
         val ALBUM_QUIET_PERIOD = 1.seconds
 
+        // lines one person sends in a row — a message the client split at its length cap, a thought typed as
+        // several messages — are one message to the agent once they have been quiet this long. every text
+        // reply waits this much, so it is as short as a split message's parts need and no longer
+        val LINES_QUIET_PERIOD = 1.seconds
+        const val MAX_LINES_PARTS = 10
+
         // how late a message left over from the previous run may still be answered. past it the
         // conversation has moved on, and an answer to what someone said hours ago reads worse than
         // the silence they already got. shorter than telegram's own 24-hour hold on purpose.
@@ -696,6 +767,22 @@ internal fun startsTurnOnEdit(
     // an album is answered as a whole, off whichever part carries the caption; one edited part is not one.
     return !inAlbum
 }
+
+/**
+ * Whether this message is one of a person's run of lines: a plain text they sent on its own, so not a
+ * command, a reply, a forward, an edit, media or an ephemeral message, each of which is handled in a way of
+ * its own. The lines of one person in one chat and topic that arrive within `LINES_QUIET_PERIOD` of each
+ * other are then one message to the agent. A sender that is not one person — anonymous admins and channels
+ * post under one shared account — never joins: two of them would be read as one.
+ */
+internal fun Message.joinsTextBatch(): Boolean =
+    text != null &&
+            from?.isPerson == true &&
+            editDate == null &&
+            !isEphemeral &&
+            forwardOrigin == null &&
+            realReplyOrNull == null &&
+            messageTextOrNull()?.leadingBotCommandOrNull() == null
 
 internal fun Message.senderRefOrNull(): UserRef? = senderIdOrNull()?.let(::telegramUser)
 
