@@ -49,7 +49,7 @@ class YtDlpClient(private val runner: YtDlpRunner) {
             workDir = workDir,
             query = query,
             maxFileSizeMb = maxFileSizeMb,
-            resolveCandidates = { runner.searchCandidates(query) },
+            resolveCandidates = { runner.videoCandidates(query) },
             describeSuccess = { "title=[${it.title}] performer=[${it.performer}]" },
             downloadCandidate = { attemptDir, url -> downloadAudioCandidate(attemptDir, url, query, maxFileSizeMb) },
         )
@@ -167,7 +167,7 @@ class YtDlpClient(private val runner: YtDlpRunner) {
 
         if (!Files.exists(outputFile)) {
             // with --max-filesize yt-dlp skips the oversized download and still exits 0
-            if (commandResult.stdout.containsAny("File is larger than max-filesize")) {
+            if (commandResult.stdout.saysTooLarge()) {
                 log.warn { "yt-dlp download rejected by max-filesize url=[$url] maxFileSizeMb=$maxFileSizeMb" }
                 return DownloadAttempt(YtDlpResult.TooLarge(sizeBytes = maxFileSizeMb.toLong() * 1024 * 1024))
             }
@@ -326,7 +326,7 @@ class YtDlpClient(private val runner: YtDlpRunner) {
         val output = commandResult.stdout
 
         return when {
-            output.containsAny("File is larger than max-filesize") -> {
+            output.saysTooLarge() -> {
                 log.warn { "yt-dlp download rejected by max-filesize url=[$url] maxFileSizeMb=$maxFileSizeMb" }
                 DownloadAttempt(YtDlpResult.TooLarge(sizeBytes = maxFileSizeMb.toLong() * 1024 * 1024))
             }
@@ -440,3 +440,6 @@ internal fun ByteArray.asTelegramVideoThumbnail(): ByteArray? {
 
     return output.toByteArray().takeIf { it.size <= THUMBNAIL_MAX_BYTES }
 }
+
+// with --max-filesize yt-dlp skips the oversized download, says so, and still exits 0
+private fun String.saysTooLarge(): Boolean = containsAny("File is larger than max-filesize")

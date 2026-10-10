@@ -5,8 +5,10 @@ import kotlinx.coroutines.*
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import kotlinx.serialization.json.Json
+import java.net.URI
 import java.nio.file.Files
 import java.nio.file.Path
+import java.nio.file.StandardCopyOption.REPLACE_EXISTING
 import java.util.concurrent.TimeUnit
 import kotlin.time.Duration
 import kotlin.time.Duration.Companion.seconds
@@ -34,14 +36,18 @@ class YtDlpRunner(
     private var cachedDiagnostics: String? = null
 
     suspend fun runCommand(command: List<String>): YtDlpCommandResult = withContext(Dispatchers.IO) {
-        val process = ProcessBuilder(command).redirectErrorStream(true).start()
+        // yt-dlp writes the cookie jar back when it exits, and two runs writing one file tear it for
+        // everyone after: each run gets a copy of its own, and the configured file is only ever read
+        val jar = cookiesFile?.takeUnless { it.isBlank() }?.let { Files.copy(Path.of(it), Files.createTempFile("ytdlp-cookies-", ".txt"), REPLACE_EXISTING) }
+        val resolved = jar?.let { copy -> command.map { arg -> if (arg == cookiesFile) copy.toString() else arg } } ?: command
+        val process = ProcessBuilder(resolved).redirectErrorStream(true).start()
 
         try {
             val outputDeferred = async { process.inputStream.bufferedReader().use { it.readText() } }
             val finishedInTime = runInterruptible { process.waitFor(timeoutSeconds, TimeUnit.SECONDS) }
 
             if (!finishedInTime) {
-                process.destroyForcibly()
+                process.destroyWithChildren()
                 val stdout = outputDeferred.awaitWithin(1.seconds)
                 YtDlpCommandResult(stdout = stdout, exitCode = -1, timedOut = true)
             } else {
@@ -49,10 +55,16 @@ class YtDlpRunner(
                 YtDlpCommandResult(stdout = stdout, exitCode = process.exitValue())
             }
         } finally {
-            if (process.isAlive) {
-                process.destroyForcibly()
-            }
+            if (process.isAlive) process.destroyWithChildren()
+            jar?.let { Files.deleteIfExists(it) }
         }
+    }
+
+    // the ffmpeg yt-dlp spawns to extract or merge would otherwise keep running into a directory about
+    // to be removed
+    private fun Process.destroyWithChildren() {
+        toHandle().descendants().forEach { it.destroyForcibly() }
+        destroyForcibly()
     }
 
     suspend fun runtimeDiagnostics(): String = diagnosticsMutex.withLock {
@@ -99,6 +111,12 @@ class YtDlpRunner(
         val trimmed = query.trim()
 
         if (trimmed.startsWith("http://") || trimmed.startsWith("https://")) {
+            // the generic extractor would fetch any address, on the bot's own network and with its cookie
+            // jar, past every check the public downloader makes
+            require(isYouTubeUrl(trimmed)) {
+                "only a YouTube link can be fetched here (youtube.com, youtu.be, music.youtube.com); anything else is the file tools' job"
+            }
+
             return listOf(YtDlpSearchCandidate(trimmed))
         }
 
@@ -225,3 +243,11 @@ internal const val PLAYER_CLIENTS = "youtube:player_client=default,web_music,web
 
 internal fun String.containsAny(vararg needles: String): Boolean =
     needles.any { contains(it, ignoreCase = true) }
+
+private fun isYouTubeUrl(url: String): Boolean {
+    val host = runCatching { URI(url).host?.lowercase() }.getOrNull() ?: return false
+
+    return YOUTUBE_HOSTS.any { host == it || host.endsWith(".$it") }
+}
+
+private val YOUTUBE_HOSTS = setOf("youtube.com", "youtu.be", "youtube-nocookie.com")
