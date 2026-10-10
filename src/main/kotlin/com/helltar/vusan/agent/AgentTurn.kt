@@ -20,6 +20,7 @@ import com.helltar.vusan.tools.ToolCatalog
 import com.helltar.vusan.tools.ToolFailure
 import com.helltar.vusan.tools.message.MessageTools
 import io.github.oshai.kotlinlogging.KotlinLogging
+import kotlinx.coroutines.TimeoutCancellationException
 import kotlinx.coroutines.async
 import kotlinx.coroutines.awaitAll
 import kotlinx.coroutines.coroutineScope
@@ -47,10 +48,12 @@ class ModelRefusal(val reason: String?) : RuntimeException("the model declined t
  * by side: a search changes nothing, so three of them need not wait for one another, while anything that
  * writes keeps its place in the batch. Results are recorded in batch order either way.
  *
- * Guards against flaky models, in three places:
+ * Guards against flaky models in four places, the four `docs/architecture.md` lists under Act:
  * - a tool call that arrives with no arguments at all for a tool that takes them (flaky models emit
  *   empty-arg siblings when they try to call tools in parallel) is answered with a validation error
  *   instead of being executed, so the follow-up request stays well-formed and the model reissues it;
+ * - a reply the output ceiling cut short runs none of its tool calls, since the last of them may have
+ *   been cut with it, and a reply the model or a provider's classifier declined ends the turn;
  * - a turn that ends having delivered nothing — no `sendMessage`, media or reaction, and empty assistant
  *   text (flaky providers return an empty completion after a batch of tool results) — gets one nudge to
  *   actually deliver before finishing, so a full turn of research does not collapse into silence;
@@ -124,7 +127,7 @@ class AgentTurn internal constructor(
                 messages.dropTrailingSilentAssistant()
 
                 // the nudge is a model call like any other, and the last one is the wrap-up's
-                if (outOfModelCalls(calls, maxModelCalls)) return wrapUp(messages)
+                if (outOfModelCalls(calls, maxModelCalls)) return wrapUp(messages, turnStart)
 
                 nudged = true
 
@@ -147,7 +150,7 @@ class AgentTurn internal constructor(
 
             messages += Message.ToolResults(results)
 
-            if (outOfModelCalls(calls, maxModelCalls)) return wrapUp(messages)
+            if (outOfModelCalls(calls, maxModelCalls)) return wrapUp(messages, turnStart)
 
             // the model has to hear that the reserve is running out without being asked, or it spends the rest
             // of the turn on reads that come back cut in half. once per run, and after the results rather than
@@ -193,13 +196,17 @@ class AgentTurn internal constructor(
         messages += folded
     }
 
-    private suspend fun wrapUp(messages: MutableList<Message>): String {
+    private suspend fun wrapUp(messages: MutableList<Message>, turnStart: Int): String {
         log.warn { "model calls spent for $scope (limit $maxModelCalls); answering with what the turn already gathered" }
 
         messages += Message.User(TOOL_BUDGET_WRAP_UP)
 
+        // the pile is at its largest here, and this is the request the whole turn's work rides on
+        val tools = catalog.visibleDefinitions()
+        foldToFit(messages, turnStart, tools)
+
         // the tools stay defined, since the calls the turn made are replayed with them, but none may be called
-        val answer = request(messages, catalog.visibleDefinitions(), mayCallTools = false).message.text
+        val answer = request(messages, tools, mayCallTools = false).message.text
 
         // queue it rather than leave it as the run's trailing text: a turn that already reacted or sent a
         // message has that text dropped as duplicate chatter, and here it is the whole answer.
@@ -301,6 +308,9 @@ class AgentTurn internal constructor(
     private suspend fun runTool(name: String, block: suspend () -> String): Pair<String, Boolean> =
         try {
             block() to false
+        } catch (e: TimeoutCancellationException) {
+            // a tool's own deadline, not the turn's cancellation, which `rethrowIfCancellation` would take it for
+            "Tool `$name` timed out: ${e.message}" to true
         } catch (e: ToolFailure) {
             e.message.orEmpty() to true
         } catch (e: IllegalArgumentException) {
