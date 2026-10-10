@@ -7,7 +7,6 @@ import com.helltar.vusan.i18n.Messages
 import com.helltar.vusan.tasks.Recurrence
 import com.helltar.vusan.tasks.ScheduledTask
 import com.helltar.vusan.tasks.TasksRepository
-import com.helltar.vusan.tasks.formatFire
 import com.helltar.vusan.tasks.nextFireAfterResume
 import com.helltar.vusan.telegram.delivery.ChatTarget
 import com.helltar.vusan.telegram.delivery.EditableMessage
@@ -19,6 +18,7 @@ import com.helltar.vusan.telegram.delivery.editTextMessage
 import com.helltar.vusan.telegram.delivery.isMessageNotModified
 import com.helltar.vusan.telegram.delivery.sendTextMessage
 import java.time.Instant
+import java.time.format.DateTimeFormatter
 import org.telegram.telegrambots.meta.api.methods.ParseMode
 import org.telegram.telegrambots.meta.api.objects.ReplyParameters
 import org.telegram.telegrambots.meta.api.objects.ephemeral.EphemeralMessageParameters
@@ -322,7 +322,7 @@ internal class TaskMenuHandler(
                             id = task.id,
                             label = task.menuLabel().escapeHtml(),
                             nextFire = task.menuFireHtml(),
-                            recurrence = task.recurrence.menuHtml(),
+                            recurrence = task.recurrence.menuHtml(messages),
                             paused = task.paused,
                         ),
                 )
@@ -344,19 +344,14 @@ internal class TaskMenuHandler(
             ?: prompt.collapseWhitespaceAndCap(MAX_TASK_LABEL_CHARS)
             ?: "#$id"
 
-    private fun ScheduledTask.menuFireHtml(): String {
-        val fire = formatFire(nextFireAt, timezone)
-        val localTime = fire.substringBeforeLast(' ').replace('T', ' ')
+    private fun ScheduledTask.menuFireHtml(): String =
+        "${MENU_FIRE.format(nextFireAt.atZone(timezone))} · ${timezone.id.escapeHtml()}"
 
-        return "$localTime · ${timezone.id.escapeHtml()}"
-    }
-
-    private fun Recurrence.menuHtml(): String =
-
+    private fun Recurrence.menuHtml(messages: Messages): String =
         when (this) {
-            Recurrence.Once -> "once"
-            is Recurrence.Every -> "every ${interval.toString().escapeHtml()}"
-            is Recurrence.Cron -> "cron · <code>${expression.escapeHtml()}</code>"
+            Recurrence.Once -> messages.taskRecurrenceOnce
+            is Recurrence.Every -> messages.taskRecurrenceEvery(interval.toString().escapeHtml())
+            is Recurrence.Cron -> messages.taskRecurrenceCron("<code>${expression.escapeHtml()}</code>")
         }
 
     private fun callbackButton(text: String, data: String): InlineKeyboardButton =
@@ -376,8 +371,10 @@ internal class TaskMenuHandler(
     )
 
     private companion object {
-        const val CALLBACK_PREFIX = "tasks:"
+        const val CALLBACK_PREFIX = TaskMenuAction.PREFIX
         const val MAX_TASK_LABEL_CHARS = 120
+
+        val MENU_FIRE: DateTimeFormatter = DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm")
 
         // the per-user task cap is a constructor argument, so the rendered list has to stay under
         // Telegram's 4096-character message limit however high it is set. the slack covers the header and notice.
@@ -417,7 +414,7 @@ private sealed interface TaskMenuAction {
     }
 
     companion object {
-        private const val PREFIX = "tasks:"
+        const val PREFIX = "tasks:"
 
         fun parse(raw: String): TaskMenuAction? {
             if (!raw.startsWith(PREFIX)) return null

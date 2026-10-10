@@ -104,6 +104,12 @@ internal object EnglishMessages : Messages {
     override fun taskMenuHiddenNotice(hidden: Int) =
         "<i>$hidden more didn't fit here — just ask me about them in your own words.</i>"
 
+    override val taskRecurrenceOnce = "once"
+
+    override fun taskRecurrenceEvery(interval: String) = "every $interval"
+
+    override fun taskRecurrenceCron(expression: String) = "cron · $expression"
+
     override fun taskMenuItem(
         id: Long,
         label: String,

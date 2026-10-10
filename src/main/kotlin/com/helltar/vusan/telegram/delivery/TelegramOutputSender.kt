@@ -619,6 +619,7 @@ private fun trackLinkLabel(url: String): String {
         "soundcloud.com" in host -> "SoundCloud"
         "spotify.com" in host -> "Spotify"
         "bandcamp.com" in host -> "Bandcamp"
-        else -> "Source"
+        // the site's own name, which every language reads, rather than a word of one
+        else -> host.removePrefix("www.").ifBlank { url }.escapeHtml()
     }
 }

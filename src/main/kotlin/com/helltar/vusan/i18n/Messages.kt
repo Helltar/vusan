@@ -54,6 +54,12 @@ interface Messages {
 
     fun taskMenuHiddenNotice(hidden: Int): String
 
+    val taskRecurrenceOnce: String
+
+    fun taskRecurrenceEvery(interval: String): String
+
+    fun taskRecurrenceCron(expression: String): String
+
     fun taskMenuItem(
         id: Long,
         label: String,
