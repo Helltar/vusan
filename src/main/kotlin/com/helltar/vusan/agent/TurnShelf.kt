@@ -197,6 +197,15 @@ class TurnShelf(
 
         require(!RESULT.matches(reference)) { "`$reference` is the text of a result; a file is named like `$reference/1`" }
 
+        // the attachment block shows a file by its name, and a model that copies the name back means that file
+        val named = attachments.filter { it.name == reference }
+
+        if (named.size == 1) return named.single()
+
+        require(named.isEmpty()) {
+            "`$reference` is the name of ${named.size} attached files; name one as `#0/1` to `#0/${attachments.size}`"
+        }
+
         throw IllegalArgumentException(
             "`${reference.take(REFERENCE_PREVIEW_CHARS)}` is not a file: name one as `#N/1` (a file a call made, " +
                     "`#0/1` for the request's own) or as `sandbox:<path>`",

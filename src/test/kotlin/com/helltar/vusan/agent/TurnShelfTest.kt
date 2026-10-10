@@ -122,6 +122,15 @@ class TurnShelfTest {
         assertFailsWith<IllegalArgumentException> { call.textOrNull("#0") }
     }
 
+    // the attachment block shows a name rather than a label, and a model that copies it back means that file
+    @Test
+    fun `a request's file is also found by its own name, unless the name is shared`() = runBlocking {
+        val call = TurnShelf(listOf(attachment("cat.png"), attachment("photo.jpg"), attachment("photo.jpg"))).open()
+
+        assertEquals("cat.png", call.file("cat.png").name)
+        assertContains(assertFailsWith<IllegalArgumentException> { call.file("photo.jpg") }.message.orEmpty(), "`#0/1` to `#0/3`")
+    }
+
     @Test
     fun `a result is not a file, and a file of a call that made none does not exist`() = runBlocking {
         val shelf = TurnShelf()
