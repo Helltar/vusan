@@ -7,9 +7,11 @@ import com.helltar.vusan.config.GroupLogConfig
 import com.helltar.vusan.config.LlmProviderConfig
 import com.helltar.vusan.infra.Db
 import com.helltar.vusan.outbox.BotOutbox
+import com.helltar.vusan.outbox.BotOutput
 import com.helltar.vusan.request.AccessPolicy
 import com.helltar.vusan.request.requestContext
 import com.helltar.vusan.request.testChat
+import java.io.Serializable
 import java.lang.reflect.Proxy
 import java.nio.file.Files
 import java.nio.file.Path
@@ -23,6 +25,8 @@ import kotlin.test.assertTrue
 import kotlin.time.Duration.Companion.seconds
 import kotlinx.coroutines.runBlocking
 import org.telegram.telegrambots.meta.api.methods.send.SendMessage
+import org.telegram.telegrambots.meta.api.objects.ApiResponse
+import org.telegram.telegrambots.meta.exceptions.TelegramApiRequestException
 import org.telegram.telegrambots.meta.api.objects.chat.Chat
 import org.telegram.telegrambots.meta.api.objects.message.Message
 import org.telegram.telegrambots.meta.generics.TelegramClient
@@ -88,6 +92,47 @@ class TelegramDeliveryTranscriptTest {
             .recordPostedMidTurn(requestContext(chatId = 2, userId = 2, isPrivate = true), "I will build the game")
 
         assertTrue(groupLog.recent(testChat(2), limit = 10, since = Instant.EPOCH).isEmpty())
+    }
+
+    // a send refused after every fallback never reached the chat, so the transcript must not say it did,
+    // and the words that were to ride on it as a caption are sent on their own
+    @Test
+    fun `a send that fails after every fallback leaves no transcript row and sends its caption as text`() = runBlocking {
+        val groupLog = GroupLogRepository(GroupLogConfig())
+        val client = RefusingClient()
+        val outbox = BotOutbox().apply { enqueue(BotOutput.Photo(byteArrayOf(1), "chart.png")) }
+
+        TelegramDelivery(client.proxy, groupLog = groupLog)
+            .send(groupMessage(), AgentResult(outputs = outbox.pending, comment = "Here is the chart"))
+
+        assertTrue(transcript(groupLog).isEmpty())
+        // the caption's own text fallback inside the photo chain, then the comment sent on its own
+        assertEquals(2, client.requests.count { it == "SendMessage" })
+    }
+
+    private class RefusingClient {
+
+        val requests = mutableListOf<String>()
+
+        val proxy: TelegramClient =
+            Proxy.newProxyInstance(
+                TelegramClient::class.java.classLoader,
+                arrayOf(TelegramClient::class.java),
+            ) { _, method, args ->
+                check(method.name == "executeAsync") { "unexpected client call: ${method.name}" }
+                requests += args.single()::class.java.simpleName
+
+                CompletableFuture.failedFuture<Any>(
+                    TelegramApiRequestException(
+                        "Error executing request",
+                        ApiResponse.builder<Serializable>()
+                            .ok(false)
+                            .errorCode(400)
+                            .errorDescription("Bad Request: message is too long")
+                            .build(),
+                    ),
+                )
+            } as TelegramClient
     }
 
     private suspend fun transcript(groupLog: GroupLogRepository) =

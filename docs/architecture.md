@@ -389,6 +389,10 @@ A normal user message travels:
     - **Rich messages** — opt-in Bot API 10.1 (`BotOutput.RichMessage`, github-flavored markdown) via the
       `sendRichMessage` tool, resent as a `message.md` document if rejected. Opt-in because some third-party clients
       (e.g. Telegram X) render rich messages as unsupported.
+    - **A send that fails after every fallback** — the kind's own fallbacks and the text-as-document one have all
+      been tried by then, so `TelegramDelivery` treats the item as not sent: no transcript row is written for it, and a
+      comment that was to ride on it as a caption goes out as a message of its own, since the words are the answer and
+      the media only what they rode on. A poll has no shape to fall back to and fails the same way.
     - **Gone targets and blocked DMs** — a reply whose target no longer exists is retried without the anchor
       (`DeliveryTarget.withoutReply`); a private chat the bot cannot write to produces a notice in the group instead.
     - **Unreachable chats** — a chat that refuses the bot rather than the payload (kicked, left, blocked, deleted, write

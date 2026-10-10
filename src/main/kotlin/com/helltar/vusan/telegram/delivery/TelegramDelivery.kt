@@ -163,7 +163,7 @@ class TelegramDelivery(
                 copy(replyToMessageId = null)
     }
 
-    private enum class ItemDeliveryOutcome { Ok, ReplyMissing, PrivateBlocked, ChatUnreachable }
+    private enum class ItemDeliveryOutcome { Ok, ReplyMissing, PrivateBlocked, ChatUnreachable, Failed }
 
     private data class DispatchOutcome(val replyUnavailable: Boolean, val chatUnreachable: Boolean) {
 
@@ -341,86 +341,84 @@ class TelegramDelivery(
         var privateBlockedNoticed = false
         var sentAnything = false
 
-        suspend fun deliverCommentText(text: String, origin: DeliveryTarget) {
-            when (
-                deliverText(
-                    text = text,
-                    toPrivate = result.commentToPrivate,
-                    originTarget = origin,
-                    senderPrivateChatId = senderPrivateChatId,
-                    messages = messages,
-                )
-            ) {
-                ItemDeliveryOutcome.ReplyMissing -> replyUnavailable = true
-                ItemDeliveryOutcome.ChatUnreachable -> chatUnreachable = true
-                ItemDeliveryOutcome.Ok, ItemDeliveryOutcome.PrivateBlocked -> Unit
-            }
-        }
+        // one output into the chat or the sender's DM, with the transcript row only a send that happened
+        // earns; false when nothing arrived, so a caption that rode on it is not lost with it
+        suspend fun deliverOne(output: BotOutput, caption: String?, toPrivate: Boolean): Boolean {
+            // pace consecutive sends, but only behind one that was attempted: a turn whose whole outbox was
+            // already delivered mid-run leaves the comment as the first thing sent here
+            if (sentAnything) delay(INTER_MESSAGE_DELAY)
 
-        if (result.outputs.isEmpty()) {
-            comment?.let { deliverCommentText(text = it, origin = originTarget) }
-            return DispatchOutcome(replyUnavailable, chatUnreachable)
+            sentAnything = true
+
+            val privateTarget = senderPrivateChatId?.takeIf { toPrivate }?.let { DeliveryTarget(it) }
+            val routedToPrivate = privateTarget != null
+            val target = privateTarget ?: if (replyUnavailable) currentChatTarget else originTarget
+            val deliveryTarget = if (routedToPrivate || replyUnavailable) target.withoutReply() else target
+
+            indicateAction(deliveryTarget.chat, botActionFor(output))
+
+            // a poll is remembered only where its answers can be read back: the transcript this feeds
+            // covers groups, and the same guard keeps a redirected reply out of it.
+            val pollRegistry = polls?.takeIf { !routedToPrivate && deliveryTarget.chatId != senderPrivateChatId }
+            val outcome = deliverItem(output, deliveryTarget, caption, routedToPrivate, currentChatTarget, messages, pollRegistry)
+
+            if (outcome == ItemDeliveryOutcome.ReplyMissing) replyUnavailable = true
+
+            when (outcome) {
+                ItemDeliveryOutcome.Ok, ItemDeliveryOutcome.ReplyMissing -> {
+                    recordBotMessage(
+                        chatId = deliveryTarget.chatId,
+                        routedToPrivate = routedToPrivate,
+                        senderPrivateChatId = senderPrivateChatId,
+                        text = caption ?: output.groupLogText(),
+                        descriptor = output.groupLogDescriptor(),
+                        answering = originTarget.replyToMessageId,
+                    )
+
+                    return true
+                }
+
+                ItemDeliveryOutcome.PrivateBlocked -> {
+                    if (!privateBlockedNoticed) {
+                        privateBlockedNoticed = true
+                        notifyPrivateChatBlocked(originTarget, messages)
+                    }
+
+                    return false
+                }
+
+                ItemDeliveryOutcome.ChatUnreachable -> {
+                    chatUnreachable = true
+
+                    return false
+                }
+
+                ItemDeliveryOutcome.Failed -> return false
+            }
         }
 
         val captionIndex =
             comment?.takeIf { it.length <= MAX_CAPTION_CHARS }?.let { singleCaptionIndex(result.outputs) } ?: -1
+        var captionArrived = false
 
         for ((index, item) in result.outputs.withIndex()) {
             // the turn already put this in the chat while it was still running (a plan it announced
             // before starting the work), and into the transcript at that moment; sending it would repeat it.
             if (item.delivered) continue
 
-            if (sentAnything) delay(INTER_MESSAGE_DELAY)
-
-            sentAnything = true
-
             val caption = comment?.takeIf { index == captionIndex }
-            val privateTarget = senderPrivateChatId?.takeIf { item.toPrivate }?.let { DeliveryTarget(it) }
-            val routedToPrivate = privateTarget != null
-            val target = privateTarget ?: if (replyUnavailable) currentChatTarget else originTarget
-            val deliveryTarget = if (routedToPrivate || replyUnavailable) target.withoutReply() else target
+            val arrived = deliverOne(item.output, caption, item.toPrivate)
 
-            indicateAction(deliveryTarget.chat, botActionFor(item.output))
+            if (caption != null && arrived) captionArrived = true
 
-            // a poll is remembered only where its answers can be read back: the transcript this feeds
-            // covers groups, and the same guard keeps a redirected reply out of it.
-            val pollRegistry =
-                polls?.takeIf { !routedToPrivate && deliveryTarget.chatId != senderPrivateChatId }
-
-            when (
-                deliverItem(
-                    item.output, deliveryTarget, caption, routedToPrivate, currentChatTarget, messages, pollRegistry,
-                )
-            ) {
-                ItemDeliveryOutcome.Ok ->
-                    recordBotMessage(
-                        chatId = deliveryTarget.chatId,
-                        routedToPrivate = routedToPrivate,
-                        senderPrivateChatId = senderPrivateChatId,
-                        text = caption ?: item.output.groupLogText(),
-                        descriptor = item.output.groupLogDescriptor(),
-                        answering = originTarget.replyToMessageId,
-                    )
-
-                ItemDeliveryOutcome.ReplyMissing -> replyUnavailable = true
-                ItemDeliveryOutcome.PrivateBlocked -> if (!privateBlockedNoticed) {
-                    privateBlockedNoticed = true
-                    notifyPrivateChatBlocked(originTarget, messages)
-                }
-
-                // every remaining item would fail the same way, so stop paying for the round trips.
-                ItemDeliveryOutcome.ChatUnreachable -> {
-                    chatUnreachable = true
-                    break
-                }
-            }
+            // every remaining item would fail the same way, so stop paying for the round trips.
+            if (chatUnreachable) break
         }
 
-        if (captionIndex < 0 && comment != null && !chatUnreachable) {
-            // pace it the same as the loop, but only behind a send that actually happened: a turn whose
-            // whole outbox was already delivered mid-run leaves the comment as the first thing sent here.
-            if (sentAnything) delay(INTER_MESSAGE_DELAY)
-            deliverCommentText(comment, if (replyUnavailable) originTarget.withoutReply() else originTarget)
+        // the comment goes out on its own when no item could carry it, and when the one carrying it never
+        // arrived: the words are the answer, the media only what they rode on
+        if (comment != null && !captionArrived && !chatUnreachable) {
+            deliverOne(BotOutput.Text(comment), caption = null, toPrivate = result.commentToPrivate)
         }
 
         return DispatchOutcome(replyUnavailable, chatUnreachable)
@@ -462,17 +460,7 @@ class TelegramDelivery(
             e.rethrowIfCancellation()
 
             if (!routedToPrivate && deliveryTarget.replyToMessageId != null && e.isReplyMessageNotFound()) {
-                runCatching { sendOutgoing(currentChatTarget, item, caption, messages, pollRegistry) }
-                    .onSuccess { noteStickerSent(item, currentChatTarget) }
-                    .onFailure { retryError ->
-                        retryError.rethrowIfCancellation()
-
-                        log.warn(retryError) {
-                            "failed to send outgoing item to chat=${currentChatTarget.chatId} without reply"
-                        }
-                    }
-
-                return ItemDeliveryOutcome.ReplyMissing
+                return deliverWithoutReply(item, currentChatTarget, caption, messages, pollRegistry)
             }
 
             if (routedToPrivate && isPrivateChatBlocked(e)) {
@@ -488,11 +476,32 @@ class TelegramDelivery(
                 reportRejectedSticker(item.catalogId)
             }
 
+            // every fallback the kind has was tried on the way here, so nothing arrived: the caller must
+            // neither record it nor let a caption die with it
             log.warn(e) { "failed to send outgoing item to chat=${deliveryTarget.chatId}" }
 
-            return ItemDeliveryOutcome.Ok
+            return ItemDeliveryOutcome.Failed
         }
     }
+
+    // the anchor is gone, so the item goes out unanchored; a second refusal is a failure of its own
+    private suspend fun deliverWithoutReply(
+        item: BotOutput,
+        target: DeliveryTarget,
+        caption: String?,
+        messages: Messages,
+        pollRegistry: PollRegistry?,
+    ): ItemDeliveryOutcome =
+        try {
+            sendOutgoing(target, item, caption, messages, pollRegistry)
+            noteStickerSent(item, target)
+            ItemDeliveryOutcome.ReplyMissing
+        } catch (e: Throwable) {
+            e.rethrowIfCancellation()
+            log.warn(e) { "failed to send outgoing item to chat=${target.chatId} without reply" }
+
+            if (e.isChatUnreachable()) ItemDeliveryOutcome.ChatUnreachable else ItemDeliveryOutcome.Failed
+        }
 
     // the bot's own turn belongs in the group transcript: a recap that shows the questions and not the
     // answers reads as if nobody replied. best-effort — the message is already delivered either way.
@@ -546,57 +555,6 @@ class TelegramDelivery(
             }
     }
 
-    private suspend fun deliverText(
-        text: String,
-        toPrivate: Boolean,
-        originTarget: DeliveryTarget,
-        senderPrivateChatId: Long?,
-        messages: Messages,
-    ): ItemDeliveryOutcome {
-        val privateTarget = senderPrivateChatId?.takeIf { toPrivate }?.let { DeliveryTarget(it) }
-        val routedToPrivate = privateTarget != null
-        val deliveryTarget = privateTarget ?: originTarget
-
-        suspend fun record() =
-            recordBotMessage(
-                chatId = deliveryTarget.chatId,
-                routedToPrivate = routedToPrivate,
-                senderPrivateChatId = senderPrivateChatId,
-                text = text,
-                descriptor = null,
-                answering = originTarget.replyToMessageId,
-            )
-
-        try {
-            indicateAction(deliveryTarget.chat, ActionType.TYPING)
-            sendReplyText(deliveryTarget, text, messages)
-            record()
-            return ItemDeliveryOutcome.Ok
-        } catch (e: Throwable) {
-            e.rethrowIfCancellation()
-
-            if (!routedToPrivate && deliveryTarget.replyToMessageId != null && e.isReplyMessageNotFound()) {
-                sendReplyText(deliveryTarget.withoutReply(), text, messages)
-                record()
-                return ItemDeliveryOutcome.ReplyMissing
-            }
-
-            if (routedToPrivate && isPrivateChatBlocked(e)) {
-                notifyPrivateChatBlocked(originTarget, messages)
-                return ItemDeliveryOutcome.PrivateBlocked
-            }
-
-            if (!routedToPrivate && e.isChatUnreachable()) {
-                log.warn(e) { "chat=${deliveryTarget.chatId} no longer accepts messages from the bot" }
-                return ItemDeliveryOutcome.ChatUnreachable
-            }
-
-            log.warn(e) { "failed to send text to chat=${deliveryTarget.chatId}" }
-
-            return ItemDeliveryOutcome.Ok
-        }
-    }
-
     // best-effort: the indicator is cosmetic, so a failed action must never abort the delivery it precedes.
     private suspend fun indicateAction(target: ChatTarget, action: ActionType?) {
         action ?: return
@@ -626,19 +584,6 @@ class TelegramDelivery(
                     target.chat,
                     text,
                     replyParameters(target.replyToMessageId),
-                )
-        }
-    }
-
-    private suspend fun sendReplyText(target: DeliveryTarget, text: String, messages: Messages) {
-        withFloodWaitRetry(target.chatId) {
-            TelegramOutputSender
-                .sendReplyText(
-                    client,
-                    target.chat,
-                    text,
-                    replyParameters(target.replyToMessageId),
-                    messages.formattingAsFileNotice,
                 )
         }
     }
