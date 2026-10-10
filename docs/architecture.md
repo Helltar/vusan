@@ -182,7 +182,8 @@ A normal user message travels:
    otherwise open. `TaskScheduler` puts the same question to the same `AccessPolicy` before every fire — a task runs on
    nobody's behalf but its owner's, so losing access stops the work that goes on without them too — and skips the fire
    without running or announcing it, moving the recurrence on. The schedule is kept either way: being allowed back
-   resumes the task instead of resurrecting the fires it missed. Two sinks then run on every allowlisted message, *before* the addressing check, because what they
+   resumes the task instead of resurrecting the fires it missed, and a one-time task, which has no recurrence to move
+   on, waits in place for the tick that may run it. Two sinks then run on every allowlisted message, *before* the addressing check, because what they
    collect is precisely what nobody addressed to the bot: `recordGroupLog` writes the group transcript row, and
    `learnSticker` teaches the catalog which sets the chat uses. Both sit ahead of album buffering too, so each part of a
    gallery is seen individually. `MessageFilter.shouldHandle` then drops messages the bot shouldn't answer (in groups:
@@ -431,7 +432,7 @@ A normal user message travels:
 ## Background and side flows
 
 - **Task scheduler** — `TaskScheduler.launchIn` polls the task store every 30 seconds. Due tasks run through
-  `AgentRunner.handleScheduled` (waits for the user lock instead of bailing), each fire in a job of its own
+  `AgentRunner.handleQueued` (waits for the user lock instead of bailing), each fire in a job of its own
   (`common/runInOwnJob`): a fire is registered in `RunningTurns` under the conversation it belongs to, so `/stop` and
   the stop button reach it like any turn, and without a job to be canceled the one they would end is the scheduler's
   own loop. A stopped fire is not a failure — it is not retried, the chat gets the same "stopped" notice a stopped
@@ -449,9 +450,11 @@ A normal user message travels:
   every poll tick. A task that has fired for the last time is removed rather than kept switched off: `/tasks` never
   listed one and nothing else reads one. A tick reads every due task
   at once and fires them one after another, which leaves the owner of a task waiting behind a long fire time to pause,
-  retime or delete it: each task is read again (`TasksRepository.findDue(id, now)`) at the moment it would fire and
-  skipped if it is no longer due, and the advance afterward is conditional on the fire time the run started from, so a
-  schedule its owner changed meanwhile is not overwritten. A chat the bot cannot write
+  retime or delete it: each task is read again (`TasksRepository.findDue(id, now)`) at the moment it would fire, by
+  the clock of that moment rather than the tick's — judged late by the tick's time, a task behind a long fire would be
+  rescheduled to a slot already past and fire twice — and skipped if it is no longer due, and the advance afterward is
+  conditional on the fire time the run started from, so a schedule its owner changed meanwhile is not overwritten. A
+  stored row whose schedule or zone no longer parses is named in the log and left due rather than fired on a guess. A chat the bot cannot write
   to at all is the exception to that advance: rather than rescheduling one task, `TasksRepository.pauseAllInChat` pauses
   every task in that chat at once, because otherwise each of them would run a full agent turn on every fire and only
   discover at delivery that nothing can arrive. It is reached from either end — the delivery port reporting the fire

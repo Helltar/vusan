@@ -2,6 +2,7 @@ package com.helltar.vusan.tasks
 
 import com.helltar.vusan.agent.AgentRequest
 import com.helltar.vusan.agent.AgentRunner
+import com.helltar.vusan.agent.scheduledTaskBlock
 import com.helltar.vusan.common.rethrowIfCancellation
 import com.helltar.vusan.common.runInOwnJob
 import com.helltar.vusan.i18n.Messages
@@ -28,6 +29,7 @@ class TaskScheduler(
     // no default: an empty policy allows nobody, and a scheduler that silently fires nothing is worse
     // than one that will not be built without being told who may use it.
     private val accessPolicy: AccessPolicy,
+    private val clock: () -> Instant = Instant::now,
 ) {
 
     private enum class FireOutcome { Delivered, RunFailed, ChatUnreachable, Stopped }
@@ -40,7 +42,7 @@ class TaskScheduler(
             }
 
             while (true) {
-                runCatching { tick(Instant.now()) }
+                runCatching { tick(clock()) }
                     .onFailure {
                         it.rethrowIfCancellation()
                         log.error(it) { "task scheduler tick failed" }
@@ -55,7 +57,7 @@ class TaskScheduler(
         if (due.isEmpty()) return
 
         for (task in due) {
-            runCatching { processOne(task.id, now) }
+            runCatching { processOne(task.id) }
                 .onFailure {
                     it.rethrowIfCancellation()
                     log.error(it) { "failed to process task id=${task.id}" }
@@ -64,8 +66,11 @@ class TaskScheduler(
     }
 
     // the whole tick was read before the first fire, and a fire is a whole agent turn: what this one
-    // does is decided by the row as it stands now, not by the copy the tick started from.
-    private suspend fun processOne(id: Long, now: Instant) {
+    // does is decided by the row as it stands now, and by the clock as it stands now — a task behind a
+    // long fire would otherwise be judged late by the tick's time and moved to a slot already past.
+    private suspend fun processOne(id: Long) {
+        val now = clock()
+
         val task =
             repo.findDue(id, now) ?: run {
                 log.info { "task id=$id skipped: it is no longer due" }
@@ -74,13 +79,8 @@ class TaskScheduler(
 
         // the allowlist is what may use this deployment, and a task fires on nobody's behalf but its
         // owner's: losing access has to stop the work that goes on without them, not only their messages.
-        // the schedule is kept and never reports itself as missed, so being allowed back resumes the task
-        // instead of resurrecting a backlog of skipped fires.
         if (!accessPolicy.allows(task.scope.chat, task.scope.user)) {
-            val reason = accessPolicy.denialReason(task.scope.chat, task.scope.user)
-
-            log.info { "task id=${task.id} skipped: ${task.scope} is $reason" }
-            rescheduleAfterFire(task, now)
+            skipDenied(task, now)
             return
         }
 
@@ -106,6 +106,21 @@ class TaskScheduler(
             return
         }
 
+        rescheduleAfterFire(task, now)
+    }
+
+    // the schedule is kept and never reports itself as missed, so being allowed back resumes the task
+    // instead of resurrecting a backlog of skipped fires: a recurring one moves on past the fire nobody
+    // may have, and a one-time one has nowhere to move, so it waits in place for the tick that may.
+    private suspend fun skipDenied(task: ScheduledTask, now: Instant) {
+        val reason = accessPolicy.denialReason(task.scope.chat, task.scope.user)
+
+        if (task.recurrence.nextAfter(task.nextFireAt, task.timezone) == null) {
+            log.debug { "task id=${task.id} waits: ${task.scope} is $reason" }
+            return
+        }
+
+        log.info { "task id=${task.id} skipped: ${task.scope} is $reason" }
         rescheduleAfterFire(task, now)
     }
 
@@ -191,7 +206,7 @@ class TaskScheduler(
         // the agent answers its own failures with a canned reply instead of throwing, so the flag is the
         // only thing separating "the task did not run" from a real answer.
         val result =
-            runCatching { agentRunner.handleScheduled(request) }
+            runCatching { agentRunner.handleQueued(request) }
                 .onFailure {
                     it.rethrowIfCancellation()
                     log.error(it) { "task id=${task.id} run failed" }
@@ -287,28 +302,15 @@ internal fun scheduledAgentRequest(task: ScheduledTask, attempt: Int, chatProfil
 
 // the retry is not stored: history keeps the task as the user wrote it, without the retry hint.
 private fun conversationEntry(task: ScheduledTask): String =
-    scheduledTaskOpenTag(task) + task.prompt + "</scheduled_task>"
+    scheduledTaskBlock(task.title, task.recurrence.display, task.prompt)
 
 internal fun scheduledTaskPrompt(task: ScheduledTask, attempt: Int): String =
-    buildString {
-        append(scheduledTaskOpenTag(task)).append('\n')
-        append("This is a scheduled task you set up earlier. Execute it now without asking for confirmation.\n")
-        append("Task: ").append(task.prompt).append('\n')
-        if (attempt > 1) append(RETRY_HINT).append('\n')
-        append("</scheduled_task>")
-    }
-
-private fun scheduledTaskOpenTag(task: ScheduledTask): String =
-    buildString {
-        append("<scheduled_task")
-        task.title?.let { appendXmlAttr("title", it) }
-        appendXmlAttr("recurrence", task.recurrence.display)
-        append('>')
-    }
-
-private fun StringBuilder.appendXmlAttr(name: String, value: String) {
-    append(' ').append(name).append('=').append('"').append(escapeXml(value)).append('"')
-}
-
-private fun escapeXml(value: String): String =
-    value.replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;").replace("\"", "&quot;")
+    scheduledTaskBlock(
+        task.title,
+        task.recurrence.display,
+        buildString {
+            appendLine("This is a scheduled task you set up earlier. Execute it now without asking for confirmation.")
+            append("Task: ").append(task.prompt)
+            if (attempt > 1) append('\n').append(RETRY_HINT)
+        },
+    )
