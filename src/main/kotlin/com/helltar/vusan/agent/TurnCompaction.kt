@@ -70,7 +70,7 @@ private fun estimateTokens(part: Part): Int =
         is Part.Image -> part.bytes.size / ESTIMATED_BYTES_PER_TOKEN
     }
 
-private fun Message.ToolResults.isFolded(): Boolean = results.all { it.output.endsWith(FOLDED_RESULT) }
+internal fun Message.ToolResults.isFolded(): Boolean = results.all { it.output.endsWith(FOLDED_RESULT) }
 
 // the stub keeps the result's label: the shelf still holds the whole of it there, so a later call can take
 // it without the tool running again

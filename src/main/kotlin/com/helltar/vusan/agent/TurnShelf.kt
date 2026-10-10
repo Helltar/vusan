@@ -140,18 +140,29 @@ class TurnShelf(
             return call(match.groupValues[1].toInt(), from).text()
         }
 
-        if (FILE.matches(reference) || reference.startsWith(SANDBOX_REFERENCE_PREFIX)) {
-            val file = resolveFile(reference, from)
-            val bytes = file.loadBytes()
+        val bytes =
+            when {
+                FILE.matches(reference) -> resolveFile(reference, from).loadBytes()
 
-            require(bytes.size <= MAX_TEXT_BYTES && bytes.none { it == 0.toByte() }) {
-                "`$reference` is not a text file, so it cannot stand in for text; open it in the sandbox instead"
+                // read under the text cap, so a build artifact named here is refused before any of it moves
+                reference.startsWith(SANDBOX_REFERENCE_PREFIX) -> {
+                    val (sandbox, path) = sandboxReference(reference)
+
+                    try {
+                        sandbox.read(path, MAX_TEXT_BYTES)
+                    } catch (e: ShelfSandbox.FileTooLarge) {
+                        throw IllegalArgumentException("${e.message}, so it cannot stand in for text; open it in the sandbox instead", e)
+                    }
+                }
+
+                else -> return null
             }
 
-            return bytes.decodeToString()
+        require(bytes.size <= MAX_TEXT_BYTES && bytes.none { it == 0.toByte() }) {
+            "`$reference` is not a text file, so it cannot stand in for text; open it in the sandbox instead"
         }
 
-        return null
+        return bytes.decodeToString()
     }
 
     private suspend fun resolveFile(value: String, from: Int): AttachedFile {
@@ -168,9 +179,7 @@ class TurnShelf(
         }
 
         if (reference.startsWith(SANDBOX_REFERENCE_PREFIX)) {
-            val path = reference.removePrefix(SANDBOX_REFERENCE_PREFIX).trim()
-            val sandbox = requireNotNull(sandbox) { "there is no sandbox in this chat to read `$path` from" }
-            require(path.isNotEmpty()) { "`$reference` names no path" }
+            val (sandbox, path) = sandboxReference(reference)
 
             return keptFile(path.substringAfterLast('/'), sizeBytes = null) { sandbox.read(path, MAX_FILE_BYTES) }
         }
@@ -181,6 +190,15 @@ class TurnShelf(
             "`${reference.take(REFERENCE_PREVIEW_CHARS)}` is not a file: name one as `#N/1` (a file a call made, " +
                     "`#0/1` for the request's own) or as `sandbox:<path>`",
         )
+    }
+
+    // the sandbox a `sandbox:<path>` reference reads from and the path it names, checked once for a file and for text
+    private fun sandboxReference(reference: String): Pair<ShelfSandbox, String> {
+        val path = reference.removePrefix(SANDBOX_REFERENCE_PREFIX).trim()
+        val sandbox = requireNotNull(sandbox) { "there is no sandbox in this chat to read `$path` from" }
+        require(path.isNotEmpty()) { "`$reference` names no path" }
+
+        return sandbox to path
     }
 
     /** One tool call of the turn: what it answered and the files it made, under its number. */
@@ -291,6 +309,7 @@ class TurnShelf(
  */
 interface ShelfSandbox {
 
+    /** The file at [path], whole; one larger than [maxBytes] fails with [FileTooLarge] before any of it moves. */
     suspend fun read(path: String, maxBytes: Int): ByteArray
 
     suspend fun write(path: String, bytes: ByteArray)
@@ -299,6 +318,10 @@ interface ShelfSandbox {
     suspend fun directories(path: String): List<String>
 
     suspend fun deleteDirectory(path: String)
+
+    /** What a read answers for a file over its cap: the decoder hands the message to the model as it is. */
+    class FileTooLarge(path: String, maxBytes: Int) :
+        IllegalArgumentException("`$path` is larger than the ${maxBytes / (1024 * 1024)} MB a file may hold here")
 }
 
 private suspend fun copy(sandbox: ShelfSandbox, path: String, bytes: suspend () -> ByteArray): String =

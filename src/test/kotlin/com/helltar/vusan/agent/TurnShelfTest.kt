@@ -35,6 +35,8 @@ private class FakeSandbox(
     val deleted = mutableListOf<String>()
 
     override suspend fun read(path: String, maxBytes: Int): ByteArray {
+        if (content.size > maxBytes) throw ShelfSandbox.FileTooLarge(path, maxBytes)
+
         reads += path
 
         return content
@@ -149,6 +151,22 @@ class TurnShelfTest {
         clip.loadBytes()
 
         assertEquals(listOf("notes/draft.txt", "out/clip.mp4"), sandbox.reads)
+    }
+
+    // a large artifact named as text is refused under the text cap, and none of it is moved first
+    @Test
+    fun `a sandbox file over the text cap is refused before it is read, while a file argument still takes it`() = runBlocking {
+        val shelf = TurnShelf()
+        val sandbox = FakeSandbox(content = ByteArray(2 * 1024 * 1024) { 'a'.code.toByte() })
+        shelf.connectSandbox(sandbox)
+        val call = shelf.open()
+
+        val message = assertFailsWith<IllegalArgumentException> { call.textOrNull("sandbox:build/app.jar") }.message.orEmpty()
+
+        assertContains(message, "1 MB")
+        assertContains(message, "cannot stand in for text")
+        assertTrue(sandbox.reads.isEmpty())
+        assertEquals(2 * 1024 * 1024, call.file("sandbox:build/app.jar").loadBytes().size)
     }
 
     @Test

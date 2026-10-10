@@ -88,7 +88,15 @@ class SandboxClient(
             }
         }
 
-        override suspend fun read(path: String, maxBytes: Int): ByteArray = readFile(path, maxBytes)
+        // the shelf names a cap of its own, so a file over it is its complaint, not the transfer budget's
+        override suspend fun read(path: String, maxBytes: Int): ByteArray =
+            call {
+                try {
+                    sandbox().files.read(path, maxBytes.toLong())
+                } catch (e: RegolithException) {
+                    if (e.code == ErrorCodes.PAYLOAD_TOO_LARGE) throw ShelfSandbox.FileTooLarge(path, maxBytes) else throw e
+                }
+            }
 
         override suspend fun write(path: String, bytes: ByteArray) = writeFile(path, bytes)
 

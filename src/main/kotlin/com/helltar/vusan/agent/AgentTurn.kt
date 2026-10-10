@@ -185,7 +185,7 @@ class AgentTurn internal constructor(
     // planned to fit and is left alone.
     private fun foldToFit(messages: MutableList<Message>, turnStart: Int, tools: List<ToolDefinition>) {
         val folded = messages.foldedToFit(promptTokenCeiling - estimateTokens(tools), turnStart) ?: return
-        val foldedResults = folded.count { it is Message.ToolResults && it.results.all { result -> result.output == FOLDED_RESULT } }
+        val foldedResults = folded.count { it is Message.ToolResults && it.isFolded() } - messages.count { it is Message.ToolResults && it.isFolded() }
 
         log.warn { "turn history folded for $scope: ${messages.size} messages over ~$promptTokenCeiling tokens, $foldedResults result batch(es) dropped" }
 
