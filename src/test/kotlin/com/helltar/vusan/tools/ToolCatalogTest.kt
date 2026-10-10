@@ -81,8 +81,9 @@ class ToolCatalogTest {
         val loadedInMenuOrder = catalog().apply { load(listOf("gifs", "voice_replies")) }
         val loadedInReverse = catalog().apply { load(listOf("voice_replies", "gifs")) }
 
+        // every group is loaded, so the loader has nothing left to offer and is not sent either
         assertEquals(
-            listOf("sendTestMessage", "loadTools", "drawTestPicture", "speakTestText"),
+            listOf("sendTestMessage", "drawTestPicture", "speakTestText"),
             loadedInMenuOrder.visibleNames(),
         )
         assertEquals(loadedInMenuOrder.visibleNames(), loadedInReverse.visibleNames())

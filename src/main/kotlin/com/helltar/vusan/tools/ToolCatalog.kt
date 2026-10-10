@@ -82,7 +82,8 @@ class ToolCatalog internal constructor(
     // registration order, not load order: the tool array is part of the cached prefix on every provider,
     // so two turns that loaded the same groups in a different order must still produce the same request.
     fun visibleDefinitions(): List<ToolDefinition> =
-        (alwaysVisible + loader + deferred.filterKeys { it in loaded }.values.flatten()).map { it.definition }
+        (alwaysVisible + loader.takeIf { loadableGroups().isNotEmpty() }.orEmpty() + deferred.filterKeys { it in loaded }.values.flatten())
+            .map { it.definition }
 
     /** The menu of what is still loadable, or null when this turn has nothing left to offer. */
     fun menu(): String? =
