@@ -9,7 +9,10 @@ import kotlinx.serialization.json.put
 internal const val FOLDED_RESULT = "[result dropped to make room in the context; its label still holds the whole of it for any argument that takes a label, or call the tool again]"
 
 // what a message costs beyond its text: the role, the ids, the framing the provider adds
-private const val MESSAGE_OVERHEAD_TOKENS = 12
+internal const val MESSAGE_OVERHEAD_TOKENS = 12
+
+// what a tool schema costs beyond its text: the JSON framing of its parameters
+internal const val TOOL_SCHEMA_OVERHEAD_TOKENS = 32
 
 // arguments shorter than this say what the call was — a path, a query — and are kept whole
 private const val KEPT_ARGUMENTS_CHARS = 200
@@ -60,7 +63,7 @@ internal fun estimateTokens(message: Message): Int =
             }
 
 internal fun estimateTokens(tools: List<ToolDefinition>): Int =
-    tools.sumOf { estimateTokens("${it.name} ${it.description} ${it.parameters}") + MESSAGE_OVERHEAD_TOKENS }
+    tools.sumOf { estimateTokens("${it.name} ${it.description} ${it.parameters}") + TOOL_SCHEMA_OVERHEAD_TOKENS }
 
 private fun estimateTokens(part: Part): Int =
     when (part) {

@@ -61,12 +61,11 @@ class ContextWindowPolicy(model: LlmModel) {
     // other thing a run piles up. Counting every deferred schema here instead would give the history a
     // budget it never gets back.
     fun budget(systemPrompt: String, currentTurn: String, tools: List<ToolDefinition>): ContextTokenBudget {
-        val toolText = tools.joinToString("\n") { "${it.name} ${it.description} ${it.parameters}" }
+        // the same estimate the fold measures the request by, so the two never disagree on the ceiling
         val fixedPromptTokens =
             estimateTokens(systemPrompt) +
                     estimateTokens(currentTurn) +
-                    estimateTokens(toolText) +
-                    tools.size * TOOL_SCHEMA_OVERHEAD_TOKENS +
+                    estimateTokens(tools) +
                     FIXED_MESSAGE_OVERHEAD_TOKENS
 
         val responseReserve = (contextWindowTokens / 8).coerceIn(512, 8_192)
@@ -87,7 +86,6 @@ class ContextWindowPolicy(model: LlmModel) {
 
     companion object {
         const val DEFAULT_CONTEXT_WINDOW_TOKENS = 16_384L
-        private const val TOOL_SCHEMA_OVERHEAD_TOKENS = 32
         private const val FIXED_MESSAGE_OVERHEAD_TOKENS = 64
     }
 }

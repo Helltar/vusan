@@ -1,11 +1,11 @@
 package com.helltar.vusan.agent.conversation
 
 import com.helltar.vusan.agent.ESTIMATED_BYTES_PER_TOKEN
+import com.helltar.vusan.agent.MESSAGE_OVERHEAD_TOKENS
 import com.helltar.vusan.agent.estimateTokens
 import com.helltar.vusan.common.limitTo
 
 private const val EXACT_TOOL_INTERACTIONS = 2
-private const val MESSAGE_OVERHEAD_TOKENS = 12
 
 data class PromptConversation(
     val summary: String?,
