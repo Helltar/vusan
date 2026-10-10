@@ -62,11 +62,11 @@ A plain number is a Telegram ID. An entry may also name the messenger it belongs
 `telegram:123456789` — which is how the same number stays two different people once Vusan runs on
 more than one. All three take either form.
 
-The ban list wins over the allowlist, the owner included, which is the point: it shuts one person out of a group that
-stays open for everyone else. For a banned ID nothing happens — no reply, dead buttons, nothing
-recorded in the group log, no stickers learned, and their scheduled tasks stay in place but never
-fire. Removing the ID restores all of it; nothing is deleted meanwhile. An ID on both lists stays
-banned, and startup says so in the log.
+The ban list wins over the allowlist, the owner included, which is the point: it shuts one person
+out of a group that stays open for everyone else. For a banned ID nothing happens — no reply, dead
+buttons, nothing recorded in the group log, no stickers learned, and their scheduled tasks stay in
+place but never fire. Removing the ID restores all of it; nothing is deleted meanwhile. An ID on
+both lists stays banned, and startup says so in the log.
 
 ## LLM provider
 
@@ -79,11 +79,11 @@ banned, and startup says so in the log.
 | `openai-compatible` | any model id the server understands |
 | `codex`             | any model the ChatGPT plan offers   |
 
-- **`openai`** and **`anthropic`** — each talks to its vendor's own API and takes any model id the vendor
-  serves: startup asks the vendor's model list about it, so a typo fails there rather than on the
-  first message. Anthropic's list also states the model's window, output ceiling and what it takes,
-  and Vusan reads those from there; OpenAI's states nothing, so an OpenAI model is assumed to be what
-  the current generation is — a reasoning model that sees images and calls tools.
+- **`openai`** and **`anthropic`** — each talks to its vendor's own API and takes any model id the
+  vendor serves: startup asks the vendor's model list about it, so a typo fails there rather than on
+  the first message. Anthropic's list also states the model's window, output ceiling and what it
+  takes, and Vusan reads those from there; OpenAI's states nothing, so an OpenAI model is assumed to
+  be what the current generation is — a reasoning model that sees images and calls tools.
 - **`openai-compatible`** — any OpenAI-compatible server, remote or local, taking whatever model
   string it serves.
 - **`codex`** — a ChatGPT subscription instead of an API key; see
@@ -102,7 +102,7 @@ without `/v1`: Vusan appends `/v1/chat/completions`, or `/v1/responses` with
 `LLM_COMPATIBLE_API=responses`, so `LLM_BASE_URL=https://api.deepseek.com` is called at
 `https://api.deepseek.com/v1/chat/completions`. The default is the API every compatible server speaks;
 `responses` is OpenAI's newer one, for a server that offers it. `openai` and `codex` read neither:
-they always call OpenAI's own address on the Responses API, the one where tools work alongside
+they always call their own address on the Responses API, the one where tools work alongside
 reasoning.
 
 `LLM_REASONING_EFFORT` applies to every provider. Which efforts work depends on the model: `codex`
@@ -139,6 +139,7 @@ LLM_MODEL=deepseek-flash
 # Ollama — the key is not checked, but the value must be non-empty
 LLM_API_KEY=ollama
 LLM_BASE_URL=http://localhost:11434
+LLM_COMPATIBLE_API=responses
 LLM_MODEL=gemma4:latest
 LLM_CONTEXT_WINDOW_TOKENS=131072
 VISION_MODEL=gemma4:latest
@@ -182,13 +183,13 @@ keyring storage, put `cli_auth_credentials_store = "file"` back in that director
 Treat the file like a password, because it holds live access and refresh tokens, and in a container
 mount its directory read-write.
 
-It is reread before every request, so a later CLI login, logout, sandbox switch or token rotation
-takes effect without restarting the bot. Sharing one file with an interactive CLI is fine — a
-refresh from either side keeps the other working, and the newer version wins. A ChatGPT access token
-lives ten days; Vusan rotates it about a day before expiry and writes it back atomically with
-owner-only permissions. `codex login --with-access-token` is also accepted, but that credential has
-no refresh token: Vusan uses it while it is fresh and asks for a replacement as expiry approaches,
-instead of failing a request after it expires.
+Before every request Vusan checks whether the file changed and rereads it if so, so a later CLI
+login, logout, sandbox switch or token rotation takes effect without restarting the bot. Sharing one
+file with an interactive CLI is fine — a refresh from either side keeps the other working, and the
+newer version wins. A ChatGPT access token lives ten days; Vusan rotates it about a day before
+expiry and writes it back atomically with owner-only permissions. `codex login --with-access-token`
+is also accepted, but that credential has no refresh token: Vusan uses it while it is fresh and asks
+for a replacement as expiry approaches, instead of failing a request after it expires.
 
 **What the plan's catalog decides.** The models your plan actually offers are read at startup, and
 six settings are checked against that list:
@@ -198,13 +199,12 @@ six settings are checked against that list:
   message with an opaque error.
 - **Vision** — the chat model becomes the default vision model only when the catalog says it reads
   images.
-- **`LLM_REASONING_EFFORT`** — an effort the model does not offer stops startup instead of a turn.
+- **`LLM_REASONING_EFFORT`** — an effort the model does not offer stops startup instead of a turn;
+  `none`, which the catalog never lists, is left to the first turn.
 - **The context window** — comes from there too, so `LLM_CONTEXT_WINDOW_TOKENS` is only an override.
 - **`CODEX_SERVICE_TIER`** — a tier the model is not served at stops startup.
 - **How wordy replies are** — the model's default verbosity is taken from there and sent with every
   request, the way the Codex CLI does it. Without a catalog the backend's own, wordier default applies.
-
-Older catalog responses without capability metadata retain the compatible image-capable default.
 
 **When a brand-new model is missing.** That list is filtered by the Codex client version Vusan
 claims, so a model released alongside a newer CLI is absent from it and startup rejects it as one the
@@ -297,10 +297,10 @@ declines in its reply, and the user is asked to word the request differently.
 
 While the fallback is answering, the status message a turn puts up names it, so the chat shows which
 model is behind the reply rather than only the log. When the primary ran out of its usage limit and
-named the time it resets, a second line under it says how long until the usual model is due back; any other
-failure has no such time to give, only the moment of the next probe, so the line stays silent about
-it. The agent is told which model is answering, so someone who asks what it is running on gets the
-truth instead of the one the system prompt names.
+named the time it resets, a second line under it says how long until the usual model is due back;
+any other failure has no such time to give, only the moment of the next probe, so the line stays
+silent about it. The agent is told which model is answering, so someone who asks what it is running
+on gets the truth instead of the one the system prompt names.
 
 Pick a fallback that can do what the primary does: one that sees images if the chat model does,
 because vision rides on the same switch, and one whose context window is not much smaller, because
@@ -320,9 +320,8 @@ still working starts with the previous answer already known. Up to three wait th
 told to hold on.
 
 `MAX_CONCURRENT_TURNS` is the other half: how many *different* people Vusan serves at once. Waiting
-messages do not count toward it. Every request is a model
-call with whatever tools it decides to run, so the number to match is what your provider accepts at
-once, not what the machine could hold.
+messages do not count toward it. Every request is a model call with whatever tools it decides to
+run, so the number to match is what your provider accepts at once, not what the machine could hold.
 
 Beyond that number people wait their turn, with the usual typing indicator, and the answer simply
 arrives a little later. Only when the queue is already several times the limit does Vusan say it is
@@ -377,20 +376,20 @@ its looks in words, say it in the personality too.
 
 ## Optional tools
 
-Each optional tool is enabled by one env variable. If it is missing, that tool is skipped at startup
-with a `WARN` log and Vusan keeps running.
+Each optional tool is enabled by one env variable. Without it the tool is left out, the startup
+summary says so in one line, and Vusan runs without it.
 
-| Variable                | Enables                                   | Notes                                      |
-|-------------------------|-------------------------------------------|--------------------------------------------|
-| `TAVILY_API_KEY`        | Web search, image search, page rendering  | See [Web search](#web-search)              |
-| `SEARXNG_URL`           | Fallback web and image search             | See [Web search](#web-search)              |
-| `GIPHY_API_KEY`         | GIF lookup                                | Giphy                                      |
-| `KLIPY_API_KEY`         | GIF, meme and clip lookup                 | KLIPY; used instead of Giphy when both are set |
-| `ELEVENLABS_API_KEY`    | Voice messages and round video messages   | See [Voice output](#voice-output)          |
-| `OPENAI_STT_API_KEY`    | Voice input, sound of a video, transcribing any recording | Reuse your OpenAI key      |
-| `IMAGE_PROVIDER`        | Image generation                          | `openai` with `IMAGE_API_KEY`, or `codex`; see [Image generation](#image-generation) |
-| `VISION_MODEL`          | Vision on a chat model that cannot see    | See [Vision](#vision)                      |
-| `REGOLITH_URL`          | Shell sandbox                           | See [Sandbox](#sandbox)                |
+| Variable             | Enables                                    | Notes                                                  |
+|----------------------|--------------------------------------------|--------------------------------------------------------|
+| `TAVILY_API_KEY`     | Web search, image search, page rendering   | See [Web search](#web-search)                          |
+| `SEARXNG_URL`        | Fallback web and image search              | See [Web search](#web-search)                          |
+| `GIPHY_API_KEY`      | GIF lookup                                 | Giphy                                                  |
+| `KLIPY_API_KEY`      | GIF, meme and clip lookup                  | KLIPY; used instead of Giphy when both are set         |
+| `ELEVENLABS_API_KEY` | Voice messages and round video messages    | See [Voice output](#voice-output)                      |
+| `OPENAI_STT_API_KEY` | Voice input and transcribing any recording | Reuse your OpenAI key; see [Voice input](#voice-input) |
+| `IMAGE_PROVIDER`     | Image generation                           | See [Image generation](#image-generation)              |
+| `VISION_MODEL`       | Vision on a chat model that cannot see     | See [Vision](#vision)                                  |
+| `REGOLITH_URL`       | Shell sandbox                              | See [Sandbox](#sandbox)                                |
 
 ### GIFs, memes and clips
 
@@ -473,9 +472,9 @@ voice message.
 | `OPENAI_STT_MODEL`                | `gpt-transcribe`    | Speech-to-text model.                     |
 
 Vusan hears the first five minutes of anything. A voice message longer than that is refused, and of a
-video she watches, or any other recording she is handed, only those minutes are transcribed. The same
+video it watches, or any other recording it is handed, only those minutes are transcribed. The same
 key lets Vusan transcribe any recording a turn can name, not only the one a message arrives as: an
-audio or video file someone sent, a track or video she fetched, or a piece she cut out in the sandbox.
+audio or video file someone sent, a track or video it fetched, or a piece it cut out in the sandbox.
 
 ### Image generation
 
@@ -558,10 +557,12 @@ VISION_API_KEY=sk-proj-qwerty
 An `openai-compatible` model sees only when the server's own model list says it takes images:
 DeepSeek's says so of `deepseek-flash`, which then needs no vision model of its own, and not of
 `deepseek-v4-pro`. A server that lists nothing of the kind may serve anything, so with it vision stays
-off until `VISION_MODEL` is set, even when the model itself does accept images. A vision model always
-wins when it is set, even where the chat model could have looked at the picture itself, and is taken
-at its word about seeing — unless its own server's list or the plan's catalog says it takes no images,
-which stops startup instead of failing every look.
+off until `VISION_MODEL` is set, even when the model itself does accept images. Naming the chat model
+itself is enough there, as in the [Ollama example](#llm-provider): without `VISION_PROVIDER` it is asked
+on the same server with the chat's key and API, through a client of its own, which a fallback provider
+does not take over. A vision model always wins when it is set, even where the chat model could have
+looked at the picture itself, and is taken at its word about seeing — unless its own server's list or
+the plan's catalog says it takes no images, which stops startup instead of failing every look.
 
 Sticker replies come with vision and stay off without it. They are the one thing here that spends
 on its own: a set a chat keeps using is pulled in and each of its stickers is described once, up to
@@ -592,9 +593,10 @@ These are the bot's side of it, and belong in `.env`:
 | `REGOLITH_TOKEN` | —       | Its API token, the same value the server was started with.          |
 
 Without `REGOLITH_URL` the sandbox tools are not registered and the bot never mentions them; a URL
-without a valid token stops startup. The token takes 32 to 256 printable characters, and `openssl rand -hex 32` makes one
-both sides accept. Regolith's default address reaches only its own machine, so
-[the sandbox guide](sandbox.md#pointing-the-bot-at-it) shows which address to give the bot.
+without a valid token stops startup. The token takes 32 to 256 printable characters, and
+`openssl rand -hex 32` makes one both sides accept. Regolith's default address reaches only its own
+machine, so [the sandbox guide](sandbox.md#pointing-the-bot-at-it) shows which address to give the
+bot.
 
 Everything else — the sandbox image, memory, home size, timeouts, retention and network policy — is
 configured on the server, and the bot reads its limits from it.
@@ -624,9 +626,9 @@ The last 40 interactions are offered to the model verbatim, as many of them as t
 fits; past that count the older ones are folded into the recap. Once recapped, the raw rows stay for
 the retention period, at most a hundred per thread, and never enter the prompt again. Cleanup runs
 when that thread completes a turn, and again in the maintenance pass every six hours, which is what
-reaches a conversation nobody has come back to. `/clear` removes the raw transcript and its recap for the chat it
-was sent from, leaving the caller's other chats and everyone else's history alone; durable memory
-and scheduled tasks remain.
+reaches a conversation nobody has come back to. `/clear` removes the raw transcript and its recap for
+the chat it was sent from, leaving the caller's other chats and everyone else's history alone;
+durable memory and scheduled tasks remain.
 
 ## Memory
 
@@ -646,8 +648,8 @@ an account shared with other people: an anonymous group admin, or a linked chann
 Separate from conversation history and keyed by chat alone, with no sender in the key. In groups the
 bot records every message it receives, including the ones not addressed to it, so it can answer
 "what did I miss" and recap a day. Private chats are never recorded — they already have conversation
-history above. Nothing is recorded for a chat outside `ALLOWED_IDS`, and nothing for a sender in
-[`BANNED_IDS`](#who-vusan-answers).
+history above. In a group outside `ALLOWED_IDS` only the people Vusan answers there are recorded —
+the owner and anyone listed by ID — and nothing from a sender in [`BANNED_IDS`](#who-vusan-answers).
 
 | Variable                   | Default | Description                                                             |
 |----------------------------|---------|-------------------------------------------------------------------------|
@@ -683,9 +685,7 @@ Vusan; everything that calls it outright is answered exactly as before, without 
 
 ```dotenv
 ADDRESSING_ENABLED=true
-ADDRESSING_PROVIDER=openai
 ADDRESSING_MODEL=gpt-6-luna
-ADDRESSING_API_KEY=sk-proj-qwerty
 ADDRESSING_NAMES=robin,robbie
 ```
 
@@ -735,8 +735,7 @@ small OpenAI models — `gpt-5.6-luna` made the fewest wrong calls of eight and 
   `ambient verdict: chat=[…] msg=[…] gate=[…] verdict=[…]`, without the text, and the message id finds
   the text in the group log when a verdict needs a second look.
 
-It needs the [group log](#group-log), which is where the recent lines come from; with
-`GROUP_LOG_ENABLED=false` it stays off, and startup says so.
+It needs the [group log](#group-log), which is where the recent lines come from.
 
 ## Diary
 
@@ -772,8 +771,8 @@ It needs the group log; with `GROUP_LOG_ENABLED=false` it stays off, and startup
 In a group Vusan normally speaks only when spoken to. With this on, it also looks over a chat people
 are writing in and, now and then, puts an emoji on a message, says a line of its own — a joke on
 what was just said, an opinion, a question about someone who has gone quiet — or answers a joke with a
-sticker the chat uses. Most looks end with
-nothing, which is the point: it is meant to feel like a member of the chat, not a notification.
+sticker the chat uses. Most looks end with nothing, which is the point: it is meant to feel like a
+member of the chat, not a notification.
 
 ```dotenv
 INITIATIVE_ENABLED=false
@@ -786,8 +785,7 @@ has: how often it looks and how much it says are fixed.
   drawn at random between fifteen and forty-five minutes, with at least three new messages since its
   last look or its own last line there, not while it is answering somebody there, and not within
   five minutes of its own last line — if it is already in the conversation, it does not talk over
-  itself. A look one of these turned away is tried
-  again five to ten minutes later.
+  itself. A look one of these turned away is tried again five to ten minutes later.
 - **What is sent** — up to sixty lines of the chat's last six hours, with names, to the chat
   model, with nobody having asked. Everything else Vusan does sends a group's messages somewhere
   only when it is addressed, which is why this has a switch. With the [diary](#diary) on, its entries
@@ -814,10 +812,11 @@ initiative look: chat=[telegram:-100123] fresh=[4] said=[1/4] reacted=[0/20] act
 initiative skip: chat=[telegram:-100123] reason=[already talking] fresh=[5]
 ```
 
-`action` is `silent`, `react`, `say`, `reply` or `sticker`, and `why` is the model's own short reason, there
-so a day of looks can be read without opening the chat. A decision that was not carried out says so in
-`result` (`over budget`, `no such target`, `no such sticker`, `emoji not allowed`, `no readable decision`). `skip` names
-the gate that kept it from looking: `quiet`, `already talking` or `budget spent`.
+`action` is `silent`, `react`, `say`, `reply` or `sticker`, and `why` is the model's own short
+reason, there so a day of looks can be read without opening the chat. A decision that was not
+carried out says so in `result` (`over budget`, `no such target`, `no such sticker`,
+`emoji not allowed`, `no readable decision`). `skip` names the gate that kept it from looking:
+`quiet`, `already talking` or `budget spent`.
 
 It needs the group log; with `GROUP_LOG_ENABLED=false` it stays off, and startup says so.
 
@@ -866,9 +865,10 @@ strips capabilities.
 Nothing to set up: the bot publishes its own command menu on every start, in each language it
 speaks. That is the same list BotFather's `/setcommands` edits — there is no separate one — so an
 edit made there survives only until the bot restarts. Groups get `/tasks` and `/clear` as ephemeral
-commands: typed or picked from the menu, the command and its answer are seen by that person and the bot alone.
-`/stop` stays in the open on purpose, so the chat sees why the bot fell silent. Private chats get the
-same commands plain, since a client hides an ephemeral command where nothing is ephemeral.
+commands: typed or picked from the menu, the command and its answer are seen by that person and the
+bot alone. `/stop` stays in the open on purpose, so the chat sees why the bot fell silent. Private
+chats get the same commands plain, since a client hides an ephemeral command where nothing is
+ephemeral.
 
 ## Agent loop
 
@@ -897,28 +897,13 @@ Where the database lives, and the one external binary that needs a credential of
 | `YT_DLP_COOKIES_FILE` | —                  | Cookies for YouTube videos that ask for a login.   |
 
 In Docker that directory is `data/` beside the compose file, and `VUSAN_HOST_DIR` in `.env` moves
-it. It is a plain directory rather than a named volume because everything in it is yours to handle.
-The database is a file you can copy for a backup, and
-`SELF_IMAGE_FILE`, `APPEARANCE_FILE` and `YT_DLP_COOKIES_FILE` are files you put there. Create it
-before the first start — `mkdir -p data` — because a bind mount Docker creates comes out owned by
-`root` while the bot runs as uid 1000.
+it. It is a plain directory rather than a named volume because everything in it is yours to handle:
+the database is a file you can copy for a backup, and `SELF_IMAGE_FILE`, `APPEARANCE_FILE` and
+`YT_DLP_COOKIES_FILE` are files you put there. Create it before the first start — `mkdir -p data` —
+because a bind mount Docker creates comes out owned by `root` while the bot runs as uid 1000.
 
 `VUSAN_IMAGE` in the same file picks the image the bot runs, `ghcr.io/helltar/vusan:latest` when
 unset — set it to pin a release tag or to run a build of your own.
-
-**Upgrading a deployment that used the `vusan-data` volume.** Earlier versions kept this in a named
-volume. If `docker volume ls` shows `vusan_vusan-data`, copy it out once, with the bot stopped, or
-it will start on an empty database and quietly build a new one:
-
-```bash
-docker compose down
-mkdir -p data
-docker run --rm -v vusan_vusan-data:/from -v "$PWD/data":/to alpine sh -c 'cp -a /from/. /to/'
-sudo chown -R 1000:1000 data      # only if your login user is not uid 1000
-docker compose up -d
-```
-
-Remove the old volume once the bot is up and its history is there.
 
 `YT_DLP_COOKIES_FILE` must point to a Netscape-format `cookies.txt`; see the
 [yt-dlp wiki](https://github.com/yt-dlp/yt-dlp/wiki/Extractors#exporting-youtube-cookies).
