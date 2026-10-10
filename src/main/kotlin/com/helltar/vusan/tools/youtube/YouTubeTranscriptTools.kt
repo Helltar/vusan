@@ -22,8 +22,8 @@ class YouTubeTranscriptTools(private val client: YouTubeTranscriptClient) : Tool
                 """No usable subtitles found for "$query". The video offers no subtitle track at all, so there is nothing to read."""
 
             is YtDlpResult.TooLarge -> """Subtitles for "$query" are too large to read."""
-            is YtDlpResult.AuthRequired -> "YouTube is asking yt-dlp to sign in. Configure `YT_DLP_COOKIES_FILE` in the bot environment."
-            is YtDlpResult.Failure -> "Failed to fetch subtitles: ${result.reason}"
+            is YtDlpResult.AuthRequired -> error("YouTube is asking yt-dlp to sign in. Configure `YT_DLP_COOKIES_FILE` in the bot environment.")
+            is YtDlpResult.Failure -> error("Failed to fetch subtitles: ${result.reason}")
             is YtDlpResult.Success -> result.value.render()
         }
     }

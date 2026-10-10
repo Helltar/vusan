@@ -152,7 +152,7 @@ class SearxngToolsTest {
             """{"results":[],"unresponsive_engines":[["brave","Suspended: too many requests"],
                ["duckduckgo","Suspended: CAPTCHA"]]}"""
 
-        val result = tools(body).metaSearch("kotlin")
+        val result = toolFailure { tools(body).metaSearch("kotlin") }
 
         assertTrue("No results found" !in result)
         assertContains(result, "rate-limited")

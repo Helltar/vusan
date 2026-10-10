@@ -31,8 +31,8 @@ class YouTubeVideoTools(private val client: YtDlpClient, private val outbox: Bot
                 """Video for "$query" is too large to send via Telegram even at the lowest quality (~${mb} MB, limit is 50 MB)."""
             }
 
-            is YtDlpResult.AuthRequired -> "YouTube is asking yt-dlp to sign in. Configure `YT_DLP_COOKIES_FILE` in the bot environment."
-            is YtDlpResult.Failure -> "Failed to fetch video: ${result.reason}"
+            is YtDlpResult.AuthRequired -> error("YouTube is asking yt-dlp to sign in. Configure `YT_DLP_COOKIES_FILE` in the bot environment.")
+            is YtDlpResult.Failure -> error("Failed to fetch video: ${result.reason}")
 
             is YtDlpResult.Success -> {
                 val video = result.value

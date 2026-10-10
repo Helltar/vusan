@@ -50,7 +50,7 @@ class VideoNoteTools(
                                 "textChars=${trimmed.length}"
                     }
 
-                    return@suspendToolGuard "Video note synthesis failed: ${e.message ?: e::class.simpleName}"
+                    error("Video note synthesis failed: ${e.message ?: e::class.simpleName}")
                 }
 
         // the speech is synthesized and paid for before ffmpeg is asked for anything, so a host without a

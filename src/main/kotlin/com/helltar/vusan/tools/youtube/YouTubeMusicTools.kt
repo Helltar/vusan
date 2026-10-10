@@ -31,8 +31,8 @@ class YouTubeMusicTools(private val client: YtDlpClient, private val outbox: Bot
                 """Track for "$query" is too large to send via Telegram (~${mb} MB, limit is 45 MB)."""
             }
 
-            is YtDlpResult.AuthRequired -> "YouTube is asking yt-dlp to sign in. Configure `YT_DLP_COOKIES_FILE` in the bot environment."
-            is YtDlpResult.Failure -> "Failed to fetch track: ${result.reason}"
+            is YtDlpResult.AuthRequired -> error("YouTube is asking yt-dlp to sign in. Configure `YT_DLP_COOKIES_FILE` in the bot environment.")
+            is YtDlpResult.Failure -> error("Failed to fetch track: ${result.reason}")
 
             is YtDlpResult.Success -> {
                 val track = result.value

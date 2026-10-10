@@ -36,7 +36,7 @@ class SpeechTools(
         require(code == null || LANGUAGE_CODE.matches(code)) { "`language` is a two-letter ISO-639-1 code such as `ky`, `uk` or `en`" }
 
         recording.fileSizeBytes?.let {
-            if (it > MAX_INPUT_BYTES) return@suspendToolGuard "`${recording.name}` is too large to transcribe ($it bytes, limit $MAX_INPUT_BYTES)."
+            require(it <= MAX_INPUT_BYTES) { "`${recording.name}` is too large to transcribe ($it bytes, limit $MAX_INPUT_BYTES)" }
         }
 
         val audio =

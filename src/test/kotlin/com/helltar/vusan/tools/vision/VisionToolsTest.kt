@@ -5,6 +5,7 @@ import com.helltar.vusan.llm.RequestOptions
 import com.helltar.vusan.llm.TEST_MODEL
 import com.helltar.vusan.request.AttachedFile
 import com.helltar.vusan.request.AttachedFileKind
+import com.helltar.vusan.tools.toolFailure
 import kotlinx.coroutines.runBlocking
 import kotlin.test.Test
 import kotlin.test.assertContains
@@ -214,7 +215,7 @@ class VisionToolsTest {
         val executor = FakeLlmClient()
         val video = videoAttachment(fileSizeBytes = (25 * 1024 * 1024).toLong())
 
-        val result = visionTools(executor, video).describeVideo("")
+        val result = toolFailure { visionTools(executor, video).describeVideo("") }
 
         assertContains(result, "could not be downloaded")
         assertEquals(0, executor.callCount)

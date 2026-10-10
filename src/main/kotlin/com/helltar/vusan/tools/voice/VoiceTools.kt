@@ -48,7 +48,7 @@ class VoiceTools(
                                 "textChars=${trimmed.length}"
                     }
 
-                    return@suspendToolGuard "Voice synthesis failed: ${e.message ?: e::class.simpleName}"
+                    error("Voice synthesis failed: ${e.message ?: e::class.simpleName}")
                 }
 
         val label = keepOnShelf(SPEECH_FILE_NAME, bytes)

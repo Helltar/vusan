@@ -70,9 +70,11 @@ class VisionTools(
         // thing still reachable, which beats answering nothing about the video at all.
         val preview =
             video.loadThumbnailBytes?.let { downloadOrNull(video, it) }
-                ?: return@suspendToolGuard "The video `${video.name}` could not be downloaded " +
-                        "(Telegram serves bots files of at most ${MAX_VIDEO_BYTES / (1024 * 1024)} MB) " +
-                        "and its preview frame is not available either."
+                ?: error(
+                    "The video `${video.name}` could not be downloaded " +
+                            "(the chat serves a bot files of at most ${MAX_VIDEO_BYTES / (1024 * 1024)} MB) " +
+                            "and its preview frame is not available either.",
+                )
 
         videoClient.describePreviewFrame(video, preview, focus)
     }

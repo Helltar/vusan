@@ -51,9 +51,11 @@ class SearxngTools(
             if (down.isNotEmpty()) {
                 log.warn { "metaSearch: every engine failed query=[$query] unresponsiveEngines=[${down.joinToString()}]" }
 
-                return@suspendToolGuard "The search engines behind this lookup are all rate-limited or unreachable, " +
-                        """so nothing came back for "$query" — this says nothing about the topic itself. """ +
-                        "Retry with `webSearch` when it is offered, otherwise tell the user search is temporarily unavailable."
+                error(
+                    "The search engines behind this lookup are all rate-limited or unreachable, " +
+                            """so nothing came back for "$query" — this says nothing about the topic itself. """ +
+                            "Retry with `webSearch` when it is offered, otherwise tell the user search is temporarily unavailable.",
+                )
             }
 
             return@suspendToolGuard """No results found for "$query"."""

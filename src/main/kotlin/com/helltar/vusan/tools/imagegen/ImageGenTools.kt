@@ -3,7 +3,10 @@ package com.helltar.vusan.tools.imagegen
 import com.helltar.vusan.tools.Arg
 import com.helltar.vusan.tools.Tool
 import com.helltar.vusan.tools.ToolSet
+import com.helltar.vusan.common.extensionOfMime
+import com.helltar.vusan.common.mimeTypeOfName
 import com.helltar.vusan.common.rethrowIfCancellation
+import com.helltar.vusan.common.sniffedImageMimeType
 import com.helltar.vusan.config.ImageProviderConfig
 import com.helltar.vusan.outbox.BotOutbox
 import com.helltar.vusan.outbox.BotOutput
@@ -70,7 +73,7 @@ class ImageGenTools(
                                 "promptChars=${trimmed.length} selfPortrait=$selfPortrait"
                     }
 
-                    return@suspendToolGuard "Image generation failed: ${e.message ?: e::class.simpleName}"
+                    error("Image generation failed: ${e.message ?: e::class.simpleName}")
                 }
 
         val name = imageFilename(bytes)
@@ -169,7 +172,7 @@ class ImageGenTools(
                                 "sources=${sources.size} promptChars=${trimmed.length}"
                     }
 
-                    return@suspendToolGuard "Image edit failed: ${e.message ?: e::class.simpleName}"
+                    error("Image edit failed: ${e.message ?: e::class.simpleName}")
                 }
 
         val name = imageFilename(bytes)
@@ -235,13 +238,7 @@ private fun AttachedFile.editContentTypeOrNull(): String? {
 
 /** The image types both edit routes accept, read off a filename when nothing else declares one. */
 internal fun imageContentTypeOrNull(filename: String): String? =
-
-    when (filename.substringAfterLast('.', "").lowercase()) {
-        "png" -> "image/png"
-        "jpg", "jpeg" -> "image/jpeg"
-        "webp" -> "image/webp"
-        else -> null
-    }
+    mimeTypeOfName(filename)?.takeIf { it in SUPPORTED_EDIT_MIME_TYPES }
 
 /**
  * The requested framing as a size the configured model actually accepts.
@@ -266,10 +263,4 @@ private fun String.toImageSize(model: String): String {
 // telegram shows a photo whatever it is called, but the name follows the file when someone saves or
 // forwards it, and the route decides the format: the platform asks for jpeg, codex sends what it likes.
 private fun imageFilename(bytes: ByteArray): String =
-
-    when {
-        bytes.size >= 3 && bytes[0] == 0xFF.toByte() && bytes[1] == 0xD8.toByte() && bytes[2] == 0xFF.toByte() ->
-            "image.jpg"
-
-        else -> "image.png"
-    }
+    "image." + (sniffedImageMimeType(bytes)?.let(::extensionOfMime) ?: "png")
