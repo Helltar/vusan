@@ -1,5 +1,6 @@
 package com.helltar.vusan.telegram.inbound
 
+import com.helltar.vusan.agent.grouplog.GroupLogEntry
 import com.helltar.vusan.common.collapseWhitespaceAndCap
 import com.helltar.vusan.i18n.Language
 import com.helltar.vusan.request.ChatContext
@@ -16,9 +17,8 @@ import java.time.Instant
 
 private const val MAX_METADATA_VALUE_CHARS = 500
 
-// both mirror the varchar widths in GroupLogTable.
-private const val MAX_DESCRIPTOR_CHARS = 200
-private const val MAX_FORWARD_LABEL_CHARS = 128
+private const val MAX_DESCRIPTOR_CHARS = GroupLogEntry.MAX_DESCRIPTOR_CHARS
+private const val MAX_FORWARD_LABEL_CHARS = GroupLogEntry.MAX_FORWARD_FROM_CHARS
 
 private const val SECONDS_PER_MINUTE = 60
 private const val MINUTES_PER_HOUR = 60
@@ -72,9 +72,14 @@ internal val Message.language: Language
 internal fun Message.textSnippetOrNull(): String? =
     text ?: caption ?: richMessage?.toRichMarkdown()?.takeIf { it.isNotBlank() }
 
-internal fun Message.replyAuthorIdOrNull(): Long? = replyToMessage?.from?.id
+// in a forum every message of a topic without a reply of its own arrives as a reply to the message
+// that opened the topic, which says nothing about who or what it is for: every reader reads through here
+internal val Message.realReplyOrNull: Message?
+    get() = replyToMessage?.takeIf { it.forumTopicCreated == null }
 
-internal fun Message.replyToMessageIdOrNull(): Long? = replyToMessage?.messageId?.toLong()
+internal fun Message.replyAuthorIdOrNull(): Long? = realReplyOrNull?.from?.id
+
+internal fun Message.replyToMessageIdOrNull(): Long? = realReplyOrNull?.messageId?.toLong()
 
 // telegram delivers anonymous group admins as GroupAnonymousBot and linked-channel posts as
 // Channel_Bot: one account id standing in for many different senders in many chats. recognizing them

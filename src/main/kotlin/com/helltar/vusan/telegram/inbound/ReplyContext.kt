@@ -24,9 +24,6 @@ private const val MAX_QUOTED_FRAGMENT_CHARS = 1024
 // a first name, a last name and a username, with room to spare for telegram's own limits.
 private const val MAX_AUTHOR_CHARS = 160
 
-internal fun isReplyToOtherUser(replyAuthorId: Long?, botUserId: Long): Boolean =
-    replyAuthorId != botUserId
-
 // the part of the replied message the sender selected before answering — the whole point of their
 // question ("what is this?" against one term inside a long answer). it also carries its own weight
 // when the reply goes to the bot: that message is already in the history, but which piece of it the
@@ -51,7 +48,7 @@ private suspend fun Message.transcribeRepliedAudioOrNull(
 ): String? {
     if (voiceTranscriber == null) return null
 
-    val replied = replyToMessage ?: return null
+    val replied = realReplyOrNull ?: return null
     val audioInput = replied.voice?.toAudioInput() ?: replied.audio?.toAudioInput() ?: return null
 
     return when (val result = voiceTranscriber.transcribe(client, audioInput)) {
@@ -61,7 +58,7 @@ private suspend fun Message.transcribeRepliedAudioOrNull(
 }
 
 internal fun Message.repliedAttachedFileOrNull(client: TelegramClient): AttachedFile? =
-    replyToMessage?.toAttachedFileOrNull(client)
+    realReplyOrNull?.toAttachedFileOrNull(client)
 
 // gif messages carry both `animation` and `document`, so the animation is matched first and the
 // document copy of the same file never turns into a second attachment.
@@ -176,7 +173,7 @@ private fun String?.orVideoName(fileUniqueId: String): String =
     this?.sanitizeFilename()?.takeIf { it.isNotBlank() } ?: "video-$fileUniqueId.mp4"
 
 private fun Message.toReplySummary(botUserId: Long): RepliedMessageSummary? =
-    replyToMessage?.summarizeInternalReply(botUserId)
+    realReplyOrNull?.summarizeInternalReply(botUserId)
         ?: externalReplyInfo?.summarize()
         ?: replyToStory?.let { RepliedMessageSummary(type = "story", textOrCaption = null) }
 

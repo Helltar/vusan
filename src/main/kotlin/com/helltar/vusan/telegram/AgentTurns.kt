@@ -24,7 +24,6 @@ import com.helltar.vusan.telegram.inbound.VoiceTranscriber
 import com.helltar.vusan.telegram.inbound.canLoadChatDescription
 import com.helltar.vusan.telegram.inbound.chatIdLong
 import com.helltar.vusan.telegram.inbound.forumTopicIdOrNull
-import com.helltar.vusan.telegram.inbound.isReplyToOtherUser
 import com.helltar.vusan.telegram.inbound.language
 import com.helltar.vusan.telegram.inbound.messageIdLong
 import com.helltar.vusan.telegram.inbound.quotedFragmentOrNull
@@ -96,7 +95,7 @@ internal class AgentTurns(
             // a reaction may only land on somebody else's message, so this stays narrower than the context above.
             replyToMessageId =
                 message.replyToMessageIdOrNull()
-                    ?.takeIf { isReplyToOtherUser(message.replyAuthorIdOrNull(), botProfile.userId) }
+                    ?.takeIf { message.replyAuthorIdOrNull() != botProfile.userId }
                     ?.toString(),
             inputKind = inputKind,
             ambient = ambient,

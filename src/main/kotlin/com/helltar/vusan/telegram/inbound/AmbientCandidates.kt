@@ -1,5 +1,6 @@
 package com.helltar.vusan.telegram.inbound
 
+import com.helltar.vusan.telegram.inbound.realReplyOrNull
 import com.helltar.vusan.agent.addressing.AmbientCandidate
 import com.helltar.vusan.telegram.telegramChat
 import org.telegram.telegrambots.meta.api.objects.message.Message
@@ -35,10 +36,8 @@ internal fun Message.ambientCandidateOrNull(captionSource: Message, authorWaitin
     )
 }
 
-// in a forum every message of a topic without a reply of its own arrives as a reply to the message that
-// opened the topic, which says nothing about who it is for.
 private fun Message.repliedAuthorOrNull(): String? {
-    val replied = replyToMessage?.takeIf { it.forumTopicCreated == null } ?: return null
+    val replied = realReplyOrNull ?: return null
 
     return replied.from?.let { displayName(it.firstName, it.lastName) ?: it.userName }
         ?: replied.senderChat?.title

@@ -18,13 +18,6 @@ import kotlin.test.assertTrue
 class ReplyContextTest {
 
     @Test
-    fun `isReplyToOtherUser skips replies to the bot`() {
-        assertFalse(isReplyToOtherUser(replyAuthorId = 123, botUserId = 123))
-        assertTrue(isReplyToOtherUser(replyAuthorId = 456, botUserId = 123))
-        assertTrue(isReplyToOtherUser(replyAuthorId = null, botUserId = 123))
-    }
-
-    @Test
     fun `quotedFragmentOrNull reads the part the sender selected`() {
         val message =
             message(
@@ -263,6 +256,26 @@ class ReplyContextTest {
 
         assertEquals(AttachedFileKind.VIDEO, file.kind)
         assertTrue(file.isAnimation)
+    }
+
+    // in a forum every message of a topic arrives as a reply to the service message that opened it
+    @Test
+    fun `a reply to the message that opened a forum topic is no reply at all`() = runBlocking {
+        val message =
+            message(
+                """
+                "text": "which build is green?",
+                "reply_to_message": {
+                  "message_id": 1, "date": 1774000000, "chat": {"id": 10, "type": "supergroup"},
+                  "forum_topic_created": {"name": "Builds", "icon_color": 7322096}
+                }
+                """
+            )
+
+        assertNull(message.replyToMessageIdOrNull())
+        assertNull(message.replyAuthorIdOrNull())
+        assertNull(message.replySummaryOrNull(unusedClient, voiceTranscriber = null, botUserId = 100L))
+        assertNull(message.repliedAttachedFileOrNull(unusedClient))
     }
 
     @Test
