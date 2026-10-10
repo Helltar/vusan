@@ -93,12 +93,12 @@ banned, and startup says so in the log.
 | Variable                      | Default                   | Description                                                                     |
 |-------------------------------|---------------------------|---------------------------------------------------------------------------------|
 | `LLM_BASE_URL`                | —                         | Server address. Required by `openai-compatible`, unused by the others.          |
-| `LLM_OPENAI_ENDPOINT`         | `completions`             | Which OpenAI API to call: `completions` or `responses`.                         |
+| `LLM_COMPATIBLE_API`          | `completions`             | The API an `openai-compatible` server speaks: `completions` or `responses`.     |
 | `LLM_REASONING_EFFORT`        | model default             | Reasoning depth: `none`, `minimal`, `low`, `medium`, `high`, `xhigh`, or `max`. |
 | `LLM_REQUEST_TIMEOUT_SECONDS` | `300`                     | Seconds one LLM call may hang before Vusan gives up and replies with an error.  |
 | `LLM_CONTEXT_WINDOW_TOKENS`   | model metadata or `16384` | Context size override.                                                          |
 
-`LLM_OPENAI_ENDPOINT` is for `openai-compatible` alone: it says which of the two OpenAI APIs the
+`LLM_COMPATIBLE_API` is for `openai-compatible` alone: it says which of the two OpenAI APIs the
 server behind `LLM_BASE_URL` speaks, since a third-party server may offer either. `openai` and
 `codex` always speak the Responses API, the one where tools work alongside reasoning.
 `LLM_REASONING_EFFORT` applies to every provider. Which efforts work depends on the model: `codex`
@@ -266,7 +266,7 @@ LLM_FALLBACK_API_KEY=sk-proj-qwerty
 The same model on both sides is the ordinary case: the plan pays for it until its window is spent,
 the key after that.
 
-`LLM_FALLBACK_BASE_URL`, `LLM_FALLBACK_OPENAI_ENDPOINT`, `LLM_FALLBACK_REASONING_EFFORT`,
+`LLM_FALLBACK_BASE_URL`, `LLM_FALLBACK_COMPATIBLE_API`, `LLM_FALLBACK_REASONING_EFFORT`,
 `LLM_FALLBACK_REQUEST_TIMEOUT_SECONDS` and `LLM_FALLBACK_CONTEXT_WINDOW_TOKENS` mean what their
 `LLM_` counterparts mean; the timeout follows the primary's when unset.
 
@@ -542,7 +542,7 @@ VISION_API_KEY=sk-proj-qwerty
 | `VISION_PROVIDER`                | the chat provider | `openai`, `anthropic`, `openai-compatible` or `codex`.                               |
 | `VISION_API_KEY`                 | —                 | Its own key. Required with `VISION_PROVIDER`, except on `codex`.                     |
 | `VISION_BASE_URL`                | —                 | Server address. Required with `VISION_PROVIDER=openai-compatible`, unused otherwise. |
-| `VISION_OPENAI_ENDPOINT`         | `completions`     | `completions` or `responses`, for `VISION_PROVIDER=openai-compatible`.               |
+| `VISION_COMPATIBLE_API`          | `completions`     | `completions` or `responses`, for `VISION_PROVIDER=openai-compatible`.               |
 | `VISION_REASONING_EFFORT`        | model default     | Reasoning depth of every look, the values `LLM_REASONING_EFFORT` takes.              |
 | `VISION_REQUEST_TIMEOUT_SECONDS` | the chat's        | Seconds one look may hang. Read with `VISION_PROVIDER` only.                         |
 | `VISION_CONTEXT_WINDOW_TOKENS`   | model metadata    | Context size override.                                                               |
@@ -695,7 +695,7 @@ prefix; its effort and window are its own either way.
 | `ADDRESSING_PROVIDER`                | the chat provider  | `openai`, `anthropic`, `openai-compatible` or `codex`.                                   |
 | `ADDRESSING_API_KEY`                 | —                  | Its own key. Required with `ADDRESSING_PROVIDER`, except on `codex`.                     |
 | `ADDRESSING_BASE_URL`                | —                  | Server address. Required with `ADDRESSING_PROVIDER=openai-compatible`, unused otherwise. |
-| `ADDRESSING_OPENAI_ENDPOINT`         | `completions`      | `completions` or `responses`, for `ADDRESSING_PROVIDER=openai-compatible`.               |
+| `ADDRESSING_COMPATIBLE_API`          | `completions`      | `completions` or `responses`, for `ADDRESSING_PROVIDER=openai-compatible`.               |
 | `ADDRESSING_REASONING_EFFORT`        | the least it takes | Reasoning depth of every verdict; see below for what the least is.                       |
 | `ADDRESSING_REQUEST_TIMEOUT_SECONDS` | the chat's         | Seconds one verdict may hang. Read with `ADDRESSING_PROVIDER` only.                      |
 | `ADDRESSING_CONTEXT_WINDOW_TOKENS`   | model metadata     | Context size override.                                                                   |

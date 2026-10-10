@@ -260,7 +260,7 @@ data class AppConfig(
                     baseUrl = requireEnv("${prefix}_BASE_URL"),
                     apiKey = requireEnv("${prefix}_API_KEY"),
                     model = requireEnv("${prefix}_MODEL"),
-                    endpoint = resolveOpenAiEndpoint(prefix),
+                    endpoint = resolveCompatibleApi(prefix),
                     reasoningEffort = resolveReasoningEffort(prefix),
                     requestTimeout = requestTimeout,
                     contextWindowTokens = contextWindowTokens,
@@ -294,11 +294,11 @@ data class AppConfig(
             }
         }
 
-        private fun resolveOpenAiEndpoint(prefix: String): OpenAiEndpoint {
-            val raw = readEnv("${prefix}_OPENAI_ENDPOINT") ?: return OpenAiEndpoint.COMPLETIONS
+        private fun resolveCompatibleApi(prefix: String): OpenAiEndpoint {
+            val raw = readEnv("${prefix}_COMPATIBLE_API") ?: return OpenAiEndpoint.COMPLETIONS
 
             return enumOrNull<OpenAiEndpoint>(raw)
-                ?: error("Unsupported ${prefix}_OPENAI_ENDPOINT=[$raw]. Supported values: ${supportedValues<OpenAiEndpoint>()}")
+                ?: error("Unsupported ${prefix}_COMPATIBLE_API=[$raw]. Supported values: ${supportedValues<OpenAiEndpoint>()}")
         }
 
         private fun resolveReasoningEffort(prefix: String): ReasoningEffort? {

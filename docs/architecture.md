@@ -683,7 +683,7 @@ A normal user message travels:
   (`llm/anthropic/AnthropicStream`), as the vendor's SDKs do at a ceiling this size, so a stall trips the socket
   timeout where a connection idling through a long think would be dropped at the API's edge. A Claude model from
   before 4.6, which the API serves under a dated id, gets neither thinking nor an effort. `openai-compatible` speaks
-  either OpenAI API under `LLM_BASE_URL` (`LLM_OPENAI_ENDPOINT`), sees images only when the server's model list says
+  either OpenAI API under `LLM_BASE_URL` (`LLM_COMPATIBLE_API`), sees images only when the server's model list says
   the model takes them (with its window and its efforts, DeepSeek's states all three), disables parallel tool calls
   because third-party models garble the siblings, and gets none of the OpenAI-only fields unless the base URL is the
   official API. A server there that thinks aloud in `reasoning_content` (DeepSeek) refuses a tool call of the turn
