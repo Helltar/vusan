@@ -246,7 +246,7 @@ suspend fun main() = coroutineScope {
             TelegramBotRunner(
                 telegramClient, config.telegramBotToken, delivery, agentRunner, taskMenu, inlineChoices, tasks,
                 chatProfiles, config.accessPolicy, voiceTranscriber, botProfile, stickerCatalog,
-                groupLog, polls, fallbackInUse, ambient,
+                groupLog, polls, fallbackInUse, ambient, sandbox = config.regolithUrl != null,
             )
 
         // retention runs on a clock of its own rather than on whoever happens to write next: what needs

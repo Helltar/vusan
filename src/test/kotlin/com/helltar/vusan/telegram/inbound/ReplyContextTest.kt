@@ -202,7 +202,7 @@ class ReplyContextTest {
                 """
             )
 
-        val block = attachedFileContextBlock(assertNotNull(message.toAttachedFileOrNull(unusedClient)))
+        val block = attachedFileContextBlock(assertNotNull(message.toAttachedFileOrNull(unusedClient)), sandbox = true)
 
         assertTrue(block.contains("It is a GIF"))
         assertTrue(block.contains("never narrate it unasked"))
@@ -297,7 +297,7 @@ class ReplyContextTest {
                 """
             )
 
-        val block = attachedFileContextBlock(assertNotNull(message.toAttachedFileOrNull(unusedClient)))
+        val block = attachedFileContextBlock(assertNotNull(message.toAttachedFileOrNull(unusedClient)), sandbox = true)
 
         assertTrue(block.contains("name: clip.mp4"))
         assertTrue(block.contains("duration: 42s"))

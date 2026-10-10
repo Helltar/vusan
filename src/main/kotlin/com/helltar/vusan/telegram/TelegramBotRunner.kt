@@ -91,6 +91,7 @@ internal class TelegramBotRunner(
     fallbackInUse: () -> FallbackInUse? = { null },
     // answers a group message nobody tagged the bot in when it is meant for it all the same; `null` is off.
     private val ambient: AmbientAddressing? = null,
+    private val sandbox: Boolean = false,
 ) {
 
     private val heartbeat = Heartbeat()
@@ -98,7 +99,7 @@ internal class TelegramBotRunner(
     private val spool = UpdateSpool(SPOOL_RETENTION)
 
     private val turns =
-        AgentTurns(client, agent, delivery, inlineChoices, chatProfiles, voiceTranscriber, fallbackInUse)
+        AgentTurns(client, agent, delivery, inlineChoices, chatProfiles, voiceTranscriber, sandbox, fallbackInUse)
 
     private val turnStop = TurnStopHandler(client, agent)
     private val callbacks = CallbackRouter(client, taskMenu, inlineChoices, turnStop, turns, accessPolicy)
@@ -625,7 +626,7 @@ internal class TelegramBotRunner(
                 .orEmpty()
                 .ifBlank { MEDIA_ONLY_PROMPT }
 
-        val albumContext = albumContextBlock(parts.size, photoCount, videoCount, attachedFiles)
+        val albumContext = albumContextBlock(parts.size, photoCount, videoCount, attachedFiles, sandbox)
 
         turns.dispatchToAgent(
             anchor,

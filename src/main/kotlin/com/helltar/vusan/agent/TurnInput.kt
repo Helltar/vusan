@@ -99,7 +99,12 @@ private fun buildReplyContextPrompt(
     }
 }
 
-internal fun attachedFileContextBlock(file: AttachedFile): String =
+// a deployment without a sandbox has no `runCommand`, so a block that sent the model there would have
+// it promise the user a look inside a file it cannot open
+private const val SANDBOX_COPY_NOTE =
+    "The sandbox command or file-writing tool copies this file into the turn's own directory under `turns/` and returns its exact path. "
+
+internal fun attachedFileContextBlock(file: AttachedFile, sandbox: Boolean): String =
     xmlBlock(
         "attached_file",
         buildString {
@@ -109,8 +114,10 @@ internal fun attachedFileContextBlock(file: AttachedFile): String =
 
             when (file.kind) {
                 AttachedFileKind.IMAGE -> {
-                    append("The sandbox command or file-writing tool copies this file into the turn's own directory under `turns/` and returns its exact path. ")
-                    append("It is an image: call `describeImage` to answer about what is visible, or work on it with `runCommand` (resize, filter, colors, dimensions).")
+                    if (sandbox) append(SANDBOX_COPY_NOTE)
+                    append("It is an image: call `describeImage` to answer about what is visible")
+                    if (sandbox) append(", or work on it with `runCommand` (resize, filter, colors, dimensions)")
+                    append('.')
                 }
 
                 // the GIF line has to live here rather than in the no-caption prompt: a caption replaces
@@ -119,14 +126,17 @@ internal fun attachedFileContextBlock(file: AttachedFile): String =
                     if (file.isAnimation)
                         append("It is a GIF: a short soundless loop, usually thrown into a chat as a reaction rather than as something to review. Call `describeVideo` only when the user asks what is in it, and never narrate it unasked.")
                     else {
-                        append("It is a video: call `describeVideo` when your answer depends on what happens in it or what is said in it. ")
-                        append("To convert, cut or re-encode it, use the sandbox; its command or file-writing tool copies the file into the turn's own directory under `turns/` and returns its exact path.")
+                        append("It is a video: call `describeVideo` when your answer depends on what happens in it or what is said in it.")
+                        if (sandbox) append(" To convert, cut or re-encode it, use the sandbox; its command or file-writing tool copies the file into the turn's own directory under `turns/` and returns its exact path.")
                     }
 
-                AttachedFileKind.OTHER -> {
-                    append("The sandbox command or file-writing tool copies this file into the turn's own directory under `turns/` and returns its exact path. ")
-                    append("Read it there with `runCommand` instead of asking the user to resend it.")
-                }
+                AttachedFileKind.OTHER ->
+                    if (sandbox) {
+                        append(SANDBOX_COPY_NOTE)
+                        append("Read it there with `runCommand` instead of asking the user to resend it.")
+                    } else {
+                        append("Its contents cannot be opened here: answer from its name and what the user says about it, and say so when the request depends on what is inside.")
+                    }
             }
         },
     )
@@ -145,6 +155,7 @@ internal fun albumContextBlock(
     photoCount: Int,
     videoCount: Int,
     attachedFiles: List<AttachedFile>,
+    sandbox: Boolean,
 ): String {
     val otherCount = itemCount - photoCount - videoCount
     val attachedImages = attachedFiles.count { it.kind == AttachedFileKind.IMAGE }
@@ -169,7 +180,7 @@ internal fun albumContextBlock(
             else
                 append("All of them are attached: $names. ")
 
-            append("The sandbox command or file-writing tool copies every attached item into the turn's own directory under `turns/` and returns each exact path. ")
+            if (sandbox) append("The sandbox command or file-writing tool copies every attached item into the turn's own directory under `turns/` and returns each exact path. ")
 
             if (attachedImages > 1)
                 append(

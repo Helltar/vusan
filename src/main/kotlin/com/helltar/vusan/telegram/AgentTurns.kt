@@ -56,6 +56,8 @@ internal class AgentTurns(
     private val inlineChoices: InlineChoiceHandler,
     private val chatProfiles: ChatProfiles,
     private val voiceTranscriber: VoiceTranscriber?,
+    // whether this deployment has a sandbox: the attachment block sends the model there only where it can go
+    private val sandbox: Boolean,
     private val fallbackInUse: () -> FallbackInUse? = { null },
 ) {
 
@@ -87,7 +89,7 @@ internal class AgentTurns(
             message = message,
             agentInput =
                 effectiveAttachedFiles.firstOrNull()
-                    ?.let { "${attachedFileContextBlock(it)}\n\n$baseAgentInput" }
+                    ?.let { "${attachedFileContextBlock(it, sandbox)}\n\n$baseAgentInput" }
                     ?: baseAgentInput,
             conversationInput = formatConversationInput(prompt, replySummary, quotedFragment),
             attachedFiles = effectiveAttachedFiles,
@@ -165,7 +167,7 @@ internal class AgentTurns(
                         attachedFiles = listOfNotNull(attachedFile),
                         language = Language.ofText(input, Language.fromCode(user.languageCode)),
                     ),
-                prompt = attachedFile?.let { "${attachedFileContextBlock(it)}\n\n$input" } ?: input,
+                prompt = attachedFile?.let { "${attachedFileContextBlock(it, sandbox)}\n\n$input" } ?: input,
                 conversationEntry = input,
             )
 
