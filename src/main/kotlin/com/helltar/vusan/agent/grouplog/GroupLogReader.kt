@@ -39,7 +39,7 @@ class GroupLogReader(
 
         val rowLimit = (budgetChars / MIN_LINE_COST).coerceIn(1, MAX_ROWS)
         val entries = repository.readWindow(chat, from, now, limit = rowLimit, author = author)
-        val rendered = renderGroupLog(entries, zone, MAX_LINE_TEXT_CHARS, budgetChars)
+        val rendered = renderGroupLog(entries, zone, LOG_LINE_CHARS, budgetChars)
 
         if (rendered.includedCount.toLong() >= total) {
             return header(from, now, total, author) + "\n\n" + block("transcript", rendered.text)
@@ -76,7 +76,7 @@ class GroupLogReader(
 
         val todayBudget = (budgetChars * TODAY_BUDGET_SHARE).toInt()
         val todayEntries = repository.readWindow(chat, todayStart, now, limit = MAX_ROWS, author = null)
-        val todayRendered = renderGroupLog(todayEntries, zone, MAX_LINE_TEXT_CHARS, todayBudget)
+        val todayRendered = renderGroupLog(todayEntries, zone, LOG_LINE_CHARS, todayBudget)
 
         val digestBudget = budgetChars - todayRendered.text.length
         val digests = collectDigests(chat, closedDays, digestBudget)
@@ -165,14 +165,8 @@ class GroupLogReader(
 
     // what a day's recap is made of: the transcript of that local day, cut to what one digest prompt
     // may cost. `null` when the day holds nothing to summarize.
-    private suspend fun sourceOf(chat: ChatRef, day: LocalDate): RenderedGroupLog? {
-        val dayEnd = day.plusDays(1).startOfDay().minusMillis(1)
-
-        return repository
-            .readWindow(chat, day.startOfDay(), dayEnd, limit = MAX_ROWS_PER_DAY)
-            .takeIf { it.isNotEmpty() }
-            ?.let { renderGroupLog(it, zone, MAX_LINE_TEXT_CHARS, DIGEST_SOURCE_CHARS) }
-    }
+    private suspend fun sourceOf(chat: ChatRef, day: LocalDate): RenderedGroupLog? =
+        repository.dayEntries(chat, day, zone).takeIf { it.isNotEmpty() }?.renderedDay(zone)
 
     private fun truncatedResult(
         rendered: RenderedGroupLog,
@@ -216,16 +210,10 @@ class GroupLogReader(
     private fun LocalDate.startOfDay(): Instant = atStartOfDay(zone).toInstant()
 
     private companion object {
-        const val MAX_LINE_TEXT_CHARS = 300
-
         // a plausible floor for one rendered line, used to turn the character budget into a row
         // limit so a month-wide window is never pulled out of SQLite whole.
         const val MIN_LINE_COST = 40
         const val MAX_ROWS = 1_000
-        const val MAX_ROWS_PER_DAY = 1_500
-
-        // what one day's transcript may cost the digester's own prompt.
-        const val DIGEST_SOURCE_CHARS = 12_000
 
         // share of the budget kept for quoting today, the part most questions are actually about.
         const val TODAY_BUDGET_SHARE = 0.4
@@ -239,3 +227,21 @@ class GroupLogReader(
 
 private fun block(openTag: String, content: String, closingTag: String = openTag): String =
     "<$openTag>\n${content.trim()}\n</$closingTag>"
+
+// one line of a rendered transcript, wherever one is quoted
+internal const val LOG_LINE_CHARS = 300
+
+// what one local day's transcript is for a model that reads it whole, a digest or a diary entry: the rows
+// read for it, and what their rendering may cost that prompt. one rule, so the two never read different days.
+internal const val DAY_SOURCE_ROWS = 1_500
+internal const val DAY_SOURCE_CHARS = 12_000
+
+internal suspend fun GroupLogRepository.dayEntries(chat: ChatRef, day: LocalDate, zone: ZoneId): List<GroupLogEntry> {
+    val start = day.atStartOfDay(zone).toInstant()
+    val end = day.plusDays(1).atStartOfDay(zone).toInstant().minusMillis(1)
+
+    return readWindow(chat, start, end, limit = DAY_SOURCE_ROWS)
+}
+
+internal fun List<GroupLogEntry>.renderedDay(zone: ZoneId): RenderedGroupLog =
+    renderGroupLog(this, zone, LOG_LINE_CHARS, DAY_SOURCE_CHARS)

@@ -2,7 +2,8 @@ package com.helltar.vusan.agent.presence
 
 import com.helltar.vusan.agent.grouplog.GroupLogEntry
 import com.helltar.vusan.agent.grouplog.GroupLogRepository
-import com.helltar.vusan.agent.grouplog.renderGroupLog
+import com.helltar.vusan.agent.grouplog.dayEntries
+import com.helltar.vusan.agent.grouplog.renderedDay
 import com.helltar.vusan.agent.neutralizePromptBlocks
 import com.helltar.vusan.common.rethrowIfCancellation
 import com.helltar.vusan.request.ChatRef
@@ -89,7 +90,7 @@ class Diary(
 
         if (repository.has(chat, day) || (attempts[key] ?: 0) >= MAX_ATTEMPTS) return
 
-        val entries = groupLog.readWindow(chat, day.startOfDay(), day.plusDays(1).startOfDay().minusMillis(1), MAX_ROWS)
+        val entries = groupLog.dayEntries(chat, day, zone)
         val written = entries.count { it.kind != GroupLogEntry.BOT_KIND }
 
         // a closed day gains no messages, so one that was too thin is not read again on the next pass
@@ -97,7 +98,7 @@ class Diary(
 
         if (written < MIN_DAY_MESSAGES) return
 
-        val transcript = renderGroupLog(entries, zone, MAX_LINE_CHARS, SOURCE_CHARS).text
+        val transcript = entries.renderedDay(zone).text
         val earlier = repository.since(chat, day.minusDays(KEPT_DAYS)).takeLast(EARLIER_ENTRIES)
         val content = writer.write(day, transcript, earlier) ?: return
 
@@ -115,11 +116,6 @@ class Diary(
         const val MIN_DAY_MESSAGES = 15
 
         const val MAX_ATTEMPTS = 3
-
-        // what one day's transcript may cost the writer's prompt, the same bound a digest has
-        const val MAX_ROWS = 1_500
-        const val MAX_LINE_CHARS = 300
-        const val SOURCE_CHARS = 12_000
 
         // every group turn carries the shown entries, so they are few; the kept ones are what a chat
         // that went quiet for a few days still comes back to
