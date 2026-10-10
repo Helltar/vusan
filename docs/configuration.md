@@ -79,28 +79,32 @@ banned, and startup says so in the log.
 | `openai-compatible` | any model id the server understands |
 | `codex`             | any model the ChatGPT plan offers   |
 
-- **`openai` and `anthropic`** — each talks to its vendor's own API and takes any model id the vendor
+- **`openai`** and **`anthropic`** — each talks to its vendor's own API and takes any model id the vendor
   serves: startup asks the vendor's model list about it, so a typo fails there rather than on the
   first message. Anthropic's list also states the model's window, output ceiling and what it takes,
   and Vusan reads those from there; OpenAI's states nothing, so an OpenAI model is assumed to be what
   the current generation is — a reasoning model that sees images and calls tools.
 - **`openai-compatible`** — any OpenAI-compatible server, remote or local, taking whatever model
-  string it serves. DeepSeek is one (`LLM_BASE_URL=https://api.deepseek.com`), and so is a local
-  llama.cpp or Ollama.
+  string it serves.
 - **`codex`** — a ChatGPT subscription instead of an API key; see
   [ChatGPT subscription](#chatgpt-subscription).
 
 | Variable                      | Default                   | Description                                                                     |
 |-------------------------------|---------------------------|---------------------------------------------------------------------------------|
 | `LLM_BASE_URL`                | —                         | Server address. Required by `openai-compatible`, unused by the others.          |
-| `LLM_COMPATIBLE_API`          | `completions`             | The API an `openai-compatible` server speaks: `completions` or `responses`.     |
+| `LLM_COMPATIBLE_API`          | `completions`             | `completions` or `responses`. Read by `openai-compatible` alone.                |
 | `LLM_REASONING_EFFORT`        | model default             | Reasoning depth: `none`, `minimal`, `low`, `medium`, `high`, `xhigh`, or `max`. |
 | `LLM_REQUEST_TIMEOUT_SECONDS` | `300`                     | Seconds one LLM call may hang before Vusan gives up and replies with an error.  |
 | `LLM_CONTEXT_WINDOW_TOKENS`   | model metadata or `16384` | Context size override.                                                          |
 
-`LLM_COMPATIBLE_API` is for `openai-compatible` alone: it says which of the two OpenAI APIs the
-server behind `LLM_BASE_URL` speaks, since a third-party server may offer either. `openai` and
-`codex` always speak the Responses API, the one where tools work alongside reasoning.
+`LLM_BASE_URL` and `LLM_COMPATIBLE_API` are read by `openai-compatible` alone. Give the address
+without `/v1`: Vusan appends `/v1/chat/completions`, or `/v1/responses` with
+`LLM_COMPATIBLE_API=responses`, so `LLM_BASE_URL=https://api.deepseek.com` is called at
+`https://api.deepseek.com/v1/chat/completions`. The default is the API every compatible server speaks;
+`responses` is OpenAI's newer one, for a server that offers it. `openai` and `codex` read neither:
+they always call OpenAI's own address on the Responses API, the one where tools work alongside
+reasoning.
+
 `LLM_REASONING_EFFORT` applies to every provider. Which efforts work depends on the model: `codex`
 and `anthropic` check yours at startup, and so does `openai-compatible` when its server lists the
 model's efforts, as DeepSeek's does; `openai` checks on the first turn, except that an effort for a
@@ -109,9 +113,8 @@ model that does not reason — the gpt-4 family — stops startup. On
 before Claude 4.6 — one the API serves under a dated id such as `claude-haiku-4-5-20251001` — takes
 no effort at all. Every other Claude model thinks adaptively on every turn here, Opus 4.7 and 4.8
 included, while a dated one runs without thinking; without an effort each runs at its own default, which is `medium` on Opus 5.5 and Haiku 5.5 and
-`high` on the others. Give `LLM_BASE_URL` no `/v1` — the API path is appended for you. Raise the
-timeout for slow local servers and heavy reasoning models: a Fable turn at a high effort can run
-for minutes.
+`high` on the others. Raise the timeout for slow local servers and heavy reasoning models: a Fable
+turn at a high effort can run for minutes.
 
 An `openai-compatible` model's window is read at startup from the server's model list when the list
 states one, as DeepSeek's does; otherwise the bot assumes 16,384 tokens, so set
@@ -124,20 +127,10 @@ interactions into the remainder.
 Third-party servers all take the same shape, with `LLM_PROVIDER=openai-compatible`:
 
 ```dotenv
-# Grok
-LLM_API_KEY=xai-qwerty
-LLM_BASE_URL=https://api.x.ai
-LLM_MODEL=grok-4.3
-
-# llama.cpp — a local server needs no real key, but the value must be non-empty
-LLM_API_KEY=sk-no-key-required
-LLM_BASE_URL=http://localhost:8080
-LLM_MODEL=unsloth/Qwen3.6-27B-GGUF:Q4_K_M
-
-# Ollama — serves an OpenAI-compatible API; the key value is ignored
-LLM_API_KEY=ollama
-LLM_BASE_URL=http://localhost:11434
-LLM_MODEL=gemma4
+# DeepSeek
+LLM_API_KEY=sk-qwerty
+LLM_BASE_URL=https://api.deepseek.com
+LLM_MODEL=deepseek-flash
 ```
 
 ## ChatGPT subscription
@@ -675,7 +668,9 @@ Vusan; everything that calls it outright is answered exactly as before, without 
 
 ```dotenv
 ADDRESSING_ENABLED=true
+ADDRESSING_PROVIDER=openai
 ADDRESSING_MODEL=gpt-6-luna
+ADDRESSING_API_KEY=sk-proj-qwerty
 ADDRESSING_NAMES=robin,robbie
 ```
 
