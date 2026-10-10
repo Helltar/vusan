@@ -122,11 +122,13 @@ class KlipyToolsTest {
     }
 
     @Test
-    fun `a kind the chat does not take is refused before the search`() = runBlocking {
+    // a meme the chat refuses is still an input for another tool, so the search goes ahead and only a send is refused
+    fun `a kind the chat does not take is still searched, and refused only at the send`() = runBlocking {
         val tools = tools(BotOutbox(ChatCapabilities(photos = false)))
 
-        assertContains(toolFailure { tools.searchGifs("slow morning", kind = "meme") }, "does not accept a meme")
-        assertTrue(requests.isEmpty())
+        tools.searchGifs("slow morning", kind = "meme")
+
+        assertTrue(requests.isNotEmpty())
     }
 
     @Test
@@ -135,7 +137,7 @@ class KlipyToolsTest {
 
         val failure = toolFailure { tools(BotOutbox()).searchGifs("sleepy cat") }
 
-        assertContains(failure, "timeout")
+        assertContains(failure, "timed out")
         assertFalse("test-key" in failure, failure)
     }
 

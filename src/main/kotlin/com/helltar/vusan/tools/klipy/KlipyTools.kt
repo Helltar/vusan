@@ -46,8 +46,6 @@ class KlipyTools(
         val wanted = kindOf(kind)
         val words = query.requireToolText("query", MAX_QUERY_CHARS)
 
-        require(wanted.deliverableIn(outbox.capabilities)) { "this chat does not accept a ${wanted.value}, search another kind" }
-
         val found =
             client.search(wanted, words, MAX_CANDIDATES)
                 .mapNotNull { item -> item.mediaUrl(wanted)?.takeIf { item.slug.isNotBlank() }?.let { item to it } }
