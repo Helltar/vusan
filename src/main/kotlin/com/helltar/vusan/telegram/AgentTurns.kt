@@ -3,7 +3,6 @@ package com.helltar.vusan.telegram
 import com.helltar.vusan.agent.AgentRequest
 import com.helltar.vusan.agent.AgentResult
 import com.helltar.vusan.agent.AgentRunner
-import com.helltar.vusan.agent.ChatFloor
 import com.helltar.vusan.llm.FallbackInUse
 import com.helltar.vusan.agent.attachedFileContextBlock
 import com.helltar.vusan.agent.formatAgentInput
@@ -59,7 +58,6 @@ internal class AgentTurns(
     // whether this deployment has a sandbox: the attachment block sends the model there only where it can go
     private val sandbox: Boolean,
     private val fallbackInUse: () -> FallbackInUse? = { null },
-    private val floor: ChatFloor = ChatFloor(),
 ) {
 
     suspend fun dispatchToAgent(
@@ -214,13 +212,6 @@ internal class AgentTurns(
                 if (context.ambient) append(" ambient=[true]")
                 append(" text=[${request.prompt.collapseWhitespaceAndCap(LOG_PROMPT_MAX_CHARS).orEmpty()}]")
             }
-        }
-
-        // the runner turns such a turn away unanswered anyway; asked here first, it does not show a
-        // typing indicator for an answer that is not coming
-        if (floor.isClosed(context)) {
-            log.info { "floor closed: skipping $inputKind, chat=${context.chat.id} user=${context.sender.id}" }
-            return
         }
 
         try {

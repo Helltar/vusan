@@ -332,8 +332,9 @@ not, or after an hour without an answer from it. Both numbers are fixed; they ca
 a live group, where only one exchange in a hundred ran that long.
 
 Nothing else changes: a message Vusan would have answered anyway is just not answered. Scheduled
-tasks still fire, Vusan still speaks up on its own under its own daily budget, slash commands still
-work, and a private chat — with nobody else to read it — is never limited. The owner is not either.
+tasks still fire, Vusan still speaks up on its own under its own daily budget, slash commands and the
+buttons of a question it asked still work, and a private chat — with nobody else to read it — is
+never limited. The owner is not either.
 
 ## Personality
 

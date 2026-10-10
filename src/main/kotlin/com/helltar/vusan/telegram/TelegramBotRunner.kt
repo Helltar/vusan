@@ -103,7 +103,7 @@ internal class TelegramBotRunner(
     private val spool = UpdateSpool(SPOOL_RETENTION)
 
     private val turns =
-        AgentTurns(client, agent, delivery, inlineChoices, chatProfiles, voiceTranscriber, sandbox, fallbackInUse, floor)
+        AgentTurns(client, agent, delivery, inlineChoices, chatProfiles, voiceTranscriber, sandbox, fallbackInUse)
 
     private val turnStop = TurnStopHandler(client, agent)
     private val callbacks = CallbackRouter(client, taskMenu, inlineChoices, turnStop, turns, accessPolicy)
@@ -271,11 +271,14 @@ internal class TelegramBotRunner(
 
             val message = update.message ?: continue
 
+            // ahead of the allowlist: in a group the bot answers only some people in, the others' lines are
+            // still what shows the chat is awake
+            message.reportToFloor()
+
             if (!message.passesAllowlist(profile)) continue
 
             recordGroupLog(message)
             learnSticker(message)
-            message.reportToFloor()
 
             // whatever else one person sends comes after the lines of theirs still waiting
             val linesKey = message.linesKeyOrNull()
@@ -345,9 +348,10 @@ internal class TelegramBotRunner(
         }
     }
 
-    // every person's line in a group, to the bot or not: a line from anybody but the one the bot has been
-    // answering hands the floor back to the chat. the shared accounts — an anonymous admin, a linked
-    // channel, another bot — are not a person who woke up, so they hand nothing back.
+    // every person's line in a group, to the bot or not and allowed or not: a line from anybody but the one
+    // the bot has been answering hands the floor back to the chat. the shared accounts — an anonymous admin,
+    // a linked channel, another bot — are not a person who woke up, so they hand nothing back. a chat with
+    // no stretch in it costs one map lookup.
     private fun Message.reportToFloor() {
         if (isPrivateChat || senderChat != null) return
         val sender = from?.takeUnless { it.isBot } ?: return
@@ -493,7 +497,7 @@ internal class TelegramBotRunner(
         botProfile: BotProfile,
         inputKind: String,
     ) {
-        if (!message.isAccepted(botProfile)) return
+        if (!message.isAcceptedForTurn(botProfile)) return
 
         val caption =
             message.messageTextOrNull()
@@ -563,7 +567,7 @@ internal class TelegramBotRunner(
 
     // a rich message has no `text`, so the agent gets its flattened markdown instead.
     private suspend fun handleRichMessageUpdate(message: Message, botProfile: BotProfile) {
-        if (!message.isAccepted(botProfile)) return
+        if (!message.isAcceptedForTurn(botProfile)) return
 
         val markdown = message.richMessage.toRichMarkdown().limitTo(MAX_RICH_MESSAGE_CHARS)
         if (markdown.isBlank()) return
@@ -577,7 +581,7 @@ internal class TelegramBotRunner(
     }
 
     private suspend fun handleStickerUpdate(message: Message, botProfile: BotProfile) {
-        if (!message.isAccepted(botProfile)) return
+        if (!message.isAcceptedForTurn(botProfile)) return
         val prompt = describeIncomingSticker(message.sticker)
         turns.dispatchToAgent(message, prompt, botProfile, inputKind = "sticker", loadRepliedAttachment = false)
     }
@@ -654,6 +658,11 @@ internal class TelegramBotRunner(
     private fun Message.isAccepted(botProfile: BotProfile, captionSource: Message = this): Boolean =
         shouldHandle(this, botProfile.userId, botProfile.username, captionSource) && claimForTurn()
 
+    // the same gate for a message that becomes an agent turn rather than a command: a person the floor has
+    // closed on gets silence, and nothing is transcribed or downloaded for an answer that is not coming
+    private fun Message.isAcceptedForTurn(botProfile: BotProfile): Boolean =
+        shouldHandle(this, botProfile.userId, botProfile.username) && !isFloorClosed() && claimForTurn()
+
     // the same gate for the paths a message nobody tagged the bot in may take too. `null` means the bot stays
     // out. ambient addressing is asked only once everything that calls the bot outright has said no, so it
     // can add answers but never take one away, and nothing it costs falls on a message the bot answers today.
@@ -665,7 +674,7 @@ internal class TelegramBotRunner(
                 else -> return null
             }
 
-        return acceptance.takeIf { claimForTurn() }
+        return acceptance.takeIf { !isFloorClosed() && claimForTurn() }
     }
 
     private suspend fun Message.isAmbientlyAddressed(captionSource: Message): Boolean {
@@ -678,6 +687,18 @@ internal class TelegramBotRunner(
         val candidate = ambientCandidateOrNull(captionSource, authorWaiting = waiting) ?: return false
 
         return addressing.isAddressed(candidate)
+    }
+
+    // asked once a message is the bot's to answer, before it is claimed: the runner would turn such a turn
+    // away unanswered anyway, and asked here nothing is transcribed or downloaded for it and no typing
+    // indicator opens. the sender is the one the turn would be keyed on.
+    private fun Message.isFloorClosed(): Boolean {
+        val sender = senderIdOrNull() ?: return false
+        val closed = floor.isClosed(telegramChat(chatIdLong), forumTopicIdOrNull?.toString(), telegramUser(sender))
+
+        if (closed) log.info { "floor closed: left unanswered, chat=$chatIdLong user=$sender msg=$messageIdLong" }
+
+        return closed
     }
 
     private fun Message.claimForTurn(): Boolean {

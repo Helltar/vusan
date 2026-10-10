@@ -69,11 +69,25 @@ class ChatFloor(
         return verdict
     }
 
-    /** Whether [admit] would turn this turn away, without counting anything. */
-    fun isClosed(context: RequestContext): Boolean =
-        isClosed(context.chatRef, context.chat.threadId, context.user)
+    /**
+     * A turn [admit] counted ended without an answer — turned away, silent, failed or stopped — so it is
+     * not one of the stretch's answers. Were it the last, the next message is the last answer instead, so
+     * the stretch never closes without the model having rounded it off.
+     */
+    fun unanswered(context: RequestContext) {
+        if (context.chat.isPrivate || exempt(context.user)) return
 
-    /** The same, for an adapter asking ahead of building the turn. A private chat never holds a stretch. */
+        // the time of the bot's last line stays: a turn's place is given back, the hour is not wound back
+        stretches.computeIfPresent(context.floor) { _, stretch ->
+            if (stretch.holder != context.user) stretch
+            else stretch.copy(answered = stretch.answered - 1).takeIf { it.answered > 0 }
+        }
+    }
+
+    /**
+     * Whether [admit] would turn this person's turn away, without counting anything: for an adapter asking
+     * before it pays for the turn. A private chat never holds a stretch.
+     */
     fun isClosed(chat: ChatRef, threadId: String?, user: UserRef): Boolean {
         if (exempt(user)) return false
 

@@ -88,14 +88,24 @@ class AgentRunner(
             return AgentResult(outputs = emptyList(), comment = null)
         }
 
+        // counted ahead of the line as well, so a turn that ends without answering — turned away, silent,
+        // failed or stopped — gives its count back, and a stretch never closes on a last answer nobody got
+        var answered = false
+
         // tracked from the line on, so a stop takes the person's waiting messages along with the one
         // that is running instead of letting the next of them start.
         val result =
-            running.track(key) {
-                conversationLocks.withLockIfRoom(key) {
-                    admission.admit { runAgent(request, onToolStarting, narrator, lastAnswerOfStretch) }
-                        ?: refusal(messages.overloadedReply)
+            try {
+                running.track(key) {
+                    conversationLocks.withLockIfRoom(key) {
+                        admission.admit {
+                            runAgent(request, onToolStarting, narrator, lastAnswerOfStretch)
+                                .also { answered = it.answeredInChat }
+                        } ?: refusal(messages.overloadedReply)
+                    }
                 }
+            } finally {
+                if (!answered) floor.unanswered(request.context)
             }
 
         return result ?: refusal(messages.busyReply)
@@ -388,6 +398,11 @@ class AgentRunner(
         const val MAX_QUEUED_TURNS_PER_CONVERSATION = 3
     }
 }
+
+// whether a turn gave the person a line of its own in the chat: a reaction adds none, and the canned reply of
+// a failed run is no answer
+private val AgentResult.answeredInChat: Boolean
+    get() = !failed && (!comment.isNullOrBlank() || outputs.any { it.output !is BotOutput.Reaction })
 
 private fun tokenUsageLogSummary(usages: List<TokenUsage>): String {
 

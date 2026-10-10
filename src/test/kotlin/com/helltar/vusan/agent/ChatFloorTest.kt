@@ -114,6 +114,27 @@ class ChatFloorTest {
     }
 
     @Test
+    fun `a last answer that never reached the person passes to the next message`() {
+        repeat(ChatFloor.ANSWERS_PER_STRETCH - 1) { floor.admit(talker) }
+        assertEquals(Verdict.LAST_ANSWER, floor.admit(talker))
+
+        floor.unanswered(talker)
+
+        assertFalse(floor.isClosed(talker))
+        assertEquals(Verdict.LAST_ANSWER, floor.admit(talker))
+        assertEquals(Verdict.CLOSED, floor.admit(talker))
+    }
+
+    @Test
+    fun `an unanswered turn gives back only its own sender's count`() {
+        repeat(ChatFloor.ANSWERS_PER_STRETCH - 1) { floor.admit(talker) }
+
+        floor.unanswered(other)
+
+        assertEquals(Verdict.LAST_ANSWER, floor.admit(talker))
+    }
+
+    @Test
     fun `asking whether the floor is closed counts nothing`() {
         repeat(ChatFloor.ANSWERS_PER_STRETCH - 1) { floor.admit(talker) }
 
@@ -121,6 +142,9 @@ class ChatFloorTest {
 
         assertEquals(Verdict.LAST_ANSWER, floor.admit(talker))
     }
+
+    private fun ChatFloor.isClosed(context: RequestContext): Boolean =
+        isClosed(context.chatRef, context.chat.threadId, context.user)
 
     private fun exhaust(context: RequestContext) {
         repeat(ChatFloor.ANSWERS_PER_STRETCH) { floor.admit(context) }
