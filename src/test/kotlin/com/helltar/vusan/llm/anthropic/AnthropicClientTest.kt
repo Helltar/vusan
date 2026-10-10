@@ -28,7 +28,6 @@ import kotlin.test.assertNull
 import kotlin.test.assertTrue
 
 private val MODEL = LlmModel("claude-opus-5-5", contextWindowTokens = 1_000_000, maxOutputTokens = 128_000)
-private val DATED_MODEL = LlmModel("claude-haiku-4-5-20251001", contextWindowTokens = 200_000, maxOutputTokens = 64_000, takesEffort = false)
 
 private val TOOL =
     ToolDefinition("lookUp", "Looks something up.", Json.parseToJsonElement("""{"type":"object","properties":{"query":{"type":"string"}},"required":["query"]}""").jsonObject)
@@ -108,17 +107,10 @@ class AnthropicClientTest {
         assertNull(body.getValue("system").jsonArray.single().jsonObject["cache_control"])
     }
 
-    // the api refuses `adaptive` and `effort` on every model it still serves under a dated snapshot id
     @Test
-    fun `a model from before adaptive thinking is sent neither thinking nor effort`() = runBlocking {
-        client().complete(DATED_MODEL, request(*basic))
-
-        assertNull(sent.single()["thinking"])
-        assertNull(sent.single()["output_config"])
-        assertEquals(64_000, sent.single().getValue("max_tokens").jsonPrimitive.content.toInt())
-
-        assertFailsWith<IllegalArgumentException> { client().complete(DATED_MODEL, request(*basic, options = RequestOptions(reasoningEffort = ReasoningEffort.LOW))) }
+    fun `an effort anthropic does not take is refused before the request`() = runBlocking {
         assertFailsWith<IllegalArgumentException> { client().complete(MODEL, request(*basic, options = RequestOptions(reasoningEffort = ReasoningEffort.NONE))) }
+        assertTrue(sent.isEmpty())
     }
 
     @Test

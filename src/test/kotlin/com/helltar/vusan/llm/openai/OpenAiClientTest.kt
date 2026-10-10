@@ -240,14 +240,6 @@ class OpenAiClientTest {
     }
 
     @Test
-    fun `a model that does not reason is not asked for encrypted reasoning`() = runBlocking {
-        client().complete(MODEL.copy(id = "gpt-4.1", takesEffort = false), request(*basic))
-
-        assertEquals(false, sent.single().getValue("store").jsonPrimitive.content.toBoolean())
-        assertFalse("include" in sent.single())
-    }
-
-    @Test
     fun `an image travels as a data url`() = runBlocking {
         client().complete(MODEL, request(Message.User(listOf(Part.Text("what is this"), Part.Image(byteArrayOf(1, 2, 3), "image/png", "a.png")))))
 

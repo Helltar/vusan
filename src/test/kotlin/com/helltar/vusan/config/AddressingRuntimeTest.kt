@@ -54,10 +54,6 @@ class AddressingRuntimeTest {
     fun `an openai model is asked whether it takes none, and gets low when it refuses`() {
         assertEquals(ReasoningEffort.NONE, effortOf(openAi("gpt-6-luna"), refusingNone = setOf("gpt-6.1-sol")))
         assertEquals(ReasoningEffort.LOW, effortOf(openAi("gpt-6.1-sol"), refusingNone = setOf("gpt-6.1-sol")))
-
-        asked.clear()
-        assertNull(effortOf(openAi("gpt-4.1-mini")), "a model that does not reason is sent no effort")
-        assertTrue(asked.isEmpty(), "and is not asked")
     }
 
     // what a vendor listed at startup — anthropic's model list, the plan's catalog, deepseek's list — is
@@ -67,7 +63,6 @@ class AddressingRuntimeTest {
         val listed = setOf(ReasoningEffort.LOW, ReasoningEffort.MEDIUM, ReasoningEffort.HIGH)
 
         assertEquals(ReasoningEffort.LOW, effortOf(anthropic("claude-haiku-5-5").copy(efforts = listed)))
-        assertNull(effortOf(anthropic("claude-haiku-4-5-20251001")), "a dated claude model takes no effort")
         assertTrue(asked.isEmpty(), "a listed floor is not asked about")
 
         val compatible =

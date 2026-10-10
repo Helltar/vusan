@@ -70,8 +70,8 @@ class LlmRuntimeTest {
     private fun openAi(model: String = "gpt-5.6-sol", effort: ReasoningEffort? = null, window: Long? = null) =
         LlmProviderConfig.OpenAi(apiKey = "key", model = model, reasoningEffort = effort, requestTimeout = TIMEOUT, contextWindowTokens = window)
 
-    private fun anthropic(model: String = "claude-opus-5-5", effort: ReasoningEffort? = null, window: Long? = null, takesEffort: Boolean? = null) =
-        LlmProviderConfig.Anthropic(apiKey = "key", model = model, reasoningEffort = effort, requestTimeout = TIMEOUT, contextWindowTokens = window, takesEffort = takesEffort)
+    private fun anthropic(model: String = "claude-opus-5-5", effort: ReasoningEffort? = null, window: Long? = null) =
+        LlmProviderConfig.Anthropic(apiKey = "key", model = model, reasoningEffort = effort, requestTimeout = TIMEOUT, contextWindowTokens = window)
 
     private fun compatible(baseUrl: String = "https://example.test", endpoint: OpenAiEndpoint = OpenAiEndpoint.COMPLETIONS, effort: ReasoningEffort? = null, window: Long? = null) =
         LlmProviderConfig.OpenAiCompatible(baseUrl = baseUrl, apiKey = "key", model = "deepseek-chat", endpoint = endpoint, reasoningEffort = effort, requestTimeout = TIMEOUT, contextWindowTokens = window)
@@ -122,14 +122,6 @@ class LlmRuntimeTest {
         assertEquals(32_768, resolveLlmRuntime(compatible(window = 32_768)).model.contextWindowTokens)
     }
 
-    // the gpt-4 family does not reason: it is asked for no encrypted reasoning, and an effort for it is a mistake
-    @Test
-    fun `an openai model that does not reason takes no effort`() {
-        assertFalse(resolveLlmRuntime(openAi(model = "gpt-4.1-mini")).model.takesEffort)
-        assertTrue(resolveLlmRuntime(openAi(model = "gpt-5.6-sol")).model.takesEffort)
-        assertFailsWith<IllegalArgumentException> { resolveLlmRuntime(openAi(model = "gpt-4.1", effort = ReasoningEffort.LOW)) }
-    }
-
     @Test
     fun `each conversation gets a prompt cache key of its own`() {
         val base = resolveLlmRuntime(openAi()).chatOptions
@@ -152,7 +144,6 @@ class LlmRuntimeTest {
         assertEquals("Anthropic", runtime.providerLabel)
         assertEquals(1_000_000, runtime.model.contextWindowTokens)
         assertEquals(128_000, runtime.model.maxOutputTokens)
-        assertTrue(runtime.model.takesEffort)
         assertNull(runtime.chatOptions.promptCacheKey)
 
         runtime.client.complete(runtime.model, request(runtime.chatOptions))
@@ -173,36 +164,17 @@ class LlmRuntimeTest {
         assertEquals("high", sent.single().body.getValue("output_config").jsonObject.getValue("effort").jsonPrimitive.content)
     }
 
-    // the api refuses `adaptive` and `effort` on every model it still serves under a dated snapshot id
-    @Test
-    fun `a claude model under a dated id takes neither thinking nor an effort`() = runBlocking {
-        assertFalse(anthropicTakesEffort("claude-haiku-4-5-20251001"))
-        assertFalse(anthropicTakesEffort("claude-sonnet-4-5-20250929"))
-        assertTrue(anthropicTakesEffort("claude-opus-4-7"))
-        assertTrue(anthropicTakesEffort("claude-haiku-5-5"))
-
-        val runtime = resolveLlmRuntime(anthropic(model = "claude-haiku-4-5-20251001"), http = http(messageEventStream(ANTHROPIC_REPLY), contentType = "text/event-stream"))
-        assertFalse(runtime.model.takesEffort)
-
-        runtime.client.complete(runtime.model, request(runtime.chatOptions))
-        assertNull(sent.single().body["thinking"])
-
-        assertFailsWith<IllegalArgumentException> { resolveLlmRuntime(anthropic(model = "claude-haiku-4-5-20251001", effort = ReasoningEffort.HIGH)) }
-    }
-
     @Test
     fun `what the vendor's list said about a model wins over the assumption`() {
-        val runtime = resolveLlmRuntime(anthropic(model = "claude-haiku-4-5-20251001", takesEffort = true, window = 200_000).copy(maxOutputTokens = 64_000))
+        val runtime = resolveLlmRuntime(anthropic(window = 200_000).copy(maxOutputTokens = 64_000))
 
-        assertTrue(runtime.model.takesEffort)
+        assertEquals(200_000, runtime.model.contextWindowTokens)
         assertEquals(64_000, runtime.model.maxOutputTokens)
     }
 
     @Test
     fun `an effort anthropic does not take fails at startup rather than on the first turn`() {
-        for (effort in listOf(ReasoningEffort.NONE, ReasoningEffort.MINIMAL)) {
-            assertFailsWith<IllegalArgumentException>(effort.name) { resolveLlmRuntime(anthropic(effort = effort)) }
-        }
+        assertFailsWith<IllegalArgumentException> { resolveLlmRuntime(anthropic(effort = ReasoningEffort.NONE)) }
     }
 
     // --- openai-compatible ---

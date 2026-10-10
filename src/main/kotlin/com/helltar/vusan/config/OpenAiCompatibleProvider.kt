@@ -22,8 +22,7 @@ private val log = KotlinLogging.logger("ModelPreflight")
  * off: third-party models garble the sibling calls of a batch, and the agent executes tool calls
  * sequentially anyway. The cache key is an OpenAI extension, so it travels only to OpenAI itself and not
  * to a server that may reject unknown fields; the same goes for `store` and the encrypted reasoning the
- * Responses API hands back on request. A model here sees only when its server's list said so, and
- * reasons unless the server is the platform itself and the id says otherwise.
+ * Responses API hands back on request. A model here sees only when its server's list said so.
  */
 internal fun compatibleRuntime(config: LlmProviderConfig.OpenAiCompatible, http: HttpClient?): LlmRuntime {
     val baseUrl = config.baseUrl.trim().trimEnd('/')
@@ -34,8 +33,6 @@ internal fun compatibleRuntime(config: LlmProviderConfig.OpenAiCompatible, http:
             id = config.model.trim(),
             contextWindowTokens = config.contextWindowTokens ?: LlmProviderConfig.DEFAULT_CONTEXT_WINDOW_TOKENS,
             seesImages = config.seesImages == true,
-            // only the platform itself is known to refuse reasoning fields to a model that does not reason
-            takesEffort = !official || openAiReasons(config.model.trim()),
             efforts = config.efforts,
         )
 

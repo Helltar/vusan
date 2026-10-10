@@ -84,8 +84,8 @@ sealed interface LlmProviderConfig {
     }
 
     /**
-     * [maxOutputTokens] and [takesEffort] are what the vendor's model list said at startup, when it
-     * answered; a configuration built without asking leaves them to the runtime's defaults.
+     * [maxOutputTokens] is what the vendor's model list said at startup, when it answered; a
+     * configuration built without asking leaves it to the runtime's default.
      */
     data class Anthropic(
         val apiKey: String,
@@ -94,7 +94,6 @@ sealed interface LlmProviderConfig {
         override val requestTimeout: Duration,
         override val contextWindowTokens: Long? = null,
         val maxOutputTokens: Int? = null,
-        val takesEffort: Boolean? = null,
         override val seesImages: Boolean? = null,
         override val efforts: Set<ReasoningEffort>? = null,
         override val envPrefix: String = DEFAULT_ENV_PREFIX,
@@ -112,7 +111,6 @@ sealed interface LlmProviderConfig {
                 reasoningEffort = reasoningEffort,
                 contextWindowTokens = contextWindowTokens,
                 maxOutputTokens = null,
-                takesEffort = null,
                 seesImages = null,
                 efforts = null,
                 envPrefix = envPrefix,

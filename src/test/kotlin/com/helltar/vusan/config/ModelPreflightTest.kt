@@ -73,7 +73,6 @@ class ModelPreflightTest {
         val checked = config.preflighted(http(HttpStatusCode.ServiceUnavailable), codexAuth = null)
 
         assertEquals(config, checked)
-        assertNull(assertIs<LlmProviderConfig.Anthropic>(checked).takesEffort)
     }
 
     @Test
@@ -86,9 +85,8 @@ class ModelPreflightTest {
         assertEquals("key", authorization?.get("x-api-key"))
         assertEquals(1_000_000, checked.contextWindowTokens)
         assertEquals(128_000, checked.maxOutputTokens)
-        assertEquals(true, checked.takesEffort)
         assertEquals(true, checked.seesImages)
-        assertEquals(ReasoningEffort.entries.toSet() - ReasoningEffort.NONE - ReasoningEffort.MINIMAL, checked.efforts)
+        assertEquals(ReasoningEffort.entries.toSet() - ReasoningEffort.NONE, checked.efforts)
     }
 
     @Test
@@ -101,18 +99,12 @@ class ModelPreflightTest {
     }
 
     @Test
-    fun `a model that takes no effort is marked so, and a configured effort for it stops the startup`() = runBlocking {
-        val plain = LlmProviderConfig.Anthropic(apiKey = "key", model = "claude-haiku-4-5-20251001", requestTimeout = timeout)
-        val checked = assertIs<LlmProviderConfig.Anthropic>(plain.preflighted(http(HttpStatusCode.OK, ANTHROPIC_OLD_MODEL), codexAuth = null))
+    fun `a claude model without adaptive thinking stops the startup`() = runBlocking {
+        val config = LlmProviderConfig.Anthropic(apiKey = "key", model = "claude-haiku-4-5-20251001", requestTimeout = timeout)
 
-        assertEquals(false, checked.takesEffort)
-        assertEquals(64_000, checked.maxOutputTokens)
-        assertEquals(emptySet(), checked.efforts)
-        assertNull(checked.seesImages, "a list that says nothing about images leaves the question open")
+        val failure = assertFailsWith<IllegalStateException> { config.preflighted(http(HttpStatusCode.OK, ANTHROPIC_OLD_MODEL), codexAuth = null) }
 
-        val withEffort = plain.copy(reasoningEffort = ReasoningEffort.LOW)
-        val failure = assertFailsWith<IllegalStateException> { withEffort.preflighted(http(HttpStatusCode.OK, ANTHROPIC_OLD_MODEL), codexAuth = null) }
-        assertContains(failure.message.orEmpty(), "low")
+        assertContains(failure.message.orEmpty(), "LLM_MODEL=[claude-haiku-4-5-20251001]")
     }
 
     private fun compatible(model: String, effort: ReasoningEffort? = null, window: Long? = null) =

@@ -93,7 +93,7 @@ banned, and startup says so in the log.
 |-------------------------------|---------------------------|---------------------------------------------------------------------------------|
 | `LLM_BASE_URL`                | —                         | Server address. Required by `openai-compatible`, unused by the others.          |
 | `LLM_COMPATIBLE_API`          | `completions`             | `completions` or `responses`. Read by `openai-compatible` alone.                |
-| `LLM_REASONING_EFFORT`        | model default             | Reasoning depth: `none`, `minimal`, `low`, `medium`, `high`, `xhigh`, or `max`. |
+| `LLM_REASONING_EFFORT`        | model default             | Reasoning depth: `none`, `low`, `medium`, `high`, `xhigh`, or `max`.            |
 | `LLM_REQUEST_TIMEOUT_SECONDS` | `300`                     | Seconds one LLM call may hang before Vusan gives up and replies with an error.  |
 | `LLM_CONTEXT_WINDOW_TOKENS`   | model metadata or `16384` | Context size override.                                                          |
 
@@ -107,13 +107,11 @@ reasoning.
 
 `LLM_REASONING_EFFORT` applies to every provider. Which efforts work depends on the model: `codex`
 and `anthropic` check yours at startup, and so does `openai-compatible` when its server lists the
-model's efforts, as DeepSeek's does; `openai` checks on the first turn, except that an effort for a
-model that does not reason — the gpt-4 family — stops startup. On
-`anthropic` the values are `low` to `max` (`none` and `minimal` stop startup), and a model from
-before Claude 4.6 — one the API serves under a dated id such as `claude-haiku-4-5-20251001` — takes
-no effort at all. Every other Claude model thinks adaptively on every turn here, Opus 4.7 and 4.8
-included, while a dated one runs without thinking; without an effort each runs at its own default, which is `medium` on Opus 5.5 and Haiku 5.5 and
-`high` on the others. Raise the timeout for slow local servers and heavy reasoning models: a Fable
+model's efforts, as DeepSeek's does; `openai` checks on the first turn. On `anthropic` the values are
+`low` to `max`, and `none` stops startup. Vusan needs a Claude model from 4.6 on, which thinks
+adaptively on every turn here; an older one, such as `claude-haiku-4-5-20251001`, stops startup.
+Without an effort a Claude model runs at its own default, which is `medium` on Opus 5.5 and Haiku 5.5
+and `high` on the others. Raise the timeout for slow local servers and heavy reasoning models: a Fable
 turn at a high effort can run for minutes.
 
 An `openai-compatible` model's window is read at startup from the server's model list when the list

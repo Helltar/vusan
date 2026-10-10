@@ -10,7 +10,6 @@ import kotlinx.serialization.json.JsonObject
  */
 enum class ReasoningEffort {
     NONE,
-    MINIMAL,
     LOW,
     MEDIUM,
     HIGH,

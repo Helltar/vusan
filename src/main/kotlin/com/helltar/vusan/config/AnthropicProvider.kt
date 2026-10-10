@@ -23,29 +23,23 @@ private const val ANTHROPIC_CONTEXT_WINDOW = 1_000_000L
 private const val ANTHROPIC_MAX_OUTPUT = 128_000
 
 /**
- * Anthropic's Messages API. What the model takes — adaptive thinking, an effort — is what its model list
- * said at startup, and the dated-id rule in [anthropicTakesEffort] when the list could not be asked.
+ * Anthropic's Messages API, on a model that thinks adaptively and takes an effort: every Claude model
+ * from 4.6 on. Which efforts it takes is what its model list said at startup.
  */
 internal fun anthropicRuntime(config: LlmProviderConfig.Anthropic, http: HttpClient?): LlmRuntime {
-    val id = config.model.trim()
-    val takesEffort = config.takesEffort ?: anthropicTakesEffort(id)
     val effort = config.reasoningEffort
 
     require(effort == null || effort in ANTHROPIC_EFFORTS) {
         "${config.envPrefix}_REASONING_EFFORT=[${effort?.requestValue}] is not an effort Anthropic takes. Supported values: " +
                 ANTHROPIC_EFFORTS.joinToString { it.requestValue }
     }
-    require(effort == null || takesEffort) {
-        "${config.envPrefix}_REASONING_EFFORT does not apply to $id: a Claude model from before adaptive thinking takes no effort"
-    }
 
     val model =
         LlmModel(
-            id = id,
+            id = config.model.trim(),
             contextWindowTokens = config.contextWindowTokens ?: ANTHROPIC_CONTEXT_WINDOW,
             maxOutputTokens = config.maxOutputTokens ?: ANTHROPIC_MAX_OUTPUT,
             seesImages = config.seesImages ?: true,
-            takesEffort = takesEffort,
             efforts = config.efforts,
         )
 
@@ -60,7 +54,8 @@ internal fun anthropicRuntime(config: LlmProviderConfig.Anthropic, http: HttpCli
 /**
  * Anthropic's model list states the window, the output ceiling and what the model takes — adaptive
  * thinking, which efforts, whether it sees — and those replace what the runtime would otherwise assume.
- * A configured effort the list does not offer stops the startup here rather than on the first turn.
+ * A model without adaptive thinking, and a configured effort the list does not offer, stop the startup
+ * here rather than failing every turn.
  */
 internal suspend fun anthropicPreflight(http: HttpClient, config: LlmProviderConfig.Anthropic): LlmProviderConfig.Anthropic {
     val facts =
@@ -74,13 +69,16 @@ internal suspend fun anthropicPreflight(http: HttpClient, config: LlmProviderCon
     val effort = capabilities?.get("effort") as? JsonObject
 
     val adaptive = (thinking?.get("adaptive") as? JsonObject)?.supported
-    val takesEffort = effort?.supported?.let { it && adaptive != false }
     val efforts = effort?.let { listed -> ReasoningEffort.entries.filter { (listed[it.requestValue] as? JsonObject)?.supported == true }.toSet() }
+
+    check(adaptive != false && effort?.supported != false) {
+        "${config.envPrefix}_MODEL=[${config.model}] does not think adaptively or take an effort; Vusan needs a Claude model from 4.6 on"
+    }
 
     config.reasoningEffort?.let { configured ->
         val offered = (effort?.get(configured.requestValue) as? JsonObject)?.supported
 
-        check(offered != false && takesEffort != false) {
+        check(offered != false) {
             "${config.envPrefix}_REASONING_EFFORT=[${configured.requestValue}] is not an effort ${config.model} takes. " +
                     "Supported values: ${efforts.orEmpty().joinToString { it.requestValue }.ifEmpty { "none" }}"
         }
@@ -89,7 +87,6 @@ internal suspend fun anthropicPreflight(http: HttpClient, config: LlmProviderCon
     return config.copy(
         contextWindowTokens = config.contextWindowTokens ?: (facts["max_input_tokens"] as? JsonPrimitive)?.longOrNull,
         maxOutputTokens = (facts["max_tokens"] as? JsonPrimitive)?.intOrNull,
-        takesEffort = takesEffort,
         seesImages = (capabilities?.get("image_input") as? JsonObject)?.supported,
         efforts = efforts,
     )
@@ -97,14 +94,3 @@ internal suspend fun anthropicPreflight(http: HttpClient, config: LlmProviderCon
 
 private val JsonObject.supported: Boolean?
     get() = (this["supported"] as? JsonPrimitive)?.booleanOrNull
-
-/**
- * Whether a Claude model thinks adaptively and takes an effort, when the vendor's list was not asked.
- *
- * Both arrived with Claude 4.6, the release that also stopped dating model ids: every model the API still
- * serves under a dated snapshot id (`claude-haiku-4-5-20251001`) refuses `adaptive` and `effort` with a
- * 400, and every undated one takes both (checked against `GET /v1/models` on 2026-10-08).
- */
-internal fun anthropicTakesEffort(modelId: String): Boolean = !DATED_ANTHROPIC_MODEL_ID.containsMatchIn(modelId)
-
-private val DATED_ANTHROPIC_MODEL_ID = Regex("""-\d{8}$""")

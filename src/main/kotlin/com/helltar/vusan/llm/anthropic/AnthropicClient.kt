@@ -71,7 +71,6 @@ class AnthropicClient(
         val effort = options.reasoningEffort
 
         require(effort == null || effort in ANTHROPIC_EFFORTS) { "Anthropic takes no effort of ${effort?.requestValue}" }
-        require(effort == null || model.takesEffort) { "${model.id} takes no effort" }
 
         val system = request.messages.filterIsInstance<Message.System>()
         val conversation = request.messages.filterNot { it is Message.System }
@@ -113,14 +112,12 @@ class AnthropicClient(
                 if (!request.mayCallTools) putJsonObject("tool_choice") { put("type", "none") }
             }
 
-            if (model.takesEffort) {
-                putJsonObject("thinking") {
-                    put("type", "adaptive")
-                    putJsonObject("block_binding") { put("prefix_mismatch_behavior", "drop_block") }
-                }
-
-                effort?.let { putJsonObject("output_config") { put("effort", it.requestValue) } }
+            putJsonObject("thinking") {
+                put("type", "adaptive")
+                putJsonObject("block_binding") { put("prefix_mismatch_behavior", "drop_block") }
             }
+
+            effort?.let { putJsonObject("output_config") { put("effort", it.requestValue) } }
 
             if (options.cachePrompt) put("cache_control", EPHEMERAL)
         }

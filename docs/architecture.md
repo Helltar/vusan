@@ -673,7 +673,7 @@ A normal user message travels:
   reads the tool results the one before it added, plus an explicit breakpoint on the stable system block, which the next
   turn still reads however its history was replayed; a prompt that never repeats, the recap, asks for no caching at all.
   Reasoning comes back encrypted (`store: false`) and is replayed verbatim through the tool
-  loop; a model that does not reason — the gpt-4 family, read off the id — is asked for none and takes no effort. `anthropic` asks for `thinking: adaptive` with `block_binding: drop_block` under its beta header — a thinking
+  loop. `anthropic` asks for `thinking: adaptive` with `block_binding: drop_block` under its beta header — a thinking
   block is bound to the tools and messages before it, and `loadTools` widens the tool list mid-turn, so an
   account the API holds to that check gets the stale block dropped rather than a 400 — sends the configured
   `output_config.effort`, the model's whole output ceiling as `max_tokens`, and two cache breakpoints: the request-level
@@ -682,7 +682,7 @@ A normal user message travels:
   outlives the quiet stretches between a chat's messages. Every call is streamed and folded back into one message
   (`llm/anthropic/AnthropicStream`), as the vendor's SDKs do at a ceiling this size, so a stall trips the socket
   timeout where a connection idling through a long think would be dropped at the API's edge. A Claude model from
-  before 4.6, which the API serves under a dated id, gets neither thinking nor an effort. `openai-compatible` speaks
+  before 4.6, which takes neither adaptive thinking nor an effort, stops startup. `openai-compatible` speaks
   either OpenAI API under `LLM_BASE_URL` (`LLM_COMPATIBLE_API`), sees images only when the server's model list says
   the model takes them (with its window and its efforts, DeepSeek's states all three), disables parallel tool calls
   because third-party models garble the siblings, and gets none of the OpenAI-only fields unless the base URL is the

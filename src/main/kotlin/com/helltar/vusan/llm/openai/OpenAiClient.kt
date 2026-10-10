@@ -132,10 +132,9 @@ class OpenAiClient(
                 options.promptCacheKey?.let { put("prompt_cache_key", it) }
                 options.maxOutputTokens?.let { put("max_output_tokens", it) }
 
-                // a model that does not reason refuses the encrypted reasoning it would never write
                 if (statelessReasoning) {
                     put("store", false)
-                    if (model.takesEffort) putJsonArray("include") { add("reasoning.encrypted_content") }
+                    putJsonArray("include") { add("reasoning.encrypted_content") }
                 }
 
                 if (streamed) put("stream", true)

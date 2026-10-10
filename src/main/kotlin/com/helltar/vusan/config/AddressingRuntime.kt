@@ -56,13 +56,9 @@ suspend fun resolveAddressingRuntime(config: AddressingConfig, codexAuth: CodexA
 
 // the least the model takes: the least its vendor listed at startup — the plan's catalog, anthropic's and
 // deepseek's model lists all state them — and where nobody listed any, what the model itself says when
-// asked once. a model that takes no effort at all is sent none.
+// asked once. a list with nothing to choose from leaves the effort out.
 private suspend fun LlmRuntime.leastEffort(options: RequestOptions): ReasoningEffort? =
-    when {
-        !model.takesEffort -> null
-        model.efforts != null -> model.efforts.minOrNull()
-        else -> probeLeastEffort(options)
-    }
+    if (model.efforts != null) model.efforts.minOrNull() else probeLeastEffort(options)
 
 /**
  * The least of `none` and `low` the model takes, found by asking it once at startup.
