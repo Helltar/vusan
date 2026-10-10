@@ -102,9 +102,6 @@ class AgentRunner(
     fun stop(scope: ConversationScope): Boolean =
         running.cancel(scope)
 
-    suspend fun handleScheduled(request: AgentRequest): AgentResult =
-        handleQueued(request)
-
     suspend fun handleQueued(
         request: AgentRequest,
         onToolStarting: (activity: ToolActivity?) -> Unit = {},
