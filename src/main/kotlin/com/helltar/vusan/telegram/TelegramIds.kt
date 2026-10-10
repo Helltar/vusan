@@ -9,8 +9,9 @@ import com.helltar.vusan.request.UserRef
  * every external reference — a person, a chat, a topic, a message — as opaque text, because a messenger
  * whose ids are not numbers at all has to fit there too.
  *
- * Both conversions live here, so nothing outside the adapter has to know Telegram's width, and a
- * reference from somewhere else cannot be silently read as a Telegram one.
+ * The read-back direction lives here, so nothing outside the adapter has to know Telegram's width, and a
+ * reference from somewhere else cannot be silently read as a Telegram one. Writing one is `toString()`
+ * at the adapter's edges, where the number came from Telegram a moment ago.
  */
 internal fun telegramChat(id: Long): ChatRef = ChatRef(Platform.TELEGRAM, id.toString())
 

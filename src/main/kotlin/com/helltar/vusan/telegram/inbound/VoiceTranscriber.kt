@@ -13,7 +13,8 @@ internal sealed interface VoiceTranscriptionResult {
     data class Success(val text: String) : VoiceTranscriptionResult
     data class TooLong(val durationSeconds: Long, val maxSeconds: Long) : VoiceTranscriptionResult
     data class Empty(val reason: String) : VoiceTranscriptionResult
-    data class Failed(val cause: Throwable) : VoiceTranscriptionResult
+    // the cause is logged where it happened; nothing downstream reads it
+    data object Failed : VoiceTranscriptionResult
 }
 
 internal data class AudioInput(
@@ -62,7 +63,7 @@ internal class VoiceTranscriber(private val whisper: OpenAiWhisperClient, privat
                         "audio download failed: fileId=[${input.fileId}] size=[${input.fileSizeBytes}]"
                     }
 
-                    return VoiceTranscriptionResult.Failed(e)
+                    return VoiceTranscriptionResult.Failed
                 }
 
         if (bytes.isEmpty())
@@ -76,7 +77,7 @@ internal class VoiceTranscriber(private val whisper: OpenAiWhisperClient, privat
                         "whisper transcription failed: model=[${config.model}] " +
                                 "fileBytes=[${bytes.size}] mime=[${input.mimeType}] name=[${input.fileName}]"
                     }
-                    return VoiceTranscriptionResult.Failed(e)
+                    return VoiceTranscriptionResult.Failed
                 }
 
         val trimmed = transcript.trim()

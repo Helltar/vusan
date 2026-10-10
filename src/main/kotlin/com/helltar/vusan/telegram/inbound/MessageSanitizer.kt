@@ -51,8 +51,13 @@ private fun MessageText.isBotMention(entity: MessageEntity, botUserId: Long, exp
     }
 
 private fun String.cleanupAfterMentionRemoval(): String =
-    replace(Regex("[\\t ]+([,.;:!?])"), "$1")
-        .replace(Regex("(^|\\n)[\\t ]*[,.;:!?-]+[\\t ]*"), "$1")
-        .replace(Regex("[\\t ]{2,}"), " ")
-        .replace(Regex(" *\\n *"), "\n")
+    replace(SPACE_BEFORE_PUNCTUATION, "$1")
+        .replace(LEADING_PUNCTUATION, "$1")
+        .replace(RUNS_OF_SPACES, " ")
+        .replace(SPACES_AROUND_NEWLINE, "\n")
         .trim()
+
+private val SPACE_BEFORE_PUNCTUATION = Regex("[\\t ]+([,.;:!?])")
+private val LEADING_PUNCTUATION = Regex("(^|\\n)[\\t ]*[,.;:!?-]+[\\t ]*")
+private val RUNS_OF_SPACES = Regex("[\\t ]{2,}")
+private val SPACES_AROUND_NEWLINE = Regex(" *\\n *")

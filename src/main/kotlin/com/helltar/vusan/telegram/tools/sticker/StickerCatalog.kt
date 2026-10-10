@@ -232,10 +232,6 @@ class StickerCatalog(
     }
 
     /**
-     * The sticker index for this chat's turn, or `null` when nothing is described yet —
-     * which is the normal state of a fresh deployment and of a chat where nobody uses stickers.
-     */
-    /**
      * The shortlist a turn in [chat] is shown, or `null` when there is nothing worth showing.
      *
      * Stickers are Telegram's own model — a set is learned and resent by `file_id` — so the catalog is
