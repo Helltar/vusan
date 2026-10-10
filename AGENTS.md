@@ -31,7 +31,8 @@ Preserve the package boundaries in [`docs/architecture.md`](docs/architecture.md
 - Inside `telegram/`: `inbound/` turns an update into agent input, `delivery/`
   sends everything back out, `callback/` owns the inline-button flows, `tools/`
   holds the tools no other messenger could implement; the runner, `AgentTurns`
-  and the raw client helpers stay at the package root.
+  and the raw client helpers stay at the package root, with `TelegramCommands`
+  for the slash commands that never enter the agent loop.
 - `TelegramBotRunner` normalizes inbound updates into a prompt; `AgentTurns`
   builds the `AgentRequest` from there and owns the turn up to its delivery.
   Tools consume `RequestContext`/`AttachedFile`, never Telegram message objects.
@@ -155,7 +156,7 @@ what they describe:
   never which library, model, key or optional service enables it. Setup
   requirements and implicit dependencies go to `docs/configuration.md` instead,
   even when no new env var is involved.
-- Telegram slash commands: `TelegramBotRunner.dispatchText` is the source of
+- Telegram slash commands: `telegram/TelegramCommands.kt` is the source of
   truth. Keep aligned with it the `Telegram commands` section in
   `agent/SystemPrompt.kt`, the menu in `telegram/CommandMenu.kt` (a description
   per `Language` in `i18n/Messages`), and architecture.md's direct-command flow.

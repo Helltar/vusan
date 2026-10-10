@@ -25,7 +25,7 @@ internal const val STOP_COMMAND = "stop"
  *
  * This is the very list BotFather's `/setcommands` writes — there is no second store behind it — so the
  * menu is republished on every start and an edit made in BotFather lasts only until the next one. It
- * lives here so that adding a command to `TelegramBotRunner.dispatchText` is all it takes to offer it.
+ * lives here so that adding a command to `TelegramCommands` is all it takes to offer it.
  *
  * `/start` is deliberately absent: Telegram opens a fresh chat with it anyway, and it does not belong in
  * a menu of things to reach for later.
