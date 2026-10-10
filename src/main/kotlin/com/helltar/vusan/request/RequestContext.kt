@@ -118,4 +118,4 @@ data class RequestContext(
  * and builds nothing public from it.
  */
 val RequestContext.personKeyOrNull: String?
-    get() = sender.takeIf { it.isPerson && platform == Platform.TELEGRAM }?.let { "telegram:${it.id}" }
+    get() = sender.takeIf { it.isPerson && platform == Platform.TELEGRAM }?.let { user.key }
