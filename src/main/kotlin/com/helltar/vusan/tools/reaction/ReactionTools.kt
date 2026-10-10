@@ -15,22 +15,20 @@ class ReactionTools(private val context: RequestContext, private val outbox: Bot
     @Tool(ReactionToolDescriptions.SET_REACTION)
     suspend fun setReaction(
         @Arg(ReactionToolDescriptions.EMOJI)
-        emoji: String? = null,
+        emoji: String,
         @Arg(ReactionToolDescriptions.TARGET_REPLIED_MESSAGE)
         targetRepliedMessage: Boolean = false,
         @Arg(ReactionToolDescriptions.MESSAGE_ID)
         messageId: String? = null,
     ): String = suspendToolGuard {
-        val trimmedEmoji = emoji?.trim()
+        val trimmedEmoji = emoji.trim()
 
-        require(!trimmedEmoji.isNullOrEmpty()) {
-            "Reaction emoji must be supplied — pass one of Telegram's free reactions as the `emoji` argument."
-        }
+        require(trimmedEmoji.isNotEmpty()) { "Reaction emoji must be supplied — pass one of the chat's free reactions as `emoji`." }
 
         val normalized = normalizeReactionEmoji(trimmedEmoji)
 
         require(normalized in ALLOWED_REACTION_EMOJI) {
-            "Emoji `$trimmedEmoji` is not in Telegram's free reaction set and will be rejected. " +
+            "Emoji `$trimmedEmoji` is not in the chat's free reaction set and will be rejected. " +
                     "Pick one of these, or skip the reaction: ${ALLOWED_REACTION_EMOJI.joinToString(" ")}"
         }
 

@@ -3,20 +3,17 @@ package com.helltar.vusan.tools.reaction
 internal object ReactionToolDescriptions {
 
     const val SET_REACTION =
-        """Sets a Telegram reaction (an emoji "like") on a message in the current chat. """ +
+        """Sets a reaction (an emoji "like") on a message in the current chat. """ +
                 "Use this instead of `sendMessage` when a short emotional acknowledgment is more natural than a textual reply (jokes, cute photos, mild surprise, agreement, sympathy) — a reaction does not produce a message in the chat, it only attaches an emoji to the target message. " +
-                "Always pass the `emoji` argument — there is no default emoji and the call fails without it. " +
                 "Target resolution: by default the reaction goes on the user's own current message. " +
                 """Set `targetRepliedMessage` to `true` when the user is replying to someone and wants that earlier message reacted to (e.g. the user replies to someone's joke and writes "react to it"). """ +
                 "Pass `messageId` explicitly only when the user gives you the id of a specific message to react to (it overrides `targetRepliedMessage`). " +
                 "Use sparingly — do not stack a reaction on top of a substantive textual reply unless the user clearly asks for both. " +
-                "Only Telegram's free reaction set is accepted — the common ones such as `👍`, `❤`, `🔥`, `😁`, `🤔`, `😢`, `🎉`, `🙏`, `👀` are in it; an emoji outside it is refused with the full list."
+                "Only the chat's free reaction set is accepted — the common ones such as `👍`, `❤`, `🔥`, `😁`, `🤔`, `😢`, `🎉`, `🙏`, `👀` are in it; an emoji outside it is refused with the full list."
 
     const val EMOJI =
-        "Required. " +
-                "Exactly one emoji from Telegram's free reaction set. " +
-                "Pass the raw emoji character, not its name or shortcode. " +
-                "Never omit this argument — the tool fails if `emoji` is missing."
+        "Exactly one emoji from the chat's free reaction set. " +
+                "Pass the raw emoji character, not its name or shortcode."
 
     const val TARGET_REPLIED_MESSAGE =
         "Set to `true` when the user is replying to someone else's message and the reaction should land on that earlier replied-to message, not on the user's current message. " +

@@ -100,12 +100,13 @@ class ReactionToolsTest {
         assertTrue(outbox.pending.isEmpty())
     }
 
+    // an omitted emoji is the decoder's complaint now, since the argument is required in the schema
     @Test
-    fun `setReaction fails when the emoji argument is omitted entirely`() = runBlocking {
+    fun `setReaction fails when the emoji argument is blank`() = runBlocking {
         val outbox = BotOutbox()
         val tools = ReactionTools(ctx(), outbox)
 
-        val message = toolFailure { tools.setReaction() }
+        val message = toolFailure { tools.setReaction(emoji = "  ") }
 
         assertTrue("Reaction emoji must be supplied" in message)
         assertTrue(outbox.pending.isEmpty())
@@ -130,7 +131,7 @@ class ReactionToolsTest {
 
         val message = toolFailure { tools.setReaction(emoji = "👋") }
 
-        assertTrue("not in Telegram's free reaction set" in message)
+        assertTrue("not in the chat's free reaction set" in message)
         assertTrue(outbox.pending.isEmpty())
     }
 
