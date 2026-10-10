@@ -184,6 +184,21 @@ internal fun albumContextBlock(
 }
 
 // a structured message flattened back into markdown never passes the sanitizing ordinary text does.
+/**
+ * The turn a scheduled task runs, which has no message behind it: what the task is called, how it
+ * recurs, and [body] — the words it was set up with, somebody's text and defused like any other.
+ */
+internal fun scheduledTaskBlock(title: String?, recurrence: String, body: String): String =
+    xmlBlock(
+        "scheduled_task",
+        buildString {
+            title?.let { appendLine("title: ${it.neutralizePromptBlocks()}") }
+            appendLine("recurrence: $recurrence")
+            appendLine()
+            append(body.neutralizePromptBlocks())
+        },
+    )
+
 internal fun wrapRichMessage(markdown: String): String =
     xmlBlock("rich_message", markdown.neutralizePromptBlocks())
 

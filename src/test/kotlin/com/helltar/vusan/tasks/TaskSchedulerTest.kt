@@ -98,7 +98,7 @@ class TaskSchedulerTest {
     fun `the first attempt carries the task and no retry hint`() {
         val prompt = scheduledTaskPrompt(task, attempt = 1)
 
-        assertContains(prompt, """<scheduled_task title="news &lt;digest&gt;" recurrence="every 6h">""")
+        assertContains(prompt, "<scheduled_task>\ntitle: news <digest>\nrecurrence: every 6h\n")
         assertContains(prompt, "Task: post the Linux news digest")
         assertTrue(prompt.endsWith("</scheduled_task>"))
         assertFalse(prompt.contains("earlier attempt"))
