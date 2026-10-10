@@ -209,16 +209,17 @@ class AgentRunner(
                 // an announced plan is a promise, not an answer, so a turn holding nothing else owes the
                 // user the reason it stopped. Without this the chat sees "building it now…" and then
                 // silence forever, which is the worst reading of a failure there is.
-                if (!outbox.hasQueuedOutput) {
+                if (!outbox.hasAnswered) {
                     return AgentResult(outputs = outbox.pending, comment = failureReply, failed = true)
                 }
 
-                // the run died with an answer already queued. deliver that instead of replacing it with the
-                // canned failure, and let the turn finish normally so the work reaches the history — a
-                // scheduled task then counts the attempt as delivered rather than paying for it all again.
+                // the run died with an answer already queued, or already in the chat. keep that instead of
+                // replacing it with the canned failure, and let the turn finish normally so the work reaches
+                // the history — a scheduled task then counts the attempt as delivered rather than paying for
+                // it all again.
                 log.warn {
                     "agent.run failed after partial delivery for chat=${context.chat.id} user=${context.sender.id}; " +
-                            "sending ${outbox.pending.size} queued output(s)"
+                            "finishing with what it already answered, ${outbox.pending.size} output(s) still queued"
                 }
 
                 ""
