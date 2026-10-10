@@ -36,16 +36,4 @@ class CodexLimitsTest {
         assertEquals(1.0, windows?.primary?.usedPercent)
         assertNull(windows?.secondary)
     }
-
-    @Test
-    fun `the latest windows are the last response's`() {
-        val limits = CodexLimits()
-        assertNull(limits.latest)
-
-        limits.observe(headers::get)
-        limits.observe((headers + ("x-codex-secondary-used-percent" to "28"))::get)
-
-        assertEquals(28.0, limits.latest?.secondary?.usedPercent)
-        assertEquals(6.0, limits.latest?.primary?.usedPercent)
-    }
 }

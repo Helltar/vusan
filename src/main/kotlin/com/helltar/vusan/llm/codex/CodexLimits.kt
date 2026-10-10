@@ -41,10 +41,6 @@ class CodexLimits {
     private var windows: CodexWindows? = null
     private var spent = Spent()
 
-    /** The windows as the latest response stated them, or `null` before the first one. */
-    val latest: CodexWindows?
-        get() = synchronized(this) { windows }
-
     /** Reads the windows off a response's headers, logging when a share moved. */
     fun observe(header: (String) -> String?) {
         val now = codexWindows(header) ?: return
