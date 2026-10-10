@@ -152,8 +152,8 @@ A normal user message travels:
    runner buffers them until that album has been quiet for `ALBUM_QUIET_PERIOD` (or hits the ten-item cap) and handles
    the batch as one gallery message: the caption may sit on any album part, every inspectable item becomes an
    `AttachedFile` on the turn, the sandbox and image editing take them all, and the agent is told that vision sees only
-   the first. `/tasks`, `/clear`, `/stop`, and task-menu
-   callback queries take direct paths that never enter the agent loop. Every pressed button reaches `CallbackRouter`,
+   the first. `/start`, `/tasks`, `/clear` and `/stop` take direct paths in `TelegramCommands` that never enter the agent
+   loop, once the runner has accepted the message like any other; so do task-menu callback queries. Every pressed button reaches `CallbackRouter`,
    which rechecks the allowlist and picks the flow: an agent-created inline-choice callback is validated and consumed by
    `InlineChoiceHandler`, and its selected option then enters the agent loop as the user's next turn. Callback data no
    handler recognizes (a button from an older build) is still answered, so the caller's client stops spinning. A
@@ -543,7 +543,8 @@ A normal user message travels:
   Only a **non-anonymous** poll produces these updates at all. `sendQuiz` is non-anonymous by default and reports its
   answers; `sendPoll` is anonymous by default and reports none unless the user asked for a public poll, which is the
   right way round — anonymity is usually the point of an ordinary poll.
-- **Sticker catalog** — `telegram/tools/sticker/StickerCatalog` learns which sticker sets a chat uses. The Bot API has no sticker
+- **Sticker catalog** — `telegram/tools/sticker/StickerCatalog` learns which sticker sets a chat uses, over the rows
+  `StickerRepository` keeps. The Bot API has no sticker
   search, so a sticker can only be sent from a set known by name: `TelegramBotRunner` taps every sticker in an
   allowlisted chat — including ones the bot is not addressed in, which in a group is its only view of what people
   actually use — records the set and the individual sticker, and pulls the set in whole through `getStickerSet`. No
@@ -754,7 +755,7 @@ window, vision, database file, enabled tools. `TelegramBotRunner` closes it with
 the allowlist.
 
 The runner's first act is `publishCommandMenu` (`telegram/CommandMenu.kt`): a `setMyCommands` call per `Language`, so
-the menu Telegram shows follows `dispatchText` without an operator step. It writes the same list BotFather's
+the menu Telegram shows follows `TelegramCommands` without an operator step. It writes the same list BotFather's
 `/setcommands` edits, which means a manual edit there is replaced on the next start. A rejected call is a warning, not a
 failed startup — an out-of-date menu is not worth refusing to serve over.
 
