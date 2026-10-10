@@ -25,6 +25,8 @@ data class OutboxItem(
  * and the send rejected — and [enqueue] says so, because a tool that reports "sent" for something
  * nobody will see is worse than one that says it could not.
  */
+// read-only tool calls of one batch run side by side, and a tool set that is read-only by contract may
+// still read the queue, so every door is on the one monitor: cheap, and a race here loses an answer
 class BotOutbox(val capabilities: ChatCapabilities = ChatCapabilities.UNRESTRICTED) {
 
     private val items = mutableListOf<OutboxItem>()
@@ -32,10 +34,12 @@ class BotOutbox(val capabilities: ChatCapabilities = ChatCapabilities.UNRESTRICT
     var redirectToPrivate: Boolean = false
         private set
 
+    @get:Synchronized
     val pending: List<OutboxItem>
         get() = items.toList()
 
     /** Queues [item], or answers `false` when this chat does not accept that kind of output at all. */
+    @Synchronized
     fun enqueue(item: BotOutput): Boolean {
         if (!capabilities.allows(item)) {
             log.info { "dropped a queued ${item.kindName()} output: this chat does not accept them" }
@@ -75,6 +79,7 @@ class BotOutbox(val capabilities: ChatCapabilities = ChatCapabilities.UNRESTRICT
     // fits [MAX_TEXT_MESSAGE_CHARS] so splitting one answer into many small messages stays cheap. a message
     // that cannot merge starts a new bubble; returns false once [MAX_TEXT_MESSAGES] bubbles are queued so
     // the caller can tell the model to stop instead of flooding the chat.
+    @Synchronized
     fun enqueueText(text: String, announcement: Boolean = false): Boolean {
         val last = items.lastOrNull()?.takeIf { it.toPrivate == redirectToPrivate && !it.delivered }
 
@@ -98,10 +103,12 @@ class BotOutbox(val capabilities: ChatCapabilities = ChatCapabilities.UNRESTRICT
     }
 
     /** Whether the turn already put something in the chat itself. */
+    @get:Synchronized
     val hasDelivered: Boolean
         get() = items.any { it.delivered }
 
     /** Whether the turn already announced its plan; a second announcement would rewrite what the user read. */
+    @get:Synchronized
     val hasAnnounced: Boolean
         get() = items.any { it.delivered && it.announcement }
 
@@ -109,10 +116,12 @@ class BotOutbox(val capabilities: ChatCapabilities = ChatCapabilities.UNRESTRICT
      * Whether anything is waiting to be sent. An announcement is not: it was a promise of an answer, so
      * a turn that made one and queued nothing else still owes the user everything it announced.
      */
+    @get:Synchronized
     val hasQueuedOutput: Boolean
         get() = items.any { !it.delivered && !it.announcement }
 
     /** Whether the turn has an answer for the user at all, waiting to be sent or already in the chat. */
+    @get:Synchronized
     val hasAnswered: Boolean
         get() = items.any { !it.announcement }
 
@@ -120,12 +129,14 @@ class BotOutbox(val capabilities: ChatCapabilities = ChatCapabilities.UNRESTRICT
     // transcript the same way a queued message does. never refused and never routed to a private chat:
     // it is already sent, and refusing it here would only lose it from the history. an announcement is a
     // promise of an answer still to come; anything else delivered this way is an answer in its own right.
+    @Synchronized
     fun recordDelivered(text: String, announcement: Boolean = true) {
         items += OutboxItem(BotOutput.Text(text), toPrivate = false, delivered = true, announcement = announcement)
     }
 
     // opt-in rich messages never coalesce — each is a deliberate structured send — but they share the
     // standalone bubble budget with plain text so a runaway turn cannot flood the chat.
+    @Synchronized
     fun enqueueRichMessage(markdown: String): Boolean {
         if (standaloneBubbleCount() >= MAX_TEXT_MESSAGES)
             return false
@@ -135,6 +146,7 @@ class BotOutbox(val capabilities: ChatCapabilities = ChatCapabilities.UNRESTRICT
         return true
     }
 
+    @Synchronized
     fun enqueueInlineChoice(choice: BotOutput.InlineChoice): Boolean {
         if (standaloneBubbleCount() >= MAX_TEXT_MESSAGES)
             return false
@@ -151,6 +163,7 @@ class BotOutbox(val capabilities: ChatCapabilities = ChatCapabilities.UNRESTRICT
                     it.output is BotOutput.InlineChoice
         }
 
+    @Synchronized
     fun useDirectMessages() {
         redirectToPrivate = true
     }
