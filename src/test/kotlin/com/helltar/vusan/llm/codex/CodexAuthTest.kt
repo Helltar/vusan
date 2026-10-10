@@ -13,6 +13,7 @@ import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.jsonPrimitive
 import java.nio.file.Files
 import java.nio.file.Path
+import java.nio.file.attribute.FileTime
 import java.nio.file.attribute.PosixFileAttributeView
 import java.nio.file.attribute.PosixFilePermission
 import java.time.Instant
@@ -175,6 +176,39 @@ class CodexAuthTest {
         val credentials = store.credentials()
         assertEquals(secondToken, credentials.accessToken)
         assertEquals("acct-2", credentials.accountId)
+    }
+
+    // the file is read again only when its stamp moved; a rewrite that keeps the stamp is seen only while
+    // the stamp is too fresh to have been remembered, which is when such a rewrite can happen at all
+    @Test
+    fun `a settled auth file with the same stamp is not read again`() = runBlocking {
+        val firstToken = jwt(expiresInMinutes = FRESH_MINUTES)
+        val secondToken = jwt(expiresInMinutes = FRESH_MINUTES + 1)
+        val file = authFile(accessToken = firstToken)
+        val settled = FileTime.from(Instant.now().minusSeconds(3600))
+        Files.setLastModifiedTime(file, settled)
+        val store = CodexAuthStore(Http.createClient(MockEngine { error("refresh must not be called") }), file)
+
+        assertEquals(firstToken, store.credentials().accessToken)
+        file.writeText(authJson(accessToken = secondToken))
+        Files.setLastModifiedTime(file, settled)
+
+        assertEquals(firstToken, store.credentials().accessToken)
+    }
+
+    @Test
+    fun `a rewrite within the tick of the write just read is still seen`() = runBlocking {
+        val firstToken = jwt(expiresInMinutes = FRESH_MINUTES)
+        val secondToken = jwt(expiresInMinutes = FRESH_MINUTES + 1)
+        val file = authFile(accessToken = firstToken)
+        val store = CodexAuthStore(Http.createClient(MockEngine { error("refresh must not be called") }), file)
+
+        assertEquals(firstToken, store.credentials().accessToken)
+        val stamp = Files.getLastModifiedTime(file)
+        file.writeText(authJson(accessToken = secondToken))
+        Files.setLastModifiedTime(file, stamp)
+
+        assertEquals(secondToken, store.credentials().accessToken)
     }
 
     @Test

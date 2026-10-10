@@ -20,6 +20,7 @@ import java.nio.file.Path
 import java.nio.file.StandardCopyOption
 import java.nio.file.attribute.PosixFileAttributeView
 import java.nio.file.attribute.PosixFilePermission
+import java.nio.file.attribute.BasicFileAttributes
 import java.nio.file.attribute.PosixFilePermissions
 import java.security.MessageDigest
 import java.time.Instant
@@ -27,6 +28,7 @@ import java.util.*
 import kotlin.io.path.*
 import kotlin.time.Duration.Companion.hours
 import kotlin.time.Duration.Companion.minutes
+import kotlin.time.Duration.Companion.seconds
 
 /**
  * The OAuth client the Codex CLI itself registers with. It is a public identifier baked into the
@@ -47,6 +49,10 @@ private val EXPIRY_GRACE = 5.minutes
 // the endpoint answers a successful refresh with `earliest_refresh_at` and refuses anything sooner, so
 // a failure waits rather than repeating on every message for the rest of the window.
 private val REFRESH_RETRY_INTERVAL = 1.hours
+
+// a file rewritten within the clock tick of the write just read keeps its stamp and, as often as not, its
+// size, so a read that fresh is not remembered: the next request reads the file again
+private val STAMP_SETTLE_TIME = 2.seconds
 
 private const val REFRESH_ERROR_MAX_CHARS = 500
 private val OWNER_ONLY_PERMISSIONS = setOf(PosixFilePermission.OWNER_READ, PosixFilePermission.OWNER_WRITE)
@@ -95,6 +101,12 @@ private data class CachedCodexTokens(
     val sourceFingerprint: String,
 )
 
+private data class AuthFileStamp(val modifiedAt: Instant, val size: Long) {
+    fun settled(): Boolean = modifiedAt.isBefore(Instant.now().minusSeconds(STAMP_SETTLE_TIME.inWholeSeconds))
+}
+
+private data class ReadAuthFile(val stamp: AuthFileStamp, val snapshot: CodexAuthSnapshot)
+
 /**
  * Deliberately without default values. The shared client encodes with kotlinx-serialization's
  * `encodeDefaults = false`, so a defaulted `grant_type` is dropped from the body and the endpoint
@@ -134,6 +146,7 @@ class CodexAuthStore(
     val limits = CodexLimits()
 
     private val mutex = Mutex()
+    private var lastRead: ReadAuthFile? = null
     private var cached: CachedCodexTokens? = null
     private var lastRefreshFailure: Instant? = null
 
@@ -204,11 +217,12 @@ class CodexAuthStore(
     suspend fun planType(): String? =
         mutex.withLock { currentTokens().tokens.idToken.claimString("chatgpt_plan_type") }
 
-    // reread the file on every request so `codex login`, `codex logout`, sandbox changes and a CLI
-    // refresh become visible without restarting vusan. the cached entry only carries a token we refreshed
-    // in memory when writing it back failed; it remains usable while the on-disk source is unchanged.
+    // the file is read again whenever its stamp moves, so `codex login`, `codex logout`, sandbox changes
+    // and a CLI refresh become visible without restarting vusan, and not otherwise. the cached entry only
+    // carries a token we refreshed in memory when writing it back failed; it remains usable while the
+    // on-disk source is unchanged.
     private fun currentTokens(): CodexAuthSnapshot {
-        val snapshot = readSnapshot()
+        val snapshot = snapshotIfChanged()
         val remembered = cached?.takeIf { it.sourceFingerprint == snapshot.fingerprint }
 
         return if (remembered != null) {
@@ -217,6 +231,22 @@ class CodexAuthStore(
             snapshot.also { cached = CachedCodexTokens(it.tokens, it.fingerprint) }
         }
     }
+
+    private fun snapshotIfChanged(): CodexAuthSnapshot {
+        // taken before the read, so a write landing between the two is read again on the next request
+        val stamp = authFileStampOrNull()
+        lastRead?.takeIf { stamp != null && it.stamp == stamp }?.let { return it.snapshot }
+
+        val snapshot = readSnapshot()
+        lastRead = stamp?.takeIf { it.settled() }?.let { ReadAuthFile(it, snapshot) }
+
+        return snapshot
+    }
+
+    private fun authFileStampOrNull(): AuthFileStamp? =
+        runCatching { Files.readAttributes(authFile, BasicFileAttributes::class.java) }
+            .map { AuthFileStamp(modifiedAt = it.lastModifiedTime().toInstant(), size = it.size()) }
+            .getOrNull()
 
     private fun readSnapshot(): CodexAuthSnapshot {
         if (!authFile.isReadable())
