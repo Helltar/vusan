@@ -116,13 +116,6 @@ internal class TelegramBotRunner(
             "Bot started: as=[${profile.username ?: profile.userId}] allowedIds=[${accessPolicy.allowed.sorted().joinToString(", ")}]"
         }
 
-        if (accessPolicy.allowed.isEmpty()) {
-            log.warn {
-                "ALLOWED_IDS is empty — bot will ignore every message. " +
-                        "Set ALLOWED_IDS to user/chat ids that may use the bot."
-            }
-        }
-
         if (accessPolicy.banned.isNotEmpty()) {
             log.info { "Banned: ids=[${accessPolicy.banned.sorted().joinToString(", ")}]" }
 
