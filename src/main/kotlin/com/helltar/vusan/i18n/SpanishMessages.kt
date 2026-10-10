@@ -37,6 +37,7 @@ internal object SpanishMessages : Messages {
     override val voiceEmptyReply = "No se oye nada en ese mensaje de voz, inténtalo otra vez o escríbelo"
 
     override val voiceTranscriptionFailedReply = "No pude entender ese mensaje de voz, mejor escríbelo"
+    override val voiceUnsupportedReply = "Aquí no puedo escuchar mensajes de voz, mejor escríbelo"
 
     override val inlineChoiceNotOwnerAlert = "Esta elección era para otra persona."
 

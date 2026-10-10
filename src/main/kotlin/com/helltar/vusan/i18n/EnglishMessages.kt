@@ -35,6 +35,7 @@ internal object EnglishMessages : Messages {
     override val voiceEmptyReply = "Nothing audible in that voice message, try again or type it"
 
     override val voiceTranscriptionFailedReply = "Couldn't make out that voice message, type it instead"
+    override val voiceUnsupportedReply = "I can't listen to voice messages here, type it instead"
 
     override val inlineChoiceNotOwnerAlert = "This choice was meant for someone else."
 

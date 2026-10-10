@@ -1,5 +1,10 @@
 package com.helltar.vusan.telegram
 
+import com.helltar.vusan.agent.VIDEO_NOTE_ONLY_PROMPT
+import com.helltar.vusan.agent.MENTION_ONLY_PROMPT
+import com.helltar.vusan.agent.MEDIA_ONLY_PROMPT
+import com.helltar.vusan.agent.ANIMATION_ONLY_PROMPT
+import kotlin.time.Duration.Companion.nanoseconds
 import com.helltar.heartbeat.Heartbeat
 import com.helltar.vusan.agent.AgentRunner
 import com.helltar.vusan.llm.FallbackInUse
@@ -174,11 +179,18 @@ internal class TelegramBotRunner(
     // opt-in only for select's onTimeout clause, experimental but long-stable.
     @OptIn(ExperimentalCoroutinesApi::class)
     private suspend fun processUpdates(updates: ReceiveChannel<Update>, profile: BotProfile) = supervisorScope {
-        val pendingAlbums = linkedMapOf<String, MutableList<Message>>()
+        // each album waits for its own quiet period: a deployment with a few busy chats never has the whole
+        // stream go quiet, and an album judged by that would wait on everybody else's messages
+        val pendingAlbums = linkedMapOf<String, PendingAlbum>()
 
-        fun flushAlbums() {
-            pendingAlbums.values.forEach { parts -> launchHandling(parts.first()) { handleGalleryUpdate(parts, profile) } }
-            pendingAlbums.clear()
+        fun flush(albums: Collection<PendingAlbum>) {
+            albums.forEach { album -> launchHandling(album.parts.first()) { handleGalleryUpdate(album.parts, profile) } }
+        }
+
+        fun flushDue() {
+            val due = pendingAlbums.filterValues { it.dueAtNanos <= System.nanoTime() }
+            due.keys.forEach(pendingAlbums::remove)
+            flush(due.values)
         }
 
         while (isActive) {
@@ -188,13 +200,16 @@ internal class TelegramBotRunner(
                 } else {
                     // select resolves receive vs timeout atomically; canceling a suspended receive
                     // (as withTimeout would) can drop an element already taken from the channel.
-                    // null on both quiet-period timeout and channel close; either way the buffered
-                    // albums are complete, and a closed channel exits on the next iteration.
+                    // null on both the earliest deadline and channel close.
+                    val wait = (pendingAlbums.values.minOf { it.dueAtNanos } - System.nanoTime()).nanoseconds
+
                     select {
                         updates.onReceiveCatching { it.getOrNull() }
-                        onTimeout(ALBUM_QUIET_PERIOD) { null }
+                        onTimeout(wait.coerceAtLeast(Duration.ZERO)) { null }
                     } ?: run {
-                        flushAlbums()
+                        if (updates.isClosedForReceive) break
+
+                        flushDue()
                         continue
                     }
                 }
@@ -253,16 +268,23 @@ internal class TelegramBotRunner(
                 continue
             }
 
-            val parts = pendingAlbums.getOrPut(albumKey, ::mutableListOf)
-            parts += message
+            val album = pendingAlbums.getOrPut(albumKey, ::PendingAlbum)
+            album.parts += message
+            album.dueAtNanos = System.nanoTime() + ALBUM_QUIET_PERIOD.inWholeNanoseconds
 
-            if (parts.size >= MAX_ALBUM_PARTS) {
+            if (album.parts.size >= MAX_ALBUM_PARTS) {
                 pendingAlbums.remove(albumKey)
-                launchHandling(message) { handleGalleryUpdate(parts, profile) }
+                launchHandling(message) { handleGalleryUpdate(album.parts, profile) }
             }
         }
 
-        flushAlbums()
+        flush(pendingAlbums.values)
+    }
+
+    // the parts of one gallery seen so far, and when it counts as complete unless another part arrives
+    private class PendingAlbum {
+        val parts = mutableListOf<Message>()
+        var dueAtNanos = 0L
     }
 
     // the group transcript has to be recorded before [shouldHandle] gets a say, because the messages
@@ -519,11 +541,10 @@ internal class TelegramBotRunner(
     ) {
         val transcriber = voiceTranscriber
 
+        // the message is already claimed, so the person who addressed the bot gets told, not silence
         if (transcriber == null) {
-            log.info {
-                "$inputKind message ignored: STT not configured " +
-                        "(chat=${message.chatIdLong} user=${message.senderIdOrNull()})"
-            }
+            log.info { "$inputKind message cannot be heard: STT not configured (chat=${message.chatIdLong} user=${message.senderIdOrNull()})" }
+            delivery.sendReply(message, Messages.of(message.language).voiceUnsupportedReply)
 
             return
         }
@@ -717,28 +738,6 @@ internal class TelegramBotRunner(
         )
 
     private companion object {
-        const val MENTION_ONLY_PROMPT = "User mentioned the bot with no text. Respond naturally and briefly."
-
-        // media without a caption is the whole message, and answering it is a conversation move rather
-        // than a report; the describe tools exist for when the answer actually depends on the content.
-        const val MEDIA_ONLY_PROMPT =
-            "User sent this with no caption, so the media itself is their whole message. " +
-                    "Reply the way a person would at this point in the conversation. " +
-                    "Look at it (`describeImage`, `describeVideo`) or process it (`runCommand`) only when your answer depends on what is inside, " +
-                    "and do not narrate what you saw unless the user asked what is in it."
-
-        // a gif is thrown into a chat the way a sticker is — as a reaction, not as a thing to review.
-        const val ANIMATION_ONLY_PROMPT =
-            "User answered with a GIF and no caption, the way one reacts with a sticker instead of typing. " +
-                    "Treat it as their reaction, match its mood, and keep the conversation going in your own voice. " +
-                    "Call `describeVideo` only if they ask what is in it; never describe or narrate it unasked."
-
-        // a round video message is the user talking, so the speech in it is the message, not the picture.
-        const val VIDEO_NOTE_ONLY_PROMPT =
-            "User sent a video note (a round video message) with no caption — it is them speaking to you. " +
-                    "Call `describeVideo` to get what they said, then answer that. " +
-                    "Do not describe how the video looks unless they ask."
-
         // a rich message may carry 32768 characters where plain text tops out at 4096, and
         // flattening adds markup on top of that. this is the only inbound content without a
         // telegram-side ceiling, so it gets one here.

@@ -149,7 +149,7 @@ A normal user message travels:
 1. **Receive** — `TelegramBotRunner` long-polls via `TelegramBotsLongPollingApplication`, funnels updates into a
    channel, and dispatches each message by content (text/command, rich message, sticker, voice, audio, photo, video,
    video note, GIF, document). Album (media group) parts arrive as separate updates sharing a `media_group_id`; the
-   runner buffers them until the update stream goes quiet (`ALBUM_QUIET_PERIOD`, or the ten-item album cap) and handles
+   runner buffers them until that album has been quiet for `ALBUM_QUIET_PERIOD` (or hits the ten-item cap) and handles
    the batch as one gallery message: the caption may sit on any album part, every inspectable item becomes an
    `AttachedFile` on the turn, the sandbox and image editing take them all, and the agent is told that vision sees only
    the first. `/tasks`, `/clear`, `/stop`, and task-menu

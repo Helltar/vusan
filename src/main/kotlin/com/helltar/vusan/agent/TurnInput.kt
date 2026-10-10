@@ -1,10 +1,10 @@
 package com.helltar.vusan.agent
 
+import com.helltar.vusan.common.asFileSize
 import com.helltar.vusan.common.collapseWhitespaceAndCap
 import com.helltar.vusan.common.xmlBlock
 import com.helltar.vusan.request.AttachedFile
 import com.helltar.vusan.request.AttachedFileKind
-import java.util.Locale
 
 // the blocks the current request is wrapped in. an adapter reads what it received and fills them in,
 // but the tags and their wording are written here once, beside the contract that says what each of
@@ -109,7 +109,7 @@ internal fun attachedFileContextBlock(file: AttachedFile, sandbox: Boolean): Str
         "attached_file",
         buildString {
             appendLine("name: ${file.name}")
-            file.fileSizeBytes?.let { appendLine("size: ${formatFileSize(it)}") }
+            file.fileSizeBytes?.let { appendLine("size: ${it.asFileSize()}") }
             file.durationSeconds?.let { appendLine("duration: ${it}s") }
 
             when (file.kind) {
@@ -140,14 +140,6 @@ internal fun attachedFileContextBlock(file: AttachedFile, sandbox: Boolean): Str
             }
         },
     )
-
-private fun formatFileSize(bytes: Long): String =
-
-    when {
-        bytes >= 1024 * 1024 -> "%.1f MB".format(Locale.ROOT, bytes / (1024.0 * 1024))
-        bytes >= 1024 -> "%.0f KB".format(Locale.ROOT, bytes / 1024.0)
-        else -> "$bytes B"
-    }
 
 /** Several items sent as one message, and which tools get to see which of them. */
 internal fun albumContextBlock(
@@ -225,3 +217,27 @@ internal fun inlineChoiceInput(question: String, option: String): String =
             append(xmlBlock("selected_option", option))
         },
     )
+
+// what the model is told when the message itself carries no words: media alone, a bare mention. the
+// wording names the tools, so it is prompt text and lives with the other prompt text, not in an adapter
+    internal const val MENTION_ONLY_PROMPT = "User mentioned the bot with no text. Respond naturally and briefly."
+
+    // media without a caption is the whole message, and answering it is a conversation move rather
+    // than a report; the describe tools exist for when the answer actually depends on the content.
+    internal const val MEDIA_ONLY_PROMPT =
+        "User sent this with no caption, so the media itself is their whole message. " +
+                "Reply the way a person would at this point in the conversation. " +
+                "Look at it (`describeImage`, `describeVideo`) or process it (`runCommand`) only when your answer depends on what is inside, " +
+                "and do not narrate what you saw unless the user asked what is in it."
+
+    // a gif is thrown into a chat the way a sticker is — as a reaction, not as a thing to review.
+    internal const val ANIMATION_ONLY_PROMPT =
+        "User answered with a GIF and no caption, the way one reacts with a sticker instead of typing. " +
+                "Treat it as their reaction, match its mood, and keep the conversation going in your own voice. " +
+                "Call `describeVideo` only if they ask what is in it; never describe or narrate it unasked."
+
+    // a round video message is the user talking, so the speech in it is the message, not the picture.
+    internal const val VIDEO_NOTE_ONLY_PROMPT =
+        "User sent a video note (a round video message) with no caption — it is them speaking to you. " +
+                "Call `describeVideo` to get what they said, then answer that. " +
+                "Do not describe how the video looks unless they ask."

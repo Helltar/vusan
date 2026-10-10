@@ -36,6 +36,7 @@ internal object RussianMessages : Messages {
     override val voiceEmptyReply = "В этом голосовом ничего не слышно, попробуй ещё раз или напиши текстом"
 
     override val voiceTranscriptionFailedReply = "Не разобрать это голосовое, напиши текстом"
+    override val voiceUnsupportedReply = "Голосовые здесь не слушаю, напиши текстом"
 
     override val inlineChoiceNotOwnerAlert = "Этот выбор был предназначен другому пользователю."
 

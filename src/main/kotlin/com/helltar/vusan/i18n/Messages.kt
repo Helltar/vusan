@@ -20,6 +20,7 @@ interface Messages {
     val turnStopNotOwnerAlert: String
     val voiceEmptyReply: String
     val voiceTranscriptionFailedReply: String
+    val voiceUnsupportedReply: String
     val inlineChoiceNotOwnerAlert: String
     val inlineChoiceUnavailableAlert: String
     val inlineChoiceErrorAlert: String
