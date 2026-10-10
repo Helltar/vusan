@@ -42,9 +42,7 @@ data class TelegramChannelPost(
     val mediaKinds: List<String>,
     val imageUrls: List<String>,
     val links: List<String>,
-) {
-    val hasMedia: Boolean get() = mediaKinds.isNotEmpty()
-}
+)
 
 class TelegramChannelImage(
     val url: String,

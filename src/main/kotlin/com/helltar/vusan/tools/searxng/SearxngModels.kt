@@ -19,7 +19,6 @@ data class SearxngResult(
     val url: String = "",
     val title: String = "",
     val content: String = "",
-    val engine: String = "",
     val publishedDate: String? = null,
     @SerialName("img_src") val imageUrl: String = "",
 )

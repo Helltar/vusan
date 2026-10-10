@@ -114,7 +114,6 @@ class TelegramChannelParserTest {
         val post = page.posts.single()
 
         assertEquals(listOf("photo", "video"), post.mediaKinds)
-        assertTrue(post.hasMedia)
         assertEquals(
             listOf("https://cdn.example.com/a.jpg", "https://cdn.example.com/b.jpg", "https://cdn.example.com/clip.jpg"),
             post.imageUrls,
