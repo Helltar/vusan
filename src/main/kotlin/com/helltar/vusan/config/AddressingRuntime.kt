@@ -54,30 +54,37 @@ suspend fun resolveAddressingRuntime(config: AddressingConfig, codexAuth: CodexA
     )
 }
 
-// the least the model takes: the least its vendor listed at startup — the plan's catalog, anthropic's and
-// deepseek's model lists all state them — and where nobody listed any, what the model itself says when
-// asked once. a list with nothing to choose from leaves the effort out.
-private suspend fun LlmRuntime.leastEffort(options: RequestOptions): ReasoningEffort? =
-    if (model.efforts != null) model.efforts.minOrNull() else probeLeastEffort(options)
+// the least the model takes: none where it takes it, which only asking tells, since no vendor's list
+// names it; otherwise the least its vendor listed at startup, or low where nobody listed any. a list with
+// nothing to choose from leaves the effort out.
+private suspend fun LlmRuntime.leastEffort(options: RequestOptions): ReasoningEffort? {
+    val refusal = refusalOfNone(options) ?: return ReasoningEffort.NONE
+    val least = if (model.efforts != null) model.efforts.minOrNull() else ReasoningEffort.LOW
+
+    log.info { "addressing: ${model.id} does not take effort=[none] ($refusal); using ${least?.requestValue ?: "its default"}" }
+
+    return least
+}
 
 /**
- * The least of `none` and `low` the model takes, found by asking it once at startup.
+ * Why the model refuses `none`, or `null` when it takes it, found by asking it once at startup.
  *
- * OpenAI's models disagree on the floor and no list states it: on 2026-10-08 gpt-5.5, every gpt-5.6,
- * gpt-6-luna and gpt-6-sol took `none`, while gpt-6.1-sol, gpt-6-astra and gpt-5-mini refused it with a
- * 400 — and every one of them took `low`. A check that could not be made at all settles on `low` too,
- * since a refused effort would fail every verdict while a needless one only slows them.
+ * Models disagree on it and nothing lists it: on 2026-10-08 gpt-5.5, every gpt-5.6, gpt-6-luna and
+ * gpt-6-sol took `none`, while gpt-6.1-sol, gpt-6-astra and gpt-5-mini refused it with a 400; the Codex
+ * backend takes it on luna and terra though its catalog lists `low` as the lowest, DeepSeek turns its
+ * thinking off with it though its list names `low` to `max`, and Anthropic has no such effort at all,
+ * which its client refuses before any request. A check that could not be made at all counts as a
+ * refusal, since a refused effort would fail every verdict while a needless one only slows them.
  */
-private suspend fun LlmRuntime.probeLeastEffort(options: RequestOptions): ReasoningEffort {
+private suspend fun LlmRuntime.refusalOfNone(options: RequestOptions): String? {
     val probe = ChatRequest(listOf(Message.User("Reply with: ok")), options = options.copy(reasoningEffort = ReasoningEffort.NONE, maxOutputTokens = PROBE_OUTPUT_TOKENS))
 
     return try {
         client.complete(model, probe)
-        ReasoningEffort.NONE
+        null
     } catch (e: Throwable) {
         e.rethrowIfCancellation()
-        log.info { "addressing: ${model.id} does not take effort=[none] (${e.message?.lineSequence()?.firstOrNull()}); using low" }
-        ReasoningEffort.LOW
+        e.message?.lineSequence()?.firstOrNull()?.takeIf { it.isNotBlank() } ?: e::class.simpleName.orEmpty()
     }
 }
 

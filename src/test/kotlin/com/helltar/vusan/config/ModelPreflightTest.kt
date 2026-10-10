@@ -147,6 +147,14 @@ class ModelPreflightTest {
         assertEquals(100_000, windowed.contextWindowTokens)
     }
 
+    // the list names thinking levels, and none, which turns thinking off, is no level of it
+    @Test
+    fun `none passes a server's list that names only thinking levels`() = runBlocking {
+        val checked = compatible("deepseek-flash", effort = ReasoningEffort.NONE).preflighted(http(HttpStatusCode.OK, DEEPSEEK_MODELS), codexAuth = null)
+
+        assertEquals(ReasoningEffort.NONE, checked.reasoningEffort)
+    }
+
     // a compatible server may serve no list, or answer to an alias it never lists
     @Test
     fun `a server without a list, or one that does not list the model, leaves the config alone`() = runBlocking {

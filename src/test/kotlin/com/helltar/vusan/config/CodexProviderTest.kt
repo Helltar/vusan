@@ -79,6 +79,14 @@ class CodexProviderTest {
         assertTrue("low" in error.message.orEmpty(), error.message.orEmpty())
     }
 
+    // the backend takes none on models whose catalog lists low as the lowest
+    @Test
+    fun `none passes a catalog that names only thinking levels`() {
+        val config = LlmProviderConfig.Codex(model = "text-model", reasoningEffort = ReasoningEffort.NONE, requestTimeout = 120.seconds)
+
+        assertEquals(ReasoningEffort.NONE, applyCodexModelMetadata(config, codexModel(supportedEfforts = setOf(ReasoningEffort.LOW))).reasoningEffort)
+    }
+
     @Test
     fun `a service tier the model does not offer fails before startup`() {
         val config =

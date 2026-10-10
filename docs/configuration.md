@@ -107,7 +107,9 @@ reasoning.
 
 `LLM_REASONING_EFFORT` applies to every provider. Which efforts work depends on the model: `codex`
 and `anthropic` check yours at startup, and so does `openai-compatible` when its server lists the
-model's efforts, as DeepSeek's does; `openai` checks on the first turn. On `anthropic` the values are
+model's efforts, as DeepSeek's does; `openai` checks on the first turn. `none` turns reasoning off
+where a model allows it — DeepSeek's and some OpenAI models do — and since no list names it, the first
+turn tells whether yours takes it, on every provider but `anthropic`. On `anthropic` the values are
 `low` to `max`, and `none` stops startup. Vusan needs a Claude model from 4.6 on, which thinks
 adaptively on every turn here; an older one, such as `claude-haiku-4-5-20251001`, stops startup.
 Without an effort a Claude model runs at its own default, which is `medium` on Opus 5.5 and Haiku 5.5
@@ -693,14 +695,13 @@ prefix; its effort and window are its own either way.
 | `ADDRESSING_REQUEST_TIMEOUT_SECONDS` | the chat's         | Seconds one verdict may hang. Read with `ADDRESSING_PROVIDER` only.                      |
 | `ADDRESSING_CONTEXT_WINDOW_TOKENS`   | model metadata     | Context size override.                                                                   |
 
-The model gets the least reasoning it is known to take unless `ADDRESSING_REASONING_EFFORT` says
-otherwise: on `openai` `none` where the model takes it and `low` where it does not — OpenAI's models
-disagree on that and nothing lists it, so the model is asked once at startup with a request of a few
-tokens; on `codex` the lowest the plan's catalog lists; `low` on `anthropic`; and its own default on
-`openai-compatible`, whose models are anyone's guess. A yes-or-no over a few
-lines of chat needs no reasoning, and every token of it is latency. The
-verdicts were measured on small OpenAI models — `gpt-5.6-luna` made the fewest wrong calls of eight
-and no false yes at all.
+The model gets the least reasoning it takes unless `ADDRESSING_REASONING_EFFORT` says otherwise:
+`none` where the model takes it, which it is asked once at startup with a request of a few tokens,
+since no vendor lists it; otherwise the lowest effort its vendor lists — the plan's catalog on
+`codex`, the model list on `anthropic` and on a compatible server that states one — or `low` where
+nothing is listed, as on `openai`. Claude has no `none`, so it gets `low`. A yes-or-no over a few
+lines of chat needs no reasoning, and every token of it is latency. The verdicts were measured on
+small OpenAI models — `gpt-5.6-luna` made the fewest wrong calls of eight and no false yes at all.
 
 - **Names** — the bot's Telegram name is always one of them. Without `ADDRESSING_NAMES` the other is
   its handle minus the `bot` ending, so `@robinbot` answers to «robin». A name matches at the start of

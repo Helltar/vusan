@@ -3,6 +3,7 @@ package com.helltar.vusan.config
 import java.nio.file.Path
 import com.helltar.vusan.infra.HttpStatusException
 import com.helltar.vusan.llm.LlmModel
+import com.helltar.vusan.llm.ReasoningEffort
 import com.helltar.vusan.llm.RequestOptions
 import com.helltar.vusan.llm.RetryingLlmClient
 import com.helltar.vusan.llm.llmHttpClient
@@ -108,7 +109,8 @@ internal fun applyCodexModelMetadata(
     val configuredEffort = config.reasoningEffort
     val supportedEfforts = model.supportedReasoningEfforts
 
-    if (configuredEffort != null && supportedEfforts != null) {
+    // the catalog names thinking levels; none turns thinking off and is no level, so the first turn decides it
+    if (configuredEffort != null && configuredEffort != ReasoningEffort.NONE && supportedEfforts != null) {
         require(configuredEffort in supportedEfforts) {
             "${config.envPrefix}_REASONING_EFFORT=[${configuredEffort.requestValue}] is not supported by " +
                     "${config.envPrefix}_MODEL=[${model.id}]. Supported values: " +

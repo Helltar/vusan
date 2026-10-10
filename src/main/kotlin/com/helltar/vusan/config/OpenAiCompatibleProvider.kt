@@ -92,7 +92,8 @@ internal suspend fun compatiblePreflight(http: HttpClient, config: LlmProviderCo
             ?.mapNotNull { level -> ReasoningEffort.entries.firstOrNull { it.requestValue == (level as? JsonPrimitive)?.contentOrNull } }
             ?.toSet()
 
-    config.reasoningEffort?.let { configured ->
+    // the list names thinking levels; none turns thinking off and is no level, so the first turn decides it
+    config.reasoningEffort?.takeIf { it != ReasoningEffort.NONE }?.let { configured ->
         check(efforts == null || configured in efforts) {
             "${config.envPrefix}_REASONING_EFFORT=[${configured.requestValue}] is not an effort $model takes. " +
                     "Supported values: ${efforts.orEmpty().joinToString { it.requestValue }.ifEmpty { "none" }}"
