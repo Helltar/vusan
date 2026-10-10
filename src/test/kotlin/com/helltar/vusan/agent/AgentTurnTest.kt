@@ -203,6 +203,21 @@ class AgentTurnTest {
             assertEquals("""{"query":"cats"}""", event.args)
         }
 
+    // a model stuck on one call reads the same answer until the budget ends the turn
+    @Test
+    fun `the third call with the same arguments is told it is repeating itself`() =
+        run(
+            toolCallReply(call("lookUp", id = "c1", args = arrayOf("query" to "cats"))),
+            toolCallReply(call("lookUp", id = "c2", args = arrayOf("query" to "cats"))),
+            toolCallReply(call("lookUp", id = "c3", args = arrayOf("query" to "cats"))),
+            textReply("done"),
+        ) { run, _ ->
+            val outputs = run.client.requests.drop(1).map { assertIs<Message.ToolResults>(it.messages.last()).results.single().output }
+
+            assertEquals("[#2] found: cats", outputs[1])
+            assertTrue(outputs[2].startsWith("[#3] found: cats\n\nThis is call 3 of `lookUp`"), outputs[2])
+        }
+
     @Test
     fun `read-only calls standing together run side by side, and the results keep the batch order`() =
         run(toolCallReply(call("lookUpTogether", "a", "query" to "a"), call("lookUpTogether", "b", "query" to "b")), textReply("ok")) { run, _ ->

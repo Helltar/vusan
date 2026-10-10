@@ -94,6 +94,9 @@ class AgentTurn internal constructor(
     private var calls = 0
     private var eventSeq = 0
 
+    // how often each (tool, arguments) pair ran this turn, for the note under a repeated call
+    private val callCounts = HashMap<String, Int>()
+
     // whether the model told the user what it was about to do, and whether it then did anything at all
     private var announced = false
     private var workedSinceAnnouncement = false
@@ -297,9 +300,22 @@ class AgentTurn internal constructor(
         // takes it by; history keeps it whole and unlabeled, since the label means nothing to the next turn
         val bounded = outcome.output.boundedToolText(toolBudget.remainingTokens)
         val labeled = slot.labeled(bounded, cut = bounded != outcome.output)
-        toolBudget.spend(estimateTokens(labeled))
+        val result = repeatedCallNote(call)?.let { "$labeled\n\n$it" } ?: labeled
+        toolBudget.spend(estimateTokens(result))
 
-        return ToolResult(call.id, call.name, labeled, outcome.isError)
+        return ToolResult(call.id, call.name, result, outcome.isError)
+    }
+
+    // a model stuck on one call repeats it with the same arguments and reads the same answer until the
+    // budget ends the turn; from the third time on the result says so. a note rather than a refusal, since
+    // a command may be polled on purpose: the model decides, having been told. keys are sorted, so the
+    // order the model wrote the arguments in cannot hide a repeat
+    private fun repeatedCallNote(call: Part.ToolCall): String? {
+        val key = call.name + call.arguments.entries.sortedBy { it.key }.joinToString { "${it.key}=${it.value}" }
+        val times = (callCounts[key] ?: 0) + 1
+        callCounts[key] = times
+
+        return repeatedCallMessage(call.name, times).takeIf { times >= REPEATED_CALL_NOTE_FROM }
     }
 
     // every failure becomes the result the model reads: the guard's own message, a decoding complaint about
@@ -325,6 +341,7 @@ class AgentTurn internal constructor(
 
     private companion object {
         const val TOOL_LOG_ARGS_MAX_CHARS = 300
+        const val REPEATED_CALL_NOTE_FROM = 3
         val log = KotlinLogging.logger {}
     }
 }
@@ -361,6 +378,11 @@ private fun cutOffResult(call: Part.ToolCall): ToolResult = ToolResult(call.id, 
 private const val CUT_OFF_CALL =
     "Your reply reached the output limit before this call was complete, so it did not run. " +
             "Reissue it with shorter arguments, splitting long content across several calls."
+
+internal fun repeatedCallMessage(tool: String, times: Int): String =
+    "This is call $times of `$tool` with exactly these arguments in this turn. " +
+            "If the result has not changed, repeating the call will not change it either: " +
+            "use what it answered, change the arguments, or say what is in the way."
 
 internal fun garbledCallMessage(tool: String, required: List<String>): String =
     "Tool `$tool` was called with no arguments at all; it takes: ${required.joinToString(", ")}. " +
