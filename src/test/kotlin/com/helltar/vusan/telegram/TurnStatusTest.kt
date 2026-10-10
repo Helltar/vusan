@@ -8,12 +8,15 @@ import java.lang.reflect.Proxy
 import java.util.concurrent.CompletableFuture
 import kotlin.test.Test
 import kotlin.test.assertEquals
+import kotlin.test.assertIs
 import kotlin.test.assertNull
 import kotlin.test.assertTrue
 import kotlin.time.Duration.Companion.minutes
 import kotlinx.coroutines.runBlocking
+import org.telegram.telegrambots.meta.api.methods.reactions.SetMessageReaction
 import org.telegram.telegrambots.meta.api.methods.send.SendMessage
 import org.telegram.telegrambots.meta.api.objects.message.Message
+import org.telegram.telegrambots.meta.api.objects.reactions.ReactionTypeEmoji
 import org.telegram.telegrambots.meta.generics.TelegramClient
 
 class TurnStatusTest {
@@ -83,7 +86,42 @@ class TurnStatusTest {
         assertTrue(posted.isEmpty())
     }
 
-    private fun statusOver(client: TelegramClient, posted: MutableList<String>) =
+    // a turn waiting in the line, or running in a slow-mode chat, has nothing else to show the message was heard
+    @Test
+    fun `an acknowledged turn marks its message as received and takes the mark off when it ends`() = runBlocking {
+        val reactions = mutableListOf<List<String>>()
+        val status = statusOver(recordingReactions(reactions), posted = mutableListOf(), acknowledges = true)
+
+        status.acknowledge()
+        status.finish()
+
+        assertEquals(listOf(listOf("👀"), emptyList()), reactions)
+    }
+
+    @Test
+    fun `a turn with something else to show touches no reaction`() = runBlocking {
+        val reactions = mutableListOf<List<String>>()
+        val status = statusOver(recordingReactions(reactions), posted = mutableListOf(), acknowledges = false)
+
+        status.acknowledge()
+        status.finish()
+
+        assertTrue(reactions.isEmpty())
+    }
+
+    private fun recordingReactions(reactions: MutableList<List<String>>): TelegramClient =
+        Proxy.newProxyInstance(
+            TelegramClient::class.java.classLoader,
+            arrayOf(TelegramClient::class.java),
+        ) { _, method, args ->
+            check(method.name == "executeAsync") { "unexpected client call: ${method.name}" }
+            val request = assertIs<SetMessageReaction>(args.single())
+
+            reactions += request.reactionTypes.orEmpty().map { assertIs<ReactionTypeEmoji>(it).emoji }
+            CompletableFuture.completedFuture(true)
+        } as TelegramClient
+
+    private fun statusOver(client: TelegramClient, posted: MutableList<String>, acknowledges: Boolean = false) =
         TurnStatus(
             client = client,
             target = ChatTarget(-7),
@@ -91,6 +129,7 @@ class TurnStatusTest {
             replyToMessageId = 77,
             messages = Messages.of(Language.ENGLISH),
             activityOpensIt = true,
+            acknowledges = acknowledges,
             onPosted = { posted += it },
         )
 

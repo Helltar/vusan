@@ -10,7 +10,6 @@ import io.github.oshai.kotlinlogging.KotlinLogging
 import java.io.ByteArrayInputStream
 import org.telegram.telegrambots.meta.api.methods.ParseMode
 import org.telegram.telegrambots.meta.api.methods.polls.SendPoll
-import org.telegram.telegrambots.meta.api.methods.reactions.SetMessageReaction
 import org.telegram.telegrambots.meta.api.methods.send.SendAudio
 import org.telegram.telegrambots.meta.api.methods.send.SendPhoto
 import org.telegram.telegrambots.meta.api.methods.send.SendVideo
@@ -23,7 +22,6 @@ import org.telegram.telegrambots.meta.api.objects.media.InputMediaDocument
 import org.telegram.telegrambots.meta.api.objects.media.InputMediaPhoto
 import org.telegram.telegrambots.meta.api.objects.message.Message
 import org.telegram.telegrambots.meta.api.objects.polls.input.InputPollOption
-import org.telegram.telegrambots.meta.api.objects.reactions.ReactionTypeEmoji
 import org.telegram.telegrambots.meta.generics.TelegramClient
 
 /**
@@ -151,15 +149,7 @@ internal object TelegramOutputSender {
         reaction: BotOutput.Reaction,
     ) {
         runCatching {
-            client.api {
-                executeAsync(
-                    SetMessageReaction.builder()
-                        .chatId(target.chatId.toString())
-                        .messageId(reaction.messageId.telegramMessageId.toInt())
-                        .reactionTypes(listOf(ReactionTypeEmoji.builder().emoji(reaction.emoji).build()))
-                        .build(),
-                )
-            }
+            setMessageReaction(client, target.chatId, reaction.messageId.telegramMessageId.toInt(), reaction.emoji)
         }.onFailure { e ->
             e.rethrowIfCancellation()
             // a failed reaction never breaks a turn — except when it failed because the chat is gone or

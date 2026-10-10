@@ -74,17 +74,20 @@ internal fun statusGraceFor(activity: ToolActivity): Duration =
  * at once, being a deliberate act rather than a side effect of some tool being slow, and an open
  * message then follows every activity, heavy or not. The status is closed here rather than by the
  * caller so that a stopped turn, which leaves through the cancellation, still takes its bubble off the
- * screen.
+ * screen. A turn that [acknowledge]s marks its message as received first, for the while in which neither
+ * surface will show anything: see [TurnStatus.acknowledge].
  */
 internal suspend fun <T> TelegramClient.withLiveProgress(
     request: AgentRequest,
     fallbackInUse: () -> FallbackInUse? = { null },
     onPosted: suspend (text: String) -> Unit = {},
+    acknowledge: Boolean = false,
     block: suspend (setActivity: (ToolActivity?) -> Unit, status: TurnStatus) -> T,
 ): T =
     coroutineScope {
         val activity = MutableStateFlow<ToolActivity?>(null)
-        val status = statusFor(request, fallbackInUse, onPosted)
+        val status = statusFor(request, fallbackInUse, onPosted, acknowledge)
+        status.acknowledge()
         val started = TimeSource.Monotonic.markNow()
 
         val actionTicker =
@@ -145,6 +148,7 @@ private fun TelegramClient.statusFor(
     request: AgentRequest,
     fallbackInUse: () -> FallbackInUse?,
     onPosted: suspend (text: String) -> Unit,
+    acknowledge: Boolean,
 ): TurnStatus =
     TurnStatus(
         client = this,
@@ -153,6 +157,7 @@ private fun TelegramClient.statusFor(
         replyToMessageId = request.context.messageId?.telegramMessageId,
         messages = Messages.of(request.context.language),
         activityOpensIt = request.context.chat.capabilities.slowModeSeconds == 0,
+        acknowledges = acknowledge,
         fallbackInUse = fallbackInUse,
         onPosted = onPosted,
     )

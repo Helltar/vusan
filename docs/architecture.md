@@ -345,7 +345,10 @@ A normal user message travels:
       screen — both announce the same turn — so the action carries the turn until the status message lands and then
       stands down, and it keeps the turn to itself when there is no status. A tool too fast to read a caption for is
       left unmapped and reads as `null`: plain `typing`, and nothing named. During delivery each item is still preceded
-      by the action matching its own content (`botActionFor`).
+      by the action matching its own content (`botActionFor`). A turn with nothing to show for a while — one that joins
+      the person's line behind a running turn, or one in a slow-mode chat, where no bubble opens for an activity — marks
+      its message as received with a 👀 reaction the moment it is admitted (`TurnStatus.acknowledge`) and takes it off
+      when the status closes; the reply, and any reaction the model chose, land after that.
     - **The status message** — one silent message per turn, the same in every kind of chat, carrying the running line
       and a stop button. Telegram's own surface for a generating agent, `sendMessageDraft`, is accepted for **private
       chats only**, so it could never be half of this; an ordinary message is what a group can have too. It opens lazily

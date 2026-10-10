@@ -139,6 +139,10 @@ internal class AgentTurns(
             request = request,
             inputKind = inputKind,
             waitForTurn = false,
+            // a message that joins the person's line, or starts in a slow-mode chat where no bubble opens for
+            // an activity, has nothing else to show for a while that it was heard
+            acknowledge =
+                agent.hasTurnUnderWay(request.context.scope) || request.context.chat.capabilities.slowModeSeconds > 0,
             deliver = { result -> delivery.send(message, result) },
             reply = { text -> delivery.sendReply(message, text) },
         )
@@ -193,6 +197,7 @@ internal class AgentTurns(
         waitForTurn: Boolean,
         deliver: suspend (AgentResult) -> Unit,
         reply: suspend (text: String) -> Unit,
+        acknowledge: Boolean = false,
     ) {
         val context = request.context
 
@@ -218,6 +223,7 @@ internal class AgentTurns(
                     request = request,
                     fallbackInUse = fallbackInUse,
                     onPosted = { text -> delivery.recordPostedMidTurn(context, text) },
+                    acknowledge = acknowledge,
                 ) { setActivity, status ->
                     if (waitForTurn)
                         agent.handleQueued(request, setActivity, status)

@@ -4,6 +4,7 @@ import com.helltar.vusan.telegram.api
 
 import java.io.ByteArrayInputStream
 import org.telegram.telegrambots.meta.api.methods.AnswerCallbackQuery
+import org.telegram.telegrambots.meta.api.methods.reactions.SetMessageReaction
 import org.telegram.telegrambots.meta.api.methods.send.SendAnimation
 import org.telegram.telegrambots.meta.api.methods.send.SendSticker
 import org.telegram.telegrambots.meta.api.methods.send.SendDocument
@@ -17,6 +18,7 @@ import org.telegram.telegrambots.meta.api.objects.InputFile
 import org.telegram.telegrambots.meta.api.objects.ReplyParameters
 import org.telegram.telegrambots.meta.api.objects.ephemeral.EphemeralMessageParameters
 import org.telegram.telegrambots.meta.api.objects.media.InputMedia
+import org.telegram.telegrambots.meta.api.objects.reactions.ReactionTypeEmoji
 import org.telegram.telegrambots.meta.api.objects.replykeyboard.InlineKeyboardMarkup
 import org.telegram.telegrambots.meta.api.objects.richtext.InputRichMessage
 import org.telegram.telegrambots.meta.generics.TelegramClient
@@ -150,6 +152,19 @@ internal suspend fun deleteChatMessage(client: TelegramClient, chatId: Long, mes
             DeleteMessage.builder()
                 .chatId(chatId)
                 .messageId(messageId)
+                .build(),
+        )
+    }
+}
+
+/** Sets the bot's one reaction on a message, or takes it off when [emoji] is `null`. */
+internal suspend fun setMessageReaction(client: TelegramClient, chatId: Long, messageId: Int, emoji: String?) {
+    client.api {
+        executeAsync(
+            SetMessageReaction.builder()
+                .chatId(chatId)
+                .messageId(messageId)
+                .reactionTypes(listOfNotNull(emoji?.let { ReactionTypeEmoji.builder().emoji(it).build() }))
                 .build(),
         )
     }

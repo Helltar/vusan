@@ -16,6 +16,7 @@ import com.helltar.vusan.telegram.delivery.isMessageNotModified
 import com.helltar.vusan.telegram.delivery.isReplyMessageNotFound
 import com.helltar.vusan.telegram.delivery.replyParameters
 import com.helltar.vusan.telegram.delivery.sendStatusMessage
+import com.helltar.vusan.telegram.delivery.setMessageReaction
 import io.github.oshai.kotlinlogging.KotlinLogging
 import kotlinx.coroutines.NonCancellable
 import kotlinx.coroutines.sync.Mutex
@@ -84,6 +85,10 @@ internal fun activityStatusLabel(activity: ToolActivity, messages: Messages): St
  * removes it, unless the model put its own words in it: those stay in the chat as the message they
  * already were, without the status line under them and without the button. A message the model sends
  * mid-turn ([send]) is a message of its own, and the status moves back under it.
+ *
+ * A turn with nothing to show for a while — one waiting in the person's line behind another, or one in
+ * a slow-mode chat, where no bubble opens for an activity — marks its message as received with a reaction
+ * instead ([acknowledge]), and takes it off when it ends; whatever reaction the model chose lands after.
  */
 internal class TurnStatus(
     private val client: TelegramClient,
@@ -94,6 +99,8 @@ internal class TurnStatus(
     // in a slow-mode group the bot's messages are rationed, so a bubble is spent only on words the model
     // chose to send; naming a running tool is never worth one of those slots.
     private val activityOpensIt: Boolean,
+    // whether the message is marked as received with a reaction while the turn has nothing else to show
+    private val acknowledges: Boolean = false,
     // which model is answering while the usual provider is out, and when that provider said it would be
     // back, so a turn served by the fallback says so where it is happening rather than only in the log.
     private val fallbackInUse: () -> FallbackInUse? = { null },
@@ -113,6 +120,23 @@ internal class TurnStatus(
     private var shown: String? = null
     private var parseMode: String? = ParseMode.HTML
     private var gone = false
+    private var acknowledged = false
+
+    /** Marks the message as received, when this turn is one that has nothing else to show for a while. */
+    suspend fun acknowledge() {
+        if (!acknowledges) return
+
+        edits.withLock {
+            val id = anchor ?: return
+
+            runCatching { setMessageReaction(client, target.chatId, id.toInt(), RECEIPT_REACTION) }
+                .onSuccess { acknowledged = true }
+                .onFailure { error ->
+                    error.rethrowIfCancellation()
+                    log.info { "the message could not be marked as received in chat=${target.chatId}: ${error.message}" }
+                }
+        }
+    }
 
     /**
      * Names [activity] in the status, spending a message on it only when [mayOpen]: an activity that is
@@ -186,6 +210,15 @@ internal class TurnStatus(
 
     suspend fun finish() {
         edits.withLock {
+            if (acknowledged) {
+                acknowledged = false
+
+                anchor?.let { id ->
+                    runCatching { setMessageReaction(client, target.chatId, id.toInt(), emoji = null) }
+                        .onFailure { error -> error.rethrowIfCancellation() }
+                }
+            }
+
             val id = messageId ?: return
             val plan = announcement
 
@@ -308,6 +341,8 @@ internal class TurnStatus(
             .build()
 
     private companion object {
+        const val RECEIPT_REACTION = "👀"
+
         val log = KotlinLogging.logger {}
     }
 }
