@@ -3,11 +3,14 @@ package com.helltar.vusan.infra
 import io.ktor.client.*
 import io.ktor.client.engine.*
 import io.ktor.client.engine.cio.*
+import io.ktor.client.network.sockets.ConnectTimeoutException
+import io.ktor.client.network.sockets.SocketTimeoutException
 import io.ktor.client.plugins.*
 import io.ktor.client.plugins.contentnegotiation.*
 import io.ktor.client.statement.*
 import io.ktor.serialization.kotlinx.json.*
 import kotlinx.serialization.json.Json
+import java.io.IOException
 
 object Http {
 
@@ -34,12 +37,14 @@ object Http {
         // single host + capped-body message that never echoes the request URL (which may carry keys).
         HttpResponseValidator {
             handleResponseExceptionWithRequest { cause, request ->
-                if (cause is ResponseException) {
-                    throw HttpStatusException(
-                        cause.response.status.value,
-                        request.url.host,
-                        cause.response.bodyAsTextSafe(),
-                    )
+                when (cause) {
+                    is ResponseException ->
+                        throw HttpStatusException(cause.response.status.value, request.url.host, cause.response.bodyAsTextSafe())
+
+                    // ktor names the whole URL in these, query and keys included, and a tool's guard hands the
+                    // message to the model
+                    is HttpRequestTimeoutException, is ConnectTimeoutException, is SocketTimeoutException ->
+                        throw HttpTimedOutException(request.url.host, cause)
                 }
             }
         }
@@ -55,6 +60,9 @@ object Http {
 }
 
 private const val ERROR_BODY_PREVIEW_LIMIT = 1_000
+
+/** A request to a configured service that timed out, named by host alone. */
+internal class HttpTimedOutException(host: String, cause: Throwable) : IOException("request to $host timed out", cause)
 
 /**
  * A non-2xx response from a configured service.
