@@ -27,9 +27,7 @@ import com.helltar.vusan.tools.files.FileTools
 import com.helltar.vusan.tools.giphy.GiphyClient
 import com.helltar.vusan.tools.giphy.GiphyTools
 import com.helltar.vusan.tools.klipy.KlipyClient
-import com.helltar.vusan.tools.klipy.KlipyKind
 import com.helltar.vusan.tools.klipy.KlipyTools
-import com.helltar.vusan.tools.klipy.deliverableIn
 import com.helltar.vusan.tools.grouplog.GroupLogTools
 import com.helltar.vusan.tools.context.ContextTools
 import com.helltar.vusan.tools.imagegen.ImageGenTools
@@ -122,7 +120,7 @@ class ToolCatalogFactory(
         TelegramChannelTools(
             TelegramChannelReader(
                 telegramChannelClient,
-                vision?.let { TelegramChannelImageDescriber(it.client, it.model, it.options) },
+                imageVisionClient?.let { TelegramChannelImageDescriber(it) },
             ),
         )
 
@@ -258,11 +256,9 @@ class ToolCatalogFactory(
             }
 
             // both answer to the same tool names, so one of them is registered: KLIPY where it is
-            // configured, because it also finds memes and clips, which a chat may take without taking GIFs.
-            val klipy = klipyClient?.takeIf { KlipyKind.entries.any { kind -> kind.deliverableIn(chat) } }
-
+            // configured, because it also finds memes and clips, which are inputs for other tools too.
             when {
-                klipy != null -> tools(ToolGroup.GIFS, KlipyTools(klipy, fileDownloadClient, outbox))
+                klipyClient != null -> tools(ToolGroup.GIFS, KlipyTools(klipyClient, fileDownloadClient, outbox))
                 chat.stickersAndAnimations -> giphyClient?.let { tools(ToolGroup.GIFS, GiphyTools(it, outbox)) }
             }
 

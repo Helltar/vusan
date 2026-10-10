@@ -1,70 +1,35 @@
 package com.helltar.vusan.tools.tgchannel
 
-import com.helltar.vusan.llm.ChatRequest
-import com.helltar.vusan.llm.LlmClient
-import com.helltar.vusan.llm.LlmModel
-import com.helltar.vusan.llm.Message
-import com.helltar.vusan.llm.Part
-import com.helltar.vusan.llm.RequestOptions
 import com.helltar.vusan.common.limitTo
+import com.helltar.vusan.request.AttachedFile
+import com.helltar.vusan.request.AttachedFileKind
+import com.helltar.vusan.tools.vision.ImageVisionClient
 
 private const val MAX_TELEGRAM_CHANNEL_IMAGE_BYTES = 8 * 1024 * 1024
+private const val MAX_POST_TEXT_CHARS = 1_000
 
-class TelegramChannelImageDescriber(
-    private val client: LlmClient,
-    private val model: LlmModel,
-    private val options: RequestOptions,
-) {
+// what a post's picture is looked at for, beyond whatever the person asked about
+private const val POST_IMAGE_FOCUS =
+    "This picture is part of a channel post: project visuals, UI, screenshots, visible text and quality signals matter."
+
+/** A channel post's picture, looked at by the same vision as an attached image, with the post's text as its caption. */
+class TelegramChannelImageDescriber(private val vision: ImageVisionClient) {
 
     suspend fun describe(image: TelegramChannelImage, post: TelegramChannelPost, focus: String): String {
         if (image.bytes.size > MAX_TELEGRAM_CHANNEL_IMAGE_BYTES) {
             return "Image is too large for vision (${image.bytes.size} bytes, limit $MAX_TELEGRAM_CHANNEL_IMAGE_BYTES)."
         }
 
-        val description = client.complete(model, buildRequest(image, post, focus)).message.text.trim()
+        val file =
+            AttachedFile(
+                name = image.filename,
+                fileSizeBytes = image.bytes.size.toLong(),
+                mimeType = image.mimeType,
+                kind = AttachedFileKind.IMAGE,
+                caption = post.text.takeIf { it.isNotBlank() }?.limitTo(MAX_POST_TEXT_CHARS),
+                loadBytes = { image.bytes },
+            )
 
-        return description.ifBlank { "Vision returned an empty description for this image." }
+        return vision.describe(file, image.bytes, listOf(POST_IMAGE_FOCUS, focus.trim()).filter { it.isNotBlank() }.joinToString(" "))
     }
-
-    private fun buildRequest(image: TelegramChannelImage, post: TelegramChannelPost, focus: String) =
-        ChatRequest(
-            listOf(
-                Message.System(
-                    "You describe images embedded in public Telegram channel posts for a chat assistant. " +
-                            "Be concise, factual, and avoid guessing identities. Mention visible text if any. " +
-                            "Reply in the user's language when clear.",
-                ),
-                Message.User(
-                    listOf(
-                        Part.Text(
-                            buildString {
-                        appendLine("Describe this Telegram channel post image for later summarization/evaluation.")
-                        appendLine("Focus on project visuals, UI, screenshots, visible text, quality signals, and anything relevant to the user's request.")
-                        appendLine("Keep it concise.")
-                        if (focus.isNotBlank()) {
-                            appendLine()
-                            appendLine("User focus:")
-                            appendLine(focus.trim())
-                        }
-                        appendLine()
-                        appendLine("Post metadata:")
-                        appendLine("- post_url: ${post.url}")
-                        post.postedAt?.let { appendLine("- posted_at: $it") }
-                        post.text.takeIf { it.isNotBlank() }?.let {
-                            appendLine("- post_text:")
-                            appendLine(it.limitTo(1_000))
-                        }
-                        appendLine()
-                        appendLine("Image metadata:")
-                        appendLine("- image_url: ${image.url}")
-                        appendLine("- mime_type: ${image.mimeType}")
-                        appendLine("- filename: ${image.filename}")
-                    },
-                        ),
-                        Part.Image(image.bytes, image.mimeType, image.filename),
-                    ),
-                ),
-            ),
-            options = options,
-        )
 }
