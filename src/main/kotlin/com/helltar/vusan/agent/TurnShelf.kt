@@ -41,8 +41,9 @@ class TurnShelf(
     private val calls = mutableListOf<Call>()
     private var keptBytes = 0L
 
-    // named by when the turn started, so the directories sort in the order the turns came
-    private val directory = "$TURNS_DIRECTORY/" + STAMP.format(startedAt.atZone(ZoneId.systemDefault()))
+    // named by when the turn started, so the directories sort in the order the turns came; settled at the
+    // first copy, when the sandbox says whether the name is free
+    private var directory = "$TURNS_DIRECTORY/" + STAMP.format(startedAt.atZone(ZoneId.systemDefault()))
 
     // copies run from whichever sandbox call comes next, and two of a batch must not write the same thing
     private val copying = Mutex()
@@ -76,7 +77,7 @@ class TurnShelf(
 
             if (!started) {
                 started = true
-                removeOldTurns(sandbox)
+                directory = claimDirectory(sandbox)
                 attachments.forEachIndexed { index, file -> lines += copyAttachment(sandbox, index + 1, file) }
             }
 
@@ -87,20 +88,29 @@ class TurnShelf(
     }
 
     // a turn often picks up what the one before it was given or made, so a few stay; the rest would only
-    // fill a home of a fixed size with downloads nobody will open again
-    private suspend fun removeOldTurns(sandbox: ShelfSandbox) {
-        val current = directory.substringAfterLast('/')
+    // fill a home of a fixed size with downloads nobody will open again. the same listing says whether
+    // the turn's name is taken: one person starting two turns within a second, in two chats, gets the
+    // next free name rather than a directory shared with the other turn
+    private suspend fun claimDirectory(sandbox: ShelfSandbox): String {
+        val existing =
+            runCatching { sandbox.directories(TURNS_DIRECTORY) }
+                .getOrElse {
+                    it.rethrowIfCancellation()
+                    log.warn { "turn directories could not be listed, old ones left in place: ${it.message}" }
+                    return directory
+                }
 
         runCatching {
-            sandbox.directories(TURNS_DIRECTORY)
-                .filter { it != current }
-                .sorted()
-                .dropLast(KEPT_TURNS - 1)
-                .forEach { sandbox.deleteDirectory("$TURNS_DIRECTORY/$it") }
+            existing.sorted().dropLast(KEPT_TURNS - 1).forEach { sandbox.deleteDirectory("$TURNS_DIRECTORY/$it") }
         }.onFailure {
             it.rethrowIfCancellation()
             log.warn { "old turn directories left in place: ${it.message}" }
         }
+
+        val stamp = directory.substringAfterLast('/')
+        val name = generateSequence(1) { it + 1 }.map { if (it == 1) stamp else "$stamp-$it" }.first { it !in existing }
+
+        return "$TURNS_DIRECTORY/$name"
     }
 
     private suspend fun copyAttachment(sandbox: ShelfSandbox, index: Int, file: AttachedFile): String {

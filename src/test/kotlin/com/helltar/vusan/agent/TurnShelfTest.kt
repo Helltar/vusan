@@ -241,6 +241,20 @@ class TurnShelfTest {
         assertEquals(listOf("turns/260101-090000", "turns/260102-090000"), sandbox.deleted)
     }
 
+    // one person starting two turns within a second, in two chats, must not have them write over each other
+    @Test
+    fun `a turn whose name is taken writes under the next free one`() = runBlocking {
+        val stamp = DIRECTORY.substringAfterLast('/')
+        val shelf = TurnShelf(listOf(attachment("photo.jpg")), startedAt = START)
+        val sandbox = FakeSandbox(existing = listOf(stamp, "$stamp-2"))
+        shelf.connectSandbox(sandbox)
+
+        shelf.copyToSandbox()
+
+        assertEquals(listOf("$DIRECTORY-3/00-1-photo.jpg"), sandbox.written)
+        assertTrue(sandbox.deleted.isEmpty())
+    }
+
     @Test
     fun `a write the sandbox refuses is reported and does not stop the rest`() = runBlocking {
         val shelf = TurnShelf(startedAt = START)
