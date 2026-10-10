@@ -1,5 +1,6 @@
 package com.helltar.vusan.tools.vision
 
+import com.helltar.vusan.common.xmlBlock
 import com.helltar.vusan.llm.ChatRequest
 import com.helltar.vusan.llm.LlmClient
 import com.helltar.vusan.llm.LlmModel
@@ -48,8 +49,7 @@ class ImageVisionClient(
 
                         image.caption?.takeIf { it.isNotBlank() }?.let {
                             appendLine()
-                            appendLine("Caption:")
-                            appendLine(it)
+                            appendLine(xmlBlock("caption", it))
                         }
                     },
                         ),

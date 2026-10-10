@@ -1,5 +1,6 @@
 package com.helltar.vusan.tools.tavily
 
+import com.helltar.vusan.common.xmlBlock
 import com.helltar.vusan.tools.Arg
 import com.helltar.vusan.tools.Tool
 import com.helltar.vusan.tools.ToolSet
@@ -114,20 +115,19 @@ class TavilyTools(
 
         if (result == null) {
             val reason = response.failedResults.firstOrNull()?.error ?: "unknown error"
-            return@suspendToolGuard "Could not extract content from $url: $reason. `readPage` reads the same address directly."
+            error("Could not extract content from $url: $reason. `readPage` reads the same address directly.")
         }
 
         val content = result.rawContent.trim().limitTo(MAX_EXTRACT_CHARS)
 
         if (content.isBlank()) {
-            return@suspendToolGuard "Page at $url returned empty content. `readPage` reads the same address directly."
+            error("Page at $url returned empty content. `readPage` reads the same address directly.")
         }
 
+        // the same shape `readPage` answers in: the page is evidence inside its own block, never bare text
         buildString {
-            append("Content from ")
-            append(url)
-            appendLine(":")
-            append(content)
+            appendLine("Use this page as evidence for the answer.")
+            append(xmlBlock("page", "url: $url\n\n$content"))
 
             if (result.rawContent.length > MAX_EXTRACT_CHARS) {
                 appendLine()
