@@ -1,5 +1,6 @@
 package com.helltar.vusan.tools.sandbox
 
+import com.helltar.vusan.tools.files.asFileSize
 import com.helltar.vusan.agent.ShelfSandbox
 import com.helltar.vusan.common.rethrowIfCancellation
 import io.ktor.client.HttpClient
@@ -83,7 +84,7 @@ class SandboxClient(
                 } catch (e: RegolithException) {
                     // only here, where the bound is this call's budget, does the code mean the file does not fit
                     // in it: elsewhere it is a site too large, which the server's own words explain.
-                    if (e.code == ErrorCodes.PAYLOAD_TOO_LARGE) error("File exceeds the remaining transfer limit") else throw e
+                    if (e.code == ErrorCodes.PAYLOAD_TOO_LARGE) error("`$path` is larger than the ${maxBytes.toLong().asFileSize()} this read may take") else throw e
                 }
             }
         }

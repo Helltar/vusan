@@ -788,7 +788,8 @@ history still uses `(userId, chatId)`; only the files and the commands running i
   what the model is told — capacity reads as "try again" with the wait the server asked for, an unavailable
   server as its own reason plus that wait, everything else as the server's own sentence; no answer at all reads
   as temporarily unavailable.
-- **`SandboxTools`** — the model-facing surface: run, read, cancel, write, delete, reset, send. It copies each of
+- **`SandboxTools`** — the model-facing surface: run a command and read its output, cancel it, write, read and edit
+  a file, reset the sandbox, send files out. It copies each of
   the turn's files into a directory of the turn's own before the first command that might want them, and renders a
   command as text the model can act on — the exit code, and the session limit that explains it
   when the memory or process cap is what killed it. Before every call that writes or runs, `TurnShelf.copyToSandbox`
@@ -902,8 +903,8 @@ A new agent tool typically touches these, in order:
 2. **`tools/<feature>/<Feature>ToolDescriptions.kt`** — an `internal object` of `const val` descriptions referenced by
    the `@Tool` and `@Arg` descriptions (see the convention in `AGENTS.md`).
 3. *(optional)* **`<Feature>Client.kt`** / **`<Feature>Models.kt`** — the external I/O and its DTOs.
-4. **`tools/ToolCatalogFactory.kt`** — register it in `buildCatalog`; wrap construction in the `optional(...)` helper
-   when it depends on an API key that may be unset. Register it under a `ToolGroup` when a turn rarely needs it, and
+4. **`tools/ToolCatalogFactory.kt`** — register it in `buildCatalog`; construct it only when the key it depends on is
+   set (`config.fooApiKey?.let { … }`). Register it under a `ToolGroup` when a turn rarely needs it, and
    leave it visible when the model may need it without being asked for it by name; a new group also needs its one-line
    summary in `tools/ToolCatalog.kt`, since that line is all the model reads before loading it. A tool only one messenger can implement goes to that adapter's
    `PlatformToolSets` instead (`telegram/tools/TelegramToolSets.kt`), gated there on the same chat capability.

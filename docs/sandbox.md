@@ -124,6 +124,8 @@ own:
 | Command text | 16 000 characters |
 | File write through a tool | 400 000 characters of text |
 | Files out of the sandbox | 10 files and 50 MB per call |
+| A text file read or edited through a tool | 2 MB, and 60 000 characters per read |
+| A path, a job id | 400 and 64 characters |
 | Attachment into the sandbox | 20 MB |
 | What the turn made, into `turns/` | 50 MB per file; a turn keeps at most 200 MB of files for its tools in all; the last three turns' directories |
 | A file handed back to a tool as `sandbox:<path>` | 50 MB, or 1 MB where it stands in for text |

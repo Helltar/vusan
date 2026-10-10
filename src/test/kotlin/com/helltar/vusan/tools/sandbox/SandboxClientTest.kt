@@ -64,7 +64,7 @@ class SandboxClientTest {
 
         val error = assertFailsWith<IllegalStateException> { client.sandboxOf("telegram:1").readFile("sample.bin", 4) }
 
-        assertContains(error.message.orEmpty(), "transfer limit")
+        assertContains(error.message.orEmpty(), "is larger than")
         assertEquals(listOf<String?>("4"), bounds)
     }
 
@@ -77,7 +77,7 @@ class SandboxClientTest {
 
         val error = assertFailsWith<IllegalStateException> { client.sandboxOf("telegram:1").readFile("sample.bin", 4) }
 
-        assertContains(error.message.orEmpty(), "transfer limit")
+        assertContains(error.message.orEmpty(), "is larger than")
     }
 
     @Test
