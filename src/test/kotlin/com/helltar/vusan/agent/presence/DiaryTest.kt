@@ -32,7 +32,7 @@ class DiaryTest {
     fun setUp() {
         tempDir = Files.createTempDirectory("vusan-diary-test")
         runBlocking { Db.connect(testConfig(tempDir.resolve("vusan.db").toString())) }
-        groupLog = GroupLogRepository(GroupLogConfig())
+        groupLog = GroupLogRepository(GroupLogConfig(), ZoneOffset.UTC)
     }
 
     @AfterTest
@@ -155,7 +155,7 @@ class DiaryTest {
     }
 
     private fun diary(writer: DiaryWriter, isAllowed: (ChatRef) -> Boolean = { true }) =
-        Diary(writer, repository, groupLog, isAllowed, zone = ZoneOffset.UTC, clock = { now })
+        Diary(writer, repository, groupLog, isAllowed, clock = { now })
 
     private data class Call(val day: LocalDate, val transcript: String, val earlier: List<DiaryEntry>)
 

@@ -23,7 +23,7 @@ class GroupLogReader(
     private val repository: GroupLogRepository,
     private val digester: GroupLogDigester?,
     private val budgetChars: Int,
-    private val zone: ZoneId = ZoneId.systemDefault(),
+    private val zone: ZoneId = repository.zone,
 ) {
 
     suspend fun read(

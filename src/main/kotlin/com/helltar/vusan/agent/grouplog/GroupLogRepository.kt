@@ -40,7 +40,11 @@ import java.time.ZoneId
  * Separate from [com.helltar.vusan.agent.conversation], which is keyed by user **and** chat and only ever
  * holds turns the bot took part in.
  */
-class GroupLogRepository(private val config: GroupLogConfig) {
+class GroupLogRepository(
+    private val config: GroupLogConfig,
+    /** The zone a transcript day is cut on. A digest is keyed by day, so every reader takes its zone from here. */
+    val zone: ZoneId = ZoneId.systemDefault(),
+) {
 
     /** How far back the log reaches at all, so a reader can refuse a window it could never fill. */
     val retentionDays: Int
@@ -91,7 +95,7 @@ class GroupLogRepository(private val config: GroupLogConfig) {
             if (updated > 0) {
                 GroupLogDigestsTable.deleteWhere {
                     digestsInChat(entry.chat) and
-                            (GroupLogDigestsTable.day eq LocalDate.ofInstant(entry.sentAt, ZONE).toString())
+                            (GroupLogDigestsTable.day eq LocalDate.ofInstant(entry.sentAt, zone).toString())
                 }
             }
 
@@ -285,7 +289,7 @@ class GroupLogRepository(private val config: GroupLogConfig) {
 
             GroupLogDigestsTable.deleteWhere {
                 digestsInChat(chat) and
-                        (GroupLogDigestsTable.day less LocalDate.ofInstant(cutoff, ZONE).toString())
+                        (GroupLogDigestsTable.day less LocalDate.ofInstant(cutoff, zone).toString())
             }
 
             val keepMinId =
@@ -314,8 +318,6 @@ private const val DESCRIPTOR_COLUMN_CHARS = 200
 private const val FORWARD_COLUMN_CHARS = 128
 
 private fun String?.fitColumn(maxChars: Int): String? = this?.limitTo(maxChars)
-
-private val ZONE: ZoneId get() = ZoneId.systemDefault()
 
 private fun inChat(chat: ChatRef): Op<Boolean> =
     (GroupLogTable.platform eq chat.platform) and (GroupLogTable.chatId eq chat.id)

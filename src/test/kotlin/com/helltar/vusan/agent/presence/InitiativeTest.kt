@@ -38,7 +38,7 @@ class InitiativeTest {
     fun setUp() {
         tempDir = Files.createTempDirectory("vusan-initiative-test")
         runBlocking { Db.connect(testConfig(tempDir.resolve("vusan.db").toString())) }
-        groupLog = GroupLogRepository(GroupLogConfig())
+        groupLog = GroupLogRepository(GroupLogConfig(), ZoneOffset.UTC)
     }
 
     @AfterTest
@@ -372,7 +372,6 @@ class InitiativeTest {
             isAllowed = isAllowed,
             isAnswering = isAnswering,
             stickers = stickers,
-            zone = ZoneOffset.UTC,
             clock = { now },
             random = Random(1),
         )

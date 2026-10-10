@@ -35,7 +35,7 @@ class Diary(
     private val repository: DiaryRepository,
     private val groupLog: GroupLogRepository,
     private val isAllowed: (ChatRef) -> Boolean,
-    private val zone: ZoneId = ZoneId.systemDefault(),
+    private val zone: ZoneId = groupLog.zone,
     private val clock: () -> Instant = Instant::now,
 ) {
 

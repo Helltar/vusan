@@ -72,7 +72,7 @@ class Initiative(
     private val isAnswering: (ChatRef) -> Boolean = { false },
     private val diary: (suspend (ChatRef) -> String?)? = null,
     private val stickers: StickerShortlist? = null,
-    private val zone: ZoneId = ZoneId.systemDefault(),
+    private val zone: ZoneId = groupLog.zone,
     private val clock: () -> Instant = Instant::now,
     private val random: Random = Random.Default,
 ) {

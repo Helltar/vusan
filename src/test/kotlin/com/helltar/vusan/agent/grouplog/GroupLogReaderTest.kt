@@ -38,7 +38,7 @@ class GroupLogReaderTest {
     fun setUp() {
         tempDir = Files.createTempDirectory("vusan-chat-log-reader-test")
         runBlocking { Db.connect(testConfig(tempDir.resolve("vusan.db").toString())) }
-        repository = GroupLogRepository(GroupLogConfig())
+        repository = GroupLogRepository(GroupLogConfig(), zone)
     }
 
     @AfterTest
@@ -73,7 +73,7 @@ class GroupLogReaderTest {
     fun `an overflowing window without a digester truncates and says how much it dropped`() = runBlocking {
         repeat(200) { record(it + 1L, "message number $it", now.minusSeconds(3_000L - it)) }
 
-        val result = GroupLogReader(repository, digester = null, budgetChars = 500, zone = zone)
+        val result = GroupLogReader(repository, digester = null, budgetChars = 500)
             .read(CHAT, 1.hours, now = now)
 
         assertContains(result, "Messages in this window: 200 (exact, for the whole window).")
@@ -86,7 +86,7 @@ class GroupLogReaderTest {
     fun `a truncated window reports the whole count and not the quoted one`() = runBlocking {
         repeat(200) { record(it + 1L, "message number $it", now.minusSeconds(3_000L - it)) }
 
-        val result = GroupLogReader(repository, digester = null, budgetChars = 500, zone = zone)
+        val result = GroupLogReader(repository, digester = null, budgetChars = 500)
             .read(CHAT, 1.hours, now = now)
 
         val quoted = Regex("""Showing the newest (\d+)""").find(result)?.groupValues?.get(1)?.toInt()
@@ -101,7 +101,7 @@ class GroupLogReaderTest {
         val digester = RecordingDigester()
         repeat(200) { record(it + 1L, "message number $it", now.minusSeconds(3_000L - it)) }
 
-        val result = GroupLogReader(repository, digester, budgetChars = 500, zone = zone)
+        val result = GroupLogReader(repository, digester, budgetChars = 500)
             .read(CHAT, 1.hours, now = now)
 
         assertContains(result, "Window: 2026-08-04T14:00 .. 2026-08-04T15:00 Europe/Kyiv.")
@@ -115,7 +115,7 @@ class GroupLogReaderTest {
         val digester = RecordingDigester()
         repeat(200) { record(it + 1L, "from olena $it", now.minusSeconds(3_000L - it)) }
 
-        val result = GroupLogReader(repository, digester, budgetChars = 500, zone = zone)
+        val result = GroupLogReader(repository, digester, budgetChars = 500)
             .read(CHAT, 1.hours, author = "olena", now = now)
 
         assertContains(result, "<transcript>")
@@ -127,7 +127,7 @@ class GroupLogReaderTest {
         repeat(120) { record(it + 1L, "olena $it", now.minusSeconds(3_000L - it)) }
         repeat(30) { recordFrom(500L + it, "petro $it", now.minusSeconds(2_000L - it), "petro", "Petro Koval") }
 
-        val result = GroupLogReader(repository, RecordingDigester(), budgetChars = 500, zone = zone)
+        val result = GroupLogReader(repository, RecordingDigester(), budgetChars = 500)
             .read(CHAT, 1.hours, author = "petro", now = now)
 
         assertContains(result, "Messages in this window: 30 from `petro` (exact, for the whole window).")
@@ -141,7 +141,7 @@ class GroupLogReaderTest {
         repeat(80) { record(2_000L + it, "yesterday $it", instantAt(2026, 8, 3, 10)) }
         repeat(80) { record(3_000L + it, "today $it", instantAt(2026, 8, 4, 11)) }
 
-        val result = GroupLogReader(repository, digester, budgetChars = 1_200, zone = zone)
+        val result = GroupLogReader(repository, digester, budgetChars = 1_200)
             .read(CHAT, 3.days, now = now)
 
         assertEquals(listOf(LocalDate.of(2026, 8, 2), LocalDate.of(2026, 8, 3)), digester.days.sorted())
@@ -160,7 +160,7 @@ class GroupLogReaderTest {
         repeat(60) { record(2_000L + it, "late on the 3rd $it", instantAt(2026, 8, 3, 20)) }
         repeat(60) { record(3_000L + it, "today $it", instantAt(2026, 8, 4, 11)) }
 
-        val result = GroupLogReader(repository, RecordingDigester(), budgetChars = 1_200, zone = zone)
+        val result = GroupLogReader(repository, RecordingDigester(), budgetChars = 1_200)
             .read(CHAT, 24.hours, now = now)
 
         assertContains(result, "Window: 2026-08-03T00:00 .. 2026-08-04T15:00 Europe/Kyiv.")
@@ -172,7 +172,7 @@ class GroupLogReaderTest {
         repeat(80) { record(2_000L + it, "yesterday $it", instantAt(2026, 8, 3, 10)) }
         repeat(80) { record(3_000L + it, "today number $it", instantAt(2026, 8, 4, 11)) }
 
-        val result = GroupLogReader(repository, RecordingDigester(), budgetChars = 1_200, zone = zone)
+        val result = GroupLogReader(repository, RecordingDigester(), budgetChars = 1_200)
             .read(CHAT, 2.days, now = now)
 
         val quoted =
@@ -190,7 +190,7 @@ class GroupLogReaderTest {
         repeat(80) { record(2_000L + it, "yesterday $it", instantAt(2026, 8, 3, 10)) }
         repeat(80) { record(3_000L + it, "today $it", instantAt(2026, 8, 4, 11)) }
 
-        val reader = GroupLogReader(repository, digester, budgetChars = 1_200, zone = zone)
+        val reader = GroupLogReader(repository, digester, budgetChars = 1_200)
 
         reader.read(CHAT, 2.days, now = now)
         assertEquals(1, digester.days.size)
@@ -206,7 +206,7 @@ class GroupLogReaderTest {
         repeat(80) { record(2_000L + it, "yesterday $it", instantAt(2026, 8, 3, 10)) }
         repeat(80) { record(3_000L + it, "today $it", instantAt(2026, 8, 4, 11)) }
 
-        GroupLogReader(repository, RecordingDigester(), budgetChars = 1_200, zone = zone)
+        GroupLogReader(repository, RecordingDigester(), budgetChars = 1_200)
             .read(CHAT, 2.days, now = now)
 
         assertEquals(null, repository.digestFor(CHAT, LocalDate.of(2026, 8, 4)))
@@ -217,7 +217,7 @@ class GroupLogReaderTest {
         repeat(80) { record(2_000L + it, "yesterday $it", instantAt(2026, 8, 3, 10)) }
         repeat(80) { record(3_000L + it, "today $it", instantAt(2026, 8, 4, 11)) }
 
-        val result = GroupLogReader(repository, FailingDigester(), budgetChars = 1_200, zone = zone)
+        val result = GroupLogReader(repository, FailingDigester(), budgetChars = 1_200)
             .read(CHAT, 2.days, now = now)
 
         assertContains(result, """<today date="2026-08-04" messages="80"""")
@@ -239,14 +239,14 @@ class GroupLogReaderTest {
                 )
             }
 
-        val result = GroupLogReader(repository, digester, budgetChars = 1_200, zone = zone).read(CHAT, 2.days, now = now)
+        val result = GroupLogReader(repository, digester, budgetChars = 1_200).read(CHAT, 2.days, now = now)
 
         assertContains(result, "recap of 2026-08-03")
         assertEquals(null, repository.digestFor(CHAT, LocalDate.of(2026, 8, 3)), "a stale recap was cached")
     }
 
     private fun reader(digester: GroupLogDigester? = null) =
-        GroupLogReader(repository, digester, budgetChars = 10_000, zone = zone)
+        GroupLogReader(repository, digester, budgetChars = 10_000)
 
     private suspend fun record(messageId: Long, text: String, at: Instant) =
         recordFrom(messageId, text, at, username = "olena", name = "Olena Petrenko")
