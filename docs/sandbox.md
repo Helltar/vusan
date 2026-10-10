@@ -51,7 +51,7 @@ them — see
 [configuration](configuration.md#sandbox). The bot never reaches the sandbox host any other way: one
 token, one HTTPS or private address, no Docker socket on this side.
 
-The server has to run **Regolith 0.6**. The bot talks to it through Regolith's own client, which reads
+The server has to run **Regolith 0.7**. The bot talks to it through Regolith's own client, which reads
 the server's answers by that release's protocol, so a server from another minor version is not
 understood.
 

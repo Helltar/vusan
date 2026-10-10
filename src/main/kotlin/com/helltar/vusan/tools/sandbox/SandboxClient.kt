@@ -236,7 +236,7 @@ private fun ExecInfo.commandStatus(): CommandStatus = when {
     else -> when (outcome?.type) {
         OutcomeType.EXITED -> CommandStatus.COMPLETED
         OutcomeType.TIMED_OUT -> CommandStatus.TIMED_OUT
-        OutcomeType.CANCELLED -> CommandStatus.CANCELED
+        OutcomeType.CANCELED -> CommandStatus.CANCELED
         OutcomeType.INTERRUPTED, null -> CommandStatus.INTERRUPTED
     }
 }
