@@ -618,8 +618,7 @@ class TelegramDelivery(
     private companion object {
         const val MAX_CAPTION_CHARS = 1000
 
-        // matches what an inbound message is allowed to cost the transcript.
-        const val MAX_BOT_TEXT_CHARS = 2_000
+        const val MAX_BOT_TEXT_CHARS = GroupLogEntry.MAX_TEXT_CHARS
 
         // pace consecutive sends in a multi-output reply so a batch does not trip Telegram's per-chat
         // rate limit in the first place. `withFloodWaitRetry` handles the one that trips it anyway,

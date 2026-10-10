@@ -23,6 +23,7 @@ object GroupLogTable : LongIdTable("group_log") {
     val text = text("text").nullable()
 
     // short human label for non-text content ("😂 HotCat", "0:14", "report.pdf"), never file ids.
+    // the two widths mirror GroupLogEntry.MAX_DESCRIPTOR_CHARS and MAX_FORWARD_FROM_CHARS, which every writer caps to
     val descriptor = varchar("descriptor", 200).nullable()
 
     val forwardFrom = varchar("forward_from", 128).nullable()

@@ -9,9 +9,8 @@ import org.telegram.telegrambots.meta.api.objects.message.Message
 import org.telegram.telegrambots.meta.api.objects.polls.PollAnswer
 import java.time.Instant
 
-// what one message is allowed to cost the log. layout whitespace is noise in a transcript, so the
-// text is collapsed rather than kept as written.
-private const val MAX_TEXT_CHARS = 2_000
+// layout whitespace is noise in a transcript, so the text is collapsed rather than kept as written
+private const val MAX_TEXT_CHARS = GroupLogEntry.MAX_TEXT_CHARS
 
 // what a vote reads as in the transcript, beside the "text", "photo" and so on of real messages.
 private const val POLL_ANSWER_KIND = "poll answer"
