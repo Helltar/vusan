@@ -131,7 +131,18 @@ Third-party servers all take the same shape, with `LLM_PROVIDER=openai-compatibl
 LLM_API_KEY=sk-qwerty
 LLM_BASE_URL=https://api.deepseek.com
 LLM_MODEL=deepseek-flash
+
+# Ollama — the key is not checked, but the value must be non-empty
+LLM_API_KEY=ollama
+LLM_BASE_URL=http://localhost:11434
+LLM_MODEL=gemma4:latest
+LLM_CONTEXT_WINDOW_TOKENS=131072
+VISION_MODEL=gemma4:latest
 ```
+
+Ollama's model list states neither the window nor whether a model sees. `LLM_CONTEXT_WINDOW_TOKENS`
+is the context Ollama loads the model with — its `OLLAMA_CONTEXT_LENGTH`, which `ollama ps` shows —
+and naming the model again as `VISION_MODEL` when it takes images lets Vusan look at pictures with it.
 
 ## ChatGPT subscription
 
