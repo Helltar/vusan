@@ -1,5 +1,6 @@
 package com.helltar.vusan.tools.youtube
 
+import com.helltar.vusan.request.PlatformLimits
 import io.github.oshai.kotlinlogging.KotlinLogging
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
@@ -15,7 +16,7 @@ class YtDlpClient(private val runner: YtDlpRunner) {
 
     private data class DownloadAttempt<out T>(val result: YtDlpResult<T>, val retryable: Boolean = false)
 
-    suspend fun downloadTrack(query: String, maxFileSizeMb: Int = 45): YtDlpResult<YtDlpTrack> =
+    suspend fun downloadTrack(query: String, maxFileSizeMb: Int = AUDIO_MAX_FILE_SIZE_MB): YtDlpResult<YtDlpTrack> =
         withContext(Dispatchers.IO) {
             require(query.isNotBlank()) { "Query must not be blank" }
             require(maxFileSizeMb in 1..50) { "maxFileSizeMb must be between 1 and 50" }
@@ -179,7 +180,7 @@ class YtDlpClient(private val runner: YtDlpRunner) {
 
         if (bytes.size > maxFileSizeMb * 1024 * 1024) {
             log.warn {
-                "yt-dlp download exceeds Telegram limit url=[$url] bytes=${bytes.size} maxFileSizeMb=$maxFileSizeMb"
+                "yt-dlp download exceeds the upload limit url=[$url] bytes=${bytes.size} maxFileSizeMb=$maxFileSizeMb"
             }
 
             return DownloadAttempt(YtDlpResult.TooLarge(sizeBytes = bytes.size.toLong()))
@@ -399,15 +400,18 @@ class YtDlpClient(private val runner: YtDlpRunner) {
         }
     }
 
-    private companion object {
-        const val FORMAT_UNAVAILABLE_MARKER = "Requested format is not available"
-        const val VIDEO_MAX_FILE_SIZE_MB = 50
-        val VIDEO_HEIGHT_CAPS = listOf(720, 480, 360)
+    companion object {
+        private const val FORMAT_UNAVAILABLE_MARKER = "Requested format is not available"
+        const val VIDEO_MAX_FILE_SIZE_MB = PlatformLimits.UPLOAD_MB
+
+        // yt-dlp sizes a track before the container is written, so a little headroom keeps it under the cap
+        const val AUDIO_MAX_FILE_SIZE_MB = PlatformLimits.UPLOAD_MB - 5
+        private val VIDEO_HEIGHT_CAPS = listOf(720, 480, 360)
 
         // --print-json implies --quiet, which swallows the max-filesize rejection that
         // runMediaDownload reads to return TooLarge; without it the height ladder never steps down.
-        val PRINT_JSON_ARGS = listOf("--print-json", "--no-quiet")
-        val log = KotlinLogging.logger {}
+        private val PRINT_JSON_ARGS = listOf("--print-json", "--no-quiet")
+        private val log = KotlinLogging.logger {}
     }
 }
 

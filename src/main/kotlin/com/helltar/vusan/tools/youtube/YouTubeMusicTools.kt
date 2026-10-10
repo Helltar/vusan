@@ -28,7 +28,7 @@ class YouTubeMusicTools(private val client: YtDlpClient, private val outbox: Bot
 
             is YtDlpResult.TooLarge -> {
                 val mb = result.sizeBytes / (1024 * 1024)
-                """Track for "$query" is too large to send via Telegram (~${mb} MB, limit is 45 MB)."""
+                """Track for "$query" is too large to send to the chat (~${mb} MB, limit is ${YtDlpClient.AUDIO_MAX_FILE_SIZE_MB} MB)."""
             }
 
             is YtDlpResult.AuthRequired -> error("YouTube is asking yt-dlp to sign in. Configure `YT_DLP_COOKIES_FILE` in the bot environment.")

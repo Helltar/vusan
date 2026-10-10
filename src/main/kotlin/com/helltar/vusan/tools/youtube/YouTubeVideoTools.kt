@@ -28,7 +28,7 @@ class YouTubeVideoTools(private val client: YtDlpClient, private val outbox: Bot
 
             is YtDlpResult.TooLarge -> {
                 val mb = result.sizeBytes / (1024 * 1024)
-                """Video for "$query" is too large to send via Telegram even at the lowest quality (~${mb} MB, limit is 50 MB)."""
+                """Video for "$query" is too large to send to the chat even at the lowest quality (~${mb} MB, limit is ${YtDlpClient.VIDEO_MAX_FILE_SIZE_MB} MB)."""
             }
 
             is YtDlpResult.AuthRequired -> error("YouTube is asking yt-dlp to sign in. Configure `YT_DLP_COOKIES_FILE` in the bot environment.")

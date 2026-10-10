@@ -15,7 +15,7 @@ internal object VoiceToolDescriptions {
                 "Example: `[whispers] hi [shouts] how are you?`. "
 
     const val SPEAK_WITH_VOICE =
-        "Speaks the given text aloud and sends it as a Telegram voice message. " +
+        "Speaks the given text aloud and sends it as a voice message. " +
                 """Use when the user asks to speak, say, voice, or pronounce something out loud ("say it out loud", "send a voice message", "read this aloud"). """ +
                 AUDIO_TAG_RULES +
                 "Hard limit: `text` must be at most $VOICE_TOOLS_MAX_CHARS characters (tags count toward this). " +

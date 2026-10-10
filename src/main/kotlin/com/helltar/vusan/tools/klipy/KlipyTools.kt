@@ -1,5 +1,6 @@
 package com.helltar.vusan.tools.klipy
 
+import com.helltar.vusan.request.PlatformLimits
 import com.helltar.vusan.tools.Arg
 import com.helltar.vusan.tools.Tool
 import com.helltar.vusan.tools.ToolSet
@@ -149,7 +150,7 @@ class KlipyTools(
         const val MAX_CANDIDATES = 8
         const val MAX_QUERY_CHARS = 200
         const val MAX_TITLE_CHARS = 120
-        const val MAX_MEME_BYTES = 10L * 1024 * 1024
+        const val MAX_MEME_BYTES = PlatformLimits.PHOTO_MB * 1024L * 1024
     }
 }
 

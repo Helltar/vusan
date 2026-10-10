@@ -1,5 +1,6 @@
 package com.helltar.vusan.tools.vision
 
+import com.helltar.vusan.request.PlatformLimits
 import com.helltar.vusan.tools.Arg
 import com.helltar.vusan.tools.Tool
 import com.helltar.vusan.tools.ToolSet
@@ -91,8 +92,8 @@ class VisionTools(
     private companion object {
         const val MAX_IMAGE_BYTES = 8 * 1024 * 1024
 
-        // telegram serves bots files of at most 20 MB, so a bigger video cannot be fetched at all.
-        const val MAX_VIDEO_BYTES = 20 * 1024 * 1024
+        // a bigger video cannot be fetched at all
+        const val MAX_VIDEO_BYTES = PlatformLimits.DOWNLOAD_MB * 1024 * 1024
 
         val log = KotlinLogging.logger {}
     }

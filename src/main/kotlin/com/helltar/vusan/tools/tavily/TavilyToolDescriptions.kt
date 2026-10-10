@@ -29,7 +29,7 @@ internal object TavilyToolDescriptions {
         "Search the web for images and send them to the chat. " +
                 """Use when the user asks to show, send, or find a picture/photo of something — for example "show me a photo of the Eiffel Tower", "send a BMW X6 picture", "find a red panda photo". """ +
                 "Use this for static images, including anime art or character pictures. " +
-                "Multiple results are sent as a Telegram media group. " +
+                "Multiple results are sent as one album. " +
                 "Each call sends its own album and usually yields about 5 images whatever `maxResults` asks, so do not promise a count before the result comes back, and do not call it again just to top a short album up: the user would get two albums. " +
                 "When the user wants more than one call gave, say how many were sent and offer `metaSearchImages`, which draws on other engines and sends a second album. " +
                 "Do not use for animated GIFs (use `searchGifs` instead). " +

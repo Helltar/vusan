@@ -16,7 +16,7 @@ internal object GroupLogToolDescriptions {
                 "The log is kept for about a month; a window past that is answered with the exact limit."
 
     const val READ_GROUP_LOG_AUTHOR =
-        "Restrict to one person, by Telegram username (with or without `@`) or by the name they display. " +
+        "Restrict to one person, by username (with or without `@`) or by the name they display. " +
                 "Omit for the whole conversation. " +
                 "The header count then covers only that person, and stays exact even when their messages are too many to quote."
 

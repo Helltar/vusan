@@ -1,5 +1,6 @@
 package com.helltar.vusan.telegram.tools
 
+import com.helltar.vusan.request.PlatformLimits
 import com.helltar.vusan.tools.Arg
 import com.helltar.vusan.tools.Tool
 import com.helltar.vusan.tools.ToolSet
@@ -24,7 +25,7 @@ private const val MAX_FILE_ID_CHARS = 200
 private const val DEFAULT_CHAT_FILE_NAME = "file"
 
 /** Telegram serves bots the files it stores only up to this size, whatever the chat could upload. */
-internal const val MAX_TELEGRAM_FILE_MB = 20
+internal const val MAX_TELEGRAM_FILE_MB = PlatformLimits.DOWNLOAD_MB
 
 /**
  * Resending a file the platform already holds, by the id it holds it under.

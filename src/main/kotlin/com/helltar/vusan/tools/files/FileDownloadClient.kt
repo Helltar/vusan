@@ -1,5 +1,6 @@
 package com.helltar.vusan.tools.files
 
+import com.helltar.vusan.request.PlatformLimits
 import com.helltar.vusan.common.extensionOfMime
 import com.helltar.vusan.common.sanitizeFilename
 import com.helltar.vusan.infra.isPublicDestination
@@ -15,8 +16,8 @@ import java.net.InetAddress
 import kotlin.time.Duration.Companion.minutes
 import kotlin.time.Duration.Companion.seconds
 
-/** Telegram caps bot document uploads at 50 MB, so a larger download could never be delivered. */
-internal const val MAX_DOWNLOAD_MB = 50
+/** A larger download could never be delivered, so it is not even finished. */
+internal const val MAX_DOWNLOAD_MB = PlatformLimits.UPLOAD_MB
 
 internal const val MAX_DOWNLOAD_BYTES = MAX_DOWNLOAD_MB * 1024L * 1024
 

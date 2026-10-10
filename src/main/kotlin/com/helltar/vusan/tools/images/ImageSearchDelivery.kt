@@ -1,5 +1,6 @@
 package com.helltar.vusan.tools.images
 
+import com.helltar.vusan.request.PlatformLimits
 import com.helltar.vusan.common.extensionOfMime
 import com.helltar.vusan.common.limitTo
 import com.helltar.vusan.common.rethrowIfCancellation
@@ -12,7 +13,7 @@ import io.github.oshai.kotlinlogging.KotlinLogging
 
 const val MAX_IMAGE_RESULTS = 10
 
-internal const val MAX_PHOTO_BYTES = 10 * 1024 * 1024
+internal const val MAX_PHOTO_BYTES = PlatformLimits.PHOTO_MB * 1024 * 1024
 private const val MAX_IMAGE_DESCRIPTION_CHARS = 200
 private const val MAX_FILENAME_BASE_CHARS = 40
 

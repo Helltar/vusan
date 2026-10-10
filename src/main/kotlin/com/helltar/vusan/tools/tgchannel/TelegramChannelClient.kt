@@ -1,5 +1,6 @@
 package com.helltar.vusan.tools.tgchannel
 
+import com.helltar.vusan.request.PlatformLimits
 import com.helltar.vusan.common.extensionOfMime
 import com.helltar.vusan.common.mimeTypeOfName
 import com.helltar.vusan.tools.files.FileDownloadClient
@@ -68,6 +69,6 @@ class TelegramChannelClient(private val downloader: FileDownloadClient) {
 
     private companion object {
         const val PAGE_LIMIT = 4 * 1024 * 1024L
-        const val IMAGE_LIMIT = 10 * 1024 * 1024L
+        const val IMAGE_LIMIT = PlatformLimits.PHOTO_MB * 1024 * 1024L
     }
 }

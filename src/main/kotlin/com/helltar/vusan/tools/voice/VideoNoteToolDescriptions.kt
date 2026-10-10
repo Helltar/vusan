@@ -5,7 +5,7 @@ import com.helltar.vusan.tools.voice.VideoNoteTools.Companion.VIDEO_NOTE_MAX_CHA
 internal object VideoNoteToolDescriptions {
 
     const val SPEAK_AS_VIDEO_NOTE =
-        "Speaks the given text aloud and sends it as a Telegram round video message — your own face in the circle, with the waveform of your voice moving as you talk. " +
+        "Speaks the given text aloud and sends it as a round video message — your own face in the circle, with the waveform of your voice moving as you talk. " +
                 """Use when the user asks for a round video message, a video note, or a "circle", and for a greeting, a toast, or a punchline that is better watched than read. """ +
                 "Prefer `speakWithVoice` when the user only asked to hear something out loud: a voice message plays in the background, while a round video takes over the screen. " +
                 VoiceToolDescriptions.AUDIO_TAG_RULES +

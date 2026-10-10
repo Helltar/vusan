@@ -1,5 +1,6 @@
 package com.helltar.vusan.agent
 
+import com.helltar.vusan.request.PlatformLimits
 import com.helltar.vusan.common.mimeTypeOfName
 import com.helltar.vusan.common.rethrowIfCancellation
 import com.helltar.vusan.common.sanitizeFilename
@@ -288,8 +289,8 @@ class TurnShelf(
         // the current turn and the two before it
         const val KEPT_TURNS = 3
 
-        // what Telegram serves a bot at most, so an attachment never came in larger
-        const val MAX_ATTACHMENT_MB = 20
+        // an attachment never came in larger than the platform serves
+        const val MAX_ATTACHMENT_MB = PlatformLimits.DOWNLOAD_MB
         const val MAX_ATTACHMENT_BYTES = MAX_ATTACHMENT_MB * 1024 * 1024
 
         val RESULT = Regex("""#(\d+)""")

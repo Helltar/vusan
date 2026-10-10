@@ -110,7 +110,7 @@ class FileToolsTest {
 
         assertTrue(outbox.pending.isEmpty())
         assertContains(reply, "100.0 MB")
-        assertContains(reply, "$MAX_DOWNLOAD_MB MB Telegram upload limit")
+        assertContains(reply, "$MAX_DOWNLOAD_MB MB upload limit")
     }
 
     @Test

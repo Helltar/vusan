@@ -3,12 +3,12 @@ package com.helltar.vusan.tools.message
 internal object MessageToolDescriptions {
 
     const val SEND_MESSAGE =
-        "Sends a Telegram text message to the user. " +
+        "Sends a text message to the user. " +
                 "Use this for any substantive text content the user must see: web search summaries, news digests, facts, answers, explanations, lists. " +
                 "Call it once per distinct message; calls are sent in order alongside any other queued media. " +
                 "Keep a reply to a few messages; never split one answer into many tiny separate messages. " +
                 "Do NOT paste raw tool payloads here; write in the user's language, concise, natural. " +
-                "Format it as the Telegram formatting rules say: the listed HTML tags only, never Markdown, and Markdown belongs only in `sendRichMessage`."
+                "Format it as the chat's formatting rules say: the listed HTML tags only, never Markdown, and Markdown belongs only in `sendRichMessage`."
 
     const val TEXT =
         "Full text of the message to send to the user. " +
@@ -16,10 +16,10 @@ internal object MessageToolDescriptions {
                 "A label (`#4`) or `sandbox:<path>` instead sends the whole text it names, such as a report written in the sandbox."
 
     const val SEND_RICH_MESSAGE =
-        "Sends a large, structured reply as a Telegram rich message (Bot API 10.1). " +
+        "Sends a large, structured reply as a rich message. " +
                 "Use this ONLY when the content is genuinely large and structured: long multi-section explanations, comparison tables, detailed step-by-step guides, or documents with headings. " +
                 "For everything else — normal answers, short replies, a little bold or a simple list — use `sendMessage`, which renders on every client. " +
-                "Some third-party clients (e.g. Telegram X) show rich messages as unsupported, so reserve this for cases where the structure is clearly worth it. " +
+                "Some third-party clients show rich messages as unsupported, so reserve this for cases where the structure is clearly worth it. " +
                 "After calling it, do not resend the same content with `sendMessage`."
 
     const val RICH_MARKDOWN =
@@ -34,7 +34,7 @@ internal object MessageToolDescriptions {
                 "Everything else you send reaches the chat only when your whole turn is over, so on work that will take a while — a sandbox build, a long download, a series of searches — this is the only way to say anything while it is still worth saying. " +
                 "Call it once, before the first slow tool call, and only when the work ahead is genuinely long: a quick answer needs no announcement. " +
                 "One or two sentences in the user's language, saying what you are going to make, not how you will do it. " +
-                "Format with Telegram HTML tags only (`<b>`, `<i>`, `<code>`, ...), never Markdown. " +
+                "Format with the listed HTML tags only (`<b>`, `<i>`, `<code>`, ...), never Markdown. " +
                 "The user reads it while you work, so do not repeat it in your final answer."
 
     const val PLAN_TEXT =
@@ -45,7 +45,7 @@ internal object MessageToolDescriptions {
         "Sends a message to the user immediately, while your turn keeps running, and it stays in the chat. " +
                 "Use it during long work for something worth reading before the rest is done: the address of a first working version, a finding that changes what you will do next, one step finished in a job of several. " +
                 "A few per turn at most; everything else waits for the end, and the final answer still goes through `sendMessage` or a plain reply, without repeating what was sent this way. " +
-                "Format with Telegram HTML tags only, never Markdown."
+                "Format with the listed HTML tags only, never Markdown."
 
     const val NOW_TEXT =
         "The message to send now, in the user's language. " +
