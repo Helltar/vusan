@@ -97,7 +97,7 @@ class ConversationRepository {
             this[ConversationMessagesTable.userId] = scope.user.id
             this[ConversationMessagesTable.chatId] = scope.chat.id
             this[ConversationMessagesTable.interactionId] = interactionId
-            this[ConversationMessagesTable.role] = turn.role
+            this[ConversationMessagesTable.role] = turn.role.name
             this[ConversationMessagesTable.content] = turn.content
             this[ConversationMessagesTable.toolCallId] = turn.toolCallId
             this[ConversationMessagesTable.toolName] = turn.toolName
@@ -272,7 +272,7 @@ class ConversationRepository {
                     createdAt = it[ConversationMessagesTable.createdAt],
                     turn =
                         ChatTurn(
-                            role = it[ConversationMessagesTable.role],
+                            role = ChatRole.valueOf(it[ConversationMessagesTable.role]),
                             content = it[ConversationMessagesTable.content],
                             toolCallId = it[ConversationMessagesTable.toolCallId],
                             toolName = it[ConversationMessagesTable.toolName],

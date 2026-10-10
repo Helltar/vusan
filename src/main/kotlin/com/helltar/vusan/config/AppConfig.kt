@@ -1,6 +1,5 @@
 package com.helltar.vusan.config
 
-import com.helltar.vusan.agent.AgentFactory
 import com.helltar.vusan.llm.ReasoningEffort
 import com.helltar.vusan.llm.openai.OpenAiEndpoint
 import com.helltar.vusan.request.AccessPolicy
@@ -51,7 +50,7 @@ data class AppConfig(
 ) {
 
     init {
-        require(agentMaxModelCalls >= AgentFactory.MIN_MODEL_CALLS) { "AGENT_MAX_MODEL_CALLS must be at least ${AgentFactory.MIN_MODEL_CALLS}" }
+        require(agentMaxModelCalls >= MIN_MODEL_CALLS) { "AGENT_MAX_MODEL_CALLS must be at least $MIN_MODEL_CALLS" }
         require(maxConcurrentTurns > 0) { "MAX_CONCURRENT_TURNS must be positive" }
         require(regolithUrl == null || !regolithToken.isNullOrBlank()) { "Sandbox API authentication is required" }
         // the classifier reads the lines around a message, and the bot's own recent ones, from the transcript
@@ -59,6 +58,9 @@ data class AppConfig(
     }
 
     companion object {
+        /** The fewest model calls a turn can be given: one to call tools, one to read them, one reserved for landing it. */
+        const val MIN_MODEL_CALLS = 3
+
         private const val DEFAULT_AGENT_MAX_MODEL_CALLS = 100
         private const val DEFAULT_LLM_REQUEST_TIMEOUT_SECONDS = 300L
         private const val LLM_PREFIX = "LLM"

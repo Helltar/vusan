@@ -1,12 +1,12 @@
 package com.helltar.vusan.infra.tables
 
-import com.helltar.vusan.agent.memory.MemoryScope
 import org.jetbrains.exposed.v1.core.dao.id.LongIdTable
 
 object MemoryTable : LongIdTable("memories") {
 
     val platform = platformColumn()
-    val scope = enumerationByName<MemoryScope>("scope", 16)
+    // the name of a `MemoryScope`, which the repository that owns the enum maps; the table knows only the text
+    val scope = varchar("scope", 16)
     val ownerId = externalId("owner_id")
     val content = text("content")
 

@@ -75,7 +75,7 @@ class MemoryRepository(private val maxEntriesPerScope: Int = MAX_ENTRIES_PER_SCO
     private fun insert(owner: MemoryOwner, content: String): Long =
         MemoryTable.insertAndGetId {
             it[MemoryTable.platform] = owner.platform
-            it[MemoryTable.scope] = owner.scope
+            it[MemoryTable.scope] = owner.scope.name
             it[MemoryTable.ownerId] = owner.id
             it[MemoryTable.content] = content
         }.value
@@ -103,5 +103,5 @@ class MemoryRepository(private val maxEntriesPerScope: Int = MAX_ENTRIES_PER_SCO
 
 private fun ownedBy(owner: MemoryOwner): Op<Boolean> =
     (MemoryTable.platform eq owner.platform) and
-            (MemoryTable.scope eq owner.scope) and
+            (MemoryTable.scope eq owner.scope.name) and
             (MemoryTable.ownerId eq owner.id)

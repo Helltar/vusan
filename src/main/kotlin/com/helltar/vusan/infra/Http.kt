@@ -70,7 +70,7 @@ internal class HttpTimedOutException(host: String, cause: Throwable) : IOExcepti
  * The raw [body] is kept next to the capped message so a caller that knows the provider's error shape
  * can read it structurally instead of matching on the text of a log line.
  */
-internal class HttpStatusException(status: Int, host: String, val body: String?) :
+internal class HttpStatusException(val status: Int, host: String, val body: String?) :
     IllegalStateException(buildMessage(status, host, body)) {
 
     companion object {

@@ -1,7 +1,7 @@
 package com.helltar.vusan.config
 
 import java.nio.file.Path
-import com.helltar.vusan.agent.ContextWindowPolicy
+import com.helltar.vusan.infra.HttpStatusException
 import com.helltar.vusan.llm.LlmModel
 import com.helltar.vusan.llm.RequestOptions
 import com.helltar.vusan.llm.RetryingLlmClient
@@ -46,7 +46,7 @@ internal fun codexRuntime(config: LlmProviderConfig.Codex, auth: CodexAuthStore,
     val model =
         LlmModel(
             id = config.model.trim(),
-            contextWindowTokens = config.contextWindowTokens ?: ContextWindowPolicy.DEFAULT_CONTEXT_WINDOW_TOKENS,
+            contextWindowTokens = config.contextWindowTokens ?: LlmProviderConfig.DEFAULT_CONTEXT_WINDOW_TOKENS,
             seesImages = config.seesImages ?: true,
             efforts = config.efforts,
         )
@@ -151,6 +151,11 @@ suspend fun verifyCodexModel(http: HttpClient, auth: CodexAuthStore, config: Llm
             .getOrElse { e ->
                 if (e is CodexAuthException) throw e
 
+                // a refused token is the sign-in failing, not the endpoint changing shape
+                if (e is HttpStatusException && e.status in REFUSED_STATUSES) {
+                    throw CodexAuthException("The ChatGPT session was refused (HTTP ${e.status}). Run `codex login` on this host again.", e)
+                }
+
                 log.warn { "Codex: could not read the model catalog (${e.message}); skipping the model check" }
                 return null
             }
@@ -172,3 +177,5 @@ suspend fun verifyCodexModel(http: HttpClient, auth: CodexAuthStore, config: Llm
 
     return match
 }
+
+private val REFUSED_STATUSES = setOf(401, 403)

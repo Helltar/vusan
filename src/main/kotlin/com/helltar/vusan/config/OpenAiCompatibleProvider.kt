@@ -1,6 +1,5 @@
 package com.helltar.vusan.config
 
-import com.helltar.vusan.agent.ContextWindowPolicy
 import com.helltar.vusan.llm.LlmModel
 import com.helltar.vusan.llm.ReasoningEffort
 import com.helltar.vusan.llm.RequestOptions
@@ -33,7 +32,7 @@ internal fun compatibleRuntime(config: LlmProviderConfig.OpenAiCompatible, http:
     val model =
         LlmModel(
             id = config.model.trim(),
-            contextWindowTokens = config.contextWindowTokens ?: ContextWindowPolicy.DEFAULT_CONTEXT_WINDOW_TOKENS,
+            contextWindowTokens = config.contextWindowTokens ?: LlmProviderConfig.DEFAULT_CONTEXT_WINDOW_TOKENS,
             seesImages = config.seesImages == true,
             // only the platform itself is known to refuse reasoning fields to a model that does not reason
             takesEffort = !official || openAiReasons(config.model.trim()),

@@ -1,5 +1,6 @@
 package com.helltar.vusan
 
+import com.helltar.vusan.config.LlmProviderConfig
 import com.helltar.vusan.agent.AgentFactory
 import com.helltar.vusan.agent.AgentRunner
 import com.helltar.vusan.agent.TurnSurroundings
@@ -350,10 +351,10 @@ private fun logStartup(
 
     // openai and anthropic models carry a window of their own; a codex catalog that could not be read or a
     // third-party server leave the policy on its conservative default
-    if (config.llmProvider.contextWindowTokens == null && llm.model.contextWindowTokens == ContextWindowPolicy.DEFAULT_CONTEXT_WINDOW_TOKENS) {
+    if (config.llmProvider.contextWindowTokens == null && llm.model.contextWindowTokens == LlmProviderConfig.DEFAULT_CONTEXT_WINDOW_TOKENS) {
         log.warn {
             "Model context size unknown: using conservative fallback " +
-                    "[${ContextWindowPolicy.DEFAULT_CONTEXT_WINDOW_TOKENS}] — set LLM_CONTEXT_WINDOW_TOKENS for this model"
+                    "[${LlmProviderConfig.DEFAULT_CONTEXT_WINDOW_TOKENS}] — set LLM_CONTEXT_WINDOW_TOKENS for this model"
         }
     } else {
         log.info { "Model context window: tokens=${llm.model.contextWindowTokens}" }

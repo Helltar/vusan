@@ -1,6 +1,5 @@
 package com.helltar.vusan.infra.tables
 
-import com.helltar.vusan.agent.conversation.ChatRole
 import org.jetbrains.exposed.v1.core.dao.id.LongIdTable
 import org.jetbrains.exposed.v1.javatime.timestamp
 import java.time.Instant
@@ -13,7 +12,8 @@ object ConversationMessagesTable : LongIdTable("conversation_messages") {
     val userId = externalId("user_id")
     val chatId = externalId("chat_id")
     val interactionId = varchar("interaction_id", 36)
-    val role = enumerationByName<ChatRole>("role", 16)
+    // the name of a `ChatRole`, which the repository that owns the enum maps; the table knows only the text
+    val role = varchar("role", 16)
     val content = text("content")
     val toolCallId = varchar("tool_call_id", 128).nullable()
     val toolName = varchar("tool_name", 128).nullable()

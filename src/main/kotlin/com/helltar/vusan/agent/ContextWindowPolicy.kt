@@ -85,7 +85,6 @@ class ContextWindowPolicy(model: LlmModel) {
     }
 
     companion object {
-        const val DEFAULT_CONTEXT_WINDOW_TOKENS = 16_384L
         private const val FIXED_MESSAGE_OVERHEAD_TOKENS = 64
     }
 }

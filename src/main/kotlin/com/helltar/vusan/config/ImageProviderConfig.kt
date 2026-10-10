@@ -31,7 +31,7 @@ sealed interface ImageProviderConfig {
     /** The Codex backend, metered against the ChatGPT subscription signed in at [authFile]. */
     data class Codex(
         val authFile: Path = defaultCodexAuthFile(),
-        // the Codex CLI version claimed to the backend; `null` leaves it to the installed CLI or this build's floor
+        // the Codex CLI version claimed to the backend; `null` claims the newest of the floor, the CLI and the latest release
         val clientVersion: String? = null,
         override val model: String = ImageProviderConfig.DEFAULT_MODEL,
         override val quality: String = ImageProviderConfig.DEFAULT_QUALITY,

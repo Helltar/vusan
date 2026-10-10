@@ -1,5 +1,6 @@
 package com.helltar.vusan.agent
 
+import com.helltar.vusan.config.AppConfig
 import com.helltar.vusan.agent.conversation.PromptConversation
 import com.helltar.vusan.agent.conversation.toMessages
 import com.helltar.vusan.common.xmlBlock
@@ -39,7 +40,7 @@ class AgentFactory(
 ) {
 
     init {
-        require(maxModelCalls >= MIN_MODEL_CALLS) { "a turn needs at least $MIN_MODEL_CALLS model calls" }
+        require(maxModelCalls >= AppConfig.MIN_MODEL_CALLS) { "a turn needs at least ${AppConfig.MIN_MODEL_CALLS} model calls" }
     }
 
     // the catalog is built before the turn text, not here: what it defers goes into that text as
@@ -113,6 +114,5 @@ class AgentFactory(
 
     companion object {
         // a request, a wrap-up and the nudge in between
-        const val MIN_MODEL_CALLS = 3
     }
 }

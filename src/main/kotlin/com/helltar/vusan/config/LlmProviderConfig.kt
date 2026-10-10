@@ -31,6 +31,11 @@ enum class ServiceTier {
  */
 sealed interface LlmProviderConfig {
 
+    companion object {
+        /** The window assumed for a model nobody stated one for, small enough to be safe on any of them. */
+        const val DEFAULT_CONTEXT_WINDOW_TOKENS = 16_384L
+    }
+
     val model: String
     val reasoningEffort: ReasoningEffort?
 
@@ -171,7 +176,7 @@ sealed interface LlmProviderConfig {
         override val seesImages: Boolean? = null,
         override val efforts: Set<ReasoningEffort>? = null,
         // the Codex CLI version reported to the backend, which decides how much of the model catalog it
-        // answers with. `null` leaves that to the installed CLI, or to this build's floor without one.
+        // answers with. `null` claims the newest of this build's floor, the installed CLI and the latest release.
         val clientVersion: String? = null,
         val authFile: Path = defaultCodexAuthFile(),
         override val requestTimeout: Duration,
