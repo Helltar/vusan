@@ -12,9 +12,10 @@ import kotlin.time.Duration.Companion.milliseconds
  * The turn's origin, rendered for the model: where it is answering and who it is answering.
  *
  * [previousExchangeAt] is not part of the request — the runner reads it from history — so it is passed
- * in rather than carried around on a record that ingress fills in.
+ * in rather than carried around on a record that ingress fills in; [lastAnswerOfStretch] is the
+ * [ChatFloor]'s verdict on this turn, decided when it was admitted, for the same reason.
  */
-internal fun RequestContext.toPromptBlock(previousExchangeAt: Instant? = null): String {
+internal fun RequestContext.toPromptBlock(previousExchangeAt: Instant? = null, lastAnswerOfStretch: Boolean = false): String {
     val lines =
         buildList {
             add("Chat:")
@@ -55,6 +56,18 @@ internal fun RequestContext.toPromptBlock(previousExchangeAt: Instant? = null): 
                 add("")
                 add("Addressing:")
                 add("- implicit: nobody mentioned you, replied to you or used a command; this message was judged to be meant for you")
+            }
+
+            if (lastAnswerOfStretch) {
+                add("")
+                add("Floor:")
+                add(
+                    "- last_answer_of_stretch: you have been answering this sender alone for a while and nobody " +
+                            "else has written in the chat, so this is your last reply to them until somebody else " +
+                            "writes here or ${ChatFloor.COOLING_PERIOD.inWholeMinutes} minutes pass; their messages " +
+                            "until then go unanswered. Answer what they asked, round the exchange off in a sentence " +
+                            "in your own voice and say you will pick it up later; start nothing new",
+                )
             }
         }
 

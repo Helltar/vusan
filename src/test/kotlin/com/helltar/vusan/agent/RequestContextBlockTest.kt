@@ -153,6 +153,17 @@ class RequestContextBlockTest {
         assertFalse(context(chat = chat).toPromptBlock().contains("Addressing:"))
     }
 
+    @Test
+    fun `the last answer of a stretch says so, and only then`() {
+        val chat = ChatContext(id = "-100", isPrivate = false)
+        val marked = context(chat = chat).toPromptBlock(lastAnswerOfStretch = true)
+
+        assertTrue(marked.contains("Floor:"))
+        assertTrue(marked.contains("- last_answer_of_stretch: "))
+        assertTrue(marked.contains("${ChatFloor.COOLING_PERIOD.inWholeMinutes} minutes"))
+        assertFalse(context(chat = chat).toPromptBlock().contains("Floor:"))
+    }
+
     private fun context(
         chat: ChatContext = ChatContext(id = "1", isPrivate = true),
         sender: SenderContext = SenderContext(id = "2"),

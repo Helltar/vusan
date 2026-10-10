@@ -41,6 +41,9 @@ class AgentRunner(
     // be served at once, and each turn is an LLM call with its tools behind it. no default — a runner
     // quietly serving one turn at a time is not something to discover under load.
     maxConcurrentTurns: Int,
+    // how long one person may keep a group to themselves; shared with the adapter, which reports the
+    // chat's other lines to it
+    private val floor: ChatFloor = ChatFloor(),
 ) {
 
     private val planner = ConversationPlanner(conversation, conversationCompactor)
@@ -71,12 +74,26 @@ class AgentRunner(
             return AgentResult(outputs = emptyList(), comment = null)
         }
 
+        // decided ahead of the line: a message that will not be answered should not hold a place in it.
+        // silence, not a notice, whoever sent it — the one line that said so was the stretch's last answer.
+        val verdict = floor.admit(request.context)
+        val lastAnswerOfStretch = verdict == ChatFloor.Verdict.LAST_ANSWER
+
+        if (verdict == ChatFloor.Verdict.CLOSED) {
+            log.info {
+                "floor closed: left unanswered, this sender alone has had the chat for a while; " +
+                        "chat=${request.context.chat.id} user=${request.context.sender.id}"
+            }
+
+            return AgentResult(outputs = emptyList(), comment = null)
+        }
+
         // tracked from the line on, so a stop takes the person's waiting messages along with the one
         // that is running instead of letting the next of them start.
         val result =
             running.track(key) {
                 conversationLocks.withLockIfRoom(key) {
-                    admission.admit { runAgent(request, onToolStarting, narrator) }
+                    admission.admit { runAgent(request, onToolStarting, narrator, lastAnswerOfStretch) }
                         ?: refusal(messages.overloadedReply)
                 }
             }
@@ -128,6 +145,7 @@ class AgentRunner(
         request: AgentRequest,
         onToolStarting: (activity: ToolActivity?) -> Unit,
         narrator: TurnNarrator?,
+        lastAnswerOfStretch: Boolean = false,
     ): AgentResult {
         val context = request.context
         val userMemory = if (context.sender.isPerson) memory.load(context.user.memoryOwner) else emptyList()
@@ -144,6 +162,7 @@ class AgentRunner(
                 context = context,
                 // the turn is stored only after the run, so this still points at the previous exchange.
                 previousExchangeAt = conversation.lastInteractionAt(context.scope),
+                lastAnswerOfStretch = lastAnswerOfStretch,
                 userMemory = userMemory,
                 chatMemory = chatMemory,
                 diary = surroundings.diaryFor(context),

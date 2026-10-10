@@ -85,6 +85,17 @@ class AppConfigTest {
     }
 
     @Test
+    fun `a single id is read the way a list entry is`() {
+        assertNull(parseIdEnv("OWNER_ID", null))
+        assertNull(parseIdEnv("OWNER_ID", "  "))
+        assertEquals("telegram:42", parseIdEnv("OWNER_ID", " 42 "))
+        assertEquals("discord:42", parseIdEnv("OWNER_ID", "discord:42"))
+
+        val failure = assertFailsWith<IllegalStateException> { parseIdEnv("OWNER_ID", "4O") }
+        assertContains(failure.message.orEmpty(), "OWNER_ID")
+    }
+
+    @Test
     fun `an unreadable id is an error rather than one silently dropped entry`() {
         // dropping one fails open on BANNED_IDS: that person would simply stay unbanned
         val failure = assertFailsWith<IllegalStateException> { parseIdSetEnv("BANNED_IDS", "12345, 6789O") }

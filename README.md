@@ -31,7 +31,7 @@ Only these values in `.env` are required to start; everything else is optional a
 [configuration.md](docs/configuration.md):
 
 ```dotenv
-ALLOWED_IDS=123456789,-1001234567890
+OWNER_ID=123456789
 TELEGRAM_BOT_TOKEN=1234567890:qwerty
 LLM_PROVIDER=openai
 LLM_MODEL=gpt-6.1-sol

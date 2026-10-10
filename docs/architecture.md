@@ -179,7 +179,7 @@ A normal user message travels:
    instead of repeated. A replay racing Telegram's own redelivery of the same update is harmless — the row is written
    with `ignore`, and `AnsweredMessages` claims the message once either way.
 
-2. **Filter** — the allowlist (`ALLOWED_IDS`) comes first, in `TelegramBotRunner.passesAllowlist`, on the polling loop
+2. **Filter** — the allowlist (`ALLOWED_IDS`, and the `OWNER_ID` it never needs to list) comes first, in `TelegramBotRunner.passesAllowlist`, on the polling loop
    itself: an update from a chat and user it does not name is dropped there, before the transcript, the sticker catalog,
    album buffering or a dispatch coroutine can cost anything, and only a message actually aimed at the bot is logged as
    denied. `BANNED_IDS` is checked first and wins over the allowlist, so a banned user is denied inside a chat that is
@@ -224,8 +224,15 @@ A normal user message travels:
    no one's text can end a block early or open one of its own. `xmlBlock` escapes only a closing tag of its own name,
    which is what keeps nesting working, so this is the step that stops a group member forging a block in somebody else's
    turn. `AgentTurns.dispatchToAgent` assembles the agent input and the shorter history input.
-4. **Run** — `AgentRunner.handle` joins the conversation's line in `agent/ConversationLocks` and then takes a place
-   from `agent/TurnAdmission`. One turn per conversation runs at a time, because a turn reads the history when it
+4. **Run** — `AgentRunner.handle` first asks `agent/ChatFloor` whether this person may still be answered in this
+   group: eight answers in a row to one person while nobody else wrote in the chat (or forum topic) close the floor
+   to them, the eighth carrying `last_answer_of_stretch` in `<message_context>` so the model rounds the exchange off
+   itself, and every message after it is turned away in silence — no reply, no reaction — until anybody else writes
+   there or an hour passes without an answer. The adapter reports every person's line to the floor from the polling
+   loop (`TelegramBotRunner.reportToFloor`, shared accounts and bots excepted), asks it before opening a typing
+   indicator (`AgentTurns.runAgentTurn`) and before paying for an ambient verdict; private chats and the `OWNER_ID`
+   are never limited, and `handleQueued` — a scheduled fire — never asks. It then joins the conversation's line in
+   `agent/ConversationLocks` and takes a place from `agent/TurnAdmission`. One turn per conversation runs at a time, because a turn reads the history when it
    starts and appends to it when it ends: the next message waits with its typing indicator and starts with the answer
    before it already in its history. Three messages may wait that way, in the order they
    arrived, and the one after that is answered "busy" — or, for an ambient message, turned away without a word, since
@@ -845,6 +852,7 @@ A symptom-to-source map for finding the right file fast. Paths are under
 | Vusan answers a group message nobody tagged it in, or does not answer one that named it | `ambient verdict` lines in the log (gate, verdict, latency, never the text), then `agent/addressing/AmbientAddressing.kt` (the gate, the windows, the rate) + `LlmAddressingClassifier.kt` (the measured wording) + `telegram/inbound/AmbientCandidates.kt` (what is never asked about) |
 | Container says `Up` but the bot answers nothing | the `com.helltar:heartbeat` library (the `/tmp/health` freshness signal, and the `ERROR` logged once when polling stalls) + `TelegramBotRunner.start` (the `getUpdates` generator hook that feeds it) |
 | Reply says "still working on your previous request", or a second message is answered only after the first | `agent/ConversationLocks.kt` — one turn per conversation, three waiting behind it (`AgentRunner`), the next refused |
+| One person's messages in a group go unanswered for a while, with no notice | `floor closed` lines in the log, then `agent/ChatFloor.kt` (`ANSWERS_PER_STRETCH`, `COOLING_PERIOD`, what reopens it) and `TelegramBotRunner.reportToFloor` (whose lines count as somebody else writing) |
 | A message goes unanswered after a restart or deploy, or one is answered twice | `telegram/UpdateSpool.kt` (what is kept, what is replayed, and `SPOOL_RETENTION`) + `telegram/TelegramBotRunner.kt` (the blocking spool write in the poll callback, and `settle` on pickup) + `telegram/AnsweredMessages.kt` (the one-turn-per-message claim) |
 | Reply lands in the wrong chat, loses its reply anchor, or DM redirect misbehaves | `telegram/delivery/TelegramDelivery.kt` (routing/anchor/private-redirect *policy*) |
 | Formatting renders wrong, message rejected, or media falls back to document/text | `agent/SystemPrompt.kt` (allowed HTML tags the agent emits), `telegram/delivery/TelegramOutputSender.kt` (which call and which fallback each output kind gets), `telegram/delivery/TelegramSendFallbacks.kt` (the fallback *mechanism* itself), `telegram/delivery/TelegramErrors.kt` (which provider errors trigger a fallback) |

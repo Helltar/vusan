@@ -82,7 +82,12 @@ data class AppConfig(
             val regolithUrl = readEnv("REGOLITH_URL")
 
             return AppConfig(
-                accessPolicy = AccessPolicy(allowed = readIdSetEnv("ALLOWED_IDS"), banned = readIdSetEnv("BANNED_IDS")),
+                accessPolicy =
+                    AccessPolicy(
+                        allowed = readIdSetEnv("ALLOWED_IDS"),
+                        banned = readIdSetEnv("BANNED_IDS"),
+                        owner = parseIdEnv("OWNER_ID", requireEnv("OWNER_ID")),
+                    ),
                 addressing = resolveAddressing(llmProvider),
                 agentMaxModelCalls = readIntEnv("AGENT_MAX_MODEL_CALLS") ?: DEFAULT_AGENT_MAX_MODEL_CALLS,
                 appearance = appearanceFile?.let(::readAppearance),
@@ -406,6 +411,9 @@ internal fun parseIdSetEnv(env: String, raw: String?): Set<String> =
         ?.map { entry -> parsePolicyId(env, entry) }
         ?.toSet()
         .orEmpty()
+
+internal fun parseIdEnv(env: String, raw: String?): String? =
+    raw?.trim()?.takeIf(String::isNotEmpty)?.let { parsePolicyId(env, it) }
 
 private fun parsePolicyId(env: String, entry: String): String {
     val platform = entry.substringBefore(':', missingDelimiterValue = "").trim()

@@ -1,6 +1,7 @@
 package com.helltar.vusan.request
 
 import kotlin.test.Test
+import kotlin.test.assertEquals
 import kotlin.test.assertFalse
 import kotlin.test.assertTrue
 
@@ -56,6 +57,25 @@ class AccessPolicyTest {
         assertTrue(policy.bans(group, user))
         assertTrue(policy.bans(group, null))
         assertFalse(AccessPolicy().bans(group, user))
+    }
+
+    @Test
+    fun `the owner is admitted everywhere without being listed`() {
+        val policy = AccessPolicy(allowed = setOf(group.key), owner = user.key)
+
+        assertTrue(policy.isOwner(user))
+        assertFalse(policy.isOwner(stranger))
+        assertTrue(policy.allows(testChat(1), user))
+        assertFalse(policy.allows(testChat(1), stranger))
+        assertTrue(AccessPolicy(owner = user.key).allows(group, user))
+    }
+
+    @Test
+    fun `a banned owner is a contradiction, and the ban wins`() {
+        val policy = AccessPolicy(owner = user.key, banned = setOf(user.key))
+
+        assertFalse(policy.allows(group, user))
+        assertEquals(setOf(user.key), policy.contradictory)
     }
 
     // both platforms issue plain numbers, so an unqualified list would ban or admit a stranger on the

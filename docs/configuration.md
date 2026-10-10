@@ -22,7 +22,7 @@ wanted.
 Five values, and Vusan runs:
 
 ```dotenv
-ALLOWED_IDS=123456789,-1001234567890
+OWNER_ID=123456789
 TELEGRAM_BOT_TOKEN=1234567890:qwerty
 LLM_PROVIDER=openai
 LLM_MODEL=gpt-6.1-sol
@@ -31,7 +31,7 @@ LLM_API_KEY=sk-proj-qwerty
 
 | Variable             | Description                                          |
 |----------------------|------------------------------------------------------|
-| `ALLOWED_IDS`        | Telegram user and group IDs Vusan answers.           |
+| `OWNER_ID`           | Your Telegram user ID: the person Vusan belongs to.  |
 | `TELEGRAM_BOT_TOKEN` | Bot token from [@BotFather](https://t.me/BotFather). |
 | `LLM_PROVIDER`       | LLM backend; see [LLM provider](#llm-provider).      |
 | `LLM_MODEL`          | Model id for the chosen provider.                    |
@@ -42,22 +42,27 @@ is actually deployed instead of a guess.
 
 ## Who Vusan answers
 
+`OWNER_ID` is the one person the deployment belongs to: answered everywhere, in private and in any
+group, without being listed anywhere else, and exempt from what limits everybody else in a group — see
+[One person alone in a group](#one-person-alone-in-a-group). It is a single user ID, never a list.
+
+| Variable      | Default | Description                                                    |
+|---------------|---------|----------------------------------------------------------------|
+| `ALLOWED_IDS` | empty   | Telegram user and group IDs Vusan answers besides the owner.   |
+| `BANNED_IDS`  | empty   | IDs Vusan ignores, whatever else allows them. Same format.     |
+
 `ALLOWED_IDS` accepts commas, whitespace or semicolons as separators. Positive IDs are users,
 negative IDs are groups, and an allowlisted group admits everyone in it. Empty or unset means Vusan
-answers nobody. Scheduled tasks are held to the same list: one whose owner and chat are both outside
-it never fires while that lasts. A recurring one moves on past the fires nobody may have and resumes
-once either is back; a one-time one waits in place and runs then, or is reported missed when that
-comes more than an hour late.
+answers the owner alone. Scheduled tasks are held to the same list: one whose owner and chat are both
+outside it never fires while that lasts. A recurring one moves on past the fires nobody may have and
+resumes once either is back; a one-time one waits in place and runs then, or is reported missed when
+that comes more than an hour late.
 
 A plain number is a Telegram ID. An entry may also name the messenger it belongs to —
 `telegram:123456789` — which is how the same number stays two different people once Vusan runs on
-more than one. Both lists take either form.
+more than one. All three take either form.
 
-| Variable     | Default | Description                                                |
-|--------------|---------|------------------------------------------------------------|
-| `BANNED_IDS` | empty   | IDs Vusan ignores, whatever else allows them. Same format. |
-
-The ban list wins over the allowlist, which is the point: it shuts one person out of a group that
+The ban list wins over the allowlist, the owner included, which is the point: it shuts one person out of a group that
 stays open for everyone else. For a banned ID nothing happens — no reply, dead buttons, nothing
 recorded in the group log, no stickers learned, and their scheduled tasks stay in place but never
 fire. Removing the ID restores all of it; nothing is deleted meanwhile. An ID on both lists stays
@@ -314,6 +319,21 @@ Beyond that number people wait their turn, with the usual typing indicator, and 
 arrives a little later. Only when the queue is already several times the limit does Vusan say it is
 overloaded instead of queueing further. Scheduled tasks always wait rather than being turned away —
 nobody is watching one arrive, and refusing it would mean skipping the run.
+
+## One person alone in a group
+
+A group is a shared room, and somebody chatting with Vusan alone at four in the morning leaves the
+rest of it a hundred messages to scroll past at breakfast. So in a group Vusan keeps an eye on who
+holds the floor: once it has answered one person eight times in a row while nobody else wrote
+anything in that chat (or in that forum topic), its eighth reply rounds the exchange off and says it
+will pick things up later, and that person's next messages go unanswered — no reply, no reaction,
+nothing to scroll. The floor opens again the moment anybody else writes in the chat, to Vusan or
+not, or after an hour without an answer from it. Both numbers are fixed; they came out of a month of
+a live group, where only one exchange in a hundred ran that long.
+
+Nothing else changes: a message Vusan would have answered anyway is just not answered. Scheduled
+tasks still fire, Vusan still speaks up on its own under its own daily budget, slash commands still
+work, and a private chat — with nobody else to read it — is never limited. The owner is not either.
 
 ## Personality
 

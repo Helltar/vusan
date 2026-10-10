@@ -3,6 +3,7 @@ package com.helltar.vusan
 import com.helltar.vusan.config.LlmProviderConfig
 import com.helltar.vusan.agent.AgentFactory
 import com.helltar.vusan.agent.AgentRunner
+import com.helltar.vusan.agent.ChatFloor
 import com.helltar.vusan.agent.TurnSurroundings
 import com.helltar.vusan.agent.addressing.AmbientAddressing
 import com.helltar.vusan.agent.addressing.LlmAddressingClassifier
@@ -203,12 +204,16 @@ suspend fun main() = coroutineScope {
                 )
             }
 
+        // one instance for the runner, which counts the answers, and the adapter, which reports the
+        // chat's other lines to it
+        val floor = ChatFloor(exempt = config.accessPolicy::isOwner)
+
         val agentRunner =
             AgentRunner(
                 agentFactory, toolCatalogFactory, conversation, memory, conversationCompactor,
                 config.chatHistory,
                 TurnSurroundings(groupLog, diary?.let { it::blockFor }, stickerCatalog?.let { it::indexBlockFor }),
-                { fallbackInUse()?.model }, config.maxConcurrentTurns,
+                { fallbackInUse()?.model }, config.maxConcurrentTurns, floor,
             )
 
         // answers to a poll are read back through the group transcript, so without one there is
@@ -247,7 +252,7 @@ suspend fun main() = coroutineScope {
             TelegramBotRunner(
                 telegramClient, config.telegramBotToken, delivery, agentRunner, taskMenu, inlineChoices, tasks,
                 chatProfiles, config.accessPolicy, voiceTranscriber, botProfile, stickerCatalog,
-                groupLog, polls, fallbackInUse, ambient, sandbox = config.regolithUrl != null,
+                groupLog, polls, fallbackInUse, ambient, sandbox = config.regolithUrl != null, floor = floor,
             )
 
         // retention runs on a clock of its own rather than on whoever happens to write next: what needs
@@ -326,6 +331,8 @@ private fun logStartup(
     selfImage: SelfImage?,
     groupLogOn: Boolean,
 ) {
+    log.info { "Owner: id=[${config.accessPolicy.owner}] allowed=[${config.accessPolicy.allowed.size}] banned=[${config.accessPolicy.banned.size}]" }
+
     when {
         config.personality != null -> log.info { "Personality: file=[${config.personalityFile}] chars=[${config.personality.length}]" }
         config.personalityFile != null -> log.warn { "Personality: built-in — PERSONALITY_FILE=[${config.personalityFile}] is blank" }

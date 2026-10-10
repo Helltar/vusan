@@ -7,6 +7,7 @@ import com.helltar.vusan.agent.ANIMATION_ONLY_PROMPT
 import kotlin.time.Duration.Companion.nanoseconds
 import com.helltar.heartbeat.Heartbeat
 import com.helltar.vusan.agent.AgentRunner
+import com.helltar.vusan.agent.ChatFloor
 import com.helltar.vusan.llm.FallbackInUse
 import com.helltar.vusan.agent.addressing.AmbientAddressing
 import com.helltar.vusan.agent.grouplog.GroupLogRepository
@@ -94,6 +95,7 @@ internal class TelegramBotRunner(
     // answers a group message nobody tagged the bot in when it is meant for it all the same; `null` is off.
     private val ambient: AmbientAddressing? = null,
     private val sandbox: Boolean = false,
+    private val floor: ChatFloor = ChatFloor(),
 ) {
 
     private val heartbeat = Heartbeat()
@@ -101,7 +103,7 @@ internal class TelegramBotRunner(
     private val spool = UpdateSpool(SPOOL_RETENTION)
 
     private val turns =
-        AgentTurns(client, agent, delivery, inlineChoices, chatProfiles, voiceTranscriber, sandbox, fallbackInUse)
+        AgentTurns(client, agent, delivery, inlineChoices, chatProfiles, voiceTranscriber, sandbox, fallbackInUse, floor)
 
     private val turnStop = TurnStopHandler(client, agent)
     private val callbacks = CallbackRouter(client, taskMenu, inlineChoices, turnStop, turns, accessPolicy)
@@ -273,6 +275,7 @@ internal class TelegramBotRunner(
 
             recordGroupLog(message)
             learnSticker(message)
+            message.reportToFloor()
 
             // whatever else one person sends comes after the lines of theirs still waiting
             val linesKey = message.linesKeyOrNull()
@@ -340,6 +343,16 @@ internal class TelegramBotRunner(
         launchHandling(message) {
             if (edited) repository.recordEdit(entry) else repository.record(entry)
         }
+    }
+
+    // every person's line in a group, to the bot or not: a line from anybody but the one the bot has been
+    // answering hands the floor back to the chat. the shared accounts — an anonymous admin, a linked
+    // channel, another bot — are not a person who woke up, so they hand nothing back.
+    private fun Message.reportToFloor() {
+        if (isPrivateChat || senderChat != null) return
+        val sender = from?.takeUnless { it.isBot } ?: return
+
+        floor.lineFrom(telegramChat(chatIdLong), forumTopicIdOrNull?.toString(), telegramUser(sender.id))
     }
 
     // a vote is not a message: it reaches no dispatch path, appears in no chat, and is answered by
@@ -658,6 +671,9 @@ internal class TelegramBotRunner(
     private suspend fun Message.isAmbientlyAddressed(captionSource: Message): Boolean {
         val addressing = ambient ?: return false
         val sender = senderIdOrNull() ?: return false
+        // a person the floor has closed on gets silence either way, so the classifier is not paid for
+        if (floor.isClosed(telegramChat(chatIdLong), forumTopicIdOrNull?.toString(), telegramUser(sender))) return false
+
         val waiting = agent.hasTurnUnderWay(conversationScopeOf(sender))
         val candidate = ambientCandidateOrNull(captionSource, authorWaiting = waiting) ?: return false
 

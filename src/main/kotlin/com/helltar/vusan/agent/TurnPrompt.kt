@@ -20,6 +20,7 @@ internal fun currentTurnPrompt(
     userInput: String,
     context: RequestContext,
     previousExchangeAt: Instant? = null,
+    lastAnswerOfStretch: Boolean = false,
     userMemory: List<MemoryEntry>,
     chatMemory: List<MemoryEntry>,
     diary: String? = null,
@@ -30,7 +31,7 @@ internal fun currentTurnPrompt(
 ): String =
     buildList {
         add(currentTimeBlock())
-        add(context.toPromptBlock(previousExchangeAt))
+        add(context.toPromptBlock(previousExchangeAt, lastAnswerOfStretch))
         memoryBlock("user_memory", userMemory)?.let(::add)
         memoryBlock("group_memory", chatMemory)?.let(::add)
         diary?.takeIf { it.isNotBlank() }?.let { add(xmlBlock("diary", it)) }
