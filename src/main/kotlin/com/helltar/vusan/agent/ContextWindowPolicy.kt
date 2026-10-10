@@ -35,7 +35,10 @@ data class ContextTokenBudget(
 
 class ContextWindowPolicy(model: LlmModel) {
 
-    val contextWindowTokens: Int = model.contextWindowTokens.coerceIn(1L, Int.MAX_VALUE.toLong()).toInt()
+    val contextWindowTokens: Int =
+        requireNotNull(model.contextWindowTokens) { "${model.id} has no context window to plan a turn against" }
+            .coerceIn(1L, Int.MAX_VALUE.toLong())
+            .toInt()
 
     // room the agent may grow into during a run: tool results, retries, and the nudge exchange.
     // the ceiling bounds what one run may pile up, not what the window can hold — every later

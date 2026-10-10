@@ -184,7 +184,7 @@ class LlmRuntimeTest {
         val runtime = resolveLlmRuntime(compatible(effort = ReasoningEffort.HIGH), http = http(COMPLETION_REPLY))
 
         assertEquals("OpenAI-compatible (https://example.test, completions)", runtime.providerLabel)
-        assertEquals(16_384, runtime.model.contextWindowTokens, "a server whose window nobody declared runs on the policy's default")
+        assertNull(runtime.model.contextWindowTokens, "a server whose window nobody declared leaves it unknown")
         assertFalse(runtime.model.seesImages)
 
         runtime.client.complete(runtime.model, request(runtime.chatOptions))
@@ -253,6 +253,11 @@ class LlmRuntimeTest {
     @Test
     fun `a codex runtime needs the signed-in account`() {
         assertFailsWith<IllegalArgumentException> { resolveLlmRuntime(codex()) }
+    }
+
+    @Test
+    fun `a codex runtime whose catalog could not be read assumes the plan's window`() {
+        assertEquals(272_000, resolveLlmRuntime(codex(), codexAuth = codexAuth()).model.contextWindowTokens)
     }
 
     @Test

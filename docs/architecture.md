@@ -288,7 +288,9 @@ A normal user message travels:
    between them, so capping from the front alone would recap what the user was replying to and not what they asked.
    An Anthropic model's window comes from the vendor's model list at startup, a compatible server's from that server's
    list where it states one, and an OpenAI model's is assumed to be its generation's; `LLM_CONTEXT_WINDOW_TOKENS`
-   supplies what nobody stated or overrides any of them.
+   supplies what nobody stated or overrides any of them, and a chat model whose window nobody stated stops the
+   startup rather than run on a guess. With a fallback provider the history is planned against the smaller of the
+   two windows, since a fallback taking over mid-turn is sent the same prompt.
 5. **Act** — during the agent loop, tools run and push results into the request's `BotOutbox`; tool calls/results are
    recorded for history. Live textual tool results share a cumulative bound derived from the reserved agent-growth
    budget before later LLM calls; the runner opens that bound as a `TurnToolBudget` the loop spends and the

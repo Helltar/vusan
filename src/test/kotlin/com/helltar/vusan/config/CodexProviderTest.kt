@@ -188,7 +188,7 @@ class CodexProviderTest {
 
         assertEquals(setOf(ReasoningEffort.LOW, ReasoningEffort.HIGH), chat.efforts)
 
-        val role = chat.withModel("gpt-5.6-luna", reasoningEffort = null, contextWindowTokens = null, envPrefix = "ADDRESSING")
+        val role = chat.withModel("gpt-5.6-luna", reasoningEffort = null, envPrefix = "ADDRESSING")
 
         assertNull(role.serviceTier)
         assertNull(role.efforts)

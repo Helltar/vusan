@@ -169,7 +169,11 @@ suspend fun main() = coroutineScope {
                 ?.takeIf { config.stickersEnabled }
                 ?.let { StickerCatalog(telegramClient, ImageVisionClient(it.client, it.model, it.options)) }
 
-        val contextWindowPolicy = ContextWindowPolicy(llm.model)
+        // the history is planned against the smaller of the chat model's window and its fallback's, since a
+        // fallback taking over mid-turn is sent the same prompt
+        val contextWindowTokens =
+            listOfNotNull(llm.statedWindow(config.llmProvider), config.llmFallback?.let { fallback?.statedWindow(it) }).min()
+        val contextWindowPolicy = ContextWindowPolicy(llm.model.copy(contextWindowTokens = contextWindowTokens))
         val groupLogDigester = groupLog?.let { LlmGroupLogDigester(client, llm.model, llm.compactionOptions) }
 
         val toolCatalogFactory =
@@ -277,7 +281,7 @@ suspend fun main() = coroutineScope {
 
         logStartup(
             config, llm, fallback, vision, ambient?.botNames, toolCatalogFactory.availableToolNames, imagePlan,
-            selfImage, groupLogOn = groupLog != null,
+            selfImage, groupLogOn = groupLog != null, contextWindowTokens = contextWindowTokens,
         )
 
         val botJob = botRunner.start(this)
@@ -318,6 +322,13 @@ private fun createVoiceTranscriber(http: HttpClient, config: AppConfig): VoiceTr
 // of a group and does there unasked, where it writes, and what it can call. a capability that is simply
 // not configured is `off (VAR not set)` at info, in the same shape as the ones that are on; a warning is
 // kept for what is configured and still cannot work.
+// a guessed window either starves the history or overruns the server, so one nobody stated stops the startup
+private fun LlmRuntime.statedWindow(config: LlmProviderConfig): Long =
+    checkNotNull(model.contextWindowTokens) {
+        "${config.envPrefix}_CONTEXT_WINDOW_TOKENS is required for ${model.id}: its server's model list states no " +
+                "context window. Set it to the context the server runs the model with"
+    }
+
 private fun logStartup(
     config: AppConfig,
     llm: LlmRuntime,
@@ -330,6 +341,7 @@ private fun logStartup(
     // what a picture of the bot itself is built from, resolved only where something can use it
     selfImage: SelfImage?,
     groupLogOn: Boolean,
+    contextWindowTokens: Long,
 ) {
     log.info { "Owner: id=[${config.accessPolicy.owner}] allowed=[${config.accessPolicy.allowed.size}] banned=[${config.accessPolicy.banned.size}]" }
 
@@ -356,15 +368,9 @@ private fun logStartup(
             ?: "LLM fallback: off (LLM_FALLBACK_PROVIDER not set)"
     }
 
-    // openai and anthropic models carry a window of their own; a codex catalog that could not be read or a
-    // third-party server leave the policy on its conservative default
-    if (config.llmProvider.contextWindowTokens == null && llm.model.contextWindowTokens == LlmProviderConfig.DEFAULT_CONTEXT_WINDOW_TOKENS) {
-        log.warn {
-            "Model context size unknown: using conservative fallback " +
-                    "[${LlmProviderConfig.DEFAULT_CONTEXT_WINDOW_TOKENS}] — set LLM_CONTEXT_WINDOW_TOKENS for this model"
-        }
-    } else {
-        log.info { "Model context window: tokens=${llm.model.contextWindowTokens}" }
+    log.info {
+        "Model context window: tokens=$contextWindowTokens" +
+                " (fallback's, the smaller)".takeIf { contextWindowTokens != llm.model.contextWindowTokens }.orEmpty()
     }
 
     if (vision != null) {

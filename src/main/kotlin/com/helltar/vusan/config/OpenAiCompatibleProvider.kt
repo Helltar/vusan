@@ -31,7 +31,7 @@ internal fun compatibleRuntime(config: LlmProviderConfig.OpenAiCompatible, http:
     val model =
         LlmModel(
             id = config.model.trim(),
-            contextWindowTokens = config.contextWindowTokens ?: LlmProviderConfig.DEFAULT_CONTEXT_WINDOW_TOKENS,
+            contextWindowTokens = config.contextWindowTokens,
             seesImages = config.seesImages == true,
             efforts = config.efforts,
         )

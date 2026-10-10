@@ -203,7 +203,6 @@ data class AppConfig(
             return chat.withModel(
                 model = model,
                 reasoningEffort = resolveReasoningEffort(prefix),
-                contextWindowTokens = readPositiveLongEnv("${prefix}_CONTEXT_WINDOW_TOKENS"),
                 envPrefix = prefix,
             )
         }
@@ -231,7 +230,9 @@ data class AppConfig(
         private fun resolveLlmProvider(prefix: String, fallbackTimeout: Duration?): LlmProviderConfig {
             val raw = requireEnv("${prefix}_PROVIDER")
 
-            val contextWindowTokens = readPositiveLongEnv("${prefix}_CONTEXT_WINDOW_TOKENS")
+            // the history is planned against the chat model's window and its fallback's; a role plans none
+            val contextWindowTokens =
+                if (prefix == LLM_PREFIX || prefix == LLM_FALLBACK_PREFIX) readPositiveLongEnv("${prefix}_CONTEXT_WINDOW_TOKENS") else null
 
             val requestTimeout =
                 readPositiveLongEnv("${prefix}_REQUEST_TIMEOUT_SECONDS")?.seconds

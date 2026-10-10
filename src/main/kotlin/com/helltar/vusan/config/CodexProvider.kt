@@ -23,6 +23,10 @@ import io.ktor.client.*
 
 private val log = KotlinLogging.logger("ModelPreflight")
 
+// what every model on the plan lists as its window (the codex cli's bundled catalog, checked 2026-10-10),
+// assumed when the account's own catalog could not be read
+private const val CODEX_CONTEXT_WINDOW = 272_000L
+
 /** Where the one signed-in ChatGPT account is read from, and the CLI version claimed for it. */
 internal data class CodexSignIn(val authFile: Path, val clientVersion: String?)
 
@@ -47,7 +51,7 @@ internal fun codexRuntime(config: LlmProviderConfig.Codex, auth: CodexAuthStore,
     val model =
         LlmModel(
             id = config.model.trim(),
-            contextWindowTokens = config.contextWindowTokens ?: LlmProviderConfig.DEFAULT_CONTEXT_WINDOW_TOKENS,
+            contextWindowTokens = config.contextWindowTokens ?: CODEX_CONTEXT_WINDOW,
             seesImages = config.seesImages ?: true,
             efforts = config.efforts,
         )

@@ -95,7 +95,7 @@ banned, and startup says so in the log.
 | `LLM_COMPATIBLE_API`          | `completions`             | `completions` or `responses`. Read by `openai-compatible` alone.                |
 | `LLM_REASONING_EFFORT`        | model default             | Reasoning depth: `none`, `low`, `medium`, `high`, `xhigh`, or `max`.            |
 | `LLM_REQUEST_TIMEOUT_SECONDS` | `300`                     | Seconds one LLM call may hang before Vusan gives up and replies with an error.  |
-| `LLM_CONTEXT_WINDOW_TOKENS`   | model metadata or `16384` | Context size override.                                                          |
+| `LLM_CONTEXT_WINDOW_TOKENS`   | model metadata            | Context size override; required where nothing states one.                       |
 
 `LLM_BASE_URL` and `LLM_COMPATIBLE_API` are read by `openai-compatible` alone. Give the address
 without `/v1`: Vusan appends `/v1/chat/completions`, or `/v1/responses` with
@@ -117,12 +117,16 @@ and `high` on the others. Raise the timeout for slow local servers and heavy rea
 turn at a high effort can run for minutes.
 
 An `openai-compatible` model's window is read at startup from the server's model list when the list
-states one, as DeepSeek's does; otherwise the bot assumes 16,384 tokens, so set
-`LLM_CONTEXT_WINDOW_TOKENS` whenever such a model has a different window. An `openai` model is assumed
-to have the window of OpenAI's current generation, 1,050,000 tokens; an `anthropic` model's is read
-from Anthropic's model list at startup. The variable overrides any of them. Vusan reserves part of that
-window for the response, tool results and estimation error, then fits only complete conversation
-interactions into the remainder.
+states one, as DeepSeek's does; where it states none, the startup stops until
+`LLM_CONTEXT_WINDOW_TOKENS` names the context the server runs the model with, since a guess would
+either starve the history or overrun the server. An `openai` model is assumed to have the window of
+OpenAI's current generation, 1,050,000 tokens; an `anthropic` model's is read from Anthropic's model
+list at startup, and a `codex` one's from the plan's catalog, or taken as 272,000 when the catalog
+cannot be read. The variable overrides any of them. With a
+[fallback](#a-second-provider-behind-the-first) the history is planned against the smaller of the two
+windows, and `LLM_FALLBACK_CONTEXT_WINDOW_TOKENS` is required on the same terms. Vusan reserves part
+of that window for the response, tool results and estimation error, then fits only complete
+conversation interactions into the remainder.
 
 Third-party servers all take the same shape, with `LLM_PROVIDER=openai-compatible`:
 
@@ -300,9 +304,10 @@ truth instead of the one the system prompt names.
 
 Pick a fallback that can do what the primary does: one that sees images if the chat model does,
 because vision rides on the same switch, and one whose context window is not much smaller, because
-the history is planned against the primary's. Image generation does not follow: it has a provider of
-its own, and on `IMAGE_PROVIDER=codex` it spends the same subscription and fails with it until the
-window resets, so a deployment that wants pictures through the outage draws on `IMAGE_PROVIDER=openai`.
+the history is planned against the smaller of the two, while the primary answers too. Image
+generation does not follow: it has a provider of its own, and on `IMAGE_PROVIDER=codex` it spends the
+same subscription and fails with it until the window resets, so a deployment that wants pictures
+through the outage draws on `IMAGE_PROVIDER=openai`.
 
 ## How many requests at once
 
@@ -526,8 +531,8 @@ since a picture is looked at once.
 When the chat model cannot accept images, `VISION_MODEL` runs vision on a model of its own and the
 chat model keeps answering everything else. On its own the model runs on the chat provider with the
 chat key, address and timeout; with `VISION_PROVIDER` it is a provider of its own, read like the chat
-one from the same variables under the `VISION_` prefix. Either way its effort and window are its
-own, never the chat's:
+one from the same variables under the `VISION_` prefix. Either way its effort is its own, never the
+chat's:
 
 ```dotenv
 LLM_PROVIDER=openai-compatible
@@ -549,7 +554,6 @@ VISION_API_KEY=sk-proj-qwerty
 | `VISION_COMPATIBLE_API`          | `completions`     | `completions` or `responses`, for `VISION_PROVIDER=openai-compatible`.               |
 | `VISION_REASONING_EFFORT`        | model default     | Reasoning depth of every look, the values `LLM_REASONING_EFFORT` takes.              |
 | `VISION_REQUEST_TIMEOUT_SECONDS` | the chat's        | Seconds one look may hang. Read with `VISION_PROVIDER` only.                         |
-| `VISION_CONTEXT_WINDOW_TOKENS`   | model metadata    | Context size override.                                                               |
 
 An `openai-compatible` model sees only when the server's own model list says it takes images:
 DeepSeek's says so of `deepseek-flash`, which then needs no vision model of its own, and not of
@@ -691,7 +695,7 @@ earns a startup `WARN`.
 
 Like a vision model, it runs on the chat provider with the chat key, address and timeout unless
 `ADDRESSING_PROVIDER` names a provider of its own, read like the chat one under the `ADDRESSING_`
-prefix; its effort and window are its own either way.
+prefix; its effort is its own either way.
 
 | Variable                             | Default            | Description                                                                              |
 |--------------------------------------|--------------------|------------------------------------------------------------------------------------------|
@@ -704,7 +708,6 @@ prefix; its effort and window are its own either way.
 | `ADDRESSING_COMPATIBLE_API`          | `completions`      | `completions` or `responses`, for `ADDRESSING_PROVIDER=openai-compatible`.               |
 | `ADDRESSING_REASONING_EFFORT`        | the least it takes | Reasoning depth of every verdict; see below for what the least is.                       |
 | `ADDRESSING_REQUEST_TIMEOUT_SECONDS` | the chat's         | Seconds one verdict may hang. Read with `ADDRESSING_PROVIDER` only.                      |
-| `ADDRESSING_CONTEXT_WINDOW_TOKENS`   | model metadata     | Context size override.                                                                   |
 
 The model gets the least reasoning it takes unless `ADDRESSING_REASONING_EFFORT` says otherwise:
 `none` where the model takes it, which it is asked once at startup with a request of a few tokens,

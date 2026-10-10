@@ -31,11 +31,6 @@ enum class ServiceTier {
  */
 sealed interface LlmProviderConfig {
 
-    companion object {
-        /** The window assumed for a model nobody stated one for, small enough to be safe on any of them. */
-        const val DEFAULT_CONTEXT_WINDOW_TOKENS = 16_384L
-    }
-
     val model: String
     val reasoningEffort: ReasoningEffort?
 
@@ -51,9 +46,10 @@ sealed interface LlmProviderConfig {
 
     /**
      * This configuration pointed at [model], for a role that runs on the chat provider with a model of
-     * its own. What the vendor said of the chat model is left behind: the role's is another model.
+     * its own. What the vendor said of the chat model is left behind: the role's is another model. A role
+     * plans no history, so it has no window of its own.
      */
-    fun withModel(model: String, reasoningEffort: ReasoningEffort?, contextWindowTokens: Long?, envPrefix: String): LlmProviderConfig
+    fun withModel(model: String, reasoningEffort: ReasoningEffort?, envPrefix: String): LlmProviderConfig
 
     data class OpenAi(
         val apiKey: String,
@@ -72,11 +68,11 @@ sealed interface LlmProviderConfig {
             requireSane(requestTimeout, contextWindowTokens)
         }
 
-        override fun withModel(model: String, reasoningEffort: ReasoningEffort?, contextWindowTokens: Long?, envPrefix: String): OpenAi =
+        override fun withModel(model: String, reasoningEffort: ReasoningEffort?, envPrefix: String): OpenAi =
             copy(
                 model = model,
                 reasoningEffort = reasoningEffort,
-                contextWindowTokens = contextWindowTokens,
+                contextWindowTokens = null,
                 seesImages = null,
                 efforts = null,
                 envPrefix = envPrefix,
@@ -105,11 +101,11 @@ sealed interface LlmProviderConfig {
             requireSane(requestTimeout, contextWindowTokens)
         }
 
-        override fun withModel(model: String, reasoningEffort: ReasoningEffort?, contextWindowTokens: Long?, envPrefix: String): Anthropic =
+        override fun withModel(model: String, reasoningEffort: ReasoningEffort?, envPrefix: String): Anthropic =
             copy(
                 model = model,
                 reasoningEffort = reasoningEffort,
-                contextWindowTokens = contextWindowTokens,
+                contextWindowTokens = null,
                 maxOutputTokens = null,
                 seesImages = null,
                 efforts = null,
@@ -143,11 +139,11 @@ sealed interface LlmProviderConfig {
             requireSane(requestTimeout, contextWindowTokens)
         }
 
-        override fun withModel(model: String, reasoningEffort: ReasoningEffort?, contextWindowTokens: Long?, envPrefix: String): OpenAiCompatible =
+        override fun withModel(model: String, reasoningEffort: ReasoningEffort?, envPrefix: String): OpenAiCompatible =
             copy(
                 model = model,
                 reasoningEffort = reasoningEffort,
-                contextWindowTokens = contextWindowTokens,
+                contextWindowTokens = null,
                 seesImages = null,
                 efforts = null,
                 envPrefix = envPrefix,
@@ -188,11 +184,11 @@ sealed interface LlmProviderConfig {
         }
 
         // the serving tier is the chat's: a role spends the same allowance, and its model may not be served at it
-        override fun withModel(model: String, reasoningEffort: ReasoningEffort?, contextWindowTokens: Long?, envPrefix: String): Codex =
+        override fun withModel(model: String, reasoningEffort: ReasoningEffort?, envPrefix: String): Codex =
             copy(
                 model = model,
                 reasoningEffort = reasoningEffort,
-                contextWindowTokens = contextWindowTokens,
+                contextWindowTokens = null,
                 serviceTier = null,
                 verbosity = null,
                 seesImages = null,

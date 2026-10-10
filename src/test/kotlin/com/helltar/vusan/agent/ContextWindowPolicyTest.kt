@@ -3,6 +3,7 @@ package com.helltar.vusan.agent
 import com.helltar.vusan.llm.LlmModel
 import kotlin.test.Test
 import kotlin.test.assertEquals
+import kotlin.test.assertFailsWith
 import kotlin.test.assertTrue
 
 class ContextWindowPolicyTest {
@@ -59,6 +60,11 @@ class ContextWindowPolicyTest {
 
         assertEquals(budget.agentReserveTokens, policy.liveToolResultMaxTokens)
         assertTrue(policy.liveToolResultMaxChars < budget.agentReserveTokens * ESTIMATED_BYTES_PER_TOKEN)
+    }
+
+    @Test
+    fun `a model without a window has nothing to plan a turn against`() {
+        assertFailsWith<IllegalArgumentException> { ContextWindowPolicy(LlmModel(id = "test", contextWindowTokens = null)) }
     }
 
     private fun model(contextLength: Long): LlmModel =
