@@ -14,9 +14,10 @@ import kotlin.time.TimeSource
 
 /**
  * A group message nobody tagged the bot in, as the adapter hands it over: only text a person typed,
- * never an edit, a forward or a command, all of which the adapter has already turned away.
+ * never a forward or a command, both of which the adapter has already turned away.
  *
  * [authorWaiting] is true while the author has a turn of their own running or queued in this chat.
+ * [edited] marks an edit of a message sent a moment ago, which is asked about only when it names the bot.
  */
 data class AmbientCandidate(
     val chat: ChatRef,
@@ -25,6 +26,7 @@ data class AmbientCandidate(
     val text: String,
     val inReplyTo: String? = null,
     val authorWaiting: Boolean = false,
+    val edited: Boolean = false,
 )
 
 /**
@@ -37,8 +39,8 @@ data class AmbientCandidate(
  *
  * Code decides whether to ask, a model decides the answer. A message reaches the model only when it
  * names the bot, when its author is still waiting on the bot, or when the bot spoke within
- * [FOLLOW_UP_WINDOW] and that line is among the few the model is shown; everything else in the chat
- * never leaves the machine. The gate is about privacy before cost.
+ * [FOLLOW_UP_WINDOW] and that line is among the few the model is shown; an edit gets only the first of
+ * those, and everything else in the chat never leaves the machine. The gate is about privacy before cost.
  */
 class AmbientAddressing(
     private val classifier: AddressingClassifier,
@@ -98,6 +100,9 @@ class AmbientAddressing(
 
         return when {
             namePattern.containsMatchIn(candidate.text) -> Gate.NAME
+            // an edit is someone adding the name they forgot; through the other doors every typo fixed near
+            // the bot's answer would be sent out to be judged
+            candidate.edited -> null
             candidate.authorWaiting -> Gate.WAITING
             // a bot line outside the context is one the model could not connect the message to anyway
             recent.any { it.kind == GroupLogEntry.BOT_KIND && !it.sentAt.isBefore(followUpSince) } -> Gate.FOLLOW_UP

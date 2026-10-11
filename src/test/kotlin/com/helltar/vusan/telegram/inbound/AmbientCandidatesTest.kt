@@ -5,6 +5,7 @@ import com.helltar.vusan.request.testChat
 import org.telegram.telegrambots.meta.api.objects.message.Message
 import kotlin.test.Test
 import kotlin.test.assertEquals
+import kotlin.test.assertFalse
 import kotlin.test.assertNotNull
 import kotlin.test.assertNull
 import kotlin.test.assertTrue
@@ -25,6 +26,12 @@ class AmbientCandidatesTest {
     @Test
     fun `the author's waiting is passed through`() {
         assertTrue(assertNotNull(message(""""text": "how is it going"""").candidate(authorWaiting = true)).authorWaiting)
+    }
+
+    @Test
+    fun `an edit is a candidate marked as one`() {
+        assertFalse(assertNotNull(message(""""text": "robin, hi"""").candidate()).edited)
+        assertTrue(assertNotNull(message(""""text": "robin, hi", "edit_date": 1774000100""").candidate()).edited)
     }
 
     @Test
@@ -79,7 +86,6 @@ class AmbientCandidatesTest {
     fun `what a person did not type into the group is never a candidate`() {
         // a private chat is always answered, and needs no judging
         assertNull(message(""""text": "robin, hi"""", chat = """{"id": 7, "type": "private"}""").candidate())
-        assertNull(message(""""text": "robin, hi", "edit_date": 1774000100""").candidate())
         assertNull(message(""""text": "robin, hi", "forward_origin": {"type": "hidden_user", "date": 1, "sender_user_name": "Carol"}""").candidate())
         assertNull(message(""""text": "robin, hi", "sender_chat": {"id": -100, "type": "supergroup", "title": "Group"}""").candidate())
         assertNull(message(""""text": "robin, hi", "via_bot": {"id": 5, "is_bot": true, "first_name": "Helper"}""").candidate())

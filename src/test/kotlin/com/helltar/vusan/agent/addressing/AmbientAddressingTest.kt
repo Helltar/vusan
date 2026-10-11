@@ -99,6 +99,24 @@ class AmbientAddressingTest {
     }
 
     @Test
+    fun `an edit that names the bot is put to the classifier`() = runBlocking {
+        val classifier = FakeClassifier(answer = true)
+
+        assertTrue(addressing(classifier).isAddressed(candidate("robin, hello", edited = true)))
+        assertEquals(1, classifier.inputs.size)
+    }
+
+    @Test
+    fun `an edit without the name is never asked about`() = runBlocking {
+        val classifier = FakeClassifier(answer = true)
+        groupLog.record(bot("the keys are on the shelf", minutesAgo(1)))
+
+        assertFalse(addressing(classifier).isAddressed(candidate("and why is that", edited = true)))
+        assertFalse(addressing(classifier).isAddressed(candidate("how is it going", authorWaiting = true, edited = true)))
+        assertTrue(classifier.inputs.isEmpty())
+    }
+
+    @Test
     fun `nobody is said to be waiting unless the author is`() = runBlocking {
         val classifier = FakeClassifier(answer = true)
 
@@ -185,13 +203,19 @@ class AmbientAddressingTest {
     private fun addressing(classifier: AddressingClassifier) =
         AmbientAddressing(classifier, groupLog, listOf("Robin", "robin"), clock = { now })
 
-    private fun candidate(text: String, messageId: String = MESSAGE_ID, authorWaiting: Boolean = false) =
+    private fun candidate(
+        text: String,
+        messageId: String = MESSAGE_ID,
+        authorWaiting: Boolean = false,
+        edited: Boolean = false,
+    ) =
         AmbientCandidate(
             chat = CHAT,
             messageId = messageId,
             author = "Bob",
             text = text,
             authorWaiting = authorWaiting,
+            edited = edited,
         )
 
     private fun person(messageId: String, name: String, text: String, at: Instant) =

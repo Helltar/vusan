@@ -200,8 +200,8 @@ A normal user message travels:
    in the open (`TelegramDelivery.sendForSenderOnly`), since the agent's own delivery is not ephemeral and a public
    answer to a private message would leak it. On the text, caption and album paths a group message `shouldHandle` turned away gets one more look when
    `ADDRESSING_ENABLED` is on: `TelegramBotRunner.acceptance` builds an `AmbientCandidate`
-   (`telegram/inbound/AmbientCandidates.kt` — typed text or a caption only, never an edit, forward, command, bot or
-   channel post) and asks `agent/addressing/AmbientAddressing`. That puts it to a classifier model of its own only when
+   (`telegram/inbound/AmbientCandidates.kt` — typed text or a caption only, never a forward, command, bot or
+   channel post; an edit counts only when it names the bot) and asks `agent/addressing/AmbientAddressing`. That puts it to a classifier model of its own only when
    the message names the bot, its author has a turn under way (`AgentRunner.hasTurnUnderWay`), or the bot spoke within
    five minutes and that line is among the six the classifier is shown, read from the group log; nothing else leaves
    the machine. A failure, a timeout, an unreadable answer or a chat over twenty checks a minute all mean no, so it can

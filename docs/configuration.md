@@ -726,8 +726,9 @@ small OpenAI models — `gpt-5.6-luna` made the fewest wrong calls of eight and 
 - **What is sent** — that one message and at most six lines before it, none older than ten minutes,
   with names. At most twenty messages per chat a minute; past that, and on any error or a verdict
   slower than five seconds, Vusan simply stays out.
-- **What is not asked about** — voice messages, stickers, edits, forwards, commands, and messages
-  from bots or from a channel.
+- **What is not asked about** — voice messages, stickers, forwards, commands, and messages
+  from bots or from a channel. An edit is asked about only when it names Vusan: someone adding the
+  name they forgot, within the same five minutes an added mention is answered in.
 - **While Vusan is busy** — a message it was called into by name waits its turn like a mention
   does, and is dropped without a word if the line is full. If the answer before it already covered
   it, or it turns out to be for somebody else, Vusan may stay silent.

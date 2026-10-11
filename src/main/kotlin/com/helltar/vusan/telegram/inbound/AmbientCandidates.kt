@@ -8,15 +8,15 @@ import org.telegram.telegrambots.meta.api.objects.message.Message
 /**
  * The message as ambient addressing reads it, or `null` when it is not one to ask about at all.
  *
- * Only what a person typed into a group qualifies: a text, or the caption on what they sent. An edit, a
- * forward, a command, and anything posted by another bot or under a chat's own account (a channel, an
+ * Only what a person typed into a group qualifies: a text, or the caption on what they sent, edited or
+ * not. A forward, a command, and anything posted by another bot or under a chat's own account (a channel, an
  * anonymous admin) never does — and nor does a voice message, since finding out whether it is meant for
  * the bot would cost a transcription of every one. [captionSource] is the album part carrying the caption
  * when the message anchors a media group.
  */
 internal fun Message.ambientCandidateOrNull(captionSource: Message, authorWaiting: Boolean): AmbientCandidate? {
-    // a private chat is always answered, and an edit or a forward is not something said to the chat just now
-    if (isPrivateChat || editDate != null || forwardOrigin != null) return null
+    // a private chat is always answered, and a forward is not something said to the chat just now
+    if (isPrivateChat || forwardOrigin != null) return null
 
     // posted under a chat's own account or through an inline bot rather than typed by a person
     if (senderChat != null || viaBot != null) return null
@@ -33,6 +33,7 @@ internal fun Message.ambientCandidateOrNull(captionSource: Message, authorWaitin
         text = content.text.trim().takeIf { it.isNotEmpty() } ?: return null,
         inReplyTo = repliedAuthorOrNull(),
         authorWaiting = authorWaiting,
+        edited = editDate != null,
     )
 }
 
