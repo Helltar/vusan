@@ -11,6 +11,7 @@ import com.helltar.vusan.delivery.TurnDelivery
 import com.helltar.vusan.infra.Db
 import com.helltar.vusan.outbox.BotOutput
 import com.helltar.vusan.request.ChatRef
+import com.helltar.vusan.request.testUser
 import kotlinx.coroutines.runBlocking
 import java.nio.file.Files
 import java.nio.file.Path
@@ -321,6 +322,56 @@ class InitiativeTest {
         assertFalse(quiet.any { it.startsWith("Alice") })
     }
 
+    @Test
+    fun `a person who asked to be left alone gets no number, and the look is told`() = runBlocking {
+        val mind = FakeMind(InitiativeDecision.Silent())
+        val leaveAlone = LeaveAloneRepository().also { it.store(CHAT, testUser(9), now.plusSeconds(10 * 3600)) }
+
+        lookWith(initiative(mind, leaveAlone = leaveAlone)) {
+            groupLog.record(person("c1", "and the tent", now.minusSeconds(5), "Carol", "9"))
+        }
+
+        val input = mind.inputs.single()
+        val carol = input.lines.single { it.author == "Carol" }
+
+        assertNull(carol.number)
+        assertTrue(carol.fresh)
+        assertEquals(listOf(1, 2, 3), input.lines.filter { it.author == "Alice" && it.fresh }.map { it.number })
+        assertEquals(1, input.leftAlone.size)
+        assertTrue(input.leftAlone.single().startsWith("Carol — asked you not to write to them"), input.leftAlone.single())
+    }
+
+    // what somebody who asked to be left alone wrote is not a reason to look at all
+    @Test
+    fun `a chat where only a person who asked to be left alone writes is not looked at`() = runBlocking {
+        val mind = FakeMind(InitiativeDecision.Silent())
+        val leaveAlone = LeaveAloneRepository().also { it.store(CHAT, testUser(9), now.plusSeconds(10 * 3600)) }
+        val initiative = initiative(mind, leaveAlone = leaveAlone)
+
+        chatter()
+        initiative.tick()
+        now = now.plusSeconds(LONGEST_PAUSE_SECONDS)
+        repeat(3) { groupLog.record(person("c$it", "tent $it", now.minusSeconds(3L - it), "Carol", "9")) }
+        initiative.tick()
+
+        assertTrue(mind.inputs.isEmpty())
+    }
+
+    @Test
+    fun `someone who asked to be left alone is not missed out loud`() = runBlocking {
+        val mind = FakeMind(InitiativeDecision.Silent())
+        val leaveAlone = LeaveAloneRepository().also { it.store(CHAT, testUser(9), now.plusSeconds(10 * 3600)) }
+        val fiveDaysAgo = now.minusSeconds(5 * 24 * 3600)
+
+        repeat(20) { groupLog.record(person("c$it", "note $it", fiveDaysAgo.plusSeconds(it.toLong()), "Carol", "9")) }
+        lookWith(initiative(mind, leaveAlone = leaveAlone))
+
+        val input = mind.inputs.single()
+
+        assertTrue(input.quietLately.isEmpty(), input.quietLately.toString())
+        assertTrue(input.leftAlone.isEmpty(), input.leftAlone.toString())
+    }
+
     // the first pass only notes the chat and draws its pause; the look comes with the pass after it
     private suspend fun lookWith(
         initiative: Initiative,
@@ -363,6 +414,7 @@ class InitiativeTest {
         isAllowed: (ChatRef) -> Boolean = { true },
         isAnswering: (ChatRef) -> Boolean = { false },
         stickers: StickerShortlist? = null,
+        leaveAlone: LeaveAloneRepository? = null,
     ) =
         Initiative(
             mind = mind,
@@ -372,6 +424,7 @@ class InitiativeTest {
             isAllowed = isAllowed,
             isAnswering = isAnswering,
             stickers = stickers,
+            leaveAlone = leaveAlone,
             clock = { now },
             random = Random(1),
         )

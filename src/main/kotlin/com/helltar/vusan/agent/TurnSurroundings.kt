@@ -4,6 +4,7 @@ import com.helltar.vusan.agent.grouplog.GroupLogEntry
 import com.helltar.vusan.agent.grouplog.GroupLogRepository
 import com.helltar.vusan.agent.grouplog.renderGroupLog
 import com.helltar.vusan.agent.grouplog.withoutExchangesWith
+import com.helltar.vusan.agent.presence.LeaveAloneRepository
 import com.helltar.vusan.common.rethrowIfCancellation
 import com.helltar.vusan.request.ChatRef
 import com.helltar.vusan.request.RequestContext
@@ -24,7 +25,8 @@ private const val RECENT_CHAT_MESSAGES = 15
  *
  * The diary and the shortlist come as functions rather than as their sources: the sticker catalog
  * resends by `file_id`, which is one messenger's own model, and nothing on this side has business
- * holding something that needs a client to exist.
+ * holding something that needs a client to exist. The sender's request to be left alone, where one
+ * holds, is read here too, since it changes what the turn is told about the person it answers.
  */
 class TurnSurroundings(
     private val groupLog: GroupLogRepository? = null,
@@ -32,7 +34,23 @@ class TurnSurroundings(
     private val diary: (suspend (ChatRef) -> String?)? = null,
     // what the chat's sticker shortlist looks like, if this deployment has one.
     private val stickerCatalog: (suspend (ChatRef) -> String?)? = null,
+    // who asked not to be written to, and until when
+    private val leaveAlone: LeaveAloneRepository? = null,
 ) {
+
+    // a request not to be written to holds in a group: in a private chat nothing is ever sent unasked, and
+    // a shared account is nobody in particular to leave alone
+    suspend fun leftAloneUntil(context: RequestContext): Instant? {
+        val requests = leaveAlone?.takeIf { !context.chat.isPrivate && context.sender.isPerson } ?: return null
+
+        return try {
+            requests.activeUntil(context.chatRef, context.user, Instant.now())
+        } catch (e: Throwable) {
+            e.rethrowIfCancellation()
+            log.warn(e) { "failed to read the leave-alone request for chat=${context.chat.id} user=${context.sender.id}" }
+            null
+        }
+    }
 
     // a group's days belong to the group: a private chat has its history instead, and no diary.
     suspend fun diaryFor(context: RequestContext): String? {

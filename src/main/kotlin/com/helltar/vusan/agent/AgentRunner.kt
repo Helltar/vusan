@@ -175,6 +175,7 @@ class AgentRunner(
                 lastAnswerOfStretch = lastAnswerOfStretch,
                 userMemory = userMemory,
                 chatMemory = chatMemory,
+                leftAloneUntil = surroundings.leftAloneUntil(context),
                 diary = surroundings.diaryFor(context),
                 recentChat = surroundings.recentChatFor(context),
                 stickerCatalog = surroundings.stickerCatalogFor(context),
@@ -264,10 +265,14 @@ class AgentRunner(
         if (outputs.isEmpty() && comment.isNullOrBlank()) {
             log.info {
                 "agent produced no output for chat=${context.chat.id} user=${context.sender.id}; staying silent" +
-                        if (context.ambient) " ambient=[true]" else ""
+                        (if (context.ambient) " ambient=[true]" else "") +
+                        outbox.silence?.let { " why=[${it.collapseWhitespaceAndCap(LOG_REPLY_MAX_CHARS)}]" }.orEmpty()
             }
 
-            return AgentResult(outputs = emptyList(), comment = null)
+            // a silence the turn declared is an answer it gave, and the message it answered is kept with it:
+            // the next turn has to see that it was asked to be quiet, not meet the same request as new. a
+            // turn that merely delivered nothing — a message that was not for it — leaves no trace
+            if (outbox.silence == null) return AgentResult(outputs = emptyList(), comment = null)
         }
 
         val assistantText = assistantTextForHistory(outputs, comment)

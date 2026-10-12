@@ -17,6 +17,7 @@ import com.helltar.vusan.agent.memory.MemoryRepository
 import com.helltar.vusan.agent.presence.Diary
 import com.helltar.vusan.agent.presence.DiaryRepository
 import com.helltar.vusan.agent.presence.Initiative
+import com.helltar.vusan.agent.presence.LeaveAloneRepository
 import com.helltar.vusan.agent.presence.LlmDiaryWriter
 import com.helltar.vusan.agent.presence.LlmInitiativeMind
 import com.helltar.vusan.agent.providerOutage
@@ -136,6 +137,10 @@ suspend fun main() = coroutineScope {
         // read once and shared: the runner matches mentions against it, the agent is told its own handle.
         val botProfile = telegramClient.botProfile()
 
+        // who asked not to be written to: read by the turn, the ambient gate and the initiative, written by
+        // the turn that hears the request
+        val leaveAlone = LeaveAloneRepository()
+
         // the classifier's context and the bot's own recent lines both come from the group transcript, which
         // the config guarantees whenever the feature is on.
         val ambient =
@@ -148,6 +153,7 @@ suspend fun main() = coroutineScope {
                     LlmAddressingClassifier(runtime.client, runtime.model, runtime.options),
                     transcript,
                     botProfile.addressingNames(addressing.names),
+                    leaveAlone,
                 )
             }
 
@@ -179,8 +185,8 @@ suspend fun main() = coroutineScope {
         val toolCatalogFactory =
             ToolCatalogFactory(
                 http, publicHttp, TelegramToolSets(telegramClient, stickerCatalog), config, conversation, memory,
-                tasks, vision, groupLog, groupLogDigester, contextWindowPolicy.liveToolResultMaxChars, codexAuth,
-                selfImage,
+                tasks, leaveAlone, vision, groupLog, groupLogDigester, contextWindowPolicy.liveToolResultMaxChars,
+                codexAuth, selfImage,
             )
 
         val agentFactory =
@@ -216,7 +222,7 @@ suspend fun main() = coroutineScope {
             AgentRunner(
                 agentFactory, toolCatalogFactory, conversation, memory, conversationCompactor,
                 config.chatHistory,
-                TurnSurroundings(groupLog, diary?.let { it::blockFor }, stickerCatalog?.let { it::indexBlockFor }),
+                TurnSurroundings(groupLog, diary?.let { it::blockFor }, stickerCatalog?.let { it::indexBlockFor }, leaveAlone),
                 { fallbackInUse()?.model }, config.maxConcurrentTurns, floor,
             )
 
@@ -236,7 +242,7 @@ suspend fun main() = coroutineScope {
 
         val scheduler =
             TaskScheduler(
-                tasks, agentRunner, delivery, chatProfiles, config.accessPolicy,
+                tasks, agentRunner, delivery, chatProfiles, config.accessPolicy, leaveAlone,
             )
 
         val initiative =
@@ -249,6 +255,7 @@ suspend fun main() = coroutineScope {
                     isAnswering = agentRunner::hasTurnUnderWayIn,
                     diary = diary?.let { it::blockFor },
                     stickers = stickerCatalog,
+                    leaveAlone = leaveAlone,
                 )
             }
 
@@ -276,6 +283,7 @@ suspend fun main() = coroutineScope {
                     groupLog?.let { Maintenance.Step("group log retention") { it.pruneExpired(MAINTENANCE_BATCH) } },
                     polls?.let { Maintenance.Step("expired polls") { it.pruneExpired() } },
                     diary?.let { Maintenance.Step("diary retention") { it.pruneExpired() } },
+                    Maintenance.Step("leave-alone retention") { leaveAlone.pruneExpired(Instant.now()) },
                 ),
             )
 

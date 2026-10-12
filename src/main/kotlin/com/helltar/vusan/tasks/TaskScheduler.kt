@@ -2,6 +2,7 @@ package com.helltar.vusan.tasks
 
 import com.helltar.vusan.agent.AgentRequest
 import com.helltar.vusan.agent.AgentRunner
+import com.helltar.vusan.agent.presence.LeaveAloneRepository
 import com.helltar.vusan.agent.scheduledTaskBlock
 import com.helltar.vusan.common.rethrowIfCancellation
 import com.helltar.vusan.common.runInOwnJob
@@ -29,6 +30,8 @@ class TaskScheduler(
     // no default: an empty policy allows nobody, and a scheduler that silently fires nothing is worse
     // than one that will not be built without being told who may use it.
     private val accessPolicy: AccessPolicy,
+    // who asked not to be written to: a follow-up of the bot's own is the one fire that would break that
+    private val leaveAlone: LeaveAloneRepository? = null,
     private val clock: () -> Instant = Instant::now,
 ) {
 
@@ -81,6 +84,14 @@ class TaskScheduler(
         // owner's: losing access has to stop the work that goes on without them, not only their messages.
         if (!accessPolicy.allows(task.scope.chat, task.scope.user)) {
             skipDenied(task, now)
+            return
+        }
+
+        // a follow-up is the bot writing unasked, which somebody who asked to be left alone was promised not
+        // to get. it is dropped rather than held: asking how the exam went a week later is not checking back
+        if (task.isHeldBy(leaveAlone, now)) {
+            log.info { "task id=${task.id} skipped: a follow-up for ${task.scope}, who asked to be left alone" }
+            rescheduleAfterFire(task, now)
             return
         }
 
@@ -284,6 +295,16 @@ class TaskScheduler(
         const val MAX_ATTEMPTS = 3
         val RETRY_BACKOFF = 30.seconds
     }
+}
+
+/**
+ * Whether [requests] hold this task back: it is a follow-up the bot set itself, in a group, for a person
+ * whose request to be left alone there holds at [now]. A task the person asked for is theirs and fires.
+ */
+internal suspend fun ScheduledTask.isHeldBy(requests: LeaveAloneRepository?, now: Instant): Boolean {
+    if (!selfInitiated || chatIsPrivate || requests == null) return false
+
+    return requests.activeUntil(scope.chat, scope.user, now) != null
 }
 
 // a failed run left no history behind, so the retry has to say in the prompt what went wrong. the usual

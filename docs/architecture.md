@@ -76,7 +76,9 @@ that is who owns writing them, not because only `agent/` reads them. No other ar
   produced by `GroupLogDigester` when the window is too wide to quote. `agent/presence/` is what the bot does in a
   group with nobody asking: `Diary` writes an entry about each closed day, and `Initiative` looks over a chat people are
   writing in and now and then reacts or says something. Neither is a turn — no history, no tools, one model call each —
-  and both are off unless switched on; see [Background and side flows](#background-and-side-flows).
+  and both are off unless switched on; see [Background and side flows](#background-and-side-flows). `LeaveAloneRepository`
+  beside them holds who asked not to be written to, which is what both, the ambient gate and the turn's context block
+  keep to.
 - **`tools/`** — agent-callable tools, one subpackage per capability (search, voice, vision, scheduled tasks, …).
   `ToolCatalogFactory` owns clients and builds a per-request `ToolCatalog` from required tools, optional tools whose
   env/config is present, and whatever the turn's messenger adds through the `PlatformToolSets` port — a tool only one
@@ -204,7 +206,9 @@ A normal user message travels:
    channel post; an edit counts only when it names the bot) and asks `agent/addressing/AmbientAddressing`. That puts it to a classifier model of its own only when
    the message names the bot, its author has a turn under way (`AgentRunner.hasTurnUnderWay`), or the bot spoke within
    five minutes and that line is among the six the classifier is shown, read from the group log; nothing else leaves
-   the machine. A failure, a timeout, an unreadable answer or a chat over twenty checks a minute all mean no, so it can
+   the machine. The follow-up door is the bot's own guess, and it stays shut for a person who asked to be left alone
+   (`agent/presence/LeaveAloneRepository`); the name door is theirs like anybody's. A failure, a timeout, an unreadable
+   answer or a chat over twenty checks a minute all mean no, so it can
    add answers and never take one away, and it costs nothing to a message the bot answers today. A yes is claimed like
    any other message and runs as an ordinary turn with `RequestContext.ambient` set.
 3. **Normalize** — text is sanitized (`MessageSanitizer`); voice/audio is transcribed (`VoiceTranscriber` → `stt/`);
@@ -328,7 +332,12 @@ A normal user message travels:
       wrap-up below takes its place, so the nudge never pushes a turn past its limit. An ambient turn is exempt on its first
       reply only (`owesDelivery`): the system prompt lets it end at once, empty and with no tool calls, when the
       message turns out to be for someone else or already answered, while an empty reply after tools is still the
-      flaky provider and still nudged;
+      flaky provider and still nudged. Silence chosen on purpose — the message asked the bot to be quiet, or is an
+      insult it will not dignify — is declared instead, through `staySilent` (`MessageTools`) with a reason for the
+      log, which `BotOutbox` accepts only while nothing is queued or in the chat; the turn ends with the batch that
+      declared it, so the model is never asked again and cannot write a closing line into a reply it chose not to
+      give. The runner stores such a turn in the history, the call and its reason with it, where an undeclared empty
+      turn leaves no trace: the next message from that person is read knowing the bot was asked to be quiet;
     - a turn that announced its plan (`announcePlan`) and then ended without a single tool call after it is sent back
       to the work once (`PROMISE_NUDGE`): the announcement reached the chat, so the user is waiting on exactly what it
       promised, and "I'll build it now" followed by silence is the one reading worse than an error.
@@ -460,7 +469,9 @@ A normal user message travels:
   (chat and optional thread), names the `UserRef` a DM-routed item belongs to, and answers a
   `DeliveryOutcome`. Chat facts come the same way, through `request/ChatProfileLookup`. A task runs with no incoming message behind it, so its `<message_context>` is
   rebuilt from what the task stored — the chat, and who set it up — instead of the live chat flavor, title, and
-  description a normal turn carries. Tasks overdue beyond `TaskScheduler.MAX_LATENESS` (e.g. after downtime) get a
+  description a normal turn carries. A follow-up the bot set itself (`selfInitiated`) in a group is dropped instead of
+  fired while its person's request to be left alone holds (`LeaveAloneRepository`): it is the one fire that writes to
+  them unasked, and a task they asked for fires as usual. Tasks overdue beyond `TaskScheduler.MAX_LATENESS` (e.g. after downtime) get a
   "missed" notice and are advanced/disabled rather than fired. A failed run (`AgentResult.failed`, or a thrown error)
   delivers nothing, so it is repeated up to `MAX_ATTEMPTS` times with a short backoff, the retry prompt telling the
   agent that the earlier attempt delivered nothing; a failed *delivery* is never repeated, since part of the answer may
@@ -485,7 +496,7 @@ A normal user message travels:
   math lives in `tasks/Recurrence.kt`.
 - **Maintenance** — `infra/Maintenance` runs a pass of bounded deletes on the way up and every six hours after
   that: conversations past `CONVERSATION_RETENTION_DAYS`, group transcripts past `GROUP_LOG_RETENTION_DAYS` or over
-  their row cap, polls past their retention, and diary entries older than a week. Each of these is also pruned where it is written, and that is enough
+  their row cap, polls past their retention, diary entries older than a week, and leave-alone requests past their end. Each of these is also pruned where it is written, and that is enough
   for as long as somebody keeps writing — the pass exists for what nobody writes to any more: a conversation the person
   left, a chat the bot still sits in, a poll never followed by another. Every step bounds its own work (a hundred
   conversations or chats a round, the next round taking the rest) and reports what it removed, and a step that throws
@@ -540,7 +551,10 @@ A normal user message travels:
   already said today, and — from `GroupLogRepository.authorActivity` — the people who used to write here and have not
   for three days. The lines a person wrote since the last look — or since the bot's own last line, when that came later: answering
   someone is having read the chat up to there — carry a number, and a number is the only way to point at a message: message ids are never shown, so a decision cannot reach
-  past what the look put in front of it. The answer is one JSON object — `silent`, `react` (one emoji from Telegram's
+  past what the look put in front of it. A person who asked to be left alone (`LeaveAloneRepository`, written by the
+  `leaveAlone` tool of the turn that heard them, in groups only) is out of a look's reach by code: their lines carry no
+  number, count as nothing new — a chat where only they write gets no look — are left out of the people asked after,
+  and are named to the look under `<left_alone>` so a line of its own is not meant for them either. The answer is one JSON object — `silent`, `react` (one emoji from Telegram's
   free set on one numbered line), `say` (one short plain-text line, optionally a reply to a numbered line) or `sticker`
   (one entry of the chat's `<sticker_catalog>`, the shortlist a turn is shown, optionally under a numbered line; an id
   the catalog cannot resolve sends nothing) — and anything unreadable, failed or slower than ninety seconds is silence.
@@ -886,6 +900,7 @@ A symptom-to-source map for finding the right file fast. Paths are under
 | A group recap misses messages, or `readGroupLog` returns too little | `telegram/TelegramBotRunner.recordGroupLog` + `telegram/inbound/GroupLogEntries.kt` (what gets recorded at all), then `agent/grouplog/GroupLogReader.kt` (window budget, day split, digest cache) and `agent/grouplog/GroupLogRepository.kt` (retention and the per-chat row cap) |
 | Vusan misreads what "that" refers to in a group, or parrots the group's chatter | `agent/TurnSurroundings.recentChatFor` (the `<recent_chat>` slice and its caps) + `agent/SystemPrompt.kt` (the `<recent_chat>` contract) |
 | A channel recap misses posts, quotes the wrong text, or costs too much vision | `tools/tgchannel/TelegramChannelReader.kt` (the `?before=` walk, the window cutoff, the size budget, and which posts get vision) + `tools/tgchannel/TelegramChannelParser.kt` (own text vs the quote of a replied-to post, reactions, media kinds) |
+| Vusan writes to somebody who told it not to, or leaves somebody unanswered who never asked for that | `staying silent … why=[…]` and `ambient check skipped, the author asked to be left alone` lines in the log, then `leave_alone` in the database (who asked, where, until when), `tools/leavealone/LeaveAloneTools.kt` (what the model records and for how long), `agent/presence/Initiative.kt` (what a look may not touch), `agent/addressing/AmbientAddressing.kt` (the follow-up door), `tasks/TaskScheduler.kt` (a dropped follow-up) and `tools/message/MessageTools.staySilent` with `agent/SystemPrompt.kt` (when silence is an answer) |
 | Vusan speaks up in a group too often, too rarely, or at the wrong moment | `initiative look` and `initiative skip` lines in the log (what it decided and why, or which gate kept it out), then `agent/presence/Initiative.kt` (the gates, the pause, the day's budget) + `agent/presence/InitiativeMind.kt` (what it is told it may do, and what counts as a readable decision) |
 | Vusan does not remember yesterday in a group, or remembers it wrong | `diary entry written` lines in the log, then `agent/presence/Diary.kt` (which day is written, the fifteen-message floor, how many entries a turn is shown) + `agent/presence/DiaryWriter.kt` (the instructions) + `agent/SystemPrompt.kt` (the `<diary>` contract) |
 | Voice/audio not transcribed | `telegram/inbound/VoiceTranscriber.kt` + `stt/OpenAiWhisperClient.kt` (needs `OPENAI_STT_API_KEY`); for a video's sound `tools/vision/VideoAudioTranscriber.kt` |

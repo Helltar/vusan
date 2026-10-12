@@ -3,6 +3,7 @@ package com.helltar.vusan.telegram.inbound
 import com.helltar.vusan.telegram.inbound.realReplyOrNull
 import com.helltar.vusan.agent.addressing.AmbientCandidate
 import com.helltar.vusan.telegram.telegramChat
+import com.helltar.vusan.telegram.telegramUser
 import org.telegram.telegrambots.meta.api.objects.message.Message
 
 /**
@@ -30,6 +31,7 @@ internal fun Message.ambientCandidateOrNull(captionSource: Message, authorWaitin
         // classifier must not be shown the caption twice, once as the message and once as the chat before it
         messageId = captionSource.messageIdLong.toString(),
         author = senderDisplayNameOrNull() ?: sender.userName ?: sender.id.toString(),
+        sender = telegramUser(sender.id),
         text = content.text.trim().takeIf { it.isNotEmpty() } ?: return null,
         inReplyTo = repliedAuthorOrNull(),
         authorWaiting = authorWaiting,

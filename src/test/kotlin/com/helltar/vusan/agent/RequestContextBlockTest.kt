@@ -7,6 +7,8 @@ import com.helltar.vusan.request.RequestContext
 import com.helltar.vusan.request.SenderContext
 import java.time.Duration
 import java.time.Instant
+import java.time.ZoneId
+import java.time.format.DateTimeFormatter
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFalse
@@ -162,6 +164,19 @@ class RequestContextBlockTest {
         assertTrue(marked.contains("- last_answer_of_stretch: "))
         assertTrue(marked.contains("${ChatFloor.COOLING_PERIOD.inWholeMinutes} minutes"))
         assertFalse(context(chat = chat).toPromptBlock().contains("Floor:"))
+    }
+
+    @Test
+    fun `a standing request to be left alone is shown with its end`() {
+        val until = Instant.parse("2026-10-12T21:00:00Z")
+        val expectedEnd = DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm").format(until.atZone(ZoneId.systemDefault()))
+
+        val prompt = context(chat = ChatContext(id = "-100", isPrivate = false)).toPromptBlock(leftAloneUntil = until)
+
+        assertTrue(prompt.contains("Left alone:"), prompt)
+        assertTrue(prompt.contains("- asked_to_be_left_alone: "), prompt)
+        assertTrue(prompt.contains("until $expectedEnd (${ZoneId.systemDefault().id})"), prompt)
+        assertFalse(context().toPromptBlock().contains("Left alone:"))
     }
 
     private fun context(

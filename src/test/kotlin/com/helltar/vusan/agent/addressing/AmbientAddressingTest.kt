@@ -2,12 +2,14 @@ package com.helltar.vusan.agent.addressing
 
 import com.helltar.vusan.agent.grouplog.GroupLogEntry
 import com.helltar.vusan.agent.grouplog.GroupLogRepository
+import com.helltar.vusan.agent.presence.LeaveAloneRepository
 import com.helltar.vusan.config.AppConfig
 import com.helltar.vusan.config.GroupLogConfig
 import com.helltar.vusan.config.LlmProviderConfig
 import com.helltar.vusan.infra.Db
 import com.helltar.vusan.request.AccessPolicy
 import com.helltar.vusan.request.testChat
+import com.helltar.vusan.request.testUser
 import kotlinx.coroutines.runBlocking
 import java.nio.file.Files
 import java.nio.file.Path
@@ -200,8 +202,36 @@ class AmbientAddressingTest {
 
     private fun minutesAgo(minutes: Long): Instant = now.minusSeconds(minutes * 60)
 
-    private fun addressing(classifier: AddressingClassifier) =
-        AmbientAddressing(classifier, groupLog, listOf("Robin", "robin"), clock = { now })
+    // the follow-up door is the bot's own guess, and a person who asked to be left alone is not guessed about
+    @Test
+    fun `a person who asked to be left alone is not taken for a follow-up`() = runBlocking {
+        val classifier = FakeClassifier(answer = true)
+        val leaveAlone = LeaveAloneRepository().also { it.store(CHAT, BOB, now.plusSeconds(3600)) }
+        groupLog.record(bot("the keys are on the shelf", minutesAgo(4)))
+
+        assertFalse(addressing(classifier, leaveAlone).isAddressed(candidate("and why is that")))
+        assertTrue(classifier.inputs.isEmpty())
+    }
+
+    @Test
+    fun `a person who asked to be left alone is still asked about when they name the bot`() = runBlocking {
+        val classifier = FakeClassifier(answer = true)
+        val leaveAlone = LeaveAloneRepository().also { it.store(CHAT, BOB, now.plusSeconds(3600)) }
+
+        assertTrue(addressing(classifier, leaveAlone).isAddressed(candidate("robin, what do you make of this")))
+    }
+
+    @Test
+    fun `a request that has run out opens the follow-up door again`() = runBlocking {
+        val classifier = FakeClassifier(answer = true)
+        val leaveAlone = LeaveAloneRepository().also { it.store(CHAT, BOB, now.minusSeconds(1)) }
+        groupLog.record(bot("the keys are on the shelf", minutesAgo(4)))
+
+        assertTrue(addressing(classifier, leaveAlone).isAddressed(candidate("and why is that")))
+    }
+
+    private fun addressing(classifier: AddressingClassifier, leaveAlone: LeaveAloneRepository? = null) =
+        AmbientAddressing(classifier, groupLog, listOf("Robin", "robin"), leaveAlone, clock = { now })
 
     private fun candidate(
         text: String,
@@ -213,6 +243,7 @@ class AmbientAddressingTest {
             chat = CHAT,
             messageId = messageId,
             author = "Bob",
+            sender = BOB,
             text = text,
             authorWaiting = authorWaiting,
             edited = edited,
@@ -278,6 +309,7 @@ class AmbientAddressingTest {
 
     private companion object {
         val CHAT = testChat(-100)
+        val BOB = testUser(8)
         const val MESSAGE_ID = "500"
     }
 }

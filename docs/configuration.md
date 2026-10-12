@@ -344,6 +344,21 @@ tasks still fire, Vusan still speaks up on its own under its own daily budget, s
 buttons of a question it asked still work, and a private chat — with nobody else to read it — is
 never limited. The owner is not either.
 
+## Leaving someone alone
+
+Anyone in a group can tell Vusan not to write to them — «leave me alone», «stop writing to me» — and it
+keeps to that: until the end of that day and for twelve hours at the least, or for as long as they
+said up to a week, nothing of its own reaches them. It does not react to their messages or reply to them when it speaks up on its own,
+it does not take a line they wrote near its own answer for a follow-up, and a check-in it had
+planned for them is dropped. A message they send it themselves — a mention, a reply, its name — is
+answered as before, and «you can write to me again» lifts the request early. There is nothing to
+configure; the request survives a restart.
+
+Told to be quiet, or met with an insult, Vusan may also answer with nothing at all. It is a choice it
+makes on purpose and writes down with its reason, so the log says why a message went unanswered
+(`staying silent … why=[…]`), and the exchange stays in its history: the next message from that
+person is read knowing it was asked to be quiet.
+
 ## Personality
 
 The agent ships with a built-in personality named "Vusan", kept generic so each deployment can

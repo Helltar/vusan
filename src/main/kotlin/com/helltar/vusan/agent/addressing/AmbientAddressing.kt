@@ -2,8 +2,10 @@ package com.helltar.vusan.agent.addressing
 
 import com.helltar.vusan.agent.grouplog.GroupLogEntry
 import com.helltar.vusan.agent.grouplog.GroupLogRepository
+import com.helltar.vusan.agent.presence.LeaveAloneRepository
 import com.helltar.vusan.common.rethrowIfCancellation
 import com.helltar.vusan.request.ChatRef
+import com.helltar.vusan.request.UserRef
 import io.github.oshai.kotlinlogging.KotlinLogging
 import kotlinx.coroutines.withTimeoutOrNull
 import java.time.Instant
@@ -16,13 +18,16 @@ import kotlin.time.TimeSource
  * A group message nobody tagged the bot in, as the adapter hands it over: only text a person typed,
  * never a forward or a command, both of which the adapter has already turned away.
  *
- * [authorWaiting] is true while the author has a turn of their own running or queued in this chat.
- * [edited] marks an edit of a message sent a moment ago, which is asked about only when it names the bot.
+ * [author] is the name the classifier is shown and [sender] who it is, qualified, for what is keyed on
+ * the person. [authorWaiting] is true while the author has a turn of their own running or queued in this
+ * chat. [edited] marks an edit of a message sent a moment ago, which is asked about only when it names
+ * the bot.
  */
 data class AmbientCandidate(
     val chat: ChatRef,
     val messageId: String,
     val author: String,
+    val sender: UserRef,
     val text: String,
     val inReplyTo: String? = null,
     val authorWaiting: Boolean = false,
@@ -41,11 +46,16 @@ data class AmbientCandidate(
  * names the bot, when its author is still waiting on the bot, or when the bot spoke within
  * [FOLLOW_UP_WINDOW] and that line is among the few the model is shown; an edit gets only the first of
  * those, and everything else in the chat never leaves the machine. The gate is about privacy before cost.
+ *
+ * The follow-up door is the one the bot opens on its own guess, so it stays shut for somebody who asked
+ * to be left alone: a line they wrote near the bot's is not taken for an answer to it. Naming the bot
+ * is speaking to it, and that door is theirs as much as anybody's.
  */
 class AmbientAddressing(
     private val classifier: AddressingClassifier,
     private val groupLog: GroupLogRepository,
     botNames: List<String>,
+    private val leaveAlone: LeaveAloneRepository? = null,
     private val clock: () -> Instant = Instant::now,
 ) {
 
@@ -64,6 +74,11 @@ class AmbientAddressing(
         val now = clock()
         val recent = recentEntries(candidate, now) ?: return false
         val gate = gateFor(candidate, recent, now) ?: return false
+
+        if (gate == Gate.FOLLOW_UP && leftAlone(candidate, now)) {
+            log.info { "ambient check skipped, the author asked to be left alone: chat=[${candidate.chat}] msg=[${candidate.messageId}]" }
+            return false
+        }
 
         if (!rateLimit.tryAcquire(candidate.chat, now)) {
             log.info { "ambient check skipped over the chat's rate: chat=[${candidate.chat}] msg=[${candidate.messageId}]" }
@@ -94,6 +109,15 @@ class AmbientAddressing(
             it.rethrowIfCancellation()
             log.warn(it) { "ambient check skipped, the group log could not be read: chat=[${candidate.chat}]" }
         }.getOrNull()
+
+    // a store that cannot be read keeps the bot out, like every other failure here
+    private suspend fun leftAlone(candidate: AmbientCandidate, now: Instant): Boolean =
+        runCatching { leaveAlone?.activeUntil(candidate.chat, candidate.sender, now) != null }
+            .onFailure {
+                it.rethrowIfCancellation()
+                log.warn(it) { "ambient check skipped, the leave-alone store could not be read: chat=[${candidate.chat}]" }
+            }
+            .getOrDefault(true)
 
     private fun gateFor(candidate: AmbientCandidate, recent: List<GroupLogEntry>, now: Instant): Gate? {
         val followUpSince = now.minusMillis(FOLLOW_UP_WINDOW.inWholeMilliseconds)

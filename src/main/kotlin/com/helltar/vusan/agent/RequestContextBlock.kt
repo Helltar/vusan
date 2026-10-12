@@ -4,6 +4,8 @@ import com.helltar.vusan.common.collapseWhitespaceAndCap
 import com.helltar.vusan.common.xmlBlock
 import com.helltar.vusan.request.RequestContext
 import java.time.Instant
+import java.time.ZoneId
+import java.time.format.DateTimeFormatter
 import kotlin.time.Duration.Companion.days
 import kotlin.time.Duration.Companion.hours
 import kotlin.time.Duration.Companion.milliseconds
@@ -13,9 +15,15 @@ import kotlin.time.Duration.Companion.milliseconds
  *
  * [previousExchangeAt] is not part of the request — the runner reads it from history — so it is passed
  * in rather than carried around on a record that ingress fills in; [lastAnswerOfStretch] is the
- * [ChatFloor]'s verdict on this turn, decided when it was admitted, for the same reason.
+ * [ChatFloor]'s verdict on this turn, decided when it was admitted, for the same reason, and
+ * [leftAloneUntil] is the end of the sender's standing request not to be written to, read from the store
+ * that keeps it.
  */
-internal fun RequestContext.toPromptBlock(previousExchangeAt: Instant? = null, lastAnswerOfStretch: Boolean = false): String {
+internal fun RequestContext.toPromptBlock(
+    previousExchangeAt: Instant? = null,
+    lastAnswerOfStretch: Boolean = false,
+    leftAloneUntil: Instant? = null,
+): String {
     val lines =
         buildList {
             add("Chat:")
@@ -58,6 +66,17 @@ internal fun RequestContext.toPromptBlock(previousExchangeAt: Instant? = null, l
                 add("- implicit: nobody mentioned you, replied to you or used a command; this message was judged to be meant for you")
             }
 
+            leftAloneUntil?.let { until ->
+                add("")
+                add("Left alone:")
+                add(
+                    "- asked_to_be_left_alone: the sender asked you not to write to them unprompted in this chat, " +
+                            "and that holds until ${leftAloneEnd(until)}. Answer what they put to you themselves, " +
+                            "keep to it and offer nothing beyond it; anything you would send them unasked — a " +
+                            "follow-up, a line of your own — waits until then",
+                )
+            }
+
             if (lastAnswerOfStretch) {
                 add("")
                 add("Floor:")
@@ -77,6 +96,15 @@ internal fun RequestContext.toPromptBlock(previousExchangeAt: Instant? = null, l
 // short gaps are ordinary back-and-forth and saying anything about them would be noise, so the line
 // only appears once the pause is long enough to be worth noticing.
 private val MIN_REPORTED_GAP = 6.hours
+
+// on the clock `<current_time>` shows, so the model can tell how far off the end is
+private val LEFT_ALONE_END = DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm")
+
+private fun leftAloneEnd(until: Instant): String {
+    val zone = ZoneId.systemDefault()
+
+    return "${LEFT_ALONE_END.format(until.atZone(zone))} (${zone.id})"
+}
 
 private fun elapsedSinceOrNull(previous: Instant): String? {
     val gap = (Instant.now().toEpochMilli() - previous.toEpochMilli()).milliseconds

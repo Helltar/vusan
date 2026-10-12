@@ -7,6 +7,7 @@ import com.helltar.vusan.infra.tables.ConversationMessagesTable
 import com.helltar.vusan.infra.tables.ConversationsTable
 import com.helltar.vusan.infra.tables.GroupLogDigestsTable
 import com.helltar.vusan.infra.tables.GroupLogTable
+import com.helltar.vusan.infra.tables.LeaveAloneTable
 import com.helltar.vusan.infra.tables.MemoryTable
 import com.helltar.vusan.infra.tables.TelegramPendingUpdatesTable
 import com.helltar.vusan.infra.tables.TelegramPollsTable
@@ -28,7 +29,7 @@ import org.jetbrains.exposed.v1.core.Table
 internal object Schema {
 
     /** Raise this by one for every schema change, and move deployed databases by hand to match. */
-    const val VERSION = 4
+    const val VERSION = 5
 
     val tables: List<Table> =
         listOf(
@@ -37,6 +38,7 @@ internal object Schema {
             GroupLogTable,
             GroupLogDigestsTable,
             ChatDiaryTable,
+            LeaveAloneTable,
             ScheduledTasksTable,
             MemoryTable,
             TelegramStickersTable,

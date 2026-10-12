@@ -34,6 +34,11 @@ class BotOutbox(val capabilities: ChatCapabilities = ChatCapabilities.UNRESTRICT
     var redirectToPrivate: Boolean = false
         private set
 
+    /** Why the turn answers with nothing, once it has said so through [staySilent]; `null` until then. */
+    @get:Synchronized
+    var silence: String? = null
+        private set
+
     @get:Synchronized
     val pending: List<OutboxItem>
         get() = items.toList()
@@ -166,6 +171,21 @@ class BotOutbox(val capabilities: ChatCapabilities = ChatCapabilities.UNRESTRICT
     @Synchronized
     fun useDirectMessages() {
         redirectToPrivate = true
+    }
+
+    /**
+     * Declares that this turn answers with nothing, on purpose, for [reason] — a phrase for the operator's
+     * log that the chat never sees. Refused once anything is queued or already in the chat, an announcement
+     * included: silence is an answer only where there is no other, and a promise followed by nothing is
+     * not silence but a promise broken.
+     */
+    @Synchronized
+    fun staySilent(reason: String): Boolean {
+        if (items.isNotEmpty()) return false
+
+        silence = reason
+
+        return true
     }
 
     companion object {

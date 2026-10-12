@@ -8,6 +8,7 @@ import com.helltar.vusan.agent.TurnNarrator
 import com.helltar.vusan.agent.TurnShelf
 import com.helltar.vusan.agent.TurnToolBudget
 import com.helltar.vusan.agent.memory.MemoryRepository
+import com.helltar.vusan.agent.presence.LeaveAloneRepository
 import com.helltar.vusan.config.AppConfig
 import com.helltar.vusan.config.LlmProviderConfig
 import com.helltar.vusan.config.VisionRuntime
@@ -28,6 +29,7 @@ import com.helltar.vusan.tools.giphy.GiphyClient
 import com.helltar.vusan.tools.giphy.GiphyTools
 import com.helltar.vusan.tools.klipy.KlipyClient
 import com.helltar.vusan.tools.klipy.KlipyTools
+import com.helltar.vusan.tools.leavealone.LeaveAloneTools
 import com.helltar.vusan.tools.grouplog.GroupLogTools
 import com.helltar.vusan.tools.context.ContextTools
 import com.helltar.vusan.tools.imagegen.ImageGenTools
@@ -79,6 +81,7 @@ class ToolCatalogFactory(
     private val conversation: ConversationRepository,
     private val memory: MemoryRepository,
     private val tasks: TasksRepository,
+    private val leaveAlone: LeaveAloneRepository,
     vision: VisionRuntime?,
     private val groupLog: GroupLogRepository?,
     groupLogDigester: GroupLogDigester?,
@@ -223,6 +226,9 @@ class ToolCatalogFactory(
             tools(InlineChoiceTools(context, outbox, conversation::revision))
             tools(MemoryTools(memory, context))
             tools(FollowUpTools(tasks, context, TasksRepository.MAX_FOLLOW_UPS_PER_USER))
+            // a request to be left alone stops what the bot sends unasked, which only a group has, and
+            // names one person, which a shared account is not
+            if (!context.chat.isPrivate && context.sender.isPerson) tools(LeaveAloneTools(leaveAlone, context))
             tools(ToolGroup.TELEGRAM_CHANNELS, telegramChannel)
             tools(ToolGroup.YOUTUBE, youTubeTranscript)
 

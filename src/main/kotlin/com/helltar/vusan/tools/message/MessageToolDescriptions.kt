@@ -56,4 +56,14 @@ internal object MessageToolDescriptions {
                 "Use when the user explicitly asks for something to be sent in DMs, privately, or in personal messages, especially from a group. " +
                 "Once switched, the change applies to every tool you call afterward in this turn. " +
                 "Note: the user must have started a private chat with the bot at least once by sending `/start`; otherwise the private send will fail and a notice will appear in the original chat."
+
+    const val STAY_SILENT =
+        "Ends your turn without answering, on purpose: nothing is sent, not even a reaction. " +
+                "Use it when the message asked you to be quiet or not to write to its author, or when it is an insult you choose not to dignify with a reply. " +
+                "It is not for a question you would rather skip, for something you cannot do, or for doubt: then answer, or say what is in the way. " +
+                "Call it before anything is sent: a call that only records something, such as `leaveAlone`, may come first, but it is refused once a message, a reaction or an announcement is on its way."
+
+    const val SILENCE_REASON =
+        "A few words for the operator's log saying what made you stay silent. " +
+                "The chat never sees it."
 }

@@ -81,6 +81,37 @@ class MessageToolsTest {
     }
 
     @Test
+    fun `staySilent declares the turn's silence with its reason`() = runBlocking {
+        val outbox = BotOutbox()
+
+        val result = MessageTools(outbox).staySilent("  asked to be quiet  ")
+
+        assertTrue(result.startsWith("Nothing was sent"), result)
+        assertEquals("asked to be quiet", outbox.silence)
+        assertTrue(outbox.pending.isEmpty())
+    }
+
+    // silence is an answer only where there is no other: once something is on its way, the turn finishes
+    // with that, and the history records the call as the mistake it was
+    @Test
+    fun `staySilent is refused once a message is queued`() = runBlocking {
+        val outbox = BotOutbox()
+        val tools = MessageTools(outbox)
+        tools.sendMessage("here it is")
+
+        val message = toolFailure { tools.staySilent("changed my mind") }
+
+        assertTrue("no longer open" in message, message)
+        assertEquals(null, outbox.silence)
+        assertEquals(1, outbox.pending.size)
+    }
+
+    @Test
+    fun `staySilent needs a reason`() = runBlocking<Unit> {
+        toolFailure { MessageTools(BotOutbox()).staySilent("   ") }
+    }
+
+    @Test
     fun `sendMessage coalesces consecutive small messages into one bubble`() = runBlocking {
         val outbox = BotOutbox()
         val tools = MessageTools(outbox)

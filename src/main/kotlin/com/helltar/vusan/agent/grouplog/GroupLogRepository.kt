@@ -222,6 +222,7 @@ class GroupLogRepository(
             .groupBy(GroupLogTable.senderId)
             .mapNotNull { row ->
                 AuthorActivity(
+                    senderId = row[GroupLogTable.senderId] ?: return@mapNotNull null,
                     name = row[username] ?: row[name] ?: return@mapNotNull null,
                     messages = row[messages],
                     lastSeenAt = row[lastSeenAt] ?: return@mapNotNull null,

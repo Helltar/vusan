@@ -70,6 +70,12 @@ private class ProbeTools(private val outbox: BotOutbox, private val rendezvous: 
         return "Sent."
     }
 
+    @Tool("Answers with nothing.")
+    fun staySilent(@Arg("Why.") reason: String): String {
+        outbox.staySilent(reason)
+        return "Nothing was sent."
+    }
+
     @Tool("Looks something up.")
     fun lookUp(@Arg("What.") query: String): String = "found: $query"
 
@@ -353,6 +359,17 @@ class AgentTurnTest {
             assertEquals("", answer)
             assertEquals(2, run.client.requests.size)
             assertTrue(run.outbox.hasQueuedOutput)
+        }
+
+    // the model is not asked again after choosing silence: a second request would only invite a closing
+    // line into a reply it decided not to give
+    @Test
+    fun `a declared silence ends the turn with the batch that declared it`() =
+        run(toolCallReply(call("staySilent", args = arrayOf("reason" to "asked to be quiet"))), textReply("ok then")) { run, answer ->
+            assertEquals("", answer)
+            assertEquals(1, run.client.requests.size)
+            assertEquals("asked to be quiet", run.outbox.silence)
+            assertEquals("staySilent", run.events.single().toolName)
         }
 
     @Test

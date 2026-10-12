@@ -20,6 +20,9 @@ private const val MAX_ANNOUNCEMENT_CHARS = 500
 // interim messages are for a result worth reading early; more than this is the turn narrating itself
 private const val MAX_INTERIM_MESSAGES = 3
 
+// the reason is a phrase for the log line, like the one an initiative look gives
+private const val MAX_SILENCE_REASON_CHARS = 160
+
 private const val QUEUE_FULL =
     "Message limit reached: ${BotOutbox.MAX_TEXT_MESSAGES} separate messages are already queued for this reply. " +
         "Do not send more; finish your turn now."
@@ -143,5 +146,22 @@ class MessageTools(
     suspend fun replyInPrivateMessages(): String = suspendToolGuard {
         outbox.useDirectMessages()
         "Subsequent replies will be sent to the user's private chat."
+    }
+
+    // the model never reads this result: the turn ends with the batch it was called in. it is written for
+    // the next turn, which replays it from the history and has to see that the silence was chosen
+    @Tool(MessageToolDescriptions.STAY_SILENT)
+    suspend fun staySilent(
+        @Arg(MessageToolDescriptions.SILENCE_REASON)
+        reason: String,
+    ): String = suspendToolGuard {
+        val trimmed = reason.requireToolText("Reason", MAX_SILENCE_REASON_CHARS)
+
+        require(outbox.staySilent(trimmed)) {
+            "silence is no longer open: a message, a reaction or an announcement of this turn is already queued or in the chat. " +
+                "Finish the turn with what you have"
+        }
+
+        "Nothing was sent, on purpose, and the turn ended here."
     }
 }

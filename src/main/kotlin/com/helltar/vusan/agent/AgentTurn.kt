@@ -56,7 +56,9 @@ class ModelRefusal(val reason: String?) : RuntimeException("the model declined t
  *   been cut with it, and a reply the model or a provider's classifier declined ends the turn;
  * - a turn that ends having delivered nothing — no `sendMessage`, media or reaction, and empty assistant
  *   text (flaky providers return an empty completion after a batch of tool results) — gets one nudge to
- *   actually deliver before finishing, so a full turn of research does not collapse into silence;
+ *   actually deliver before finishing, so a full turn of research does not collapse into silence. Silence
+ *   chosen on purpose is declared through `staySilent` instead, and ends the turn with the batch that
+ *   declared it, so an empty reply is never mistaken for a decision;
  * - a turn that announced its plan and then ended without doing the work is sent back to it once: the
  *   announcement reached the chat, so the user is waiting on exactly what it promised.
  *
@@ -152,6 +154,10 @@ class AgentTurn internal constructor(
                 }
 
             messages += Message.ToolResults(results)
+
+            // the turn chose to answer with nothing: asking the model again would only invite a closing
+            // line into a reply it decided not to give, and the request it would cost buys nothing
+            if (outbox.silence != null) return ""
 
             if (outOfModelCalls(calls, maxModelCalls)) return wrapUp(messages, turnStart)
 
@@ -397,7 +403,7 @@ private const val TOOL_BUDGET_WRAP_UP =
 private const val DELIVER_NUDGE =
     "Your turn ended without sending anything to the user — no message, media, or reaction was delivered. " +
             "Deliver your answer now by calling `sendMessage` (or the appropriate media or reaction tool). " +
-            "Do not reply with empty text."
+            "If you mean to answer with nothing, say so with `staySilent`. Do not reply with empty text."
 
 internal const val PROMISE_NUDGE =
     "You told the user what you were about to do and then ended the turn without doing it. " +

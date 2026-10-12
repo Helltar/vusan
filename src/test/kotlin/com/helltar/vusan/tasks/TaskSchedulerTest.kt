@@ -1,12 +1,17 @@
 package com.helltar.vusan.tasks
 
+import com.helltar.vusan.agent.presence.LeaveAloneRepository
+import com.helltar.vusan.agent.presence.testConfig
 import com.helltar.vusan.delivery.AttributionReason
+import com.helltar.vusan.infra.Db
 import com.helltar.vusan.i18n.Language
 import com.helltar.vusan.request.ChatProfile
 import java.time.Instant
 import java.time.ZoneId
 import com.helltar.vusan.request.testScope
 import com.helltar.vusan.request.testUser
+import kotlinx.coroutines.runBlocking
+import java.nio.file.Files
 import kotlin.test.Test
 import kotlin.test.assertContains
 import kotlin.test.assertEquals
@@ -88,6 +93,24 @@ class TaskSchedulerTest {
         )
     }
 
+    // a follow-up is the bot writing unasked; a task the person asked for is theirs and fires anyway
+    @Test
+    fun `only a follow-up in a group is held by a request to be left alone`() = withDatabase {
+        val requests = LeaveAloneRepository()
+        val now = task.nextFireAt
+        val followUp = task.copy(selfInitiated = true)
+
+        assertFalse(followUp.isHeldBy(requests, now))
+
+        requests.store(task.scope.chat, task.scope.user, now.plusSeconds(3600))
+
+        assertTrue(followUp.isHeldBy(requests, now))
+        assertFalse(task.isHeldBy(requests, now))
+        assertFalse(followUp.copy(chatIsPrivate = true).isHeldBy(requests, now))
+        assertFalse(followUp.isHeldBy(null, now))
+        assertFalse(followUp.isHeldBy(requests, now.plusSeconds(3600)))
+    }
+
     // in a private chat the only other member is the person the task belongs to.
     @Test
     fun `a private task is attributed to nobody`() {
@@ -111,5 +134,22 @@ class TaskSchedulerTest {
         assertContains(prompt, "Task: post the Linux news digest")
         assertContains(prompt, "An earlier attempt at this task ended without delivering anything.")
         assertTrue(prompt.endsWith("</scheduled_task>"))
+    }
+
+    private fun withDatabase(block: suspend () -> Unit) {
+        val dir = Files.createTempDirectory("vusan-task-scheduler-test")
+
+        try {
+            runBlocking {
+                Db.connect(testConfig(dir.resolve("vusan.db").toString()))
+                try {
+                    block()
+                } finally {
+                    Db.disconnect()
+                }
+            }
+        } finally {
+            dir.toFile().deleteRecursively()
+        }
     }
 }

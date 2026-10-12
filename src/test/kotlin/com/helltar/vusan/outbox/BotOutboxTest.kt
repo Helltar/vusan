@@ -29,6 +29,17 @@ class BotOutboxTest {
         assertEquals(2, outbox.pending.size)
     }
 
+    // an announcement is a promise of an answer, and a promise followed by nothing is not silence
+    @Test
+    fun `silence is refused after an announcement as after any output`() {
+        val announced = BotOutbox().also { it.recordDelivered("building it now") }
+        val reacted = BotOutbox().also { it.enqueue(BotOutput.Reaction("1", "👍")) }
+
+        assertFalse(announced.staySilent("nothing to add"))
+        assertFalse(reacted.staySilent("nothing to add"))
+        assertTrue(BotOutbox().staySilent("asked to be quiet"))
+    }
+
     // telegram grants animations, games and stickers under one permission, so both go with it.
     @Test
     fun `stickers and animations follow the one permission telegram grants them under`() {

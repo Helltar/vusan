@@ -59,7 +59,9 @@ interface StickerShortlist {
  * switched on deliberately, and only for chats [isAllowed] still admits.
  *
  * It may only ever add something. A failure, a timeout or an unreadable answer is a look that ended in
- * silence, and what it writes in a day is bounded whatever the model would like.
+ * silence, and what it writes in a day is bounded whatever the model would like. Somebody who asked to be
+ * left alone is out of its reach by code: their lines carry no number to point at, count as nothing new,
+ * and the look is told so, since a line of its own must not be meant for them either.
  *
  * The state is process memory: a restart forgets what was looked at and what today's count stood at.
  */
@@ -72,6 +74,7 @@ class Initiative(
     private val isAnswering: (ChatRef) -> Boolean = { false },
     private val diary: (suspend (ChatRef) -> String?)? = null,
     private val stickers: StickerShortlist? = null,
+    private val leaveAlone: LeaveAloneRepository? = null,
     private val zone: ZoneId = groupLog.zone,
     private val clock: () -> Instant = Instant::now,
     private val random: Random = Random.Default,
@@ -145,6 +148,7 @@ class Initiative(
         state.startDay(LocalDate.ofInstant(now, zone))
 
         val entries = groupLog.recent(chat, CONTEXT_LINES, since = now - CONTEXT_MAX_AGE)
+        val leftAlone = leaveAlone?.activeInChat(chat, now).orEmpty()
 
         // a line of its own is proof it was here, whoever that line was for: what stands above it has
         // been read, and reacting to it afterward looks like noticing a message it already answered past
@@ -153,7 +157,9 @@ class Initiative(
                 ?.takeIf { it.isAfter(state.lastLookAt) }
                 ?: state.lastLookAt
 
-        val fresh = entries.count { it.isFromPerson && it.sentAt.isAfter(seenUntil) }
+        // what somebody who asked to be left alone wrote is not a reason to look: a chat where only they
+        // are writing has nothing a look may touch
+        val fresh = entries.count { it.isFromPerson && it.sentAt.isAfter(seenUntil) && it.senderId !in leftAlone }
 
         // the day's count bounds how much it writes, the gap how often: without it a lively hour could
         // take the whole day's lines one look after another
@@ -186,7 +192,7 @@ class Initiative(
             return
         }
 
-        val glance = Glance(entries, seenUntil, zone)
+        val glance = Glance(entries, seenUntil, zone, leftAlone.keys)
         state.lastLookAt = now
 
         val input =
@@ -196,8 +202,9 @@ class Initiative(
                 saidToday = state.said,
                 maySpeak = maySpeak,
                 diary = diary?.invoke(chat),
+                leftAlone = leftAloneLines(entries, leftAlone),
                 // both are only for a line of its own, so a spent day pays for neither
-                quietLately = if (maySpeak) quietLately(chat, now) else emptyList(),
+                quietLately = if (maySpeak) quietLately(chat, now, leftAlone.keys) else emptyList(),
                 stickerCatalog = if (maySpeak) stickers?.indexBlockFor(chat) else null,
             )
 
@@ -305,13 +312,26 @@ class Initiative(
     }
 
     // people who used to write here and stopped: enough of a share that their silence is noticeable,
-    // gone long enough that it is not just a weekend
-    private suspend fun quietLately(chat: ChatRef, now: Instant): List<String> =
+    // gone long enough that it is not just a weekend. asking after somebody is writing to them, so a
+    // person who asked to be left alone is not missed out loud
+    private suspend fun quietLately(chat: ChatRef, now: Instant, leftAlone: Set<String>): List<String> =
         groupLog.authorActivity(chat, since = now - ABSENCE_LOOKBACK)
             .filter { it.messages >= ABSENCE_MIN_MESSAGES && it.lastSeenAt.isBefore(now - ABSENCE_AFTER) }
+            .filterNot { it.senderId in leftAlone }
             .sortedByDescending(AuthorActivity::messages)
             .take(MAX_QUIET_PEOPLE)
             .map { "${it.name} — last wrote ${JavaDuration.between(it.lastSeenAt, now).toDays()} days ago" }
+
+    // the people in the window who asked to be left alone, under the name the glance shows them by. one
+    // with no line in the window is left out: there is nothing of theirs to point at or to answer
+    private fun leftAloneLines(entries: List<GroupLogEntry>, leftAlone: Map<String, Instant>): List<String> =
+        entries
+            .filter { it.isFromPerson && it.senderId in leftAlone }
+            .distinctBy { it.senderId }
+            .map { entry ->
+                val until = leftAlone.getValue(checkNotNull(entry.senderId))
+                "${entry.glanceAuthor()} — asked you not to write to them, until ${LEFT_ALONE_END.format(ZonedDateTime.ofInstant(until, zone))}"
+            }
 
     private fun nextPause(): Duration = config.intervalMinutes.minutes * (PAUSE_MIN_SHARE + random.nextDouble())
 
@@ -355,6 +375,8 @@ class Initiative(
         const val ABSENCE_MIN_MESSAGES = 20L
         const val MAX_QUIET_PEOPLE = 5
 
+        val LEFT_ALONE_END: DateTimeFormatter = DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm")
+
         val log = KotlinLogging.logger {}
     }
 }
@@ -363,9 +385,10 @@ class Initiative(
  * The recent chat as one look shows it, and the way back from a number the model points at to the
  * message it stands for. Message ids themselves are never shown: a number can only name a line a person
  * wrote after [seenUntil] — the last look, or the bot's own last line when that came later — so a
- * decision cannot reach past what this look put in front of it.
+ * decision cannot reach past what this look put in front of it. A line by somebody in [leftAlone] gets
+ * none either, whenever it was written: with nothing to point at, no reaction and no reply can reach them.
  */
-private class Glance(entries: List<GroupLogEntry>, seenUntil: Instant, zone: ZoneId) {
+private class Glance(entries: List<GroupLogEntry>, seenUntil: Instant, zone: ZoneId, leftAlone: Set<String>) {
 
     private val targets = HashMap<Int, String>()
 
@@ -376,7 +399,7 @@ private class Glance(entries: List<GroupLogEntry>, seenUntil: Instant, zone: Zon
 
             val number =
                 entry.messageId
-                    ?.takeIf { fresh && entry.isFromPerson }
+                    ?.takeIf { fresh && entry.isFromPerson && entry.senderId !in leftAlone }
                     ?.let { id -> (targets.size + 1).also { targets[it] = id } }
 
             ChatGlanceLine(
