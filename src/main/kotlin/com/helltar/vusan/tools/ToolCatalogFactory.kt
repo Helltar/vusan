@@ -226,9 +226,8 @@ class ToolCatalogFactory(
             tools(InlineChoiceTools(context, outbox, conversation::revision))
             tools(MemoryTools(memory, context))
             tools(FollowUpTools(tasks, context, TasksRepository.MAX_FOLLOW_UPS_PER_USER))
-            // a request to be left alone stops what the bot sends unasked, which only a group has, and
-            // names one person, which a shared account is not
-            if (!context.chat.isPrivate && context.sender.isPerson) tools(LeaveAloneTools(leaveAlone, context))
+            // a request to be left alone names one person, which a shared account is not
+            if (context.sender.isPerson) tools(LeaveAloneTools(leaveAlone, context))
             tools(ToolGroup.TELEGRAM_CHANNELS, telegramChannel)
             tools(ToolGroup.YOUTUBE, youTubeTranscript)
 

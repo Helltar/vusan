@@ -29,8 +29,9 @@ private const val MAX_NAME_CHARS = 60
 /**
  * What a person says when they want the bot to stop writing to them, recorded so that code keeps the
  * promise: no look reacts to them or answers them, no follow-up of the bot's is guessed to be for them,
- * until the request ends or they lift it. Registered in groups only, and only for a sender who is one
- * person: a private chat has nothing the bot sends unasked, and a shared account is nobody to leave alone.
+ * until the request ends or they lift it. In a private chat that stops its follow-ups, the one thing the bot
+ * sends there unasked. Registered only for a sender who is one person: a shared account is nobody to leave
+ * alone.
  */
 class LeaveAloneTools(
     private val requests: LeaveAloneRepository,

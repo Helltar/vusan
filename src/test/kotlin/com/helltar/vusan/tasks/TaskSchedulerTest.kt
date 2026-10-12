@@ -95,7 +95,7 @@ class TaskSchedulerTest {
 
     // a follow-up is the bot writing unasked; a task the person asked for is theirs and fires anyway
     @Test
-    fun `only a follow-up in a group is held by a request to be left alone`() = withDatabase {
+    fun `only a follow-up is held by a request to be left alone, in a private chat too`() = withDatabase {
         val requests = LeaveAloneRepository()
         val now = task.nextFireAt
         val followUp = task.copy(selfInitiated = true)
@@ -106,7 +106,7 @@ class TaskSchedulerTest {
 
         assertTrue(followUp.isHeldBy(requests, now))
         assertFalse(task.isHeldBy(requests, now))
-        assertFalse(followUp.copy(chatIsPrivate = true).isHeldBy(requests, now))
+        assertTrue(followUp.copy(chatIsPrivate = true).isHeldBy(requests, now))
         assertFalse(followUp.isHeldBy(null, now))
         assertFalse(followUp.isHeldBy(requests, now.plusSeconds(3600)))
     }

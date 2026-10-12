@@ -298,11 +298,12 @@ class TaskScheduler(
 }
 
 /**
- * Whether [requests] hold this task back: it is a follow-up the bot set itself, in a group, for a person
- * whose request to be left alone there holds at [now]. A task the person asked for is theirs and fires.
+ * Whether [requests] hold this task back: it is a follow-up the bot set itself for a person whose request
+ * to be left alone in its chat holds at [now], a private chat as much as a group. A task the person asked
+ * for is theirs and fires.
  */
 internal suspend fun ScheduledTask.isHeldBy(requests: LeaveAloneRepository?, now: Instant): Boolean {
-    if (!selfInitiated || chatIsPrivate || requests == null) return false
+    if (!selfInitiated || requests == null) return false
 
     return requests.activeUntil(scope.chat, scope.user, now) != null
 }

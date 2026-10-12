@@ -469,7 +469,7 @@ A normal user message travels:
   (chat and optional thread), names the `UserRef` a DM-routed item belongs to, and answers a
   `DeliveryOutcome`. Chat facts come the same way, through `request/ChatProfileLookup`. A task runs with no incoming message behind it, so its `<message_context>` is
   rebuilt from what the task stored — the chat, and who set it up — instead of the live chat flavor, title, and
-  description a normal turn carries. A follow-up the bot set itself (`selfInitiated`) in a group is dropped instead of
+  description a normal turn carries. A follow-up the bot set itself (`selfInitiated`), in a group or a private chat, is dropped instead of
   fired while its person's request to be left alone holds (`LeaveAloneRepository`): it is the one fire that writes to
   them unasked, and a task they asked for fires as usual. Tasks overdue beyond `TaskScheduler.MAX_LATENESS` (e.g. after downtime) get a
   "missed" notice and are advanced/disabled rather than fired. A failed run (`AgentResult.failed`, or a thrown error)
@@ -552,7 +552,7 @@ A normal user message travels:
   for three days. The lines a person wrote since the last look — or since the bot's own last line, when that came later: answering
   someone is having read the chat up to there — carry a number, and a number is the only way to point at a message: message ids are never shown, so a decision cannot reach
   past what the look put in front of it. A person who asked to be left alone (`LeaveAloneRepository`, written by the
-  `leaveAlone` tool of the turn that heard them, in groups only) is out of a look's reach by code: their lines carry no
+  `leaveAlone` tool of the turn that heard them) is out of a look's reach by code: their lines carry no
   number, count as nothing new — a chat where only they write gets no look — are left out of the people asked after,
   and are named to the look under `<left_alone>` so a line of its own is not meant for them either. The answer is one JSON object — `silent`, `react` (one emoji from Telegram's
   free set on one numbered line), `say` (one short plain-text line, optionally a reply to a numbered line) or `sticker`

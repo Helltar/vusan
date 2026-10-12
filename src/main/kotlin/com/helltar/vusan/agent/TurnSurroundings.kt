@@ -38,10 +38,10 @@ class TurnSurroundings(
     private val leaveAlone: LeaveAloneRepository? = null,
 ) {
 
-    // a request not to be written to holds in a group: in a private chat nothing is ever sent unasked, and
-    // a shared account is nobody in particular to leave alone
+    // a private chat has its unasked lines too, the follow-ups; a shared account is nobody in particular
+    // to leave alone
     suspend fun leftAloneUntil(context: RequestContext): Instant? {
-        val requests = leaveAlone?.takeIf { !context.chat.isPrivate && context.sender.isPerson } ?: return null
+        val requests = leaveAlone?.takeIf { context.sender.isPerson } ?: return null
 
         return try {
             requests.activeUntil(context.chatRef, context.user, Instant.now())

@@ -346,13 +346,15 @@ never limited. The owner is not either.
 
 ## Leaving someone alone
 
-Anyone in a group can tell Vusan not to write to them — «leave me alone», «stop writing to me» — and it
+Anyone can tell Vusan not to write to them — «leave me alone», «stop writing to me» — and it
 keeps to that: until the end of that day and for twelve hours at the least, or for as long as they
 said up to a week, nothing of its own reaches them. It does not react to their messages or reply to them when it speaks up on its own,
 it does not take a line they wrote near its own answer for a follow-up, and a check-in it had
 planned for them is dropped. A message they send it themselves — a mention, a reply, its name — is
 answered as before, and «you can write to me again» lifts the request early. There is nothing to
-configure; the request survives a restart.
+configure; the request survives a restart. It holds in the chat it was said in, a private chat as
+much as a group: in a private chat the check-ins are the only thing Vusan writes unasked, so those
+are what it stops.
 
 Told to be quiet, or met with an insult, Vusan may also answer with nothing at all. It is a choice it
 makes on purpose and writes down with its reason, so the log says why a message went unanswered
