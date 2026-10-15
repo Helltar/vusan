@@ -79,11 +79,26 @@ class GroupLogRendererTest {
     }
 
     @Test
-    fun `text longer than the per-line cap is truncated`() {
-        val rendered = render(listOf(entry(text = "x".repeat(500))), maxTextChars = 50)
+    fun `a transcript that fits the budget quotes every message in full`() {
+        val long = "y".repeat(500)
+        val entries = listOf(entry(text = long), entry(text = "short", at = noon.plusSeconds(1)))
 
-        assertTrue(rendered.text.length < 100, "line was not capped: ${rendered.text.length} chars")
-        assertTrue(rendered.text.endsWith("..."))
+        val rendered = render(entries, maxTextChars = 50, budgetChars = 1_000)
+
+        assertEquals(2, rendered.includedCount)
+        assertTrue(rendered.text.contains(long), "a message that fits was cut")
+    }
+
+    @Test
+    fun `text longer than the per-line cap is truncated when the whole transcript does not fit`() {
+        val entries = (0 until 2).map { entry(text = "x".repeat(500), at = noon.plusSeconds(it.toLong())) }
+
+        val rendered = render(entries, maxTextChars = 50, budgetChars = 400)
+        val lines = rendered.text.lines()
+
+        assertEquals(2, rendered.includedCount)
+        assertTrue(lines.all { it.length < 100 }, "a line was not capped: ${lines.map { it.length }}")
+        assertTrue(lines.all { it.endsWith("...") })
     }
 
     @Test

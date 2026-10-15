@@ -50,9 +50,11 @@ internal fun List<GroupLogEntry>.withoutExchangesWith(userId: String): List<Grou
 }
 
 /**
- * Renders entries as a transcript, oldest line first. Lines are taken from the newest end until
- * [budgetChars] runs out, because a recap is asked about how a conversation ended far more often
- * than about how it started; [RenderedGroupLog.includedCount] tells the caller how much got in.
+ * Renders entries as a transcript, oldest line first. When the whole transcript fits [budgetChars]
+ * as written, every message is quoted in full; otherwise each is cut to [maxTextChars], and lines are
+ * taken from the newest end until the budget runs out, because a recap is asked about how a
+ * conversation ended far more often than about how it started. [RenderedGroupLog.includedCount]
+ * tells the caller how much got in.
  */
 internal fun renderGroupLog(
     entries: List<GroupLogEntry>,
@@ -62,6 +64,12 @@ internal fun renderGroupLog(
 ): RenderedGroupLog {
     val spansDays = entries.mapTo(mutableSetOf()) { LocalDate.ofInstant(it.sentAt, zone) }.size > 1
     val formatter = if (spansDays) DATE_AND_TIME else TIME_ONLY
+
+    // the cap exists so one long message cannot crowd out the rest of a busy window. a narrow window,
+    // or one person's messages, is asked about for what was said, and cutting it there leaves the
+    // model retelling a story it was only shown the opening of.
+    renderWholeOrNull(entries, zone, formatter, budgetChars)?.let { return it }
+
     val lines = ArrayDeque<String>()
     var used = 0
 
@@ -73,6 +81,27 @@ internal fun renderGroupLog(
 
         lines.addFirst(line)
         used += cost
+    }
+
+    return RenderedGroupLog(lines.joinToString("\n"), lines.size)
+}
+
+private fun renderWholeOrNull(
+    entries: List<GroupLogEntry>,
+    zone: ZoneId,
+    formatter: DateTimeFormatter,
+    budgetChars: Int,
+): RenderedGroupLog? {
+    val lines = ArrayList<String>(entries.size)
+    var used = 0
+
+    for (entry in entries) {
+        val line = entry.toLine(zone, formatter, maxTextChars = Int.MAX_VALUE)
+        used += line.length + 1
+
+        if (used > budgetChars) return null
+
+        lines += line
     }
 
     return RenderedGroupLog(lines.joinToString("\n"), lines.size)
