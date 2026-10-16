@@ -20,16 +20,36 @@ import org.jetbrains.exposed.v1.core.Table
  * The shape the code expects, and the number the database carries in its own `PRAGMA user_version` to
  * say it has that shape.
  *
- * Nothing is reconciled by comparing declarations, and nothing is migrated in code. Reconciling could add
- * a column but never rebuild a key, so two installations running the same code could hold different
- * schemas; migrations are not worth writing before 1.0, when a change may rewrite anything. So a database
- * is moved by hand instead, and this number is how the code can tell that it has been: a database whose
- * version this build does not know is not opened at all.
+ * Nothing is reconciled by comparing declarations: that could add a column but never rebuild a key, so
+ * two installations running the same code could hold different schemas. A deployed database moves
+ * forward through [steps] instead, written once as plain SQL; a database older than the first of them,
+ * or newer than this build, is not opened at all.
  */
 internal object Schema {
 
-    /** Raise this by one for every schema change, and move deployed databases by hand to match. */
+    /** Raise this by one for every schema change, together with the step that reaches it. */
     const val VERSION = 5
+
+    /**
+     * What moves a database from one version to the next: the statements under `N` take a database at
+     * `N - 1` to `N`. Every step a start needs runs in one transaction, together with the stamps.
+     *
+     * A step is frozen once released — a database already moved by it is never moved again, so editing
+     * one leaves deployments apart. It is SQL rather than the declarations in [tables], which describe
+     * only the newest shape. `DatabaseMigrationTest` proves the steps land on what a fresh database
+     * gets.
+     */
+    val steps: Map<Int, List<String>> =
+        mapOf(
+            5 to listOf(
+                "CREATE TABLE leave_alone (platform VARCHAR(16) NOT NULL, chat_id VARCHAR(64) NOT NULL, " +
+                        "user_id VARCHAR(64) NOT NULL, ends_at TEXT NOT NULL, " +
+                        "CONSTRAINT pk_leave_alone PRIMARY KEY (platform, chat_id, user_id))",
+            ),
+        )
+
+    /** The oldest version [steps] can move forward; anything before it was moved by hand. */
+    val oldestStepped: Int = steps.keys.min() - 1
 
     val tables: List<Table> =
         listOf(

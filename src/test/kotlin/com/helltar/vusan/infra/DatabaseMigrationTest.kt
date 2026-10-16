@@ -51,7 +51,7 @@ class DatabaseMigrationTest {
     }
 
     @Test
-    fun `a database of another version is refused, whichever way it differs`() = withTempDb { dbPath ->
+    fun `a database newer than this build is refused`() = withTempDb { dbPath ->
         runBlocking {
             Db.connect(testConfig(dbPath))
             Db.disconnect()
@@ -61,8 +61,74 @@ class DatabaseMigrationTest {
 
         val failure = assertFailsWith<IllegalStateException> { runBlocking { Db.connect(testConfig(dbPath)) } }
 
-        assertContains(failure.message.orEmpty(), "by hand")
+        assertContains(failure.message.orEmpty(), "newer")
         assertEquals(Schema.VERSION + 1, userVersion(dbPath))
+    }
+
+    @Test
+    fun `a database older than the first step is refused, not reshaped`() = withTempDb { dbPath ->
+        createSnapshot(dbPath, Schema.oldestStepped)
+        stampUserVersion(dbPath, Schema.oldestStepped - 1)
+        val before = shape(dbPath)
+
+        val failure = assertFailsWith<IllegalStateException> { runBlocking { Db.connect(testConfig(dbPath)) } }
+
+        assertContains(failure.message.orEmpty(), "by hand")
+        assertEquals(Schema.oldestStepped - 1, userVersion(dbPath))
+        assertEquals(before, shape(dbPath))
+    }
+
+    @Test
+    fun `every version from the oldest stepped one up to this build has its step`() {
+        assertEquals((Schema.oldestStepped + 1..Schema.VERSION).toList(), Schema.steps.keys.sorted())
+    }
+
+    // the guarantee the hand moves had by construction: a database moved forward ends in exactly the
+    // shape a fresh one is created in. the oldest snapshot walks through every step there is.
+    @Test
+    fun `an older database moved forward has the shape of a fresh one and keeps its rows`() = withTempDb { dbPath ->
+        val freshPath = dbPath.replace("vusan.db", "fresh.db")
+        runBlocking {
+            Db.connect(testConfig(freshPath))
+            Db.disconnect()
+        }
+
+        createSnapshot(dbPath, Schema.oldestStepped)
+        withStatement(dbPath) {
+            it.execute("INSERT INTO memories (platform, scope, owner_id, content) VALUES ('TELEGRAM', 'USER', '100', 'likes tea')")
+        }
+        stampUserVersion(dbPath, Schema.oldestStepped)
+
+        runBlocking {
+            Db.connect(testConfig(dbPath))
+            Db.disconnect()
+        }
+
+        assertEquals(Schema.VERSION, userVersion(dbPath))
+        assertEquals(shape(freshPath), shape(dbPath))
+        assertEquals(1, withStatement(dbPath) { st -> st.executeQuery("SELECT count(*) FROM memories").use { it.getInt(1) } })
+
+        val snapshotPath = dbPath.replace("vusan.db", "snapshot.db")
+        createSnapshot(snapshotPath, Schema.oldestStepped)
+
+        val copy = "$dbPath.schema-${Schema.oldestStepped}"
+        assertEquals(Schema.oldestStepped, userVersion(copy))
+        assertEquals(shape(snapshotPath), shape(copy))
+    }
+
+    @Test
+    fun `a step that fails leaves the database as it was found`() = withTempDb { dbPath ->
+        createSnapshot(dbPath, Schema.oldestStepped)
+        // the table the first step creates is already there, so that step cannot run
+        val firstCreated = Schema.steps.getValue(Schema.oldestStepped + 1).firstNotNullOf(::createdTable)
+        withStatement(dbPath) { it.execute("CREATE TABLE $firstCreated (x TEXT)") }
+        stampUserVersion(dbPath, Schema.oldestStepped)
+        val before = shape(dbPath)
+
+        assertFailsWith<Exception> { runBlocking { Db.connect(testConfig(dbPath)) } }
+
+        assertEquals(Schema.oldestStepped, userVersion(dbPath))
+        assertEquals(before, shape(dbPath))
     }
 
     @Test
@@ -107,6 +173,43 @@ class DatabaseMigrationTest {
             tempDir.toFile().deleteRecursively()
         }
     }
+
+    // the frozen schema a release of that version created, as `.schema` printed it
+    private fun createSnapshot(dbPath: String, version: Int) {
+        val ddl = checkNotNull(javaClass.getResource("/schema/$version.sql")) { "no snapshot of schema $version" }.readText()
+
+        withStatement(dbPath) { statement ->
+            ddl.split(";\n").filter { it.isNotBlank() }.forEach(statement::execute)
+        }
+    }
+
+    private fun createdTable(sql: String): String? =
+        Regex("""^CREATE TABLE (\w+)""").find(sql)?.groupValues?.get(1)
+
+    // what a table is for the code reading and writing it: its columns, indices and foreign keys. not the
+    // stored CREATE text, which SQLite keeps as it was typed — a table rebuilt by hand and renamed into
+    // place reads `CREATE TABLE IF NOT EXISTS "name"` with the very same shape.
+    private fun shape(dbPath: String): Map<String, List<String>> =
+        DriverManager.getConnection("jdbc:sqlite:$dbPath").use { connection ->
+            fun rows(sql: String, vararg columns: String): List<String> =
+                connection.createStatement().use { statement ->
+                    statement.executeQuery(sql).use { rs ->
+                        buildList { while (rs.next()) add(columns.joinToString("|") { rs.getString(it).orEmpty() }) }
+                    }
+                }
+
+            rows("SELECT name FROM sqlite_master WHERE type = 'table' AND name NOT LIKE 'sqlite_%'", "name")
+                .associateWith { table ->
+                    val indices = rows("PRAGMA index_list(`$table`)", "name", "unique", "origin", "partial").map { index ->
+                        val name = index.substringBefore('|')
+                        index + "|" + rows("PRAGMA index_info(`$name`)", "name").joinToString(",")
+                    }
+
+                    rows("PRAGMA table_xinfo(`$table`)", "cid", "name", "type", "notnull", "dflt_value", "pk") +
+                            indices.sorted() +
+                            rows("PRAGMA foreign_key_list(`$table`)", "table", "from", "to")
+                }
+        }
 
     private fun userVersion(dbPath: String): Int =
         readPragma(dbPath, "user_version")

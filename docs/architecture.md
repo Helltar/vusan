@@ -124,8 +124,10 @@ that is who owns writing them, not because only `agent/` reads them. No other ar
   table that holds state belonging to somebody carries a `platform` column beside the external id, so two messengers
   issuing the same number never read each other's rows. `Db.connect` creates a fresh database whole and stamps the version
   declared in `infra/Schema.kt` into SQLite's own `PRAGMA user_version`. Nothing is inferred by comparing declarations
-  to what is there, and nothing is migrated in code: a database of any other version — from before versions existed, or
-  from a newer build — stops startup instead of being reshaped, and is moved by hand.
+  to what is there: an older database is moved forward through `Schema.steps`, plain SQL per version run in one
+  transaction with the stamps after a `VACUUM INTO` copy is kept beside it (`vusan.db.schema-<N>`), and a test holds
+  the result to the shape a fresh database gets. A database older than the first step, or from a newer build, stops
+  startup instead of being reshaped.
 - **`config/`** — `.env` parsing (`AppConfig`), LLM provider/model resolution (`LlmRuntime`) and the startup check of
   every configured model against its vendor (`ModelPreflight`), both of which dispatch to one file per provider
   (`OpenAiProvider`, `AnthropicProvider`, `OpenAiCompatibleProvider`, `CodexProvider`). `VisionRuntime` resolves separately which model looks at

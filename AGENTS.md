@@ -59,10 +59,11 @@ Preserve the package boundaries in [`docs/architecture.md`](docs/architecture.md
 - `Db.connect(config)` in [`infra/Database.kt`](src/main/kotlin/com/helltar/vusan/infra/Database.kt)
   is the single DB initialization point and application access goes through
   `Db.dbTransaction { ... }`; never call Exposed `transaction {}` or
-  `suspendTransaction(...)` outside that file. A schema change is a table edit plus a
-  raised `Schema.VERSION` in [`infra/Schema.kt`](src/main/kotlin/com/helltar/vusan/infra/Schema.kt),
-  and deployed databases moved by hand to match — nothing is reconciled by comparing
-  declarations and no migration runs in code.
+  `suspendTransaction(...)` outside that file. A schema change is a table edit, a
+  raised `Schema.VERSION` in [`infra/Schema.kt`](src/main/kotlin/com/helltar/vusan/infra/Schema.kt)
+  and the step in `Schema.steps` that moves a deployed database to it, as plain SQL
+  that is never edited once released; `DatabaseMigrationTest` proves the steps land
+  on what a fresh database gets. Nothing is reconciled by comparing declarations.
 - Env vars are parsed in `AppConfig.Companion` via private `readEnv` (optional,
   with a fallback or `null`) and `requireEnv` (required). Never call
   `System.getenv` directly.

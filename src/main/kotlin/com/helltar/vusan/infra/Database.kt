@@ -13,8 +13,10 @@ import org.jetbrains.exposed.v1.jdbc.transactions.TransactionManager
 import org.jetbrains.exposed.v1.jdbc.transactions.suspendTransaction
 import java.nio.file.Path
 import java.sql.Connection
+import java.sql.DriverManager
 import java.sql.Statement
 import kotlin.io.path.createDirectories
+import kotlin.io.path.exists
 
 private data class DbConnectionSpec(val url: String, val absolutePath: Path) {
 
@@ -77,28 +79,65 @@ object Db {
     }
 
     /**
-     * Creates an empty database at [Schema.VERSION], accepts one already at it, and refuses the rest.
+     * Creates an empty database at [Schema.VERSION], accepts one already at it, moves an older one
+     * forward through [Schema.steps], and refuses the rest.
      *
      * A database says what shape it has in `PRAGMA user_version`, which SQLite keeps in the file header
-     * and hands back as `0` until something stamps it. Anything else — `0` with tables in it, or a
-     * version this build does not know — is a database of another shape, and nothing here reshapes it:
-     * it is left untouched and named in the error, because a schema half made of one version and half
-     * of another is how rows go missing quietly. Such a database is moved by hand into a fresh one.
+     * and hands back as `0` until something stamps it. Every step runs in this one transaction together
+     * with its stamp, so a failure leaves the database exactly as it was found; a copy of it is kept
+     * beside it first all the same. A version older than the first step, `0` with tables in it, or one
+     * newer than this build is a shape nothing here knows how to move: it is left untouched and named in
+     * the error, because a schema half made of one version and half of another is how rows go missing
+     * quietly.
      */
     private fun JdbcTransaction.prepareSchema(path: Path) {
         val found = userVersion()
 
         if (found == Schema.VERSION) return
 
-        check(found == 0 && isEmpty()) {
-            "Database at $path is schema version $found, not the $SCHEMA_LABEL this build expects. " +
-                    "Move it across by hand into a fresh database and stamp it with " +
-                    "`PRAGMA user_version = ${Schema.VERSION}`, or run the build that matches it."
+        if (found == 0 && isEmpty()) {
+            SchemaUtils.create(tables = Schema.tables.toTypedArray())
+            stampUserVersion(Schema.VERSION)
+            log.info { "created a fresh database at $SCHEMA_LABEL" }
+            return
         }
 
-        SchemaUtils.create(tables = Schema.tables.toTypedArray())
-        stampUserVersion(Schema.VERSION)
-        log.info { "created a fresh database at $SCHEMA_LABEL" }
+        check(found < Schema.VERSION) {
+            "Database at $path is schema version $found, newer than the $SCHEMA_LABEL this build knows. " +
+                    "Run the build that matches it."
+        }
+
+        check(found >= Schema.oldestStepped) {
+            "Database at $path is schema version $found, older than this build moves forward " +
+                    "(${Schema.oldestStepped} and later). Move it across by hand into a fresh database and stamp it " +
+                    "with `PRAGMA user_version = ${Schema.VERSION}`, or run the build that matches it."
+        }
+
+        val copy = keepCopy(path, found)
+
+        for (version in found + 1..Schema.VERSION) {
+            Schema.steps.getValue(version).forEach { sql -> rawStatement { it.execute(sql) } }
+            stampUserVersion(version)
+        }
+
+        log.info { "moved the database from schema version $found to ${Schema.VERSION}, the old one kept at $copy" }
+    }
+
+    // VACUUM INTO cannot run inside a transaction, so the copy goes through a connection of its own. it
+    // folds the WAL in, which a copy of the file alone would miss. a copy left by an earlier start that
+    // failed is the same database, since nothing has run on it since.
+    private fun keepCopy(path: Path, version: Int): Path {
+        val copy = path.resolveSibling("${path.fileName}.schema-$version")
+
+        if (!copy.exists()) {
+            DriverManager.getConnection("jdbc:sqlite:$path").use { connection ->
+                connection.createStatement().use {
+                    it.execute("VACUUM INTO '${copy.toString().replace("'", "''")}'")
+                }
+            }
+        }
+
+        return copy
     }
 
     // the version pragmas go through the transaction's own connection rather than `exec`: sqlite takes a

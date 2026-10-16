@@ -920,6 +920,12 @@ the database is a file you can copy for a backup, and `SELF_IMAGE_FILE`, `APPEAR
 `YT_DLP_COOKIES_FILE` are files you put there. Create it before the first start — `mkdir -p data` —
 because a bind mount Docker creates comes out owned by `root` while the bot runs as uid 1000.
 
+A release that changes the database's shape moves an existing one forward on its first start;
+nothing has to be run by hand. Before it does, it leaves a copy of the old database beside it, named
+after the version it holds (`vusan.db.schema-4`), which can be deleted once the new version runs. A
+database written by a release before 0.13.0, or by a newer release than the one starting, stops the
+start instead and says so.
+
 `VUSAN_IMAGE` in the same file picks the image the bot runs, `ghcr.io/helltar/vusan:latest` when
 unset — set it to pin a release tag or to run a build of your own.
 
