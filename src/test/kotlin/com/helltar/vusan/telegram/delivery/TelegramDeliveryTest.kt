@@ -8,6 +8,7 @@ import com.helltar.vusan.outbox.BotOutbox
 import com.helltar.vusan.outbox.BotOutput
 import java.io.Serializable
 import java.lang.reflect.Proxy
+import java.net.SocketTimeoutException
 import java.util.concurrent.CompletableFuture
 import com.helltar.vusan.delivery.Attribution
 import com.helltar.vusan.delivery.AttributionReason
@@ -23,6 +24,7 @@ import kotlin.test.assertTrue
 import kotlinx.coroutines.runBlocking
 import org.telegram.telegrambots.meta.api.methods.ActionType
 import org.telegram.telegrambots.meta.api.methods.send.SendMessage
+import org.telegram.telegrambots.meta.api.methods.send.SendVideo
 import org.telegram.telegrambots.meta.api.objects.ApiResponse
 import org.telegram.telegrambots.meta.api.objects.chat.Chat
 import org.telegram.telegrambots.meta.api.objects.message.Message
@@ -147,6 +149,25 @@ class TelegramDeliveryTest {
         assertTrue(outcome.isUnreachable)
         // the chat action of the first item, then its send. the two remaining photos are never tried.
         assertEquals(2, client.calls)
+    }
+
+    // telegram can take longer to process an uploaded video than the client waits for its answer, and the
+    // video lands in the chat anyway: neither the document fallback nor the caption may repeat it.
+    @Test
+    fun `a video nobody answered for is not sent again in another shape`() = runBlocking {
+        val client = UnansweredVideoClient()
+        val outbox = BotOutbox().apply { enqueue(BotOutput.Video(oneByte, "clip.mp4")) }
+
+        TelegramDelivery(client.proxy).deliver(
+            TurnDelivery(
+                result = AgentResult(outputs = outbox.pending, comment = "The clip, cut to the beat."),
+                destination = Destination(testChat(-1)),
+                recipient = testUser(2),
+                language = Language.ENGLISH,
+            ),
+        )
+
+        assertEquals(listOf("SendChatAction", "SendVideo"), client.requests)
     }
 
     // the buttons sit on the bot's own question, but the answer belongs under the message the user wrote,
@@ -382,6 +403,27 @@ class TelegramDeliveryTest {
             language = Language.ENGLISH,
                 ),
             )
+    }
+
+    private class UnansweredVideoClient {
+
+        val requests = mutableListOf<String>()
+
+        val proxy: TelegramClient =
+            Proxy.newProxyInstance(
+                TelegramClient::class.java.classLoader,
+                arrayOf(TelegramClient::class.java)
+            ) { _, method, args ->
+                check(method.name == "executeAsync") { "unexpected client call: ${method.name}" }
+                val request = args.single()
+                requests += request.javaClass.simpleName
+
+                if (request is SendVideo) {
+                    CompletableFuture.failedFuture<Any>(SocketTimeoutException("timeout"))
+                } else {
+                    CompletableFuture.completedFuture<Any>(Message())
+                }
+            } as TelegramClient
     }
 
     private class RejectingClient(private val description: String) {

@@ -1,6 +1,7 @@
 package com.helltar.vusan.telegram.delivery
 
 import java.io.Serializable
+import java.net.SocketTimeoutException
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFalse
@@ -207,6 +208,18 @@ class TelegramErrorsTest {
     fun `does not read other failures as flood control`() {
         assertNull(telegramError("Bad Request: message is too long").retryAfterOrNull())
         assertNull(RuntimeException("connection reset").retryAfterOrNull())
+    }
+
+    @Test
+    fun `reads a timeout as a send nobody answered`() {
+        assertTrue(SocketTimeoutException("timeout").isUnanswered())
+        assertTrue(TelegramApiException("Unable to execute sendVideo method", SocketTimeoutException("timeout")).isUnanswered())
+    }
+
+    @Test
+    fun `does not read a rejection or a local failure as unanswered`() {
+        assertFalse(telegramError("Bad Request: wrong file identifier/HTTP URL specified").isUnanswered())
+        assertFalse(TelegramApiException("Parameter method can not be null").isUnanswered())
     }
 
     private fun floodError(retryAfter: Int): TelegramApiRequestException =

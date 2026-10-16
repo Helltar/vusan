@@ -422,6 +422,12 @@ A normal user message travels:
       been tried by then, so `TelegramDelivery` treats the item as not sent: no transcript row is written for it, and a
       comment that was to ride on it as a caption goes out as a message of its own, since the words are the answer and
       the media only what they rode on. A poll has no shape to fall back to and fails the same way.
+    - **A send nobody answered** — a timeout or a dropped connection with no API error behind it
+      (`TelegramErrors.isUnanswered`) is not a rejection: Telegram may have delivered the message and only the answer
+      was lost, which is common for a video it is still processing. The fallbacks rethrow it rather than send the
+      payload again in another shape, and `TelegramDelivery` treats the item as possibly arrived — no transcript row,
+      and the caption that rode on it is not repeated as a message. The client waits `TELEGRAM_IO_TIMEOUT` (`Main.kt`)
+      for an answer instead of OkHttp's ten seconds, so this stays rare.
     - **Gone targets and blocked DMs** — a reply whose target no longer exists is retried without the anchor
       (`DeliveryTarget.withoutReply`); a private chat the bot cannot write to produces a notice in the group instead.
     - **Unreachable chats** — a chat that refuses the bot rather than the payload (kicked, left, blocked, deleted, write

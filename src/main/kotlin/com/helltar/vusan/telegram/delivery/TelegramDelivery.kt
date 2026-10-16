@@ -163,7 +163,7 @@ class TelegramDelivery(
                 copy(replyToMessageId = null)
     }
 
-    private enum class ItemDeliveryOutcome { Ok, ReplyMissing, PrivateBlocked, ChatUnreachable, Failed }
+    private enum class ItemDeliveryOutcome { Ok, ReplyMissing, PrivateBlocked, ChatUnreachable, Unanswered, Failed }
 
     private data class DispatchOutcome(val replyUnavailable: Boolean, val chatUnreachable: Boolean) {
 
@@ -393,6 +393,10 @@ class TelegramDelivery(
                     return false
                 }
 
+                // telegram may have shown it without saying so: the caption that rode on it is not sent
+                // again, and the transcript does not claim a message nobody confirmed
+                ItemDeliveryOutcome.Unanswered -> return true
+
                 ItemDeliveryOutcome.Failed -> return false
             }
         }
@@ -476,6 +480,11 @@ class TelegramDelivery(
                 reportRejectedSticker(item.catalogId)
             }
 
+            if (e.isUnanswered()) {
+                log.warn(e) { "no answer to an outgoing item in chat=${deliveryTarget.chatId}, not sending it again" }
+                return ItemDeliveryOutcome.Unanswered
+            }
+
             // every fallback the kind has was tried on the way here, so nothing arrived: the caller must
             // neither record it nor let a caption die with it
             log.warn(e) { "failed to send outgoing item to chat=${deliveryTarget.chatId}" }
@@ -500,7 +509,11 @@ class TelegramDelivery(
             e.rethrowIfCancellation()
             log.warn(e) { "failed to send outgoing item to chat=${target.chatId} without reply" }
 
-            if (e.isChatUnreachable()) ItemDeliveryOutcome.ChatUnreachable else ItemDeliveryOutcome.Failed
+            when {
+                e.isChatUnreachable() -> ItemDeliveryOutcome.ChatUnreachable
+                e.isUnanswered() -> ItemDeliveryOutcome.Unanswered
+                else -> ItemDeliveryOutcome.Failed
+            }
         }
 
     // the bot's own turn belongs in the group transcript: a recap that shows the questions and not the

@@ -1,5 +1,6 @@
 package com.helltar.vusan.telegram.delivery
 
+import java.io.IOException
 import org.telegram.telegrambots.meta.exceptions.TelegramApiRequestException
 import kotlin.time.Duration
 import kotlin.time.Duration.Companion.seconds
@@ -82,6 +83,12 @@ internal fun Throwable.isStickerSetGone(): Boolean {
     return "stickerset_invalid" in description || "sticker set not found" in description
 }
 
+// the request went out and no answer came back: a timeout or a dropped connection, with no api error
+// anywhere in the chain. telegram may well have delivered the message, so unlike a rejection this
+// says nothing against the payload, and sending it again in any shape risks showing it twice.
+internal fun Throwable.isUnanswered(): Boolean =
+    telegramRequestError == null && causes.any { it is IOException }
+
 /**
  * How long Telegram's flood control says to wait, or `null` when the failure was not a 429.
  *
@@ -102,6 +109,7 @@ private val Throwable.telegramDescription: String?
 // the client wraps request failures in generic TelegramApiException chains, so search the causes
 // for the api-level exception that carries telegram's error description and its parameters.
 private val Throwable.telegramRequestError: TelegramApiRequestException?
+    get() = causes.filterIsInstance<TelegramApiRequestException>().firstOrNull()
+
+private val Throwable.causes: Sequence<Throwable>
     get() = generateSequence(this) { error -> error.cause.takeIf { it !== error } }
-        .filterIsInstance<TelegramApiRequestException>()
-        .firstOrNull()

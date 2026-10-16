@@ -57,6 +57,8 @@ import kotlinx.coroutines.cancelAndJoin
 import kotlinx.coroutines.coroutineScope
 import java.time.Instant
 import java.time.temporal.ChronoUnit
+import kotlin.time.Duration.Companion.seconds
+import okhttp3.OkHttpClient
 import org.telegram.telegrambots.client.okhttp.OkHttpTelegramClient
 
 private val log = KotlinLogging.logger {}
@@ -64,6 +66,10 @@ private val log = KotlinLogging.logger {}
 // how much one maintenance pass takes on: enough that a neglected database catches up over a few
 // rounds, small enough that a pass never holds the write lock against the turns being served.
 private const val MAINTENANCE_BATCH = 100
+
+// okhttp's default of ten seconds is shorter than telegram takes to process an uploaded video, and a
+// timeout after the upload says nothing about whether the message arrived — it usually has.
+private val TELEGRAM_IO_TIMEOUT = 60.seconds
 
 suspend fun main() = coroutineScope {
     log.info { "Starting Vusan ${appVersion()}" }
@@ -132,7 +138,14 @@ suspend fun main() = coroutineScope {
         // a vision model of its own comes with a second client to close; otherwise vision rides on the chat one
         visionClient = vision?.takeIf { it.ownClient }?.client
 
-        val telegramClient = OkHttpTelegramClient(config.telegramBotToken)
+        val telegramClient =
+            OkHttpTelegramClient(
+                OkHttpClient.Builder()
+                    .writeTimeout(TELEGRAM_IO_TIMEOUT)
+                    .readTimeout(TELEGRAM_IO_TIMEOUT)
+                    .build(),
+                config.telegramBotToken,
+            )
 
         // read once and shared: the runner matches mentions against it, the agent is told its own handle.
         val botProfile = telegramClient.botProfile()

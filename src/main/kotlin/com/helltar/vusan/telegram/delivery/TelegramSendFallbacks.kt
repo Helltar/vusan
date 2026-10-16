@@ -94,6 +94,13 @@ internal fun rethrowIfRateLimited(error: Throwable) {
     if (error.retryAfterOrNull() != null) throw error
 }
 
+// a send nobody answered may have arrived all the same, and every fallback here sends the payload
+// again in another shape — a video timed out while telegram processed it shows up twice, once as a
+// video and once as the document telegram turns back into one.
+internal fun rethrowIfUnanswered(error: Throwable) {
+    if (error.isUnanswered()) throw error
+}
+
 // what a turn will still stand still for. telegram can ask for minutes at a time, and a wait that long
 // is worse than an unsent message: the user is left with a silent chat and the turn holds its lock.
 private val MAX_FLOOD_WAIT = 30.seconds
@@ -175,6 +182,7 @@ internal suspend fun sendMediaWithDocumentFallback(
             rethrowIfReplyNotFound(e, replyParameters)
             rethrowIfRateLimited(e)
             rethrowIfChatUnreachable(e)
+            rethrowIfUnanswered(e)
             log.warn(e) { "$mediaLabel failed for chat=${target.chatId}, retrying as document" }
             sendDocumentWithCaptionFallback(client, target, bytes, filename, caption, replyParameters, formattingFileNotice)
         }
@@ -183,6 +191,7 @@ internal suspend fun sendMediaWithDocumentFallback(
             rethrowIfReplyNotFound(e, replyParameters)
             rethrowIfRateLimited(e)
             rethrowIfChatUnreachable(e)
+            rethrowIfUnanswered(e)
             log.warn(e) { "$mediaLabel document fallback failed for chat=${target.chatId}, falling back to text" }
             onTextFallback()
         }
@@ -200,6 +209,7 @@ internal suspend fun sendOrFallback(
         rethrowIfReplyNotFound(e, replyParameters)
         rethrowIfRateLimited(e)
         rethrowIfChatUnreachable(e)
+        rethrowIfUnanswered(e)
         log.warn(e) { "$failureMessage chat=${target.chatId}" }
         onFallback()
     }
@@ -240,6 +250,7 @@ internal suspend fun sendTextAsDocument(
         e.rethrowIfCancellation()
         rethrowIfRateLimited(e)
         rethrowIfChatUnreachable(e)
+        rethrowIfUnanswered(e)
         log.warn(e) { "Document fallback failed for chat=${target.chatId}, sending plain text" }
         sendTextMessage(client, target, text, parseMode = null, replyParameters = replyParameters)
     }.getOrThrow()
@@ -265,6 +276,7 @@ internal suspend fun sendMarkdownDocument(
         e.rethrowIfCancellation()
         rethrowIfRateLimited(e)
         rethrowIfChatUnreachable(e)
+        rethrowIfUnanswered(e)
         log.warn(e) { "Markdown document fallback failed for chat=${target.chatId}, sending plain text" }
         sendTextMessage(client, target, markdown, parseMode = null, replyParameters = replyParameters)
     }.getOrThrow()

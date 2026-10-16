@@ -138,6 +138,7 @@ internal object TelegramOutputSender {
             rethrowIfReplyNotFound(e, replyParameters)
             rethrowIfRateLimited(e)
             rethrowIfChatUnreachable(e)
+            rethrowIfUnanswered(e)
             log.warn(e) { "sendRichMessage failed for chat=${target.chatId}, resending as a $MARKDOWN_DOCUMENT_FILENAME file" }
             sendMarkdownDocument(client, target, markdown, replyParameters)
         }.getOrThrow()
@@ -510,6 +511,7 @@ internal object TelegramOutputSender {
             rethrowIfReplyNotFound(e, replyParameters)
             rethrowIfRateLimited(e)
             rethrowIfChatUnreachable(e)
+            rethrowIfUnanswered(e)
 
             // a recipient can refuse voice and video messages from anyone outside their contacts, which
             // comes back as `VOICE_MESSAGES_FORBIDDEN`. the same mp4 is still allowed as an ordinary
