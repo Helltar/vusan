@@ -27,6 +27,7 @@ import com.helltar.vusan.telegram.callback.InlineChoiceHandler
 import com.helltar.vusan.telegram.callback.TaskMenuHandler
 import com.helltar.vusan.telegram.callback.TurnStopHandler
 import com.helltar.vusan.telegram.delivery.TelegramDelivery
+import com.helltar.vusan.telegram.delivery.isTelegramUnavailable
 import com.helltar.vusan.telegram.inbound.AudioInput
 import com.helltar.vusan.telegram.inbound.MessageText
 import com.helltar.vusan.telegram.inbound.VoiceTranscriber
@@ -62,6 +63,7 @@ import kotlinx.coroutines.channels.ReceiveChannel
 import kotlinx.coroutines.selects.onTimeout
 import kotlinx.coroutines.selects.select
 import org.telegram.telegrambots.longpolling.TelegramBotsLongPollingApplication
+import org.telegram.telegrambots.longpolling.exceptions.TelegramApiErrorResponseException
 import org.telegram.telegrambots.longpolling.util.DefaultGetUpdatesGenerator
 import org.telegram.telegrambots.meta.TelegramUrl
 import org.telegram.telegrambots.meta.api.objects.CallbackQuery
@@ -111,7 +113,7 @@ internal class TelegramBotRunner(
 
     private val answeredMessages = AnsweredMessages(ANSWERED_MEMORY)
 
-    fun start(scope: CoroutineScope): Job {
+    suspend fun start(scope: CoroutineScope): Job {
         log.info {
             "Bot started: as=[${profile.username ?: profile.userId}] allowedIds=[${accessPolicy.allowed.sorted().joinToString(", ")}]"
         }
@@ -133,17 +135,27 @@ internal class TelegramBotRunner(
         // the generator is where the heartbeat hooks in, because the session calls it once per poll
         // cycle before every request. the consumer below would not do: the session skips it entirely
         // on an empty batch, so a bot nobody writes to would look dead within minutes.
-        longPolling.registerBot(
-            botToken,
-            { TelegramUrl.DEFAULT_URL },
-            heartbeat.beatOn(DefaultGetUpdatesGenerator())
-        ) { batch ->
-            // blocking on purpose, on the session's own poller thread: the batch has to be on disk
-            // before this returns, because returning is what lets the next request confirm it to
-            // Telegram. the session polls again only after the callback finishes, so nothing else waits.
-            runBlocking { spool.record(batch) }
+        // registering sends deleteWebhook, the second request of a start. getMe has just proved the token,
+        // so a failure here is telegram's state whatever the session wrapped it in, and is waited out. a
+        // session whose start failed stays registered, and registering it again would be refused.
+        waitingOutTelegram("deleteWebhook", isOutage = { it.isTelegramUnavailable() || it is TelegramApiErrorResponseException }) {
+            runInterruptible(Dispatchers.IO) {
+                runCatching {
+                    longPolling.registerBot(
+                        botToken,
+                        { TelegramUrl.DEFAULT_URL },
+                        heartbeat.beatOn(DefaultGetUpdatesGenerator()),
+                    ) { batch ->
+                        // blocking on purpose, on the session's own poller thread: the batch has to be on
+                        // disk before this returns, because returning is what lets the next request confirm
+                        // it to Telegram. the session polls again only after the callback finishes, so
+                        // nothing else waits.
+                        runBlocking { spool.record(batch) }
 
-            batch.forEach { updates.trySend(it) }
+                        batch.forEach { updates.trySend(it) }
+                    }
+                }.onFailure { runCatching { longPolling.unregisterBot(botToken) } }.getOrThrow()
+            }
         }
 
         // handlers inherit this dispatcher; without it, they would run on the single-threaded

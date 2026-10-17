@@ -1,9 +1,15 @@
 package com.helltar.vusan.telegram
 
+import com.helltar.vusan.common.rethrowIfCancellation
+import com.helltar.vusan.telegram.delivery.isTelegramUnavailable
+import io.github.oshai.kotlinlogging.KotlinLogging
 import java.util.concurrent.CompletableFuture
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.future.await
 import kotlinx.coroutines.runInterruptible
+import kotlin.time.Duration.Companion.minutes
+import kotlin.time.Duration.Companion.seconds
 import org.telegram.telegrambots.meta.api.methods.GetFile
 import org.telegram.telegrambots.meta.generics.TelegramClient
 
@@ -12,6 +18,39 @@ import org.telegram.telegrambots.meta.generics.TelegramClient
 // interrupt into a TelegramApiException, hiding the cancellation from rethrowIfCancellation.
 internal suspend fun <T> TelegramClient.api(block: TelegramClient.() -> CompletableFuture<T>): T =
     block().await()
+
+private val log = KotlinLogging.logger("TelegramApi")
+
+private val FIRST_OUTAGE_WAIT = 1.seconds
+private val MAX_OUTAGE_WAIT = 1.minutes
+
+/**
+ * Sends [request] until it goes through, pausing longer each time while [isOutage] says the failure is
+ * Telegram's own state rather than its answer to this request.
+ *
+ * Meant for the requests a start cannot go on without. Failing one ends the process, and every restart
+ * repeats each startup check before asking again, so an outage is better waited out in place. A
+ * refusal — a revoked token above all — is not waited out: no wait can fix it.
+ */
+internal suspend fun <T> waitingOutTelegram(
+    method: String,
+    isOutage: (Throwable) -> Boolean = { it.isTelegramUnavailable() },
+    request: suspend () -> T,
+): T {
+    var wait = FIRST_OUTAGE_WAIT
+
+    while (true) {
+        val outcome = runCatching { request() }
+        val error = outcome.exceptionOrNull() ?: return outcome.getOrThrow()
+
+        error.rethrowIfCancellation()
+        if (!isOutage(error)) throw error
+
+        log.warn { "Telegram cannot answer $method yet, asking again in ${wait.inWholeSeconds}s: ${error.message}" }
+        delay(wait)
+        wait = (wait * 2).coerceAtMost(MAX_OUTAGE_WAIT)
+    }
+}
 
 /**
  * A file the Bot API served, with the server-side path it came from. Telegram names that path after
