@@ -217,6 +217,14 @@ class TelegramErrorsTest {
     }
 
     @Test
+    fun `reads a server error or no answer as telegram being unavailable`() {
+        assertTrue(apiError(502, "Bad Gateway").isTelegramUnavailable())
+        assertTrue(SocketTimeoutException("timeout").isTelegramUnavailable())
+        assertFalse(apiError(401, "Unauthorized").isTelegramUnavailable())
+        assertFalse(telegramError("Bad Request: chat not found").isTelegramUnavailable())
+    }
+
+    @Test
     fun `does not read a rejection or a local failure as unanswered`() {
         assertFalse(telegramError("Bad Request: wrong file identifier/HTTP URL specified").isUnanswered())
         assertFalse(TelegramApiException("Parameter method can not be null").isUnanswered())
@@ -231,6 +239,12 @@ class TelegramErrorsTest {
                 .errorDescription("Too Many Requests: retry after $retryAfter")
                 .parameters(ResponseParameters(null, retryAfter))
                 .build(),
+        )
+
+    private fun apiError(code: Int, description: String): TelegramApiRequestException =
+        TelegramApiRequestException(
+            "Error executing request",
+            ApiResponse.builder<Serializable>().ok(false).errorCode(code).errorDescription(description).build(),
         )
 
     private fun telegramError(description: String): TelegramApiRequestException =

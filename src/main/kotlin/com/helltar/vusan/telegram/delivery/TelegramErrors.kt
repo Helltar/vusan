@@ -6,6 +6,7 @@ import kotlin.time.Duration
 import kotlin.time.Duration.Companion.seconds
 
 private const val TOO_MANY_REQUESTS = 429
+private const val SERVER_ERRORS = 500
 
 // telegram prefixes every parse-mode failure with "Bad Request: can't parse entities: ...",
 // regardless of the specific HTML wording (unsupported tag, unclosed tag, unescaped `<`/`&`, ...).
@@ -88,6 +89,11 @@ internal fun Throwable.isStickerSetGone(): Boolean {
 // says nothing against the payload, and sending it again in any shape risks showing it twice.
 internal fun Throwable.isUnanswered(): Boolean =
     telegramRequestError == null && causes.any { it is IOException }
+
+// telegram itself is down or overloaded rather than refusing this request: a 5xx from its gateway, or
+// no answer at all. worth asking again later, unlike every 4xx, which the same request would get again.
+internal fun Throwable.isTelegramUnavailable(): Boolean =
+    isUnanswered() || telegramRequestError?.errorCode?.let { it >= SERVER_ERRORS } == true
 
 /**
  * How long Telegram's flood control says to wait, or `null` when the failure was not a 429.

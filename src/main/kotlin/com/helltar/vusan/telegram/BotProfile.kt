@@ -1,5 +1,11 @@
 package com.helltar.vusan.telegram
 
+import com.helltar.vusan.common.rethrowIfCancellation
+import com.helltar.vusan.telegram.delivery.isTelegramUnavailable
+import io.github.oshai.kotlinlogging.KotlinLogging
+import kotlinx.coroutines.delay
+import kotlin.time.Duration.Companion.minutes
+import kotlin.time.Duration.Companion.seconds
 import org.telegram.telegrambots.meta.api.methods.GetMe
 import org.telegram.telegrambots.meta.generics.TelegramClient
 
@@ -17,9 +23,38 @@ internal data class BotProfile(
     val displayName: String?,
 )
 
-internal suspend fun TelegramClient.botProfile(): BotProfile =
-    api { executeAsync(GetMe()) }
-        .let { BotProfile(userId = it.id, username = it.userName, displayName = it.firstName) }
+private val log = KotlinLogging.logger("BotProfile")
+
+private val FIRST_GETME_WAIT = 1.seconds
+private val MAX_GETME_WAIT = 1.minutes
+
+/**
+ * Reads [BotProfile] for the account the client is signed in as, waiting for as long as Telegram cannot
+ * answer.
+ *
+ * It is the first request a start makes, so a passing outage would otherwise end the process, and each
+ * restart repeats every startup check before asking again. A refusal — a revoked token above all — is
+ * not waited out: no wait can fix it.
+ */
+internal suspend fun TelegramClient.botProfile(): BotProfile {
+    var wait = FIRST_GETME_WAIT
+
+    while (true) {
+        val me =
+            runCatching { api { executeAsync(GetMe()) } }
+                .onFailure { error ->
+                    error.rethrowIfCancellation()
+                    if (!error.isTelegramUnavailable()) throw error
+                    log.warn { "Telegram cannot answer getMe yet, asking again in ${wait.inWholeSeconds}s: ${error.message}" }
+                }
+                .getOrNull()
+
+        if (me != null) return BotProfile(userId = me.id, username = me.userName, displayName = me.firstName)
+
+        delay(wait)
+        wait = (wait * 2).coerceAtMost(MAX_GETME_WAIT)
+    }
+}
 
 /**
  * The names people call the bot by in a group: its profile name first, then the ones the deployment
