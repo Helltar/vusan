@@ -103,9 +103,9 @@ class ChatFloor(
         get() = Floor(chatRef, chat.threadId)
 
     companion object {
-        // the 99th percentile of one person's exchanges with the bot measured over a month of a live
-        // group, where nothing else was written in between; the longer ones were the nights in question
-        const val ANSWERS_PER_STRETCH = 8
+        // a little above the 99th percentile of one person's exchanges with the bot measured over a month
+        // of a live group, where nothing else was written in between; the longer ones were the nights in question
+        const val ANSWERS_PER_STRETCH = 10
 
         // long enough for the person to have moved on from the conversation, short enough that a quiet
         // afternoon does not keep someone shut out until the evening

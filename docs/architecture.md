@@ -231,8 +231,8 @@ A normal user message travels:
    which is what keeps nesting working, so this is the step that stops a group member forging a block in somebody else's
    turn. `AgentTurns.dispatchToAgent` assembles the agent input and the shorter history input.
 4. **Run** — `AgentRunner.handle` first asks `agent/ChatFloor` whether this person may still be answered in this
-   group: eight answers in a row to one person while nobody else wrote in the chat (or forum topic) close the floor
-   to them, the eighth carrying `last_answer_of_stretch` in `<message_context>` so the model rounds the exchange off
+   group: ten answers in a row to one person while nobody else wrote in the chat (or forum topic) close the floor
+   to them, the tenth carrying `last_answer_of_stretch` in `<message_context>` so the model rounds the exchange off
    itself, and every message after it is turned away in silence — no reply, no reaction — until anybody else writes
    there or an hour passes without an answer. A turn is counted when it is admitted, so a turn that ends without a
    line of its own in the chat — turned away, silent, failed or stopped — gives its count back, and the next message

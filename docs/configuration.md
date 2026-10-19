@@ -332,8 +332,8 @@ nobody is watching one arrive, and refusing it would mean skipping the run.
 
 A group is a shared room, and somebody chatting with Vusan alone at four in the morning leaves the
 rest of it a hundred messages to scroll past at breakfast. So in a group Vusan keeps an eye on who
-holds the floor: once it has answered one person eight times in a row while nobody else wrote
-anything in that chat (or in that forum topic), its eighth reply rounds the exchange off and says it
+holds the floor: once it has answered one person ten times in a row while nobody else wrote
+anything in that chat (or in that forum topic), its tenth reply rounds the exchange off and says it
 will pick things up later, and that person's next messages go unanswered — no reply, no reaction,
 nothing to scroll. The floor opens again the moment anybody else writes in the chat, to Vusan or
 not, or after an hour without an answer from it. Both numbers are fixed; they came out of a month of
