@@ -21,15 +21,22 @@ class SystemPromptTest {
     // stated outright or the model never learns the name it is called by.
     @Test
     fun `system prompt names the telegram account when one is known`() {
-        val prompt = systemPromptFor("Custom personality", MODEL_ID, "VusanBot", "Vusan")
+        val prompt = systemPromptFor("Custom personality", MODEL_ID, listOf("VusanBot"), "Vusan")
 
         assertContains(prompt, """Your Telegram account is `@VusanBot`, shown as "Vusan".""")
         assertContains(prompt, "it is removed from the text you receive")
     }
 
     @Test
+    fun `system prompt names every handle, the one the profile shows first`() {
+        val prompt = systemPromptFor("Custom personality", MODEL_ID, listOf("VusanAgent", "VusanBot"), "Vusan")
+
+        assertContains(prompt, """Your Telegram account is `@VusanAgent` (also `@VusanBot`), shown as "Vusan".""")
+    }
+
+    @Test
     fun `system prompt says nothing about an account it does not know`() {
-        val prompt = systemPromptFor("Custom personality", MODEL_ID, botUsername = null, botDisplayName = "Vusan")
+        val prompt = systemPromptFor("Custom personality", MODEL_ID, botUsernames = emptyList(), botDisplayName = "Vusan")
 
         assertFalse("Telegram account" in prompt)
         assertFalse("Vusan" in prompt.substringAfter("</personality>"))

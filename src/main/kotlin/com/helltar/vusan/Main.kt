@@ -147,7 +147,7 @@ suspend fun main() = coroutineScope {
                 config.telegramBotToken,
             )
 
-        // read once and shared: the runner matches mentions against it, the agent is told its own handle.
+        // read once and shared: the runner matches mentions against it, the agent is told its own handles.
         val botProfile = telegramClient.botProfile()
 
         // who asked not to be written to: read by the turn, the ambient gate and the initiative, written by
@@ -205,7 +205,7 @@ suspend fun main() = coroutineScope {
         val agentFactory =
             AgentFactory(
                 client, llm.model, llm.chatOptions,
-                config.personality, botProfile.username, botProfile.displayName,
+                config.personality, botProfile.usernames, botProfile.displayName,
                 sandbox = config.regolithUrl != null,
                 maxModelCalls = config.agentMaxModelCalls,
                 contextWindowPolicy = contextWindowPolicy,

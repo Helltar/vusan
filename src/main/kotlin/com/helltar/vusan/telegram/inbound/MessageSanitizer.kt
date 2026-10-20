@@ -16,12 +16,12 @@ internal fun MessageText.entitySpan(entity: MessageEntity): String {
     return text.substring(start, end)
 }
 
-internal fun sanitizeUserText(content: MessageText, botUserId: Long, botUsername: String?): String {
-    val expectedUsername = normalizeUsername(botUsername)
+internal fun sanitizeUserText(content: MessageText, botUserId: Long, botUsernames: Collection<String>): String {
+    val expectedUsernames = botUsernames.normalizedUsernames()
 
     val removals =
         content.entities
-            .filter { content.isBotMention(it, botUserId, expectedUsername) }
+            .filter { content.isBotMention(it, botUserId, expectedUsernames) }
             .sortedBy { it.offset }
 
     if (removals.isEmpty()) return content.text.trim().neutralizePromptBlocks()
@@ -42,10 +42,10 @@ internal fun sanitizeUserText(content: MessageText, botUserId: Long, botUsername
     return sanitized.cleanupAfterMentionRemoval().neutralizePromptBlocks()
 }
 
-private fun MessageText.isBotMention(entity: MessageEntity, botUserId: Long, expectedUsername: String?): Boolean =
+private fun MessageText.isBotMention(entity: MessageEntity, botUserId: Long, expectedUsernames: Set<String>): Boolean =
 
     when (entity.type) {
-        EntityType.MENTION -> expectedUsername != null && normalizeUsername(entitySpan(entity)) == expectedUsername
+        EntityType.MENTION -> normalizeUsername(entitySpan(entity)) in expectedUsernames
         EntityType.TEXTMENTION -> entity.user?.id == botUserId
         else -> false
     }

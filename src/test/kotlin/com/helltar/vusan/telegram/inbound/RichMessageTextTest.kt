@@ -11,7 +11,7 @@ import org.telegram.telegrambots.meta.api.objects.message.Message
 import org.telegram.telegrambots.meta.generics.TelegramClient
 
 private const val BOT_USER_ID = 100L
-private const val BOT_USERNAME = "VusanBot"
+private val BOT_USERNAMES = listOf("VusanAgent", "VusanBot")
 
 class RichMessageTextTest {
 
@@ -189,8 +189,8 @@ class RichMessageTextTest {
         val unrelated =
             message("""{"message_id":3,"date":1,$group"rich_message":{"blocks":[{"type":"paragraph","text":"hi all"}]}}""")
 
-        assertTrue(shouldHandle(mentioning, BOT_USER_ID, BOT_USERNAME))
-        assertTrue(shouldHandle(textMentioning, BOT_USER_ID, BOT_USERNAME))
-        assertFalse(shouldHandle(unrelated, BOT_USER_ID, BOT_USERNAME))
+        assertTrue(shouldHandle(mentioning, BOT_USER_ID, BOT_USERNAMES))
+        assertTrue(shouldHandle(textMentioning, BOT_USER_ID, BOT_USERNAMES))
+        assertFalse(shouldHandle(unrelated, BOT_USER_ID, BOT_USERNAMES))
     }
 }

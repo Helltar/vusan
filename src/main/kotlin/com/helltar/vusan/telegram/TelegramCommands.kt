@@ -15,6 +15,7 @@ import com.helltar.vusan.telegram.inbound.isPrivateChat
 import com.helltar.vusan.telegram.inbound.language
 import com.helltar.vusan.telegram.inbound.messageIdLong
 import com.helltar.vusan.telegram.inbound.normalizeUsername
+import com.helltar.vusan.telegram.inbound.normalizedUsernames
 import com.helltar.vusan.telegram.inbound.senderIdOrNull
 import io.github.oshai.kotlinlogging.KotlinLogging
 import org.telegram.telegrambots.meta.api.objects.ephemeral.EphemeralMessageParameters
@@ -37,7 +38,7 @@ internal class TelegramCommands(
     /** Whether [command] is one of these and meant for this bot: `/stop@other_bot` in a group is not. */
     fun recognizes(command: BotCommand, profile: BotProfile): Boolean =
         command.command in NAMES &&
-                (command.targetUsername == null || normalizeUsername(command.targetUsername) == normalizeUsername(profile.username))
+                (command.targetUsername == null || normalizeUsername(command.targetUsername) in profile.usernames.normalizedUsernames())
 
     suspend fun handle(command: BotCommand, message: Message) {
         when (command.command) {

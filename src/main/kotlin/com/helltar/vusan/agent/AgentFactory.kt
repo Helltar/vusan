@@ -28,9 +28,9 @@ class AgentFactory(
     private val model: LlmModel,
     private val options: RequestOptions = RequestOptions(),
     private val personality: String? = null,
-    // the bot's own Telegram handle: inbound sanitizing strips the mention before the prompt is
-    // built, so without this the model never sees the name people call it by.
-    private val botUsername: String? = null,
+    // the bot's own Telegram handles: inbound sanitizing strips the mention before the prompt is
+    // built, so without this the model never sees the names people call it by.
+    private val botUsernames: List<String> = emptyList(),
     private val botDisplayName: String? = null,
     // whether this deployment has a sandbox at all; the prompt says nothing about one where it does not
     private val sandbox: Boolean = false,
@@ -47,7 +47,7 @@ class AgentFactory(
     // `<tool_groups>`, and the budget below has to weigh the finished prompt.
     fun prepare(toolCatalog: ToolCatalog, currentTurn: String): AgentPromptPreparation {
         val systemPrompt =
-            systemPromptFor(personality ?: DEFAULT_PERSONALITY, model.id, botUsername, botDisplayName, sandbox)
+            systemPromptFor(personality ?: DEFAULT_PERSONALITY, model.id, botUsernames, botDisplayName, sandbox)
 
         return AgentPromptPreparation(
             toolCatalog = toolCatalog,

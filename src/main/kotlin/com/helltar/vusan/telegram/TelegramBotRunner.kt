@@ -115,7 +115,7 @@ internal class TelegramBotRunner(
 
     suspend fun start(scope: CoroutineScope): Job {
         log.info {
-            "Bot started: as=[${profile.username ?: profile.userId}] allowedIds=[${accessPolicy.allowed.sorted().joinToString(", ")}]"
+            "Bot started: as=[${profile.usernames.joinToString(", ").ifEmpty { profile.userId.toString() }}] allowedIds=[${accessPolicy.allowed.sorted().joinToString(", ")}]"
         }
 
         if (accessPolicy.banned.isNotEmpty()) {
@@ -192,7 +192,7 @@ internal class TelegramBotRunner(
         // lines one person sent in a row are one message to the agent when any of them calls the bot. a run
         // nobody addressed is handled line by line, as it was, so ambient addressing judges what it always did
         fun flushLines(parts: List<Message>) {
-            if (parts.size > 1 && parts.any { shouldHandle(it, profile.userId, profile.username) })
+            if (parts.size > 1 && parts.any { shouldHandle(it, profile.userId, profile.usernames) })
                 launchHandling(parts.last()) { handleTextBatch(parts, profile) }
             else
                 parts.forEach { part -> launchHandling(part) { dispatch(part, profile) } }
@@ -470,14 +470,14 @@ internal class TelegramBotRunner(
     // any of them starts nothing
     private suspend fun handleTextBatch(parts: List<Message>, botProfile: BotProfile) {
         val anchor = parts.last()
-        val addressedPart = parts.first { shouldHandle(it, botProfile.userId, botProfile.username) }
+        val addressedPart = parts.first { shouldHandle(it, botProfile.userId, botProfile.usernames) }
         val acceptance = anchor.acceptance(botProfile, captionSource = addressedPart) ?: return
 
         parts.dropLast(1).forEach { answeredMessages.markAnswered(it.chatIdLong, it.messageIdLong, Instant.now()) }
 
         val userText =
             parts.mapNotNull { it.messageTextOrNull() }
-                .joinToString("\n") { sanitizeUserText(it, botProfile.userId, botProfile.username) }
+                .joinToString("\n") { sanitizeUserText(it, botProfile.userId, botProfile.usernames) }
                 .trim()
                 .ifBlank { MENTION_ONLY_PROMPT }
 
@@ -490,7 +490,7 @@ internal class TelegramBotRunner(
         val acceptance = message.acceptance(botProfile) ?: return
 
         val userText =
-            sanitizeUserText(content, botProfile.userId, botProfile.username)
+            sanitizeUserText(content, botProfile.userId, botProfile.usernames)
                 .ifBlank { MENTION_ONLY_PROMPT }
 
         turns.dispatchToAgent(message, userText, botProfile, inputKind = "text", ambient = acceptance.ambient)
@@ -506,7 +506,7 @@ internal class TelegramBotRunner(
 
         val caption =
             message.messageTextOrNull()
-                ?.let { sanitizeUserText(it, botProfile.userId, botProfile.username) }
+                ?.let { sanitizeUserText(it, botProfile.userId, botProfile.usernames) }
                 .orEmpty()
 
         handleTranscribedAudio(
@@ -601,7 +601,7 @@ internal class TelegramBotRunner(
 
         val caption =
             message.messageTextOrNull()
-                ?.let { sanitizeUserText(it, botProfile.userId, botProfile.username) }
+                ?.let { sanitizeUserText(it, botProfile.userId, botProfile.usernames) }
                 .orEmpty()
                 .ifBlank { noCaptionPrompt }
 
@@ -629,7 +629,7 @@ internal class TelegramBotRunner(
 
         val caption =
             captionedPart?.messageTextOrNull()
-                ?.let { sanitizeUserText(it, botProfile.userId, botProfile.username) }
+                ?.let { sanitizeUserText(it, botProfile.userId, botProfile.usernames) }
                 .orEmpty()
                 .ifBlank { MEDIA_ONLY_PROMPT }
 
@@ -652,7 +652,7 @@ internal class TelegramBotRunner(
         if (accessPolicy.allows(telegramChat(chatIdLong), senderRefOrNull())) return true
 
         // only a message aimed at the bot is worth a line — the rest is chat traffic it happens to see.
-        if (shouldHandle(this, botProfile.userId, botProfile.username))
+        if (shouldHandle(this, botProfile.userId, botProfile.usernames))
             logDenied(accessPolicy.denialReason(telegramChat(chatIdLong), senderRefOrNull()))
 
         return false
@@ -661,12 +661,12 @@ internal class TelegramBotRunner(
     // the single gate every dispatched message goes through, so it is also where a message is claimed for
     // its one turn: the alternative is remembering to do that at each of the callers.
     private fun Message.isAccepted(botProfile: BotProfile, captionSource: Message = this): Boolean =
-        shouldHandle(this, botProfile.userId, botProfile.username, captionSource) && claimForTurn()
+        shouldHandle(this, botProfile.userId, botProfile.usernames, captionSource) && claimForTurn()
 
     // the same gate for a message that becomes an agent turn rather than a command: a person the floor has
     // closed on gets silence, and nothing is transcribed or downloaded for an answer that is not coming
     private fun Message.isAcceptedForTurn(botProfile: BotProfile): Boolean =
-        shouldHandle(this, botProfile.userId, botProfile.username) && !isFloorClosed() && claimForTurn()
+        shouldHandle(this, botProfile.userId, botProfile.usernames) && !isFloorClosed() && claimForTurn()
 
     // the same gate for the paths a message nobody tagged the bot in may take too. `null` means the bot stays
     // out. ambient addressing is asked only once everything that calls the bot outright has said no, so it
@@ -674,7 +674,7 @@ internal class TelegramBotRunner(
     private suspend fun Message.acceptance(botProfile: BotProfile, captionSource: Message = this): Acceptance? {
         val acceptance =
             when {
-                shouldHandle(this, botProfile.userId, botProfile.username, captionSource) -> Acceptance.ADDRESSED
+                shouldHandle(this, botProfile.userId, botProfile.usernames, captionSource) -> Acceptance.ADDRESSED
                 isAmbientlyAddressed(captionSource) -> Acceptance.AMBIENT
                 else -> return null
             }

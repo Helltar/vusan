@@ -99,7 +99,7 @@ private const val OPERATIONAL_CONTRACT = """# Instruction scope
  * stated instead. It belongs in the system block: the deployment never changes it mid-run, so it
  * costs nothing beyond the first cached prefix.
  */
-private fun runtimeSection(modelId: String, botUsername: String?, botDisplayName: String?): String =
+private fun runtimeSection(modelId: String, botUsernames: List<String>, botDisplayName: String?): String =
     buildString {
         append(
             """# Runtime
@@ -109,11 +109,14 @@ private fun runtimeSection(modelId: String, botUsername: String?, botDisplayName
 - For anything else about your own build that the identifier does not answer, say you do not have that detail instead of guessing."""
         )
 
-        botUsername?.takeIf { it.isNotBlank() }?.let { username ->
+        val handles = botUsernames.filter(String::isNotBlank).map { "`@$it`" }
+
+        if (handles.isNotEmpty()) {
+            val alsoAs = handles.drop(1).takeIf { it.isNotEmpty() }?.let { " (also ${it.joinToString(", ")})" }.orEmpty()
             val shownAs = botDisplayName?.takeIf { it.isNotBlank() }?.let { """, shown as "$it"""" }.orEmpty()
 
-            append("\n- Your Telegram account is `@$username`$shownAs. ")
-            append("That handle is how people address you in a group, and it is removed from the text you receive — ")
+            append("\n- Your Telegram account is ${handles.first()}$alsoAs$shownAs. ")
+            append("A handle is how people address you in a group, and it is removed from the text you receive — ")
             append("so a message that arrives as bare text may still have been addressed to you by name.")
         }
     }
@@ -151,14 +154,14 @@ private fun passingResultsSection(sandbox: Boolean): String =
 internal fun systemPromptFor(
     personality: String,
     modelId: String,
-    botUsername: String? = null,
+    botUsernames: List<String> = emptyList(),
     botDisplayName: String? = null,
     sandbox: Boolean = false,
 ): String =
     "${xmlBlock("personality", personality)}\n\n" +
             xmlBlock(
                 "operational_contract",
-                "$OPERATIONAL_CONTRACT\n\n${passingResultsSection(sandbox)}\n\n${runtimeSection(modelId, botUsername, botDisplayName)}",
+                "$OPERATIONAL_CONTRACT\n\n${passingResultsSection(sandbox)}\n\n${runtimeSection(modelId, botUsernames, botDisplayName)}",
             )
 
 // the block names the contract above enumerates, kept next to it so the two cannot drift apart.

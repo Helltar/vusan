@@ -770,7 +770,7 @@ efforts — so a typo fails here
 → create the LLM runtime, whose client everything downstream then shares — wrapped in `llm/FallbackLlmClient` when
 `LLM_FALLBACK_PROVIDER` names a second runtime, so a spent subscription hands every call to it until the deadline its
 refusal named → build repositories, context policy, conversation compactor, the
-Telegram client and its `BotProfile` — one `getMe` call shared by the runner, which matches mentions against it, and `AgentFactory`, which puts the handle in the system prompt; it and the long-polling registration's `deleteWebhook` are asked again with a growing pause while Telegram answers 5xx or not at all (`waitingOutTelegram`), so an outage holds the start instead of ending it → (only when image
+Telegram client and its `BotProfile` — `getMe`, then `getChat` on the bot itself for every active handle (a premium `@name_agent` beside the `@name_bot` one), shared by the runner, which matches mentions of any of them, and `AgentFactory`, which puts the handles in the system prompt; both and the long-polling registration's `deleteWebhook` are asked again with a growing pause while Telegram answers 5xx or not at all (`waitingOutTelegram`), so an outage holds the start instead of ending it → (only when image
 generation or `ELEVENLABS_API_KEY` is configured, the two things that use it) `resolveSelfImage`
 (`tools/imagegen/SelfImage.kt`), which reads the reference photo self-portraits and round video messages are drawn from:
 `SELF_IMAGE_FILE` when set, otherwise whatever avatar loader startup hands it — for Telegram, one
