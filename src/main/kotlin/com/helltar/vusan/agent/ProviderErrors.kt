@@ -29,12 +29,13 @@ private val CONTEXT_OVERFLOW_REGEX =
         RegexOption.IGNORE_CASE,
     )
 
-// a subscription that has run out of Codex usage reports it in the error body rather than by status:
-// a plain 429 is an ordinary rate limit that retrying fixes, while these mean "come back later".
+// a spent allowance — a subscription out of Codex usage, an xAI account out of credits — is reported in the
+// error body rather than by status: a plain 429 is an ordinary rate limit that retrying fixes, while these
+// mean "come back later". xAI's words come with a 402 on an API key and a 403 on a Grok subscription.
 private val SUBSCRIPTION_LIMIT_REGEX =
     Regex(
         "usage_limit_reached|usage limit reached|usage_not_included|quota_exceeded|" +
-                "insufficient_quota|exceeded your current quota",
+                "insufficient_quota|exceeded your current quota|spending-limit|run out of credits",
         RegexOption.IGNORE_CASE,
     )
 
@@ -43,6 +44,9 @@ private val SUBSCRIPTION_LIMIT_REGEX =
 // or the configured model changes.
 private val MODEL_NOT_IN_PLAN_REGEX =
     Regex("not supported when using codex with a chatgpt account", RegexOption.IGNORE_CASE)
+
+// 402 Payment Required is a spent allowance on whichever provider sends it, whatever its body says
+private const val PAYMENT_REQUIRED = 402
 
 private val UNAUTHORIZED_REGEX =
     Regex("missing_authorization_header|token_expired|invalid_api_key|authentication_error|unauthorized", RegexOption.IGNORE_CASE)
@@ -64,6 +68,9 @@ internal fun Throwable.providerError(): LlmException? =
 private val LlmException.text: String
     get() = body.orEmpty()
 
+private val LlmException.allowanceSpent: Boolean
+    get() = status == PAYMENT_REQUIRED || SUBSCRIPTION_LIMIT_REGEX.containsMatchIn(text)
+
 // a 403 alone says nothing about the sign-in: a region the provider does not serve, a model the key may
 // not use, a cloudflare challenge on the codex backend
 private val LlmException.unauthorized: Boolean
@@ -73,7 +80,7 @@ private val LlmException.unauthorized: Boolean
 internal fun Messages.providerErrorReply(error: LlmException, now: Instant = Instant.now()): String =
     when {
         CONTENT_POLICY_REGEX.containsMatchIn(error.text) -> contentPolicyReply
-        SUBSCRIPTION_LIMIT_REGEX.containsMatchIn(error.text) -> subscriptionLimitReply(usageLimitResetIn(error.text, now))
+        error.allowanceSpent -> subscriptionLimitReply(usageLimitResetIn(error.text, now))
         error.unauthorized -> signInRequiredReply
         error.status in TRANSIENT_STATUSES -> overloadedReply
         else -> fallbackErrorReply
@@ -119,7 +126,7 @@ internal fun Throwable.providerOutage(now: Instant = Instant.now()): ProviderOut
     return when {
         CONTENT_POLICY_REGEX.containsMatchIn(error.text) -> null
 
-        SUBSCRIPTION_LIMIT_REGEX.containsMatchIn(error.text) ->
+        error.allowanceSpent ->
             usageLimitResetIn(error.text, now)?.let { now.outageFor(it, deadlineNamed = true) }
                 ?: now.outageFor(DEFAULT_PROVIDER_OUTAGE)
 

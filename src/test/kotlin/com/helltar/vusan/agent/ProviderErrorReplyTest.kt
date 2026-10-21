@@ -133,6 +133,12 @@ class ProviderErrorReplyTest {
         assertEquals(now.plusSeconds(600), spent.until)
         assertTrue(spent.deadlineNamed)
 
+        // what xai answered on 2026-10-22 once the account's credits ran out
+        val paymentRequired = error(402, """{"code":"personal-team-blocked:spending-limit","error":"You have run out of credits or need a Grok subscription."}""")
+        assertEquals(now.plusSeconds(1800), assertNotNull(paymentRequired.providerOutage(now)).until)
+        assertEquals(EnglishMessages.subscriptionLimitReply(null), EnglishMessages.providerErrorReply(paymentRequired, now))
+        assertNotNull(error(403, "You have run out of credits").providerOutage(now), "the same words behind a 403")
+
         val rateLimited = assertNotNull(error(429, "rate_limit_exceeded").providerOutage(now))
         assertEquals(now.plusSeconds(120), rateLimited.until)
         assertTrue(!rateLimited.deadlineNamed)
