@@ -64,7 +64,7 @@ group, and exempt from the [limit on one person alone in a group](#one-person-al
 |---------------------|----------------------------|----------------------------------------------------------------|
 | `openai`            | `gpt-6.1-sol`              | OpenAI's API.                                                  |
 | `anthropic`         | `claude-opus-5-5`          | Anthropic's API, Claude 4.6 or newer.                          |
-| `xai`               | `grok-4.7`                 | xAI's API; see below.                                          |
+| `xai`               | `grok-4.7`                 | xAI's API.                                                     |
 | `codex`             | a model your plan offers   | A ChatGPT plan instead of a key; see below.                    |
 | `openai-compatible` | whatever the server serves | Any OpenAI-compatible server, remote or local.                 |
 
@@ -116,20 +116,6 @@ VISION_MODEL=gemma4:latest
 Ollama states neither the window nor whether a model sees. Set the window to Ollama's
 `OLLAMA_CONTEXT_LENGTH` (`ollama ps` shows it), and name the model again as `VISION_MODEL` if it
 takes images.
-
-## xAI
-
-`LLM_PROVIDER=xai` runs Vusan on Grok with an xAI API key.
-
-```dotenv
-LLM_PROVIDER=xai
-LLM_MODEL=grok-4.7
-LLM_API_KEY=xai-qwerty
-```
-
-- **Effort** — `grok-4.7` always thinks, from `low` to `xhigh`. `grok-4.3` also takes `none`, which
-  makes it the quick one for [answering without a mention](#answering-without-a-mention).
-- **Images** — JPEG, PNG and WebP; a GIF is refused.
 
 ## ChatGPT subscription
 
@@ -480,7 +466,7 @@ VISION_API_KEY=sk-proj-qwerty
 | Variable                         | Default           | Description                                                      |
 |----------------------------------|-------------------|------------------------------------------------------------------|
 | `VISION_MODEL`                   | —                 | Turns on a vision model of its own.                              |
-| `VISION_PROVIDER`                | the chat provider | `openai`, `anthropic`, `openai-compatible`, `codex` or `xai`.    |
+| `VISION_PROVIDER`                | the chat provider | `openai`, `anthropic`, `xai`, `codex` or `openai-compatible`.    |
 | `VISION_API_KEY`                 | —                 | Required with `VISION_PROVIDER`, except on `codex`.              |
 | `VISION_BASE_URL`                | —                 | Required with `VISION_PROVIDER=openai-compatible`.               |
 | `VISION_COMPATIBLE_API`          | `completions`     | `completions` or `responses`, for `openai-compatible`.           |
@@ -623,7 +609,7 @@ prefix.
 | `ADDRESSING_ENABLED`                 | `false`            | Turns the feature on.                                        |
 | `ADDRESSING_MODEL`                   | —                  | The model that decides; never the chat model.                |
 | `ADDRESSING_NAMES`                   | the bot's handles  | Other spellings the chat uses, comma-separated.              |
-| `ADDRESSING_PROVIDER`                | the chat provider  | `openai`, `anthropic`, `openai-compatible`, `codex` or `xai`. |
+| `ADDRESSING_PROVIDER`                | the chat provider  | `openai`, `anthropic`, `xai`, `codex` or `openai-compatible`. |
 | `ADDRESSING_API_KEY`                 | —                  | Required with `ADDRESSING_PROVIDER`, except on `codex`.      |
 | `ADDRESSING_BASE_URL`                | —                  | Required with `ADDRESSING_PROVIDER=openai-compatible`.       |
 | `ADDRESSING_COMPATIBLE_API`          | `completions`      | `completions` or `responses`, for `openai-compatible`.       |
