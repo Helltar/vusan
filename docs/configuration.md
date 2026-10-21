@@ -376,22 +376,26 @@ the one a message arrived as — a file someone sent, a track it fetched, a piec
   chat runs on.
 - **`xai`** — xAI's Imagine API, billed per image against `IMAGE_API_KEY`.
 
-| Variable         | Default               | Description                                               |
-|------------------|-----------------------|-----------------------------------------------------------|
-| `IMAGE_PROVIDER` | unset                 | `openai`, `codex` or `xai`.                               |
-| `IMAGE_API_KEY`  | —                     | The key `openai` or `xai` draws with.                     |
-| `IMAGE_MODEL`    | `gpt-image-2.5-flare` | Image model, on any provider.                             |
-| `IMAGE_QUALITY`  | `medium`              | `low`, `medium`, `high`, `xhigh`, `max` or `auto`.        |
+| Variable         | Default     | Description                                                                       |
+|------------------|-------------|-----------------------------------------------------------------------------------|
+| `IMAGE_PROVIDER` | unset       | `openai`, `codex` or `xai`.                                                       |
+| `IMAGE_API_KEY`  | —           | The key `openai` or `xai` draws with.                                             |
+| `IMAGE_MODEL`    | by provider | `gpt-image-2.5-flare` on `openai` and `codex`, `grok-imagine-image-2.0` on `xai`. |
+| `IMAGE_QUALITY`  | by provider | `medium` on `openai` and `codex`, `auto` on `xai`.                                |
 
 The agent picks the aspect ratio; the model and quality are yours, so the cost stays predictable.
 
-- **Quality** — sets the price per image. `xhigh` and `max` work only on `gpt-image-2.5` models;
-  older ones stop at `high` and fail above it.
 - **Self-portraits** — a picture of the bot is an edit of the [Appearance](#appearance) photo, which
-  keeps the face. On `gpt-image-1`, `-1-mini` and `-1.5` holding the original that closely costs extra
-  input tokens; from `gpt-image-2` on it is always included.
+  keeps the face.
 - **Edits** — take everything one message carried, so an album sent with "merge these" becomes one
   picture, with Vusan in it if asked.
+
+On `openai`:
+
+- **Quality** — `low`, `medium`, `high`, `xhigh`, `max` or `auto`. `xhigh` and `max` work only on
+  `gpt-image-2.5` models; older ones stop at `high` and fail above it.
+- **Likeness** — on `gpt-image-1`, `-1-mini` and `-1.5` holding a face that closely costs extra input
+  tokens; from `gpt-image-2` on it is always included.
 - **Sizes** — wallpaper and banner framings, and sizes beyond the three classic ones, need
   `gpt-image-2` or newer; older models use the nearest size they have.
 - **Format** — pictures arrive as JPEG: Telegram re-encodes photos anyway, and the smaller file keeps
@@ -400,11 +404,11 @@ The agent picks the aspect ratio; the model and quality are yours, so the cost s
   Vusan asks for the looser of its two settings. A refusal is reported as one, with an offer to
   change the picture.
 
-On `codex` three things differ: pictures count against the same usage limit as the chat, the aspect
-ratio is only a hint because the model picks its own dimensions, and the filter is ChatGPT's, with
-no setting.
+On `codex` the models and qualities are OpenAI's, with three differences: pictures count against the
+same usage limit as the chat, the aspect ratio is only a hint because the model picks its own
+dimensions, and the filter is ChatGPT's, with no setting.
 
-On `xai` the model is `grok-imagine-image-2.0` and the quality `auto` unless you set them:
+On `xai`:
 
 - **Quality** — `low`, `medium` or `auto`. On `auto` xAI picks `low` for a new picture and `medium`
   for an edit; a new picture at `medium` takes over a minute instead of about fifteen seconds.
