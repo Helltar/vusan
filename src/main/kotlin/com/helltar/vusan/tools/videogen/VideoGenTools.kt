@@ -1,6 +1,5 @@
 package com.helltar.vusan.tools.videogen
 
-import com.helltar.vusan.common.dataUrl
 import com.helltar.vusan.common.rethrowIfCancellation
 import com.helltar.vusan.common.sniffedImageMimeType
 import com.helltar.vusan.outbox.BotOutbox
@@ -11,6 +10,7 @@ import com.helltar.vusan.tools.Arg
 import com.helltar.vusan.tools.Tool
 import com.helltar.vusan.tools.ToolSet
 import com.helltar.vusan.tools.imagegen.SelfImage
+import com.helltar.vusan.tools.imagegen.SourceImage
 import com.helltar.vusan.tools.keepOnShelf
 import com.helltar.vusan.tools.keptNotSent
 import com.helltar.vusan.tools.refusedByChat
@@ -57,32 +57,31 @@ class VideoGenTools(
 
         require(!withYourself || self != null) { "there is no photo or description of you to put in a video" }
 
-        val selfPhoto = self?.reference?.let { dataUrl(it.contentType, it.bytes) }
-        val pictures = references.map { it.imageDataUrl() } + listOfNotNull(selfPhoto)
-        val offset = if (startFrame != null) 1 else 0
+        require(namesOnlyWhatItWasGiven(text, references.size, withSelf = self != null)) {
+            "the prompt names a picture it was not given: `<IMAGE_0>` and up name the references in order, " +
+                    "and `<SELF>` needs `withYourself`"
+        }
 
-        // the bot is its photo where it has one, after the references; without one, the notes are all of it
-        val selfName = self?.let { if (selfPhoto != null) "<IMAGE_${references.size + offset}>" else "the main character" }
+        val start = startFrame?.picture()
+        val end = endFrame?.picture()
+        val pictures = references.map { it.picture() }
+        val uploadBytes = (listOfNotNull(start, end, self?.reference) + pictures).sumOf { it.bytes.size.toLong() }
 
-        val tagged =
-            requireNotNull(xaiVideoPrompt(text, references.size, offset, selfName)) {
-                "the prompt names a picture it was not given: `<IMAGE_0>` and up name the references in order, " +
-                        "and `<SELF>` needs `withYourself`"
-            }
-
-        val described = self?.appearance?.let { "$tagged\n\nAbout $selfName: $it" } ?: tagged
+        require(uploadBytes <= MAX_UPLOAD_BYTES) {
+            "the pictures add up to more than $MAX_UPLOAD_BYTES bytes; use fewer or smaller ones"
+        }
 
         val video =
             render("generate") {
                 client.generate(
-                    prompt = described,
+                    prompt = text,
                     seconds = seconds,
                     aspectRatio = aspectRatio,
                     sound = sound,
-                    startFrame = startFrame?.imageDataUrl(),
-                    endFrame = endFrame?.imageDataUrl(),
+                    startFrame = start,
+                    endFrame = end,
                     references = pictures,
-                    speaker = selfName,
+                    self = self,
                 )
             } ?: return@suspendToolGuard MODERATION_ADVICE
 
@@ -103,7 +102,8 @@ class VideoGenTools(
         if (send && !outbox.capabilities.videos) return@suspendToolGuard refusedByChat("videos")
 
         val source = sourceVideo(video)
-        val edited = render("edit") { client.edit(text, source.mp4DataUrl()) } ?: return@suspendToolGuard MODERATION_ADVICE
+        val bytes = source.loadUpload()
+        val edited = render("edit") { client.edit(text, bytes, source.name) } ?: return@suspendToolGuard MODERATION_ADVICE
 
         deliver(edited, "The edited video", send)
     }
@@ -128,13 +128,16 @@ class VideoGenTools(
         if (send && !outbox.capabilities.videos) return@suspendToolGuard refusedByChat("videos")
 
         val source = sourceVideo(video)
-        val extended = render("extend") { client.extend(text, source.mp4DataUrl(), seconds) } ?: return@suspendToolGuard MODERATION_ADVICE
-        val length = source.durationSeconds?.plus(seconds)
+        val bytes = source.loadUpload()
 
-        deliver(RenderedVideo(extended.bytes, length), "The extended video", send)
+        val extended =
+            render("extend") { client.extend(text, bytes, source.name, seconds, source.durationSeconds) }
+                ?: return@suspendToolGuard MODERATION_ADVICE
+
+        deliver(extended, "The extended video", send)
     }
 
-    // the video, or null when xAI's moderation withheld it, which the model is told rather than failed with
+    // the video, or null when the provider's moderation withheld it, which the model is told rather than failed with
     private suspend fun render(action: String, block: suspend () -> RenderedVideo): RenderedVideo? =
         runCatching { block() }
             .getOrElse { e ->
@@ -182,52 +185,35 @@ class VideoGenTools(
         val ASPECT_RATIOS = listOf("16:9", "9:16", "1:1", "4:3", "3:4", "3:2", "2:3", "21:9", "5:2")
 
         const val MODERATION_ADVICE =
-            "xAI's moderation rejected the finished video, and the rendering was billed all the same. " +
+            "The provider's moderation rejected the finished video, and the rendering was billed all the same. " +
                     "Tell the user it was blocked; a clearly different scene may pass, the same one reworded will not, so do not retry it on your own."
 
         val log = KotlinLogging.logger {}
     }
 }
 
-/**
- * The prompt as xAI reads it, or `null` when it names a picture the call was not given.
- *
- * The model names its references from `<IMAGE_0>` and itself as `<SELF>`, while xAI numbers every image
- * the request carries: a start frame is `<IMAGE_0>`, so [offset] moves the references up by one, and
- * [selfName] is what `<SELF>` becomes — `null` when the bot is not in the video.
- */
-internal fun xaiVideoPrompt(prompt: String, references: Int, offset: Int, selfName: String?): String? {
-    if (IMAGE_TAG.findAll(prompt).any { it.groupValues[1].toInt() >= references }) return null
-    if (SELF_TAG in prompt && selfName == null) return null
+/** Whether [prompt] names only what the call was given: `<IMAGE_0>` and up for its [references], `<SELF>` only [withSelf]. */
+internal fun namesOnlyWhatItWasGiven(prompt: String, references: Int, withSelf: Boolean): Boolean =
+    IMAGE_TAG.findAll(prompt).all { (it.groupValues[1].toIntOrNull() ?: Int.MAX_VALUE) < references } && (withSelf || SELF_TAG !in prompt)
 
-    val numbered = IMAGE_TAG.replace(prompt) { "<IMAGE_${it.groupValues[1].toInt() + offset}>" }
+// how the model names its references and itself in a prompt, whatever the provider numbers them as
+internal val IMAGE_TAG = Regex("""<IMAGE_(\d+)>""")
+internal const val SELF_TAG = "<SELF>"
 
-    return selfName?.let { numbered.replace(SELF_TAG, it) } ?: numbered
-}
+// one request carries every picture or the video inline, so what it uploads is bounded the way an image
+// edit's is: by what a single upload can carry before its timeout, not by any provider's own limit
+private const val MAX_UPLOAD_BYTES = 45L * 1024 * 1024
 
-private val IMAGE_TAG = Regex("""<IMAGE_(\d+)>""")
-private const val SELF_TAG = "<SELF>"
-
-// what xAI reads as a picture: JPEG, PNG and WebP, judged by the bytes rather than a name
-private val PICTURE_TYPES = setOf("image/jpeg", "image/png", "image/webp")
-
-private suspend fun AttachedFile.imageDataUrl(): String {
+private suspend fun AttachedFile.picture(): SourceImage {
     require(kind == AttachedFileKind.IMAGE) { "`$name` is not a picture" }
 
-    val bytes = loadBytes()
-    val type = requireNotNull(sniffedImageMimeType(bytes)?.takeIf { it in PICTURE_TYPES }) { "`$name` is not a JPEG, PNG or WebP picture" }
+    val bytes = loadUpload()
 
-    return dataUrl(type, bytes)
+    return SourceImage(bytes, name, requireNotNull(sniffedImageMimeType(bytes)) { "`$name` is not a picture that can be read" })
 }
 
-// an MP4 opens with its `ftyp` box, four bytes in
-private suspend fun AttachedFile.mp4DataUrl(): String {
-    val bytes = loadBytes()
+private suspend fun AttachedFile.loadUpload(): ByteArray {
+    fileSizeBytes?.let { require(it <= MAX_UPLOAD_BYTES) { "`$name` is too large to send ($it bytes, limit $MAX_UPLOAD_BYTES)" } }
 
-    require(bytes.size > MP4_BRAND_END && bytes.decodeToString(MP4_BRAND_START, MP4_BRAND_END) == "ftyp") { "`$name` is not an MP4 video" }
-
-    return dataUrl("video/mp4", bytes)
+    return loadBytes().also { require(it.size <= MAX_UPLOAD_BYTES) { "`$name` is too large to send (${it.size} bytes, limit $MAX_UPLOAD_BYTES)" } }
 }
-
-private const val MP4_BRAND_START = 4
-private const val MP4_BRAND_END = 8

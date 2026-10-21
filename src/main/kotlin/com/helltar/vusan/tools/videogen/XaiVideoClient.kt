@@ -1,11 +1,14 @@
 package com.helltar.vusan.tools.videogen
 
+import com.helltar.vusan.common.dataUrl
 import com.helltar.vusan.common.rethrowIfCancellation
 import com.helltar.vusan.config.VideoProviderConfig
 import com.helltar.vusan.config.XAI_API_BASE_URL
 import com.helltar.vusan.infra.HttpStatusException
 import com.helltar.vusan.tools.files.FileDownloadClient
 import com.helltar.vusan.tools.files.FileDownloadResult
+import com.helltar.vusan.tools.imagegen.SelfImage
+import com.helltar.vusan.tools.imagegen.SourceImage
 import com.helltar.vusan.tools.isImagineModerated
 import io.github.oshai.kotlinlogging.KotlinLogging
 import io.ktor.client.*
@@ -41,13 +44,19 @@ private val UPLOAD_TIMEOUT = 2.minutes
 private val PASSING_FAILURES = setOf("internal_error", "service_unavailable")
 private const val ATTEMPTS = 2
 
+// what xAI reads as a picture: JPEG, PNG and WebP, judged by the bytes rather than a name
+private val PICTURE_TYPES = setOf("image/jpeg", "image/png", "image/webp")
+
+// how the bot is named in a video where it has no photo, only the notes on how it looks
+private const val SELF_WITHOUT_PHOTO = "the main character"
+
 /**
  * xAI made the video and its moderation withheld it, which it says two ways: a finished job whose address
  * is empty, or a 400 coded as moderated. Nothing in the request turns the filter off.
  */
 class VideoModerationBlocked : IllegalStateException("xAI's moderation withheld the video")
 
-/** A finished video, with its length where xAI states the whole of it. */
+/** A finished video, with its length where it is known. */
 class RenderedVideo(val bytes: ByteArray, val durationSeconds: Int?)
 
 /**
@@ -65,55 +74,69 @@ class XaiVideoClient(
 
     /**
      * A new video from [prompt]: from nothing, from a [startFrame] it opens on, toward an [endFrame] it
-     * closes on, and featuring [references] the prompt names as `<IMAGE_n>`. [aspectRatio] is left out
-     * where a start frame decides it, and [speaker], the bot as the prompt names it, is given the
-     * configured voice as `<AUDIO_0>`.
+     * closes on, and featuring [references] the prompt names from `<IMAGE_0>`, and [self], the bot, as
+     * `<SELF>`. [aspectRatio] is left out where a start frame decides it.
      */
     suspend fun generate(
         prompt: String,
         seconds: Int,
         aspectRatio: String,
         sound: Boolean,
-        startFrame: String? = null,
-        endFrame: String? = null,
-        references: List<String> = emptyList(),
-        speaker: String? = null,
+        startFrame: SourceImage? = null,
+        endFrame: SourceImage? = null,
+        references: List<SourceImage> = emptyList(),
+        self: SelfImage? = null,
     ): RenderedVideo {
-        val voice = config.voice?.takeIf { speaker != null }
-        val referenced = endFrame != null || references.isNotEmpty() || voice != null
+        // xai numbers the images of the prompt across `image` and `reference_images`: a start frame is
+        // <IMAGE_0> and moves the references up by one, and the bot's photo goes after them. a last frame
+        // is a field of its own, which the reference-to-video docs leave out of the count.
+        val photo = self?.reference
+        val offset = if (startFrame != null) 1 else 0
+        val selfName = self?.let { if (photo != null) "<IMAGE_${references.size + offset}>" else SELF_WITHOUT_PHOTO }
+        val pictures = references + listOfNotNull(photo)
+        val voice = config.voice?.takeIf { selfName != null }
+        val referenced = endFrame != null || pictures.isNotEmpty() || voice != null
+
+        val described =
+            listOfNotNull(
+                xaiVideoPrompt(prompt, offset, selfName),
+                self?.appearance?.let { "About $selfName: $it" },
+                voice?.let { "When $selfName speaks, it is with the voice <AUDIO_0>." },
+            ).joinToString("\n\n")
 
         val request =
             XaiVideoGenerationRequest(
                 model = config.model,
-                prompt = voice?.let { "$prompt\n\nWhen $speaker speaks, it is with the voice <AUDIO_0>." } ?: prompt,
+                prompt = described,
                 duration = seconds,
                 resolution = if (referenced && config.resolution == FULL_HD) REFERENCE_MAX_RESOLUTION else config.resolution,
                 aspectRatio = aspectRatio.takeIf { startFrame == null },
                 generateAudio = false.takeUnless { sound },
-                image = startFrame?.let(::XaiMedia),
-                lastFrame = endFrame?.let(::XaiMedia),
-                referenceImages = references.map(::XaiMedia).ifEmpty { null },
+                image = startFrame?.media(),
+                lastFrame = endFrame?.media(),
+                referenceImages = pictures.map { it.media() }.ifEmpty { null },
                 referenceAudios = voice?.let { listOf(XaiVoice(it)) },
             )
 
         return render("generations", { setBody(request) }) { it.video?.duration }
     }
 
-    /** [video] with the change [prompt] describes, as long as it was. */
-    suspend fun edit(prompt: String, video: String): RenderedVideo {
-        val request = XaiVideoEditRequest(EDIT_MODEL, prompt, XaiMedia(video))
+    /** [video], an MP4 called [filename], with the change [prompt] describes, as long as it was. */
+    suspend fun edit(prompt: String, video: ByteArray, filename: String): RenderedVideo {
+        val request = XaiVideoEditRequest(EDIT_MODEL, prompt, mp4Media(video, filename))
 
         return render("edits", { setBody(request) }) { it.video?.duration }
     }
 
     /**
-     * [video] carried on for [seconds] more, as one video. The answer states the added seconds alone,
-     * while the file holds the source and the extension together, so no length is taken from it.
+     * [video], an MP4 called [filename] that runs [sourceSeconds], carried on for [seconds] more as one
+     * video. The answer states the added seconds alone while the file holds both parts, so the length is
+     * the source's plus the request's.
      */
-    suspend fun extend(prompt: String, video: String, seconds: Int): RenderedVideo {
-        val request = XaiVideoExtensionRequest(EDIT_MODEL, prompt, XaiMedia(video), seconds)
+    suspend fun extend(prompt: String, video: ByteArray, filename: String, seconds: Int, sourceSeconds: Int?): RenderedVideo {
+        val request = XaiVideoExtensionRequest(EDIT_MODEL, prompt, mp4Media(video, filename), seconds)
 
-        return render("extensions", { setBody(request) }) { null }
+        return render("extensions", { setBody(request) }) { sourceSeconds?.plus(seconds) }
     }
 
     private suspend fun render(path: String, body: HttpRequestBuilder.() -> Unit, durationOf: (XaiVideoStatus) -> Int?): RenderedVideo =
@@ -182,3 +205,30 @@ class XaiVideoClient(
         val log = KotlinLogging.logger {}
     }
 }
+
+/**
+ * The prompt as xAI reads it: the references the model names from `<IMAGE_0>` moved up by [offset], and
+ * `<SELF>` turned into [selfName], the bot as xAI knows it — `null` when the bot is not in the video, which
+ * the tool has already made sure the prompt does not ask for.
+ */
+internal fun xaiVideoPrompt(prompt: String, offset: Int, selfName: String?): String {
+    val numbered = IMAGE_TAG.replace(prompt) { "<IMAGE_${it.groupValues[1].toInt() + offset}>" }
+
+    return selfName?.let { numbered.replace(SELF_TAG, it) } ?: numbered
+}
+
+private fun SourceImage.media(): XaiMedia {
+    require(contentType in PICTURE_TYPES) { "`$filename` is not a JPEG, PNG or WebP picture" }
+
+    return XaiMedia(dataUrl(contentType, bytes))
+}
+
+// an MP4 opens with its `ftyp` box, four bytes in
+private fun mp4Media(bytes: ByteArray, filename: String): XaiMedia {
+    require(bytes.size > MP4_BRAND_END && bytes.decodeToString(MP4_BRAND_START, MP4_BRAND_END) == "ftyp") { "`$filename` is not an MP4 video" }
+
+    return XaiMedia(dataUrl("video/mp4", bytes))
+}
+
+private const val MP4_BRAND_START = 4
+private const val MP4_BRAND_END = 8

@@ -142,13 +142,41 @@ class VideoGenToolsTest {
         assertEquals(false, body.getValue("generate_audio").jsonPrimitive.content.toBoolean())
     }
 
+    // the reference-to-video docs number `image` and `reference_images` alone; a last frame is a field of its own
+    @Test
+    fun `a last frame leaves the numbering of the references alone`() = runBlocking {
+        val xai = Xai()
+
+        tools(xai).generateVideo("the cat from <IMAGE_0> walks in", startFrame = picture("hill.jpg"), endFrame = picture("sea.jpg"), references = listOf(picture()))
+
+        val body = xai.started.single().second
+        assertContains(body.prompt, "the cat from <IMAGE_1> walks in")
+        assertTrue(body.getValue("last_frame").jsonObject.getValue("url").jsonPrimitive.content.startsWith("data:image/jpeg;base64,"))
+        assertEquals(1, body.getValue("reference_images").jsonArray.size)
+    }
+
     @Test
     fun `the prompt is renumbered for xai and refused when it names what it was not given`() {
-        assertEquals("<IMAGE_1> and <IMAGE_2>", xaiVideoPrompt("<IMAGE_0> and <IMAGE_1>", references = 2, offset = 1, selfName = null))
-        assertEquals("<IMAGE_1> waves", xaiVideoPrompt("<SELF> waves", references = 1, offset = 0, selfName = "<IMAGE_1>"))
-        assertEquals("the main character waves", xaiVideoPrompt("<SELF> waves", references = 0, offset = 0, selfName = "the main character"))
-        assertNull(xaiVideoPrompt("<IMAGE_1> dances", references = 1, offset = 0, selfName = null))
-        assertNull(xaiVideoPrompt("<SELF> dances", references = 0, offset = 0, selfName = null))
+        assertEquals("<IMAGE_1> and <IMAGE_2>", xaiVideoPrompt("<IMAGE_0> and <IMAGE_1>", offset = 1, selfName = null))
+        assertEquals("<IMAGE_1> waves", xaiVideoPrompt("<SELF> waves", offset = 0, selfName = "<IMAGE_1>"))
+        assertEquals("the main character waves", xaiVideoPrompt("<SELF> waves", offset = 0, selfName = "the main character"))
+        assertTrue(namesOnlyWhatItWasGiven("<IMAGE_0> and <SELF>", references = 1, withSelf = true))
+        assertFalse(namesOnlyWhatItWasGiven("<IMAGE_1> dances", references = 1, withSelf = false))
+        assertFalse(namesOnlyWhatItWasGiven("<IMAGE_99999999999> dances", references = 1, withSelf = false))
+        assertFalse(namesOnlyWhatItWasGiven("<SELF> dances", references = 0, withSelf = false))
+    }
+
+    @Test
+    fun `a picture xai cannot read or an upload too large is refused before anything is started`() = runBlocking {
+        val xai = Xai()
+        val gif = AttachedFile("cat.gif", 16, "image/gif", AttachedFileKind.IMAGE) { "GIF89a".encodeToByteArray() + ByteArray(10) }
+        val huge = AttachedFile("huge.jpg", 46L * 1024 * 1024, "image/jpeg", AttachedFileKind.IMAGE) { error("not loaded") }
+        val clip = AttachedFile("long.mp4", 46L * 1024 * 1024, "video/mp4", AttachedFileKind.VIDEO) { error("not loaded") }
+
+        assertContains(toolFailure { tools(xai).generateVideo("a fox", startFrame = gif) }, "is not a JPEG, PNG or WebP picture")
+        assertContains(toolFailure { tools(xai).generateVideo("a fox", references = listOf(huge)) }, "is too large to send")
+        assertContains(toolFailure { tools(xai).editVideo("x", video = clip) }, "is too large to send")
+        assertTrue(xai.started.isEmpty())
     }
 
     @Test
