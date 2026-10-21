@@ -2,7 +2,6 @@ package com.helltar.vusan.tools.imagegen
 
 import com.helltar.vusan.common.dataUrl
 import com.helltar.vusan.common.rethrowIfCancellation
-import com.helltar.vusan.config.ImageProviderConfig
 import com.helltar.vusan.config.XAI_API_BASE_URL
 import com.helltar.vusan.infra.HttpStatusException
 import com.helltar.vusan.tools.isImagineModerated
@@ -26,7 +25,12 @@ private val IMAGE_TIMEOUT = 5.minutes
  * No resolution is asked for, which is 1k: Telegram shows a photo at most 1280 pixels on its long side,
  * and 2k comes back as a PNG of seven megabytes for the same picture.
  */
-class XaiImageClient(private val http: HttpClient, private val config: ImageProviderConfig.Xai) : ImageClient {
+class XaiImageClient(
+    private val http: HttpClient,
+    private val apiKey: String,
+    private val model: String,
+    private val quality: String,
+) : ImageClient {
 
     // documented for grok-imagine-image-2.0; an album beyond it is cut down by the tool, which says so
     override val maxEditImages = 5
@@ -58,10 +62,10 @@ class XaiImageClient(private val http: HttpClient, private val config: ImageProv
     // `auto` is what an omitted quality means, and the models before grok-imagine-image-2.0 take no quality at all
     private fun request(prompt: String, framing: ImageFraming) =
         XaiImageRequest(
-            model = config.model,
+            model = model,
             prompt = prompt,
             aspectRatio = framing.aspectRatio,
-            quality = config.quality.takeUnless { it == "auto" },
+            quality = quality.takeUnless { it == "auto" },
             responseFormat = "b64_json",
         )
 
@@ -69,7 +73,7 @@ class XaiImageClient(private val http: HttpClient, private val config: ImageProv
         val response =
             runCatching {
                 http.post("$XAI_IMAGES_URL/$path") {
-                    bearerAuth(config.apiKey)
+                    bearerAuth(apiKey)
                     contentType(ContentType.Application.Json)
 
                     timeout {

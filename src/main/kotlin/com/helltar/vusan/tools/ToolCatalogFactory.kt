@@ -118,6 +118,7 @@ class ToolCatalogFactory(
     private val imageDownloadClient = ImageDownloadClient(fileDownloadClient)
     private val elevenLabsTts = config.elevenLabsTts
     private val image = config.image
+    private val video = config.video
     private val imageVisionClient = vision?.let { ImageVisionClient(it.client, it.model, it.options) }
     private val telegramChannelClient = TelegramChannelClient(fileDownloadClient)
     private val ytDlpRunner = YtDlpRunner(config.ytDlpCookiesFile)
@@ -181,11 +182,11 @@ class ToolCatalogFactory(
                 OpenAiImageClient(http, auth, image.model, image.quality)
             }
 
-            is ImageProviderConfig.Xai -> XaiImageClient(http, image)
+            is ImageProviderConfig.Xai -> XaiImageClient(http, image.apiKey, image.model, image.quality)
         }
 
     private val videoClient =
-        when (val video = config.video) {
+        when (video) {
             null -> null
             is VideoProviderConfig.Xai -> XaiVideoClient(http, video, fileDownloadClient)
         }

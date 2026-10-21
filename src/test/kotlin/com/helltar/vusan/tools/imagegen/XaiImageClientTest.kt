@@ -48,7 +48,7 @@ class XaiImageClientTest {
                 },
             )
 
-        return XaiImageClient(http, config)
+        return XaiImageClient(http, config.apiKey, config.model, config.quality)
     }
 
     private fun JsonObject.text(key: String): String? = this[key]?.jsonPrimitive?.content

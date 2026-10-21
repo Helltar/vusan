@@ -454,7 +454,7 @@ class ImageGenToolsTest {
             )
         val xai = ImageProviderConfig.Xai(apiKey = "xai-test")
 
-        return ImageGenTools(XaiImageClient(http, xai), xai, outbox, attached, selfImage)
+        return ImageGenTools(XaiImageClient(http, xai.apiKey, xai.model, xai.quality), xai, outbox, attached, selfImage)
     }
 
     private fun png(width: Int, height: Int): ByteArray =
