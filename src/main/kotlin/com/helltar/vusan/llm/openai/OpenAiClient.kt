@@ -159,7 +159,6 @@ class OpenAiClient(
                                     buildJsonObject {
                                         put("type", "input_image")
                                         put("image_url", part.dataUrl())
-                                        put("detail", "auto")
                                     }
 
                                 else -> null
