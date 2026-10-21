@@ -1,152 +1,137 @@
 # The sandbox shell
 
-One persistent Linux home **per person, across all chats**. It runs Bash, works on projects, converts
-documents and media, installs user-local dependencies and sends the results back; files survive new
-messages, `/clear`, a stopped container and a restarted service. Different people have separate homes,
-and the same person uses the same files in private chat and in every group, while conversation history
-stays separate per chat.
+One persistent Linux home **per person, across all chats**. There the agent runs Bash, works on
+projects, converts documents and media, installs user-local dependencies and sends the results back.
+Files survive new messages, `/clear` and restarts. Each person has their own home and finds the same
+files in private chat and in every group, while conversation history stays separate per chat.
 
 It runs on **[Regolith](https://github.com/reified-io/regolith)**, a self-hosted sandbox server with
-its own deployment and documentation. This bot is one of its clients: it asks for the sandbox filed
-under the person, then runs commands, moves files and reads output over HTTP. How a sandbox is
-isolated, which image it runs and what it can reach are set on the server, and Regolith's
-documentation covers them.
+its own deployment and documentation. The bot is one of its clients: it asks for the person's sandbox,
+then runs commands, moves files and reads output over HTTP. Isolation, the image and what a sandbox
+can reach are set on the server and documented by Regolith.
 
 ## The server
 
-Regolith runs on an ordinary Linux Docker host. A machine of its own is the recommended setup, since
-it runs commands the model wrote and holds the Docker socket to do it, though it also runs beside the
-bot. Installing it, generating its token and checking the host before the first start are covered in
+Regolith runs on an ordinary Linux Docker host. Give it a machine of its own if you can — it runs
+commands the model wrote and holds the Docker socket to do it — though it also runs beside the bot.
+Installing it, making its token and checking the host are in
 [Regolith's documentation](https://github.com/reified-io/regolith).
 
-The **sandbox image** is set on the server, and the bot assumes only two things about it: there
-is no `sudo`, and nothing in particular is installed. The model is told to check what a task needs and
-to report a missing system package rather than work around it, so a deployment that wants Pandoc,
-FFmpeg, ImageMagick or a browser points the server at an image carrying them — Regolith's own
-[`regolith-sandbox-full`](https://github.com/reified-io/regolith/blob/main/docs/configuration.md#sandbox-images)
-is one.
+The server has to run **Regolith 0.7**: the bot talks to it through Regolith's own client, which reads
+that release's protocol and does not understand another minor version.
+
+The bot assumes only two things about the **sandbox image**: there is no `sudo`, and nothing in
+particular is installed. The model checks what a task needs and reports a missing system package
+rather than working around it, so for Pandoc, FFmpeg, ImageMagick or a browser, point the server at an
+image that has them — such as Regolith's own
+[`regolith-sandbox-full`](https://github.com/reified-io/regolith/blob/main/docs/configuration.md#sandbox-images).
 
 ## Pointing the bot at it
 
-Out of the box Regolith publishes its API on `127.0.0.1:8080`, which only its own machine reaches. The
-bot in its container cannot, even on that machine, so publish the API on an address the bot can use —
-a private network or a tunnel, where the sandbox machine is `10.0.0.4` here. In the server's `.env`:
+By default Regolith listens on `127.0.0.1:8080`, which the bot's container cannot reach even on the
+same machine. Publish the API on an address the bot can use — a private network or a tunnel. With the
+sandbox machine at `10.0.0.4`, in the server's `.env`:
 
 ```dotenv
 REGOLITH_PUBLISH=10.0.0.4:8080
 ```
 
-Then two values in the bot's `.env`, and the shell tools appear:
+And in the bot's `.env`, after which the shell tools appear:
 
 ```dotenv
 REGOLITH_URL=http://10.0.0.4:8080
 REGOLITH_TOKEN=<the same token>
 ```
 
-A bot run from source on the server's own machine needs none of that: `http://127.0.0.1:8080` works
-as it is.
+A bot run from source on the server's own machine can use `http://127.0.0.1:8080` as it is. Without
+both values the tools are not registered and the bot never mentions them; see
+[configuration](configuration.md#sandbox).
 
-Both a URL and a token must be present, or the tools are not registered and the bot never mentions
-them — see
-[configuration](configuration.md#sandbox). The bot never reaches the sandbox host any other way: one
-token, one HTTPS or private address, no Docker socket on this side.
-
-The server has to run **Regolith 0.7**. The bot talks to it through Regolith's own client, which reads
-the server's answers by that release's protocol, so a server from another minor version is not
-understood.
-
-Each person is an alias on that server — `telegram:<telegram id>` — and the sandbox behind it is created on
-first use with the server's own defaults. The alias goes no further than the server, which addresses the
-sandbox by an id of its own making. Everything else — image, memory, home size, idle stop, retention, network
-policy — is configured on the server, and the bot reads the limits it has to respect from `GET /v1/info`
-instead of keeping its own copy.
+- **One way in** — the bot reaches the sandbox host only through that address and token, never through
+  a Docker socket.
+- **One sandbox per person** — filed on the server under an alias, `telegram:<telegram id>`, and created
+  on first use with the server's defaults.
+- **The server's settings** — image, memory, home size, idle stop, retention and network policy are set
+  there. The bot reads the limits it has to respect from `GET /v1/info` and keeps no copy.
 
 ## Files
 
-- **The turn's own directory** — before every command, write, edit or send, the turn's files reach
-  `turns/<yyMMdd-HHmmss>/`, named by when the turn started: every file the message carried, an album's
-  included, as `00-1-<name>`; whatever the agent's other tools made — a picture it drew, speech it voiced,
-  a video or track it fetched — as `05-1-<name>`; and what searches, pages, transcripts and vision found
-  as `03-<tool>.txt`. The tool result names each path, and repeated filenames never overwrite. The last
-  three turns' directories are kept and older ones removed; the group's transcript, tasks and memory are
-  never copied there.
-- **Back out to the other tools** — any file in the home can be handed to the agent's other tools as
+- **The turn's own directory** — before every command, write, edit or send, the turn's files land in
+  `turns/<yyMMdd-HHmmss>/`: what the message carried, an album included, as `00-1-<name>`; what the
+  agent's other tools made — a drawn picture, voiced speech, a fetched video — as `05-1-<name>`; and
+  what searches, pages, transcripts and vision found as `03-<tool>.txt`. The tool result names each
+  path. The last three turns' directories are kept. The group's transcript, tasks and memory are never
+  copied there.
+- **Back out to other tools** — any file in the home can be handed to another tool as
   `sandbox:<path>`: a cut piece of video to watch, frames to look at, a recording to transcribe, a
-  picture to edit, a text for the voice to read.
+  picture to edit, a text to read aloud.
 - **Paths** — relative to the home, `/home/sandbox`. `writeSandboxFile` replaces a file atomically
-  and creates parent directories; removing a file is `rm` in `runCommand`.
-- **Reading and editing** — `readSandboxFile` returns a text file with line numbers, a range of lines
-  at a time, and says where to continue; `editSandboxFile` replaces one exact passage, which has to
-  occur once unless every occurrence is meant, so a change to a long file costs the passage rather than
-  the whole file. Both refuse binary files and files over 2 MB, which the shell handles.
-- **`resetSandbox`** — deletes the sandbox with its home; the next command starts in an empty one.
-  For a home too full, too broken or too tangled to repair file by file. A site published from it
-  goes down with it, and its address is never served again.
-- **Privacy** — what a command creates stays in the sandbox until the agent sends it. One home per
-  person: a request in a group reaches the same files as private chat. Sharing files across chats is
-  intentional; sharing raw history is not.
+  and creates parent directories; removing one is `rm` in `runCommand`.
+- **Reading and editing** — `readSandboxFile` returns a text file with line numbers, a range at a time.
+  `editSandboxFile` replaces one exact passage, so a change to a long file costs the passage rather
+  than the whole file. Both refuse binary files and files over 2 MB, which the shell handles.
+- **`resetSandbox`** — deletes the sandbox with its home, for one too full or tangled to repair file
+  by file. A site published from it goes down too, and its address is never served again.
+- **Privacy** — what a command creates stays in the sandbox until the agent sends it. A request in a
+  group reaches the same files as private chat: files are shared across chats on purpose, history is
+  not.
 
 ## Commands
 
 Every command is a fresh shell starting at the home.
 
-- **Nothing carries over** — use `cd project && ...` explicitly; shell variables and the working
-  directory do not survive between commands, and nothing is sourced before a command, `~/.profile`
-  included, so environment setup goes into the command itself.
-- **No terminal** — commands get no stdin and no TTY, so an interactive prompt ends rather than hangs.
-- **Long commands do not block** — the call returns in about ten seconds with a job id, and the agent
-  reads more output from the byte offset it was given or cancels the job. Output is recorded on the
-  server, so nothing is lost between reads.
-- **Canceling** stops that command and every process it started, background servers included; other
-  commands keep running.
-- **History outlives the chat** — asking for recent commands with an empty job id works after
-  `/clear`.
-- **A killed command says why** — a command the session's memory limit killed reports `out of memory`
-  and one that hit the process limit says so, instead of a bare exit code.
+- **Nothing carries over** — the working directory and shell variables do not survive between
+  commands, and nothing is sourced first, `~/.profile` included, so `cd project && …` and any
+  environment setup go into the command itself.
+- **No terminal** — no stdin and no TTY, so an interactive prompt ends rather than hangs.
+- **Long commands do not block** — after about ten seconds the call returns a job id; the agent reads
+  more output from the offset it was given, or cancels the job. Output is kept on the server, so
+  nothing is lost between reads.
+- **Canceling** — stops that command and every process it started, background servers included.
+- **History outlives the chat** — recent commands can be listed even after `/clear`.
+- **A killed command says why** — `out of memory`, or the process limit, instead of a bare exit code.
 
 ## Sending results
 
-`sendFromSandbox` delivers finished files to the chat: images as photos, GIFs as animations, videos as
-videos, anything else as a document. The model can ask for another kind for the whole call: every file
-as a document, or a `.gif` or soundless `.mp4` as an animation — which is how an edited GIF goes back,
-since a GIF in a chat is itself a soundless MP4. At most 10 files and 50 MB per call, and a file kind
-the chat refuses is named in the result rather than reported as sent.
+`sendFromSandbox` delivers finished files: images as photos, GIFs as animations, videos as videos,
+anything else as a document. The model can override that for the whole call — everything as a
+document, or a `.gif` or soundless `.mp4` as an animation, which is how an edited GIF goes back. At
+most 10 files and 50 MB per call; a kind the chat refuses is named in the result rather than reported
+as sent.
 
 ## Limits
 
-The server sets them and reports them in `GET /v1/info`; on top of that, the bot enforces a few of its
-own:
+The server sets most limits and reports them in `GET /v1/info`. The bot adds a few of its own:
 
-| Bound | Where it comes from |
-|---|---|
-| Command timeout | The server's default and ceiling; the bot trims what the model asks for to that ceiling |
-| Output per read | 16 KB, then the model continues from the offset it was given |
-| Command text | 16 000 characters |
-| File write through a tool | 400 000 characters of text |
-| Files out of the sandbox | 10 files and 50 MB per call |
-| A text file read or edited through a tool | 2 MB, and 60 000 characters per read |
-| A path, a job id | 400 and 64 characters |
-| Attachment into the sandbox | 20 MB |
-| What the turn made, into `turns/` | 50 MB per file; a turn keeps at most 200 MB of files for its tools in all; the last three turns' directories |
-| A file handed back to a tool as `sandbox:<path>` | 50 MB, or 1 MB where it stands in for text |
-| Home size, memory, CPU, processes | The server's per-sandbox settings |
+| Bound                                    | Limit                                                          |
+|------------------------------------------|----------------------------------------------------------------|
+| Command timeout                          | The server's ceiling; the bot trims what the model asks for    |
+| Output per read                          | 16 KB, then the model continues from the offset it was given   |
+| Command text                             | 16,000 characters                                              |
+| File written through a tool              | 400,000 characters of text                                     |
+| Text file read or edited through a tool  | 2 MB, and 60,000 characters per read                           |
+| Files sent out of the sandbox            | 10 files and 50 MB per call                                    |
+| Attachment copied in                     | 20 MB                                                          |
+| What a turn made, in `turns/`            | 50 MB per file, 200 MB per turn                                |
+| A file handed to a tool as `sandbox:`    | 50 MB, or 1 MB where it stands in for text                     |
+| A path, a job id                         | 400 and 64 characters                                          |
+| Home size, memory, CPU, processes        | The server's per-sandbox settings                              |
 
-A home is a fixed-size disk: when it fills, commands fail with `No space left on device` and the fix
+A home is a fixed-size disk: when it fills, commands fail with `No space left on device`, and the fix
 is to delete what is no longer needed.
 
 ## When a home goes away
 
-- **Idle** — the server stops a sandbox that has been idle for a while. Files stay; processes do not,
-  so a background server started by an earlier command is gone by the next message.
-- **Retention** — a sandbox nobody has used for the server's retention window is deleted with its
-  home. While the person has a site published only the home goes, and the site stays until its own
-  term (see [sites](sites.md)). The next command creates an empty one.
-- **Reset** — `resetSandbox`, immediately and permanently, together with the site it published.
+- **Idle** — the server stops a sandbox idle for a while. Files stay; processes do not, so a
+  background server started earlier is gone by the next message.
+- **Retention** — a sandbox unused for the server's retention window is deleted with its home. A
+  published site outlives it until its own term ends (see [sites](sites.md)). The next command
+  starts an empty home.
+- **Reset** — `resetSandbox`, immediately and permanently, together with its site.
 
-The bot keeps no copy of a home; backing one up is done on the Regolith host.
+The bot keeps no copy of a home; back one up on the Regolith host.
 
 ## Removing it
 
-Unset `REGOLITH_URL` and restart the bot: the shell tools disappear, and with them site publishing,
-which has nothing to publish without a sandbox. The sandboxes stay on the server until deleted
-there.
+Unset `REGOLITH_URL` and restart the bot. The shell tools disappear, and site publishing with them;
+the sandboxes stay on the server until deleted there.
