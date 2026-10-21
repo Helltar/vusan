@@ -44,10 +44,9 @@ Then start it:
 docker compose up -d
 ```
 
-That starts the bot, which is the whole deployment. Two capabilities stay off until it can reach a
-[Regolith](docs/sandbox.md) server: the sandbox shell, which runs model-authored commands, and
-[publishing to the web](docs/sites.md), which puts what was built there at a public address. Both come
-from that one server, which is a separate project with a machine of its own as the recommendation.
+That is the whole deployment. The [sandbox shell](docs/sandbox.md) and
+[publishing to the web](docs/sites.md) stay off until the bot can reach a Regolith server — a separate
+project that runs the commands the model writes, best kept on a machine of its own.
 
 ### Add it to a group
 
@@ -83,14 +82,13 @@ Or run it on JDK 21, with `ffmpeg` and `yt-dlp` on `PATH`:
 ### At home in a group
 
 - **Called by name** — answers when you say its name or follow up, no mention needed.
-- **Speaks up on its own** — now and then reacts to a message, drops a line or a sticker without
-  being called, and notices when someone has gone quiet.
+- **Speaks up on its own** — now and then reacts, drops a line or a sticker, or asks after someone.
 - **What the group said** — recaps the whole conversation and answers questions about who said what.
 - **Diary** — writes down what each day in a group was like and picks up yesterday's thread.
-- **Each person apart** — keeps everyone's conversation, memory and sandbox their own in one chat.
-- **Replies** — uses the message you reply to as context, including other people's files and
-  pictures.
+- **Each person apart** — everyone in a chat keeps their own conversation, memory and sandbox.
+- **Replies** — reads the message you reply to, other people's files and pictures included.
 - **Private replies** — moves the answer into your DMs when you ask.
+- **Leaves you be** — stops writing to you on its own when you ask, until you say otherwise.
 - **Stickers** — learns your chat's sticker collection and picks fitting replies from it.
 - **Forum topics** — answers, notices and scheduled reminders stay in the topic they belong to.
 
@@ -105,31 +103,23 @@ Or run it on JDK 21, with `ffmpeg` and `yt-dlp` on `PATH`:
 - **Web search** — searches the web and reads the pages it finds.
 - **Links** — reads a web page you send and answers from it.
 - **Image search** — finds pictures on the web and sends them.
-- **Telegram channels** — recaps public channel posts by day or week, searches by keyword, and reads
-  memes and screenshots.
+- **Telegram channels** — recaps and searches public channel posts, pictures included.
 - **YouTube video and audio** — finds videos by name or link and sends the video or audio track.
 - **YouTube transcripts** — summarizes videos and answers questions using their subtitles.
 
 ### Creates
 
-- **Its own sandbox** — runs code, builds projects, converts media and analyzes data, then sends
-  the results. Each person gets a private Linux home that persists across chats, and the bot edits
-  what it built there in place rather than rewriting it.
-- **One job, many tools** — passes what one tool made to the next, like voicing your video in its
-  own voice with itself in the frame.
-- **Keeps you posted** — says what it is about to do before a long job, and sends a first working
-  version or a finding worth knowing while the rest is still in progress.
-- **Web pages** — puts a page, game or small app it built on the internet at your own address, and
-  hands you the link.
+- **Its own sandbox** — a private Linux home per person for code, projects, media and data.
+- **One job, many tools** — chains its tools, like putting itself into your video and voicing it.
+- **Web pages** — publishes a page, game or small app it built at your own address.
 - **Images** — draws from descriptions, edits your pictures, and merges several into one.
 - **Voice replies** — answers out loud with voice messages.
 - **Round video messages** — replies with its own face and voice in a video circle.
-- **GIFs, memes and clips** — finds a fitting GIF, meme picture or short clip, or makes a GIF from
-  your video.
+- **GIFs, memes and clips** — finds a fitting GIF, meme or clip, or turns your video into a GIF.
 
 ### In the chat
 
-- **Live progress** — shows what it is doing, and says what it is about to make before a long job.
+- **Live progress** — shows what it is doing, and sends early results while a long job runs.
 - **Stop button** — ends a running answer from the progress message, in groups too.
 - **Inline choices** — asks for decisions or confirmation with buttons and continues when you tap.
 - **Edits** — answers when you add its mention, or its name, to an earlier message.
@@ -137,25 +127,22 @@ Or run it on JDK 21, with `ffmpeg` and `yt-dlp` on `PATH`:
 ### Speaks Telegram
 
 - **Reactions** — sometimes an emoji on your message is the whole answer.
-- **Polls and quizzes** — creates Telegram polls and quizzes, and follows who answered what in a quiz.
-- **Files and links** — sends documents, downloads links, and retrieves files behind chat stickers
-  and pictures.
+- **Polls and quizzes** — creates polls and quizzes, and follows who answered what.
+- **Files** — sends documents, downloads links, and fetches the file behind a sticker or picture.
 - **Long structured answers** — formats longer replies with headings, tables, and checklists.
 
 ### Remembers
 
 - **Conversation history** — keeps context with recent messages and recaps, separately in each chat.
 - **Sense of time** — notices gaps between conversations.
-- **Memory** — remembers facts about you and the group across history resets; forgets them on
-  request.
-- **Scheduled tasks** — runs tasks once or on a recurring schedule; lets you pause, resume, edit or
-  cancel.
+- **Memory** — keeps facts about you and the group through history resets, and forgets on request.
+- **Scheduled tasks** — runs tasks once or on a schedule, which you can pause, edit or cancel.
 - **Follow-ups** — checks back after an exam, interview or other event you mentioned.
 
 ## Documentation
 
 - [Configuration](docs/configuration.md) — every setting, from the required five onward.
-- [The sandbox shell](docs/sandbox.md) — what the persistent home does, and how to deploy it.
+- [The sandbox shell](docs/sandbox.md) — what the persistent home does, and how to connect it.
 - [Publishing to the web](docs/sites.md) — how a page built in the sandbox gets an address.
 - [Architecture](docs/architecture.md) — the layers, and how a message flows through them.
 
