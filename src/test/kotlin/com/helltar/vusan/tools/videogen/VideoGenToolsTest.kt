@@ -13,6 +13,7 @@ import com.helltar.vusan.tools.imagegen.SelfImage
 import com.helltar.vusan.tools.imagegen.SourceImage
 import com.helltar.vusan.tools.toolFailure
 import io.ktor.client.engine.mock.*
+import io.ktor.client.request.*
 import io.ktor.http.*
 import io.ktor.http.content.*
 import kotlinx.coroutines.runBlocking
@@ -22,6 +23,7 @@ import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.jsonArray
 import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.jsonPrimitive
+import java.io.IOException
 import kotlin.test.Test
 import kotlin.test.assertContains
 import kotlin.test.assertContentEquals
@@ -164,6 +166,66 @@ class VideoGenToolsTest {
         assertFalse(namesOnlyWhatItWasGiven("<IMAGE_1> dances", references = 1, withSelf = false))
         assertFalse(namesOnlyWhatItWasGiven("<IMAGE_99999999999> dances", references = 1, withSelf = false))
         assertFalse(namesOnlyWhatItWasGiven("<SELF> dances", references = 0, withSelf = false))
+    }
+
+    // the job renders and is billed whatever happens to one look at it
+    @Test
+    fun `a look at the job that failed in passing is made again, a refused one is not`() = runBlocking {
+        var polls = 0
+
+        fun tools(failure: (MockRequestHandleScope.() -> HttpResponseData)?): VideoGenTools {
+            polls = 0
+
+            val http =
+                Http.createClient(
+                    MockEngine { request ->
+                        val json = headersOf(HttpHeaders.ContentType, ContentType.Application.Json.toString())
+
+                        when {
+                            request.url.toString() == VIDEO_URL -> respond(VIDEO, HttpStatusCode.OK, headersOf(HttpHeaders.ContentType, "video/mp4"))
+                            request.method == HttpMethod.Post -> respond("""{"request_id":"job-1"}""", HttpStatusCode.OK, json)
+                            ++polls < 3 && failure != null -> failure()
+                            else -> respond(done(), HttpStatusCode.OK, json)
+                        }
+                    },
+                )
+
+            return VideoGenTools(XaiVideoClient(http, VideoProviderConfig.Xai(apiKey = "xai-test"), FileDownloadClient(http), pollInterval = Duration.ZERO), BotOutbox())
+        }
+
+        assertContains(tools { respondError(HttpStatusCode.BadGateway) }.generateVideo("a fox"), "queued")
+        assertEquals(3, polls)
+        assertContains(tools { throw IOException("connection reset") }.generateVideo("a fox"), "queued")
+        assertEquals(3, polls)
+        assertContains(tools { respond("""{"status":"queued"}""", HttpStatusCode.OK, headersOf(HttpHeaders.ContentType, "application/json")) }.generateVideo("a fox"), "queued")
+        assertEquals(3, polls, "a status xai does not document is waited out")
+        assertContains(toolFailure { tools { respondError(HttpStatusCode.NotFound) }.generateVideo("a fox") }, "404")
+        assertEquals(1, polls)
+    }
+
+    @Test
+    fun `a download of the finished video lost in passing is made again`() = runBlocking {
+        var downloads = 0
+        val outbox = BotOutbox()
+        val http =
+            Http.createClient(
+                MockEngine { request ->
+                    val json = headersOf(HttpHeaders.ContentType, ContentType.Application.Json.toString())
+
+                    when {
+                        request.url.toString() == VIDEO_URL && ++downloads < 3 -> respondError(HttpStatusCode.ServiceUnavailable)
+                        request.url.toString() == VIDEO_URL -> respond(VIDEO, HttpStatusCode.OK, headersOf(HttpHeaders.ContentType, "video/mp4"))
+                        request.method == HttpMethod.Post -> respond("""{"request_id":"job-1"}""", HttpStatusCode.OK, json)
+                        else -> respond(done(), HttpStatusCode.OK, json)
+                    }
+                },
+            )
+
+        VideoGenTools(XaiVideoClient(http, VideoProviderConfig.Xai(apiKey = "xai-test"), FileDownloadClient(http), pollInterval = Duration.ZERO), outbox)
+            .generateVideo("a fox")
+
+        assertEquals(3, downloads)
+        assertIs<BotOutput.Video>(outbox.pending.single().output)
     }
 
     @Test

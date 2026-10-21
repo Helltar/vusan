@@ -17,6 +17,7 @@ import io.ktor.client.plugins.*
 import io.ktor.client.request.*
 import io.ktor.http.*
 import kotlinx.coroutines.delay
+import java.io.IOException
 import kotlin.time.Duration
 import kotlin.time.Duration.Companion.minutes
 import kotlin.time.Duration.Companion.seconds
@@ -43,6 +44,14 @@ private val UPLOAD_TIMEOUT = 2.minutes
 // on the next try. what was wrong with the request itself fails the same way again, so it is not repeated.
 private val PASSING_FAILURES = setOf("internal_error", "service_unavailable")
 private const val ATTEMPTS = 2
+
+// xai documents pending, done, failed and expired; a status it may add, such as queued, is waited out rather
+// than read as the end of the job
+private val FINAL_STATUSES = setOf("done", "failed", "error", "expired", "cancelled")
+
+// the finished address lives four hours and the render behind it is paid for, so a failed download is made
+// again: the download client reports a status as plain text, and a few more tries at one address cost nothing
+private const val DOWNLOAD_ATTEMPTS = 3
 
 // what xAI reads as a picture: JPEG, PNG and WebP, judged by the bytes rather than a name
 private val PICTURE_TYPES = setOf("image/jpeg", "image/png", "image/webp")
@@ -178,15 +187,26 @@ class XaiVideoClient(
         }
     }
 
+    // the job renders, and is billed, whether or not anyone asks about it, so a look that failed in passing
+    // is made again until the deadline rather than throwing the paid video away
     private suspend fun await(requestId: String): XaiVideoStatus {
         val deadline = TimeSource.Monotonic.markNow() + RENDER_DEADLINE
 
         while (true) {
             delay(pollInterval)
 
-            val status = http.get("$XAI_VIDEOS_URL/${requestId.encodeURLPathPart()}") { bearerAuth(config.apiKey) }.body<XaiVideoStatus>()
+            val status =
+                runCatching { http.get("$XAI_VIDEOS_URL/${requestId.encodeURLPathPart()}") { bearerAuth(config.apiKey) }.body<XaiVideoStatus>() }
+                    .getOrElse { e ->
+                        e.rethrowIfCancellation()
 
-            if (status.status != "pending") return status
+                        if (!e.isPassing()) throw e
+
+                        log.warn { "xAI video poll failed, asking again: requestId=[$requestId] error=[${e.message}]" }
+                        null
+                    }
+
+            if (status != null && status.status in FINAL_STATUSES) return status
 
             check(deadline.hasNotPassedNow()) { "The video was not ready after ${RENDER_DEADLINE.inWholeMinutes} minutes" }
         }
@@ -195,10 +215,25 @@ class XaiVideoClient(
     private suspend fun finished(status: XaiVideoStatus, durationSeconds: Int?): RenderedVideo {
         val url = status.video?.takeIf { it.respectModeration }?.url?.takeIf { it.isNotBlank() } ?: throw VideoModerationBlocked()
 
-        return when (val download = downloads.download(url, "video.mp4")) {
+        val download = retrying(DOWNLOAD_ATTEMPTS) { downloads.download(url, "video.mp4") }
+
+        return when (download) {
             is FileDownloadResult.Success -> RenderedVideo(download.bytes, durationSeconds)
             is FileDownloadResult.TooLarge -> error("The finished video is larger than can be sent (${download.sizeBytes ?: "over the limit"} bytes)")
         }
+    }
+
+    private suspend fun <T> retrying(attempts: Int, block: suspend () -> T): T {
+        repeat(attempts - 1) {
+            runCatching { return block() }
+                .onFailure { e ->
+                    e.rethrowIfCancellation()
+                    log.warn { "xAI video download failed, trying again: error=[${e.message}]" }
+                    delay(pollInterval)
+                }
+        }
+
+        return block()
     }
 
     private companion object {
@@ -216,6 +251,11 @@ internal fun xaiVideoPrompt(prompt: String, offset: Int, selfName: String?): Str
 
     return selfName?.let { numbered.replace(SELF_TAG, it) } ?: numbered
 }
+
+// a status that says nothing about the job: xai's side out for a moment, or the answer lost on the way
+private fun Throwable.isPassing(): Boolean =
+    this is IOException ||
+            (this is HttpStatusException && (status == HttpStatusCode.TooManyRequests.value || status >= HttpStatusCode.InternalServerError.value))
 
 private fun SourceImage.media(): XaiMedia {
     require(contentType in PICTURE_TYPES) { "`$filename` is not a JPEG, PNG or WebP picture" }
