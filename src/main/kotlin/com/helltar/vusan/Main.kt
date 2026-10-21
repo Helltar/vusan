@@ -1,14 +1,13 @@
 package com.helltar.vusan
 
-import com.helltar.vusan.config.LlmProviderConfig
 import com.helltar.vusan.agent.AgentFactory
 import com.helltar.vusan.agent.AgentRunner
 import com.helltar.vusan.agent.ChatFloor
+import com.helltar.vusan.agent.ContextWindowPolicy
+import com.helltar.vusan.agent.DEFAULT_PERSONALITY
 import com.helltar.vusan.agent.TurnSurroundings
 import com.helltar.vusan.agent.addressing.AmbientAddressing
 import com.helltar.vusan.agent.addressing.LlmAddressingClassifier
-import com.helltar.vusan.agent.ContextWindowPolicy
-import com.helltar.vusan.agent.DEFAULT_PERSONALITY
 import com.helltar.vusan.agent.conversation.ConversationRepository
 import com.helltar.vusan.agent.conversation.LlmConversationCompactor
 import com.helltar.vusan.agent.grouplog.GroupLogRepository
@@ -22,15 +21,17 @@ import com.helltar.vusan.agent.presence.LlmDiaryWriter
 import com.helltar.vusan.agent.presence.LlmInitiativeMind
 import com.helltar.vusan.agent.providerOutage
 import com.helltar.vusan.config.*
-import com.helltar.vusan.llm.codex.CodexAuthStore
-import com.helltar.vusan.llm.codex.claimCodexClientVersion
-import com.helltar.vusan.llm.FallbackInUse
-import com.helltar.vusan.llm.FallbackLlmClient
-import com.helltar.vusan.llm.LlmClient
+import com.helltar.vusan.config.LlmProviderConfig
+import com.helltar.vusan.config.VideoProviderConfig
 import com.helltar.vusan.infra.Db
 import com.helltar.vusan.infra.Http
 import com.helltar.vusan.infra.Maintenance
 import com.helltar.vusan.infra.createPublicHttpClient
+import com.helltar.vusan.llm.FallbackInUse
+import com.helltar.vusan.llm.FallbackLlmClient
+import com.helltar.vusan.llm.LlmClient
+import com.helltar.vusan.llm.codex.CodexAuthStore
+import com.helltar.vusan.llm.codex.claimCodexClientVersion
 import com.helltar.vusan.request.ChatRef
 import com.helltar.vusan.stt.OpenAiWhisperClient
 import com.helltar.vusan.tasks.TaskScheduler
@@ -40,27 +41,26 @@ import com.helltar.vusan.telegram.PollRegistry
 import com.helltar.vusan.telegram.TelegramBotRunner
 import com.helltar.vusan.telegram.addressingNames
 import com.helltar.vusan.telegram.botProfile
-import com.helltar.vusan.telegram.profilePhotoReference
 import com.helltar.vusan.telegram.callback.InlineChoiceHandler
 import com.helltar.vusan.telegram.callback.TaskMenuHandler
 import com.helltar.vusan.telegram.delivery.TelegramDelivery
 import com.helltar.vusan.telegram.inbound.VoiceTranscriber
-import com.helltar.vusan.tools.ToolCatalogFactory
-import com.helltar.vusan.config.VideoProviderConfig
-import com.helltar.vusan.tools.imagegen.SelfImage
-import com.helltar.vusan.tools.imagegen.resolveSelfImage
+import com.helltar.vusan.telegram.profilePhotoReference
 import com.helltar.vusan.telegram.tools.TelegramToolSets
 import com.helltar.vusan.telegram.tools.sticker.StickerCatalog
+import com.helltar.vusan.tools.ToolCatalogFactory
+import com.helltar.vusan.tools.imagegen.SelfImage
+import com.helltar.vusan.tools.imagegen.resolveSelfImage
 import com.helltar.vusan.tools.vision.ImageVisionClient
 import io.github.oshai.kotlinlogging.KotlinLogging
 import io.ktor.client.*
 import kotlinx.coroutines.cancelAndJoin
 import kotlinx.coroutines.coroutineScope
+import okhttp3.OkHttpClient
+import org.telegram.telegrambots.client.okhttp.OkHttpTelegramClient
 import java.time.Instant
 import java.time.temporal.ChronoUnit
 import kotlin.time.Duration.Companion.seconds
-import okhttp3.OkHttpClient
-import org.telegram.telegrambots.client.okhttp.OkHttpTelegramClient
 
 private val log = KotlinLogging.logger {}
 
