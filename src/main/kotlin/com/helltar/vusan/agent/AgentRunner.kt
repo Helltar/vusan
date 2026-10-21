@@ -422,6 +422,7 @@ private fun tokenUsageLogSummary(usages: List<TokenUsage>): String {
             "inputTokens=${usages.map { it.inputTokens }.sumOrNa()} " +
             "cacheReadTokens=${usages.map { it.cacheReadTokens }.sumOrNa()} " +
             "cacheWriteTokens=${usages.map { it.cacheWriteTokens }.sumOrNa()} " +
+            "cacheWriteLongTokens=${usages.map { it.cacheWriteLongTokens }.sumOrNa()} " +
             "outputTokens=${usages.map { it.outputTokens }.sumOrNa()} " +
             "runTotal=${usages.map { it.totalTokens }.sumOrNa()}"
 }

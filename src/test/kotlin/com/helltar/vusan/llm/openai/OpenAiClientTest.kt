@@ -46,7 +46,7 @@ private const val RESPONSES_REPLY =
          {"type":"message","id":"msg-1","role":"assistant","status":"completed","content":[{"type":"output_text","text":"ok","annotations":[]}]},
          {"type":"function_call","id":"fc-1","call_id":"call-1","name":"lookUp","arguments":"{\"query\":\"cats\"}","status":"completed"}
        ],
-       "usage":{"input_tokens":120,"input_tokens_details":{"cached_tokens":100,"cache_write_tokens":7},"output_tokens":30}}"""
+       "usage":{"input_tokens":120,"input_tokens_details":{"cached_tokens":100,"cache_write_tokens":7,"cache_write_tokens_details":{"ttl_30m_tokens":3,"ttl_12h_tokens":4}},"output_tokens":30}}"""
 
 private const val COMPLETION_REPLY =
     """{"id":"chatcmpl-1","object":"chat.completion","created":0,"model":"deepseek-chat",
@@ -139,6 +139,7 @@ class OpenAiClientTest {
         assertEquals(30, reply.usage?.outputTokens)
         assertEquals(100, reply.usage?.cacheReadTokens)
         assertEquals(7, reply.usage?.cacheWriteTokens)
+        assertEquals(4, reply.usage?.cacheWriteLongTokens)
     }
 
     // the call a cut response ends in may be cut too, so the ceiling is reported over the calls
@@ -249,16 +250,21 @@ class OpenAiClientTest {
     }
 
     // the implicit mode caches each iteration's tool results for the next; the system block is marked so that
-    // a turn longer than the lookback window still reads the one prefix every request shares
+    // a turn longer than the lookback window still reads the one prefix every request shares, and kept for
+    // twelve hours while the tail keeps the request's default
     @Test
-    fun `a gpt-5_6 request asks for implicit caching and marks the system block alone`() = runBlocking {
+    fun `a gpt-5_6 request asks for implicit caching and marks the system block alone for twelve hours`() = runBlocking {
         client().complete(MODEL, request(*basic))
 
         val body = sent.single()
-        assertEquals("implicit", body.getValue("prompt_cache_options").jsonObject.getValue("mode").jsonPrimitive.content)
+        val cacheOptions = body.getValue("prompt_cache_options").jsonObject
+        assertEquals("implicit", cacheOptions.getValue("mode").jsonPrimitive.content)
+        assertNull(cacheOptions["ttl"])
 
         val input = body.getValue("input").jsonArray.map { it.jsonObject }
-        assertTrue(input[0].getValue("content").jsonArray.single().jsonObject.containsKey("prompt_cache_breakpoint"))
+        val breakpoint = input[0].getValue("content").jsonArray.single().jsonObject.getValue("prompt_cache_breakpoint").jsonObject
+        assertEquals("explicit", breakpoint.getValue("mode").jsonPrimitive.content)
+        assertEquals("12h", breakpoint.getValue("ttl").jsonPrimitive.content)
         assertFalse(input[1].getValue("content").jsonArray.single().jsonObject.containsKey("prompt_cache_breakpoint"))
     }
 

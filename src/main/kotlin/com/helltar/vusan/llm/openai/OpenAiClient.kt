@@ -275,6 +275,7 @@ class OpenAiClient(
                         outputTokens = it.int("output_tokens"),
                         cacheReadTokens = details?.int("cached_tokens"),
                         cacheWriteTokens = details?.int("cache_write_tokens"),
+                        cacheWriteLongTokens = (details?.get("cache_write_tokens_details") as? JsonObject)?.int("ttl_12h_tokens"),
                     )
                 },
             model = response.string("model"),

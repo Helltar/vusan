@@ -19,8 +19,8 @@ Part of the [architecture index](../architecture.md).
   most recently written under a key, and one key for the whole deployment would let busy chats evict each other; recaps
   keep a single shared key, their tool-free prefix being identical everywhere — and, from GPT-5.6 on, the cache options
   stated outright (`llm/openai/OpenAiPromptCaching`): the platform's implicit mode, under which each iteration of the loop
-  reads the tool results the one before it added, plus an explicit breakpoint on the stable system block, which the next
-  turn still reads however its history was replayed; a prompt that never repeats, the recap, asks for no caching at all.
+  reads the tool results the one before it added, plus an explicit twelve-hour breakpoint on the stable system block,
+  which the next turn still reads however its history was replayed and hours later; a prompt that never repeats, the recap, asks for no caching at all.
   Reasoning comes back encrypted (`store: false`) and is replayed verbatim through the tool
   loop. `anthropic` asks for `thinking: adaptive` with `block_binding: drop_block` under its beta header — a thinking
   block is bound to the tools and messages before it, and `loadTools` widens the tool list mid-turn, so an

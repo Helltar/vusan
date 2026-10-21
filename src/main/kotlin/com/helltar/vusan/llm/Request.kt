@@ -103,6 +103,8 @@ data class TokenUsage(
     // what the provider served from its prompt cache and what it wrote to it, where it says so
     val cacheReadTokens: Int? = null,
     val cacheWriteTokens: Int? = null,
+    // the part of those writes kept for the provider's longer lifetime, where it splits them
+    val cacheWriteLongTokens: Int? = null,
 ) {
 
     val totalTokens: Int?

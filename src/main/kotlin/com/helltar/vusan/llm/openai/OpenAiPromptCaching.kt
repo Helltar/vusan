@@ -21,6 +21,11 @@ import kotlinx.serialization.json.put
  * turn pushed out of the lookback window. Measured live on 2026-10-08 (gpt-5.6-luna, a three-call turn):
  * reads of 0 → 2512 → 2561, against 0 → 2512 → 2512 with explicit breakpoints alone.
  *
+ * On the Responses API that breakpoint asks for the twelve-hour lifetime, while the implicit tail keeps the
+ * thirty-minute default: the developer block is written at two and a half times the input price instead of
+ * one and a quarter, which pays once a conversation would otherwise rewrite it twice — two gaps longer than
+ * half an hour within the day. Chat Completions is not documented to take the lifetime and keeps the default.
+ *
  * A prompt that never repeats — the history recap, a look at a picture — gets explicit mode with nothing
  * marked, which the API documents as no caching at all; left to the implicit mode, the platform writes
  * the whole prompt at a quarter over the input price for a read nobody makes. Older models know neither
@@ -34,10 +39,10 @@ internal fun withPromptCacheOptions(body: JsonObject, cachePrompt: Boolean): Jso
 
     val marked =
         (body["input"] as? JsonArray)
-            ?.let { markSystemBlock(it, "input_text") }
+            ?.let { markSystemBlock(it, "input_text", LONG_LIVED_BREAKPOINT) }
             ?.let { "input" to it }
             ?: (body["messages"] as? JsonArray)
-                ?.let { markSystemBlock(it, "text") }
+                ?.let { markSystemBlock(it, "text", EXPLICIT_BREAKPOINT) }
                 ?.let { "messages" to it }
             ?: return body
 
@@ -55,10 +60,10 @@ internal fun takesOpenAiPromptCacheOptions(model: String): Boolean {
 
 // the breakpoint goes on the last text block of the first developer or system message: the prefix every
 // request of the deployment shares, and the one the lookup is sure to reach
-private fun markSystemBlock(messages: JsonArray, textBlockType: String): JsonArray? {
+private fun markSystemBlock(messages: JsonArray, textBlockType: String, breakpoint: JsonObject): JsonArray? {
     val index = messages.indexOfFirst { it.role == "developer" || it.role == "system" }.takeIf { it >= 0 } ?: return null
     val message = messages[index] as? JsonObject ?: return null
-    val content = markLastTextBlock(message["content"], textBlockType) ?: return null
+    val content = markLastTextBlock(message["content"], textBlockType, breakpoint) ?: return null
 
     return JsonArray(messages.mapIndexed { position, value -> if (position == index) JsonObject(message + ("content" to content)) else value })
 }
@@ -67,9 +72,9 @@ private val JsonElement.role: String?
     get() = ((this as? JsonObject)?.get("role") as? JsonPrimitive)?.contentOrNull
 
 // a chat completions message may carry its text as a bare string; a breakpoint needs a block to sit on
-private fun markLastTextBlock(content: JsonElement?, textBlockType: String): JsonArray? {
+private fun markLastTextBlock(content: JsonElement?, textBlockType: String, breakpoint: JsonObject): JsonArray? {
     if (content is JsonPrimitive && content.isString) {
-        return JsonArray(listOf(markedTextBlock(buildJsonObject { put("type", textBlockType); put("text", content.content) })))
+        return JsonArray(listOf(markedTextBlock(buildJsonObject { put("type", textBlockType); put("text", content.content) }, breakpoint)))
     }
 
     val blocks = content as? JsonArray ?: return null
@@ -78,14 +83,15 @@ private fun markLastTextBlock(content: JsonElement?, textBlockType: String): Jso
 
     val block = blocks[index] as? JsonObject ?: return null
 
-    return JsonArray(blocks.mapIndexed { blockIndex, value -> if (blockIndex == index) markedTextBlock(block) else value })
+    return JsonArray(blocks.mapIndexed { blockIndex, value -> if (blockIndex == index) markedTextBlock(block, breakpoint) else value })
 }
 
-private fun markedTextBlock(block: JsonObject): JsonObject = JsonObject(block + ("prompt_cache_breakpoint" to EXPLICIT_BREAKPOINT))
+private fun markedTextBlock(block: JsonObject, breakpoint: JsonObject): JsonObject = JsonObject(block + ("prompt_cache_breakpoint" to breakpoint))
 
 private const val CACHE_OPTIONS_MAJOR = 5
 private const val CACHE_OPTIONS_MINOR = 6
 private val GPT_MODEL_VERSION = Regex("""^gpt-(\d+)(?:\.(\d+))?""")
 private val EXPLICIT_BREAKPOINT = buildJsonObject { put("mode", "explicit") }
+private val LONG_LIVED_BREAKPOINT = buildJsonObject { put("mode", "explicit"); put("ttl", "12h") }
 private val EXPLICIT_MODE = buildJsonObject { put("mode", "explicit") }
 private val IMPLICIT_MODE = buildJsonObject { put("mode", "implicit") }
