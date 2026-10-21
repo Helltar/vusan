@@ -91,7 +91,7 @@ answer to its name. More in [Rights in a group](docs/configuration.md#rights-in-
 - **One job, many tools** — chains its tools, like putting itself into your video and voicing it.
 - **Web pages** — publishes a page, game or small app it built at your own address.
 - **Images** — draws from descriptions, edits your pictures, and merges several into one.
-- **Videos** — makes short videos with sound, brings your photos to life, and edits or extends a clip.
+- **Video clips** — makes short videos with sound, brings your photos to life, and edits or extends a clip.
 - **Voice replies** — answers out loud with voice messages.
 - **Round video messages** — replies with its own face and voice in a video circle.
 - **GIFs, memes and clips** — finds a fitting GIF, meme or clip, or turns your video into a GIF.

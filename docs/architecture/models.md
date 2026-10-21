@@ -97,3 +97,12 @@ Part of the [architecture index](../architecture.md).
   into a size or an aspect ratio of its own, and reads off the client how many sources one edit takes, so an album
   beyond it is cut down with the result saying so. An edit left to `auto` is framed like its first source, so when
   that source is the bot's likeness the tool asks for the framing nearest to the picture being edited instead.
+
+  Videos have a provider of their own too (`config/VideoProviderConfig`, `xai` alone so far), rendered by
+  `tools/videogen/XaiVideoClient` behind the `videos` group. `VideoGenTools` speaks the model's language: it checks
+  that the prompt names only the pictures it was given — references as `<IMAGE_0>` and up, the bot as `<SELF>` — loads
+  them within one upload's size, and delivers the result. The client turns that into xAI's request: it numbers the
+  pictures the way xAI counts them, puts the bot's photo after the references, gives the bot its configured voice,
+  and drops to `720p` where a request with references cannot render `1080p`. A job is asynchronous, so the client
+  polls it inside the turn; a look or a download that fails in passing is made again rather than throwing away a
+  render that is already paid for, and a moderation refusal becomes `VideoModerationBlocked`.
