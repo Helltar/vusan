@@ -1,17 +1,11 @@
 # AGENTS.md
 
-Root instruction file for coding agents on Vusan, a Telegram AI agent built on
-[TelegramBots](https://github.com/rubenlagus/TelegramBots), Exposed/SQLite, and its own
-`llm/` layer over the OpenAI and Anthropic APIs.
-It applies to the whole repository; `CLAUDE.md` is just the one-line `@AGENTS.md`
-import that points Claude Code here. Keep this file short and actionable —
-product docs go in `README.md` or `docs/`. Prefer clean removals over
-compatibility shims.
-
-[`docs/architecture.md`](docs/architecture.md) indexes the architecture pages:
-read the one that covers request flow, delivery, tools, storage, scheduling or
-startup wiring before changing it, and use the index's
-[symptom map](docs/architecture.md#where-to-look-when) before broad searching.
+Rules for coding agents on Vusan, a Telegram AI agent in Kotlin. They apply to the whole
+repository; `CLAUDE.md` only imports this file. This file holds rules, and how the code works
+is in `docs/`: [`docs/architecture.md`](docs/architecture.md) indexes the architecture pages —
+read the one that covers what you are changing, and use its
+[symptom map](docs/architecture.md#where-to-look-when) before broad searching. Prefer clean
+removals over compatibility shims.
 
 ## Commands and Verification
 
@@ -27,138 +21,90 @@ startup wiring before changing it, and use the index's
 
 ## Architecture Rules
 
-Preserve the package boundaries in [`docs/architecture/layers.md`](docs/architecture/layers.md).
+Keep the package boundaries in [`docs/architecture/layers.md`](docs/architecture/layers.md).
 
 - Inside `telegram/`: `inbound/` turns an update into agent input, `delivery/`
   sends everything back out, `callback/` owns the inline-button flows, `tools/`
-  holds the tools no other messenger could implement; the runner, `AgentTurns`
-  and the raw client helpers stay at the package root, with `TelegramCommands`
-  for the slash commands that never enter the agent loop.
-- `TelegramBotRunner` normalizes inbound updates into a prompt; `AgentTurns`
-  builds the `AgentRequest` from there and owns the turn up to its delivery.
-  Tools consume `RequestContext`/`AttachedFile`, never Telegram message objects.
-- One `RequestContext` is built at ingress and read unchanged from there on:
-  identity (`UserRef`/`ChatRef`/`ConversationScope`) is platform-qualified, and
-  every external reference is opaque text — a message, a topic or a reply anchor
-  as much as a person or a chat, in a stored row as much as in memory. Convert to
-  a messenger's own width only inside that adapter — for Telegram,
-  `telegram/TelegramIds.kt` and nowhere else.
-- Outside an adapter, deliver through the `delivery/OutputDelivery` port and
-  read chat facts through `request/ChatProfileLookup`. `tasks/` and everything
-  else shared must stay free of a messenger client; `PlatformBoundaryTest`
-  enforces that with an allowlist that may only shrink.
-- Tools enqueue `BotOutput` into `BotOutbox`, never TelegramBots send methods
-  directly. Keep `BotOutput` immutable and enforce invariants in `init {}` blocks.
-- Canned bot text (`startReply`, `busyReply`, `fallbackErrorReply`,
-  `privateBlockedNotice`, voice notices) belongs in `i18n/Messages`, one
-  implementation per `Language` — no inline English in `telegram/` or `agent/`.
-- A kind-specific send fallback belongs in `TelegramOutputSender`, a
-  kind-agnostic one in `TelegramSendFallbacks`, raw Bot API builders in
-  `TelegramRequests` and nowhere else; route choice and reply anchoring stay in
-  `TelegramDelivery`. `BotOutbox.useDirectMessages()` affects subsequent
-  enqueues, and reactions are intentionally never redirected to DMs.
+  holds the tools no other messenger could implement; the runner, `AgentTurns`,
+  `TelegramCommands` and the raw client helpers stay at the package root. Tools
+  consume `RequestContext`/`AttachedFile`, never Telegram message objects.
+- One `RequestContext` is built at ingress and read unchanged from there on.
+  Identity (`UserRef`/`ChatRef`/`ConversationScope`) is platform-qualified, and
+  every external reference is opaque text, stored or in memory. Only the adapter
+  converts one to its messenger's width — for Telegram, `telegram/TelegramIds.kt`
+  and nowhere else.
+- Outside an adapter, deliver through `delivery/OutputDelivery` and read chat
+  facts through `request/ChatProfileLookup`. Shared code, `tasks/` included,
+  holds no messenger client; `PlatformBoundaryTest`'s allowlist may only shrink.
+- Tools enqueue `BotOutput` into `BotOutbox`, never TelegramBots send methods.
+  `BotOutput` is immutable, with its invariants in `init {}` blocks.
+- Canned bot text belongs in `i18n/Messages`, one implementation per `Language` —
+  no inline English in `telegram/` or `agent/`.
+- A kind-specific send fallback goes in `TelegramOutputSender`, a kind-agnostic
+  one in `TelegramSendFallbacks`, raw Bot API builders in `TelegramRequests`;
+  route choice and reply anchoring stay in `TelegramDelivery`.
+  `BotOutbox.useDirectMessages()` affects later enqueues only, and reactions are
+  never redirected to DMs.
 - `Db.connect(config)` in [`infra/Database.kt`](src/main/kotlin/com/helltar/vusan/infra/Database.kt)
-  is the single DB initialization point and application access goes through
-  `Db.dbTransaction { ... }`; never call Exposed `transaction {}` or
-  `suspendTransaction(...)` outside that file. A schema change is a table edit, a
-  raised `Schema.VERSION` in [`infra/Schema.kt`](src/main/kotlin/com/helltar/vusan/infra/Schema.kt)
-  and the step in `Schema.steps` that moves a deployed database to it, as plain SQL
-  that is never edited once released; `DatabaseMigrationTest` proves the steps land
-  on what a fresh database gets. Nothing is reconciled by comparing declarations.
-- Env vars are parsed in `AppConfig.Companion` via private `readEnv` (optional,
-  with a fallback or `null`) and `requireEnv` (required). Never call
-  `System.getenv` directly.
-- `llm/` is the model layer and knows nothing about the bot: no outbox, no
-  messenger, no `AppConfig`. Every call to a model goes through its `LlmClient`
-  with its `Message` model; a field one API grew lives in that API's client
-  (`llm/openai/`, `llm/anthropic/`), never in a request rewrite outside it, and a
-  reasoning block an endpoint returned is kept raw and replayed verbatim to that
-  endpoint alone.
-  Behavior on the wire is proven by a test over a mock engine, not by reading
-  the request builder.
-- A model provider is three things: a client under `llm/<vendor>/`, a config
-  class in `config/LlmProviderConfig.kt`, and `config/<Vendor>Provider.kt` with
-  its runtime and its startup check, plus the name `AppConfig` reads. What a
-  model can do — its window, whether it sees, which efforts it takes — travels
-  as facts on `LlmProviderConfig` and `LlmModel`; the roles, the agent and the
-  fallback read those and never name a provider.
-- Avoid thin abstractions and one-off helper objects. Add an abstraction only
-  when it removes real complexity or matches an existing local pattern.
+  is the only DB initialization and `Db.dbTransaction { ... }` the only access;
+  never call Exposed `transaction {}` or `suspendTransaction(...)` outside that
+  file. A schema change is a table edit, a raised `Schema.VERSION` in
+  [`infra/Schema.kt`](src/main/kotlin/com/helltar/vusan/infra/Schema.kt) and a plain
+  SQL step in `Schema.steps`, never edited once released; `DatabaseMigrationTest`
+  proves the steps land on what a fresh database gets.
+- Env vars are read only in `AppConfig.Companion`, through its private `readEnv`
+  (optional) and `requireEnv` (required). Never call `System.getenv`.
+- `llm/` knows nothing about the bot: no outbox, no messenger, no `AppConfig`.
+  Every model call goes through `LlmClient` with its `Message` model. A field one
+  API grew lives in that API's client (`llm/openai/`, `llm/anthropic/`), and a
+  reasoning block is replayed verbatim to the endpoint that returned it and no
+  other. Prove behavior on the wire with a test over a mock engine.
+- A model provider is a client under `llm/<vendor>/`, a config class in
+  `config/LlmProviderConfig.kt`, and `config/<Vendor>Provider.kt` with its runtime
+  and startup check. What a model can do travels as facts on `LlmProviderConfig`
+  and `LlmModel`; the roles, the agent and the fallback never name a provider.
+- No thin abstractions or one-off helper objects. Add one only when it removes
+  real complexity or matches an existing local pattern.
 
-### The sandbox
+### Regolith, the sandbox and publishing
 
-- The sandbox is a Regolith server: a separate project, deployed on its own,
-  reached only through Regolith's Kotlin SDK, and only from
-  `tools/sandbox/SandboxClient.kt`; nothing here knows how a sandbox is
-  isolated, and no Docker socket reaches this side.
-- The SDK reads the server's answers by its own protocol, so its version moves
-  with the server's minor version — and only to a release Maven Central already
-  serves, or the public build breaks. `docs/sandbox.md` names that version.
-- Do not copy the server's settings into Kotlin. It is authoritative about
-  images, resources, timeouts, retention and network policy, and states its
-  limits in `GET /v1/info`; the client reads them there and trims what the model
-  asks for, rather than keeping a second copy.
-- One sandbox per person: `personKeyOrNull` is the alias the server files it
-  under, and `SandboxClient.sandboxOf` gives a turn one handle for it that every
-  sandbox and site tool of that turn shares. Vusan sends no sandbox settings
-  when it creates one: the server's defaults are the deployment's business.
-- It is optional — `REGOLITH_URL` plus `REGOLITH_TOKEN` is the whole switch, and
-  without it neither the shell tools nor publishing are registered.
+How the bot uses the server is in
+[`docs/architecture/sandbox-and-sites.md`](docs/architecture/sandbox-and-sites.md).
 
-### Publishing to the web
-
-- A site is published by the Regolith server, not from here: one call sends a
-  directory's path and gets the address back. Never build a site's URL in Kotlin
-  — the server returns it, so its naming scheme can change without touching the
-  bot.
-- The server is authoritative about what a site may hold, where it is served and
-  how long it is kept. Do not keep a copy of any of it here, and do not add a
-  setting for whether publishing exists: `GET /v1/info` says so.
-- Publishing is a snapshot of a directory, and the tools say so to the model.
-  Nothing is served out of a live sandbox home, which is reclaimed when its
-  session stops.
-- The one mistake worth a warning is the missing `index.html`, because a
-  directory without one publishes fine and its link opens nothing. The server
-  reports it as `hasIndex` on the publish answer; nothing here lists the
-  directory to find out.
-
-### Deployment layouts
-
-- One deployment ships from this repository: the bot, its `compose.yaml` and the
-  `.env` beside it. Nothing else belongs in it — the sandbox and the sites it
-  publishes are a Regolith server's, deployed separately and reached with one URL
-  and one token.
-- The bot only ever connects out. Never add an inbound port or a service that
-  expects to reach it, so a deployment behind CGNAT stays as ordinary as one on a
-  public machine.
+- The Regolith server is reached only through its Kotlin SDK, and only from
+  `tools/sandbox/SandboxClient.kt`. Nothing here knows how a sandbox is isolated,
+  and no Docker socket reaches this side.
+- The SDK version follows the server's minor version, and moves only to a
+  release Maven Central already serves, or the public build breaks.
+  `docs/sandbox.md` names that version.
+- The server owns images, resources, timeouts, retention, network policy and
+  everything about sites. Read its limits from `GET /v1/info`; never copy them
+  into Kotlin, send them when creating a sandbox or add a setting for them, and
+  never build a site's URL here — the server returns it.
+- One deployment ships from this repository: the bot, `compose.yaml` and `.env`.
+  The bot only connects out: never add an inbound port or a service that expects
+  to reach it.
 
 ## Documentation Triggers
 
 Update docs in the same change as the behavior, and read them before changing
 what they describe:
 
-- [`docs/architecture/`](docs/architecture.md), the page that describes it:
-  lifecycle, package/layer moves, delivery policy, scheduler behavior, startup
-  wiring, or core orchestrators (`AgentRunner`, `AgentFactory`,
-  `ToolCatalogFactory`, `TelegramDelivery`, `TelegramOutputSender`,
-  `TaskScheduler`). A new page gets its line in the index, `docs/architecture.md`.
-- [`docs/configuration.md`](docs/configuration.md) and
-  [`.env.example`](.env.example): env var additions, removals,
-  renames, default or semantics changes.
-- [`docs/sites.md`](docs/sites.md): what publishing does for a person and what
-  the bot expects of the server that serves it. Limits, addresses and retention
-  are the server's to document, not this repository's.
-- [`docs/sandbox.md`](docs/sandbox.md): what the sandbox can do, what the
-  bot expects of a Regolith server, and which side owns each limit — the [limits
-  table](docs/sandbox.md#limits) lists only the bounds this repository
-  enforces. Keep claims about isolation, images and defaults on the server's
-  side of the line rather than restating them here or in LLM-facing
-  descriptions: the agent checks what its task needs.
-- [`README.md`](README.md) Features section: added/removed/renamed tools or
-  changed user-visible capability. Write it for users — what a capability does,
-  never which library, model, key or optional service enables it. Setup
-  requirements and implicit dependencies go to `docs/configuration.md` instead,
-  even when no new env var is involved.
+- [`docs/architecture/`](docs/architecture.md), the page that covers it: the
+  request lifecycle, package moves, delivery policy, scheduling, startup wiring
+  or a core orchestrator (`AgentRunner`, `AgentFactory`, `ToolCatalogFactory`,
+  `TelegramDelivery`, `TelegramOutputSender`, `TaskScheduler`). A new page gets
+  its line in the index.
+- [`docs/configuration.md`](docs/configuration.md) and [`.env.example`](.env.example):
+  env var additions, removals, renames, default or semantics changes.
+- [`docs/sandbox.md`](docs/sandbox.md) and [`docs/sites.md`](docs/sites.md): what
+  the sandbox and publishing do for a person and what the bot expects of the
+  server. Limits, isolation, images and retention are the server's to document —
+  not here and not in LLM-facing descriptions; the sandbox
+  [limits table](docs/sandbox.md#limits) lists only bounds this repository enforces.
+- [`README.md`](README.md) Features: added, removed or renamed user-visible
+  capability. Say what it does, never which library, model, key or service
+  enables it; setup requirements go to `docs/configuration.md`.
 - Telegram slash commands: `telegram/TelegramCommands.kt` is the source of
   truth. Keep aligned with it the `Telegram commands` section in
   `agent/SystemPrompt.kt`, the menu in `telegram/CommandMenu.kt` (a description
@@ -187,13 +133,13 @@ what they describe:
 - Member order is the one the Kotlin conventions give: properties and
   initializer blocks, secondary constructors, methods, and the companion object
   last.
-- Blank lines carry meaning, and code is read more often than written. A wrapped
-  class header is followed by one. A `return` that ends a function body has one
-  above it whenever there is work above it, while a `return` inside a small block
-  stays where it is. A multi-line `if`, `when`, `try`, `for` or `while` at the top
-  of a function body is separated from what surrounds it. Never two in a row.
-- A parameter or argument list that wraps over several lines ends with a trailing
-  comma, which is what the conventions encourage at the declaration site.
+- Blank lines carry meaning. A wrapped class header is followed by one. A
+  `return` that ends a function body has one above it whenever there is work
+  above it, while a `return` inside a small block stays where it is. A multi-line
+  `if`, `when`, `try`, `for` or `while` at the top of a function body is
+  separated from what surrounds it. Never two in a row.
+- A parameter or argument list that wraps over several lines ends with a
+  trailing comma.
 
 ## Prompt and Text Handling
 
@@ -202,62 +148,54 @@ what they describe:
   whitespace is noise (metadata, logs, snippets), `limitTo(max)` where inner
   whitespace matters, `xmlBlock(tag, content)` for structured text sent to the
   LLM, plus `isEffectivelyBlank`, `sanitizeFilename` and `escapeHtml`.
-- `xmlBlock` already escapes a closing tag of its own name, so tool output and
-  fetched pages cannot end their block early; text quoted from a message needs
-  `neutralizePromptBlocks` too, which defuses every tag the prompt uses. Avoid
-  plain markers such as `Reply context:` or `[Sent N images]` — models parrot them.
+- `xmlBlock` already escapes a closing tag of its own name; text quoted from a
+  message needs `neutralizePromptBlocks` too, which defuses every tag the prompt
+  uses. Avoid plain markers such as `Reply context:` or `[Sent N images]` —
+  models parrot them.
 - The blocks the current request arrives in — `<reply_context>`,
   `<quoted_fragment>`, `<attached_file>`, `<album>`, a transcript, a pressed
-  choice — are written by `agent/TurnInput.kt`, beside the contract that says
-  what they mean. An adapter reads its update into them and never spells one
-  of those tags itself.
+  choice — are written by `agent/TurnInput.kt` alone. An adapter reads its update
+  into them and never spells one of those tags itself.
 
 ## Tools
 
-Layout: `tools/<feature>/<Feature>Tools.kt` (the `ToolSet` surface),
-`<Feature>ToolDescriptions.kt` (a local `internal object *ToolDescriptions`), optional
-client/model files for external I/O, registration in
-[`ToolCatalogFactory`](src/main/kotlin/com/helltar/vusan/tools/ToolCatalogFactory.kt),
-then docs per the triggers above. Registration also decides whether the tool's schemas ride
-in every request or wait for `loadTools`: a set registered under a `ToolGroup` in
-[`ToolCatalog`](src/main/kotlin/com/helltar/vusan/tools/ToolCatalog.kt) is registered all
-the same, only offered later. Group what a turn rarely needs; leave visible what the model
-may need without being asked for it by name. A tool needing an optional key is registered only when
-the key is set (`config.fooApiKey?.let { … }`), never failing startup; `Main.logStartup`
-says what is on and off, one line per capability in one shape, so a missing optional
-key is an info line there and not a warning.
+The files a new tool touches, in order, are in
+[`docs/architecture/adding-a-tool.md`](docs/architecture/adding-a-tool.md).
 
-A tool only one messenger can implement — Telegram's `file_id`, its sticker sets —
-is not registered there at all: it lives in that adapter (`telegram/tools/`) and
-reaches the catalog through the `PlatformToolSets` port, gated there on the same
-chat capabilities. Nothing under `tools/` may name a messenger, and
-`PlatformBoundaryTest`'s allowlist is empty — keep it that way.
-
+- Register under a `ToolGroup` what a turn rarely needs, and leave visible what
+  the model may need without being asked for it by name.
+- A tool needing an optional key is registered only when the key is set
+  (`config.fooApiKey?.let { … }`), never failing startup. `Main.logStartup` says
+  what is on and off, one line per capability in one shape, so a missing key is
+  an info line, not a warning.
+- A tool only one messenger can implement lives in that adapter
+  (`telegram/tools/`) and reaches the catalog through `PlatformToolSets`. Nothing
+  under `tools/` may name a messenger.
 - Every `@Tool` method returns `String` and is wrapped in `suspendToolGuard { ... }`
   from [`tools/ToolGuard.kt`](src/main/kotlin/com/helltar/vusan/tools/ToolGuard.kt);
   no broad `try/catch` for the same behavior. It throws `ToolFailure`, so the call
-  is recorded as failed and the model still reads the message as the result; test
-  one with `toolFailure { }`. A parameter with a default or a nullable type is
-  optional for the model; the rest are required in the schema it reads.
+  is recorded as failed and the model still reads the message; test one with
+  `toolFailure { }`. A parameter with a default or a nullable type is optional
+  for the model; the rest are required.
 - Use `requireToolText(label, maxChars)` for required text args when it fits.
-- A tool that changes nothing — no output queued, no file written, no state a later
-  call reads — is `@Tool(..., readOnly = true)`, and the loop runs such calls of one
-  batch side by side. Anything whose order against the batch is its meaning stays
-  sequential, however harmless.
-- Results travel between tools by reference, resolved by the loop and the argument
-  decoder, never by a tool: a parameter that takes a file is an `AttachedFile` (or a
-  list), which the model names by label (`#3/1`) or `sandbox:<path>` and which falls
-  back to the request's attachment when left out. A tool that makes a file calls
-  `keepOnShelf` whether or not it sends it — so it is not read-only — and takes `send`
-  where a file made without delivering it is worth having. A text parameter takes a
-  reference only when it declares `@Arg(takesReference = true)` and its description says
-  so — a body worth not retyping, never a path or a query. `copiedToSandbox` is opt-in
-  for answers that are material to work on, never for what is about other people or
+- A tool that changes nothing — no output queued, no file written, no state a
+  later call reads — is `@Tool(..., readOnly = true)`, and runs side by side with
+  the other read-only calls of its batch. Anything whose order in the batch is
+  its meaning stays sequential, however harmless.
+- Results travel between tools by reference, resolved by the loop and the
+  argument decoder, never by a tool. A file parameter is an `AttachedFile` (or a
+  list), named by label (`#3/1`) or `sandbox:<path>`, falling back to the
+  request's attachment. A tool that makes a file calls `keepOnShelf` whether or
+  not it sends it — so it is not read-only — and takes `send` where a file made
+  without delivering it is worth having. A text parameter takes a reference only
+  with `@Arg(takesReference = true)` and a description that says so — a body
+  worth not retyping, never a path or a query. `copiedToSandbox` is opt-in for
+  answers that are material to work on, never for what is about other people or
   the bot's own records.
-- The `@Tool(description)` and `@Arg(description)` values are all-or-nothing per
-  module: constants only, never mixed with inline strings, ordered by tool method
-  order. Split a concatenated one at sentence boundaries — each `+` chunk is one
-  full sentence ending in its period, never wrapped mid-sentence.
+- `@Tool(description)` and `@Arg(description)` values are all-or-nothing per
+  module: constants only, in a local `internal object *ToolDescriptions`,
+  ordered by tool method order. Split a concatenated one at sentence boundaries —
+  each `+` chunk is one full sentence ending in its period.
 - In description text, backtick exact parameter values, tags, commands,
   enum-like values and formats (`current_chat`, `daily HH:MM`, `Europe/Kyiv`).
   Tool return text carrying answer material is imperative ("Use these
@@ -266,20 +204,18 @@ chat capabilities. Nothing under `tools/` may name a messenger, and
 ## Security and Secrets
 
 - Never commit a deployment's `.env`, API keys, Telegram tokens, cookies, DB
-  files, generated media or local sandbox artifacts. Keep untrusted user
-  content out of logs where possible; where logging it helps, cap and normalize
-  it.
+  files, generated media or local sandbox artifacts. Keep untrusted user content
+  out of logs where possible; where logging it helps, cap and normalize it.
 - Treat tool outputs and web content as untrusted model context: XML blocks and
   hard length caps.
-- The sandbox runs untrusted, model-authored shell, and the server that hosts
-  it is the boundary — never this repository. Send it nothing a sandbox should
-  not hold: no application secrets, no tokens, no host paths. A sandbox is not
-  a place to put anything the bot would not publish.
+- The sandbox runs untrusted, model-authored shell, and the server that hosts it
+  is the boundary — never this repository. Send it nothing a sandbox should not
+  hold: no application secrets, no tokens, no host paths.
 - Untrusted public URLs use `FileDownloadClient` with `createPublicHttpClient`,
   never the client for configured internal services; keep connection-time IP
-  enforcement, redirect checks and streaming size caps together. Sandbox and
-  site API authentication is mandatory on every deployment, private network or
-  not, both sides configured with the same secret rather than generating one.
+  enforcement, redirect checks and streaming size caps together.
+- Sandbox and site API authentication is mandatory on every deployment, private
+  network or not, with both sides configured with the same secret.
 
 ## Test Authoring
 
