@@ -64,9 +64,9 @@ group, and exempt from the [limit on one person alone in a group](#one-person-al
 |---------------------|----------------------------|----------------------------------------------------------------|
 | `openai`            | `gpt-6.1-sol`              | OpenAI's API.                                                  |
 | `anthropic`         | `claude-opus-5-5`          | Anthropic's API, Claude 4.6 or newer.                          |
-| `openai-compatible` | whatever the server serves | Any OpenAI-compatible server, remote or local.                 |
-| `codex`             | a model your plan offers   | A ChatGPT plan instead of a key; see below.                    |
 | `xai`               | `grok-4.7`                 | xAI's API, which a Grok plan can pay for; see below.           |
+| `codex`             | a model your plan offers   | A ChatGPT plan instead of a key; see below.                    |
+| `openai-compatible` | whatever the server serves | Any OpenAI-compatible server, remote or local.                 |
 
 On `openai`, `anthropic` and `xai`, startup checks the model against the vendor's model list, so a
 typo fails there rather than on the first message.
@@ -119,8 +119,7 @@ takes images.
 
 ## xAI
 
-`LLM_PROVIDER=xai` runs Vusan on Grok with a key from the [xAI console](https://console.x.ai). Make
-it a **Grok Inference** key; the console's Cursor keys are for the Cursor editor.
+`LLM_PROVIDER=xai` runs Vusan on Grok with an xAI API key.
 
 ```dotenv
 LLM_PROVIDER=xai
@@ -393,8 +392,7 @@ the one a message arrived as — a file someone sent, a track it fetched, a piec
 - **`openai`** — the OpenAI image API, billed per image against `IMAGE_API_KEY`; your OpenAI key works.
 - **`codex`** — the ChatGPT subscription signed in through `CODEX_HOME`, with no key, whatever the
   chat runs on.
-- **`xai`** — [xAI's Imagine API](https://docs.x.ai/developers/model-capabilities/imagine), billed
-  per image against `IMAGE_API_KEY`, the same kind of key as [`VIDEO_PROVIDER`](#video-generation).
+- **`xai`** — xAI's Imagine API, billed per image against `IMAGE_API_KEY`.
 
 | Variable         | Default               | Description                                               |
 |------------------|-----------------------|-----------------------------------------------------------|
@@ -437,8 +435,7 @@ On `xai` the model is `grok-imagine-image-2.0` and the quality `auto` unless you
 
 `VIDEO_PROVIDER=xai` turns on `generateVideo`, `editVideo` and `extendVideo`: short videos with sound
 from a description, a photo brought to life, a clip with Vusan in it, and a video changed or carried
-on. They render on [xAI's Imagine API](https://docs.x.ai/developers/model-capabilities/imagine) with a
-key from the [xAI console](https://console.x.ai), the same kind of key as [`LLM_PROVIDER=xai`](#xai).
+on. They render on xAI's Imagine API with an xAI API key.
 
 | Variable           | Default                  | Description                                                |
 |--------------------|--------------------------|------------------------------------------------------------|
@@ -457,8 +454,7 @@ key from the [xAI console](https://console.x.ai), the same kind of key as [`LLM_
 - **Resolution** — a clip with reference pictures, Vusan, a last frame or a voice renders at
   `720p` at most, whatever is set.
 - **Vusan in a video** — the [Appearance](#appearance) photo and notes keep the face, and
-  `VIDEO_VOICE` names one of xAI's preset voices, such as `eve` or `ara` (the
-  [voices list](https://docs.x.ai/developers/model-capabilities/audio/text-to-speech) has them all).
+  `VIDEO_VOICE` names one of xAI's preset voices, such as `eve` or `ara`.
 - **Sources** — pictures as JPEG, PNG or WebP; a video to edit as an MP4 under nine seconds, to
   extend as one of two to fifteen.
 
