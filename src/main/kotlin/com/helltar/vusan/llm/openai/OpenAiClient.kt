@@ -50,6 +50,9 @@ enum class OpenAiEndpoint {
  * [echoesReasoningContent] is for a Chat Completions server that thinks aloud in `reasoning_content` and
  * wants it back on every tool call of a turn, as DeepSeek does: a call another endpoint wrote — the
  * provider a fallback took over from — then carries an empty one, since none at all is a 400.
+ * [legacyOutputCeiling] is for a Chat Completions server that reads the output ceiling from the original
+ * `max_tokens`: OpenAI renamed it `max_completion_tokens` and refuses the old name on a reasoning model,
+ * while DeepSeek ignores the new one (asked for 40 tokens on 2026-10-21, it wrote 3,614).
  *
  * [onResponse] sees every request and the response it got, for a caller that keeps books on them.
  */
@@ -62,6 +65,7 @@ class OpenAiClient(
     private val statelessReasoning: Boolean = false,
     private val explicitPromptCaching: Boolean = false,
     private val echoesReasoningContent: Boolean = false,
+    private val legacyOutputCeiling: Boolean = false,
     private val label: String = "OpenAI",
     private val onResponse: (request: JsonObject, response: JsonObject) -> Unit = { _, _ -> },
 ) : LlmClient {
@@ -351,7 +355,7 @@ class OpenAiClient(
                 options.reasoningEffort?.let { put("reasoning_effort", it.requestValue) }
                 options.serviceTier?.let { put("service_tier", it) }
                 options.promptCacheKey?.let { put("prompt_cache_key", it) }
-                options.maxOutputTokens?.let { put("max_completion_tokens", it) }
+                options.maxOutputTokens?.let { put(if (legacyOutputCeiling) "max_tokens" else "max_completion_tokens", it) }
             }
 
         return if (explicitPromptCaching) withPromptCacheOptions(body, options.cachePrompt) else body

@@ -33,9 +33,9 @@ Part of the [architecture index](../architecture.md).
   timeout where a connection idling through a long think would be dropped at the API's edge. A Claude model from
   before 4.6, which takes neither adaptive thinking nor an effort, stops startup. `openai-compatible` speaks
   either OpenAI API under `LLM_BASE_URL` (`LLM_COMPATIBLE_API`), sees images only when the server's model list says
-  the model takes them (with its window and its efforts, DeepSeek's states all three), disables parallel tool calls
-  because third-party models garble the siblings, and gets none of the OpenAI-only fields unless the base URL is the
-  official API. A server there that thinks aloud in `reasoning_content` (DeepSeek) refuses a tool call of the turn
+  the model takes them (with its window and its efforts, DeepSeek's states all three), leaves parallel tool calls
+  to the server's default, sends the output ceiling as the original `max_tokens` on Chat Completions (DeepSeek ignores
+  OpenAI's `max_completion_tokens`), and gets none of the OpenAI-only fields unless the base URL is the official API. A server there that thinks aloud in `reasoning_content` (DeepSeek) refuses a tool call of the turn
   without it, so a call the provider before a fallback wrote carries an empty one. A vision or an addressing model is
   one more `LlmProviderConfig`, read from its own prefix (`VISION_`, `ADDRESSING_`) and resolved the same way; by default
   it runs on the chat provider with the chat key.

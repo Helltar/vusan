@@ -180,7 +180,7 @@ class LlmRuntimeTest {
     // --- openai-compatible ---
 
     @Test
-    fun `a compatible runtime speaks completions under its base url, parallel calls off, no openai extras`() = runBlocking {
+    fun `a compatible runtime speaks completions under its base url, no openai extras`() = runBlocking {
         val runtime = resolveLlmRuntime(compatible(effort = ReasoningEffort.HIGH), http = http(COMPLETION_REPLY))
 
         assertEquals("OpenAI-compatible (https://example.test, completions)", runtime.providerLabel)
@@ -191,7 +191,7 @@ class LlmRuntimeTest {
 
         val wire = sent.single()
         assertEquals("https://example.test/v1/chat/completions", wire.url)
-        assertEquals(false, wire.body.getValue("parallel_tool_calls").jsonPrimitive.content.toBoolean())
+        assertNull(wire.body["parallel_tool_calls"], "left to the server's default")
         assertEquals("high", wire.body.getValue("reasoning_effort").jsonPrimitive.content)
         assertNull(wire.body["prompt_cache_key"])
         assertNull(wire.body["store"])

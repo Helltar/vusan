@@ -66,6 +66,7 @@ class OpenAiClientTest {
         explicitPromptCaching: Boolean = true,
         streamed: Boolean = false,
         echoesReasoningContent: Boolean = false,
+        legacyOutputCeiling: Boolean = false,
     ): OpenAiClient {
         val engine =
             MockEngine { request ->
@@ -82,6 +83,7 @@ class OpenAiClientTest {
             statelessReasoning = statelessReasoning,
             explicitPromptCaching = explicitPromptCaching,
             echoesReasoningContent = echoesReasoningContent,
+            legacyOutputCeiling = legacyOutputCeiling,
         )
     }
 
@@ -238,6 +240,20 @@ class OpenAiClientTest {
             assertEquals(false, sent.last().getValue("parallel_tool_calls").jsonPrimitive.content.toBoolean(), "$endpoint")
             assertEquals("none", sent.last().getValue("tool_choice").jsonPrimitive.content, "$endpoint")
         }
+    }
+
+    // openai renamed the ceiling and refuses the old name on a reasoning model; deepseek reads only the old one
+    @Test
+    fun `a completions ceiling takes the name its server reads`() = runBlocking {
+        val options = RequestOptions(maxOutputTokens = 40)
+
+        client(reply = COMPLETION_REPLY, endpoint = OpenAiEndpoint.COMPLETIONS).complete(OLD_MODEL, request(*basic, options = options))
+        assertEquals(40, sent.last().getValue("max_completion_tokens").jsonPrimitive.content.toInt())
+        assertNull(sent.last()["max_tokens"])
+
+        client(reply = COMPLETION_REPLY, endpoint = OpenAiEndpoint.COMPLETIONS, legacyOutputCeiling = true).complete(OLD_MODEL, request(*basic, options = options))
+        assertEquals(40, sent.last().getValue("max_tokens").jsonPrimitive.content.toInt())
+        assertNull(sent.last()["max_completion_tokens"])
     }
 
     @Test

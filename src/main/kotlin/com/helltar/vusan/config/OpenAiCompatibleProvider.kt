@@ -18,11 +18,11 @@ import kotlinx.serialization.json.longOrNull
 private val log = KotlinLogging.logger("ModelPreflight")
 
 /**
- * Any server that speaks the OpenAI API under `LLM_BASE_URL`, either endpoint. Parallel tool calls stay
- * off: third-party models garble the sibling calls of a batch, and the agent executes tool calls
- * sequentially anyway. The cache key is an OpenAI extension, so it travels only to OpenAI itself and not
- * to a server that may reject unknown fields; the same goes for `store` and the encrypted reasoning the
- * Responses API hands back on request. A model here sees only when its server's list said so.
+ * Any server that speaks the OpenAI API under `LLM_BASE_URL`, either endpoint. Parallel tool calls are
+ * left to the server's default: DeepSeek ignores the field, and one that honors it, such as xAI, would
+ * only be slowed by `false`. The cache key is an OpenAI extension, so it travels only to OpenAI itself and
+ * not to a server that may reject unknown fields; the same goes for `store` and the encrypted reasoning
+ * the Responses API hands back on request. A model here sees only when its server's list said so.
  */
 internal fun compatibleRuntime(config: LlmProviderConfig.OpenAiCompatible, http: HttpClient?): LlmRuntime {
     val baseUrl = config.baseUrl.trim().trimEnd('/')
@@ -39,7 +39,6 @@ internal fun compatibleRuntime(config: LlmProviderConfig.OpenAiCompatible, http:
     val options =
         RequestOptions(
             reasoningEffort = config.reasoningEffort,
-            parallelToolCalls = false,
             promptCacheKey = PROMPT_CACHE_KEY.takeIf { official },
         )
 
@@ -55,6 +54,7 @@ internal fun compatibleRuntime(config: LlmProviderConfig.OpenAiCompatible, http:
                     statelessReasoning = official,
                     explicitPromptCaching = official,
                     echoesReasoningContent = !official,
+                    legacyOutputCeiling = !official,
                     label = "OpenAI-compatible",
                 ),
             ),
