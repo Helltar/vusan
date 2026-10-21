@@ -196,6 +196,38 @@ sealed interface LlmProviderConfig {
                 envPrefix = envPrefix,
             )
     }
+
+    /**
+     * xAI's API with a key from its console. On a team whose seat carries a Grok subscription, the
+     * calls are drawn from the plan's weekly included usage before any prepaid credit.
+     */
+    data class Xai(
+        val apiKey: String,
+        override val model: String,
+        override val reasoningEffort: ReasoningEffort? = null,
+        override val requestTimeout: Duration,
+        override val contextWindowTokens: Long? = null,
+        override val seesImages: Boolean? = null,
+        override val efforts: Set<ReasoningEffort>? = null,
+        override val envPrefix: String = DEFAULT_ENV_PREFIX,
+    ) : LlmProviderConfig {
+
+        init {
+            require(apiKey.isNotBlank()) { "the api key must not be blank" }
+            require(model.isNotBlank()) { "the model must not be blank" }
+            requireSane(requestTimeout, contextWindowTokens)
+        }
+
+        override fun withModel(model: String, reasoningEffort: ReasoningEffort?, envPrefix: String): Xai =
+            copy(
+                model = model,
+                reasoningEffort = reasoningEffort,
+                contextWindowTokens = null,
+                seesImages = null,
+                efforts = null,
+                envPrefix = envPrefix,
+            )
+    }
 }
 
 private const val DEFAULT_ENV_PREFIX = "LLM"

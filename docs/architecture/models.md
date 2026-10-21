@@ -8,10 +8,13 @@ Part of the [architecture index](../architecture.md).
   whether it takes an effort and which ones its vendor lists), and the options a turn and a history recap send. Each
   provider is one file, `config/<Vendor>Provider.kt`, holding its runtime builder and its startup check; the two
   dispatchers (`resolveLlmRuntime`, `ModelPreflight.preflighted`) and the name `AppConfig` reads are all that names
-  them, and a new provider is one more such file plus its client under `llm/<vendor>/`. There is no model catalog: a
+  them, and a new provider is one more such file plus its client under `llm/<vendor>/` — or none, where the vendor
+  speaks a protocol a client already does, as xAI speaks OpenAI's Responses API. There is no model catalog: a
   deployment names a model, and the provider's check asks the vendor about it at startup — OpenAI confirms the id,
   Anthropic also states the window, the ceiling and what the model takes (adaptive thinking, which efforts, images),
-  and those replace the runtime's assumptions; Codex reads the account's own catalog. What the vendor said goes back
+  and those replace the runtime's assumptions; xAI states the window and the efforts (`none` among them where thinking
+  can be turned off) in its model list, which answers for an alias too, and whether the model sees in its
+  language-model list; Codex reads the account's own catalog. What the vendor said goes back
   into the config as facts (`seesImages`, `efforts`) that the roles read without knowing the provider: vision stops the
   startup on a model its vendor calls blind, and addressing sends the least effort listed, asking the model once where
   nothing is. `openai` always speaks the Responses API, the
@@ -39,6 +42,12 @@ Part of the [architecture index](../architecture.md).
   without it, so a call the provider before a fallback wrote carries an empty one. A vision or an addressing model is
   one more `LlmProviderConfig`, read from its own prefix (`VISION_`, `ADDRESSING_`) and resolved the same way; by default
   it runs on the chat provider with the chat key.
+- **xAI (`xai`)** — `config/XaiProvider` points the OpenAI client at `https://api.x.ai/v1/responses` with a key. What
+  xAI reads differs from OpenAI and decides what goes along: the conversation's `prompt_cache_key`, which xAI routes on
+  as on `x-grok-conv-id` to the server holding the prefix; `store: false` and the encrypted reasoning, replayed through
+  the tool loop, since a request missing the reasoning before it is what xAI names the first cause of cache misses; and
+  none of OpenAI's cache options, since xAI caches on its own and charges nothing to write. A key on a team whose seat
+  carries a Grok plan is paid from the plan's weekly included usage before any prepaid credit.
 - **ChatGPT subscription (`codex`)** — the same OpenAI client pointed at the Codex backend's Responses API, with no API
   key. `llm/codex/CodexAuth.CodexAuthStore` owns the credentials `codex login` writes to `~/.codex/auth.json` (or
   `$CODEX_HOME`). `AppConfig` resolves that path into the Codex provider config, and the store rereads the file per

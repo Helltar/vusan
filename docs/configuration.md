@@ -66,9 +66,10 @@ group, and exempt from the [limit on one person alone in a group](#one-person-al
 | `anthropic`         | `claude-opus-5-5`          | Anthropic's API, Claude 4.6 or newer.                          |
 | `openai-compatible` | whatever the server serves | Any OpenAI-compatible server, remote or local.                 |
 | `codex`             | a model your plan offers   | A ChatGPT plan instead of a key; see below.                    |
+| `xai`               | `grok-4.7`                 | xAI's API, which a Grok plan can pay for; see below.           |
 
-On `openai` and `anthropic`, startup checks the model against the vendor's model list, so a typo
-fails there rather than on the first message.
+On `openai`, `anthropic` and `xai`, startup checks the model against the vendor's model list, so a
+typo fails there rather than on the first message.
 
 | Variable                      | Default        | Description                                                        |
 |-------------------------------|----------------|--------------------------------------------------------------------|
@@ -81,16 +82,16 @@ fails there rather than on the first message.
 - **`LLM_BASE_URL`** — give it without `/v1`: `https://api.deepseek.com` is called at
   `…/v1/chat/completions`, or `…/v1/responses` with `LLM_COMPATIBLE_API=responses`. `openai` and
   `codex` always call their own Responses API.
-- **`LLM_REASONING_EFFORT`** — which values work depends on the model. `codex` and `anthropic` check
-  at startup, `openai-compatible` does when its server lists efforts (DeepSeek's does), `openai` on
+- **`LLM_REASONING_EFFORT`** — which values work depends on the model. `codex`, `anthropic` and
+  `xai` check at startup, `openai-compatible` does when its server lists efforts (DeepSeek's does), `openai` on
   the first turn. `none` turns reasoning off where a model allows it; since no list names it, the
   first turn tells. Claude takes `low` to `max`, and without a value uses its own default: `medium`
   on Opus 5.5 and Haiku 5.5, `high` on the rest.
 - **`LLM_REQUEST_TIMEOUT_SECONDS`** — raise it for slow local servers and heavy reasoning: a Fable
   turn at a high effort can run for minutes.
 - **`LLM_CONTEXT_WINDOW_TOKENS`** — overrides what Vusan knows: Anthropic's model list, the plan's
-  catalog on `codex` (272,000 if it cannot be read), 1,050,000 on `openai`, and the server's list on
-  `openai-compatible` when it states one. When it does not, startup stops until you set the context
+  catalog on `codex` (272,000 if it cannot be read), 1,050,000 on `openai`, xAI's model list on `xai`
+  (256,000 if it cannot be read), and the server's list on `openai-compatible` when it states one. When it does not, startup stops until you set the context
   the server really runs the model with. Part of the window is kept for the reply and tool results,
   and history fills the rest with whole interactions.
 
@@ -115,6 +116,23 @@ VISION_MODEL=gemma4:latest
 Ollama states neither the window nor whether a model sees. Set the window to Ollama's
 `OLLAMA_CONTEXT_LENGTH` (`ollama ps` shows it), and name the model again as `VISION_MODEL` if it
 takes images.
+
+## xAI
+
+`LLM_PROVIDER=xai` runs Vusan on Grok with a key from the [xAI console](https://console.x.ai). Make
+it a **Grok Inference** key; the console's Cursor keys are for the Cursor editor.
+
+```dotenv
+LLM_PROVIDER=xai
+LLM_MODEL=grok-4.7
+LLM_API_KEY=xai-qwerty
+```
+
+- **On a Grok plan** — the calls come out of the plan's weekly included usage first, and out of
+  prepaid credits only once it is spent. Without credits, they pause until the weekly reset.
+- **Effort** — `grok-4.7` always thinks, from `low` to `xhigh`. `grok-4.3` also takes `none`, which
+  makes it the quick one for [answering without a mention](#answering-without-a-mention).
+- **Images** — JPEG, PNG and WebP; a GIF is refused.
 
 ## ChatGPT subscription
 
@@ -428,7 +446,7 @@ VISION_API_KEY=sk-proj-qwerty
 | Variable                         | Default           | Description                                                      |
 |----------------------------------|-------------------|------------------------------------------------------------------|
 | `VISION_MODEL`                   | —                 | Turns on a vision model of its own.                              |
-| `VISION_PROVIDER`                | the chat provider | `openai`, `anthropic`, `openai-compatible` or `codex`.           |
+| `VISION_PROVIDER`                | the chat provider | `openai`, `anthropic`, `openai-compatible`, `codex` or `xai`.    |
 | `VISION_API_KEY`                 | —                 | Required with `VISION_PROVIDER`, except on `codex`.              |
 | `VISION_BASE_URL`                | —                 | Required with `VISION_PROVIDER=openai-compatible`.               |
 | `VISION_COMPATIBLE_API`          | `completions`     | `completions` or `responses`, for `openai-compatible`.           |
@@ -571,7 +589,7 @@ prefix.
 | `ADDRESSING_ENABLED`                 | `false`            | Turns the feature on.                                        |
 | `ADDRESSING_MODEL`                   | —                  | The model that decides; never the chat model.                |
 | `ADDRESSING_NAMES`                   | the bot's handles  | Other spellings the chat uses, comma-separated.              |
-| `ADDRESSING_PROVIDER`                | the chat provider  | `openai`, `anthropic`, `openai-compatible` or `codex`.       |
+| `ADDRESSING_PROVIDER`                | the chat provider  | `openai`, `anthropic`, `openai-compatible`, `codex` or `xai`. |
 | `ADDRESSING_API_KEY`                 | —                  | Required with `ADDRESSING_PROVIDER`, except on `codex`.      |
 | `ADDRESSING_BASE_URL`                | —                  | Required with `ADDRESSING_PROVIDER=openai-compatible`.       |
 | `ADDRESSING_COMPATIBLE_API`          | `completions`      | `completions` or `responses`, for `openai-compatible`.       |

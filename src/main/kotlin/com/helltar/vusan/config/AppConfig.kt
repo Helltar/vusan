@@ -290,8 +290,18 @@ data class AppConfig(
                         envPrefix = prefix,
                     )
 
+                "xai" ->
+                    LlmProviderConfig.Xai(
+                        apiKey = requireEnv("${prefix}_API_KEY"),
+                        model = requireEnv("${prefix}_MODEL"),
+                        reasoningEffort = resolveReasoningEffort(prefix),
+                        requestTimeout = requestTimeout,
+                        contextWindowTokens = contextWindowTokens,
+                        envPrefix = prefix,
+                    )
+
                 else ->
-                    error("Unsupported ${prefix}_PROVIDER=[$provider]. Supported values: openai, anthropic, openai-compatible, codex")
+                    error("Unsupported ${prefix}_PROVIDER=[$provider]. Supported values: openai, anthropic, openai-compatible, codex, xai")
             }
         }
 
