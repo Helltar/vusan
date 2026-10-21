@@ -35,6 +35,9 @@ import com.helltar.vusan.tools.context.ContextTools
 import com.helltar.vusan.tools.imagegen.ImageGenTools
 import com.helltar.vusan.llm.codex.CodexAuthStore
 import com.helltar.vusan.config.ImageProviderConfig
+import com.helltar.vusan.config.VideoProviderConfig
+import com.helltar.vusan.tools.videogen.VideoGenTools
+import com.helltar.vusan.tools.videogen.XaiVideoClient
 import com.helltar.vusan.tools.imagegen.ImageAuth
 import com.helltar.vusan.tools.imagegen.OpenAiImageClient
 import com.helltar.vusan.tools.imagegen.SelfImage
@@ -174,6 +177,12 @@ class ToolCatalogFactory(
                 OpenAiImageClient(http, ImageAuth.Codex(requireNotNull(codexAuth) { "a codex image provider needs the plan's sign-in" }))
         }
 
+    private val videoClient =
+        when (val video = config.video) {
+            null -> null
+            is VideoProviderConfig.Xai -> XaiVideoClient(http, video, fileDownloadClient)
+        }
+
     private val sandboxClient =
         config.regolithUrl?.let {
             SandboxClient(http, it, requireNotNull(config.regolithToken))
@@ -288,6 +297,8 @@ class ToolCatalogFactory(
             if (imageClient != null && image != null) {
                 tools(ImageGenTools(imageClient, image, outbox, context.attachedFiles, selfImage))
             }
+
+            videoClient?.let { tools(ToolGroup.VIDEOS, VideoGenTools(it, outbox, context.attachedFiles, selfImage)) }
 
             platformTools.of(context, outbox).forEach { tools(it) }
         }

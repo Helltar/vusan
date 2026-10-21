@@ -167,6 +167,7 @@ internal object UkrainianMessages : Messages {
             ToolActivity.SEARCHING_IMAGES -> "Шукаю картинки"
             ToolActivity.SEARCHING_GIF -> "Шукаю GIF"
             ToolActivity.DRAWING -> "Малюю"
+            ToolActivity.FILMING -> "Знімаю відео"
             ToolActivity.RUNNING_CODE -> "Виконую код"
             ToolActivity.LOOKING_AT_IMAGE -> "Дивлюся на зображення"
             ToolActivity.WATCHING_VIDEO -> "Дивлюся відео"

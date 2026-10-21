@@ -166,6 +166,7 @@ internal object EnglishMessages : Messages {
             ToolActivity.SEARCHING_IMAGES -> "Looking for pictures"
             ToolActivity.SEARCHING_GIF -> "Looking for a GIF"
             ToolActivity.DRAWING -> "Drawing"
+            ToolActivity.FILMING -> "Filming"
             ToolActivity.RUNNING_CODE -> "Running code"
             ToolActivity.LOOKING_AT_IMAGE -> "Looking at the image"
             ToolActivity.WATCHING_VIDEO -> "Watching the video"

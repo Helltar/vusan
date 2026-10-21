@@ -42,6 +42,7 @@ internal fun statusGraceFor(activity: ToolActivity): Duration =
     when (activity) {
         ToolActivity.SEARCHING_WEB,
         ToolActivity.DRAWING,
+        ToolActivity.FILMING,
         ToolActivity.RUNNING_CODE,
         ToolActivity.WATCHING_VIDEO,
         ToolActivity.DOWNLOADING_VIDEO,

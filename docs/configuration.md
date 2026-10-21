@@ -310,6 +310,7 @@ summary says so in one line.
 | `ELEVENLABS_API_KEY` | Voice and round video messages             | See [Voice output](#voice-output)                        |
 | `OPENAI_STT_API_KEY` | Voice input and transcribing any recording | Your OpenAI key works; see [Voice input](#voice-input)   |
 | `IMAGE_PROVIDER`     | Image generation                           | See [Image generation](#image-generation)                |
+| `VIDEO_PROVIDER`     | Video generation                           | See [Video generation](#video-generation)                |
 | `VISION_MODEL`       | Vision on a chat model that cannot see     | See [Vision](#vision)                                    |
 | `REGOLITH_URL`       | Shell sandbox                              | See [Sandbox](#sandbox)                                  |
 
@@ -420,6 +421,35 @@ The agent picks the aspect ratio; the model and quality are yours, so the cost s
 On `codex` three things differ: pictures count against the same usage limit as the chat, the aspect
 ratio is only a hint because the model picks its own dimensions, and the filter is ChatGPT's, with
 no setting.
+
+### Video generation
+
+`VIDEO_PROVIDER=xai` turns on `generateVideo`, `editVideo` and `extendVideo`: short videos with sound
+from a description, a photo brought to life, a clip with Vusan in it, and a video changed or carried
+on. They render on [xAI's Imagine API](https://docs.x.ai/developers/model-capabilities/imagine) with a
+key from the [xAI console](https://console.x.ai), the same kind of key as [`LLM_PROVIDER=xai`](#xai).
+
+| Variable           | Default                  | Description                                                |
+|--------------------|--------------------------|------------------------------------------------------------|
+| `VIDEO_PROVIDER`   | unset                    | `xai`.                                                     |
+| `VIDEO_API_KEY`    | —                        | The key xAI renders with.                                  |
+| `VIDEO_MODEL`      | `grok-imagine-video-1.5` | Model for new videos.                                      |
+| `VIDEO_RESOLUTION` | `720p`                   | `480p`, `720p` or `1080p`.                                 |
+| `VIDEO_VOICE`      | the model's own          | The voice Vusan speaks with in a video of itself.          |
+
+- **Waiting** — a clip takes from half a minute to a few minutes, and the turn waits for it with
+  🎥 in its status. People ask for videos by name, so the tools load when a request needs them.
+- **Price** — billed per second of video, so the agent keeps clips short unless asked otherwise. On
+  a Grok plan the seconds come out of its weekly included usage first.
+- **Models** — `grok-imagine-video-1.5-lite` is a quarter of the price and makes no clip from
+  reference pictures or with Vusan in it. Edits and extensions always run on `grok-imagine-video`.
+- **Resolution** — a clip with reference pictures, Vusan, a last frame or a voice renders at
+  `720p` at most, whatever is set.
+- **Vusan in a video** — the [Appearance](#appearance) photo and notes keep the face, and
+  `VIDEO_VOICE` names one of xAI's preset voices, such as `eve` or `ara` (the
+  [voices list](https://docs.x.ai/developers/model-capabilities/audio/text-to-speech) has them all).
+- **Sources** — pictures as JPEG, PNG or WebP; a video to edit as an MP4 under nine seconds, to
+  extend as one of two to fifteen.
 
 ### Vision
 

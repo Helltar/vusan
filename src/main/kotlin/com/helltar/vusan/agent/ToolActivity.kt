@@ -6,6 +6,7 @@ import com.helltar.vusan.tools.giphy.GiphyTools
 import com.helltar.vusan.tools.klipy.KlipyTools
 import com.helltar.vusan.tools.grouplog.GroupLogTools
 import com.helltar.vusan.tools.imagegen.ImageGenTools
+import com.helltar.vusan.tools.videogen.VideoGenTools
 import com.helltar.vusan.tools.memory.MemoryTools
 import com.helltar.vusan.tools.message.MessageTools
 import com.helltar.vusan.tools.page.PageTools
@@ -39,6 +40,7 @@ enum class ToolActivity {
     SEARCHING_IMAGES,
     SEARCHING_GIF,
     DRAWING,
+    FILMING,
     RUNNING_CODE,
     LOOKING_AT_IMAGE,
     WATCHING_VIDEO,
@@ -71,6 +73,9 @@ private val TOOL_ACTIVITIES: Map<String, ToolActivity> = buildMap {
     put(KlipyTools::searchGifs.name, ToolActivity.SEARCHING_GIF)
     put(ImageGenTools::generateImage.name, ToolActivity.DRAWING)
     put(ImageGenTools::editImage.name, ToolActivity.DRAWING)
+    put(VideoGenTools::generateVideo.name, ToolActivity.FILMING)
+    put(VideoGenTools::editVideo.name, ToolActivity.FILMING)
+    put(VideoGenTools::extendVideo.name, ToolActivity.FILMING)
     put(SandboxTools::runCommand.name, ToolActivity.RUNNING_CODE)
     put(SandboxTools::readSandboxCommand.name, ToolActivity.RUNNING_CODE)
     put(SandboxTools::cancelSandboxCommand.name, ToolActivity.RUNNING_CODE)

@@ -46,6 +46,7 @@ import com.helltar.vusan.telegram.callback.TaskMenuHandler
 import com.helltar.vusan.telegram.delivery.TelegramDelivery
 import com.helltar.vusan.telegram.inbound.VoiceTranscriber
 import com.helltar.vusan.tools.ToolCatalogFactory
+import com.helltar.vusan.config.VideoProviderConfig
 import com.helltar.vusan.tools.imagegen.SelfImage
 import com.helltar.vusan.tools.imagegen.resolveSelfImage
 import com.helltar.vusan.telegram.tools.TelegramToolSets
@@ -172,9 +173,9 @@ suspend fun main() = coroutineScope {
 
         // a picture of the bot itself has to show the same face every time, which text-to-image cannot
         // hold on its own — so the reference is read once, here, and only where it can be used at all:
-        // the self-portrait it edits, and the round video message it puts in the circle.
+        // the self-portrait it edits, the round video message it puts in the circle, and a video it is in.
         val selfImage =
-            if (config.image != null || config.elevenLabsApiKey != null)
+            if (config.image != null || config.video != null || config.elevenLabsApiKey != null)
                 resolveSelfImage(config.selfImageFile, config.appearance) {
                     telegramClient.profilePhotoReference(botProfile.userId)
                 }
@@ -416,6 +417,14 @@ private fun logStartup(
     }
 
     log.info {
+        when (val video = config.video) {
+            null -> "Videos: off (VIDEO_PROVIDER not set)"
+            is VideoProviderConfig.Xai ->
+                "Videos: provider=[${video.name}] model=[${video.model}] resolution=[${video.resolution}] voice=[${video.voice ?: "the model's own"}]"
+        }
+    }
+
+    log.info {
         config.elevenLabsTts?.let { tts ->
             "Voice: provider=[elevenlabs] model=[${tts.model}] voice=[${tts.voiceId}] " +
                     "roundVideo=[${if (selfImage?.reference != null) "on" else "off — no reference photo"}]"
@@ -435,8 +444,8 @@ private fun logStartup(
 
         selfImage != null -> log.info { "Self-portrait: appearance only — no reference photo" }
 
-        config.image != null ->
-            log.warn { "Self-portrait: off — no reference photo and no APPEARANCE_FILE; a picture of the bot shows a different person every time" }
+        config.image != null || config.video != null ->
+            log.warn { "Self-portrait: off — no reference photo and no APPEARANCE_FILE; a picture or a video of the bot shows a different person every time" }
 
         else -> log.info { "Self-portrait: off — nothing draws or films it" }
     }

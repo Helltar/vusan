@@ -166,6 +166,7 @@ internal object RussianMessages : Messages {
             ToolActivity.SEARCHING_IMAGES -> "Ищу картинки"
             ToolActivity.SEARCHING_GIF -> "Ищу GIF"
             ToolActivity.DRAWING -> "Рисую"
+            ToolActivity.FILMING -> "Снимаю видео"
             ToolActivity.RUNNING_CODE -> "Выполняю код"
             ToolActivity.LOOKING_AT_IMAGE -> "Смотрю на изображение"
             ToolActivity.WATCHING_VIDEO -> "Смотрю видео"

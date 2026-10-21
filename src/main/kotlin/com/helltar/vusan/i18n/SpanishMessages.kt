@@ -168,6 +168,7 @@ internal object SpanishMessages : Messages {
             ToolActivity.SEARCHING_IMAGES -> "Buscando imágenes"
             ToolActivity.SEARCHING_GIF -> "Buscando un GIF"
             ToolActivity.DRAWING -> "Dibujando"
+            ToolActivity.FILMING -> "Filmando"
             ToolActivity.RUNNING_CODE -> "Ejecutando código"
             ToolActivity.LOOKING_AT_IMAGE -> "Mirando la imagen"
             ToolActivity.WATCHING_VIDEO -> "Viendo el vídeo"

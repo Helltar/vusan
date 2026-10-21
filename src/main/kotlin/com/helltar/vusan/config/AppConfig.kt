@@ -35,6 +35,7 @@ data class AppConfig(
     val llmFallback: LlmProviderConfig? = null,
     val maxConcurrentTurns: Int,
     val image: ImageProviderConfig?,
+    val video: VideoProviderConfig? = null,
     val openAiStt: OpenAiSttConfig?,
     val vision: LlmProviderConfig? = null,
     val personality: String?,
@@ -102,6 +103,7 @@ data class AppConfig(
                 llmFallback = llmFallback,
                 maxConcurrentTurns = readIntEnv("MAX_CONCURRENT_TURNS") ?: DEFAULT_MAX_CONCURRENT_TURNS,
                 image = resolveImageProvider(),
+                video = resolveVideoProvider(),
                 openAiStt = resolveOpenAiStt(),
                 vision = resolveRole(VISION_PREFIX, llmProvider),
                 personality = personalityFile?.let(::readPersonality),
@@ -355,6 +357,22 @@ data class AppConfig(
                     )
 
                 else -> error("Unsupported IMAGE_PROVIDER=[$provider]. Supported values: openai, codex")
+            }
+        }
+
+        private fun resolveVideoProvider(): VideoProviderConfig? {
+            val provider = readEnv("VIDEO_PROVIDER")?.trim()?.lowercase() ?: return null
+
+            return when (provider) {
+                "xai" ->
+                    VideoProviderConfig.Xai(
+                        apiKey = requireEnv("VIDEO_API_KEY"),
+                        model = readEnv("VIDEO_MODEL") ?: VideoProviderConfig.Xai.DEFAULT_MODEL,
+                        resolution = readEnv("VIDEO_RESOLUTION")?.trim()?.lowercase() ?: VideoProviderConfig.Xai.DEFAULT_RESOLUTION,
+                        voice = readEnv("VIDEO_VOICE")?.trim()?.lowercase(),
+                    )
+
+                else -> error("Unsupported VIDEO_PROVIDER=[$provider]. Supported values: xai")
             }
         }
 

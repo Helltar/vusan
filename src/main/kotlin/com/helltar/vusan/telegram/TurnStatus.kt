@@ -60,6 +60,7 @@ internal fun activityStatusLabel(activity: ToolActivity, messages: Messages): St
             ToolActivity.SEARCHING_IMAGES -> "🖼️"
             ToolActivity.SEARCHING_GIF -> "🎞️"
             ToolActivity.DRAWING -> "🎨"
+            ToolActivity.FILMING -> "🎥"
             ToolActivity.RUNNING_CODE -> "💻"
             ToolActivity.LOOKING_AT_IMAGE -> "👀"
             ToolActivity.WATCHING_VIDEO -> "📺"

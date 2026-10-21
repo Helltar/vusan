@@ -106,7 +106,7 @@ private fun BotOutput.groupLogDescriptor(): String? = when (this) {
 // that produces no media — and a turn with no tool running — reads as plain typing.
 internal fun chatActionFor(activity: ToolActivity?): ActionType = when (activity) {
     ToolActivity.SEARCHING_IMAGES, ToolActivity.DRAWING -> ActionType.UPLOAD_PHOTO
-    ToolActivity.SEARCHING_GIF, ToolActivity.DOWNLOADING_VIDEO -> ActionType.UPLOAD_VIDEO
+    ToolActivity.SEARCHING_GIF, ToolActivity.DOWNLOADING_VIDEO, ToolActivity.FILMING -> ActionType.UPLOAD_VIDEO
     ToolActivity.DOWNLOADING_AUDIO, ToolActivity.SENDING_FILE -> ActionType.UPLOAD_DOCUMENT
     ToolActivity.SPEAKING -> ActionType.RECORD_VOICE
     else -> ActionType.TYPING
