@@ -1,16 +1,14 @@
 # Configuration
 
-Everything Vusan reads from `.env`. Copy [`.env.example`](../.env.example) and fill it in; a blank
-value counts as missing. For Docker, follow the [quick start](../README.md#quick-start) — the same
-`.env` also carries the few Compose settings listed at the bottom of `.env.example`.
+Vusan reads every setting from `.env`. Copy the [example file](../.env.example) and fill in what you
+need.
 
-The [sandbox](#sandbox) is configured elsewhere. It is a Regolith server with its own deployment: it
-runs the commands the model writes and publishes the pages people build, so it never gets the bot's
-secrets.
-
-**How values are read.** Booleans are `true` or `false`, in any case. A value that is set but
-unreadable — `AGENT_MAX_MODEL_CALLS=7O`, `GROUP_LOG_ENABLED=off`, a zero timeout — stops startup with
-a message naming the variable, instead of quietly falling back to the default.
+- **Docker** — follow the [quick start](../README.md#quick-start); the same `.env` also holds the few
+  Compose settings at the end of the example.
+- **Values** — a blank one counts as missing, and booleans are `true` or `false` in any case. One that
+  is set but unreadable, like `AGENT_MAX_MODEL_CALLS=7O`, stops startup and names the variable.
+- [Sandbox](#sandbox) — configured on its own: a Regolith server that runs the commands the model
+  writes and never sees the bot's secrets.
 
 ## Minimum setup
 
