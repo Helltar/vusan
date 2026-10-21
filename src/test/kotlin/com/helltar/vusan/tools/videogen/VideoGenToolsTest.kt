@@ -190,7 +190,34 @@ class VideoGenToolsTest {
 
         val result = tools(xai, outbox).generateVideo("a fox in the snow")
 
-        assertContains(result, "moderation withheld")
+        assertContains(result, "moderation rejected")
+        assertTrue(outbox.pending.isEmpty())
+    }
+
+    // what xai answered on 2026-10-21 for a rendered video its moderation rejected
+    @Test
+    fun `a moderation refusal sent as a 400 is reported, not failed`() = runBlocking {
+        val xai = Xai()
+        val outbox = BotOutbox()
+        val http =
+            Http.createClient(
+                MockEngine { request ->
+                    val json = headersOf(HttpHeaders.ContentType, ContentType.Application.Json.toString())
+
+                    if (request.method == HttpMethod.Post) {
+                        xai.started += request.url.encodedPath to JsonObject(emptyMap())
+                        respond("""{"request_id":"job-1"}""", HttpStatusCode.OK, json)
+                    } else {
+                        respond("""{"code":"imagine:content-moderated","error":"Generated video rejected by content moderation."}""", HttpStatusCode.BadRequest, json)
+                    }
+                },
+            )
+        val tools = VideoGenTools(XaiVideoClient(http, VideoProviderConfig.Xai(apiKey = "xai-test"), FileDownloadClient(http), pollInterval = Duration.ZERO), outbox)
+
+        val result = tools.generateVideo("a fox in the snow")
+
+        assertContains(result, "moderation rejected")
+        assertEquals(1, xai.started.size, "a refusal is not retried")
         assertTrue(outbox.pending.isEmpty())
     }
 

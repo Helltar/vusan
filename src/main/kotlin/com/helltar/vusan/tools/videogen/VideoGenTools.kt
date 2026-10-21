@@ -182,7 +182,8 @@ class VideoGenTools(
         val ASPECT_RATIOS = listOf("16:9", "9:16", "1:1", "4:3", "3:4", "3:2", "2:3", "21:9", "5:2")
 
         const val MODERATION_ADVICE =
-            "xAI's moderation withheld the finished video. Tell the user it was blocked; a different scene may pass, the same one will not."
+            "xAI's moderation rejected the finished video, and the rendering was billed all the same. " +
+                    "Tell the user it was blocked; a clearly different scene may pass, the same one reworded will not, so do not retry it on your own."
 
         val log = KotlinLogging.logger {}
     }

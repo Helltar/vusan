@@ -1,6 +1,8 @@
 package com.helltar.vusan.tools.videogen
 
+import com.helltar.vusan.common.rethrowIfCancellation
 import com.helltar.vusan.config.VideoProviderConfig
+import com.helltar.vusan.infra.HttpStatusException
 import com.helltar.vusan.tools.files.FileDownloadClient
 import com.helltar.vusan.tools.files.FileDownloadResult
 import io.github.oshai.kotlinlogging.KotlinLogging
@@ -10,6 +12,10 @@ import io.ktor.client.plugins.*
 import io.ktor.client.request.*
 import io.ktor.http.*
 import kotlinx.coroutines.delay
+import kotlinx.serialization.json.Json
+import kotlinx.serialization.json.JsonPrimitive
+import kotlinx.serialization.json.contentOrNull
+import kotlinx.serialization.json.jsonObject
 import kotlin.time.Duration
 import kotlin.time.Duration.Companion.minutes
 import kotlin.time.Duration.Companion.seconds
@@ -37,7 +43,13 @@ private val UPLOAD_TIMEOUT = 2.minutes
 private val PASSING_FAILURES = setOf("internal_error", "service_unavailable")
 private const val ATTEMPTS = 2
 
-/** xAI made the video and its moderation withheld it: the job is done and the address is empty. */
+// what a 400 says when moderation rejected the rendered video; measured live on 2026-10-21, and billed in full
+private const val MODERATED_CODE = "imagine:content-moderated"
+
+/**
+ * xAI made the video and its moderation withheld it, which it says two ways: a finished job whose address
+ * is empty, or a 400 coded as moderated. Nothing in the request turns the filter off.
+ */
 class VideoModerationBlocked : IllegalStateException("xAI's moderation withheld the video")
 
 /** A finished video, with its length where xAI states the whole of it. */
@@ -109,7 +121,14 @@ class XaiVideoClient(
         return render("extensions", { setBody(request) }) { null }
     }
 
-    private suspend fun render(path: String, body: HttpRequestBuilder.() -> Unit, durationOf: (XaiVideoStatus) -> Int?): RenderedVideo {
+    private suspend fun render(path: String, body: HttpRequestBuilder.() -> Unit, durationOf: (XaiVideoStatus) -> Int?): RenderedVideo =
+        runCatching { renderJob(path, body, durationOf) }
+            .getOrElse { e ->
+                e.rethrowIfCancellation()
+                throw (e as? HttpStatusException)?.takeIf { it.isModerated() }?.let { VideoModerationBlocked() } ?: e
+            }
+
+    private suspend fun renderJob(path: String, body: HttpRequestBuilder.() -> Unit, durationOf: (XaiVideoStatus) -> Int?): RenderedVideo {
         var attempt = 1
 
         while (true) {
@@ -163,6 +182,10 @@ class XaiVideoClient(
             is FileDownloadResult.TooLarge -> error("The finished video is larger than can be sent (${download.sizeBytes ?: "over the limit"} bytes)")
         }
     }
+
+    private fun HttpStatusException.isModerated(): Boolean =
+        status == HttpStatusCode.BadRequest.value &&
+                runCatching { (Json.parseToJsonElement(body.orEmpty()).jsonObject["code"] as? JsonPrimitive)?.contentOrNull }.getOrNull() == MODERATED_CODE
 
     private companion object {
         val log = KotlinLogging.logger {}
