@@ -415,7 +415,6 @@ On `xai`:
 - **Size** — pictures come at about 1,250 pixels on the long side, the most Telegram shows of a photo.
 - **Edits** — up to five images at once, Vusan's own photo included; of a bigger album the first are
   used, and Vusan says so.
-- **Refusals** — xAI's filter cannot be turned off and has no setting.
 
 ### Video generation
 
