@@ -10,6 +10,8 @@ need.
 - [Sandbox](#sandbox) — configured on its own: a Regolith server that runs the commands the model
   writes and never sees the bot's secrets.
 
+How Vusan behaves with people, which needs no setting, is in [Vusan in a chat](chats.md).
+
 ## Minimum setup
 
 Five values, and Vusan runs:

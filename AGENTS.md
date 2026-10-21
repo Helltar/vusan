@@ -102,6 +102,9 @@ what they describe:
   server. Limits, isolation, images and retention are the server's to document —
   not here and not in LLM-facing descriptions; the sandbox
   [limits table](docs/sandbox.md#limits) lists only bounds this repository enforces.
+- [`docs/chats.md`](docs/chats.md): how Vusan behaves with people — history,
+  memory, tasks, group behavior, being left alone — and the fixed numbers
+  behind it, such as limits, windows and quiet hours.
 - [`README.md`](README.md) Features: added, removed or renamed user-visible
   capability. Say what it does, never which library, model, key or service
   enables it; setup requirements go to `docs/configuration.md`.

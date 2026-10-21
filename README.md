@@ -121,6 +121,7 @@ answer to its name. More in [Rights in a group](docs/configuration.md#rights-in-
 ## Documentation
 
 - [Configuration](docs/configuration.md) — every setting, from the required five onward.
+- [Vusan in a chat](docs/chats.md) — how it behaves with people: memory, tasks, groups, being left alone.
 - [The sandbox shell](docs/sandbox.md) — what the persistent home does, and how to connect it.
 - [Publishing to the web](docs/sites.md) — how a page built in the sandbox gets an address.
 - [Architecture](docs/architecture.md) — the layers, and how a message flows through them.
