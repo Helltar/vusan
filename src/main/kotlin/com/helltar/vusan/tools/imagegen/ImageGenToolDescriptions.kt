@@ -24,7 +24,7 @@ internal object ImageGenToolDescriptions {
                 "Use `square` (default, 1:1), `portrait` (2:3) for posters or full-body characters, " +
                 "`landscape` (3:2) for scenery and group scenes, " +
                 "`story` (9:16) for phone wallpapers and stories, or `banner` (16:9) for desktop wallpapers and covers. " +
-                "`story` and `banner` need a `gpt-image-2` or newer model; on an older one they fall back to `portrait` and `landscape`."
+                "An image model that cannot draw `story` or `banner` uses `portrait` or `landscape` instead."
 
     const val SELF_PORTRAIT =
         "Whether the picture shows you. " +

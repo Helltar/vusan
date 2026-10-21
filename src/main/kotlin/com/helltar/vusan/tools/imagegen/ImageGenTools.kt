@@ -4,6 +4,7 @@ import com.helltar.vusan.tools.Arg
 import com.helltar.vusan.tools.Tool
 import com.helltar.vusan.tools.ToolSet
 import com.helltar.vusan.common.extensionOfMime
+import com.helltar.vusan.common.imageDimensions
 import com.helltar.vusan.common.mimeTypeOfName
 import com.helltar.vusan.common.rethrowIfCancellation
 import com.helltar.vusan.common.sniffedImageMimeType
@@ -19,7 +20,7 @@ import com.helltar.vusan.tools.suspendToolGuard
 import io.github.oshai.kotlinlogging.KotlinLogging
 
 class ImageGenTools(
-    private val client: OpenAiImageClient,
+    private val client: ImageClient,
     private val config: ImageProviderConfig,
     private val outbox: BotOutbox,
     private val attachedFiles: List<AttachedFile> = emptyList(),
@@ -49,16 +50,16 @@ class ImageGenTools(
         if (send && !outbox.capabilities.photos)
             return@suspendToolGuard refusedByChat("photos")
 
-        val size = orientation.toImageSize(config.model)
+        val framing = ImageFraming.of(orientation)
         val self = selfImage?.takeIf { selfPortrait }
         val reference = self?.reference
 
         val bytes =
             runCatching {
                 if (reference == null)
-                    client.generate(trimmed.withAppearance(self?.appearance), size, config)
+                    client.generate(trimmed.withAppearance(self?.appearance), framing)
                 else
-                    client.edit(selfPortraitPrompt(trimmed, self.appearance), listOf(reference), size, config)
+                    client.edit(selfPortraitPrompt(trimmed, self.appearance), listOf(reference), framing)
             }
                 .getOrElse { e ->
                     e.rethrowIfCancellation()
@@ -69,8 +70,8 @@ class ImageGenTools(
                     }
 
                     log.warn(e) {
-                        "OpenAI image generation failed: model=${config.model} size=$size " +
-                                "promptChars=${trimmed.length} selfPortrait=$selfPortrait"
+                        "Image generation failed: provider=[${config.name}] model=[${config.model}] framing=[${framing.label}] " +
+                                "promptChars=[${trimmed.length}] selfPortrait=[$selfPortrait]"
                     }
 
                     error("Image generation failed: ${e.message ?: e::class.simpleName}")
@@ -79,11 +80,11 @@ class ImageGenTools(
         val name = imageFilename(bytes)
         val label = keepOnShelf(name, bytes)
 
-        if (!send) return@suspendToolGuard keptNotSent("The image ($size, ${bytes.size} bytes)", label)
+        if (!send) return@suspendToolGuard keptNotSent("The image (${framing.label}, ${bytes.size} bytes)", label)
 
         outbox.enqueue(BotOutput.Photo(bytes = bytes, filename = name))
 
-        "Image queued ($size, ${bytes.size} bytes). Do not add a separate user-facing confirmation."
+        "Image queued (${framing.label}, ${bytes.size} bytes). Do not add a separate user-facing confirmation."
     }
 
     @Tool(ImageGenToolDescriptions.EDIT_IMAGE)
@@ -134,7 +135,9 @@ class ImageGenTools(
 
         var uploadBytes = self?.bytes?.size ?: 0
 
-        for ((file, contentType) in editable.take(MAX_EDIT_IMAGES - sources.size)) {
+        val taken = editable.take(client.maxEditImages - sources.size)
+
+        for ((file, contentType) in taken) {
             file.fileSizeBytes?.let {
                 if (it > MAX_EDIT_IMAGE_BYTES)
                     return@suspendToolGuard "`${file.name}` is too large to edit ($it bytes, limit $MAX_EDIT_IMAGE_BYTES)."
@@ -154,11 +157,12 @@ class ImageGenTools(
             sources += SourceImage(bytes, file.name, contentType)
         }
 
-        val size = orientation.toImageSize(config.model)
+        val asked = ImageFraming.of(orientation)
+        val framing = if (self != null && asked == ImageFraming.AUTO) sceneFraming(sources[1]) else asked
         val instruction = self?.let { selfInEditPrompt(trimmed, selfImage?.appearance, sources.size - 1) } ?: trimmed
 
         val bytes =
-            runCatching { client.edit(instruction, sources, size, config) }
+            runCatching { client.edit(instruction, sources, framing) }
                 .getOrElse { e ->
                     e.rethrowIfCancellation()
 
@@ -168,8 +172,8 @@ class ImageGenTools(
                     }
 
                     log.warn(e) {
-                        "OpenAI image edit failed: model=${config.model} size=$size " +
-                                "sources=${sources.size} promptChars=${trimmed.length}"
+                        "Image edit failed: provider=[${config.name}] model=[${config.model}] framing=[${framing.label}] " +
+                                "sources=[${sources.size}] promptChars=[${trimmed.length}]"
                     }
 
                     error("Image edit failed: ${e.message ?: e::class.simpleName}")
@@ -178,21 +182,24 @@ class ImageGenTools(
         val name = imageFilename(bytes)
         val label = keepOnShelf(name, bytes)
 
-        if (!send) return@suspendToolGuard keptNotSent("The edited image ($size, ${bytes.size} bytes)", label)
+        val left =
+            if (taken.size < editable.size)
+                " The provider edits at most ${client.maxEditImages} images at once, so only the first ${taken.size} " +
+                        "of the ${editable.size} were used; tell the user if that matters."
+            else
+                ""
+
+        if (!send) return@suspendToolGuard keptNotSent("The edited image (${framing.label}, ${bytes.size} bytes)", label) + left
 
         outbox.enqueue(BotOutput.Photo(bytes = bytes, filename = name))
 
-        "Edited image queued (${sources.size} source image(s), $size, ${bytes.size} bytes). " +
-                "Do not add a separate user-facing confirmation."
+        "Edited image queued (${sources.size} source image(s), ${framing.label}, ${bytes.size} bytes). " +
+                "Do not add a separate user-facing confirmation.$left"
     }
 
     companion object {
         const val IMAGE_PROMPT_MAX_CHARS = 32_000
         const val MAX_EDIT_IMAGE_BYTES = 25 * 1024 * 1024
-
-        // the edits endpoint takes up to 16 sources; a telegram album stops at ten long before that,
-        // so this only bounds a turn that collected its images some other way.
-        const val MAX_EDIT_IMAGES = 16
 
         // one upload, not one image: ten album photos at the per-image limit would be a quarter-gigabyte
         // request that spends its five-minute timeout uploading.
@@ -212,17 +219,17 @@ private fun ImageModerationBlocked.advice(): String {
 
     return when (stage) {
         ImageModerationStage.INPUT ->
-            "OpenAI's content filter rejected the description before anything was drawn$flagged. " +
+            "The content filter rejected the description before anything was drawn$flagged. " +
                     "Do not send it again: offer the user a version without whatever crossed the line, " +
                     "or tell them this picture cannot be generated."
 
         ImageModerationStage.OUTPUT ->
-            "OpenAI's content filter withheld the finished image$flagged. " +
+            "The content filter withheld the finished image$flagged. " +
                     "Try once more with a milder, more specific description; if that is withheld too, " +
                     "tell the user this picture cannot be generated."
 
         ImageModerationStage.UNKNOWN ->
-            "OpenAI's content filter refused this image$flagged. " +
+            "The content filter refused this image$flagged. " +
                     "Rewrite the description without the part that likely triggered it, " +
                     "or tell the user this picture cannot be generated."
     }
@@ -241,26 +248,17 @@ internal fun imageContentTypeOrNull(filename: String): String? =
     mimeTypeOfName(filename)?.takeIf { it in SUPPORTED_EDIT_MIME_TYPES }
 
 /**
- * The requested framing as a size the configured model actually accepts.
- *
- * `gpt-image-2` and later take any `WIDTHxHEIGHT` within their bounds, which is what makes the 16:9
- * framings possible at all; the gpt-image-1 family takes three fixed sizes and rejects everything
- * else, so there they fall back to the nearest one rather than failing the request.
+ * An edit left to `auto` is framed like its first source — documented for xAI, and a square likeness
+ * measured that way — so with the bot's likeness first, `auto` takes the frame of the picture being
+ * edited instead. A picture nothing here can measure, WebP among them, stays `auto`.
  */
-private fun String.toImageSize(model: String): String {
-    val flexible = supportsFlexibleSizes(model)
+private fun sceneFraming(scene: SourceImage): ImageFraming =
+    imageDimensions(scene.bytes)?.let { (width, height) -> ImageFraming.closestTo(width, height) } ?: ImageFraming.AUTO
 
-    return when (trim().lowercase()) {
-        "portrait", "tall", "vertical" -> "1024x1536"
-        "landscape", "horizontal" -> "1536x1024"
-        "story", "phone" -> if (flexible) "1152x2048" else "1024x1536"
-        "banner", "wide", "widescreen" -> if (flexible) "2048x1152" else "1536x1024"
-        "auto" -> "auto"
-        else -> "1024x1024"
-    }
-}
+private val ImageFraming.label: String
+    get() = name.lowercase()
 
 // telegram shows a photo whatever it is called, but the name follows the file when someone saves or
-// forwards it, and the route decides the format: the platform asks for jpeg, codex sends what it likes.
+// forwards it, and the route decides the format: the platform asks for jpeg, codex and xai send what they like.
 private fun imageFilename(bytes: ByteArray): String =
     "image." + (sniffedImageMimeType(bytes)?.let(::extensionOfMime) ?: "png")

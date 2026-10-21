@@ -393,12 +393,14 @@ the one a message arrived as — a file someone sent, a track it fetched, a piec
 - **`openai`** — the OpenAI image API, billed per image against `IMAGE_API_KEY`; your OpenAI key works.
 - **`codex`** — the ChatGPT subscription signed in through `CODEX_HOME`, with no key, whatever the
   chat runs on.
+- **`xai`** — [xAI's Imagine API](https://docs.x.ai/developers/model-capabilities/imagine), billed
+  per image against `IMAGE_API_KEY`, the same kind of key as [`VIDEO_PROVIDER`](#video-generation).
 
 | Variable         | Default               | Description                                               |
 |------------------|-----------------------|-----------------------------------------------------------|
-| `IMAGE_PROVIDER` | unset                 | `openai` or `codex`.                                      |
-| `IMAGE_API_KEY`  | —                     | The key `openai` draws with.                              |
-| `IMAGE_MODEL`    | `gpt-image-2.5-flare` | Image model, on either provider.                          |
+| `IMAGE_PROVIDER` | unset                 | `openai`, `codex` or `xai`.                               |
+| `IMAGE_API_KEY`  | —                     | The key `openai` or `xai` draws with.                     |
+| `IMAGE_MODEL`    | `gpt-image-2.5-flare` | Image model, on any provider.                             |
 | `IMAGE_QUALITY`  | `medium`              | `low`, `medium`, `high`, `xhigh`, `max` or `auto`.        |
 
 The agent picks the aspect ratio; the model and quality are yours, so the cost stays predictable.
@@ -421,6 +423,15 @@ The agent picks the aspect ratio; the model and quality are yours, so the cost s
 On `codex` three things differ: pictures count against the same usage limit as the chat, the aspect
 ratio is only a hint because the model picks its own dimensions, and the filter is ChatGPT's, with
 no setting.
+
+On `xai` the model is `grok-imagine-image-2.0` and the quality `auto` unless you set them:
+
+- **Quality** — `low`, `medium` or `auto`. On `auto` xAI picks `low` for a new picture and `medium`
+  for an edit; a new picture at `medium` takes over a minute instead of about fifteen seconds.
+- **Size** — pictures come at about 1,250 pixels on the long side, the most Telegram shows of a photo.
+- **Edits** — up to five images at once, Vusan's own photo included; of a bigger album the first are
+  used, and Vusan says so.
+- **Refusals** — xAI's filter cannot be turned off and has no setting.
 
 ### Video generation
 

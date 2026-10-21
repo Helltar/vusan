@@ -92,3 +92,9 @@ Part of the [architecture index](../architecture.md).
   failed HTTP call to interpret. An edit takes every image the turn carries, which is what makes an album one picture;
   the first source is the one both routes hold closest to the original, so a picture of the bot itself puts its
   reference photo there.
+
+  `IMAGE_PROVIDER=xai` draws through `XaiImageClient` instead, JSON both ways with the sources inline as data URLs.
+  Both clients implement `tools/imagegen/ImageClient`: `ImageGenTools` hands them an `ImageFraming` that each turns
+  into a size or an aspect ratio of its own, and reads off the client how many sources one edit takes, so an album
+  beyond it is cut down with the result saying so. An edit left to `auto` is framed like its first source, so when
+  that source is the bot's likeness the tool asks for the framing nearest to the picture being edited instead.

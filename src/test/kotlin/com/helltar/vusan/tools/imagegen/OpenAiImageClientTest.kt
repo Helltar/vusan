@@ -58,9 +58,9 @@ class OpenAiImageClientTest {
                     )
                 },
             )
-        val client = OpenAiImageClient(http, ImageAuth.ApiKey("sk-test"))
+        val client = OpenAiImageClient(http, ImageAuth.ApiKey("sk-test"), config)
 
-        val bytes = client.generate("a red panda astronaut", "1536x1024", config)
+        val bytes = client.generate("a red panda astronaut", ImageFraming.LANDSCAPE)
 
         assertContentEquals(imageBytes, bytes)
         http.close()
@@ -89,9 +89,9 @@ class OpenAiImageClientTest {
                     )
                 },
             )
-        val client = OpenAiImageClient(http, ImageAuth.ApiKey("sk-test"))
+        val client = OpenAiImageClient(http, ImageAuth.ApiKey("sk-test"), config)
 
-        val bytes = client.edit("add a hat", listOf(source("photo.jpg", "image/jpeg")), "auto", config)
+        val bytes = client.edit("add a hat", listOf(source("photo.jpg", "image/jpeg")), ImageFraming.AUTO)
 
         assertContentEquals(imageBytes, bytes)
         http.close()
@@ -99,10 +99,10 @@ class OpenAiImageClientTest {
 
     @Test
     fun `edit rejects empty image bytes without calling the network`() = runBlocking {
-        val client = OpenAiImageClient(Http.createClient(MockEngine { error("unused") }), ImageAuth.ApiKey("sk-test"))
+        val client = OpenAiImageClient(Http.createClient(MockEngine { error("unused") }), ImageAuth.ApiKey("sk-test"), config)
 
         assertFailsWith<IllegalArgumentException> {
-            client.edit("add a hat", listOf(SourceImage(ByteArray(0), "photo.jpg", "image/jpeg")), "auto", config)
+            client.edit("add a hat", listOf(SourceImage(ByteArray(0), "photo.jpg", "image/jpeg")), ImageFraming.AUTO)
         }
         Unit
     }
@@ -119,10 +119,10 @@ class OpenAiImageClientTest {
                     )
                 },
             )
-        val client = OpenAiImageClient(http, ImageAuth.ApiKey("sk-test"))
+        val client = OpenAiImageClient(http, ImageAuth.ApiKey("sk-test"), config)
 
         val error = assertFailsWith<IllegalStateException> {
-            client.generate("forbidden", "1024x1024", config)
+            client.generate("forbidden", ImageFraming.SQUARE)
         }
 
         assertEquals(
@@ -144,10 +144,10 @@ class OpenAiImageClientTest {
                     )
                 },
             )
-        val client = OpenAiImageClient(http, ImageAuth.ApiKey("sk-test"))
+        val client = OpenAiImageClient(http, ImageAuth.ApiKey("sk-test"), config)
 
         assertFailsWith<IllegalStateException> {
-            client.generate("anything", "1024x1024", config)
+            client.generate("anything", ImageFraming.SQUARE)
         }
         http.close()
     }
@@ -192,7 +192,7 @@ class OpenAiImageClientTest {
                 },
             )
 
-        OpenAiImageClient(http, ImageAuth.ApiKey("sk-test")).generate("a red panda", "1024x1024", config)
+        OpenAiImageClient(http, ImageAuth.ApiKey("sk-test"), config).generate("a red panda", ImageFraming.SQUARE)
 
         val body = Json.parseToJsonElement(payload).jsonObject
 
@@ -214,10 +214,10 @@ class OpenAiImageClientTest {
                     )
                 },
             )
-        val client = OpenAiImageClient(http, ImageAuth.ApiKey("sk-test"))
+        val client = OpenAiImageClient(http, ImageAuth.ApiKey("sk-test"), config)
 
         val blocked = assertFailsWith<ImageModerationBlocked> {
-            client.generate("a duel at dawn", "1024x1024", config)
+            client.generate("a duel at dawn", ImageFraming.SQUARE)
         }
 
         assertEquals(ImageModerationStage.OUTPUT, blocked.stage)
@@ -244,7 +244,7 @@ class OpenAiImageClientTest {
                 },
             )
 
-        OpenAiImageClient(http, ImageAuth.ApiKey("sk-test")).edit("add a hat", images, "auto", config)
+        OpenAiImageClient(http, ImageAuth.ApiKey("sk-test"), config).edit("add a hat", images, ImageFraming.AUTO)
 
         http.close()
 

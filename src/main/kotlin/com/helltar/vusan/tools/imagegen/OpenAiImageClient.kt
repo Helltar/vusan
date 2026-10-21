@@ -31,23 +31,6 @@ private const val OUTPUT_FORMAT = "jpeg"
 private const val OUTPUT_COMPRESSION = 95
 private val errorJson = Json { ignoreUnknownKeys = true }
 
-/** Which side of the filter refused: the prompt, or the picture the model had already drawn. */
-enum class ImageModerationStage { INPUT, OUTPUT, UNKNOWN }
-
-/**
- * OpenAI's content filter refused the request, rather than the call failing.
- *
- * Separate from a transport error because the two need opposite answers: a filtered prompt has to be
- * rewritten or given up on, while retrying is what fixes everything else.
- */
-class ImageModerationBlocked(val stage: ImageModerationStage, val categories: List<String>) :
-    IllegalStateException(
-        "Image moderation blocked the request: stage=[${stage.name.lowercase()}] categories=[${categories.joinToString()}]",
-    )
-
-/** One image handed to the edit endpoint, with what either route needs to name and type it. */
-class SourceImage(val bytes: ByteArray, val filename: String, val contentType: String)
-
 /**
  * Where the image request goes and how it authenticates.
  *
@@ -66,9 +49,17 @@ sealed interface ImageAuth {
     data class Codex(val store: CodexAuthStore) : ImageAuth
 }
 
-class OpenAiImageClient(private val http: HttpClient, private val auth: ImageAuth) {
+class OpenAiImageClient(
+    private val http: HttpClient,
+    private val auth: ImageAuth,
+    private val config: ImageProviderConfig,
+) : ImageClient {
 
-    suspend fun generate(prompt: String, size: String, config: ImageProviderConfig): ByteArray {
+    // the edits endpoint takes up to 16 sources; a telegram album stops at ten long before that,
+    // so this only bounds a turn that collected its images some other way.
+    override val maxEditImages = 16
+
+    override suspend fun generate(prompt: String, framing: ImageFraming): ByteArray {
         require(prompt.isNotBlank()) { "Prompt must not be blank" }
 
         val response: OpenAiImageResponse =
@@ -82,7 +73,7 @@ class OpenAiImageClient(private val http: HttpClient, private val auth: ImageAut
                         OpenAiImageRequest(
                             model = config.model,
                             prompt = prompt,
-                            size = size,
+                            size = framing.toSize(config.model),
                             quality = config.quality,
                             moderation = platformOnly(MODERATION),
                             outputFormat = platformOnly(OUTPUT_FORMAT),
@@ -95,18 +86,7 @@ class OpenAiImageClient(private val http: HttpClient, private val auth: ImageAut
         return response.firstImageBytes()
     }
 
-    /**
-     * Edit [images] into one picture: retouching a single one, or combining several into a new scene.
-     *
-     * The first image is the one both routes hold closest to the original, so a picture of the bot puts
-     * its own reference photo there.
-     */
-    suspend fun edit(
-        prompt: String,
-        images: List<SourceImage>,
-        size: String,
-        config: ImageProviderConfig,
-    ): ByteArray {
+    override suspend fun edit(prompt: String, images: List<SourceImage>, framing: ImageFraming): ByteArray {
         require(prompt.isNotBlank()) { "Prompt must not be blank" }
         require(images.isNotEmpty()) { "At least one source image is required" }
         require(images.none { it.bytes.isEmpty() }) { "Image bytes must not be empty" }
@@ -114,20 +94,15 @@ class OpenAiImageClient(private val http: HttpClient, private val auth: ImageAut
         val response =
             imageRequest {
                 when (auth) {
-                    is ImageAuth.ApiKey -> editViaPlatform(prompt, images, size, config)
-                    is ImageAuth.Codex -> editViaCodex(prompt, images, config)
+                    is ImageAuth.ApiKey -> editViaPlatform(prompt, images, framing.toSize(config.model))
+                    is ImageAuth.Codex -> editViaCodex(prompt, images)
                 }
             }
 
         return response.firstImageBytes()
     }
 
-    private suspend fun editViaPlatform(
-        prompt: String,
-        images: List<SourceImage>,
-        size: String,
-        config: ImageProviderConfig,
-    ): OpenAiImageResponse =
+    private suspend fun editViaPlatform(prompt: String, images: List<SourceImage>, size: String): OpenAiImageResponse =
         http.submitFormWithBinaryData(
             url = "$PLATFORM_BASE_URL/edits",
             formData = formData {
@@ -162,11 +137,7 @@ class OpenAiImageClient(private val http: HttpClient, private val auth: ImageAut
     // the codex edit endpoint takes JSON with the source inlined as a data URL rather than a multipart
     // upload, and infers the output size from that image — so no `size` is sent, and the caller must
     // read the size off the result instead of assuming the one it asked for.
-    private suspend fun editViaCodex(
-        prompt: String,
-        images: List<SourceImage>,
-        config: ImageProviderConfig,
-    ): OpenAiImageResponse =
+    private suspend fun editViaCodex(prompt: String, images: List<SourceImage>): OpenAiImageResponse =
         http.post("$CODEX_BASE_URL/edits") {
             authorize()
             contentType(ContentType.Application.Json)
@@ -230,12 +201,32 @@ class OpenAiImageClient(private val http: HttpClient, private val auth: ImageAut
 private fun supportsInputFidelity(model: String): Boolean = model.startsWith("gpt-image-1")
 
 /**
+ * The framing as a size the configured model actually accepts.
+ *
+ * `gpt-image-2` and later take any `WIDTHxHEIGHT` within their bounds, which is what makes the 16:9
+ * framings possible at all; the gpt-image-1 family takes three fixed sizes and rejects everything
+ * else, so there they fall back to the nearest one rather than failing the request.
+ */
+private fun ImageFraming.toSize(model: String): String {
+    val flexible = supportsFlexibleSizes(model)
+
+    return when (this) {
+        ImageFraming.SQUARE -> "1024x1024"
+        ImageFraming.PORTRAIT -> "1024x1536"
+        ImageFraming.LANDSCAPE -> "1536x1024"
+        ImageFraming.STORY -> if (flexible) "1152x2048" else "1024x1536"
+        ImageFraming.BANNER -> if (flexible) "2048x1152" else "1536x1024"
+        ImageFraming.AUTO -> "auto"
+    }
+}
+
+/**
  * Whether the model takes any `WIDTHxHEIGHT` within its bounds rather than three fixed sizes.
  *
  * The gpt-image-1 family takes `1024x1024`, `1536x1024`, `1024x1536` and `auto` and rejects the rest;
  * gpt-image-2 and later accept anything up to 3840px whose edges are multiples of 16.
  */
-internal fun supportsFlexibleSizes(model: String): Boolean = !model.startsWith("gpt-image-1")
+private fun supportsFlexibleSizes(model: String): Boolean = !model.startsWith("gpt-image-1")
 
 // both routes render on the same models, so a refusal arrives as OpenAI's error envelope. `code` is
 // the documented signal; the safety wording is the fallback for a backend that forwards the message

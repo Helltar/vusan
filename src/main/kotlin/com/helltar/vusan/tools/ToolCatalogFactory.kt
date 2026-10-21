@@ -39,7 +39,9 @@ import com.helltar.vusan.config.VideoProviderConfig
 import com.helltar.vusan.tools.videogen.VideoGenTools
 import com.helltar.vusan.tools.videogen.XaiVideoClient
 import com.helltar.vusan.tools.imagegen.ImageAuth
+import com.helltar.vusan.tools.imagegen.ImageClient
 import com.helltar.vusan.tools.imagegen.OpenAiImageClient
+import com.helltar.vusan.tools.imagegen.XaiImageClient
 import com.helltar.vusan.tools.imagegen.SelfImage
 import com.helltar.vusan.tools.images.ImageDownloadClient
 import com.helltar.vusan.tools.memory.MemoryTools
@@ -167,14 +169,16 @@ class ToolCatalogFactory(
     // nothing to put in the circle and the tool is left out rather than sending an empty one.
     private val selfPortrait = selfImage?.reference?.bytes
 
-    private val imageClient =
+    private val imageClient: ImageClient? =
         when (image) {
             null -> null
-            is ImageProviderConfig.OpenAi -> OpenAiImageClient(http, ImageAuth.ApiKey(image.apiKey))
+            is ImageProviderConfig.OpenAi -> OpenAiImageClient(http, ImageAuth.ApiKey(image.apiKey), image)
 
             // the plan is signed in for the pictures alone when nothing else runs on it
             is ImageProviderConfig.Codex ->
-                OpenAiImageClient(http, ImageAuth.Codex(requireNotNull(codexAuth) { "a codex image provider needs the plan's sign-in" }))
+                OpenAiImageClient(http, ImageAuth.Codex(requireNotNull(codexAuth) { "a codex image provider needs the plan's sign-in" }), image)
+
+            is ImageProviderConfig.Xai -> XaiImageClient(http, image)
         }
 
     private val videoClient =

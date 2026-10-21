@@ -7,6 +7,9 @@ import java.nio.file.Path
  * Who renders a picture, and therefore who is billed for it. `IMAGE_PROVIDER` names it, every provider
  * takes `IMAGE_MODEL` and `IMAGE_QUALITY`, and each brings its own way in: a key, or the signed-in
  * ChatGPT subscription. Nothing here switches itself on — without a provider the drawing tools stay out.
+ *
+ * The defaults and the qualities in the companion are OpenAI's, which the plan's backend shares; xAI
+ * has its own.
  */
 sealed interface ImageProviderConfig {
     val name: String
@@ -41,6 +44,31 @@ sealed interface ImageProviderConfig {
 
         init {
             requireSane(model, quality)
+        }
+    }
+
+    /** xAI's Imagine API, billed per image against [apiKey], a key from its console. */
+    data class Xai(
+        val apiKey: String,
+        override val model: String = DEFAULT_MODEL,
+        override val quality: String = DEFAULT_QUALITY,
+    ) : ImageProviderConfig {
+
+        override val name: String = "xai"
+
+        init {
+            require(apiKey.isNotBlank()) { "IMAGE_API_KEY must not be blank" }
+            require(model.isNotBlank()) { "IMAGE_MODEL must not be blank" }
+            require(quality in QUALITIES) { "IMAGE_QUALITY must be one of $QUALITIES on xai" }
+        }
+
+        companion object {
+            const val DEFAULT_MODEL = "grok-imagine-image-2.0"
+
+            // xai's own pick: low for a new picture and medium for an edit, which took 15 and 13 seconds when
+            // measured on 2026-10-21, while a new picture at medium took 80
+            const val DEFAULT_QUALITY = "auto"
+            val QUALITIES = setOf("low", "medium", "auto")
         }
     }
 

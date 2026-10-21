@@ -333,19 +333,19 @@ data class AppConfig(
             return tier.takeUnless { it == ServiceTier.DEFAULT }
         }
 
-        // pictures have a provider of their own: a key for the api, or the subscription signed in through
-        // CODEX_HOME whether or not the chat runs there. nothing switches on without one.
+        // pictures have a provider of their own: a key for openai's or xai's api, or the subscription signed
+        // in through CODEX_HOME whether or not the chat runs there. nothing switches on without one.
         private fun resolveImageProvider(): ImageProviderConfig? {
             val provider = readEnv("IMAGE_PROVIDER")?.trim()?.lowercase() ?: return null
             val model = readEnv("IMAGE_MODEL")
-            val quality = readEnv("IMAGE_QUALITY") ?: ImageProviderConfig.DEFAULT_QUALITY
+            val quality = readEnv("IMAGE_QUALITY")
 
             return when (provider) {
                 "openai" ->
                     ImageProviderConfig.OpenAi(
                         apiKey = requireEnv("IMAGE_API_KEY"),
                         model = model ?: ImageProviderConfig.DEFAULT_MODEL,
-                        quality = quality,
+                        quality = quality ?: ImageProviderConfig.DEFAULT_QUALITY,
                     )
 
                 "codex" ->
@@ -353,10 +353,17 @@ data class AppConfig(
                         authFile = defaultCodexAuthFile(readEnv("CODEX_HOME")),
                         clientVersion = resolveCodexClientVersion(),
                         model = model ?: ImageProviderConfig.DEFAULT_MODEL,
-                        quality = quality,
+                        quality = quality ?: ImageProviderConfig.DEFAULT_QUALITY,
                     )
 
-                else -> error("Unsupported IMAGE_PROVIDER=[$provider]. Supported values: openai, codex")
+                "xai" ->
+                    ImageProviderConfig.Xai(
+                        apiKey = requireEnv("IMAGE_API_KEY"),
+                        model = model ?: ImageProviderConfig.Xai.DEFAULT_MODEL,
+                        quality = quality ?: ImageProviderConfig.Xai.DEFAULT_QUALITY,
+                    )
+
+                else -> error("Unsupported IMAGE_PROVIDER=[$provider]. Supported values: openai, codex, xai")
             }
         }
 

@@ -14,9 +14,14 @@ import com.helltar.vusan.agent.TurnShelf
 import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.withContext
 import kotlinx.serialization.json.Json
+import kotlinx.serialization.json.JsonObject
+import kotlinx.serialization.json.jsonArray
 import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.jsonPrimitive
+import java.awt.image.BufferedImage
+import java.io.ByteArrayOutputStream
 import java.util.*
+import javax.imageio.ImageIO
 import kotlin.test.Test
 import kotlin.test.assertContains
 import kotlin.test.assertContentEquals
@@ -72,7 +77,7 @@ class ImageGenToolsTest {
                 },
             )
 
-        return ImageGenTools(OpenAiImageClient(http, ImageAuth.ApiKey("sk-test")), config, outbox)
+        return ImageGenTools(OpenAiImageClient(http, ImageAuth.ApiKey("sk-test"), config), config, outbox)
     }
 
     private fun selfTools(outbox: BotOutbox, selfImage: SelfImage?, probe: RouteProbe = RouteProbe()): ImageGenTools {
@@ -91,7 +96,7 @@ class ImageGenToolsTest {
             )
 
         return ImageGenTools(
-            OpenAiImageClient(http, ImageAuth.ApiKey("sk-test")), config, outbox, selfImage = selfImage,
+            OpenAiImageClient(http, ImageAuth.ApiKey("sk-test"), config), config, outbox, selfImage = selfImage,
         )
     }
 
@@ -118,7 +123,7 @@ class ImageGenToolsTest {
             )
 
         return ImageGenTools(
-            OpenAiImageClient(http, ImageAuth.ApiKey("sk-test")), config, outbox, attached.toList(), selfImage,
+            OpenAiImageClient(http, ImageAuth.ApiKey("sk-test"), config), config, outbox, attached.toList(), selfImage,
         )
     }
 
@@ -239,10 +244,11 @@ class ImageGenToolsTest {
 
     @Test
     fun `editImage orientation override maps to the requested size`() = runBlocking {
-        val outbox = BotOutbox()
-        val result = editTools(outbox, imageAttachment()).editImage("make it wide", orientation = "landscape")
+        val probe = EditProbe()
+        val result = editTools(BotOutbox(), imageAttachment(), probe = probe).editImage("make it wide", orientation = "landscape")
 
-        assertContains(result, "1536x1024")
+        assertContains(result, "landscape")
+        assertContains(probe.form, "1536x1024")
     }
 
     @Test
@@ -351,7 +357,7 @@ class ImageGenToolsTest {
                     )
                 },
             )
-        val tools = ImageGenTools(OpenAiImageClient(http, ImageAuth.ApiKey("sk-test")), config, outbox)
+        val tools = ImageGenTools(OpenAiImageClient(http, ImageAuth.ApiKey("sk-test"), config), config, outbox)
 
         val result = tools.generateImage("a duel at dawn")
 
@@ -424,5 +430,59 @@ class ImageGenToolsTest {
         val flexible = SizeProbe()
         tools(BotOutbox(), flexible, config.copy(model = "gpt-image-2.5-flare")).generateImage("x", orientation = "story")
         assertEquals("1152x2048", flexible.size)
+    }
+
+    // the json body the xai client posted, which is where its sources and framing end up
+    private fun xaiTools(
+        outbox: BotOutbox,
+        attached: List<AttachedFile>,
+        sent: MutableList<JsonObject>,
+        selfImage: SelfImage? = null,
+    ): ImageGenTools {
+        val encoded = Base64.getEncoder().encodeToString(imageBytes)
+        val http =
+            Http.createClient(
+                MockEngine { request ->
+                    sent += Json.parseToJsonElement(assertIs<TextContent>(request.body).text).jsonObject
+
+                    respond(
+                        content = """{"data":[{"b64_json":"$encoded"}]}""",
+                        status = HttpStatusCode.OK,
+                        headers = headersOf(HttpHeaders.ContentType, ContentType.Application.Json.toString()),
+                    )
+                },
+            )
+        val xai = ImageProviderConfig.Xai(apiKey = "xai-test")
+
+        return ImageGenTools(XaiImageClient(http, xai), xai, outbox, attached, selfImage)
+    }
+
+    private fun png(width: Int, height: Int): ByteArray =
+        ByteArrayOutputStream().also { ImageIO.write(BufferedImage(width, height, BufferedImage.TYPE_INT_RGB), "png", it) }.toByteArray()
+
+    @Test
+    fun `an album beyond what the provider edits at once is cut down, and the result says so`() = runBlocking {
+        val sent = mutableListOf<JsonObject>()
+        val album = (1..7).map { imageAttachment(name = "photo$it.jpg") }
+
+        val result = xaiTools(BotOutbox(), album, sent).editImage("merge these")
+
+        assertEquals(5, assertNotNull(sent.single()["images"]).jsonArray.size)
+        assertContains(result, "at most 5 images")
+        assertContains(result, "only the first 5 of the 7 were used")
+    }
+
+    @Test
+    fun `withYourself on auto takes the frame of the picture being edited, not of the likeness`() = runBlocking {
+        val sent = mutableListOf<JsonObject>()
+        val scene = imageAttachment(name = "room.png", mimeType = "image/png", bytes = png(300, 200))
+        val likeness = SelfImage(SourceImage(png(64, 64), "avatar.png", "image/png"), appearance = null)
+
+        val result = xaiTools(BotOutbox(), listOf(scene), sent, likeness).editImage("standing by the window", withYourself = true)
+        xaiTools(BotOutbox(), listOf(scene), sent).editImage("make it winter")
+
+        assertEquals("3:2", sent[0]["aspect_ratio"]?.jsonPrimitive?.content)
+        assertContains(result, "landscape")
+        assertFalse("aspect_ratio" in sent[1])
     }
 }
