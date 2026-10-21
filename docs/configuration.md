@@ -58,7 +58,7 @@ group, and exempt from the [limit on one person alone in a group](#one-person-al
 
 `LLM_PROVIDER` picks the backend. Whichever it is, the model must support tool calling.
 
-| `LLM_PROVIDER`      | Example `LLM_MODEL`        | What it is                                                     |
+| Provider            | Example model              | What it is                                                     |
 |---------------------|----------------------------|----------------------------------------------------------------|
 | `openai`            | `gpt-6.1-sol`              | OpenAI's API.                                                  |
 | `anthropic`         | `claude-opus-5-5`          | Anthropic's API, Claude 4.6 or newer.                          |
