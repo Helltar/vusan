@@ -434,7 +434,7 @@ private fun refreshFailureMessage(status: HttpStatusCode, body: String?): String
 
 // the endpoint answers in more than one shape: `error` as a bare string, `error` as an object carrying
 // `code` and `message`, or the code at the top level. reading only the first is how a dead session gets
-// logged as a bare "HTTP 400" — openclaw's `TOKEN_FAILURE_REASON_BY_CODE` reads all of them.
+// logged as a bare "HTTP 400", so all three are read.
 private fun refreshErrorCode(body: String): String? =
     runCatching {
         val root = authJson.parseToJsonElement(body).jsonObject
