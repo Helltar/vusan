@@ -55,28 +55,6 @@ in [@BotFather](https://t.me/BotFather) with `/setprivacy`, or make it an admini
 that Telegram shows it only mentions, replies and commands, so it can neither recap the chat nor
 answer to its name. More in [Rights in a group](docs/configuration.md#rights-in-a-group).
 
-### From source
-
-To build the image yourself or run on a local JVM, clone the repository and set up `.env` the same
-way:
-
-```bash
-git clone https://github.com/Helltar/vusan.git && cd vusan && \
-  cp .env.example .env && mkdir data
-```
-
-Then build and start the image:
-
-```bash
-docker compose up --build -d
-```
-
-Or run it on JDK 21, with `ffmpeg` and `yt-dlp` on `PATH`:
-
-```bash
-./gradlew run
-```
-
 ## Features
 
 ### At home in a group
@@ -145,6 +123,28 @@ Or run it on JDK 21, with `ffmpeg` and `yt-dlp` on `PATH`:
 - [The sandbox shell](docs/sandbox.md) — what the persistent home does, and how to connect it.
 - [Publishing to the web](docs/sites.md) — how a page built in the sandbox gets an address.
 - [Architecture](docs/architecture.md) — the layers, and how a message flows through them.
+
+## Building from source
+
+[Quick start](#quick-start) runs the published image. To build the image yourself or run on a
+local JVM instead, clone the repository and fill in `.env` the same way:
+
+```bash
+git clone https://github.com/Helltar/vusan.git && cd vusan && \
+  cp .env.example .env && mkdir data
+```
+
+Then build and start the image:
+
+```bash
+docker compose up --build -d
+```
+
+Or run it on JDK 21, with `ffmpeg` and `yt-dlp` on `PATH`:
+
+```bash
+./gradlew run
+```
 
 ## Stack
 
