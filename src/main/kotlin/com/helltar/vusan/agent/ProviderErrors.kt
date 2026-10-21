@@ -38,6 +38,12 @@ private val SUBSCRIPTION_LIMIT_REGEX =
         RegexOption.IGNORE_CASE,
     )
 
+// a ChatGPT account that may no longer use the model — a plan that lapsed, or a model retired from it —
+// is refused with a 400 naming the model, and every call after it is refused the same way until the plan
+// or the configured model changes.
+private val MODEL_NOT_IN_PLAN_REGEX =
+    Regex("not supported when using codex with a chatgpt account", RegexOption.IGNORE_CASE)
+
 private val UNAUTHORIZED_REGEX =
     Regex("missing_authorization_header|token_expired|invalid_api_key|authentication_error|unauthorized", RegexOption.IGNORE_CASE)
 
@@ -97,7 +103,7 @@ internal fun Throwable.isContextOverflow(): Boolean =
 /**
  * How long the provider behind [this] is out for, or `null` when the failure is not the provider's.
  *
- * A spent allowance and a dead sign-in mean every call is refused until something outside the bot
+ * A spent allowance, a dead sign-in and a model the plan no longer covers mean every call is refused until something outside the bot
  * changes, so they keep the provider out for the deadline the body names, or [DEFAULT_PROVIDER_OUTAGE]
  * without one. A rate limit, an overloaded server, a server error that outlasted its repeats or a call
  * that never got an answer usually passes in seconds or minutes, so those keep it out for
@@ -117,7 +123,7 @@ internal fun Throwable.providerOutage(now: Instant = Instant.now()): ProviderOut
             usageLimitResetIn(error.text, now)?.let { now.outageFor(it, deadlineNamed = true) }
                 ?: now.outageFor(DEFAULT_PROVIDER_OUTAGE)
 
-        error.unauthorized -> now.outageFor(DEFAULT_PROVIDER_OUTAGE)
+        error.unauthorized || MODEL_NOT_IN_PLAN_REGEX.containsMatchIn(error.text) -> now.outageFor(DEFAULT_PROVIDER_OUTAGE)
         error.status in TRANSIENT_STATUSES || error.status in SERVER_ERROR_STATUSES -> now.outageFor(TRANSIENT_OUTAGE)
         // the request never got an answer to read a status out of: a timeout, a dropped connection, a name
         // that does not resolve

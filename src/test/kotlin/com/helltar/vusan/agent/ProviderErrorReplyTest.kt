@@ -147,6 +147,12 @@ class ProviderErrorReplyTest {
 
         val signedOut = assertNotNull(error(401, "token_expired").providerOutage(now))
         assertEquals(now.plusSeconds(1800), signedOut.until)
+
+        val lapsedPlan =
+            error(400, """{"detail":"The 'some-model' model is not supported when using Codex with a ChatGPT account."}""")
+        val outOfPlan = assertNotNull(lapsedPlan.providerOutage(now), "a model the plan lost is not the bot's own error")
+        assertEquals(now.plusSeconds(1800), outOfPlan.until)
+        assertTrue(!outOfPlan.deadlineNamed)
     }
 
     @Test
