@@ -344,16 +344,16 @@ data class AppConfig(
                 "openai" ->
                     ImageProviderConfig.OpenAi(
                         apiKey = requireEnv("IMAGE_API_KEY"),
-                        model = model ?: ImageProviderConfig.DEFAULT_MODEL,
-                        quality = quality ?: ImageProviderConfig.DEFAULT_QUALITY,
+                        model = model ?: ImageProviderConfig.OpenAi.DEFAULT_MODEL,
+                        quality = quality ?: ImageProviderConfig.OpenAi.DEFAULT_QUALITY,
                     )
 
                 "codex" ->
                     ImageProviderConfig.Codex(
                         authFile = defaultCodexAuthFile(readEnv("CODEX_HOME")),
                         clientVersion = resolveCodexClientVersion(),
-                        model = model ?: ImageProviderConfig.DEFAULT_MODEL,
-                        quality = quality ?: ImageProviderConfig.DEFAULT_QUALITY,
+                        model = model ?: ImageProviderConfig.OpenAi.DEFAULT_MODEL,
+                        quality = quality ?: ImageProviderConfig.OpenAi.DEFAULT_QUALITY,
                     )
 
                 "xai" ->

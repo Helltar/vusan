@@ -14,7 +14,7 @@ class ImageProviderConfigTest {
 
     @Test
     fun `every documented quality is accepted by both providers`() {
-        ImageProviderConfig.ALLOWED_QUALITIES.forEach { quality ->
+        ImageProviderConfig.OpenAi.QUALITIES.forEach { quality ->
             assertEquals(quality, ImageProviderConfig.OpenAi(apiKey = "sk-test", quality = quality).quality)
             assertEquals(quality, ImageProviderConfig.Codex(quality = quality).quality)
         }

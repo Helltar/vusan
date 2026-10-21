@@ -7,9 +7,6 @@ import java.nio.file.Path
  * Who renders a picture, and therefore who is billed for it. `IMAGE_PROVIDER` names it, every provider
  * takes `IMAGE_MODEL` and `IMAGE_QUALITY`, and each brings its own way in: a key, or the signed-in
  * ChatGPT subscription. Nothing here switches itself on — without a provider the drawing tools stay out.
- *
- * The defaults and the qualities in the companion are OpenAI's, which the plan's backend shares; xAI
- * has its own.
  */
 sealed interface ImageProviderConfig {
     val name: String
@@ -19,31 +16,45 @@ sealed interface ImageProviderConfig {
     /** The OpenAI image API, billed per image against [apiKey]. */
     data class OpenAi(
         val apiKey: String,
-        override val model: String = ImageProviderConfig.DEFAULT_MODEL,
-        override val quality: String = ImageProviderConfig.DEFAULT_QUALITY,
+        override val model: String = DEFAULT_MODEL,
+        override val quality: String = DEFAULT_QUALITY,
     ) : ImageProviderConfig {
 
         override val name: String = "openai"
 
         init {
             require(apiKey.isNotBlank()) { "IMAGE_API_KEY must not be blank" }
-            requireSane(model, quality)
+            requireOpenAiModel(model, quality)
+        }
+
+        companion object {
+            // the codex backend shares these: it takes the platform's current model too, measured live on a
+            // plus plan on 2026-10-09, even though the CLI itself still asks for gpt-image-2
+            const val DEFAULT_MODEL = "gpt-image-2.5-flare"
+            const val DEFAULT_QUALITY = "medium"
+
+            // xhigh and max are gpt-image-2.5 only; older models top out at high and reject the rest,
+            // so the set is the union and the operator matches it to the model they configured.
+            val QUALITIES = setOf("low", "medium", "high", "xhigh", "max", "auto")
         }
     }
 
-    /** The Codex backend, metered against the ChatGPT subscription signed in at [authFile]. */
+    /**
+     * The Codex backend, metered against the ChatGPT subscription signed in at [authFile]. It renders on
+     * OpenAI's models, so it takes [OpenAi]'s defaults and qualities.
+     */
     data class Codex(
         val authFile: Path = defaultCodexAuthFile(),
         // the Codex CLI version claimed to the backend; `null` claims the newest of the floor, the CLI and the latest release
         val clientVersion: String? = null,
-        override val model: String = ImageProviderConfig.DEFAULT_MODEL,
-        override val quality: String = ImageProviderConfig.DEFAULT_QUALITY,
+        override val model: String = OpenAi.DEFAULT_MODEL,
+        override val quality: String = OpenAi.DEFAULT_QUALITY,
     ) : ImageProviderConfig {
 
         override val name: String = "codex"
 
         init {
-            requireSane(model, quality)
+            requireOpenAiModel(model, quality)
         }
     }
 
@@ -71,22 +82,11 @@ sealed interface ImageProviderConfig {
             val QUALITIES = setOf("low", "medium", "auto")
         }
     }
-
-    companion object {
-        // one default for both: the codex backend takes the platform's current model too, measured
-        // live on a plus plan on 2026-10-09, even though the CLI itself still asks for gpt-image-2
-        const val DEFAULT_MODEL = "gpt-image-2.5-flare"
-        const val DEFAULT_QUALITY = "medium"
-
-        // xhigh and max are gpt-image-2.5 only; older models top out at high and reject the rest,
-        // so the set is the union and the operator matches it to the model they configured.
-        val ALLOWED_QUALITIES = setOf("low", "medium", "high", "xhigh", "max", "auto")
-    }
 }
 
-private fun requireSane(model: String, quality: String) {
+private fun requireOpenAiModel(model: String, quality: String) {
     require(model.isNotBlank()) { "IMAGE_MODEL must not be blank" }
-    require(quality in ImageProviderConfig.ALLOWED_QUALITIES) {
-        "IMAGE_QUALITY must be one of ${ImageProviderConfig.ALLOWED_QUALITIES}"
+    require(quality in ImageProviderConfig.OpenAi.QUALITIES) {
+        "IMAGE_QUALITY must be one of ${ImageProviderConfig.OpenAi.QUALITIES}"
     }
 }

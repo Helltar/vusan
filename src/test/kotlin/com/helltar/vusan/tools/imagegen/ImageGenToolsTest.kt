@@ -77,7 +77,7 @@ class ImageGenToolsTest {
                 },
             )
 
-        return ImageGenTools(OpenAiImageClient(http, ImageAuth.ApiKey("sk-test"), config), config, outbox)
+        return ImageGenTools(OpenAiImageClient(http, ImageAuth.ApiKey("sk-test"), config.model, config.quality), config, outbox)
     }
 
     private fun selfTools(outbox: BotOutbox, selfImage: SelfImage?, probe: RouteProbe = RouteProbe()): ImageGenTools {
@@ -96,7 +96,7 @@ class ImageGenToolsTest {
             )
 
         return ImageGenTools(
-            OpenAiImageClient(http, ImageAuth.ApiKey("sk-test"), config), config, outbox, selfImage = selfImage,
+            OpenAiImageClient(http, ImageAuth.ApiKey("sk-test"), config.model, config.quality), config, outbox, selfImage = selfImage,
         )
     }
 
@@ -123,7 +123,7 @@ class ImageGenToolsTest {
             )
 
         return ImageGenTools(
-            OpenAiImageClient(http, ImageAuth.ApiKey("sk-test"), config), config, outbox, attached.toList(), selfImage,
+            OpenAiImageClient(http, ImageAuth.ApiKey("sk-test"), config.model, config.quality), config, outbox, attached.toList(), selfImage,
         )
     }
 
@@ -357,7 +357,7 @@ class ImageGenToolsTest {
                     )
                 },
             )
-        val tools = ImageGenTools(OpenAiImageClient(http, ImageAuth.ApiKey("sk-test"), config), config, outbox)
+        val tools = ImageGenTools(OpenAiImageClient(http, ImageAuth.ApiKey("sk-test"), config.model, config.quality), config, outbox)
 
         val result = tools.generateImage("a duel at dawn")
 

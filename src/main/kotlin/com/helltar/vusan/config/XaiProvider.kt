@@ -22,7 +22,7 @@ import kotlinx.serialization.json.contentOrNull
 import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.longOrNull
 
-private const val XAI_API_BASE_URL = "https://api.x.ai/v1"
+internal const val XAI_API_BASE_URL = "https://api.x.ai/v1"
 private const val XAI_MODELS_PAGE = "https://docs.x.ai/developers/models"
 
 // the smallest window among the text models xai lists (grok-build-0.1, checked 2026-10-21); the startup

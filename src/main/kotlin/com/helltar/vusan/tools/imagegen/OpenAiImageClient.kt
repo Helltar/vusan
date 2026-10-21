@@ -1,9 +1,9 @@
 package com.helltar.vusan.tools.imagegen
 
 import com.helltar.vusan.config.OPENAI_API_BASE_URL
+import com.helltar.vusan.common.dataUrl
 import com.helltar.vusan.common.rethrowIfCancellation
 import com.helltar.vusan.llm.codex.CodexAuthStore
-import com.helltar.vusan.config.ImageProviderConfig
 import com.helltar.vusan.llm.codex.codexRequestHeaders
 import com.helltar.vusan.infra.HttpStatusException
 import io.ktor.client.*
@@ -52,7 +52,8 @@ sealed interface ImageAuth {
 class OpenAiImageClient(
     private val http: HttpClient,
     private val auth: ImageAuth,
-    private val config: ImageProviderConfig,
+    private val model: String,
+    private val quality: String,
 ) : ImageClient {
 
     // the edits endpoint takes up to 16 sources; a telegram album stops at ten long before that,
@@ -71,10 +72,10 @@ class OpenAiImageClient(
 
                     setBody(
                         OpenAiImageRequest(
-                            model = config.model,
+                            model = model,
                             prompt = prompt,
-                            size = framing.toSize(config.model),
-                            quality = config.quality,
+                            size = framing.toSize(model),
+                            quality = quality,
                             moderation = platformOnly(MODERATION),
                             outputFormat = platformOnly(OUTPUT_FORMAT),
                             outputCompression = platformOnly(OUTPUT_COMPRESSION),
@@ -94,7 +95,7 @@ class OpenAiImageClient(
         val response =
             imageRequest {
                 when (auth) {
-                    is ImageAuth.ApiKey -> editViaPlatform(prompt, images, framing.toSize(config.model))
+                    is ImageAuth.ApiKey -> editViaPlatform(prompt, images, framing.toSize(model))
                     is ImageAuth.Codex -> editViaCodex(prompt, images)
                 }
             }
@@ -106,15 +107,15 @@ class OpenAiImageClient(
         http.submitFormWithBinaryData(
             url = "$PLATFORM_BASE_URL/edits",
             formData = formData {
-                append("model", config.model)
+                append("model", model)
                 append("prompt", prompt)
                 append("size", size)
-                append("quality", config.quality)
+                append("quality", quality)
                 append("moderation", MODERATION)
                 append("output_format", OUTPUT_FORMAT)
                 append("output_compression", OUTPUT_COMPRESSION.toString())
 
-                if (supportsInputFidelity(config.model))
+                if (supportsInputFidelity(model))
                     append("input_fidelity", "high")
 
                 // the repeated `image[]` key is what makes several sources one edit rather than several
@@ -145,10 +146,10 @@ class OpenAiImageClient(
 
             setBody(
                 CodexImageEditRequest(
-                    images = images.map { CodexImageSource(dataUrl(it.bytes, it.contentType)) },
+                    images = images.map { CodexImageSource(dataUrl(it.contentType, it.bytes)) },
                     prompt = prompt,
-                    model = config.model,
-                    quality = config.quality,
+                    model = model,
+                    quality = quality,
                 ),
             )
         }.observed().body()
@@ -259,9 +260,6 @@ private fun HttpStatusException.moderationBlockOrNull(): ImageModerationBlocked?
 
     return ImageModerationBlocked(stage, details?.categories.orEmpty())
 }
-
-private fun dataUrl(bytes: ByteArray, contentType: String): String =
-    "data:$contentType;base64,${Base64.getEncoder().encodeToString(bytes)}"
 
 private fun HttpRequestBuilder.imageTimeout() {
     timeout {

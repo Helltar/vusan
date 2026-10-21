@@ -1,6 +1,7 @@
 package com.helltar.vusan.common
 
 import java.net.URLConnection
+import java.util.*
 
 /** The extension of a file name, lowercased and without the dot; empty when it has none. */
 val String.fileExtension: String
@@ -11,6 +12,9 @@ val String.fileExtension: String
  * guess misses some, webp among them, and vision would then label the bytes as a jpeg.
  */
 fun mimeTypeOfName(name: String): String? = MIME_BY_EXTENSION[name.fileExtension] ?: URLConnection.guessContentTypeFromName(name)
+
+/** [bytes] inline as a `data:` URL, for an API that takes media in the request instead of fetching it. */
+fun dataUrl(contentType: String, bytes: ByteArray): String = "data:$contentType;base64,${Base64.getEncoder().encodeToString(bytes)}"
 
 /** The extension a media type is usually written with, or `null` for one nothing here names. */
 fun extensionOfMime(mimeType: String): String? = EXTENSION_BY_MIME[mimeType.lowercase()]

@@ -1,27 +1,23 @@
 package com.helltar.vusan.tools.imagegen
 
+import com.helltar.vusan.common.dataUrl
 import com.helltar.vusan.common.rethrowIfCancellation
 import com.helltar.vusan.config.ImageProviderConfig
+import com.helltar.vusan.config.XAI_API_BASE_URL
 import com.helltar.vusan.infra.HttpStatusException
+import com.helltar.vusan.tools.isImagineModerated
 import io.ktor.client.*
 import io.ktor.client.call.*
 import io.ktor.client.plugins.*
 import io.ktor.client.request.*
 import io.ktor.http.*
-import kotlinx.serialization.json.Json
-import kotlinx.serialization.json.JsonPrimitive
-import kotlinx.serialization.json.contentOrNull
-import kotlinx.serialization.json.jsonObject
 import java.util.*
 import kotlin.time.Duration.Companion.minutes
 
-private const val XAI_IMAGES_URL = "https://api.x.ai/v1/images"
+private const val XAI_IMAGES_URL = "$XAI_API_BASE_URL/images"
 
 // a new picture at medium quality took 80 to 90 seconds when measured, so this leaves room for a slow one
 private val IMAGE_TIMEOUT = 5.minutes
-
-// what a 400 says when moderation rejected a video, measured on 2026-10-21; an image is assumed to say the same
-private const val MODERATED_CODE = "imagine:content-moderated"
 
 /**
  * xAI's Imagine image API: JSON both ways, the sources inline as data URLs and the picture back as
@@ -46,7 +42,7 @@ class XaiImageClient(private val http: HttpClient, private val config: ImageProv
         require(images.isNotEmpty()) { "At least one source image is required" }
         require(images.none { it.bytes.isEmpty() }) { "Image bytes must not be empty" }
 
-        val sources = images.map { XaiImageSource("data:${it.contentType};base64,${Base64.getEncoder().encodeToString(it.bytes)}") }
+        val sources = images.map { XaiImageSource(dataUrl(it.contentType, it.bytes)) }
 
         // `image` and `images` exclude each other, and one picture goes as `image`, the form xai documents
         // for a single edit. an edit left to auto is framed like the first of them.
@@ -86,7 +82,7 @@ class XaiImageClient(private val http: HttpClient, private val config: ImageProv
             }
                 .getOrElse { e ->
                     e.rethrowIfCancellation()
-                    throw (e as? HttpStatusException)?.takeIf { it.isModerated() }
+                    throw (e as? HttpStatusException)?.takeIf { it.isImagineModerated() }
                         ?.let { ImageModerationBlocked(ImageModerationStage.UNKNOWN, emptyList()) }
                         ?: e
                 }
@@ -104,10 +100,6 @@ class XaiImageClient(private val http: HttpClient, private val config: ImageProv
 
         return bytes
     }
-
-    private fun HttpStatusException.isModerated(): Boolean =
-        status == HttpStatusCode.BadRequest.value &&
-                runCatching { (Json.parseToJsonElement(body.orEmpty()).jsonObject["code"] as? JsonPrimitive)?.contentOrNull }.getOrNull() == MODERATED_CODE
 }
 
 private val ImageFraming.aspectRatio: String?

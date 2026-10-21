@@ -172,11 +172,14 @@ class ToolCatalogFactory(
     private val imageClient: ImageClient? =
         when (image) {
             null -> null
-            is ImageProviderConfig.OpenAi -> OpenAiImageClient(http, ImageAuth.ApiKey(image.apiKey), image)
+            is ImageProviderConfig.OpenAi -> OpenAiImageClient(http, ImageAuth.ApiKey(image.apiKey), image.model, image.quality)
 
             // the plan is signed in for the pictures alone when nothing else runs on it
-            is ImageProviderConfig.Codex ->
-                OpenAiImageClient(http, ImageAuth.Codex(requireNotNull(codexAuth) { "a codex image provider needs the plan's sign-in" }), image)
+            is ImageProviderConfig.Codex -> {
+                val auth = ImageAuth.Codex(requireNotNull(codexAuth) { "a codex image provider needs the plan's sign-in" })
+
+                OpenAiImageClient(http, auth, image.model, image.quality)
+            }
 
             is ImageProviderConfig.Xai -> XaiImageClient(http, image)
         }

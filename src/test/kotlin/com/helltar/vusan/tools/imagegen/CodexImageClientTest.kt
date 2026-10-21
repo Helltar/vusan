@@ -58,7 +58,7 @@ class CodexImageClientTest {
                 },
             )
 
-        val bytes = OpenAiImageClient(http, ImageAuth.Codex(store()), config).generate("a red panda", ImageFraming.SQUARE)
+        val bytes = OpenAiImageClient(http, ImageAuth.Codex(store()), config.model, config.quality).generate("a red panda", ImageFraming.SQUARE)
 
         assertContentEquals(imageBytes, bytes)
     }
@@ -98,7 +98,7 @@ class CodexImageClientTest {
             )
 
         val bytes =
-            OpenAiImageClient(http, ImageAuth.Codex(store()), config)
+            OpenAiImageClient(http, ImageAuth.Codex(store()), config.model, config.quality)
                 .edit("make it blue", listOf(SourceImage(source, "in.png", "image/png")), ImageFraming.SQUARE)
 
         assertContentEquals(result, bytes)
@@ -119,7 +119,7 @@ class CodexImageClientTest {
                 },
             )
 
-        OpenAiImageClient(http, ImageAuth.Codex(store()), config)
+        OpenAiImageClient(http, ImageAuth.Codex(store()), config.model, config.quality)
             .edit(
                 "put them together",
                 listOf(
@@ -146,7 +146,7 @@ class CodexImageClientTest {
             )
 
         val blocked = assertFailsWith<ImageModerationBlocked> {
-            OpenAiImageClient(http, ImageAuth.Codex(store()), config).generate("a portrait", ImageFraming.SQUARE)
+            OpenAiImageClient(http, ImageAuth.Codex(store()), config.model, config.quality).generate("a portrait", ImageFraming.SQUARE)
         }
 
         assertEquals(ImageModerationStage.UNKNOWN, blocked.stage)

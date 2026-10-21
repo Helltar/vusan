@@ -1,5 +1,6 @@
 package com.helltar.vusan.tools.videogen
 
+import com.helltar.vusan.common.dataUrl
 import com.helltar.vusan.common.rethrowIfCancellation
 import com.helltar.vusan.common.sniffedImageMimeType
 import com.helltar.vusan.outbox.BotOutbox
@@ -16,7 +17,6 @@ import com.helltar.vusan.tools.refusedByChat
 import com.helltar.vusan.tools.requireToolText
 import com.helltar.vusan.tools.suspendToolGuard
 import io.github.oshai.kotlinlogging.KotlinLogging
-import java.util.*
 
 class VideoGenTools(
     private val client: XaiVideoClient,
@@ -231,5 +231,3 @@ private suspend fun AttachedFile.mp4DataUrl(): String {
 
 private const val MP4_BRAND_START = 4
 private const val MP4_BRAND_END = 8
-
-private fun dataUrl(type: String, bytes: ByteArray): String = "data:$type;base64,${Base64.getEncoder().encodeToString(bytes)}"
