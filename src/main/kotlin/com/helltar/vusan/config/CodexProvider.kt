@@ -61,7 +61,8 @@ internal fun codexRuntime(config: LlmProviderConfig.Codex, auth: CodexAuthStore,
             reasoningEffort = config.reasoningEffort,
             verbosity = config.verbosity,
             serviceTier = config.serviceTier?.requestValue,
-            parallelToolCalls = false,
+            // what the cli asks for too: one request for a batch of lookups, which run side by side when read-only
+            parallelToolCalls = true,
             promptCacheKey = PROMPT_CACHE_KEY,
         )
 

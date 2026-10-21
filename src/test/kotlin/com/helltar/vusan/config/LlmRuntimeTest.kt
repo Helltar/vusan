@@ -247,7 +247,7 @@ class LlmRuntimeTest {
         assertEquals("low", wire.body.getValue("text").jsonObject.getValue("verbosity").jsonPrimitive.content)
         assertEquals("priority", wire.body.getValue("service_tier").jsonPrimitive.content)
         assertEquals("vusan", wire.body.getValue("prompt_cache_key").jsonPrimitive.content)
-        assertEquals(false, wire.body.getValue("parallel_tool_calls").jsonPrimitive.content.toBoolean())
+        assertEquals(true, wire.body.getValue("parallel_tool_calls").jsonPrimitive.content.toBoolean())
     }
 
     @Test
