@@ -183,6 +183,22 @@ keyring storage, put `cli_auth_credentials_store = "file"` back in that director
 Treat the file like a password, because it holds live access and refresh tokens, and in a container
 mount its directory read-write.
 
+**Signing in from another machine.** The bot host does not need the CLI, and the image does not
+ship it. Sign in on any machine with a browser into an empty directory, then copy its `auth.json`
+into the bot's `CODEX_HOME`. The same works after a logout or a change of the account's email:
+
+```bash
+mkdir -p /tmp/codex-vusan
+echo 'cli_auth_credentials_store = "file"' > /tmp/codex-vusan/config.toml
+CODEX_HOME=/tmp/codex-vusan codex login
+scp /tmp/codex-vusan/auth.json bot-host:/path/to/codex-home/auth.json
+ssh bot-host chmod 600 /path/to/codex-home/auth.json
+rm -r /tmp/codex-vusan
+```
+
+The next request reads the new file. With a [fallback](#a-second-provider-behind-the-first) behind
+Codex, a sign-in that expired keeps Codex out for half an hour, and a restart brings it back at once.
+
 Before every request Vusan checks whether the file changed and rereads it if so, so a later CLI
 login, logout, sandbox switch or token rotation takes effect without restarting the bot. Sharing one
 file with an interactive CLI is fine — a refresh from either side keeps the other working, and the
