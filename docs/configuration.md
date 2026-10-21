@@ -369,12 +369,7 @@ the one a message arrived as — a file someone sent, a track it fetched, a piec
 
 ### Image generation
 
-`IMAGE_PROVIDER` turns on `generateImage` and `editImage` and picks who draws:
-
-- **`openai`** — the OpenAI image API, billed per image against `IMAGE_API_KEY`; your OpenAI key works.
-- **`codex`** — the ChatGPT subscription signed in through `CODEX_HOME`, with no key, whatever the
-  chat runs on.
-- **`xai`** — xAI's Imagine API, billed per image against `IMAGE_API_KEY`.
+`IMAGE_PROVIDER` turns on `generateImage` and `editImage` and picks who draws.
 
 | Variable         | Default     | Description                                                                       |
 |------------------|-------------|-----------------------------------------------------------------------------------|
@@ -383,44 +378,19 @@ the one a message arrived as — a file someone sent, a track it fetched, a piec
 | `IMAGE_MODEL`    | by provider | `gpt-image-2.5-flare` on `openai` and `codex`, `grok-imagine-image-2.0` on `xai`. |
 | `IMAGE_QUALITY`  | by provider | `medium` on `openai` and `codex`, `auto` on `xai`.                                |
 
-The agent picks the aspect ratio; the model and quality are yours, so the cost stays predictable.
+- **`openai`** — OpenAI's image API, billed per image. Quality goes from `low` to `max`, or `auto`;
+  `xhigh` and `max` need a `gpt-image-2.5` model, and models before `gpt-image-2` lack wide framings.
+- **`codex`** — the ChatGPT subscription signed in through `CODEX_HOME`, with no key: the same models
+  and qualities, counted against the chat's usage limit.
+- **`xai`** — xAI's Imagine API, billed per image. Quality is `low`, `medium` or `auto`, which picks
+  `low` for a new picture and `medium` for an edit; a new one at `medium` takes over a minute.
 
-- **Self-portraits** — a picture of the bot is an edit of the [Appearance](#appearance) photo, which
-  keeps the face.
-- **Edits** — take everything one message carried, so an album sent with "merge these" becomes one
-  picture, with Vusan in it if asked.
-
-On `openai`:
-
-- **Quality** — `low`, `medium`, `high`, `xhigh`, `max` or `auto`. `xhigh` and `max` work only on
-  `gpt-image-2.5` models; older ones stop at `high` and fail above it.
-- **Likeness** — on `gpt-image-1`, `-1-mini` and `-1.5` holding a face that closely costs extra input
-  tokens; from `gpt-image-2` on it is always included.
-- **Sizes** — wallpaper and banner framings, and sizes beyond the three classic ones, need
-  `gpt-image-2` or newer; older models use the nearest size they have.
-- **Format** — pictures arrive as JPEG: Telegram re-encodes photos anyway, and the smaller file keeps
-  a `max` picture within its size limit.
-- **Refusals** — OpenAI filters both the prompt and the picture, and that cannot be turned off;
-  Vusan asks for the looser of its two settings. A refusal is reported as one, with an offer to
-  change the picture.
-
-On `codex` the models and qualities are OpenAI's, with three differences: pictures count against the
-same usage limit as the chat, the aspect ratio is only a hint because the model picks its own
-dimensions, and the filter is ChatGPT's, with no setting.
-
-On `xai`:
-
-- **Quality** — `low`, `medium` or `auto`. On `auto` xAI picks `low` for a new picture and `medium`
-  for an edit; a new picture at `medium` takes over a minute instead of about fifteen seconds.
-- **Size** — pictures come at about 1,250 pixels on the long side, the most Telegram shows of a photo.
-- **Edits** — up to five images at once, Vusan's own photo included; of a bigger album the first are
-  used, and Vusan says so.
+A picture of Vusan itself is drawn from the [Appearance](#appearance) photo, which keeps the face.
 
 ### Video generation
 
-`VIDEO_PROVIDER=xai` turns on `generateVideo`, `editVideo` and `extendVideo`: short videos with sound
-from a description, a photo brought to life, a clip with Vusan in it, and a video changed or carried
-on. They render on xAI's Imagine API with an xAI API key.
+`VIDEO_PROVIDER=xai` turns on `generateVideo`, `editVideo` and `extendVideo`, rendered on xAI's
+Imagine API.
 
 | Variable           | Default                  | Description                                                |
 |--------------------|--------------------------|------------------------------------------------------------|
@@ -430,8 +400,6 @@ on. They render on xAI's Imagine API with an xAI API key.
 | `VIDEO_RESOLUTION` | `720p`                   | `480p`, `720p` or `1080p`.                                 |
 | `VIDEO_VOICE`      | the model's own          | The voice Vusan speaks with in a video of itself.          |
 
-- **Waiting** — a clip takes from half a minute to a few minutes, and the turn waits for it with
-  🎥 in its status. People ask for videos by name, so the tools load when a request needs them.
 - **Price** — billed per second of video, so the agent keeps clips short unless asked otherwise.
 - **Models** — `grok-imagine-video-1.5-lite` is a quarter of the price and makes no clip from
   reference pictures or with Vusan in it. Edits and extensions always run on `grok-imagine-video`.
@@ -439,8 +407,6 @@ on. They render on xAI's Imagine API with an xAI API key.
   `720p` at most, whatever is set.
 - **Vusan in a video** — the [Appearance](#appearance) photo and notes keep the face, and
   `VIDEO_VOICE` names one of xAI's preset voices, such as `eve` or `ara`.
-- **Sources** — pictures as JPEG, PNG or WebP; a video to edit as an MP4 under nine seconds, to
-  extend as one of two to fifteen.
 
 ### Vision
 
