@@ -8,8 +8,9 @@ import that points Claude Code here. Keep this file short and actionable —
 product docs go in `README.md` or `docs/`. Prefer clean removals over
 compatibility shims.
 
-Read [`docs/architecture.md`](docs/architecture.md) before changing request flow,
-delivery, tools, storage, scheduling or startup wiring, and use its
+[`docs/architecture.md`](docs/architecture.md) indexes the architecture pages:
+read the one that covers request flow, delivery, tools, storage, scheduling or
+startup wiring before changing it, and use the index's
 [symptom map](docs/architecture.md#where-to-look-when) before broad searching.
 
 ## Commands and Verification
@@ -26,7 +27,7 @@ delivery, tools, storage, scheduling or startup wiring, and use its
 
 ## Architecture Rules
 
-Preserve the package boundaries in [`docs/architecture.md`](docs/architecture.md#layers).
+Preserve the package boundaries in [`docs/architecture/layers.md`](docs/architecture/layers.md).
 
 - Inside `telegram/`: `inbound/` turns an update into agent input, `delivery/`
   sends everything back out, `callback/` owns the inline-button flows, `tools/`
@@ -136,10 +137,11 @@ Preserve the package boundaries in [`docs/architecture.md`](docs/architecture.md
 Update docs in the same change as the behavior, and read them before changing
 what they describe:
 
-- [`docs/architecture.md`](docs/architecture.md): lifecycle, package/layer moves,
-  delivery policy, scheduler behavior, startup wiring, or core orchestrators
-  (`AgentRunner`, `AgentFactory`, `ToolCatalogFactory`, `TelegramDelivery`,
-  `TelegramOutputSender`, `TaskScheduler`).
+- [`docs/architecture/`](docs/architecture.md), the page that describes it:
+  lifecycle, package/layer moves, delivery policy, scheduler behavior, startup
+  wiring, or core orchestrators (`AgentRunner`, `AgentFactory`,
+  `ToolCatalogFactory`, `TelegramDelivery`, `TelegramOutputSender`,
+  `TaskScheduler`). A new page gets its line in the index, `docs/architecture.md`.
 - [`docs/configuration.md`](docs/configuration.md) and
   [`.env.example`](.env.example): env var additions, removals,
   renames, default or semantics changes.
@@ -160,7 +162,7 @@ what they describe:
 - Telegram slash commands: `telegram/TelegramCommands.kt` is the source of
   truth. Keep aligned with it the `Telegram commands` section in
   `agent/SystemPrompt.kt`, the menu in `telegram/CommandMenu.kt` (a description
-  per `Language` in `i18n/Messages`), and architecture.md's direct-command flow.
+  per `Language` in `i18n/Messages`), and `docs/architecture/commands.md`.
 
 ## Kotlin Style
 

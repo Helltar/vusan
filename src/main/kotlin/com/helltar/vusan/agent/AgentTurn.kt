@@ -48,7 +48,7 @@ class ModelRefusal(val reason: String?) : RuntimeException("the model declined t
  * by side: a search changes nothing, so three of them need not wait for one another, while anything that
  * writes keeps its place in the batch. Results are recorded in batch order either way.
  *
- * Guards against flaky models in four places, the four `docs/architecture.md` lists under Act:
+ * Guards against flaky models in four places, the four `docs/architecture/turn.md` lists under Act:
  * - a tool call that arrives with no arguments at all for a tool that takes them (flaky models emit
  *   empty-arg siblings when they try to call tools in parallel) is answered with a validation error
  *   instead of being executed, so the follow-up request stays well-formed and the model reissues it;
