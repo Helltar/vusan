@@ -6,8 +6,7 @@ sealed interface VideoProviderConfig {
     val model: String
 
     /**
-     * xAI's Imagine API with a key from its console. On a team whose seat carries a Grok plan, the
-     * videos are drawn from the plan's weekly included usage before any prepaid credit.
+     * xAI's Imagine API with an xAI API key.
      *
      * [model] makes new videos; an edit or an extension always runs on the one model that takes them.
      * [voice] is a preset voice the bot speaks with when it films itself, `null` for the model's own.

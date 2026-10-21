@@ -197,10 +197,7 @@ sealed interface LlmProviderConfig {
             )
     }
 
-    /**
-     * xAI's API with a key from its console. On a team whose seat carries a Grok subscription, the
-     * calls are drawn from the plan's weekly included usage before any prepaid credit.
-     */
+    /** xAI's API with an xAI API key. */
     data class Xai(
         val apiKey: String,
         override val model: String,

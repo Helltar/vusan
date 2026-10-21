@@ -46,8 +46,7 @@ Part of the [architecture index](../architecture.md).
   xAI reads differs from OpenAI and decides what goes along: the conversation's `prompt_cache_key`, which xAI routes on
   as on `x-grok-conv-id` to the server holding the prefix; `store: false` and the encrypted reasoning, replayed through
   the tool loop, since a request missing the reasoning before it is what xAI names the first cause of cache misses; and
-  none of OpenAI's cache options, since xAI caches on its own and charges nothing to write. A key on a team whose seat
-  carries a Grok plan is paid from the plan's weekly included usage before any prepaid credit.
+  none of OpenAI's cache options, since xAI caches on its own and charges nothing to write.
 - **ChatGPT subscription (`codex`)** — the same OpenAI client pointed at the Codex backend's Responses API, with no API
   key. `llm/codex/CodexAuth.CodexAuthStore` owns the credentials `codex login` writes to `~/.codex/auth.json` (or
   `$CODEX_HOME`). `AppConfig` resolves that path into the Codex provider config, and the store rereads the file per

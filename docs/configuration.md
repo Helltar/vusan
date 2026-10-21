@@ -64,7 +64,7 @@ group, and exempt from the [limit on one person alone in a group](#one-person-al
 |---------------------|----------------------------|----------------------------------------------------------------|
 | `openai`            | `gpt-6.1-sol`              | OpenAI's API.                                                  |
 | `anthropic`         | `claude-opus-5-5`          | Anthropic's API, Claude 4.6 or newer.                          |
-| `xai`               | `grok-4.7`                 | xAI's API, which a Grok plan can pay for; see below.           |
+| `xai`               | `grok-4.7`                 | xAI's API; see below.                                          |
 | `codex`             | a model your plan offers   | A ChatGPT plan instead of a key; see below.                    |
 | `openai-compatible` | whatever the server serves | Any OpenAI-compatible server, remote or local.                 |
 
@@ -127,8 +127,6 @@ LLM_MODEL=grok-4.7
 LLM_API_KEY=xai-qwerty
 ```
 
-- **On a Grok plan** — the calls come out of the plan's weekly included usage first, and out of
-  prepaid credits only once it is spent. Without credits, they pause until the weekly reset.
 - **Effort** — `grok-4.7` always thinks, from `low` to `xhigh`. `grok-4.3` also takes `none`, which
   makes it the quick one for [answering without a mention](#answering-without-a-mention).
 - **Images** — JPEG, PNG and WebP; a GIF is refused.
@@ -447,8 +445,7 @@ on. They render on xAI's Imagine API with an xAI API key.
 
 - **Waiting** — a clip takes from half a minute to a few minutes, and the turn waits for it with
   🎥 in its status. People ask for videos by name, so the tools load when a request needs them.
-- **Price** — billed per second of video, so the agent keeps clips short unless asked otherwise. On
-  a Grok plan the seconds come out of its weekly included usage first.
+- **Price** — billed per second of video, so the agent keeps clips short unless asked otherwise.
 - **Models** — `grok-imagine-video-1.5-lite` is a quarter of the price and makes no clip from
   reference pictures or with Vusan in it. Edits and extensions always run on `grok-imagine-video`.
 - **Resolution** — a clip with reference pictures, Vusan, a last frame or a voice renders at
