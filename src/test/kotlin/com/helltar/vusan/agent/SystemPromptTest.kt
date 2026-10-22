@@ -67,6 +67,19 @@ class SystemPromptTest {
         assertFalse("turns/" in without)
     }
 
+    // without it a model asked again answers from the history of when it was on, with a made-up refusal
+    @Test
+    fun `media generation switched off is named, and nothing is said where it is on`() {
+        val off = systemPromptFor("Custom personality", MODEL_ID, images = false, videos = true)
+        val bothOff = systemPromptFor("Custom personality", MODEL_ID)
+        val on = systemPromptFor("Custom personality", MODEL_ID, images = true, videos = true)
+
+        assertContains(off, "Switched off on this deployment, with no tool for it and none to load: drawing and editing pictures.")
+        assertContains(off, "never make up a result or a refusal")
+        assertContains(bothOff, "none to load: drawing and editing pictures, making and editing videos.")
+        assertFalse("Switched off" in on)
+    }
+
     @Test
     fun `system prompt separates personality from the operational contract`() {
         val prompt = systemPromptFor("  Custom personality  ", MODEL_ID)

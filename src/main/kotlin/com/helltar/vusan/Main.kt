@@ -208,6 +208,8 @@ suspend fun main() = coroutineScope {
                 client, llm.model, llm.chatOptions,
                 config.personality, botProfile.usernames, botProfile.displayName,
                 sandbox = config.regolithUrl != null,
+                images = config.image != null,
+                videos = config.video != null,
                 maxModelCalls = config.agentMaxModelCalls,
                 contextWindowPolicy = contextWindowPolicy,
             )

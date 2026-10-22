@@ -56,7 +56,8 @@ that is who owns writing them, not because only `agent/` reads them. No other ar
   `<current_model>` block and the status message's fallback line read to say who is answering. `AgentFactory` builds
   the `AgentTurn` (system prompt + history + tools over the model client) and budgets its model context, and
   `AgentTurn` is the agent loop itself; `SystemPrompt` keeps the deployment's customizable personality and the
-  fixed delivery/tool contract in separate XML-delimited blocks. `agent/conversation/` groups turns into complete
+  fixed delivery/tool contract in separate XML-delimited blocks, the contract naming the model and whichever of
+  pictures and videos this deployment cannot make. `agent/conversation/` groups turns into complete
   interactions, persists raw history and maintains its semantic recap; `ConversationPlanner` picks what of it a prompt
   carries, recapping first when it does not fit. All of it is keyed by a `ConversationScope` — one
   person in one chat, so a private exchange can never be replayed as that person's own words inside a group, and what

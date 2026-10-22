@@ -34,6 +34,10 @@ class AgentFactory(
     private val botDisplayName: String? = null,
     // whether this deployment has a sandbox at all; the prompt says nothing about one where it does not
     private val sandbox: Boolean = false,
+    // whether pictures and videos can be made here; the prompt names what is off, or the history of
+    // when it was on reads as a capability the model still has
+    private val images: Boolean = false,
+    private val videos: Boolean = false,
     // model calls one turn may make, the last of them reserved for landing a turn that runs long
     private val maxModelCalls: Int,
     private val contextWindowPolicy: ContextWindowPolicy = ContextWindowPolicy(model),
@@ -47,7 +51,7 @@ class AgentFactory(
     // `<tool_groups>`, and the budget below has to weigh the finished prompt.
     fun prepare(toolCatalog: ToolCatalog, currentTurn: String): AgentPromptPreparation {
         val systemPrompt =
-            systemPromptFor(personality ?: DEFAULT_PERSONALITY, model.id, botUsernames, botDisplayName, sandbox)
+            systemPromptFor(personality ?: DEFAULT_PERSONALITY, model.id, botUsernames, botDisplayName, sandbox, images, videos)
 
         return AgentPromptPreparation(
             toolCatalog = toolCatalog,

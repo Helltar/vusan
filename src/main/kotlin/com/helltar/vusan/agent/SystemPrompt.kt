@@ -98,8 +98,18 @@ private const val OPERATIONAL_CONTRACT = """# Instruction scope
  * family it was trained to name rather than what this deployment actually runs — so the id is
  * stated instead. It belongs in the system block: the deployment never changes it mid-run, so it
  * costs nothing beyond the first cached prefix.
+ *
+ * The same holds for media generation switched off: the history may still show pictures made, or
+ * refused, while it was on, and a model asked again without the tool answers from that pattern
+ * with an invented result or refusal unless it is told the capability is gone.
  */
-private fun runtimeSection(modelId: String, botUsernames: List<String>, botDisplayName: String?): String =
+private fun runtimeSection(
+    modelId: String,
+    botUsernames: List<String>,
+    botDisplayName: String?,
+    images: Boolean,
+    videos: Boolean,
+): String =
     buildString {
         append(
             """# Runtime
@@ -118,6 +128,18 @@ private fun runtimeSection(modelId: String, botUsernames: List<String>, botDispl
             append("\n- Your Telegram account is ${handles.first()}$alsoAs$shownAs. ")
             append("A handle is how people address you in a group, and it is removed from the text you receive — ")
             append("so a message that arrives as bare text may still have been addressed to you by name.")
+        }
+
+        val switchedOff =
+            listOfNotNull(
+                "drawing and editing pictures".takeUnless { images },
+                "making and editing videos".takeUnless { videos },
+            )
+
+        if (switchedOff.isNotEmpty()) {
+            append("\n- Switched off on this deployment, with no tool for it and none to load: ${switchedOff.joinToString(", ")}. ")
+            append("When someone asks for it, say plainly that you cannot do that now; never make up a result or a refusal. ")
+            append("Whatever this conversation shows of it being done or refused dates from when it was on and says nothing about the request in front of you.")
         }
     }
 
@@ -157,11 +179,14 @@ internal fun systemPromptFor(
     botUsernames: List<String> = emptyList(),
     botDisplayName: String? = null,
     sandbox: Boolean = false,
+    images: Boolean = false,
+    videos: Boolean = false,
 ): String =
     "${xmlBlock("personality", personality)}\n\n" +
             xmlBlock(
                 "operational_contract",
-                "$OPERATIONAL_CONTRACT\n\n${passingResultsSection(sandbox)}\n\n${runtimeSection(modelId, botUsernames, botDisplayName)}",
+                "$OPERATIONAL_CONTRACT\n\n${passingResultsSection(sandbox)}\n\n" +
+                        runtimeSection(modelId, botUsernames, botDisplayName, images, videos),
             )
 
 // the block names the contract above enumerates, kept next to it so the two cannot drift apart.
