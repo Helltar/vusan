@@ -72,9 +72,10 @@ private suspend fun LlmRuntime.leastEffort(options: RequestOptions): ReasoningEf
  * Models disagree on it and nothing lists it: on 2026-10-08 gpt-5.5, every gpt-5.6, gpt-6-luna and
  * gpt-6-sol took `none`, while gpt-6.1-sol, gpt-6-astra and gpt-5-mini refused it with a 400; the Codex
  * backend takes it on luna and terra though its catalog lists `low` as the lowest, DeepSeek turns its
- * thinking off with it though its list names `low` to `max`, and Anthropic has no such effort at all,
- * which its client refuses before any request. A check that could not be made at all counts as a
- * refusal, since a refused effort would fail every verdict while a needless one only slows them.
+ * thinking off with it though its list names only `low`, `high` and `max`, and Anthropic has no such
+ * effort at all, which its client refuses before any request. A check that could not be made at all
+ * counts as a refusal, since a refused effort would fail every verdict while a needless one only slows
+ * them.
  */
 private suspend fun LlmRuntime.refusalOfNone(options: RequestOptions): String? {
     val probe = ChatRequest(listOf(Message.User("Reply with: ok")), options = options.copy(reasoningEffort = ReasoningEffort.NONE, maxOutputTokens = PROBE_OUTPUT_TOKENS))
