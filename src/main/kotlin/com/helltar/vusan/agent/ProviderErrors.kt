@@ -5,11 +5,13 @@ import com.helltar.vusan.i18n.Messages
 import com.helltar.vusan.llm.LlmException
 import com.helltar.vusan.llm.ProviderOutage
 import java.time.Instant
+import java.time.Duration as JavaDuration
 import kotlin.time.Duration
 import kotlin.time.Duration.Companion.days
 import kotlin.time.Duration.Companion.minutes
 import kotlin.time.Duration.Companion.seconds
 import kotlin.time.toJavaDuration
+import kotlin.time.toKotlinDuration
 
 // what a provider failure means, read out of the status and the body the client kept. a provider says why
 // it refused in prose that varies by endpoint and by vendor, so most rules here are a pattern over the
@@ -31,11 +33,13 @@ private val CONTEXT_OVERFLOW_REGEX =
 
 // a spent allowance — a subscription out of Codex usage, an xAI account out of credits — is reported in the
 // error body rather than by status: a plain 429 is an ordinary rate limit that retrying fixes, while these
-// mean "come back later". xAI's words come with a 402 on an API key and a 403 on a Grok subscription.
+// mean "come back later". xAI's words come with a 402 on an API key and a 403 on a Grok subscription;
+// openrouter answers a key's own spending limit, or a budget set over it, with a 403 that names the reset.
 private val SUBSCRIPTION_LIMIT_REGEX =
     Regex(
         "usage_limit_reached|usage limit reached|usage_not_included|quota_exceeded|" +
-                "insufficient_quota|exceeded your current quota|spending-limit|run out of credits",
+                "insufficient_quota|exceeded your current quota|spending-limit|run out of credits|" +
+                "key limit exceeded|budget limit exceeded",
         RegexOption.IGNORE_CASE,
     )
 
@@ -86,9 +90,11 @@ internal fun Messages.providerErrorReply(error: LlmException, now: Instant = Ins
         else -> fallbackErrorReply
     }
 
-// an exhausted subscription says when it lifts, as a countdown or as an epoch-second deadline. the body
-// is JSON on some endpoints and flattened `key=value` lines on others, so match both spellings.
+// an exhausted subscription says when it lifts, as a countdown or as a deadline: epoch seconds, or an ISO
+// instant on openrouter. the body is JSON on some endpoints and flattened `key=value` lines on others, so
+// match both spellings.
 private val RESETS_IN_REGEX = Regex(""""?resets_in_seconds"?\s*[:=]\s*"?(\d+)""")
+private val RESETS_AT_INSTANT_REGEX = Regex(""""?resets_at"?\s*[:=]\s*"?(\d{4}-\d{2}-\d{2}T[\d:.]+Z)""")
 private val RESETS_AT_REGEX = Regex(""""?resets_at"?\s*[:=]\s*"?(\d+)""")
 
 // no real subscription window is longer than this, so a larger value is a malformed deadline (seconds
@@ -98,11 +104,15 @@ private val MAX_USAGE_LIMIT_RESET = 7.days
 /** How long until the exhausted subscription lifts, or `null` when the error body does not say. */
 internal fun usageLimitResetIn(providerError: String, now: Instant = Instant.now()): Duration? =
     (RESETS_IN_REGEX.longIn(providerError)?.seconds
+        ?: RESETS_AT_INSTANT_REGEX.instantIn(providerError)?.let { JavaDuration.between(now, it).toKotlinDuration() }
         ?: RESETS_AT_REGEX.longIn(providerError)?.let { (it - now.epochSecond).seconds })
         ?.takeIf { it.isPositive() && it <= MAX_USAGE_LIMIT_RESET }
 
 private fun Regex.longIn(text: String): Long? =
     find(text)?.groupValues?.get(1)?.toLongOrNull()
+
+private fun Regex.instantIn(text: String): Instant? =
+    find(text)?.groupValues?.get(1)?.let { runCatching { Instant.parse(it) }.getOrNull() }
 
 internal fun Throwable.isContextOverflow(): Boolean =
     providerError()?.text?.let(CONTEXT_OVERFLOW_REGEX::containsMatchIn) == true

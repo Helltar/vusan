@@ -111,14 +111,17 @@ LLM_MODEL=anthropic/claude-opus-5.5
 LLM_API_KEY=sk-or-v1-qwerty
 ```
 
-- **Startup check** — the model has to be one the key may use, and one that calls tools. OpenRouter's
-  list also gives its window, whether it sees and which efforts it takes, so nothing needs setting
-  by hand. The account's privacy and provider settings narrow that list.
+- **Startup check** — the model has to be one OpenRouter lists for the key, and one that calls
+  tools. The list also gives its window, whether it sees and which efforts it takes, so nothing
+  needs setting by hand. It does not apply every privacy setting: a free model the account's
+  privacy settings exclude still passes, and its first turn fails.
 - **Claude and the rest** — a Claude model works as it does on Anthropic's own API, thinking and
   effort included, and the others as on OpenAI's.
 - **Credit** — before each call OpenRouter sets aside enough for the longest reply the model may
   write. On a low balance, or near a key's daily limit, a large model is refused while a smaller one
   would still answer. Vusan takes that as credit run out, the way it takes a spent plan.
+- **A key's spending limit** — once it is spent, Vusan leaves OpenRouter alone until the limit
+  resets, answering on the [fallback](#a-second-provider-behind-the-first) if there is one.
 
 ## ChatGPT subscription
 

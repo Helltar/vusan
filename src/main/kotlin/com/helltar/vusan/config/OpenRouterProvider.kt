@@ -21,7 +21,8 @@ import kotlinx.serialization.json.longOrNull
 
 internal const val OPENROUTER_API_BASE_URL = "https://openrouter.ai/api"
 
-// the models this key may use, which the account's privacy and provider settings narrow down
+// the models listed for this key; not every privacy setting narrows it: a free model the account's
+// privacy settings exclude is still listed, and refused with a 404 on its first request
 private const val OPENROUTER_MODELS_URL = "$OPENROUTER_API_BASE_URL/v1/models/user"
 private const val OPENROUTER_MODELS_PAGE = "https://openrouter.ai/models"
 private const val CLAUDE_PREFIX = "anthropic/"

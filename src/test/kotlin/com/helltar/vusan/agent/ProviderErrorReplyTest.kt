@@ -161,6 +161,25 @@ class ProviderErrorReplyTest {
         assertTrue(!outOfPlan.deadlineNamed)
     }
 
+    // the shape openrouter documents for a key's own limit and for a budget over it, an ISO deadline in both places
+    @Test
+    fun `an openrouter key or budget limit is a spent allowance until the deadline it names`() {
+        val keyLimit =
+            error(
+                403,
+                """{"error":{"message":"Key limit exceeded (daily limit). $10.00 of $10.00 used; resets 1970-01-12T14:00:00.000Z.","code":403,""" +
+                        """"metadata":{"limit_source":"openrouter_key_limit","resets_at":"1970-01-12T14:00:00.000Z"}}}""",
+            )
+
+        val spent = assertNotNull(keyLimit.providerOutage(now))
+        assertEquals(now.plusSeconds(800), spent.until)
+        assertTrue(spent.deadlineNamed)
+        assertEquals(EnglishMessages.subscriptionLimitReply(800.seconds), EnglishMessages.providerErrorReply(keyLimit, now))
+
+        val budget = error(403, """{"error":{"message":"Budget limit exceeded (monthly limit). Contact your org admin.","code":403}}""")
+        assertEquals(now.plusSeconds(1800), assertNotNull(budget.providerOutage(now)).until, "no deadline, so the default wait")
+    }
+
     @Test
     fun `the reset countdown wins over the deadline`() {
         assertEquals(600.seconds, usageLimitResetIn(usageLimitBody, now))
