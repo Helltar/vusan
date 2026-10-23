@@ -76,7 +76,17 @@ class LlmDiaryWriter(
                 ),
             )
 
-        val entry = reply.message.text.trim().limitTo(maxChars).takeIf { it.isNotBlank() } ?: return null
+        val entry = reply.message.text.trim().limitTo(maxChars)
+
+        // an empty answer is retried and then given up on, so this line is the only trace of why
+        if (entry.isBlank()) {
+            log.warn {
+                "diary entry came back empty: $what stop=[${reply.stopReason}] refusal=[${reply.refusal ?: "none"}] " +
+                        "outputTokens=[${reply.usage?.outputTokens ?: "n/a"}]"
+            }
+
+            return null
+        }
 
         log.info {
             "diary entry generated: $what chars=[${entry.length}] " +
