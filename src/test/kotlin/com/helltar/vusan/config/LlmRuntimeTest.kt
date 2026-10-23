@@ -251,7 +251,7 @@ class LlmRuntimeTest {
     }
 
     // every other model streams openrouter's responses api; its gpt-5.6 breakpoint goes without the implicit mode,
-    // which openrouter refuses as a value
+    // which openrouter refuses as a value, and without the lifetime, which azure behind it refuses
     @Test
     fun `any other model on openrouter streams responses with stateless reasoning, the breakpoint and a session`() = runBlocking {
         val runtime = resolveLlmRuntime(openRouter("openai/gpt-5.6-luna", ReasoningEffort.LOW), http = http(CODEX_STREAM, contentType = "text/event-stream"))
@@ -274,7 +274,8 @@ class LlmRuntimeTest {
         assertEquals(key, wire.body.getValue("session_id").jsonPrimitive.content)
         assertNull(wire.body["prompt_cache_options"])
         val developer = wire.body.getValue("input").jsonArray.first().jsonObject.getValue("content").jsonArray.single().jsonObject
-        assertEquals("12h", developer.getValue("prompt_cache_breakpoint").jsonObject.getValue("ttl").jsonPrimitive.content)
+        assertEquals("explicit", developer.getValue("prompt_cache_breakpoint").jsonObject.getValue("mode").jsonPrimitive.content)
+        assertNull(developer.getValue("prompt_cache_breakpoint").jsonObject["ttl"])
         sent.clear()
 
         runtime.client.complete(runtime.model, request(runtime.compactionOptions, tools = emptyList()))

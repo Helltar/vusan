@@ -38,8 +38,8 @@ private val log = KotlinLogging.logger("ModelPreflight")
  *   `output_config.effort`, and the two cache breakpoints, the system one kept an hour. On Chat
  *   Completions Claude loses its thinking after a tool call and the effort goes unread.
  * - Every other model goes to its Responses API: stateless, with the encrypted reasoning replayed, and on
- *   the GPT-5.6 generation the developer block's breakpoint without the implicit mode named, which
- *   OpenRouter refuses as a value. It streams, since OpenRouter answers 200 as soon as an upstream takes
+ *   the GPT-5.6 generation the developer block's breakpoint as every upstream takes it: no implicit mode
+ *   named, which OpenRouter refuses as a value, and no twelve-hour lifetime, which Azure refuses. It streams, since OpenRouter answers 200 as soon as an upstream takes
  *   the request: a failure after that is an error event in a stream, where a plain call would get a body
  *   holding nothing but the error.
  *
@@ -80,7 +80,7 @@ internal fun openRouterRuntime(config: LlmProviderConfig.OpenRouter, http: HttpC
                 streamed = true,
                 statelessReasoning = true,
                 explicitPromptCaching = true,
-                statesImplicitCacheMode = false,
+                gatewayPromptCaching = true,
                 routesBySession = true,
                 label = "OpenRouter",
             )

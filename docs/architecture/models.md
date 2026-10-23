@@ -52,8 +52,9 @@ Part of the [architecture index](../architecture.md).
   model (`anthropic/…`) goes through the Anthropic client to OpenRouter's Messages API at `https://openrouter.ai/api`,
   everything Anthropic gets included (adaptive thinking with signed blocks replayed, effort, the two breakpoints);
   any other model streams OpenRouter's Responses API through the OpenAI client, stateless with the encrypted reasoning
-  replayed, and on GPT-5.6 and later the twelve-hour breakpoint on the developer block with no mode named, since
-  OpenRouter refuses `implicit` as a value and serves the unnamed one as it. The Responses call streams because
+  replayed, and on GPT-5.6 and later a breakpoint on the developer block as every upstream takes it: no mode named,
+  since OpenRouter refuses `implicit` as a value and serves the unnamed one as it, and no twelve-hour lifetime, which
+  Azure, one of the upstreams it routes OpenAI models to, refuses as an unknown parameter. The Responses call streams because
   OpenRouter answers 200 once an upstream takes the request, so a later failure is an error event rather than a
   body holding nothing but the error. Both clients send the conversation's cache key as `session_id` too, which keeps
   a conversation on the upstream holding its cached prefix.

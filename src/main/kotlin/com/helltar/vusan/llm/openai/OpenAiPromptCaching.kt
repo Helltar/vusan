@@ -30,26 +30,29 @@ import kotlinx.serialization.json.put
  * marked, which the API documents as no caching at all; left to the implicit mode, the platform writes
  * the whole prompt at a quarter over the input price for a read nobody makes. Older models know neither
  * field and keep their own automatic caching, and a body with no developer block has nothing to mark and
- * is left to the platform's default, which is the implicit mode. A gateway that refuses `implicit` as a
- * value, OpenRouter, gets the breakpoint with no mode named ([statesImplicitMode] off), which it serves as
- * the implicit mode all the same: measured there on 2026-10-23 (gpt-5.6-luna), the tail was read back as
- * it is here, where explicit mode kept the reads at the developer block.
+ * is left to the platform's default, which is the implicit mode.
+ *
+ * A gateway ([viaGateway]) passes the fields on to whichever upstream serves the request, so it gets only
+ * what every one of them takes, as OpenRouter's did on 2026-10-23 (gpt-5.6-luna): the breakpoint with no
+ * mode named, since OpenRouter refuses `implicit` as a value and serves the unnamed one as it — the tail
+ * was read back as it is here, where explicit mode kept the reads at the developer block — and without the
+ * twelve-hour lifetime, an unknown parameter to Azure behind it.
  */
-internal fun withPromptCacheOptions(body: JsonObject, cachePrompt: Boolean, statesImplicitMode: Boolean = true): JsonObject {
+internal fun withPromptCacheOptions(body: JsonObject, cachePrompt: Boolean, viaGateway: Boolean = false): JsonObject {
     val model = (body["model"] as? JsonPrimitive)?.contentOrNull ?: return body
     if (!takesOpenAiPromptCacheOptions(model)) return body
     if (!cachePrompt) return JsonObject(body + ("prompt_cache_options" to EXPLICIT_MODE))
 
     val marked =
         (body["input"] as? JsonArray)
-            ?.let { markSystemBlock(it, "input_text", LONG_LIVED_BREAKPOINT) }
+            ?.let { markSystemBlock(it, "input_text", if (viaGateway) EXPLICIT_BREAKPOINT else LONG_LIVED_BREAKPOINT) }
             ?.let { "input" to it }
             ?: (body["messages"] as? JsonArray)
                 ?.let { markSystemBlock(it, "text", EXPLICIT_BREAKPOINT) }
                 ?.let { "messages" to it }
             ?: return body
 
-    return if (statesImplicitMode) JsonObject(body + marked + ("prompt_cache_options" to IMPLICIT_MODE)) else JsonObject(body + marked)
+    return if (viaGateway) JsonObject(body + marked) else JsonObject(body + marked + ("prompt_cache_options" to IMPLICIT_MODE))
 }
 
 /**

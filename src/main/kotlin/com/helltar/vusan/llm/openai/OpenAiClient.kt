@@ -47,8 +47,8 @@ enum class OpenAiEndpoint {
  * loop echo it; a third-party server may know neither field. [explicitPromptCaching] states the GPT-5.6
  * generation's cache options — the platform's own fields, which a third-party server may not know: the
  * implicit mode with a breakpoint on the system prefix, or no caching for a prompt that never repeats.
- * [statesImplicitCacheMode] is off for a gateway that takes `explicit` as the only mode and leaves the
- * implicit one to be the default, as OpenRouter does: the breakpoint then goes without the mode named.
+ * [gatewayPromptCaching] narrows those options to what every upstream behind a gateway takes, for
+ * OpenRouter: the breakpoint without a lifetime, and the implicit mode left unnamed.
  * [routesBySession] is for a gateway that picks the upstream per request, as OpenRouter does: the
  * conversation's cache key goes along as `session_id` too, which keeps the conversation on the upstream
  * holding its cached prefix.
@@ -69,7 +69,7 @@ class OpenAiClient(
     private val streamed: Boolean = false,
     private val statelessReasoning: Boolean = false,
     private val explicitPromptCaching: Boolean = false,
-    private val statesImplicitCacheMode: Boolean = true,
+    private val gatewayPromptCaching: Boolean = false,
     private val routesBySession: Boolean = false,
     private val echoesReasoningContent: Boolean = false,
     private val legacyOutputCeiling: Boolean = false,
@@ -152,7 +152,7 @@ class OpenAiClient(
                 if (streamed) put("stream", true)
             }
 
-        return if (explicitPromptCaching) withPromptCacheOptions(body, options.cachePrompt, statesImplicitCacheMode) else body
+        return if (explicitPromptCaching) withPromptCacheOptions(body, options.cachePrompt, gatewayPromptCaching) else body
     }
 
     private fun responsesItems(message: Message): List<JsonObject> =
@@ -367,7 +367,7 @@ class OpenAiClient(
                 options.maxOutputTokens?.let { put(if (legacyOutputCeiling) "max_tokens" else "max_completion_tokens", it) }
             }
 
-        return if (explicitPromptCaching) withPromptCacheOptions(body, options.cachePrompt, statesImplicitCacheMode) else body
+        return if (explicitPromptCaching) withPromptCacheOptions(body, options.cachePrompt, gatewayPromptCaching) else body
     }
 
     private fun completionMessages(message: Message): List<JsonObject> =
