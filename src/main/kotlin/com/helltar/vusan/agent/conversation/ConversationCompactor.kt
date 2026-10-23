@@ -50,7 +50,7 @@ class LlmConversationCompactor(
             buildList {
                 previousSummary
                     ?.takeIf { it.isNotBlank() }
-                    ?.let { add(xmlBlock("previous_recap", it.limitTo(MAX_SUMMARY_CHARS))) }
+                    ?.let { add(xmlBlock("previous_recap", it.limitTo(MAX_SUMMARY_CHARS).neutralizeRecapSourceTags())) }
                 add(xmlBlock("conversation_events", source))
             }.joinToString("\n\n")
 
@@ -101,18 +101,18 @@ class LlmConversationCompactor(
             turns.forEach { turn ->
                 when (turn.role) {
                     ChatRole.USER ->
-                        appendLine(xmlBlock("user", turn.content.limitUserEntryTo(MAX_USER_OR_ASSISTANT_SOURCE_CHARS)))
+                        appendLine(xmlBlock("user", turn.content.limitUserEntryTo(MAX_USER_OR_ASSISTANT_SOURCE_CHARS).neutralizeRecapSourceTags()))
 
                     ChatRole.ASSISTANT ->
-                        appendLine(xmlBlock("assistant", turn.content.limitTo(MAX_USER_OR_ASSISTANT_SOURCE_CHARS)))
+                        appendLine(xmlBlock("assistant", turn.content.limitTo(MAX_USER_OR_ASSISTANT_SOURCE_CHARS).neutralizeRecapSourceTags()))
 
                     ChatRole.TOOL_CALL -> {
-                        val args = turn.content.collapseWhitespaceAndCap(MAX_TOOL_CALL_SOURCE_CHARS).orEmpty()
+                        val args = turn.content.collapseWhitespaceAndCap(MAX_TOOL_CALL_SOURCE_CHARS).orEmpty().neutralizeRecapSourceTags()
                         appendLine(xmlBlock("tool_call", "${turn.toolName}: $args"))
                     }
 
                     ChatRole.TOOL_RESULT -> {
-                        val output = turn.content.collapseWhitespaceAndCap(MAX_TOOL_RESULT_SOURCE_CHARS).orEmpty()
+                        val output = turn.content.collapseWhitespaceAndCap(MAX_TOOL_RESULT_SOURCE_CHARS).orEmpty().neutralizeRecapSourceTags()
                         val status = if (turn.toolIsError == true) "error" else "ok"
                         appendLine(xmlBlock("tool_result", "${turn.toolName} ($status): $output"))
                     }
@@ -132,6 +132,20 @@ class LlmConversationCompactor(
         val log = KotlinLogging.logger {}
     }
 }
+
+// the recap source's own delimiters. `user` and the rest are too generic to defuse in every quoted text, which
+// `neutralizePromptBlocks` leaves alone, but here they are the boundaries: a message or a fetched page that
+// closed its event and opened a `<user>` one would put words in somebody's mouth in the recap, and the recap
+// is durable memory. an opening tag is matched with attributes too, so a forged one cannot survive by carrying
+// some, and the blocks a stored user entry is written in (`<user_message>`, `<reply_context>`) are not these.
+private val RECAP_SOURCE_TAG =
+    Regex(
+        "</?(?:assistant|conversation_events|interaction|previous_recap|tool_call|tool_result|user)(?:\\s[^<>\\n]*)?>",
+        RegexOption.IGNORE_CASE,
+    )
+
+private fun String.neutralizeRecapSourceTags(): String =
+    replace(RECAP_SOURCE_TAG) { "&lt;${it.value.removePrefix("<")}" }
 
 // below this a context excerpt is too short to say what the request was answering, so the request
 // takes the whole budget instead.
