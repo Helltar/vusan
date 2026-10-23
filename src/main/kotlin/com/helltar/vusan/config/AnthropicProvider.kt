@@ -20,7 +20,7 @@ private const val ANTHROPIC_MODELS_PAGE = "https://platform.claude.com/docs/en/a
 
 // what every claude model since opus 4.7 lists, and what the vendor's model list confirms at startup
 private const val ANTHROPIC_CONTEXT_WINDOW = 1_000_000L
-private const val ANTHROPIC_MAX_OUTPUT = 128_000
+internal const val ANTHROPIC_MAX_OUTPUT = 128_000
 
 /**
  * Anthropic's Messages API, on a model that thinks adaptively and takes an effort: every Claude model

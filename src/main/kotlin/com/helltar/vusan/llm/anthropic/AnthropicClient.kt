@@ -38,12 +38,17 @@ val ANTHROPIC_EFFORTS: Set<ReasoningEffort> =
  *   1.25×; the tail stays on the five-minute default, and that order — the longer TTL first — is the one
  *   the API allows.
  * - Unknown content block types are skipped with a warning rather than failing the call.
+ *
+ * [baseUrl] is another server that speaks this API, OpenRouter's among them. [routesBySession] is for a
+ * gateway that picks the upstream per request, as OpenRouter does: the conversation's cache key goes along
+ * as `session_id`, which keeps the conversation on the upstream holding its cached prefix.
  */
 class AnthropicClient(
     private val http: HttpClient,
     apiKey: String,
     baseUrl: String = DEFAULT_BASE_URL,
     private val label: String = "Anthropic",
+    private val routesBySession: Boolean = false,
 ) : LlmClient {
 
     // what the reasoning blocks this client returns are tagged with, and the only ones it replays
@@ -120,6 +125,7 @@ class AnthropicClient(
             effort?.let { putJsonObject("output_config") { put("effort", it.requestValue) } }
 
             if (options.cachePrompt) put("cache_control", EPHEMERAL)
+            if (routesBySession) options.promptCacheKey?.let { put("session_id", it) }
         }
     }
 

@@ -30,9 +30,12 @@ import kotlinx.serialization.json.put
  * marked, which the API documents as no caching at all; left to the implicit mode, the platform writes
  * the whole prompt at a quarter over the input price for a read nobody makes. Older models know neither
  * field and keep their own automatic caching, and a body with no developer block has nothing to mark and
- * is left to the platform's default, which is the implicit mode.
+ * is left to the platform's default, which is the implicit mode. A gateway that refuses `implicit` as a
+ * value, OpenRouter, gets the breakpoint with no mode named ([statesImplicitMode] off), which it serves as
+ * the implicit mode all the same: measured there on 2026-10-23 (gpt-5.6-luna), the tail was read back as
+ * it is here, where explicit mode kept the reads at the developer block.
  */
-internal fun withPromptCacheOptions(body: JsonObject, cachePrompt: Boolean): JsonObject {
+internal fun withPromptCacheOptions(body: JsonObject, cachePrompt: Boolean, statesImplicitMode: Boolean = true): JsonObject {
     val model = (body["model"] as? JsonPrimitive)?.contentOrNull ?: return body
     if (!takesOpenAiPromptCacheOptions(model)) return body
     if (!cachePrompt) return JsonObject(body + ("prompt_cache_options" to EXPLICIT_MODE))
@@ -46,10 +49,13 @@ internal fun withPromptCacheOptions(body: JsonObject, cachePrompt: Boolean): Jso
                 ?.let { "messages" to it }
             ?: return body
 
-    return JsonObject(body + marked + ("prompt_cache_options" to IMPLICIT_MODE))
+    return if (statesImplicitMode) JsonObject(body + marked + ("prompt_cache_options" to IMPLICIT_MODE)) else JsonObject(body + marked)
 }
 
-/** The cache options arrived with the GPT-5.6 generation; a generation's first models carry no minor version. */
+/**
+ * The cache options arrived with the GPT-5.6 generation; a generation's first models carry no minor version.
+ * A gateway names the model under its vendor (`openai/gpt-5.6-luna`).
+ */
 internal fun takesOpenAiPromptCacheOptions(model: String): Boolean {
     val version = GPT_MODEL_VERSION.find(model.trim().lowercase()) ?: return false
     val major = version.groupValues[1].toInt()
@@ -90,7 +96,7 @@ private fun markedTextBlock(block: JsonObject, breakpoint: JsonObject): JsonObje
 
 private const val CACHE_OPTIONS_MAJOR = 5
 private const val CACHE_OPTIONS_MINOR = 6
-private val GPT_MODEL_VERSION = Regex("""^gpt-(\d+)(?:\.(\d+))?""")
+private val GPT_MODEL_VERSION = Regex("""^(?:openai/)?gpt-(\d+)(?:\.(\d+))?""")
 private val EXPLICIT_BREAKPOINT = buildJsonObject { put("mode", "explicit") }
 private val LONG_LIVED_BREAKPOINT = buildJsonObject { put("mode", "explicit"); put("ttl", "12h") }
 private val EXPLICIT_MODE = buildJsonObject { put("mode", "explicit") }

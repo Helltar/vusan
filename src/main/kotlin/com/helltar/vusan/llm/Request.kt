@@ -28,7 +28,8 @@ enum class ReasoningEffort {
  * [cachePrompt] asks the provider to keep the prompt's prefix for the next call — Anthropic's
  * `cache_control` and OpenAI's explicit breakpoints; off for a prompt whose body never repeats, since
  * the write would buy a read nobody makes. [promptCacheKey] is OpenAI's: it routes a conversation's
- * requests to the machine holding its prefix, and travels only to servers that know it.
+ * requests to the machine holding its prefix, and travels only to servers that know it — OpenRouter takes
+ * it as `session_id` besides, to keep a conversation on one upstream.
  */
 data class RequestOptions(
     val reasoningEffort: ReasoningEffort? = null,

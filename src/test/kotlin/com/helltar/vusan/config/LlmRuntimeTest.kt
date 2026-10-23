@@ -82,6 +82,9 @@ class LlmRuntimeTest {
     private fun xai(effort: ReasoningEffort? = null, window: Long? = null) =
         LlmProviderConfig.Xai(apiKey = "key", model = "grok-4.7", reasoningEffort = effort, requestTimeout = TIMEOUT, contextWindowTokens = window)
 
+    private fun openRouter(model: String, effort: ReasoningEffort? = null) =
+        LlmProviderConfig.OpenRouter(apiKey = "key", model = model, reasoningEffort = effort, requestTimeout = TIMEOUT)
+
     private fun codexAuth() = CodexAuthStore(Http.createClient(MockEngine { error("no refresh expected") }))
 
     // --- openai ---
@@ -214,6 +217,68 @@ class LlmRuntimeTest {
 
         assertEquals(500_000, runtime.model.contextWindowTokens)
         assertEquals("vusan-recap", sent.single().body.getValue("prompt_cache_key").jsonPrimitive.content)
+    }
+
+    // --- openrouter ---
+
+    // claude on openrouter's messages api is the anthropic client as it is, plus the conversation's routing key
+    @Test
+    fun `a claude model on openrouter speaks messages with the key, adaptive thinking, the breakpoints and a session`() = runBlocking {
+        val runtime = resolveLlmRuntime(openRouter("anthropic/claude-opus-5.5", ReasoningEffort.HIGH), http = http(messageEventStream(ANTHROPIC_REPLY), contentType = "text/event-stream"))
+
+        assertEquals("OpenRouter", runtime.providerLabel)
+        assertEquals(128_000, runtime.model.maxOutputTokens, "claude's ceiling, until the startup check says the model's own")
+
+        runtime.client.complete(runtime.model, request(runtime.chatOptions.forConversation("telegram:1@-100")))
+
+        val wire = sent.single()
+        assertEquals("https://openrouter.ai/api/v1/messages", wire.url)
+        assertEquals("key", wire.headers["x-api-key"])
+        assertEquals("adaptive", wire.body.getValue("thinking").jsonObject.getValue("type").jsonPrimitive.content)
+        assertEquals("high", wire.body.getValue("output_config").jsonObject.getValue("effort").jsonPrimitive.content)
+        assertEquals("1h", wire.body.getValue("system").jsonArray.single().jsonObject.getValue("cache_control").jsonObject.getValue("ttl").jsonPrimitive.content)
+        assertTrue(wire.body.getValue("session_id").jsonPrimitive.content.startsWith("vusan-"))
+        assertNull(wire.body["prompt_cache_key"])
+        sent.clear()
+
+        runtime.client.complete(runtime.model, request(runtime.compactionOptions, tools = emptyList()))
+        assertEquals("vusan-recap", sent.single().body.getValue("session_id").jsonPrimitive.content)
+    }
+
+    @Test
+    fun `an effort claude does not take fails at startup on openrouter too`() {
+        assertFailsWith<IllegalArgumentException> { resolveLlmRuntime(openRouter("anthropic/claude-opus-5.5", ReasoningEffort.NONE)) }
+    }
+
+    // every other model streams openrouter's responses api; its gpt-5.6 breakpoint goes without the implicit mode,
+    // which openrouter refuses as a value
+    @Test
+    fun `any other model on openrouter streams responses with stateless reasoning, the breakpoint and a session`() = runBlocking {
+        val runtime = resolveLlmRuntime(openRouter("openai/gpt-5.6-luna", ReasoningEffort.LOW), http = http(CODEX_STREAM, contentType = "text/event-stream"))
+
+        assertNull(runtime.model.contextWindowTokens, "nobody stated one until the startup check reads the list")
+        assertFalse(runtime.model.seesImages)
+
+        val reply = runtime.client.complete(runtime.model, request(runtime.chatOptions.forConversation("telegram:1@-100")))
+
+        assertEquals("ok", reply.message.text)
+        val wire = sent.single()
+        assertEquals("https://openrouter.ai/api/v1/responses", wire.url)
+        assertEquals("Bearer key", wire.headers["Authorization"])
+        assertEquals(true, wire.body.getValue("stream").jsonPrimitive.content.toBoolean())
+        assertEquals(false, wire.body.getValue("store").jsonPrimitive.content.toBoolean())
+        assertEquals("reasoning.encrypted_content", wire.body.getValue("include").jsonArray.single().jsonPrimitive.content)
+        assertEquals("low", wire.body.getValue("reasoning").jsonObject.getValue("effort").jsonPrimitive.content)
+        val key = wire.body.getValue("prompt_cache_key").jsonPrimitive.content
+        assertTrue(key.startsWith("vusan-"))
+        assertEquals(key, wire.body.getValue("session_id").jsonPrimitive.content)
+        assertNull(wire.body["prompt_cache_options"])
+        val developer = wire.body.getValue("input").jsonArray.first().jsonObject.getValue("content").jsonArray.single().jsonObject
+        assertEquals("12h", developer.getValue("prompt_cache_breakpoint").jsonObject.getValue("ttl").jsonPrimitive.content)
+        sent.clear()
+
+        runtime.client.complete(runtime.model, request(runtime.compactionOptions, tools = emptyList()))
+        assertEquals("explicit", sent.single().body.getValue("prompt_cache_options").jsonObject.getValue("mode").jsonPrimitive.content)
     }
 
     // --- openai-compatible ---

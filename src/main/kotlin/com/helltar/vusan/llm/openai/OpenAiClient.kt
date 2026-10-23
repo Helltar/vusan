@@ -47,6 +47,11 @@ enum class OpenAiEndpoint {
  * loop echo it; a third-party server may know neither field. [explicitPromptCaching] states the GPT-5.6
  * generation's cache options — the platform's own fields, which a third-party server may not know: the
  * implicit mode with a breakpoint on the system prefix, or no caching for a prompt that never repeats.
+ * [statesImplicitCacheMode] is off for a gateway that takes `explicit` as the only mode and leaves the
+ * implicit one to be the default, as OpenRouter does: the breakpoint then goes without the mode named.
+ * [routesBySession] is for a gateway that picks the upstream per request, as OpenRouter does: the
+ * conversation's cache key goes along as `session_id` too, which keeps the conversation on the upstream
+ * holding its cached prefix.
  * [echoesReasoningContent] is for a Chat Completions server that thinks aloud in `reasoning_content` and
  * wants it back on every tool call of a turn, as DeepSeek does: a call another endpoint wrote — the
  * provider a fallback took over from — then carries an empty one, since none at all is a 400.
@@ -64,6 +69,8 @@ class OpenAiClient(
     private val streamed: Boolean = false,
     private val statelessReasoning: Boolean = false,
     private val explicitPromptCaching: Boolean = false,
+    private val statesImplicitCacheMode: Boolean = true,
+    private val routesBySession: Boolean = false,
     private val echoesReasoningContent: Boolean = false,
     private val legacyOutputCeiling: Boolean = false,
     private val label: String = "OpenAI",
@@ -134,6 +141,7 @@ class OpenAiClient(
                 options.verbosity?.let { putJsonObject("text") { put("verbosity", it) } }
                 options.serviceTier?.let { put("service_tier", it) }
                 options.promptCacheKey?.let { put("prompt_cache_key", it) }
+                if (routesBySession) options.promptCacheKey?.let { put("session_id", it) }
                 options.maxOutputTokens?.let { put("max_output_tokens", it) }
 
                 if (statelessReasoning) {
@@ -144,7 +152,7 @@ class OpenAiClient(
                 if (streamed) put("stream", true)
             }
 
-        return if (explicitPromptCaching) withPromptCacheOptions(body, options.cachePrompt) else body
+        return if (explicitPromptCaching) withPromptCacheOptions(body, options.cachePrompt, statesImplicitCacheMode) else body
     }
 
     private fun responsesItems(message: Message): List<JsonObject> =
@@ -355,10 +363,11 @@ class OpenAiClient(
                 options.reasoningEffort?.let { put("reasoning_effort", it.requestValue) }
                 options.serviceTier?.let { put("service_tier", it) }
                 options.promptCacheKey?.let { put("prompt_cache_key", it) }
+                if (routesBySession) options.promptCacheKey?.let { put("session_id", it) }
                 options.maxOutputTokens?.let { put(if (legacyOutputCeiling) "max_tokens" else "max_completion_tokens", it) }
             }
 
-        return if (explicitPromptCaching) withPromptCacheOptions(body, options.cachePrompt) else body
+        return if (explicitPromptCaching) withPromptCacheOptions(body, options.cachePrompt, statesImplicitCacheMode) else body
     }
 
     private fun completionMessages(message: Message): List<JsonObject> =

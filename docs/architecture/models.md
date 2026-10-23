@@ -14,7 +14,8 @@ Part of the [architecture index](../architecture.md).
   Anthropic also states the window, the ceiling and what the model takes (adaptive thinking, which efforts, images),
   and those replace the runtime's assumptions; xAI states the window and the efforts (`none` among them where thinking
   can be turned off) in its model list, which answers for an alias too, and whether the model sees in its
-  language-model list; Codex reads the account's own catalog. What the vendor said goes back
+  language-model list; OpenRouter's list of the models a key may use states the window, the ceiling, the eyes, whether
+  the model calls tools and its efforts; Codex reads the account's own catalog. What the vendor said goes back
   into the config as facts (`seesImages`, `efforts`) that the roles read without knowing the provider: vision stops the
   startup on a model its vendor calls blind, and addressing sends the least effort listed, asking the model once where
   nothing is. `openai` always speaks the Responses API, the
@@ -47,6 +48,15 @@ Part of the [architecture index](../architecture.md).
   as on `x-grok-conv-id` to the server holding the prefix; `store: false` and the encrypted reasoning, replayed through
   the tool loop, since a request missing the reasoning before it is what xAI names the first cause of cache misses; and
   none of OpenAI's cache options, since xAI caches on its own and charges nothing to write.
+- **OpenRouter (`openrouter`)** — `config/OpenRouterProvider` picks a client by the model's vendor prefix: a Claude
+  model (`anthropic/…`) goes through the Anthropic client to OpenRouter's Messages API at `https://openrouter.ai/api`,
+  everything Anthropic gets included (adaptive thinking with signed blocks replayed, effort, the two breakpoints);
+  any other model streams OpenRouter's Responses API through the OpenAI client, stateless with the encrypted reasoning
+  replayed, and on GPT-5.6 and later the twelve-hour breakpoint on the developer block with no mode named, since
+  OpenRouter refuses `implicit` as a value and serves the unnamed one as it. The Responses call streams because
+  OpenRouter answers 200 once an upstream takes the request, so a later failure is an error event rather than a
+  body holding nothing but the error. Both clients send the conversation's cache key as `session_id` too, which keeps
+  a conversation on the upstream holding its cached prefix.
 - **ChatGPT subscription (`codex`)** — the same OpenAI client pointed at the Codex backend's Responses API, with no API
   key. `llm/codex/CodexAuth.CodexAuthStore` owns the credentials `codex login` writes to `~/.codex/auth.json` (or
   `$CODEX_HOME`). `AppConfig` resolves that path into the Codex provider config, and the store rereads the file per

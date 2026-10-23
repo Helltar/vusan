@@ -320,6 +320,13 @@ class OpenAiClientTest {
     }
 
     @Test
+    fun `a gateway's name for an openai model passes the same gate`() {
+        assertTrue(takesOpenAiPromptCacheOptions("openai/gpt-5.6-luna"))
+        assertFalse(takesOpenAiPromptCacheOptions("openai/gpt-5.5"))
+        assertFalse(takesOpenAiPromptCacheOptions("x-ai/gpt-5.6-luna"))
+    }
+
+    @Test
     fun `a chat completions request and reply take the completions shape`() = runBlocking {
         val client = client(reply = COMPLETION_REPLY, endpoint = OpenAiEndpoint.COMPLETIONS, explicitPromptCaching = false, statelessReasoning = false)
         val reply = client.complete(OLD_MODEL, request(*basic, options = RequestOptions(reasoningEffort = ReasoningEffort.HIGH, parallelToolCalls = false)))

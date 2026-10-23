@@ -42,6 +42,26 @@ private const val XAI_MODEL =
 
 private const val XAI_LANGUAGE_MODEL = """{"id":"grok-4.3","input_modalities":["text","image"],"output_modalities":["text"]}"""
 
+// what openrouter's list of the models a key may use answered on 2026-10-23, trimmed to the fields read
+private const val OPENROUTER_MODELS =
+    """{"data":[
+         {"id":"anthropic/claude-opus-5.5","context_length":1000000,"architecture":{"input_modalities":["text","image","file"]},
+          "top_provider":{"context_length":1000000,"max_completion_tokens":128000},"supported_parameters":["reasoning","tools","verbosity"],
+          "reasoning":{"mandatory":true,"supported_efforts":["max","xhigh","high","medium","low"],"default_effort":"high"}},
+         {"id":"anthropic/claude-haiku-5.5","context_length":1000000,"architecture":{"input_modalities":["text","image","file"]},
+          "top_provider":{"context_length":1000000,"max_completion_tokens":128000},"supported_parameters":["reasoning","tools"],
+          "reasoning":{"mandatory":false,"supported_efforts":["max","xhigh","high","medium","low","none"],"default_effort":"medium"}},
+         {"id":"anthropic/claude-haiku-4.5","context_length":200000,"architecture":{"input_modalities":["text","image"]},
+          "top_provider":{"context_length":200000,"max_completion_tokens":64000},"supported_parameters":["reasoning","tools"],"reasoning":{"mandatory":false}},
+         {"id":"openai/gpt-5.6-luna","context_length":1050000,"architecture":{"input_modalities":["file","image","text"]},
+          "top_provider":{"context_length":1050000,"max_completion_tokens":128000},"supported_parameters":["reasoning","tools"],
+          "reasoning":{"mandatory":false,"supported_efforts":["max","xhigh","high","medium","low","none"],"default_effort":"medium"}},
+         {"id":"deepseek/deepseek-v4-pro","context_length":1048576,"architecture":{"input_modalities":["text"]},
+          "top_provider":{"context_length":1024000,"max_completion_tokens":384000},"supported_parameters":["reasoning","tools"],
+          "reasoning":{"mandatory":false,"supported_efforts":["xhigh","high","none"],"default_effort":"high"}},
+         {"id":"liquid/lfm-2.5-2.6b:free","context_length":32768,"architecture":{"input_modalities":["text"]},
+          "top_provider":{"context_length":32768,"max_completion_tokens":null},"supported_parameters":["max_tokens","temperature"],"reasoning":null}]}"""
+
 class ModelPreflightTest {
 
     private var asked: String? = null
@@ -226,5 +246,67 @@ class ModelPreflightTest {
         val failure = assertFailsWith<IllegalStateException> { xai("grok-nope").preflighted(http(HttpStatusCode.NotFound), codexAuth = null) }
 
         assertContains(failure.message.orEmpty(), "LLM_MODEL=[grok-nope]")
+    }
+
+    private fun openRouter(model: String, effort: ReasoningEffort? = null) =
+        LlmProviderConfig.OpenRouter(apiKey = "key", model = model, reasoningEffort = effort, requestTimeout = timeout)
+
+    private suspend fun LlmProviderConfig.OpenRouter.checked() = assertIs<LlmProviderConfig.OpenRouter>(preflighted(http(HttpStatusCode.OK, OPENROUTER_MODELS), codexAuth = null))
+
+    @Test
+    fun `openrouter's list fills in the window, the ceiling, the eyes and the efforts`() = runBlocking {
+        val checked = openRouter("openai/gpt-5.6-luna", ReasoningEffort.NONE).checked()
+
+        assertEquals("https://openrouter.ai/api/v1/models/user", asked)
+        assertEquals("Bearer key", authorization?.get("Authorization"))
+        assertEquals(1_050_000, checked.contextWindowTokens)
+        assertEquals(128_000, checked.maxOutputTokens)
+        assertEquals(true, checked.seesImages)
+        assertEquals(ReasoningEffort.entries.toSet(), checked.efforts)
+    }
+
+    // the window an upstream serves the model with is what a request can use, not the model's own
+    @Test
+    fun `the top provider's window wins over the model's, and a model without eyes says so`() = runBlocking {
+        val checked = openRouter("deepseek/deepseek-v4-pro").checked()
+
+        assertEquals(1_024_000, checked.contextWindowTokens)
+        assertEquals(false, checked.seesImages)
+        assertEquals(setOf(ReasoningEffort.NONE, ReasoningEffort.HIGH, ReasoningEffort.XHIGH), checked.efforts)
+    }
+
+    // claude turns thinking off through an effort the messages api lacks, so none is not offered for it
+    @Test
+    fun `a claude model on openrouter takes only claude's efforts, and none stops the startup`() = runBlocking {
+        assertEquals(setOf(ReasoningEffort.LOW, ReasoningEffort.MEDIUM, ReasoningEffort.HIGH, ReasoningEffort.XHIGH, ReasoningEffort.MAX), openRouter("anthropic/claude-haiku-5.5").checked().efforts)
+
+        val failure = assertFailsWith<IllegalStateException> { openRouter("anthropic/claude-haiku-5.5", ReasoningEffort.NONE).checked() }
+        assertContains(failure.message.orEmpty(), "LLM_REASONING_EFFORT=[none]")
+    }
+
+    @Test
+    fun `a claude model before 4_6 stops the startup on openrouter`() = runBlocking {
+        val failure = assertFailsWith<IllegalStateException> { openRouter("anthropic/claude-haiku-4.5").checked() }
+
+        assertContains(failure.message.orEmpty(), "from 4.6 on")
+    }
+
+    @Test
+    fun `a routing variant is read as its model`() = runBlocking {
+        assertEquals(1_000_000, openRouter("anthropic/claude-opus-5.5:nitro").checked().contextWindowTokens)
+    }
+
+    @Test
+    fun `a model the key may not use, one that calls no tools, or an effort it does not list stops the startup`() = runBlocking {
+        assertContains(assertFailsWith<IllegalStateException> { openRouter("openai/gpt-nope").checked() }.message.orEmpty(), "LLM_MODEL=[openai/gpt-nope]")
+        assertContains(assertFailsWith<IllegalStateException> { openRouter("liquid/lfm-2.5-2.6b:free").checked() }.message.orEmpty(), "calls no tools")
+        assertContains(assertFailsWith<IllegalStateException> { openRouter("deepseek/deepseek-v4-pro", ReasoningEffort.LOW).checked() }.message.orEmpty(), "none, high, xhigh")
+    }
+
+    @Test
+    fun `an openrouter list that could not be read leaves the config alone`() = runBlocking {
+        val config = openRouter("openai/gpt-5.6-luna")
+
+        assertSame(config, config.preflighted(http(HttpStatusCode.ServiceUnavailable), codexAuth = null))
     }
 }
