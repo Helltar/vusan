@@ -496,7 +496,8 @@ read under the `ADDRESSING_` prefix.
 
 After a day ends, Vusan writes itself a short entry about each group, and after a week or a month it
 looks back over that span's entries in one. The last three days, the last week and the last month ride
-along on every turn there, so it picks up yesterday's thread and remembers what came before.
+along on every turn there, so it picks up yesterday's thread and remembers what came before; older
+entries it reads when a conversation reaches back to them.
 
 | Variable        | Default | Description                                       |
 |-----------------|---------|---------------------------------------------------|

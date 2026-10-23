@@ -8,6 +8,7 @@ import com.helltar.vusan.agent.grouplog.GroupLogDigester
 import com.helltar.vusan.agent.grouplog.GroupLogReader
 import com.helltar.vusan.agent.grouplog.GroupLogRepository
 import com.helltar.vusan.agent.memory.MemoryRepository
+import com.helltar.vusan.agent.presence.DiaryRepository
 import com.helltar.vusan.agent.presence.LeaveAloneRepository
 import com.helltar.vusan.config.AppConfig
 import com.helltar.vusan.config.ImageProviderConfig
@@ -27,6 +28,7 @@ import com.helltar.vusan.tools.choice.InlineChoiceTools
 import com.helltar.vusan.tools.codexsearch.CodexSearchClient
 import com.helltar.vusan.tools.codexsearch.CodexSearchTools
 import com.helltar.vusan.tools.context.ContextTools
+import com.helltar.vusan.tools.diary.DiaryTools
 import com.helltar.vusan.tools.files.FileDownloadClient
 import com.helltar.vusan.tools.files.FileTools
 import com.helltar.vusan.tools.giphy.GiphyClient
@@ -90,6 +92,8 @@ class ToolCatalogFactory(
     vision: VisionRuntime?,
     private val groupLog: GroupLogRepository?,
     groupLogDigester: GroupLogDigester?,
+    // present only where the deployment keeps a diary
+    private val diary: DiaryRepository?,
     toolResultMaxChars: Int,
     // present only on LLM_PROVIDER=codex; lets image generation and a web search ride the ChatGPT
     // session instead of needing a second paid key.
@@ -106,12 +110,11 @@ class ToolCatalogFactory(
         buildCatalog(TOOL_NAME_PROBE_CONTEXT, BotOutbox(), TurnToolBudget(0), TurnShelf()).tools.map { it.name }.sorted()
     }
 
-    // one chat log read may not eat the whole run's tool budget: the model still has to fit its own
-    // answer, and a recap turn often calls other tools alongside it.
-    private val groupLogReader =
-        groupLog?.let {
-            GroupLogReader(it, groupLogDigester, budgetChars = (toolResultMaxChars / 2).coerceIn(4_000, 24_000))
-        }
+    // one chat log or diary read may not eat the whole run's tool budget: the model still has to fit its
+    // own answer, and a recap turn often calls other tools alongside it.
+    private val chatReadBudgetChars = (toolResultMaxChars / 2).coerceIn(4_000, 24_000)
+
+    private val groupLogReader = groupLog?.let { GroupLogReader(it, groupLogDigester, chatReadBudgetChars) }
 
     private val fileDownloadClient = FileDownloadClient(publicHttp)
     private val pageReader = PageReader(fileDownloadClient)
@@ -287,6 +290,8 @@ class ToolCatalogFactory(
             if (groupLog != null && groupLogReader != null) {
                 tools(GroupLogTools(groupLog, groupLogReader, context))
             }
+
+            diary?.let { tools(DiaryTools(it, context, chatReadBudgetChars)) }
 
             if (imageVisionClient != null && videoVisionClient != null) {
                 tools(VisionTools(imageVisionClient, videoVisionClient, context.attachedFile))

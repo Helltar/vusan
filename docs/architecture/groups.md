@@ -30,7 +30,9 @@ the sticker catalog. Part of the [architecture index](../architecture.md).
   the newest three entries of the past week into every turn in that group as `<diary>` — defused like the transcript
   they came from — and `Initiative` reads the same block. Entries live in `chat_diary` and look-backs in
   `chat_diary_look_back`, with no retention of their own, outliving the transcript, until
-  `GroupLogRepository.clear` drops them with the transcript they were written from. Unlike a digest, an entry is written
+  `GroupLogRepository.clear` drops them with the transcript they were written from. What the block leaves out is read
+  on demand through `readDiary` (`tools/diary/`): a day, a month or a range, or the entries that mention a word, with
+  months, then weeks, then the newest days kept when a read outgrows its budget. Unlike a digest, an entry is written
   with nobody having asked, so a whole day of a chat goes to the chat model unprompted: `DIARY_ENABLED=false` is the
   switch, and a chat the allowlist no longer names is never read.
 - **Initiative** — `agent/presence/Initiative` is the bot speaking up without being called. Code decides whether to

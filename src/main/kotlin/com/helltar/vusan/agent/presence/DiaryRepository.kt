@@ -75,6 +75,17 @@ class DiaryRepository {
             .map { DiaryEntry(LocalDate.parse(it[ChatDiaryTable.day]), it[ChatDiaryTable.content]) }
     }
 
+    /** The day of the oldest entry [chat] has, or `null` when it has none. */
+    suspend fun firstDay(chat: ChatRef): LocalDate? = dbTransaction {
+        ChatDiaryTable
+            .select(ChatDiaryTable.day)
+            .where { inChat(chat) }
+            .orderBy(ChatDiaryTable.day to SortOrder.ASC)
+            .limit(1)
+            .map { LocalDate.parse(it[ChatDiaryTable.day]) }
+            .firstOrNull()
+    }
+
     /** The chats with at least one entry from [from] to [to], both included. */
     suspend fun chatsWithEntries(from: LocalDate, to: LocalDate): List<ChatRef> = dbTransaction {
         ChatDiaryTable
@@ -120,6 +131,29 @@ class DiaryRepository {
                 )
             }
             .firstOrNull()
+    }
+
+    /** The look-backs of either period over a span that reaches into [from]..[to], oldest first. */
+    suspend fun lookBacksBetween(chat: ChatRef, from: LocalDate, to: LocalDate): List<DiaryLookBack> = dbTransaction {
+        ChatDiaryLookBackTable
+            .selectAll()
+            .where {
+                // no span is longer than a month, so one starting earlier than that cannot reach [from]
+                (ChatDiaryLookBackTable.platform eq chat.platform) and (ChatDiaryLookBackTable.chatId eq chat.id) and
+                        (ChatDiaryLookBackTable.firstDay greaterEq from.minusMonths(1).toString()) and
+                        (ChatDiaryLookBackTable.firstDay lessEq to.toString())
+            }
+            .orderBy(ChatDiaryLookBackTable.firstDay to SortOrder.ASC)
+            .map {
+                DiaryLookBack(
+                    DiarySpan(
+                        DiaryPeriod.valueOf(it[ChatDiaryLookBackTable.period].uppercase()),
+                        LocalDate.parse(it[ChatDiaryLookBackTable.firstDay]),
+                    ),
+                    it[ChatDiaryLookBackTable.content],
+                )
+            }
+            .filter { it.span.lastDay >= from }
     }
 
     suspend fun storeLookBack(chat: ChatRef, lookBack: DiaryLookBack) {

@@ -197,11 +197,14 @@ suspend fun main() = coroutineScope {
         val contextWindowPolicy = ContextWindowPolicy(llm.model.copy(contextWindowTokens = contextWindowTokens))
         val groupLogDigester = groupLog?.let { LlmGroupLogDigester(client, llm.model, llm.compactionOptions) }
 
+        // the diary reads the group log, so it is kept only where there is one
+        val diaryRepository = groupLog?.takeIf { config.diaryEnabled }?.let { DiaryRepository() }
+
         val toolCatalogFactory =
             ToolCatalogFactory(
                 http, publicHttp, TelegramToolSets(telegramClient, stickerCatalog), config, conversation, memory,
-                tasks, leaveAlone, vision, groupLog, groupLogDigester, contextWindowPolicy.liveToolResultMaxChars,
-                codexAuth, selfImage,
+                tasks, leaveAlone, vision, groupLog, groupLogDigester, diaryRepository,
+                contextWindowPolicy.liveToolResultMaxChars, codexAuth, selfImage,
             )
 
         val agentFactory =
@@ -224,11 +227,10 @@ suspend fun main() = coroutineScope {
         val isAllowedChat = { chat: ChatRef -> config.accessPolicy.allows(chat, user = null) }
 
         val diary =
-            groupLog?.takeIf { config.diaryEnabled }?.let {
-                Diary(
-                    LlmDiaryWriter(client, llm.model, llm.compactionOptions, personality),
-                    DiaryRepository(), it, isAllowedChat,
-                )
+            if (groupLog != null && diaryRepository != null) {
+                Diary(LlmDiaryWriter(client, llm.model, llm.compactionOptions, personality), diaryRepository, groupLog, isAllowedChat)
+            } else {
+                null
             }
 
         // one instance for the runner, which counts the answers, and the adapter, which reports the
