@@ -61,7 +61,10 @@ finished turn leaves behind. Before it: [receiving a message](inbound.md); after
    defers goes into that text as `<tool_groups>`; `AgentFactory.prepare` then estimates the fixed
    system/tool/current-turn cost — from the visible tools alone, so a group loaded later is spent from the agent
    reserve rather than from the history budget. The history planner reserves room for output, future tool calls, and estimation error,
-   then admits only complete interactions. If an older prefix no longer fits or exceeds the configured recent count,
+   then admits only complete interactions. The part of them replayed as text, which the next turn replays the same way,
+   and the whole of them are the request's stable prefixes (`ChatRequest.stablePrefixes`): a provider that takes cache
+   breakpoints gets one at the end of each, since the current message is stored in a shorter shape than it is sent and the
+   next turn's request stops repeating this one's right there. If an older prefix no longer fits or exceeds the configured recent count,
    `LlmConversationCompactor` merges it into the persisted `<conversation_recap>` before `AgentFactory.build` creates
    the `AgentTurn`. Every turn is capped on the way into that recap prompt, and a user turn budgets its
    `<user_message>` first: reply metadata and a quoted fragment are written ahead of the request and can outrun the cap

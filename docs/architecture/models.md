@@ -24,7 +24,9 @@ Part of the [architecture index](../architecture.md).
   keep a single shared key, their tool-free prefix being identical everywhere — and, from GPT-5.6 on, the cache options
   stated outright (`llm/openai/OpenAiPromptCaching`): the platform's implicit mode, under which each iteration of the loop
   reads the tool results the one before it added, plus an explicit twelve-hour breakpoint on the stable system block,
-  which the next turn still reads however its history was replayed and hours later; a prompt that never repeats, the recap, asks for no caching at all.
+  which the next turn still reads however its history was replayed and hours later, and one on the last user message
+  before the end of each stable part of the replayed history (`ChatRequest.stablePrefixes`), which is where the next
+  turn's request stops repeating this one's; a prompt that never repeats, the recap, asks for no caching at all.
   A tool group loaded mid-turn goes as an `additional_tools` item where it was offered, so the tool list stays the cached
   one.
   A preamble the model wrote before its tool calls goes back with its `phase`, which the platform asks for so as not to
@@ -35,10 +37,11 @@ Part of the [architecture index](../architecture.md).
   4.6, Opus 4.7, Sonnet 5) `loadTools` widens the tool list mid-turn, so an account the API holds to that check gets
   the stale block dropped rather than a 400; every later model gets the groups' tools declared `defer_loading` and a
   loaded group offered by a `tool_addition` reference, and the list never changes — sends the configured
-  `output_config.effort`, the model's whole output ceiling as `max_tokens`, and two cache breakpoints: the request-level
-  one the API places on the last block, which every iteration of the loop reads back, and an hour-long one on the
-  system block, which the next turn — whose history is replayed from storage in another shape — still reads, and which
-  outlives the quiet stretches between a chat's messages. Every call is streamed and folded back into one message
+  `output_config.effort`, the model's whole output ceiling as `max_tokens`, and up to four cache breakpoints: the
+  request-level one the API places on the last block, which every iteration of the loop reads back, and hour-long ones
+  on the system block and on the end of each stable part of the replayed history, which the next turn — whose current
+  message is replayed from storage in a shorter shape — still reads, and which outlive the quiet stretches between a
+  chat's messages. Every call is streamed and folded back into one message
   (`llm/anthropic/AnthropicStream`), as the vendor's SDKs do at a ceiling this size, so a stall trips the socket
   timeout where a connection idling through a long think would be dropped at the API's edge. A Claude model from
   before 4.6, which takes neither adaptive thinking nor an effort, stops startup. `openai-compatible` speaks

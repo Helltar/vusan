@@ -37,20 +37,35 @@ import kotlinx.serialization.json.put
  * mode named, since OpenRouter refuses `implicit` as a value and serves the unnamed one as it — the tail
  * was read back as it is here, where explicit mode kept the reads at the developer block — and without the
  * twelve-hour lifetime, an unknown parameter to Azure behind it.
+ *
+ * [stablePrefixes] are the item counts at which the replayed history ends, as far as the next turn will
+ * replay it the same way. Each gets a breakpoint of the default lifetime on the last user message before
+ * it: the implicit lookback finds a prefix only where an earlier request wrote one, and the history's end
+ * moves into the middle of the next turn's prompt, where nothing was. A breakpoint on an assistant message
+ * is taken and ignored. Measured live on 2026-10-24 (gpt-6-luna, and openai/gpt-5.6-luna through
+ * OpenRouter): the second of two turns over a 2.5k-token history read 2610 tokens with the developer
+ * block marked alone, 4627 with the history marked too. The implicit breakpoint, the developer block's and
+ * two of these are the four cache writes a request may make.
  */
-internal fun withPromptCacheOptions(body: JsonObject, cachePrompt: Boolean, viaGateway: Boolean = false): JsonObject {
+internal fun withPromptCacheOptions(
+    body: JsonObject,
+    cachePrompt: Boolean,
+    viaGateway: Boolean = false,
+    stablePrefixes: List<Int> = emptyList(),
+): JsonObject {
     val model = (body["model"] as? JsonPrimitive)?.contentOrNull ?: return body
     if (!takesOpenAiPromptCacheOptions(model)) return body
     if (!cachePrompt) return JsonObject(body + ("prompt_cache_options" to EXPLICIT_MODE))
 
-    val marked =
-        (body["input"] as? JsonArray)
-            ?.let { markSystemBlock(it, "input_text", if (viaGateway) EXPLICIT_BREAKPOINT else LONG_LIVED_BREAKPOINT) }
-            ?.let { "input" to it }
-            ?: (body["messages"] as? JsonArray)
-                ?.let { markSystemBlock(it, "text", EXPLICIT_BREAKPOINT) }
-                ?.let { "messages" to it }
-            ?: return body
+    val (key, textBlockType, systemBreakpoint) =
+        when {
+            body["input"] is JsonArray -> Triple("input", "input_text", if (viaGateway) EXPLICIT_BREAKPOINT else LONG_LIVED_BREAKPOINT)
+            body["messages"] is JsonArray -> Triple("messages", "text", EXPLICIT_BREAKPOINT)
+            else -> return body
+        }
+
+    val messages = markSystemBlock(body[key] as JsonArray, textBlockType, systemBreakpoint) ?: return body
+    val marked = key to stablePrefixes.distinct().fold(messages) { marking, end -> markHistoryEnd(marking, end, textBlockType) }
 
     return if (viaGateway) JsonObject(body + marked) else JsonObject(body + marked + ("prompt_cache_options" to IMPLICIT_MODE))
 }
@@ -72,6 +87,18 @@ internal fun takesOpenAiPromptCacheOptions(model: String): Boolean {
 // carries the developer role too, and takes no breakpoint
 private fun markSystemBlock(messages: JsonArray, textBlockType: String, breakpoint: JsonObject): JsonArray? {
     val index = messages.indexOfFirst { it.isMessage && (it.role == "developer" || it.role == "system") }.takeIf { it >= 0 } ?: return null
+
+    return markMessage(messages, index, textBlockType, breakpoint)
+}
+
+// a history that ends without a user message before [end] — the system prompt alone — has nothing to mark
+private fun markHistoryEnd(messages: JsonArray, end: Int, textBlockType: String): JsonArray {
+    val index = (0 until minOf(end, messages.size)).lastOrNull { messages[it].isMessage && messages[it].role == "user" } ?: return messages
+
+    return markMessage(messages, index, textBlockType, EXPLICIT_BREAKPOINT) ?: messages
+}
+
+private fun markMessage(messages: JsonArray, index: Int, textBlockType: String, breakpoint: JsonObject): JsonArray? {
     val message = messages[index] as? JsonObject ?: return null
     val content = markLastTextBlock(message["content"], textBlockType, breakpoint) ?: return null
 

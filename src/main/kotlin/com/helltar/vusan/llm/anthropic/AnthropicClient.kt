@@ -35,13 +35,14 @@ val ANTHROPIC_EFFORTS: Set<ReasoningEffort> =
  *   Opus 4.6, Sonnet 4.6, Opus 4.7 and Sonnet 5; the prefix before the offer was read back whole.
  * - A request whose model may call no tool keeps them defined, with `tool_choice: none`: tool blocks in
  *   the messages are a 400 without them.
- * - Two cache breakpoints when the caller asks for caching: the request-level one, which the API places
- *   on the last block and which every iteration of a tool loop reads back, and one on the last system
- *   block, the prefix every request of the deployment shares — the next turn replays its history from
- *   storage in another shape, so the automatic one alone misses then. The system one is kept an hour,
- *   which outlives the quiet stretches between a chat's messages at twice the write price instead of
- *   1.25×; the tail stays on the five-minute default, and that order — the longer TTL first — is the one
- *   the API allows.
+ * - Up to four cache breakpoints when the caller asks for caching: the request-level one, which the API
+ *   places on the last block and which every iteration of a tool loop reads back; one on the last system
+ *   block, the prefix every request of the deployment shares; and one on the end of each stable prefix of
+ *   the replayed history, which the next turn reads back — the live turn is replayed in a shorter shape
+ *   then, so the automatic one alone would leave it nothing past the system block. The system and history
+ *   ones are kept an hour, which outlives the quiet stretches between a chat's messages at twice the write
+ *   price instead of 1.25×; the tail stays on the five-minute default, and that order — the longer TTL
+ *   first — is the one the API allows.
  * - Unknown content block types are skipped with a warning rather than failing the call.
  *
  * [baseUrl] is another server that speaks this API, OpenRouter's among them. [routesBySession] is for a
@@ -144,18 +145,26 @@ class AnthropicClient(
     }
 
     /**
-     * The conversation as the Messages API takes it: system messages lifted into the system field, and a
-     * tool offer as a system message of `tool_addition` references where the model takes one.
+     * The conversation as the Messages API takes it: system messages lifted into the system field, a tool
+     * offer as a system message of `tool_addition` references where the model takes one, and the ends of
+     * the replayed history marked for the cache.
      *
      * A system message has to follow a user turn and be followed by the assistant's, so an offer that a
      * user message came after — a nudge sent once the reply to the offer was dropped as empty — moves
-     * behind that message.
+     * behind that message. The history is marked on its last block, at the lifetime the system prompt
+     * has: measured on 2026-10-24 (Haiku 5.5 through OpenRouter, a 3.2k-token history), the next turn read
+     * 7636 tokens instead of 4428 and wrote 555 instead of 3763. With the system block's and the request's
+     * own, these are the four breakpoints a request may carry.
      */
     private fun conversationMessages(request: ChatRequest, offersLater: Boolean): JsonArray {
         val rendered = mutableListOf<JsonObject>()
+        // what the stable prefixes end on, by the request's own message count
+        val renderedBefore = IntArray(request.messages.size + 1)
         val waiting = mutableListOf<JsonObject>()
 
-        request.messages.forEach { message ->
+        request.messages.forEachIndexed { index, message ->
+            renderedBefore[index] = rendered.size
+
             when (message) {
                 is Message.System -> Unit
 
@@ -175,7 +184,14 @@ class AnthropicClient(
             }
         }
 
+        renderedBefore[request.messages.size] = rendered.size
         rendered += waiting
+
+        if (request.options.cachePrompt) {
+            request.stablePrefixes.map { renderedBefore[it] - 1 }.distinct().filter { it >= 0 }.forEach { position ->
+                rendered[position] = rendered[position].withCacheMarkOnLastBlock()
+            }
+        }
 
         return JsonArray(rendered)
     }
@@ -194,6 +210,13 @@ class AnthropicClient(
                 }
             }
         }
+
+    private fun JsonObject.withCacheMarkOnLastBlock(): JsonObject {
+        val blocks = this["content"] as? JsonArray ?: return this
+        val last = blocks.lastOrNull() as? JsonObject ?: return this
+
+        return JsonObject(this + ("content" to JsonArray(blocks.dropLast(1) + JsonObject(last + ("cache_control" to HISTORY_CACHE)))))
+    }
 
     private fun conversationMessage(message: Message): JsonObject =
         when (message) {
@@ -348,6 +371,9 @@ class AnthropicClient(
 
         private val EPHEMERAL = buildJsonObject { put("type", "ephemeral") }
         private val SYSTEM_PREFIX_CACHE = buildJsonObject { put("type", "ephemeral"); put("ttl", "1h") }
+
+        // the history outlives the quiet stretches between a chat's messages for the same reason the system prompt does
+        private val HISTORY_CACHE = SYSTEM_PREFIX_CACHE
         private val log = KotlinLogging.logger {}
     }
 }

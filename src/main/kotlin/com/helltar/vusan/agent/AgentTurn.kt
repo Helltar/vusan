@@ -77,6 +77,8 @@ class AgentTurn internal constructor(
     private val model: LlmModel,
     private val options: RequestOptions,
     private val history: List<Message>,
+    // counts of [history] after which the next turn repeats this one's request, for the provider's cache
+    private val stablePrefixes: List<Int> = emptyList(),
     private val catalog: ToolCatalog,
     private val outbox: BotOutbox,
     private val toolBudget: TurnToolBudget,
@@ -179,7 +181,7 @@ class AgentTurn internal constructor(
         calls++
 
         // a copy: the list grows as the turn goes on, and a client may keep the request it was handed
-        val reply = client.complete(model, ChatRequest(messages.toList(), tools, options, mayCallTools))
+        val reply = client.complete(model, ChatRequest(messages.toList(), tools, options, mayCallTools, stablePrefixes))
 
         reply.usage?.let(tokenUsage)
 

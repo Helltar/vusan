@@ -148,7 +148,9 @@ class OpenAiClient(
                 if (streamed) put("stream", true)
             }
 
-        return if (explicitPromptCaching) withPromptCacheOptions(body, options.cachePrompt, gatewayPromptCaching) else body
+        if (!explicitPromptCaching) return body
+
+        return withPromptCacheOptions(body, options.cachePrompt, gatewayPromptCaching, request.stablePrefixes.map { items.take(it).sumOf(List<JsonObject>::size) })
     }
 
     private fun responsesTool(tool: ToolDefinition): JsonObject =
@@ -411,7 +413,9 @@ class OpenAiClient(
                 options.maxOutputTokens?.let { put(if (legacyOutputCeiling) "max_tokens" else "max_completion_tokens", it) }
             }
 
-        return if (explicitPromptCaching) withPromptCacheOptions(body, options.cachePrompt, gatewayPromptCaching) else body
+        if (!explicitPromptCaching) return body
+
+        return withPromptCacheOptions(body, options.cachePrompt, gatewayPromptCaching, request.stablePrefixes.map { messages.take(it).sumOf(List<JsonObject>::size) })
     }
 
     private fun completionMessages(message: Message): List<JsonObject> =

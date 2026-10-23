@@ -40,6 +40,19 @@ class ConversationPlanTest {
         assertTrue(result.compactablePrefix.isEmpty())
     }
 
+    // the oldest of the three is the only one the next turn is sure to replay the way this one does
+    @Test
+    fun `the turns replayed as text are the stable ones`() {
+        val interactions = (1L..3L).map { toolExchange(it) }
+
+        val prompt = planConversation(snapshot(interactions), tokenBudget = 10_000, maxRecentInteractions = 12).prompt
+
+        assertEquals(2, prompt.stableTurns)
+        assertEquals(listOf(ChatRole.USER, ChatRole.ASSISTANT), prompt.turns.take(prompt.stableTurns).map { it.role })
+        assertEquals(ChatRole.USER, prompt.turns[prompt.stableTurns].role)
+        assertEquals(0, planConversation(snapshot(interactions.take(2)), tokenBudget = 10_000, maxRecentInteractions = 12).prompt.stableTurns)
+    }
+
     @Test
     fun `token budget keeps a newest complete interaction and compacts the older prefix`() {
         val interactions = (1L..3L).map { exchange(it, "u".repeat(120), "a".repeat(120)) }

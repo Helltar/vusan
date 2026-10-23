@@ -253,6 +253,33 @@ class AnthropicClientTest {
     }
 
     @Test
+    fun `the end of each stable part of the history is marked for an hour`() = runBlocking {
+        val messages =
+            listOf(
+                Message.System("stable instructions"),
+                Message.User("first question"),
+                Message.Assistant("first answer"),
+                Message.User("second question"),
+                Message.Assistant(listOf(Part.Text("second answer"), Part.ToolCall("toolu-2", "lookUp", buildJsonObject { put("query", "dogs") }))),
+                Message.ToolResults(listOf(ToolResult("toolu-2", "lookUp", "found"))),
+                Message.User("current request"),
+            )
+
+        client().complete(MODEL, ChatRequest(messages, listOf(TOOL), stablePrefixes = listOf(3, 6)))
+
+        val marks =
+            sent.single().getValue("messages").jsonArray.map { message ->
+                message.jsonObject.getValue("content").jsonArray.map { block -> block.jsonObject["cache_control"]?.jsonObject?.get("ttl")?.jsonPrimitive?.content }
+            }
+
+        assertEquals(listOf(listOf(null), listOf("1h"), listOf(null), listOf(null, null), listOf("1h"), listOf(null)), marks)
+
+        sent.clear()
+        client().complete(MODEL, ChatRequest(messages, listOf(TOOL), RequestOptions(cachePrompt = false), stablePrefixes = listOf(3, 6)))
+        assertFalse(sent.single().getValue("messages").jsonArray.any { message -> message.jsonObject.getValue("content").jsonArray.any { "cache_control" in it.jsonObject } })
+    }
+
+    @Test
     fun `a non-2xx answer is an error with its status and body`() = runBlocking {
         val failure = assertFailsWith<com.helltar.vusan.llm.LlmException> {
             client(reply = """{"type":"error","error":{"type":"overloaded_error"}}""", status = HttpStatusCode(529, "Overloaded")).complete(MODEL, request(*basic))

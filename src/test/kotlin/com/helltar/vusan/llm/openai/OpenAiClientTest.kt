@@ -408,6 +408,36 @@ class OpenAiClientTest {
         assertEquals(listOf("system", "user"), completions.getValue("messages").jsonArray.map { it.jsonObject.getValue("role").jsonPrimitive.content })
     }
 
+    // a breakpoint on an assistant message is taken and ignored, so the history's end is marked on the last
+    // user message before it
+    @Test
+    fun `the end of each stable part of the history is marked on its last user message`() = runBlocking {
+        val messages =
+            listOf(
+                Message.System("stable instructions"),
+                Message.User("first question"),
+                Message.Assistant("first answer"),
+                Message.User("second question"),
+                Message.Assistant("second answer"),
+                Message.User("current request"),
+            )
+
+        client().complete(MODEL, ChatRequest(messages, listOf(TOOL), stablePrefixes = listOf(3, 5)))
+
+        val marks =
+            sent.single().getValue("input").jsonArray.map { item ->
+                item.jsonObject.getValue("content").jsonArray.last().jsonObject["prompt_cache_breakpoint"]?.jsonObject
+            }
+
+        assertEquals("12h", marks[0]?.getValue("ttl")?.jsonPrimitive?.content)
+        assertEquals(listOf(false, true, false, true, false, false), marks.map { it != null && it["ttl"] == null })
+        assertEquals("explicit", marks[1]?.getValue("mode")?.jsonPrimitive?.content)
+
+        sent.clear()
+        client().complete(MODEL, ChatRequest(messages, listOf(TOOL), RequestOptions(cachePrompt = false), stablePrefixes = listOf(3, 5)))
+        assertFalse(sent.single().getValue("input").jsonArray.any { item -> item.jsonObject.getValue("content").jsonArray.any { "prompt_cache_breakpoint" in it.jsonObject } })
+    }
+
     @Test
     fun `a chat completions request and reply take the completions shape`() = runBlocking {
         val client = client(reply = COMPLETION_REPLY, endpoint = OpenAiEndpoint.COMPLETIONS, explicitPromptCaching = false, statelessReasoning = false)

@@ -81,16 +81,24 @@ data class ToolDefinition(
  * [mayCallTools] `false` keeps [tools] in the request while the model may call none of them: a request
  * replaying tool calls has to define the tools on Anthropic, and the tool list is part of the cached
  * prefix on both APIs, so dropping it to forbid a call would cost a 400 or a cache miss.
+ *
+ * [stablePrefixes] are counts of [messages], from the start, after which the next turn's request will
+ * still send what came before unchanged: the replayed history, as far as the next turn replays it the
+ * same way. A client that places cache breakpoints marks the end of each when [RequestOptions.cachePrompt]
+ * asks for caching, so that turn reads its history back instead of paying for all of it again; the
+ * turn's own calls read one another through the breakpoint the request itself carries.
  */
 data class ChatRequest(
     val messages: List<Message>,
     val tools: List<ToolDefinition> = emptyList(),
     val options: RequestOptions = RequestOptions(),
     val mayCallTools: Boolean = true,
+    val stablePrefixes: List<Int> = emptyList(),
 ) {
 
     init {
         require(messages.isNotEmpty()) { "a request carries at least one message" }
+        require(stablePrefixes.all { it in 1..messages.size }) { "a stable prefix ends inside the request" }
     }
 
     /**

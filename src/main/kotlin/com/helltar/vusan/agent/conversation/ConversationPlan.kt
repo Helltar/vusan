@@ -7,10 +7,22 @@ import com.helltar.vusan.common.limitTo
 
 private const val EXACT_TOOL_INTERACTIONS = 2
 
+/**
+ * The history a turn replays. The first [stableTurns] of [turns] are replayed as text, and the next turn
+ * replays them the same way; the newest interactions after them carry their tool calls, which the next
+ * turn may already show as text, so a cache breakpoint at the end of the stable part is the one sure to
+ * be read back.
+ */
 data class PromptConversation(
     val summary: String?,
     val turns: List<ChatTurn>,
-)
+    val stableTurns: Int = 0,
+) {
+
+    init {
+        require(stableTurns in 0..turns.size) { "the stable turns are some of the turns" }
+    }
+}
 
 data class ConversationPlan(
     val prompt: PromptConversation,
@@ -65,6 +77,8 @@ fun planConversation(
     }
 
     val includedCount = selected.size
+    // the interactions replayed with their tool calls are the newest, so the rest are the ones replayed as text
+    val stableTurns = selected.toList().dropLast(EXACT_TOOL_INTERACTIONS).sumOf { it.size }
     val omittedByBudget = snapshot.interactions.size - includedCount
     val retainedAfterCountCompaction = (maxRecentInteractions * 2 / 3).coerceAtLeast(1)
     val omittedByCount =
@@ -77,7 +91,7 @@ fun planConversation(
     val estimatedTokens = summaryTokens + estimateTokens(turns)
 
     return ConversationPlan(
-        prompt = PromptConversation(summary = summary, turns = turns),
+        prompt = PromptConversation(summary = summary, turns = turns, stableTurns = stableTurns),
         compactablePrefix = snapshot.interactions.take(compactableCount),
         estimatedTokens = estimatedTokens,
         includedInteractions = includedCount,

@@ -90,8 +90,15 @@ class AgentFactory(
                 add(Message.System(preparation.systemPrompt))
                 // the recap is written from quoted events, so it can carry a delimiter out of them.
                 conversation.summary?.let { add(Message.User(xmlBlock("conversation_recap", it.neutralizePromptBlocks()))) }
-                addAll(conversation.turns.toMessages())
+                addAll(conversation.turns.take(conversation.stableTurns).toMessages())
             }
+
+        // where the next turn's request stops repeating this one's: after the part of the history replayed as
+        // text for sure, and after all of it when the newest interactions replay the same way next time. the
+        // system prompt alone is marked by the client already
+        val stableEnd = history.size
+        val fullHistory = history + conversation.turns.drop(conversation.stableTurns).toMessages()
+        val stablePrefixes = listOf(stableEnd, fullHistory.size).distinct().filter { it > 1 }
 
         // what the request may measure before the turn's own results are folded: the window less what the
         // answer and the estimate's own error are reserved
@@ -101,7 +108,8 @@ class AgentFactory(
             client = client,
             model = model,
             options = options.forConversation(scope.toString()),
-            history = history,
+            history = fullHistory,
+            stablePrefixes = stablePrefixes,
             catalog = preparation.toolCatalog,
             outbox = outbox,
             toolBudget = toolBudget,
