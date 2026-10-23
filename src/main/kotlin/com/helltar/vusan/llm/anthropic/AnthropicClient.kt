@@ -266,7 +266,7 @@ class AnthropicClient(
 
     companion object {
         const val DEFAULT_BASE_URL = "https://api.anthropic.com"
-        const val API_VERSION = "2023-06-01"
+        const val API_VERSION = "2026-10-21"
 
         // lets a request say what to do with a thinking block whose conversation changed under it; harmless
         // on a model that never binds one, which answers with an empty `input_transformations`.
