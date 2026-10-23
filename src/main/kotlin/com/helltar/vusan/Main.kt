@@ -198,7 +198,7 @@ suspend fun main() = coroutineScope {
         val groupLogDigester = groupLog?.let { LlmGroupLogDigester(client, llm.model, llm.compactionOptions) }
 
         // the diary reads the group log, so it is kept only where there is one
-        val diaryRepository = groupLog?.takeIf { config.diaryEnabled }?.let { DiaryRepository() }
+        val diaryRepository = groupLog?.let { DiaryRepository() }
 
         val toolCatalogFactory =
             ToolCatalogFactory(
@@ -485,13 +485,10 @@ private fun logStartup(
             ?: "Ambient addressing: off (ADDRESSING_ENABLED not true)"
     }
 
-    if (!groupLogOn && (config.diaryEnabled || config.initiative != null)) {
+    if (!groupLogOn) {
         log.warn { "Diary and initiative: off — both read the group log, and GROUP_LOG_ENABLED=false" }
     } else {
-        log.info {
-            if (config.diaryEnabled) "Diary: on — each group's closed day is written up by the chat model"
-            else "Diary: off (DIARY_ENABLED=false)"
-        }
+        log.info { "Diary: on — each group's closed day is written up by the chat model" }
 
         log.info {
             config.initiative?.let {

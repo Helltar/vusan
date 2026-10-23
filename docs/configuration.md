@@ -499,16 +499,13 @@ looks back over that span's entries in one. The last three days, the last week a
 along on every turn there, so it picks up yesterday's thread and remembers what came before; older
 entries it reads when a conversation reaches back to them.
 
-| Variable        | Default | Description                                       |
-|-----------------|---------|---------------------------------------------------|
-| `DIARY_ENABLED` | `true`  | `false` writes nothing and sends no day anywhere. |
-
 - **What is sent** — once per group per day with at least fifteen messages, that day's transcript,
   up to 100,000 characters, goes to the chat model with nobody having asked. A look-back sends the
   span's own entries, not the messages.
 - **How long** — entries are kept after the day's messages expire, until the group log is forgotten.
 
-It needs the [group log](#group-log); with `GROUP_LOG_ENABLED=false` it stays off.
+It has no switch of its own: it is on wherever the [group log](#group-log) is, and
+`GROUP_LOG_ENABLED=false` turns it off with it.
 
 ## Initiative
 

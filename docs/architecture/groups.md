@@ -33,8 +33,8 @@ the sticker catalog. Part of the [architecture index](../architecture.md).
   `GroupLogRepository.clear` drops them with the transcript they were written from. What the block leaves out is read
   on demand through `readDiary` (`tools/diary/`): a day, a month or a range, or the entries that mention a word, with
   months, then weeks, then the newest days kept when a read outgrows its budget. Unlike a digest, an entry is written
-  with nobody having asked, so a whole day of a chat goes to the chat model unprompted: `DIARY_ENABLED=false` is the
-  switch, and a chat the allowlist no longer names is never read.
+  with nobody having asked, so a whole day of a chat goes to the chat model unprompted: it runs wherever the group log
+  does, with no switch of its own, and a chat the allowlist no longer names is never read.
 - **Initiative** — `agent/presence/Initiative` is the bot speaking up without being called. Code decides whether to
   look, a model decides what comes of it. Once a minute it takes the chats people wrote in during the last quarter of
   an hour and, for each, checks the gates: outside the quiet hours, one to eight in the morning; a pause drawn at random between half and
