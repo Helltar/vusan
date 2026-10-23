@@ -22,6 +22,7 @@ internal class FakeLlmClient(private val response: String = "description") : Llm
                     is Message.User -> message.text
                     is Message.Assistant -> message.text
                     is Message.ToolResults -> message.results.joinToString("\n") { it.output }
+                    is Message.ToolsOffered -> message.names.joinToString(", ")
                 }
             }
 

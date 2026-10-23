@@ -35,6 +35,8 @@ internal fun openAiRuntime(config: LlmProviderConfig.OpenAi, http: HttpClient?):
             maxOutputTokens = OPENAI_MAX_OUTPUT,
             seesImages = config.seesImages ?: true,
             efforts = config.efforts,
+            // `additional_tools`, taken by every model from gpt-5.5 on when measured on 2026-10-24
+            offersToolsMidConversation = true,
         )
 
     val options = RequestOptions(reasoningEffort = config.reasoningEffort, promptCacheKey = PROMPT_CACHE_KEY)

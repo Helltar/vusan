@@ -49,6 +49,10 @@ private const val RESPONSES_REPLY =
        ],
        "usage":{"input_tokens":120,"input_tokens_details":{"cached_tokens":100,"cache_write_tokens":7,"cache_write_tokens_details":{"ttl_30m_tokens":3,"ttl_12h_tokens":4}},"output_tokens":30}}"""
 
+private val DRAW = TOOL.copy(name = "draw", deferred = true)
+private val SING = TOOL.copy(name = "sing", deferred = true)
+private val OFFERING_MODEL = MODEL.copy(offersToolsMidConversation = true)
+
 private const val PHASED_REPLY =
     """{"id":"resp-2","object":"response","created_at":0,"model":"gpt-5.6-sol","status":"completed",
        "output":[
@@ -367,6 +371,41 @@ class OpenAiClientTest {
         val replayed = sent.single().getValue("input").jsonArray.map { it.jsonObject }.filter { it["role"]?.jsonPrimitive?.content == "assistant" }
         assertEquals(listOf("commentary", "final_answer", null), replayed.map { it["phase"]?.jsonPrimitive?.content })
         assertEquals(listOf("on it", "done", "aside"), replayed.map { it.getValue("content").jsonArray.single().jsonObject.getValue("text").jsonPrimitive.content })
+    }
+
+    @Test
+    fun `a tool offered partway through reaches a model that takes it as an additional_tools item`() = runBlocking {
+        client().complete(OFFERING_MODEL, request(*basic, Message.ToolsOffered(listOf("draw")), tools = listOf(TOOL, DRAW, SING)))
+
+        val body = sent.single()
+        assertEquals(listOf("lookUp"), body.getValue("tools").jsonArray.map { it.jsonObject.getValue("name").jsonPrimitive.content }, "the tool list stays the cached one")
+
+        val offer = body.getValue("input").jsonArray.last().jsonObject
+        assertEquals("additional_tools", offer.getValue("type").jsonPrimitive.content)
+        assertEquals("developer", offer.getValue("role").jsonPrimitive.content)
+
+        val offered = offer.getValue("tools").jsonArray.single().jsonObject
+        assertEquals("draw", offered.getValue("name").jsonPrimitive.content)
+        assertEquals("function", offered.getValue("type").jsonPrimitive.content)
+        assertEquals(TOOL.parameters, offered.getValue("parameters"))
+        assertFalse("prompt_cache_breakpoint" in offered, "the developer block is the one marked, not the offer")
+    }
+
+    @Test
+    fun `elsewhere an offered tool is listed up front and the offer left out`() = runBlocking {
+        val offered = request(*basic, Message.ToolsOffered(listOf("draw")), tools = listOf(TOOL, DRAW, SING))
+
+        client().complete(MODEL, offered)
+        client(reply = COMPLETION_REPLY, endpoint = OpenAiEndpoint.COMPLETIONS).complete(OFFERING_MODEL, offered)
+
+        val (responses, completions) = sent
+        assertEquals(listOf("lookUp", "draw"), responses.getValue("tools").jsonArray.map { it.jsonObject.getValue("name").jsonPrimitive.content })
+        assertEquals(listOf("message", "message"), responses.getValue("input").jsonArray.map { it.jsonObject.getValue("type").jsonPrimitive.content })
+        assertEquals(
+            listOf("lookUp", "draw"),
+            completions.getValue("tools").jsonArray.map { it.jsonObject.getValue("function").jsonObject.getValue("name").jsonPrimitive.content },
+        )
+        assertEquals(listOf("system", "user"), completions.getValue("messages").jsonArray.map { it.jsonObject.getValue("role").jsonPrimitive.content })
     }
 
     @Test

@@ -26,6 +26,8 @@ internal fun renderPromptDump(messages: List<Message>, model: String, tools: Lis
                     append("\n\n--- tool results ---\n").append(
                         message.results.joinToString("\n") { "[tool result ${it.name} id=${it.callId} error=${it.isError}]\n${it.output}" },
                     )
+
+                is Message.ToolsOffered -> append("\n\n--- tools offered ---\n").append(message.names.joinToString(", "))
             }
         }
     }

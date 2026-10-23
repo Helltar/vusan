@@ -365,6 +365,31 @@ class LlmRuntimeTest {
         assertEquals(272_000, resolveLlmRuntime(codex(), codexAuth = codexAuth()).model.contextWindowTokens)
     }
 
+    // the models measured on 2026-10-24: a tool offered partway through is taken where this says so, and
+    // listed up front everywhere else
+    @Test
+    fun `which models take a tool offered partway through`() {
+        assertTrue(resolveLlmRuntime(openAi()).model.offersToolsMidConversation)
+        assertTrue(resolveLlmRuntime(anthropic()).model.offersToolsMidConversation)
+        assertFalse(resolveLlmRuntime(anthropic(model = "claude-sonnet-4-6")).model.offersToolsMidConversation)
+        assertTrue(resolveLlmRuntime(openRouter("anthropic/claude-haiku-5.5")).model.offersToolsMidConversation)
+        assertFalse(resolveLlmRuntime(openRouter("anthropic/claude-opus-4.7:nitro")).model.offersToolsMidConversation)
+        assertTrue(resolveLlmRuntime(openRouter("openai/gpt-5.6-luna")).model.offersToolsMidConversation)
+        assertFalse(resolveLlmRuntime(openRouter("x-ai/grok-4.7")).model.offersToolsMidConversation)
+        assertFalse(resolveLlmRuntime(compatible()).model.offersToolsMidConversation)
+        assertFalse(resolveLlmRuntime(xai()).model.offersToolsMidConversation)
+        assertFalse(resolveLlmRuntime(codex(), codexAuth = codexAuth()).model.offersToolsMidConversation)
+    }
+
+    @Test
+    fun `every claude model since the ones before tool offers takes them, whatever its id looks like`() {
+        listOf("claude-opus-4-6", "claude-sonnet-4-6", "claude-opus-4-7", "claude-sonnet-5", "claude-sonnet-5-20260630", "anthropic/claude-sonnet-4.6", "anthropic/claude-sonnet-5:batch")
+            .forEach { assertFalse(claudeOffersToolsMidConversation(it), it) }
+
+        listOf("claude-opus-4-8", "claude-opus-5", "claude-sonnet-5-5", "claude-haiku-5-5", "claude-fable-5-1", "anthropic/claude-sonnet-5.5", "anthropic/claude-opus-5.5:batch")
+            .forEach { assertTrue(claudeOffersToolsMidConversation(it), it) }
+    }
+
     @Test
     fun `codex chat and compaction prompts use separate cache keys`() {
         val runtime = resolveLlmRuntime(codex(), codexAuth = codexAuth())

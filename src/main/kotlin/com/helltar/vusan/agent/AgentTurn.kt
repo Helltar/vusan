@@ -111,10 +111,12 @@ class AgentTurn internal constructor(
 
         var nudged = false
         var lowBudgetWarned = false
+        // the same list on every step: a group loaded mid-turn is offered in the conversation instead
+        val tools = catalog.requestDefinitions()
 
         while (true) {
-            val tools = catalog.visibleDefinitions()
-            foldToFit(messages, turnStart, tools)
+            offerLoadedTools(messages)
+            foldToFit(messages, turnStart)
 
             val reply = request(messages, tools)
             val message = reply.message
@@ -173,7 +175,7 @@ class AgentTurn internal constructor(
     }
 
     private suspend fun request(messages: List<Message>, tools: List<ToolDefinition>, mayCallTools: Boolean = true): Reply {
-        logPromptDump(messages, model.id, tools.map { it.name })
+        logPromptDump(messages, model.id, tools.filterNot { it.deferred }.map { it.name })
         calls++
 
         // a copy: the list grows as the turn goes on, and a client may keep the request it was handed
@@ -192,11 +194,21 @@ class AgentTurn internal constructor(
         return reply
     }
 
+    // the tools of every group loaded by now that the turn has not offered yet, offered at the end of the
+    // conversation: after whatever the turn appended since, before the request that may call them first
+    private fun offerLoadedTools(messages: MutableList<Message>) {
+        val offered = messages.filterIsInstance<Message.ToolsOffered>().flatMapTo(mutableSetOf()) { it.names }
+        val fresh = catalog.loadedToolNames().filterNot { it in offered }
+
+        if (fresh.isNotEmpty()) messages += Message.ToolsOffered(fresh)
+    }
+
     // the turn's own pile is folded when the whole request would not fit: the oldest results first, with
     // the long arguments they answered, never the latest batch. the stored history before the turn was
-    // planned to fit and is left alone.
-    private fun foldToFit(messages: MutableList<Message>, turnStart: Int, tools: List<ToolDefinition>) {
-        val folded = messages.foldedToFit(promptTokenCeiling - estimateTokens(tools), turnStart) ?: return
+    // planned to fit and is left alone. the tools weighed are the ones the model is shown, wherever an
+    // endpoint puts them.
+    private fun foldToFit(messages: MutableList<Message>, turnStart: Int) {
+        val folded = messages.foldedToFit(promptTokenCeiling - estimateTokens(catalog.visibleDefinitions()), turnStart) ?: return
         val foldedResults = folded.count { it is Message.ToolResults && it.isFolded() } - messages.count { it is Message.ToolResults && it.isFolded() }
 
         log.warn { "turn history folded for $scope: ${messages.size} messages over ~$promptTokenCeiling tokens, $foldedResults result batch(es) dropped" }
@@ -211,11 +223,11 @@ class AgentTurn internal constructor(
         messages += Message.User(TOOL_BUDGET_WRAP_UP)
 
         // the pile is at its largest here, and this is the request the whole turn's work rides on
-        val tools = catalog.visibleDefinitions()
-        foldToFit(messages, turnStart, tools)
+        offerLoadedTools(messages)
+        foldToFit(messages, turnStart)
 
         // the tools stay defined, since the calls the turn made are replayed with them, but none may be called
-        val answer = request(messages, tools, mayCallTools = false).message.text
+        val answer = request(messages, catalog.requestDefinitions(), mayCallTools = false).message.text
 
         // queue it rather than leave it as the run's trailing text: a turn that already reacted or sent a
         // message has that text dropped as duplicate chatter, and here it is the whole answer.

@@ -78,4 +78,20 @@ sealed interface Message {
             require(results.isNotEmpty()) { "a tool results message carries at least one result" }
         }
     }
+
+    /**
+     * Tools the request declared [ToolDefinition.deferred], offered to the model from this point of the
+     * conversation on, by [names].
+     *
+     * Where the model takes tools partway through ([LlmModel.offersToolsMidConversation]) its client says
+     * so here and the tool list, which the provider caches ahead of everything else, stays what it was;
+     * elsewhere a client lists the tools from its first message on and leaves this out, which costs the
+     * cache from the start of the prompt for the rest of the turn.
+     */
+    data class ToolsOffered(val names: List<String>) : Message {
+
+        init {
+            require(names.isNotEmpty()) { "an offer names at least one tool" }
+        }
+    }
 }

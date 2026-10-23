@@ -68,9 +68,10 @@ internal fun takesOpenAiPromptCacheOptions(model: String): Boolean {
 }
 
 // the breakpoint goes on the last text block of the first developer or system message: the prefix every
-// request of the deployment shares, and the one the lookup is sure to reach
+// request of the deployment shares, and the one the lookup is sure to reach. an `additional_tools` item
+// carries the developer role too, and takes no breakpoint
 private fun markSystemBlock(messages: JsonArray, textBlockType: String, breakpoint: JsonObject): JsonArray? {
-    val index = messages.indexOfFirst { it.role == "developer" || it.role == "system" }.takeIf { it >= 0 } ?: return null
+    val index = messages.indexOfFirst { it.isMessage && (it.role == "developer" || it.role == "system") }.takeIf { it >= 0 } ?: return null
     val message = messages[index] as? JsonObject ?: return null
     val content = markLastTextBlock(message["content"], textBlockType, breakpoint) ?: return null
 
@@ -79,6 +80,10 @@ private fun markSystemBlock(messages: JsonArray, textBlockType: String, breakpoi
 
 private val JsonElement.role: String?
     get() = ((this as? JsonObject)?.get("role") as? JsonPrimitive)?.contentOrNull
+
+// a responses input item names its type, a chat completions message has none
+private val JsonElement.isMessage: Boolean
+    get() = (((this as? JsonObject)?.get("type") as? JsonPrimitive)?.contentOrNull ?: "message") == "message"
 
 // a chat completions message may carry its text as a bare string; a breakpoint needs a block to sit on
 private fun markLastTextBlock(content: JsonElement?, textBlockType: String, breakpoint: JsonObject): JsonArray? {

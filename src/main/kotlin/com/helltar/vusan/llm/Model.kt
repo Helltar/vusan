@@ -10,6 +10,9 @@ package com.helltar.vusan.llm
  * cannot do without.
  * [efforts] are the ones its vendor lists, where it lists any: the least of them is what a yes-or-no
  * job sends. `null` where nobody said, empty where the vendor said there is nothing to choose.
+ * [offersToolsMidConversation] is whether it takes tools offered partway through a conversation without
+ * the tool list changing — Anthropic's `tool_addition`, OpenAI's `additional_tools` — see
+ * [Message.ToolsOffered].
  */
 data class LlmModel(
     val id: String,
@@ -17,6 +20,7 @@ data class LlmModel(
     val maxOutputTokens: Int? = null,
     val seesImages: Boolean = true,
     val efforts: Set<ReasoningEffort>? = null,
+    val offersToolsMidConversation: Boolean = false,
 ) {
 
     init {

@@ -39,7 +39,10 @@ data class ToolLoadResult(
  *
  * Everything registered runs from the first step: a call is resolved against [tools] and not against
  * the definitions the request carried, so a tool the model names before loading its group still runs.
- * Only what [visibleDefinitions] returns is sent, and it widens as [load] is called.
+ * What the model is shown is [visibleDefinitions], which widens as [load] is called. A request declares
+ * [requestDefinitions] instead, the same on every step, with the groups' tools deferred: the turn offers
+ * those as [loadedToolNames] names them, which an endpoint that takes tools partway through does without
+ * touching the tool list it caches first.
  *
  * [preloaded] is what this conversation asked for on an earlier turn, offered again from the first
  * request — see [LoadedToolGroups] for why. A group that is no longer registered at all, because the
@@ -85,6 +88,16 @@ class ToolCatalog internal constructor(
     fun visibleDefinitions(): List<ToolDefinition> =
         (alwaysVisible + loader.takeIf { loadableGroups().isNotEmpty() }.orEmpty() + deferred.filterKeys { it in loaded }.values.flatten())
             .map { it.definition }
+
+    /**
+     * Every tool this turn may offer, in registration order: the visible ones and the loader as they are,
+     * and every group's tools deferred whether or not they are loaded, so the list never changes as groups are.
+     */
+    fun requestDefinitions(): List<ToolDefinition> =
+        (alwaysVisible + loader).map { it.definition } + deferred.values.flatten().map { it.definition.copy(deferred = true) }
+
+    /** The tools of the groups loaded by now, in registration order: what the turn has to have offered. */
+    fun loadedToolNames(): List<String> = deferred.filterKeys { it in loaded }.values.flatten().map { it.name }
 
     /** The menu of what is still loadable, or null when this turn has nothing left to offer. */
     fun menu(): String? =

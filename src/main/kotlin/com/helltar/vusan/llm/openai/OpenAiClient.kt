@@ -11,6 +11,7 @@ import com.helltar.vusan.llm.Part
 import com.helltar.vusan.llm.Reply
 import com.helltar.vusan.llm.StopReason
 import com.helltar.vusan.llm.TokenUsage
+import com.helltar.vusan.llm.ToolDefinition
 import com.helltar.vusan.llm.llmJson
 import com.helltar.vusan.llm.postEventStream
 import com.helltar.vusan.llm.postJson
@@ -113,25 +114,19 @@ class OpenAiClient(
 
     internal fun responsesRequest(model: LlmModel, request: ChatRequest): JsonObject {
         val options = request.options
+        // a deferred tool reaches a model that takes it partway through as an `additional_tools` item where it
+        // was offered, and the tool list, which the cache reads first, stays as it was
+        val offersLater = model.offersToolsMidConversation
+        val tools = if (offersLater) request.tools.filterNot { it.deferred } else request.toolsListedUpFront()
+        val items = request.messages.map { responsesItems(it, request, offersLater) }
 
         val body =
             buildJsonObject {
                 put("model", model.id)
-                put("input", JsonArray(request.messages.flatMap(::responsesItems)))
+                put("input", JsonArray(items.flatten()))
 
-                if (request.tools.isNotEmpty()) {
-                    putJsonArray("tools") {
-                        request.tools.forEach { tool ->
-                            add(
-                                buildJsonObject {
-                                    put("type", "function")
-                                    put("name", tool.name)
-                                    put("description", tool.description)
-                                    put("parameters", tool.parameters)
-                                },
-                            )
-                        }
-                    }
+                if (tools.isNotEmpty()) {
+                    putJsonArray("tools") { tools.forEach { add(responsesTool(it)) } }
 
                     // both are refused in a request that defines no tools
                     if (!request.mayCallTools) put("tool_choice", "none")
@@ -156,7 +151,15 @@ class OpenAiClient(
         return if (explicitPromptCaching) withPromptCacheOptions(body, options.cachePrompt, gatewayPromptCaching) else body
     }
 
-    private fun responsesItems(message: Message): List<JsonObject> =
+    private fun responsesTool(tool: ToolDefinition): JsonObject =
+        buildJsonObject {
+            put("type", "function")
+            put("name", tool.name)
+            put("description", tool.description)
+            put("parameters", tool.parameters)
+        }
+
+    private fun responsesItems(message: Message, request: ChatRequest, offersLater: Boolean): List<JsonObject> =
         when (message) {
             is Message.System -> listOf(messageItem("developer", listOf(inputText(message.text))))
 
@@ -189,6 +192,21 @@ class OpenAiClient(
                         put("call_id", result.callId)
                         put("output", result.output)
                     }
+                }
+
+            is Message.ToolsOffered ->
+                if (offersLater) {
+                    val offered = request.tools.filter { it.name in message.names }
+
+                    listOf(
+                        buildJsonObject {
+                            put("type", "additional_tools")
+                            put("role", "developer")
+                            putJsonArray("tools") { offered.forEach { add(responsesTool(it)) } }
+                        },
+                    )
+                } else {
+                    emptyList()
                 }
         }
 
@@ -357,15 +375,18 @@ class OpenAiClient(
 
     internal fun completionsRequest(model: LlmModel, request: ChatRequest): JsonObject {
         val options = request.options
+        // chat completions has no way to offer a tool partway through, so what was offered is listed up front
+        val tools = request.toolsListedUpFront()
+        val messages = request.messages.map(::completionMessages)
 
         val body =
             buildJsonObject {
                 put("model", model.id)
-                put("messages", JsonArray(request.messages.flatMap(::completionMessages)))
+                put("messages", JsonArray(messages.flatten()))
 
-                if (request.tools.isNotEmpty()) {
+                if (tools.isNotEmpty()) {
                     putJsonArray("tools") {
-                        request.tools.forEach { tool ->
+                        tools.forEach { tool ->
                             add(
                                 buildJsonObject {
                                     put("type", "function")
@@ -470,6 +491,8 @@ class OpenAiClient(
                         put("content", result.output)
                     }
                 }
+
+            is Message.ToolsOffered -> emptyList()
         }
 
     private fun parseCompletion(response: JsonObject): Reply {

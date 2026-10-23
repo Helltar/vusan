@@ -13,8 +13,8 @@ import java.time.format.DateTimeFormatter
  *
  * All of it rides in one user-role message, including the clock and the sticker index. A second
  * system message would read as a higher-priority instruction — wrong for context assembled out of
- * what people sent — and the Anthropic API takes every system message into its top-level system
- * field anyway, so a block placed here would not stay here on that provider.
+ * what people sent — and OpenRouter hands the text of one inside the conversation to Claude as the
+ * assistant's own words, so the Anthropic client lifts every system message into its system field.
  */
 internal fun currentTurnPrompt(
     userInput: String,

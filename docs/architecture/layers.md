@@ -79,9 +79,13 @@ that is who owns writing them, not because only `agent/` reads them. No other ar
   schemas are withheld until the model calls `loadTools` (`tools/catalog/`), which the `<tool_groups>` menu in the
   turn prompt tells it about. Deferring is what keeps the schemas of a dozen rarely-used capabilities out of the
   conversation budget; a call is resolved against everything registered, so a tool named before its group is loaded
-  still runs. `LoadedToolGroups` then keeps the last few groups a conversation loaded and offers them again from its next
-  first request: the tool array is part of the prompt prefix providers cache, so a set that changes every turn would
-  cost more than the schemas it saved. See the Features section of the [README](../../README.md). `tools/images/` is not a tool surface
+  still runs. The request declares the groups' tools deferred from its first step, and a group once loaded is offered in
+  the conversation (`Message.ToolsOffered`): on a model that takes tools partway through — Anthropic's `tool_addition`,
+  OpenAI's `additional_tools`, `LlmModel.offersToolsMidConversation` — the tool array, which providers cache ahead of
+  everything else, then never changes; elsewhere the client lists what was offered up front, and a load costs the cache
+  for the rest of the turn. `LoadedToolGroups` keeps the last few groups a conversation loaded and offers them again
+  with its next request, which spares the model the load and, on the second kind of endpoint, keeps the array from
+  changing every turn. See the Features section of the [README](../../README.md). `tools/images/` is not a tool surface
   but the pipeline every image search shares: download a provider's candidates, drop what Telegram would refuse, and
   queue the survivors.
 - **`outbox/`** — the output model. `BotOutput` is the immutable sealed set of Telegram outputs (text, inline choice,

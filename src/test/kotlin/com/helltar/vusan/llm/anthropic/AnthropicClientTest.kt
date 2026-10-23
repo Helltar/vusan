@@ -32,6 +32,10 @@ private val MODEL = LlmModel("claude-opus-5-5", contextWindowTokens = 1_000_000,
 private val TOOL =
     ToolDefinition("lookUp", "Looks something up.", Json.parseToJsonElement("""{"type":"object","properties":{"query":{"type":"string"}},"required":["query"]}""").jsonObject)
 
+private val DRAW = TOOL.copy(name = "draw", deferred = true)
+private val SING = TOOL.copy(name = "sing", deferred = true)
+private val OFFERING_MODEL = MODEL.copy(offersToolsMidConversation = true)
+
 private const val REPLY =
     """{"id":"msg-1","type":"message","role":"assistant","model":"claude-opus-5-5",
        "content":[
@@ -205,6 +209,47 @@ class AnthropicClientTest {
 
         client().complete(MODEL, ChatRequest(basic.toList(), listOf(TOOL)))
         assertFalse("tool_choice" in sent.last())
+    }
+
+    @Test
+    fun `a deferred tool is declared up front and offered by reference where the model takes it`() = runBlocking {
+        client().complete(OFFERING_MODEL, request(*basic, Message.ToolsOffered(listOf("draw")), tools = listOf(TOOL, DRAW, SING)))
+
+        val body = sent.single()
+        val tools = body.getValue("tools").jsonArray.map { it.jsonObject }
+        assertEquals(listOf("lookUp", "draw", "sing"), tools.map { it.getValue("name").jsonPrimitive.content })
+        assertEquals(listOf(null, "true", "true"), tools.map { it["defer_loading"]?.jsonPrimitive?.content })
+
+        val offer = body.getValue("messages").jsonArray.last().jsonObject
+        assertEquals("system", offer.getValue("role").jsonPrimitive.content)
+
+        val addition = offer.getValue("content").jsonArray.single().jsonObject
+        assertEquals("tool_addition", addition.getValue("type").jsonPrimitive.content)
+        assertEquals("tool_reference", addition.getValue("tool").jsonObject.getValue("type").jsonPrimitive.content)
+        assertEquals("draw", addition.getValue("tool").jsonObject.getValue("name").jsonPrimitive.content)
+        assertEquals("thinking-binding-controls-2026-08-01,mid-conversation-tool-changes-2026-07-01", sentHeaders?.get("anthropic-beta"))
+    }
+
+    // a system message has to be followed by the assistant's turn: a nudge sent once the reply after the offer
+    // was dropped as empty goes in front of it
+    @Test
+    fun `an offer a user message came after moves behind that message`() = runBlocking {
+        client().complete(OFFERING_MODEL, request(*basic, Message.ToolsOffered(listOf("draw")), Message.User("deliver your answer"), tools = listOf(TOOL, DRAW)))
+
+        val roles = sent.single().getValue("messages").jsonArray.map { it.jsonObject.getValue("role").jsonPrimitive.content }
+        assertEquals(listOf("user", "user", "system"), roles)
+    }
+
+    @Test
+    fun `a model that takes no offer gets the offered tool listed and no beta for it`() = runBlocking {
+        client().complete(MODEL, request(*basic, Message.ToolsOffered(listOf("draw")), tools = listOf(TOOL, DRAW, SING)))
+
+        val body = sent.single()
+        val tools = body.getValue("tools").jsonArray.map { it.jsonObject }
+        assertEquals(listOf("lookUp", "draw"), tools.map { it.getValue("name").jsonPrimitive.content })
+        assertFalse(tools.any { "defer_loading" in it })
+        assertEquals(listOf("user"), body.getValue("messages").jsonArray.map { it.jsonObject.getValue("role").jsonPrimitive.content })
+        assertEquals("thinking-binding-controls-2026-08-01", sentHeaders?.get("anthropic-beta"))
     }
 
     @Test

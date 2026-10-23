@@ -330,9 +330,27 @@ class AgentTurnTest {
     @Test
     fun `a group loaded mid-turn is offered from the next request on`() =
         run(toolCallReply(call("loadTools", args = arrayOf("groups" to "gifs"))), toolCallReply(call("draw", args = arrayOf("subject" to "a cat"))), textReply("done")) { run, _ ->
-            assertFalse("draw" in run.client.requests[0].toolNames)
-            assertTrue("draw" in run.client.requests[1].toolNames)
-            assertEquals("[#2] drew a cat", assertIs<Message.ToolResults>(run.client.requests[2].messages.last()).results.single().output)
+            val (first, second, third) = run.client.requests
+
+            assertEquals(first.tools, third.tools, "the tool list a provider caches first stays what it was")
+            assertTrue(first.tools.single { it.name == "draw" }.deferred)
+            assertFalse("draw" in first.toolsListedUpFront().map { it.name })
+            assertEquals(listOf("draw"), assertIs<Message.ToolsOffered>(second.messages.last()).names)
+            assertTrue("draw" in second.toolsListedUpFront().map { it.name })
+            assertEquals(1, third.messages.count { it is Message.ToolsOffered }, "a tool is offered once")
+            assertEquals("[#2] drew a cat", assertIs<Message.ToolResults>(third.messages.last()).results.single().output)
+        }
+
+    @Test
+    fun `a group loaded on an earlier turn is offered with the request`() =
+        run(
+            textReply("done"),
+            catalog = { outbox -> toolCatalog(preloaded = setOf(ToolGroup.GIFS)) { tools(ProbeTools(outbox)); tools(ToolGroup.GIFS, DrawTools()) } },
+        ) { run, _ ->
+            val messages = run.client.requests.single().messages
+
+            assertEquals("the request", assertIs<Message.User>(messages[messages.lastIndex - 1]).text)
+            assertEquals(listOf("draw"), assertIs<Message.ToolsOffered>(messages.last()).names)
         }
 
     @Test

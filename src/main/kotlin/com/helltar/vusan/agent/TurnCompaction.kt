@@ -60,6 +60,8 @@ internal fun estimateTokens(message: Message): Int =
                 is Message.User -> message.parts.sumOf(::estimateTokens)
                 is Message.Assistant -> message.parts.sumOf(::estimateTokens)
                 is Message.ToolResults -> message.results.sumOf { estimateTokens(it.output) + MESSAGE_OVERHEAD_TOKENS }
+                // the schemas it brings in are counted with the tools the model is shown
+                is Message.ToolsOffered -> message.names.sumOf(::estimateTokens)
             }
 
 internal fun estimateTokens(tools: List<ToolDefinition>): Int =

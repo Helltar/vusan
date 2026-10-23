@@ -47,6 +47,21 @@ class ToolCatalogTest {
         assertContains(catalog.tools.map { it.name }, "drawTestPicture")
     }
 
+    // the list a provider caches ahead of everything else: loading a group names its tools as loaded and
+    // leaves the list as it was, the groups' tools deferred in it from the start
+    @Test
+    fun `a request declares the same tools whatever is loaded, the groups' tools deferred`() {
+        val catalog = catalog()
+        val before = catalog.requestDefinitions()
+
+        catalog.load(listOf("voice_replies"))
+
+        assertEquals(before, catalog.requestDefinitions())
+        assertEquals(listOf("sendTestMessage", "loadTools", "drawTestPicture", "speakTestText"), before.map { it.name })
+        assertEquals(listOf(false, false, true, true), before.map { it.deferred })
+        assertEquals(listOf("speakTestText"), catalog.loadedToolNames())
+    }
+
     @Test
     fun `loading a group offers its tools and widens the revision`() {
         val catalog = catalog()

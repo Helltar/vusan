@@ -42,8 +42,9 @@ finished turn leaves behind. Before it: [receiving a message](inbound.md); after
    bot's last reply or somebody else's line in between, and the replayed history carries no such order.
    `<current_time>` and the chat's `<sticker_catalog>` ride in that same user turn rather than in a system message of
    their own: a system message reads as a higher-priority instruction, which is wrong for context assembled out of what
-   people sent, and the Messages API has no system role inside the conversation, so `llm/anthropic/AnthropicClient`
-   moves every system message into the top-level system field regardless of where it sat. In a group the turn also carries what that chat lets the bot post, read through
+   people sent; and where the Messages API does take a system message inside the conversation, OpenRouter hands its text
+   to Claude as the assistant's own words (measured 2026-10-24), so `llm/anthropic/AnthropicClient` moves every system
+   message into the top-level system field regardless of where it sat — the only one it sends inside is a tool offer. In a group the turn also carries what that chat lets the bot post, read through
    `telegram/ChatProfiles.kt`: one cached `getChat` + `getChatMember` pair yields the chat description, the permissions
    binding a bot that is a plain member (an administrator is bound by none of them, slow mode included), and the
    slow-mode delay. `ChatCapabilities` travels in `RequestContext.chat` and reaches three places — a tool that makes

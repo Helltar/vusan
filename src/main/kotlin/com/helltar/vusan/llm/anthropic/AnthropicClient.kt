@@ -25,9 +25,14 @@ val ANTHROPIC_EFFORTS: Set<ReasoningEffort> =
  *   through a long think is dropped at the API's edge.
  * - `thinking: adaptive` for every model that takes an effort (that generation also stopped thinking
  *   without it on Opus 4.7 and 4.8), with `block_binding: drop_block` under its beta header: a thinking
- *   block is bound to the system prompt, the tools and every message before it, and the agent moves the
- *   tool list mid-turn — `loadTools` widens it — so an account the API holds to that check would
- *   otherwise get a 400 where it now gets the stale block dropped.
+ *   block is bound to the system prompt, the tools and every message before it, and on a model that
+ *   takes no tool partway through the agent moves the tool list mid-turn — `loadTools` widens it — so an
+ *   account the API holds to that check would otherwise get a 400 where it now gets the stale block dropped.
+ * - On a model that takes them ([LlmModel.offersToolsMidConversation]) a deferred tool is declared with
+ *   `defer_loading` from the first request and offered by a `tool_addition` reference where the agent
+ *   offered it, so the tool list never changes. Measured on 2026-10-24 through OpenRouter: the reference
+ *   works on Opus 4.8, Opus 5, Opus 5.5, Sonnet 5.5, Haiku 5.5, Fable 5 and Fable 5.1, and is a 400 on
+ *   Opus 4.6, Sonnet 4.6, Opus 4.7 and Sonnet 5; the prefix before the offer was read back whole.
  * - A request whose model may call no tool keeps them defined, with `tool_choice: none`: tool blocks in
  *   the messages are a 400 without them.
  * - Two cache breakpoints when the caller asks for caching: the request-level one, which the API places
@@ -64,7 +69,12 @@ class AnthropicClient(
     override suspend fun complete(model: LlmModel, request: ChatRequest): Reply {
         val folder = MessagesStreamFolder(label)
 
-        http.postEventStream(label, reasoningSource, messagesRequest(model, request), headers, folder::accept)
+        // a tool offered partway through travels under a beta of its own, which a request without one does without
+        val betas =
+            if (model.offersToolsMidConversation && request.tools.any { it.deferred }) "$THINKING_BINDING_CONTROLS_BETA,$MID_CONVERSATION_TOOLS_BETA"
+            else THINKING_BINDING_CONTROLS_BETA
+
+        http.postEventStream(label, reasoningSource, messagesRequest(model, request), headers + ("anthropic-beta" to betas), folder::accept)
 
         return parse(folder.response())
     }
@@ -78,7 +88,8 @@ class AnthropicClient(
         require(effort == null || effort in ANTHROPIC_EFFORTS) { "Anthropic takes no effort of ${effort?.requestValue}" }
 
         val system = request.messages.filterIsInstance<Message.System>()
-        val conversation = request.messages.filterNot { it is Message.System }
+        val offersLater = model.offersToolsMidConversation
+        val tools = if (offersLater) request.tools else request.toolsListedUpFront()
 
         return buildJsonObject {
             put("model", model.id)
@@ -99,16 +110,19 @@ class AnthropicClient(
                 }
             }
 
-            put("messages", JsonArray(conversation.map(::conversationMessage)))
+            put("messages", conversationMessages(request, offersLater))
 
-            if (request.tools.isNotEmpty()) {
+            if (tools.isNotEmpty()) {
                 putJsonArray("tools") {
-                    request.tools.forEach { tool ->
+                    tools.forEach { tool ->
                         add(
                             buildJsonObject {
                                 put("name", tool.name)
                                 put("description", tool.description)
                                 put("input_schema", tool.parameters)
+                                // withheld from the model until an offer names it, and out of the rendered prompt
+                                // until then: what the deferred tools cost together was 93 tokens on 2026-10-24
+                                if (tool.deferred) put("defer_loading", true)
                             },
                         )
                     }
@@ -129,9 +143,62 @@ class AnthropicClient(
         }
     }
 
+    /**
+     * The conversation as the Messages API takes it: system messages lifted into the system field, and a
+     * tool offer as a system message of `tool_addition` references where the model takes one.
+     *
+     * A system message has to follow a user turn and be followed by the assistant's, so an offer that a
+     * user message came after — a nudge sent once the reply to the offer was dropped as empty — moves
+     * behind that message.
+     */
+    private fun conversationMessages(request: ChatRequest, offersLater: Boolean): JsonArray {
+        val rendered = mutableListOf<JsonObject>()
+        val waiting = mutableListOf<JsonObject>()
+
+        request.messages.forEach { message ->
+            when (message) {
+                is Message.System -> Unit
+
+                is Message.ToolsOffered -> if (offersLater) waiting += toolOffer(message)
+
+                is Message.Assistant -> {
+                    rendered += waiting
+                    waiting.clear()
+                    rendered += conversationMessage(message)
+                }
+
+                is Message.User, is Message.ToolResults -> {
+                    rendered += conversationMessage(message)
+                    rendered += waiting
+                    waiting.clear()
+                }
+            }
+        }
+
+        rendered += waiting
+
+        return JsonArray(rendered)
+    }
+
+    private fun toolOffer(offer: Message.ToolsOffered): JsonObject =
+        buildJsonObject {
+            put("role", "system")
+            putJsonArray("content") {
+                offer.names.forEach { name ->
+                    add(
+                        buildJsonObject {
+                            put("type", "tool_addition")
+                            putJsonObject("tool") { put("type", "tool_reference"); put("name", name) }
+                        },
+                    )
+                }
+            }
+        }
+
     private fun conversationMessage(message: Message): JsonObject =
         when (message) {
             is Message.System -> error("system messages travel in the system field")
+            is Message.ToolsOffered -> error("a tool offer travels as a system message of its own")
 
             is Message.User ->
                 buildJsonObject {
@@ -271,6 +338,10 @@ class AnthropicClient(
         // lets a request say what to do with a thinking block whose conversation changed under it; harmless
         // on a model that never binds one, which answers with an empty `input_transformations`.
         const val THINKING_BINDING_CONTROLS_BETA = "thinking-binding-controls-2026-08-01"
+
+        // a tool declared `defer_loading` and offered later by a `tool_addition` reference. an inline definition
+        // has a newer beta, `inline-tools-2026-09-15`, which OpenRouter's validator refuses (2026-10-24)
+        const val MID_CONVERSATION_TOOLS_BETA = "mid-conversation-tool-changes-2026-07-01"
 
         // for a model whose ceiling nobody declared: what a thinking model needs to answer at all
         private const val DEFAULT_MAX_TOKENS = 16_000

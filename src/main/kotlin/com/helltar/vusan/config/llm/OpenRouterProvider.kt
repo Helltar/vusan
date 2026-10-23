@@ -26,6 +26,7 @@ internal const val OPENROUTER_API_BASE_URL = "https://openrouter.ai/api"
 private const val OPENROUTER_MODELS_URL = "$OPENROUTER_API_BASE_URL/v1/models/user"
 private const val OPENROUTER_MODELS_PAGE = "https://openrouter.ai/models"
 private const val CLAUDE_PREFIX = "anthropic/"
+private const val OPENAI_PREFIX = "openai/"
 
 private val log = KotlinLogging.logger("ModelPreflight")
 
@@ -64,6 +65,9 @@ internal fun openRouterRuntime(config: LlmProviderConfig.OpenRouter, http: HttpC
             maxOutputTokens = config.maxOutputTokens ?: ANTHROPIC_MAX_OUTPUT.takeIf { claude },
             seesImages = config.seesImages == true,
             efforts = config.efforts,
+            // another vendor's model also took `additional_tools` on 2026-10-24, but only openai's was shown to keep
+            // its cache through one, so the rest list what was offered up front
+            offersToolsMidConversation = if (claude) claudeOffersToolsMidConversation(id) else id.startsWith(OPENAI_PREFIX),
         )
 
     val httpClient = http ?: llmHttpClient(config.requestTimeout)

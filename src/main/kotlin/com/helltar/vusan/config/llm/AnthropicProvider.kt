@@ -41,6 +41,7 @@ internal fun anthropicRuntime(config: LlmProviderConfig.Anthropic, http: HttpCli
             maxOutputTokens = config.maxOutputTokens ?: ANTHROPIC_MAX_OUTPUT,
             seesImages = config.seesImages ?: true,
             efforts = config.efforts,
+            offersToolsMidConversation = claudeOffersToolsMidConversation(config.model),
         )
 
     return LlmRuntime(
@@ -94,3 +95,24 @@ internal suspend fun anthropicPreflight(http: HttpClient, config: LlmProviderCon
 
 private val JsonObject.supported: Boolean?
     get() = (this["supported"] as? JsonPrimitive)?.booleanOrNull
+
+// the claude models vusan runs on that came before tools could be offered partway through: each answers a
+// `tool_addition` with a 400 naming the feature (measured through OpenRouter on 2026-10-24), and every later
+// model takes it
+private val CLAUDE_WITHOUT_TOOL_OFFERS = setOf("claude-opus-4-6", "claude-sonnet-4-6", "claude-opus-4-7", "claude-sonnet-5")
+private val CLAUDE_SNAPSHOT_DATE = Regex("""-\d{8}$""")
+
+/**
+ * Whether [model] takes tools offered partway through a conversation, under Anthropic's id or a gateway's
+ * (`anthropic/claude-opus-4.7:nitro`); a dated snapshot is its model.
+ */
+internal fun claudeOffersToolsMidConversation(model: String): Boolean {
+    val id =
+        model.trim().lowercase()
+            .removePrefix("anthropic/")
+            .substringBefore(':')
+            .replace('.', '-')
+            .replace(CLAUDE_SNAPSHOT_DATE, "")
+
+    return id !in CLAUDE_WITHOUT_TOOL_OFFERS
+}

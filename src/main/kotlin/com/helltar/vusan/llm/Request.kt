@@ -63,11 +63,18 @@ data class RequestOptions(
     }
 }
 
-/** A tool as the model is told about it: its name, what it is for, and the JSON schema of its arguments. */
+/**
+ * A tool as the model is told about it: its name, what it is for, and the JSON schema of its arguments.
+ *
+ * A [deferred] tool is declared without being offered: the model gets it from the [Message.ToolsOffered]
+ * that names it, and until then it is not in front of the model at all. Declaring it from the first
+ * request on is what lets offering it later leave the start of the prompt as it was.
+ */
 data class ToolDefinition(
     val name: String,
     val description: String,
     val parameters: JsonObject,
+    val deferred: Boolean = false,
 )
 
 /**
@@ -84,6 +91,16 @@ data class ChatRequest(
 
     init {
         require(messages.isNotEmpty()) { "a request carries at least one message" }
+    }
+
+    /**
+     * The tools an endpoint that cannot take them partway through lists up front: every one not deferred,
+     * and every deferred one this request has offered by now.
+     */
+    fun toolsListedUpFront(): List<ToolDefinition> {
+        val offered = messages.filterIsInstance<Message.ToolsOffered>().flatMapTo(mutableSetOf()) { it.names }
+
+        return tools.filter { !it.deferred || it.name in offered }.map { it.copy(deferred = false) }
     }
 }
 

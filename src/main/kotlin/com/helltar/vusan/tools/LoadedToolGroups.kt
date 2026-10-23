@@ -6,10 +6,11 @@ import com.helltar.vusan.request.ConversationScope
  * What each conversation has already loaded, so its next turn can offer the same tools from its
  * first request.
  *
- * A `loadTools` call rewrites the tool array mid-turn, and that array is part of the prompt prefix
- * providers cache — so without this a conversation that asks for a voice reply every day would rebuild
- * the whole prefix on every turn, which costs far more than the schemas it saved. Offering last turn's
- * groups again keeps the array stable across turns: only the first use of a capability pays.
+ * Offering last turn's groups again spares the model a `loadTools` call it would make anyway. On an
+ * endpoint that takes no tool partway through it also keeps the tool array stable across turns: there a
+ * load rewrites the array mid-turn, and that array is part of the prompt prefix providers cache — so a
+ * conversation that asks for a voice reply every day would otherwise rebuild the whole prefix on every
+ * turn, which costs far more than the schemas it saved.
  *
  * Process memory on purpose. Losing it to a restart costs one extra load per conversation, which is
  * not worth a table and a schema version.

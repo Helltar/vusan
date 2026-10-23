@@ -25,12 +25,16 @@ Part of the [architecture index](../architecture.md).
   stated outright (`llm/openai/OpenAiPromptCaching`): the platform's implicit mode, under which each iteration of the loop
   reads the tool results the one before it added, plus an explicit twelve-hour breakpoint on the stable system block,
   which the next turn still reads however its history was replayed and hours later; a prompt that never repeats, the recap, asks for no caching at all.
+  A tool group loaded mid-turn goes as an `additional_tools` item where it was offered, so the tool list stays the cached
+  one.
   A preamble the model wrote before its tool calls goes back with its `phase`, which the platform asks for so as not to
   read it back as the answer.
   Reasoning comes back encrypted (`store: false`) and is replayed verbatim through the tool
   loop. `anthropic` asks for `thinking: adaptive` with `block_binding: drop_block` under its beta header — a thinking
-  block is bound to the tools and messages before it, and `loadTools` widens the tool list mid-turn, so an
-  account the API holds to that check gets the stale block dropped rather than a 400 — sends the configured
+  block is bound to the tools and messages before it, and on a Claude model from before tool offers (Opus and Sonnet
+  4.6, Opus 4.7, Sonnet 5) `loadTools` widens the tool list mid-turn, so an account the API holds to that check gets
+  the stale block dropped rather than a 400; every later model gets the groups' tools declared `defer_loading` and a
+  loaded group offered by a `tool_addition` reference, and the list never changes — sends the configured
   `output_config.effort`, the model's whole output ceiling as `max_tokens`, and two cache breakpoints: the request-level
   one the API places on the last block, which every iteration of the loop reads back, and an hour-long one on the
   system block, which the next turn — whose history is replayed from storage in another shape — still reads, and which

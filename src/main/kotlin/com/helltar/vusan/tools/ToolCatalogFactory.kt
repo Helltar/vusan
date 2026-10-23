@@ -101,9 +101,9 @@ class ToolCatalogFactory(
     private val selfImage: SelfImage? = null,
 ) {
 
-    // what each conversation already loaded, so its next turn opens with the same tool array: that
-    // array is part of the cached prompt prefix, and rebuilding it every turn costs more than the
-    // schemas the catalog saves.
+    // what each conversation already loaded, so its next turn offers the same tools from the start: the
+    // model need not load them again, and an endpoint that lists offered tools up front keeps the same
+    // tool array, which is part of the cached prompt prefix.
     private val loadedGroups = LoadedToolGroups()
 
     val availableToolNames: List<String> by lazy {
