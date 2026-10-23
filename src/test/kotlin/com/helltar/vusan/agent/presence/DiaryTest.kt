@@ -70,6 +70,22 @@ class DiaryTest {
     }
 
     @Test
+    fun `a busy day reaches the writer from its morning on`() = runBlocking {
+        val writer = FakeWriter("the ferry won")
+        val morning = Instant.parse("2026-10-03T06:00:00Z")
+        val chatter = "x".repeat(50)
+
+        groupLog.record(person("first", "the ferry leaves at seven", morning))
+        repeat(1_200) { groupLog.record(person("m$it", "$chatter $it", morning.plusSeconds(60L + it * 30L))) }
+        diary(writer).catchUp()
+
+        val transcript = writer.calls.single().transcript
+
+        assertTrue(transcript.length > 60_000, "the day was not busy enough to prove anything")
+        assertTrue("the ferry leaves at seven" in transcript)
+    }
+
+    @Test
     fun `a day of a few stray lines gets no entry`() = runBlocking {
         val writer = FakeWriter("nothing happened")
         val diary = diary(writer)

@@ -502,7 +502,7 @@ every turn there, so it picks up yesterday's thread.
 | `DIARY_ENABLED` | `true`  | `false` writes nothing and sends no day anywhere. |
 
 - **What is sent** — once per group per day with at least fifteen messages, that day's transcript,
-  up to 12,000 characters, goes to the chat model with nobody having asked.
+  up to 100,000 characters, goes to the chat model with nobody having asked.
 - **How long** — entries are kept after the day's messages expire, until the group log is forgotten;
   only the last week's are shown.
 

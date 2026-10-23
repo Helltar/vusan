@@ -233,8 +233,10 @@ internal const val LOG_LINE_CHARS = 300
 
 // what one local day's transcript is for a model that reads it whole, a digest or a diary entry: the rows
 // read for it, and what their rendering may cost that prompt. one rule, so the two never read different days.
-internal const val DAY_SOURCE_ROWS = 1_500
-internal const val DAY_SOURCE_CHARS = 12_000
+// a busy group fills tens of thousands of characters a day, and an overflow is cut from the morning, so the
+// budget is sized to hold such a day whole: it is paid once per closed day, never per turn.
+internal const val DAY_SOURCE_ROWS = 3_000
+internal const val DAY_SOURCE_CHARS = 100_000
 
 internal suspend fun GroupLogRepository.dayEntries(chat: ChatRef, day: LocalDate, zone: ZoneId): List<GroupLogEntry> {
     val start = day.atStartOfDay(zone).toInstant()
