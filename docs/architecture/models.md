@@ -25,6 +25,8 @@ Part of the [architecture index](../architecture.md).
   stated outright (`llm/openai/OpenAiPromptCaching`): the platform's implicit mode, under which each iteration of the loop
   reads the tool results the one before it added, plus an explicit twelve-hour breakpoint on the stable system block,
   which the next turn still reads however its history was replayed and hours later; a prompt that never repeats, the recap, asks for no caching at all.
+  A preamble the model wrote before its tool calls goes back with its `phase`, which the platform asks for so as not to
+  read it back as the answer.
   Reasoning comes back encrypted (`store: false`) and is replayed verbatim through the tool
   loop. `anthropic` asks for `thinking: adaptive` with `block_binding: drop_block` under its beta header — a thinking
   block is bound to the tools and messages before it, and `loadTools` widens the tool list mid-turn, so an

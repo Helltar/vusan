@@ -5,7 +5,12 @@ import kotlinx.serialization.json.JsonObject
 /** One block of a message. */
 sealed interface Part {
 
-    data class Text(val text: String) : Part
+    /**
+     * Text, and for the model's own what the endpoint said of it beside the words, replayed with it to
+     * that endpoint alone — the Responses API's `phase`, which tells a preamble before tool calls from the
+     * answer, and without which the model can read its own preamble back as the answer it already gave.
+     */
+    data class Text(val text: String, val endpointFields: EndpointFields? = null) : Part
 
     class Image(
         val bytes: ByteArray,
@@ -31,6 +36,9 @@ sealed interface Part {
         val arguments: JsonObject,
     ) : Part
 }
+
+/** Fields the endpoint at [source] put on a block, handed back to it unchanged and to no other. */
+data class EndpointFields(val source: String, val values: JsonObject)
 
 /** What a tool answered to one [Part.ToolCall]. */
 data class ToolResult(

@@ -3,6 +3,7 @@ package com.helltar.vusan.llm.openai
 import com.helltar.vusan.llm.string
 import com.helltar.vusan.llm.int
 import com.helltar.vusan.llm.ChatRequest
+import com.helltar.vusan.llm.EndpointFields
 import com.helltar.vusan.llm.LlmClient
 import com.helltar.vusan.llm.LlmModel
 import com.helltar.vusan.llm.Message
@@ -192,19 +193,31 @@ class OpenAiClient(
         }
 
     // text parts become one assistant message item; a reasoning item and a function call each stand alone,
-    // in the order the model produced them, which is the order the api wants them back in.
+    // in the order the model produced them, which is the order the api wants them back in. texts the
+    // platform marked differently — a preamble's phase against the answer's — stay separate items, each
+    // with its own fields back on it.
     private fun assistantItems(message: Message.Assistant): List<JsonObject> =
         buildList {
             val texts = mutableListOf<JsonObject>()
+            var fields: JsonObject? = null
 
             fun flushTexts() {
-                if (texts.isNotEmpty()) add(messageItem("assistant", texts.toList()))
+                if (texts.isNotEmpty()) add(JsonObject(messageItem("assistant", texts.toList()) + fields.orEmpty()))
                 texts.clear()
             }
 
             message.parts.forEach { part ->
                 when (part) {
-                    is Part.Text -> texts += buildJsonObject { put("type", "output_text"); put("text", part.text) }
+                    is Part.Text -> {
+                        val own = part.endpointFields?.takeIf { it.source == reasoningSource }?.values
+
+                        if (own != fields) {
+                            flushTexts()
+                            fields = own
+                        }
+
+                        texts += buildJsonObject { put("type", "output_text"); put("text", part.text) }
+                    }
 
                     is Part.Reasoning ->
                         if (part.source == reasoningSource) {
@@ -297,7 +310,10 @@ class OpenAiClient(
     private fun outputParts(item: JsonObject): List<Part> =
         when (val type = item.string("type")) {
             "reasoning" -> listOf(Part.Reasoning(reasoningSource, item))
-            "message" -> messageTexts(item).map { (text, _) -> Part.Text(text) }
+            "message" -> {
+                val fields = item.messageFields()
+                messageTexts(item).map { (text, _) -> Part.Text(text, fields) }
+            }
 
             "function_call" ->
                 listOf(
@@ -313,6 +329,13 @@ class OpenAiClient(
                 emptyList()
             }
         }
+
+    // what the platform says of an output message beside its text, kept for the replay: `phase`, a preamble's
+    // `commentary` against the answer's `final_answer`, which the platform asks to have back unchanged
+    private fun JsonObject.messageFields(): EndpointFields? =
+        this["phase"]
+            ?.takeUnless { it is JsonNull }
+            ?.let { EndpointFields(reasoningSource, JsonObject(mapOf("phase" to it))) }
 
     // the text blocks of an output message, each flagged when it is the model declining rather than answering
     private fun messageTexts(item: JsonObject): List<Pair<String, Boolean>> =

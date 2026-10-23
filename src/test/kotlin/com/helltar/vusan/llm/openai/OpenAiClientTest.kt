@@ -1,6 +1,7 @@
 package com.helltar.vusan.llm.openai
 
 import com.helltar.vusan.llm.ChatRequest
+import com.helltar.vusan.llm.EndpointFields
 import com.helltar.vusan.llm.LlmException
 import com.helltar.vusan.llm.LlmModel
 import com.helltar.vusan.llm.Message
@@ -47,6 +48,14 @@ private const val RESPONSES_REPLY =
          {"type":"function_call","id":"fc-1","call_id":"call-1","name":"lookUp","arguments":"{\"query\":\"cats\"}","status":"completed"}
        ],
        "usage":{"input_tokens":120,"input_tokens_details":{"cached_tokens":100,"cache_write_tokens":7,"cache_write_tokens_details":{"ttl_30m_tokens":3,"ttl_12h_tokens":4}},"output_tokens":30}}"""
+
+private const val PHASED_REPLY =
+    """{"id":"resp-2","object":"response","created_at":0,"model":"gpt-5.6-sol","status":"completed",
+       "output":[
+         {"type":"message","id":"msg-1","role":"assistant","status":"completed","phase":"commentary","content":[{"type":"output_text","text":"Looking it up.","annotations":[]}]},
+         {"type":"function_call","id":"fc-1","call_id":"call-1","name":"lookUp","arguments":"{\"query\":\"cats\"}","status":"completed"}
+       ],
+       "usage":{"input_tokens":120,"output_tokens":30}}"""
 
 private const val COMPLETION_REPLY =
     """{"id":"chatcmpl-1","object":"chat.completion","created":0,"model":"deepseek-chat",
@@ -324,6 +333,40 @@ class OpenAiClientTest {
         assertTrue(takesOpenAiPromptCacheOptions("openai/gpt-5.6-luna"))
         assertFalse(takesOpenAiPromptCacheOptions("openai/gpt-5.5"))
         assertFalse(takesOpenAiPromptCacheOptions("x-ai/gpt-5.6-luna"))
+    }
+
+    // without it the platform can read the preamble back as the answer the model already gave
+    @Test
+    fun `a preamble comes back with its phase`() = runBlocking {
+        val client = client(reply = PHASED_REPLY)
+        val first = client.complete(MODEL, request(*basic)).message
+        sent.clear()
+
+        client.complete(MODEL, request(*basic, first, Message.ToolResults(listOf(ToolResult("call-1", "lookUp", "found")))))
+
+        val replayed = sent.single().getValue("input").jsonArray.map { it.jsonObject }.filter { it["role"]?.jsonPrimitive?.content == "assistant" }
+        assertEquals(listOf("commentary"), replayed.map { it.getValue("phase").jsonPrimitive.content })
+        assertEquals("Looking it up.", replayed.single().getValue("content").jsonArray.single().jsonObject.getValue("text").jsonPrimitive.content)
+    }
+
+    @Test
+    fun `texts of different phases replay as messages of their own, and another endpoint's phase not at all`() = runBlocking {
+        fun phase(value: String, source: String = "https://api.openai.com/v1/responses") = EndpointFields(source, buildJsonObject { put("phase", value) })
+
+        val assistant =
+            Message.Assistant(
+                listOf(
+                    Part.Text("on it", phase("commentary")),
+                    Part.Text("done", phase("final_answer")),
+                    Part.Text("aside", phase("commentary", source = "https://chatgpt.com/backend-api/codex/responses")),
+                ),
+            )
+
+        client().complete(MODEL, request(*basic, assistant, Message.User("next")))
+
+        val replayed = sent.single().getValue("input").jsonArray.map { it.jsonObject }.filter { it["role"]?.jsonPrimitive?.content == "assistant" }
+        assertEquals(listOf("commentary", "final_answer", null), replayed.map { it["phase"]?.jsonPrimitive?.content })
+        assertEquals(listOf("on it", "done", "aside"), replayed.map { it.getValue("content").jsonArray.single().jsonObject.getValue("text").jsonPrimitive.content })
     }
 
     @Test
