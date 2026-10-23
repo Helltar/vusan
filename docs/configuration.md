@@ -220,7 +220,10 @@ LLM_FALLBACK_API_KEY=sk-proj-qwerty
 counterparts do; the timeout follows the primary's when unset.
 
 - **What switches** — a usage limit, rejected credentials, a rate limit, an overloaded or failing
-  server, a dropped connection. A content refusal does not: it would repeat anywhere.
+  server, a dropped connection. A content refusal does not end a turn on the fallback: it would
+  usually repeat anywhere. A daily recap and a [diary](#diary) entry are the exception: one the
+  primary declines is asked of the fallback once, so a day is not left unwritten over one vendor's
+  filter, and the primary stays in use.
 - **For how long** — a usage limit until the reset time it named, an expired sign-in for half an
   hour, a rate limit or an outage for two minutes; then Vusan tries the primary again.
 - **Vision** — switches too, so pick a fallback that sees images if the chat model does.

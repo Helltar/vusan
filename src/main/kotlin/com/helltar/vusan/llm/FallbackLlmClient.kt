@@ -72,23 +72,33 @@ class FallbackLlmClient(
 
         if (known != null) log.info { "probing $primaryLabel again after its outage" }
 
-        return try {
-            primary.complete(model, request).also { if (known != null) recovered() }
-        } catch (e: Throwable) {
-            e.rethrowIfCancellation()
-            val outage = outageOf(e, now) ?: throw e
+        val reply =
+            try {
+                primary.complete(model, request).also { if (known != null) recovered() }
+            } catch (e: Throwable) {
+                e.rethrowIfCancellation()
+                val outage = outageOf(e, now) ?: throw e
 
-            primaryOutage = outage
+                primaryOutage = outage
 
-            log.warn {
-                "$primaryLabel is out for ${JavaDuration.between(now, outage.until).toMinutes()}m: " +
-                        "${e.message?.lineSequence()?.firstOrNull()}; answering from $fallbackLabel until then"
+                log.warn {
+                    "$primaryLabel is out for ${JavaDuration.between(now, outage.until).toMinutes()}m: " +
+                            "${e.message?.lineSequence()?.firstOrNull()}; answering from $fallbackLabel until then"
+                }
+
+                return onFallback(request)
+            } finally {
+                if (known != null) probing.set(false)
             }
 
-            onFallback(request)
-        } finally {
-            if (known != null) probing.set(false)
+        // a refusal says nothing about the primary being out, so the next call goes to it again as usual
+        if (reply.stopReason == StopReason.REFUSAL && request.options.fallBackOnRefusal) {
+            log.warn { "$primaryLabel declined a call: ${reply.refusal ?: "no reason given"}; asking $fallbackLabel instead" }
+
+            return onFallback(request)
         }
+
+        return reply
     }
 
     override fun close() {

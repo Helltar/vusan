@@ -195,7 +195,10 @@ suspend fun main() = coroutineScope {
         val contextWindowTokens =
             listOfNotNull(llm.statedWindow(config.llmProvider), config.llmFallback?.let { fallback?.statedWindow(it) }).min()
         val contextWindowPolicy = ContextWindowPolicy(llm.model.copy(contextWindowTokens = contextWindowTokens))
-        val groupLogDigester = groupLog?.let { LlmGroupLogDigester(client, llm.model, llm.compactionOptions) }
+        // a digest and a diary entry retell what a group said, and one vendor's content filter declining that
+        // text is no reason to leave a day unwritten while another model stands behind it
+        val summaryOptions = llm.compactionOptions.copy(fallBackOnRefusal = true)
+        val groupLogDigester = groupLog?.let { LlmGroupLogDigester(client, llm.model, summaryOptions) }
 
         // the diary reads the group log, so it is kept only where there is one
         val diaryRepository = groupLog?.let { DiaryRepository() }
@@ -228,7 +231,7 @@ suspend fun main() = coroutineScope {
 
         val diary =
             if (groupLog != null && diaryRepository != null) {
-                Diary(LlmDiaryWriter(client, llm.model, llm.compactionOptions, personality), diaryRepository, groupLog, isAllowedChat)
+                Diary(LlmDiaryWriter(client, llm.model, summaryOptions, personality), diaryRepository, groupLog, isAllowedChat)
             } else {
                 null
             }

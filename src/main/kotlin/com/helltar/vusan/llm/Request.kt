@@ -30,6 +30,10 @@ enum class ReasoningEffort {
  * the write would buy a read nobody makes. [promptCacheKey] is OpenAI's: it routes a conversation's
  * requests to the machine holding its prefix, and travels only to servers that know it — OpenRouter takes
  * it as `session_id` besides, to keep a conversation on one upstream.
+ *
+ * [fallBackOnRefusal] has a call the primary declines asked again of the fallback provider, where one stands
+ * behind it: for a call whose refusal is one vendor's filter rather than a verdict that would hold anywhere.
+ * No provider reads it.
  */
 data class RequestOptions(
     val reasoningEffort: ReasoningEffort? = null,
@@ -39,6 +43,7 @@ data class RequestOptions(
     val parallelToolCalls: Boolean? = null,
     val maxOutputTokens: Int? = null,
     val cachePrompt: Boolean = true,
+    val fallBackOnRefusal: Boolean = false,
 ) {
 
     /**

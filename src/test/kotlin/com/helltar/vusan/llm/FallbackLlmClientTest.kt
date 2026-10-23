@@ -45,6 +45,42 @@ class FallbackLlmClientTest {
         }
     }
 
+    private class Refusing : LlmClient {
+
+        var calls = 0
+
+        override suspend fun complete(model: LlmModel, request: ChatRequest): Reply {
+            calls++
+
+            return Reply(Message.Assistant(emptyList()), StopReason.REFUSAL, refusal = "cyber")
+        }
+    }
+
+    @Test
+    fun `a refusal is asked again of the fallback when the call allows it, and the primary stays in use`() = runBlocking {
+        val primary = Refusing()
+        val fallback = Scripted("from fallback")
+        val client = FallbackLlmClient(primary, "a", fallback, "b", FALLBACK_MODEL, FALLBACK_OPTIONS, { e, now -> e.providerOutage(now) }, TickingClock(start))
+        val allowing = ChatRequest(listOf(Message.User("hi")), options = RequestOptions(fallBackOnRefusal = true))
+
+        assertEquals("from fallback", client.complete(PRIMARY_MODEL, allowing).message.text)
+        assertEquals(FALLBACK_MODEL, fallback.calls.single().second)
+        assertNull(client.fallbackInUse)
+
+        client.complete(PRIMARY_MODEL, allowing)
+
+        assertEquals(2, primary.calls)
+    }
+
+    @Test
+    fun `a refusal reaches the caller when the call does not allow a second opinion`() = runBlocking {
+        val fallback = Scripted("from fallback")
+        val client = FallbackLlmClient(Refusing(), "a", fallback, "b", FALLBACK_MODEL, FALLBACK_OPTIONS, { e, now -> e.providerOutage(now) }, TickingClock(start))
+
+        assertEquals(StopReason.REFUSAL, client.complete(PRIMARY_MODEL, request()).stopReason)
+        assertTrue(fallback.calls.isEmpty())
+    }
+
     private fun client(primary: Scripted, fallback: Scripted, clock: Clock) =
         FallbackLlmClient(primary, "subscription", fallback, "api key", FALLBACK_MODEL, FALLBACK_OPTIONS, { e, now -> e.providerOutage(now) }, clock)
 
