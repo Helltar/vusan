@@ -42,11 +42,12 @@ internal fun String.isEffectivelyBlank(): Boolean =
  * Wraps [content] in an XML-style `<tag>…</tag>` block, trimming surrounding whitespace. A closing tag
  * of the same name inside [content] is escaped: command output, a transcript or a fetched page would
  * otherwise be able to end the block early and have the rest read as the prompt's own text. Blocks of
- * other names are left alone, so nesting still works — inbound message text is separately defused by
+ * other names are left alone, so nesting still works — one whose name merely starts with [tag] too, as
+ * `<user_message>` inside `<user>` — and inbound message text is separately defused by
  * `neutralizePromptBlocks`.
  */
 internal fun xmlBlock(tag: String, content: String): String {
-    val closing = Regex("</\\s*${Regex.escape(tag)}", RegexOption.IGNORE_CASE)
+    val closing = Regex("</\\s*${Regex.escape(tag)}(?![\\w-])", RegexOption.IGNORE_CASE)
 
     return "<$tag>\n${closing.replace(content.trim()) { "&lt;${it.value.removePrefix("<")}" }}\n</$tag>"
 }

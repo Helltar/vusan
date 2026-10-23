@@ -114,4 +114,12 @@ class StringsTest {
 
         assertEquals("<report>\n$inner\n</report>", xmlBlock("report", inner))
     }
+
+    // the recap wraps each stored user entry, written in `<user_message>`, in a `<user>` block
+    @Test
+    fun `xmlBlock leaves a tag whose name only starts with its own alone`() {
+        val inner = xmlBlock("user_message", "is the shelf empty")
+
+        assertEquals("<user>\n$inner\n</user>", xmlBlock("user", inner))
+    }
 }
