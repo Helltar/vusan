@@ -25,8 +25,8 @@ the sticker catalog. Part of the [architecture index](../architecture.md).
   Only a closed day is written, for the reason only a closed day is digested, and a day of fewer than fifteen messages
   gets none. A day whose writer keeps failing is given up on after three tries. `TurnSurroundings` then puts the newest three
   entries of the past week into every turn in that group as `<diary>` — defused like the transcript they came from —
-  and `Initiative` reads the same block. Entries live in `chat_diary`, a week at most (`Maintenance`), and
-  `GroupLogRepository.clear` drops them with the transcript they were written from. Unlike a digest, an entry is written
+  and `Initiative` reads the same block. Entries live in `chat_diary` with no retention of their own, outliving
+  the transcript, until `GroupLogRepository.clear` drops them with the transcript they were written from. Unlike a digest, an entry is written
   with nobody having asked, so a whole day of a chat goes to the chat model unprompted: `DIARY_ENABLED=false` is the
   switch, and a chat the allowlist no longer names is never read.
 - **Initiative** — `agent/presence/Initiative` is the bot speaking up without being called. Code decides whether to

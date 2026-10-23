@@ -126,14 +126,14 @@ class DiaryTest {
     }
 
     @Test
-    fun `entries past their week are pruned and the rest stay`() = runBlocking {
+    fun `an entry past its week is kept but no longer shown`() = runBlocking {
         val diary = diary(FakeWriter("unused"))
 
         repository.store(CHAT, DiaryEntry(yesterday.minusDays(7), "long ago"))
         repository.store(CHAT, DiaryEntry(yesterday, "the ferry won"))
 
-        assertEquals(1, diary.pruneExpired())
         assertEquals("2026-10-03: the ferry won", diary.blockFor(CHAT))
+        assertTrue(repository.has(CHAT, yesterday.minusDays(7)))
     }
 
     @Test

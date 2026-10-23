@@ -40,7 +40,7 @@ Part of the [architecture index](../architecture.md).
   math lives in `tasks/Recurrence.kt`.
 - **Maintenance** — `infra/Maintenance` runs a pass of bounded deletes on the way up and every six hours after
   that: conversations past `CONVERSATION_RETENTION_DAYS`, group transcripts past `GROUP_LOG_RETENTION_DAYS` or over
-  their row cap, polls past their retention, diary entries older than a week, and leave-alone requests past their end. Each of these is also pruned where it is written, and that is enough
+  their row cap, polls past their retention, and leave-alone requests past their end. Each of these is also pruned where it is written, and that is enough
   for as long as somebody keeps writing — the pass exists for what nobody writes to any more: a conversation the person
   left, a chat the bot still sits in, a poll never followed by another. Every step bounds its own work (a hundred
   conversations or chats a round, the next round taking the rest) and reports what it removed, and a step that throws

@@ -29,6 +29,9 @@ import kotlin.time.Duration.Companion.minutes
  * added to. Unlike a digest an entry is written without anyone asking, so a whole day of a chat goes
  * to the model unprompted — which is why this is switched on deliberately and only reads chats that
  * [isAllowed] still admits.
+ *
+ * Entries are kept for as long as the chat's transcript is not cleared, outliving the transcript's own
+ * retention: a turn is shown only the last few, and the rest are what remains of the days before.
  */
 class Diary(
     private val writer: DiaryWriter,
@@ -81,10 +84,6 @@ class Diary(
         return repository.since(chat, since).takeLast(SHOWN_ENTRIES).takeIf { it.isNotEmpty() }?.let(::renderDiary)
     }
 
-    /** Retention: an entry older than anything [blockFor] would show has no reader left. */
-    suspend fun pruneExpired(): Int =
-        repository.pruneBefore(LocalDate.ofInstant(clock(), zone).minusDays(KEPT_DAYS))
-
     private suspend fun writeIfMissing(chat: ChatRef, day: LocalDate) {
         val key = chat to day
 
@@ -117,8 +116,8 @@ class Diary(
 
         const val MAX_ATTEMPTS = 3
 
-        // every group turn carries the shown entries, so they are few; the kept ones are what a chat
-        // that went quiet for a few days still comes back to
+        // every group turn carries the shown entries, so they are few, and drawn from the last week only:
+        // a chat that went quiet for a few days still comes back to them, one silent for a month does not
         const val SHOWN_ENTRIES = 3
         const val EARLIER_ENTRIES = 2
         const val KEPT_DAYS = 7L
