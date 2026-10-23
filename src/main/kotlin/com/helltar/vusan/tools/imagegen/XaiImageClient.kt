@@ -2,7 +2,7 @@ package com.helltar.vusan.tools.imagegen
 
 import com.helltar.vusan.common.dataUrl
 import com.helltar.vusan.common.rethrowIfCancellation
-import com.helltar.vusan.config.XAI_API_BASE_URL
+import com.helltar.vusan.config.llm.XAI_API_BASE_URL
 import com.helltar.vusan.infra.HttpStatusException
 import com.helltar.vusan.tools.isImagineModerated
 import io.ktor.client.*

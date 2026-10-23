@@ -1,7 +1,7 @@
 package com.helltar.vusan.tools.tasks
 
 import com.helltar.vusan.config.AppConfig
-import com.helltar.vusan.config.LlmProviderConfig
+import com.helltar.vusan.config.llm.LlmProviderConfig
 import com.helltar.vusan.i18n.Language
 import com.helltar.vusan.infra.Db
 import com.helltar.vusan.request.RequestContext

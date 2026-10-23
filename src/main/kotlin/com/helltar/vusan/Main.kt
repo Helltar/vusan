@@ -21,7 +21,8 @@ import com.helltar.vusan.agent.presence.LlmDiaryWriter
 import com.helltar.vusan.agent.presence.LlmInitiativeMind
 import com.helltar.vusan.agent.providerOutage
 import com.helltar.vusan.config.*
-import com.helltar.vusan.config.LlmProviderConfig
+import com.helltar.vusan.config.llm.*
+import com.helltar.vusan.config.llm.LlmProviderConfig
 import com.helltar.vusan.config.VideoProviderConfig
 import com.helltar.vusan.infra.Db
 import com.helltar.vusan.infra.Http

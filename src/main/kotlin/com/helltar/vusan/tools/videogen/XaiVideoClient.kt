@@ -3,7 +3,7 @@ package com.helltar.vusan.tools.videogen
 import com.helltar.vusan.common.dataUrl
 import com.helltar.vusan.common.rethrowIfCancellation
 import com.helltar.vusan.config.VideoProviderConfig
-import com.helltar.vusan.config.XAI_API_BASE_URL
+import com.helltar.vusan.config.llm.XAI_API_BASE_URL
 import com.helltar.vusan.infra.HttpStatusException
 import com.helltar.vusan.tools.files.FileDownloadClient
 import com.helltar.vusan.tools.files.FileDownloadResult

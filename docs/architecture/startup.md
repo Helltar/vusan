@@ -5,7 +5,7 @@ How `Main.kt` wires the application, what the startup log says, and what ships a
 
 `Main.kt` wires everything in order: load `AppConfig` → connect `Db` → create the `Http` client → (only with
 a model on `codex` — the chat, its fallback or a role) build the `CodexAuthStore` → preflight every configured model
-(`config/ModelPreflight`): the Codex one proves the ChatGPT session works and fills the context window in from the
+(`config/llm/ModelPreflight`): the Codex one proves the ChatGPT session works and fills the context window in from the
 account's model catalog, an OpenAI one is confirmed against the vendor's list, an Anthropic one also brings its window
 and what it takes back, and a compatible one reads whatever its server's list states — whether it sees, its window, its
 efforts — so a typo fails here

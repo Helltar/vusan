@@ -1,7 +1,7 @@
 package com.helltar.vusan.infra
 
 import com.helltar.vusan.config.AppConfig
-import com.helltar.vusan.config.LlmProviderConfig
+import com.helltar.vusan.config.llm.LlmProviderConfig
 import com.helltar.vusan.i18n.Language
 import com.helltar.vusan.request.AccessPolicy
 import com.helltar.vusan.request.testScope

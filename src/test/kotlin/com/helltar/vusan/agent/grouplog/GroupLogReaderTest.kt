@@ -2,7 +2,7 @@ package com.helltar.vusan.agent.grouplog
 
 import com.helltar.vusan.config.AppConfig
 import com.helltar.vusan.config.GroupLogConfig
-import com.helltar.vusan.config.LlmProviderConfig
+import com.helltar.vusan.config.llm.LlmProviderConfig
 import com.helltar.vusan.infra.Db
 import java.nio.file.Files
 import java.nio.file.Path

@@ -3,10 +3,10 @@
 How a configured provider becomes the client every call goes through, and what the ChatGPT subscription adds.
 Part of the [architecture index](../architecture.md).
 
-- **LLM provider resolution** — `config/LlmRuntime.resolveLlmRuntime` turns a `LlmProviderConfig` into an `LlmRuntime`:
+- **LLM provider resolution** — `config/llm/LlmRuntime.resolveLlmRuntime` turns a `LlmProviderConfig` into an `LlmRuntime`:
   the client, the model as the bot needs to know it (`llm/LlmModel`: wire id, window, output ceiling, whether it sees,
   whether it takes an effort and which ones its vendor lists), and the options a turn and a history recap send. Each
-  provider is one file, `config/<Vendor>Provider.kt`, holding its runtime builder and its startup check; the two
+  provider is one file, `config/llm/<Vendor>Provider.kt`, holding its runtime builder and its startup check; the two
   dispatchers (`resolveLlmRuntime`, `ModelPreflight.preflighted`) and the name `AppConfig` reads are all that names
   them, and a new provider is one more such file plus its client under `llm/<vendor>/` — or none, where the vendor
   speaks a protocol a client already does, as xAI speaks OpenAI's Responses API. There is no model catalog: a
@@ -43,12 +43,12 @@ Part of the [architecture index](../architecture.md).
   without it, so a call the provider before a fallback wrote carries an empty one. A vision or an addressing model is
   one more `LlmProviderConfig`, read from its own prefix (`VISION_`, `ADDRESSING_`) and resolved the same way; by default
   it runs on the chat provider with the chat key.
-- **xAI (`xai`)** — `config/XaiProvider` points the OpenAI client at `https://api.x.ai/v1/responses` with a key. What
+- **xAI (`xai`)** — `config/llm/XaiProvider` points the OpenAI client at `https://api.x.ai/v1/responses` with a key. What
   xAI reads differs from OpenAI and decides what goes along: the conversation's `prompt_cache_key`, which xAI routes on
   as on `x-grok-conv-id` to the server holding the prefix; `store: false` and the encrypted reasoning, replayed through
   the tool loop, since a request missing the reasoning before it is what xAI names the first cause of cache misses; and
   none of OpenAI's cache options, since xAI caches on its own and charges nothing to write.
-- **OpenRouter (`openrouter`)** — `config/OpenRouterProvider` picks a client by the model's vendor prefix: a Claude
+- **OpenRouter (`openrouter`)** — `config/llm/OpenRouterProvider` picks a client by the model's vendor prefix: a Claude
   model (`anthropic/…`) goes through the Anthropic client to OpenRouter's Messages API at `https://openrouter.ai/api`,
   everything Anthropic gets included (adaptive thinking with signed blocks replayed, effort, the two breakpoints);
   any other model streams OpenRouter's Responses API through the OpenAI client, stateless with the encrypted reasoning
@@ -80,7 +80,7 @@ Part of the [architecture index](../architecture.md).
   reasoning content, so reasoning items can be echoed through a stateless multi-step tool loop. Every completed call is
   logged with its cache share and where its prefix drifted, and counted toward the subscription's next step.
 
-  Model discovery runs at startup through `llm/codex/CodexCatalog`, and `config/CodexProvider` holds the configured model
+  Model discovery runs at startup through `llm/codex/CodexCatalog`, and `config/llm/CodexProvider` holds the configured model
   against it: the account's own catalog decides which ids and context window are valid, since Codex and the Platform API expose different model sets. Input modalities decide whether the
   model may be reused for vision, advertised reasoning efforts validate `LLM_REASONING_EFFORT`, and advertised service
   tiers validate `CODEX_SERVICE_TIER`; older catalog entries without those fields keep the compatibility defaults. A

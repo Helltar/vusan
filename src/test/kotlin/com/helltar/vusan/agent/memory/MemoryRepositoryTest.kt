@@ -1,7 +1,7 @@
 package com.helltar.vusan.agent.memory
 
 import com.helltar.vusan.config.AppConfig
-import com.helltar.vusan.config.LlmProviderConfig
+import com.helltar.vusan.config.llm.LlmProviderConfig
 import com.helltar.vusan.infra.Db
 import kotlinx.coroutines.runBlocking
 import java.nio.file.Files

@@ -120,11 +120,13 @@ that is who owns writing them, not because only `agent/` reads them. No other ar
   transaction with the stamps after a `VACUUM INTO` copy is kept beside it (`vusan.db.schema-<N>`), and a test holds
   the result to the shape a fresh database gets. A database older than the first step, or from a newer build, stops
   startup instead of being reshaped.
-- **`config/`** — `.env` parsing (`AppConfig`), LLM provider/model resolution (`LlmRuntime`) and the startup check of
-  every configured model against its vendor (`ModelPreflight`), both of which dispatch to one file per provider
-  (`OpenAiProvider`, `AnthropicProvider`, `OpenAiCompatibleProvider`, `CodexProvider`). `VisionRuntime` resolves separately which model looks at
-  images: the `VISION_*` model when configured, the chat model when it accepts images, and nothing at all
-  otherwise — which leaves the vision tools and sticker catalog unavailable.
+- **`config/`** — `.env` parsing (`AppConfig`) into the settings of each feature. Its `llm/` holds the model wiring:
+  provider/model resolution (`LlmRuntime`) and the startup check of every configured model against its vendor
+  (`ModelPreflight`), both of which dispatch to one file per provider (`OpenAiProvider`, `AnthropicProvider`,
+  `OpenAiCompatibleProvider`, `CodexProvider`, `XaiProvider`, `OpenRouterProvider`), and the two roles on a model of
+  their own. `VisionRuntime` resolves which model looks at images: the `VISION_*` model when configured, the chat
+  model when it accepts images, and nothing at all otherwise — which leaves the vision tools and sticker catalog
+  unavailable. `AddressingRuntime` resolves the model that decides whether an unmentioned message is for the bot.
 - **`stt/`** — OpenAI speech-to-text client (`OpenAiWhisperClient`, default model `gpt-transcribe`); used for voice
   transcription and for the sound of a video the vision tool watches, opt-in via `OPENAI_STT_API_KEY`.
 - **`i18n/`** — user-facing message strings: the `Messages` interface, and one implementation per `Language` in a file

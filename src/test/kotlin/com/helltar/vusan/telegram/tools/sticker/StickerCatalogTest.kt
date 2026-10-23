@@ -1,7 +1,7 @@
 package com.helltar.vusan.telegram.tools.sticker
 
 import com.helltar.vusan.config.AppConfig
-import com.helltar.vusan.config.LlmProviderConfig
+import com.helltar.vusan.config.llm.LlmProviderConfig
 import com.helltar.vusan.infra.Db
 import com.helltar.vusan.infra.tables.TelegramChatStickerSetsTable
 import com.helltar.vusan.infra.tables.TelegramChatStickersTable

@@ -1,4 +1,4 @@
-package com.helltar.vusan.config
+package com.helltar.vusan.config.llm
 
 import com.helltar.vusan.llm.LlmClient
 import com.helltar.vusan.llm.LlmModel

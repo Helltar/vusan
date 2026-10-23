@@ -1,5 +1,7 @@
 package com.helltar.vusan.config
 
+import com.helltar.vusan.config.llm.AddressingConfig
+import com.helltar.vusan.config.llm.LlmProviderConfig
 import com.helltar.vusan.request.AccessPolicy
 import kotlin.test.Test
 import kotlin.test.assertContains

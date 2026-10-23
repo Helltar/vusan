@@ -1,6 +1,6 @@
 package com.helltar.vusan.stt
 
-import com.helltar.vusan.config.OPENAI_API_BASE_URL
+import com.helltar.vusan.config.llm.OPENAI_API_BASE_URL
 import com.helltar.vusan.common.sanitizeFilename
 import com.helltar.vusan.config.OpenAiSttConfig
 import io.ktor.client.*

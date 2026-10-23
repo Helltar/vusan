@@ -1,5 +1,7 @@
-package com.helltar.vusan.config
+package com.helltar.vusan.config.llm
 
+import com.helltar.vusan.config.AppConfig
+import com.helltar.vusan.config.ImageProviderConfig
 import java.nio.file.Path
 import com.helltar.vusan.infra.HttpStatusException
 import com.helltar.vusan.llm.LlmModel

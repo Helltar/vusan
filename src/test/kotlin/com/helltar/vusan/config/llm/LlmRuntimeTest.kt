@@ -1,4 +1,4 @@
-package com.helltar.vusan.config
+package com.helltar.vusan.config.llm
 
 import com.helltar.vusan.infra.Http
 import com.helltar.vusan.llm.ChatRequest

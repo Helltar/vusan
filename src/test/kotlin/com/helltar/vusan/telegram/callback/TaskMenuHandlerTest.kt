@@ -1,7 +1,7 @@
 package com.helltar.vusan.telegram.callback
 
 import com.helltar.vusan.config.AppConfig
-import com.helltar.vusan.config.LlmProviderConfig
+import com.helltar.vusan.config.llm.LlmProviderConfig
 import com.helltar.vusan.i18n.Language
 import com.helltar.vusan.i18n.Messages
 import com.helltar.vusan.infra.Db

@@ -11,9 +11,9 @@ import com.helltar.vusan.agent.memory.MemoryRepository
 import com.helltar.vusan.agent.presence.LeaveAloneRepository
 import com.helltar.vusan.config.AppConfig
 import com.helltar.vusan.config.ImageProviderConfig
-import com.helltar.vusan.config.LlmProviderConfig
+import com.helltar.vusan.config.llm.LlmProviderConfig
 import com.helltar.vusan.config.VideoProviderConfig
-import com.helltar.vusan.config.VisionRuntime
+import com.helltar.vusan.config.llm.VisionRuntime
 import com.helltar.vusan.llm.codex.CodexAuthStore
 import com.helltar.vusan.outbox.BotOutbox
 import com.helltar.vusan.request.ChatContext

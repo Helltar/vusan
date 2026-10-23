@@ -60,9 +60,10 @@ Keep the package boundaries in [`docs/architecture/layers.md`](docs/architecture
   reasoning block is replayed verbatim to the endpoint that returned it and no
   other. Prove behavior on the wire with a test over a mock engine.
 - A model provider is a client under `llm/<vendor>/`, a config class in
-  `config/LlmProviderConfig.kt`, and `config/<Vendor>Provider.kt` with its runtime
-  and startup check. What a model can do travels as facts on `LlmProviderConfig`
-  and `LlmModel`; the roles, the agent and the fallback never name a provider.
+  `config/llm/LlmProviderConfig.kt`, and `config/llm/<Vendor>Provider.kt` with
+  its runtime and startup check. What a model can do travels as facts on
+  `LlmProviderConfig` and `LlmModel`; the roles, the agent and the fallback never
+  name a provider.
 - No thin abstractions or one-off helper objects. Add one only when it removes
   real complexity or matches an existing local pattern.
 

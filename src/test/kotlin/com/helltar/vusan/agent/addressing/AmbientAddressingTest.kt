@@ -5,7 +5,7 @@ import com.helltar.vusan.agent.grouplog.GroupLogRepository
 import com.helltar.vusan.agent.presence.LeaveAloneRepository
 import com.helltar.vusan.config.AppConfig
 import com.helltar.vusan.config.GroupLogConfig
-import com.helltar.vusan.config.LlmProviderConfig
+import com.helltar.vusan.config.llm.LlmProviderConfig
 import com.helltar.vusan.infra.Db
 import com.helltar.vusan.request.AccessPolicy
 import com.helltar.vusan.request.testChat

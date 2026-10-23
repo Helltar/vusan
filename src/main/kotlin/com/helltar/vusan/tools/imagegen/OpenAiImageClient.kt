@@ -1,6 +1,6 @@
 package com.helltar.vusan.tools.imagegen
 
-import com.helltar.vusan.config.OPENAI_API_BASE_URL
+import com.helltar.vusan.config.llm.OPENAI_API_BASE_URL
 import com.helltar.vusan.common.dataUrl
 import com.helltar.vusan.common.rethrowIfCancellation
 import com.helltar.vusan.llm.codex.CodexAuthStore

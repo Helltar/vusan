@@ -4,7 +4,7 @@ import com.helltar.vusan.agent.AgentResult
 import com.helltar.vusan.agent.grouplog.GroupLogRepository
 import com.helltar.vusan.config.AppConfig
 import com.helltar.vusan.config.GroupLogConfig
-import com.helltar.vusan.config.LlmProviderConfig
+import com.helltar.vusan.config.llm.LlmProviderConfig
 import com.helltar.vusan.infra.Db
 import com.helltar.vusan.outbox.BotOutbox
 import com.helltar.vusan.outbox.BotOutput
