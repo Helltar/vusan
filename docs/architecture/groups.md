@@ -23,10 +23,14 @@ the sticker catalog. Part of the [architecture index](../architecture.md).
   looks for chats people wrote in yesterday that have no entry for that day, and has `DiaryWriter` write one from the
   day's transcript: first person, in the deployment's own personality, with the two entries before it for continuity.
   Only a closed day is written, for the reason only a closed day is digested, and a day of fewer than fifteen messages
-  gets none. A day whose writer keeps failing is given up on after three tries. `TurnSurroundings` then puts the newest three
-  entries of the past week into every turn in that group as `<diary>` — defused like the transcript they came from —
-  and `Initiative` reads the same block. Entries live in `chat_diary` with no retention of their own, outliving
-  the transcript, until `GroupLogRepository.clear` drops them with the transcript they were written from. Unlike a digest, an entry is written
+  gets none. A day whose writer keeps failing is given up on after three tries. The same pass then writes a look-back
+  over the last settled Monday-to-Sunday week and calendar month, from that span's daily entries and the look-back
+  before it; a span settles the day after its last day closes, once that day's own entry can no longer appear, and
+  one with fewer than two entries gets none. `TurnSurroundings` then puts the newest month and week look-backs and
+  the newest three entries of the past week into every turn in that group as `<diary>` — defused like the transcript
+  they came from — and `Initiative` reads the same block. Entries live in `chat_diary` and look-backs in
+  `chat_diary_look_back`, with no retention of their own, outliving the transcript, until
+  `GroupLogRepository.clear` drops them with the transcript they were written from. Unlike a digest, an entry is written
   with nobody having asked, so a whole day of a chat goes to the chat model unprompted: `DIARY_ENABLED=false` is the
   switch, and a chat the allowlist no longer names is never read.
 - **Initiative** — `agent/presence/Initiative` is the bot speaking up without being called. Code decides whether to

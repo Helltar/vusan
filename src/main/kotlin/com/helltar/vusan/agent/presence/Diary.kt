@@ -12,9 +12,12 @@ import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
+import java.time.DayOfWeek
 import java.time.Instant
 import java.time.LocalDate
+import java.time.YearMonth
 import java.time.ZoneId
+import java.time.temporal.TemporalAdjusters
 import kotlin.time.Duration.Companion.minutes
 
 /**
@@ -30,8 +33,9 @@ import kotlin.time.Duration.Companion.minutes
  * to the model unprompted — which is why this is switched on deliberately and only reads chats that
  * [isAllowed] still admits.
  *
- * Entries are kept for as long as the chat's transcript is not cleared, outliving the transcript's own
- * retention: a turn is shown only the last few, and the rest are what remains of the days before.
+ * Once a week or a month is over, its daily entries are read again into one look-back over it, so what
+ * mattered weeks ago still reaches a turn that is shown only the last few days. Entries and look-backs
+ * are kept for as long as the chat's transcript is not cleared, outliving the transcript's own retention.
  */
 class Diary(
     private val writer: DiaryWriter,
@@ -44,6 +48,7 @@ class Diary(
 
     // a day that keeps failing is given up on rather than asked about every pass until midnight
     private val attempts = HashMap<Pair<ChatRef, LocalDate>, Int>()
+    private val lookBackAttempts = HashMap<Pair<ChatRef, DiarySpan>, Int>()
 
     fun launchIn(scope: CoroutineScope): Job =
         scope.launch {
@@ -60,7 +65,10 @@ class Diary(
             }
         }
 
-    /** Writes yesterday's entry for every chat that had a day worth one and has no entry yet. */
+    /**
+     * Writes yesterday's entry for every chat that had a day worth one and has no entry yet, then the
+     * look-back over the last settled week and month.
+     */
     suspend fun catchUp() {
         val today = LocalDate.ofInstant(clock(), zone)
         val day = today.minusDays(1)
@@ -75,13 +83,26 @@ class Diary(
                     log.warn(it) { "diary entry failed: chat=[$chat] day=[$day]" }
                 }
         }
+
+        // a day's entry is written only while the next day lasts, so the day before yesterday is the
+        // last one whose entry can no longer appear, and a span ending there is read whole
+        writeLookBacks(settled = day.minusDays(1))
     }
 
-    /** The last few entries of [chat] as the text of a `<diary>` block, or `null` when there are none. */
+    /**
+     * The text of a `<diary>` block for [chat], or `null` when there is nothing in it: the newest month and
+     * week look-backs, then the last few entries of the past week, oldest first.
+     */
     suspend fun blockFor(chat: ChatRef): String? {
-        val since = LocalDate.ofInstant(clock(), zone).minusDays(KEPT_DAYS)
+        val today = LocalDate.ofInstant(clock(), zone)
+        val entries = repository.since(chat, today.minusDays(KEPT_DAYS)).takeLast(SHOWN_ENTRIES)
 
-        return repository.since(chat, since).takeLast(SHOWN_ENTRIES).takeIf { it.isNotEmpty() }?.let(::renderDiary)
+        val lookBacks =
+            DiaryPeriod.entries
+                .mapNotNull { repository.latestLookBack(chat, it, before = today) }
+                .sortedBy { it.span.firstDay }
+
+        return renderDiary(entries, lookBacks).takeIf { it.isNotEmpty() }
     }
 
     private suspend fun writeIfMissing(chat: ChatRef, day: LocalDate) {
@@ -106,6 +127,45 @@ class Diary(
         log.info { "diary entry written: chat=[$chat] day=[$day] messages=[$written] chars=[${content.length}]" }
     }
 
+    private suspend fun writeLookBacks(settled: LocalDate) {
+        val spans = DiaryPeriod.entries.map { it.lastEndingBy(settled) }
+
+        lookBackAttempts.keys.retainAll { it.second in spans }
+
+        spans.forEach { span ->
+            repository.chatsWithEntries(span.firstDay, span.lastDay).filter(isAllowed).forEach { chat ->
+                runCatching { writeLookBackIfMissing(chat, span) }
+                    .onFailure {
+                        it.rethrowIfCancellation()
+                        log.warn(it) { "diary look-back failed: chat=[$chat] period=[${span.period}] from=[${span.firstDay}]" }
+                    }
+            }
+        }
+    }
+
+    private suspend fun writeLookBackIfMissing(chat: ChatRef, span: DiarySpan) {
+        val key = chat to span
+
+        if (repository.hasLookBack(chat, span) || (lookBackAttempts[key] ?: 0) >= MAX_ATTEMPTS) return
+
+        val entries = repository.between(chat, span.firstDay, span.lastDay)
+
+        // with a single day in it a look-back would only retell that day's entry
+        lookBackAttempts[key] = if (entries.size < MIN_LOOK_BACK_ENTRIES) MAX_ATTEMPTS else (lookBackAttempts[key] ?: 0) + 1
+
+        if (entries.size < MIN_LOOK_BACK_ENTRIES) return
+
+        val earlier = repository.latestLookBack(chat, span.period, before = span.firstDay)
+        val content = writer.lookBack(span, entries, earlier) ?: return
+
+        repository.storeLookBack(chat, DiaryLookBack(span, content))
+
+        log.info {
+            "diary look-back written: chat=[$chat] period=[${span.period}] from=[${span.firstDay}] " +
+                    "entries=[${entries.size}] chars=[${content.length}]"
+        }
+    }
+
     private fun LocalDate.startOfDay(): Instant = atStartOfDay(zone).toInstant()
 
     private companion object {
@@ -115,9 +175,10 @@ class Diary(
         const val MIN_DAY_MESSAGES = 15
 
         const val MAX_ATTEMPTS = 3
+        const val MIN_LOOK_BACK_ENTRIES = 2
 
         // every group turn carries the shown entries, so they are few, and drawn from the last week only:
-        // a chat that went quiet for a few days still comes back to them, one silent for a month does not
+        // a chat that went quiet for a few days still comes back to them, one silent longer only to its look-backs
         const val SHOWN_ENTRIES = 3
         const val EARLIER_ENTRIES = 2
         const val KEPT_DAYS = 7L
@@ -126,7 +187,24 @@ class Diary(
     }
 }
 
+/** The newest span of this period that ends on or before [day]. */
+internal fun DiaryPeriod.lastEndingBy(day: LocalDate): DiarySpan {
+    val next = day.plusDays(1)
+
+    return when (this) {
+        DiaryPeriod.WEEK -> DiarySpan(this, next.with(TemporalAdjusters.previousOrSame(DayOfWeek.MONDAY)).minusWeeks(1))
+        DiaryPeriod.MONTH -> DiarySpan(this, next.withDayOfMonth(1).minusMonths(1))
+    }
+}
+
+internal fun DiarySpan.label(): String =
+    when (period) {
+        DiaryPeriod.WEEK -> "week $firstDay..$lastDay"
+        DiaryPeriod.MONTH -> "month ${YearMonth.from(firstDay)}"
+    }
+
 // an entry was written from what people said in the chat, so it is quoted text like the transcript
 // it came from, and gets the same defusing before it is shown inside a prompt block.
-internal fun renderDiary(entries: List<DiaryEntry>): String =
-    entries.joinToString("\n\n") { "${it.day}: ${it.content.neutralizePromptBlocks()}" }
+internal fun renderDiary(entries: List<DiaryEntry>, lookBacks: List<DiaryLookBack> = emptyList()): String =
+    (lookBacks.map { it.span.label() to it.content } + entries.map { it.day.toString() to it.content })
+        .joinToString("\n\n") { (label, content) -> "$label: ${content.neutralizePromptBlocks()}" }

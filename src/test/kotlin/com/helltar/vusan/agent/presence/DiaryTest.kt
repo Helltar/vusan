@@ -155,13 +155,117 @@ class DiaryTest {
     @Test
     fun `clearing a chat's transcript takes its diary along and leaves other chats alone`() = runBlocking {
         val other = testChat(-200)
+        val week = DiarySpan(DiaryPeriod.WEEK, LocalDate.parse("2026-09-21"))
 
         repository.store(CHAT, DiaryEntry(yesterday, "the ferry won"))
+        repository.storeLookBack(CHAT, DiaryLookBack(week, "a week of ferries"))
         repository.store(other, DiaryEntry(yesterday, "the bridge reopened"))
+        repository.storeLookBack(other, DiaryLookBack(week, "a week of bridges"))
         groupLog.clear(CHAT)
 
         assertFalse(repository.has(CHAT, yesterday))
+        assertFalse(repository.hasLookBack(CHAT, week))
         assertTrue(repository.has(other, yesterday))
+        assertTrue(repository.hasLookBack(other, week))
+    }
+
+    @Test
+    fun `a closed week is looked back over only once its sunday's entry can no longer come`() = runBlocking {
+        val writer = FakeWriter("unused", lookBackText = "the week of the ferry")
+
+        repository.store(CHAT, DiaryEntry(LocalDate.parse("2026-09-29"), "the ferry was late"))
+        repository.store(CHAT, DiaryEntry(LocalDate.parse("2026-10-04"), "the ferry won"))
+
+        // monday: sunday's own entry is still being written
+        diary(writer, at = Instant.parse("2026-10-05T10:00:00Z")).catchUp()
+        assertTrue(writer.lookBacks.none { it.span.period == DiaryPeriod.WEEK })
+
+        diary(writer, at = Instant.parse("2026-10-06T10:00:00Z")).catchUp()
+
+        val call = writer.lookBacks.single { it.span.period == DiaryPeriod.WEEK }
+
+        assertEquals(LocalDate.parse("2026-09-28"), call.span.firstDay)
+        assertEquals(listOf("the ferry was late", "the ferry won"), call.entries.map { it.content })
+        assertTrue(repository.hasLookBack(CHAT, call.span))
+    }
+
+    @Test
+    fun `a month is looked back over from its own days, with the month before it`() = runBlocking {
+        val writer = FakeWriter("unused", lookBackText = "september, the month of the ferry")
+        val august = DiarySpan(DiaryPeriod.MONTH, LocalDate.parse("2026-08-01"))
+
+        repository.storeLookBack(CHAT, DiaryLookBack(august, "august was all about the bridge"))
+        repository.store(CHAT, DiaryEntry(LocalDate.parse("2026-08-31"), "the bridge closed"))
+        repository.store(CHAT, DiaryEntry(LocalDate.parse("2026-09-10"), "the ferry was bought"))
+        repository.store(CHAT, DiaryEntry(LocalDate.parse("2026-09-30"), "the ferry sailed"))
+
+        diary(writer).catchUp()
+        diary(writer).catchUp()
+
+        val call = writer.lookBacks.single { it.span.period == DiaryPeriod.MONTH }
+
+        assertEquals(LocalDate.parse("2026-09-01"), call.span.firstDay)
+        assertEquals(listOf("the ferry was bought", "the ferry sailed"), call.entries.map { it.content })
+        assertEquals("august was all about the bridge", call.earlier?.content)
+    }
+
+    @Test
+    fun `a span with a single day in it gets no look-back`() = runBlocking {
+        val writer = FakeWriter("unused", lookBackText = "a quiet month")
+
+        repository.store(CHAT, DiaryEntry(LocalDate.parse("2026-09-10"), "the ferry was bought"))
+        diary(writer).catchUp()
+
+        assertTrue(writer.lookBacks.isEmpty())
+    }
+
+    @Test
+    fun `the block leads with the month and the week, then the days`() = runBlocking {
+        val diary = diary(FakeWriter("unused"))
+
+        repository.storeLookBack(CHAT, DiaryLookBack(DiarySpan(DiaryPeriod.MONTH, LocalDate.parse("2026-08-01")), "august"))
+        repository.storeLookBack(CHAT, DiaryLookBack(DiarySpan(DiaryPeriod.MONTH, LocalDate.parse("2026-09-01")), "september"))
+        repository.storeLookBack(CHAT, DiaryLookBack(DiarySpan(DiaryPeriod.WEEK, LocalDate.parse("2026-09-21")), "a week"))
+        repository.store(CHAT, DiaryEntry(yesterday, "the ferry won"))
+
+        assertEquals(
+            "month 2026-09: september\n\nweek 2026-09-21..2026-09-27: a week\n\n2026-10-03: the ferry won",
+            diary.blockFor(CHAT),
+        )
+    }
+
+    @Test
+    fun `a chat with only look-backs left still gets a block`() = runBlocking {
+        val diary = diary(FakeWriter("unused"))
+
+        repository.store(CHAT, DiaryEntry(yesterday.minusDays(20), "long ago"))
+        repository.storeLookBack(CHAT, DiaryLookBack(DiarySpan(DiaryPeriod.WEEK, LocalDate.parse("2026-09-07")), "a week"))
+
+        assertEquals("week 2026-09-07..2026-09-13: a week", diary.blockFor(CHAT))
+    }
+
+    @Test
+    fun `a look-back is asked for with its span, the one before it and the days in it`() {
+        val span = DiarySpan(DiaryPeriod.WEEK, LocalDate.parse("2026-09-28"))
+        val earlier = DiaryLookBack(DiarySpan(DiaryPeriod.WEEK, LocalDate.parse("2026-09-21")), "the bridge week")
+
+        val request = lookBackRequest(span, listOf(DiaryEntry(LocalDate.parse("2026-09-29"), "the ferry was late")), earlier)
+
+        assertTrue(request.startsWith("Week: 2026-09-28 to 2026-10-04"), request)
+        assertTrue("<earlier_look_back>\nweek 2026-09-21..2026-09-27: the bridge week\n</earlier_look_back>" in request, request)
+        assertTrue("<diary_entries>\n2026-09-29: the ferry was late\n</diary_entries>" in request, request)
+    }
+
+    @Test
+    fun `a span is the last one ending on or before the day`() {
+        val sunday = LocalDate.parse("2026-10-04")
+        val lastOfSeptember = LocalDate.parse("2026-09-30")
+
+        assertEquals(LocalDate.parse("2026-09-28"), DiaryPeriod.WEEK.lastEndingBy(sunday).firstDay)
+        assertEquals(LocalDate.parse("2026-09-21"), DiaryPeriod.WEEK.lastEndingBy(sunday.minusDays(1)).firstDay)
+        assertEquals(LocalDate.parse("2026-09-01"), DiaryPeriod.MONTH.lastEndingBy(lastOfSeptember).firstDay)
+        assertEquals(LocalDate.parse("2026-08-01"), DiaryPeriod.MONTH.lastEndingBy(lastOfSeptember.minusDays(1)).firstDay)
+        assertEquals(LocalDate.parse("2026-02-28"), DiarySpan(DiaryPeriod.MONTH, LocalDate.parse("2026-02-01")).lastDay)
     }
 
     private suspend fun fillYesterday(messages: Int) {
@@ -170,23 +274,33 @@ class DiaryTest {
         repeat(messages) { groupLog.record(person("y$it", "plan $it", noon.plusSeconds(it.toLong()))) }
     }
 
-    private fun diary(writer: DiaryWriter, isAllowed: (ChatRef) -> Boolean = { true }) =
-        Diary(writer, repository, groupLog, isAllowed, clock = { now })
+    private fun diary(writer: DiaryWriter, isAllowed: (ChatRef) -> Boolean = { true }, at: Instant = now) =
+        Diary(writer, repository, groupLog, isAllowed, clock = { at })
 
     private data class Call(val day: LocalDate, val transcript: String, val earlier: List<DiaryEntry>)
+
+    private data class LookBackCall(val span: DiarySpan, val entries: List<DiaryEntry>, val earlier: DiaryLookBack?)
 
     private class FakeWriter(
         private val entry: String? = null,
         private val failure: Throwable? = null,
+        private val lookBackText: String? = null,
     ) : DiaryWriter {
 
         val calls = mutableListOf<Call>()
+        val lookBacks = mutableListOf<LookBackCall>()
 
         override suspend fun write(day: LocalDate, transcript: String, earlier: List<DiaryEntry>): String? {
             calls += Call(day, transcript, earlier)
             failure?.let { throw it }
 
             return entry
+        }
+
+        override suspend fun lookBack(span: DiarySpan, entries: List<DiaryEntry>, earlier: DiaryLookBack?): String? {
+            lookBacks += LookBackCall(span, entries, earlier)
+
+            return lookBackText
         }
     }
 }

@@ -3,6 +3,7 @@ package com.helltar.vusan.agent.grouplog
 import com.helltar.vusan.common.limitTo
 import com.helltar.vusan.config.GroupLogConfig
 import com.helltar.vusan.infra.Db.dbTransaction
+import com.helltar.vusan.infra.tables.ChatDiaryLookBackTable
 import com.helltar.vusan.infra.tables.ChatDiaryTable
 import com.helltar.vusan.infra.tables.GroupLogDigestsTable
 import com.helltar.vusan.infra.tables.GroupLogTable
@@ -236,6 +237,10 @@ class GroupLogRepository(
 
         ChatDiaryTable.deleteWhere {
             (ChatDiaryTable.platform eq chat.platform) and (ChatDiaryTable.chatId eq chat.id)
+        }
+
+        ChatDiaryLookBackTable.deleteWhere {
+            (ChatDiaryLookBackTable.platform eq chat.platform) and (ChatDiaryLookBackTable.chatId eq chat.id)
         }
 
         GroupLogTable.deleteWhere { inChat(chat) }

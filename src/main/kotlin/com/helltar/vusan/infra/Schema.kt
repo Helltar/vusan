@@ -1,5 +1,6 @@
 package com.helltar.vusan.infra
 
+import com.helltar.vusan.infra.tables.ChatDiaryLookBackTable
 import com.helltar.vusan.infra.tables.ChatDiaryTable
 import com.helltar.vusan.infra.tables.TelegramChatStickerSetsTable
 import com.helltar.vusan.infra.tables.TelegramChatStickersTable
@@ -28,7 +29,7 @@ import org.jetbrains.exposed.v1.core.Table
 internal object Schema {
 
     /** Raise this by one for every schema change, together with the step that reaches it. */
-    const val VERSION = 5
+    const val VERSION = 6
 
     /**
      * What moves a database from one version to the next: the statements under `N` take a database at
@@ -46,6 +47,11 @@ internal object Schema {
                         "user_id VARCHAR(64) NOT NULL, ends_at TEXT NOT NULL, " +
                         "CONSTRAINT pk_leave_alone PRIMARY KEY (platform, chat_id, user_id))",
             ),
+            6 to listOf(
+                "CREATE TABLE chat_diary_look_back (platform VARCHAR(16) NOT NULL, chat_id VARCHAR(64) NOT NULL, " +
+                        "period VARCHAR(8) NOT NULL, first_day VARCHAR(10) NOT NULL, content TEXT NOT NULL, " +
+                        "CONSTRAINT pk_chat_diary_look_back PRIMARY KEY (platform, chat_id, period, first_day))",
+            ),
         )
 
     /** The oldest version [steps] can move forward; anything before it was moved by hand. */
@@ -58,6 +64,7 @@ internal object Schema {
             GroupLogTable,
             GroupLogDigestsTable,
             ChatDiaryTable,
+            ChatDiaryLookBackTable,
             LeaveAloneTable,
             ScheduledTasksTable,
             MemoryTable,

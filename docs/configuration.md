@@ -494,17 +494,18 @@ read under the `ADDRESSING_` prefix.
 
 ## Diary
 
-After a day ends, Vusan writes itself a short entry about each group, and the last three ride along on
-every turn there, so it picks up yesterday's thread.
+After a day ends, Vusan writes itself a short entry about each group, and after a week or a month it
+looks back over that span's entries in one. The last three days, the last week and the last month ride
+along on every turn there, so it picks up yesterday's thread and remembers what came before.
 
 | Variable        | Default | Description                                       |
 |-----------------|---------|---------------------------------------------------|
 | `DIARY_ENABLED` | `true`  | `false` writes nothing and sends no day anywhere. |
 
 - **What is sent** — once per group per day with at least fifteen messages, that day's transcript,
-  up to 100,000 characters, goes to the chat model with nobody having asked.
-- **How long** — entries are kept after the day's messages expire, until the group log is forgotten;
-  only the last week's are shown.
+  up to 100,000 characters, goes to the chat model with nobody having asked. A look-back sends the
+  span's own entries, not the messages.
+- **How long** — entries are kept after the day's messages expire, until the group log is forgotten.
 
 It needs the [group log](#group-log); with `GROUP_LOG_ENABLED=false` it stays off.
 
