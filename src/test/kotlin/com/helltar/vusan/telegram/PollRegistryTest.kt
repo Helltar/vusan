@@ -6,6 +6,7 @@ import com.helltar.vusan.infra.Db
 import com.helltar.vusan.outbox.BotOutput
 import java.nio.file.Files
 import java.nio.file.Path
+import java.time.Instant
 import kotlin.test.AfterTest
 import kotlin.test.BeforeTest
 import com.helltar.vusan.request.AccessPolicy
@@ -14,7 +15,6 @@ import kotlin.test.assertEquals
 import kotlin.test.assertNotNull
 import kotlin.test.assertNull
 import kotlin.time.Duration.Companion.days
-import kotlin.time.Duration.Companion.milliseconds
 import kotlin.time.Duration.Companion.seconds
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.runBlocking
@@ -75,18 +75,18 @@ class PollRegistryTest {
 
     @Test
     fun `a poll old enough to be forgotten is dropped by the maintenance pass`() = runBlocking<Unit> {
-        val forgetful = PollRegistry(20.milliseconds)
-
-        forgetful.remember("p1", chatId = -100L, output = quiz)
+        registry.remember("p1", chatId = -100L, output = quiz)
         // retention no longer rides on the next poll: a chat that asked one question and stopped would
         // have kept it forever.
-        delay(40)
-        forgetful.remember("p2", chatId = -100L, output = quiz)
+        delay(10)
+        val between = Instant.now()
+        delay(10)
+        registry.remember("p2", chatId = -100L, output = quiz)
 
-        assertEquals(1, forgetful.pruneExpired())
+        assertEquals(1, registry.pruneExpired(between.plusMillis(30.days.inWholeMilliseconds)))
 
-        assertNull(forgetful.find("p1"))
-        assertNotNull(forgetful.find("p2"))
+        assertNull(registry.find("p1"))
+        assertNotNull(registry.find("p2"))
     }
 
     // an output that is neither leaves no row: there is no poll id it could ever be matched against.

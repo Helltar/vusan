@@ -57,12 +57,12 @@ class PollRegistry(private val retention: Duration = DEFAULT_RETENTION) {
     }
 
     /**
-     * Drops the polls past [retention], and answers how many. Nothing waits for a poll that old: an
-     * answer to one arrives while people are still looking at it, and the row only feeds the transcript.
+     * Drops the polls past [retention] at [now], and answers how many. Nothing waits for a poll that old:
+     * an answer to one arrives while people are still looking at it, and the row only feeds the transcript.
      */
-    suspend fun pruneExpired(): Int = dbTransaction {
+    suspend fun pruneExpired(now: Instant): Int = dbTransaction {
         TelegramPollsTable.deleteWhere {
-            TelegramPollsTable.createdAt less Instant.now().minusMillis(retention.inWholeMilliseconds)
+            TelegramPollsTable.createdAt less now.minusMillis(retention.inWholeMilliseconds)
         }
     }
 

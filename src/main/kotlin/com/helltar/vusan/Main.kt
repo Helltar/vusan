@@ -303,7 +303,7 @@ suspend fun main() = coroutineScope {
                         )
                     },
                     groupLog?.let { Maintenance.Step("group log retention") { it.pruneExpired(MAINTENANCE_BATCH) } },
-                    polls?.let { Maintenance.Step("expired polls") { it.pruneExpired() } },
+                    polls?.let { Maintenance.Step("expired polls") { it.pruneExpired(Instant.now()) } },
                     Maintenance.Step("leave-alone retention") { leaveAlone.pruneExpired(Instant.now()) },
                 ),
             )
