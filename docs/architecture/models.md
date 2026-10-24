@@ -68,7 +68,8 @@ Part of the [architecture index](../architecture.md).
   body holding nothing but the error. Both clients send the conversation's cache key as `session_id` too, which keeps
   a conversation on the upstream holding its cached prefix.
 - **ChatGPT subscription (`codex`)** — the same OpenAI client pointed at the Codex backend's Responses API, with no API
-  key. `llm/codex/CodexAuth.CodexAuthStore` owns the credentials `codex login` writes to `~/.codex/auth.json` (or
+  key; like the platform, it takes a tool group loaded mid-turn as an `additional_tools` item, so the tool list stays
+  the cached one. `llm/codex/CodexAuth.CodexAuthStore` owns the credentials `codex login` writes to `~/.codex/auth.json` (or
   `$CODEX_HOME`). `AppConfig` resolves that path into the Codex provider config, and the store rereads the file per
   request so an external login, logout, sandbox switch, or CLI refresh takes effect without a restart. It refreshes
   OAuth sessions a few minutes before expiry and replaces the file atomically through an owner-only temporary file,

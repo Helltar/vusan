@@ -56,6 +56,9 @@ internal fun codexRuntime(config: LlmProviderConfig.Codex, auth: CodexAuthStore,
             contextWindowTokens = config.contextWindowTokens ?: CODEX_CONTEXT_WINDOW,
             seesImages = config.seesImages ?: true,
             efforts = config.efforts,
+            // the backend takes `additional_tools` as the platform does: measured on 2026-10-24 on gpt-6-luna,
+            // the one model the plan served, the offered tool was called and the prefix before it read back
+            offersToolsMidConversation = true,
         )
 
     val options =

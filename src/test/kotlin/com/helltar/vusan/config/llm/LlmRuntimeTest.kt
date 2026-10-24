@@ -378,7 +378,7 @@ class LlmRuntimeTest {
         assertFalse(resolveLlmRuntime(openRouter("x-ai/grok-4.7")).model.offersToolsMidConversation)
         assertFalse(resolveLlmRuntime(compatible()).model.offersToolsMidConversation)
         assertFalse(resolveLlmRuntime(xai()).model.offersToolsMidConversation)
-        assertFalse(resolveLlmRuntime(codex(), codexAuth = codexAuth()).model.offersToolsMidConversation)
+        assertTrue(resolveLlmRuntime(codex(), codexAuth = codexAuth()).model.offersToolsMidConversation)
     }
 
     @Test
