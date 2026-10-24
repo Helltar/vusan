@@ -182,7 +182,9 @@ class SandboxTools(
         require(paths.size <= MAX_SEND_FILES) { "At most $MAX_SEND_FILES files per call" }
         val wanted = paths.map { it.requireToolText("Path", MAX_PATH_CHARS).sandboxPath() }.distinct()
         val kind = sendAs.trim().lowercase()
-        require(kind in setOf("", SEND_AS_DOCUMENT, SEND_AS_ANIMATION)) { "sendAs must be `document`, `animation` or empty" }
+        require(kind in setOf("", SEND_AS_DOCUMENT, SEND_AS_ANIMATION)) {
+            "sendAs must be `document`, `animation` or empty; leave it empty to send images as photos and videos as videos"
+        }
         require(kind != SEND_AS_ANIMATION || wanted.all { sandboxFilename(it).extension in ANIMATION_EXTENSIONS }) {
             "Only `.gif` and `.mp4` files can be sent as an animation"
         }
