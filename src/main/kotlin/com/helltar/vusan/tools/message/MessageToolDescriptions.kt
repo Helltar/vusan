@@ -3,12 +3,10 @@ package com.helltar.vusan.tools.message
 internal object MessageToolDescriptions {
 
     const val SEND_MESSAGE =
-        "Sends a text message to the user. " +
-                "Use this for any substantive text content the user must see: web search summaries, news digests, facts, answers, explanations, lists. " +
-                "Call it once per distinct message; calls are sent in order alongside any other queued media. " +
-                "Keep a reply to a few messages; never split one answer into many tiny separate messages. " +
-                "Do NOT paste raw tool payloads here; write in the user's language, concise, natural. " +
-                "Format it as the chat's formatting rules say: the listed HTML tags only, never Markdown, and Markdown belongs only in `sendRichMessage`."
+        "Sends a text message to the user, for an answer with substance: facts, explanations, search results, news digests, lists. " +
+                "Messages go out in call order with any other queued media. " +
+                "One answer is one message, or a few for a long one. " +
+                "Format it as Telegram HTML with the listed tags; Markdown is for `sendRichMessage` alone."
 
     const val TEXT =
         "Full text of the message to send to the user. " +
@@ -59,9 +57,9 @@ internal object MessageToolDescriptions {
 
     const val STAY_SILENT =
         "Ends your turn without answering, on purpose: nothing is sent, not even a reaction. " +
-                "Use it when the message asked you to be quiet or not to write to its author, or when it is an insult you choose not to dignify with a reply. " +
-                "It is not for a question you would rather skip, for something you cannot do, or for doubt: then answer, or say what is in the way. " +
-                "Call it before anything is sent: a call that only records something, such as `leaveAlone`, may come first, but it is refused once a message, a reaction or an announcement is on its way."
+                "It is for a message that asks you to be quiet or not to write to its author, and for an insult you choose not to dignify. " +
+                "A question you would rather skip, something you cannot do or doubt gets an answer instead, or a word on what is in the way. " +
+                "Call it before anything is sent: a call that only records something, such as `leaveAlone`, may come first, and once a message, a reaction or an announcement is on its way it is refused."
 
     const val SILENCE_REASON =
         "A few words for the operator's log saying what made you stay silent. " +

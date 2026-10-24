@@ -49,7 +49,8 @@ class SystemPromptTest {
         val prompt = systemPromptFor("Custom personality", MODEL_ID)
 
         assertContains(prompt, "# Loading more tools")
-        assertContains(prompt, "call `loadTools` with the group names")
+        assertContains(prompt, "once `loadTools` names the group")
+        assertContains(prompt, "Never tell the user it is unavailable")
         assertFalse("</tool_groups>" in prompt)
     }
 
@@ -94,10 +95,20 @@ class SystemPromptTest {
         val prompt = systemPromptFor("Custom personality", MODEL_ID)
 
         assertContains(prompt, "`/start` shows the bot's greeting")
-        assertContains(prompt, "`/tasks` opens the current user's scheduled-task controls")
-        assertContains(prompt, "`/clear` clears the current user's conversation history")
-        assertContains(prompt, "It does not clear durable memory or scheduled tasks")
-        assertContains(prompt, "These commands bypass the agent")
+        assertContains(prompt, "`/tasks` opens the user's scheduled tasks")
+        assertContains(prompt, "`/clear` clears the user's conversation history and leaves durable memory and scheduled tasks as they are")
+        assertContains(prompt, "`/stop` interrupts what you are doing")
+        assertContains(prompt, "These commands bypass you")
+    }
+
+    // said outright, since a model told only to format in html answered in markdown fences with a bare
+    // `<` inside, which the parse mode refuses
+    @Test
+    fun `system prompt keeps code out of markdown`() {
+        val prompt = systemPromptFor("Custom personality", MODEL_ID)
+
+        assertContains(prompt, "Code goes in `<code>` inline and in `<pre>` as a block, never in backticks or ``` fences")
+        assertContains(prompt, "`if (x &lt; 5 &amp;&amp; y &gt; 0)`")
     }
 
     @Test
