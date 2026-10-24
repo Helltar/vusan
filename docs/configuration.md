@@ -58,7 +58,7 @@ LLM_API_KEY=sk-proj-qwerty
 |---------------------|-----------------------------|-------------------------------------------------------------|
 | `openai`            | `gpt-6.1-sol`               | OpenAI's API, a current model that reasons and sees images. |
 | `anthropic`         | `claude-opus-5-5`           | Anthropic's API, Claude 4.6 or newer.                       |
-| `openrouter`        | `anthropic/claude-opus-5.5` | Many vendors' models behind one OpenRouter key; see below.  |
+| `openrouter`        | `google/gemini-3.8-flash`   | Many vendors' models behind one OpenRouter key; see below.  |
 | `codex`             | a model your plan offers    | A ChatGPT plan instead of a key; see below.                 |
 | `openai-compatible` | whatever the server serves  | Any OpenAI-compatible server, remote or local.              |
 
@@ -106,7 +106,7 @@ key. Name the model as OpenRouter lists it:
 
 ```dotenv
 LLM_PROVIDER=openrouter
-LLM_MODEL=anthropic/claude-opus-5.5
+LLM_MODEL=google/gemini-3.8-flash
 LLM_API_KEY=sk-or-v1-qwerty
 ```
 
