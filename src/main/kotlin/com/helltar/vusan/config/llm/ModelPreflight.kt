@@ -31,7 +31,6 @@ suspend fun LlmProviderConfig.preflighted(http: HttpClient, codexAuth: CodexAuth
         is LlmProviderConfig.Anthropic -> anthropicPreflight(http, this)
         is LlmProviderConfig.OpenAiCompatible -> compatiblePreflight(http, this)
         is LlmProviderConfig.Codex -> codexPreflight(http, this, codexAuth)
-        is LlmProviderConfig.Xai -> xaiPreflight(http, this)
         is LlmProviderConfig.OpenRouter -> openRouterPreflight(http, this)
     }
 

@@ -79,9 +79,6 @@ class LlmRuntimeTest {
     private fun codex(effort: ReasoningEffort? = null, verbosity: String? = null, tier: ServiceTier? = null, vision: Boolean = true, window: Long? = null) =
         LlmProviderConfig.Codex(model = "gpt-5.6-terra", reasoningEffort = effort, serviceTier = tier, verbosity = verbosity, seesImages = vision, requestTimeout = TIMEOUT, contextWindowTokens = window)
 
-    private fun xai(effort: ReasoningEffort? = null, window: Long? = null) =
-        LlmProviderConfig.Xai(apiKey = "key", model = "grok-4.7", reasoningEffort = effort, requestTimeout = TIMEOUT, contextWindowTokens = window)
-
     private fun openRouter(model: String, effort: ReasoningEffort? = null) =
         LlmProviderConfig.OpenRouter(apiKey = "key", model = model, reasoningEffort = effort, requestTimeout = TIMEOUT)
 
@@ -181,42 +178,6 @@ class LlmRuntimeTest {
     @Test
     fun `an effort anthropic does not take fails at startup rather than on the first turn`() {
         assertFailsWith<IllegalArgumentException> { resolveLlmRuntime(anthropic(effort = ReasoningEffort.NONE)) }
-    }
-
-    // --- xai ---
-
-    // the responses api as xai reads it: the conversation's key routes to the server holding the prefix, and
-    // caching is automatic, so none of openai's cache options go along
-    @Test
-    fun `an xai runtime speaks responses with the key, stateless reasoning and no cache options`() = runBlocking {
-        val runtime = resolveLlmRuntime(xai(effort = ReasoningEffort.LOW), http = http(RESPONSES_REPLY))
-
-        assertEquals("xAI", runtime.providerLabel)
-        assertEquals(256_000, runtime.model.contextWindowTokens, "the smallest window xai lists, until the startup check says the model's own")
-        assertTrue(runtime.model.seesImages)
-
-        runtime.client.complete(runtime.model, request(runtime.chatOptions.forConversation("telegram:1@-100")))
-
-        val wire = sent.single()
-        assertEquals("https://api.x.ai/v1/responses", wire.url)
-        assertEquals("Bearer key", wire.headers["Authorization"])
-        assertTrue(wire.body.getValue("prompt_cache_key").jsonPrimitive.content.startsWith("vusan-"))
-        assertEquals("low", wire.body.getValue("reasoning").jsonObject.getValue("effort").jsonPrimitive.content)
-        assertEquals(false, wire.body.getValue("store").jsonPrimitive.content.toBoolean())
-        assertEquals("reasoning.encrypted_content", wire.body.getValue("include").jsonArray.single().jsonPrimitive.content)
-        assertNull(wire.body["prompt_cache_options"])
-        assertNull(wire.body["parallel_tool_calls"], "left to the default, on")
-        assertFalse(wire.body.getValue("input").jsonArray.any { item -> item.jsonObject.getValue("content").jsonArray.any { "prompt_cache_breakpoint" in it.jsonObject } })
-    }
-
-    @Test
-    fun `the xai recap keeps a key of its own`() = runBlocking {
-        val runtime = resolveLlmRuntime(xai(window = 500_000), http = http(RESPONSES_REPLY))
-
-        runtime.client.complete(runtime.model, request(runtime.compactionOptions, tools = emptyList()))
-
-        assertEquals(500_000, runtime.model.contextWindowTokens)
-        assertEquals("vusan-recap", sent.single().body.getValue("prompt_cache_key").jsonPrimitive.content)
     }
 
     // --- openrouter ---
@@ -377,7 +338,6 @@ class LlmRuntimeTest {
         assertTrue(resolveLlmRuntime(openRouter("openai/gpt-5.6-luna")).model.offersToolsMidConversation)
         assertFalse(resolveLlmRuntime(openRouter("x-ai/grok-4.7")).model.offersToolsMidConversation)
         assertFalse(resolveLlmRuntime(compatible()).model.offersToolsMidConversation)
-        assertFalse(resolveLlmRuntime(xai()).model.offersToolsMidConversation)
         assertTrue(resolveLlmRuntime(codex(), codexAuth = codexAuth()).model.offersToolsMidConversation)
     }
 

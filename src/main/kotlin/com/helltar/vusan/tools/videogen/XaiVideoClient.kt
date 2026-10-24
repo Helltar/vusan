@@ -3,7 +3,6 @@ package com.helltar.vusan.tools.videogen
 import com.helltar.vusan.common.dataUrl
 import com.helltar.vusan.common.rethrowIfCancellation
 import com.helltar.vusan.config.VideoProviderConfig
-import com.helltar.vusan.config.llm.XAI_API_BASE_URL
 import com.helltar.vusan.infra.HttpStatusException
 import com.helltar.vusan.tools.files.FileDownloadClient
 import com.helltar.vusan.tools.files.FileDownloadResult
@@ -23,7 +22,7 @@ import kotlin.time.Duration.Companion.minutes
 import kotlin.time.Duration.Companion.seconds
 import kotlin.time.TimeSource
 
-private const val XAI_VIDEOS_URL = "$XAI_API_BASE_URL/videos"
+private const val XAI_VIDEOS_URL = "https://api.x.ai/v1/videos"
 
 // the one model that edits a video or extends one; the newer ones answer both with a 400
 private const val EDIT_MODEL = "grok-imagine-video"

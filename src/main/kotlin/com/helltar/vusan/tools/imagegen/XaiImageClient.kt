@@ -2,7 +2,6 @@ package com.helltar.vusan.tools.imagegen
 
 import com.helltar.vusan.common.dataUrl
 import com.helltar.vusan.common.rethrowIfCancellation
-import com.helltar.vusan.config.llm.XAI_API_BASE_URL
 import com.helltar.vusan.infra.HttpStatusException
 import com.helltar.vusan.tools.isImagineModerated
 import io.ktor.client.*
@@ -13,7 +12,7 @@ import io.ktor.http.*
 import java.util.*
 import kotlin.time.Duration.Companion.minutes
 
-private const val XAI_IMAGES_URL = "$XAI_API_BASE_URL/images"
+private const val XAI_IMAGES_URL = "https://api.x.ai/v1/images"
 
 // a new picture at medium quality took 80 to 90 seconds when measured, so this leaves room for a slow one
 private val IMAGE_TIMEOUT = 5.minutes

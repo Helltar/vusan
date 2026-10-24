@@ -58,7 +58,6 @@ LLM_API_KEY=sk-proj-qwerty
 |---------------------|-----------------------------|-------------------------------------------------------------|
 | `openai`            | `gpt-6.1-sol`               | OpenAI's API, a current model that reasons and sees images. |
 | `anthropic`         | `claude-opus-5-5`           | Anthropic's API, Claude 4.6 or newer.                       |
-| `xai`               | `grok-4.7`                  | xAI's API.                                                  |
 | `openrouter`        | `anthropic/claude-opus-5.5` | Many vendors' models behind one OpenRouter key; see below.  |
 | `codex`             | a model your plan offers    | A ChatGPT plan instead of a key; see below.                 |
 | `openai-compatible` | whatever the server serves  | Any OpenAI-compatible server, remote or local.              |
@@ -391,7 +390,7 @@ VISION_API_KEY=sk-proj-qwerty
 | Variable                         | Default           | Description                                                                 |
 |----------------------------------|-------------------|-----------------------------------------------------------------------------|
 | `VISION_MODEL`                   | —                 | Turns on a vision model of its own.                                         |
-| `VISION_PROVIDER`                | the chat provider | `openai`, `anthropic`, `xai`, `openrouter`, `codex` or `openai-compatible`. |
+| `VISION_PROVIDER`                | the chat provider | `openai`, `anthropic`, `openrouter`, `codex` or `openai-compatible`.        |
 | `VISION_API_KEY`                 | —                 | Required with `VISION_PROVIDER`, except on `codex`.                         |
 | `VISION_BASE_URL`                | —                 | Required with `VISION_PROVIDER=openai-compatible`.                          |
 | `VISION_COMPATIBLE_API`          | `completions`     | `completions` or `responses`, for `openai-compatible`.                      |
@@ -481,7 +480,7 @@ read under the `ADDRESSING_` prefix.
 | `ADDRESSING_ENABLED`                 | `false`            | Turns the feature on.                                                       |
 | `ADDRESSING_MODEL`                   | —                  | The model that decides; never the chat model.                               |
 | `ADDRESSING_NAMES`                   | the bot's handles  | Other spellings the chat uses, comma-separated.                             |
-| `ADDRESSING_PROVIDER`                | the chat provider  | `openai`, `anthropic`, `xai`, `openrouter`, `codex` or `openai-compatible`. |
+| `ADDRESSING_PROVIDER`                | the chat provider  | `openai`, `anthropic`, `openrouter`, `codex` or `openai-compatible`.        |
 | `ADDRESSING_API_KEY`                 | —                  | Required with `ADDRESSING_PROVIDER`, except on `codex`.                     |
 | `ADDRESSING_BASE_URL`                | —                  | Required with `ADDRESSING_PROVIDER=openai-compatible`.                      |
 | `ADDRESSING_COMPATIBLE_API`          | `completions`      | `completions` or `responses`, for `openai-compatible`.                      |
