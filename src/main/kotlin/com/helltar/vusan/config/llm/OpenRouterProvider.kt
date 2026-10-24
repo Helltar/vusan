@@ -65,8 +65,9 @@ internal fun openRouterRuntime(config: LlmProviderConfig.OpenRouter, http: HttpC
             maxOutputTokens = config.maxOutputTokens ?: ANTHROPIC_MAX_OUTPUT.takeIf { claude },
             seesImages = config.seesImages == true,
             efforts = config.efforts,
-            // another vendor's model also took `additional_tools` on 2026-10-24, but only openai's was shown to keep
-            // its cache through one, so the rest list what was offered up front
+            // another vendor's model takes `additional_tools` too, but openrouter folds the item into its tool list,
+            // which costs the cache a widened list does (gemini, grok and deepseek on 2026-10-24), so the rest list
+            // what was offered up front
             offersToolsMidConversation = if (claude) claudeOffersToolsMidConversation(id) else id.startsWith(OPENAI_PREFIX),
         )
 
