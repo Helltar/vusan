@@ -75,10 +75,22 @@ class SystemPromptTest {
         val bothOff = systemPromptFor("Custom personality", MODEL_ID)
         val on = systemPromptFor("Custom personality", MODEL_ID, images = true, videos = true)
 
-        assertContains(off, "Switched off on this deployment, with no tool for it and none to load: drawing and editing pictures.")
+        assertContains(off, "Switched off on this deployment, with no tool for it and none to load: drawing and editing pictures with an image model.")
         assertContains(off, "never make up a result or a refusal")
-        assertContains(bothOff, "none to load: drawing and editing pictures, making and editing videos.")
+        assertContains(bothOff, "none to load: drawing and editing pictures with an image model, making and editing videos with a video model.")
         assertFalse("Switched off" in on)
+    }
+
+    // told only that pictures are off, a weak model turned down a crop or a caption it could write in python
+    @Test
+    fun `media generation switched off leaves editing with code to the sandbox`() {
+        val withSandbox = systemPromptFor("Custom personality", MODEL_ID, sandbox = true)
+        val withoutSandbox = systemPromptFor("Custom personality", MODEL_ID)
+        val allOn = systemPromptFor("Custom personality", MODEL_ID, sandbox = true, images = true, videos = true)
+
+        assertContains(withSandbox, "Only the model is gone. The sandbox still changes an existing picture or video with code")
+        assertFalse("Only the model is gone" in withoutSandbox)
+        assertFalse("Only the model is gone" in allOn)
     }
 
     @Test

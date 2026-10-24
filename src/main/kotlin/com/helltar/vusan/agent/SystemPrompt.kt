@@ -94,12 +94,15 @@ private const val OPERATIONAL_CONTRACT = """# Instruction scope
  *
  * The same holds for media generation switched off: the history may still show pictures made, or
  * refused, while it was on, and a model asked again without the tool answers from that pattern
- * with an invented result or refusal unless it is told the capability is gone.
+ * with an invented result or refusal unless it is told the capability is gone. Told only that, a
+ * weak model stretches "pictures" to cover the sandbox too and turns down a crop or a caption it
+ * could make with code, so the line names a model as what is gone and the sandbox as what is not.
  */
 private fun runtimeSection(
     modelId: String,
     botUsernames: List<String>,
     botDisplayName: String?,
+    sandbox: Boolean,
     images: Boolean,
     videos: Boolean,
 ): String =
@@ -125,14 +128,19 @@ private fun runtimeSection(
 
         val switchedOff =
             listOfNotNull(
-                "drawing and editing pictures".takeUnless { images },
-                "making and editing videos".takeUnless { videos },
+                "drawing and editing pictures with an image model".takeUnless { images },
+                "making and editing videos with a video model".takeUnless { videos },
             )
 
         if (switchedOff.isNotEmpty()) {
             append("\n- Switched off on this deployment, with no tool for it and none to load: ${switchedOff.joinToString(", ")}. ")
-            append("When someone asks for it, say plainly that you cannot do that now; never make up a result or a refusal. ")
+            append("When someone asks for that, say plainly that you cannot do it now; never make up a result or a refusal. ")
             append("Whatever this conversation shows of it being done or refused dates from when it was on and says nothing about the request in front of you.")
+
+            if (sandbox) {
+                append("\n- Only the model is gone. The sandbox still changes an existing picture or video with code — cropping, resizing, brightness and colors, text on top — ")
+                append("so a request code can meet is done there, and only one that needs something newly drawn is turned down.")
+            }
         }
     }
 
@@ -179,7 +187,7 @@ internal fun systemPromptFor(
             xmlBlock(
                 "operational_contract",
                 "$OPERATIONAL_CONTRACT\n\n${passingResultsSection(sandbox)}\n\n" +
-                        runtimeSection(modelId, botUsernames, botDisplayName, images, videos),
+                        runtimeSection(modelId, botUsernames, botDisplayName, sandbox, images, videos),
             )
 
 // the block names the contract above enumerates, kept next to it so the two cannot drift apart.
