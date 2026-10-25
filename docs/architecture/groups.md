@@ -12,7 +12,8 @@ the sticker catalog. Part of the [architecture index](../architecture.md).
   something to remove rather than the chats that happen to be busy. On read, `GroupLogReader` quotes the window when it fits the budget derived from
   `liveToolResultMaxChars`; when it does not and the window reaches back into a closed day, it splits by local day,
   replaces each **closed** day with a `GroupLogDigester` recap cached in `group_log_digests`, and leaves the current day
-  quoted. A window lying inside today has no closed day to summarize, so it is truncated to its newest entries rather
+  quoted. The digester runs at the least effort the chat model lists, since the turn that asked waits on every day it
+  makes. A window lying inside today has no closed day to summarize, so it is truncated to its newest entries rather
   than widened to the whole day. Today is never cached — it is still being written to — which is what makes a repeated
   weekly question cost nothing after the first one. Every result leads with the window's exact message count, narrowed
   to one author when one was asked for, because the transcript under it may be only part of the window and a "how many"

@@ -198,7 +198,10 @@ suspend fun main() = coroutineScope {
         // a digest and a diary entry retell what a group said, and one vendor's content filter declining that
         // text is no reason to leave a day unwritten while another model stands behind it
         val summaryOptions = llm.compactionOptions.copy(fallBackOnRefusal = true)
-        val groupLogDigester = groupLog?.let { LlmGroupLogDigester(client, llm.model, summaryOptions) }
+        // a digest is made while somebody waits for the turn that asked for it, one closed day after another,
+        // and retelling a day needs no deliberation: the least effort the model lists, never the chat's own
+        val digestOptions = summaryOptions.copy(reasoningEffort = llm.model.efforts?.minOrNull() ?: summaryOptions.reasoningEffort)
+        val groupLogDigester = groupLog?.let { LlmGroupLogDigester(client, llm.model, digestOptions) }
 
         // the diary reads the group log, so it is kept only where there is one
         val diaryRepository = groupLog?.let { DiaryRepository() }
