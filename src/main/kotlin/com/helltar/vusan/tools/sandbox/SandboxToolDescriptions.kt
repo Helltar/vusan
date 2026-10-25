@@ -110,7 +110,8 @@ internal object SandboxToolDescriptions {
     const val SEND_AS =
         "Optional: `document`, `animation` or empty. " +
                 "Leave it empty for images and videos, which already go out as photos and videos by extension. " +
-                "`document` sends every file of the call as a plain file, for a photo or video the user wants uncompressed or as a file. " +
+                "`document` sends every file of the call as a plain file, only when the user asked for the file itself or for the uncompressed original. " +
+                "A screenshot, chart or any other picture meant to be looked at goes out as a photo, however much text it holds. " +
                 "`animation` sends a `.gif` or a soundless `.mp4` as a looping GIF. " +
                 "A GIF from the chat arrives as an `.mp4`, so return an edited one as an H.264 `.mp4` without audio (`-an`, `-pix_fmt yuv420p`) with `animation`, rather than converting it to `.gif`."
 }
