@@ -61,7 +61,7 @@ answer to its name. More in [Rights in a group](docs/configuration.md#rights-in-
 
 - **Called by name** — answers when you say its name or follow up, no mention needed.
 - **Speaks up on its own** — now and then reacts, drops a line or a sticker, or asks after someone.
-- **What the group said** — recaps the whole conversation and answers questions about who said what.
+- **What the group said** — recaps the whole conversation, answers questions about who said what and finds when something came up.
 - **Diary** — writes down what each day in a group was like, looks back over its weeks and months, and picks up yesterday's thread or one from months ago.
 - **Each person apart** — everyone in a chat keeps their own conversation, memory and sandbox.
 - **Replies** — reads the message you reply to, other people's files and pictures included.

@@ -18,6 +18,9 @@ import kotlin.time.Duration
  * cached one-off recap, and the current day stays verbatim. Only closed days are cached — today is
  * still being written to, so its recap would be stale the moment it was stored. A window with no
  * closed day in it has nothing to summarize, and is truncated to the newest entries instead.
+ *
+ * A search for a text never takes the digest path: a recap keeps what a day was about, and the one
+ * message that named something is exactly what it drops.
  */
 class GroupLogReader(
     private val repository: GroupLogRepository,
@@ -30,12 +33,16 @@ class GroupLogReader(
         chat: ChatRef,
         window: Duration,
         author: String? = null,
+        contains: String? = null,
         now: Instant = Instant.now(),
     ): String {
         val from = now.minusSeconds(window.inWholeSeconds)
+
+        contains?.let { return searchResult(chat, from, now, author, it) }
+
         val total = repository.countInWindow(chat, from, now, author)
 
-        if (total == 0L) return emptyResult(author, from, now)
+        if (total == 0L) return emptyResult(from, now, author)
 
         val rowLimit = (budgetChars / MIN_LINE_COST).coerceIn(1, MAX_ROWS)
         val entries = repository.readWindow(chat, from, now, limit = rowLimit, author = author)
@@ -53,6 +60,29 @@ class GroupLogReader(
         }
 
         return digestedResult(chat, from, now)
+    }
+
+    private suspend fun searchResult(chat: ChatRef, from: Instant, now: Instant, author: String?, needle: String): String {
+        val matches = repository.searchWindow(chat, from, now, needle, author)
+
+        if (matches.isEmpty()) return emptyResult(from, now, author, needle)
+
+        val rendered = renderGroupLog(matches, zone, LOG_LINE_CHARS, budgetChars)
+
+        return buildString {
+            append(header(from, now, matches.size.toLong(), author, needle))
+
+            if (rendered.includedCount < matches.size) {
+                appendLine()
+                append("Showing the newest ${rendered.includedCount} matches; the rest did not fit. ")
+                append("$COUNT_FROM_HEADER ")
+                append("Narrow the window to read the earlier ones.")
+            }
+
+            appendLine()
+            appendLine()
+            append(block("transcript", rendered.text))
+        }
     }
 
     private fun reachesAClosedDay(from: Instant, now: Instant): Boolean =
@@ -82,7 +112,7 @@ class GroupLogReader(
         val digests = collectDigests(chat, closedDays, digestBudget)
 
         return buildString {
-            append(header(windowStart, now, total, author = null))
+            append(header(windowStart, now, total))
             appendLine()
             append("Too much to quote in full: closed days are summarized, today is quoted. ")
             append(COUNT_FROM_HEADER)
@@ -186,14 +216,18 @@ class GroupLogReader(
             append(block("transcript", rendered.text))
         }
 
-    private fun emptyResult(author: String?, from: Instant, now: Instant): String =
-        author
-            ?.let { "No messages from `$it` between ${stamp(from)} and ${stamp(now)}." }
-            ?: "No messages recorded between ${stamp(from)} and ${stamp(now)}."
+    private fun emptyResult(from: Instant, now: Instant, author: String?, contains: String? = null): String =
+        buildString {
+            append("No messages")
+            author?.let { append(" from `$it`") }
+            contains?.let { append(" mentioning `$it`") }
+            if (author == null && contains == null) append(" recorded")
+            append(" between ${stamp(from)} and ${stamp(now)}.")
+        }
 
     // the count spans the whole window while the transcript under it may be a subset, so the number
     // is labeled as the exact one. without that a "how many" answer becomes a tally of visible lines.
-    private fun header(from: Instant, now: Instant, total: Long, author: String?): String =
+    private fun header(from: Instant, now: Instant, total: Long, author: String? = null, contains: String? = null): String =
         buildString {
             append("Chat log for this group.")
             appendLine()
@@ -201,6 +235,7 @@ class GroupLogReader(
             appendLine()
             append("Messages in this window: $total")
             author?.let { append(" from `$it`") }
+            contains?.let { append(" mentioning `$it`") }
             append(" (exact, for the whole window).")
         }
 

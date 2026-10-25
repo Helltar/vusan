@@ -59,6 +59,8 @@ With the [group log](configuration.md#group-log) on, Vusan records every message
 - **Every turn** — a group turn carries the last fifteen messages of the past hour.
 - **Long ranges** — a range too big for the context is read through daily recaps, made once per
   closed day and kept. The current day is never cached.
+- **Searching** — asked whether or when something came up, Vusan searches every recorded message
+  for it, whatever the case, and quotes what it finds instead of a recap.
 - **What a row holds** — the text (up to 2,000 characters, 1,000 for a forwarded post), sender and
   time, a short label for anything else (`🐤 UtyaDuck`, `0:14`, `report.pdf`), where a forward came
   from and what it replied to. Vusan's own replies are recorded; replies sent to someone's DMs are not.

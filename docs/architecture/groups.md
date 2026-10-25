@@ -17,7 +17,10 @@ the sticker catalog. Part of the [architecture index](../architecture.md).
   weekly question cost nothing after the first one. Every result leads with the window's exact message count, narrowed
   to one author when one was asked for, because the transcript under it may be only part of the window and a "how many"
   answer must not be a tally of quoted lines. The digest path counts over the day-snapped window it prints rather than
-  the narrower one requested, and labels `<today>` with how many of its messages fit.
+  the narrower one requested, and labels `<today>` with how many of its messages fit. A read with `contains` never
+  takes the digest path: `GroupLogRepository.searchWindow` walks the window's rows and matches text, media label and
+  forward source in Kotlin, because SQLite's `LIKE` folds case for ASCII alone, and the matches are quoted under their
+  exact count, newest kept when they overflow.
 - **Diary** — `agent/presence/Diary` gives the bot a memory of what a group's days were like, which neither history
   (one person's exchanges with it) nor durable memory (facts somebody asked to be kept) holds. Every fifteen minutes it
   looks for chats people wrote in yesterday that have no entry for that day, and has `DiaryWriter` write one from the

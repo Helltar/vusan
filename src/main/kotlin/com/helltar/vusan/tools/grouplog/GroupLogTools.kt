@@ -7,6 +7,7 @@ import com.helltar.vusan.agent.grouplog.GroupLogReader
 import com.helltar.vusan.agent.grouplog.GroupLogRepository
 import com.helltar.vusan.request.RequestContext
 import com.helltar.vusan.tasks.Recurrence
+import com.helltar.vusan.tools.requireToolText
 import com.helltar.vusan.tools.suspendToolGuard
 import kotlin.time.Duration.Companion.days
 
@@ -24,6 +25,7 @@ class GroupLogTools(
     suspend fun readGroupLog(
         @Arg(GroupLogToolDescriptions.READ_GROUP_LOG_WINDOW) window: String,
         @Arg(GroupLogToolDescriptions.READ_GROUP_LOG_AUTHOR) author: String? = null,
+        @Arg(GroupLogToolDescriptions.READ_GROUP_LOG_CONTAINS) contains: String? = null,
     ): String = suspendToolGuard {
         if (context.chat.isPrivate)
             return@suspendToolGuard "No group chat log in a private chat — this conversation is already your history."
@@ -41,6 +43,7 @@ class GroupLogTools(
             chat = context.chatRef,
             window = parsed,
             author = author?.trim()?.takeIf { it.isNotEmpty() },
+            contains = contains?.requireToolText("contains", MAX_CONTAINS_CHARS),
         )
     }
 
@@ -52,5 +55,9 @@ class GroupLogTools(
         val removed = repository.clear(context.chatRef)
 
         "Deleted this group's recorded messages ($removed) and every cached daily recap."
+    }
+
+    private companion object {
+        const val MAX_CONTAINS_CHARS = 100
     }
 }

@@ -140,6 +140,36 @@ class GroupLogRepositoryTest {
     }
 
     @Test
+    fun `a search matches text, media labels and forward sources whatever their case`() = runBlocking {
+        val repository = GroupLogRepository(GroupLogConfig())
+
+        repository.record(entry("1", "lunch with ÉLODIE tomorrow", now.minusSeconds(40)))
+        repository.record(entry("2", "nothing to see here", now.minusSeconds(30)))
+        repository.record(entry("3", "see the file", now.minusSeconds(20)).copy(kind = "document", descriptor = "elodie-notes.pdf"))
+        repository.record(entry("4", "a repost", now.minusSeconds(10)).copy(forwardFrom = "Élodie Daily"))
+
+        val found = repository.searchWindow(CHAT, now.minusSeconds(60), now, needle = "élodie").map { it.messageId }
+
+        // the accented capital is folded too, which sqlite's own LIKE would not do
+        assertEquals(listOf("1", "4"), found)
+        assertEquals(listOf("3"), repository.searchWindow(CHAT, now.minusSeconds(60), now, needle = "NOTES.pdf").map { it.messageId })
+    }
+
+    @Test
+    fun `a search keeps to the window and the author`() = runBlocking {
+        val repository = GroupLogRepository(GroupLogConfig())
+
+        repository.record(entry("1", "old budget talk", now.minusSeconds(600)))
+        repository.record(entry("2", "her budget", now.minusSeconds(30)))
+        repository.record(entry("3", "his budget", now.minusSeconds(20), username = "serhii", name = "Serhii Koval"))
+
+        val from = now.minusSeconds(60)
+
+        assertEquals(listOf("2", "3"), repository.searchWindow(CHAT, from, now, needle = "budget").map { it.messageId })
+        assertEquals(listOf("3"), repository.searchWindow(CHAT, from, now, needle = "budget", author = "serhii").map { it.messageId })
+    }
+
+    @Test
     fun `a value longer than its column is truncated instead of rejected`() = runBlocking {
         val repository = GroupLogRepository(GroupLogConfig())
 

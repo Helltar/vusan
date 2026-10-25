@@ -134,6 +134,27 @@ class GroupLogRepository(
         }
 
     /**
+     * Every entry of the window that mentions [needle] in its text, its media label or the channel it was
+     * forwarded from, whatever the case, oldest first. The match is made here rather than in SQL: SQLite
+     * folds case for ASCII alone, so `LIKE` would miss a capitalized Cyrillic name. Retention and
+     * [GroupLogConfig.maxMessagesPerChat] bound the rows a window can hold, which is what makes walking
+     * all of them affordable.
+     */
+    suspend fun searchWindow(
+        chat: ChatRef,
+        from: Instant,
+        to: Instant,
+        needle: String,
+        author: String? = null,
+    ): List<GroupLogEntry> = dbTransaction {
+        GroupLogTable
+            .selectAll()
+            .where { windowCondition(chat, from, to, author) }
+            .orderBy(GroupLogTable.sentAt to SortOrder.ASC, GroupLogTable.id to SortOrder.ASC)
+            .mapNotNull { row -> row.toEntry().takeIf { it.mentions(needle) } }
+    }
+
+    /**
      * The tail of the conversation for the `<recent_chat>` prompt block. [excludeMessageId] drops the message
      * that triggered the current turn, which the model is already being shown as the request itself.
      */
@@ -349,6 +370,9 @@ private fun authorCondition(author: String): Op<Boolean> {
     return (GroupLogTable.senderUsername.lowerCase() eq needle) or
             (GroupLogTable.senderName.lowerCase() like contains)
 }
+
+private fun GroupLogEntry.mentions(needle: String): Boolean =
+    listOfNotNull(text, descriptor, forwardFrom).any { it.contains(needle, ignoreCase = true) }
 
 private fun ResultRow.toEntry(): GroupLogEntry =
     GroupLogEntry(

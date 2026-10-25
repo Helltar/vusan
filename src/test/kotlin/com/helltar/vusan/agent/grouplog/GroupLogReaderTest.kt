@@ -134,6 +134,47 @@ class GroupLogReaderTest {
     }
 
     @Test
+    fun `a search quotes its matches from every day and never reaches the digester`() = runBlocking {
+        val digester = RecordingDigester()
+
+        repeat(80) { record(1_000L + it, "two days ago $it", instantAt(2026, 8, 2, 10)) }
+        record(1_500L, "the Budget is due friday", instantAt(2026, 8, 2, 11))
+        repeat(80) { record(2_000L + it, "yesterday $it", instantAt(2026, 8, 3, 10)) }
+        record(2_500L, "who approved the budget", instantAt(2026, 8, 3, 11))
+        repeat(80) { record(3_000L + it, "today $it", instantAt(2026, 8, 4, 11)) }
+
+        val result = GroupLogReader(repository, digester, budgetChars = 1_200)
+            .read(CHAT, 3.days, contains = "budget", now = now)
+
+        assertContains(result, "Messages in this window: 2 mentioning `budget` (exact, for the whole window).")
+        assertContains(result, "the Budget is due friday")
+        assertContains(result, "who approved the budget")
+        assertFalse(result.contains("Showing the newest"), "every match fit")
+        assertTrue(digester.days.isEmpty(), "a recap drops exactly the message a search is after")
+    }
+
+    @Test
+    fun `a search too big to quote shows the newest matches under the exact count`() = runBlocking {
+        repeat(200) { record(it + 1L, "budget line $it", now.minusSeconds(3_000L - it)) }
+
+        val result = GroupLogReader(repository, RecordingDigester(), budgetChars = 500)
+            .read(CHAT, 1.hours, author = "olena", contains = "budget", now = now)
+
+        assertContains(result, "Messages in this window: 200 from `olena` mentioning `budget` (exact, for the whole window).")
+        assertContains(result, "Showing the newest")
+        assertContains(result, "budget line 199")
+    }
+
+    @Test
+    fun `a search with no match says what was looked for`() = runBlocking {
+        record(1L, "first", now.minusSeconds(600))
+
+        val result = reader().read(CHAT, 1.hours, contains = "budget", now = now)
+
+        assertContains(result, "No messages mentioning `budget` between")
+    }
+
+    @Test
     fun `an overflowing window digests closed days and quotes today`() = runBlocking {
         val digester = RecordingDigester()
 
