@@ -18,6 +18,7 @@ import com.helltar.vusan.request.ChatRef
 import com.helltar.vusan.request.ConversationScope
 import com.helltar.vusan.request.RequestContext
 import com.helltar.vusan.tools.ToolCatalogFactory
+import com.helltar.vusan.tools.grouplog.GroupLogTools
 import io.github.oshai.kotlinlogging.KotlinLogging
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Job
@@ -211,6 +212,7 @@ class AgentRunner(
                 memoryFingerprint = memoryFingerprint,
                 storedHistoryTokens = conversationPlan.estimatedTokens,
                 historyBudget = preparation.tokenBudget.conversationTokens,
+                rawRetentionCutoff = rawRetentionCutoff(),
             )
 
         // the labels of the request it continues are in it, so this turn's go on from where they stopped
@@ -333,18 +335,24 @@ class AgentRunner(
             // a run that threw left no request to continue, and the history it stored is not in the one kept
             sentConversations?.let { kept ->
                 if (stored != null && sent.isNotEmpty()) {
-                    kept.remember(context.scope, SentConversations.Sent(sent, stored, shelf.nextNumber, memoryFingerprint))
+                    val oldestTurnAt = continued?.oldestTurnAt ?: conversationPlan.oldestIncludedAt ?: Instant.now()
+                    kept.remember(context.scope, SentConversations.Sent(sent, stored, shelf.nextNumber, memoryFingerprint, oldestTurnAt))
                 } else {
                     kept.forget(context.scope)
                 }
             }
         }
 
+        // every request kept for the chat carries what it was saying, the log this turn erased
+        if (toolEvents.any { it.toolName == GroupLogTools::clearGroupLog.name && !it.isError }) {
+            sentConversations?.forgetChat(context.chatRef)
+        }
+
         val pruned =
             conversation.pruneCompacted(
                 scope = context.scope,
                 maxStoredInteractions = ConversationRepository.MAX_STORED_INTERACTIONS,
-                rawRetentionCutoff = Instant.now().minus(conversationConfig.retentionDays.toLong(), ChronoUnit.DAYS),
+                rawRetentionCutoff = rawRetentionCutoff(),
             )
 
         if (pruned > 0) {
@@ -410,6 +418,8 @@ class AgentRunner(
             run(emergencyConversation, continued = null)
         }
     }
+
+    private fun rawRetentionCutoff(): Instant = Instant.now().minus(conversationConfig.retentionDays.toLong(), ChronoUnit.DAYS)
 
     // pick the user-facing reply and log accordingly. LLM provider errors arrive as a large JSON body, so
     // they get a single capped WARN line; a transient overload (429/503) gets a friendly "try again" reply,

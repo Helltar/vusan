@@ -2,7 +2,9 @@ package com.helltar.vusan.agent.conversation
 
 import com.helltar.vusan.llm.Message
 import com.helltar.vusan.request.testScope
+import java.time.Instant
 import kotlin.test.Test
+import kotlin.test.assertNotNull
 import kotlin.test.assertNull
 import kotlin.test.assertSame
 
@@ -10,12 +12,13 @@ class SentConversationsTest {
 
     private val scope = testScope(userId = 42, chatId = 42)
 
-    private fun sent(system: String = "the system prompt", history: String = "an earlier answer") =
+    private fun sent(system: String = "the system prompt", history: String = "an earlier answer", oldestTurnAt: Instant = NOW) =
         SentConversations.Sent(
             messages = listOf(Message.System(system), Message.User("an earlier request"), Message.Assistant(history)),
             storedInteractionId = "stored-1",
             nextCall = 3,
             memoryFingerprint = 11,
+            oldestTurnAt = oldestTurnAt,
         )
 
     private fun SentConversations.continuation(
@@ -24,7 +27,8 @@ class SentConversationsTest {
         memoryFingerprint: Int = 11,
         storedHistoryTokens: Int = 20,
         historyBudget: Int = 100_000,
-    ) = continuation(scope, systemPrompt, newestStoredInteractionId, memoryFingerprint, storedHistoryTokens, historyBudget)
+        rawRetentionCutoff: Instant = NOW.minusSeconds(86_400),
+    ) = continuation(scope, systemPrompt, newestStoredInteractionId, memoryFingerprint, storedHistoryTokens, historyBudget, rawRetentionCutoff)
 
     @Test
     fun `a request that still stands on the stored history is continued`() {
@@ -86,6 +90,31 @@ class SentConversationsTest {
         assertNull(kept.continuation(storedHistoryTokens = 2_000))
     }
 
+    // what a stored turn said may be kept only as long as the stored turn itself
+    @Test
+    fun `a request holding a turn past retention is dropped`() {
+        val kept = SentConversations()
+        kept.remember(scope, sent(oldestTurnAt = NOW.minusSeconds(3 * 86_400)))
+
+        assertNull(kept.continuation(rawRetentionCutoff = NOW.minusSeconds(2 * 86_400)))
+    }
+
+    // every message of the request carries what the chat was saying, the log that was just erased
+    @Test
+    fun `a cleared group log drops every request kept for that chat and no other`() {
+        val kept = SentConversations()
+        val group = testScope(userId = 1, chatId = -100)
+        val sameGroup = testScope(userId = 2, chatId = -100)
+        val elsewhere = testScope(userId = 1, chatId = -200)
+        listOf(group, sameGroup, elsewhere).forEach { kept.remember(it, sent()) }
+
+        kept.forgetChat(group.chat)
+
+        assertNull(kept.continuation(group, "the system prompt", "stored-1", 11, 20, 100_000, NOW.minusSeconds(86_400)))
+        assertNull(kept.continuation(sameGroup, "the system prompt", "stored-1", 11, 20, 100_000, NOW.minusSeconds(86_400)))
+        assertNotNull(kept.continuation(elsewhere, "the system prompt", "stored-1", 11, 20, 100_000, NOW.minusSeconds(86_400)))
+    }
+
     @Test
     fun `only the most recent conversations are kept`() {
         val kept = SentConversations(capacity = 1)
@@ -93,5 +122,9 @@ class SentConversationsTest {
         kept.remember(testScope(userId = 7, chatId = 7), sent())
 
         assertNull(kept.continuation())
+    }
+
+    private companion object {
+        val NOW: Instant = Instant.parse("2026-10-27T12:00:00Z")
     }
 }

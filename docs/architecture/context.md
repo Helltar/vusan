@@ -22,7 +22,8 @@ How a turn's history and tool results are fitted into the model's window. Part o
   stored one is still what recaps, other providers and every rebuilt turn read, and a kept request is continued only
   while the newest stored interaction is the one it ended with, the system prompt and the memory the turn carries
   are unchanged, it fits the history budget and it is at most 16,000 tokens larger than the stored history would
-  be — otherwise the turn is rebuilt and pays for the history once. The earlier turns' results keep their labels in
+  be, and holds no stored turn past the raw history's retention — otherwise the turn is rebuilt and pays for the
+  history once. A cleared group log drops every request kept for that chat, since their messages carry what it said. The earlier turns' results keep their labels in
   it, so the continuing turn numbers its calls on from there (`TurnShelf.numberFrom`) and an old label is refused.
   Kept in memory for the 128 conversations seen last; `/clear` drops it, and a restart rebuilds every conversation.
 - **Live tool-result budget** — `ContextWindowPolicy.liveToolResultMaxChars` caps everything the tools return during one

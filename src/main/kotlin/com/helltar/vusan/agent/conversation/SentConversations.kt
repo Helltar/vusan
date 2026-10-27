@@ -3,8 +3,10 @@ package com.helltar.vusan.agent.conversation
 import com.helltar.vusan.agent.estimateTokens
 import com.helltar.vusan.llm.LlmModel
 import com.helltar.vusan.llm.Message
+import com.helltar.vusan.request.ChatRef
 import com.helltar.vusan.request.ConversationScope
 import io.github.oshai.kotlinlogging.KotlinLogging
+import java.time.Instant
 
 /**
  * The last request of each conversation exactly as it went, with what it returned, for a model whose
@@ -21,7 +23,9 @@ import io.github.oshai.kotlinlogging.KotlinLogging
  * stored interaction is the one the request ended with, the system prompt is the same, the memory its
  * messages carry has not changed since, and it is not much larger than the history it replaces. The
  * memory matters because every earlier message carries the memory of its own turn: an entry the person
- * had removed would live on in them. Anything else drops it, and the turn is rebuilt from storage,
+ * had removed would live on in them. For the same reason a kept request holds no stored turn past the raw
+ * history's retention, and a cleared group log drops every one kept for that chat ([forgetChat]), since its
+ * messages carry what the chat was saying. Anything else drops it, and the turn is rebuilt from storage,
  * which costs that turn's cache once. Kept in memory only, for the conversations seen most recently: a
  * restart rebuilds every conversation once.
  */
@@ -30,13 +34,14 @@ class SentConversations(private val capacity: Int = DEFAULT_CAPACITY) {
     /**
      * What a conversation's last request held, [messages] from its system prompt on, standing on the stored
      * interaction [storedInteractionId], whose labels ran up to [nextCall], exclusive, with the memory of
-     * [memoryFingerprint] in its messages.
+     * [memoryFingerprint] in its messages and nothing older than [oldestTurnAt] from the stored history.
      */
     class Sent(
         val messages: List<Message>,
         val storedInteractionId: String,
         val nextCall: Int,
         val memoryFingerprint: Int,
+        val oldestTurnAt: Instant,
     ) {
 
         init {
@@ -62,10 +67,16 @@ class SentConversations(private val capacity: Int = DEFAULT_CAPACITY) {
         synchronized(sent) { sent.remove(scope) }
     }
 
+    /** Drops what was kept for every conversation in [chat], after something the chat said was erased. */
+    fun forgetChat(chat: ChatRef) {
+        synchronized(sent) { sent.keys.removeIf { it.chat == chat } }
+    }
+
     /**
      * The request this turn continues, or `null` when it is rebuilt from storage, in which case whatever
      * was kept for [scope] is dropped. [memoryFingerprint] is the memory this turn carries, [storedHistoryTokens]
-     * what the rebuilt history would cost, and [historyBudget] what the history may cost at all.
+     * what the rebuilt history would cost, [historyBudget] what the history may cost at all, and
+     * [rawRetentionCutoff] the instant before which stored turns are no longer kept.
      */
     fun continuation(
         scope: ConversationScope,
@@ -74,6 +85,7 @@ class SentConversations(private val capacity: Int = DEFAULT_CAPACITY) {
         memoryFingerprint: Int,
         storedHistoryTokens: Int,
         historyBudget: Int,
+        rawRetentionCutoff: Instant,
     ): Sent? {
         val request = synchronized(sent) { sent[scope] } ?: return null
 
@@ -82,6 +94,7 @@ class SentConversations(private val capacity: Int = DEFAULT_CAPACITY) {
                 request.storedInteractionId != newestStoredInteractionId -> "the stored history changed"
                 (request.messages.first() as Message.System).text != systemPrompt -> "the system prompt changed"
                 request.memoryFingerprint != memoryFingerprint -> "the memory changed"
+                request.oldestTurnAt.isBefore(rawRetentionCutoff) -> "it holds turns past retention"
                 request.historyTokens > historyBudget -> "it outgrew the history budget"
                 request.historyTokens > storedHistoryTokens + GROWTH_ALLOWANCE_TOKENS -> "it outgrew the stored history"
                 else -> return request

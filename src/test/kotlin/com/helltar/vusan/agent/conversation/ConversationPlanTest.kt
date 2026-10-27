@@ -73,6 +73,19 @@ class ConversationPlanTest {
         assertTrue(result.overBudget)
     }
 
+    // a request continued from this one must not keep a stored turn longer than storage does
+    @Test
+    fun `the plan says when the oldest interaction it replays was stored`() {
+        val interactions = (1L..3L).map { exchange(it, "u".repeat(120), "a".repeat(120)).copy(createdAt = Instant.ofEpochSecond(it * 100)) }
+
+        val all = planConversation(snapshot(interactions), tokenBudget = 10_000, maxRecentInteractions = 12)
+        val newest = planConversation(snapshot(interactions), tokenBudget = estimateTokens(interactions.last().turns) + 1, maxRecentInteractions = 12)
+
+        assertEquals(Instant.ofEpochSecond(100), all.oldestIncludedAt)
+        assertEquals(Instant.ofEpochSecond(300), newest.oldestIncludedAt)
+        assertEquals("i-3", all.newestInteractionId)
+    }
+
     @Test
     fun `broken legacy tool fragments are not replayed`() {
         val interaction =

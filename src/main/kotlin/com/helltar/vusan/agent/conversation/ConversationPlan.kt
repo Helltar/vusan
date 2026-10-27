@@ -4,6 +4,7 @@ import com.helltar.vusan.agent.ESTIMATED_BYTES_PER_TOKEN
 import com.helltar.vusan.agent.MESSAGE_OVERHEAD_TOKENS
 import com.helltar.vusan.agent.estimateTokens
 import com.helltar.vusan.common.limitTo
+import java.time.Instant
 
 private const val EXACT_TOOL_INTERACTIONS = 2
 
@@ -35,6 +36,8 @@ data class ConversationPlan(
     val stats: ConversationStats,
     /** The id of the newest interaction stored and not yet recapped, which a continued request has to end on. */
     val newestInteractionId: String? = null,
+    /** When the oldest interaction [prompt] replays was stored, `null` when it replays none. */
+    val oldestIncludedAt: Instant? = null,
 )
 
 fun planConversation(
@@ -51,6 +54,7 @@ fun planConversation(
 
     val eligible = snapshot.interactions.takeLast(maxRecentInteractions)
     val selected = ArrayDeque<List<ChatTurn>>()
+    var oldestIncludedAt: Instant? = null
     var exactToolInteractions = 0
 
     for ((distanceFromNewest, interaction) in eligible.asReversed().withIndex()) {
@@ -64,6 +68,7 @@ fun planConversation(
 
         if (estimated <= remaining) {
             selected.addFirst(turns)
+            oldestIncludedAt = interaction.createdAt
             remaining -= estimated
             if (exactTools && turns.any { it.role == ChatRole.TOOL_CALL }) exactToolInteractions++
             continue
@@ -73,6 +78,7 @@ fun planConversation(
             val fitted = turns.withoutToolEvents().fitToTokenBudget(remaining)
             if (fitted.isNotEmpty()) {
                 selected.addFirst(fitted)
+                oldestIncludedAt = interaction.createdAt
                 remaining -= estimateTokens(fitted)
             }
         }
@@ -103,6 +109,7 @@ fun planConversation(
         exactToolInteractions = exactToolInteractions,
         stats = snapshot.stats,
         newestInteractionId = snapshot.interactions.lastOrNull()?.id,
+        oldestIncludedAt = oldestIncludedAt,
     )
 }
 
