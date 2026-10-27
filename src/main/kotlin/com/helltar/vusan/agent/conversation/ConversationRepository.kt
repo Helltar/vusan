@@ -83,8 +83,9 @@ class ConversationRepository {
         )
     }
 
-    suspend fun appendInteraction(scope: ConversationScope, turns: List<ChatTurn>) = dbTransaction {
-        if (turns.isEmpty()) return@dbTransaction
+    /** Stores [turns] as one interaction and returns its id, or `null` when there was nothing to store. */
+    suspend fun appendInteraction(scope: ConversationScope, turns: List<ChatTurn>): String? = dbTransaction {
+        if (turns.isEmpty()) return@dbTransaction null
 
         require(turns.first().role == ChatRole.USER) { "Chat interaction must start with a USER turn" }
 
@@ -101,6 +102,8 @@ class ConversationRepository {
             this[ConversationMessagesTable.toolName] = turn.toolName
             this[ConversationMessagesTable.toolIsError] = turn.toolIsError
         }
+
+        interactionId
     }
 
     suspend fun storeSummary(

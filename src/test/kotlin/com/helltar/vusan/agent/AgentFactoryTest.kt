@@ -41,6 +41,36 @@ class AgentFactoryTest {
         }
 
     @Test
+    fun `a continued turn sends the request it continues whole before its own message`() =
+        runBlocking {
+            val continued =
+                listOf(
+                    Message.System("the system prompt"),
+                    Message.User("<current_time>noon</current_time>\nan earlier request"),
+                    Message.Assistant("an earlier answer"),
+                )
+            val client = ScriptedLlmClient(textReply("ok"))
+            val factory = AgentFactory(client, TEST_MODEL, RequestOptions(promptCacheKey = "vusan"), maxModelCalls = 20)
+
+            factory.build(
+                scope = testScope(),
+                conversation = PromptConversation(summary = "never read", turns = listOf(ChatTurn(ChatRole.USER, "never read either"))),
+                continued = continued,
+                preparation = factory.prepare(toolCatalog { }, "the request"),
+                outbox = BotOutbox(),
+                toolBudget = TurnToolBudget(factory.liveToolResultMaxTokens),
+                toolEvents = {},
+                tokenUsage = {},
+                shelf = TurnShelf(),
+            ).run("the request")
+
+            val request = client.requests.single()
+
+            assertEquals(continued + Message.User("the request"), request.messages)
+            assertEquals(listOf(continued.size), request.stablePrefixes)
+        }
+
+    @Test
     fun `history reaches the request between the system prompt and the current turn`() {
         val messages =
             firstRequest(history = listOf(ChatTurn(ChatRole.USER, "earlier question"), ChatTurn(ChatRole.ASSISTANT, "earlier answer"))).messages

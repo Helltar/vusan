@@ -121,7 +121,9 @@ class AgentTurnTest {
         val outbox: BotOutbox = BotOutbox(),
         val events: MutableList<ToolEvent> = mutableListOf(),
         val usages: MutableList<TokenUsage> = mutableListOf(),
-    )
+    ) {
+        var sent: List<Message> = emptyList()
+    }
 
     private fun run(
         vararg replies: Reply,
@@ -137,7 +139,7 @@ class AgentTurnTest {
         val preparation = factory.prepare(tools, "the request")
         val budget = TurnToolBudget(factory.liveToolResultMaxTokens)
 
-        val answer =
+        val turn =
             factory.build(
                 scope = testScope(),
                 conversation = PromptConversation(summary = null, turns = emptyList()),
@@ -148,7 +150,10 @@ class AgentTurnTest {
                 tokenUsage = run.usages::add,
                 mayStaySilent = mayStaySilent,
                 shelf = TurnShelf(),
-            ).run("the request")
+            )
+
+        val answer = turn.run("the request")
+        run.sent = turn.sent
 
         block(run, answer)
     }
@@ -449,6 +454,31 @@ class AgentTurnTest {
         assertFalse(declined.outbox.hasQueuedOutput)
         assertTrue(declined.events.isEmpty())
     }
+
+    // the next turn continues this request where the provider reads back only what a request repeats
+    @Test
+    fun `the turn keeps its last request with what that request returned`() =
+        run(toolCallReply(call("lookUp", args = arrayOf("query" to "cats"))), textReply("cats are fine")) { run, _ ->
+            assertEquals(run.client.requests.last().messages + Message.Assistant("cats are fine"), run.sent)
+        }
+
+    @Test
+    fun `a closing reply that said nothing is not kept`() =
+        run(toolCallReply(call("sendMessage", args = arrayOf("text" to "hi"))), textReply("")) { run, _ ->
+            assertEquals(run.client.requests.last().messages, run.sent)
+            assertIs<Message.ToolResults>(run.sent.last())
+        }
+
+    @Test
+    fun `a wrap-up answer is kept with the request it answered`() =
+        run(
+            toolCallReply(call("lookUp", id = "1", args = arrayOf("query" to "a"))),
+            toolCallReply(call("lookUp", id = "2", args = arrayOf("query" to "b"))),
+            textReply("here is what I found"),
+            maxModelCalls = 3,
+        ) { run, _ ->
+            assertEquals(run.client.requests.last().messages + Message.Assistant("here is what I found"), run.sent)
+        }
 
     @Test
     fun `usage of every call is reported`() =

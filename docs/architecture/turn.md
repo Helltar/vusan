@@ -64,7 +64,8 @@ finished turn leaves behind. Before it: [receiving a message](inbound.md); after
    then admits only complete interactions. The part of them replayed as text, which the next turn replays the same way,
    and the whole of them are the request's stable prefixes (`ChatRequest.stablePrefixes`): a provider that takes cache
    breakpoints gets one at the end of each, since the current message is stored in a shorter shape than it is sent and the
-   next turn's request stops repeating this one's right there. If an older prefix no longer fits or exceeds the configured recent count,
+   next turn's request stops repeating this one's right there. A provider that takes none gets the conversation's last
+   request continued instead, where it still stands on the stored history ([context budget](context.md)). If an older prefix no longer fits or exceeds the configured recent count,
    `LlmConversationCompactor` merges it into the persisted `<conversation_recap>` before `AgentFactory.build` creates
    the `AgentTurn`. Every turn is capped on the way into that recap prompt, and a user turn budgets its
    `<user_message>` first: reply metadata and a quoted fragment are written ahead of the request and can outrun the cap
@@ -130,7 +131,8 @@ finished turn leaves behind. Before it: [receiving a message](inbound.md); after
    dropped as duplicate chatter). Without that, a research turn would die with every search it paid for still
    unanswered.
 6. **Collect** — `AgentRunner` persists the produced history as one interaction through `ConversationRepository` while
-   it still holds the turn lock. Delivery tools whose payload already became assistant history are omitted; other tool
+   it still holds the turn lock, and where the provider takes no cache breakpoints keeps the turn's last request
+   beside it for the next turn to continue. Delivery tools whose payload already became assistant history are omitted; other tool
    events are stored as bounded complete call/result pairs. Only the newest two interactions replay those raw pairs,
    while older recent interactions replay user/assistant text. Summarized raw interactions are pruned by whole
    interaction after the configured count or age. Persisting inside the lock is what makes a concurrent `/clear` safe:

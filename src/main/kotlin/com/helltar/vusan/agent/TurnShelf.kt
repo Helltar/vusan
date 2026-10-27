@@ -30,8 +30,10 @@ import java.time.format.DateTimeFormatter
  * circle: a reference to an earlier call of the same batch waits for that call to finish.
  *
  * It lives for one turn and in memory only. Stored history carries the results without their labels,
- * so the next turn has nothing to point at that is no longer here. What reaches the sandbox stays there
- * a little longer, in a directory of the turn's own under `turns/`.
+ * so the next turn has nothing to point at that is no longer here; a turn that continues the last
+ * request, labels and all, numbers its calls on from where that one stopped ([numberFrom]), so an
+ * earlier turn's label is refused rather than taken for one of this turn's. What reaches the sandbox
+ * stays there a little longer, in a directory of the turn's own under `turns/`.
  */
 class TurnShelf(
     private val attachments: List<AttachedFile> = emptyList(),
@@ -40,6 +42,9 @@ class TurnShelf(
 
     private val calls = mutableListOf<Call>()
     private var keptBytes = 0L
+
+    // the number of the turn's first call
+    private var firstCall = 1
 
     // named by when the turn started, so the directories sort in the order the turns came; settled at the
     // first copy, when the sandbox says whether the name is free
@@ -53,14 +58,28 @@ class TurnShelf(
     @Volatile
     private var sandbox: ShelfSandbox? = null
 
+    /** The number the next call of the turn takes. */
+    val nextNumber: Int
+        get() = synchronized(calls) { firstCall + calls.size }
+
     /** Lets `sandbox:` references read from the turn's sandbox, and the turn's files reach it. */
     fun connectSandbox(sandbox: ShelfSandbox) {
         this.sandbox = sandbox
     }
 
+    /** Numbers the turn's calls from [first] on, where the request it continues left its labels. */
+    fun numberFrom(first: Int) {
+        require(first > 0) { "calls are numbered from one" }
+
+        synchronized(calls) {
+            check(calls.isEmpty()) { "the numbering is settled before the first call" }
+            firstCall = first
+        }
+    }
+
     /** Opens the next call of the turn; the loop runs the tool inside it and closes it with what it answered. */
     fun open(): Call =
-        synchronized(calls) { Call(calls.size + 1).also { calls += it } }
+        synchronized(calls) { Call(firstCall + calls.size).also { calls += it } }
 
     /**
      * Writes into the turn's own directory in the sandbox, `turns/<when>/`, what has not reached it yet:
@@ -136,12 +155,15 @@ class TurnShelf(
         }
 
     private fun call(number: Int, from: Int): Call {
-        require(number in 1 until from) {
-            if (number >= from) "`#$number` is not an earlier result of this turn: a call can only take what came before it"
-            else "`#0` holds the request's own files; name one as `#0/1`"
+        require(number in firstCall until from) {
+            when {
+                number >= from -> "`#$number` is not an earlier result of this turn: a call can only take what came before it"
+                number > 0 -> "`#$number` is a result of an earlier turn, which is not kept: call its tool again"
+                else -> "`#0` holds the request's own files; name one as `#0/1`"
+            }
         }
 
-        return synchronized(calls) { calls[number - 1] }
+        return synchronized(calls) { calls[number - firstCall] }
     }
 
     private suspend fun resolveText(value: String, from: Int): String? {

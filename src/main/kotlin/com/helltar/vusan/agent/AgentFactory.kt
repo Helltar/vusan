@@ -51,6 +51,10 @@ class AgentFactory(
     val liveToolResultMaxTokens: Int
         get() = contextWindowPolicy.liveToolResultMaxTokens
 
+    /** Whether a turn continues its conversation's last request rather than replaying the stored history ([LlmModel.cachesOnlyRepeatedPrefix]). */
+    val continuesLastRequest: Boolean
+        get() = model.cachesOnlyRepeatedPrefix
+
     // the catalog is built before the turn text, not here: what it defers goes into that text as
     // `<tool_groups>`, and the budget below has to weigh the finished prompt.
     fun prepare(toolCatalog: ToolCatalog, currentTurn: String): AgentPromptPreparation {
@@ -72,9 +76,14 @@ class AgentFactory(
     /** The cache key this conversation's model calls travel under, when the provider takes one: what ties a call in the log to a chat. */
     fun conversationCacheKey(scope: ConversationScope): String? = options.forConversation(scope.toString()).promptCacheKey
 
+    /**
+     * An [AgentTurn] over [conversation], or over [continued] — the last request of the conversation with
+     * what it returned, system prompt first — when the turn continues that instead.
+     */
     fun build(
         scope: ConversationScope,
         conversation: PromptConversation,
+        continued: List<Message>? = null,
         preparation: AgentPromptPreparation,
         outbox: BotOutbox,
         toolBudget: TurnToolBudget,
@@ -85,20 +94,9 @@ class AgentFactory(
         mayStaySilent: Boolean = false,
         shelf: TurnShelf,
     ): AgentTurn {
-        val history =
-            buildList {
-                add(Message.System(preparation.systemPrompt))
-                // the recap is written from quoted events, so it can carry a delimiter out of them.
-                conversation.summary?.let { add(Message.User(xmlBlock("conversation_recap", it.neutralizePromptBlocks()))) }
-                addAll(conversation.turns.take(conversation.stableTurns).toMessages())
-            }
-
-        // where the next turn's request stops repeating this one's: after the part of the history replayed as
-        // text for sure, and after all of it when the newest interactions replay the same way next time. the
-        // system prompt alone is marked by the client already
-        val stableEnd = history.size
-        val fullHistory = history + conversation.turns.drop(conversation.stableTurns).toMessages()
-        val stablePrefixes = listOf(stableEnd, fullHistory.size).distinct().filter { it > 1 }
+        // a continued request repeats itself whole, so the next turn's stops repeating this one's at its end
+        val (fullHistory, stablePrefixes) =
+            if (continued != null) continued to listOf(continued.size) else replayed(conversation, preparation)
 
         // what the request may measure before the turn's own results are folded: the window less what the
         // answer and the estimate's own error are reserved
@@ -122,6 +120,24 @@ class AgentFactory(
             onToolStarting = onToolStarting,
             shelf = shelf,
         )
+    }
+
+    // the history as storage replays it, and the counts of it after which the next turn's request stops
+    // repeating this one's: after the part replayed as text for sure, and after all of it when the newest
+    // interactions replay the same way next time. the system prompt alone is marked by the client already
+    private fun replayed(conversation: PromptConversation, preparation: AgentPromptPreparation): Pair<List<Message>, List<Int>> {
+        val history =
+            buildList {
+                add(Message.System(preparation.systemPrompt))
+                // the recap is written from quoted events, so it can carry a delimiter out of them.
+                conversation.summary?.let { add(Message.User(xmlBlock("conversation_recap", it.neutralizePromptBlocks()))) }
+                addAll(conversation.turns.take(conversation.stableTurns).toMessages())
+            }
+
+        val stableEnd = history.size
+        val fullHistory = history + conversation.turns.drop(conversation.stableTurns).toMessages()
+
+        return fullHistory to listOf(stableEnd, fullHistory.size).distinct().filter { it > 1 }
     }
 
     companion object {

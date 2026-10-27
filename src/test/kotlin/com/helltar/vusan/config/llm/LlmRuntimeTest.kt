@@ -341,6 +341,20 @@ class LlmRuntimeTest {
         assertTrue(resolveLlmRuntime(codex(), codexAuth = codexAuth()).model.offersToolsMidConversation)
     }
 
+    // the routes measured on 2026-10-27: where this says so, a turn continues the last request
+    @Test
+    fun `which routes read back only what a request repeats`() {
+        assertTrue(resolveLlmRuntime(codex(), codexAuth = codexAuth()).model.cachesOnlyRepeatedPrefix)
+        assertTrue(resolveLlmRuntime(compatible(baseUrl = "https://api.deepseek.com/")).model.cachesOnlyRepeatedPrefix)
+        assertTrue(resolveLlmRuntime(compatible(baseUrl = "https://api.deepseek.com", endpoint = OpenAiEndpoint.RESPONSES)).model.cachesOnlyRepeatedPrefix)
+        assertTrue(resolveLlmRuntime(openRouter("x-ai/grok-4.7")).model.cachesOnlyRepeatedPrefix)
+        assertFalse(resolveLlmRuntime(compatible()).model.cachesOnlyRepeatedPrefix)
+        assertFalse(resolveLlmRuntime(openRouter("deepseek/deepseek-v4.1-flash")).model.cachesOnlyRepeatedPrefix)
+        assertFalse(resolveLlmRuntime(openRouter("openai/gpt-5.6-luna")).model.cachesOnlyRepeatedPrefix)
+        assertFalse(resolveLlmRuntime(openAi()).model.cachesOnlyRepeatedPrefix)
+        assertFalse(resolveLlmRuntime(anthropic()).model.cachesOnlyRepeatedPrefix)
+    }
+
     @Test
     fun `every claude model since the ones before tool offers takes them, whatever its id looks like`() {
         listOf("claude-opus-4-6", "claude-sonnet-4-6", "claude-opus-4-7", "claude-sonnet-5", "claude-sonnet-5-20260630", "anthropic/claude-sonnet-4.6", "anthropic/claude-sonnet-5:batch")

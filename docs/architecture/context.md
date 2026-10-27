@@ -14,6 +14,17 @@ How a turn's history and tool results are fitted into the model's window. Part o
   retention and model-visible context are deliberately separate. The recap is injected at user priority so mixed
   user/assistant history is not mislabeled as an assistant instruction. An initial context-overflow failure retries once
   with recap only, but never after a tool ran, which avoids duplicated actions.
+- **Continuing the last request** — on a model whose provider keeps no cache breakpoints
+  (`LlmModel.cachesOnlyRepeatedPrefix`: the Codex backend, DeepSeek's own API, Grok through OpenRouter) a turn rebuilt from storage reads nothing of the history
+  back, since the stored history is shorter than what was sent. There `agent/conversation/SentConversations` keeps
+  each conversation's last request exactly as it went, with what it returned, and the next turn sends that before
+  its own message instead of the replayed history, so it only appends. It is a copy, never a second history: the
+  stored one is still what recaps, other providers and every rebuilt turn read, and a kept request is continued only
+  while the newest stored interaction is the one it ended with, the system prompt and the memory the turn carries
+  are unchanged, it fits the history budget and it is at most 16,000 tokens larger than the stored history would
+  be — otherwise the turn is rebuilt and pays for the history once. The earlier turns' results keep their labels in
+  it, so the continuing turn numbers its calls on from there (`TurnShelf.numberFrom`) and an old label is refused.
+  Kept in memory for the 128 conversations seen last; `/clear` drops it, and a restart rebuilds every conversation.
 - **Live tool-result budget** — `ContextWindowPolicy.liveToolResultMaxChars` caps everything the tools return during one
   run, converting the agent reserve back to characters at the same ratio `estimateTokens` reads them. It scales
   with the window on purpose: a fixed ceiling starves a large-window model, since a single full-length YouTube

@@ -3,6 +3,7 @@ package com.helltar.vusan.agent
 import com.helltar.vusan.agent.conversation.*
 import com.helltar.vusan.agent.memory.MemoryRepository
 import com.helltar.vusan.agent.memory.memoryOwner
+import com.helltar.vusan.llm.Message
 import com.helltar.vusan.llm.TokenUsage
 import com.helltar.vusan.common.collapseWhitespaceAndCap
 import com.helltar.vusan.common.limitTo
@@ -50,6 +51,9 @@ class AgentRunner(
 
     private val planner = ConversationPlanner(conversation, conversationCompactor)
     private val admission = TurnAdmission(maxConcurrentTurns)
+
+    // the last request of each conversation, where the provider reads back only what a request repeats
+    private val sentConversations = SentConversations().takeIf { agentFactory.continuesLastRequest }
 
     // the lock is taken before a place, in every path: a turn that holds a place is running and waits
     // for nothing, so nothing can wait in a circle — and a person's line costs the others no places.
@@ -154,7 +158,10 @@ class AgentRunner(
     // the lock is keyed by what it guards, one conversation, so the same person writing in two chats is
     // served in both instead of being told the bot is busy.
     suspend fun clearConversation(scope: ConversationScope) {
-        conversationLocks.withLock(scope) { conversation.clear(scope) }
+        conversationLocks.withLock(scope) {
+            conversation.clear(scope)
+            sentConversations?.forget(scope)
+        }
     }
 
     private suspend fun runAgent(
@@ -166,6 +173,9 @@ class AgentRunner(
         val context = request.context
         val userMemory = if (context.sender.isPerson) memory.load(context.user.memoryOwner) else emptyList()
         val chatMemory = if (context.chat.isPrivate) emptyList() else memory.load(context.chatRef.memoryOwner)
+
+        // what a continued request has to have been sent with, since each of its messages carries its own turn's
+        val memoryFingerprint = (userMemory to chatMemory).hashCode()
 
         val outbox = BotOutbox(context.chat.capabilities)
         val toolBudget = TurnToolBudget(agentFactory.liveToolResultMaxTokens)
@@ -192,7 +202,22 @@ class AgentRunner(
         val preparation = agentFactory.prepare(toolCatalog, currentTurn)
 
         val conversationPlan = planner.planForPrompt(context.scope, preparation.tokenBudget.conversationTokens)
-        val plannedInputTokens = preparation.tokenBudget.fixedPromptTokens + conversationPlan.estimatedTokens
+
+        val continued =
+            sentConversations?.continuation(
+                scope = context.scope,
+                systemPrompt = preparation.systemPrompt,
+                newestStoredInteractionId = conversationPlan.newestInteractionId,
+                memoryFingerprint = memoryFingerprint,
+                storedHistoryTokens = conversationPlan.estimatedTokens,
+                historyBudget = preparation.tokenBudget.conversationTokens,
+            )
+
+        // the labels of the request it continues are in it, so this turn's go on from where they stopped
+        continued?.let { shelf.numberFrom(it.nextCall) }
+
+        val historyTokens = continued?.historyTokens ?: conversationPlan.estimatedTokens
+        val plannedInputTokens = preparation.tokenBudget.fixedPromptTokens + historyTokens
 
         log.info {
             "prompt history loaded: user=${context.sender.id} chat=${context.chat.id} " +
@@ -201,6 +226,7 @@ class AgentRunner(
                     "storedChars=${conversationPlan.stats.storedChars} unsummarized=${conversationPlan.stats.unsummarizedInteractions} " +
                     "includedInteractions=${conversationPlan.includedInteractions} turns=${conversationPlan.prompt.turns.size} " +
                     "summaryChars=${conversationPlan.prompt.summary?.length ?: 0} exactToolInteractions=${conversationPlan.exactToolInteractions} " +
+                    "continued=${continued?.let { "[${it.messages.size} messages]" } ?: "[no]"} " +
                     "userMemory=${userMemory.size} chatMemory=${chatMemory.size} " +
                     "promptChars=${request.prompt.length} historyChars=${request.conversationEntry.length} " +
                     "attachedFiles=${context.attachedFiles.size}"
@@ -211,16 +237,18 @@ class AgentRunner(
                     "contextTokens=${preparation.tokenBudget.contextWindowTokens} " +
                     "fixedTokens=${preparation.tokenBudget.fixedPromptTokens} " +
                     "historyBudget=${preparation.tokenBudget.conversationTokens} " +
-                    "conversationTokens=${conversationPlan.estimatedTokens} " +
+                    "conversationTokens=$historyTokens " +
                     "responseReserve=${preparation.tokenBudget.responseReserveTokens} " +
                     "agentReserve=${preparation.tokenBudget.agentReserveTokens} " +
                     "safetyReserve=${preparation.tokenBudget.safetyReserveTokens} " +
                     "plannedInputTokens=$plannedInputTokens " +
-                    "contextPercent=${preparation.tokenBudget.contextPercentFor(conversationPlan.estimatedTokens)}"
+                    "contextPercent=${preparation.tokenBudget.contextPercentFor(historyTokens)}"
         }
 
         val toolEvents = mutableListOf<ToolEvent>()
         val tokenUsages = mutableListOf<TokenUsage>()
+        // what the turn's last request held, once the run came back with it
+        var sent: List<Message> = emptyList()
 
         val answer =
             try {
@@ -228,6 +256,7 @@ class AgentRunner(
                     scope = context.scope,
                     currentTurn = currentTurn,
                     conversation = conversationPlan.prompt,
+                    continued = continued?.messages,
                     preparation = preparation,
                     outbox = outbox,
                     toolBudget = toolBudget,
@@ -236,6 +265,7 @@ class AgentRunner(
                     onToolStarting = onToolStarting,
                     mayStaySilent = context.ambient,
                     shelf = shelf,
+                    sent = { sent = it },
                 )
             } catch (e: Throwable) {
                 e.rethrowIfCancellation()
@@ -297,8 +327,17 @@ class AgentRunner(
         }
 
         if (turns.isNotEmpty()) {
-            conversation.appendInteraction(context.scope, turns)
+            val stored = conversation.appendInteraction(context.scope, turns)
             planner.recapLater(context.scope, preparation.tokenBudget.conversationTokens)
+
+            // a run that threw left no request to continue, and the history it stored is not in the one kept
+            sentConversations?.let { kept ->
+                if (stored != null && sent.isNotEmpty()) {
+                    kept.remember(context.scope, SentConversations.Sent(sent, stored, shelf.nextNumber, memoryFingerprint))
+                } else {
+                    kept.forget(context.scope)
+                }
+            }
         }
 
         val pruned =
@@ -319,6 +358,7 @@ class AgentRunner(
         scope: ConversationScope,
         currentTurn: String,
         conversation: PromptConversation,
+        continued: List<Message>?,
         preparation: AgentPromptPreparation,
         outbox: BotOutbox,
         toolBudget: TurnToolBudget,
@@ -327,12 +367,14 @@ class AgentRunner(
         onToolStarting: (activity: ToolActivity?) -> Unit,
         mayStaySilent: Boolean,
         shelf: TurnShelf,
+        sent: (List<Message>) -> Unit,
     ): String {
-        suspend fun run(prompt: PromptConversation): String =
-            agentFactory
-                .build(
+        suspend fun run(prompt: PromptConversation, continued: List<Message>?): String {
+            val turn =
+                agentFactory.build(
                     scope = scope,
                     conversation = prompt,
+                    continued = continued,
                     preparation = preparation,
                     outbox = outbox,
                     toolBudget = toolBudget,
@@ -342,10 +384,12 @@ class AgentRunner(
                     mayStaySilent = mayStaySilent,
                     shelf = shelf,
                 )
-                .run(currentTurn)
+
+            return turn.run(currentTurn).also { sent(turn.sent) }
+        }
 
         return try {
-            run(conversation)
+            run(conversation, continued)
         } catch (e: Throwable) {
             e.rethrowIfCancellation()
 
@@ -356,14 +400,14 @@ class AgentRunner(
                 )
             val safeToRetry =
                 e.isContextOverflow() &&
-                        conversation != emergencyConversation &&
+                        (continued != null || conversation != emergencyConversation) &&
                         toolEvents.isEmpty() &&
                         outbox.pending.isEmpty()
 
             if (!safeToRetry) throw e
 
             log.warn { "context limit exceeded for $scope; retrying once with recap only" }
-            run(emergencyConversation)
+            run(emergencyConversation, continued = null)
         }
     }
 

@@ -27,6 +27,7 @@ private const val OPENROUTER_MODELS_URL = "$OPENROUTER_API_BASE_URL/v1/models/us
 private const val OPENROUTER_MODELS_PAGE = "https://openrouter.ai/models"
 private const val CLAUDE_PREFIX = "anthropic/"
 private const val OPENAI_PREFIX = "openai/"
+private const val XAI_PREFIX = "x-ai/"
 
 private val log = KotlinLogging.logger("ModelPreflight")
 
@@ -69,6 +70,10 @@ internal fun openRouterRuntime(config: LlmProviderConfig.OpenRouter, http: HttpC
             // which costs the cache a widened list does (gemini, grok and deepseek on 2026-10-24), so the rest list
             // what was offered up front
             offersToolsMidConversation = if (claude) claudeOffersToolsMidConversation(id) else id.startsWith(OPENAI_PREFIX),
+            // grok, which only xai serves there, reads back only what a request repeats: measured on 2026-10-27 on
+            // grok-4.7, a rebuilt turn read xai's own 1152-token prefix and an appended one the whole last request.
+            // the other vendors measured either cache the longest prefix or are served by upstreams that differ
+            cachesOnlyRepeatedPrefix = id.startsWith(XAI_PREFIX),
         )
 
     val httpClient = http ?: llmHttpClient(config.requestTimeout)

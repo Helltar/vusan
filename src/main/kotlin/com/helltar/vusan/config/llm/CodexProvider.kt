@@ -56,9 +56,13 @@ internal fun codexRuntime(config: LlmProviderConfig.Codex, auth: CodexAuthStore,
             contextWindowTokens = config.contextWindowTokens ?: CODEX_CONTEXT_WINDOW,
             seesImages = config.seesImages ?: true,
             efforts = config.efforts,
-            // the backend takes `additional_tools` as the platform does: measured on 2026-10-24 on gpt-6-luna,
-            // the one model the plan served, the offered tool was called and the prefix before it read back
+            // the backend takes `additional_tools` as the platform does: measured on 2026-10-27 on every model a
+            // plus plan lists, the offered tool was called and the prefix before it read back
             offersToolsMidConversation = true,
+            // the backend refuses breakpoints and keeps an entry near the end of each request: measured on
+            // 2026-10-27 on gpt-6-luna and gpt-6.1-sol, a turn that appended to the last request read all of
+            // it back, one rebuilt from the stored history the system block alone
+            cachesOnlyRepeatedPrefix = true,
         )
 
     val options =

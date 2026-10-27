@@ -154,7 +154,7 @@ private fun passingResultsSection(sandbox: Boolean): String =
         append(
             """# Passing results between tools
 
-- Every tool result opens with its label, `[#3]`, numbered in the order of this turn's calls. The files a call made are listed under it as `#3/1`, `#3/2`, and the files attached to the request are `#0/1`, `#0/2`, in order.
+- Every tool result opens with its label, `[#3]`, numbered in the order of the calls. The files a call made are listed under it as `#3/1`, `#3/2`, and the files attached to the request are `#0/1`, `#0/2`, in order. Only this turn's labels can be taken: an earlier turn's results are gone.
 """,
         )
 

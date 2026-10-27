@@ -33,6 +33,8 @@ data class ConversationPlan(
     val includedInteractions: Int,
     val exactToolInteractions: Int,
     val stats: ConversationStats,
+    /** The id of the newest interaction stored and not yet recapped, which a continued request has to end on. */
+    val newestInteractionId: String? = null,
 )
 
 fun planConversation(
@@ -100,6 +102,7 @@ fun planConversation(
         includedInteractions = includedCount,
         exactToolInteractions = exactToolInteractions,
         stats = snapshot.stats,
+        newestInteractionId = snapshot.interactions.lastOrNull()?.id,
     )
 }
 

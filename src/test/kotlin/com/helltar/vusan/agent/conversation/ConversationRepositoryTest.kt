@@ -15,6 +15,7 @@ import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFalse
 import kotlin.test.assertNotNull
+import kotlin.test.assertNull
 import kotlin.test.assertTrue
 import kotlin.time.Duration.Companion.seconds
 import kotlinx.coroutines.runBlocking
@@ -33,6 +34,16 @@ class ConversationRepositoryTest {
     fun tearDown() {
         runBlocking { Db.disconnect() }
         tempDir.toFile().deleteRecursively()
+    }
+
+    @Test
+    fun `an appended interaction is the newest one loaded, under the id the append returned`() = runBlocking {
+        val history = ConversationRepository()
+        history.appendInteraction(DM, exchange("first", "one"))
+        val stored = history.appendInteraction(DM, exchange("second", "two"))
+
+        assertEquals(stored, history.load(DM).interactions.last().id)
+        assertNull(history.appendInteraction(DM, emptyList()))
     }
 
     @Test

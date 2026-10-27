@@ -87,6 +87,29 @@ class TurnShelfTest {
         assertFailsWith<IllegalArgumentException> { first.textOrNull("#2") }
     }
 
+    // a continued request carries the last turn's labels, so this turn's must not mean the same numbers
+    @Test
+    fun `a turn numbered on from an earlier one refuses that turn's labels`() = runBlocking {
+        val shelf = TurnShelf()
+        shelf.numberFrom(4)
+        val first = shelf.open()
+        first.close("this turn's answer")
+        val second = shelf.open()
+
+        assertEquals(4, first.number)
+        assertEquals("this turn's answer", second.textOrNull("#4"))
+        assertContains(assertFailsWith<IllegalArgumentException> { second.textOrNull("#3") }.message.orEmpty(), "earlier turn")
+        assertEquals(6, shelf.nextNumber)
+    }
+
+    @Test
+    fun `the numbering is settled before the first call`() {
+        val shelf = TurnShelf()
+        shelf.open()
+
+        assertFailsWith<IllegalStateException> { shelf.numberFrom(4) }
+    }
+
     @Test
     fun `a file a call kept is named by its label and listed under its result`() = runBlocking {
         val shelf = TurnShelf()

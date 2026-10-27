@@ -13,6 +13,9 @@ package com.helltar.vusan.llm
  * [offersToolsMidConversation] is whether it takes tools offered partway through a conversation without
  * the tool list changing — Anthropic's `tool_addition`, OpenAI's `additional_tools` — see
  * [Message.ToolsOffered].
+ * [cachesOnlyRepeatedPrefix] is whether its provider keeps no cache breakpoints, so that a turn reads its
+ * history back only where its request repeats the conversation's last one item for item; the runner then
+ * continues that request instead of replaying the stored history, which is shorter than what was sent.
  */
 data class LlmModel(
     val id: String,
@@ -21,6 +24,7 @@ data class LlmModel(
     val seesImages: Boolean = true,
     val efforts: Set<ReasoningEffort>? = null,
     val offersToolsMidConversation: Boolean = false,
+    val cachesOnlyRepeatedPrefix: Boolean = false,
 ) {
 
     init {

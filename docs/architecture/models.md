@@ -44,7 +44,8 @@ Part of the [architecture index](../architecture.md).
   (`llm/anthropic/AnthropicStream`), as the vendor's SDKs do at a ceiling this size, so a stall trips the socket
   timeout where a connection idling through a long think would be dropped at the API's edge. A Claude model from
   before 4.6, which takes neither adaptive thinking nor an effort, stops startup. `openai-compatible` speaks
-  either OpenAI API under `LLM_BASE_URL` (`LLM_COMPATIBLE_API`), sees images only when the server's model list says
+  either OpenAI API under `LLM_BASE_URL` (`LLM_COMPATIBLE_API`), continues a conversation's last request on DeepSeek's
+  own API, which takes no breakpoints and reads back only what a request repeats ([context budget](context.md)), sees images only when the server's model list says
   the model takes them (with its window and its efforts, DeepSeek's states all three), leaves parallel tool calls
   to the server's default, sends the output ceiling as the original `max_tokens` on Chat Completions (DeepSeek ignores
   OpenAI's `max_completion_tokens`), and gets none of the OpenAI-only fields unless the base URL is the official API. A server there that thinks aloud in `reasoning_content` (DeepSeek) refuses a tool call of the turn
@@ -60,10 +61,12 @@ Part of the [architecture index](../architecture.md).
   Azure, one of the upstreams it routes OpenAI models to, refuses as an unknown parameter. The Responses call streams because
   OpenRouter answers 200 once an upstream takes the request, so a later failure is an error event rather than a
   body holding nothing but the error. Both clients send the conversation's cache key as `session_id` too, which keeps
-  a conversation on the upstream holding its cached prefix.
+  a conversation on the upstream holding its cached prefix. A Grok model (`x-ai/…`) continues the conversation's last
+  request, as Codex does, since xAI keeps no breakpoints there ([context budget](context.md)).
 - **ChatGPT subscription (`codex`)** — the same OpenAI client pointed at the Codex backend's Responses API, with no API
   key; like the platform, it takes a tool group loaded mid-turn as an `additional_tools` item, so the tool list stays
-  the cached one. `llm/codex/CodexAuth.CodexAuthStore` owns the credentials `codex login` writes to `~/.codex/auth.json` (or
+  the cached one. It takes no cache breakpoints, so a turn continues the conversation's last request rather than
+  replaying the stored history (`cachesOnlyRepeatedPrefix`, [context budget](context.md)). `llm/codex/CodexAuth.CodexAuthStore` owns the credentials `codex login` writes to `~/.codex/auth.json` (or
   `$CODEX_HOME`). `AppConfig` resolves that path into the Codex provider config, and the store rereads the file per
   request so an external login, logout, sandbox switch, or CLI refresh takes effect without a restart. It refreshes
   OAuth sessions a few minutes before expiry and replaces the file atomically through an owner-only temporary file,

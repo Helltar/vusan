@@ -105,11 +105,28 @@ class AgentTurn internal constructor(
     private var announced = false
     private var workedSinceAnnouncement = false
 
+    /**
+     * The conversation as the turn's last request held it, with what that request returned, once [run] has
+     * returned: what the next turn sends ahead of its own message when it continues this one. Empty until
+     * then, and after a run that threw.
+     */
+    var sent: List<Message> = emptyList()
+        private set
+
     /** Runs the turn for [currentTurn] and returns the model's closing text, which may be empty. */
     suspend fun run(currentTurn: String): String {
         val messages = history.toMutableList()
-        val turnStart = messages.size
         messages += Message.User(currentTurn)
+
+        return converse(messages).also {
+            // a reply that said nothing goes, as it does before a nudge: no endpoint takes it back
+            messages.dropTrailingSilentAssistant()
+            sent = messages.toList()
+        }
+    }
+
+    private suspend fun converse(messages: MutableList<Message>): String {
+        val turnStart = messages.size - 1
 
         var nudged = false
         var lowBudgetWarned = false
@@ -229,7 +246,9 @@ class AgentTurn internal constructor(
         foldToFit(messages, turnStart)
 
         // the tools stay defined, since the calls the turn made are replayed with them, but none may be called
-        val answer = request(messages, catalog.requestDefinitions(), mayCallTools = false).message.text
+        val reply = request(messages, catalog.requestDefinitions(), mayCallTools = false).message
+        messages += reply
+        val answer = reply.text
 
         // queue it rather than leave it as the run's trailing text: a turn that already reacted or sent a
         // message has that text dropped as duplicate chatter, and here it is the whole answer.
