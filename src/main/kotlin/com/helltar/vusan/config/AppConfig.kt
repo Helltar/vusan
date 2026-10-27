@@ -344,7 +344,7 @@ data class AppConfig(
             return when (provider) {
                 "openai" ->
                     ImageProviderConfig.OpenAi(
-                        apiKey = requireEnv("IMAGE_API_KEY"),
+                        apiKey = requireEnv("OPENAI_IMAGE_API_KEY"),
                         model = model ?: ImageProviderConfig.OpenAi.DEFAULT_MODEL,
                         quality = quality ?: ImageProviderConfig.OpenAi.DEFAULT_QUALITY,
                     )

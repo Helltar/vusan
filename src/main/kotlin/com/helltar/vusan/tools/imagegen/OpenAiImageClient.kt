@@ -41,7 +41,7 @@ sealed interface ImageAuth {
 
     data class ApiKey(val key: String) : ImageAuth {
         init {
-            require(key.isNotBlank()) { "IMAGE_API_KEY must not be blank" }
+            require(key.isNotBlank()) { "OPENAI_IMAGE_API_KEY must not be blank" }
         }
     }
 

@@ -332,12 +332,12 @@ the [Appearance](#appearance) photo; without one, only voice messages are offere
 
 `IMAGE_PROVIDER` turns on `generateImage` and `editImage` and picks who draws.
 
-| Variable         | Default               | Description                      |
-|------------------|-----------------------|----------------------------------|
-| `IMAGE_PROVIDER` | unset                 | `openai` or `codex`.             |
-| `IMAGE_API_KEY`  | —                     | The key `openai` draws with.     |
-| `IMAGE_MODEL`    | `gpt-image-2.5-flare` | Model for new and edited images. |
-| `IMAGE_QUALITY`  | `medium`              | See below.                       |
+| Variable               | Default               | Description                      |
+|------------------------|-----------------------|----------------------------------|
+| `IMAGE_PROVIDER`       | unset                 | `openai` or `codex`.             |
+| `OPENAI_IMAGE_API_KEY` | —                     | The key `openai` draws with.     |
+| `IMAGE_MODEL`          | `gpt-image-2.5-flare` | Model for new and edited images. |
+| `IMAGE_QUALITY`        | `medium`              | See below.                       |
 
 - **`openai`** — OpenAI's image API, billed per image. Quality goes from `low` to `max`, or `auto`;
   `xhigh` and `max` need a `gpt-image-2.5` model, and models before `gpt-image-2` lack wide framings.

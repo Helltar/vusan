@@ -23,7 +23,7 @@ sealed interface ImageProviderConfig {
         override val name: String = "openai"
 
         init {
-            require(apiKey.isNotBlank()) { "IMAGE_API_KEY must not be blank" }
+            require(apiKey.isNotBlank()) { "OPENAI_IMAGE_API_KEY must not be blank" }
             requireOpenAiModel(model, quality)
         }
 
