@@ -34,7 +34,7 @@ class SentConversationsTest {
     fun `a request that still stands on the stored history is continued`() {
         val kept = SentConversations()
         val request = sent()
-        kept.remember(scope, request)
+        kept.remember(scope, request, 0)
 
         assertSame(request, kept.continuation())
         assertSame(request, kept.continuation(), "continuing a request does not use it up")
@@ -43,14 +43,14 @@ class SentConversationsTest {
     @Test
     fun `nothing is continued where nothing was kept`() {
         assertNull(SentConversations().continuation())
-        assertNull(SentConversations().apply { remember(testScope(userId = 7, chatId = 7), sent()) }.continuation())
+        assertNull(SentConversations().apply { remember(testScope(userId = 7, chatId = 7), sent(), 0) }.continuation())
     }
 
     // a clear, a turn stored without a request to continue, or a recap of everything: the history moved on
     @Test
     fun `a request the stored history has moved past is dropped`() {
         val kept = SentConversations()
-        kept.remember(scope, sent())
+        kept.remember(scope, sent(), 0)
 
         assertNull(kept.continuation(newestStoredInteractionId = "stored-2"))
         assertNull(kept.continuation(), "dropped, not only passed over")
@@ -59,7 +59,7 @@ class SentConversationsTest {
     @Test
     fun `a request sent under another system prompt is dropped`() {
         val kept = SentConversations()
-        kept.remember(scope, sent())
+        kept.remember(scope, sent(), 0)
 
         assertNull(kept.continuation(systemPrompt = "a new personality"))
     }
@@ -68,7 +68,7 @@ class SentConversationsTest {
     @Test
     fun `a request sent with other memory is dropped`() {
         val kept = SentConversations()
-        kept.remember(scope, sent())
+        kept.remember(scope, sent(), 0)
 
         assertNull(kept.continuation(memoryFingerprint = 12))
     }
@@ -76,7 +76,7 @@ class SentConversationsTest {
     @Test
     fun `a request over the history budget is dropped`() {
         val kept = SentConversations()
-        kept.remember(scope, sent(history = "x".repeat(3_000)))
+        kept.remember(scope, sent(history = "x".repeat(3_000)), 0)
 
         assertNull(kept.continuation(storedHistoryTokens = 1_000, historyBudget = 900))
     }
@@ -85,7 +85,7 @@ class SentConversationsTest {
     @Test
     fun `a request grown far past the stored history is dropped`() {
         val kept = SentConversations()
-        kept.remember(scope, sent(history = "x".repeat(60_000)))
+        kept.remember(scope, sent(history = "x".repeat(60_000)), 0)
 
         assertNull(kept.continuation(storedHistoryTokens = 2_000))
     }
@@ -94,7 +94,7 @@ class SentConversationsTest {
     @Test
     fun `a request holding a turn past retention is dropped`() {
         val kept = SentConversations()
-        kept.remember(scope, sent(oldestTurnAt = NOW.minusSeconds(3 * 86_400)))
+        kept.remember(scope, sent(oldestTurnAt = NOW.minusSeconds(3 * 86_400)), 0)
 
         assertNull(kept.continuation(rawRetentionCutoff = NOW.minusSeconds(2 * 86_400)))
     }
@@ -106,7 +106,7 @@ class SentConversationsTest {
         val group = testScope(userId = 1, chatId = -100)
         val sameGroup = testScope(userId = 2, chatId = -100)
         val elsewhere = testScope(userId = 1, chatId = -200)
-        listOf(group, sameGroup, elsewhere).forEach { kept.remember(it, sent()) }
+        listOf(group, sameGroup, elsewhere).forEach { kept.remember(it, sent(), 0) }
 
         kept.forgetChat(group.chat)
 
@@ -115,11 +115,27 @@ class SentConversationsTest {
         assertNotNull(kept.continuation(elsewhere, "the system prompt", "stored-1", 11, 20, 100_000, NOW.minusSeconds(86_400)))
     }
 
+    // a turn of someone else in the chat began before the log was cleared, and ends holding what it said
+    @Test
+    fun `a request built before the chat's log was cleared is not kept`() {
+        val kept = SentConversations()
+        val seen = kept.erasuresOf(scope.chat)
+
+        kept.forgetChat(scope.chat)
+        kept.remember(scope, sent(), seen)
+
+        assertNull(kept.continuation())
+
+        kept.remember(scope, sent(), kept.erasuresOf(scope.chat))
+
+        assertNotNull(kept.continuation())
+    }
+
     @Test
     fun `only the most recent conversations are kept`() {
         val kept = SentConversations(capacity = 1)
-        kept.remember(scope, sent())
-        kept.remember(testScope(userId = 7, chatId = 7), sent())
+        kept.remember(scope, sent(), 0)
+        kept.remember(testScope(userId = 7, chatId = 7), sent(), 0)
 
         assertNull(kept.continuation())
     }

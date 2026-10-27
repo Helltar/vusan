@@ -178,6 +178,9 @@ class AgentRunner(
         // what a continued request has to have been sent with, since each of its messages carries its own turn's
         val memoryFingerprint = (userMemory to chatMemory).hashCode()
 
+        // read before anything is built, so a log erased while this turn runs keeps its request from being kept
+        val erasuresSeen = sentConversations?.erasuresOf(context.chatRef) ?: 0
+
         val outbox = BotOutbox(context.chat.capabilities)
         val toolBudget = TurnToolBudget(agentFactory.liveToolResultMaxTokens)
         val shelf = TurnShelf(context.attachedFiles)
@@ -249,6 +252,13 @@ class AgentRunner(
 
         val toolEvents = mutableListOf<ToolEvent>()
         val tokenUsages = mutableListOf<TokenUsage>()
+
+        // every request kept for the chat carries what it was saying, so a cleared log drops them the moment it
+        // is cleared, whatever the rest of the turn does
+        fun recordToolEvent(event: ToolEvent) {
+            toolEvents += event
+            if (event.toolName == GroupLogTools::clearGroupLog.name && !event.isError) sentConversations?.forgetChat(context.chatRef)
+        }
         // what the turn's last request held, once the run came back with it
         var sent: List<Message> = emptyList()
 
@@ -263,6 +273,7 @@ class AgentRunner(
                     outbox = outbox,
                     toolBudget = toolBudget,
                     toolEvents = toolEvents,
+                    recordToolEvent = ::recordToolEvent,
                     tokenUsages = tokenUsages,
                     onToolStarting = onToolStarting,
                     mayStaySilent = context.ambient,
@@ -336,16 +347,11 @@ class AgentRunner(
             sentConversations?.let { kept ->
                 if (stored != null && sent.isNotEmpty()) {
                     val oldestTurnAt = continued?.oldestTurnAt ?: conversationPlan.oldestIncludedAt ?: Instant.now()
-                    kept.remember(context.scope, SentConversations.Sent(sent, stored, shelf.nextNumber, memoryFingerprint, oldestTurnAt))
+                    kept.remember(context.scope, SentConversations.Sent(sent, stored, shelf.nextNumber, memoryFingerprint, oldestTurnAt), erasuresSeen)
                 } else {
                     kept.forget(context.scope)
                 }
             }
-        }
-
-        // every request kept for the chat carries what it was saying, the log this turn erased
-        if (toolEvents.any { it.toolName == GroupLogTools::clearGroupLog.name && !it.isError }) {
-            sentConversations?.forgetChat(context.chatRef)
         }
 
         val pruned =
@@ -371,6 +377,7 @@ class AgentRunner(
         outbox: BotOutbox,
         toolBudget: TurnToolBudget,
         toolEvents: MutableList<ToolEvent>,
+        recordToolEvent: (ToolEvent) -> Unit,
         tokenUsages: MutableList<TokenUsage>,
         onToolStarting: (activity: ToolActivity?) -> Unit,
         mayStaySilent: Boolean,
@@ -386,7 +393,7 @@ class AgentRunner(
                     preparation = preparation,
                     outbox = outbox,
                     toolBudget = toolBudget,
-                    toolEvents = toolEvents::add,
+                    toolEvents = recordToolEvent,
                     tokenUsage = tokenUsages::add,
                     onToolStarting = onToolStarting,
                     mayStaySilent = mayStaySilent,

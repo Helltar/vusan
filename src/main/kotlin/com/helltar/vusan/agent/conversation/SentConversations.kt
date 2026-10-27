@@ -59,17 +59,29 @@ class SentConversations(private val capacity: Int = DEFAULT_CAPACITY) {
                 size > capacity
         }
 
-    fun remember(scope: ConversationScope, request: Sent) {
-        synchronized(sent) { sent[scope] = request }
+    // how many times each chat's log was erased: a turn that began before an erasure ends holding what was erased
+    private val erasures = HashMap<ChatRef, Long>()
+
+    /** What [remember] is handed back for [chat]: a turn reads it before it builds its request. */
+    fun erasuresOf(chat: ChatRef): Long = synchronized(sent) { erasures[chat] ?: 0 }
+
+    /** Keeps [request] for [scope], unless the chat's log was erased since the turn read [erasuresSeen]. */
+    fun remember(scope: ConversationScope, request: Sent, erasuresSeen: Long) {
+        synchronized(sent) {
+            if ((erasures[scope.chat] ?: 0) == erasuresSeen) sent[scope] = request else sent.remove(scope)
+        }
     }
 
     fun forget(scope: ConversationScope) {
         synchronized(sent) { sent.remove(scope) }
     }
 
-    /** Drops what was kept for every conversation in [chat], after something the chat said was erased. */
+    /** Drops what was kept for every conversation in [chat], and what a turn running there now would keep, after something the chat said was erased. */
     fun forgetChat(chat: ChatRef) {
-        synchronized(sent) { sent.keys.removeIf { it.chat == chat } }
+        synchronized(sent) {
+            erasures[chat] = (erasures[chat] ?: 0) + 1
+            sent.keys.removeIf { it.chat == chat }
+        }
     }
 
     /**
