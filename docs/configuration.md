@@ -86,13 +86,11 @@ LLM_API_KEY=sk-qwerty
 LLM_BASE_URL=https://api.deepseek.com
 LLM_MODEL=deepseek-flash
 
-# xAI — its model list states neither the window nor whether the model sees
+# xAI
 LLM_API_KEY=xai-qwerty
 LLM_BASE_URL=https://api.x.ai
 LLM_COMPATIBLE_API=responses
 LLM_MODEL=grok-4.7
-LLM_CONTEXT_WINDOW_TOKENS=500000
-VISION_MODEL=grok-4.7
 
 # Ollama — the key is not checked, but must not be empty
 LLM_API_KEY=ollama

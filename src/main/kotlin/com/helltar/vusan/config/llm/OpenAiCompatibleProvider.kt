@@ -1,19 +1,26 @@
 package com.helltar.vusan.config.llm
 
+import com.helltar.vusan.common.rethrowIfCancellation
 import com.helltar.vusan.llm.LlmModel
 import com.helltar.vusan.llm.ReasoningEffort
 import com.helltar.vusan.llm.RequestOptions
 import com.helltar.vusan.llm.RetryingLlmClient
 import com.helltar.vusan.llm.llmHttpClient
+import com.helltar.vusan.llm.llmJson
+import com.helltar.vusan.llm.long
+import com.helltar.vusan.llm.string
 import com.helltar.vusan.llm.openai.OpenAiClient
 import io.github.oshai.kotlinlogging.KotlinLogging
 import io.ktor.client.*
+import io.ktor.client.plugins.*
 import io.ktor.client.request.*
+import io.ktor.client.statement.*
+import io.ktor.http.*
 import kotlinx.serialization.json.JsonArray
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.JsonPrimitive
 import kotlinx.serialization.json.contentOrNull
-import kotlinx.serialization.json.longOrNull
+import kotlinx.serialization.json.jsonObject
 
 private val log = KotlinLogging.logger("ModelPreflight")
 
@@ -68,6 +75,12 @@ internal fun compatibleRuntime(config: LlmProviderConfig.OpenAiCompatible, http:
  * What a compatible server's model list says of the model, where it says anything: whether it takes
  * images, its window and which efforts it takes.
  *
+ * Servers spell these differently, and each spelling met is read: DeepSeek's `context_window` and
+ * `effort.supported_levels`, and xAI's `context_length` and `capabilities.reasoning_effort`, with the
+ * model found under one of its `aliases` too. xAI states what a model takes in only on a list of its
+ * own, `/v1/language-models`, which is asked about the model when the main list leaves it out; on a
+ * server without that list the question is a 404 and changes nothing.
+ *
  * Nothing about a compatible server is promised — it may serve no list, list a model without any of
  * these, or answer to an alias it never lists — so each fact it leaves out keeps the runtime's
  * assumption, and a model missing from the list is a warning rather than a failed startup. An effort it
@@ -78,7 +91,7 @@ internal suspend fun compatiblePreflight(http: HttpClient, config: LlmProviderCo
     val label = "OpenAI-compatible ($baseUrl)"
     val model = config.model.trim()
     val listed = listedModels(http, label, "$baseUrl/v1/models") { bearerAuth(config.apiKey) } ?: return config
-    val facts = listed.firstOrNull { (it["id"] as? JsonPrimitive)?.contentOrNull == model }
+    val facts = listed.firstOrNull { model == it.string("id") || model in it.texts("aliases").orEmpty() }
 
     if (facts == null) {
         val ids = listed.mapNotNull { (it["id"] as? JsonPrimitive)?.contentOrNull }
@@ -88,8 +101,8 @@ internal suspend fun compatiblePreflight(http: HttpClient, config: LlmProviderCo
     }
 
     val efforts =
-        ((facts["effort"] as? JsonObject)?.get("supported_levels") as? JsonArray)
-            ?.mapNotNull { level -> ReasoningEffort.entries.firstOrNull { it.requestValue == (level as? JsonPrimitive)?.contentOrNull } }
+        ((facts["effort"] as? JsonObject)?.texts("supported_levels") ?: (facts["capabilities"] as? JsonObject)?.texts("reasoning_effort"))
+            ?.mapNotNull { level -> ReasoningEffort.entries.firstOrNull { it.requestValue == level } }
             ?.toSet()
 
     // the list names thinking levels; none turns thinking off and is no level, so the first turn decides it
@@ -100,13 +113,35 @@ internal suspend fun compatiblePreflight(http: HttpClient, config: LlmProviderCo
         }
     }
 
-    val modalities = (facts["input_modalities"] as? JsonArray)?.mapNotNull { (it as? JsonPrimitive)?.contentOrNull }
+    val modalities =
+        facts.texts("input_modalities")
+            ?: languageModelInputs(http, "$baseUrl/v1/language-models/${model.encodeURLPathPart()}") { bearerAuth(config.apiKey) }
 
     log.info { "$label: model=[$model] confirmed against the server's model list" }
 
     return config.copy(
-        contextWindowTokens = config.contextWindowTokens ?: (facts["context_window"] as? JsonPrimitive)?.longOrNull,
+        contextWindowTokens = config.contextWindowTokens ?: facts.long("context_window") ?: facts.long("context_length"),
         seesImages = modalities?.let { "image" in it } ?: config.seesImages,
         efforts = efforts ?: config.efforts,
     )
 }
+
+// what a server's list of language models says one takes in, or `null` when it keeps no such list
+private suspend fun languageModelInputs(http: HttpClient, url: String, authorize: HttpRequestBuilder.() -> Unit): List<String>? {
+    val response =
+        runCatching {
+            http.get(url) {
+                authorize()
+                expectSuccess = false
+            }
+        }.getOrElse {
+            it.rethrowIfCancellation()
+            return null
+        }
+
+    if (!response.status.isSuccess()) return null
+
+    return runCatching { llmJson.parseToJsonElement(response.bodyAsText()).jsonObject.texts("input_modalities") }.getOrNull()
+}
+
+private fun JsonObject.texts(key: String): List<String>? = (this[key] as? JsonArray)?.mapNotNull { (it as? JsonPrimitive)?.contentOrNull }

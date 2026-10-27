@@ -30,6 +30,17 @@ private const val DEEPSEEK_MODELS =
           "effort":{"supported_levels":["low","high","max"],"default_level":"high"}},
          {"id":"deepseek-v4-pro","object":"model","context_window":1048576,"input_modalities":["text"]}]}"""
 
+// xai's two lists in the shape its api reference gives them, trimmed to the fields read: the window and the
+// efforts on the main one, what a model takes in only on the language-model one
+private const val XAI_MODELS =
+    """{"object":"list","data":[
+         {"id":"grok-4.7","object":"model","owned_by":"xai","aliases":["grok-latest"],"context_length":500000,
+          "capabilities":{"reasoning_effort":["low","medium","high","xhigh"],"default_reasoning_effort":"medium"}}]}"""
+
+private const val XAI_LANGUAGE_MODEL =
+    """{"id":"grok-4.7","object":"model","owned_by":"xai","aliases":["grok-latest"],
+       "input_modalities":["text","image"],"output_modalities":["text"]}"""
+
 // what openrouter's list of the models a key may use answered on 2026-10-23, trimmed to the fields read
 private const val OPENROUTER_MODELS =
     """{"data":[
@@ -56,6 +67,7 @@ class ModelPreflightTest {
     private var authorization: Headers? = null
 
     private val timeout = 120.seconds
+    private val askedUrls = mutableListOf<String>()
 
     private fun http(status: HttpStatusCode, body: String = "") =
         Http.createClient(
@@ -181,6 +193,51 @@ class ModelPreflightTest {
         assertSame(config, config.preflighted(http(HttpStatusCode.NotFound), codexAuth = null))
         assertSame(config, config.preflighted(http(HttpStatusCode.OK, DEEPSEEK_MODELS), codexAuth = null))
         assertSame(config, config.preflighted(http(HttpStatusCode.OK, "<html>not a list</html>"), codexAuth = null))
+    }
+
+    // answers each path from its own body, and a 404 for any path not given one
+    private fun routed(vararg bodies: Pair<String, String>) =
+        Http.createClient(
+            MockEngine { request ->
+                askedUrls += request.url.toString()
+                val body = bodies.firstOrNull { (path, _) -> request.url.encodedPath == path }?.second
+
+                if (body == null) respond("", HttpStatusCode.NotFound) else respond(body, HttpStatusCode.OK, headersOf(HttpHeaders.ContentType, ContentType.Application.Json.toString()))
+            },
+        )
+
+    private fun xai(model: String) =
+        LlmProviderConfig.OpenAiCompatible(baseUrl = "https://api.x.ai", apiKey = "key", model = model, requestTimeout = timeout)
+
+    @Test
+    fun `xai's lists fill in the window, the efforts and whether the model sees`() = runBlocking {
+        val http = routed("/v1/models" to XAI_MODELS, "/v1/language-models/grok-4.7" to XAI_LANGUAGE_MODEL)
+
+        val checked = assertIs<LlmProviderConfig.OpenAiCompatible>(xai("grok-4.7").preflighted(http, codexAuth = null))
+
+        assertEquals(listOf("https://api.x.ai/v1/models", "https://api.x.ai/v1/language-models/grok-4.7"), askedUrls)
+        assertEquals(500_000, checked.contextWindowTokens)
+        assertEquals(setOf(ReasoningEffort.LOW, ReasoningEffort.MEDIUM, ReasoningEffort.HIGH, ReasoningEffort.XHIGH), checked.efforts)
+        assertEquals(true, checked.seesImages)
+    }
+
+    @Test
+    fun `a model named by one of its aliases is found on the list`() = runBlocking {
+        val http = routed("/v1/models" to XAI_MODELS, "/v1/language-models/grok-latest" to XAI_LANGUAGE_MODEL)
+
+        val checked = assertIs<LlmProviderConfig.OpenAiCompatible>(xai("grok-latest").preflighted(http, codexAuth = null))
+
+        assertEquals(500_000, checked.contextWindowTokens)
+        assertEquals(true, checked.seesImages)
+    }
+
+    // a server with no language-model list answers the question with a 404, and the model stays unseeing
+    @Test
+    fun `a list that leaves out what the model takes in, on a server without a language-model list, changes nothing about it`() = runBlocking {
+        val checked = assertIs<LlmProviderConfig.OpenAiCompatible>(xai("grok-4.7").preflighted(routed("/v1/models" to XAI_MODELS), codexAuth = null))
+
+        assertEquals(500_000, checked.contextWindowTokens)
+        assertNull(checked.seesImages)
     }
 
     private fun openRouter(model: String, effort: ReasoningEffort? = null) =
