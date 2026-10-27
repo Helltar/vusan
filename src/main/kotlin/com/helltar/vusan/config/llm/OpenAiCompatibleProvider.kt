@@ -79,7 +79,8 @@ internal fun compatibleRuntime(config: LlmProviderConfig.OpenAiCompatible, http:
  * `effort.supported_levels`, and xAI's `context_length` and `capabilities.reasoning_effort`, with the
  * model found under one of its `aliases` too. xAI states what a model takes in only on a list of its
  * own, `/v1/language-models`, which is asked about the model when the main list leaves it out; on a
- * server without that list the question is a 404 and changes nothing.
+ * server without that list the question is a 404 and changes nothing. Ollama's list names its models
+ * and nothing more, and its own API is asked last, the same way (see [ollamaFacts]).
  *
  * Nothing about a compatible server is promised — it may serve no list, list a model without any of
  * these, or answer to an alias it never lists — so each fact it leaves out keeps the runtime's
@@ -116,15 +117,76 @@ internal suspend fun compatiblePreflight(http: HttpClient, config: LlmProviderCo
     val modalities =
         facts.texts("input_modalities")
             ?: languageModelInputs(http, "$baseUrl/v1/language-models/${model.encodeURLPathPart()}") { bearerAuth(config.apiKey) }
+    val window = config.contextWindowTokens ?: facts.long("context_window") ?: facts.long("context_length")
 
     log.info { "$label: model=[$model] confirmed against the server's model list" }
 
+    val local = if (modalities == null || window == null) ollamaFacts(http, baseUrl, model) else null
+
+    local?.let {
+        log.info { "$label: model=[$model] read off Ollama's own API: sees=[${it.seesImages}] window=[${it.window ?: "not stated"}]" }
+    }
+
     return config.copy(
-        contextWindowTokens = config.contextWindowTokens ?: facts.long("context_window") ?: facts.long("context_length"),
-        seesImages = modalities?.let { "image" in it } ?: config.seesImages,
+        contextWindowTokens = window ?: local?.window,
+        seesImages = modalities?.let { "image" in it } ?: local?.seesImages ?: config.seesImages,
         efforts = efforts ?: config.efforts,
     )
 }
+
+/** What Ollama's own API says of a model: whether it sees, and the window it actually runs with, where that is certain. */
+private data class OllamaFacts(val seesImages: Boolean, val window: Long?)
+
+/**
+ * The model as Ollama's own API describes it, or `null` on a server that is not Ollama.
+ *
+ * `/api/show` names what the model can do, `vision` among it. The window it reports there is the one the
+ * model was trained on, not the one Ollama runs it with — that is the Modelfile's `num_ctx`, else the
+ * server's `OLLAMA_CONTEXT_LENGTH` — so only those two are taken: `num_ctx` when the Modelfile sets one,
+ * and what `/api/ps` reports for the model while it is loaded. A window planned past the real one is cut
+ * by Ollama from the front of the prompt, the system prompt first, without a word.
+ */
+private suspend fun ollamaFacts(http: HttpClient, baseUrl: String, model: String): OllamaFacts? {
+    val shown =
+        runCatching {
+            http.post("$baseUrl/api/show") {
+                contentType(ContentType.Application.Json)
+                setBody(JsonObject(mapOf("model" to JsonPrimitive(model))))
+                expectSuccess = false
+            }
+        }.getOrElse {
+            it.rethrowIfCancellation()
+            return null
+        }
+
+    if (!shown.status.isSuccess()) return null
+
+    val facts = runCatching { llmJson.parseToJsonElement(shown.bodyAsText()).jsonObject }.getOrNull() ?: return null
+    val capabilities = facts.texts("capabilities") ?: return null
+    val numCtx = facts.string("parameters")?.let { NUM_CTX.find(it)?.groupValues?.get(1)?.toLongOrNull() }
+
+    return OllamaFacts(seesImages = "vision" in capabilities, window = numCtx ?: loadedWindow(http, baseUrl, model))
+}
+
+// the window a loaded model runs with, which is exact; `null` while the model is not in memory
+private suspend fun loadedWindow(http: HttpClient, baseUrl: String, model: String): Long? {
+    val response =
+        runCatching { http.get("$baseUrl/api/ps") { expectSuccess = false } }
+            .getOrElse {
+                it.rethrowIfCancellation()
+                return null
+            }
+
+    if (!response.status.isSuccess()) return null
+
+    val loaded = runCatching { llmJson.parseToJsonElement(response.bodyAsText()).jsonObject["models"] as? JsonArray }.getOrNull() ?: return null
+
+    return loaded.filterIsInstance<JsonObject>()
+        .firstOrNull { model == it.string("name") || model == it.string("model") }
+        ?.long("context_length")
+}
+
+private val NUM_CTX = Regex("""(?m)^num_ctx\s+(\d+)""")
 
 // what a server's list of language models says one takes in, or `null` when it keeps no such list
 private suspend fun languageModelInputs(http: HttpClient, url: String, authorize: HttpRequestBuilder.() -> Unit): List<String>? {

@@ -98,12 +98,12 @@ LLM_BASE_URL=http://localhost:11434
 LLM_COMPATIBLE_API=responses
 LLM_MODEL=gemma4:latest
 LLM_CONTEXT_WINDOW_TOKENS=131072
-VISION_MODEL=gemma4:latest
 ```
 
-Ollama states neither the window nor whether a model sees. Set the window to Ollama's
-`OLLAMA_CONTEXT_LENGTH` (`ollama ps` shows it), and name the model again as `VISION_MODEL` if it
-takes images.
+Vusan asks Ollama's own API whether the model sees, so a model that takes images needs no
+`VISION_MODEL`. The window it runs with is stated only by a Modelfile's `num_ctx`, or by `ollama ps`
+while the model is loaded, so set `LLM_CONTEXT_WINDOW_TOKENS` to Ollama's `OLLAMA_CONTEXT_LENGTH`
+unless the Modelfile sets one.
 
 ## OpenRouter
 

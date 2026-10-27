@@ -41,6 +41,15 @@ private const val XAI_LANGUAGE_MODEL =
     """{"id":"grok-4.7","object":"model","owned_by":"xai","aliases":["grok-latest"],
        "input_modalities":["text","image"],"output_modalities":["text"]}"""
 
+// what ollama 0.40 answered on 2026-10-27: a compatible list with ids alone, and its own api beside it. the
+// window under model_info is the trained one, which is not what ollama runs the model with
+private const val OLLAMA_MODELS = """{"object":"list","data":[{"id":"gemma4:latest","object":"model","created":1791659551,"owned_by":"library"}]}"""
+
+private fun ollamaShow(parameters: String) =
+    """{"capabilities":["completion","vision","tools","thinking"],"parameters":"$parameters","model_info":{"gemma4.context_length":131072}}"""
+
+private const val OLLAMA_LOADED = """{"models":[{"name":"gemma4:latest","model":"gemma4:latest","context_length":65536,"runner":"llamacpp"}]}"""
+
 // what openrouter's list of the models a key may use answered on 2026-10-23, trimmed to the fields read
 private const val OPENROUTER_MODELS =
     """{"data":[
@@ -238,6 +247,37 @@ class ModelPreflightTest {
 
         assertEquals(500_000, checked.contextWindowTokens)
         assertNull(checked.seesImages)
+    }
+
+    private fun ollama() =
+        LlmProviderConfig.OpenAiCompatible(baseUrl = "http://localhost:11434", apiKey = "ollama", model = "gemma4:latest", requestTimeout = timeout)
+
+    @Test
+    fun `ollama's own api says the model sees, and its modelfile's num_ctx is the window`() = runBlocking {
+        val http = routed("/v1/models" to OLLAMA_MODELS, "/api/show" to ollamaShow("""temperature 1\nnum_ctx 32768"""), "/api/ps" to OLLAMA_LOADED)
+
+        val checked = assertIs<LlmProviderConfig.OpenAiCompatible>(ollama().preflighted(http, codexAuth = null))
+
+        assertEquals(true, checked.seesImages)
+        assertEquals(32_768, checked.contextWindowTokens)
+    }
+
+    @Test
+    fun `without a num_ctx the window is the one a loaded model runs with`() = runBlocking {
+        val http = routed("/v1/models" to OLLAMA_MODELS, "/api/show" to ollamaShow("temperature 1"), "/api/ps" to OLLAMA_LOADED)
+
+        assertEquals(65_536, ollama().preflighted(http, codexAuth = null).contextWindowTokens)
+    }
+
+    // the trained window may be far above the one ollama runs with, which cuts the prompt from the front
+    @Test
+    fun `a model not loaded and without a num_ctx gets no window, not the one it was trained on`() = runBlocking {
+        val http = routed("/v1/models" to OLLAMA_MODELS, "/api/show" to ollamaShow("temperature 1"), "/api/ps" to """{"models":[]}""")
+
+        val checked = assertIs<LlmProviderConfig.OpenAiCompatible>(ollama().preflighted(http, codexAuth = null))
+
+        assertNull(checked.contextWindowTokens)
+        assertEquals(true, checked.seesImages)
     }
 
     private fun openRouter(model: String, effort: ReasoningEffort? = null) =
