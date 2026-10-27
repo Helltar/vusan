@@ -36,6 +36,9 @@ class ChatFloor(
 
     private val stretches = ConcurrentHashMap<Floor, Stretch>()
 
+    private val RequestContext.floor: Floor
+        get() = Floor(chatRef, chat.threadId)
+
     /** A person's line reached the chat. Anybody but the one holding the floor takes it back for the chat. */
     fun lineFrom(chat: ChatRef, threadId: String?, speaker: UserRef) {
         stretches.computeIfPresent(Floor(chat, threadId)) { _, stretch -> stretch.takeIf { it.holder == speaker } }
@@ -98,9 +101,6 @@ class ChatFloor(
 
     private fun Stretch.cooledBy(now: Instant): Boolean =
         Duration.between(lastAnsweredAt, now).toKotlinDuration() >= COOLING_PERIOD
-
-    private val RequestContext.floor: Floor
-        get() = Floor(chatRef, chat.threadId)
 
     companion object {
         // a little above the 99th percentile of one person's exchanges with the bot measured over a month

@@ -19,6 +19,10 @@ data class AccessPolicy(
     val owner: String? = null,
 ) {
 
+    /** Ids both allowed and banned, the owner included. A config mistake worth naming, since the ban wins silently. */
+    val contradictory: Set<String>
+        get() = (allowed + listOfNotNull(owner)) intersect banned
+
     fun allows(chat: ChatRef, user: UserRef?): Boolean =
         !bans(chat, user) && (chat.key in allowed || (user != null && (user.key in allowed || isOwner(user))))
 
@@ -30,8 +34,4 @@ data class AccessPolicy(
 
     fun denialReason(chat: ChatRef, user: UserRef?): String =
         if (bans(chat, user)) "banned" else "not in allowlist"
-
-    /** Ids both allowed and banned, the owner included. A config mistake worth naming, since the ban wins silently. */
-    val contradictory: Set<String>
-        get() = (allowed + listOfNotNull(owner)) intersect banned
 }

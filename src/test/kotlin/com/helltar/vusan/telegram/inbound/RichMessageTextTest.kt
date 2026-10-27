@@ -21,7 +21,7 @@ class RichMessageTextTest {
     private val unusedClient =
         Proxy.newProxyInstance(
             TelegramClient::class.java.classLoader,
-            arrayOf(TelegramClient::class.java)
+            arrayOf(TelegramClient::class.java),
         ) { _, method, _ -> error("unexpected telegram call: ${method.name}") } as TelegramClient
 
     private fun message(json: String): Message = mapper.readValue(json, Message::class.java)
@@ -47,7 +47,7 @@ class RichMessageTextTest {
                 {"type":"photo","photo":[{"file_id":"a","file_unique_id":"b","width":1,"height":1}],
                  "caption":{"text":"the chart"}},
                 {"type":"future_block","text":"from a newer bot api"}
-                """.trimIndent()
+                """.trimIndent(),
             )
 
         assertEquals(
@@ -84,7 +84,7 @@ class RichMessageTextTest {
                  "caption":{"text":"the report"}},
                 {"type":"buttons","buttons":[{"text":"Buy now"},{"text":"Learn more"}],"align":"center"},
                 {"type":"paragraph","text":["Press ",{"type":"button","button":{"text":"here"}}]}
-                """.trimIndent()
+                """.trimIndent(),
             )
 
         assertEquals(
@@ -113,7 +113,7 @@ class RichMessageTextTest {
                   [{"text":"Speed","align":"left","valign":"top"},
                    {"text":"42","align":"right","valign":"top"}]],
                  "caption":"Benchmarks"}
-                """.trimIndent()
+                """.trimIndent(),
             )
 
         assertEquals(
@@ -158,7 +158,7 @@ class RichMessageTextTest {
                 """
                 {"message_id":11,"date":1,"chat":{"id":42,"type":"private"},"text":"what is step two?",
                  "reply_to_message":${mapper.writeValueAsString(replied)}}
-                """.trimIndent()
+                """.trimIndent(),
             )
 
         val summary =
@@ -176,14 +176,14 @@ class RichMessageTextTest {
             message(
                 """{"message_id":1,"date":1,$group"rich_message":{"blocks":[
                    {"type":"paragraph","text":["hey ",
-                    {"type":"mention","text":"@VusanBot","username":"VusanBot"}," look"]}]}}"""
+                    {"type":"mention","text":"@VusanBot","username":"VusanBot"}," look"]}]}}""",
             )
 
         val textMentioning =
             message(
                 """{"message_id":2,"date":1,$group"rich_message":{"blocks":[
                    {"type":"paragraph","text":{"type":"text_mention","text":"Vusan",
-                    "user":{"id":100,"is_bot":true,"first_name":"Vusan"}}}]}}"""
+                    "user":{"id":100,"is_bot":true,"first_name":"Vusan"}}}]}}""",
             )
 
         val unrelated =

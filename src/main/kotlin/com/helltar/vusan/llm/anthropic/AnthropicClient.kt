@@ -377,5 +377,3 @@ class AnthropicClient(
         private val log = KotlinLogging.logger {}
     }
 }
-
-

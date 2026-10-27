@@ -54,21 +54,21 @@ sealed interface Message {
 
     data class User(val parts: List<Part>) : Message {
 
-        constructor(text: String) : this(listOf(Part.Text(text)))
-
         val text: String
             get() = parts.filterIsInstance<Part.Text>().joinToString("\n") { it.text }
+
+        constructor(text: String) : this(listOf(Part.Text(text)))
     }
 
     data class Assistant(val parts: List<Part>) : Message {
-
-        constructor(text: String) : this(listOf(Part.Text(text)))
 
         val text: String
             get() = parts.filterIsInstance<Part.Text>().joinToString("\n") { it.text }
 
         val toolCalls: List<Part.ToolCall>
             get() = parts.filterIsInstance<Part.ToolCall>()
+
+        constructor(text: String) : this(listOf(Part.Text(text)))
     }
 
     /** The answers to the tool calls of the assistant message before it, all of them in one message. */

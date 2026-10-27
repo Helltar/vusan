@@ -67,7 +67,6 @@ class GroupLogRepository(
                 it[sentAt] = entry.sentAt
             }
         }
-
     }
 
     /**

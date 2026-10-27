@@ -103,7 +103,7 @@ class ChatFileToolsTest {
         val proxy: TelegramClient =
             Proxy.newProxyInstance(
                 TelegramClient::class.java.classLoader,
-                arrayOf(TelegramClient::class.java)
+                arrayOf(TelegramClient::class.java),
             ) { _, method, args ->
                 when (method.name) {
                     "executeAsync" -> respond(args.single() as GetFile)

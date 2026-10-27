@@ -14,13 +14,17 @@ import org.telegram.telegrambots.meta.api.objects.polls.PollAnswer
 
 class GroupLogEntriesTest {
 
+    private val mapper = ObjectMapper()
+
+    private val quiz = SentPoll(chatId = -100L, options = listOf("Lviv", "Kyiv"), correctOptionIndex = 1)
+
     @Test
     fun `a text message keeps its sender, text and telegram timestamp`() {
         val entry =
             assertNotNull(
                 message(
                     """"text": "hello everyone",
-                    "from": {"id": 7, "is_bot": false, "first_name": "Olena", "last_name": "Petrenko", "username": "olena"}"""
+                    "from": {"id": 7, "is_bot": false, "first_name": "Olena", "last_name": "Petrenko", "username": "olena"}""",
                 ).toGroupLogEntry(),
             )
 
@@ -42,7 +46,7 @@ class GroupLogEntriesTest {
                 message(
                     """"text": "$long",
                     "forward_origin": {"type": "channel", "date": 1774000000,
-                        "chat": {"id": -1001, "type": "channel", "title": "BBC News"}, "message_id": 5}"""
+                        "chat": {"id": -1001, "type": "channel", "title": "BBC News"}, "message_id": 5}""",
                 ).toGroupLogEntry(),
             )
 
@@ -56,7 +60,7 @@ class GroupLogEntriesTest {
             "BBC News",
             message(
                 """"text": "x", "forward_origin": {"type": "channel", "date": 1, "message_id": 5,
-                "chat": {"id": -1001, "type": "channel", "title": "BBC News"}}"""
+                "chat": {"id": -1001, "type": "channel", "title": "BBC News"}}""",
             ).forwardOriginLabel(),
         )
 
@@ -64,7 +68,7 @@ class GroupLogEntriesTest {
             "Some Group",
             message(
                 """"text": "x", "forward_origin": {"type": "chat", "date": 1,
-                "sender_chat": {"id": -1002, "type": "supergroup", "title": "Some Group"}}"""
+                "sender_chat": {"id": -1002, "type": "supergroup", "title": "Some Group"}}""",
             ).forwardOriginLabel(),
         )
 
@@ -72,7 +76,7 @@ class GroupLogEntriesTest {
             "Serhii Koval",
             message(
                 """"text": "x", "forward_origin": {"type": "user", "date": 1,
-                "sender_user": {"id": 9, "is_bot": false, "first_name": "Serhii", "last_name": "Koval"}}"""
+                "sender_user": {"id": 9, "is_bot": false, "first_name": "Serhii", "last_name": "Koval"}}""",
             ).forwardOriginLabel(),
         )
 
@@ -96,7 +100,7 @@ class GroupLogEntriesTest {
                 message(
                     """"sticker": {"file_id": "abc", "file_unique_id": "u", "type": "regular",
                     "width": 512, "height": 512, "is_animated": false, "is_video": false,
-                    "emoji": "😂", "set_name": "HotCat"}"""
+                    "emoji": "😂", "set_name": "HotCat"}""",
                 ).toGroupLogEntry(),
             )
 
@@ -134,7 +138,7 @@ class GroupLogEntriesTest {
             assertNotNull(
                 message(
                     """"caption": "there it is",
-                    "photo": [{"file_id": "abc", "file_unique_id": "u", "width": 90, "height": 60}]"""
+                    "photo": [{"file_id": "abc", "file_unique_id": "u", "width": 90, "height": 60}]""",
                 ).toGroupLogEntry(),
             )
 
@@ -160,7 +164,7 @@ class GroupLogEntriesTest {
             assertNotNull(
                 message(
                     """"text": "agreed", "reply_to_message": {"message_id": 40, "date": 1774000000,
-                    "chat": {"id": -100, "type": "supergroup"}}"""
+                    "chat": {"id": -100, "type": "supergroup"}}""",
                 ).toGroupLogEntry(),
             )
 
@@ -171,8 +175,6 @@ class GroupLogEntriesTest {
     fun `a service message with neither text nor media is not recorded`() {
         assertNull(message(""""group_chat_created": true""").toGroupLogEntry())
     }
-
-    private val mapper = ObjectMapper()
 
     // `date` must stay non-zero: the bot api models a zero date as an InaccessibleMessage subtype.
     @Test
@@ -232,8 +234,6 @@ class GroupLogEntriesTest {
 
         assertNull(answer.toGroupLogEntry(quiz))
     }
-
-    private val quiz = SentPoll(chatId = -100L, options = listOf("Lviv", "Kyiv"), correctOptionIndex = 1)
 
     private fun pollAnswer(fields: String): PollAnswer =
         mapper.readValue(

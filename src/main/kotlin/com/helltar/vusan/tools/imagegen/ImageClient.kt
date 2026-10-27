@@ -36,6 +36,15 @@ enum class ImageFraming {
 
     companion object {
 
+        private val RATIOS =
+            mapOf(
+                SQUARE to 1.0,
+                PORTRAIT to 2.0 / 3,
+                LANDSCAPE to 3.0 / 2,
+                STORY to 9.0 / 16,
+                BANNER to 16.0 / 9,
+            )
+
         /** The framing an orientation names, in any of the words the model uses for it; anything else is square. */
         fun of(orientation: String): ImageFraming =
             when (orientation.trim().lowercase()) {
@@ -53,15 +62,6 @@ enum class ImageFraming {
 
             return RATIOS.entries.minBy { (_, r) -> abs(ln(r) - ratio) }.key
         }
-
-        private val RATIOS =
-            mapOf(
-                SQUARE to 1.0,
-                PORTRAIT to 2.0 / 3,
-                LANDSCAPE to 3.0 / 2,
-                STORY to 9.0 / 16,
-                BANNER to 16.0 / 9,
-            )
     }
 }
 

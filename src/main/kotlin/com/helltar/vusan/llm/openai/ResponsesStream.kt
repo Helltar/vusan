@@ -3,13 +3,10 @@ package com.helltar.vusan.llm.openai
 import com.helltar.vusan.llm.ssePayloadOrNull
 import com.helltar.vusan.llm.STREAM_ERROR_STATUS
 import com.helltar.vusan.llm.string
-import com.helltar.vusan.llm.int
 import com.helltar.vusan.llm.LlmException
-import com.helltar.vusan.llm.llmJson
 import kotlinx.serialization.json.JsonArray
 import kotlinx.serialization.json.JsonElement
 import kotlinx.serialization.json.JsonObject
-import kotlinx.serialization.json.jsonObject
 
 // a stream that ends in an error event answered 200 before it said anything went wrong
 

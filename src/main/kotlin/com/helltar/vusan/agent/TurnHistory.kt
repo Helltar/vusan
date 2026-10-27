@@ -76,7 +76,6 @@ internal fun buildTurns(userEntry: String, toolEvents: List<ToolEvent>, assistan
         add(ChatTurn(role = ChatRole.USER, content = userEntry))
 
         for (event in toolEvents.forHistory()) {
-
             add(
                 ChatTurn(
                     role = ChatRole.TOOL_CALL,

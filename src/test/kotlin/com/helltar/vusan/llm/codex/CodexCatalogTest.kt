@@ -29,7 +29,7 @@ class CodexCatalogTest {
               {"slug":"gpt-5.6-mini","display_name":"GPT-5.6 Mini","max_context_window":272000,
                "input_modalities":["text"],"supported_reasoning_levels":[{"effort":"low"},{"level":"high"}]}
             ]}
-            """.trimIndent()
+            """.trimIndent(),
         )
 
         val models = fetchCodexModels(http, store())
@@ -66,7 +66,7 @@ class CodexCatalogTest {
                 {"models":[{"slug":"gpt-5.6-sol","supported_reasoning_levels":[
                   {"effort":"low"},{"effort":"high"},{"effort":"xhigh"},{"effort":"max"},{"effort":"ultra"}
                 ]}]}
-                """.trimIndent()
+                """.trimIndent(),
             ),
             store(),
         )
@@ -87,7 +87,7 @@ class CodexCatalogTest {
                    "description":"1.5x speed, increased usage"}]},
                   {"slug":"plain-model","service_tiers":[]}
                 ]}
-                """.trimIndent()
+                """.trimIndent(),
             ),
             store(),
         )
@@ -107,7 +107,7 @@ class CodexCatalogTest {
                   {"slug":"deaf-model","support_verbosity":false,"default_verbosity":"low"},
                   {"slug":"plain-model"}
                 ]}
-                """.trimIndent()
+                """.trimIndent(),
             ),
             store(),
         )

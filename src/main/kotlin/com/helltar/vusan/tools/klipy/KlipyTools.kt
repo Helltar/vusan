@@ -37,6 +37,9 @@ class KlipyTools(
     private val candidates = ConcurrentHashMap<String, Candidate>()
     private val sent = ConcurrentHashMap.newKeySet<String>()
 
+    private val KlipyKind.maxBytes: Long
+        get() = if (this == KlipyKind.MEME) MAX_MEME_BYTES else MAX_DOWNLOAD_BYTES
+
     @Tool(KlipyToolDescriptions.SEARCH_GIFS, readOnly = true)
     suspend fun searchGifs(
         @Arg(KlipyToolDescriptions.QUERY)
@@ -122,9 +125,6 @@ class KlipyTools(
                     BotOutput.Video(it.bytes, it.filename)
                 }
         }
-
-    private val KlipyKind.maxBytes: Long
-        get() = if (this == KlipyKind.MEME) MAX_MEME_BYTES else MAX_DOWNLOAD_BYTES
 
     private suspend fun Candidate.downloaded(maxBytes: Long): FileDownloadResult.Success =
         when (val result = downloads.download(url, maxBytes = maxBytes)) {

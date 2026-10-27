@@ -309,7 +309,7 @@ class TelegramOutputSenderTest {
         val proxy: TelegramClient =
             Proxy.newProxyInstance(
                 TelegramClient::class.java.classLoader,
-                arrayOf(TelegramClient::class.java)
+                arrayOf(TelegramClient::class.java),
             ) { _, method, args ->
                 check(method.name == "executeAsync") { "unexpected client call: ${method.name}" }
                 handle(args.single())

@@ -15,6 +15,9 @@ removals over compatibility shims.
 - `./gradlew detekt` is detekt 2's light analysis and the one `check` runs.
   `detektMain` and `detektTest` add the rules that need types, and are not
   part of the build while their findings on this code are mostly false.
+  It enforces several rules below (member order, trailing commas at call
+  sites, one blank line, `Db.dbTransaction`) through ktlint's wrapper too;
+  `./gradlew detekt --auto-correct` fixes what ktlint can.
 - Before finishing code changes, run `./gradlew test` and `./gradlew detekt`
   unless the change is docs-only or the user says not to.
 - If a check cannot run, report the exact command and blocker. Gradle

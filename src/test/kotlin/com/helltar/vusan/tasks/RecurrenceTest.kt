@@ -18,6 +18,8 @@ class RecurrenceTest {
 
     private val kyiv = ZoneId.of("Europe/Kyiv")
 
+    private val now = instant(2026, 5, 24, 12, 0)
+
     private fun instant(year: Int, month: Int, day: Int, hour: Int, minute: Int, tz: ZoneId = kyiv) =
         LocalDateTime.of(year, month, day, hour, minute).atZone(tz).toInstant()
 
@@ -94,8 +96,6 @@ class RecurrenceTest {
         assertNull(Recurrence.parse("every:PT1M"))
         assertNull(Recurrence.parse("cron:not a cron"))
     }
-
-    private val now = instant(2026, 5, 24, 12, 0)
 
     private fun ok(raw: String) = parseSchedule(raw, now, kyiv) as ScheduleParse.Ok
 

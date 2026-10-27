@@ -52,6 +52,8 @@ class AnthropicClientTest {
     private val sent = mutableListOf<JsonObject>()
     private var sentHeaders: Headers? = null
 
+    private val basic = arrayOf(Message.System("stable instructions"), Message.User("current request"))
+
     // a reply is streamed the way the api streams it; a failure is the error body the api sends instead of a stream
     private fun client(reply: String = REPLY, status: HttpStatusCode = HttpStatusCode.OK): AnthropicClient {
         val engine =
@@ -68,8 +70,6 @@ class AnthropicClientTest {
 
         return AnthropicClient(HttpClient(engine), apiKey = "key")
     }
-
-    private val basic = arrayOf(Message.System("stable instructions"), Message.User("current request"))
 
     private fun request(vararg messages: Message, tools: List<ToolDefinition> = listOf(TOOL), options: RequestOptions = RequestOptions()) =
         ChatRequest(messages.toList(), tools, options)

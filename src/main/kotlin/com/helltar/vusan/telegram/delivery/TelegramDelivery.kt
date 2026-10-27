@@ -151,10 +151,10 @@ class TelegramDelivery(
 
     private data class DeliveryTarget(val chat: ChatTarget, val replyToMessageId: Long? = null) {
 
-        constructor(chatId: Long) : this(ChatTarget(chatId))
-
         val chatId: Long
             get() = chat.chatId
+
+        constructor(chatId: Long) : this(ChatTarget(chatId))
 
         fun withoutReply(): DeliveryTarget =
             if (replyToMessageId == null)

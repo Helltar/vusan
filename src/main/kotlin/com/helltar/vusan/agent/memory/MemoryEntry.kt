@@ -3,7 +3,6 @@ package com.helltar.vusan.agent.memory
 import com.helltar.vusan.request.ChatRef
 import com.helltar.vusan.request.Platform
 import com.helltar.vusan.request.UserRef
-import java.time.Instant
 
 /**
  * Scope of a durable [MemoryEntry], separate from the rolling conversation history:

@@ -71,6 +71,8 @@ class OpenAiClientTest {
 
     private val sent = mutableListOf<JsonObject>()
 
+    private val basic = arrayOf(Message.System("stable instructions"), Message.User("current request"))
+
     private fun client(
         reply: String = RESPONSES_REPLY,
         endpoint: OpenAiEndpoint = OpenAiEndpoint.RESPONSES,
@@ -102,8 +104,6 @@ class OpenAiClientTest {
 
     private fun request(vararg messages: Message, tools: List<ToolDefinition> = listOf(TOOL), options: RequestOptions = RequestOptions()) =
         ChatRequest(messages.toList(), tools, options)
-
-    private val basic = arrayOf(Message.System("stable instructions"), Message.User("current request"))
 
     @Test
     fun `a responses request carries the model, the items, the tools and the options`() = runBlocking {

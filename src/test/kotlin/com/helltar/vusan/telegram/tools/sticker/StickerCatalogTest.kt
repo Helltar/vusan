@@ -4,7 +4,6 @@ import com.helltar.vusan.config.AppConfig
 import com.helltar.vusan.config.llm.LlmProviderConfig
 import com.helltar.vusan.infra.Db
 import com.helltar.vusan.infra.tables.TelegramChatStickerSetsTable
-import com.helltar.vusan.infra.tables.TelegramChatStickersTable
 import com.helltar.vusan.infra.tables.TelegramStickerSetsTable
 import com.helltar.vusan.infra.tables.TelegramStickersTable
 import com.helltar.vusan.llm.RequestOptions
@@ -490,7 +489,7 @@ class StickerCatalogTest {
         val proxy: TelegramClient =
             Proxy.newProxyInstance(
                 TelegramClient::class.java.classLoader,
-                arrayOf(TelegramClient::class.java)
+                arrayOf(TelegramClient::class.java),
             ) { _, method, args ->
                 when (method.name) {
                     "executeAsync" -> respond(args.single())

@@ -24,6 +24,13 @@ class PollRegistryTest {
     private lateinit var tempDir: Path
     private lateinit var registry: PollRegistry
 
+    private val quiz =
+        BotOutput.Quiz(
+            question = "Capital of Ukraine?",
+            options = listOf("Lviv", "Kyiv", "Odesa"),
+            correctOptionIndex = 1,
+        )
+
     @BeforeTest
     fun setUp() {
         tempDir = Files.createTempDirectory("vusan-polls-test")
@@ -96,13 +103,6 @@ class PollRegistryTest {
 
         assertNull(registry.find("p1"))
     }
-
-    private val quiz =
-        BotOutput.Quiz(
-            question = "Capital of Ukraine?",
-            options = listOf("Lviv", "Kyiv", "Odesa"),
-            correctOptionIndex = 1,
-        )
 
     private fun testConfig(dbPath: String) =
         AppConfig(

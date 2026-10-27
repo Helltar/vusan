@@ -110,6 +110,9 @@ private class DrawTools : ToolSet {
 
 class AgentTurnTest {
 
+    private val ChatRequest.toolNames: List<String>
+        get() = tools.map { it.name }
+
     private fun call(name: String, id: String = "c-$name", vararg args: Pair<String, String>) =
         Part.ToolCall(id, name, buildJsonObject { args.forEach { (k, v) -> put(k, v) } })
 
@@ -149,9 +152,6 @@ class AgentTurnTest {
 
         block(run, answer)
     }
-
-    private val ChatRequest.toolNames: List<String>
-        get() = tools.map { it.name }
 
     @Test
     fun `a file one call made is what a later call takes by its label`() =

@@ -37,12 +37,12 @@ internal fun isRepeatableFailure(failure: Throwable): Boolean {
     return failure.cutShort ||
             failure.status in REPEATABLE_STATUSES ||
             failure.body?.let(REPEATABLE_BODY_REGEX::containsMatchIn) == true ||
-            failure.status == null && failure.cause.isDroppedConnection()
+            (failure.status == null && failure.cause.isDroppedConnection())
 }
 
 private fun Throwable?.isDroppedConnection(): Boolean =
     generateSequence(this) { it.cause }.any {
-        it is IOException && it !is SocketTimeoutException && it !is HttpRequestTimeoutException ||
+        (it is IOException && it !is SocketTimeoutException && it !is HttpRequestTimeoutException) ||
                 it.message?.contains("connection reset", ignoreCase = true) == true
     }
 

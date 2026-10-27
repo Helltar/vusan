@@ -54,6 +54,8 @@ class LlmRuntimeTest {
 
     private val sent = mutableListOf<Wire>()
 
+    private val tool = ToolDefinition("lookUp", "Looks up.", buildJsonObject { put("type", "object") })
+
     private fun http(reply: String, contentType: String = ContentType.Application.Json.toString()): HttpClient =
         HttpClient(
             MockEngine { request ->
@@ -61,8 +63,6 @@ class LlmRuntimeTest {
                 respond(reply, headers = headersOf(HttpHeaders.ContentType, contentType))
             },
         )
-
-    private val tool = ToolDefinition("lookUp", "Looks up.", buildJsonObject { put("type", "object") })
 
     private fun request(options: RequestOptions, tools: List<ToolDefinition> = listOf(tool)) =
         ChatRequest(listOf(Message.System("stable instructions"), Message.User("current request")), tools, options)

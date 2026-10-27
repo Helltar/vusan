@@ -47,6 +47,10 @@ class AgentFactory(
         require(maxModelCalls >= AppConfig.MIN_MODEL_CALLS) { "a turn needs at least ${AppConfig.MIN_MODEL_CALLS} model calls" }
     }
 
+    /** The reserve one run may spend on tool results, from which the runner opens its [TurnToolBudget]. */
+    val liveToolResultMaxTokens: Int
+        get() = contextWindowPolicy.liveToolResultMaxTokens
+
     // the catalog is built before the turn text, not here: what it defers goes into that text as
     // `<tool_groups>`, and the budget below has to weigh the finished prompt.
     fun prepare(toolCatalog: ToolCatalog, currentTurn: String): AgentPromptPreparation {
@@ -67,10 +71,6 @@ class AgentFactory(
 
     /** The cache key this conversation's model calls travel under, when the provider takes one: what ties a call in the log to a chat. */
     fun conversationCacheKey(scope: ConversationScope): String? = options.forConversation(scope.toString()).promptCacheKey
-
-    /** The reserve one run may spend on tool results, from which the runner opens its [TurnToolBudget]. */
-    val liveToolResultMaxTokens: Int
-        get() = contextWindowPolicy.liveToolResultMaxTokens
 
     fun build(
         scope: ConversationScope,

@@ -18,7 +18,6 @@ import com.helltar.vusan.common.limitTo
 import com.helltar.vusan.common.rethrowIfCancellation
 import com.helltar.vusan.i18n.Messages
 import com.helltar.vusan.request.AccessPolicy
-import com.helltar.vusan.request.AttachedFile
 import com.helltar.vusan.request.ConversationScope
 import com.helltar.vusan.request.UserRef
 import com.helltar.vusan.tasks.TasksRepository
@@ -68,7 +67,6 @@ import org.telegram.telegrambots.longpolling.util.DefaultGetUpdatesGenerator
 import org.telegram.telegrambots.meta.TelegramUrl
 import org.telegram.telegrambots.meta.api.objects.CallbackQuery
 import org.telegram.telegrambots.meta.api.objects.Update
-import org.telegram.telegrambots.meta.api.objects.User
 import org.telegram.telegrambots.meta.api.objects.message.Message
 import org.telegram.telegrambots.meta.api.objects.polls.PollAnswer
 import org.telegram.telegrambots.meta.generics.TelegramClient

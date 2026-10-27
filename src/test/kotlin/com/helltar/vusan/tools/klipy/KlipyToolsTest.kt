@@ -121,9 +121,9 @@ class KlipyToolsTest {
         assertTrue(outbox.pending.isEmpty())
     }
 
-    @Test
     // a meme the chat refuses is still an input for another tool, so the search goes ahead and only a send is refused
-    fun `a kind the chat does not take is still searched, and refused only at the send`() = runBlocking {
+    @Test
+fun `a kind the chat does not take is still searched, and refused only at the send`() = runBlocking {
         val tools = tools(BotOutbox(ChatCapabilities(photos = false)))
 
         tools.searchGifs("slow morning", kind = "meme")

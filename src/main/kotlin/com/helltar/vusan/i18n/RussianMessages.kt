@@ -64,6 +64,8 @@ internal object RussianMessages : Messages {
 
     override val ephemeralChatReply = "Это видим только мы с тобой, а отвечаю я всем. Напиши мне обычным сообщением"
 
+    override val taskRecurrenceOnce = "один раз"
+
     override fun voiceTooLongReply(durationSeconds: Long, maxSeconds: Long): String =
         "Это голосовое на ${durationSeconds}с, а я слушаю до ${maxSeconds}с. Пришли короче или напиши текстом"
 
@@ -104,8 +106,6 @@ internal object RussianMessages : Messages {
 
     override fun taskMenuHiddenNotice(hidden: Int) =
         "<i>Ещё $hidden сюда не поместилось — просто спроси о них своими словами.</i>"
-
-    override val taskRecurrenceOnce = "один раз"
 
     override fun taskRecurrenceEvery(interval: String) = "каждые $interval"
 

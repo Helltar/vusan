@@ -417,7 +417,6 @@ private val AgentResult.answeredInChat: Boolean
     get() = !failed && (!comment.isNullOrBlank() || outputs.any { it.output !is BotOutput.Reaction })
 
 private fun tokenUsageLogSummary(usages: List<TokenUsage>): String {
-
     fun List<Int?>.sumOrNa(): String =
         filterNotNull().let { if (it.isEmpty()) "n/a" else it.sum().toString() }
 

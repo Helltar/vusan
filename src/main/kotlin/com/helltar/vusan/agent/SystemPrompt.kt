@@ -112,7 +112,7 @@ private fun runtimeSection(
 
 - You are served by the model `$modelId`. Asked which model, version, or engine you are, answer with that identifier and nothing invented around it — no assumed family name, release date, or training cutoff.
 - A `<current_model>` block in the current turn overrides that identifier for as long as it is there: it names the model actually serving you while the usual one is unavailable.
-- For anything else about your own build that the identifier does not answer, say you do not have that detail instead of guessing."""
+- For anything else about your own build that the identifier does not answer, say you do not have that detail instead of guessing.""",
         )
 
         val handles = botUsernames.filter(String::isNotBlank).map { "`@$it`" }

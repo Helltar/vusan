@@ -16,6 +16,7 @@ detekt = "2.0.0-alpha.6"
 regolith = "0.7.0"
 
 [libraries]
+detekt-ktlint-wrapper = { module = "dev.detekt:detekt-rules-ktlint-wrapper", version.ref = "detekt" }
 telegrambots-longpolling = { module = "org.telegram:telegrambots-longpolling", version.ref = "telegrambots" }
 telegrambots-client = { module = "org.telegram:telegrambots-client", version.ref = "telegrambots" }
 heartbeat = { module = "com.helltar:heartbeat", version.ref = "heartbeat" }

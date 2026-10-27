@@ -23,7 +23,6 @@ import com.helltar.vusan.telegram.delivery.TelegramDelivery
 import com.helltar.vusan.telegram.inbound.VoiceTranscriber
 import com.helltar.vusan.telegram.inbound.canLoadChatDescription
 import com.helltar.vusan.telegram.inbound.chatIdLong
-import com.helltar.vusan.telegram.inbound.forumTopicIdOrNull
 import com.helltar.vusan.telegram.inbound.language
 import com.helltar.vusan.telegram.inbound.messageIdLong
 import com.helltar.vusan.telegram.inbound.quotedFragmentOrNull

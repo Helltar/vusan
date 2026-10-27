@@ -9,11 +9,9 @@ import kotlin.test.Test
 import kotlin.test.assertContains
 import kotlin.test.assertEquals
 import kotlin.test.assertFailsWith
-import kotlin.test.assertFalse
 import kotlin.test.assertIs
 import kotlin.test.assertNull
 import kotlin.test.assertSame
-import kotlin.test.assertTrue
 import kotlin.time.Duration.Companion.seconds
 
 private const val ANTHROPIC_MODEL =
@@ -57,6 +55,8 @@ class ModelPreflightTest {
     private var asked: String? = null
     private var authorization: Headers? = null
 
+    private val timeout = 120.seconds
+
     private fun http(status: HttpStatusCode, body: String = "") =
         Http.createClient(
             MockEngine { request ->
@@ -65,8 +65,6 @@ class ModelPreflightTest {
                 respond(body, status, headersOf(HttpHeaders.ContentType, ContentType.Application.Json.toString()))
             },
         )
-
-    private val timeout = 120.seconds
 
     @Test
     fun `a model openai serves passes, and the key goes with the question`() = runBlocking {

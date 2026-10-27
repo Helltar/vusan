@@ -76,12 +76,12 @@ class ToolCatalog internal constructor(
 
     private val byName: Map<String, ToolFunction> = tools.associateBy { it.name }
 
-    /** The tool a call names, whether or not its group has been loaded, or `null` for a name nothing answers to. */
-    fun find(name: String): ToolFunction? = byName[name]
-
     /** Bumped whenever [load] widens the visible set, so a run can tell when to re-send its tool list. */
     var revision: Int = 0
         private set
+
+    /** The tool a call names, whether or not its group has been loaded, or `null` for a name nothing answers to. */
+    fun find(name: String): ToolFunction? = byName[name]
 
     // registration order, not load order: the tool array is part of the cached prefix on every provider,
     // so two turns that loaded the same groups in a different order must still produce the same request.

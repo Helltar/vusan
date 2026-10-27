@@ -43,6 +43,29 @@ class BotOutbox(val capabilities: ChatCapabilities = ChatCapabilities.UNRESTRICT
     val pending: List<OutboxItem>
         get() = items.toList()
 
+    /** Whether the turn already put something in the chat itself. */
+    @get:Synchronized
+    val hasDelivered: Boolean
+        get() = items.any { it.delivered }
+
+    /** Whether the turn already announced its plan; a second announcement would rewrite what the user read. */
+    @get:Synchronized
+    val hasAnnounced: Boolean
+        get() = items.any { it.delivered && it.announcement }
+
+    /**
+     * Whether anything is waiting to be sent. An announcement is not: it was a promise of an answer, so
+     * a turn that made one and queued nothing else still owes the user everything it announced.
+     */
+    @get:Synchronized
+    val hasQueuedOutput: Boolean
+        get() = items.any { !it.delivered && !it.announcement }
+
+    /** Whether the turn has an answer for the user at all, waiting to be sent or already in the chat. */
+    @get:Synchronized
+    val hasAnswered: Boolean
+        get() = items.any { !it.announcement }
+
     /** Queues [item], or answers `false` when this chat does not accept that kind of output at all. */
     @Synchronized
     fun enqueue(item: BotOutput): Boolean {
@@ -106,29 +129,6 @@ class BotOutbox(val capabilities: ChatCapabilities = ChatCapabilities.UNRESTRICT
 
         return true
     }
-
-    /** Whether the turn already put something in the chat itself. */
-    @get:Synchronized
-    val hasDelivered: Boolean
-        get() = items.any { it.delivered }
-
-    /** Whether the turn already announced its plan; a second announcement would rewrite what the user read. */
-    @get:Synchronized
-    val hasAnnounced: Boolean
-        get() = items.any { it.delivered && it.announcement }
-
-    /**
-     * Whether anything is waiting to be sent. An announcement is not: it was a promise of an answer, so
-     * a turn that made one and queued nothing else still owes the user everything it announced.
-     */
-    @get:Synchronized
-    val hasQueuedOutput: Boolean
-        get() = items.any { !it.delivered && !it.announcement }
-
-    /** Whether the turn has an answer for the user at all, waiting to be sent or already in the chat. */
-    @get:Synchronized
-    val hasAnswered: Boolean
-        get() = items.any { !it.announcement }
 
     // records text the turn already put in the chat itself, so it reaches the history and the group
     // transcript the same way a queued message does. never refused and never routed to a private chat:

@@ -15,6 +15,8 @@ repositories {
 }
 
 dependencies {
+    detektPlugins(libs.detekt.ktlint.wrapper)
+
     implementation(kotlin("reflect"))
 
     implementation(libs.telegrambots.client)

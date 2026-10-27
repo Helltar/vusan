@@ -17,6 +17,8 @@ import org.telegram.telegrambots.meta.api.objects.stickers.Sticker
 
 class MessageMetadataTest {
 
+    private val mapper = ObjectMapper()
+
     @Test
     fun `each chat flavor gets its own prompt label`() {
         assertEquals("private", messageIn("""{"id": 5, "type": "private"}""").promptChatType())
@@ -95,7 +97,7 @@ class MessageMetadataTest {
         assertEquals(
             "😂 happy_cats",
             message(""""sticker": {"file_id": "s", "file_unique_id": "su", "width": 512, "height": 512,
-                "type": "regular", "emoji": "😂", "set_name": "happy_cats"}""").groupLogDescriptor()
+                "type": "regular", "emoji": "😂", "set_name": "happy_cats"}""").groupLogDescriptor(),
         )
 
         assertEquals("Tea or coffee?", message(""""poll": {"id": "p", "question": "Tea or coffee?"}""").groupLogDescriptor())
@@ -114,7 +116,7 @@ class MessageMetadataTest {
         assertEquals(
             "Marta Vane - Slow Harbor",
             message(""""audio": {"file_id": "a", "file_unique_id": "au", "duration": 200,
-                "performer": "Marta Vane", "title": "Slow Harbor"}""").groupLogDescriptor()
+                "performer": "Marta Vane", "title": "Slow Harbor"}""").groupLogDescriptor(),
         )
 
         assertEquals(
@@ -213,18 +215,16 @@ class MessageMetadataTest {
         assertNull(messageIn("""{"id": 5, "type": "private"}""").chat.titleOrDisplayName())
     }
 
-    private val mapper = ObjectMapper()
-
     private fun gif(): Message =
         message(
             """"animation": {"file_id": "a", "file_unique_id": "au", "width": 320, "height": 240, "duration": 3},
-            "document": {"file_id": "d", "file_unique_id": "du", "file_name": "reaction.mp4"}"""
+            "document": {"file_id": "d", "file_unique_id": "du", "file_name": "reaction.mp4"}""",
         )
 
     private fun video(seconds: Int): Message =
         message(
             """"video": {"file_id": "v", "file_unique_id": "vu", "width": 640, "height": 360,
-            "duration": $seconds, "mime_type": "video/mp4"}"""
+            "duration": $seconds, "mime_type": "video/mp4"}""",
         )
 
     private fun photo(): Message =
@@ -232,7 +232,7 @@ class MessageMetadataTest {
             """"photo": [
                 {"file_id": "small", "file_unique_id": "s", "width": 90, "height": 90},
                 {"file_id": "big", "file_unique_id": "b", "width": 1280, "height": 720, "file_size": 204800}
-            ]"""
+            ]""",
         )
 
     private fun document(fileName: String): Message =
@@ -241,13 +241,13 @@ class MessageMetadataTest {
     private fun venue(): Message =
         message(
             """"venue": {"location": {"longitude": 1.0, "latitude": 2.0},
-            "title": "The Old Library", "address": "12 Mill Lane"}"""
+            "title": "The Old Library", "address": "12 Mill Lane"}""",
         )
 
     private fun stickerOf(fields: String = ""): Sticker =
         message(
             """"sticker": {"file_id": "s", "file_unique_id": "su", "width": 512, "height": 512,
-            "type": "regular"${if (fields.isBlank()) "" else ", ${fields.trim()}"}}"""
+            "type": "regular"${if (fields.isBlank()) "" else ", ${fields.trim()}"}}""",
         ).sticker
 
     private fun externalReply(fields: String = ""): ExternalReplyInfo =

@@ -283,7 +283,7 @@ class DatabaseMigrationTest {
                         creator_username VARCHAR(64),
                         creator_display_name VARCHAR(200)
                     )
-                    """.trimIndent()
+                    """.trimIndent(),
                 )
             }
         }

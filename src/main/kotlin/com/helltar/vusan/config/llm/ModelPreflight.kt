@@ -15,7 +15,6 @@ import kotlinx.serialization.json.jsonObject
 
 private val log = KotlinLogging.logger("ModelPreflight")
 
-
 /**
  * Asks the vendor about the configured model before the first turn, so a typo fails at startup with
  * the vendor's answer rather than on someone's first message with an opaque error.

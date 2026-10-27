@@ -94,4 +94,3 @@ private fun readReferenceFile(path: String): SourceImage {
 
     return SourceImage(bytes, file.name, contentType)
 }
-

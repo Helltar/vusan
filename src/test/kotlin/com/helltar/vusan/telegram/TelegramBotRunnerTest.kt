@@ -10,6 +10,10 @@ import kotlin.time.Duration.Companion.minutes
 
 class TelegramBotRunnerTest {
 
+    private val mapper = ObjectMapper()
+
+    private val now: Instant = Instant.parse("2026-08-28T12:00:00Z")
+
     // a plain text a person sent on its own joins their run of lines; everything handled in a way of its own does not
     @Test
     fun `a plain text joins its sender's lines and anything handled on its own does not`() {
@@ -20,7 +24,7 @@ class TelegramBotRunnerTest {
                 "text": "in a topic",
                 "reply_to_message": {"message_id": 1, "date": 1774000000, "chat": {"id": 10, "type": "supergroup"},
                                      "forum_topic_created": {"name": "Builds", "icon_color": 7322096}}
-                """
+                """,
             ).joinsTextBatch(),
         )
 
@@ -30,7 +34,7 @@ class TelegramBotRunnerTest {
                 """
                 "text": "see above",
                 "reply_to_message": {"message_id": 3, "date": 1774000000, "chat": {"id": 10, "type": "private"}, "text": "earlier"}
-                """
+                """,
             ).joinsTextBatch(),
         )
         assertFalse(
@@ -44,8 +48,6 @@ class TelegramBotRunnerTest {
             message(""""text": "as an admin"""", sender = """"from": {"id": 1087968824, "is_bot": true, "first_name": "Group"},""").joinsTextBatch(),
         )
     }
-
-    private val mapper = ObjectMapper()
 
     // `date` must stay non-zero: the bot api models a zero date as an InaccessibleMessage subtype.
     private fun message(fields: String, sender: String = """"from": {"id": 5, "is_bot": false, "first_name": "Ada"},"""): Message =
@@ -83,8 +85,6 @@ class TelegramBotRunnerTest {
         assertFalse(edit(inAlbum = true))
     }
 
-    private val now: Instant = Instant.parse("2026-08-28T12:00:00Z")
-
     private fun edit(
         sentAt: Instant = now.minusSeconds(30),
         editedAt: Instant? = now.minusSeconds(10),
@@ -99,5 +99,4 @@ class TelegramBotRunnerTest {
             isCommand = isCommand,
             inAlbum = inAlbum,
         )
-
 }

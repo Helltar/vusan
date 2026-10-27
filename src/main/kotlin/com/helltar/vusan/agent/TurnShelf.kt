@@ -383,4 +383,3 @@ private fun AttachedFile.describe(): String {
 
     return fileSizeBytes?.let { "$kind, ${it.asFileSize()}" } ?: kind
 }
-

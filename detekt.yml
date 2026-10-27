@@ -1,7 +1,17 @@
-# Narrow, high-signal config. The default ruleset (buildUponDefaultConfig=true
-# in build.gradle.kts) stays active; this file only tweaks what's too noisy
-# or too lenient for this codebase. See AGENTS.md for the project's coding
-# conventions.
+# The default rules (buildUponDefaultConfig=true in build.gradle.kts) stay active; this file turns
+# off what is too noisy for this codebase and turns on what it already keeps to, so it stays that
+# way. A rule turned on here had no finding left when it was, so a new one is a real regression.
+# See AGENTS.md for the conventions several of these enforce.
+
+comments:
+  DeprecatedBlockTag:
+    active: true
+  EndOfSentenceFormat:
+    active: true
+  KDocReferencesNonPublicProperty:
+    active: true
+  OutdatedDocumentation:
+    active: true
 
 complexity:
   LongParameterList:
@@ -12,6 +22,61 @@ complexity:
     active: false
   TooManyFunctions:
     active: false
+
+coroutines:
+  GlobalCoroutineUsage:
+    active: true
+
+exceptions:
+  TooGenericExceptionCaught:
+    active: false
+  SwallowedException:
+    active: false
+  InstanceOfCheckForException:
+    active: false
+  ErrorUsageWithThrowable:
+    active: true
+  NotImplementedDeclaration:
+    active: true
+  ObjectExtendsThrowable:
+    active: true
+  ThrowingExceptionInMain:
+    active: true
+
+naming:
+  FunctionNaming:
+    active: true
+    ignoreAnnotated: ['Test']
+  MatchingDeclarationName:
+    active: false
+  LambdaParameterNaming:
+    active: true
+  NonBooleanPropertyPrefixedWithIs:
+    active: true
+
+performance:
+  UnnecessaryInitOnArray:
+    active: true
+  UnnecessaryPartOfBinaryExpression:
+    active: true
+  UnnecessaryTypeCasting:
+    active: true
+
+potential-bugs:
+  CastToNullableType:
+    active: true
+  CharArrayToStringCall:
+    active: true
+  DontDowncastCollectionTypes:
+    active: true
+  MissingPackageDeclaration:
+    active: true
+  MissingSuperCall:
+    active: true
+  NullCheckOnMutableProperty:
+    active: true
+  UnnecessaryNotNullCheck:
+    active: true
 
 style:
   MagicNumber:
@@ -32,18 +97,112 @@ style:
     active: false
   LoopWithTooManyJumpStatements:
     active: false
-
-naming:
-  FunctionNaming:
+  # properties and initializer blocks, secondary constructors, methods, the companion object last
+  ClassOrdering:
     active: true
-    ignoreAnnotated: ['Test']
-  MatchingDeclarationName:
-    active: false
+  # the database is reached through Db.dbTransaction alone
+  ForbiddenImport:
+    active: true
+    excludes: ['**/infra/Database.kt']
+    forbiddenImports:
+      - value: 'org.jetbrains.exposed.v1.jdbc.transactions.transaction'
+        reason: 'Use Db.dbTransaction from infra/Database.kt.'
+      - value: 'org.jetbrains.exposed.v1.jdbc.transactions.suspendTransaction'
+        reason: 'Use Db.dbTransaction from infra/Database.kt.'
+  CollapsibleIfStatements:
+    active: true
+  DataClassShouldBeImmutable:
+    active: true
+  DoubleNegativeExpression:
+    active: true
+  DoubleNegativeLambda:
+    active: true
+  EqualsOnSignatureLine:
+    active: true
+  ExplicitCollectionElementAccessMethod:
+    active: true
+  MandatoryBracesLoops:
+    active: true
+  NoTabs:
+    active: true
+  OptionalUnit:
+    active: true
+  RangeUntilInsteadOfRangeTo:
+    active: true
+  RedundantConstructorKeyword:
+    active: true
+  RedundantExplicitType:
+    active: true
+  RedundantVisibilityModifier:
+    active: true
+  SpacingAfterPackageAndImports:
+    active: true
+  TrailingWhitespace:
+    active: true
+  UnnecessaryAny:
+    active: true
+  UnnecessaryBackticks:
+    active: true
+  UnnecessaryBracesAroundTrailingLambda:
+    active: true
+  UnnecessaryFullyQualifiedName:
+    active: true
+  UnnecessaryInnerClass:
+    active: true
+  UnnecessaryLet:
+    active: true
+  UnnecessaryReversed:
+    active: true
+  UnusedImport:
+    active: true
+  UseEmptyCounterpart:
+    active: true
+  UseIfEmptyOrIfBlank:
+    active: true
+  UseLet:
+    active: true
+  UseSumOfInsteadOfFlatMapSize:
+    active: true
 
-exceptions:
-  TooGenericExceptionCaught:
+# ktlint's whitespace and syntax rules stay on; what is off is its layout, which this codebase does
+# not follow (wrapping, indentation, signatures, import order). The trailing commas and the single
+# blank line are AGENTS.md's own rules.
+ktlint:
+  ArgumentListWrapping:
     active: false
-  SwallowedException:
+  BinaryExpressionWrapping:
     active: false
-  InstanceOfCheckForException:
+  BlankLineBetweenWhenConditions:
+    active: false
+  ClassSignature:
+    active: false
+  Filename:
+    active: false
+  FunctionLiteral:
+    active: false
+  FunctionSignature:
+    active: false
+  ImportOrdering:
+    active: false
+  Indentation:
+    active: false
+  MaximumLineLength:
+    active: false
+  MultiLineIfElse:
+    active: false
+  NoWildcardImports:
+    active: false
+  ParameterListWrapping:
+    active: false
+  PropertyWrapping:
+    active: false
+  # it puts a comma after the last entry of an enum as well, where this code ends the entries with `;`
+  TrailingCommaOnDeclarationSite:
+    active: false
+  # a comment glues a declaration to the group it belongs to rather than setting it apart
+  SpacingBetweenDeclarationsWithComments:
+    active: false
+  StatementWrapping:
+    active: false
+  Wrapping:
     active: false

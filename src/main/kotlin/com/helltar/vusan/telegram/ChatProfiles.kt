@@ -39,11 +39,11 @@ class ChatProfiles(
     private val ttl: Duration = DEFAULT_TTL,
 ) : ChatProfileLookup {
 
+    private val cached = ConcurrentHashMap<Long, Cached>()
+
     override suspend fun of(chat: ChatRef): ChatProfile = of(chat.telegramChatId)
 
     private data class Cached(val profile: ChatProfile, val readAt: Instant)
-
-    private val cached = ConcurrentHashMap<Long, Cached>()
 
     suspend fun of(chatId: Long): ChatProfile {
         cached[chatId]

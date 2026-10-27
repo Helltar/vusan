@@ -15,11 +15,6 @@ import kotlin.test.assertTrue
 
 class TurnCompactionTest {
 
-    private fun call(id: String, query: String) = Part.ToolCall(id, "lookUp", buildJsonObject { put("query", query) })
-
-    private fun batch(id: String, query: String, output: String) =
-        listOf(Message.Assistant(listOf(call(id, query))), Message.ToolResults(listOf(ToolResult(id, "lookUp", output))))
-
     private val long = "x".repeat(3_000)
 
     // the stored history and the request, then three rounds of the turn's own tool calls
@@ -28,6 +23,11 @@ class TurnCompactionTest {
                 batch("c1", long, long) + batch("c2", "short", long) + batch("c3", long, long)
 
     private val turnStart = 3
+
+    private fun call(id: String, query: String) = Part.ToolCall(id, "lookUp", buildJsonObject { put("query", query) })
+
+    private fun batch(id: String, query: String, output: String) =
+        listOf(Message.Assistant(listOf(call(id, query))), Message.ToolResults(listOf(ToolResult(id, "lookUp", output))))
 
     @Test
     fun `a request that fits is left alone`() {

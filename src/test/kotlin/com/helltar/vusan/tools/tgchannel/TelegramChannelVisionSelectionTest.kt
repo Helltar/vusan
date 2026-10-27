@@ -5,6 +5,8 @@ import kotlin.test.assertEquals
 
 class TelegramChannelVisionSelectionTest {
 
+    private val longCaption = "A caption long enough to be carrying the post entirely on its own words. ".repeat(2)
+
     private fun post(id: String, text: String = "", images: Int = 1, reactions: Int = 0) =
         TelegramChannelPost(
             id = id,
@@ -21,8 +23,6 @@ class TelegramChannelVisionSelectionTest {
             imageUrls = (1..images).map { "https://cdn.example.com/$id-$it.jpg" },
             links = emptyList(),
         )
-
-    private val longCaption = "A caption long enough to be carrying the post entirely on its own words. ".repeat(2)
 
     @Test
     fun `everything is described when the window fits the allowance`() {

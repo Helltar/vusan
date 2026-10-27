@@ -46,6 +46,9 @@ class VideoGenToolsTest {
         val outcomes = ArrayDeque<String>()
     }
 
+    private val JsonObject.prompt: String
+        get() = getValue("prompt").jsonPrimitive.content
+
     private fun done(duration: Int = 6, moderated: Boolean = true) =
         """{"status":"done","progress":100,"video":{"url":"$VIDEO_URL","duration":$duration,"respect_moderation":$moderated},"model":"m"}"""
 
@@ -89,9 +92,6 @@ class VideoGenToolsTest {
 
     private fun clip(name: String = "clip.mp4", duration: Int? = 5) =
         AttachedFile(name, VIDEO.size.toLong(), "video/mp4", AttachedFileKind.VIDEO, durationSeconds = duration) { VIDEO }
-
-    private val JsonObject.prompt: String
-        get() = getValue("prompt").jsonPrimitive.content
 
     @Test
     fun `a video from a description is started, waited for, downloaded and queued`() = runBlocking {

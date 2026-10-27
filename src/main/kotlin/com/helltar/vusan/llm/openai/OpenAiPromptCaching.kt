@@ -79,7 +79,7 @@ internal fun takesOpenAiPromptCacheOptions(model: String): Boolean {
     val major = version.groupValues[1].toInt()
     val minor = version.groupValues[2].toIntOrNull() ?: 0
 
-    return major > CACHE_OPTIONS_MAJOR || major == CACHE_OPTIONS_MAJOR && minor >= CACHE_OPTIONS_MINOR
+    return major > CACHE_OPTIONS_MAJOR || (major == CACHE_OPTIONS_MAJOR && minor >= CACHE_OPTIONS_MINOR)
 }
 
 // the breakpoint goes on the last text block of the first developer or system message: the prefix every

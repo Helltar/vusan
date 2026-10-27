@@ -25,7 +25,7 @@ class TelegramToolSetsTest {
     private val client: TelegramClient =
         Proxy.newProxyInstance(
             TelegramClient::class.java.classLoader,
-            arrayOf(TelegramClient::class.java)
+            arrayOf(TelegramClient::class.java),
         ) { _, method, _ -> error("the tool sets must not call Telegram to be built: ${method.name}") } as TelegramClient
 
     private val catalog = StickerCatalog(client, ImageVisionClient(FakeLlmClient(), TEST_MODEL, RequestOptions()))
