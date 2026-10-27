@@ -64,8 +64,8 @@ that is who owns writing them, not because only `agent/` reads them. No other ar
   travels between chats is durable memory rather than raw turns; `agent/memory/` stores that memory under a
   `MemoryOwner` (one person, or one group), which survives a history clear and is injected as
   `<user_memory>`/`<group_memory>`; `agent/grouplog/` is the group transcript, keyed by chat alone, holding every message the bot saw in a group rather than only the turns it took
-  part in. `GroupLogReader` answers a window from it under a character budget, falling back to cached per-day recaps
-  produced by `GroupLogDigester` when the window is too wide to quote. `agent/presence/` is what the bot does in a
+  part in. `GroupLogReader` answers a window from it under a character budget, giving each closed day as its diary
+  entry when the window is too wide to quote — through the `RememberedDays` port, so it never names `agent/presence/`. `agent/presence/` is what the bot does in a
   group with nobody asking: `Diary` writes an entry about each closed day, and `Initiative` looks over a chat people are
   writing in and now and then reacts or says something. Neither is a turn — no history, no tools, one model call each —
   and both are off unless switched on; see [Background and side flows](groups.md). `LeaveAloneRepository`

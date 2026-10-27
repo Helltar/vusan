@@ -11,22 +11,22 @@ the sticker catalog. Part of the [architecture index](../architecture.md).
   `GROUP_LOG_RETENTION_DAYS` and trims a chat to `GroupLogConfig.maxMessagesPerChat`, taking the chats that have
   something to remove rather than the chats that happen to be busy. On read, `GroupLogReader` quotes the window when it fits the budget derived from
   `liveToolResultMaxChars`; when it does not and the window reaches back into a closed day, it splits by local day,
-  replaces each **closed** day with a `GroupLogDigester` recap cached in `group_log_digests`, and leaves the current day
-  quoted. The digester runs at the least effort the chat model lists, since the turn that asked waits on every day it
-  makes. A window lying inside today has no closed day to summarize, so it is truncated to its newest entries rather
-  than widened to the whole day. Today is never cached — it is still being written to — which is what makes a repeated
-  weekly question cost nothing after the first one. Every result leads with the window's exact message count, narrowed
+  gives each **closed** day as the diary entry already written about it, and leaves the current day quoted. The entries
+  come through the `RememberedDays` port, which `ToolCatalogFactory` fills from `DiaryRepository`, so a wide read makes
+  no model call at all; the result says they are how the bot remembered the days, and names each closed day that had
+  messages but has no entry. A window lying inside today has no closed day to give, so it is truncated to its newest
+  entries rather than widened to the whole day. Every result leads with the window's exact message count, narrowed
   to one author when one was asked for, because the transcript under it may be only part of the window and a "how many"
-  answer must not be a tally of quoted lines. The digest path counts over the day-snapped window it prints rather than
+  answer must not be a tally of quoted lines. The diary path counts over the day-snapped window it prints rather than
   the narrower one requested, and labels `<today>` with how many of its messages fit. A read with `contains` never
-  takes the digest path: `GroupLogRepository.searchWindow` walks the window's rows and matches text, media label and
+  takes the diary path: `GroupLogRepository.searchWindow` walks the window's rows and matches text, media label and
   forward source in Kotlin, because SQLite's `LIKE` folds case for ASCII alone, and the matches are quoted under their
   exact count, newest kept when they overflow.
 - **Diary** — `agent/presence/Diary` gives the bot a memory of what a group's days were like, which neither history
   (one person's exchanges with it) nor durable memory (facts somebody asked to be kept) holds. Every fifteen minutes it
   looks for chats people wrote in yesterday that have no entry for that day, and has `DiaryWriter` write one from the
   day's transcript: first person, in the deployment's own personality, with the two entries before it for continuity.
-  Only a closed day is written, for the reason only a closed day is digested, and a day of fewer than fifteen messages
+  Only a closed day is written, since today is still being added to, and a day of fewer than fifteen messages
   gets none. A day whose writer keeps failing is given up on after three tries. The same pass then writes a look-back
   over the last settled Monday-to-Sunday week and calendar month, from that span's daily entries and the look-back
   before it; a span settles the day after its last day closes, once that day's own entry can no longer appear, and
@@ -36,8 +36,8 @@ the sticker catalog. Part of the [architecture index](../architecture.md).
   `chat_diary_look_back`, with no retention of their own, outliving the transcript, until
   `GroupLogRepository.clear` drops them with the transcript they were written from. What the block leaves out is read
   on demand through `readDiary` (`tools/diary/`): a day, a month or a range, or the entries that mention a word, with
-  months, then weeks, then the newest days kept when a read outgrows its budget. Unlike a digest, an entry is written
-  with nobody having asked, so a whole day of a chat goes to the chat model unprompted: it runs wherever the group log
+  months, then weeks, then the newest days kept when a read outgrows its budget, and `readGroupLog` gives the
+  entries for the closed days of a window too wide to quote. An entry is written with nobody having asked, so a whole day of a chat goes to the chat model unprompted: it runs wherever the group log
   does, with no switch of its own, and a chat the allowlist no longer names is never read.
 - **Initiative** — `agent/presence/Initiative` is the bot speaking up without being called. Code decides whether to
   look, a model decides what comes of it. Once a minute it takes the chats people wrote in during the last quarter of

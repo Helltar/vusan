@@ -6,7 +6,6 @@ import com.helltar.vusan.infra.tables.TelegramChatStickerSetsTable
 import com.helltar.vusan.infra.tables.TelegramChatStickersTable
 import com.helltar.vusan.infra.tables.ConversationMessagesTable
 import com.helltar.vusan.infra.tables.ConversationsTable
-import com.helltar.vusan.infra.tables.GroupLogDigestsTable
 import com.helltar.vusan.infra.tables.GroupLogTable
 import com.helltar.vusan.infra.tables.LeaveAloneTable
 import com.helltar.vusan.infra.tables.MemoryTable
@@ -29,7 +28,7 @@ import org.jetbrains.exposed.v1.core.Table
 internal object Schema {
 
     /** Raise this by one for every schema change, together with the step that reaches it. */
-    const val VERSION = 7
+    const val VERSION = 8
 
     /**
      * What moves a database from one version to the next: the statements under `N` take a database at
@@ -56,6 +55,9 @@ internal object Schema {
                 "UPDATE scheduled_tasks SET language = CASE language WHEN 'ENGLISH' THEN 'en' " +
                         "WHEN 'UKRAINIAN' THEN 'uk' WHEN 'RUSSIAN' THEN 'ru' WHEN 'SPANISH' THEN 'es' END",
             ),
+            8 to listOf(
+                "DROP TABLE group_log_digests",
+            ),
         )
 
     /** The oldest version [steps] can move forward; anything before it was moved by hand. */
@@ -66,7 +68,6 @@ internal object Schema {
             ConversationMessagesTable,
             ConversationsTable,
             GroupLogTable,
-            GroupLogDigestsTable,
             ChatDiaryTable,
             ChatDiaryLookBackTable,
             LeaveAloneTable,

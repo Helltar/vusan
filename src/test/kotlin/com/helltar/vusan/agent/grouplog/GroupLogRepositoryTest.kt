@@ -1,5 +1,7 @@
 package com.helltar.vusan.agent.grouplog
 
+import com.helltar.vusan.agent.presence.DiaryEntry
+import com.helltar.vusan.agent.presence.DiaryRepository
 import com.helltar.vusan.config.AppConfig
 import com.helltar.vusan.config.GroupLogConfig
 import com.helltar.vusan.config.llm.LlmProviderConfig
@@ -8,7 +10,6 @@ import java.nio.file.Files
 import java.nio.file.Path
 import java.time.Instant
 import java.time.LocalDate
-import java.time.ZoneId
 import java.time.temporal.ChronoUnit
 import kotlin.test.AfterTest
 import kotlin.test.BeforeTest
@@ -17,7 +18,6 @@ import com.helltar.vusan.request.testChat
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFalse
-import kotlin.test.assertNull
 import kotlin.test.assertTrue
 import kotlin.time.Duration.Companion.seconds
 import kotlinx.coroutines.runBlocking
@@ -211,16 +211,18 @@ class GroupLogRepositoryTest {
     }
 
     @Test
-    fun `clear removes the transcript and the cached digests`() = runBlocking {
+    fun `clear removes the transcript and the diary written from it`() = runBlocking {
         val repository = GroupLogRepository(GroupLogConfig())
+        val diary = DiaryRepository()
+        val day = LocalDate.of(2026, 8, 3)
 
         repository.record(entry("1", "gone", now))
-        repository.storeDigest(CHAT, LocalDate.of(2026, 8, 3), content = "a recap")
+        diary.store(CHAT, DiaryEntry(day, "a day worth remembering"))
 
         repository.clear(CHAT)
 
         assertEquals(0L, repository.countInWindow(CHAT, now.minusSeconds(600), now))
-        assertNull(repository.digestFor(CHAT, LocalDate.of(2026, 8, 3)))
+        assertTrue(diary.between(CHAT, day, day).isEmpty())
     }
 
     @Test
@@ -272,18 +274,6 @@ class GroupLogRepositoryTest {
     }
 
     @Test
-    fun `a stored digest round-trips and is replaced on rewrite`() = runBlocking {
-        val repository = GroupLogRepository(GroupLogConfig())
-        val day = LocalDate.of(2026, 8, 3)
-
-        repository.storeDigest(CHAT, day, content = "first take")
-        assertEquals("first take", repository.digestFor(CHAT, day))
-
-        repository.storeDigest(CHAT, day, content = "second take")
-        assertEquals("second take", repository.digestFor(CHAT, day))
-    }
-
-    @Test
     fun `an edit rewrites what the transcript quotes`() = runBlocking {
         val repository = GroupLogRepository(GroupLogConfig())
 
@@ -294,21 +284,6 @@ class GroupLogRepositoryTest {
         val entries = repository.readWindow(CHAT, now.minusSeconds(600), now, limit = 10)
 
         assertEquals(listOf("weather in kyiv"), entries.map { it.text })
-    }
-
-    @Test
-    fun `an edit drops the cached digest of the day it belongs to`() = runBlocking {
-        // the day may already be closed, and nothing else would ever invalidate a stored digest
-        val repository = GroupLogRepository(GroupLogConfig())
-        val sentAt = now.minusSeconds(100)
-        val day = LocalDate.ofInstant(sentAt, ZoneId.systemDefault())
-
-        repository.record(entry(messageId = "1", text = "before", at = sentAt))
-        repository.storeDigest(CHAT, day, content = "a recap quoting before")
-
-        repository.recordEdit(entry(messageId = "1", text = "after", at = sentAt))
-
-        assertNull(repository.digestFor(CHAT, day))
     }
 
     // the reference a messenger issues is opaque text, and a chat log has to hold whatever shape that

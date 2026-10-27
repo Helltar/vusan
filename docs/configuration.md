@@ -220,7 +220,7 @@ counterparts do; the timeout follows the primary's when unset.
 
 - **What switches** — a usage limit, rejected credentials, a rate limit, an overloaded or failing
   server, a dropped connection. A content refusal does not end a turn on the fallback: it would
-  usually repeat anywhere. A daily recap and a [diary](#diary) entry are the exception: one the
+  usually repeat anywhere. A [diary](#diary) entry is the exception: one the
   primary declines is asked of the fallback once, so a day is not left unwritten over one vendor's
   filter, and the primary stays in use.
 - **For how long** — a usage limit until the reset time it named, an expired sign-in for half an

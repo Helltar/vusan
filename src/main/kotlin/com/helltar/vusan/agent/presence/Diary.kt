@@ -28,10 +28,10 @@ import kotlin.time.Duration.Companion.minutes
  * with the bot, and durable memory is facts somebody asked to be kept; neither holds what the chat was
  * like the day before.
  *
- * Only a closed day is written, for the reason only a closed day is digested: today is still being
- * added to. Unlike a digest an entry is written without anyone asking, so a whole day of a chat goes
- * to the model unprompted — which is why this is switched on deliberately and only reads chats that
- * [isAllowed] still admits.
+ * Only a closed day is written: today is still being added to. An entry is written without anyone
+ * asking, so a whole day of a chat goes to the model unprompted — which is why this only reads chats
+ * that [isAllowed] still admits. It is also what `readGroupLog` gives for the closed days of a window
+ * too wide to quote.
  *
  * Once a week or a month is over, its daily entries are read again into one look-back over it, so what
  * mattered weeks ago still reaches a turn that is shown only the last few days. Entries and look-backs

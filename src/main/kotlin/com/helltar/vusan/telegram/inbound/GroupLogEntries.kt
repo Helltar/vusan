@@ -39,7 +39,7 @@ internal fun Message.toGroupLogEntry(): GroupLogEntry? {
         chat = telegramChat(chatIdLong),
         messageId = messageIdLong.toString(),
         kind = kind,
-        // telegram's own send time: a digest keyed on local days must not drift when the bot is
+        // telegram's own send time: a diary entry keyed on local days must not drift when the bot is
         // catching up on a backlog of updates.
         sentAt = date?.let { Instant.ofEpochSecond(it.toLong()) } ?: Instant.now(),
         senderId = senderIdOrNull()?.toString(),

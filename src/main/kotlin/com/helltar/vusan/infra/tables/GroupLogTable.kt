@@ -29,7 +29,7 @@ object GroupLogTable : LongIdTable("group_log") {
     val forwardFrom = varchar("forward_from", 128).nullable()
     val replyToMessageId = externalId("reply_to_message_id").nullable()
 
-    // telegram's own send time, not the moment the row was written: a digest keyed on local days
+    // telegram's own send time, not the moment the row was written: a diary entry keyed on local days
     // must not drift when the bot lags behind the update stream.
     val sentAt = timestamp("sent_at")
 

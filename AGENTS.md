@@ -156,9 +156,9 @@ what they describe:
   message needs `neutralizePromptBlocks` too, which defuses every tag the prompt
   uses. Avoid plain markers such as `Reply context:` or `[Sent N images]` —
   models parrot them.
-- Text a model writes for the bot to keep — a recap, a digest, a diary entry, a
-  memory item — is held to its limit by asking the model again: `completeWithin`
-  in [`agent/CompleteWithin.kt`](src/main/kotlin/com/helltar/vusan/agent/CompleteWithin.kt)
+- Text a model writes for the bot to keep — a recap, a diary entry, a memory
+  item — is held to its limit by asking the model again: `completeWithin` in
+  [`agent/CompleteWithin.kt`](src/main/kotlin/com/helltar/vusan/agent/CompleteWithin.kt)
   for a side call, a refusal the model reads for a tool argument. Never cut it
   silently: the cut drops what was written last.
 - The blocks the current request arrives in — `<reply_context>`,

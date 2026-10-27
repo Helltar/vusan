@@ -4,7 +4,7 @@ import com.helltar.vusan.agent.TurnNarrator
 import com.helltar.vusan.agent.TurnShelf
 import com.helltar.vusan.agent.TurnToolBudget
 import com.helltar.vusan.agent.conversation.ConversationRepository
-import com.helltar.vusan.agent.grouplog.GroupLogDigester
+import com.helltar.vusan.agent.grouplog.RememberedDays
 import com.helltar.vusan.agent.grouplog.GroupLogReader
 import com.helltar.vusan.agent.grouplog.GroupLogRepository
 import com.helltar.vusan.agent.memory.MemoryRepository
@@ -91,7 +91,6 @@ class ToolCatalogFactory(
     private val leaveAlone: LeaveAloneRepository,
     vision: VisionRuntime?,
     private val groupLog: GroupLogRepository?,
-    groupLogDigester: GroupLogDigester?,
     // present only where the deployment keeps a diary
     private val diary: DiaryRepository?,
     toolResultMaxChars: Int,
@@ -114,7 +113,16 @@ class ToolCatalogFactory(
     // own answer, and a recap turn often calls other tools alongside it.
     private val chatReadBudgetChars = (toolResultMaxChars / 2).coerceIn(4_000, 24_000)
 
-    private val groupLogReader = groupLog?.let { GroupLogReader(it, groupLogDigester, chatReadBudgetChars) }
+    // a window too wide to quote gives its closed days as the diary entries already written about them
+    private val groupLogReader =
+        groupLog?.let { log ->
+            val remembered =
+                diary?.let { repository ->
+                    RememberedDays { chat, from, to -> repository.between(chat, from, to).associate { it.day to it.content } }
+                }
+
+            GroupLogReader(log, remembered, chatReadBudgetChars)
+        }
 
     private val fileDownloadClient = FileDownloadClient(publicHttp)
     private val pageReader = PageReader(fileDownloadClient)

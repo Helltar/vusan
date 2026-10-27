@@ -9,7 +9,7 @@ object ChatDiaryTable : Table("chat_diary") {
     val platform = platformColumn()
     val chatId = externalId("chat_id")
 
-    // local date as `yyyy-MM-dd`, in the bot's own zone, the same way a digest names its day.
+    // local date as `yyyy-MM-dd`, in the bot's own zone, the one the group log cuts its days on.
     val day = varchar("day", 10)
 
     val content = text("content")

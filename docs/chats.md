@@ -58,8 +58,9 @@ How they run:
 With the [group log](configuration.md#group-log) on, Vusan records every message it receives.
 
 - **Every turn** — a group turn carries the last fifteen messages of the past hour.
-- **Long ranges** — a range too big for the context is read through daily recaps, made once per
-  closed day and kept. The current day is never cached.
+- **Long ranges** — when a range is too big for the context, Vusan reads each past day in it
+  from its [diary](configuration.md#diary) entry and quotes only the current day. A day with
+  messages but no entry yet is named as such.
 - **Searching** — asked whether or when something came up, Vusan searches every recorded message
   for it, whatever the case, and quotes what it finds instead of a recap.
 - **What a row holds** — the text (up to 2,000 characters, 1,000 for a forwarded post), sender and

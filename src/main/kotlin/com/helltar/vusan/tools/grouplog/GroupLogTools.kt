@@ -54,7 +54,7 @@ class GroupLogTools(
 
         val removed = repository.clear(context.chatRef)
 
-        "Deleted this group's recorded messages ($removed) and every cached daily recap."
+        "Deleted this group's recorded messages ($removed) and your diary about it."
     }
 
     private companion object {

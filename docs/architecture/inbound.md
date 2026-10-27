@@ -21,7 +21,7 @@ turn starts from. Next: [running a turn](turn.md).
    `my_chat_member` update — the bot's own membership changing, which Telegram delivers by default — carries no message
    and goes straight to `telegram/BotMembership.kt` instead of the dispatch below; it is in the default
    `allowed_updates` set, which is why it needs no `allowed_updates` parameter of its own. An `edited_message` update always rewrites its
-   group-transcript row (`GroupLogRepository.recordEdit`, which also drops the cached digest of that message's day), and
+   group-transcript row (`GroupLogRepository.recordEdit`), and
    only then may enter the dispatch below. `startsTurnOnEdit` decides: an edit answers only when it is what made the
    message addressed to the bot — someone adding the mention they forgot. An edit of a message older than
    `EDIT_TURN_WINDOW`, an edit into a slash command, and an edit of an album part are recorded but never answered; the

@@ -5,7 +5,6 @@ import com.helltar.vusan.config.GroupLogConfig
 import com.helltar.vusan.infra.Db.dbTransaction
 import com.helltar.vusan.infra.tables.ChatDiaryLookBackTable
 import com.helltar.vusan.infra.tables.ChatDiaryTable
-import com.helltar.vusan.infra.tables.GroupLogDigestsTable
 import com.helltar.vusan.infra.tables.GroupLogTable
 import com.helltar.vusan.request.ChatRef
 import org.jetbrains.exposed.v1.core.LikePattern
@@ -31,9 +30,7 @@ import org.jetbrains.exposed.v1.jdbc.insertIgnore
 import org.jetbrains.exposed.v1.jdbc.select
 import org.jetbrains.exposed.v1.jdbc.selectAll
 import org.jetbrains.exposed.v1.jdbc.update
-import org.jetbrains.exposed.v1.jdbc.upsert
 import java.time.Instant
-import java.time.LocalDate
 import java.time.ZoneId
 
 /**
@@ -43,7 +40,7 @@ import java.time.ZoneId
  */
 class GroupLogRepository(
     private val config: GroupLogConfig,
-    /** The zone a transcript day is cut on. A digest is keyed by day, so every reader takes its zone from here. */
+    /** The zone a transcript day is cut on. A diary entry is keyed by day, so every reader takes its zone from here. */
     val zone: ZoneId = ZoneId.systemDefault(),
 ) {
 
@@ -82,25 +79,13 @@ class GroupLogRepository(
         val editedMessageId = entry.messageId ?: return false
 
         return dbTransaction {
-            val updated =
-                GroupLogTable.update({
-                    inChat(entry.chat) and (GroupLogTable.messageId eq editedMessageId)
-                }) {
-                    it[kind] = entry.kind.limitTo(KIND_COLUMN_CHARS)
-                    it[text] = entry.text
-                    it[descriptor] = entry.descriptor.fitColumn(DESCRIPTOR_COLUMN_CHARS)
-                }
-
-            // the edited message's day may already be closed and cached, and nothing else would ever
-            // invalidate that digest — it would keep reciting the text the edit replaced.
-            if (updated > 0) {
-                GroupLogDigestsTable.deleteWhere {
-                    digestsInChat(entry.chat) and
-                            (GroupLogDigestsTable.day eq LocalDate.ofInstant(entry.sentAt, zone).toString())
-                }
-            }
-
-            updated > 0
+            GroupLogTable.update({
+                inChat(entry.chat) and (GroupLogTable.messageId eq editedMessageId)
+            }) {
+                it[kind] = entry.kind.limitTo(KIND_COLUMN_CHARS)
+                it[text] = entry.text
+                it[descriptor] = entry.descriptor.fitColumn(DESCRIPTOR_COLUMN_CHARS)
+            } > 0
         }
     }
 
@@ -183,30 +168,6 @@ class GroupLogRepository(
             .reversed()
     }
 
-    suspend fun digestFor(chat: ChatRef, day: LocalDate): String? = dbTransaction {
-        GroupLogDigestsTable
-            .select(GroupLogDigestsTable.content)
-            .where { digestsInChat(chat) and (GroupLogDigestsTable.day eq day.toString()) }
-            .singleOrNull()
-            ?.get(GroupLogDigestsTable.content)
-    }
-
-    suspend fun storeDigest(chat: ChatRef, day: LocalDate, content: String) {
-        require(content.isNotBlank()) { "Chat log digest must not be blank" }
-
-        dbTransaction {
-            // the key names the day of one chat, so a second recap of the same day replaces the first
-            GroupLogDigestsTable.upsert(
-                onUpdate = { it[GroupLogDigestsTable.content] = content },
-            ) {
-                it[GroupLogDigestsTable.platform] = chat.platform
-                it[GroupLogDigestsTable.chatId] = chat.id
-                it[GroupLogDigestsTable.day] = day.toString()
-                it[GroupLogDigestsTable.content] = content
-            }
-        }
-    }
-
     /**
      * The chats people wrote in between [from] and [to]. The bot's own lines do not count: a chat only
      * the bot has spoken in is not one anybody is in.
@@ -252,10 +213,8 @@ class GroupLogRepository(
             }
     }
 
-    /** Drops everything recorded for [chat]: the transcript, and the digests and diary made from it. */
+    /** Drops everything recorded for [chat]: the transcript, and the diary written from it. */
     suspend fun clear(chat: ChatRef): Int = dbTransaction {
-        GroupLogDigestsTable.deleteWhere { digestsInChat(chat) }
-
         ChatDiaryTable.deleteWhere {
             (ChatDiaryTable.platform eq chat.platform) and (ChatDiaryTable.chatId eq chat.id)
         }
@@ -314,11 +273,6 @@ class GroupLogRepository(
         dbTransaction {
             GroupLogTable.deleteWhere { inChat(chat) and (GroupLogTable.sentAt less cutoff) }
 
-            GroupLogDigestsTable.deleteWhere {
-                digestsInChat(chat) and
-                        (GroupLogDigestsTable.day less LocalDate.ofInstant(cutoff, zone).toString())
-            }
-
             val keepMinId =
                 GroupLogTable
                     .select(GroupLogTable.id)
@@ -348,9 +302,6 @@ private fun String?.fitColumn(maxChars: Int): String? = this?.limitTo(maxChars)
 
 private fun inChat(chat: ChatRef): Op<Boolean> =
     (GroupLogTable.platform eq chat.platform) and (GroupLogTable.chatId eq chat.id)
-
-private fun digestsInChat(chat: ChatRef): Op<Boolean> =
-    (GroupLogDigestsTable.platform eq chat.platform) and (GroupLogDigestsTable.chatId eq chat.id)
 
 private fun windowCondition(chat: ChatRef, from: Instant, to: Instant, author: String?): Op<Boolean> {
     val window =

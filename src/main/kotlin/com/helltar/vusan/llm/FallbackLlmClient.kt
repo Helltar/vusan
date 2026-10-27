@@ -28,7 +28,7 @@ class ProviderOutage(val until: Instant, val deadlineNamed: Boolean)
  * after which one call probes it again.
  *
  * It wraps the client rather than the agent so that one place covers every call the bot makes — a
- * turn, a history recap, a group-log digest, vision on the chat model — and so the turn that ran into
+ * turn, a history recap, a diary entry, vision on the chat model — and so the turn that ran into
  * the limit finishes on the fallback instead of ending in "come back later". [outageOf] reads a failure
  * into the outage it means, or `null` when the failure is not the provider's and reaches the caller.
  */

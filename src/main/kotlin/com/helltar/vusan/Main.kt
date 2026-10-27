@@ -11,7 +11,6 @@ import com.helltar.vusan.agent.addressing.LlmAddressingClassifier
 import com.helltar.vusan.agent.conversation.ConversationRepository
 import com.helltar.vusan.agent.conversation.LlmConversationCompactor
 import com.helltar.vusan.agent.grouplog.GroupLogRepository
-import com.helltar.vusan.agent.grouplog.LlmGroupLogDigester
 import com.helltar.vusan.agent.memory.MemoryRepository
 import com.helltar.vusan.agent.presence.Diary
 import com.helltar.vusan.agent.presence.DiaryRepository
@@ -195,13 +194,9 @@ suspend fun main() = coroutineScope {
         val contextWindowTokens =
             listOfNotNull(llm.statedWindow(config.llmProvider), config.llmFallback?.let { fallback?.statedWindow(it) }).min()
         val contextWindowPolicy = ContextWindowPolicy(llm.model.copy(contextWindowTokens = contextWindowTokens))
-        // a digest and a diary entry retell what a group said, and one vendor's content filter declining that
-        // text is no reason to leave a day unwritten while another model stands behind it
+        // a diary entry retells what a group said, and one vendor's content filter declining that text is
+        // no reason to leave a day unwritten while another model stands behind it
         val summaryOptions = llm.compactionOptions.copy(fallBackOnRefusal = true)
-        // a digest is made while somebody waits for the turn that asked for it, one closed day after another,
-        // and retelling a day needs no deliberation: the least effort the model lists, never the chat's own
-        val digestOptions = summaryOptions.copy(reasoningEffort = llm.model.efforts?.minOrNull() ?: summaryOptions.reasoningEffort)
-        val groupLogDigester = groupLog?.let { LlmGroupLogDigester(client, llm.model, digestOptions) }
 
         // the diary reads the group log, so it is kept only where there is one
         val diaryRepository = groupLog?.let { DiaryRepository() }
@@ -209,7 +204,7 @@ suspend fun main() = coroutineScope {
         val toolCatalogFactory =
             ToolCatalogFactory(
                 http, publicHttp, TelegramToolSets(telegramClient, stickerCatalog), config, conversation, memory,
-                tasks, leaveAlone, vision, groupLog, groupLogDigester, diaryRepository,
+                tasks, leaveAlone, vision, groupLog, diaryRepository,
                 contextWindowPolicy.liveToolResultMaxChars, codexAuth, selfImage,
             )
 

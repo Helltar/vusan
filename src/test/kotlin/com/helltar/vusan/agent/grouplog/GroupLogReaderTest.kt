@@ -12,6 +12,7 @@ import java.time.ZoneId
 import kotlin.test.AfterTest
 import kotlin.test.BeforeTest
 import com.helltar.vusan.request.AccessPolicy
+import com.helltar.vusan.request.ChatRef
 import com.helltar.vusan.request.testChat
 import kotlin.test.Test
 import kotlin.test.assertContains
@@ -55,25 +56,25 @@ class GroupLogReaderTest {
     }
 
     @Test
-    fun `a window that fits is quoted whole and never reaches the digester`() = runBlocking {
-        val digester = RecordingDigester()
+    fun `a window that fits is quoted whole and never reaches the diary`() = runBlocking {
+        val diary = RecordingDiary()
         record(1L, "first", now.minusSeconds(600))
         record(2L, "second", now.minusSeconds(300))
 
-        val result = reader(digester).read(CHAT, 1.hours, now = now)
+        val result = reader(diary).read(CHAT, 1.hours, now = now)
 
         assertContains(result, "Messages in this window: 2 (exact, for the whole window).")
         assertContains(result, "<transcript>")
         assertContains(result, "first")
         assertContains(result, "second")
-        assertTrue(digester.days.isEmpty(), "a fitting window must not cost an LLM call")
+        assertTrue(diary.reads.isEmpty(), "a fitting window has no use for the diary")
     }
 
     @Test
-    fun `an overflowing window without a digester truncates and says how much it dropped`() = runBlocking {
+    fun `an overflowing window without a diary truncates and says how much it dropped`() = runBlocking {
         repeat(200) { record(it + 1L, "message number $it", now.minusSeconds(3_000L - it)) }
 
-        val result = GroupLogReader(repository, digester = null, budgetChars = 500)
+        val result = GroupLogReader(repository, diary = null, budgetChars = 500)
             .read(CHAT, 1.hours, now = now)
 
         assertContains(result, "Messages in this window: 200 (exact, for the whole window).")
@@ -86,7 +87,7 @@ class GroupLogReaderTest {
     fun `a truncated window reports the whole count and not the quoted one`() = runBlocking {
         repeat(200) { record(it + 1L, "message number $it", now.minusSeconds(3_000L - it)) }
 
-        val result = GroupLogReader(repository, digester = null, budgetChars = 500)
+        val result = GroupLogReader(repository, diary = null, budgetChars = 500)
             .read(CHAT, 1.hours, now = now)
 
         val quoted = Regex("""Showing the newest (\d+)""").find(result)?.groupValues?.get(1)?.toInt()
@@ -98,28 +99,28 @@ class GroupLogReaderTest {
 
     @Test
     fun `a window inside today truncates instead of widening itself to the whole day`() = runBlocking {
-        val digester = RecordingDigester()
+        val diary = RecordingDiary()
         repeat(200) { record(it + 1L, "message number $it", now.minusSeconds(3_000L - it)) }
 
-        val result = GroupLogReader(repository, digester, budgetChars = 500)
+        val result = GroupLogReader(repository, diary, budgetChars = 500)
             .read(CHAT, 1.hours, now = now)
 
         assertContains(result, "Window: 2026-08-04T14:00 .. 2026-08-04T15:00 Europe/Kyiv.")
         assertContains(result, "Showing the newest")
-        assertFalse(result.contains("closed days are summarized"), "there is no closed day in this window")
-        assertTrue(digester.days.isEmpty(), "a window with nothing closed in it must not cost an LLM call")
+        assertFalse(result.contains("diary entry"), "there is no closed day in this window")
+        assertTrue(diary.reads.isEmpty(), "a window with nothing closed in it has no entry to give")
     }
 
     @Test
     fun `an author query stays raw even when it overflows`() = runBlocking {
-        val digester = RecordingDigester()
+        val diary = RecordingDiary()
         repeat(200) { record(it + 1L, "from olena $it", now.minusSeconds(3_000L - it)) }
 
-        val result = GroupLogReader(repository, digester, budgetChars = 500)
+        val result = GroupLogReader(repository, diary, budgetChars = 500)
             .read(CHAT, 1.hours, author = "olena", now = now)
 
         assertContains(result, "<transcript>")
-        assertTrue(digester.days.isEmpty(), "a per-author question cannot be answered from whole-chat digests")
+        assertTrue(diary.reads.isEmpty(), "a per-author question cannot be answered from entries about the whole chat")
     }
 
     @Test
@@ -127,15 +128,15 @@ class GroupLogReaderTest {
         repeat(120) { record(it + 1L, "olena $it", now.minusSeconds(3_000L - it)) }
         repeat(30) { recordFrom(500L + it, "petro $it", now.minusSeconds(2_000L - it), "petro", "Petro Koval") }
 
-        val result = GroupLogReader(repository, RecordingDigester(), budgetChars = 500)
+        val result = GroupLogReader(repository, RecordingDiary(), budgetChars = 500)
             .read(CHAT, 1.hours, author = "petro", now = now)
 
         assertContains(result, "Messages in this window: 30 from `petro` (exact, for the whole window).")
     }
 
     @Test
-    fun `a search quotes its matches from every day and never reaches the digester`() = runBlocking {
-        val digester = RecordingDigester()
+    fun `a search quotes its matches from every day and never reaches the diary`() = runBlocking {
+        val diary = RecordingDiary()
 
         repeat(80) { record(1_000L + it, "two days ago $it", instantAt(2026, 8, 2, 10)) }
         record(1_500L, "the Budget is due friday", instantAt(2026, 8, 2, 11))
@@ -143,21 +144,21 @@ class GroupLogReaderTest {
         record(2_500L, "who approved the budget", instantAt(2026, 8, 3, 11))
         repeat(80) { record(3_000L + it, "today $it", instantAt(2026, 8, 4, 11)) }
 
-        val result = GroupLogReader(repository, digester, budgetChars = 1_200)
+        val result = GroupLogReader(repository, diary, budgetChars = 1_200)
             .read(CHAT, 3.days, contains = "budget", now = now)
 
         assertContains(result, "Messages in this window: 2 mentioning `budget` (exact, for the whole window).")
         assertContains(result, "the Budget is due friday")
         assertContains(result, "who approved the budget")
         assertFalse(result.contains("Showing the newest"), "every match fit")
-        assertTrue(digester.days.isEmpty(), "a recap drops exactly the message a search is after")
+        assertTrue(diary.reads.isEmpty(), "an entry drops exactly the message a search is after")
     }
 
     @Test
     fun `a search too big to quote shows the newest matches under the exact count`() = runBlocking {
         repeat(200) { record(it + 1L, "budget line $it", now.minusSeconds(3_000L - it)) }
 
-        val result = GroupLogReader(repository, RecordingDigester(), budgetChars = 500)
+        val result = GroupLogReader(repository, RecordingDiary(), budgetChars = 500)
             .read(CHAT, 1.hours, author = "olena", contains = "budget", now = now)
 
         assertContains(result, "Messages in this window: 200 from `olena` mentioning `budget` (exact, for the whole window).")
@@ -175,33 +176,81 @@ class GroupLogReaderTest {
     }
 
     @Test
-    fun `an overflowing window digests closed days and quotes today`() = runBlocking {
-        val digester = RecordingDigester()
+    fun `an overflowing window gives closed days as diary entries and quotes today`() = runBlocking {
+        val diary = RecordingDiary(LocalDate.of(2026, 8, 2) to "a quiet sunday", LocalDate.of(2026, 8, 3) to "the budget fight")
 
         repeat(80) { record(1_000L + it, "two days ago $it", instantAt(2026, 8, 2, 10)) }
         repeat(80) { record(2_000L + it, "yesterday $it", instantAt(2026, 8, 3, 10)) }
         repeat(80) { record(3_000L + it, "today $it", instantAt(2026, 8, 4, 11)) }
 
-        val result = GroupLogReader(repository, digester, budgetChars = 1_200)
+        val result = GroupLogReader(repository, diary, budgetChars = 1_200)
             .read(CHAT, 3.days, now = now)
 
-        assertEquals(listOf(LocalDate.of(2026, 8, 2), LocalDate.of(2026, 8, 3)), digester.days.sorted())
-        assertContains(result, """<day date="2026-08-02">""")
-        assertContains(result, """<day date="2026-08-03">""")
+        assertEquals(listOf(LocalDate.of(2026, 8, 1) to LocalDate.of(2026, 8, 3)), diary.reads)
+        assertContains(result, "<day date=\"2026-08-02\">\na quiet sunday\n</day>")
+        assertContains(result, "<day date=\"2026-08-03\">\nthe budget fight\n</day>")
+        assertContains(result, "how you remembered the day, not what was said")
         assertContains(result, """<today date="2026-08-04" messages="80"""")
-        assertContains(result, "today")
-        assertFalse(digester.days.contains(LocalDate.of(2026, 8, 4)), "today must never be digested")
+        assertFalse(result.contains("yesterday 1"), "a closed day is given by its entry, not quoted")
     }
 
     @Test
-    fun `the digested count covers the snapped window rather than the narrower one asked for`() = runBlocking {
-        // 15:00 minus 24h lands mid-day on the 3rd, and the digest path then widens the window to that
+    fun `a closed day without an entry is named rather than left out silently`() = runBlocking {
+        val diary = RecordingDiary(LocalDate.of(2026, 8, 3) to "the budget fight")
+
+        repeat(80) { record(1_000L + it, "two days ago $it", instantAt(2026, 8, 2, 10)) }
+        repeat(80) { record(2_000L + it, "yesterday $it", instantAt(2026, 8, 3, 10)) }
+        repeat(80) { record(3_000L + it, "today $it", instantAt(2026, 8, 4, 11)) }
+
+        val result = GroupLogReader(repository, diary, budgetChars = 1_200)
+            .read(CHAT, 2.days, now = now)
+
+        assertContains(result, "No diary entry for 2026-08-02.")
+        assertContains(result, "the budget fight")
+    }
+
+    @Test
+    fun `a diary that cannot be read leaves the days without an entry instead of failing the read`() = runBlocking {
+        repeat(80) { record(2_000L + it, "yesterday $it", instantAt(2026, 8, 3, 10)) }
+        repeat(80) { record(3_000L + it, "today $it", instantAt(2026, 8, 4, 11)) }
+
+        val result = GroupLogReader(repository, { _, _, _ -> error("database is locked") }, budgetChars = 1_200)
+            .read(CHAT, 2.days, now = now)
+
+        assertContains(result, """<today date="2026-08-04" messages="80"""")
+        assertContains(result, "No diary entry for 2026-08-03.")
+        assertFalse(result.contains("<day "), "a failed read must not produce a day block")
+    }
+
+    @Test
+    fun `entries that do not all fit keep the newest days`() = runBlocking {
+        val diary =
+            RecordingDiary(
+                LocalDate.of(2026, 8, 1) to "first ".repeat(60),
+                LocalDate.of(2026, 8, 2) to "second ".repeat(60),
+                LocalDate.of(2026, 8, 3) to "third ".repeat(60),
+            )
+
+        repeat(80) { record(1_000L + it, "early $it", instantAt(2026, 8, 1, 10)) }
+        repeat(80) { record(3_000L + it, "today $it", instantAt(2026, 8, 4, 11)) }
+
+        val result = GroupLogReader(repository, diary, budgetChars = 1_200)
+            .read(CHAT, 4.days, now = now)
+
+        assertContains(result, "third")
+        assertFalse(result.contains("first first"), "the oldest entry is the one dropped")
+        assertContains(result, "entries of the window did not fit and are omitted")
+    }
+
+    @Test
+    fun `the count covers the snapped window rather than the narrower one asked for`() = runBlocking {
+        // 15:00 minus 24h lands mid-day on the 3rd, and the diary path then widens the window to that
         // whole day. the count has to follow, or the header contradicts the window it prints.
         repeat(60) { record(1_000L + it, "early on the 3rd $it", instantAt(2026, 8, 3, 9)) }
         repeat(60) { record(2_000L + it, "late on the 3rd $it", instantAt(2026, 8, 3, 20)) }
         repeat(60) { record(3_000L + it, "today $it", instantAt(2026, 8, 4, 11)) }
 
-        val result = GroupLogReader(repository, RecordingDigester(), budgetChars = 1_200)
+        val result = GroupLogReader(repository, RecordingDiary(), budgetChars = 1_200)
             .read(CHAT, 24.hours, now = now)
 
         assertContains(result, "Window: 2026-08-03T00:00 .. 2026-08-04T15:00 Europe/Kyiv.")
@@ -213,7 +262,7 @@ class GroupLogReaderTest {
         repeat(80) { record(2_000L + it, "yesterday $it", instantAt(2026, 8, 3, 10)) }
         repeat(80) { record(3_000L + it, "today number $it", instantAt(2026, 8, 4, 11)) }
 
-        val result = GroupLogReader(repository, RecordingDigester(), budgetChars = 1_200)
+        val result = GroupLogReader(repository, RecordingDiary(), budgetChars = 1_200)
             .read(CHAT, 2.days, now = now)
 
         val quoted =
@@ -224,70 +273,8 @@ class GroupLogReaderTest {
         assertTrue(quoted[2].toInt() < 80, "the today share of a 1200 char budget cannot hold 80 messages")
     }
 
-    @Test
-    fun `a closed day is digested once and served from the cache after that`() = runBlocking {
-        val digester = RecordingDigester()
-
-        repeat(80) { record(2_000L + it, "yesterday $it", instantAt(2026, 8, 3, 10)) }
-        repeat(80) { record(3_000L + it, "today $it", instantAt(2026, 8, 4, 11)) }
-
-        val reader = GroupLogReader(repository, digester, budgetChars = 1_200)
-
-        reader.read(CHAT, 2.days, now = now)
-        assertEquals(1, digester.days.size)
-
-        reader.read(CHAT, 2.days, now = now)
-        assertEquals(1, digester.days.size, "the cached recap must not be recomputed")
-
-        assertEquals("recap of 2026-08-03", repository.digestFor(CHAT, LocalDate.of(2026, 8, 3)))
-    }
-
-    @Test
-    fun `today is never cached`() = runBlocking {
-        repeat(80) { record(2_000L + it, "yesterday $it", instantAt(2026, 8, 3, 10)) }
-        repeat(80) { record(3_000L + it, "today $it", instantAt(2026, 8, 4, 11)) }
-
-        GroupLogReader(repository, RecordingDigester(), budgetChars = 1_200)
-            .read(CHAT, 2.days, now = now)
-
-        assertEquals(null, repository.digestFor(CHAT, LocalDate.of(2026, 8, 4)))
-    }
-
-    @Test
-    fun `a digester that fails leaves the day out instead of failing the read`() = runBlocking {
-        repeat(80) { record(2_000L + it, "yesterday $it", instantAt(2026, 8, 3, 10)) }
-        repeat(80) { record(3_000L + it, "today $it", instantAt(2026, 8, 4, 11)) }
-
-        val result = GroupLogReader(repository, FailingDigester(), budgetChars = 1_200)
-            .read(CHAT, 2.days, now = now)
-
-        assertContains(result, """<today date="2026-08-04" messages="80"""")
-        assertFalse(result.contains("<day "), "a failed digest must not produce an empty day block")
-    }
-
-    // an edit invalidates the cached recap of its day, but while the model is working there is no row
-    // to invalidate yet: the recap of the text the edit replaced must not be stored behind it.
-    @Test
-    fun `a day edited while its recap is made is answered but not cached`() = runBlocking {
-        val edited = instantAt(2026, 8, 3, 10)
-        record(1L, "the original wording", edited)
-        repeat(80) { record(3_000L + it, "today $it", instantAt(2026, 8, 4, 11)) }
-
-        val digester =
-            EditingDigester {
-                repository.recordEdit(
-                    GroupLogEntry(chat = CHAT, messageId = "1", kind = "text", sentAt = edited, text = "rewritten"),
-                )
-            }
-
-        val result = GroupLogReader(repository, digester, budgetChars = 1_200).read(CHAT, 2.days, now = now)
-
-        assertContains(result, "recap of 2026-08-03")
-        assertEquals(null, repository.digestFor(CHAT, LocalDate.of(2026, 8, 3)), "a stale recap was cached")
-    }
-
-    private fun reader(digester: GroupLogDigester? = null) =
-        GroupLogReader(repository, digester, budgetChars = 10_000)
+    private fun reader(diary: RememberedDays? = null) =
+        GroupLogReader(repository, diary, budgetChars = 10_000)
 
     private suspend fun record(messageId: Long, text: String, at: Instant) =
         recordFrom(messageId, text, at, username = "olena", name = "Olena Petrenko")
@@ -310,27 +297,15 @@ class GroupLogReaderTest {
     private fun instantAt(year: Int, month: Int, day: Int, hour: Int): Instant =
         LocalDate.of(year, month, day).atTime(hour, 0).atZone(zone).toInstant()
 
-    private class RecordingDigester : GroupLogDigester {
-        val days = mutableListOf<LocalDate>()
+    private class RecordingDiary(vararg entries: Pair<LocalDate, String>) : RememberedDays {
+        private val written = entries.toMap()
+        val reads = mutableListOf<Pair<LocalDate, LocalDate>>()
 
-        override suspend fun digest(day: LocalDate, transcript: String): String {
-            days += day
+        override suspend fun between(chat: ChatRef, from: LocalDate, to: LocalDate): Map<LocalDate, String> {
+            reads += from to to
 
-            return "recap of $day"
+            return written.filterKeys { it in from..to }
         }
-    }
-
-    // the day changes under the digester, the way an edit lands while the model is answering
-    private class EditingDigester(private val edit: suspend () -> Unit) : GroupLogDigester {
-        override suspend fun digest(day: LocalDate, transcript: String): String {
-            edit()
-
-            return "recap of $day"
-        }
-    }
-
-    private class FailingDigester : GroupLogDigester {
-        override suspend fun digest(day: LocalDate, transcript: String): String? = error("provider is down")
     }
 
     private fun testConfig(dbPath: String) =
