@@ -3,6 +3,7 @@ package com.helltar.vusan.agent.conversation
 import java.time.Instant
 import kotlin.test.Test
 import kotlin.test.assertEquals
+import kotlin.test.assertFalse
 import kotlin.test.assertTrue
 
 class ConversationPlanTest {
@@ -26,6 +27,8 @@ class ConversationPlanTest {
 
         assertEquals(listOf("i-1", "i-2", "i-3"), result.compactablePrefix.map { it.id })
         assertEquals(listOf("user-3", "assistant-3", "user-4", "assistant-4", "user-5", "assistant-5"), result.prompt.turns.map { it.content })
+        // every interaction the count keeps fit, so the recap it asks for can wait for the turn to end
+        assertFalse(result.overBudget)
     }
 
     @Test
@@ -67,6 +70,7 @@ class ConversationPlanTest {
 
         assertEquals(listOf("i-1", "i-2"), result.compactablePrefix.map { it.id })
         assertEquals(interactions.last().turns, result.prompt.turns)
+        assertTrue(result.overBudget)
     }
 
     @Test

@@ -317,10 +317,12 @@ suspend fun main() = coroutineScope {
         val maintenanceJob = maintenance.launchIn(this)
         val diaryJob = diary?.launchIn(this)
         val initiativeJob = initiative?.launchIn(this)
+        val recapJob = agentRunner.launchRecapsIn(this)
 
         try {
             botJob.join()
         } finally {
+            recapJob.cancelAndJoin()
             initiativeJob?.cancelAndJoin()
             diaryJob?.cancelAndJoin()
             maintenanceJob.cancelAndJoin()

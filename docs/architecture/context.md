@@ -4,9 +4,13 @@ How a turn's history and tool results are fitted into the model's window. Part o
 
 - **History compaction** — `agent/conversation/ConversationPlanner` picks the history a prompt carries:
   `ConversationPlan.planConversation` token-budgets complete recent interactions, and `LlmConversationCompactor` rewrites the previous recap plus the next omitted interaction prefix into a
-  standalone semantic recap and advances a database checkpoint only after that model call succeeds. It runs at most once
-  per turn, because it is an extra LLM round trip in front of the user's reply; a prefix that still does not fit stays
-  out of the prompt and gets its own recap on a later turn. Failed compaction never deletes source rows. Raw transcript
+  standalone semantic recap of at most 15,000 characters (12,000 asked) and advances a database checkpoint only after
+  that model call succeeds. A recap is an extra LLM round trip, so it runs in front of the user's reply only when the
+  history does not fit the prompt (`ConversationPlan.overBudget`), at most once per turn. One that only the count of
+  40 raw interactions asks for is queued by `AgentRunner` once the turn is stored and made by the planner's worker
+  (`launchRecapsIn`, started in `Main`), one conversation at a time, with nobody waiting on it; the checkpoint refuses
+  it if a turn or a `/clear` got there first. A prefix that still does not fit stays out of the prompt and gets its own
+  recap on a later turn. Failed compaction never deletes source rows. Raw transcript
   retention and model-visible context are deliberately separate. The recap is injected at user priority so mixed
   user/assistant history is not mislabeled as an assistant instruction. An initial context-overflow failure retries once
   with recap only, but never after a tool ran, which avoids duplicated actions.

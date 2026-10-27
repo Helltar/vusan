@@ -455,7 +455,7 @@ answer "what did I miss" and recap a day. Private chats are never recorded.
   a [banned](#who-vusan-answers) sender.
 - **What a row holds** — the text, sender and time, and a short label for anything else; never the
   media. At most fifty thousand rows per chat.
-- **Forgetting** — asking the agent to forget the group log wipes the chat's messages, recaps and
+- **Forgetting** — asking the agent to forget the group log wipes the chat's messages and
   [diary](#diary);
   `/clear` does not touch it.
 

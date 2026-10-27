@@ -27,6 +27,8 @@ data class PromptConversation(
 data class ConversationPlan(
     val prompt: PromptConversation,
     val compactablePrefix: List<ConversationInteraction>,
+    /** Whether the token budget, not only the count, left recent interactions out of [prompt]. */
+    val overBudget: Boolean,
     val estimatedTokens: Int,
     val includedInteractions: Int,
     val exactToolInteractions: Int,
@@ -93,6 +95,7 @@ fun planConversation(
     return ConversationPlan(
         prompt = PromptConversation(summary = summary, turns = turns, stableTurns = stableTurns),
         compactablePrefix = snapshot.interactions.take(compactableCount),
+        overBudget = includedCount < eligible.size,
         estimatedTokens = estimatedTokens,
         includedInteractions = includedCount,
         exactToolInteractions = exactToolInteractions,

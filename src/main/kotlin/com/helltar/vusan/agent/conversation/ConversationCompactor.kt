@@ -13,8 +13,10 @@ import com.helltar.vusan.common.limitTo
 import com.helltar.vusan.common.xmlBlock
 import io.github.oshai.kotlinlogging.KotlinLogging
 
-// what the prompt asks for, under the hard cap so a recap that runs a little long is still kept as written
-private const val RECAP_ASKED_CHARS = 5_000
+// what the prompt asks for, under the hard cap so a recap that runs a little long is still kept as written.
+// the recap sits at the head of the prompt and is cached until the next one, so on the windows in use (a
+// million tokens, 272k on codex) it costs little to keep a long conversation's facts rather than its last part
+private const val RECAP_ASKED_CHARS = 12_000
 
 private const val COMPACTION_SYSTEM_PROMPT =
     """You maintain the durable recap of an ongoing personal conversation. Rewrite the previous recap and the new conversation events into one concise, standalone recap for a future assistant.
@@ -130,12 +132,15 @@ class LlmConversationCompactor(
         }
 
     private companion object {
-        const val MAX_SUMMARY_CHARS = 6_000
+        const val MAX_SUMMARY_CHARS = 15_000
         const val MAX_USER_OR_ASSISTANT_SOURCE_CHARS = 1_500
         const val MAX_TOOL_CALL_SOURCE_CHARS = 400
         const val MAX_TOOL_RESULT_SOURCE_CHARS = 600
         const val MIN_COMPACTION_INPUT_TOKENS = 2_048
-        const val MAX_COMPACTION_INPUT_TOKENS = 12_000
+
+        // the previous recap is part of the input, and at its full length it is about 10k tokens: the
+        // ceiling has to leave the events beside it room for a whole batch
+        const val MAX_COMPACTION_INPUT_TOKENS = 32_000
         val log = KotlinLogging.logger {}
     }
 }

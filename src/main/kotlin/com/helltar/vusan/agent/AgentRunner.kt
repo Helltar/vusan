@@ -18,6 +18,8 @@ import com.helltar.vusan.request.ConversationScope
 import com.helltar.vusan.request.RequestContext
 import com.helltar.vusan.tools.ToolCatalogFactory
 import io.github.oshai.kotlinlogging.KotlinLogging
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Job
 import java.time.Instant
 import java.time.temporal.ChronoUnit
 
@@ -110,6 +112,10 @@ class AgentRunner(
 
         return result ?: refusal(messages.busyReply)
     }
+
+    /** Starts the worker that recaps a conversation's history once a turn has left it longer than it keeps raw. */
+    fun launchRecapsIn(scope: CoroutineScope): Job =
+        planner.launchIn(scope)
 
     /** Whether this conversation has a turn running or waiting in its line. */
     fun hasTurnUnderWay(scope: ConversationScope): Boolean =
@@ -292,6 +298,7 @@ class AgentRunner(
 
         if (turns.isNotEmpty()) {
             conversation.appendInteraction(context.scope, turns)
+            planner.recapLater(context.scope, preparation.tokenBudget.conversationTokens)
         }
 
         val pruned =
