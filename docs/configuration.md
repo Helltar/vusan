@@ -268,7 +268,7 @@ summary says so in one line.
 | `ELEVENLABS_API_KEY` | Voice and round video messages             | See [Voice output](#voice-output)                        |
 | `OPENAI_STT_API_KEY` | Voice input and transcribing any recording | Your OpenAI key works; see [Voice input](#voice-input)   |
 | `IMAGE_PROVIDER`     | Image generation                           | See [Image generation](#image-generation)                |
-| `VIDEO_PROVIDER`     | Video generation                           | See [Video generation](#video-generation)                |
+| `XAI_API_KEY`        | Video generation                           | See [Video generation](#video-generation)                |
 | `VISION_MODEL`       | Vision on a chat model that cannot see     | See [Vision](#vision)                                    |
 | `REGOLITH_URL`       | Shell sandbox                              | See [Sandbox](#sandbox)                                  |
 
@@ -332,32 +332,29 @@ the [Appearance](#appearance) photo; without one, only voice messages are offere
 
 `IMAGE_PROVIDER` turns on `generateImage` and `editImage` and picks who draws.
 
-| Variable         | Default     | Description                                                                       |
-|------------------|-------------|-----------------------------------------------------------------------------------|
-| `IMAGE_PROVIDER` | unset       | `openai`, `codex` or `xai`.                                                       |
-| `IMAGE_API_KEY`  | —           | The key `openai` or `xai` draws with.                                             |
-| `IMAGE_MODEL`    | by provider | `gpt-image-2.5-flare` on `openai` and `codex`, `grok-imagine-image-2.0` on `xai`. |
-| `IMAGE_QUALITY`  | by provider | `medium` on `openai` and `codex`, `auto` on `xai`.                                |
+| Variable         | Default               | Description                      |
+|------------------|-----------------------|----------------------------------|
+| `IMAGE_PROVIDER` | unset                 | `openai` or `codex`.             |
+| `IMAGE_API_KEY`  | —                     | The key `openai` draws with.     |
+| `IMAGE_MODEL`    | `gpt-image-2.5-flare` | Model for new and edited images. |
+| `IMAGE_QUALITY`  | `medium`              | See below.                       |
 
 - **`openai`** — OpenAI's image API, billed per image. Quality goes from `low` to `max`, or `auto`;
   `xhigh` and `max` need a `gpt-image-2.5` model, and models before `gpt-image-2` lack wide framings.
 - **`codex`** — the ChatGPT subscription signed in through `CODEX_HOME`, with no key: the same models
   and qualities, counted against the chat's usage limit.
-- **`xai`** — xAI's Imagine API, billed per image. Quality is `low`, `medium` or `auto`, which picks
-  `low` for a new picture and `medium` for an edit; a new one at `medium` takes over a minute.
 
 ### Video generation
 
-`VIDEO_PROVIDER=xai` turns on `generateVideo`, `editVideo` and `extendVideo`, rendered on xAI's
-Imagine API.
+`XAI_API_KEY`, a key for [xAI's API](https://docs.x.ai/overview), turns on `generateVideo`,
+`editVideo` and `extendVideo`.
 
-| Variable           | Default                  | Description                                                |
-|--------------------|--------------------------|------------------------------------------------------------|
-| `VIDEO_PROVIDER`   | unset                    | `xai`.                                                     |
-| `VIDEO_API_KEY`    | —                        | The key xAI renders with.                                  |
-| `VIDEO_MODEL`      | `grok-imagine-video-1.5` | Model for new videos.                                      |
-| `VIDEO_RESOLUTION` | `720p`                   | `480p`, `720p` or `1080p`.                                 |
-| `VIDEO_VOICE`      | the model's own          | The voice Vusan speaks with in a video of itself.          |
+| Variable               | Default                  | Description                                       |
+|------------------------|--------------------------|---------------------------------------------------|
+| `XAI_API_KEY`          | unset                    | The key xAI renders with.                         |
+| `XAI_VIDEO_MODEL`      | `grok-imagine-video-1.5` | Model for new videos.                             |
+| `XAI_VIDEO_RESOLUTION` | `720p`                   | `480p`, `720p` or `1080p`.                        |
+| `XAI_VIDEO_VOICE`      | the model's own          | The voice Vusan speaks with in a video of itself. |
 
 - **Price** — billed per second of video, so the agent keeps clips short unless asked otherwise.
 - **Models** — `grok-imagine-video-1.5-lite` is a quarter of the price and makes no clip from

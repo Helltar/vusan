@@ -1,7 +1,7 @@
 package com.helltar.vusan.tools.videogen
 
 import com.helltar.vusan.agent.TurnShelf
-import com.helltar.vusan.config.VideoProviderConfig
+import com.helltar.vusan.config.XaiVideoConfig
 import com.helltar.vusan.infra.Http
 import com.helltar.vusan.outbox.BotOutbox
 import com.helltar.vusan.outbox.BotOutput
@@ -57,7 +57,7 @@ class VideoGenToolsTest {
     private fun tools(
         xai: Xai,
         outbox: BotOutbox = BotOutbox(),
-        config: VideoProviderConfig.Xai = VideoProviderConfig.Xai(apiKey = "xai-test"),
+        config: XaiVideoConfig = XaiVideoConfig(apiKey = "xai-test"),
         attached: List<AttachedFile> = emptyList(),
         self: SelfImage? = null,
     ): VideoGenTools {
@@ -121,7 +121,7 @@ class VideoGenToolsTest {
     @Test
     fun `the pictures are numbered the way xai counts them, and the bot speaks with its voice`() = runBlocking {
         val xai = Xai()
-        val config = VideoProviderConfig.Xai(apiKey = "xai-test", resolution = "1080p", voice = "eve")
+        val config = XaiVideoConfig(apiKey = "xai-test", resolution = "1080p", voice = "eve")
         val self = SelfImage(SourceImage(JPEG, "me.jpg", "image/jpeg"), "Wears a green scarf.")
 
         tools(xai, config = config, self = self).generateVideo(
@@ -190,7 +190,7 @@ class VideoGenToolsTest {
                     },
                 )
 
-            return VideoGenTools(XaiVideoClient(http, VideoProviderConfig.Xai(apiKey = "xai-test"), FileDownloadClient(http), pollInterval = Duration.ZERO), BotOutbox())
+            return VideoGenTools(XaiVideoClient(http, XaiVideoConfig(apiKey = "xai-test"), FileDownloadClient(http), pollInterval = Duration.ZERO), BotOutbox())
         }
 
         assertContains(tools { respondError(HttpStatusCode.BadGateway) }.generateVideo("a fox"), "queued")
@@ -221,7 +221,7 @@ class VideoGenToolsTest {
                 },
             )
 
-        VideoGenTools(XaiVideoClient(http, VideoProviderConfig.Xai(apiKey = "xai-test"), FileDownloadClient(http), pollInterval = Duration.ZERO), outbox)
+        VideoGenTools(XaiVideoClient(http, XaiVideoConfig(apiKey = "xai-test"), FileDownloadClient(http), pollInterval = Duration.ZERO), outbox)
             .generateVideo("a fox")
 
         assertEquals(3, downloads)
@@ -302,7 +302,7 @@ class VideoGenToolsTest {
                     }
                 },
             )
-        val tools = VideoGenTools(XaiVideoClient(http, VideoProviderConfig.Xai(apiKey = "xai-test"), FileDownloadClient(http), pollInterval = Duration.ZERO), outbox)
+        val tools = VideoGenTools(XaiVideoClient(http, XaiVideoConfig(apiKey = "xai-test"), FileDownloadClient(http), pollInterval = Duration.ZERO), outbox)
 
         val result = tools.generateVideo("a fox in the snow")
 

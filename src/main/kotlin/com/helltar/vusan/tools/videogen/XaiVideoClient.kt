@@ -2,13 +2,12 @@ package com.helltar.vusan.tools.videogen
 
 import com.helltar.vusan.common.dataUrl
 import com.helltar.vusan.common.rethrowIfCancellation
-import com.helltar.vusan.config.VideoProviderConfig
+import com.helltar.vusan.config.XaiVideoConfig
 import com.helltar.vusan.infra.HttpStatusException
 import com.helltar.vusan.tools.files.FileDownloadClient
 import com.helltar.vusan.tools.files.FileDownloadResult
 import com.helltar.vusan.tools.imagegen.SelfImage
 import com.helltar.vusan.tools.imagegen.SourceImage
-import com.helltar.vusan.tools.isImagineModerated
 import io.github.oshai.kotlinlogging.KotlinLogging
 import io.ktor.client.*
 import io.ktor.client.call.*
@@ -75,7 +74,7 @@ class RenderedVideo(val bytes: ByteArray, val durationSeconds: Int?)
  */
 class XaiVideoClient(
     private val http: HttpClient,
-    private val config: VideoProviderConfig.Xai,
+    private val config: XaiVideoConfig,
     private val downloads: FileDownloadClient,
     private val pollInterval: Duration = POLL_INTERVAL,
 ) {

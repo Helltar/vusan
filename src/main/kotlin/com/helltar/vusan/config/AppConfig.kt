@@ -37,7 +37,7 @@ data class AppConfig(
     val llmFallback: LlmProviderConfig? = null,
     val maxConcurrentTurns: Int,
     val image: ImageProviderConfig?,
-    val video: VideoProviderConfig? = null,
+    val xaiVideo: XaiVideoConfig? = null,
     val openAiStt: OpenAiSttConfig?,
     val vision: LlmProviderConfig? = null,
     val personality: String?,
@@ -104,7 +104,7 @@ data class AppConfig(
                 llmFallback = llmFallback,
                 maxConcurrentTurns = readIntEnv("MAX_CONCURRENT_TURNS") ?: DEFAULT_MAX_CONCURRENT_TURNS,
                 image = resolveImageProvider(),
-                video = resolveVideoProvider(),
+                xaiVideo = resolveXaiVideo(),
                 openAiStt = resolveOpenAiStt(),
                 vision = resolveRole(VISION_PREFIX, llmProvider),
                 personality = personalityFile?.let(::readPersonality),
@@ -334,7 +334,7 @@ data class AppConfig(
             return tier.takeUnless { it == ServiceTier.DEFAULT }
         }
 
-        // pictures have a provider of their own: a key for openai's or xai's api, or the subscription signed
+        // pictures have a provider of their own: a key for openai's api, or the subscription signed
         // in through CODEX_HOME whether or not the chat runs there. nothing switches on without one.
         private fun resolveImageProvider(): ImageProviderConfig? {
             val provider = readEnv("IMAGE_PROVIDER")?.trim()?.lowercase() ?: return null
@@ -357,32 +357,19 @@ data class AppConfig(
                         quality = quality ?: ImageProviderConfig.OpenAi.DEFAULT_QUALITY,
                     )
 
-                "xai" ->
-                    ImageProviderConfig.Xai(
-                        apiKey = requireEnv("IMAGE_API_KEY"),
-                        model = model ?: ImageProviderConfig.Xai.DEFAULT_MODEL,
-                        quality = quality ?: ImageProviderConfig.Xai.DEFAULT_QUALITY,
-                    )
-
-                else -> error("Unsupported IMAGE_PROVIDER=[$provider]. Supported values: openai, codex, xai")
+                else -> error("Unsupported IMAGE_PROVIDER=[$provider]. Supported values: openai, codex")
             }
         }
 
-        private fun resolveVideoProvider(): VideoProviderConfig? {
-            val provider = readEnv("VIDEO_PROVIDER")?.trim()?.lowercase() ?: return null
-
-            return when (provider) {
-                "xai" ->
-                    VideoProviderConfig.Xai(
-                        apiKey = requireEnv("VIDEO_API_KEY"),
-                        model = readEnv("VIDEO_MODEL") ?: VideoProviderConfig.Xai.DEFAULT_MODEL,
-                        resolution = readEnv("VIDEO_RESOLUTION")?.trim()?.lowercase() ?: VideoProviderConfig.Xai.DEFAULT_RESOLUTION,
-                        voice = readEnv("VIDEO_VOICE")?.trim()?.lowercase(),
-                    )
-
-                else -> error("Unsupported VIDEO_PROVIDER=[$provider]. Supported values: xai")
+        private fun resolveXaiVideo(): XaiVideoConfig? =
+            readEnv("XAI_API_KEY")?.let { apiKey ->
+                XaiVideoConfig(
+                    apiKey = apiKey,
+                    model = readEnv("XAI_VIDEO_MODEL") ?: XaiVideoConfig.DEFAULT_MODEL,
+                    resolution = readEnv("XAI_VIDEO_RESOLUTION")?.trim()?.lowercase() ?: XaiVideoConfig.DEFAULT_RESOLUTION,
+                    voice = readEnv("XAI_VIDEO_VOICE")?.trim()?.lowercase(),
+                )
             }
-        }
 
         // the catalog Codex answers with is filtered by the claimed client version, and this pins it: for
         // a host that cannot ask github for the latest release, or when the automatic choice is wrong.

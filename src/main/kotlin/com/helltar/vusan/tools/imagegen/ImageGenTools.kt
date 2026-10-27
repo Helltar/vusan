@@ -248,9 +248,8 @@ internal fun imageContentTypeOrNull(filename: String): String? =
     mimeTypeOfName(filename)?.takeIf { it in SUPPORTED_EDIT_MIME_TYPES }
 
 /**
- * An edit left to `auto` is framed like its first source — documented for xAI, and a square likeness
- * measured that way — so with the bot's likeness first, `auto` takes the frame of the picture being
- * edited instead. A picture nothing here can measure, WebP among them, stays `auto`.
+ * An edit left to `auto` is framed like its first source, so with the bot's likeness first, `auto` takes
+ * the frame of the picture being edited instead. A picture nothing here can measure, WebP among them, stays `auto`.
  */
 private fun sceneFraming(scene: SourceImage): ImageFraming =
     imageDimensions(scene.bytes)?.let { (width, height) -> ImageFraming.closestTo(width, height) } ?: ImageFraming.AUTO
@@ -259,6 +258,6 @@ private val ImageFraming.label: String
     get() = name.lowercase()
 
 // telegram shows a photo whatever it is called, but the name follows the file when someone saves or
-// forwards it, and the route decides the format: the platform asks for jpeg, codex and xai send what they like.
+// forwards it, and the route decides the format: the platform asks for jpeg, codex sends what it likes.
 private fun imageFilename(bytes: ByteArray): String =
     "image." + (sniffedImageMimeType(bytes)?.let(::extensionOfMime) ?: "png")

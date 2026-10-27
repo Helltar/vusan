@@ -14,8 +14,6 @@ import com.helltar.vusan.agent.TurnShelf
 import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.withContext
 import kotlinx.serialization.json.Json
-import kotlinx.serialization.json.JsonObject
-import kotlinx.serialization.json.jsonArray
 import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.jsonPrimitive
 import java.awt.image.BufferedImage
@@ -433,56 +431,52 @@ class ImageGenToolsTest {
     }
 
     // the json body the xai client posted, which is where its sources and framing end up
-    private fun xaiTools(
-        outbox: BotOutbox,
-        attached: List<AttachedFile>,
-        sent: MutableList<JsonObject>,
-        selfImage: SelfImage? = null,
-    ): ImageGenTools {
-        val encoded = Base64.getEncoder().encodeToString(imageBytes)
-        val http =
-            Http.createClient(
-                MockEngine { request ->
-                    sent += Json.parseToJsonElement(assertIs<TextContent>(request.body).text).jsonObject
+    // what the tools hand to a provider, whichever it is: how many sources and which framing
+    private class RecordingImageClient(override val maxEditImages: Int) : ImageClient {
+        val edits = mutableListOf<Pair<Int, ImageFraming>>()
 
-                    respond(
-                        content = """{"data":[{"b64_json":"$encoded"}]}""",
-                        status = HttpStatusCode.OK,
-                        headers = headersOf(HttpHeaders.ContentType, ContentType.Application.Json.toString()),
-                    )
-                },
-            )
-        val xai = ImageProviderConfig.Xai(apiKey = "xai-test")
+        override suspend fun generate(prompt: String, framing: ImageFraming): ByteArray = byteArrayOf(4, 2, 0)
 
-        return ImageGenTools(XaiImageClient(http, xai.apiKey, xai.model, xai.quality), xai, outbox, attached, selfImage)
+        override suspend fun edit(prompt: String, images: List<SourceImage>, framing: ImageFraming): ByteArray {
+            edits += images.size to framing
+
+            return byteArrayOf(4, 2, 0)
+        }
     }
+
+    private fun recordingTools(
+        client: RecordingImageClient,
+        attached: List<AttachedFile>,
+        selfImage: SelfImage? = null,
+    ): ImageGenTools =
+        ImageGenTools(client, ImageProviderConfig.OpenAi(apiKey = "sk-test"), BotOutbox(), attached, selfImage)
 
     private fun png(width: Int, height: Int): ByteArray =
         ByteArrayOutputStream().also { ImageIO.write(BufferedImage(width, height, BufferedImage.TYPE_INT_RGB), "png", it) }.toByteArray()
 
     @Test
     fun `an album beyond what the provider edits at once is cut down, and the result says so`() = runBlocking {
-        val sent = mutableListOf<JsonObject>()
+        val client = RecordingImageClient(maxEditImages = 5)
         val album = (1..7).map { imageAttachment(name = "photo$it.jpg") }
 
-        val result = xaiTools(BotOutbox(), album, sent).editImage("merge these")
+        val result = recordingTools(client, album).editImage("merge these")
 
-        assertEquals(5, assertNotNull(sent.single()["images"]).jsonArray.size)
+        assertEquals(5, client.edits.single().first)
         assertContains(result, "at most 5 images")
         assertContains(result, "only the first 5 of the 7 were used")
     }
 
     @Test
     fun `withYourself on auto takes the frame of the picture being edited, not of the likeness`() = runBlocking {
-        val sent = mutableListOf<JsonObject>()
+        val client = RecordingImageClient(maxEditImages = 5)
         val scene = imageAttachment(name = "room.png", mimeType = "image/png", bytes = png(300, 200))
         val likeness = SelfImage(SourceImage(png(64, 64), "avatar.png", "image/png"), appearance = null)
 
-        val result = xaiTools(BotOutbox(), listOf(scene), sent, likeness).editImage("standing by the window", withYourself = true)
-        xaiTools(BotOutbox(), listOf(scene), sent).editImage("make it winter")
+        val result = recordingTools(client, listOf(scene), likeness).editImage("standing by the window", withYourself = true)
+        recordingTools(client, listOf(scene)).editImage("make it winter")
 
-        assertEquals("3:2", sent[0]["aspect_ratio"]?.jsonPrimitive?.content)
+        assertEquals(ImageFraming.LANDSCAPE, client.edits[0].second)
         assertContains(result, "landscape")
-        assertFalse("aspect_ratio" in sent[1])
+        assertEquals(ImageFraming.AUTO, client.edits[1].second)
     }
 }

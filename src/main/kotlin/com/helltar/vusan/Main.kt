@@ -22,7 +22,6 @@ import com.helltar.vusan.agent.providerOutage
 import com.helltar.vusan.config.*
 import com.helltar.vusan.config.llm.*
 import com.helltar.vusan.config.llm.LlmProviderConfig
-import com.helltar.vusan.config.VideoProviderConfig
 import com.helltar.vusan.infra.Db
 import com.helltar.vusan.infra.Http
 import com.helltar.vusan.infra.Maintenance
@@ -175,7 +174,7 @@ suspend fun main() = coroutineScope {
         // hold on its own — so the reference is read once, here, and only where it can be used at all:
         // the self-portrait it edits, the round video message it puts in the circle, and a video it is in.
         val selfImage =
-            if (config.image != null || config.video != null || config.elevenLabsApiKey != null)
+            if (config.image != null || config.xaiVideo != null || config.elevenLabsApiKey != null)
                 resolveSelfImage(config.selfImageFile, config.appearance) {
                     telegramClient.profilePhotoReference(botProfile.userId)
                 }
@@ -214,7 +213,7 @@ suspend fun main() = coroutineScope {
                 config.personality, botProfile.usernames, botProfile.displayName,
                 sandbox = config.regolithUrl != null,
                 images = config.image != null,
-                videos = config.video != null,
+                videos = config.xaiVideo != null,
                 maxModelCalls = config.agentMaxModelCalls,
                 contextWindowPolicy = contextWindowPolicy,
             )
@@ -424,11 +423,9 @@ private fun logStartup(
     }
 
     log.info {
-        when (val video = config.video) {
-            null -> "Videos: off (VIDEO_PROVIDER not set)"
-            is VideoProviderConfig.Xai ->
-                "Videos: provider=[${video.name}] model=[${video.model}] resolution=[${video.resolution}] voice=[${video.voice ?: "the model's own"}]"
-        }
+        config.xaiVideo?.let { video ->
+            "Videos: provider=[xai] model=[${video.model}] resolution=[${video.resolution}] voice=[${video.voice ?: "the model's own"}]"
+        } ?: "Videos: off (XAI_API_KEY not set)"
     }
 
     log.info {
@@ -451,7 +448,7 @@ private fun logStartup(
 
         selfImage != null -> log.info { "Self-portrait: appearance only — no reference photo" }
 
-        config.image != null || config.video != null ->
+        config.image != null || config.xaiVideo != null ->
             log.warn { "Self-portrait: off — no reference photo and no APPEARANCE_FILE; a picture or a video of the bot shows a different person every time" }
 
         else -> log.info { "Self-portrait: off — nothing draws or films it" }

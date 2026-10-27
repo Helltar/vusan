@@ -13,7 +13,6 @@ import com.helltar.vusan.agent.presence.LeaveAloneRepository
 import com.helltar.vusan.config.AppConfig
 import com.helltar.vusan.config.ImageProviderConfig
 import com.helltar.vusan.config.llm.LlmProviderConfig
-import com.helltar.vusan.config.VideoProviderConfig
 import com.helltar.vusan.config.llm.VisionRuntime
 import com.helltar.vusan.llm.codex.CodexAuthStore
 import com.helltar.vusan.outbox.BotOutbox
@@ -39,7 +38,6 @@ import com.helltar.vusan.tools.imagegen.ImageClient
 import com.helltar.vusan.tools.imagegen.ImageGenTools
 import com.helltar.vusan.tools.imagegen.OpenAiImageClient
 import com.helltar.vusan.tools.imagegen.SelfImage
-import com.helltar.vusan.tools.imagegen.XaiImageClient
 import com.helltar.vusan.tools.images.ImageDownloadClient
 import com.helltar.vusan.tools.klipy.KlipyClient
 import com.helltar.vusan.tools.klipy.KlipyTools
@@ -128,7 +126,7 @@ class ToolCatalogFactory(
     private val imageDownloadClient = ImageDownloadClient(fileDownloadClient)
     private val elevenLabsTts = config.elevenLabsTts
     private val image = config.image
-    private val video = config.video
+    private val xaiVideo = config.xaiVideo
     private val imageVisionClient = vision?.let { ImageVisionClient(it.client, it.model, it.options) }
     private val telegramChannelClient = TelegramChannelClient(fileDownloadClient)
     private val ytDlpRunner = YtDlpRunner(config.ytDlpCookiesFile)
@@ -191,15 +189,9 @@ class ToolCatalogFactory(
 
                 OpenAiImageClient(http, auth, image.model, image.quality)
             }
-
-            is ImageProviderConfig.Xai -> XaiImageClient(http, image.apiKey, image.model, image.quality)
         }
 
-    private val videoClient =
-        when (video) {
-            null -> null
-            is VideoProviderConfig.Xai -> XaiVideoClient(http, video, fileDownloadClient)
-        }
+    private val videoClient = xaiVideo?.let { XaiVideoClient(http, it, fileDownloadClient) }
 
     private val sandboxClient =
         config.regolithUrl?.let {

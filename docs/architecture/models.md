@@ -107,13 +107,12 @@ Part of the [architecture index](../architecture.md).
   the first source is the one both routes hold closest to the original, so a picture of the bot itself puts its
   reference photo there.
 
-  `IMAGE_PROVIDER=xai` draws through `XaiImageClient` instead, JSON both ways with the sources inline as data URLs.
-  Both clients implement `tools/imagegen/ImageClient`: `ImageGenTools` hands them an `ImageFraming` that each turns
-  into a size or an aspect ratio of its own, and reads off the client how many sources one edit takes, so an album
-  beyond it is cut down with the result saying so. An edit left to `auto` is framed like its first source, so when
+  The client implements `tools/imagegen/ImageClient`: `ImageGenTools` hands it an `ImageFraming` that it turns into a
+  size the configured model takes, and reads off it how many sources one edit takes, so an album beyond it is cut down
+  with the result saying so. An edit left to `auto` is framed like its first source, so when
   that source is the bot's likeness the tool asks for the framing nearest to the picture being edited instead.
 
-  Videos have a provider of their own too (`config/VideoProviderConfig`, `xai` alone so far), rendered by
+  Videos are xAI's alone, on when `XAI_API_KEY` is set (`config/XaiVideoConfig`), rendered by
   `tools/videogen/XaiVideoClient` behind the `videos` group. `VideoGenTools` speaks the model's language: it checks
   that the prompt names only the pictures it was given — references as `<IMAGE_0>` and up, the bot as `<SELF>` — loads
   them within one upload's size, and delivers the result. The client turns that into xAI's request: it numbers the
