@@ -62,11 +62,18 @@ class MemoryTools(private val memory: MemoryRepository, private val context: Req
     }
 
     // a wrong id still saves the detail: losing what the user asked to keep is worse than a stale
-    // entry left beside it, and the reply says which of the two happened.
+    // entry left beside it, and the reply says which of the two happened. a detail over the limit is
+    // refused rather than cut: an item that grows is appended to, so a cut would drop the newest part.
     private suspend fun save(owner: MemoryOwner, where: String, detail: String, replacesId: Long): String {
         val clean =
-            detail.collapseWhitespaceAndCap(MAX_MEMORY_CHARS)
+            detail.collapseWhitespaceAndCap(Int.MAX_VALUE)
                 ?: return "Nothing to remember — the detail was empty."
+
+        require(clean.length <= MAX_MEMORY_CHARS) {
+            "The detail is ${clean.length} characters and an item holds at most $MAX_MEMORY_CHARS, so nothing " +
+                "was saved. Write it again as a shorter summary of what still holds, leaving out anything that reads " +
+                "as a running log, such as dated entries — the chat history already keeps those."
+        }
 
         if (replacesId <= 0) return "Saved to $where (#${memory.add(owner, clean)}): $clean"
 

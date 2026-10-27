@@ -12,11 +12,12 @@ internal object MemoryToolDescriptions {
 
     const val REMEMBER_ABOUT_ME_DETAIL =
         "The detail to remember, as a short self-contained statement in the user's language, e.g. `User's name is Olena` or `Prefers metric units`. " +
-                "At most 500 characters; anything past that is cut off."
+                "At most 500 characters; a longer one is refused, not cut."
 
     const val REPLACES_ID =
         "The id of the remembered item this detail takes the place of, as shown after `#` in the memory block. " +
                 "The old item is removed and the new one saved in one step, so write the detail in full rather than as an addition to the old one. " +
+                "Fold what the old item says into a summary of what still holds instead of appending to it: an item is a standing fact, not a log. " +
                 "Leave it at `0` for a detail that is new."
 
     const val REMEMBER_ABOUT_GROUP =
@@ -29,7 +30,7 @@ internal object MemoryToolDescriptions {
 
     const val REMEMBER_ABOUT_GROUP_DETAIL =
         "The detail to remember about the group, as a short self-contained statement, e.g. `This group is the team's standup channel`. " +
-                "At most 500 characters; anything past that is cut off."
+                "At most 500 characters; a longer one is refused, not cut."
 
     const val FORGET_MEMORY =
         "Removes a single remembered item by its id. " +

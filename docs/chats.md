@@ -13,7 +13,8 @@ Someone active in a DM and two groups has three threads, each with its own recap
 - **`/clear`** — removes the transcript and recap of the chat it was sent in, for that person only.
   Memory and scheduled tasks stay.
 - **Memory** — outlives `/clear`. Personal entries follow a person into every chat; group entries
-  belong to the chat. Each holds up to twenty entries and drops the oldest past that.
+  belong to the chat. Each holds up to twenty entries and drops the oldest past that. An entry is at
+  most 500 characters; a longer one is refused rather than cut, so Vusan writes it again shorter.
 - **Across chats** — what someone said in a DM is not replayed in a group, and two groups never see
   each other's exchanges, so asking Vusan to remember something is how it follows you everywhere. A
   person's [sandbox](sandbox.md) is shared across chats too.
