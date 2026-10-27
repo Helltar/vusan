@@ -60,10 +60,16 @@ internal fun RequestContext.toPromptBlock(
                 )
             }
 
+            // said as the guess it is: told the message "was judged to be meant for you", claude and deepseek
+            // answered a plain reply to somebody else every time (2026-10-27), and this wording let them leave it
             if (ambient) {
                 add("")
                 add("Addressing:")
-                add("- implicit: nobody mentioned you, replied to you or used a command; this message was judged to be meant for you")
+                add(
+                    "- implicit: nobody mentioned you, replied to you or used a command; a quick classifier guessed this " +
+                            "message is meant for you, and it is often wrong: the chat, a reply to someone else, or a question " +
+                            "somebody else was asked can show it is not yours",
+                )
             }
 
             leftAloneUntil?.let { until ->
