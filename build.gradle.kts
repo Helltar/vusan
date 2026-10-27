@@ -74,5 +74,4 @@ tasks.test {
 detekt {
     buildUponDefaultConfig = true
     config.setFrom("$projectDir/detekt.yml")
-    autoCorrect = false
 }

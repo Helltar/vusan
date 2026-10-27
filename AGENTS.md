@@ -9,11 +9,12 @@ removals over compatibility shims.
 
 ## Commands and Verification
 
-- `./gradlew test`, `./gradlew detekt` (`maxIssues: 0`), `./gradlew build`
+- `./gradlew test`, `./gradlew detekt` (any finding fails it), `./gradlew build`
   (compile + test + package), `./gradlew run` (local bot on `.env`).
   While iterating: `./gradlew test --tests "*AgentFactoryTest*"`.
-- Run Gradle itself on JDK 21: the build uses `jvmToolchain(21)`, and detekt
-  1.23.x crashes on JDK 25+.
+- `./gradlew detekt` is detekt 2's light analysis and the one `check` runs.
+  `detektMain` and `detektTest` add the rules that need types, and are not
+  part of the build while their findings on this code are mostly false.
 - Before finishing code changes, run `./gradlew test` and `./gradlew detekt`
   unless the change is docs-only or the user says not to.
 - If a check cannot run, report the exact command and blocker. Gradle

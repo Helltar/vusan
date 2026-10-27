@@ -12,7 +12,7 @@ kotlin-logging = "8.0.4"
 logback = "1.6.5"
 cron-utils = "9.2.1"
 shadow = "9.6.1"
-detekt = "1.23.8"
+detekt = "2.0.0-alpha.6"
 regolith = "0.7.0"
 
 [libraries]
@@ -41,4 +41,4 @@ kotlin-jvm = { id = "org.jetbrains.kotlin.jvm", version.ref = "kotlin" }
 kotlin-serialization = { id = "org.jetbrains.kotlin.plugin.serialization", version.ref = "kotlin" }
 kotlin-lombok = { id = "org.jetbrains.kotlin.plugin.lombok", version.ref = "kotlin" }
 shadow = { id = "com.gradleup.shadow", version.ref = "shadow" }
-detekt = { id = "io.gitlab.arturbosch.detekt", version.ref = "detekt" }
+detekt = { id = "dev.detekt", version.ref = "detekt" }

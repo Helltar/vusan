@@ -1,7 +1,3 @@
-build:
-  maxIssues: 0
-  excludeCorrectable: false
-
 # Narrow, high-signal config. The default ruleset (buildUponDefaultConfig=true
 # in build.gradle.kts) stays active; this file only tweaks what's too noisy
 # or too lenient for this codebase. See AGENTS.md for the project's coding
@@ -28,9 +24,11 @@ style:
     active: false
   MaxLineLength:
     active: false
-  UnnecessaryAbstractClass:
+  AbstractClassCanBeConcreteClass:
     active: false
-  MayBeConst:
+  AbstractClassCanBeInterface:
+    active: false
+  MayBeConstant:
     active: false
   LoopWithTooManyJumpStatements:
     active: false
