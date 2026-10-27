@@ -29,7 +29,7 @@ import org.jetbrains.exposed.v1.core.Table
 internal object Schema {
 
     /** Raise this by one for every schema change, together with the step that reaches it. */
-    const val VERSION = 6
+    const val VERSION = 7
 
     /**
      * What moves a database from one version to the next: the statements under `N` take a database at
@@ -51,6 +51,10 @@ internal object Schema {
                 "CREATE TABLE chat_diary_look_back (platform VARCHAR(16) NOT NULL, chat_id VARCHAR(64) NOT NULL, " +
                         "period VARCHAR(8) NOT NULL, first_day VARCHAR(10) NOT NULL, content TEXT NOT NULL, " +
                         "CONSTRAINT pk_chat_diary_look_back PRIMARY KEY (platform, chat_id, period, first_day))",
+            ),
+            7 to listOf(
+                "UPDATE scheduled_tasks SET language = CASE language WHEN 'ENGLISH' THEN 'en' " +
+                        "WHEN 'UKRAINIAN' THEN 'uk' WHEN 'RUSSIAN' THEN 'ru' WHEN 'SPANISH' THEN 'es' END",
             ),
         )
 

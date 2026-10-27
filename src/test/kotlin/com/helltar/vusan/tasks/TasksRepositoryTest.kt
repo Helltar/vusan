@@ -6,6 +6,7 @@ import com.helltar.vusan.i18n.Language
 import com.helltar.vusan.infra.Db
 import java.nio.file.Files
 import java.nio.file.Path
+import java.sql.DriverManager
 import java.time.Instant
 import java.time.ZoneId
 import kotlin.test.AfterTest
@@ -159,6 +160,22 @@ class TasksRepositoryTest {
         // the same chat number on the other platform is a different room, and parking it leaves this one running
         assertEquals(1, repo.pauseAllInChat(onDiscord.chat))
         assertFalse(assertNotNull(repo.findForUser(onTelegram.user, id)).paused)
+    }
+
+    @Test
+    fun `a task keeps its language as a code`() = runBlocking {
+        val id = repo.create(newTask(testScope(userId = 100, chatId = -200), "digest").copy(language = Language.UKRAINIAN))
+
+        assertEquals(Language.UKRAINIAN, assertNotNull(repo.findForUser(testUser(100), id)).language)
+
+        val stored =
+            DriverManager.getConnection("jdbc:sqlite:${tempDir.resolve("vusan.db")}").use { connection ->
+                connection.createStatement().use { statement ->
+                    statement.executeQuery("SELECT language FROM scheduled_tasks WHERE id = $id").use { it.getString(1) }
+                }
+            }
+
+        assertEquals("uk", stored)
     }
 
     private fun newTask(scope: ConversationScope, title: String) =

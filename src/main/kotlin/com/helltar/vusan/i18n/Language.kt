@@ -1,11 +1,15 @@
 package com.helltar.vusan.i18n
 
-enum class Language(val codes: Set<String>, private val cyrillic: Boolean = false) {
+/**
+ * A language the bot has canned text in. [code] is its ISO 639-1 code, the form Telegram reports a client's
+ * language in and the form a stored row keeps it in, so renaming a constant never touches the database.
+ */
+enum class Language(val code: String, private val cyrillic: Boolean = false) {
 
-    ENGLISH(setOf("en")),
-    UKRAINIAN(setOf("uk"), cyrillic = true),
-    RUSSIAN(setOf("ru"), cyrillic = true),
-    SPANISH(setOf("es"));
+    ENGLISH("en"),
+    UKRAINIAN("uk", cyrillic = true),
+    RUSSIAN("ru", cyrillic = true),
+    SPANISH("es");
 
     companion object {
         val DEFAULT = ENGLISH
@@ -33,7 +37,7 @@ enum class Language(val codes: Set<String>, private val cyrillic: Boolean = fals
         fun fromCode(code: String?): Language {
             val primary = code?.substringBefore('-')?.trim()?.lowercase()?.takeIf { it.isNotEmpty() } ?: return DEFAULT
 
-            return entries.firstOrNull { primary in it.codes } ?: DEFAULT
+            return entries.firstOrNull { it.code == primary } ?: DEFAULT
         }
 
         /**

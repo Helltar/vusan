@@ -117,6 +117,35 @@ class DatabaseMigrationTest {
     }
 
     @Test
+    fun `a task's language stored as a constant name is moved to its code`() = withTempDb { dbPath ->
+        createSnapshot(dbPath, Schema.oldestStepped)
+        withStatement(dbPath) { statement ->
+            listOf("'UKRAINIAN'", "'RUSSIAN'", "'ENGLISH'", "'SPANISH'", "'KLINGON'", "NULL").forEach { language ->
+                statement.execute(
+                    "INSERT INTO scheduled_tasks (platform, user_id, chat_id, prompt, recurrence, timezone, " +
+                            "next_fire_at, language) VALUES ('TELEGRAM', '100', '-200', 'post the digest', 'once', " +
+                            "'UTC', '2026-07-28T08:00:00Z', $language)",
+                )
+            }
+        }
+        stampUserVersion(dbPath, Schema.oldestStepped)
+
+        runBlocking {
+            Db.connect(testConfig(dbPath))
+            Db.disconnect()
+        }
+
+        val languages =
+            withStatement(dbPath) { statement ->
+                statement.executeQuery("SELECT language FROM scheduled_tasks ORDER BY id").use { rows ->
+                    buildList { while (rows.next()) add(rows.getString(1)) }
+                }
+            }
+
+        assertEquals(listOf("uk", "ru", "en", "es", null, null), languages)
+    }
+
+    @Test
     fun `a step that fails leaves the database as it was found`() = withTempDb { dbPath ->
         createSnapshot(dbPath, Schema.oldestStepped)
         // the table the first step creates is already there, so that step cannot run

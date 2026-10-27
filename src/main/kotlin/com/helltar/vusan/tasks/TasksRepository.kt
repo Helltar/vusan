@@ -33,7 +33,7 @@ class TasksRepository {
                 it[creatorUsername] = task.creatorUsername
                 it[creatorDisplayName] = task.creatorDisplayName
                 it[chatIsPrivate] = task.chatIsPrivate
-                it[language] = task.language.name
+                it[language] = task.language.code
                 it[selfInitiated] = task.selfInitiated
             }.value
     }
@@ -212,9 +212,7 @@ class TasksRepository {
             selfInitiated = this[ScheduledTasksTable.selfInitiated],
             nextFireAt = this[ScheduledTasksTable.nextFireAt],
             paused = this[ScheduledTasksTable.paused],
-            language =
-                this[ScheduledTasksTable.language]?.let { runCatching { Language.valueOf(it) }.getOrNull() }
-                    ?: Language.DEFAULT,
+            language = Language.fromCode(this[ScheduledTasksTable.language]),
         )
     }
 

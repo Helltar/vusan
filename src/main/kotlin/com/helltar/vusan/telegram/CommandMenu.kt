@@ -46,7 +46,7 @@ internal suspend fun TelegramClient.publishCommandMenu() {
             )
 
         // the list without a language answers everyone whose own language has no dedicated one
-        val languageCode = language.codes.first().takeUnless { language == Language.DEFAULT }
+        val languageCode = language.code.takeUnless { language == Language.DEFAULT }
         val plain = commands(::BotCommand)
         val ephemeral = commands(::ephemeralCommand)
 

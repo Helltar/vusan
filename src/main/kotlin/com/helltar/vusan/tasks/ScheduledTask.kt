@@ -85,7 +85,7 @@ internal fun ScheduledTask.toRequestContext(profile: ChatProfile = ChatProfile.N
                 id = scope.user.id,
                 displayName = creatorDisplayName,
                 username = creatorUsername,
-                languageCode = language.codes.firstOrNull(),
+                languageCode = language.code,
             ),
         language = language,
     )
