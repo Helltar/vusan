@@ -151,6 +151,6 @@ Or run it on JDK 21, with `ffmpeg` and `yt-dlp` on `PATH`:
 ## Stack
 
 Kotlin, with [TelegramBots](https://github.com/rubenlagus/TelegramBots) for Telegram, Exposed/SQLite
-for storage, and its own thin clients for the OpenAI and Anthropic APIs. Works with OpenAI, Anthropic,
+for storage, and its own thin clients for the model providers' APIs. Works with OpenAI, Anthropic,
 OpenRouter, any OpenAI-compatible server (DeepSeek, xAI, Ollama and others), or a ChatGPT subscription
 instead of a paid API key — see [configuration.md](docs/configuration.md#llm-provider).
