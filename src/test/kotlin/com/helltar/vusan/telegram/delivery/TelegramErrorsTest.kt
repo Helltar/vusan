@@ -156,6 +156,12 @@ class TelegramErrorsTest {
     }
 
     @Test
+    fun `detects a reply target telegram refuses`() {
+        assertTrue(telegramError("Bad Request: REPLY_TO_INVALID").isReplyTargetInvalid())
+        assertFalse(telegramError("Bad Request: reply message not found").isReplyTargetInvalid())
+    }
+
+    @Test
     fun `detects an unchanged edited message`() {
         val error =
             telegramError(

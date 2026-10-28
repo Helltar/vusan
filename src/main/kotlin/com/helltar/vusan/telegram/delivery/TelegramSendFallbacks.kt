@@ -124,6 +124,27 @@ internal suspend fun withFloodWaitRetry(chatId: Long, send: suspend () -> Unit) 
         .getOrThrow()
 }
 
+/**
+ * Send a message for one person's eyes anchored by [replyParameters], and once more without the anchor
+ * when Telegram refuses it — the ephemeral command it answers came in past its 15 seconds. Unanchored,
+ * only an administrator may reach that person, so the second attempt can fail too, and the caller says
+ * what then.
+ */
+internal suspend fun sendEphemeralWithAnchorFallback(
+    replyParameters: ReplyParameters?,
+    send: suspend (replyParameters: ReplyParameters?) -> Unit,
+) {
+    runCatching { send(replyParameters) }
+        .recoverCatching { error ->
+            error.rethrowIfCancellation()
+            if (replyParameters?.ephemeralMessageId == null || !error.isReplyTargetInvalid()) throw error
+
+            log.warn { "ephemeral reply refused its anchor, sending it unanchored: ${error.message}" }
+            send(null)
+        }
+        .getOrThrow()
+}
+
 internal suspend fun sendWithHtmlFallback(send: suspend (parseMode: String?) -> Unit) {
     runCatching { send(ParseMode.HTML) }
         .recoverCatching { e ->

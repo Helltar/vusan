@@ -18,6 +18,7 @@ import com.helltar.vusan.request.testChat
 import com.helltar.vusan.request.testUser
 import kotlin.test.Test
 import kotlin.test.assertEquals
+import kotlin.test.assertFailsWith
 import kotlin.test.assertFalse
 import kotlin.test.assertNull
 import kotlin.test.assertTrue
@@ -28,6 +29,7 @@ import org.telegram.telegrambots.meta.api.methods.send.SendVideo
 import org.telegram.telegrambots.meta.api.objects.ApiResponse
 import org.telegram.telegrambots.meta.api.objects.chat.Chat
 import org.telegram.telegrambots.meta.api.objects.message.Message
+import org.telegram.telegrambots.meta.api.objects.User
 import org.telegram.telegrambots.meta.exceptions.TelegramApiRequestException
 import org.telegram.telegrambots.meta.generics.TelegramClient
 
@@ -336,6 +338,53 @@ class TelegramDeliveryTest {
         assertEquals(listOf<Int?>(null), client.threadIds)
     }
 
+    @Test
+    fun `an ephemeral reply refused past its window is sent again without its anchor`() = runBlocking {
+        val client = EphemeralClient(refusals = 1)
+
+        TelegramDelivery(client.proxy).sendForSenderOnly(ephemeralCommand(), "Cleared.")
+
+        assertEquals(listOf<Int?>(5, null), client.ephemeralAnchors)
+        assertEquals(listOf<Long?>(2L, 2L), client.receivers)
+    }
+
+    @Test
+    fun `an ephemeral reply refused unanchored as well reaches the caller`() {
+        val client = EphemeralClient(refusals = 2)
+
+        assertFailsWith<TelegramApiRequestException> {
+            runBlocking { TelegramDelivery(client.proxy).sendForSenderOnly(ephemeralCommand(), "Cleared.") }
+        }
+        assertEquals(2, client.ephemeralAnchors.size)
+    }
+
+    @Test
+    fun `an ephemeral reply refused for another reason is not sent again`() {
+        val client = RejectingClient("Bad Request: chat not found")
+
+        assertFailsWith<TelegramApiRequestException> {
+            runBlocking { TelegramDelivery(client.proxy).sendForSenderOnly(ephemeralCommand(), "Cleared.") }
+        }
+        assertEquals(1, client.calls)
+    }
+
+    @Test
+    fun `a canned reply to an ephemeral message hangs under nothing`() = runBlocking {
+        val client = RecordingClient()
+
+        TelegramDelivery(client.proxy).sendReply(ephemeralCommand(), "Nothing to stop.")
+
+        assertNull(client.replyTargets.single())
+    }
+
+    private fun ephemeralCommand() =
+        Message().apply {
+            messageId = 0
+            ephemeralMessageId = 5
+            chat = Chat.builder().id(-7L).type("supergroup").build()
+            from = User.builder().id(2L).firstName("Ann").isBot(false).build()
+        }
+
     private fun choiceMessage() =
         Message().apply {
             messageId = 77
@@ -420,6 +469,39 @@ class TelegramDeliveryTest {
 
                 if (request is SendVideo) {
                     CompletableFuture.failedFuture<Any>(SocketTimeoutException("timeout"))
+                } else {
+                    CompletableFuture.completedFuture<Any>(Message())
+                }
+            } as TelegramClient
+    }
+
+    // refuses the first [refusals] sends the way Telegram refuses an ephemeral reply past its window
+    private class EphemeralClient(private var refusals: Int) {
+
+        val ephemeralAnchors = mutableListOf<Int?>()
+        val receivers = mutableListOf<Long?>()
+
+        val proxy: TelegramClient =
+            Proxy.newProxyInstance(
+                TelegramClient::class.java.classLoader,
+                arrayOf(TelegramClient::class.java),
+            ) { _, method, args ->
+                check(method.name == "executeAsync") { "unexpected client call: ${method.name}" }
+                val request = args.single() as SendMessage
+                ephemeralAnchors += request.replyParameters?.ephemeralMessageId
+                receivers += request.ephemeralMessageParameters?.receiverUserId
+
+                if (refusals-- > 0) {
+                    CompletableFuture.failedFuture<Any>(
+                        TelegramApiRequestException(
+                            "Error executing request",
+                            ApiResponse.builder<Serializable>()
+                                .ok(false)
+                                .errorCode(400)
+                                .errorDescription("Bad Request: REPLY_TO_INVALID")
+                                .build(),
+                        ),
+                    )
                 } else {
                     CompletableFuture.completedFuture<Any>(Message())
                 }

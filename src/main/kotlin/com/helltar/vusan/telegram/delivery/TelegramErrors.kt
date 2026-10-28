@@ -45,6 +45,11 @@ internal fun Throwable.isReplyMessageNotFound(): Boolean {
     return "reply message not found" in description || "message to be replied not found" in description
 }
 
+// an ephemeral message may be answered only within 15 seconds of being sent; past that the anchor is refused
+// with this code, and so is an anchor on a message id of 0, which every ephemeral message carries.
+internal fun Throwable.isReplyTargetInvalid(): Boolean =
+    telegramDescription?.contains("REPLY_TO_INVALID", ignoreCase = true) == true
+
 internal fun Throwable.isMessageNotModified(): Boolean =
     telegramDescription?.contains("message is not modified", ignoreCase = true) == true
 

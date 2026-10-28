@@ -27,6 +27,7 @@ import com.helltar.vusan.telegram.telegramUserId
 import com.helltar.vusan.telegram.telegramChat
 import com.helltar.vusan.telegram.inbound.chatIdLong
 import com.helltar.vusan.telegram.inbound.forumTopicIdOrNull
+import com.helltar.vusan.telegram.inbound.isEphemeral
 import com.helltar.vusan.telegram.inbound.messageIdLong
 import com.helltar.vusan.telegram.inbound.senderIdOrNull
 import com.helltar.vusan.telegram.inbound.language
@@ -276,33 +277,39 @@ class TelegramDelivery(
      * message that asked.
      */
     suspend fun sendReply(message: Message, text: String, replyToMessageId: Long? = null) {
+        // an ephemeral message's id is 0, which no reply can hang under
+        val anchor = replyToMessageId ?: message.messageIdLong.takeUnless { message.isEphemeral }
+
         withFloodWaitRetry(message.chatIdLong) {
             TelegramOutputSender.sendText(
                 client = client,
                 target = message.chatTarget,
                 text = text,
-                replyParameters = replyParameters(replyToMessageId ?: message.messageIdLong),
+                replyParameters = replyParameters(anchor),
             )
         }
     }
 
     /**
      * A reply only [message]'s sender sees, as Telegram's ephemeral messages: anchored to the ephemeral
-     * message it answers when there is one, and otherwise sent on the bot's own standing in the chat,
-     * which Telegram grants an administrator alone — so this may fail, and the caller says what then.
+     * message it answers when there is one and it is still within its 15 seconds, and otherwise sent on
+     * the bot's own standing in the chat, which Telegram grants an administrator alone — so this may
+     * fail, and the caller says what then.
      */
     suspend fun sendForSenderOnly(message: Message, text: String) {
         val receiver = requireNotNull(message.from?.id) { "An ephemeral reply needs a person to receive it" }
 
         withFloodWaitRetry(message.chatIdLong) {
-            sendTextMessage(
-                client = client,
-                target = message.chatTarget,
-                text = text,
-                parseMode = ParseMode.HTML,
-                replyParameters = message.ephemeralMessageId?.let(::ephemeralReplyParameters),
-                ephemeral = EphemeralMessageParameters.builder().receiverUserId(receiver).build(),
-            )
+            sendEphemeralWithAnchorFallback(message.ephemeralMessageId?.let(::ephemeralReplyParameters)) { anchor ->
+                sendTextMessage(
+                    client = client,
+                    target = message.chatTarget,
+                    text = text,
+                    parseMode = ParseMode.HTML,
+                    replyParameters = anchor,
+                    ephemeral = EphemeralMessageParameters.builder().receiverUserId(receiver).build(),
+                )
+            }
         }
     }
 

@@ -8,6 +8,7 @@ import com.helltar.vusan.telegram.delivery.TelegramDelivery
 import com.helltar.vusan.telegram.delivery.chatTarget
 import com.helltar.vusan.telegram.delivery.ephemeralReplyParameters
 import com.helltar.vusan.telegram.delivery.replyParameters
+import com.helltar.vusan.telegram.delivery.sendEphemeralWithAnchorFallback
 import com.helltar.vusan.telegram.inbound.BotCommand
 import com.helltar.vusan.telegram.inbound.chatIdLong
 import com.helltar.vusan.telegram.inbound.isEphemeral
@@ -18,6 +19,7 @@ import com.helltar.vusan.telegram.inbound.normalizeUsername
 import com.helltar.vusan.telegram.inbound.normalizedUsernames
 import com.helltar.vusan.telegram.inbound.senderIdOrNull
 import io.github.oshai.kotlinlogging.KotlinLogging
+import java.time.Instant
 import org.telegram.telegrambots.meta.api.objects.ephemeral.EphemeralMessageParameters
 import org.telegram.telegrambots.meta.api.objects.message.Message
 
@@ -41,6 +43,13 @@ internal class TelegramCommands(
                 (command.targetUsername == null || normalizeUsername(command.targetUsername) in profile.usernames.normalizedUsernames())
 
     suspend fun handle(command: BotCommand, message: Message) {
+        // an ephemeral command must be answered within 15 seconds of being sent, so how late it arrived is
+        // what tells a refused answer apart from a broken one
+        log.info {
+            "command: name=[${command.command}] chat=[${message.chatIdLong}] user=[${message.senderIdOrNull()}] " +
+                    "ephemeral=[${message.isEphemeral}] age=[${message.date?.let { Instant.now().epochSecond - it }}s]"
+        }
+
         when (command.command) {
             START_COMMAND -> delivery.sendReply(message, Messages.of(message.language).startReply)
             TASKS_COMMAND -> sendTaskMenu(message)
@@ -67,14 +76,26 @@ internal class TelegramCommands(
         // the menu is sent straight to the bot api, so unlike an agent reply it has no delivery
         // fallback chain — without this the user would see nothing at all when the send is rejected.
         runCatching {
-            taskMenu.sendMenu(
-                target = message.chatTarget,
-                userId = userId,
-                replyParameters = if (forSenderOnly) message.ephemeralMessageId?.let(::ephemeralReplyParameters) else replyParameters(message.messageIdLong),
-                chatIsPrivate = message.isPrivateChat,
-                messages = messages,
-                ephemeral = EphemeralMessageParameters.builder().receiverUserId(userId).build().takeIf { forSenderOnly },
-            )
+            if (forSenderOnly) {
+                sendEphemeralWithAnchorFallback(message.ephemeralMessageId?.let(::ephemeralReplyParameters)) { anchor ->
+                    taskMenu.sendMenu(
+                        target = message.chatTarget,
+                        userId = userId,
+                        replyParameters = anchor,
+                        chatIsPrivate = false,
+                        messages = messages,
+                        ephemeral = EphemeralMessageParameters.builder().receiverUserId(userId).build(),
+                    )
+                }
+            } else {
+                taskMenu.sendMenu(
+                    target = message.chatTarget,
+                    userId = userId,
+                    replyParameters = replyParameters(message.messageIdLong),
+                    chatIsPrivate = message.isPrivateChat,
+                    messages = messages,
+                )
+            }
         }.recoverCatching { error ->
             error.rethrowIfCancellation()
             if (!forSenderOnly || message.isEphemeral) throw error
@@ -89,6 +110,14 @@ internal class TelegramCommands(
             )
         }.onFailure { error ->
             error.rethrowIfCancellation()
+
+            // nobody else saw an ephemeral command, so an apology in the open would answer nothing they
+            // know of, and the one person who did is out of reach
+            if (message.isEphemeral) {
+                log.warn { "no task menu for an ephemeral /tasks in chat=${message.chatIdLong} user=$userId: ${error.message}" }
+                return
+            }
+
             log.error(error) { "failed to send task menu for chat=${message.chatIdLong} user=$userId" }
             delivery.sendReply(message, messages.fallbackErrorReply)
         }
@@ -123,7 +152,18 @@ internal class TelegramCommands(
 
         // from a group's menu the command reached the bot alone, and so does the answer
         val reply = Messages.of(message.language).conversationClearedReply
-        if (message.isEphemeral) delivery.sendForSenderOnly(message, reply) else delivery.sendReply(message, reply)
+
+        if (!message.isEphemeral) {
+            delivery.sendReply(message, reply)
+            return
+        }
+
+        // the history is gone either way; a confirmation Telegram refuses is only logged
+        runCatching { delivery.sendForSenderOnly(message, reply) }
+            .onFailure { error ->
+                error.rethrowIfCancellation()
+                log.warn { "could not confirm an ephemeral /clear in chat=${message.chatIdLong} user=$userId: ${error.message}" }
+            }
     }
 
     private companion object {

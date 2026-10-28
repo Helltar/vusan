@@ -11,7 +11,12 @@ inline choices. Part of the [architecture index](../architecture.md).
   `delivery/TelegramRequests` is the address a callback carries, ephemeral or not. Callback data carries the menu
   owner, every action checks ownership and group scope, and Telegram is always sent an `answerCallbackQuery`. Since
   the per-user cap is a constructor argument, the menu renders only as many tasks as fit Telegram's message limit and points
-  at plain language for the rest; a rejected send falls back to the generic error reply rather than silence.
+  at plain language for the rest; a rejected send falls back to the generic error reply rather than silence — except
+  for an ephemeral `/tasks`, which nobody else saw, so a menu Telegram refuses there is only logged. An ephemeral
+  answer (the menu, a `/clear` confirmation) must come within 15 seconds of the command; past that Telegram answers
+  `REPLY_TO_INVALID` and the answer is sent once more without its anchor
+  (`TelegramSendFallbacks.sendEphemeralWithAnchorFallback`), which reaches the person only when the bot is an
+  administrator. Every command logs a `command:` line with its `age`, which tells a late command from a broken send.
   Pause/resume edits the menu in place; cancel first renders a delete/back confirmation. Resuming an overdue recurring
   task advances it to the next future occurrence, while an overdue one-time task stays paused. The agent-callable
   `pauseTask` and `resumeTask` tools use the same repository operations and resume calculation, so plain-language

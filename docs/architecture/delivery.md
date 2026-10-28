@@ -104,4 +104,4 @@ Before it: [running a turn](turn.md).
       one message per track, each repeating the reply quote. Anything queued between them ends the run.
     - **Sender split** — `TelegramOutputSender.kt` maps each `BotOutput` kind to a Bot API call and picks the fallback
       wrapping it, `TelegramSendFallbacks.kt` holds the output-kind-agnostic rejection handling (plain-text retry,
-      media-to-document, text-as-document), `TelegramRequests.kt` the raw request builders.
+      media-to-document, text-as-document, an ephemeral reply sent again without the anchor Telegram refused), `TelegramRequests.kt` the raw request builders.
