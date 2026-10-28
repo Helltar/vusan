@@ -68,9 +68,30 @@ kotlin {
 tasks.test {
     useJUnitPlatform()
 
+    // only what needs attention: a passing run prints its one summary line, a failure its whole trace
     testLogging {
-        events("passed", "skipped", "failed")
+        events("skipped", "failed")
+        exceptionFormat = org.gradle.api.tasks.testing.logging.TestExceptionFormat.FULL
     }
+
+    addTestListener(
+        object : TestListener {
+            override fun beforeSuite(suite: TestDescriptor) {}
+
+            override fun beforeTest(testDescriptor: TestDescriptor) {}
+
+            override fun afterTest(testDescriptor: TestDescriptor, result: TestResult) {}
+
+            override fun afterSuite(suite: TestDescriptor, result: TestResult) {
+                if (suite.parent == null) {
+                    println(
+                        "tests: ${result.resultType} ${result.testCount} run, ${result.successfulTestCount} passed, " +
+                            "${result.failedTestCount} failed, ${result.skippedTestCount} skipped",
+                    )
+                }
+            }
+        },
+    )
 }
 
 detekt {
