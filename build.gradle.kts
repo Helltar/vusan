@@ -94,6 +94,16 @@ tasks.test {
     )
 }
 
+// what a model is sent before any conversation, as JSON built by the production code: the system prompt and
+// every tool definition. `./gradlew -q exportPrompt --args="--out /tmp/prompt.json"`; the flags are in
+// src/test/kotlin/com/helltar/vusan/telegram/PromptExport.kt
+tasks.register<JavaExec>("exportPrompt") {
+    description = "Prints the system prompt and the tool definitions as JSON."
+    classpath = sourceSets.test.get().runtimeClasspath
+    mainClass.set("com.helltar.vusan.telegram.PromptExportKt")
+    environment("LOG_LEVEL", "WARN")
+}
+
 detekt {
     buildUponDefaultConfig = true
     config.setFrom("$projectDir/detekt.yml")

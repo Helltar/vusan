@@ -12,6 +12,10 @@ removals over compatibility shims.
 - `./gradlew test`, `./gradlew detekt` (any finding fails it), `./gradlew build`
   (compile + test + package), `./gradlew run` (local bot on `.env`).
   While iterating: `./gradlew test --tests "*AgentFactoryTest*"`.
+- `./gradlew -q exportPrompt --args="--out <file>"` writes what a model is
+  sent before any conversation — the system prompt and every tool definition —
+  as JSON built by the production code; the flags are in `PromptExport.kt`.
+  Read it instead of reconstructing the prompt from the sources.
 - `./gradlew detekt` is detekt 2's light analysis and the one `check` runs.
   `detektMain` and `detektTest` add the rules that need types, and are not
   part of the build while their findings on this code are mostly false.
