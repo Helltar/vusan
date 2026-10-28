@@ -1,11 +1,11 @@
 package com.helltar.vusan.agent.presence
 
+import com.helltar.vusan.config.testConfig
 import com.helltar.vusan.infra.Db
 import com.helltar.vusan.request.Platform
 import com.helltar.vusan.request.UserRef
 import com.helltar.vusan.request.testChat
 import com.helltar.vusan.request.testUser
-import kotlinx.coroutines.runBlocking
 import java.nio.file.Files
 import java.nio.file.Path
 import java.time.Instant
@@ -17,6 +17,7 @@ import kotlin.test.assertFailsWith
 import kotlin.test.assertFalse
 import kotlin.test.assertNull
 import kotlin.test.assertTrue
+import kotlinx.coroutines.runBlocking
 
 class LeaveAloneRepositoryTest {
 

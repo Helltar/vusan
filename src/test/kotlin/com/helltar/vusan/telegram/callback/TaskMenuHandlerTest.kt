@@ -1,14 +1,17 @@
 package com.helltar.vusan.telegram.callback
 
-import com.helltar.vusan.config.AppConfig
-import com.helltar.vusan.config.llm.LlmProviderConfig
+import com.helltar.vusan.config.testConfig
 import com.helltar.vusan.i18n.Language
 import com.helltar.vusan.i18n.Messages
 import com.helltar.vusan.infra.Db
-import com.helltar.vusan.telegram.delivery.ChatTarget
+import com.helltar.vusan.request.testScope
+import com.helltar.vusan.request.testUser
 import com.helltar.vusan.tasks.NewScheduledTask
 import com.helltar.vusan.tasks.Recurrence
 import com.helltar.vusan.tasks.TasksRepository
+import com.helltar.vusan.telegram.delivery.ChatTarget
+import com.helltar.vusan.telegram.delivery.EditableMessage
+import com.helltar.vusan.telegram.delivery.replyParameters
 import java.lang.reflect.Proxy
 import java.nio.file.Files
 import java.nio.file.Path
@@ -17,9 +20,6 @@ import java.time.ZoneId
 import java.util.concurrent.CompletableFuture
 import kotlin.test.AfterTest
 import kotlin.test.BeforeTest
-import com.helltar.vusan.request.AccessPolicy
-import com.helltar.vusan.request.testScope
-import com.helltar.vusan.request.testUser
 import kotlin.test.Test
 import kotlin.test.assertContains
 import kotlin.test.assertEquals
@@ -29,12 +29,9 @@ import kotlin.test.assertNotNull
 import kotlin.test.assertNull
 import kotlin.test.assertTrue
 import kotlin.time.Duration.Companion.hours
-import kotlin.time.Duration.Companion.seconds
 import kotlinx.coroutines.runBlocking
 import org.telegram.telegrambots.meta.api.methods.AnswerCallbackQuery
 import org.telegram.telegrambots.meta.api.methods.ParseMode
-import com.helltar.vusan.telegram.delivery.EditableMessage
-import com.helltar.vusan.telegram.delivery.replyParameters
 import org.telegram.telegrambots.meta.api.methods.send.SendMessage
 import org.telegram.telegrambots.meta.api.methods.updatingmessages.EditMessageText
 import org.telegram.telegrambots.meta.api.objects.message.Message
@@ -381,32 +378,4 @@ class TaskMenuHandlerTest {
             return CompletableFuture.completedFuture(response)
         }
     }
-
-    private fun testConfig(dbPath: String) =
-        AppConfig(
-            agentMaxModelCalls = 70,
-            accessPolicy = AccessPolicy(),
-            appearance = null,
-            databasePath = dbPath,
-            elevenLabsApiKey = null,
-            elevenLabsTts = null,
-            giphyApiKey = null,
-            klipyApiKey = null,
-            llmProvider = LlmProviderConfig.OpenAi(
-                    apiKey = "test",
-                model = "test",
-                requestTimeout = 60.seconds,
-            ),
-            maxConcurrentTurns = 4,
-            image = null,
-            openAiStt = null,
-            regolithToken = null,
-            regolithUrl = null,
-            searxngUrl = null,
-            selfImageFile = null,
-            personality = null,
-            tavilyApiKey = null,
-            telegramBotToken = "test",
-            ytDlpCookiesFile = null,
-        )
 }

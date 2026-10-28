@@ -1,22 +1,19 @@
 package com.helltar.vusan.agent.memory
 
-import com.helltar.vusan.config.AppConfig
-import com.helltar.vusan.config.llm.LlmProviderConfig
+import com.helltar.vusan.config.testConfig
 import com.helltar.vusan.infra.Db
-import kotlinx.coroutines.runBlocking
+import com.helltar.vusan.request.Platform
+import com.helltar.vusan.request.testChat
+import com.helltar.vusan.request.testUser
 import java.nio.file.Files
 import java.nio.file.Path
 import kotlin.test.AfterTest
 import kotlin.test.BeforeTest
-import com.helltar.vusan.request.Platform
-import com.helltar.vusan.request.testChat
-import com.helltar.vusan.request.testUser
-import com.helltar.vusan.request.AccessPolicy
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFalse
 import kotlin.test.assertTrue
-import kotlin.time.Duration.Companion.seconds
+import kotlinx.coroutines.runBlocking
 
 class MemoryRepositoryTest {
 
@@ -177,32 +174,4 @@ class MemoryRepositoryTest {
         assertFalse(repo.forget(id, testUser(100, Platform.DISCORD), testChat(-500, Platform.DISCORD)))
         assertTrue(repo.forget(id, testUser(100, Platform.TELEGRAM), testChat(-500, Platform.TELEGRAM)))
     }
-
-    private fun testConfig(dbPath: String) =
-        AppConfig(
-            agentMaxModelCalls = 70,
-            accessPolicy = AccessPolicy(),
-            appearance = null,
-            databasePath = dbPath,
-            elevenLabsApiKey = null,
-            elevenLabsTts = null,
-            giphyApiKey = null,
-            klipyApiKey = null,
-            llmProvider = LlmProviderConfig.OpenAi(
-                    apiKey = "test",
-                model = "test",
-                requestTimeout = 60.seconds,
-            ),
-            maxConcurrentTurns = 4,
-            image = null,
-            openAiStt = null,
-            regolithToken = null,
-            regolithUrl = null,
-            searxngUrl = null,
-            selfImageFile = null,
-            personality = null,
-            tavilyApiKey = null,
-            telegramBotToken = "test",
-            ytDlpCookiesFile = null,
-        )
 }

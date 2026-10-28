@@ -1,9 +1,13 @@
 package com.helltar.vusan.tasks
 
-import com.helltar.vusan.config.AppConfig
-import com.helltar.vusan.config.llm.LlmProviderConfig
+import com.helltar.vusan.config.testConfig
 import com.helltar.vusan.i18n.Language
 import com.helltar.vusan.infra.Db
+import com.helltar.vusan.request.ConversationScope
+import com.helltar.vusan.request.Platform
+import com.helltar.vusan.request.testChat
+import com.helltar.vusan.request.testScope
+import com.helltar.vusan.request.testUser
 import java.nio.file.Files
 import java.nio.file.Path
 import java.sql.DriverManager
@@ -11,19 +15,12 @@ import java.time.Instant
 import java.time.ZoneId
 import kotlin.test.AfterTest
 import kotlin.test.BeforeTest
-import com.helltar.vusan.request.AccessPolicy
-import com.helltar.vusan.request.ConversationScope
-import com.helltar.vusan.request.Platform
-import com.helltar.vusan.request.testChat
-import com.helltar.vusan.request.testScope
-import com.helltar.vusan.request.testUser
-import kotlin.test.assertFalse
-import kotlin.test.assertNull
 import kotlin.test.Test
 import kotlin.test.assertEquals
+import kotlin.test.assertFalse
 import kotlin.test.assertNotNull
+import kotlin.test.assertNull
 import kotlin.test.assertTrue
-import kotlin.time.Duration.Companion.seconds
 import kotlinx.coroutines.runBlocking
 
 class TasksRepositoryTest {
@@ -210,33 +207,5 @@ class TasksRepositoryTest {
                 chatIsPrivate = true,
                 language = Language.ENGLISH,
             ),
-        )
-
-    private fun testConfig(dbPath: String) =
-        AppConfig(
-            agentMaxModelCalls = 70,
-            accessPolicy = AccessPolicy(),
-            appearance = null,
-            databasePath = dbPath,
-            elevenLabsApiKey = null,
-            elevenLabsTts = null,
-            giphyApiKey = null,
-            klipyApiKey = null,
-            llmProvider = LlmProviderConfig.OpenAi(
-                    apiKey = "test",
-                model = "test",
-                requestTimeout = 60.seconds,
-            ),
-            maxConcurrentTurns = 4,
-            image = null,
-            openAiStt = null,
-            regolithToken = null,
-            regolithUrl = null,
-            searxngUrl = null,
-            selfImageFile = null,
-            personality = null,
-            tavilyApiKey = null,
-            telegramBotToken = "test",
-            ytDlpCookiesFile = null,
         )
 }

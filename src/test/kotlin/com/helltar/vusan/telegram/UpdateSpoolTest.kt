@@ -1,14 +1,12 @@
 package com.helltar.vusan.telegram
 
-import com.helltar.vusan.config.AppConfig
-import com.helltar.vusan.config.llm.LlmProviderConfig
+import com.helltar.vusan.config.testConfig
 import com.helltar.vusan.infra.Db
 import java.nio.file.Files
 import java.nio.file.Path
 import java.time.Instant
 import kotlin.test.AfterTest
 import kotlin.test.BeforeTest
-import com.helltar.vusan.request.AccessPolicy
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertTrue
@@ -107,32 +105,4 @@ class UpdateSpoolTest {
                     .from(User.builder().id(5L).firstName("Ann").isBot(false).build())
                     .build()
         }
-
-    private fun testConfig(dbPath: String) =
-        AppConfig(
-            agentMaxModelCalls = 70,
-            accessPolicy = AccessPolicy(),
-            appearance = null,
-            databasePath = dbPath,
-            elevenLabsApiKey = null,
-            elevenLabsTts = null,
-            giphyApiKey = null,
-            klipyApiKey = null,
-            llmProvider = LlmProviderConfig.OpenAi(
-                    apiKey = "test",
-                model = "test",
-                requestTimeout = 60.seconds,
-            ),
-            maxConcurrentTurns = 4,
-            image = null,
-            openAiStt = null,
-            regolithToken = null,
-            regolithUrl = null,
-            searxngUrl = null,
-            selfImageFile = null,
-            personality = null,
-            tavilyApiKey = null,
-            telegramBotToken = "test",
-            ytDlpCookiesFile = null,
-        )
 }

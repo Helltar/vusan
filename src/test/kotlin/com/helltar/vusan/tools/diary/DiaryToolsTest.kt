@@ -6,11 +6,10 @@ import com.helltar.vusan.agent.presence.DiaryLookBack
 import com.helltar.vusan.agent.presence.DiaryPeriod
 import com.helltar.vusan.agent.presence.DiaryRepository
 import com.helltar.vusan.agent.presence.DiarySpan
-import com.helltar.vusan.agent.presence.testConfig
+import com.helltar.vusan.config.testConfig
 import com.helltar.vusan.infra.Db
 import com.helltar.vusan.request.requestContext
 import com.helltar.vusan.tools.toolFailure
-import kotlinx.coroutines.runBlocking
 import java.nio.file.Files
 import java.nio.file.Path
 import java.time.Instant
@@ -22,6 +21,7 @@ import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFalse
 import kotlin.test.assertTrue
+import kotlinx.coroutines.runBlocking
 
 class DiaryToolsTest {
 

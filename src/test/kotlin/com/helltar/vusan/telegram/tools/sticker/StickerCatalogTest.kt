@@ -1,24 +1,41 @@
 package com.helltar.vusan.telegram.tools.sticker
 
-import com.helltar.vusan.config.AppConfig
-import com.helltar.vusan.config.llm.LlmProviderConfig
+import com.helltar.vusan.config.testConfig
 import com.helltar.vusan.infra.Db
 import com.helltar.vusan.infra.tables.TelegramChatStickerSetsTable
 import com.helltar.vusan.infra.tables.TelegramStickerSetsTable
 import com.helltar.vusan.infra.tables.TelegramStickersTable
+import com.helltar.vusan.llm.FakeLlmClient
 import com.helltar.vusan.llm.RequestOptions
+import com.helltar.vusan.llm.TEST_MODEL
 import com.helltar.vusan.outbox.BotOutbox
+import com.helltar.vusan.request.AccessPolicy
 import com.helltar.vusan.request.requestContext
 import com.helltar.vusan.request.testChat
-import com.helltar.vusan.llm.FakeLlmClient
 import com.helltar.vusan.tools.vision.ImageVisionClient
-import com.helltar.vusan.llm.TEST_MODEL
+import java.io.ByteArrayInputStream
+import java.io.Serializable
+import java.lang.reflect.Proxy
+import java.nio.file.Files
+import java.nio.file.Path
+import java.time.Instant
+import java.time.temporal.ChronoUnit
+import java.util.concurrent.CompletableFuture
+import kotlin.random.Random
+import kotlin.test.AfterTest
+import kotlin.test.BeforeTest
+import kotlin.test.Test
+import kotlin.test.assertContains
+import kotlin.test.assertEquals
+import kotlin.test.assertNotNull
+import kotlin.test.assertNull
+import kotlin.test.assertTrue
+import kotlin.time.Duration.Companion.seconds
 import kotlinx.coroutines.cancelAndJoin
 import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.withTimeout
-import kotlin.random.Random
 import org.jetbrains.exposed.v1.core.eq
 import org.jetbrains.exposed.v1.jdbc.select
 import org.jetbrains.exposed.v1.jdbc.selectAll
@@ -32,24 +49,6 @@ import org.telegram.telegrambots.meta.api.objects.stickers.Sticker
 import org.telegram.telegrambots.meta.api.objects.stickers.StickerSet
 import org.telegram.telegrambots.meta.exceptions.TelegramApiRequestException
 import org.telegram.telegrambots.meta.generics.TelegramClient
-import java.io.ByteArrayInputStream
-import java.io.Serializable
-import java.lang.reflect.Proxy
-import java.nio.file.Files
-import java.nio.file.Path
-import java.time.Instant
-import java.time.temporal.ChronoUnit
-import java.util.concurrent.CompletableFuture
-import kotlin.test.AfterTest
-import kotlin.test.BeforeTest
-import com.helltar.vusan.request.AccessPolicy
-import kotlin.test.Test
-import kotlin.test.assertContains
-import kotlin.test.assertEquals
-import kotlin.test.assertNotNull
-import kotlin.test.assertNull
-import kotlin.test.assertTrue
-import kotlin.time.Duration.Companion.seconds
 
 private const val CHAT = -100L
 private const val OTHER_CHAT = -200L
@@ -66,7 +65,7 @@ class StickerCatalogTest {
     @BeforeTest
     fun setUp() {
         tempDir = Files.createTempDirectory("vusan-sticker-catalog-test")
-        runBlocking { Db.connect(testConfig(tempDir.resolve("vusan.db").toString())) }
+        runBlocking { Db.connect(testConfig(tempDir.resolve("vusan.db").toString(), AccessPolicy(allowed = setOf("telegram:1")))) }
     }
 
     @AfterTest
@@ -538,33 +537,4 @@ class StickerCatalogTest {
                     .build(),
             )
     }
-
-    private fun testConfig(dbPath: String) =
-        AppConfig(
-            agentMaxModelCalls = 70,
-            accessPolicy = AccessPolicy(allowed = setOf("telegram:1")),
-            appearance = null,
-            databasePath = dbPath,
-            elevenLabsApiKey = null,
-            elevenLabsTts = null,
-            giphyApiKey = null,
-            klipyApiKey = null,
-            llmProvider =
-                LlmProviderConfig.OpenAi(
-                    apiKey = "test",
-                    model = "test",
-                    requestTimeout = 60.seconds,
-                ),
-            maxConcurrentTurns = 4,
-            image = null,
-            openAiStt = null,
-            regolithToken = null,
-            regolithUrl = null,
-            searxngUrl = null,
-            selfImageFile = null,
-            personality = null,
-            tavilyApiKey = null,
-            telegramBotToken = "test",
-            ytDlpCookiesFile = null,
-        )
 }

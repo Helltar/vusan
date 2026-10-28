@@ -1,9 +1,7 @@
 package com.helltar.vusan.tools.tasks
 
-import com.helltar.vusan.config.AppConfig
-import com.helltar.vusan.config.llm.LlmProviderConfig
+import com.helltar.vusan.config.testConfig
 import com.helltar.vusan.infra.Db
-import com.helltar.vusan.request.AccessPolicy
 import com.helltar.vusan.request.RequestContext
 import com.helltar.vusan.request.requestContext
 import com.helltar.vusan.request.testUser
@@ -22,7 +20,6 @@ import kotlin.test.assertEquals
 import kotlin.test.assertIs
 import kotlin.test.assertNotNull
 import kotlin.test.assertTrue
-import kotlin.time.Duration.Companion.seconds
 import kotlinx.coroutines.runBlocking
 
 class FollowUpToolsTest {
@@ -84,32 +81,4 @@ class FollowUpToolsTest {
 
     private fun tomorrow() =
         Instant.now().atZone(ZoneId.systemDefault()).plusDays(1).toLocalDateTime().truncatedTo(ChronoUnit.MINUTES)
-
-    private fun testConfig(dbPath: String) =
-        AppConfig(
-            agentMaxModelCalls = 70,
-            accessPolicy = AccessPolicy(),
-            appearance = null,
-            databasePath = dbPath,
-            elevenLabsApiKey = null,
-            elevenLabsTts = null,
-            giphyApiKey = null,
-            klipyApiKey = null,
-            llmProvider = LlmProviderConfig.OpenAi(
-                    apiKey = "test",
-                model = "test",
-                requestTimeout = 60.seconds,
-            ),
-            maxConcurrentTurns = 4,
-            image = null,
-            openAiStt = null,
-            regolithToken = null,
-            regolithUrl = null,
-            searxngUrl = null,
-            selfImageFile = null,
-            personality = null,
-            tavilyApiKey = null,
-            telegramBotToken = "test",
-            ytDlpCookiesFile = null,
-        )
 }

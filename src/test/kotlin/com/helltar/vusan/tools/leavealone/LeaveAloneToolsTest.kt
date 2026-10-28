@@ -1,13 +1,12 @@
 package com.helltar.vusan.tools.leavealone
 
 import com.helltar.vusan.agent.presence.LeaveAloneRepository
-import com.helltar.vusan.agent.presence.testConfig
+import com.helltar.vusan.config.testConfig
 import com.helltar.vusan.infra.Db
 import com.helltar.vusan.request.requestContext
 import com.helltar.vusan.request.testChat
 import com.helltar.vusan.request.testUser
 import com.helltar.vusan.tools.toolFailure
-import kotlinx.coroutines.runBlocking
 import java.nio.file.Files
 import java.nio.file.Path
 import java.time.Instant
@@ -18,6 +17,7 @@ import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertNull
 import kotlin.test.assertTrue
+import kotlinx.coroutines.runBlocking
 
 class LeaveAloneToolsTest {
 

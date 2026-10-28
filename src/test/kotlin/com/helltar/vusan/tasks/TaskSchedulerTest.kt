@@ -1,17 +1,16 @@
 package com.helltar.vusan.tasks
 
 import com.helltar.vusan.agent.presence.LeaveAloneRepository
-import com.helltar.vusan.agent.presence.testConfig
+import com.helltar.vusan.config.testConfig
 import com.helltar.vusan.delivery.AttributionReason
-import com.helltar.vusan.infra.Db
 import com.helltar.vusan.i18n.Language
+import com.helltar.vusan.infra.Db
 import com.helltar.vusan.request.ChatProfile
-import java.time.Instant
-import java.time.ZoneId
 import com.helltar.vusan.request.testScope
 import com.helltar.vusan.request.testUser
-import kotlinx.coroutines.runBlocking
 import java.nio.file.Files
+import java.time.Instant
+import java.time.ZoneId
 import kotlin.test.Test
 import kotlin.test.assertContains
 import kotlin.test.assertEquals
@@ -20,6 +19,7 @@ import kotlin.test.assertNotNull
 import kotlin.test.assertNull
 import kotlin.test.assertTrue
 import kotlin.time.Duration.Companion.hours
+import kotlinx.coroutines.runBlocking
 
 class TaskSchedulerTest {
 

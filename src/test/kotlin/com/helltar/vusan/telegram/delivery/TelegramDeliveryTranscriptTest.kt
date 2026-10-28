@@ -2,13 +2,11 @@ package com.helltar.vusan.telegram.delivery
 
 import com.helltar.vusan.agent.AgentResult
 import com.helltar.vusan.agent.grouplog.GroupLogRepository
-import com.helltar.vusan.config.AppConfig
 import com.helltar.vusan.config.GroupLogConfig
-import com.helltar.vusan.config.llm.LlmProviderConfig
+import com.helltar.vusan.config.testConfig
 import com.helltar.vusan.infra.Db
 import com.helltar.vusan.outbox.BotOutbox
 import com.helltar.vusan.outbox.BotOutput
-import com.helltar.vusan.request.AccessPolicy
 import com.helltar.vusan.request.requestContext
 import com.helltar.vusan.request.testChat
 import java.io.Serializable
@@ -22,13 +20,12 @@ import kotlin.test.BeforeTest
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertTrue
-import kotlin.time.Duration.Companion.seconds
 import kotlinx.coroutines.runBlocking
 import org.telegram.telegrambots.meta.api.methods.send.SendMessage
 import org.telegram.telegrambots.meta.api.objects.ApiResponse
-import org.telegram.telegrambots.meta.exceptions.TelegramApiRequestException
 import org.telegram.telegrambots.meta.api.objects.chat.Chat
 import org.telegram.telegrambots.meta.api.objects.message.Message
+import org.telegram.telegrambots.meta.exceptions.TelegramApiRequestException
 import org.telegram.telegrambots.meta.generics.TelegramClient
 
 class TelegramDeliveryTranscriptTest {
@@ -143,35 +140,6 @@ class TelegramDeliveryTranscriptTest {
             messageId = 77
             chat = Chat.builder().id(CHAT_ID).type("supergroup").build()
         }
-
-    private fun testConfig(dbPath: String) =
-        AppConfig(
-            agentMaxModelCalls = 70,
-            accessPolicy = AccessPolicy(),
-            appearance = null,
-            databasePath = dbPath,
-            elevenLabsApiKey = null,
-            elevenLabsTts = null,
-            giphyApiKey = null,
-            klipyApiKey = null,
-            llmProvider =
-                LlmProviderConfig.OpenAi(
-                    apiKey = "test",
-                    model = "test",
-                    requestTimeout = 60.seconds,
-                ),
-            maxConcurrentTurns = 4,
-            image = null,
-            openAiStt = null,
-            regolithToken = null,
-            regolithUrl = null,
-            searxngUrl = null,
-            selfImageFile = null,
-            personality = null,
-            tavilyApiKey = null,
-            telegramBotToken = "test",
-            ytDlpCookiesFile = null,
-        )
 
     private companion object {
         const val CHAT_ID = -7L

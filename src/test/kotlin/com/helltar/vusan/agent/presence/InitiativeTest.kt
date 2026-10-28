@@ -4,6 +4,7 @@ import com.helltar.vusan.agent.grouplog.GroupLogRepository
 import com.helltar.vusan.config.GroupLogConfig
 import com.helltar.vusan.config.InitiativeConfig
 import com.helltar.vusan.config.QuietHours
+import com.helltar.vusan.config.testConfig
 import com.helltar.vusan.delivery.DeliveryOutcome
 import com.helltar.vusan.delivery.Destination
 import com.helltar.vusan.delivery.OutputDelivery
@@ -12,7 +13,6 @@ import com.helltar.vusan.infra.Db
 import com.helltar.vusan.outbox.BotOutput
 import com.helltar.vusan.request.ChatRef
 import com.helltar.vusan.request.testUser
-import kotlinx.coroutines.runBlocking
 import java.nio.file.Files
 import java.nio.file.Path
 import java.time.Instant
@@ -25,6 +25,7 @@ import kotlin.test.assertEquals
 import kotlin.test.assertFalse
 import kotlin.test.assertNull
 import kotlin.test.assertTrue
+import kotlinx.coroutines.runBlocking
 
 class InitiativeTest {
 
