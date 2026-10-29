@@ -358,20 +358,21 @@ It needs its own model and the [group log](#group-log), and either one missing s
 [vision model](#vision), it runs on the chat provider unless `ADDRESSING_PROVIDER` names its own,
 read under the `ADDRESSING_` prefix.
 
-| Variable                             | Default            | Description                                                                                       |
-|--------------------------------------|--------------------|---------------------------------------------------------------------------------------------------|
-| `ADDRESSING_ENABLED`                 | `false`            | Turns the feature on.                                                                             |
-| `ADDRESSING_MODEL`                   | —                  | The model that decides; never the chat model.                                                     |
-| `ADDRESSING_NAMES`                   | the bot's handles  | Other spellings the chat uses, comma-separated.                                                   |
-| `ADDRESSING_PROVIDER`                | the chat provider  | `openai`, `anthropic`, `openrouter`, `google`, `deepseek`, `xai`, `codex` or `openai-compatible`. |
-| `ADDRESSING_API_KEY`                 | —                  | Required with `ADDRESSING_PROVIDER`, except on `codex`.                                           |
-| `ADDRESSING_BASE_URL`                | —                  | Required with `ADDRESSING_PROVIDER=openai-compatible`.                                            |
-| `ADDRESSING_COMPATIBLE_API`          | `completions`      | `completions` or `responses`, for `openai-compatible`.                                            |
-| `ADDRESSING_REASONING_EFFORT`        | the least it takes | Effort of every verdict.                                                                          |
-| `ADDRESSING_REQUEST_TIMEOUT_SECONDS` | the chat's         | How long one verdict may hang; with its own provider only.                                        |
+| Variable                      | Default            | Description                                                                                       |
+|-------------------------------|--------------------|---------------------------------------------------------------------------------------------------|
+| `ADDRESSING_ENABLED`          | `false`            | Turns the feature on.                                                                             |
+| `ADDRESSING_MODEL`            | —                  | The model that decides; never the chat model.                                                     |
+| `ADDRESSING_NAMES`            | the bot's handles  | Other spellings the chat uses, comma-separated.                                                   |
+| `ADDRESSING_PROVIDER`         | the chat provider  | `openai`, `anthropic`, `openrouter`, `google`, `deepseek`, `xai`, `codex` or `openai-compatible`. |
+| `ADDRESSING_API_KEY`          | —                  | Required with `ADDRESSING_PROVIDER`, except on `codex`.                                           |
+| `ADDRESSING_BASE_URL`         | —                  | Required with `ADDRESSING_PROVIDER=openai-compatible`.                                            |
+| `ADDRESSING_COMPATIBLE_API`   | `completions`      | `completions` or `responses`, for `openai-compatible`.                                            |
+| `ADDRESSING_REASONING_EFFORT` | the least it takes | Effort of every verdict.                                                                          |
 
 - **Model** — a small, fast one, since every verdict is latency; of eight small OpenAI models
   measured, `gpt-5.6-luna` made the fewest wrong calls.
+- **Five seconds** — a verdict that takes longer counts as "not for Vusan", and the message goes
+  unanswered as it would with the feature off. A model that often runs past it is too slow here.
 - **Names** — the bot's Telegram name always counts. Without `ADDRESSING_NAMES`, so does each of its
   handles minus the ending, so `@robinbot` answers to «robin».
 - **What is sent** — a message that names Vusan or follows its reply, with up to six lines before

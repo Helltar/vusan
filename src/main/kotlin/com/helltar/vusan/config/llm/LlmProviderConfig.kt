@@ -51,6 +51,9 @@ sealed interface LlmProviderConfig {
      */
     fun withModel(model: String, reasoningEffort: ReasoningEffort?, envPrefix: String): LlmProviderConfig
 
+    /** This configuration with calls cut off at [requestTimeout], for a role whose answer is worthless later. */
+    fun withRequestTimeout(requestTimeout: Duration): LlmProviderConfig
+
     data class OpenAi(
         val apiKey: String,
         override val model: String,
@@ -77,6 +80,8 @@ sealed interface LlmProviderConfig {
                 efforts = null,
                 envPrefix = envPrefix,
             )
+
+        override fun withRequestTimeout(requestTimeout: Duration): OpenAi = copy(requestTimeout = requestTimeout)
     }
 
     /**
@@ -111,6 +116,8 @@ sealed interface LlmProviderConfig {
                 efforts = null,
                 envPrefix = envPrefix,
             )
+
+        override fun withRequestTimeout(requestTimeout: Duration): Anthropic = copy(requestTimeout = requestTimeout)
     }
 
     /**
@@ -148,6 +155,8 @@ sealed interface LlmProviderConfig {
                 efforts = null,
                 envPrefix = envPrefix,
             )
+
+        override fun withRequestTimeout(requestTimeout: Duration): OpenAiCompatible = copy(requestTimeout = requestTimeout)
     }
 
     /**
@@ -195,6 +204,8 @@ sealed interface LlmProviderConfig {
                 efforts = null,
                 envPrefix = envPrefix,
             )
+
+        override fun withRequestTimeout(requestTimeout: Duration): Codex = copy(requestTimeout = requestTimeout)
     }
 
     /**
@@ -227,6 +238,8 @@ sealed interface LlmProviderConfig {
                 efforts = null,
                 envPrefix = envPrefix,
             )
+
+        override fun withRequestTimeout(requestTimeout: Duration): Xai = copy(requestTimeout = requestTimeout)
     }
 
     /**
@@ -261,6 +274,8 @@ sealed interface LlmProviderConfig {
                 efforts = null,
                 envPrefix = envPrefix,
             )
+
+        override fun withRequestTimeout(requestTimeout: Duration): DeepSeek = copy(requestTimeout = requestTimeout)
     }
 
     /**
@@ -296,6 +311,8 @@ sealed interface LlmProviderConfig {
                 efforts = null,
                 envPrefix = envPrefix,
             )
+
+        override fun withRequestTimeout(requestTimeout: Duration): Google = copy(requestTimeout = requestTimeout)
     }
 
     /**
@@ -330,6 +347,8 @@ sealed interface LlmProviderConfig {
                 efforts = null,
                 envPrefix = envPrefix,
             )
+
+        override fun withRequestTimeout(requestTimeout: Duration): OpenRouter = copy(requestTimeout = requestTimeout)
     }
 }
 

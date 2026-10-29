@@ -10,6 +10,7 @@ import com.helltar.vusan.llm.RequestOptions
 import com.helltar.vusan.llm.codex.CodexAuthStore
 import io.github.oshai.kotlinlogging.KotlinLogging
 import io.ktor.client.*
+import kotlin.time.Duration.Companion.seconds
 
 /**
  * Ambient addressing: answering a group message that calls the bot by name, or follows up on its answer,
@@ -17,7 +18,8 @@ import io.ktor.client.*
  * `ADDRESSING_MODEL`.
  *
  * [names] are the spellings the chat uses besides the bot's own display name; empty means the ones
- * derived from its profile.
+ * derived from its profile. [provider] waits [VERDICT_TIMEOUT] at most on a call, whatever its role's
+ * settings would have said: a verdict is worth nothing later.
  */
 data class AddressingConfig(
     val provider: LlmProviderConfig,
@@ -26,6 +28,15 @@ data class AddressingConfig(
 
     init {
         require(names.none { it.isBlank() }) { "ADDRESSING_NAMES must not contain a blank name" }
+    }
+
+    companion object {
+        /**
+         * How long a verdict may take before the message is taken as not for the bot. The model answered
+         * in about a second, with a tail to almost three; a verdict later than this lands after the
+         * conversation has moved on.
+         */
+        val VERDICT_TIMEOUT = 5.seconds
     }
 }
 

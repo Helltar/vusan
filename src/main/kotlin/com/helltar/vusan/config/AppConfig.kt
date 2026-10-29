@@ -190,7 +190,7 @@ data class AppConfig(
                 }
 
             return AddressingConfig(
-                provider = provider,
+                provider = provider.withRequestTimeout(AddressingConfig.VERDICT_TIMEOUT),
                 names = readEnv("ADDRESSING_NAMES")?.split(',')?.map(String::trim)?.filter(String::isNotEmpty).orEmpty(),
             )
         }
@@ -237,8 +237,9 @@ data class AppConfig(
             val contextWindowTokens =
                 if (prefix == LLM_PREFIX || prefix == LLM_FALLBACK_PREFIX) readPositiveLongEnv("${prefix}_CONTEXT_WINDOW_TOKENS") else null
 
+            // a verdict waits as long as AddressingConfig says, so its role has no timeout of its own to read
             val requestTimeout =
-                readPositiveLongEnv("${prefix}_REQUEST_TIMEOUT_SECONDS")?.seconds
+                (if (prefix == ADDRESSING_PREFIX) null else readPositiveLongEnv("${prefix}_REQUEST_TIMEOUT_SECONDS"))?.seconds
                     ?: fallbackTimeout
                     ?: DEFAULT_LLM_REQUEST_TIMEOUT_SECONDS.seconds
 

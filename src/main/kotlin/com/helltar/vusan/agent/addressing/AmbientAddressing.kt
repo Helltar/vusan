@@ -4,6 +4,7 @@ import com.helltar.vusan.agent.grouplog.GroupLogEntry
 import com.helltar.vusan.agent.grouplog.GroupLogRepository
 import com.helltar.vusan.agent.presence.LeaveAloneRepository
 import com.helltar.vusan.common.rethrowIfCancellation
+import com.helltar.vusan.config.llm.AddressingConfig
 import com.helltar.vusan.request.ChatRef
 import com.helltar.vusan.request.UserRef
 import io.github.oshai.kotlinlogging.KotlinLogging
@@ -11,7 +12,6 @@ import kotlinx.coroutines.withTimeoutOrNull
 import java.time.Instant
 import kotlin.time.Duration
 import kotlin.time.Duration.Companion.minutes
-import kotlin.time.Duration.Companion.seconds
 import kotlin.time.TimeSource
 
 /**
@@ -145,7 +145,7 @@ class AmbientAddressing(
             )
 
         return runCatching {
-            withTimeoutOrNull(CLASSIFIER_TIMEOUT) { Verdict.of(classifier.isAddressed(input)) } ?: Verdict.TIMED_OUT
+            withTimeoutOrNull(AddressingConfig.VERDICT_TIMEOUT) { Verdict.of(classifier.isAddressed(input)) } ?: Verdict.TIMED_OUT
         }.getOrElse {
             it.rethrowIfCancellation()
             log.warn(it) { "ambient classifier failed: chat=[${candidate.chat}] msg=[${candidate.messageId}]" }
@@ -194,10 +194,6 @@ class AmbientAddressing(
         // what the classifier is shown, the way it was measured: a few lines, none of them old
         const val CONTEXT_LINES = 6
         val CONTEXT_MAX_AGE = 10.minutes
-
-        // the model answered in about a second, with a tail to almost three; a verdict later than this
-        // lands after the conversation has moved on
-        val CLASSIFIER_TIMEOUT = 5.seconds
 
         // a chat that runs hot right after the bot speaks would otherwise send the model every line of it
         const val MAX_CALLS_PER_CHAT = 20
