@@ -105,7 +105,8 @@ what they describe:
   `TelegramDelivery`, `TelegramOutputSender`, `TaskScheduler`). A new page gets
   its line in the index.
 - [`docs/configuration.md`](docs/configuration.md) and [`.env.example`](.env.example):
-  env var additions, removals, renames, default or semantics changes.
+  env var additions, removals, renames, default or semantics changes; what one
+  provider needs beyond a key goes to [`docs/providers.md`](docs/providers.md).
 - [`docs/sandbox.md`](docs/sandbox.md) and [`docs/sites.md`](docs/sites.md): what
   the sandbox and publishing do for a person and what the bot expects of the
   server. Limits, isolation, images and retention are the server's to document —
