@@ -505,10 +505,11 @@ NAME              STATUS
 vusan-container   Up 6 hours (healthy)
 ```
 
-The first `healthy` takes about two minutes. A short Telegram outage stays healthy and recovers on its
-own; past about fifteen minutes of failures the container goes unhealthy, and a restart resumes
-polling at once. To act on it automatically, pair it with a container that restarts unhealthy
-services, or point an uptime monitor at Docker's health state:
+The first `healthy` takes about two minutes. A Telegram outage, however long, stays healthy: the bot
+keeps retrying at most a minute apart and resumes polling within that minute once Telegram answers.
+Unhealthy means the polling loop itself stopped, which a restart fixes. To act on it automatically,
+pair it with a container that restarts unhealthy services, or point an uptime monitor at Docker's
+health state:
 
 ```bash
 docker inspect --format '{{.State.Health.Status}}' vusan-container

@@ -47,9 +47,11 @@ Registration also wraps the session's `getUpdates` generator, so every poll cycl
 `/tmp/health` fresh for as long as the loop turns; the image's `HEALTHCHECK` reads nothing but that file's age, and the
 runner cancels the heartbeat when it shuts down. The hook belongs on the generator rather than the update consumer
 because the session skips the consumer entirely when a batch comes back empty — a bot nobody writes to would otherwise
-look dead within minutes. Freshness follows the loop rather than whether Telegram answers, so a brief outage upstream
-does not mark every bot unhealthy over something a restart cannot fix — while a long one does, once the session's
-backoff decays to a 15-minute retry interval and a restart becomes the thing that clears it. See
+look dead within minutes. Freshness follows the loop rather than whether Telegram answers, so an outage upstream does
+not mark the bot unhealthy over something a restart cannot fix. The session gets a backoff of the runner's own for that:
+the library's default, fifteen minutes into an outage, retries only every fifteen minutes, which keeps the bot deaf up to that
+long after Telegram came back. The runner's never stops retrying and waits at most `POLL_BACKOFF_CAP` (30 seconds, up to
+half again with randomization), so a timed-out poll plus the wait stays inside the heartbeat's three minutes. See
 [Health check](../configuration.md#health-check).
 
 ## Deployment layouts

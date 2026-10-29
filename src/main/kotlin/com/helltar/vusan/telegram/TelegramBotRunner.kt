@@ -64,13 +64,17 @@ import kotlinx.coroutines.selects.select
 import org.telegram.telegrambots.longpolling.TelegramBotsLongPollingApplication
 import org.telegram.telegrambots.longpolling.exceptions.TelegramApiErrorResponseException
 import org.telegram.telegrambots.longpolling.util.DefaultGetUpdatesGenerator
+import org.telegram.telegrambots.longpolling.util.ExponentialBackOff
+import org.telegram.telegrambots.longpolling.util.TelegramOkHttpClientFactory
 import org.telegram.telegrambots.meta.TelegramUrl
 import org.telegram.telegrambots.meta.api.objects.CallbackQuery
 import org.telegram.telegrambots.meta.api.objects.Update
 import org.telegram.telegrambots.meta.api.objects.message.Message
 import org.telegram.telegrambots.meta.api.objects.polls.PollAnswer
 import org.telegram.telegrambots.meta.generics.TelegramClient
+import com.fasterxml.jackson.databind.ObjectMapper
 import java.time.Instant
+import java.util.concurrent.Executors
 import kotlin.time.Duration
 import kotlin.time.Duration.Companion.hours
 import kotlin.time.Duration.Companion.minutes
@@ -128,7 +132,22 @@ internal class TelegramBotRunner(
         // the long polling app runs on its own okhttp threads; updates are funneled into a channel so
         // dispatch (and album aggregation) happens inside the coroutine world.
         val updates = Channel<Update>(Channel.UNLIMITED)
-        val longPolling = TelegramBotsLongPollingApplication()
+
+        // the library's own defaults, but for the backoff: its default, fifteen minutes into an outage, waits
+        // fifteen minutes between attempts, so the bot stays deaf up to that long after telegram comes back.
+        // this one never gives up and caps the wait low enough that a timed-out poll plus the wait still beats
+        // the heartbeat before it goes stale.
+        val longPolling =
+            TelegramBotsLongPollingApplication(
+                ::ObjectMapper,
+                TelegramOkHttpClientFactory.DefaultOkHttpClientCreator(),
+                Executors::newSingleThreadScheduledExecutor,
+            ) {
+                ExponentialBackOff.Builder()
+                    .setMaxIntervalMillis(POLL_BACKOFF_CAP.inWholeMilliseconds.toInt())
+                    .setMaxElapsedTimeMillis(Int.MAX_VALUE)
+                    .build()
+            }
 
         // the generator is where the heartbeat hooks in, because the session calls it once per poll
         // cycle before every request. the consumer below would not do: the session skips it entirely
@@ -772,6 +791,10 @@ internal class TelegramBotRunner(
         // conversation has moved on, and an answer to what someone said hours ago reads worse than
         // the silence they already got. shorter than telegram's own 24-hour hold on purpose.
         val SPOOL_RETENTION = 30.minutes
+
+        // the longest wait between failed polls before randomization, which adds up to half of it. with the
+        // client's 100-second read timeout on top, a cycle stays under the heartbeat's three minutes.
+        val POLL_BACKOFF_CAP = 30.seconds
 
         val log = KotlinLogging.logger {}
     }
