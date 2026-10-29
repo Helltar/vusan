@@ -84,6 +84,16 @@ private const val GOOGLE_EMBEDDING_MODEL =
 private const val GOOGLE_PLAIN_MODEL =
     """{"name":"models/gemini-2-flash","inputTokenLimit":1048576,"outputTokenLimit":8192,"supportedGenerationMethods":["generateContent"],"thinking":false}"""
 
+// what xai answered on 2026-10-21, trimmed: the model list for an alias names the model's own id
+private const val XAI_REASONING_ALIAS =
+    """{"id":"grok-4.20-0309-reasoning","aliases":["grok-4.20"],"context_length":1000000,"object":"model","owned_by":"xai","capabilities":null}"""
+
+private const val XAI_MODEL =
+    """{"id":"grok-4.3","aliases":["grok-4.3-latest"],"context_length":1000000,"object":"model","owned_by":"xai",
+       "capabilities":{"reasoning_effort":["none","low","medium","high","xhigh"],"default_reasoning_effort":"low"}}"""
+
+private const val XAI_LANGUAGE_MODEL_43 = """{"id":"grok-4.3","input_modalities":["text","image"],"output_modalities":["text"]}"""
+
 class ModelPreflightTest {
 
     private var asked: String? = null
@@ -91,6 +101,7 @@ class ModelPreflightTest {
 
     private val timeout = 120.seconds
     private val askedUrls = mutableListOf<String>()
+    private val xaiAsked = mutableListOf<String>()
 
     private fun http(status: HttpStatusCode, body: String = "") =
         Http.createClient(
@@ -229,14 +240,14 @@ class ModelPreflightTest {
             },
         )
 
-    private fun xai(model: String) =
+    private fun xaiCompatible(model: String) =
         LlmProviderConfig.OpenAiCompatible(baseUrl = "https://api.x.ai", apiKey = "key", model = model, requestTimeout = timeout)
 
     @Test
     fun `xai's lists fill in the window, the efforts and whether the model sees`() = runBlocking {
         val http = routed("/v1/models" to XAI_MODELS, "/v1/language-models/grok-4.7" to XAI_LANGUAGE_MODEL)
 
-        val checked = assertIs<LlmProviderConfig.OpenAiCompatible>(xai("grok-4.7").preflighted(http, codexAuth = null))
+        val checked = assertIs<LlmProviderConfig.OpenAiCompatible>(xaiCompatible("grok-4.7").preflighted(http, codexAuth = null))
 
         assertEquals(listOf("https://api.x.ai/v1/models", "https://api.x.ai/v1/language-models/grok-4.7"), askedUrls)
         assertEquals(500_000, checked.contextWindowTokens)
@@ -248,7 +259,7 @@ class ModelPreflightTest {
     fun `a model named by one of its aliases is found on the list`() = runBlocking {
         val http = routed("/v1/models" to XAI_MODELS, "/v1/language-models/grok-latest" to XAI_LANGUAGE_MODEL)
 
-        val checked = assertIs<LlmProviderConfig.OpenAiCompatible>(xai("grok-latest").preflighted(http, codexAuth = null))
+        val checked = assertIs<LlmProviderConfig.OpenAiCompatible>(xaiCompatible("grok-latest").preflighted(http, codexAuth = null))
 
         assertEquals(500_000, checked.contextWindowTokens)
         assertEquals(true, checked.seesImages)
@@ -257,7 +268,7 @@ class ModelPreflightTest {
     // a server with no language-model list answers the question with a 404, and the model stays unseeing
     @Test
     fun `a list that leaves out what the model takes in, on a server without a language-model list, changes nothing about it`() = runBlocking {
-        val checked = assertIs<LlmProviderConfig.OpenAiCompatible>(xai("grok-4.7").preflighted(routed("/v1/models" to XAI_MODELS), codexAuth = null))
+        val checked = assertIs<LlmProviderConfig.OpenAiCompatible>(xaiCompatible("grok-4.7").preflighted(routed("/v1/models" to XAI_MODELS), codexAuth = null))
 
         assertEquals(500_000, checked.contextWindowTokens)
         assertNull(checked.seesImages)
@@ -425,5 +436,56 @@ class ModelPreflightTest {
         val unknown = LlmProviderConfig.DeepSeek(apiKey = "key", model = "deepseek-nope", requestTimeout = timeout)
         val missing = assertFailsWith<IllegalStateException> { unknown.preflighted(http(HttpStatusCode.NotFound), codexAuth = null) }
         assertContains(missing.message.orEmpty(), "LLM_MODEL=[deepseek-nope]")
+    }
+
+    private fun xaiHttp(model: String, languageModel: String?) =
+        Http.createClient(
+            MockEngine { request ->
+                val url = request.url.toString()
+                xaiAsked += url
+                authorization = request.headers
+                val body = if ("/language-models/" in url) languageModel else model
+                if (body == null) respond("", HttpStatusCode.InternalServerError) else respond(body, HttpStatusCode.OK, headersOf(HttpHeaders.ContentType, ContentType.Application.Json.toString()))
+            },
+        )
+
+    private fun xai(model: String, effort: ReasoningEffort? = null) = LlmProviderConfig.Xai(apiKey = "key", model = model, reasoningEffort = effort, requestTimeout = timeout)
+
+    @Test
+    fun `xai's lists fill in the window, the efforts with none among them, and the eyes`() = runBlocking {
+        val checked = assertIs<LlmProviderConfig.Xai>(xai("grok-4.3", ReasoningEffort.NONE).preflighted(xaiHttp(XAI_MODEL, XAI_LANGUAGE_MODEL_43), codexAuth = null))
+
+        assertEquals(listOf("https://api.x.ai/v1/models/grok-4.3", "https://api.x.ai/v1/language-models/grok-4.3"), xaiAsked)
+        assertEquals("Bearer key", authorization?.get("Authorization"))
+        assertEquals(1_000_000, checked.contextWindowTokens)
+        assertEquals(true, checked.seesImages)
+        assertEquals(ReasoningEffort.entries.toSet() - ReasoningEffort.MAX, checked.efforts)
+    }
+
+    // a model without capabilities takes no effort and refuses the field, so asking for one stops the startup
+    @Test
+    fun `an xai model that takes no effort says so, and an effort set for it stops the startup`() = runBlocking {
+        val checked = assertIs<LlmProviderConfig.Xai>(xai("grok-4.20").preflighted(xaiHttp(XAI_REASONING_ALIAS, null), codexAuth = null))
+
+        assertEquals(emptySet(), checked.efforts)
+        assertNull(checked.seesImages, "a language-model list that did not answer leaves the eyes to the runtime")
+
+        val failure = assertFailsWith<IllegalStateException> { xai("grok-4.20", ReasoningEffort.LOW).preflighted(xaiHttp(XAI_REASONING_ALIAS, null), codexAuth = null) }
+        assertContains(failure.message.orEmpty(), "LLM_REASONING_EFFORT=[low]")
+        assertContains(failure.message.orEmpty(), "takes none")
+    }
+
+    @Test
+    fun `an effort the xai model does not list stops the startup`() = runBlocking {
+        val failure = assertFailsWith<IllegalStateException> { xai("grok-4.3", ReasoningEffort.MAX).preflighted(xaiHttp(XAI_MODEL, XAI_LANGUAGE_MODEL_43), codexAuth = null) }
+
+        assertContains(failure.message.orEmpty(), "none, low, medium, high, xhigh")
+    }
+
+    @Test
+    fun `a model xai does not serve stops the startup`() = runBlocking {
+        val failure = assertFailsWith<IllegalStateException> { xai("grok-nope").preflighted(http(HttpStatusCode.NotFound), codexAuth = null) }
+
+        assertContains(failure.message.orEmpty(), "LLM_MODEL=[grok-nope]")
     }
 }

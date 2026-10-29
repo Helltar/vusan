@@ -198,6 +198,38 @@ sealed interface LlmProviderConfig {
     }
 
     /**
+     * xAI's API with an xAI key. The window, whether the model sees and which efforts it takes are what its
+     * two model lists said at startup.
+     */
+    data class Xai(
+        val apiKey: String,
+        override val model: String,
+        override val reasoningEffort: ReasoningEffort? = null,
+        override val requestTimeout: Duration,
+        override val contextWindowTokens: Long? = null,
+        override val seesImages: Boolean? = null,
+        override val efforts: Set<ReasoningEffort>? = null,
+        override val envPrefix: String = DEFAULT_ENV_PREFIX,
+    ) : LlmProviderConfig {
+
+        init {
+            require(apiKey.isNotBlank()) { "the api key must not be blank" }
+            require(model.isNotBlank()) { "the model must not be blank" }
+            requireSane(requestTimeout, contextWindowTokens)
+        }
+
+        override fun withModel(model: String, reasoningEffort: ReasoningEffort?, envPrefix: String): Xai =
+            copy(
+                model = model,
+                reasoningEffort = reasoningEffort,
+                contextWindowTokens = null,
+                seesImages = null,
+                efforts = null,
+                envPrefix = envPrefix,
+            )
+    }
+
+    /**
      * DeepSeek's own API with a DeepSeek key. The window, [maxOutputTokens], whether the model sees and
      * which efforts it takes are what its model list said at startup.
      */

@@ -72,6 +72,14 @@ Part of the [architecture index](../architecture.md).
   The startup check reads the window, the ceiling, the eyes and the levels from `GET /models/{id}`; a level the list does
   not name stops startup, since DeepSeek would serve `medium` as `high`. A `finish_reason` of
   `insufficient_system_resource` is raised as an overload, so the call is repeated or handed to the fallback.
+- **xAI (`xai`)** — `config/llm/XaiProvider` points the OpenAI client at `https://api.x.ai/v1/responses` with a key. What
+  xAI reads differs from OpenAI and decides what goes along: the conversation's `prompt_cache_key`, which xAI routes on
+  as on `x-grok-conv-id` to the server holding the prefix; `store: false` and the encrypted reasoning, replayed through
+  the tool loop, since a request missing the reasoning before it is what xAI names the first cause of cache misses; and
+  none of OpenAI's cache options, since xAI caches on its own and charges nothing to write. It keeps an entry per
+  request, so a turn continues the conversation's last request ([context budget](context.md)). The startup check reads
+  the window and the efforts (`none` among them where thinking can be turned off) from `/v1/models/{id}`, which answers
+  for an alias too, and whether the model sees from `/v1/language-models/{id}`.
 - **Google (`google`)** — `config/llm/GoogleProvider` runs `llm/google/GoogleClient` on the Gemini API's Interactions
   endpoint, the vendor's default since June 2026, stateless (`store: false`): the conversation goes out whole as steps,
   system messages lifted into `system_instruction`. A `thought` step carries the signature the turn's next request is

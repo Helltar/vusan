@@ -84,6 +84,9 @@ class LlmRuntimeTest {
     private fun openRouter(model: String, effort: ReasoningEffort? = null) =
         LlmProviderConfig.OpenRouter(apiKey = "key", model = model, reasoningEffort = effort, requestTimeout = TIMEOUT)
 
+    private fun xai(effort: ReasoningEffort? = null, window: Long? = null) =
+        LlmProviderConfig.Xai(apiKey = "key", model = "grok-4.7", reasoningEffort = effort, requestTimeout = TIMEOUT, contextWindowTokens = window)
+
     private fun deepSeek(model: String = "deepseek-flash", effort: ReasoningEffort? = null) =
         LlmProviderConfig.DeepSeek(apiKey = "key", model = model, reasoningEffort = effort, requestTimeout = TIMEOUT)
 
@@ -269,6 +272,40 @@ class LlmRuntimeTest {
         assertNull(wire.body["prompt_cache_options"])
     }
 
+    // the responses api as xai reads it: the conversation's key routes to the server holding the prefix, and
+    // caching is automatic, so none of openai's cache options go along
+    @Test
+    fun `an xai runtime speaks responses with the key, stateless reasoning and no cache options`() = runBlocking {
+        val runtime = resolveLlmRuntime(xai(effort = ReasoningEffort.LOW), http = http(RESPONSES_REPLY))
+
+        assertEquals("xAI", runtime.providerLabel)
+        assertNull(runtime.model.contextWindowTokens, "the startup check says the model's own")
+        assertTrue(runtime.model.seesImages)
+
+        runtime.client.complete(runtime.model, request(runtime.chatOptions.forConversation("telegram:1@-100")))
+
+        val wire = sent.single()
+        assertEquals("https://api.x.ai/v1/responses", wire.url)
+        assertEquals("Bearer key", wire.headers["Authorization"])
+        assertTrue(wire.body.getValue("prompt_cache_key").jsonPrimitive.content.startsWith("vusan-"))
+        assertEquals("low", wire.body.getValue("reasoning").jsonObject.getValue("effort").jsonPrimitive.content)
+        assertEquals(false, wire.body.getValue("store").jsonPrimitive.content.toBoolean())
+        assertEquals("reasoning.encrypted_content", wire.body.getValue("include").jsonArray.single().jsonPrimitive.content)
+        assertNull(wire.body["prompt_cache_options"])
+        assertNull(wire.body["parallel_tool_calls"], "left to the default, on")
+        assertFalse(wire.body.getValue("input").jsonArray.any { item -> item.jsonObject.getValue("content").jsonArray.any { "prompt_cache_breakpoint" in it.jsonObject } })
+    }
+
+    @Test
+    fun `the xai recap keeps a key of its own`() = runBlocking {
+        val runtime = resolveLlmRuntime(xai(window = 500_000), http = http(RESPONSES_REPLY))
+
+        runtime.client.complete(runtime.model, request(runtime.compactionOptions, tools = emptyList()))
+
+        assertEquals(500_000, runtime.model.contextWindowTokens)
+        assertEquals("vusan-recap", sent.single().body.getValue("prompt_cache_key").jsonPrimitive.content)
+    }
+
     // deepseek reads `max_tokens` and ignores `max_completion_tokens`, and refuses a call of the turn without its thinking
     @Test
     fun `a deepseek runtime speaks completions at its documented base url, its thinking echoed and the old ceiling`() = runBlocking {
@@ -365,6 +402,7 @@ class LlmRuntimeTest {
         assertTrue(resolveLlmRuntime(openRouter("openai/gpt-5.6-luna")).model.offersToolsMidConversation)
         assertFalse(resolveLlmRuntime(openRouter("x-ai/grok-4.7")).model.offersToolsMidConversation)
         assertFalse(resolveLlmRuntime(compatible()).model.offersToolsMidConversation)
+        assertFalse(resolveLlmRuntime(xai()).model.offersToolsMidConversation)
         assertTrue(resolveLlmRuntime(codex(), codexAuth = codexAuth()).model.offersToolsMidConversation)
     }
 
@@ -373,6 +411,7 @@ class LlmRuntimeTest {
     fun `which routes read back only what a request repeats`() {
         assertTrue(resolveLlmRuntime(codex(), codexAuth = codexAuth()).model.cachesOnlyRepeatedPrefix)
         assertTrue(resolveLlmRuntime(deepSeek()).model.cachesOnlyRepeatedPrefix)
+        assertTrue(resolveLlmRuntime(xai()).model.cachesOnlyRepeatedPrefix)
         assertTrue(resolveLlmRuntime(deepSeek("deepseek-v4-pro")).model.cachesOnlyRepeatedPrefix)
         assertTrue(resolveLlmRuntime(openRouter("x-ai/grok-4.7")).model.cachesOnlyRepeatedPrefix)
         assertFalse(resolveLlmRuntime(compatible()).model.cachesOnlyRepeatedPrefix)

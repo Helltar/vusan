@@ -15,7 +15,7 @@ How a turn's history and tool results are fitted into the model's window. Part o
   user/assistant history is not mislabeled as an assistant instruction. An initial context-overflow failure retries once
   with recap only, but never after a tool ran, which avoids duplicated actions.
 - **Continuing the last request** — on a model whose provider keeps no cache breakpoints
-  (`LlmModel.cachesOnlyRepeatedPrefix`: the Codex backend, DeepSeek's own API, Grok through OpenRouter) a turn rebuilt from storage reads nothing of the history
+  (`LlmModel.cachesOnlyRepeatedPrefix`: the Codex backend, DeepSeek's own API, Grok on xAI's own API and through OpenRouter) a turn rebuilt from storage reads nothing of the history
   back, since the stored history is shorter than what was sent. There `agent/conversation/SentConversations` keeps
   each conversation's last request exactly as it went, with what it returned, and the next turn sends that before
   its own message instead of the replayed history, so it only appends. It is a copy, never a second history: the

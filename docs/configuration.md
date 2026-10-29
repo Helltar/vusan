@@ -61,6 +61,7 @@ LLM_API_KEY=sk-proj-qwerty
 | `openrouter`        | `google/gemini-3.8-flash`   | Many vendors' models behind one OpenRouter key; see below.  |
 | `google`            | `gemini-3.8-flash`          | Google's Gemini API on an AI Studio key; see below.         |
 | `deepseek`          | `deepseek-flash`            | DeepSeek's API; see below.                                  |
+| `xai`               | `grok-4.7`                  | xAI's API; see below.                                       |
 | `codex`             | a model your plan offers    | A ChatGPT plan instead of a key; see below.                 |
 | `openai-compatible` | whatever the server serves  | Any OpenAI-compatible server, remote or local.              |
 
@@ -72,7 +73,7 @@ LLM_API_KEY=sk-proj-qwerty
 | `LLM_REQUEST_TIMEOUT_SECONDS` | `300`          | How long one model call may hang before the turn fails.            |
 | `LLM_CONTEXT_WINDOW_TOKENS`   | model metadata | Context size; required where nothing states one.                   |
 
-- **`LLM_BASE_URL`** — give it without `/v1`: `https://api.x.ai` is called at
+- **`LLM_BASE_URL`** — give it without `/v1`: `http://localhost:11434` is called at
   `…/v1/chat/completions`, or `…/v1/responses` with `LLM_COMPATIBLE_API=responses`.
 - **`LLM_REASONING_EFFORT`** — which values work depends on the model; `none` turns reasoning off
   where the model allows it.
@@ -80,15 +81,9 @@ LLM_API_KEY=sk-proj-qwerty
 - **`LLM_CONTEXT_WINDOW_TOKENS`** — needed only when the server's model list leaves the window out;
   startup stops and asks for it. Set it to the context the server really runs the model with.
 
-Third-party servers all use `LLM_PROVIDER=openai-compatible`:
+Any other server uses `LLM_PROVIDER=openai-compatible`, a local one such as Ollama among them:
 
 ```dotenv
-# xAI
-LLM_API_KEY=xai-qwerty
-LLM_BASE_URL=https://api.x.ai
-LLM_COMPATIBLE_API=responses
-LLM_MODEL=grok-4.7
-
 # Ollama — the key is not checked, but must not be empty
 LLM_API_KEY=ollama
 LLM_BASE_URL=http://localhost:11434
@@ -162,6 +157,26 @@ LLM_API_KEY=sk-qwerty
   setting by hand.
 - **`LLM_REASONING_EFFORT`** — `none` turns thinking off; `low`, `high` and `max` are the levels
   DeepSeek lists. Anything else stops startup: DeepSeek would quietly serve `medium` as `high`.
+
+## xAI
+
+`LLM_PROVIDER=xai` runs Vusan on [xAI's API](https://docs.x.ai) with a key from its
+[console](https://console.x.ai):
+
+```dotenv
+LLM_PROVIDER=xai
+LLM_MODEL=grok-4.7
+LLM_API_KEY=xai-qwerty
+```
+
+- **Startup check** — the model has to be one xAI serves, under its own id or an alias. Its lists give
+  the window, whether the model sees and which efforts it takes; `none` only where the model lists it,
+  as `grok-4.3` does and `grok-4.7` does not.
+- **Credits** — xAI answers the startup check even on an account out of credits; the first turn then
+  fails, which Vusan takes as the provider being out, answering on the
+  [fallback](#a-second-provider-behind-the-first) if there is one.
+- **Video** — [video generation](#video-generation) has a key setting of its own, `XAI_API_KEY`; the
+  same key may serve both.
 
 ## ChatGPT subscription
 
@@ -424,15 +439,15 @@ VISION_MODEL=gpt-6-luna
 VISION_API_KEY=sk-proj-qwerty
 ```
 
-| Variable                         | Default           | Description                                                                                |
-|----------------------------------|-------------------|--------------------------------------------------------------------------------------------|
-| `VISION_MODEL`                   | —                 | Turns on a vision model of its own.                                                        |
-| `VISION_PROVIDER`                | the chat provider | `openai`, `anthropic`, `openrouter`, `google`, `deepseek`, `codex` or `openai-compatible`. |
-| `VISION_API_KEY`                 | —                 | Required with `VISION_PROVIDER`, except on `codex`.                                        |
-| `VISION_BASE_URL`                | —                 | Required with `VISION_PROVIDER=openai-compatible`.                                         |
-| `VISION_COMPATIBLE_API`          | `completions`     | `completions` or `responses`, for `openai-compatible`.                                     |
-| `VISION_REASONING_EFFORT`        | model default     | Effort of every look; the values `LLM_REASONING_EFFORT` takes.                             |
-| `VISION_REQUEST_TIMEOUT_SECONDS` | the chat's        | How long one look may hang; read with `VISION_PROVIDER` only.                              |
+| Variable                         | Default           | Description                                                                                       |
+|----------------------------------|-------------------|---------------------------------------------------------------------------------------------------|
+| `VISION_MODEL`                   | —                 | Turns on a vision model of its own.                                                               |
+| `VISION_PROVIDER`                | the chat provider | `openai`, `anthropic`, `openrouter`, `google`, `deepseek`, `xai`, `codex` or `openai-compatible`. |
+| `VISION_API_KEY`                 | —                 | Required with `VISION_PROVIDER`, except on `codex`.                                               |
+| `VISION_BASE_URL`                | —                 | Required with `VISION_PROVIDER=openai-compatible`.                                                |
+| `VISION_COMPATIBLE_API`          | `completions`     | `completions` or `responses`, for `openai-compatible`.                                            |
+| `VISION_REASONING_EFFORT`        | model default     | Effort of every look; the values `LLM_REASONING_EFFORT` takes.                                    |
+| `VISION_REQUEST_TIMEOUT_SECONDS` | the chat's        | How long one look may hang; read with `VISION_PROVIDER` only.                                     |
 
 - **On `deepseek` and `openai-compatible`** — a model sees only if the server's model list says so:
   DeepSeek's says it of `deepseek-flash`, not of `deepseek-v4-pro`. Where the server lists nothing, as
@@ -512,17 +527,17 @@ It needs its own model and the [group log](#group-log), and either one missing s
 [vision model](#vision), it runs on the chat provider unless `ADDRESSING_PROVIDER` names its own,
 read under the `ADDRESSING_` prefix.
 
-| Variable                             | Default            | Description                                                                                |
-|--------------------------------------|--------------------|--------------------------------------------------------------------------------------------|
-| `ADDRESSING_ENABLED`                 | `false`            | Turns the feature on.                                                                      |
-| `ADDRESSING_MODEL`                   | —                  | The model that decides; never the chat model.                                              |
-| `ADDRESSING_NAMES`                   | the bot's handles  | Other spellings the chat uses, comma-separated.                                            |
-| `ADDRESSING_PROVIDER`                | the chat provider  | `openai`, `anthropic`, `openrouter`, `google`, `deepseek`, `codex` or `openai-compatible`. |
-| `ADDRESSING_API_KEY`                 | —                  | Required with `ADDRESSING_PROVIDER`, except on `codex`.                                    |
-| `ADDRESSING_BASE_URL`                | —                  | Required with `ADDRESSING_PROVIDER=openai-compatible`.                                     |
-| `ADDRESSING_COMPATIBLE_API`          | `completions`      | `completions` or `responses`, for `openai-compatible`.                                     |
-| `ADDRESSING_REASONING_EFFORT`        | the least it takes | Effort of every verdict.                                                                   |
-| `ADDRESSING_REQUEST_TIMEOUT_SECONDS` | the chat's         | How long one verdict may hang; with its own provider only.                                 |
+| Variable                             | Default            | Description                                                                                       |
+|--------------------------------------|--------------------|---------------------------------------------------------------------------------------------------|
+| `ADDRESSING_ENABLED`                 | `false`            | Turns the feature on.                                                                             |
+| `ADDRESSING_MODEL`                   | —                  | The model that decides; never the chat model.                                                     |
+| `ADDRESSING_NAMES`                   | the bot's handles  | Other spellings the chat uses, comma-separated.                                                   |
+| `ADDRESSING_PROVIDER`                | the chat provider  | `openai`, `anthropic`, `openrouter`, `google`, `deepseek`, `xai`, `codex` or `openai-compatible`. |
+| `ADDRESSING_API_KEY`                 | —                  | Required with `ADDRESSING_PROVIDER`, except on `codex`.                                           |
+| `ADDRESSING_BASE_URL`                | —                  | Required with `ADDRESSING_PROVIDER=openai-compatible`.                                            |
+| `ADDRESSING_COMPATIBLE_API`          | `completions`      | `completions` or `responses`, for `openai-compatible`.                                            |
+| `ADDRESSING_REASONING_EFFORT`        | the least it takes | Effort of every verdict.                                                                          |
+| `ADDRESSING_REQUEST_TIMEOUT_SECONDS` | the chat's         | How long one verdict may hang; with its own provider only.                                        |
 
 - **Model** — a small, fast one, since every verdict is latency; of eight small OpenAI models
   measured, `gpt-5.6-luna` made the fewest wrong calls.

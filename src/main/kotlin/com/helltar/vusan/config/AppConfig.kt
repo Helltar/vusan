@@ -303,6 +303,16 @@ data class AppConfig(
                         envPrefix = prefix,
                     )
 
+                "xai" ->
+                    LlmProviderConfig.Xai(
+                        apiKey = requireEnv("${prefix}_API_KEY"),
+                        model = requireEnv("${prefix}_MODEL"),
+                        reasoningEffort = resolveReasoningEffort(prefix),
+                        requestTimeout = requestTimeout,
+                        contextWindowTokens = contextWindowTokens,
+                        envPrefix = prefix,
+                    )
+
                 "deepseek" ->
                     LlmProviderConfig.DeepSeek(
                         apiKey = requireEnv("${prefix}_API_KEY"),
@@ -324,7 +334,7 @@ data class AppConfig(
                     )
 
                 else ->
-                    error("Unsupported ${prefix}_PROVIDER=[$provider]. Supported values: openai, anthropic, openai-compatible, codex, openrouter, google, deepseek")
+                    error("Unsupported ${prefix}_PROVIDER=[$provider]. Supported values: openai, anthropic, openai-compatible, codex, openrouter, google, deepseek, xai")
             }
         }
 

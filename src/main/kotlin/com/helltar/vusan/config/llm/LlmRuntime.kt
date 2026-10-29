@@ -32,7 +32,7 @@ val LlmRuntime.serviceTier: String?
 
 /**
  * Builds the runtime for [config]. Each provider's file — `OpenAiProvider`, `AnthropicProvider`,
- * `OpenAiCompatibleProvider`, `CodexProvider`, `OpenRouterProvider`, `GoogleProvider`, `DeepSeekProvider` — turns its own config into the client, the model as the
+ * `OpenAiCompatibleProvider`, `CodexProvider`, `OpenRouterProvider`, `GoogleProvider`, `DeepSeekProvider`, `XaiProvider` — turns its own config into the client, the model as the
  * bot needs to know it and the options every call carries; nothing outside those files knows one wire
  * from another. [http] is for tests, which hand in a client over a mock engine; a deployment leaves it
  * to the provider, which gives a Codex runtime the client that signs its requests.
@@ -46,4 +46,5 @@ fun resolveLlmRuntime(config: LlmProviderConfig, codexAuth: CodexAuthStore? = nu
         is LlmProviderConfig.OpenRouter -> openRouterRuntime(config, http)
         is LlmProviderConfig.Google -> googleRuntime(config, http)
         is LlmProviderConfig.DeepSeek -> deepSeekRuntime(config, http)
+        is LlmProviderConfig.Xai -> xaiRuntime(config, http)
     }
