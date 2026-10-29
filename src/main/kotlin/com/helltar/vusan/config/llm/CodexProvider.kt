@@ -24,8 +24,8 @@ import io.ktor.client.*
 
 private val log = KotlinLogging.logger("ModelPreflight")
 
-// what every model on the plan lists as its window (the codex cli's bundled catalog, checked 2026-10-10),
-// assumed when the account's own catalog could not be read
+// the smallest window the plan's catalog lists (checked 2026-10-29: gpt-6.1-sol and gpt-6.1-terra list
+// 500k, the rest 272k), assumed when the account's own catalog could not be read
 private const val CODEX_CONTEXT_WINDOW = 272_000L
 
 /** Where the one signed-in ChatGPT account is read from, and the CLI version claimed for it. */
