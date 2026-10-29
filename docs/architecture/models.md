@@ -65,6 +65,13 @@ Part of the [architecture index](../architecture.md).
   body holding nothing but the error. Both clients send the conversation's cache key as `session_id` too, which keeps
   a conversation on the upstream holding its cached prefix. A Grok model (`x-ai/…`) continues the conversation's last
   request, as Codex does, since xAI keeps no breakpoints there ([context budget](context.md)).
+- **Google (`google`)** — `config/llm/GoogleProvider` runs `llm/google/GoogleClient` on the Gemini API's Interactions
+  endpoint, the vendor's default since June 2026, stateless (`store: false`): the conversation goes out whole as steps,
+  system messages lifted into `system_instruction`. A `thought` step carries the signature the turn's next request is
+  checked against, so it is kept as reasoning tagged with the endpoint and replayed verbatim to it alone. `none` goes out
+  as `thinking_level: minimal`. The startup check reads the window, the output ceiling and whether the model thinks from
+  `GET /v1beta/models/{id}`; the list says nothing of images, which every Gemini and Gemma 4 model takes. The cache is
+  implicit, with no breakpoint to place.
 - **ChatGPT subscription (`codex`)** — the same OpenAI client pointed at the Codex backend's Responses API, with no API
   key; like the platform, it takes a tool group loaded mid-turn as an `additional_tools` item, so the tool list stays
   the cached one. It takes no cache breakpoints, so a turn continues the conversation's last request rather than

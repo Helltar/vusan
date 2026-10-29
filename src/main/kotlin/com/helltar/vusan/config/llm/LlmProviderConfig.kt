@@ -198,6 +198,41 @@ sealed interface LlmProviderConfig {
     }
 
     /**
+     * Google's Gemini API with an AI Studio key, the model named as the API lists it (`gemini-3.5-flash-lite`).
+     * The window and [maxOutputTokens] are what its model list said at startup; it says nothing of images,
+     * and of efforts only whether the model thinks.
+     */
+    data class Google(
+        val apiKey: String,
+        override val model: String,
+        override val reasoningEffort: ReasoningEffort? = null,
+        override val requestTimeout: Duration,
+        override val contextWindowTokens: Long? = null,
+        val maxOutputTokens: Int? = null,
+        override val seesImages: Boolean? = null,
+        override val efforts: Set<ReasoningEffort>? = null,
+        override val envPrefix: String = DEFAULT_ENV_PREFIX,
+    ) : LlmProviderConfig {
+
+        init {
+            require(apiKey.isNotBlank()) { "the api key must not be blank" }
+            require(model.isNotBlank()) { "the model must not be blank" }
+            requireSane(requestTimeout, contextWindowTokens)
+        }
+
+        override fun withModel(model: String, reasoningEffort: ReasoningEffort?, envPrefix: String): Google =
+            copy(
+                model = model,
+                reasoningEffort = reasoningEffort,
+                contextWindowTokens = null,
+                maxOutputTokens = null,
+                seesImages = null,
+                efforts = null,
+                envPrefix = envPrefix,
+            )
+    }
+
+    /**
      * OpenRouter with an OpenRouter key, the model named as OpenRouter lists it (`anthropic/claude-opus-5.5`).
      * [maxOutputTokens], like the window, the eyes and the efforts, is what its model list said at startup.
      */

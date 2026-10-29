@@ -59,6 +59,7 @@ LLM_API_KEY=sk-proj-qwerty
 | `openai`            | `gpt-6.1-sol`               | OpenAI's API, a current model that reasons and sees images. |
 | `anthropic`         | `claude-opus-5-5`           | Anthropic's API, Claude 4.6 or newer.                       |
 | `openrouter`        | `google/gemini-3.8-flash`   | Many vendors' models behind one OpenRouter key; see below.  |
+| `google`            | `gemini-3.8-flash`          | Google's Gemini API on an AI Studio key; see below.         |
 | `codex`             | a model your plan offers    | A ChatGPT plan instead of a key; see below.                 |
 | `openai-compatible` | whatever the server serves  | Any OpenAI-compatible server, remote or local.              |
 
@@ -127,6 +128,27 @@ LLM_API_KEY=sk-or-v1-qwerty
   would still answer. Vusan takes that as credit run out, the way it takes a spent plan.
 - **A key's spending limit** — once it is spent, Vusan leaves OpenRouter alone until the limit
   resets, answering on the [fallback](#a-second-provider-behind-the-first) if there is one.
+
+## Google
+
+`LLM_PROVIDER=google` runs Vusan on Google's Gemini API with a key from
+[AI Studio](https://aistudio.google.com/api-keys). Name the model as Google lists it:
+
+```dotenv
+LLM_PROVIDER=google
+LLM_MODEL=gemini-3.8-flash
+LLM_API_KEY=AIzaSy-qwerty
+```
+
+- **Startup check** — the model has to be one Google serves the key, and one that writes text. Its
+  window comes from Google's list, so `LLM_CONTEXT_WINDOW_TOKENS` is only an override. The list says
+  nothing about images; every Gemini and Gemma 4 model takes them, so the chat model is taken to see.
+- **`LLM_REASONING_EFFORT`** — `none`, `low`, `medium` or `high`. A Gemini 3 model cannot stop thinking,
+  so `none` asks for the least it does. Which levels a model takes is the model's, and Google lists
+  none of them: Gemini 3.5 Flash-Lite takes all four, Gemini 3.8 Flash no `none`, Gemma 4 only `none`
+  and `high`. A level the model refuses fails the first turn.
+- **Limits** — Vusan takes a spent rate or daily limit as the provider being out, answering on the
+  [fallback](#a-second-provider-behind-the-first) if there is one.
 
 ## ChatGPT subscription
 

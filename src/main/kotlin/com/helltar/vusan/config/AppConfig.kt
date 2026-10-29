@@ -303,8 +303,18 @@ data class AppConfig(
                         envPrefix = prefix,
                     )
 
+                "google" ->
+                    LlmProviderConfig.Google(
+                        apiKey = requireEnv("${prefix}_API_KEY"),
+                        model = requireEnv("${prefix}_MODEL"),
+                        reasoningEffort = resolveReasoningEffort(prefix),
+                        requestTimeout = requestTimeout,
+                        contextWindowTokens = contextWindowTokens,
+                        envPrefix = prefix,
+                    )
+
                 else ->
-                    error("Unsupported ${prefix}_PROVIDER=[$provider]. Supported values: openai, anthropic, openai-compatible, codex, openrouter")
+                    error("Unsupported ${prefix}_PROVIDER=[$provider]. Supported values: openai, anthropic, openai-compatible, codex, openrouter, google")
             }
         }
 

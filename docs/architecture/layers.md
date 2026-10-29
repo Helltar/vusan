@@ -34,7 +34,8 @@ that is who owns writing them, not because only `agent/` reads them. No other ar
   agent-created choice buttons, whose selection becomes an agent input.
 - **`llm/`** — the model layer: one `LlmClient` interface, the `Message`/`Part` model every caller builds, `RequestOptions`,
   and a client per wire protocol under `llm/openai/` (the Responses and Chat Completions APIs, which also cover the Codex
-  backend and any OpenAI-compatible server) and `llm/anthropic/` (the Messages API), plus `llm/codex/`: what the Codex backend needs beside the protocol —
+  backend and any OpenAI-compatible server), `llm/anthropic/` (the Messages API) and `llm/google/` (the Gemini API's
+  Interactions endpoint), plus `llm/codex/`: what the Codex backend needs beside the protocol —
   the credentials `codex login` writes, the headers Cloudflare checks, the subscription's usage windows and the
   account's model catalog. The package knows nothing about the
   bot: `RetryingLlmClient` repeats a call the provider fumbled, `FallbackLlmClient` hands every call to a second provider
@@ -127,7 +128,7 @@ that is who owns writing them, not because only `agent/` reads them. No other ar
 - **`config/`** — `.env` parsing (`AppConfig`) into the settings of each feature. Its `llm/` holds the model wiring:
   provider/model resolution (`LlmRuntime`) and the startup check of every configured model against its vendor
   (`ModelPreflight`), both of which dispatch to one file per provider (`OpenAiProvider`, `AnthropicProvider`,
-  `OpenAiCompatibleProvider`, `CodexProvider`, `OpenRouterProvider`), and the two roles on a model of
+  `OpenAiCompatibleProvider`, `CodexProvider`, `OpenRouterProvider`, `GoogleProvider`), and the two roles on a model of
   their own. `VisionRuntime` resolves which model looks at images: the `VISION_*` model when configured, the chat
   model when it accepts images, and nothing at all otherwise — which leaves the vision tools and sticker catalog
   unavailable. `AddressingRuntime` resolves the model that decides whether an unmentioned message is for the bot.

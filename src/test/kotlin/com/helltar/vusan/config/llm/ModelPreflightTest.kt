@@ -70,6 +70,17 @@ private const val OPENROUTER_MODELS =
          {"id":"liquid/lfm-2.5-2.6b:free","context_length":32768,"architecture":{"input_modalities":["text"]},
           "top_provider":{"context_length":32768,"max_completion_tokens":null},"supported_parameters":["max_tokens","temperature"],"reasoning":null}]}"""
 
+// what google's model list answered for two models on 2026-10-29, trimmed to the fields read
+private const val GEMINI_MODEL =
+    """{"name":"models/gemini-3.5-flash-lite","inputTokenLimit":1048576,"outputTokenLimit":65536,
+       "supportedGenerationMethods":["generateContent","countTokens","createCachedContent","batchGenerateContent"],"thinking":true}"""
+
+private const val GOOGLE_EMBEDDING_MODEL =
+    """{"name":"models/gemini-embedding-2","inputTokenLimit":8192,"outputTokenLimit":1,"supportedGenerationMethods":["embedContent"]}"""
+
+private const val GOOGLE_PLAIN_MODEL =
+    """{"name":"models/gemini-2-flash","inputTokenLimit":1048576,"outputTokenLimit":8192,"supportedGenerationMethods":["generateContent"],"thinking":false}"""
+
 class ModelPreflightTest {
 
     private var asked: String? = null
@@ -340,5 +351,46 @@ class ModelPreflightTest {
         val config = openRouter("openai/gpt-5.6-luna")
 
         assertSame(config, config.preflighted(http(HttpStatusCode.ServiceUnavailable), codexAuth = null))
+    }
+
+    @Test
+    fun `google's model list gives the window and the ceiling, with the key in its own header`() = runBlocking {
+        val config = LlmProviderConfig.Google(apiKey = "key", model = "gemini-3.5-flash-lite", requestTimeout = timeout)
+
+        val checked = assertIs<LlmProviderConfig.Google>(config.preflighted(http(HttpStatusCode.OK, GEMINI_MODEL), codexAuth = null))
+
+        assertEquals("https://generativelanguage.googleapis.com/v1beta/models/gemini-3.5-flash-lite", asked)
+        assertEquals("key", authorization?.get("x-goog-api-key"))
+        assertEquals(1_048_576, checked.contextWindowTokens)
+        assertEquals(65_536, checked.maxOutputTokens)
+        // the list says the model thinks but not at which levels, and nothing of images
+        assertNull(checked.efforts)
+        assertNull(checked.seesImages)
+    }
+
+    @Test
+    fun `a google model that writes no text, or an effort for one that does not think, stops the startup`() = runBlocking {
+        val embedding = LlmProviderConfig.Google(apiKey = "key", model = "gemini-embedding-2", requestTimeout = timeout)
+        val failure = assertFailsWith<IllegalStateException> { embedding.preflighted(http(HttpStatusCode.OK, GOOGLE_EMBEDDING_MODEL), codexAuth = null) }
+        assertContains(failure.message.orEmpty(), "LLM_MODEL=[gemini-embedding-2]")
+
+        val plain = LlmProviderConfig.Google(apiKey = "key", model = "gemini-2-flash", requestTimeout = timeout)
+        val unset = assertIs<LlmProviderConfig.Google>(plain.preflighted(http(HttpStatusCode.OK, GOOGLE_PLAIN_MODEL), codexAuth = null))
+        assertEquals(emptySet(), unset.efforts)
+
+        val effortFailure =
+            assertFailsWith<IllegalStateException> {
+                plain.copy(reasoningEffort = ReasoningEffort.LOW).preflighted(http(HttpStatusCode.OK, GOOGLE_PLAIN_MODEL), codexAuth = null)
+            }
+        assertContains(effortFailure.message.orEmpty(), "LLM_REASONING_EFFORT=[low]")
+    }
+
+    @Test
+    fun `a model google does not serve stops the startup`() = runBlocking {
+        val config = LlmProviderConfig.Google(apiKey = "key", model = "gemini-9-nope", requestTimeout = timeout)
+
+        val failure = assertFailsWith<IllegalStateException> { config.preflighted(http(HttpStatusCode.NotFound), codexAuth = null) }
+
+        assertContains(failure.message.orEmpty(), "LLM_MODEL=[gemini-9-nope]")
     }
 }

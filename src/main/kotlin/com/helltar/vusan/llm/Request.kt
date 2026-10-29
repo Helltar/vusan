@@ -6,7 +6,8 @@ import kotlinx.serialization.json.JsonObject
  * How hard a reasoning model thinks before it answers, named the way the APIs spell it.
  *
  * Which of these a model accepts is up to the model: OpenAI takes `none` to `max`, Anthropic `low` to
- * `max`, and either refuses the rest with a 400 — so the resolvers check what they can at startup.
+ * `max`, Google `none` to `high`, and each refuses the rest with a 400 — so the resolvers check what they
+ * can at startup.
  */
 enum class ReasoningEffort {
     NONE,
