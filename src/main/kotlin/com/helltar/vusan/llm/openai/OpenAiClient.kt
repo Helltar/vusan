@@ -476,6 +476,7 @@ class OpenAiClient(
                                                 put("name", call.name)
                                                 put("arguments", call.arguments.toString())
                                             }
+                                            call.endpointFields?.takeIf { it.source == reasoningSource }?.values?.forEach { (key, value) -> put(key, value) }
                                         },
                                     )
                                 }
@@ -517,6 +518,7 @@ class OpenAiClient(
                             id = call.string("id").orEmpty(),
                             name = function?.string("name").orEmpty(),
                             arguments = parseArguments(function?.string("arguments")),
+                            endpointFields = call.callFields(),
                         ),
                     )
                 }
@@ -549,6 +551,14 @@ class OpenAiClient(
             model = response.string("model"),
         )
     }
+
+    // what a server put on a call beside the function, kept for the replay: gemini's `extra_content` carries the
+    // thought signature, and google refuses the next request of the turn when a call of it comes back without
+    // one (measured 2026-10-29 on gemini-3.5-flash-lite); calls of earlier turns are not checked
+    private fun JsonObject.callFields(): EndpointFields? =
+        this["extra_content"]
+            ?.takeUnless { it is JsonNull }
+            ?.let { EndpointFields(reasoningSource, JsonObject(mapOf("extra_content" to it))) }
 
     // the arguments arrive as a json string; a model that garbles it still gets its call answered, with the
     // empty-args guard in the agent telling it what was missing.

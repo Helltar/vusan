@@ -82,6 +82,7 @@ class OpenAiClientTest {
         streamed: Boolean = false,
         echoesReasoningContent: Boolean = false,
         legacyOutputCeiling: Boolean = false,
+        baseUrl: String = "https://api.openai.com/v1",
     ): OpenAiClient {
         val engine =
             MockEngine { request ->
@@ -91,7 +92,7 @@ class OpenAiClientTest {
 
         return OpenAiClient(
             http = HttpClient(engine),
-            baseUrl = "https://api.openai.com/v1",
+            baseUrl = baseUrl,
             apiKey = "key",
             endpoint = endpoint,
             streamed = streamed,
@@ -462,6 +463,42 @@ class OpenAiClientTest {
         assertEquals("call-9", messages[2].getValue("tool_calls").jsonArray.single().jsonObject.getValue("id").jsonPrimitive.content)
         assertEquals("tool", messages[3].getValue("role").jsonPrimitive.content)
         assertEquals("call-9", messages[3].getValue("tool_call_id").jsonPrimitive.content)
+    }
+
+    // google refuses the next request of the turn when a gemini call comes back without its thought signature
+    @Test
+    fun `what a server put on a call comes back on it to that server alone`() = runBlocking {
+        val signed =
+            COMPLETION_REPLY.replace(
+                """"function":{"name":"lookUp","arguments":"{\"query\":\"dogs\"}"}}""",
+                """"function":{"name":"lookUp","arguments":"{\"query\":\"dogs\"}"},"extra_content":{"google":{"thought_signature":"sig"}}}""",
+            )
+        val client = client(reply = signed, endpoint = OpenAiEndpoint.COMPLETIONS)
+        val first = client.complete(OLD_MODEL, request(*basic)).message
+        val turn = arrayOf(*basic, first, Message.ToolResults(listOf(ToolResult("call-9", "lookUp", "found"))))
+        sent.clear()
+
+        client.complete(OLD_MODEL, request(*turn))
+        val call = sent.single().getValue("messages").jsonArray[2].jsonObject.getValue("tool_calls").jsonArray.single().jsonObject
+        assertEquals("sig", call.getValue("extra_content").jsonObject.getValue("google").jsonObject.getValue("thought_signature").jsonPrimitive.content)
+
+        // a fallback taking over mid-turn speaks to another endpoint, which gets the call without it
+        client(reply = COMPLETION_REPLY, endpoint = OpenAiEndpoint.COMPLETIONS, baseUrl = "https://api.deepseek.com/v1").complete(OLD_MODEL, request(*turn))
+        val foreign = sent.last().getValue("messages").jsonArray[2].jsonObject.getValue("tool_calls").jsonArray.single().jsonObject
+        assertEquals(setOf("id", "type", "function"), foreign.keys)
+    }
+
+    @Test
+    fun `a call that came with nothing beside the function replays as before`() = runBlocking {
+        val client = client(reply = COMPLETION_REPLY, endpoint = OpenAiEndpoint.COMPLETIONS)
+        val first = client.complete(OLD_MODEL, request(*basic)).message
+        sent.clear()
+
+        client.complete(OLD_MODEL, request(*basic, first, Message.ToolResults(listOf(ToolResult("call-9", "lookUp", "found")))))
+
+        val call = sent.single().getValue("messages").jsonArray[2].jsonObject.getValue("tool_calls").jsonArray.single().jsonObject
+        assertNull(first.toolCalls.single().endpointFields)
+        assertEquals(setOf("id", "type", "function"), call.keys)
     }
 
     @Test
