@@ -32,6 +32,7 @@ suspend fun LlmProviderConfig.preflighted(http: HttpClient, codexAuth: CodexAuth
         is LlmProviderConfig.Codex -> codexPreflight(http, this, codexAuth)
         is LlmProviderConfig.OpenRouter -> openRouterPreflight(http, this)
         is LlmProviderConfig.Google -> googlePreflight(http, this)
+        is LlmProviderConfig.DeepSeek -> deepSeekPreflight(http, this)
     }
 
 /** The vendor's model object when it serves the configured model, `null` when it could not be asked, an error when it does not. */

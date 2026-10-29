@@ -501,6 +501,16 @@ class OpenAiClientTest {
         assertEquals(setOf("id", "type", "function"), call.keys)
     }
 
+    // deepseek cuts an answer short when its servers run out of capacity: an overload to repeat, not a reply
+    @Test
+    fun `an answer cut for want of capacity is an overload`() = runBlocking {
+        val cut = COMPLETION_REPLY.replace("\"finish_reason\":\"tool_calls\"", "\"finish_reason\":\"insufficient_system_resource\"")
+
+        val failure = assertFailsWith<LlmException> { client(reply = cut, endpoint = OpenAiEndpoint.COMPLETIONS).complete(MODEL, request(*basic)) }
+
+        assertEquals(503, failure.status)
+    }
+
     @Test
     fun `a non-2xx answer is an error with its status and body`() = runBlocking {
         val failure = assertFailsWith<LlmException> { client(reply = """{"error":{"type":"usage_limit_reached"}}""", status = HttpStatusCode.TooManyRequests).complete(MODEL, request(*basic)) }

@@ -5,6 +5,7 @@ import com.helltar.vusan.llm.int
 import com.helltar.vusan.llm.ChatRequest
 import com.helltar.vusan.llm.EndpointFields
 import com.helltar.vusan.llm.LlmClient
+import com.helltar.vusan.llm.LlmException
 import com.helltar.vusan.llm.LlmModel
 import com.helltar.vusan.llm.Message
 import com.helltar.vusan.llm.Part
@@ -499,6 +500,12 @@ class OpenAiClient(
 
     private fun parseCompletion(response: JsonObject): Reply {
         val choice = (response["choices"] as? JsonArray)?.firstOrNull() as? JsonObject
+
+        // deepseek's server cut the answer short for want of capacity: an overload, which the rules downstream
+        // repeat or hand to the fallback, not an answer to deliver
+        if (choice?.string("finish_reason") == INSUFFICIENT_SYSTEM_RESOURCE) {
+            throw LlmException(label, OVERLOADED_STATUS, "finish_reason $INSUFFICIENT_SYSTEM_RESOURCE")
+        }
         val message = choice?.get("message") as? JsonObject
 
         val parts =
@@ -574,6 +581,8 @@ class OpenAiClient(
 
     private companion object {
         const val REASONING_CONTENT = "reasoning_content"
+        const val INSUFFICIENT_SYSTEM_RESOURCE = "insufficient_system_resource"
+        const val OVERLOADED_STATUS = 503
         const val ARGS_PREVIEW_CHARS = 200
 
         val log = KotlinLogging.logger {}

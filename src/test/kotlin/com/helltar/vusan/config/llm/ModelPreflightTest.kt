@@ -5,6 +5,9 @@ import com.helltar.vusan.llm.ReasoningEffort
 import io.ktor.client.engine.mock.*
 import io.ktor.http.*
 import kotlinx.coroutines.runBlocking
+import kotlinx.serialization.json.Json
+import kotlinx.serialization.json.jsonArray
+import kotlinx.serialization.json.jsonObject
 import kotlin.test.Test
 import kotlin.test.assertContains
 import kotlin.test.assertEquals
@@ -392,5 +395,35 @@ class ModelPreflightTest {
         val failure = assertFailsWith<IllegalStateException> { config.preflighted(http(HttpStatusCode.NotFound), codexAuth = null) }
 
         assertContains(failure.message.orEmpty(), "LLM_MODEL=[gemini-9-nope]")
+    }
+
+    // what deepseek's `GET /models/{id}` answered for flash on 2026-10-29, trimmed to the fields read
+    @Test
+    fun `deepseek's own list gives the window, the ceiling, the eyes and the levels`() = runBlocking {
+        val config = LlmProviderConfig.DeepSeek(apiKey = "key", model = "deepseek-flash", reasoningEffort = ReasoningEffort.NONE, requestTimeout = timeout)
+        val flash = DEEPSEEK_MODELS.let { Json.parseToJsonElement(it).jsonObject.getValue("data").jsonArray.first().toString() }
+
+        val checked = assertIs<LlmProviderConfig.DeepSeek>(config.preflighted(http(HttpStatusCode.OK, flash), codexAuth = null))
+
+        assertEquals("https://api.deepseek.com/models/deepseek-flash", asked)
+        assertEquals("Bearer key", authorization?.get("Authorization"))
+        assertEquals(1_048_576, checked.contextWindowTokens)
+        assertEquals(393_216, checked.maxOutputTokens)
+        assertEquals(true, checked.seesImages)
+        assertEquals(setOf(ReasoningEffort.LOW, ReasoningEffort.HIGH, ReasoningEffort.MAX), checked.efforts)
+    }
+
+    // deepseek would serve `medium` as `high` without a word
+    @Test
+    fun `an effort deepseek does not list, or a model it does not serve, stops the startup`() = runBlocking {
+        val flash = DEEPSEEK_MODELS.let { Json.parseToJsonElement(it).jsonObject.getValue("data").jsonArray.first().toString() }
+        val medium = LlmProviderConfig.DeepSeek(apiKey = "key", model = "deepseek-flash", reasoningEffort = ReasoningEffort.MEDIUM, requestTimeout = timeout)
+
+        val failure = assertFailsWith<IllegalStateException> { medium.preflighted(http(HttpStatusCode.OK, flash), codexAuth = null) }
+        assertContains(failure.message.orEmpty(), "LLM_REASONING_EFFORT=[medium]")
+
+        val unknown = LlmProviderConfig.DeepSeek(apiKey = "key", model = "deepseek-nope", requestTimeout = timeout)
+        val missing = assertFailsWith<IllegalStateException> { unknown.preflighted(http(HttpStatusCode.NotFound), codexAuth = null) }
+        assertContains(missing.message.orEmpty(), "LLM_MODEL=[deepseek-nope]")
     }
 }

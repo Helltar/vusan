@@ -44,12 +44,12 @@ Part of the [architecture index](../architecture.md).
   (`llm/anthropic/AnthropicStream`), as the vendor's SDKs do at a ceiling this size, so a stall trips the socket
   timeout where a connection idling through a long think would be dropped at the API's edge. A Claude model from
   before 4.6, which takes neither adaptive thinking nor an effort, stops startup. `openai-compatible` speaks
-  either OpenAI API under `LLM_BASE_URL` (`LLM_COMPATIBLE_API`), continues a conversation's last request on DeepSeek's
-  own API, which takes no breakpoints and reads back only what a request repeats ([context budget](context.md)), sees images only when the server's model list says
-  the model takes them (with its window and its efforts, DeepSeek's states all three), leaves parallel tool calls
-  to the server's default, sends the output ceiling as the original `max_tokens` on Chat Completions (DeepSeek ignores
-  OpenAI's `max_completion_tokens`), and gets none of the OpenAI-only fields unless the base URL is the official API. A server there that thinks aloud in `reasoning_content` (DeepSeek) refuses a tool call of the turn
-  without it, so a call the provider before a fallback wrote carries an empty one. What a server puts on a call beside
+  either OpenAI API under `LLM_BASE_URL` (`LLM_COMPATIBLE_API`), sees images only when the server's model list says
+  the model takes them (with its window and its efforts, where it states them), leaves parallel tool calls
+  to the server's default, sends the output ceiling as the original `max_tokens` on Chat Completions, and gets none of
+  the OpenAI-only fields unless the base URL is the official API. A server there that thinks aloud in
+  `reasoning_content` gets it back with the turn's calls, and a call the provider before a fallback wrote carries an
+  empty one. What a server puts on a call beside
   the function (Gemini's `extra_content`, which carries the thought signature Google wants back within the turn) is kept
   as the call's `EndpointFields` and replayed to that endpoint alone. A vision or an addressing model is
   one more `LlmProviderConfig`, read from its own prefix (`VISION_`, `ADDRESSING_`) and resolved the same way; by default
@@ -65,6 +65,13 @@ Part of the [architecture index](../architecture.md).
   body holding nothing but the error. Both clients send the conversation's cache key as `session_id` too, which keeps
   a conversation on the upstream holding its cached prefix. A Grok model (`x-ai/…`) continues the conversation's last
   request, as Codex does, since xAI keeps no breakpoints there ([context budget](context.md)).
+- **DeepSeek (`deepseek`)** — `config/llm/DeepSeekProvider` runs the OpenAI client's Chat Completions at
+  `https://api.deepseek.com`, the base URL its docs give: `reasoning_content` echoed with the turn's calls, the output
+  ceiling as the `max_tokens` DeepSeek reads (it ignores `max_completion_tokens`), and `none` turning thinking off. Both
+  models keep an entry per request, so a turn continues the conversation's last request ([context budget](context.md)).
+  The startup check reads the window, the ceiling, the eyes and the levels from `GET /models/{id}`; a level the list does
+  not name stops startup, since DeepSeek would serve `medium` as `high`. A `finish_reason` of
+  `insufficient_system_resource` is raised as an overload, so the call is repeated or handed to the fallback.
 - **Google (`google`)** — `config/llm/GoogleProvider` runs `llm/google/GoogleClient` on the Gemini API's Interactions
   endpoint, the vendor's default since June 2026, stateless (`store: false`): the conversation goes out whole as steps,
   system messages lifted into `system_instruction`. A `thought` step carries the signature the turn's next request is

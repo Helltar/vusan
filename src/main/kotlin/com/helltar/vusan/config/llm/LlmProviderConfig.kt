@@ -114,10 +114,10 @@ sealed interface LlmProviderConfig {
     }
 
     /**
-     * Any server that speaks the OpenAI API, DeepSeek included. The server behind [baseUrl] may serve
-     * anything, so [seesImages] is what the server's own model list said at startup — `true`, `false`, or
-     * `null` when it said nothing — and a chat model sees only on a `true`; without one a chat model here
-     * needs a vision model of its own.
+     * Any server that speaks the OpenAI API: a local one, or a vendor without a provider of its own. The
+     * server behind [baseUrl] may serve anything, so [seesImages] is what the server's own model list said
+     * at startup — `true`, `false`, or `null` when it said nothing — and a chat model sees only on a `true`;
+     * without one a chat model here needs a vision model of its own.
      */
     data class OpenAiCompatible(
         val baseUrl: String,
@@ -191,6 +191,40 @@ sealed interface LlmProviderConfig {
                 contextWindowTokens = null,
                 serviceTier = null,
                 verbosity = null,
+                seesImages = null,
+                efforts = null,
+                envPrefix = envPrefix,
+            )
+    }
+
+    /**
+     * DeepSeek's own API with a DeepSeek key. The window, [maxOutputTokens], whether the model sees and
+     * which efforts it takes are what its model list said at startup.
+     */
+    data class DeepSeek(
+        val apiKey: String,
+        override val model: String,
+        override val reasoningEffort: ReasoningEffort? = null,
+        override val requestTimeout: Duration,
+        override val contextWindowTokens: Long? = null,
+        val maxOutputTokens: Int? = null,
+        override val seesImages: Boolean? = null,
+        override val efforts: Set<ReasoningEffort>? = null,
+        override val envPrefix: String = DEFAULT_ENV_PREFIX,
+    ) : LlmProviderConfig {
+
+        init {
+            require(apiKey.isNotBlank()) { "the api key must not be blank" }
+            require(model.isNotBlank()) { "the model must not be blank" }
+            requireSane(requestTimeout, contextWindowTokens)
+        }
+
+        override fun withModel(model: String, reasoningEffort: ReasoningEffort?, envPrefix: String): DeepSeek =
+            copy(
+                model = model,
+                reasoningEffort = reasoningEffort,
+                contextWindowTokens = null,
+                maxOutputTokens = null,
                 seesImages = null,
                 efforts = null,
                 envPrefix = envPrefix,

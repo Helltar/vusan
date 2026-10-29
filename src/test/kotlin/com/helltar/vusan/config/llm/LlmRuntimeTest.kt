@@ -3,9 +3,11 @@ package com.helltar.vusan.config.llm
 import com.helltar.vusan.infra.Http
 import com.helltar.vusan.llm.ChatRequest
 import com.helltar.vusan.llm.Message
+import com.helltar.vusan.llm.Part
 import com.helltar.vusan.llm.ReasoningEffort
 import com.helltar.vusan.llm.RequestOptions
 import com.helltar.vusan.llm.ToolDefinition
+import com.helltar.vusan.llm.ToolResult
 import com.helltar.vusan.llm.anthropic.messageEventStream
 import com.helltar.vusan.llm.openai.OpenAiEndpoint
 import com.helltar.vusan.llm.codex.CODEX_BACKEND_BASE_URL
@@ -81,6 +83,9 @@ class LlmRuntimeTest {
 
     private fun openRouter(model: String, effort: ReasoningEffort? = null) =
         LlmProviderConfig.OpenRouter(apiKey = "key", model = model, reasoningEffort = effort, requestTimeout = TIMEOUT)
+
+    private fun deepSeek(model: String = "deepseek-flash", effort: ReasoningEffort? = null) =
+        LlmProviderConfig.DeepSeek(apiKey = "key", model = model, reasoningEffort = effort, requestTimeout = TIMEOUT)
 
     private fun codexAuth() = CodexAuthStore(Http.createClient(MockEngine { error("no refresh expected") }))
 
@@ -264,6 +269,28 @@ class LlmRuntimeTest {
         assertNull(wire.body["prompt_cache_options"])
     }
 
+    // deepseek reads `max_tokens` and ignores `max_completion_tokens`, and refuses a call of the turn without its thinking
+    @Test
+    fun `a deepseek runtime speaks completions at its documented base url, its thinking echoed and the old ceiling`() = runBlocking {
+        val runtime = resolveLlmRuntime(deepSeek(effort = ReasoningEffort.NONE), http = http(COMPLETION_REPLY))
+
+        assertEquals("DeepSeek", runtime.providerLabel)
+        assertFalse(runtime.model.seesImages, "a model nobody said sees is taken as blind")
+
+        runtime.client.complete(runtime.model, request(runtime.chatOptions.copy(maxOutputTokens = 40)))
+        val foreign = Message.Assistant(listOf(Part.ToolCall("call-x", "lookUp", buildJsonObject { put("q", "x") })))
+        runtime.client.complete(runtime.model, ChatRequest(listOf(Message.User("hi"), foreign, Message.ToolResults(listOf(ToolResult("call-x", "lookUp", "found")))), listOf(tool)))
+
+        val wire = sent.first()
+        assertEquals("https://api.deepseek.com/chat/completions", wire.url)
+        assertEquals("Bearer key", wire.headers["Authorization"])
+        assertEquals("none", wire.body.getValue("reasoning_effort").jsonPrimitive.content)
+        assertEquals(40, wire.body.getValue("max_tokens").jsonPrimitive.content.toInt())
+        assertNull(wire.body["max_completion_tokens"])
+        assertNull(wire.body["prompt_cache_key"])
+        assertEquals("", sent.last().body.getValue("messages").jsonArray[1].jsonObject.getValue("reasoning_content").jsonPrimitive.content)
+    }
+
     @Test
     fun `a compatible runtime targets the responses endpoint on request`() = runBlocking {
         val runtime = resolveLlmRuntime(compatible(endpoint = OpenAiEndpoint.RESPONSES), http = http(RESPONSES_REPLY))
@@ -345,8 +372,8 @@ class LlmRuntimeTest {
     @Test
     fun `which routes read back only what a request repeats`() {
         assertTrue(resolveLlmRuntime(codex(), codexAuth = codexAuth()).model.cachesOnlyRepeatedPrefix)
-        assertTrue(resolveLlmRuntime(compatible(baseUrl = "https://api.deepseek.com/")).model.cachesOnlyRepeatedPrefix)
-        assertTrue(resolveLlmRuntime(compatible(baseUrl = "https://api.deepseek.com", endpoint = OpenAiEndpoint.RESPONSES)).model.cachesOnlyRepeatedPrefix)
+        assertTrue(resolveLlmRuntime(deepSeek()).model.cachesOnlyRepeatedPrefix)
+        assertTrue(resolveLlmRuntime(deepSeek("deepseek-v4-pro")).model.cachesOnlyRepeatedPrefix)
         assertTrue(resolveLlmRuntime(openRouter("x-ai/grok-4.7")).model.cachesOnlyRepeatedPrefix)
         assertFalse(resolveLlmRuntime(compatible()).model.cachesOnlyRepeatedPrefix)
         assertFalse(resolveLlmRuntime(openRouter("deepseek/deepseek-v4.1-flash")).model.cachesOnlyRepeatedPrefix)

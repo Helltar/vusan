@@ -24,8 +24,6 @@ import kotlinx.serialization.json.jsonObject
 
 private val log = KotlinLogging.logger("ModelPreflight")
 
-private const val DEEPSEEK_API_BASE_URL = "https://api.deepseek.com"
-
 /**
  * Any server that speaks the OpenAI API under `LLM_BASE_URL`, either endpoint. Parallel tool calls are
  * left to the server's default: DeepSeek ignores the field, and one that honors it, such as xAI, would
@@ -43,10 +41,6 @@ internal fun compatibleRuntime(config: LlmProviderConfig.OpenAiCompatible, http:
             contextWindowTokens = config.contextWindowTokens,
             seesImages = config.seesImages == true,
             efforts = config.efforts,
-            // deepseek's own api reads back only what a request repeats: measured on 2026-10-27 on both of its
-            // endpoints, deepseek-v4-pro read nothing of a rebuilt turn and the whole last request of an appended
-            // one, and deepseek-flash, which caches the longest prefix, the last turn more
-            cachesOnlyRepeatedPrefix = baseUrl.equals(DEEPSEEK_API_BASE_URL, ignoreCase = true),
         )
 
     val options =
