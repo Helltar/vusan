@@ -9,8 +9,7 @@ import com.helltar.vusan.llm.ReasoningEffort
 import com.helltar.vusan.llm.RequestOptions
 import com.helltar.vusan.llm.RetryingLlmClient
 import com.helltar.vusan.llm.llmHttpClient
-import com.helltar.vusan.llm.openai.OpenAiClient
-import com.helltar.vusan.llm.openai.OpenAiEndpoint
+import com.helltar.vusan.llm.openai.ResponsesClient
 import com.helltar.vusan.llm.codex.CODEX_BACKEND_BASE_URL
 import com.helltar.vusan.llm.codex.CodexAuthException
 import com.helltar.vusan.llm.codex.CodexAuthStore
@@ -79,11 +78,10 @@ internal fun codexRuntime(config: LlmProviderConfig.Codex, auth: CodexAuthStore,
         providerLabel = "ChatGPT subscription (Codex)",
         client =
             RetryingLlmClient(
-                OpenAiClient(
+                ResponsesClient(
                     http = http ?: llmHttpClient(config.requestTimeout, codexRequestPlugin(auth, codexRoutingHint(config.model, config.serviceTier?.requestValue))),
                     baseUrl = CODEX_BACKEND_BASE_URL,
                     apiKey = null,
-                    endpoint = OpenAiEndpoint.RESPONSES,
                     streamed = true,
                     statelessReasoning = true,
                     label = "Codex",

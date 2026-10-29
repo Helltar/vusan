@@ -7,8 +7,7 @@ import com.helltar.vusan.llm.RequestOptions
 import com.helltar.vusan.llm.RetryingLlmClient
 import com.helltar.vusan.llm.llmHttpClient
 import com.helltar.vusan.llm.llmJson
-import com.helltar.vusan.llm.openai.OpenAiClient
-import com.helltar.vusan.llm.openai.OpenAiEndpoint
+import com.helltar.vusan.llm.openai.ResponsesClient
 import io.github.oshai.kotlinlogging.KotlinLogging
 import io.ktor.client.*
 import io.ktor.client.plugins.*
@@ -59,11 +58,10 @@ internal fun xaiRuntime(config: LlmProviderConfig.Xai, http: HttpClient?): LlmRu
         providerLabel = "xAI",
         client =
             RetryingLlmClient(
-                OpenAiClient(
+                ResponsesClient(
                     http = http ?: llmHttpClient(config.requestTimeout),
                     baseUrl = XAI_API_BASE_URL,
                     apiKey = config.apiKey,
-                    endpoint = OpenAiEndpoint.RESPONSES,
                     statelessReasoning = true,
                     label = "xAI",
                 ),

@@ -33,16 +33,11 @@ private const val DEEPSEEK_MODELS =
           "effort":{"supported_levels":["low","high","max"],"default_level":"high"}},
          {"id":"deepseek-v4-pro","object":"model","context_window":1048576,"input_modalities":["text"]}]}"""
 
-// xai's two lists in the shape its api reference gives them, trimmed to the fields read: the window and the
-// efforts on the main one, what a model takes in only on the language-model one
-private const val XAI_MODELS =
+// a compatible server's list in the plainest shape met: the window under either name, and what the model takes in
+private const val COMPATIBLE_MODELS =
     """{"object":"list","data":[
-         {"id":"grok-4.7","object":"model","owned_by":"xai","aliases":["grok-latest"],"context_length":500000,
-          "capabilities":{"reasoning_effort":["low","medium","high","xhigh"],"default_reasoning_effort":"medium"}}]}"""
-
-private const val XAI_LANGUAGE_MODEL =
-    """{"id":"grok-4.7","object":"model","owned_by":"xai","aliases":["grok-latest"],
-       "input_modalities":["text","image"],"output_modalities":["text"]}"""
+         {"id":"local-vision","object":"model","context_window":131072,"input_modalities":["text","image"]},
+         {"id":"local-text","object":"model","context_length":32768,"input_modalities":["text"]}]}"""
 
 // what ollama 0.40 answered on 2026-10-27: a compatible list with ids alone, and its own api beside it. the
 // window under model_info is the trained one, which is not what ollama runs the model with
@@ -173,7 +168,7 @@ class ModelPreflightTest {
 
     private fun compatible(model: String, effort: ReasoningEffort? = null, window: Long? = null) =
         LlmProviderConfig.OpenAiCompatible(
-            baseUrl = "https://api.deepseek.com/",
+            baseUrl = "https://models.test/",
             apiKey = "key",
             model = model,
             reasoningEffort = effort,
@@ -181,42 +176,28 @@ class ModelPreflightTest {
             contextWindowTokens = window,
         )
 
-    // deepseek's own list says flash takes images, so it sees without a vision model of its own
     @Test
     fun `a compatible server's list says whether the model sees and how much it holds`() = runBlocking {
-        val flash = assertIs<LlmProviderConfig.OpenAiCompatible>(compatible("deepseek-flash").preflighted(http(HttpStatusCode.OK, DEEPSEEK_MODELS), codexAuth = null))
+        val vision = assertIs<LlmProviderConfig.OpenAiCompatible>(compatible("local-vision").preflighted(http(HttpStatusCode.OK, COMPATIBLE_MODELS), codexAuth = null))
 
-        assertEquals("https://api.deepseek.com/v1/models", asked)
+        assertEquals("https://models.test/v1/models", asked)
         assertEquals("Bearer key", authorization?.get("Authorization"))
-        assertEquals(true, flash.seesImages)
-        assertEquals(1_048_576, flash.contextWindowTokens)
-        assertEquals(setOf(ReasoningEffort.LOW, ReasoningEffort.HIGH, ReasoningEffort.MAX), flash.efforts)
+        assertEquals(true, vision.seesImages)
+        assertEquals(131_072, vision.contextWindowTokens)
+        assertNull(vision.efforts, "no vendor's shape of efforts is read here")
 
-        val pro = assertIs<LlmProviderConfig.OpenAiCompatible>(compatible("deepseek-v4-pro").preflighted(http(HttpStatusCode.OK, DEEPSEEK_MODELS), codexAuth = null))
-        assertEquals(false, pro.seesImages)
-        assertNull(pro.efforts)
+        val text = assertIs<LlmProviderConfig.OpenAiCompatible>(compatible("local-text").preflighted(http(HttpStatusCode.OK, COMPATIBLE_MODELS), codexAuth = null))
+        assertEquals(false, text.seesImages)
+        assertEquals(32_768, text.contextWindowTokens)
     }
 
+    // which efforts a model takes is the first turn's to say; the list is not asked
     @Test
-    fun `an effort the server's list does not offer stops the startup, and a configured window wins`() = runBlocking {
-        val failure =
-            assertFailsWith<IllegalStateException> {
-                compatible("deepseek-flash", effort = ReasoningEffort.MEDIUM).preflighted(http(HttpStatusCode.OK, DEEPSEEK_MODELS), codexAuth = null)
-            }
+    fun `a configured window wins, and any effort is left to the first turn`() = runBlocking {
+        val checked = compatible("local-vision", effort = ReasoningEffort.MEDIUM, window = 100_000).preflighted(http(HttpStatusCode.OK, COMPATIBLE_MODELS), codexAuth = null)
 
-        assertContains(failure.message.orEmpty(), "LLM_REASONING_EFFORT=[medium]")
-        assertContains(failure.message.orEmpty(), "low, high, max")
-
-        val windowed = compatible("deepseek-flash", effort = ReasoningEffort.HIGH, window = 100_000).preflighted(http(HttpStatusCode.OK, DEEPSEEK_MODELS), codexAuth = null)
-        assertEquals(100_000, windowed.contextWindowTokens)
-    }
-
-    // the list names thinking levels, and none, which turns thinking off, is no level of it
-    @Test
-    fun `none passes a server's list that names only thinking levels`() = runBlocking {
-        val checked = compatible("deepseek-flash", effort = ReasoningEffort.NONE).preflighted(http(HttpStatusCode.OK, DEEPSEEK_MODELS), codexAuth = null)
-
-        assertEquals(ReasoningEffort.NONE, checked.reasoningEffort)
+        assertEquals(100_000, checked.contextWindowTokens)
+        assertEquals(ReasoningEffort.MEDIUM, checked.reasoningEffort)
     }
 
     // a compatible server may serve no list, or answer to an alias it never lists
@@ -225,7 +206,7 @@ class ModelPreflightTest {
         val config = compatible("local-model")
 
         assertSame(config, config.preflighted(http(HttpStatusCode.NotFound), codexAuth = null))
-        assertSame(config, config.preflighted(http(HttpStatusCode.OK, DEEPSEEK_MODELS), codexAuth = null))
+        assertSame(config, config.preflighted(http(HttpStatusCode.OK, COMPATIBLE_MODELS), codexAuth = null))
         assertSame(config, config.preflighted(http(HttpStatusCode.OK, "<html>not a list</html>"), codexAuth = null))
     }
 
@@ -239,40 +220,6 @@ class ModelPreflightTest {
                 if (body == null) respond("", HttpStatusCode.NotFound) else respond(body, HttpStatusCode.OK, headersOf(HttpHeaders.ContentType, ContentType.Application.Json.toString()))
             },
         )
-
-    private fun xaiCompatible(model: String) =
-        LlmProviderConfig.OpenAiCompatible(baseUrl = "https://api.x.ai", apiKey = "key", model = model, requestTimeout = timeout)
-
-    @Test
-    fun `xai's lists fill in the window, the efforts and whether the model sees`() = runBlocking {
-        val http = routed("/v1/models" to XAI_MODELS, "/v1/language-models/grok-4.7" to XAI_LANGUAGE_MODEL)
-
-        val checked = assertIs<LlmProviderConfig.OpenAiCompatible>(xaiCompatible("grok-4.7").preflighted(http, codexAuth = null))
-
-        assertEquals(listOf("https://api.x.ai/v1/models", "https://api.x.ai/v1/language-models/grok-4.7"), askedUrls)
-        assertEquals(500_000, checked.contextWindowTokens)
-        assertEquals(setOf(ReasoningEffort.LOW, ReasoningEffort.MEDIUM, ReasoningEffort.HIGH, ReasoningEffort.XHIGH), checked.efforts)
-        assertEquals(true, checked.seesImages)
-    }
-
-    @Test
-    fun `a model named by one of its aliases is found on the list`() = runBlocking {
-        val http = routed("/v1/models" to XAI_MODELS, "/v1/language-models/grok-latest" to XAI_LANGUAGE_MODEL)
-
-        val checked = assertIs<LlmProviderConfig.OpenAiCompatible>(xaiCompatible("grok-latest").preflighted(http, codexAuth = null))
-
-        assertEquals(500_000, checked.contextWindowTokens)
-        assertEquals(true, checked.seesImages)
-    }
-
-    // a server with no language-model list answers the question with a 404, and the model stays unseeing
-    @Test
-    fun `a list that leaves out what the model takes in, on a server without a language-model list, changes nothing about it`() = runBlocking {
-        val checked = assertIs<LlmProviderConfig.OpenAiCompatible>(xaiCompatible("grok-4.7").preflighted(routed("/v1/models" to XAI_MODELS), codexAuth = null))
-
-        assertEquals(500_000, checked.contextWindowTokens)
-        assertNull(checked.seesImages)
-    }
 
     private fun ollama() =
         LlmProviderConfig.OpenAiCompatible(baseUrl = "http://localhost:11434", apiKey = "ollama", model = "gemma4:latest", requestTimeout = timeout)

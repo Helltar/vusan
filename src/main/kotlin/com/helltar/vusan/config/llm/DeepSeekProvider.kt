@@ -5,8 +5,7 @@ import com.helltar.vusan.llm.ReasoningEffort
 import com.helltar.vusan.llm.RequestOptions
 import com.helltar.vusan.llm.RetryingLlmClient
 import com.helltar.vusan.llm.llmHttpClient
-import com.helltar.vusan.llm.openai.OpenAiClient
-import com.helltar.vusan.llm.openai.OpenAiEndpoint
+import com.helltar.vusan.llm.openai.ChatCompletionsClient
 import io.ktor.client.*
 import io.ktor.client.request.*
 import kotlinx.serialization.json.JsonArray
@@ -45,11 +44,10 @@ internal fun deepSeekRuntime(config: LlmProviderConfig.DeepSeek, http: HttpClien
         providerLabel = "DeepSeek",
         client =
             RetryingLlmClient(
-                OpenAiClient(
+                ChatCompletionsClient(
                     http = http ?: llmHttpClient(config.requestTimeout),
                     baseUrl = DEEPSEEK_API_BASE_URL,
                     apiKey = config.apiKey,
-                    endpoint = OpenAiEndpoint.COMPLETIONS,
                     echoesReasoningContent = true,
                     legacyOutputCeiling = true,
                     label = "DeepSeek",

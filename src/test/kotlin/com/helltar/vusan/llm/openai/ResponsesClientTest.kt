@@ -61,13 +61,7 @@ private const val PHASED_REPLY =
        ],
        "usage":{"input_tokens":120,"output_tokens":30}}"""
 
-private const val COMPLETION_REPLY =
-    """{"id":"chatcmpl-1","object":"chat.completion","created":0,"model":"deepseek-chat",
-       "choices":[{"index":0,"finish_reason":"tool_calls","message":{"role":"assistant","content":null,"reasoning_content":"thinking...",
-         "tool_calls":[{"id":"call-9","type":"function","function":{"name":"lookUp","arguments":"{\"query\":\"dogs\"}"}}]}}],
-       "usage":{"prompt_tokens":50,"completion_tokens":10,"prompt_tokens_details":{"cached_tokens":40}}}"""
-
-class OpenAiClientTest {
+class ResponsesClientTest {
 
     private val sent = mutableListOf<JsonObject>()
 
@@ -75,31 +69,24 @@ class OpenAiClientTest {
 
     private fun client(
         reply: String = RESPONSES_REPLY,
-        endpoint: OpenAiEndpoint = OpenAiEndpoint.RESPONSES,
         status: HttpStatusCode = HttpStatusCode.OK,
         statelessReasoning: Boolean = true,
         explicitPromptCaching: Boolean = true,
         streamed: Boolean = false,
-        echoesReasoningContent: Boolean = false,
-        legacyOutputCeiling: Boolean = false,
-        baseUrl: String = "https://api.openai.com/v1",
-    ): OpenAiClient {
+    ): ResponsesClient {
         val engine =
             MockEngine { request ->
                 sent += Json.parseToJsonElement(request.body.toByteArray().decodeToString()).jsonObject
                 respond(reply, status, headersOf(HttpHeaders.ContentType, if (streamed) "text/event-stream" else ContentType.Application.Json.toString()))
             }
 
-        return OpenAiClient(
+        return ResponsesClient(
             http = HttpClient(engine),
-            baseUrl = baseUrl,
+            baseUrl = "https://api.openai.com/v1",
             apiKey = "key",
-            endpoint = endpoint,
             streamed = streamed,
             statelessReasoning = statelessReasoning,
             explicitPromptCaching = explicitPromptCaching,
-            echoesReasoningContent = echoesReasoningContent,
-            legacyOutputCeiling = legacyOutputCeiling,
         )
     }
 
@@ -219,23 +206,6 @@ class OpenAiClientTest {
 
         client().complete(MODEL, request(*basic, turn, Message.User("next")))
         assertFalse(sent.last().getValue("input").jsonArray.any { it.jsonObject["type"]?.jsonPrimitive?.content == "reasoning" })
-
-        client(reply = COMPLETION_REPLY, endpoint = OpenAiEndpoint.COMPLETIONS).complete(MODEL, request(*basic, turn, Message.User("next")))
-        assertFalse(sent.last().getValue("messages").jsonArray.any { "reasoning_content" in it.jsonObject })
-    }
-
-    // deepseek refuses a tool call of the turn that carries no `reasoning_content`, and one written by the
-    // provider a fallback took over from has none of its own
-    @Test
-    fun `a call another endpoint wrote carries an empty reasoning to a server that echoes it`() = runBlocking {
-        val foreign = Message.Assistant(listOf(Part.ToolCall("call-1", "lookUp", buildJsonObject { put("query", "cats") })))
-        val turn = arrayOf(*basic, foreign, Message.ToolResults(listOf(ToolResult("call-1", "lookUp", "found"))))
-
-        client(reply = COMPLETION_REPLY, endpoint = OpenAiEndpoint.COMPLETIONS, echoesReasoningContent = true).complete(MODEL, request(*turn))
-        assertEquals("", sent.last().getValue("messages").jsonArray[2].jsonObject.getValue("reasoning_content").jsonPrimitive.content)
-
-        client(reply = COMPLETION_REPLY, endpoint = OpenAiEndpoint.COMPLETIONS).complete(MODEL, request(*turn))
-        assertFalse("reasoning_content" in sent.last().getValue("messages").jsonArray[2].jsonObject)
     }
 
     // both are refused in a request that defines no tools, and the choice keeps the replayed calls valid
@@ -243,31 +213,13 @@ class OpenAiClientTest {
     fun `the tool choice and parallel calls travel only beside the tools`() = runBlocking {
         val options = RequestOptions(parallelToolCalls = false)
 
-        for (endpoint in OpenAiEndpoint.entries) {
-            val reply = if (endpoint == OpenAiEndpoint.RESPONSES) RESPONSES_REPLY else COMPLETION_REPLY
+        client().complete(MODEL, request(*basic, tools = emptyList(), options = options))
+        assertFalse("parallel_tool_calls" in sent.last())
+        assertFalse("tool_choice" in sent.last())
 
-            client(reply = reply, endpoint = endpoint).complete(MODEL, request(*basic, tools = emptyList(), options = options))
-            assertFalse("parallel_tool_calls" in sent.last(), "$endpoint")
-            assertFalse("tool_choice" in sent.last(), "$endpoint")
-
-            client(reply = reply, endpoint = endpoint).complete(MODEL, ChatRequest(basic.toList(), listOf(TOOL), options, mayCallTools = false))
-            assertEquals(false, sent.last().getValue("parallel_tool_calls").jsonPrimitive.content.toBoolean(), "$endpoint")
-            assertEquals("none", sent.last().getValue("tool_choice").jsonPrimitive.content, "$endpoint")
-        }
-    }
-
-    // openai renamed the ceiling and refuses the old name on a reasoning model; deepseek reads only the old one
-    @Test
-    fun `a completions ceiling takes the name its server reads`() = runBlocking {
-        val options = RequestOptions(maxOutputTokens = 40)
-
-        client(reply = COMPLETION_REPLY, endpoint = OpenAiEndpoint.COMPLETIONS).complete(OLD_MODEL, request(*basic, options = options))
-        assertEquals(40, sent.last().getValue("max_completion_tokens").jsonPrimitive.content.toInt())
-        assertNull(sent.last()["max_tokens"])
-
-        client(reply = COMPLETION_REPLY, endpoint = OpenAiEndpoint.COMPLETIONS, legacyOutputCeiling = true).complete(OLD_MODEL, request(*basic, options = options))
-        assertEquals(40, sent.last().getValue("max_tokens").jsonPrimitive.content.toInt())
-        assertNull(sent.last()["max_completion_tokens"])
+        client().complete(MODEL, ChatRequest(basic.toList(), listOf(TOOL), options, mayCallTools = false))
+        assertEquals(false, sent.last().getValue("parallel_tool_calls").jsonPrimitive.content.toBoolean())
+        assertEquals("none", sent.last().getValue("tool_choice").jsonPrimitive.content)
     }
 
     @Test
@@ -394,19 +346,11 @@ class OpenAiClientTest {
 
     @Test
     fun `elsewhere an offered tool is listed up front and the offer left out`() = runBlocking {
-        val offered = request(*basic, Message.ToolsOffered(listOf("draw")), tools = listOf(TOOL, DRAW, SING))
+        client().complete(MODEL, request(*basic, Message.ToolsOffered(listOf("draw")), tools = listOf(TOOL, DRAW, SING)))
 
-        client().complete(MODEL, offered)
-        client(reply = COMPLETION_REPLY, endpoint = OpenAiEndpoint.COMPLETIONS).complete(OFFERING_MODEL, offered)
-
-        val (responses, completions) = sent
-        assertEquals(listOf("lookUp", "draw"), responses.getValue("tools").jsonArray.map { it.jsonObject.getValue("name").jsonPrimitive.content })
-        assertEquals(listOf("message", "message"), responses.getValue("input").jsonArray.map { it.jsonObject.getValue("type").jsonPrimitive.content })
-        assertEquals(
-            listOf("lookUp", "draw"),
-            completions.getValue("tools").jsonArray.map { it.jsonObject.getValue("function").jsonObject.getValue("name").jsonPrimitive.content },
-        )
-        assertEquals(listOf("system", "user"), completions.getValue("messages").jsonArray.map { it.jsonObject.getValue("role").jsonPrimitive.content })
+        val body = sent.single()
+        assertEquals(listOf("lookUp", "draw"), body.getValue("tools").jsonArray.map { it.jsonObject.getValue("name").jsonPrimitive.content })
+        assertEquals(listOf("message", "message"), body.getValue("input").jsonArray.map { it.jsonObject.getValue("type").jsonPrimitive.content })
     }
 
     // a breakpoint on an assistant message is taken and ignored, so the history's end is marked on the last
@@ -437,78 +381,6 @@ class OpenAiClientTest {
         sent.clear()
         client().complete(MODEL, ChatRequest(messages, listOf(TOOL), RequestOptions(cachePrompt = false), stablePrefixes = listOf(3, 5)))
         assertFalse(sent.single().getValue("input").jsonArray.any { item -> item.jsonObject.getValue("content").jsonArray.any { "prompt_cache_breakpoint" in it.jsonObject } })
-    }
-
-    @Test
-    fun `a chat completions request and reply take the completions shape`() = runBlocking {
-        val client = client(reply = COMPLETION_REPLY, endpoint = OpenAiEndpoint.COMPLETIONS, explicitPromptCaching = false, statelessReasoning = false)
-        val reply = client.complete(OLD_MODEL, request(*basic, options = RequestOptions(reasoningEffort = ReasoningEffort.HIGH, parallelToolCalls = false)))
-
-        val body = sent.single()
-        assertEquals("high", body.getValue("reasoning_effort").jsonPrimitive.content)
-        assertEquals("system", body.getValue("messages").jsonArray.first().jsonObject.getValue("role").jsonPrimitive.content)
-        assertEquals("lookUp", body.getValue("tools").jsonArray.single().jsonObject.getValue("function").jsonObject.getValue("name").jsonPrimitive.content)
-
-        assertEquals(StopReason.TOOL_CALLS, reply.stopReason)
-        assertEquals("dogs", reply.message.toolCalls.single().arguments.getValue("query").jsonPrimitive.content)
-        assertEquals(50, reply.usage?.inputTokens)
-        assertEquals(40, reply.usage?.cacheReadTokens)
-        sent.clear()
-
-        // the thinking a server returned goes back with the call, and the results go back as tool messages
-        client.complete(OLD_MODEL, request(*basic, reply.message, Message.ToolResults(listOf(ToolResult("call-9", "lookUp", "found")))))
-
-        val messages = sent.single().getValue("messages").jsonArray.map { it.jsonObject }
-        assertEquals("thinking...", messages[2].getValue("reasoning_content").jsonPrimitive.content)
-        assertEquals("call-9", messages[2].getValue("tool_calls").jsonArray.single().jsonObject.getValue("id").jsonPrimitive.content)
-        assertEquals("tool", messages[3].getValue("role").jsonPrimitive.content)
-        assertEquals("call-9", messages[3].getValue("tool_call_id").jsonPrimitive.content)
-    }
-
-    // google refuses the next request of the turn when a gemini call comes back without its thought signature
-    @Test
-    fun `what a server put on a call comes back on it to that server alone`() = runBlocking {
-        val signed =
-            COMPLETION_REPLY.replace(
-                """"function":{"name":"lookUp","arguments":"{\"query\":\"dogs\"}"}}""",
-                """"function":{"name":"lookUp","arguments":"{\"query\":\"dogs\"}"},"extra_content":{"google":{"thought_signature":"sig"}}}""",
-            )
-        val client = client(reply = signed, endpoint = OpenAiEndpoint.COMPLETIONS)
-        val first = client.complete(OLD_MODEL, request(*basic)).message
-        val turn = arrayOf(*basic, first, Message.ToolResults(listOf(ToolResult("call-9", "lookUp", "found"))))
-        sent.clear()
-
-        client.complete(OLD_MODEL, request(*turn))
-        val call = sent.single().getValue("messages").jsonArray[2].jsonObject.getValue("tool_calls").jsonArray.single().jsonObject
-        assertEquals("sig", call.getValue("extra_content").jsonObject.getValue("google").jsonObject.getValue("thought_signature").jsonPrimitive.content)
-
-        // a fallback taking over mid-turn speaks to another endpoint, which gets the call without it
-        client(reply = COMPLETION_REPLY, endpoint = OpenAiEndpoint.COMPLETIONS, baseUrl = "https://api.deepseek.com/v1").complete(OLD_MODEL, request(*turn))
-        val foreign = sent.last().getValue("messages").jsonArray[2].jsonObject.getValue("tool_calls").jsonArray.single().jsonObject
-        assertEquals(setOf("id", "type", "function"), foreign.keys)
-    }
-
-    @Test
-    fun `a call that came with nothing beside the function replays as before`() = runBlocking {
-        val client = client(reply = COMPLETION_REPLY, endpoint = OpenAiEndpoint.COMPLETIONS)
-        val first = client.complete(OLD_MODEL, request(*basic)).message
-        sent.clear()
-
-        client.complete(OLD_MODEL, request(*basic, first, Message.ToolResults(listOf(ToolResult("call-9", "lookUp", "found")))))
-
-        val call = sent.single().getValue("messages").jsonArray[2].jsonObject.getValue("tool_calls").jsonArray.single().jsonObject
-        assertNull(first.toolCalls.single().endpointFields)
-        assertEquals(setOf("id", "type", "function"), call.keys)
-    }
-
-    // deepseek cuts an answer short when its servers run out of capacity: an overload to repeat, not a reply
-    @Test
-    fun `an answer cut for want of capacity is an overload`() = runBlocking {
-        val cut = COMPLETION_REPLY.replace("\"finish_reason\":\"tool_calls\"", "\"finish_reason\":\"insufficient_system_resource\"")
-
-        val failure = assertFailsWith<LlmException> { client(reply = cut, endpoint = OpenAiEndpoint.COMPLETIONS).complete(MODEL, request(*basic)) }
-
-        assertEquals(503, failure.status)
     }
 
     @Test

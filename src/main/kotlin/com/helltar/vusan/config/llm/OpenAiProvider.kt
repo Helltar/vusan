@@ -4,8 +4,7 @@ import com.helltar.vusan.llm.LlmModel
 import com.helltar.vusan.llm.RequestOptions
 import com.helltar.vusan.llm.RetryingLlmClient
 import com.helltar.vusan.llm.llmHttpClient
-import com.helltar.vusan.llm.openai.OpenAiClient
-import com.helltar.vusan.llm.openai.OpenAiEndpoint
+import com.helltar.vusan.llm.openai.ResponsesClient
 import io.ktor.client.*
 import io.ktor.client.request.*
 
@@ -45,11 +44,10 @@ internal fun openAiRuntime(config: LlmProviderConfig.OpenAi, http: HttpClient?):
         providerLabel = "OpenAI",
         client =
             RetryingLlmClient(
-                OpenAiClient(
+                ResponsesClient(
                     http = http ?: llmHttpClient(config.requestTimeout),
                     baseUrl = OPENAI_API_BASE_URL + OPENAI_API_PATH,
                     apiKey = config.apiKey,
-                    endpoint = OpenAiEndpoint.RESPONSES,
                     statelessReasoning = true,
                     explicitPromptCaching = true,
                 ),

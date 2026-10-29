@@ -7,8 +7,7 @@ import com.helltar.vusan.llm.RetryingLlmClient
 import com.helltar.vusan.llm.anthropic.ANTHROPIC_EFFORTS
 import com.helltar.vusan.llm.anthropic.AnthropicClient
 import com.helltar.vusan.llm.llmHttpClient
-import com.helltar.vusan.llm.openai.OpenAiClient
-import com.helltar.vusan.llm.openai.OpenAiEndpoint
+import com.helltar.vusan.llm.openai.ResponsesClient
 import io.github.oshai.kotlinlogging.KotlinLogging
 import io.ktor.client.*
 import io.ktor.client.request.*
@@ -82,11 +81,10 @@ internal fun openRouterRuntime(config: LlmProviderConfig.OpenRouter, http: HttpC
         if (claude) {
             AnthropicClient(httpClient, config.apiKey, baseUrl = OPENROUTER_API_BASE_URL, label = "OpenRouter", routesBySession = true)
         } else {
-            OpenAiClient(
+            ResponsesClient(
                 http = httpClient,
                 baseUrl = "$OPENROUTER_API_BASE_URL/v1",
                 apiKey = config.apiKey,
-                endpoint = OpenAiEndpoint.RESPONSES,
                 streamed = true,
                 statelessReasoning = true,
                 explicitPromptCaching = true,

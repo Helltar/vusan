@@ -30,16 +30,10 @@ sealed interface Part {
      */
     data class Reasoning(val source: String, val raw: JsonObject) : Part
 
-    /**
-     * A tool call, and what the endpoint put on it beside the name and arguments, replayed with it to that
-     * endpoint alone — Gemini's `extra_content` with the thought signature, without which its next request
-     * in the turn is a 400.
-     */
     data class ToolCall(
         val id: String,
         val name: String,
         val arguments: JsonObject,
-        val endpointFields: EndpointFields? = null,
     ) : Part
 }
 

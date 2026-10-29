@@ -33,8 +33,8 @@ that is who owns writing them, not because only `agent/` reads them. No other ar
   pressed button and picks its flow, `TaskMenuHandler` runs the deterministic `/tasks` UI, and `InlineChoiceHandler` the
   agent-created choice buttons, whose selection becomes an agent input.
 - **`llm/`** — the model layer: one `LlmClient` interface, the `Message`/`Part` model every caller builds, `RequestOptions`,
-  and a client per wire protocol under `llm/openai/` (the Responses and Chat Completions APIs, which also cover the Codex
-  backend and any OpenAI-compatible server), `llm/anthropic/` (the Messages API) and `llm/google/` (the Gemini API's
+  and a client per wire protocol under `llm/openai/` (`ResponsesClient` and `ChatCompletionsClient`, OpenAI's two APIs, which
+  also cover the Codex backend, OpenRouter, xAI, DeepSeek and any OpenAI-compatible server), `llm/anthropic/` (the Messages API) and `llm/google/` (the Gemini API's
   Interactions endpoint), plus `llm/codex/`: what the Codex backend needs beside the protocol —
   the credentials `codex login` writes, the headers Cloudflare checks, the subscription's usage windows and the
   account's model catalog. The package knows nothing about the

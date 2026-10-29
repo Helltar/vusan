@@ -49,15 +49,14 @@ Part of the [architecture index](../architecture.md).
   to the server's default, sends the output ceiling as the original `max_tokens` on Chat Completions, and gets none of
   the OpenAI-only fields unless the base URL is the official API. A server there that thinks aloud in
   `reasoning_content` gets it back with the turn's calls, and a call the provider before a fallback wrote carries an
-  empty one. What a server puts on a call beside
-  the function (Gemini's `extra_content`, which carries the thought signature Google wants back within the turn) is kept
-  as the call's `EndpointFields` and replayed to that endpoint alone. A vision or an addressing model is
+  empty one. A vendor with a provider of its own is not followed here: its quirks live in that provider. A vision or an
+  addressing model is
   one more `LlmProviderConfig`, read from its own prefix (`VISION_`, `ADDRESSING_`) and resolved the same way; by default
   it runs on the chat provider with the chat key.
 - **OpenRouter (`openrouter`)** — `config/llm/OpenRouterProvider` picks a client by the model's vendor prefix: a Claude
   model (`anthropic/…`) goes through the Anthropic client to OpenRouter's Messages API at `https://openrouter.ai/api`,
   everything Anthropic gets included (adaptive thinking with signed blocks replayed, effort, the two breakpoints);
-  any other model streams OpenRouter's Responses API through the OpenAI client, stateless with the encrypted reasoning
+  any other model streams OpenRouter's Responses API through `ResponsesClient`, stateless with the encrypted reasoning
   replayed, and on GPT-5.6 and later a breakpoint on the developer block as every upstream takes it: no mode named,
   since OpenRouter refuses `implicit` as a value and serves the unnamed one as it, and no twelve-hour lifetime, which
   Azure, one of the upstreams it routes OpenAI models to, refuses as an unknown parameter. The Responses call streams because
@@ -65,14 +64,14 @@ Part of the [architecture index](../architecture.md).
   body holding nothing but the error. Both clients send the conversation's cache key as `session_id` too, which keeps
   a conversation on the upstream holding its cached prefix. A Grok model (`x-ai/…`) continues the conversation's last
   request, as Codex does, since xAI keeps no breakpoints there ([context budget](context.md)).
-- **DeepSeek (`deepseek`)** — `config/llm/DeepSeekProvider` runs the OpenAI client's Chat Completions at
+- **DeepSeek (`deepseek`)** — `config/llm/DeepSeekProvider` runs `llm/openai/ChatCompletionsClient` at
   `https://api.deepseek.com`, the base URL its docs give: `reasoning_content` echoed with the turn's calls, the output
   ceiling as the `max_tokens` DeepSeek reads (it ignores `max_completion_tokens`), and `none` turning thinking off. Both
   models keep an entry per request, so a turn continues the conversation's last request ([context budget](context.md)).
   The startup check reads the window, the ceiling, the eyes and the levels from `GET /models/{id}`; a level the list does
   not name stops startup, since DeepSeek would serve `medium` as `high`. A `finish_reason` of
   `insufficient_system_resource` is raised as an overload, so the call is repeated or handed to the fallback.
-- **xAI (`xai`)** — `config/llm/XaiProvider` points the OpenAI client at `https://api.x.ai/v1/responses` with a key. What
+- **xAI (`xai`)** — `config/llm/XaiProvider` points `llm/openai/ResponsesClient` at `https://api.x.ai/v1/responses` with a key. What
   xAI reads differs from OpenAI and decides what goes along: the conversation's `prompt_cache_key`, which xAI routes on
   as on `x-grok-conv-id` to the server holding the prefix; `store: false` and the encrypted reasoning, replayed through
   the tool loop, since a request missing the reasoning before it is what xAI names the first cause of cache misses; and
@@ -87,7 +86,7 @@ Part of the [architecture index](../architecture.md).
   as `thinking_level: minimal`. The startup check reads the window, the output ceiling and whether the model thinks from
   `GET /v1beta/models/{id}`; the list says nothing of images, which every Gemini and Gemma 4 model takes. The cache is
   implicit, with no breakpoint to place.
-- **ChatGPT subscription (`codex`)** — the same OpenAI client pointed at the Codex backend's Responses API, with no API
+- **ChatGPT subscription (`codex`)** — the same `ResponsesClient` pointed at the Codex backend's Responses API, with no API
   key; like the platform, it takes a tool group loaded mid-turn as an `additional_tools` item, so the tool list stays
   the cached one. It takes no cache breakpoints, so a turn continues the conversation's last request rather than
   replaying the stored history (`cachesOnlyRepeatedPrefix`, [context budget](context.md)). `llm/codex/CodexAuth.CodexAuthStore` owns the credentials `codex login` writes to `~/.codex/auth.json` (or
