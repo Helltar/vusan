@@ -1,21 +1,17 @@
 package com.helltar.vusan.llm
 
 /**
- * A model as this bot needs to know it: what to call it on the wire, how much it holds, and what it
- * can do. Nothing here is a vendor catalog; a deployment names a model, and startup asks the vendor
- * about it where the vendor answers.
+ * A model as this bot needs to know it: its wire name, how much it holds, and what it can do. No vendor
+ * catalog: a deployment names a model, and startup asks the vendor where it answers.
  *
- * [contextWindowTokens] is `null` where nobody stated one — a compatible server whose list says nothing
- * of it — which only the chat model and its fallback, whose windows the history is planned against,
- * cannot do without.
- * [efforts] are the ones its vendor lists, where it lists any: the least of them is what a yes-or-no
- * job sends. `null` where nobody said, empty where the vendor said there is nothing to choose.
- * [offersToolsMidConversation] is whether it takes tools offered partway through a conversation without
- * the tool list changing — Anthropic's `tool_addition`, OpenAI's `additional_tools` — see
- * [Message.ToolsOffered].
- * [cachesOnlyRepeatedPrefix] is whether its provider keeps no cache breakpoints, so that a turn reads its
- * history back only where its request repeats the conversation's last one item for item; the runner then
- * continues that request instead of replaying the stored history, which is shorter than what was sent.
+ * [contextWindowTokens] is `null` where nobody stated one (a compatible server whose list is silent), which
+ * only the chat model and its fallback cannot do without, since history is planned against them. [efforts]
+ * are the ones the vendor lists, if any; the least is what a yes-or-no job sends. `null` where nobody said,
+ * empty where there is nothing to choose. [offersToolsMidConversation] is whether it takes tools offered
+ * mid-conversation without the tool list changing (Anthropic's `tool_addition`, OpenAI's `additional_tools`);
+ * see [Message.ToolsOffered]. [cachesOnlyRepeatedPrefix] is whether its provider keeps no cache breakpoints,
+ * so a turn reads history back only where its request repeats the last one item for item; the runner then
+ * continues that request instead of replaying the shorter stored history.
  */
 data class LlmModel(
     val id: String,

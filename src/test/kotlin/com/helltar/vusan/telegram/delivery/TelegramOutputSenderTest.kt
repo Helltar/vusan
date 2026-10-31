@@ -292,8 +292,8 @@ class TelegramOutputSenderTest {
         assertEquals(listOf("sendRichMessage", "sendDocument", "sendMessage"), client.methods)
     }
 
-    // records every request the sender executes; the production code only ever calls `executeAsync`,
-    // so a reflective proxy avoids implementing the whole TelegramClient surface.
+    // records every request executed; production only calls `executeAsync`, so a reflective proxy spares
+    // implementing all of TelegramClient.
     private class RecordingClient(
         private val failPhoto: Boolean = false,
         private val failAnimation: Boolean = false,
@@ -315,8 +315,7 @@ class TelegramOutputSenderTest {
                 handle(args.single())
             } as TelegramClient
 
-        // failures complete the future exceptionally, mirroring how the okhttp client reports
-        // telegram error responses.
+        // failures complete the future exceptionally, as the okhttp client reports telegram errors.
         private fun handle(request: Any): CompletableFuture<Any> {
             val method = request.javaClass.simpleName.replaceFirstChar { it.lowercase() }
             methods += method

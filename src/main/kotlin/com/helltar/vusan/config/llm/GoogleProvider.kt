@@ -19,9 +19,9 @@ private const val GOOGLE_MODELS_URL = "${GoogleClient.DEFAULT_BASE_URL}/v1beta/m
 private const val GOOGLE_MODELS_PAGE = "https://ai.google.dev/gemini-api/docs/models"
 
 /**
- * Google's Gemini API on an AI Studio key, through its Interactions endpoint. The window and the output
- * ceiling are what its model list said at startup. That list says nothing of images, and every Gemini and
- * Gemma 4 model takes them, so a model here sees unless the deployment says otherwise.
+ * Google's Gemini API on an AI Studio key, through the Interactions endpoint. The window and ceiling come
+ * from its model list at startup. The list says nothing of images, and every Gemini and Gemma 4 model takes
+ * them, so a model sees unless configured otherwise.
  */
 internal fun googleRuntime(config: LlmProviderConfig.Google, http: HttpClient?): LlmRuntime {
     val effort = config.reasoningEffort
@@ -49,10 +49,9 @@ internal fun googleRuntime(config: LlmProviderConfig.Google, http: HttpClient?):
 }
 
 /**
- * Google's model list states the window (`inputTokenLimit`), the output ceiling, what the model generates
- * and whether it thinks, but not which thinking levels it takes — those differ from model to model and the
- * first turn tells. A model that writes no text, and an effort configured for one that does not think,
- * stop the startup here rather than failing every turn.
+ * Google's model list states the window (`inputTokenLimit`), the ceiling, what the model generates and
+ * whether it thinks, but not its thinking levels, which differ per model and the first turn tells. A model
+ * writing no text, or an effort for one that does not think, stops startup instead of failing every turn.
  */
 internal suspend fun googlePreflight(http: HttpClient, config: LlmProviderConfig.Google): LlmProviderConfig.Google {
     val facts =

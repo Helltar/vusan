@@ -89,8 +89,8 @@ class AgentFactoryTest {
         assertEquals("earlier question", assertIs<Message.User>(messages[2]).text)
     }
 
-    // the next turn replays the part replayed as text the same way for sure, and all of it when the newest
-    // interactions replay the same way too, so the end of each is where it can read this turn's cache
+    // the next turn surely replays the text part the same way, and all of it when the newest interactions do
+    // too, so each end is where it can read this turn's cache
     @Test
     fun `the request marks where the replayed history ends`() {
         val history =
@@ -113,8 +113,8 @@ class AgentFactoryTest {
         assertEquals("vusan-${testScope().toString().hashCode().toUInt().toString(16)}", firstRequest().options.promptCacheKey)
     }
 
-    // a provider's call lines name the conversation by its cache key; a turn logging the same is what ties
-    // a turn to its calls, and a provider without a key names none
+    // a provider's call lines name the conversation by cache key, and the turn logging the same ties them
+    // together; a provider without a key names none
     @Test
     fun `a turn is logged under the cache key its calls carry`() {
         val options = RequestOptions(promptCacheKey = "vusan")

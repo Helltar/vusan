@@ -39,7 +39,7 @@ class SpeechToolsTest {
     private fun tools(attached: AttachedFile? = null, audio: ByteArray? = byteArrayOf(9)) =
         SpeechTools(whisper, attached, CuttingSampler(audio))
 
-    // records the cut asked for and never samples a frame, since speech wants none
+    // records the requested cut and never samples a frame, since speech needs none
     private inner class CuttingSampler(private val audio: ByteArray?) : VideoSampler {
 
         override suspend fun sampleFrames(video: ByteArray, durationSeconds: Int?, maxFrames: Int): List<ByteArray> =

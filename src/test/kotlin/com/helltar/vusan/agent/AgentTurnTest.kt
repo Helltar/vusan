@@ -39,7 +39,7 @@ import kotlin.test.assertFalse
 import kotlin.test.assertIs
 import kotlin.test.assertTrue
 
-// where calls that run side by side meet: each waits a moment for the other, and says whether it came
+// where parallel calls meet: each waits briefly for the other and reports whether it arrived
 private class Rendezvous(private val expected: Int) {
 
     private val waiting = AtomicInteger()
@@ -130,7 +130,7 @@ class AgentTurnTest {
         maxModelCalls: Int = 20,
         mayStaySilent: Boolean = false,
         catalog: (BotOutbox) -> ToolCatalog = { outbox -> toolCatalog { tools(ProbeTools(outbox)); tools(ToolGroup.GIFS, DrawTools()) } },
-        // passed in by a test that has to look at the run after it throws
+        // for a test that inspects the run after it throws
         run: Run = Run(ScriptedLlmClient(*replies)),
         block: (Run, String) -> Unit,
     ) = runBlocking {
@@ -239,8 +239,7 @@ class AgentTurnTest {
             assertEquals(listOf("a", "b"), run.events.map { it.toolCallId })
         }
 
-    // a call that may change something keeps its place in the batch, so the reads on either side of it
-    // run one at a time
+    // a call that may change something keeps its place in the batch, so the reads around it run one at a time
     @Test
     fun `a call that is not read-only keeps the batch in order`() =
         run(
@@ -272,8 +271,8 @@ class AgentTurnTest {
             assertFalse(run.client.requests.any { request -> request.messages.any { it is Message.User && it.text == PROMISE_NUDGE } })
         }
 
-    // three calls with long arguments outgrow a 16k window: before the request that follows, the oldest
-    // batches are folded away, the latest kept whole, so the turn goes on instead of overflowing
+    // three calls with long arguments outgrow a 16k window: the oldest batches are folded before the next
+    // request, the latest kept whole, so the turn continues
     @Test
     fun `a turn whose own pile outgrows the window has its oldest results folded before the next request`() {
         val long = "y".repeat(20_000)
@@ -293,7 +292,7 @@ class AgentTurnTest {
             // folded under the labels the shelf still answers to
             assertEquals("[#1] $FOLDED_RESULT", results[0].output)
             assertEquals("[#2] $FOLDED_RESULT", results[1].output)
-            // the run's own budget already cut the latest result down; folding never touches it
+            // the run's budget already cut the latest result; folding never touches it
             assertFalse(results[2].output.endsWith(FOLDED_RESULT), "the latest batch is never folded")
 
             val calls = last.filterIsInstance<Message.Assistant>().flatMap { it.toolCalls }
@@ -312,8 +311,8 @@ class AgentTurnTest {
             assertTrue(run.events.single().isError)
         }
 
-    // the guard exists for one observed shape: a sibling call in a garbled parallel batch arriving with
-    // no arguments at all, for a tool that takes them
+    // the guard exists for one observed shape: a sibling call in a garbled parallel batch arriving with no
+    // arguments for a tool that takes them
     @Test
     fun `a call with no arguments at all is turned away without running`() =
         run(toolCallReply(call("lookUp")), textReply("ok")) { run, _ ->
@@ -384,8 +383,8 @@ class AgentTurnTest {
             assertTrue(run.outbox.hasQueuedOutput)
         }
 
-    // the model is not asked again after choosing silence: a second request would only invite a closing
-    // line into a reply it decided not to give
+    // no request after choosing silence: it would only invite a closing line into a reply the model decided
+    // not to give
     @Test
     fun `a declared silence ends the turn with the batch that declared it`() =
         run(toolCallReply(call("staySilent", args = arrayOf("reason" to "asked to be quiet"))), textReply("ok then")) { run, answer ->
@@ -559,7 +558,7 @@ class AgentTurnTest {
         assertTrue(bounded.endsWith("[tool result truncated for the model context]"))
     }
 
-    // the estimator reads bytes, so a token budget buys half the cyrillic characters it buys latin ones
+    // the estimator reads bytes, so a token budget buys half as many cyrillic characters as latin
     @Test
     fun `cyrillic costs the run budget more than latin of the same length`() {
         val latin = "a".repeat(3_000).boundedToolText(500)

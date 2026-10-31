@@ -75,8 +75,8 @@ class ChatFileToolsTest {
         assertContains(reply, "file_unique_id")
     }
 
-    // fetching for a chat that refuses documents would be dropped at the send, so it is answered before the
-    // fetch; kept for a later call, the file is fetched and queued nowhere
+    // fetching for a chat that refuses documents would be dropped at the send, so it is answered first; kept
+    // for a later call, the file is fetched and queued nowhere
     @Test
     fun `a chat that refuses documents is answered before the fetch, unless the file is kept instead`() = runBlocking {
         val outbox = BotOutbox(ChatCapabilities(documents = false))

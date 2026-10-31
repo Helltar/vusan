@@ -21,14 +21,14 @@ import org.telegram.telegrambots.meta.generics.TelegramClient
 private const val COMPACT_BUTTON_MAX_CHARS = 24
 private const val INLINE_CHOICE_CALLBACK_PREFIX = "choice:"
 
-// a question asked by a turn that had no message of its own (a selection answering an earlier question,
-// a fired task) carries no origin, so the answer falls back to replying to the question itself.
+// a question from a turn with no message of its own (a selection answering an earlier question, a fired task)
+// has no origin, so the answer replies to the question itself.
 private const val NO_ORIGIN_MESSAGE = 0L
 
 internal data class InlineChoiceSelection(
     val question: String,
     val option: String,
-    // the user message the question was asked about, when the button still carries it.
+    // the user message the question was about, when the button still carries it.
     val originMessageId: Long? = null,
 )
 
@@ -47,10 +47,9 @@ internal class InlineChoiceHandler(
                 size > MAX_RECENT_SELECTIONS
         }
 
-    // the turn that asked the question may have been about a photo, but the selection that answers it
-    // arrives as a callback with no message of its own, so the attachment has to wait here or the
-    // follow-up turn runs with the picture gone. one slot per person and chat: every later turn
-    // replaces or clears it, and buttons older than that are already dead by history revision.
+    // the asking turn may have been about a photo, but the answering selection is a callback with no message,
+    // so the attachment waits here or the follow-up runs without it. one slot per person and chat: every
+    // later turn replaces or clears it, and older buttons are already dead by history revision.
     private val parkedAttachments =
         object : LinkedHashMap<ConversationKey, AttachedFile>(16, 0.75f, true) {
             override fun removeEldestEntry(eldest: MutableMap.MutableEntry<ConversationKey, AttachedFile>?): Boolean =

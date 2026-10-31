@@ -67,8 +67,8 @@ class PollRegistryTest {
         assertNull(registry.find("never-sent"))
     }
 
-    // telegram can deliver the same poll's creation twice through a redelivered update; the second
-    // write is the same poll and must not fail or replace what is already there.
+    // telegram may deliver a poll's creation twice; the second write is the same poll and must neither fail
+    // nor replace it.
     @Test
     fun `remembering the same poll twice keeps one row`() = runBlocking {
         registry.remember("p1", chatId = -100L, output = quiz)
@@ -80,8 +80,8 @@ class PollRegistryTest {
     @Test
     fun `a poll old enough to be forgotten is dropped by the maintenance pass`() = runBlocking<Unit> {
         registry.remember("p1", chatId = -100L, output = quiz)
-        // retention no longer rides on the next poll: a chat that asked one question and stopped would
-        // have kept it forever.
+        // retention no longer waits for the next poll: a chat asking one question and stopping kept it
+        // forever.
         delay(10)
         val between = Instant.now()
         delay(10)
@@ -93,7 +93,7 @@ class PollRegistryTest {
         assertNotNull(registry.find("p2"))
     }
 
-    // an output that is neither leaves no row: there is no poll id it could ever be matched against.
+    // an output that is neither leaves no row: no poll id could ever match it.
     @Test
     fun `a plain message is not remembered as a poll`() = runBlocking {
         registry.remember("p1", chatId = -100L, output = BotOutput.Text("hello"))

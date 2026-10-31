@@ -33,14 +33,14 @@ private const val DEEPSEEK_MODELS =
           "effort":{"supported_levels":["low","high","max"],"default_level":"high"}},
          {"id":"deepseek-v4-pro","object":"model","context_window":1048576,"input_modalities":["text"]}]}"""
 
-// a compatible server's list in the plainest shape met: the window under either name, and what the model takes in
+// a compatible server's list in its plainest shape: the window under either name, and the input modalities
 private const val COMPATIBLE_MODELS =
     """{"object":"list","data":[
          {"id":"local-vision","object":"model","context_window":131072,"input_modalities":["text","image"]},
          {"id":"local-text","object":"model","context_length":32768,"input_modalities":["text"]}]}"""
 
-// what ollama 0.40 answered on 2026-10-27: a compatible list with ids alone, and its own api beside it. the
-// window under model_info is the trained one, which is not what ollama runs the model with
+// what ollama 0.40 answered on 2026-10-27: a compatible list with ids alone, plus its own api. model_info's
+// window is the trained one, not what ollama runs with
 private const val OLLAMA_MODELS = """{"object":"list","data":[{"id":"gemma4:latest","object":"model","created":1791659551,"owned_by":"library"}]}"""
 
 private fun ollamaShow(parameters: String) =
@@ -48,7 +48,7 @@ private fun ollamaShow(parameters: String) =
 
 private const val OLLAMA_LOADED = """{"models":[{"name":"gemma4:latest","model":"gemma4:latest","context_length":65536,"runner":"llamacpp"}]}"""
 
-// what openrouter's list of the models a key may use answered on 2026-10-23, trimmed to the fields read
+// openrouter's list for a key on 2026-10-23, trimmed to the fields read
 private const val OPENROUTER_MODELS =
     """{"data":[
          {"id":"anthropic/claude-opus-5.5","context_length":1000000,"architecture":{"input_modalities":["text","image","file"]},
@@ -68,7 +68,7 @@ private const val OPENROUTER_MODELS =
          {"id":"liquid/lfm-2.5-2.6b:free","context_length":32768,"architecture":{"input_modalities":["text"]},
           "top_provider":{"context_length":32768,"max_completion_tokens":null},"supported_parameters":["max_tokens","temperature"],"reasoning":null}]}"""
 
-// what google's model list answered for two models on 2026-10-29, trimmed to the fields read
+// google's model list for two models on 2026-10-29, trimmed to the fields read
 private const val GEMINI_MODEL =
     """{"name":"models/gemini-3.5-flash-lite","inputTokenLimit":1048576,"outputTokenLimit":65536,
        "supportedGenerationMethods":["generateContent","countTokens","createCachedContent","batchGenerateContent"],"thinking":true}"""
@@ -79,7 +79,7 @@ private const val GOOGLE_EMBEDDING_MODEL =
 private const val GOOGLE_PLAIN_MODEL =
     """{"name":"models/gemini-2-flash","inputTokenLimit":1048576,"outputTokenLimit":8192,"supportedGenerationMethods":["generateContent"],"thinking":false}"""
 
-// what xai answered on 2026-10-21, trimmed: the model list for an alias names the model's own id
+// xai's answer on 2026-10-21, trimmed: the list for an alias names the model's own id
 private const val XAI_REASONING_ALIAS =
     """{"id":"grok-4.20-0309-reasoning","aliases":["grok-4.20"],"context_length":1000000,"object":"model","owned_by":"xai","capabilities":null}"""
 
@@ -191,7 +191,7 @@ class ModelPreflightTest {
         assertEquals(32_768, text.contextWindowTokens)
     }
 
-    // which efforts a model takes is the first turn's to say; the list is not asked
+    // efforts are left to the first turn; the list is not asked
     @Test
     fun `a configured window wins, and any effort is left to the first turn`() = runBlocking {
         val checked = compatible("local-vision", effort = ReasoningEffort.MEDIUM, window = 100_000).preflighted(http(HttpStatusCode.OK, COMPATIBLE_MODELS), codexAuth = null)
@@ -210,7 +210,7 @@ class ModelPreflightTest {
         assertSame(config, config.preflighted(http(HttpStatusCode.OK, "<html>not a list</html>"), codexAuth = null))
     }
 
-    // answers each path from its own body, and a 404 for any path not given one
+    // answers each path from its own body, and a 404 for any other
     private fun routed(vararg bodies: Pair<String, String>) =
         Http.createClient(
             MockEngine { request ->
@@ -269,7 +269,7 @@ class ModelPreflightTest {
         assertEquals(ReasoningEffort.entries.toSet(), checked.efforts)
     }
 
-    // the window an upstream serves the model with is what a request can use, not the model's own
+    // the window an upstream serves is what a request can use, not the model's own
     @Test
     fun `the top provider's window wins over the model's, and a model without eyes says so`() = runBlocking {
         val checked = openRouter("deepseek/deepseek-v4-pro").checked()
@@ -279,7 +279,7 @@ class ModelPreflightTest {
         assertEquals(setOf(ReasoningEffort.NONE, ReasoningEffort.HIGH, ReasoningEffort.XHIGH), checked.efforts)
     }
 
-    // claude turns thinking off through an effort the messages api lacks, so none is not offered for it
+    // claude turns thinking off through an effort the messages api lacks, so `none` is not offered
     @Test
     fun `a claude model on openrouter takes only claude's efforts, and none stops the startup`() = runBlocking {
         assertEquals(setOf(ReasoningEffort.LOW, ReasoningEffort.MEDIUM, ReasoningEffort.HIGH, ReasoningEffort.XHIGH, ReasoningEffort.MAX), openRouter("anthropic/claude-haiku-5.5").checked().efforts)
@@ -355,7 +355,7 @@ class ModelPreflightTest {
         assertContains(failure.message.orEmpty(), "LLM_MODEL=[gemini-9-nope]")
     }
 
-    // what deepseek's `GET /models/{id}` answered for flash on 2026-10-29, trimmed to the fields read
+    // deepseek's `GET /models/{id}` for flash on 2026-10-29, trimmed to the fields read
     @Test
     fun `deepseek's own list gives the window, the ceiling, the eyes and the levels`() = runBlocking {
         val config = LlmProviderConfig.DeepSeek(apiKey = "key", model = "deepseek-flash", reasoningEffort = ReasoningEffort.NONE, requestTimeout = timeout)
@@ -371,7 +371,7 @@ class ModelPreflightTest {
         assertEquals(setOf(ReasoningEffort.LOW, ReasoningEffort.HIGH, ReasoningEffort.MAX), checked.efforts)
     }
 
-    // deepseek would serve `medium` as `high` without a word
+    // deepseek would silently serve `medium` as `high`
     @Test
     fun `an effort deepseek does not list, or a model it does not serve, stops the startup`() = runBlocking {
         val flash = DEEPSEEK_MODELS.let { Json.parseToJsonElement(it).jsonObject.getValue("data").jsonArray.first().toString() }
@@ -409,7 +409,7 @@ class ModelPreflightTest {
         assertEquals(ReasoningEffort.entries.toSet() - ReasoningEffort.MAX, checked.efforts)
     }
 
-    // a model without capabilities takes no effort and refuses the field, so asking for one stops the startup
+    // a model without capabilities refuses the effort field, so asking for one stops startup
     @Test
     fun `an xai model that takes no effort says so, and an effort set for it stops the startup`() = runBlocking {
         val checked = assertIs<LlmProviderConfig.Xai>(xai("grok-4.20").preflighted(xaiHttp(XAI_REASONING_ALIAS, null), codexAuth = null))

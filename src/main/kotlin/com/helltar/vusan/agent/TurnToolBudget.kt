@@ -3,13 +3,12 @@ package com.helltar.vusan.agent
 /**
  * What one run may still pile up in tool results, in estimated tokens.
  *
- * `ContextWindowPolicy` sizes the reserve per model; the run spends it as results come back. It is the
- * one part of the budget the model itself moves, and the one that bites: past it a result is truncated
- * and then omitted entirely, so a turn can keep calling tools and learn nothing from them. The
- * strategy spends it, `checkContextBudget` reports it.
+ * `ContextWindowPolicy` sizes the reserve per model and the run spends it as results return. It is the part
+ * of the budget the model moves itself, and the one that bites: past it results are truncated, then omitted,
+ * so a turn can keep calling tools and learn nothing. `checkContextBudget` reports it.
  *
- * Read-only calls of one batch run side by side, so spending is serialized; the field itself is read
- * across the coroutine hops between calls.
+ * Read-only calls of a batch run in parallel, so spending is serialized; the field is read across coroutine
+ * hops between calls.
  */
 class TurnToolBudget(val totalTokens: Int) {
 
@@ -28,14 +27,14 @@ class TurnToolBudget(val totalTokens: Int) {
     }
 
     private companion object {
-        // below this the next long read is the one that starts losing its own tail
+        // below this the next long read starts losing its tail
         const val LOW_PERCENT = 25
     }
 }
 
 /**
- * The figures and what to do about them, in one wording for both surfaces that state them: the
- * `checkContextBudget` tool when the model asks, and the run's own notice when it does not.
+ * The figures and what to do about them, worded once for both places that state them: the
+ * `checkContextBudget` tool, and the run's own unprompted notice.
  */
 internal fun TurnToolBudget.report(): String =
     buildString {

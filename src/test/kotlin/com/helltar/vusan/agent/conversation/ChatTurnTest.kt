@@ -44,7 +44,7 @@ class ChatTurnTest {
         val longCode = "x = 1\n".repeat(4_000) // ~24k chars, well over the cap
         val result = toolCallArgsForStorage(jsonArgs("code" to longCode))
 
-        // still a parseable JSON object that an OpenAI-compatible endpoint will accept.
+        // still a parseable JSON object an OpenAI-compatible endpoint accepts.
         val code = codeValue(result)
         assertTrue(code.length < longCode.length, "expected the long value to be truncated")
         assertTrue(code.endsWith("[truncated]"), "expected a truncation marker")

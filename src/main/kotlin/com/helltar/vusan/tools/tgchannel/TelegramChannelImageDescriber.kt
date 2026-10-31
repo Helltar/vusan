@@ -8,11 +8,13 @@ import com.helltar.vusan.tools.vision.ImageVisionClient
 private const val MAX_TELEGRAM_CHANNEL_IMAGE_BYTES = 8 * 1024 * 1024
 private const val MAX_POST_TEXT_CHARS = 1_000
 
-// what a post's picture is looked at for, beyond whatever the person asked about
+// what a post's picture is looked at for, beyond what the person asked
 private const val POST_IMAGE_FOCUS =
     "This picture is part of a channel post: project visuals, UI, screenshots, visible text and quality signals matter."
 
-/** A channel post's picture, looked at by the same vision as an attached image, with the post's text as its caption. */
+/**
+ * A channel post's picture, seen by the same vision as an attached image, with the post's text as caption.
+ */
 class TelegramChannelImageDescriber(private val vision: ImageVisionClient) {
 
     suspend fun describe(image: TelegramChannelImage, post: TelegramChannelPost, focus: String): String {

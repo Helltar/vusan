@@ -24,29 +24,29 @@ import io.ktor.client.*
 
 private val log = KotlinLogging.logger("ModelPreflight")
 
-// the smallest window the plan's catalog lists (checked 2026-10-29: gpt-6.1-sol and gpt-6.1-terra list
-// 500k, the rest 272k), assumed when the account's own catalog could not be read
+// the smallest window in the plan's catalog (2026-10-29: gpt-6.1-sol and gpt-6.1-terra list 500k, the rest
+// 272k), assumed when the account's catalog could not be read
 private const val CODEX_CONTEXT_WINDOW = 272_000L
 
-/** Where the one signed-in ChatGPT account is read from, and the CLI version claimed for it. */
+/** Where the signed-in ChatGPT account is read from, and the CLI version claimed for it. */
 internal data class CodexSignIn(val authFile: Path, val clientVersion: String?)
 
-/** Every model role this deployment runs on the plan: the chat, its fallback, vision, addressing. */
+/** Every model role this deployment runs on the plan: chat, fallback, vision, addressing. */
 internal fun AppConfig.codexRoles(): List<LlmProviderConfig.Codex> =
     listOfNotNull(llmProvider, llmFallback, vision, addressing?.provider).filterIsInstance<LlmProviderConfig.Codex>()
 
 /**
- * The plan's sign-in, wherever the plan is used — a model role, or image generation alone. One account
- * serves all of them, so the first configured use names the file and the version.
+ * The plan's sign-in wherever the plan is used, a model role or images alone. One account serves all, so the
+ * first configured use names the file and version.
  */
 internal fun AppConfig.codexSignIn(): CodexSignIn? =
     codexRoles().firstOrNull()?.let { CodexSignIn(it.authFile, it.clientVersion) }
         ?: (image as? ImageProviderConfig.Codex)?.let { CodexSignIn(it.authFile, it.clientVersion) }
 
 /**
- * A ChatGPT subscription through the Codex backend, which speaks the Responses API, streaming only,
- * without an API key: the HTTP client stamps a currently valid ChatGPT token on every request. The
- * catalog's context window, eyes and efforts arrive in the config, filled in by the preflight.
+ * A ChatGPT subscription via the Codex backend: the Responses API, streaming only, with a valid ChatGPT token
+ * on every request instead of an API key. The window, vision and efforts come from the catalog via the
+ * preflight.
  */
 internal fun codexRuntime(config: LlmProviderConfig.Codex, auth: CodexAuthStore, http: HttpClient?): LlmRuntime {
     val model =
@@ -55,12 +55,12 @@ internal fun codexRuntime(config: LlmProviderConfig.Codex, auth: CodexAuthStore,
             contextWindowTokens = config.contextWindowTokens ?: CODEX_CONTEXT_WINDOW,
             seesImages = config.seesImages ?: true,
             efforts = config.efforts,
-            // the backend takes `additional_tools` as the platform does: measured on 2026-10-27 on every model a
+            // the backend takes `additional_tools` as the platform does: measured 2026-10-27 on every model a
             // plus plan lists, the offered tool was called and the prefix before it read back
             offersToolsMidConversation = true,
-            // the backend refuses breakpoints and keeps an entry near the end of each request: measured on
-            // 2026-10-27 on gpt-6-luna and gpt-6.1-sol, a turn that appended to the last request read all of
-            // it back, one rebuilt from the stored history the system block alone
+            // the backend refuses breakpoints and caches near each request's end: measured 2026-10-27 on
+            // gpt-6-luna and gpt-6.1-sol, a turn appending to the last request read all of it back, a rebuilt
+            // one only the system block
             cachesOnlyRepeatedPrefix = true,
         )
 
@@ -69,7 +69,7 @@ internal fun codexRuntime(config: LlmProviderConfig.Codex, auth: CodexAuthStore,
             reasoningEffort = config.reasoningEffort,
             verbosity = config.verbosity,
             serviceTier = config.serviceTier?.requestValue,
-            // what the cli asks for too: one request for a batch of lookups, which run side by side when read-only
+            // as the cli asks: one request for a batch of lookups, run side by side when read-only
             parallelToolCalls = true,
             promptCacheKey = PROMPT_CACHE_KEY,
         )
@@ -95,11 +95,9 @@ internal fun codexRuntime(config: LlmProviderConfig.Codex, auth: CodexAuthStore,
 }
 
 /**
- * Proves the ChatGPT session works before the bot starts taking messages, then applies the context
- * window and the capabilities the account's own model catalog advertises.
- *
- * Reading the token here also forces a refresh on a stale `auth.json`, so a host that has been idle for
- * days fails at startup with a "run `codex login`" message instead of on someone's first turn.
+ * Proves the ChatGPT session works before taking messages, then applies the window and capabilities the
+ * account's catalog advertises. Reading the token also forces a refresh of a stale `auth.json`, so a host
+ * idle for days fails at startup with "run `codex login`" rather than on someone's first turn.
  */
 internal suspend fun codexPreflight(http: HttpClient, config: LlmProviderConfig.Codex, auth: CodexAuthStore?): LlmProviderConfig.Codex {
     val store = requireNotNull(auth) { "a codex provider needs a CodexAuthStore" }
@@ -121,7 +119,8 @@ internal fun applyCodexModelMetadata(
     val configuredEffort = config.reasoningEffort
     val supportedEfforts = model.supportedReasoningEfforts
 
-    // the catalog names thinking levels; none turns thinking off and is no level, so the first turn decides it
+    // the catalog lists thinking levels; `none` turns thinking off and is no level, so the first turn decides
+    // it
     if (configuredEffort != null && configuredEffort != ReasoningEffort.NONE && supportedEfforts != null) {
         require(configuredEffort in supportedEfforts) {
             "${config.envPrefix}_REASONING_EFFORT=[${configuredEffort.requestValue}] is not supported by " +
@@ -150,12 +149,10 @@ internal fun applyCodexModelMetadata(
 }
 
 /**
- * Check the configured model against the account's catalog before the first turn.
- *
- * Returns the catalog entry when it matches, `null` when the catalog could not be read. A missing
- * catalog is not fatal: `/models` is an undocumented endpoint, and a shape change there must not take
- * a working bot down — a wrong model name still surfaces on the first turn. A model the account
- * plainly cannot run *is* fatal, because that is the confusing failure worth catching early.
+ * Checks the configured model against the account's catalog before the first turn: the entry when it matches,
+ * `null` when the catalog is unreadable. `/models` is undocumented, so a shape change there must not take a
+ * working bot down; a wrong name still surfaces on the first turn. A model the account plainly cannot run
+ * *is* fatal, since that failure is the confusing one.
  */
 suspend fun verifyCodexModel(http: HttpClient, auth: CodexAuthStore, config: LlmProviderConfig.Codex): CodexModel? {
     val model = config.model
@@ -182,8 +179,8 @@ suspend fun verifyCodexModel(http: HttpClient, auth: CodexAuthStore, config: Llm
     val match = catalog.firstOrNull { it.id.equals(model.trim(), ignoreCase = true) }
 
     checkNotNull(match) {
-        // the catalog is filtered by the version we claim, so a model too new for it is missing rather
-        // than refused — worth naming here, since the list alone reads as an entitlement problem.
+        // the catalog is filtered by the claimed version, so a model too new for it is missing rather than
+        // refused; said here since the list alone reads as an entitlement problem.
         "${config.envPrefix}_MODEL=[$model] is not available on this ChatGPT subscription. " +
                 "Available models: ${catalog.map { it.id }.sorted().joinToString()}. " +
                 "Models newer than client_version=[${codexClientVersion()}] are hidden from that list."

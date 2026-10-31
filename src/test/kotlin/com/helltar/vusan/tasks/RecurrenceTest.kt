@@ -80,7 +80,7 @@ class RecurrenceTest {
     fun `catchUpAfter on EVERY lands on next slot strictly after now`() {
         val original = instant(2026, 5, 24, 9, 0)
         val now = instant(2026, 5, 24, 9, 35)
-        // slots: 09:30, 10:00 — first strictly after 09:35 is 10:00.
+        // slots 09:30 and 10:00: the first strictly after 09:35 is 10:00.
         assertEquals(instant(2026, 5, 24, 10, 0), Every(30.minutes).catchUpAfter(original, kyiv, now))
     }
 

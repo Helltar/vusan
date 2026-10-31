@@ -12,20 +12,20 @@ import kotlin.time.Duration.Companion.hours
 /**
  * The pass that keeps stored data from outliving its retention.
  *
- * Everything here is also pruned where it is written — a turn prunes its own conversation, a chat its
- * own transcript — and that is enough for as long as somebody keeps writing. It is people who stop who
- * need this: a conversation nobody comes back to, a chat the bot was left in, a poll never followed by
- * another one. None of them will produce the write that would have cleaned them up.
+ * Everything is also pruned where it is written (a turn prunes its conversation, a chat its transcript),
+ * which suffices while people keep writing. This is for those who stop: a conversation nobody returns to, a
+ * chat the bot was left in, a poll never followed by another. None will produce the write that would clean it
+ * up.
  *
- * Each [Step] bounds its own pass and answers how much it removed, so a long-neglected database is
- * caught up over several rounds rather than in one transaction holding the write lock.
+ * Each [Step] bounds its own pass and returns how much it removed, so a long-neglected database catches up
+ * over several rounds instead of one transaction holding the write lock.
  */
 class Maintenance(
     private val steps: List<Step>,
     private val interval: Duration = DEFAULT_INTERVAL,
 ) {
 
-    /** One thing to clean up, and what it removed: rows, chats, conversations — whatever it counts. */
+    /** One thing to clean up, and how much it removed, in whatever unit it counts. */
     class Step(val name: String, val run: suspend () -> Int)
 
     fun launchIn(scope: CoroutineScope): Job =
@@ -52,8 +52,8 @@ class Maintenance(
     private companion object {
         val log = KotlinLogging.logger {}
 
-        // retention is measured in days everywhere it is configured, so nothing here is urgent; a
-        // restart runs a pass on the way in, which is what catches a bot that is only up briefly.
+        // retention is in days everywhere, so nothing is urgent; a restart runs a pass on the way in, which
+        // covers a bot that is only up briefly.
         val DEFAULT_INTERVAL = 6.hours
     }
 }

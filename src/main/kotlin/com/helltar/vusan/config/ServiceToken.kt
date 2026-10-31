@@ -1,10 +1,9 @@
 package com.helltar.vusan.config
 
 /**
- * The shared secret for one of the services the bot calls out to. Both sides are configured with the
- * same value and nothing is generated here, so a missing or weak one is a configuration error rather
- * than something to paper over: the sandbox runs model-authored shell and the site host publishes to
- * the internet.
+ * The shared secret for a service the bot calls. Both sides hold the same value and nothing is generated
+ * here, so a missing or weak one is a configuration error: the sandbox runs model-authored shell and the site
+ * host publishes to the internet.
  */
 internal fun readServiceToken(prefix: String, token: String?): String {
     val resolved = token?.trim()?.takeIf { it.isNotEmpty() }

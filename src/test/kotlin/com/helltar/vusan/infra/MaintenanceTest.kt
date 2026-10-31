@@ -38,7 +38,7 @@ class MaintenanceTest {
         assertEquals(listOf("first", "last"), done)
     }
 
-    // the pass runs on the way in, which is what a bot that is only ever up briefly relies on.
+    // the pass runs on the way in, which a briefly-up bot relies on.
     @Test
     fun `the first pass does not wait for the interval`() = runBlocking {
         val ran = CompletableDeferred<Unit>()

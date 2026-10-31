@@ -91,8 +91,8 @@ class TelegramErrorsTest {
 
     @Test
     fun `a content rejection named after forbidden is not a rejected recipient`() {
-        // a recipient who allows voice and video messages only from contacts refuses those two kinds
-        // and nothing else; reading it as a block would park the chat's tasks and drop the reply.
+        // a recipient allowing voice and video only from contacts refuses those two kinds alone; reading it
+        // as a block would park the chat's tasks and drop the reply.
         val error = telegramError("Bad Request: VOICE_MESSAGES_FORBIDDEN")
 
         assertFalse(error.isForbidden())
@@ -119,8 +119,8 @@ class TelegramErrorsTest {
 
     @Test
     fun `a refusal of one output kind is not read as an unreachable chat`() {
-        // photos or stickers can be off in a chat that still takes text, and the send fallbacks handle
-        // that; treating it as unreachable would park every task scheduled there.
+        // photos or stickers may be off in a chat still taking text, which the fallbacks handle; treating it
+        // as unreachable would park every task there.
         val descriptions =
             listOf(
                 "Bad Request: not enough rights to send photos to the chat",
@@ -205,8 +205,8 @@ class TelegramErrorsTest {
                     .build(),
             )
 
-        // the seconds are also in the description, but parsing prose to find them would guess where the
-        // structured field is authoritative — a request with no parameters simply gets no retry.
+        // the seconds are in the description too, but the structured field is authoritative: no parameters,
+        // no retry.
         assertNull(error.retryAfterOrNull())
     }
 

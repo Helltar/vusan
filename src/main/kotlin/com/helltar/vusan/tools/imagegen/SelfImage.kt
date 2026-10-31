@@ -9,20 +9,17 @@ import kotlin.io.path.readBytes
 /**
  * What a picture of the bot itself is built from.
  *
- * Text-to-image invents a face per call, so "send a selfie" drawn from the prompt alone shows a
- * different person every time. A [reference] turns the request into an *edit* of that photo instead,
- * which is what holds the face still across pictures. [appearance] carries what a head-and-shoulders
- * reference cannot show — height, build, tattoos, what the character usually wears — and is the only
- * thing left when no reference exists.
+ * Text-to-image invents a face per call, so a selfie from the prompt alone shows a different person each
+ * time. A [reference] makes the request an *edit* of that photo, which holds the face still. [appearance]
+ * carries what a head-and-shoulders photo cannot show (height, build, tattoos, usual clothes) and is all that
+ * is left without a reference.
  */
 class SelfImage(val reference: SourceImage?, val appearance: String?)
 
 /**
- * Read the character's reference photo once at startup: the operator's file when set, otherwise
- * whatever [loadAvatar] finds — the bot's own picture on the platform it runs on, which needs no
- * configuration and is already the face people see next to every message it sends.
- *
- * The operator's file wins, and a deployment with neither still works on [appearance] alone.
+ * Reads the reference photo once at startup: the operator's file when set, otherwise what [loadAvatar] finds,
+ * the bot's own platform picture, which needs no configuration and is the face people already see. A
+ * deployment with neither still works on [appearance] alone.
  */
 internal suspend fun resolveSelfImage(
     file: String?,
@@ -32,18 +29,17 @@ internal suspend fun resolveSelfImage(
     val reference = file?.let { readReferenceFile(it) } ?: loadAvatar()
     val notes = appearance?.takeUnless { it.isEffectivelyBlank() }
 
-    // with neither there is nothing to hold a face still with, which the startup summary says
+    // with neither nothing holds a face still, which the startup summary says
     return if (reference == null && notes == null) null else SelfImage(reference, notes)
 }
 
 /**
- * Compose the instruction that renders [scene] as a picture of the character in the reference photo.
+ * The instruction that renders [scene] as the character in the reference photo.
  *
- * The edit endpoint's default reading of a prompt is "keep this picture, change what I named", so the
- * wrapper spells out the opposite: identity stays, the frame around it is thrown away. Without that
- * the result is the avatar with a hat on rather than the scene that was asked for. "Face" has to be
- * split from "head angle and expression" just as explicitly, or every picture comes back with the
- * reference's own straight-on stare on a new body.
+ * The edit endpoint reads a prompt as "keep this picture, change what I named", so the wrapper says the
+ * opposite: identity stays, the frame goes. Otherwise the result is the avatar with a hat on. "Face" must be
+ * split from "head angle and expression" just as explicitly, or every picture repeats the reference's
+ * straight-on stare on a new body.
  */
 internal fun selfPortraitPrompt(scene: String, appearance: String?): String =
     buildString {
@@ -55,10 +51,9 @@ internal fun selfPortraitPrompt(scene: String, appearance: String?): String =
     }
 
 /**
- * The same identity, but as one source among the user's own images rather than the only one.
- *
- * [selfPortraitPrompt] tells the model to take *nothing* but the face from its single reference, which
- * is exactly wrong once the other images are the scene being edited — so the two are separate texts.
+ * The same identity as one source among the user's own images. [selfPortraitPrompt] takes *nothing* but the
+ * face from its reference, which is wrong once the other images are the scene being edited, hence a separate
+ * text.
  */
 internal fun selfInEditPrompt(instruction: String, appearance: String?, otherImages: Int): String =
     buildString {
@@ -74,7 +69,7 @@ internal fun selfInEditPrompt(instruction: String, appearance: String?, otherIma
         append("\n\n$instruction")
     }
 
-/** The same picture asked for without a reference: the written description is all the identity there is. */
+/** The same picture without a reference: the written description is the whole identity. */
 internal fun String.withAppearance(appearance: String?): String =
     appearance?.let { "$it\n\n$this" } ?: this
 

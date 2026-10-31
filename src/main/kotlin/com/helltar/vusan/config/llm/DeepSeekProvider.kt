@@ -20,14 +20,14 @@ private const val DEEPSEEK_MODELS_URL = "$DEEPSEEK_API_BASE_URL/models"
 private const val DEEPSEEK_MODELS_PAGE = "https://api-docs.deepseek.com/quick_start/pricing"
 
 /**
- * DeepSeek's own API: Chat Completions at the base URL its docs give, the OpenAI client speaking it. The
- * thinking a model writes in `reasoning_content` goes back with the turn's calls, and a call another
- * provider wrote carries an empty one; the output ceiling travels as the `max_tokens` DeepSeek reads, since
- * it ignores `max_completion_tokens`. `none` turns thinking off, which the API documents among the efforts.
+ * DeepSeek's API: Chat Completions at its documented base URL, spoken by the OpenAI client. Thinking in
+ * `reasoning_content` goes back with the turn's calls, and a call another provider wrote carries an empty
+ * one; the ceiling goes as `max_tokens`, since `max_completion_tokens` is ignored. `none` turns thinking off,
+ * as documented among the efforts.
  *
- * Both models keep an entry per request rather than per prefix — measured on 2026-10-27, `deepseek-v4-pro`
- * read nothing of a turn rebuilt from storage and the whole of one that continued the last request, and
- * `deepseek-flash` the last turn more — so a turn continues the conversation's last request.
+ * Both models keep an entry per request rather than per prefix (2026-10-27: `deepseek-v4-pro` read nothing of
+ * a rebuilt turn and all of a continued one, `deepseek-flash` the last turn more), so a turn continues the
+ * last request.
  */
 internal fun deepSeekRuntime(config: LlmProviderConfig.DeepSeek, http: HttpClient?): LlmRuntime {
     val model =
@@ -59,9 +59,9 @@ internal fun deepSeekRuntime(config: LlmProviderConfig.DeepSeek, http: HttpClien
 }
 
 /**
- * DeepSeek's model list states the window, the output ceiling, what the model takes in and which thinking
- * levels it takes. It names levels only, never the switch that turns thinking off, so `none` passes; another
- * effort the list does not name stops the startup — DeepSeek would quietly serve `medium` as `high`.
+ * DeepSeek's model list states the window, output ceiling, input modalities and thinking levels. It names
+ * levels only, never the off switch, so `none` passes; any other unlisted effort stops startup, since
+ * DeepSeek would silently serve `medium` as `high`.
  */
 internal suspend fun deepSeekPreflight(http: HttpClient, config: LlmProviderConfig.DeepSeek): LlmProviderConfig.DeepSeek {
     val facts =

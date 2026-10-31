@@ -16,7 +16,7 @@ import java.net.InetAddress
 import kotlin.time.Duration.Companion.minutes
 import kotlin.time.Duration.Companion.seconds
 
-/** A larger download could never be delivered, so it is not even finished. */
+/** A larger download could never be delivered, so it is not finished. */
 internal const val MAX_DOWNLOAD_MB = PlatformLimits.UPLOAD_MB
 
 internal const val MAX_DOWNLOAD_BYTES = MAX_DOWNLOAD_MB * 1024L * 1024
@@ -31,13 +31,13 @@ private val DOWNLOAD_TIMEOUT = 3.minutes
 private val SOCKET_TIMEOUT = 30.seconds
 private val ALLOWED_PROTOCOLS = setOf("http", "https")
 
-// many CDNs, wikis and file hosts answer a default ktor user agent with 403
+// many CDNs, wikis and file hosts answer ktor's default user agent with 403
 private const val USER_AGENT =
     "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0.0.0 Safari/537.36"
 
 sealed class FileDownloadResult {
 
-    /** [contentType] is the media type alone; [charset] is the one the server declared beside it, if any. */
+    /** [contentType] is the bare media type; [charset] the one declared beside it, if any. */
     class Success(
         val bytes: ByteArray,
         val filename: String,
@@ -53,9 +53,9 @@ sealed class FileDownloadResult {
 /** Uses the public-only connection engine supplied at startup, never the internal-service client. */
 class FileDownloadClient(http: HttpClient) {
 
-    // redirects are followed by hand so every hop is re-checked against the local-address guard;
-    // a public URL that 302s to 127.0.0.1 or 169.254.169.254 would otherwise walk straight past it.
-    // statuses are inspected here too, so the shared client's expectSuccess is turned off.
+    // redirects are followed by hand so every hop is checked against the local-address guard; a public URL
+    // 302ing to 127.0.0.1 or 169.254.169.254 would otherwise walk past it. statuses are checked here too, so
+    // expectSuccess is off.
     private val http =
         http.config {
             followRedirects = false
@@ -139,7 +139,7 @@ class FileDownloadClient(http: HttpClient) {
 
             if (read < 0) break
 
-            // a missing or lying Content-Length only shows up here, so the cap is enforced on the stream too
+            // a missing or lying Content-Length shows up only here, so the cap applies to the stream too
             if (buffer.size() + read > maxBytes) {
                 channel.cancel()
                 log.info { "download exceeded cap mid-stream host=[${target.host}] max=$maxBytes" }
@@ -184,7 +184,7 @@ class FileDownloadClient(http: HttpClient) {
 
     private fun requirePublicLiteral(target: Url) {
         val host = target.host
-        // names are resolved and checked at connection time by PublicDns, without a DNS check/use race.
+        // names are resolved and checked at connection time by PublicDns, with no check/use race.
         if (!host.contains(':') && !host.all { it.isDigit() || it == '.' }) return
         require(InetAddress.getByName(host).isPublicDestination) {
             "Refusing to download from a private or local address: [${target.host}]"
@@ -201,7 +201,7 @@ private fun parseDownloadUrl(url: String): Url {
 
     require(trimmed.isNotEmpty()) { "Download URL must not be empty" }
 
-    // models routinely drop the scheme ("example.com/report.pdf"); assume https rather than fail
+    // models often drop the scheme ("example.com/report.pdf"); assume https rather than fail
     val text = if (trimmed.contains("://")) trimmed else "https://$trimmed"
     val parsed = runCatching { Url(text) }.getOrNull()
 
@@ -231,8 +231,8 @@ private fun String.withExtensionFor(contentType: ContentType?): String {
     if (hasFileExtension || contentType == null) return this
 
     val mime = "${contentType.contentType}/${contentType.contentSubtype}".lowercase()
-    // a type nothing names falls back to its subtype when that reads like an extension, which covers
-    // pdf/zip/json and leaves compound subtypes (octet-stream) unnamed
+    // an unnamed type falls back to its subtype when that looks like an extension: pdf, zip, json, but not
+    // octet-stream
     val extension = extensionOfMime(mime) ?: contentType.contentSubtype.lowercase().takeIf { it.looksLikeExtension }
 
     return if (extension == null) this else "$this.$extension"

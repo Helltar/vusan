@@ -6,11 +6,9 @@ import com.helltar.vusan.tools.catalog.CatalogTools
 /**
  * A capability whose tool schemas are withheld until the model asks for them.
  *
- * Every schema the request carries is re-sent on every step of a turn and is charged to the
- * conversation budget in `ContextWindowPolicy` — offering all of them at once costs more than a
- * small model's whole window, and most turns call none of these. [summary] is the only thing the
- * model reads before loading a group, so it names the capability the way a person would ask for it
- * rather than the tools behind it.
+ * Every schema is re-sent on every step and charged to the budget in `ContextWindowPolicy`: all of them at
+ * once cost more than a small model's whole window, and most turns call none. [summary] is all the model
+ * reads before loading, so it names the capability as a person would ask for it.
  */
 enum class ToolGroup(val summary: String) {
 
@@ -27,7 +25,7 @@ enum class ToolGroup(val summary: String) {
     val groupName: String = name.lowercase()
 }
 
-/** What one [ToolCatalog.load] call did, in the terms the tool reports back to the model. */
+/** What one [ToolCatalog.load] call did, as reported back to the model. */
 data class ToolLoadResult(
     val groups: List<ToolGroup>,
     val toolNames: List<String>,
@@ -35,18 +33,16 @@ data class ToolLoadResult(
 )
 
 /**
- * The tools of one turn, split into what the model is shown and what it can ask for.
+ * One turn's tools, split into what the model is shown and what it can ask for.
  *
- * Everything registered runs from the first step: a call is resolved against [tools] and not against
- * the definitions the request carried, so a tool the model names before loading its group still runs.
- * What the model is shown is [visibleDefinitions], which widens as [load] is called. A request declares
- * [requestDefinitions] instead, the same on every step, with the groups' tools deferred: the turn offers
- * those as [loadedToolNames] names them, which an endpoint that takes tools partway through does without
- * touching the tool list it caches first.
+ * Everything registered runs from the first step: a call resolves against [tools], not the request's
+ * definitions, so a tool named before its group is loaded still runs. The model is shown
+ * [visibleDefinitions], which widens with [load]. A request declares [requestDefinitions], the same every
+ * step, with group tools deferred; the turn offers those as [loadedToolNames] lists them, which an endpoint
+ * taking tools mid-conversation does without touching its cached tool list.
  *
- * [preloaded] is what this conversation asked for on an earlier turn, offered again from the first
- * request — see [LoadedToolGroups] for why. A group that is no longer registered at all, because the
- * chat or the deployment lost it, is dropped rather than remembered.
+ * [preloaded] is what this conversation loaded on an earlier turn, offered from the first request (see
+ * [LoadedToolGroups]). A group no longer registered at all is dropped.
  */
 class ToolCatalog internal constructor(
     entries: List<CatalogEntry>,
@@ -63,9 +59,8 @@ class ToolCatalog internal constructor(
 
     private val loaded: MutableSet<ToolGroup> = deferred.keys.filterTo(mutableSetOf()) { it in preloaded }
 
-    // the loader has nothing to offer when every group this turn registered is gone with the optional
-    // service or chat capability behind it, or is already loaded — and an empty menu is one more
-    // schema for nothing.
+    // no loader when every registered group is gone with its optional service or already loaded: an empty
+    // menu is one more schema for nothing.
     private val loader: List<ToolFunction> =
         if (deferred.keys.all { it in loaded }) emptyList() else CatalogTools(this).toolFunctions()
 
@@ -76,30 +71,30 @@ class ToolCatalog internal constructor(
 
     private val byName: Map<String, ToolFunction> = tools.associateBy { it.name }
 
-    /** Bumped whenever [load] widens the visible set, so a run can tell when to re-send its tool list. */
+    /** Bumped whenever [load] widens the visible set, so a run knows to re-send its tool list. */
     var revision: Int = 0
         private set
 
-    /** The tool a call names, whether or not its group has been loaded, or `null` for a name nothing answers to. */
+    /** The tool a call names, loaded or not, or `null` when nothing answers to it. */
     fun find(name: String): ToolFunction? = byName[name]
 
-    // registration order, not load order: the tool array is part of the cached prefix on every provider,
-    // so two turns that loaded the same groups in a different order must still produce the same request.
+    // registration order, not load order: the tool array is part of the cached prefix, so the same groups
+    // loaded in another order must produce the same request.
     fun visibleDefinitions(): List<ToolDefinition> =
         (alwaysVisible + loader.takeIf { loadableGroups().isNotEmpty() }.orEmpty() + deferred.filterKeys { it in loaded }.values.flatten())
             .map { it.definition }
 
     /**
-     * Every tool this turn may offer, in registration order: the visible ones and the loader as they are,
-     * and every group's tools deferred whether or not they are loaded, so the list never changes as groups are.
+     * Every tool this turn may offer, in registration order, with all group tools deferred whether loaded or
+     * not, so the list never changes.
      */
     fun requestDefinitions(): List<ToolDefinition> =
         (alwaysVisible + loader).map { it.definition } + deferred.values.flatten().map { it.definition.copy(deferred = true) }
 
-    /** The tools of the groups loaded by now, in registration order: what the turn has to have offered. */
+    /** The tools of groups loaded by now, in registration order: what the turn must have offered. */
     fun loadedToolNames(): List<String> = deferred.filterKeys { it in loaded }.values.flatten().map { it.name }
 
-    /** The menu of what is still loadable, or null when this turn has nothing left to offer. */
+    /** The menu of what is still loadable, or null when nothing is left. */
     fun menu(): String? =
         loadableGroups()
             .takeIf { it.isNotEmpty() }
@@ -119,13 +114,13 @@ class ToolCatalog internal constructor(
         )
     }
 
-    /** Everything still to load, in menu order, for a message that has to name them all. */
+    /** Everything still to load, in menu order. */
     fun groupNames(): List<String> = loadableGroups().map { it.groupName }
 
     private fun loadableGroups(): List<ToolGroup> = deferred.keys.filterNot { it in loaded }
 }
 
-/** One registered tool set and the group, if any, the model has to load before it is offered. */
+/** One registered tool set and the group, if any, it is behind. */
 class CatalogEntry internal constructor(val group: ToolGroup?, val tools: List<ToolFunction>)
 
 class ToolCatalogBuilder internal constructor() {

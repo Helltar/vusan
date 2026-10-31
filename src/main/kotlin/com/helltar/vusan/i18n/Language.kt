@@ -1,8 +1,8 @@
 package com.helltar.vusan.i18n
 
 /**
- * A language the bot has canned text in. [code] is its ISO 639-1 code, the form Telegram reports a client's
- * language in and the form a stored row keeps it in, so renaming a constant never touches the database.
+ * A language the bot has canned text in. [code] is ISO 639-1, as telegram reports a client's language and as
+ * rows store it, so renaming a constant never touches the database.
  */
 enum class Language(val code: String, private val cyrillic: Boolean = false) {
 
@@ -14,8 +14,8 @@ enum class Language(val code: String, private val cyrillic: Boolean = false) {
     companion object {
         val DEFAULT = ENGLISH
 
-        // the letters only one of the two alphabets has, and the everyday words only one of the two
-        // languages spells this way: enough to tell a line of chat apart without a language model.
+        // letters only one alphabet has, and everyday words only one language spells this way: enough to tell
+        // a chat line apart without a model.
         private const val UKRAINIAN_LETTERS = "іїєґ"
         private const val RUSSIAN_LETTERS = "ыэъё"
         private val UKRAINIAN_WORDS =
@@ -41,11 +41,10 @@ enum class Language(val code: String, private val cyrillic: Boolean = false) {
         }
 
         /**
-         * The language [text] is written in, as far as the text itself says. Ukrainian and Russian are told
-         * apart by the letters only one of them has, then by the everyday words only one of them spells that
-         * way. Text that settles nothing, such as Latin script or a bare `ок`, is left to [fallback], the
-         * language the sender's client reports; a Cyrillic message whose fallback is not a Cyrillic language
-         * is answered in Ukrainian rather than in English.
+         * The language [text] is written in, as far as the text says. Ukrainian and Russian are told apart by
+         * their unique letters, then by everyday words only one spells that way. Text that settles nothing
+         * (Latin script, a bare `ок`) is left to [fallback], the client's reported language; a Cyrillic
+         * message whose fallback is not Cyrillic is answered in Ukrainian rather than English.
          */
         fun ofText(text: String?, fallback: Language): Language {
             val sample = text?.take(SAMPLE_CHARS)?.lowercase()?.takeIf { it.isNotBlank() } ?: return fallback

@@ -11,18 +11,18 @@ import org.jsoup.nodes.TextNode
 import org.jsoup.select.NodeVisitor
 import java.io.ByteArrayInputStream
 
-// a page is read for its words, so the cap is well under what a download may be: a document past it is
-// not an article, and the text cap below cuts a long one before any of this matters.
+// a page is read for its words, so the cap is far under the download limit: a larger document is no article,
+// and the text cap cuts a long one anyway.
 private const val PAGE_LIMIT = 4 * 1024 * 1024L
 
-// what a page holds beside its content. `article` and `main` are dropped from this list on purpose:
-// they are where the content is, and the boilerplate tags are removed from inside them too.
+// what a page holds beside its content. `article` and `main` are left out on purpose: they hold the content,
+// and boilerplate inside them is removed too.
 private const val BOILERPLATE_TAGS = "script, style, noscript, template, svg, iframe, nav, header, footer, aside, form"
 private const val CONTENT_ROOTS = "article, main, [role=main]"
 
-// what the page hides from a reader and would show a model: the `hidden` attribute, `aria-hidden`, or an
-// inline style that takes the element off the screen. a stylesheet can hide more, which only a browser
-// would know; these are the forms an instruction planted for a model is written in.
+// what a page hides from readers but would show a model: `hidden`, `aria-hidden`, or an inline style moving
+// the element off screen. a stylesheet can hide more, which only a browser knows; these are the forms planted
+// instructions use.
 private const val HIDDEN_ELEMENTS =
     "[hidden], [aria-hidden=true], [style*=display:none], [style*=display: none], [style*=visibility:hidden], [style*=visibility: hidden]"
 private const val BLOCK_TAGS =
@@ -36,14 +36,14 @@ sealed interface PageContent {
     /** Readable text, with [title] from the document when it had one. */
     class Text(val title: String?, val text: String) : PageContent
 
-    /** Something a reader cannot turn into words: a binary, or a document past the size cap. */
+    /** Something that cannot become words: a binary, or a document past the size cap. */
     class NotReadable(val reason: String) : PageContent
 }
 
 /**
- * Reads a public web page into text. HTML is reduced to its content — the article or main element
- * when the page marks one, with scripts, navigation and chrome removed — and plain text is passed
- * through. Everything else is reported as not readable rather than decoded into noise.
+ * Reads a public web page into text. HTML is reduced to its content (the article or main element when marked,
+ * without scripts, navigation and chrome), plain text passes through, and anything else is reported
+ * unreadable rather than decoded into noise.
  */
 class PageReader(private val downloader: FileDownloadClient) {
 
@@ -89,8 +89,8 @@ private fun ContentType.isText(): Boolean =
 
 private fun ContentType.withSubtype(subtype: String): ContentType = ContentType(contentType, subtype)
 
-// jsoup's `text()` folds a whole page onto one line, so the structure is rebuilt by hand: a line
-// break per block element and per `br`, a bullet per list item, everything else collapsed.
+// jsoup's `text()` folds a page onto one line, so structure is rebuilt by hand: a break per block element and
+// `br`, a bullet per list item, the rest collapsed.
 private fun Element.toText(): String {
     val out = StringBuilder()
 

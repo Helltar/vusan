@@ -17,7 +17,7 @@ class TurnCompactionTest {
 
     private val long = "x".repeat(3_000)
 
-    // the stored history and the request, then three rounds of the turn's own tool calls
+    // stored history and the request, then three rounds of the turn's own tool calls
     private val turn =
         listOf(Message.System("rules"), Message.User("stored question"), Message.Assistant("stored answer"), Message.User("the request")) +
                 batch("c1", long, long) + batch("c2", "short", long) + batch("c3", long, long)
@@ -73,7 +73,7 @@ class TurnCompactionTest {
         assertEquals("short", secondCall.arguments.getValue("query").jsonPrimitive.content)
         assertEquals(FOLDED_RESULT, assertIs<Message.ToolResults>(folded[7]).results.single().output)
 
-        // the latest batch alone is over the ceiling here, and that is as far as folding goes
+        // the latest batch alone exceeds the ceiling, and folding stops there
         assertEquals(long, assertIs<Message.ToolResults>(folded[9]).results.single().output)
     }
 

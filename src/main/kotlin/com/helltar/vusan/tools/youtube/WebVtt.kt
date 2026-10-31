@@ -15,12 +15,9 @@ private val HTML_ENTITIES =
     )
 
 /**
- * Flattens a WebVTT subtitle track into one line of plain text, dropping the header, cue ids,
- * timings, and inline karaoke tags.
- *
- * YouTube's auto-generated captions scroll: every cue repeats the tail of the previous cue, so
- * a naive concatenation says everything two or three times. Consecutive duplicate lines are
- * collapsed to keep the transcript readable and to roughly halve its token cost.
+ * Flattens a WebVTT track into one line of plain text, dropping the header, cue ids, timings and karaoke
+ * tags. YouTube's auto-captions scroll, each cue repeating the previous one's tail, so consecutive duplicate
+ * lines are collapsed, roughly halving the token cost.
  */
 internal fun parseWebVtt(vtt: String): String {
     val lines = mutableListOf<String>()

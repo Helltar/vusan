@@ -23,16 +23,15 @@ import kotlinx.serialization.json.putJsonArray
 import kotlinx.serialization.json.putJsonObject
 
 /**
- * OpenAI's Chat Completions API, and every server that speaks it: DeepSeek, and any compatible server behind
- * `LLM_BASE_URL`.
+ * OpenAI's Chat Completions API and every server speaking it: DeepSeek and any compatible `LLM_BASE_URL`.
  *
- * [baseUrl] is where `/chat/completions` hangs. [explicitPromptCaching] states the GPT-5.6 generation's cache
- * options, for OpenAI's own API behind the compatible provider. [echoesReasoningContent] is for a server that
- * thinks aloud in `reasoning_content` and wants it back on every tool call of a turn, as DeepSeek documents:
- * a call another endpoint wrote — the provider a fallback took over from — then carries an empty one, since
- * none at all was a 400. [legacyOutputCeiling] is for a server that reads the output ceiling from the original
- * `max_tokens`: OpenAI renamed it `max_completion_tokens` and refuses the old name on a reasoning model, while
- * DeepSeek ignores the new one (asked for 40 tokens on 2026-10-21, it wrote 3,614).
+ * [baseUrl] is where `/chat/completions` hangs. [explicitPromptCaching] sends GPT-5.6's cache options, for
+ * OpenAI itself behind the compatible provider. [echoesReasoningContent] is for a server that thinks in
+ * `reasoning_content` and wants it back on every tool call of a turn, as DeepSeek documents; a call another
+ * endpoint wrote (before a fallback took over) carries an empty one, since none at all was a 400.
+ * [legacyOutputCeiling] is for a server reading the ceiling from the original `max_tokens`: OpenAI renamed it
+ * `max_completion_tokens` and refuses the old name on reasoning models, while DeepSeek ignores the new one
+ * (asked for 40 tokens on 2026-10-21, it wrote 3,614).
  */
 class ChatCompletionsClient(
     private val http: HttpClient,
@@ -48,7 +47,7 @@ class ChatCompletionsClient(
 
     private val url = "$baseUrl/chat/completions"
 
-    // what the reasoning this client returns is tagged with, and the only reasoning it replays
+    // the source tag on returned reasoning, and the only reasoning replayed
     private val reasoningSource = url
 
     override suspend fun complete(model: LlmModel, request: ChatRequest): Reply =
@@ -58,7 +57,7 @@ class ChatCompletionsClient(
 
     internal fun completionsRequest(model: LlmModel, request: ChatRequest): JsonObject {
         val options = request.options
-        // chat completions has no way to offer a tool partway through, so what was offered is listed up front
+        // chat completions cannot offer a tool mid-conversation, so offered tools are listed up front
         val tools = request.toolsListedUpFront()
         val messages = request.messages.map(::completionMessages)
 
@@ -183,8 +182,8 @@ class ChatCompletionsClient(
         val choice = (response["choices"] as? JsonArray)?.firstOrNull() as? JsonObject
         val finishReason = choice?.string("finish_reason")
 
-        // deepseek's server cut the answer short for want of capacity: an overload, which the rules downstream
-        // repeat or hand to the fallback, not an answer to deliver
+        // deepseek cut the answer short for lack of capacity: an overload to repeat or hand to the fallback,
+        // not an answer
         if (finishReason == INSUFFICIENT_SYSTEM_RESOURCE) throw LlmException(label, OVERLOADED_STATUS, "finish_reason $INSUFFICIENT_SYSTEM_RESOURCE")
 
         val message = choice?.get("message") as? JsonObject

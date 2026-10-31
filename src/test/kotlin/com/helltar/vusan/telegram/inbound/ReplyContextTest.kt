@@ -19,7 +19,7 @@ class ReplyContextTest {
 
     private val mapper = ObjectMapper()
 
-    // attachment building only captures file ids; nothing is downloaded until the tool asks for bytes.
+    // attachments capture only file ids; nothing downloads until a tool asks for bytes.
     private val unusedClient: TelegramClient =
         Proxy.newProxyInstance(
             TelegramClient::class.java.classLoader,
@@ -47,8 +47,8 @@ class ReplyContextTest {
         assertNull(withoutQuote.quotedFragmentOrNull())
     }
 
-    // the conversation history is keyed by user and chat, so a reply to something the bot wrote for
-    // somebody else in a group reaches a history that never saw it. the block is then all there is.
+    // history is keyed by user and chat, so a reply to something the bot wrote for someone else reaches a
+    // history that never saw it; the block is all there is.
     @Test
     fun `a reply to the bot's own message names it as the bot's own`() = runBlocking {
         val message =
@@ -100,7 +100,7 @@ class ReplyContextTest {
         assertEquals("Ada Byron @ada", summary.author)
     }
 
-    // the name is whatever its owner typed, and it goes on a line of its own inside the block.
+    // the name is user text, on its own line inside the block.
     @Test
     fun `an author who named themselves after a block tag cannot close it`() = runBlocking {
         val message =
@@ -189,8 +189,8 @@ class ReplyContextTest {
         assertTrue(file.isAnimation)
     }
 
-    // a caption replaces the gif-as-reaction prompt, so the attachment block is what has to carry the
-    // rule that a gif is not something to narrate back.
+    // a caption replaces the gif-as-reaction prompt, so the attachment block must carry the rule that a gif
+    // is not narrated back.
     @Test
     fun `attachedFileContextBlock marks a gif as a reaction, not a video to review`() {
         val message =
@@ -251,7 +251,7 @@ class ReplyContextTest {
         assertNotNull(file.loadThumbnailBytes)
     }
 
-    // a gif that arrives as a bare document, with no `animation` beside it, is the same soundless loop
+    // a gif arriving as a bare document, without `animation`, is the same soundless loop
     @Test
     fun `toAttachedFileOrNull maps a gif document as an animation`() {
         val message =
@@ -267,7 +267,7 @@ class ReplyContextTest {
         assertTrue(file.isAnimation)
     }
 
-    // in a forum every message of a topic arrives as a reply to the service message that opened it
+    // in a forum every topic message arrives as a reply to the service message that opened the topic
     @Test
     fun `a reply to the message that opened a forum topic is no reply at all`() = runBlocking {
         val message =
@@ -324,12 +324,12 @@ class ReplyContextTest {
         assertTrue(block.contains("name: clip.mp4"))
         assertTrue(block.contains("duration: 42s"))
         assertTrue(block.contains("`describeVideo`"))
-        // a video is worth re-encoding as well as watching, so it is offered to both
+        // a video is worth re-encoding as well as watching, so both are offered
         assertTrue(block.contains("`turns/`"))
         assertTrue(block.contains("returns its exact path"))
     }
 
-    // `date` must stay non-zero: the bot api models a zero date as an InaccessibleMessage subtype.
+    // `date` must stay non-zero: the bot api models a zero date as InaccessibleMessage.
     private fun message(fields: String): Message =
         mapper.readValue(
             """{"message_id": 1, "date": 1774000000, "chat": {"id": 10, "type": "private"}, ${fields.trim()}}""",

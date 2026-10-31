@@ -23,9 +23,9 @@ data class YtDlpCommandResult(
 internal data class YtDlpSearchCandidate(val url: String)
 
 /**
- * Shared yt-dlp invocation surface: process handling, the auth and extractor arguments every
- * command needs, and turning a user query into candidate video URLs. Owned by the feature clients
- * ([YtDlpClient], [YouTubeTranscriptClient]) so they only assemble the arguments specific to them.
+ * Shared yt-dlp invocation: process handling, the auth and extractor arguments every command needs, and
+ * turning a query into candidate video URLs. Owned by the feature clients ([YtDlpClient],
+ * [YouTubeTranscriptClient]), which add only their own arguments.
  */
 class YtDlpRunner(
     private val cookiesFile: String? = null,
@@ -36,8 +36,8 @@ class YtDlpRunner(
     private var cachedDiagnostics: String? = null
 
     suspend fun runCommand(command: List<String>): YtDlpCommandResult = withContext(Dispatchers.IO) {
-        // yt-dlp writes the cookie jar back when it exits, and two runs writing one file tear it for
-        // everyone after: each run gets a copy of its own, and the configured file is only ever read
+        // yt-dlp writes the cookie jar back on exit, and two runs writing one file corrupt it: each run gets
+        // its own copy, and the configured file is only read
         val jar = cookiesFile?.takeUnless { it.isBlank() }?.let { Files.copy(Path.of(it), Files.createTempFile("ytdlp-cookies-", ".txt"), REPLACE_EXISTING) }
         val resolved = jar?.let { copy -> command.map { arg -> if (arg == cookiesFile) copy.toString() else arg } } ?: command
         val process = ProcessBuilder(resolved).redirectErrorStream(true).start()
@@ -60,8 +60,7 @@ class YtDlpRunner(
         }
     }
 
-    // the ffmpeg yt-dlp spawns to extract or merge would otherwise keep running into a directory about
-    // to be removed
+    // otherwise the ffmpeg yt-dlp spawns keeps running into a directory about to be removed
     private fun Process.destroyWithChildren() {
         toHandle().descendants().forEach { it.destroyForcibly() }
         destroyForcibly()
@@ -106,13 +105,13 @@ class YtDlpRunner(
         return "auth=none"
     }
 
-    /** Resolves a direct URL as itself, and anything else through a YouTube search. */
+    /** Resolves a direct URL as itself, anything else through a YouTube search. */
     internal suspend fun videoCandidates(query: String): List<YtDlpSearchCandidate> {
         val trimmed = query.trim()
 
         if (trimmed.startsWith("http://") || trimmed.startsWith("https://")) {
-            // the generic extractor would fetch any address, on the bot's own network and with its cookie
-            // jar, past every check the public downloader makes
+            // the generic extractor would fetch any address from the bot's network with its cookie jar, past
+            // every check the public downloader makes
             require(isYouTubeUrl(trimmed)) {
                 "only a YouTube link can be fetched here (youtube.com, youtu.be, music.youtube.com); anything else is the file tools' job"
             }
@@ -236,9 +235,9 @@ class YtDlpRunner(
 internal const val YT_DLP_BINARY = "yt-dlp"
 internal const val USER_AGENT = "Mozilla/5.0 (X11; Linux x86_64; rv:127.0) Gecko/20100101 Firefox/127.0"
 
-// youtube answers the tv player with "the page needs to be reloaded" whenever cookies are attached,
-// and the remaining default clients are then left offering storyboards only. web_music still serves
-// music, web_embedded serves the rest; default stays first so plain extraction wins once it recovers.
+// youtube answers the tv player with "the page needs to be reloaded" when cookies are attached, leaving the
+// other default clients with storyboards only. web_music still serves music, web_embedded the rest; default
+// stays first so plain extraction wins once it recovers.
 internal const val PLAYER_CLIENTS = "youtube:player_client=default,web_music,web_embedded"
 
 internal fun String.containsAny(vararg needles: String): Boolean =

@@ -43,7 +43,7 @@ class MessageMetadataTest {
 
     @Test
     fun `a business connection outranks the chat it arrives in`() {
-        // the flags are not mutually exclusive, so the order of the ladder is the actual contract
+        // the flags overlap, so the ladder's order is the contract
         assertEquals(
             "business",
             message(""""business_connection_id": "conn-1"""", chat = """{"id": -100, "type": "supergroup"}""")
@@ -68,7 +68,7 @@ class MessageMetadataTest {
 
     @Test
     fun `a gif counts as an animation, not as the document telegram also sets on it`() {
-        // telegram fills both fields for a gif; whichever branch runs first decides what the agent is told
+        // telegram fills both fields for a gif; the first branch to run decides what the agent is told
         assertEquals("animation", gif().contentTypeName())
         assertEquals("0:03", gif().groupLogDescriptor())
     }
@@ -107,7 +107,7 @@ class MessageMetadataTest {
 
     @Test
     fun `a photo has no descriptor worth storing`() {
-        // there is nothing a caption-less photo adds to a transcript that its kind does not already say
+        // a caption-less photo adds nothing to a transcript beyond its kind
         assertNull(photo().groupLogDescriptor())
     }
 
@@ -127,7 +127,7 @@ class MessageMetadataTest {
 
     @Test
     fun `a descriptor is collapsed and capped to the column that stores it`() {
-        // escaped so the fixture is valid JSON: telegram delivers these as real whitespace in the value
+        // escaped for valid JSON: telegram delivers real whitespace in the value
         assertEquals("spaced out name.pdf", document("""  spaced\n\tout   name.pdf  """).groupLogDescriptor())
 
         val descriptor = document("n".repeat(400) + ".pdf").groupLogDescriptor()

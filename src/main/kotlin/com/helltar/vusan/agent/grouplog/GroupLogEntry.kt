@@ -4,8 +4,8 @@ import com.helltar.vusan.request.ChatRef
 import java.time.Instant
 
 /**
- * One message seen in a group chat. Media is reduced to [kind] plus a short human [descriptor];
- * the file itself is never stored, and neither are the Telegram file ids that would let it be fetched.
+ * One message seen in a group chat. Media is reduced to [kind] plus a short human [descriptor]; neither the
+ * file nor the telegram file ids that could fetch it are stored.
  */
 data class GroupLogEntry(
     val chat: ChatRef,
@@ -29,16 +29,16 @@ data class GroupLogEntry(
     }
 
     companion object {
-        /** [kind] of a message the bot itself sent into the chat. */
+        /** [kind] of a message the bot sent. */
         const val BOT_KIND = "bot"
 
-        // what one message may cost the log, the bot's own lines included; every writer caps to these,
-        // and the two varchar widths in GroupLogTable mirror the last two
+        // what one message may cost the log, bot lines included; every writer caps to these, and
+        // GroupLogTable's two varchar widths mirror the last two
         const val MAX_TEXT_CHARS = 2_000
         const val MAX_DESCRIPTOR_CHARS = 200
         const val MAX_FORWARD_FROM_CHARS = 128
     }
 }
 
-/** One person's share of a chat over some stretch, under the name the transcript shows them by. */
+/** One person's share of a chat over a stretch, under their transcript name. */
 data class AuthorActivity(val senderId: String, val name: String, val messages: Long, val lastSeenAt: Instant)

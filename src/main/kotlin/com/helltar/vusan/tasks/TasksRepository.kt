@@ -38,9 +38,8 @@ class TasksRepository {
             }.value
     }
 
-    // user-requested tasks and the bot's own follow-ups are counted against separate limits, so the
-    // bot can never fill up the quota the user needs for their own reminders. [selfInitiated] null
-    // counts both, which is what the task menu shows as the user's overall total.
+    // user tasks and the bot's own follow-ups have separate limits, so the bot never eats the user's quota.
+    // [selfInitiated] null counts both, the task menu's total.
     suspend fun countForUser(owner: UserRef, selfInitiated: Boolean? = null): Int = dbTransaction {
         var condition = ownedBy(owner)
 
@@ -66,9 +65,8 @@ class TasksRepository {
     }
 
     /**
-     * One task as it stands, and only while it is still due. A tick reads every due task at once and
-     * fires them one after another, so the owner of a task waiting behind a long fire has time to pause,
-     * retime or delete it before it starts.
+     * One task as it stands, only while still due. A tick reads all due tasks at once and fires them in
+     * sequence, so an owner can still pause, retime or delete a task waiting behind a long fire.
      */
     suspend fun findDue(id: Long, now: Instant): ScheduledTask? = dbTransaction {
         ScheduledTasksTable
@@ -114,9 +112,8 @@ class TasksRepository {
     ): Boolean = dbTransaction {
         require(original.id == edited.id) { "original and edited task ids must match" }
 
-        // only the columns the caller actually changed are written. [original] is read before the edit, so
-        // writing it back wholesale would silently undo a TaskScheduler reschedule that landed in between —
-        // renaming a task would drag its fire time back to the already-fired slot.
+        // only changed columns are written: [original] was read before the edit, and writing it back whole
+        // would undo a reschedule that landed in between, dragging a renamed task back to its fired slot.
         ScheduledTasksTable
             .update({ taskCondition(owner, original.id, chat) }) {
                 if (original.prompt != edited.prompt)
@@ -137,9 +134,9 @@ class TasksRepository {
     }
 
     /**
-     * Pauses every task scheduled in one chat and answers how many that was. Used when the bot loses the
-     * right to post there: pausing rather than disabling keeps the tasks listed in `/tasks`, so their
-     * owners can resume them if the bot gets back in.
+     * Pauses every task in one chat and returns the count, when the bot loses the right to post there.
+     * Paused, not disabled, so the tasks stay in `/tasks` and their owners can resume them if the bot gets
+     * back in.
      */
     suspend fun pauseAllInChat(chat: ChatRef): Int = dbTransaction {
         ScheduledTasksTable
@@ -149,10 +146,9 @@ class TasksRepository {
     }
 
     /**
-     * Moves a fired task on to [nextFireAt] and answers whether it was still the task that fired.
-     * [firedAt] is the fire time the run started from: a whole agent turn happens in between, and an
-     * owner who retimed the task during it means that, so their schedule is not overwritten with the
-     * one this fire computed.
+     * Moves a fired task to [nextFireAt] and answers whether it was still the task that fired. [firedAt] is
+     * the fire time the run started from: an owner who retimed the task during the turn meant it, so their
+     * schedule is not overwritten.
      */
     suspend fun reschedule(id: Long, firedAt: Instant, nextFireAt: Instant): Boolean = dbTransaction {
         ScheduledTasksTable
@@ -162,9 +158,8 @@ class TasksRepository {
     }
 
     /**
-     * Removes a task that has just fired for the last time, under the same condition as [reschedule].
-     * A finished task is deleted rather than kept switched off: `/tasks` never showed one, nothing else
-     * reads one, and rows nobody can reach only grow.
+     * Removes a task that just fired for the last time, under the same condition as [reschedule]. Deleted
+     * rather than disabled: `/tasks` never shows it and nothing reads it.
      */
     suspend fun deleteFinished(id: Long, firedAt: Instant): Boolean = dbTransaction {
         ScheduledTasksTable.deleteWhere { firedTaskCondition(id, firedAt) } > 0
@@ -180,8 +175,8 @@ class TasksRepository {
     private fun firedTaskCondition(id: Long, firedAt: Instant): Op<Boolean> =
         (ScheduledTasksTable.id eq id) and (ScheduledTasksTable.nextFireAt eq firedAt)
 
-    // a row moved by hand can hold a schedule nothing here reads; firing it on a guessed one would run the
-    // task at the wrong time, so it stays due, is named in the log, and is skipped until the row is fixed
+    // a hand-edited row may hold a schedule nothing reads; firing on a guess would run at the wrong time, so
+    // it stays due, is logged and skipped until fixed
     private fun ResultRow.dueTaskOrNull(): ScheduledTask? =
         runCatching { toScheduledTask() }
             .onFailure { log.error(it) { "task id=${this[ScheduledTasksTable.id].value} cannot be read and is skipped" } }
@@ -230,8 +225,8 @@ class TasksRepository {
     }
 
     companion object {
-        // caps on one person, against a model that schedules in a loop rather than against the person:
-        // a morning brief, a weekly digest and a few reminders fit, a runaway turn does not.
+        // caps against a model scheduling in a loop: a morning brief, a weekly digest and a few reminders
+        // fit, a runaway turn does not.
         const val MAX_TASKS_PER_USER = 10
         const val MAX_FOLLOW_UPS_PER_USER = 3
 

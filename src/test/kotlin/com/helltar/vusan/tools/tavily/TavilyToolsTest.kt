@@ -30,7 +30,8 @@ class TavilyToolsTest {
         return TavilyTools(TavilyClient(http, "tvly-test"), ImageDownloadClient(FileDownloadClient(http)), BotOutbox())
     }
 
-    // the shared json leaves defaults out, so the count has none: a defaulted one would stay unsent and tavily would pick ten
+    // the shared json omits defaults, so the count has none: a defaulted one would stay unsent and tavily
+    // would pick ten
     @Test
     fun `a search sends its result count and no search depth`() = runBlocking {
         tools().webSearch("tides")

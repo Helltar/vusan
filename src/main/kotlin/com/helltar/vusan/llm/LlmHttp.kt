@@ -15,15 +15,14 @@ import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.jsonObject
 import kotlin.time.Duration
 
-// one Json for every client: lenient on the way in, since a provider adds fields faster than anyone reads
-// them, and nothing a client decodes is a closed shape.
+// one Json for every client, lenient on input: providers add fields faster than anyone reads them, and no
+// decoded shape is closed.
 internal val llmJson = Json { ignoreUnknownKeys = true; isLenient = true; explicitNulls = false }
 
 /**
- * A Ktor client for one provider: the timeouts a model call may take, and nothing else assumed.
- *
- * Both request and socket timeouts are the one the operator set, so a stalled call fails and the agent
- * delivers an error reply instead of leaving the bot silent for the engine's quarter of an hour.
+ * A Ktor client for one provider with the timeouts a model call may take, nothing else assumed. Request and
+ * socket timeouts are both the operator's, so a stalled call fails with an error reply instead of a quarter
+ * hour of silence.
  */
 fun llmHttpClient(requestTimeout: Duration, plugin: ClientPlugin<Unit>? = null): HttpClient =
     HttpClient(CIO) {
@@ -41,13 +40,16 @@ fun llmHttpClient(requestTimeout: Duration, plugin: ClientPlugin<Unit>? = null):
 private const val CONNECT_TIMEOUT_MILLIS = 10_000L
 private const val SSE_DATA_PREFIX = "data:"
 
-/** The conversation a request belongs to, for a plugin that files requests per conversation without reading the body back. */
+/**
+ * The conversation a request belongs to, for a plugin filing requests per conversation without reading the
+ * body back.
+ */
 internal val PROMPT_CACHE_KEY = AttributeKey<String>("promptCacheKey")
 
-// a stream that ended in an error event answered with a 200, so the status alone says nothing
+// a stream ending in an error event answered 200, so the status says nothing
 internal const val STREAM_ERROR_STATUS = 200
 
-/** The JSON of one `data:` line of an event stream, or `null` for any other line, an empty one and `[DONE]`. */
+/** The JSON of one `data:` line of an event stream, or `null` for other lines, empty ones and `[DONE]`. */
 internal fun String.ssePayloadOrNull(): JsonObject? {
     if (!startsWith(SSE_DATA_PREFIX)) return null
 
@@ -62,8 +64,8 @@ private fun HttpRequestBuilder.carryPromptCacheKey(body: JsonObject) {
 }
 
 /**
- * Posts [body] and reads the answer as JSON, turning anything but a 2xx — and anything that never
- * answered — into an [LlmException] the rules downstream can read a status and a body out of.
+ * Posts [body] and reads the JSON answer, turning a non-2xx, or no answer at all, into an [LlmException] with
+ * a readable status and body.
  */
 internal suspend fun HttpClient.postJson(
     provider: String,
@@ -98,8 +100,8 @@ internal suspend fun HttpClient.postJson(
 private const val REPLY_PREVIEW_CHARS = 500
 
 /**
- * Posts [body] as a streaming request and hands every `data:` payload of the event stream to [onEvent]
- * as it arrives. A non-2xx answer is an [LlmException] with the body the server sent instead of a stream.
+ * Posts [body] as a streaming request and hands each `data:` payload to [onEvent] as it arrives. A non-2xx
+ * answer is an [LlmException] with the body sent instead of a stream.
  */
 internal suspend fun HttpClient.postEventStream(
     provider: String,
@@ -115,7 +117,7 @@ internal suspend fun HttpClient.postEventStream(
             val channel = response.bodyAsChannel()
 
             while (!channel.isClosedForRead) {
-                // the event stream spec ends a line with LF, CRLF or a bare CR; the default mode drops the last
+                // event streams end lines with LF, CRLF or a bare CR; the default mode drops the last
                 val line = channel.readLine(LineEnding.Lenient) ?: break
                 line.ssePayloadOrNull()?.let(onEvent)
             }
@@ -126,7 +128,7 @@ internal suspend fun HttpClient.postEventStream(
     }
 }
 
-// a non-2xx answer to a streaming request carries the error body instead of a stream
+// a non-2xx answer to a streaming request carries an error body instead of a stream
 private suspend fun HttpResponse.failUnlessSuccess(provider: String) {
     if (!status.isSuccess()) throw LlmException(provider, status.value, bodyAsText())
 }

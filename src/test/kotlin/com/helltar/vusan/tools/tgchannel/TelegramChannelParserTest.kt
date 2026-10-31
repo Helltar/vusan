@@ -34,8 +34,8 @@ class TelegramChannelParserTest {
         assertEquals(Instant.parse("2026-03-03T10:00:00Z"), page.posts.first().postedAt)
     }
 
-    // the widget marks the quoted preview of the replied-to post with the same _text class, and
-    // puts it first, so a selector that ignores js-message_text reports the quote as the post.
+    // the widget gives the replied-to post's preview the same _text class and puts it first, so a selector
+    // ignoring js-message_text reports the quote as the post.
     @Test
     fun `parse reads the post body rather than the quote of the post it replies to`() {
         val page = parse(
@@ -73,7 +73,7 @@ class TelegramChannelParserTest {
         val post = page.posts.single()
 
         assertEquals(1_200 + 340 + 1_500_000 + 7, post.reactionCount)
-        // only the strongest few are rendered, biggest first, and the tail is dropped
+        // only the strongest few, biggest first; the tail is dropped
         assertEquals("C 1500000 A 1200 B 340", post.reactions)
     }
 

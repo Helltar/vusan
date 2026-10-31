@@ -24,16 +24,14 @@ import kotlinx.serialization.json.putJsonObject
 /** A page the answer cites, as the search model named it. */
 data class CodexSearchSource(val title: String, val url: String)
 
-/** What one hosted search came back with: the written answer and the pages it rests on. */
+/** One hosted search's result: the written answer and the pages it rests on. */
 data class CodexSearchAnswer(val text: String, val sources: List<CodexSearchSource>)
 
 /**
- * Web search on the ChatGPT subscription: one short Responses call in which OpenAI's hosted
- * `web_search` tool is the only tool and is forced, so the model on the other side runs the queries,
- * reads the pages and writes the answer.
- *
- * It is a call of its own rather than a tool declared on the chat turn, because beside ordinary
- * function tools the model reaches for those and leaves the hosted one alone.
+ * Web search on the ChatGPT subscription: one short Responses call where OpenAI's hosted `web_search` is the
+ * only tool and is forced, so the model on the other side runs the queries, reads the pages and writes the
+ * answer. A separate call rather than a tool on the chat turn, because beside function tools the model
+ * ignores the hosted one.
  */
 class CodexSearchClient(
     private val http: HttpClient,
@@ -65,8 +63,8 @@ class CodexSearchClient(
 
         val output = (completed["output"] as? JsonArray).orEmpty().filterIsInstance<JsonObject>()
 
-        // without a search the text is the model's memory dressed as a lookup, which is the one
-        // thing this tool must not hand back as an answer from the web.
+        // without a search the text is the model's memory dressed as a lookup, which this tool must never
+        // return as a web answer.
         check(output.any { it.string("type") == "web_search_call" }) {
             "The search model answered without searching the web"
         }
@@ -94,8 +92,8 @@ class CodexSearchClient(
         return CodexSearchAnswer(text, sources)
     }
 
-    // the backend takes a streamed, unstored request and nothing else; a reasoning effort is left
-    // out because which ones a model accepts differs per model, and its own default always works.
+    // the backend takes only a streamed, unstored request; the effort is left out since accepted ones differ
+    // per model, and the default always works.
     private fun requestBody(question: String): JsonObject =
         buildJsonObject {
             put("model", model)
@@ -131,7 +129,7 @@ class CodexSearchClient(
         const val CLIENT_NAME = "codex-search"
         const val HOSTED_TOOL = "web_search"
 
-        // a search reads pages before it answers; ten seconds is ordinary and a hard question runs longer
+        // a search reads pages before answering; ten seconds is ordinary, a hard question takes longer
         val SEARCH_TIMEOUT = 3.minutes
 
         const val INSTRUCTIONS =
@@ -142,7 +140,7 @@ class CodexSearchClient(
 
         val json = Json { ignoreUnknownKeys = true }
 
-        // every link the hosted tool hands back carries this marker, in the text and in the citations
+        // the hosted tool marks every link it returns, in the text and in the citations
         val tracking = Regex("""([?&])utm_source=openai(&?)""")
 
         fun String.withoutTracking(): String =

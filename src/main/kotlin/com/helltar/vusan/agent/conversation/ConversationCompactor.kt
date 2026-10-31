@@ -13,9 +13,9 @@ import com.helltar.vusan.common.limitTo
 import com.helltar.vusan.common.xmlBlock
 import io.github.oshai.kotlinlogging.KotlinLogging
 
-// what the prompt asks for, under the hard cap so a recap that runs a little long is still kept as written.
-// the recap sits at the head of the prompt and is cached until the next one, so on the windows in use (a
-// million tokens, 272k on codex) it costs little to keep a long conversation's facts rather than its last part
+// what the prompt asks for, under the hard cap so a slightly long recap is kept as written. the recap heads
+// the prompt and stays cached until the next one, so on the windows in use (a million tokens, 272k on codex)
+// keeping a long conversation's facts is cheap
 private const val RECAP_ASKED_CHARS = 12_000
 
 private const val COMPACTION_SYSTEM_PROMPT =
@@ -138,18 +138,17 @@ class LlmConversationCompactor(
         const val MAX_TOOL_RESULT_SOURCE_CHARS = 600
         const val MIN_COMPACTION_INPUT_TOKENS = 2_048
 
-        // the previous recap is part of the input, and at its full length it is about 10k tokens: the
-        // ceiling has to leave the events beside it room for a whole batch
+        // the previous recap is part of the input, about 10k tokens at full length; the ceiling must leave
+        // room for a whole batch of events beside it
         const val MAX_COMPACTION_INPUT_TOKENS = 32_000
         val log = KotlinLogging.logger {}
     }
 }
 
-// the recap source's own delimiters. `user` and the rest are too generic to defuse in every quoted text, which
-// `neutralizePromptBlocks` leaves alone, but here they are the boundaries: a message or a fetched page that
-// closed its event and opened a `<user>` one would put words in somebody's mouth in the recap, and the recap
-// is durable memory. an opening tag is matched with attributes too, so a forged one cannot survive by carrying
-// some, and the blocks a stored user entry is written in (`<user_message>`, `<reply_context>`) are not these.
+// the recap source's own delimiters. `user` and the like are too generic for `neutralizePromptBlocks`, but
+// here they are boundaries: a message or page closing its event and opening a `<user>` one would put words in
+// someone's mouth in durable memory. opening tags match with attributes too, and a stored user entry's own
+// blocks (`<user_message>`, `<reply_context>`) are not these.
 private val RECAP_SOURCE_TAG =
     Regex(
         "</?(?:assistant|conversation_events|interaction|previous_recap|tool_call|tool_result|user)(?:\\s[^<>\\n]*)?>",
@@ -159,20 +158,17 @@ private val RECAP_SOURCE_TAG =
 private fun String.neutralizeRecapSourceTags(): String =
     replace(RECAP_SOURCE_TAG) { "&lt;${it.value.removePrefix("<")}" }
 
-// below this a context excerpt is too short to say what the request was answering, so the request
-// takes the whole budget instead.
+// a shorter context excerpt cannot say what the request answered, so the request takes the whole budget
+// instead.
 private const val MIN_CONTEXT_SOURCE_CHARS = 200
 
 private const val USER_MESSAGE_OPEN_TAG = "<user_message>"
 
 /**
- * Caps a stored user entry, budgeting the request separately from the context in front of it.
- *
- * The entry is written context first and request last: reply metadata, then a quoted fragment, and
- * only then `<user_message>`. Those can run past the cap on their own, so plain head truncation
- * silently drops the request and leaves a recap built from what the user was replying to instead of
- * what they asked. Quoted text has its delimiters neutralized, so the opening tag can only be the
- * real boundary.
+ * Caps a stored user entry, budgeting the request apart from the context before it. The entry is context
+ * first (reply metadata, a quoted fragment) and `<user_message>` last, and the context alone can exceed the
+ * cap, so head truncation would drop the request and build the recap from what the user replied to. Quoted
+ * text is neutralized, so the opening tag can only be the real boundary.
  */
 private fun String.limitUserEntryTo(maxChars: Int): String {
     if (length <= maxChars) return this

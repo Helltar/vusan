@@ -100,7 +100,7 @@ class ReactionToolsTest {
         assertTrue(outbox.pending.isEmpty())
     }
 
-    // an omitted emoji is the decoder's complaint now, since the argument is required in the schema
+    // an omitted emoji is now the decoder's complaint, the argument being required
     @Test
     fun `setReaction fails when the emoji argument is blank`() = runBlocking {
         val outbox = BotOutbox()
@@ -112,7 +112,7 @@ class ReactionToolsTest {
         assertTrue(outbox.pending.isEmpty())
     }
 
-    // a scheduled task fires with nothing behind it, so there is no message of its own to react to.
+    // a scheduled task has no message of its own to react to.
     @Test
     fun `setReaction fails when no valid target is available`() = runBlocking {
         val outbox = BotOutbox()

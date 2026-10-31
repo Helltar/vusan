@@ -17,8 +17,8 @@ class GroupLogTools(
     private val context: RequestContext,
 ) : ToolSet {
 
-    // a window past retention would read as an empty chat rather than as a limit, so it is refused
-    // with the number instead.
+    // a window past retention would read as an empty chat rather than a limit, so it is refused with the
+    // number.
     private val maxWindow = repository.retentionDays.days
 
     @Tool(GroupLogToolDescriptions.READ_GROUP_LOG, readOnly = true)

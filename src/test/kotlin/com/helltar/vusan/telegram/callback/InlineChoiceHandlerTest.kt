@@ -53,8 +53,8 @@ class InlineChoiceHandlerTest {
         Unit
     }
 
-    // the answer has to land under the message that started the exchange, not under the bot's question,
-    // and a task set up by the selection is anchored to the same message when it fires.
+    // the answer lands under the message that started the exchange, not the bot's question, and a task set up
+    // by the selection anchors to the same message.
     @Test
     fun `a question asked without a message of its own carries no origin`() = runBlocking {
         val client = RecordingClient()
@@ -148,9 +148,9 @@ class InlineChoiceHandlerTest {
         assertContains(assertNotNull(answer.text), "no longer available")
     }
 
-    // telegram caps callback_data at 64 bytes, and the origin message id is a fourth field packed into it.
-    // the widest each field can get: a user id is capped at 52 significant bits, a message id is a 32-bit
-    // integer, an option index is a single digit, and the revision only grows by one per `/clear` here.
+    // telegram caps callback_data at 64 bytes, and the origin message id is a fourth field. each at its
+    // widest: a user id up to 52 significant bits, a 32-bit message id, a one-digit option index, and a
+    // revision growing by one per `/clear`.
     @Test
     fun `callback data of the widest possible choice still fits telegram's limit`() {
         val keyboard =
@@ -170,8 +170,8 @@ class InlineChoiceHandlerTest {
         }
     }
 
-    // the selection turn has no message of its own, so a photo the question was asked about only
-    // reaches it through the parked slot.
+    // the selection turn has no message of its own, so a photo the question was about reaches it only through
+    // the parked slot.
     @Test
     fun `an attachment parked with a question survives until the selection`() {
         val handler = InlineChoiceHandler(RecordingClient().proxy) { _ -> 3L }

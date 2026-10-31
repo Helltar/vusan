@@ -29,10 +29,9 @@ import org.telegram.telegrambots.meta.api.objects.replykeyboard.buttons.InlineKe
 import org.telegram.telegrambots.meta.generics.TelegramClient
 
 /**
- * The status message's body: the plan the model announced, and under it the line naming what is running.
- * The line is plain text — the emoji already sets it apart from the plan above it — and carries its own
- * ellipsis, since nothing animates one after a message is sent. The fallback note under it brings its own
- * markup, like the plan does.
+ * The status body: the announced plan, and under it the line naming what runs. The line is plain text (the
+ * emoji sets it apart) with its own ellipsis, since nothing animates one in a sent message. The fallback note
+ * brings its own markup, as the plan does.
  */
 internal fun statusMessageText(plan: String?, label: String?, fallbackNote: String? = null): String? {
     val running = listOfNotNull(label?.let { "$it…" }, fallbackNote).joinToString("\n").ifEmpty { null }
@@ -45,8 +44,8 @@ internal fun statusMessageText(plan: String?, label: String?, fallbackNote: Stri
 }
 
 /**
- * The words for the tool that is running, behind an emoji saying the same thing at a glance. The picture
- * is the same in every language, so it lives here rather than repeated in each [Messages] implementation.
+ * The words for the running tool behind an emoji. The emoji is the same in every language, so it lives here
+ * rather than in each [Messages].
  */
 internal fun activityStatusLabel(activity: ToolActivity, messages: Messages): String {
     val emoji =
@@ -76,20 +75,18 @@ internal fun activityStatusLabel(activity: ToolActivity, messages: Messages): St
 }
 
 /**
- * What a turn shows while it runs: one silent message naming the tool currently working, carrying the
- * plan the model announces before starting long work, with a stop button on it. The same message in
- * every kind of chat — Telegram's own draft surface (`sendMessageDraft`) is private chats only, so it
- * could never be half of this.
+ * What a turn shows while it runs: one silent message naming the working tool, carrying the plan the model
+ * announces before long work, with a stop button. The same in every kind of chat; telegram's
+ * `sendMessageDraft` works in private chats only.
  *
- * It opens lazily, on the first named activity or the first thing the model says, and unlike a draft or
- * a chat action it does not expire, so it is written only when something actually changes. [finish]
- * removes it, unless the model put its own words in it: those stay in the chat as the message they
- * already were, without the status line under them and without the button. A message the model sends
- * mid-turn ([send]) is a message of its own, and the status moves back under it.
+ * It opens lazily on the first named activity or the model's first words, and does not expire, so it is
+ * written only on change. [finish] removes it unless the model put words in it: those stay as a message,
+ * without the status line and button. A message sent mid-turn ([send]) stands on its own, and the status
+ * moves under it.
  *
- * A turn with nothing to show for a while — one waiting in the person's line behind another, or one in
- * a slow-mode chat, where no bubble opens for an activity — marks its message as received with a reaction
- * instead ([acknowledge]), and takes it off when it ends; whatever reaction the model chose lands after.
+ * A turn with nothing to show for a while (queued behind another, or in a slow-mode chat where activities
+ * open no bubble) marks the message received with a reaction ([acknowledge]) and removes it at the end; a
+ * reaction the model chose lands after.
  */
 internal class TurnStatus(
     private val client: TelegramClient,
@@ -97,23 +94,23 @@ internal class TurnStatus(
     private val ownerId: Long,
     replyToMessageId: Long?,
     private val messages: Messages,
-    // in a slow-mode group the bot's messages are rationed, so a bubble is spent only on words the model
-    // chose to send; naming a running tool is never worth one of those slots.
+    // slow mode rations the bot's messages, so a bubble is spent only on words the model chose; a running
+    // tool never earns one.
     private val activityOpensIt: Boolean,
-    // whether the message is marked as received with a reaction while the turn has nothing else to show
+    // whether to mark the message received with a reaction while there is nothing else to show
     private val acknowledges: Boolean = false,
-    // which model is answering while the usual provider is out, and when that provider said it would be
-    // back, so a turn served by the fallback says so where it is happening rather than only in the log.
+    // the answering model and when the usual provider said it would be back, so a fallback turn says so in
+    // the chat, not only in the log.
     private val fallbackInUse: () -> FallbackInUse? = { null },
-    // words the model put in the chat while the turn still runs, told the moment they are there.
+    // the model's words, reported the moment they reach the chat.
     private val onPosted: suspend (text: String) -> Unit = {},
 ) : TurnNarrator {
 
-    // a turn writes from two places — the tool that narrates, and the collector following the activity —
-    // and both read the state they are about to change.
+    // written from two places, the narrating tool and the activity collector, each reading the state it
+    // changes.
     private val edits = Mutex()
 
-    // an inline choice starts a turn with no message behind it, and Telegram takes no reply to id 0.
+    // an inline choice starts a turn with no message behind it, and telegram takes no reply to id 0.
     private var anchor: Long? = replyToMessageId
     private var messageId: Int? = null
     private var announcement: String? = null
@@ -123,7 +120,7 @@ internal class TurnStatus(
     private var gone = false
     private var acknowledged = false
 
-    /** Marks the message as received, when this turn is one that has nothing else to show for a while. */
+    /** Marks the message received, for a turn with nothing else to show for a while. */
     suspend fun acknowledge() {
         if (!acknowledges) return
 
@@ -140,9 +137,9 @@ internal class TurnStatus(
     }
 
     /**
-     * Names [activity] in the status, spending a message on it only when [mayOpen]: an activity that is
-     * part of the exchange rather than a job fills a bubble already on screen but never opens one of its
-     * own. Returns `true` while the bubble is up, which is what stands the chat action down.
+     * Names [activity] in the status, opening a message only when [mayOpen]: an activity that is part of the
+     * exchange fills a bubble already on screen but never opens one. Returns `true` while the bubble is up,
+     * which stands the chat action down.
      */
     suspend fun showActivity(activity: ToolActivity, mayOpen: Boolean): Boolean =
         edits.withLock {
@@ -157,8 +154,8 @@ internal class TurnStatus(
                 val previous = announcement
                 announcement = text
 
-                // nothing reached the chat, so the caller still owes the user these words: forget them here
-                // and let it queue them the ordinary way.
+                // nothing reached the chat, so forget the words and let the caller queue them the ordinary
+                // way.
                 render().also { delivered -> if (!delivered) announcement = previous }
             }
 
@@ -182,7 +179,7 @@ internal class TurnStatus(
                     .recoverCatching { error ->
                         error.rethrowIfCancellation()
 
-                        // whatever it was answering is gone; the message still has something to say
+                        // the anchor is gone; the message still has something to say
                         if (!error.isReplyMessageNotFound()) throw error
 
                         anchor = null
@@ -196,8 +193,8 @@ internal class TurnStatus(
 
             if (!posted) return false
 
-            // the status bubble belongs under the newest message: taken down here and raised again at
-            // once, carrying the plan and the running line with it
+            // the bubble belongs under the newest message: taken down and raised again at once, plan and
+            // running line included
             messageId?.let { id ->
                 messageId = null
                 shown = null
@@ -234,7 +231,7 @@ internal class TurnStatus(
             }.onFailure { error ->
                 error.rethrowIfCancellation()
 
-                // a plan that never got a running line under it is already the text this edit writes.
+                // a plan with no running line under it is already this text.
                 if (error.isMessageNotModified()) return
 
                 log.warn { "live status could not be closed in chat=${target.chatId}: ${error.message}" }
@@ -254,14 +251,14 @@ internal class TurnStatus(
                 error.rethrowIfCancellation()
 
                 when {
-                    // the model writes its plan in HTML like any other message. broken markup costs the
-                    // formatting, not the status itself: the same text goes up again as plain text.
+                    // broken HTML in the plan costs the formatting, not the status: the same text goes up as
+                    // plain text.
                     error.isEntityParseError() -> {
                         parseMode = null
                         push(text)
                     }
 
-                    // whatever it was answering is gone, but the status still has something to say.
+                    // the anchor is gone, but the status still has something to say.
                     error.isReplyMessageNotFound() -> {
                         anchor = null
                         push(text)
@@ -277,7 +274,7 @@ internal class TurnStatus(
             .getOrElse { error ->
                 error.rethrowIfCancellation()
 
-                // the message already carries this text; the local copy was simply behind.
+                // the message already says this; the local copy was behind.
                 if (error.isMessageNotModified()) {
                     shown = text
                     return true
@@ -285,8 +282,8 @@ internal class TurnStatus(
 
                 log.warn { "live status rejected in chat=${target.chatId}: ${error.message}" }
 
-                // a message somebody deleted is not coming back and every further write would fail the
-                // same way. anything else may be transient, so the next change tries again.
+                // a deleted message is not coming back and every write would fail; anything else may be
+                // transient, so the next change retries.
                 if (error.isMessageGone()) gone = true
 
                 false
@@ -296,9 +293,8 @@ internal class TurnStatus(
     private fun statusText(): String? =
         statusMessageText(announcement, label, fallbackInUse()?.let { messages.fallbackModelNote(it.model, it.primaryBackIn) })
 
-    // a write in flight when the turn ends must still finish. `/stop`, or simply the turn being over,
-    // cancels the collector this runs in, and a send canceled mid-flight can still have created the
-    // message — leaving an id nobody holds and a status bubble nothing will ever take down.
+    // a write in flight when the turn ends must finish: `/stop` or the turn ending cancels the collector, and
+    // a canceled send may still have created the message, leaving a bubble nothing takes down.
     private suspend fun push(text: String): String =
         withContext(NonCancellable) {
             val id = messageId

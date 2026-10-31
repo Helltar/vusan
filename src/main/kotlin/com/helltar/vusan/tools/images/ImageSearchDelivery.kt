@@ -17,19 +17,17 @@ internal const val MAX_PHOTO_BYTES = PlatformLimits.PHOTO_MB * 1024 * 1024
 private const val MAX_IMAGE_DESCRIPTION_CHARS = 200
 private const val MAX_FILENAME_BASE_CHARS = 40
 
-// providers hand back dead links and hotlink-protected hosts, so a candidate list is worked through
-// until enough images survive rather than stopping after one attempt each.
+// providers return dead links and hotlink-protected hosts, so candidates are worked through until enough
+// images survive.
 private const val ATTEMPTS_PER_IMAGE = 4
 
 private val log = KotlinLogging.logger("ImageSearch")
 
 /**
- * The answer for a chat that will not show a photo, or `null` when it will.
- *
- * An image search asked in such a chat is answered before the provider is even queried: the pictures
- * are the whole point of the call, and querying then fetching megabytes of them to have the send
- * refused costs the turn for nothing. [deliverImageResults] checks again, so a caller that forgets
- * still cannot queue something nobody will see.
+ * The answer for a chat that will not show a photo, or `null` when it will. Given before the provider is
+ * queried: pictures are the point of the call, and fetching megabytes only to have the send refused wastes
+ * the turn. [deliverImageResults] checks again, so a forgetful caller still cannot queue what nobody will
+ * see.
  */
 internal fun BotOutbox.photosRefusedReply(): String? =
     if (capabilities.photos)
@@ -38,17 +36,13 @@ internal fun BotOutbox.photosRefusedReply(): String? =
         "This chat does not accept photos, so image search cannot deliver anything here. " +
                 "Tell the user that and answer with links or a description instead."
 
-/** One image a search provider found; [description] is what that provider says is in it. */
+/** One image a search provider found; [description] is what the provider says is in it. */
 data class FoundImage(val url: String, val description: String? = null)
 
 /**
- * Downloads [candidates] in order, keeps up to [limit] the chat can show as a photo on the turn's shelf,
- * queues them as a single photo or a media group unless [send] is off, and returns the text the tool
- * reports back to the model.
- *
- * A chat that refuses photos is answered before the first download when they are to be sent: the images
- * are the whole point of the call, and fetching megabytes of them to have the send rejected costs the
- * turn for nothing.
+ * Downloads [candidates] in order, keeps up to [limit] the chat can show as photos on the turn's shelf,
+ * queues them as one photo or a media group unless [send] is off, and returns the text reported to the model.
+ * A chat refusing photos is answered before the first download when they are to be sent.
  */
 suspend fun ImageDownloadClient.deliverImageResults(
     query: String,
@@ -121,8 +115,8 @@ suspend fun ImageDownloadClient.deliverImageResults(
     }.trim()
 }
 
-// the extension comes off the bytes, never the address: a CDN URL ends in a query or a bare path, and a
-// name with a wrong one puts the picture on the shelf as something no image tool takes
+// the extension comes from the bytes, never the URL: a CDN address ends in a query or a bare path, and a
+// wrong extension puts the picture on the shelf as something no image tool takes
 private fun imageFilename(query: String, index: Int, bytes: ByteArray): String {
     val extension = sniffedImageMimeType(bytes)?.let(::extensionOfMime) ?: "jpg"
 

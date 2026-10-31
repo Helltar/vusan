@@ -46,7 +46,7 @@ class SentConversationsTest {
         assertNull(SentConversations().apply { remember(testScope(userId = 7, chatId = 7), sent(), 0) }.continuation())
     }
 
-    // a clear, a turn stored without a request to continue, or a recap of everything: the history moved on
+    // a clear, a turn stored without a request to continue, or a full recap: the history moved on
     @Test
     fun `a request the stored history has moved past is dropped`() {
         val kept = SentConversations()
@@ -64,7 +64,7 @@ class SentConversationsTest {
         assertNull(kept.continuation(systemPrompt = "a new personality"))
     }
 
-    // every earlier message carries its own turn's memory, so an entry removed since would live on in them
+    // every earlier message carries its turn's memory, so a removed entry would live on in them
     @Test
     fun `a request sent with other memory is dropped`() {
         val kept = SentConversations()
@@ -81,7 +81,7 @@ class SentConversationsTest {
         assertNull(kept.continuation(storedHistoryTokens = 1_000, historyBudget = 900))
     }
 
-    // the stored history is the lean one: a continued request may carry more, but not without end
+    // stored history is the lean one: a continuation may carry more, but not without end
     @Test
     fun `a request grown far past the stored history is dropped`() {
         val kept = SentConversations()
@@ -90,7 +90,7 @@ class SentConversationsTest {
         assertNull(kept.continuation(storedHistoryTokens = 2_000))
     }
 
-    // what a stored turn said may be kept only as long as the stored turn itself
+    // what a stored turn said may be kept only as long as that turn
     @Test
     fun `a request holding a turn past retention is dropped`() {
         val kept = SentConversations()
@@ -99,7 +99,7 @@ class SentConversationsTest {
         assertNull(kept.continuation(rawRetentionCutoff = NOW.minusSeconds(2 * 86_400)))
     }
 
-    // every message of the request carries what the chat was saying, the log that was just erased
+    // every message of the request carries what the chat said, the log just erased
     @Test
     fun `a cleared group log drops every request kept for that chat and no other`() {
         val kept = SentConversations()
@@ -115,7 +115,7 @@ class SentConversationsTest {
         assertNotNull(kept.continuation(elsewhere, "the system prompt", "stored-1", 11, 20, 100_000, NOW.minusSeconds(86_400)))
     }
 
-    // a turn of someone else in the chat began before the log was cleared, and ends holding what it said
+    // someone else's turn began before the log was cleared and ends holding what it said
     @Test
     fun `a request built before the chat's log was cleared is not kept`() {
         val kept = SentConversations()

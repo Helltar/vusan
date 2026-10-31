@@ -14,13 +14,12 @@ class AttachedFile(
     val mimeType: String?,
     val kind: AttachedFileKind,
     val caption: String? = null,
-    // videos only: telegram's own duration, which decides how frames are sampled, and its thumbnail —
-    // the one frame still reachable when the video itself is over the bot download limit.
+    // videos only: telegram's duration, which decides frame sampling, and its thumbnail, the one frame still
+    // reachable past the bot download limit.
     val durationSeconds: Int? = null,
     val loadThumbnailBytes: (suspend () -> ByteArray)? = null,
-    // a GIF is a video everywhere it matters (sampling, size limits), so it stays
-    // kind VIDEO; this only marks the two places where it is not one — it carries no audio, and it is
-    // usually thrown into a chat as a reaction rather than as something to review.
+    // a GIF stays kind VIDEO, being one for sampling and size limits; this marks where it is not: it has no
+    // audio, and is usually a reaction rather than something to review.
     val isAnimation: Boolean = false,
     val loadBytes: suspend () -> ByteArray,
 ) {
@@ -34,9 +33,9 @@ class AttachedFile(
 }
 
 /**
- * The kind a file is handled as, from what the platform says of it first and its name otherwise, wherever a
- * file arrives without one: a document, a file a tool made, a file read out of the sandbox. A GIF is a video
- * everywhere it matters, and [isAnimationFile] marks it.
+ * The kind a file is handled as, from the platform's type first and its name otherwise, for files arriving
+ * without one: a document, a tool's output, a sandbox file. A GIF is a video wherever it matters, marked by
+ * [isAnimationFile].
  */
 fun attachedFileKindOf(name: String, mimeType: String?): AttachedFileKind =
     when {

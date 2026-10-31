@@ -8,26 +8,22 @@ import kotlin.time.Duration.Companion.seconds
 private const val TOO_MANY_REQUESTS = 429
 private const val SERVER_ERRORS = 500
 
-// telegram prefixes every parse-mode failure with "Bad Request: can't parse entities: ...",
-// regardless of the specific HTML wording (unsupported tag, unclosed tag, unescaped `<`/`&`, ...).
+// every parse-mode failure starts with "Bad Request: can't parse entities: ..." whatever the HTML problem.
 internal fun Throwable.isEntityParseError(): Boolean =
     telegramDescription?.contains("can't parse entities", ignoreCase = true) == true
 
-// a private delivery rejected by the recipient comes back as a 403 "Forbidden: ..." (bot blocked,
-// can't initiate conversation, user deactivated) or as "Bad Request: chat not found" when the user
-// never interacted with the bot. only the leading word counts: telegram also names content rejections
-// after it (`VOICE_MESSAGES_FORBIDDEN`), and those are one output kind being refused by a chat that
-// still takes everything else.
+// a private delivery refused by the recipient is a 403 "Forbidden: ..." (blocked, can't initiate,
+// deactivated) or "Bad Request: chat not found" when the user never interacted. only the leading word counts:
+// content rejections such as `VOICE_MESSAGES_FORBIDDEN` refuse one output kind in a chat that takes the rest.
 internal fun Throwable.isForbidden(): Boolean {
     val description = telegramDescription?.lowercase() ?: return false
 
     return description.startsWith("forbidden:") || "chat not found" in description
 }
 
-// nothing at all can be delivered into this chat any more: the bot was kicked or left, the user
-// blocked it, the chat is gone, or an admin took its right to write away. distinct from one output
-// kind being refused (photos off, text still allowed), which the send fallbacks already handle —
-// this one means every further send into the chat, now and on the next fire, is wasted.
+// nothing can be delivered here any more: kicked or left, blocked, the chat gone, or the right to write taken
+// away. unlike one refused output kind, which the send fallbacks handle, this makes every further send into
+// the chat wasted.
 internal fun Throwable.isChatUnreachable(): Boolean {
     if (isForbidden()) return true
 
@@ -38,24 +34,23 @@ internal fun Throwable.isChatUnreachable(): Boolean {
         "group chat was deactivated" in description
 }
 
-// telegram has used both wordings for a missing reply target, so match either.
+// telegram has used both wordings for a missing reply target.
 internal fun Throwable.isReplyMessageNotFound(): Boolean {
     val description = telegramDescription?.lowercase() ?: return false
 
     return "reply message not found" in description || "message to be replied not found" in description
 }
 
-// an ephemeral message may be answered only within 15 seconds of being sent; past that the anchor is refused
-// with this code, and so is an anchor on a message id of 0, which every ephemeral message carries.
+// an ephemeral message may be answered only within 15 seconds; after that the anchor is refused with this
+// code, as is an anchor on message id 0, which every ephemeral message has.
 internal fun Throwable.isReplyTargetInvalid(): Boolean =
     telegramDescription?.contains("REPLY_TO_INVALID", ignoreCase = true) == true
 
 internal fun Throwable.isMessageNotModified(): Boolean =
     telegramDescription?.contains("message is not modified", ignoreCase = true) == true
 
-// the message an edit or a deletion names is not there any more — somebody removed it, or it aged past
-// what the bot may still touch. distinct from a transient rejection: this one never recovers, so the
-// caller stops writing to that message instead of retrying.
+// the message to edit or delete is gone (removed, or too old to touch). this never recovers, so the caller
+// stops writing to it instead of retrying.
 internal fun Throwable.isMessageGone(): Boolean {
     val description = telegramDescription?.lowercase() ?: return false
 
@@ -65,9 +60,8 @@ internal fun Throwable.isMessageGone(): Boolean {
         "message can't be deleted" in description
 }
 
-// a `file_id` telegram no longer accepts. the wordings vary and this does not have to catch every
-// one: a match only schedules an early re-read of the set, so a miss costs a day's delay and a false
-// positive costs one extra `getStickerSet` call.
+// a `file_id` telegram no longer accepts. wordings vary and a miss is cheap: a match only schedules an early
+// re-read of the set, so a miss costs a day and a false positive one extra `getStickerSet`.
 internal fun Throwable.isWrongFileIdentifier(): Boolean {
     val description = telegramDescription?.lowercase() ?: return false
 
@@ -76,36 +70,32 @@ internal fun Throwable.isWrongFileIdentifier(): Boolean {
         "invalid file_id" in description
 }
 
-// getFile refuses a file above the 20 MB bot download limit before serving any of it.
+// getFile refuses a file over the 20 MB bot download limit.
 internal fun Throwable.isFileTooBig(): Boolean =
     telegramDescription?.contains("file is too big", ignoreCase = true) == true
 
-// a sticker set the owner deleted or renamed. telegram answers `getStickerSet` with either the raw
-// core error or the readable wording, and only these mean the set is really gone — any other
-// failure is transient and must not be taken as permission to drop what was learned from it.
+// a set its owner deleted or renamed, in the raw core error or the readable wording. only these mean gone;
+// anything else is transient and must not drop what was learned.
 internal fun Throwable.isStickerSetGone(): Boolean {
     val description = telegramDescription?.lowercase() ?: return false
 
     return "stickerset_invalid" in description || "sticker set not found" in description
 }
 
-// the request went out and no answer came back: a timeout or a dropped connection, with no api error
-// anywhere in the chain. telegram may well have delivered the message, so unlike a rejection this
-// says nothing against the payload, and sending it again in any shape risks showing it twice.
+// sent with no answer back (a timeout, a dropped connection, no api error in the chain). telegram may have
+// delivered it, so resending in any shape risks showing it twice.
 internal fun Throwable.isUnanswered(): Boolean =
     telegramRequestError == null && causes.any { it is IOException }
 
-// telegram itself is down or overloaded rather than refusing this request: a 5xx from its gateway, or
-// no answer at all. worth asking again later, unlike every 4xx, which the same request would get again.
+// telegram down or overloaded rather than refusing: a 5xx from its gateway, or no answer. worth retrying,
+// unlike a 4xx.
 internal fun Throwable.isTelegramUnavailable(): Boolean =
     isUnanswered() || telegramRequestError?.errorCode?.let { it >= SERVER_ERRORS } == true
 
 /**
- * How long Telegram's flood control says to wait, or `null` when the failure was not a 429.
- *
- * The number is the only thing worth acting on: it is exact, while any local pacing is a guess. It
- * can also be far longer than a turn is worth waiting for, so the caller decides what it will still
- * sit through — this only reports what was asked.
+ * How long telegram's flood control says to wait, or `null` when the failure was not a 429. The number is
+ * exact where local pacing is a guess, but may be far longer than a turn is worth, so the caller decides what
+ * it will sit through.
  */
 internal fun Throwable.retryAfterOrNull(): Duration? =
     telegramRequestError
@@ -117,8 +107,8 @@ internal fun Throwable.retryAfterOrNull(): Duration? =
 private val Throwable.telegramDescription: String?
     get() = telegramRequestError?.apiResponse
 
-// the client wraps request failures in generic TelegramApiException chains, so search the causes
-// for the api-level exception that carries telegram's error description and its parameters.
+// the client wraps failures in generic TelegramApiException chains, so find the one carrying telegram's
+// description and parameters.
 private val Throwable.telegramRequestError: TelegramApiRequestException?
     get() = causes.filterIsInstance<TelegramApiRequestException>().firstOrNull()
 

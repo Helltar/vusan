@@ -6,30 +6,29 @@ import com.helltar.vusan.llm.RequestOptions
 import com.helltar.vusan.llm.codex.CodexAuthStore
 
 /**
- * The model that looks at images and video frames, with the client that reaches it and the [options]
- * every look carries: no prompt caching, since a picture is looked at once, and a cache key of its own.
+ * The model that looks at images and video frames, its client, and the [options] every look carries: no
+ * prompt caching, since a picture is looked at once, and a cache key of its own.
  */
 data class VisionRuntime(
     val providerLabel: String,
     val client: LlmClient,
     val model: LlmModel,
     val options: RequestOptions,
-    // whether the client is the chat's own, which the caller closes once, or one of vision's to close too
+    // whether the client is vision's own and must be closed too, or the chat's, closed once by the caller
     val ownClient: Boolean,
 )
 
 /**
- * Picks the model that looks at images. `VISION_MODEL` gives vision a model of its own, so a chat model
- * that cannot see (`deepseek-v4-pro`, most local models) does not take the bot's eyes away with it; a
- * model named for the role is taken at its word about seeing, unless its own vendor said at startup that
- * it takes no images (`seesImages == false`, however the vendor put it) — then the startup stops, rather
- * than every look failing. Without one, vision rides on the chat model, and a chat model that cannot see
- * leaves vision off entirely — `null` here means the vision tools are never registered, which beats
- * offering the agent a tool whose every call fails.
+ * Picks the vision model. `VISION_MODEL` gives vision its own model, so a blind chat model
+ * (`deepseek-v4-pro`, most local models) does not take the bot's eyes with it; a model named for the role is
+ * trusted to see unless its vendor said at startup it takes no images (`seesImages == false`), which stops
+ * startup instead of failing every look. Without one, vision rides on the chat model, and a blind chat model
+ * leaves vision off: `null` means the vision tools are never registered, better than a tool whose every call
+ * fails.
  */
 fun resolveVisionRuntime(config: LlmProviderConfig?, chat: LlmRuntime, codexAuth: CodexAuthStore? = null): VisionRuntime? {
-    // riding on the chat model, a look keeps the model's own effort rather than the one tuned for turns;
-    // a vision model of its own is sent the effort configured for it
+    // on the chat model a look keeps the model's own effort rather than the turn's; a dedicated vision model
+    // gets its configured effort
     if (config == null) {
         return chat.takeIf { it.model.seesImages }?.let {
             VisionRuntime(it.providerLabel, it.client, it.model, it.visionOptions().copy(reasoningEffort = null), ownClient = false)

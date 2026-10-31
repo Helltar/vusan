@@ -35,18 +35,18 @@ class ImageGenToolsTest {
     private val config = ImageProviderConfig.OpenAi(apiKey = "sk-test", model = "gpt-image-1.5", quality = "medium")
     private val imageBytes = byteArrayOf(4, 2, 0)
 
-    // records the `size` of the last request the tool issued, so orientation mapping can be asserted.
+    // records the `size` of the last request, to assert orientation mapping.
     private class SizeProbe {
         var size: String? = null
     }
 
-    // records the endpoint the tool picked: a self-portrait has to leave through /edits with the
-    // reference photo, everything else through /generations.
+    // records the endpoint: a self-portrait leaves through /edits with the reference photo, everything else
+    // through /generations.
     private class RouteProbe {
         var path: String? = null
     }
 
-    // records the multipart upload an edit built, which is where the source images end up.
+    // records the multipart upload an edit built, where the source images end up.
     private class EditProbe {
         var form: String = ""
 
@@ -150,7 +150,7 @@ class ImageGenToolsTest {
         assertContains(result, "Image queued")
     }
 
-    // what a later call is to take must not reach the chat on the way
+    // what a later call will take must not reach the chat on the way
     @Test
     fun `a picture made with send off is kept for the turn and queued nowhere`() = runBlocking {
         val outbox = BotOutbox()
@@ -165,8 +165,8 @@ class ImageGenToolsTest {
         assertContentEquals(imageBytes, shelf.open().file("#1/1").loadBytes())
     }
 
-    // drawing for a chat that refuses photos would be paid for and dropped, so it is answered before the
-    // provider is called; kept for a later call, the picture is drawn all the same
+    // drawing for a chat refusing photos would be paid for and dropped, so it is answered before the provider
+    // is called; kept for a later call, it is drawn anyway
     @Test
     fun `a chat that refuses photos is answered before generating, unless the picture is kept instead`() = runBlocking {
         val outbox = BotOutbox(ChatCapabilities(photos = false))
@@ -430,8 +430,7 @@ class ImageGenToolsTest {
         assertEquals("1152x2048", flexible.size)
     }
 
-    // the json body the xai client posted, which is where its sources and framing end up
-    // what the tools hand to a provider, whichever it is: how many sources and which framing
+    // what the tools hand a provider, whichever it is: how many sources and which framing
     private class RecordingImageClient(override val maxEditImages: Int) : ImageClient {
         val edits = mutableListOf<Pair<Int, ImageFraming>>()
 

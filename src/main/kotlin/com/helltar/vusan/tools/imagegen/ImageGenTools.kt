@@ -129,8 +129,8 @@ class ImageGenTools(
         val self = selfImage?.reference?.takeIf { withYourself }
         val sources = mutableListOf<SourceImage>()
 
-        // the first source is the one the model holds closest to the original, which is why a picture of
-        // the bot puts its own face there and the user's images follow it.
+        // the model holds the first source closest to the original, so a picture of the bot puts its face
+        // there, the user's images after.
         self?.let { sources += it }
 
         var uploadBytes = self?.bytes?.size ?: 0
@@ -201,8 +201,8 @@ class ImageGenTools(
         const val IMAGE_PROMPT_MAX_CHARS = 32_000
         const val MAX_EDIT_IMAGE_BYTES = 25 * 1024 * 1024
 
-        // one upload, not one image: ten album photos at the per-image limit would be a quarter-gigabyte
-        // request that spends its five-minute timeout uploading.
+        // per upload, not per image: ten album photos at the per-image limit would be a quarter-gigabyte
+        // request spending its five-minute timeout uploading.
         const val MAX_EDIT_TOTAL_BYTES = 45 * 1024 * 1024
 
         private val log = KotlinLogging.logger {}
@@ -210,9 +210,8 @@ class ImageGenTools(
 }
 
 /**
- * What to do next after the content filter refused, which is not the same on both sides of it: a
- * prompt it never drew is one the model has to change, while a picture it drew and then withheld is
- * often only a retry away.
+ * What to do after a content-filter refusal, which depends on the side: a prompt it never drew must change,
+ * while a picture drawn and then withheld is often only a retry away.
  */
 private fun ImageModerationBlocked.advice(): String {
     val flagged = categories.takeIf { it.isNotEmpty() }?.let { " (flagged: ${it.joinToString()})" }.orEmpty()
@@ -248,8 +247,8 @@ internal fun imageContentTypeOrNull(filename: String): String? =
     mimeTypeOfName(filename)?.takeIf { it in SUPPORTED_EDIT_MIME_TYPES }
 
 /**
- * An edit left to `auto` is framed like its first source, so with the bot's likeness first, `auto` takes
- * the frame of the picture being edited instead. A picture nothing here can measure, WebP among them, stays `auto`.
+ * An `auto` edit is framed like its first source, so with the bot's likeness first, `auto` takes the edited
+ * picture's frame instead. A picture nothing here can measure, WebP among them, stays `auto`.
  */
 private fun sceneFraming(scene: SourceImage): ImageFraming =
     imageDimensions(scene.bytes)?.let { (width, height) -> ImageFraming.closestTo(width, height) } ?: ImageFraming.AUTO
@@ -257,7 +256,7 @@ private fun sceneFraming(scene: SourceImage): ImageFraming =
 private val ImageFraming.label: String
     get() = name.lowercase()
 
-// telegram shows a photo whatever it is called, but the name follows the file when someone saves or
-// forwards it, and the route decides the format: the platform asks for jpeg, codex sends what it likes.
+// telegram shows a photo whatever its name, but the name follows the file when saved or forwarded, and the
+// route decides the format: the platform asks for jpeg, codex sends what it likes.
 private fun imageFilename(bytes: ByteArray): String =
     "image." + (sniffedImageMimeType(bytes)?.let(::extensionOfMime) ?: "png")

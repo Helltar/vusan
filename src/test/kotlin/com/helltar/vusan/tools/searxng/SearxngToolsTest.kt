@@ -26,7 +26,7 @@ class SearxngToolsTest {
         ByteArrayOutputStream().also { ImageIO.write(BufferedImage(width, height, BufferedImage.TYPE_INT_RGB), "png", it) }
             .toByteArray()
 
-    /** Captures the query parameters of every `/search` call the tools make. */
+    /** Captures the query parameters of every `/search` call. */
     private class SearchProbe {
         val calls = mutableListOf<Parameters>()
         val last: Parameters get() = calls.last()
@@ -67,8 +67,8 @@ class SearxngToolsTest {
 
     @Test
     fun `blank language and time range are left out of the request`() = runBlocking {
-        // SearXNG answers an empty `language` with 400 Empty language parameter, and an unknown
-        // `time_range` with a 400 too, so neither may ever reach the wire as an empty string.
+        // SearXNG answers an empty `language` or an unknown `time_range` with a 400, so neither may go out as
+        // an empty string.
         val probe = SearchProbe()
         tools(resultsJson("https://a"), probe = probe).metaSearch("kotlin", timeRange = "", language = "")
 
@@ -146,8 +146,8 @@ class SearxngToolsTest {
 
     @Test
     fun `a total engine outage is not reported as an empty topic`() = runBlocking {
-        // every engine rate-limiting itself at once produces the same empty `results` as a genuine
-        // miss, and calling that "no results" makes the model tell the user the topic has no coverage.
+        // all engines rate-limiting at once looks like a genuine miss, and "no results" makes the model say
+        // the topic has no coverage.
         val body =
             """{"results":[],"unresponsive_engines":[["brave","Suspended: too many requests"],
                ["duckduckgo","Suspended: CAPTCHA"]]}"""
@@ -169,8 +169,8 @@ class SearxngToolsTest {
 
     @Test
     fun `image search pins the engine list and sends no category`() = runBlocking {
-        // `engines` combined with `categories=images` is ignored by SearXNG, which re-adds the
-        // category's own stock-photo and icon engines on top and floods the results with noise.
+        // SearXNG ignores `engines` with `categories=images` and re-adds the category's stock-photo and icon
+        // engines, flooding the results.
         val probe = SearchProbe()
         tools(imagesJson(1), probe = probe, image = png()).metaSearchImages("red panda")
 
@@ -178,8 +178,7 @@ class SearxngToolsTest {
         assertContains(probe.last["engines"] ?: "", "bing images")
     }
 
-    // the images are the whole point of the call, so a chat that refuses them is answered before the
-    // first download rather than after megabytes have been fetched for a send that gets rejected.
+    // images are the point of the call, so a chat refusing them is answered before the first download.
     @Test
     fun `image search in a chat that refuses photos downloads nothing`() = runBlocking {
         val outbox = BotOutbox(ChatCapabilities(photos = false))

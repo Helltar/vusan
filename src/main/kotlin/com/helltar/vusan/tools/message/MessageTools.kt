@@ -10,17 +10,17 @@ import com.helltar.vusan.tools.suspendToolGuard
 
 private const val MAX_MESSAGE_CHARS = 4000
 
-// Telegram caps a rich message at 32768 UTF-8 characters (Bot API 10.1).
+// telegram caps a rich message at 32768 UTF-8 characters (Bot API 10.1).
 private const val MAX_RICH_MESSAGE_CHARS = 32768
 
-// an announcement is one or two sentences about what comes next; anything longer is the answer itself,
-// and the answer is not due yet.
+// an announcement is a sentence or two about what comes next; anything longer is the answer, which is not due
+// yet.
 private const val MAX_ANNOUNCEMENT_CHARS = 500
 
-// interim messages are for a result worth reading early; more than this is the turn narrating itself
+// interim messages are for results worth reading early; more is the turn narrating itself
 private const val MAX_INTERIM_MESSAGES = 3
 
-// the reason is a phrase for the log line, like the one an initiative look gives
+// a phrase for the log line, like an initiative look's reason
 private const val MAX_SILENCE_REASON_CHARS = 160
 
 private const val QUEUE_FULL =
@@ -77,9 +77,9 @@ class MessageTools(
                 "You have already announced this turn's plan and the user is reading it. " +
                     "Get on with the work and report the result at the end."
 
-            // a reply the user asked to have in private must not surface in the chat the turn runs in, which
-            // is where the live status is; the words travel to the private chat with the rest instead, and a
-            // full queue refuses them rather than letting them through to the chat.
+            // a reply the user wants in private must not show in the chat, where the live status is; the
+            // words go to the private chat with the rest, and a full queue refuses them rather than leaking
+            // them.
             outbox.redirectToPrivate ->
                 if (outbox.enqueueText(trimmed, announcement = true)) {
                     "This reply goes to the user's private chat, so the plan was queued with it rather than shown here. " +
@@ -88,15 +88,14 @@ class MessageTools(
                     QUEUE_FULL
                 }
 
-            // the turn has a live status to write into, and what it says is in the chat right now.
+            // the live status shows it in the chat right now.
             narrator?.say(trimmed) == true -> {
                 outbox.recordDelivered(trimmed)
                 "Sent. The user can read this while the rest of the turn runs. " +
                     "Announce nothing further: do the work, and do not repeat these words in your final answer."
             }
 
-            // nobody is watching this turn go by — a scheduled run has no one waiting on it — so the
-            // words travel with the answer instead.
+            // nobody watches a scheduled run go by, so the words travel with the answer.
             outbox.enqueueText(trimmed, announcement = true) ->
                 "This turn has no live chat to announce into, so the text was queued with the rest of the reply. " +
                     "Do not announce anything else; write the result into the same reply."
@@ -117,9 +116,8 @@ class MessageTools(
                 "You have already sent $MAX_INTERIM_MESSAGES messages this way in this turn. " +
                     "Finish the work and put the rest into your final answer."
 
-            // a reply the user asked to have in private must not surface in the chat the turn runs in; the
-            // words travel to the private chat with the rest instead, and a full queue refuses them rather
-            // than letting them through to the chat
+            // a reply the user wants in private must not show in the chat; the words go to the private chat
+            // with the rest, and a full queue refuses them rather than leaking them
             outbox.redirectToPrivate ->
                 if (outbox.enqueueText(trimmed)) {
                     "This reply goes to the user's private chat, so the text was queued with the rest of it rather than sent here."
@@ -127,14 +125,14 @@ class MessageTools(
                     QUEUE_FULL
                 }
 
-            // in the chat now, and recorded as an answer the turn gave rather than a promise it made
+            // in the chat now, recorded as an answer rather than a promise
             narrator?.send(trimmed) == true -> {
                 interimSent++
                 outbox.recordDelivered(trimmed, announcement = false)
                 "Sent. The user is reading it now; do not repeat it in your final answer."
             }
 
-            // nobody is watching this turn go by, so the words travel with the answer instead
+            // nobody watches this turn go by, so the words travel with the answer
             outbox.enqueueText(trimmed) ->
                 "This turn has no live chat to send into, so the text was queued with the rest of the reply."
 
@@ -148,8 +146,8 @@ class MessageTools(
         "Subsequent replies will be sent to the user's private chat."
     }
 
-    // the model never reads this result: the turn ends with the batch it was called in. it is written for
-    // the next turn, which replays it from the history and has to see that the silence was chosen
+    // the model never reads this result, since the turn ends with this batch; it is for the next turn, which
+    // replays it from history and must see the silence was chosen
     @Tool(MessageToolDescriptions.STAY_SILENT)
     suspend fun staySilent(
         @Arg(MessageToolDescriptions.SILENCE_REASON)

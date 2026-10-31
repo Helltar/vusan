@@ -37,7 +37,7 @@ class MemoryRepositoryTest {
 
         repo.add(testUser(100).memoryOwner, content = "alice detail")
         repo.add(testUser(200).memoryOwner, content = "bob detail")
-        // same numeric owner as the user above, but a different scope — must not bleed across.
+        // the same number as the user above in another scope must not bleed across.
         repo.add(testChat(100).memoryOwner, content = "group detail")
 
         assertEquals(listOf("alice detail"), repo.load(testUser(100).memoryOwner).map { it.content })
@@ -84,7 +84,7 @@ class MemoryRepositoryTest {
         val repo = MemoryRepository()
         val others = repo.add(testUser(200).memoryOwner, "keeps bees")
 
-        // the same number in another scope is somebody else's row too
+        // the same number in another scope is someone else's row too
         assertEquals(null, repo.replace(testUser(100).memoryOwner, others, "keeps goats"))
         assertEquals(null, repo.replace(testChat(200).memoryOwner, others, "keeps goats"))
 
@@ -106,7 +106,7 @@ class MemoryRepositoryTest {
         val repo = MemoryRepository()
         val id = repo.add(testUser(100).memoryOwner, content = "alice detail")
 
-        // a different user (200) cannot delete user 100's memory, even with its id.
+        // another user (200) cannot delete user 100's memory, even with its id.
         assertFalse(repo.forget(id, user = testUser(200), chat = testChat(-1)))
         assertEquals(listOf("alice detail"), repo.load(testUser(100).memoryOwner).map { it.content })
     }
@@ -116,7 +116,7 @@ class MemoryRepositoryTest {
         val repo = MemoryRepository()
         val id = repo.add(testChat(-500).memoryOwner, content = "group detail")
 
-        // member's own userId differs, but the chatId matches the entry's owner chat.
+        // the member's userId differs, but the chatId matches the entry's owner chat.
         assertTrue(repo.forget(id, user = testUser(100), chat = testChat(-500)))
         assertTrue(repo.load(testChat(-500).memoryOwner).isEmpty())
     }
@@ -146,8 +146,8 @@ class MemoryRepositoryTest {
         assertEquals(listOf("group"), repo.load(testChat(100).memoryOwner).map { it.content })
     }
 
-    // both platforms issue plain numbers, so an unqualified owner would hand one person's memory to
-    // whoever matched the id on the other one.
+    // both platforms issue plain numbers, so an unqualified owner would hand one person's memory to whoever
+    // matched the id on the other.
     @Test
     fun `the same id on two platforms is two owners`() = runBlocking {
         val repo = MemoryRepository()

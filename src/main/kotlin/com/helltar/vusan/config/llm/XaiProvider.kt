@@ -27,20 +27,20 @@ private const val XAI_MODELS_PAGE = "https://docs.x.ai/developers/models"
 private val log = KotlinLogging.logger("ModelPreflight")
 
 /**
- * xAI's API through the Responses API, the endpoint its quick start calls. It matches OpenAI's on the wire,
- * so the OpenAI client speaks it; what differs is what xAI reads, as measured on 2026-10-21:
+ * xAI's API through the Responses API, the endpoint its quick start uses. It matches OpenAI's on the wire, so
+ * the OpenAI client speaks it; what differs is what xAI reads, measured 2026-10-21:
  *
- * - `prompt_cache_key` is the conversation's own, and xAI routes on it as on `x-grok-conv-id`, to the
- *   server that holds the prefix. Caching is automatic, a write costs nothing, and there are no
- *   breakpoints or lifetimes to ask for, so OpenAI's cache options are not sent.
- * - `store: false` keeps the conversation off xAI's servers, which otherwise hold it for 30 days, and
- *   the encrypted reasoning comes back to be replayed through the tool loop: a request without the
- *   reasoning before it is what xAI names the first cause of cache misses.
- * - `parallel_tool_calls` is left at its default, on.
+ * - `prompt_cache_key` is the conversation's, and xAI routes on it as on `x-grok-conv-id`, to the server
+ *   holding the prefix. Caching is automatic, writes are free, and there are no breakpoints or lifetimes, so
+ *   OpenAI's cache options are not sent.
+ * - `store: false` keeps the conversation off xAI's servers (otherwise kept 30 days), and the encrypted
+ *   reasoning comes back for the tool loop: a request missing the prior reasoning is what xAI names the first
+ *   cause of cache misses.
+ * - `parallel_tool_calls` stays at its default, on.
  *
- * Grok keeps an entry per request rather than per prefix — on 2026-10-27, through OpenRouter on xAI's own
- * upstream, a turn rebuilt from storage read 1,152 tokens, xAI's own prefix, against 7,680 for one that
- * continued the last request — so a turn continues the conversation's last request.
+ * Grok keeps an entry per request rather than per prefix (2026-10-27, via OpenRouter on xAI's upstream: a
+ * rebuilt turn read 1,152 tokens, xAI's own prefix, against 7,680 for a continuation), so a turn continues
+ * the last request.
  */
 internal fun xaiRuntime(config: LlmProviderConfig.Xai, http: HttpClient?): LlmRuntime {
     val model =
@@ -73,11 +73,10 @@ internal fun xaiRuntime(config: LlmProviderConfig.Xai, http: HttpClient?): LlmRu
 }
 
 /**
- * xAI's model list answers for an alias as well, under the model's own id, and states its window and
- * the efforts it takes: `none` among them where thinking can be turned off, nothing at all for a model
- * that takes no effort, which refuses the field. Whether the model sees is stated only by the
- * language-model list, asked second. Both answer on an account out of credits, whose first turn is then
- * what fails, with a 402.
+ * xAI's model list also answers for an alias, under the model's own id, with its window and efforts: `none`
+ * where thinking can be turned off, nothing for a model that refuses the field. Vision is stated only by the
+ * language-model list, asked second. Both answer on an account out of credits, whose first turn then fails
+ * with a 402.
  */
 internal suspend fun xaiPreflight(http: HttpClient, config: LlmProviderConfig.Xai): LlmProviderConfig.Xai {
     val facts = verifyModel(http, "xAI", config, XAI_MODELS_PAGE, "$XAI_API_BASE_URL/models") { bearerAuth(config.apiKey) } ?: return config

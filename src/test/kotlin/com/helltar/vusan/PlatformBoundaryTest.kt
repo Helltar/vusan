@@ -11,21 +11,17 @@ import kotlin.test.Test
 import kotlin.test.fail
 
 /**
- * How much of the codebase still knows that Telegram exists.
+ * How much of the codebase still knows telegram exists.
  *
- * A second messenger stays cheap only while the shared core is unaware of the first one. No import is
- * not proof of neutrality, but a new import is proof of regrowth — so this walks every package outside
- * `telegram/` and fails on one.
+ * A second messenger stays cheap only while the shared core is unaware of the first. No import is no proof of
+ * neutrality, but a new import is proof of regrowth, so this walks every package outside `telegram/` and
+ * fails on one. The exception list is empty, the state to hold; what remains is semantics (telegram's
+ * formatting, limits, numeric message references) that no import test sees.
  *
- * The exception list is empty, and that is the state to hold. What is left of the platform work is not
- * measured here any more: it is the semantics — Telegram's formatting, its limits, its numeric message
- * references — that no import test can see.
- *
- * **What this does not catch.** It reads imports, so a shared file can still depend on a messenger
- * *through another type* and pass: `AgentRunner` held a `StickerCatalog`, which holds a
- * `TelegramClient`, while importing nothing from `telegram/` itself. Three such dependencies were
- * found by reading the code, not by this test. A green run means no shared file names Telegram — not
- * that none reaches it. When adding a messenger, check what the constructors actually take.
+ * **What this does not catch.** A shared file can depend on a messenger *through another type* and pass:
+ * `AgentRunner` once held a `StickerCatalog` holding a `TelegramClient` while importing nothing from
+ * `telegram/`. A green run means no shared file names telegram, not that none reaches it; when adding a
+ * messenger, check what the constructors actually take.
  */
 class PlatformBoundaryTest {
 
@@ -69,7 +65,7 @@ class PlatformBoundaryTest {
 
     private fun Path.pathIn(root: Path): String = relativeTo(root).toString()
 
-    // the test's working directory is the project directory under gradle, but not under every ide runner.
+    // the working directory is the project under gradle, but not under every ide runner.
     private fun projectRoot(): Path =
         generateSequence(Path.of("").toAbsolutePath()) { it.parent }
             .firstOrNull { it.resolve("src/main/kotlin").exists() }
@@ -78,15 +74,14 @@ class PlatformBoundaryTest {
     private companion object {
         val TELEGRAM_IMPORT = Regex("""^import\s+(org\.telegram\.|com\.helltar\.vusan\.telegram\.)""")
 
-        // the composition root wires whichever adapters the deployment runs, so it is expected to name
-        // them. it is exempt rather than allowlisted: it will still import Telegram once nothing else does.
+        // the composition root wires the adapters, so it is expected to name them: exempt rather than
+        // allowlisted.
         val COMPOSITION_ROOT = setOf("src/main/kotlin/com/helltar/vusan/Main.kt")
 
         /**
-         * Shared files that still reach into Telegram, and what each is waiting for. It is empty, which is
-         * the state to hold: adding an entry means the boundary moved the wrong way and needs a deliberate
-         * decision, not a line here. A tool that only one messenger can implement belongs in its adapter
-         * and reaches the registry through `PlatformToolSets`.
+         * Shared files still reaching into telegram, and what each waits for. Empty, the state to hold: a new
+         * entry means the boundary moved the wrong way. A tool only one messenger can implement belongs in
+         * its adapter and reaches the registry through `PlatformToolSets`.
          */
         val ALLOWED = emptyMap<String, String>()
     }

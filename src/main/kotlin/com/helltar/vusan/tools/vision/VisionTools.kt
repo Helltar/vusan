@@ -67,8 +67,8 @@ class VisionTools(
                 ?.let { return@suspendToolGuard videoClient.describe(video, it, focus) }
         }
 
-        // both an oversize video and a refused download leave telegram's own preview frame as the only
-        // thing still reachable, which beats answering nothing about the video at all.
+        // an oversize video and a refused download both leave telegram's preview frame as the only thing
+        // reachable, better than nothing.
         val preview =
             video.loadThumbnailBytes?.let { downloadOrNull(video, it) }
                 ?: error(

@@ -21,7 +21,7 @@ import kotlin.test.assertTrue
 
 private val START: Instant = Instant.parse("2026-10-10T09:30:00Z")
 
-// named the way the shelf names it, in whatever zone the tests run in
+// named as the shelf names it, in the tests' zone
 private val DIRECTORY = "turns/" + DateTimeFormatter.ofPattern("yyMMdd-HHmmss").format(START.atZone(ZoneId.systemDefault()))
 
 private class FakeSandbox(
@@ -66,7 +66,7 @@ class TurnShelfTest {
         assertEquals("a long answer", second.textOrNull(" #1 "))
     }
 
-    // a reference is a value, not a template: text that merely mentions a label is meant as written
+    // a reference is a value, not a template: text merely mentioning a label is meant as written
     @Test
     fun `only a whole value is a reference`() = runBlocking {
         val shelf = TurnShelf()
@@ -87,7 +87,7 @@ class TurnShelfTest {
         assertFailsWith<IllegalArgumentException> { first.textOrNull("#2") }
     }
 
-    // a continued request carries the last turn's labels, so this turn's must not mean the same numbers
+    // a continued request carries the last turn's labels, so this turn's numbers must differ
     @Test
     fun `a turn numbered on from an earlier one refuses that turn's labels`() = runBlocking {
         val shelf = TurnShelf()
@@ -127,7 +127,7 @@ class TurnShelfTest {
         assertContentEquals(byteArrayOf(1, 2, 3), file.loadBytes())
     }
 
-    // a cut result is still whole on the shelf, and the model has to know where
+    // a cut result is still whole on the shelf, and the model must know where
     @Test
     fun `a result the budget cut says where the whole of it is`() {
         val call = TurnShelf().open()
@@ -145,7 +145,7 @@ class TurnShelfTest {
         assertFailsWith<IllegalArgumentException> { call.textOrNull("#0") }
     }
 
-    // the attachment block shows a name rather than a label, and a model that copies it back means that file
+    // the attachment block shows a name, not a label, and a model copying it back means that file
     @Test
     fun `a request's file is also found by its own name, unless the name is shared`() = runBlocking {
         val call = TurnShelf(listOf(attachment("cat.png"), attachment("photo.jpg"), attachment("photo.jpg"))).open()
@@ -185,7 +185,7 @@ class TurnShelfTest {
         assertEquals(listOf("notes/draft.txt", "out/clip.mp4"), sandbox.reads)
     }
 
-    // a large artifact named as text is refused under the text cap, and none of it is moved first
+    // a large artifact named as text is refused under the text cap before any of it moves
     @Test
     fun `a sandbox file over the text cap is refused before it is read, while a file argument still takes it`() = runBlocking {
         val shelf = TurnShelf()
@@ -216,7 +216,7 @@ class TurnShelfTest {
         assertContains(message.orEmpty(), "no sandbox")
     }
 
-    // calls of one read-only run go side by side, so a reference to an earlier one of them waits for it
+    // read-only calls run side by side, so a reference to an earlier one waits for it
     @Test
     fun `a reference to a call still running waits for it to finish`() = runBlocking {
         val shelf = TurnShelf()
@@ -273,7 +273,7 @@ class TurnShelfTest {
         assertEquals(listOf("turns/260101-090000", "turns/260102-090000"), sandbox.deleted)
     }
 
-    // one person starting two turns within a second, in two chats, must not have them write over each other
+    // two turns started within a second in two chats must not write over each other
     @Test
     fun `a turn whose name is taken writes under the next free one`() = runBlocking {
         val stamp = DIRECTORY.substringAfterLast('/')

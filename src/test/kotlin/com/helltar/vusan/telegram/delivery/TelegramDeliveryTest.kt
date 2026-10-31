@@ -85,8 +85,8 @@ class TelegramDeliveryTest {
     @Test
     fun `a sticker refused for reasons of its own is not blamed on the catalog`() = runBlocking {
         val rejected = mutableListOf<Long>()
-        // a group where admins restricted stickers rejects every one of them; the catalog is shared
-        // by every chat, so this must not be read as the sticker being broken.
+        // admins restricting stickers rejects every one; the catalog is shared by all chats, so this must not
+        // mark the sticker broken.
         val client = RejectingClient("Bad Request: not enough rights to send stickers to the chat")
 
         deliverSticker(TelegramDelivery(client.proxy, onStickerRejected = { rejected += it }))
@@ -149,12 +149,12 @@ class TelegramDeliveryTest {
             )
 
         assertTrue(outcome.isUnreachable)
-        // the chat action of the first item, then its send. the two remaining photos are never tried.
+        // the first item's chat action, then its send; the remaining two photos are never tried.
         assertEquals(2, client.calls)
     }
 
-    // telegram can take longer to process an uploaded video than the client waits for its answer, and the
-    // video lands in the chat anyway: neither the document fallback nor the caption may repeat it.
+    // telegram may take longer to process an uploaded video than the client waits, and the video lands
+    // anyway: neither the document fallback nor the caption may repeat it.
     @Test
     fun `a video nobody answered for is not sent again in another shape`() = runBlocking {
         val client = UnansweredVideoClient()
@@ -172,8 +172,8 @@ class TelegramDeliveryTest {
         assertEquals(listOf("SendChatAction", "SendVideo"), client.requests)
     }
 
-    // the buttons sit on the bot's own question, but the answer belongs under the message the user wrote,
-    // the same place a plain reply would land.
+    // the buttons sit on the bot's question, but the answer belongs under the user's message, where a plain
+    // reply would land.
     @Test
     fun `a callback answer replies to the message the exchange started from`() = runBlocking {
         val client = RecordingClient()
@@ -204,8 +204,7 @@ class TelegramDeliveryTest {
         assertEquals(77, client.replyTargets.single())
     }
 
-    // the turn announced its plan into the live status while it was still working, so the chat already
-    // has those words; delivery owes the user only what is left.
+    // the plan was already announced into the live status, so delivery owes only what is left.
     @Test
     fun `an announcement already in the chat is not sent again`() = runBlocking {
         val client = RecordingClient()
@@ -241,8 +240,8 @@ class TelegramDeliveryTest {
         assertEquals("⏰ Scheduled by @helltar", client.sentTexts.first())
     }
 
-    // a notice is parsed as HTML, so the link has to be written as HTML: markdown would arrive as
-    // literal brackets, and a display name is the person's own text.
+    // a notice is parsed as HTML, so the link is HTML: markdown would arrive as literal brackets, and a
+    // display name is user text.
     @Test
     fun `an owner without a username is linked by their account`() = runBlocking {
         val client = RecordingClient()
@@ -264,8 +263,8 @@ class TelegramDeliveryTest {
         )
     }
 
-    // a task fired in a forum has no message to anchor to once the one that created it is gone, so the
-    // topic is the only thing keeping the answer out of the group's General.
+    // a task fired in a forum after its creator message is gone has only the topic to keep the answer out of
+    // General.
     @Test
     fun `a scheduled fire names the topic it was set up in`() = runBlocking {
         val client = RecordingClient()
@@ -323,8 +322,8 @@ class TelegramDeliveryTest {
         assertEquals(listOf<Int?>(42), client.threadIds)
     }
 
-    // outside a forum the same field identifies a reply chain, and sending with it is rejected — so the
-    // answer must name no topic at all.
+    // outside a forum the same field names a reply chain and sending with it is rejected, so no topic may be
+    // named.
     @Test
     fun `a reply thread in an ordinary supergroup is not treated as a topic`() = runBlocking {
         val client = RecordingClient()
@@ -391,8 +390,8 @@ class TelegramDeliveryTest {
             chat = Chat.builder().id(-7L).type("supergroup").build()
         }
 
-    // built rather than mutated: `isTopicMessage` is ambiguous as a property, since the library carries
-    // both a nullable field and a null-safe accessor of that name.
+    // built rather than mutated: `isTopicMessage` is ambiguous as a property, the library having both a
+    // nullable field and a null-safe accessor of that name.
     private fun topicMessage(isTopic: Boolean = true): Message =
         Message.builder()
             .messageId(77)
@@ -475,7 +474,7 @@ class TelegramDeliveryTest {
             } as TelegramClient
     }
 
-    // refuses the first [refusals] sends the way Telegram refuses an ephemeral reply past its window
+    // refuses the first [refusals] sends as telegram refuses an ephemeral reply past its window
     private class EphemeralClient(private var refusals: Int) {
 
         val ephemeralAnchors = mutableListOf<Int?>()

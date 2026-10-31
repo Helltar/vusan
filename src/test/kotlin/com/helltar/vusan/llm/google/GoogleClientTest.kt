@@ -34,7 +34,7 @@ private val MODEL = LlmModel("gemini-3.5-flash-lite", contextWindowTokens = 1_04
 private val TOOL =
     ToolDefinition("lookUp", "Looks something up.", Json.parseToJsonElement("""{"type":"object","properties":{"query":{"type":"string"}},"required":["query"]}""").jsonObject)
 
-// the shape the interactions api answered with on 2026-10-29, the signature shortened
+// the interactions api's answer on 2026-10-29, signature shortened
 private const val CALL_REPLY =
     """{"id":"int-1","object":"interaction","model":"gemini-3.5-flash-lite","status":"requires_action",
        "steps":[
@@ -92,7 +92,7 @@ class GoogleClientTest {
         assertNull(body["generation_config"])
     }
 
-    // a gemini 3 model cannot stop thinking, and `minimal` is its least
+    // a gemini 3 model cannot stop thinking; `minimal` is its least
     @Test
     fun `the effort, the ceiling and a forbidden call travel in the generation config`() = runBlocking {
         val options = RequestOptions(reasoningEffort = ReasoningEffort.NONE, maxOutputTokens = 40)
@@ -130,7 +130,7 @@ class GoogleClientTest {
         assertEquals(10, text.usage?.outputTokens)
     }
 
-    // without the thought the call came with, google answers the turn's next request with a 400
+    // without the call's thought, google answers the turn's next request with a 400
     @Test
     fun `the turn replays its thought and call as they came, with the results after them`() = runBlocking {
         val client = client()

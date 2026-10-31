@@ -5,18 +5,16 @@ import org.jetbrains.exposed.v1.javatime.timestamp
 import java.time.Instant
 
 /**
- * Updates Telegram has handed over but the bot has not yet begun to handle.
- *
- * A row exists only for that gap. The polling session confirms an update to Telegram by asking for a
- * higher offset on its *next* request, so an update the bot is still working on is already forgotten
- * upstream: without this table a restart in the middle loses it with nothing to replay.
+ * Updates telegram handed over that the bot has not begun to handle. The session confirms an update by asking
+ * for a higher offset on its *next* request, so an update still being worked on is already forgotten
+ * upstream; without this table a restart loses it.
  */
 object TelegramPendingUpdatesTable : Table("telegram_pending_updates") {
 
-    /** Telegram's own update id, which is what makes a replay and a redelivery the same row. */
+    /** Telegram's update id, which makes a replay and a redelivery the same row. */
     val updateId = long("update_id")
 
-    /** The update exactly as Telegram sent it — the Bot API JSON, re-serialized unchanged. */
+    /** The update as telegram sent it, the Bot API JSON re-serialized unchanged. */
     val payload = text("payload")
 
     val receivedAt = timestamp("received_at").clientDefault { Instant.now() }

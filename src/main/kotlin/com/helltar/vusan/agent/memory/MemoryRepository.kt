@@ -16,9 +16,8 @@ import org.jetbrains.exposed.v1.jdbc.select
 import org.jetbrains.exposed.v1.jdbc.selectAll
 
 /**
- * Durable memory, separate from the conversation history ([com.helltar.vusan.agent.conversation]).
- * Entries survive a history wipe; a [MemoryOwner] says whether a row is one person's or one group's,
- * and on which platform.
+ * Durable memory, separate from conversation history ([com.helltar.vusan.agent.conversation]) and surviving a
+ * history wipe. A [MemoryOwner] says whether a row is one person's or one group's, and on which platform.
  */
 class MemoryRepository(private val maxEntriesPerScope: Int = MAX_ENTRIES_PER_SCOPE) {
 
@@ -42,9 +41,9 @@ class MemoryRepository(private val maxEntriesPerScope: Int = MAX_ENTRIES_PER_SCO
     }
 
     /**
-     * Saves [content] in place of [owner]'s entry [replaces], so a detail that was refined or turned
-     * out wrong does not stay beside its correction. Returns the new entry's id, or `null` with
-     * nothing saved when [owner] has no such entry — another owner's is never touched.
+     * Saves [content] in place of [owner]'s entry [replaces], so a refined or wrong detail does not stay
+     * beside its correction. Returns the new id, or `null` with nothing saved when [owner] has no such entry;
+     * another owner's is never touched.
      */
     suspend fun replace(owner: MemoryOwner, replaces: Long, content: String): Long? = dbTransaction {
         require(content.isNotBlank()) { "Memory content must not be blank" }
@@ -55,9 +54,9 @@ class MemoryRepository(private val maxEntriesPerScope: Int = MAX_ENTRIES_PER_SCO
     }
 
     /**
-     * Deletes the entry with [id], but only if it belongs to [user]'s own memory or to [chat]'s shared
-     * memory. The ownership check lives in the query, so a caller can never delete another person's
-     * memory or another chat's. Returns whether a row was removed.
+     * Deletes entry [id] only if it belongs to [user]'s memory or [chat]'s shared memory. The ownership check
+     * is in the query, so nobody can delete another person's or chat's memory. Returns whether a row was
+     * removed.
      */
     suspend fun forget(id: Long, user: UserRef, chat: ChatRef): Boolean = dbTransaction {
         val deleted =
@@ -95,8 +94,8 @@ class MemoryRepository(private val maxEntriesPerScope: Int = MAX_ENTRIES_PER_SCO
     }
 
     companion object {
-        // the oldest entry is evicted past this without a word, so it is sized for what a person
-        // accumulates over months — name, place, work, language, a handful of preferences — not weeks.
+        // the oldest entry is evicted silently past this, so it fits what a person accumulates over months:
+        // name, place, work, language, a handful of preferences.
         const val MAX_ENTRIES_PER_SCOPE = 20
     }
 }

@@ -137,7 +137,7 @@ class VideoGenTools(
         deliver(extended, "The extended video", send)
     }
 
-    // the video, or null when the provider's moderation withheld it, which the model is told rather than failed with
+    // the video, or null when moderation withheld it, which the model is told rather than failed with
     private suspend fun render(action: String, block: suspend () -> RenderedVideo): RenderedVideo? =
         runCatching { block() }
             .getOrElse { e ->
@@ -192,16 +192,19 @@ class VideoGenTools(
     }
 }
 
-/** Whether [prompt] names only what the call was given: `<IMAGE_0>` and up for its [references], `<SELF>` only [withSelf]. */
+/**
+ * Whether [prompt] names only what the call was given: `<IMAGE_0>` and up for [references], `<SELF>` only
+ * [withSelf].
+ */
 internal fun namesOnlyWhatItWasGiven(prompt: String, references: Int, withSelf: Boolean): Boolean =
     IMAGE_TAG.findAll(prompt).all { (it.groupValues[1].toIntOrNull() ?: Int.MAX_VALUE) < references } && (withSelf || SELF_TAG !in prompt)
 
-// how the model names its references and itself in a prompt, whatever the provider numbers them as
+// how the model names references and itself, whatever the provider numbers them as
 internal val IMAGE_TAG = Regex("""<IMAGE_(\d+)>""")
 internal const val SELF_TAG = "<SELF>"
 
-// one request carries every picture or the video inline, so what it uploads is bounded the way an image
-// edit's is: by what a single upload can carry before its timeout, not by any provider's own limit
+// one request carries every picture or the video inline, so its upload is bounded like an image edit's: by
+// what fits before the timeout
 private const val MAX_UPLOAD_BYTES = 45L * 1024 * 1024
 
 private suspend fun AttachedFile.picture(): SourceImage {

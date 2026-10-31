@@ -14,17 +14,15 @@ internal const val OPENAI_API_PATH = "/v1"
 private const val OPENAI_MODELS_URL = "$OPENAI_API_BASE_URL$OPENAI_API_PATH/models"
 private const val OPENAI_MODELS_PAGE = "https://platform.openai.com/docs/models"
 
-// what every openai model since gpt-5.5 lists on its model page (checked 2026-09-17 for the 5.6 and 6
-// generations); openai's model list reports no window, so this is assumed and LLM_CONTEXT_WINDOW_TOKENS
-// says otherwise when a model does not keep it.
+// what every openai model since gpt-5.5 lists on its model page (checked 2026-09-17 for 5.6 and 6); the model
+// list reports no window, so this is assumed unless LLM_CONTEXT_WINDOW_TOKENS says otherwise.
 private const val OPENAI_CONTEXT_WINDOW = 1_050_000L
 private const val OPENAI_MAX_OUTPUT = 128_000
 
 /**
- * OpenAI's own platform: the Responses API, the one endpoint where tools work alongside reasoning, and
- * every turn here carries tools. A conversation gets a cache key of its own, and the gpt-5.6 generation
- * its cache options. The platform's model list states nothing about a model, so the window, the ceiling
- * and the eyes are what every model since gpt-5.5 has, and it is taken to reason, as every one of them does.
+ * OpenAI's platform via the Responses API, the one endpoint where tools work alongside reasoning. Each
+ * conversation gets its own cache key, and GPT-5.6 its cache options. The model list states nothing about a
+ * model, so the window, ceiling and vision are what every model since gpt-5.5 has, and it is taken to reason.
  */
 internal fun openAiRuntime(config: LlmProviderConfig.OpenAi, http: HttpClient?): LlmRuntime {
     val model =
@@ -34,7 +32,7 @@ internal fun openAiRuntime(config: LlmProviderConfig.OpenAi, http: HttpClient?):
             maxOutputTokens = OPENAI_MAX_OUTPUT,
             seesImages = config.seesImages ?: true,
             efforts = config.efforts,
-            // `additional_tools`, taken by every model from gpt-5.5 on when measured on 2026-10-24
+            // `additional_tools`, taken by every model from gpt-5.5 on (measured 2026-10-24)
             offersToolsMidConversation = true,
         )
 
@@ -58,7 +56,7 @@ internal fun openAiRuntime(config: LlmProviderConfig.OpenAi, http: HttpClient?):
     )
 }
 
-/** OpenAI's model list only confirms the id exists; what the model can do is assumed in [openAiRuntime]. */
+/** OpenAI's model list only confirms the id exists; capabilities are assumed in [openAiRuntime]. */
 internal suspend fun openAiPreflight(http: HttpClient, config: LlmProviderConfig.OpenAi): LlmProviderConfig.OpenAi {
     verifyModel(http, "OpenAI", config, OPENAI_MODELS_PAGE, OPENAI_MODELS_URL) { bearerAuth(config.apiKey) }
 

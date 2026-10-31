@@ -6,7 +6,7 @@ import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.JsonPrimitive
 import kotlinx.serialization.json.contentOrNull
 
-/** What KLIPY keeps in separate libraries, each behind its own path and with its own file layout. */
+/** What KLIPY keeps in separate libraries, each with its own path and file layout. */
 enum class KlipyKind(val value: String, val path: String) {
     GIF("gif", "gifs"),
     MEME("meme", "static-memes"),
@@ -30,10 +30,9 @@ data class KlipyItem(
 )
 
 /**
- * The file to send for an item of [kind], exactly as the API gave it, or `null` when it lists none.
- *
- * A GIF and a meme come in sizes, each holding formats; a clip is one file per format. A GIF goes out
- * as its MP4, which is what a GIF in a chat is anyway.
+ * The file to send for an item of [kind], as the API gave it, or `null` when it lists none. GIFs and memes
+ * come in sizes holding formats, a clip as one file per format; a GIF goes out as its MP4, which is what a
+ * chat GIF is anyway.
  */
 internal fun KlipyItem.mediaUrl(kind: KlipyKind): String? =
     when (kind) {

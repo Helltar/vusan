@@ -68,8 +68,8 @@ class TasksRepositoryTest {
         assertEquals(schedulerNextFire, stored.nextFireAt)
     }
 
-    // the other half of the same race: the fire takes a whole agent turn, and the schedule it started
-    // from is not the one to write back if its owner retimed it meanwhile.
+    // the other half of the race: a fire takes a whole turn, and its starting schedule is not the one to
+    // write back if the owner retimed it meanwhile.
     @Test
     fun `a fire does not move a task its owner retimed while it ran`() = runBlocking {
         val firedAt = Instant.parse("2026-07-28T08:00:00Z")
@@ -105,7 +105,7 @@ class TasksRepositoryTest {
 
         assertNotNull(repo.findDue(id, now))
 
-        // whatever its owner did while the tasks ahead of it fired: paused, retimed, deleted
+        // whatever the owner did while earlier tasks fired: paused, retimed, deleted
         assertTrue(repo.pauseForUser(testUser(100), id))
         assertNull(repo.findDue(id, now))
 
@@ -128,15 +128,15 @@ class TasksRepositoryTest {
         assertEquals(2, repo.pauseAllInChat(testChat(lostChat)))
         assertEquals(listOf(elsewhere), repo.findDue(due).map { it.id })
 
-        // parked, not deleted: they stay listed so their owner can resume them if the bot gets back in.
+        // parked, not deleted: still listed so the owner can resume them if the bot gets back in.
         assertTrue(repo.listForUser(testUser(100)).map { it.id }.containsAll(listOf(first, second)))
 
-        // a second removal notice for the same chat must not re-park what is already parked.
+        // a second removal notice must not re-park what is already parked.
         assertEquals(0, repo.pauseAllInChat(testChat(lostChat)))
     }
 
-    // a task is both an owner's quota and somebody else's chat, so an unqualified id would let one
-    // platform's owner pause, edit and delete another's tasks.
+    // a task is an owner's quota and someone's chat, so an unqualified id would let one platform's owner
+    // pause, edit and delete another's tasks.
     @Test
     fun `a task belongs to one platform's owner and chat`() = runBlocking {
         val repo = TasksRepository()
@@ -154,7 +154,8 @@ class TasksRepositoryTest {
         assertEquals(listOf("telegram digest"), repo.listForUser(onTelegram.user).map { it.title })
         assertEquals(listOf("discord digest"), repo.listForUser(onDiscord.user).map { it.title })
 
-        // the same chat number on the other platform is a different room, and parking it leaves this one running
+        // the same chat number on another platform is a different room, and parking it leaves this one
+        // running
         assertEquals(1, repo.pauseAllInChat(onDiscord.chat))
         assertFalse(assertNotNull(repo.findForUser(onTelegram.user, id)).paused)
     }

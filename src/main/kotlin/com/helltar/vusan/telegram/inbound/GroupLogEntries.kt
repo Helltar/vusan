@@ -9,20 +9,19 @@ import org.telegram.telegrambots.meta.api.objects.message.Message
 import org.telegram.telegrambots.meta.api.objects.polls.PollAnswer
 import java.time.Instant
 
-// layout whitespace is noise in a transcript, so the text is collapsed rather than kept as written
+// layout whitespace is noise in a transcript, so text is collapsed
 private const val MAX_TEXT_CHARS = GroupLogEntry.MAX_TEXT_CHARS
 
-// what a vote reads as in the transcript, beside the "text", "photo" and so on of real messages.
+// how a vote reads in the transcript, beside "text", "photo" and so on.
 private const val POLL_ANSWER_KIND = "poll answer"
 
-// a forwarded channel post can be four thousand characters of somebody else's writing, and a day of
-// those is what makes a group's transcript unreadable. the origin plus the opening is enough to
-// recall what was shared.
+// a forwarded channel post can be thousands of characters of someone else's writing; the origin plus the
+// opening is enough to recall what was shared.
 private const val MAX_FORWARDED_TEXT_CHARS = 1_000
 
 /**
- * Turns an inbound message into its chat-log row, or `null` when there is nothing worth recording.
- * Service messages (joins, leaves, pins) carry neither text nor media and are dropped here.
+ * An inbound message as its chat-log row, or `null` when there is nothing to record. Service messages (joins,
+ * leaves, pins) carry neither text nor media and are dropped.
  */
 internal fun Message.toGroupLogEntry(): GroupLogEntry? {
     val forwardFrom = forwardOriginLabel()
@@ -39,8 +38,7 @@ internal fun Message.toGroupLogEntry(): GroupLogEntry? {
         chat = telegramChat(chatIdLong),
         messageId = messageIdLong.toString(),
         kind = kind,
-        // telegram's own send time: a diary entry keyed on local days must not drift when the bot is
-        // catching up on a backlog of updates.
+        // telegram's send time, so diary days do not drift while the bot catches up on a backlog.
         sentAt = date?.let { Instant.ofEpochSecond(it.toLong()) } ?: Instant.now(),
         senderId = senderIdOrNull()?.toString(),
         senderUsername = senderUsernameOrNull(),
@@ -53,14 +51,12 @@ internal fun Message.toGroupLogEntry(): GroupLogEntry? {
 }
 
 /**
- * A vote on one of the bot's polls, as a line of the chat transcript.
- *
- * `poll_answer` is not a message and has no place of its own in the chat, so the answer is recorded
- * the way a person's message is — the transcript is where the agent reads what happened, and a quiz
- * nobody's answers reach is a question the bot asked and never heard back from.
+ * A vote on one of the bot's polls as a transcript line. `poll_answer` is not a message, but the transcript
+ * is where the agent reads what happened, and a quiz whose answers never reach it is a question never heard
+ * back from.
  *
  * `null` when there is nothing to record: an anonymous vote names no one, and a retracted one
- * ([PollAnswer.optionIds] empty) is the absence of an answer rather than an answer.
+ * ([PollAnswer.optionIds] empty) is no answer.
  */
 internal fun PollAnswer.toGroupLogEntry(poll: SentPoll): GroupLogEntry? {
     val voter = user ?: return null
@@ -73,7 +69,7 @@ internal fun PollAnswer.toGroupLogEntry(poll: SentPoll): GroupLogEntry? {
 
     return GroupLogEntry(
         chat = telegramChat(poll.chatId),
-        // an answer is not a message, so it has no id of its own and nothing can reply to it.
+        // an answer is not a message: it has no id and nothing can reply to it.
         messageId = null,
         kind = POLL_ANSWER_KIND,
         sentAt = Instant.now(),

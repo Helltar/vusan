@@ -29,20 +29,19 @@ internal val Message.chatIdLong: Long
 internal val Message.messageIdLong: Long
     get() = messageId.toLong()
 
-// an edit rewrote the text, so the edit is when the words being answered were written.
+// after an edit, the words being answered were written at the edit.
 internal val Message.writtenAt: Instant?
     get() = (editDate ?: date)?.let { Instant.ofEpochSecond(it.toLong()) }
 
 /**
- * The forum topic this message is in, or `null` when it is not in one.
+ * The forum topic this message is in, or `null`.
  *
- * `message_thread_id` alone does not mean a topic: Telegram also puts it on replies in ordinary
- * supergroups, where it identifies a reply chain instead. Sending with one of those as a topic id
- * fails, since the send parameter only exists for forums — so `is_topic_message` is what decides,
- * and it is the only form of the id delivery may echo back.
+ * `message_thread_id` alone is no topic: telegram also sets it on replies in ordinary supergroups, where it
+ * names a reply chain, and sending with that as a topic fails. So `is_topic_message` decides, and only then
+ * may delivery echo the id.
  *
- * `isTopicMessage()` carries its parentheses on purpose: the library has both a nullable field and a
- * null-safe accessor of that name, and the bare property reference is ambiguous between them.
+ * `isTopicMessage()` keeps its parentheses on purpose: the library has a nullable field and a null-safe
+ * accessor of that name, and the bare property is ambiguous.
  */
 internal val Message.forumTopicIdOrNull: Int?
     get() = messageThreadId?.takeIf { isTopicMessage() }
@@ -53,7 +52,7 @@ internal val Message.canLoadChatDescription: Boolean
 internal val Message.isPrivateChat: Boolean
     get() = chat.isUserChat
 
-// an ephemeral command: seen by its sender and the bot alone, with no message id, only an ephemeral one
+// an ephemeral command: seen by its sender and the bot alone, with only an ephemeral id
 internal val Message.isEphemeral: Boolean
     get() = ephemeralMessageId != null
 
@@ -72,8 +71,8 @@ internal val Message.language: Language
 internal fun Message.textSnippetOrNull(): String? =
     text ?: caption ?: richMessage?.toRichMarkdown()?.takeIf { it.isNotBlank() }
 
-// in a forum every message of a topic without a reply of its own arrives as a reply to the message
-// that opened the topic, which says nothing about who or what it is for: every reader reads through here
+// in a forum every message without its own reply arrives as a reply to the topic's opening message, which
+// says nothing; every reader goes through here
 internal val Message.realReplyOrNull: Message?
     get() = replyToMessage?.takeIf { it.forumTopicCreated == null }
 
@@ -81,9 +80,8 @@ internal fun Message.replyAuthorIdOrNull(): Long? = realReplyOrNull?.from?.id
 
 internal fun Message.replyToMessageIdOrNull(): Long? = realReplyOrNull?.messageId?.toLong()
 
-// telegram delivers anonymous group admins as GroupAnonymousBot and linked-channel posts as
-// Channel_Bot: one account id standing in for many different senders in many chats. recognizing them
-// is ingress's job, so the core is handed the identity fact rather than a list of magic ids.
+// GroupAnonymousBot (anonymous admins) and Channel_Bot (linked-channel posts): one id for many senders.
+// recognizing them is ingress's job, so the core gets the identity fact, not magic ids.
 private val SHARED_SENDER_IDS = setOf(1_087_968_824L, 136_817_688L)
 
 internal fun Message.toChatContext(profile: ChatProfile): ChatContext =
@@ -107,12 +105,11 @@ internal fun User.toSenderContext(): SenderContext =
         isPerson = isPerson,
     )
 
-/** Whether this sender is one human, rather than the account many anonymous admins or channels post under. */
+/** Whether this sender is one human, not the account anonymous admins or channels post under. */
 internal val User.isPerson: Boolean
     get() = id !in SHARED_SENDER_IDS
 
-// the bot api models chat flavors as flags on `Chat` and `Message` rather than distinct types,
-// so the prompt label is assembled from those flags.
+// the bot api models chat kinds as flags on `Chat` and `Message`, so the label is assembled from them.
 internal fun Message.promptChatType(): String =
     when {
         businessConnectionId != null -> "business"
@@ -152,14 +149,13 @@ internal fun Message.contentTypeName(): String =
 internal fun Message.mediaMetadataLines(): List<String> = mediaAttachment().metadataLines()
 
 /**
- * A short human label for content the chat log cannot carry as text — what a person would say the
- * message was. Deliberately not [mediaMetadataLines]: file ids describe nothing that happened in the
- * conversation and only cost tokens when the transcript is read back.
+ * A short human label for content the chat log cannot carry as text. Not [mediaMetadataLines]: file ids say
+ * nothing about the conversation and only cost tokens on read-back.
  */
 internal fun Message.groupLogDescriptor(): String? =
     when {
         sticker != null -> listOfNotNull(sticker.emoji, sticker.setName).joinToString(" ")
-        // animation is checked before document for the same reason as everywhere else: a gif carries both.
+        // animation before document: a gif carries both.
         animation != null -> animation.duration.asClock()
         !photo.isNullOrEmpty() -> null
         video != null -> video.duration?.asClock()
@@ -173,9 +169,8 @@ internal fun Message.groupLogDescriptor(): String? =
     }?.collapseWhitespaceAndCap(MAX_DESCRIPTOR_CHARS)
 
 /**
- * Who a reposted message originally came from, or `null` when the message is not a forward. Telegram
- * models a repost as a [MessageOrigin] variant rather than a flag on the text, so without this a
- * forwarded channel post reads exactly as if the sender had typed it themselves.
+ * Who a reposted message came from, or `null` for no forward. Telegram models a repost as a [MessageOrigin]
+ * variant, so without this a forwarded channel post reads as typed by the sender.
  */
 internal fun Message.forwardOriginLabel(): String? =
     when (val origin = forwardOrigin) {
@@ -202,7 +197,7 @@ private fun Int.asClock(): String {
             seconds.toString().padStart(2, '0')
 }
 
-// external replies expose only the media descriptor of the quoted message, never its text.
+// external replies expose only the quoted message's media, never its text.
 internal fun ExternalReplyInfo.summaryTypeNameOrNull(): String? =
     mediaAttachment().typeNameOrNull() ?: story?.let { "story" } ?: poll?.let { "poll" }
 
@@ -227,8 +222,7 @@ internal fun describeIncomingSticker(sticker: Sticker): String =
         append("Sticker kind: ${sticker.readableFormat()} ${sticker.type ?: "regular"} sticker.")
     }
 
-// the same media fields exist on both `Message` and `ExternalReplyInfo`; this descriptor lets one
-// classification and one metadata builder serve both.
+// the same media fields exist on `Message` and `ExternalReplyInfo`, so one classification serves both.
 private class MediaAttachment(
     val sticker: Sticker?,
     val animation: Animation?,
@@ -246,8 +240,7 @@ private fun Message.mediaAttachment(): MediaAttachment =
 private fun ExternalReplyInfo.mediaAttachment(): MediaAttachment =
     MediaAttachment(sticker, animation, photo, video, videoNote, voice, audio, document)
 
-// animation is checked before photo/document because telegram sets both `animation` and
-// `document` on gif messages.
+// animation before photo/document: gif messages carry both `animation` and `document`.
 private fun MediaAttachment.typeNameOrNull(): String? =
 
     when {

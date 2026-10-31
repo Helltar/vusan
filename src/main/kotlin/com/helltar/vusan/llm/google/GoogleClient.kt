@@ -24,29 +24,29 @@ import kotlinx.serialization.json.putJsonArray
 import java.util.*
 
 /**
- * The efforts the Gemini API takes, as `thinking_level`: `none` goes out as `minimal`, its "little to no
- * thinking", since a Gemini 3 model cannot stop thinking altogether. Which of them a model takes is the
- * model's: Flash-Lite takes all four, Gemini 3.8 Flash no `minimal`, Gemma 4 only `minimal` and `high`.
+ * The efforts the Gemini API takes as `thinking_level`. `none` goes out as `minimal`, since a Gemini 3 model
+ * cannot stop thinking altogether. Models differ: Flash-Lite takes all four, Gemini 3.8 Flash no `minimal`,
+ * Gemma 4 only `minimal` and `high`.
  */
 val GOOGLE_EFFORTS: Set<ReasoningEffort> =
     setOf(ReasoningEffort.NONE, ReasoningEffort.LOW, ReasoningEffort.MEDIUM, ReasoningEffort.HIGH)
 
 /**
  * The Gemini API's Interactions endpoint, the vendor's default interface since June 2026 (`generateContent`
- * is its legacy one).
+ * is the legacy one).
  *
- * Every call is stateless (`store: false`): the conversation goes out whole as a list of steps — `user_input`,
- * `model_output`, `thought`, `function_call`, `function_result` — and nothing is kept on the vendor's side
- * to chain to. System messages travel in `system_instruction`, the one string the API takes for them.
+ * Every call is stateless (`store: false`): the conversation goes out whole as steps (`user_input`,
+ * `model_output`, `thought`, `function_call`, `function_result`). System messages go in `system_instruction`,
+ * a single string.
  *
- * A `thought` step carries the signature the model's next request in the turn is checked against: without
- * it a turn's second call is a 400 (measured 2026-10-29 on gemini-3.5-flash-lite). So a thought is kept as
- * a [Part.Reasoning] tagged with this endpoint and replayed verbatim, to this endpoint alone. Gemma 4 puts
- * its thinking into the same step as a summary, out of the answer's text.
+ * A `thought` step carries the signature the turn's next request is checked against; without it the second
+ * call is a 400 (measured 2026-10-29 on gemini-3.5-flash-lite). So a thought is kept as a [Part.Reasoning]
+ * tagged with this endpoint and replayed verbatim to it alone. Gemma 4 puts its thinking in the same step as
+ * a summary.
  *
- * The cache is implicit: a repeated prefix is read back on its own (21,720 of 21,769 tokens on a repeated
- * request with the full tool list), and there is no breakpoint to place. Unknown step and content types are
- * skipped with a warning rather than failing the call.
+ * Caching is implicit: a repeated prefix is read back on its own (21,720 of 21,769 tokens on a repeat with
+ * the full tool list), with no breakpoint to place. Unknown step and content types are skipped with a
+ * warning.
  */
 class GoogleClient(
     private val http: HttpClient,
@@ -57,7 +57,7 @@ class GoogleClient(
 
     private val url = "$baseUrl/v1beta/interactions"
 
-    // what the thoughts this client returns are tagged with, and the only ones it replays
+    // the source tag on returned thoughts, and the only ones replayed
     private val reasoningSource = url
 
     private val headers = mapOf("x-goog-api-key" to apiKey)
@@ -111,7 +111,7 @@ class GoogleClient(
 
     private fun steps(message: Message): List<JsonObject> =
         when (message) {
-            // lifted into `system_instruction`, and a tool offer is the tool listed up front
+            // lifted into `system_instruction`; a tool offer is listed up front
             is Message.System, is Message.ToolsOffered -> emptyList()
 
             is Message.User ->
@@ -153,8 +153,8 @@ class GoogleClient(
                 }
         }
 
-    // the model's turn in the order it came: its texts gathered into one output step until a thought or a call
-    // comes between them, a blank text left out, and another endpoint's reasoning not sent here at all
+    // the model's turn in order: texts gathered into one output step until a thought or call comes between,
+    // blanks left out, other endpoints' reasoning not sent
     private fun assistantSteps(message: Message.Assistant): List<JsonObject> =
         buildList {
             val texts = mutableListOf<JsonObject>()
@@ -198,9 +198,9 @@ class GoogleClient(
     private fun parse(response: JsonObject): Reply {
         val status = response.string("status")
 
-        // a failed or cancelled interaction still answers 200; what went wrong is in its errors, for the rules
-        // downstream to read. no safety block was seen on this endpoint (the model declined in its own words),
-        // and other harnesses on it and on generateContent treat a blocked answer as an error too
+        // a failed or cancelled interaction still answers 200, with what went wrong in its errors. no safety
+        // block was seen here (the model declined in its own words), and other harnesses on this endpoint
+        // treat a blocked answer as an error too
         if (status == "failed" || status == "cancelled") throw LlmException(label, FAILED_STATUS, (response["errors"] ?: response).toString())
 
         val parts =
@@ -246,7 +246,7 @@ class GoogleClient(
                 usage?.let {
                     TokenUsage(
                         inputTokens = it.int("total_input_tokens"),
-                        // thinking is output the model was billed for, as every other vendor counts it
+                        // thinking is billed output, as every other vendor counts it
                         outputTokens = listOfNotNull(it.int("total_output_tokens"), it.int("total_thought_tokens")).takeIf { counts -> counts.isNotEmpty() }?.sum(),
                         cacheReadTokens = it.int("total_cached_tokens"),
                     )
@@ -274,7 +274,7 @@ class GoogleClient(
 
         private const val MINIMAL_THINKING = "minimal"
 
-        // an interaction that failed is answered with a 200 and a status saying so
+        // a failed interaction answers 200 with a status saying so
         private const val FAILED_STATUS = 200
 
         private val log = KotlinLogging.logger {}

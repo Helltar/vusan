@@ -6,8 +6,8 @@ import kotlin.test.assertNull
 
 class TurnStopCallbackTest {
 
-    // the button sits on a message everyone in a group can press, so the owner has to survive the round
-    // trip: without it a bystander's tap would end somebody else's turn.
+    // anyone in a group can press the button, so the owner must survive the round trip, or a bystander's tap
+    // would end someone else's turn.
     @Test
     fun `the owner survives the round trip`() {
         assertEquals(4321L, turnStopOwnerId(turnStopCallbackData(4321L)))

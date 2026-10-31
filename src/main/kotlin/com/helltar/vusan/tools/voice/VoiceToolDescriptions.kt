@@ -4,8 +4,8 @@ import com.helltar.vusan.tools.voice.VoiceTools.Companion.VOICE_TOOLS_MAX_CHARS
 
 internal object VoiceToolDescriptions {
 
-    // shared with the round video message: both speak the text through the same model, so the rules for
-    // directing that voice must not drift apart between the two tools.
+    // shared with the round video message: both speak through the same model, so the voice-directing rules
+    // must not drift apart.
     const val AUDIO_TAG_RULES =
         "By default, send plain prose with NO audio tags — the default voice already sounds natural and unwanted tags make it theatrical. " +
                 """Add audio tags in square brackets only when the user explicitly directs the delivery: asks for a manner ("say it quietly", "like a pirate", "sarcastically"), scripts the line themselves (`start quietly with "hi", then loudly "how are you?"`), or asks for a clearly performative read (poem, dialogue, dramatic scene). """ +

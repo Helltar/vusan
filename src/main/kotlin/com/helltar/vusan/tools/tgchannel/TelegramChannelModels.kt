@@ -11,14 +11,13 @@ data class TelegramChannelPage(
     val url: String,
     val posts: List<TelegramChannelPost>,
     /**
-     * Id to pass as `?before=` to load the batch preceding this page, taken from the widget's own
-     * "load more" link. `null` once Telegram stops offering one, which is how the walk learns it
-     * reached the start of the channel.
+     * The `?before=` id loading the batch before this page, taken from the widget's "load more" link. `null`
+     * once telegram offers none, which is how the walk knows it reached the channel's start.
      */
     val olderThanCursor: Long?,
     /**
-     * False when t.me redirected away from `/s/`, meaning the username is not a channel with a
-     * public web preview. Distinguishes "nothing to read" from "cannot be read at all".
+     * False when t.me redirected away from `/s/`: the username is not a channel with a public preview. Tells
+     * "nothing to read" from "cannot be read at all".
      */
     val previewAvailable: Boolean = true,
 )
@@ -29,11 +28,11 @@ data class TelegramChannelPost(
     val postedAt: Instant?,
     val text: String,
     val views: String?,
-    /** Sum over every reaction on the post, used to rank which posts are worth vision. */
+    /** Total reactions on the post, for ranking which posts are worth vision. */
     val reactionCount: Int,
     /**
-     * The strongest few reactions that have a readable glyph, e.g. `😁 2380 ❤ 173`. Null when the
-     * channel only uses custom emoji, whose count still lands in [reactionCount].
+     * The strongest few reactions with a readable glyph, e.g. `😁 2380 ❤ 173`. Null when the channel only uses
+     * custom emoji, still counted in [reactionCount].
      */
     val reactions: String?,
     val forwardedFrom: String?,

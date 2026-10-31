@@ -31,7 +31,7 @@ class AppConfigTest {
 
     @Test
     fun `a mistyped number stops the startup instead of restoring the default`() {
-        // the digit-oh typo is the whole point: it used to read as "unset" and bring back the default
+        // the digit-oh typo is the point: it used to read as unset and bring back the default
         val failure = assertFailsWith<IllegalStateException> { parseIntEnv("AGENT_MAX_MODEL_CALLS", "7O") }
 
         assertContains(failure.message.orEmpty(), "AGENT_MAX_MODEL_CALLS")
@@ -54,7 +54,7 @@ class AppConfigTest {
 
     @Test
     fun `a boolean spelled some other way never reads as the default`() {
-        // silently defaulting here left the group transcript recording after it was asked to stop
+        // silently defaulting here kept the group transcript recording after it was turned off
         listOf("0", "1", "no", "yes", "off", "on", "disabled").forEach { raw ->
             val failure = assertFailsWith<IllegalStateException> { parseBooleanEnv("GROUP_LOG_ENABLED", raw) }
 
@@ -74,8 +74,8 @@ class AppConfigTest {
         assertEquals(setOf("telegram:5"), parseIdSetEnv("ALLOWED_IDS", "5,,  ,5"))
     }
 
-    // a bare number is what every existing deployment has written, so it keeps meaning Telegram; a
-    // second messenger's ids have to name themselves rather than land in the same set as numbers.
+    // a bare number is what existing deployments wrote, so it keeps meaning telegram; another messenger's ids
+    // name themselves.
     @Test
     fun `an id names its platform, or is read as a telegram one`() {
         assertEquals(setOf("discord:99"), parseIdSetEnv("ALLOWED_IDS", "discord:99"))
@@ -99,7 +99,7 @@ class AppConfigTest {
 
     @Test
     fun `an unreadable id is an error rather than one silently dropped entry`() {
-        // dropping one fails open on BANNED_IDS: that person would simply stay unbanned
+        // dropping one fails open on BANNED_IDS: that person would stay unbanned
         val failure = assertFailsWith<IllegalStateException> { parseIdSetEnv("BANNED_IDS", "12345, 6789O") }
 
         assertContains(failure.message.orEmpty(), "BANNED_IDS")
@@ -111,7 +111,7 @@ class AppConfigTest {
         assertFailsWith<IllegalArgumentException> { config(agentMaxModelCalls = 2) }
     }
 
-    // a role reads the same settings under its own prefix, so the message has to say which one was wrong
+    // a role reads the same settings under its own prefix, so the message names which one was wrong
     @Test
     fun `a zero timeout or window names the variable it came from`() {
         val failure = assertFailsWith<IllegalArgumentException> { parsePositiveLongEnv("VISION_REQUEST_TIMEOUT_SECONDS", "0") }
@@ -121,7 +121,7 @@ class AppConfigTest {
         assertEquals(null, parsePositiveLongEnv("LLM_CONTEXT_WINDOW_TOKENS", null))
     }
 
-    // the switch on with the transcript off would leave the feature with nothing to judge a message by
+    // the switch on with the transcript off leaves nothing to judge a message by
     @Test
     fun `answering without a mention stops the startup without the group log`() {
         val addressing =
@@ -134,7 +134,7 @@ class AppConfigTest {
         config(addressing = addressing)
     }
 
-    // a service reached without its secret is a misconfiguration, never a service reached anonymously
+    // a service without its secret is a misconfiguration, never anonymous access
     @Test
     fun `a sandbox url without a token stops the startup`() {
         assertFailsWith<IllegalArgumentException> { config(regolithUrl = "http://regolith:8080") }

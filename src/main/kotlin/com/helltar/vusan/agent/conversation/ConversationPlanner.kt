@@ -13,11 +13,10 @@ import kotlinx.coroutines.launch
 /**
  * The history a prompt carries: what [planConversation] fits under the budget, and its recap.
  *
- * A recap is an LLM round trip, so it is made in front of the user's reply only when the history does
- * not fit the prompt at all. One that only the interaction count asks for waits for the turn to end:
- * [recapLater] hands it to the worker [launchIn] starts, which makes it while nobody is waiting, one
- * conversation at a time. Either way a recap that fails, or loses the race for its checkpoint, leaves
- * the raw history as it was, and whatever is still over budget gets its recap on a later turn.
+ * A recap is an LLM round trip, so it is made ahead of the reply only when the history does not fit at all.
+ * One that only the interaction count asks for waits for the turn to end: [recapLater] hands it to the worker
+ * [launchIn] starts, one conversation at a time. A recap that fails or loses the race for its checkpoint
+ * leaves the raw history as is, and a later turn tries again.
  */
 class ConversationPlanner(
     private val repository: ConversationRepository,
@@ -37,7 +36,7 @@ class ConversationPlanner(
         return if (recap(scope, snapshot, plan)) planFor(repository.load(scope), tokenBudget) else plan
     }
 
-    /** Asks for the recap this conversation's history is due, if any, after the turn that wrote it. */
+    /** Asks for the recap this conversation is due, if any, after the turn that wrote it. */
     fun recapLater(scope: ConversationScope, tokenBudget: Int) {
         if (queued.add(scope)) due.trySend(scope to tokenBudget)
     }
@@ -45,7 +44,7 @@ class ConversationPlanner(
     fun launchIn(scope: CoroutineScope): Job =
         scope.launch {
             for ((conversation, tokenBudget) in due) {
-                // released before the work, so a turn that ends while it runs can queue the next one
+                // released before the work, so a turn ending meanwhile can queue the next one
                 queued.remove(conversation)
 
                 runCatching {
@@ -73,8 +72,8 @@ class ConversationPlanner(
                 return false
             } ?: return false
 
-        // a turn of the same conversation may have stored a recap of its own meanwhile, and a clear may have
-        // removed what this one recapped: the checkpoint refuses both
+        // a turn may have stored its own recap meanwhile, or a clear removed what this one covered: the
+        // checkpoint refuses both
         val stored =
             repository.storeSummary(
                 scope = scope,
@@ -109,9 +108,8 @@ class ConversationPlanner(
     private companion object {
         val log = KotlinLogging.logger {}
 
-        // the count a recap is triggered by, not what the prompt ends up carrying — a window too small
-        // for these still fits only what its token budget allows. kept well above that budget on a
-        // large window, where a low count buys nothing and only pays for recaps.
+        // the count that triggers a recap, not what the prompt carries: a small window still fits only its
+        // token budget. kept well above that budget on large windows, where a low count only pays for recaps.
         const val MAX_RECENT_INTERACTIONS = 40
 
         const val RECAP_ERROR_LOG_MAX_CHARS = 300

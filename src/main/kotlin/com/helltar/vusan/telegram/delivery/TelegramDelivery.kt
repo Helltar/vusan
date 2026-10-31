@@ -46,18 +46,17 @@ import java.time.Instant
 internal fun replyParameters(replyToMessageId: Long?): ReplyParameters? =
     replyToMessageId?.let { ReplyParameters.builder().messageId(it.toInt()).build() }
 
-// an ephemeral message has no message id, only one of its own kind, and a reply to it is ephemeral too
+// an ephemeral message has no message id, only an ephemeral one, and a reply to it is ephemeral too
 internal fun ephemeralReplyParameters(ephemeralMessageId: Int): ReplyParameters =
     ReplyParameters.builder().ephemeralMessageId(ephemeralMessageId).build()
 
-// where an answer to this message belongs. an anchored reply would land in the right topic on its
-// own, but everything sent without one — a notice, a scheduled fire, an item after the anchor is
-// gone — needs the topic named, or it arrives in the forum's General instead.
+// where an answer belongs. an anchored reply finds its topic, but anything unanchored (a notice, a scheduled
+// fire, an item after the anchor is gone) needs the topic named or lands in the forum's General.
 internal val Message.chatTarget: ChatTarget
     get() = ChatTarget(chatIdLong, forumTopicIdOrNull)
 
-// the chat action shown just before an item is delivered, so the user sees "sending photo",
-// "recording audio", etc. matching what is about to arrive. reactions are instant and get none.
+// the chat action shown just before an item is delivered ("sending photo", "recording audio"). reactions get
+// none.
 internal fun botActionFor(output: BotOutput): ActionType? = when (output) {
     is BotOutput.Photo, is BotOutput.PhotoGroup -> ActionType.UPLOAD_PHOTO
     is BotOutput.Document, is BotOutput.DocumentGroup -> ActionType.UPLOAD_DOCUMENT
@@ -70,12 +69,12 @@ internal fun botActionFor(output: BotOutput): ActionType? = when (output) {
     is BotOutput.RichMessage,
     is BotOutput.Quiz,
     is BotOutput.Poll -> ActionType.TYPING
-    // nothing is uploaded for either: a reaction is instant, and a sticker is resent by file_id.
+    // a reaction is instant, and a sticker is resent by file_id.
     is BotOutput.Reaction, is BotOutput.Sticker -> null
 }
 
-// what the bot said, for the group transcript. only outputs that carry words have text; the rest are
-// recorded the same way a person's media is, as a short label saying what arrived.
+// what the bot said, for the group transcript: text where an output carries words, otherwise a short label,
+// as for a person's media.
 private fun BotOutput.groupLogText(): String? = when (this) {
     is BotOutput.Text -> text
     is BotOutput.RichMessage -> markdown
@@ -97,14 +96,13 @@ private fun BotOutput.groupLogDescriptor(): String? = when (this) {
     is BotOutput.Video -> "video"
     is BotOutput.Audio -> "audio"
     is BotOutput.AudioGroup -> "tracks"
-    // a reaction is not a message in the chat, so it leaves no transcript row at all.
+    // a reaction is not a message, so it leaves no row.
     else -> null
 }
 
-// the chat action shown while a tool runs, so a slow media-producing call (image generation,
-// video download, speech synthesis) hints at what is coming. the activity itself is resolved in the
-// agent layer (`toolActivityFor`); here it is only translated to a concrete Telegram action. anything
-// that produces no media — and a turn with no tool running — reads as plain typing.
+// the chat action while a tool runs, hinting at slow media (image generation, video download, speech). the
+// activity is resolved by `toolActivityFor`; this only maps it to a telegram action. everything else reads as
+// typing.
 internal fun chatActionFor(activity: ToolActivity?): ActionType = when (activity) {
     ToolActivity.SEARCHING_IMAGES, ToolActivity.DRAWING -> ActionType.UPLOAD_PHOTO
     ToolActivity.SEARCHING_GIF, ToolActivity.DOWNLOADING_VIDEO, ToolActivity.FILMING -> ActionType.UPLOAD_VIDEO
@@ -113,21 +111,17 @@ internal fun chatActionFor(activity: ToolActivity?): ActionType = when (activity
     else -> ActionType.TYPING
 }
 
-// a destination the shared model addressed, in the terms the Bot API takes.
 private val Destination.chatTarget: ChatTarget
     get() = ChatTarget(chat.telegramChatId, telegramThreadId(threadId))
 
-// how Telegram names a person: a public @username where there is one, otherwise a link that opens the
-// account behind their display name. it is written as HTML because that is what a notice is parsed as
-// — markdown would arrive as its own punctuation — and the name is somebody's own text, so it is
-// escaped like any other.
+// a public @username where there is one, otherwise a link to the account behind the display name. HTML
+// because notices are parsed as HTML, and the name is escaped as user text.
 private val Attribution.mention: String
     get() =
         username?.let { "@$it" }
             ?: """<a href="tg://user?id=${person.telegramUserId}">${(displayName ?: person.id).escapeHtml()}</a>"""
 
-// which of the two lines to write follows from the reason the task gave; only the mention inside it
-// is Telegram's.
+// the reason the task gave picks the line; only the mention is telegram's.
 private fun Attribution.headerText(messages: Messages): String =
 
     when (reason) {
@@ -136,11 +130,10 @@ private fun Attribution.headerText(messages: Messages): String =
     }
 
 /**
- * [onStickerRejected] is told the catalog id of a sticker Telegram would not accept. It is a hint, not
- * a verdict: the catalog schedules an early re-read of that set rather than deleting anything here,
- * because a send can fail for reasons that say nothing about the sticker (restricted chat, rate limit).
- * [onStickerSent] is told the chat and catalog id of every sticker that did go out, which is how the
- * catalog keeps the shortlist from offering the same one again soon.
+ * [onStickerRejected] gets the catalog id of a sticker telegram refused. A hint, not a verdict: the catalog
+ * schedules an early re-read of the set, since a send can fail for reasons unrelated to the sticker
+ * (restricted chat, rate limit). [onStickerSent] gets the chat and catalog id of every sticker sent, so the
+ * shortlist does not offer it again soon.
  */
 class TelegramDelivery(
     private val client: TelegramClient,
@@ -168,9 +161,8 @@ class TelegramDelivery(
 
     private data class DispatchOutcome(val replyUnavailable: Boolean, val chatUnreachable: Boolean) {
 
-        // `replyUnavailable` is about one anchor, not about the chat, so only the second half reaches
-        // the caller: everything else is a send this chat happened to refuse, which says nothing about
-        // whether the next one would arrive.
+        // `replyUnavailable` is about one anchor, so only unreachability reaches the caller: any other
+        // refusal says nothing about the next send.
         fun asOutcome(): DeliveryOutcome =
             if (chatUnreachable) DeliveryOutcome.Unreachable else DeliveryOutcome.Handled
     }
@@ -201,8 +193,8 @@ class TelegramDelivery(
         val anchorTarget = DeliveryTarget(target, replyToMessageId = attribution.anchorMessageId.telegramMessageId)
         val outcome = dispatch(delivery.result, anchorTarget, plainTarget, recipient, messages)
 
-        // the message the task was set up from is gone, so the answer arrived unanchored and the line
-        // saying whose it is has to be sent on its own.
+        // the task's origin message is gone, so the answer went unanchored and the attribution line goes on
+        // its own.
         if (outcome.replyUnavailable && !outcome.chatUnreachable) {
             notify(delivery.destination, attribution.headerText(messages))
         }
@@ -227,10 +219,9 @@ class TelegramDelivery(
     }
 
     /**
-     * Writes into the group transcript what [context]'s turn put in the chat while it was still running
-     * — its announced plan, an interim message — at the moment it appeared. Left to the turn's delivery,
-     * it would carry the time the turn ended, and a turn queued behind this one reads the transcript
-     * before that delivery is over.
+     * Records in the group transcript what [context]'s turn posted while still running (an announced plan, an
+     * interim message), at the moment it appeared. Left to the turn's delivery it would carry the end time,
+     * and a queued turn reads the transcript before that.
      */
     suspend fun recordPostedMidTurn(context: RequestContext, text: String) {
         if (context.chat.isPrivate) return
@@ -246,9 +237,8 @@ class TelegramDelivery(
     }
 
     /**
-     * [message] is the bot's own question, the one the buttons are on. The answer belongs under
-     * [originMessageId], the message the exchange started from, and falls back to the question itself only
-     * when there was none — a question asked by a turn with no message behind it.
+     * [message] is the bot's question carrying the buttons. The answer goes under [originMessageId], the
+     * message the exchange started from, or under the question when a turn had no message behind it.
      */
     suspend fun sendCallback(
         result: AgentResult,
@@ -270,11 +260,10 @@ class TelegramDelivery(
     }
 
     /**
-     * Send a canned reply — a command answer, a voice notice, a fallback after a failed turn. It carries
-     * none of the agent-reply machinery: no formatting fallback chain, no private routing, no retry when
-     * the anchor is gone. [replyToMessageId] anchors it somewhere other than [message] itself, which is
-     * what an inline choice needs: the question carries the buttons, but the answer belongs under the
-     * message that asked.
+     * Sends a canned reply (a command answer, a voice notice, a fallback after a failed turn) without the
+     * agent-reply machinery: no formatting fallbacks, private routing or retry when the anchor is gone.
+     * [replyToMessageId] anchors it elsewhere, as an inline choice needs: the question carries the buttons,
+     * the answer goes under the asking message.
      */
     suspend fun sendReply(message: Message, text: String, replyToMessageId: Long? = null) {
         // an ephemeral message's id is 0, which no reply can hang under
@@ -291,10 +280,9 @@ class TelegramDelivery(
     }
 
     /**
-     * A reply only [message]'s sender sees, as Telegram's ephemeral messages: anchored to the ephemeral
-     * message it answers when there is one and it is still within its 15 seconds, and otherwise sent on
-     * the bot's own standing in the chat, which Telegram grants an administrator alone — so this may
-     * fail, and the caller says what then.
+     * A reply only [message]'s sender sees, as a telegram ephemeral message: anchored to the ephemeral
+     * message it answers while still within its 15 seconds, otherwise sent on the bot's own standing, which
+     * only an administrator has. So this may fail, and the caller says what then.
      */
     suspend fun sendForSenderOnly(message: Message, text: String) {
         val receiver = requireNotNull(message.from?.id) { "An ephemeral reply needs a person to receive it" }
@@ -314,9 +302,9 @@ class TelegramDelivery(
     }
 
     /**
-     * Send a plain-text notice from the bot itself (no reply anchor, no formatting fallback retry chain).
-     * Only an unreachable chat is reported as such; any other failure is logged and reported as handled,
-     * since it says nothing about whether the next message would arrive.
+     * Sends a plain-text notice from the bot, with no reply anchor and no formatting fallbacks. Only an
+     * unreachable chat is reported; any other failure is logged and treated as handled, since it says nothing
+     * about the next send.
      */
     override suspend fun notify(destination: Destination, text: String): DeliveryOutcome {
         val target = destination.chatTarget
@@ -348,11 +336,11 @@ class TelegramDelivery(
         var privateBlockedNoticed = false
         var sentAnything = false
 
-        // one output into the chat or the sender's DM, with the transcript row only a send that happened
-        // earns; false when nothing arrived, so a caption that rode on it is not lost with it
+        // one output into the chat or the sender's DM, with a transcript row only for a send that happened;
+        // false when nothing arrived, so the caption riding on it is not lost
         suspend fun deliverOne(output: BotOutput, caption: String?, toPrivate: Boolean): Boolean {
-            // pace consecutive sends, but only behind one that was attempted: a turn whose whole outbox was
-            // already delivered mid-run leaves the comment as the first thing sent here
+            // pace only behind an attempted send: if the whole outbox went out mid-run, the comment is the
+            // first thing sent here
             if (sentAnything) delay(INTER_MESSAGE_DELAY)
 
             sentAnything = true
@@ -364,8 +352,8 @@ class TelegramDelivery(
 
             indicateAction(deliveryTarget.chat, botActionFor(output))
 
-            // a poll is remembered only where its answers can be read back: the transcript this feeds
-            // covers groups, and the same guard keeps a redirected reply out of it.
+            // a poll is remembered only where its answers can be read back: the transcript covers groups, and
+            // the same guard keeps a redirected reply out.
             val pollRegistry = polls?.takeIf { !routedToPrivate && deliveryTarget.chatId != senderPrivateChatId }
             val outcome = deliverItem(output, deliveryTarget, caption, routedToPrivate, currentChatTarget, messages, pollRegistry)
 
@@ -400,8 +388,8 @@ class TelegramDelivery(
                     return false
                 }
 
-                // telegram may have shown it without saying so: the caption that rode on it is not sent
-                // again, and the transcript does not claim a message nobody confirmed
+                // telegram may have shown it without saying so: the caption is not sent again, and the
+                // transcript does not claim an unconfirmed message
                 ItemDeliveryOutcome.Unanswered -> return true
 
                 ItemDeliveryOutcome.Failed -> return false
@@ -413,8 +401,7 @@ class TelegramDelivery(
         var captionArrived = false
 
         for ((index, item) in result.outputs.withIndex()) {
-            // the turn already put this in the chat while it was still running (a plan it announced
-            // before starting the work), and into the transcript at that moment; sending it would repeat it.
+            // already posted mid-run (an announced plan) and recorded then; sending it again would repeat it.
             if (item.delivered) continue
 
             val caption = comment?.takeIf { index == captionIndex }
@@ -422,12 +409,12 @@ class TelegramDelivery(
 
             if (caption != null && arrived) captionArrived = true
 
-            // every remaining item would fail the same way, so stop paying for the round trips.
+            // every remaining item would fail the same way.
             if (chatUnreachable) break
         }
 
-        // the comment goes out on its own when no item could carry it, and when the one carrying it never
-        // arrived: the words are the answer, the media only what they rode on
+        // the comment goes alone when no item could carry it or the carrier never arrived: the words are the
+        // answer, the media only rode on them
         if (comment != null && !captionArrived && !chatUnreachable) {
             deliverOne(BotOutput.Text(comment), caption = null, toPrivate = result.commentToPrivate)
         }
@@ -435,8 +422,7 @@ class TelegramDelivery(
         return DispatchOutcome(replyUnavailable, chatUnreachable)
     }
 
-    // an already delivered item is out of the chat's future: it can neither carry the caption nor stop
-    // the one media output that still can from taking it.
+    // an already delivered item can neither carry the caption nor keep the last media output from taking it.
     private fun singleCaptionIndex(outputs: List<OutboxItem>): Int {
         val pending = outputs.withIndex().filter { !it.value.delivered }
 
@@ -492,15 +478,15 @@ class TelegramDelivery(
                 return ItemDeliveryOutcome.Unanswered
             }
 
-            // every fallback the kind has was tried on the way here, so nothing arrived: the caller must
-            // neither record it nor let a caption die with it
+            // every fallback was tried, so nothing arrived: the caller must neither record it nor drop a
+            // caption with it
             log.warn(e) { "failed to send outgoing item to chat=${deliveryTarget.chatId}" }
 
             return ItemDeliveryOutcome.Failed
         }
     }
 
-    // the anchor is gone, so the item goes out unanchored; a second refusal is a failure of its own
+    // the anchor is gone, so send unanchored; a second refusal is a failure of its own
     private suspend fun deliverWithoutReply(
         item: BotOutput,
         target: DeliveryTarget,
@@ -523,8 +509,8 @@ class TelegramDelivery(
             }
         }
 
-    // the bot's own turn belongs in the group transcript: a recap that shows the questions and not the
-    // answers reads as if nobody replied. best-effort — the message is already delivered either way.
+    // a recap showing the questions without the answers reads as if nobody replied. best-effort: the message
+    // is delivered either way.
     private suspend fun recordBotMessage(
         chatId: Long,
         routedToPrivate: Boolean,
@@ -535,9 +521,8 @@ class TelegramDelivery(
     ) {
         val repository = groupLog ?: return
 
-        // a reply redirected to the sender's DM never happened in the group, so the transcript must not
-        // claim it did — the exchange is still kept as the origin chat's conversation history. a private
-        // chat is never part of the group log to begin with.
+        // a reply redirected to the DM never happened in the group, so the transcript must not claim it; the
+        // conversation history still keeps it. a private chat is never in the group log.
         if (routedToPrivate || chatId == senderPrivateChatId) return
         if (text == null && descriptor == null) return
 
@@ -550,8 +535,8 @@ class TelegramDelivery(
                     sentAt = Instant.now(),
                     text = text?.collapseWhitespaceAndCap(MAX_BOT_TEXT_CHARS),
                     descriptor = descriptor,
-                    // the anchor is what ties this reply to the message it answers, which is how the
-                    // recent-chat slice knows this exchange is already in that user's own history.
+                    // the anchor is how the recent-chat slice knows this exchange is already in that user's
+                    // own history.
                     replyToMessageId = answering?.toString(),
                 ),
             )
@@ -575,7 +560,7 @@ class TelegramDelivery(
             }
     }
 
-    // best-effort: the indicator is cosmetic, so a failed action must never abort the delivery it precedes.
+    // best-effort: the indicator is cosmetic and must never abort the delivery.
     private suspend fun indicateAction(target: ChatTarget, action: ActionType?) {
         action ?: return
         runCatching {
@@ -640,9 +625,8 @@ class TelegramDelivery(
 
         const val MAX_BOT_TEXT_CHARS = GroupLogEntry.MAX_TEXT_CHARS
 
-        // pace consecutive sends in a multi-output reply so a batch does not trip Telegram's per-chat
-        // rate limit in the first place. `withFloodWaitRetry` handles the one that trips it anyway,
-        // but it costs the wait Telegram names — this keeps most batches from ever paying it.
+        // paces multi-output replies so a batch rarely trips telegram's per-chat rate limit;
+        // `withFloodWaitRetry` handles the ones that do, at the cost of the wait telegram names.
         val INTER_MESSAGE_DELAY = 700.milliseconds
 
         val log = KotlinLogging.logger {}

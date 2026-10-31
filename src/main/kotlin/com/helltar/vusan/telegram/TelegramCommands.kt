@@ -24,12 +24,11 @@ import org.telegram.telegrambots.meta.api.objects.ephemeral.EphemeralMessagePara
 import org.telegram.telegrambots.meta.api.objects.message.Message
 
 /**
- * The slash commands that take a direct path and never enter the agent loop: `/start`, `/tasks`, `/clear`
- * and `/stop`. The runner hands over a message it has already accepted — allowlisted, addressed to the
- * bot and claimed for its one turn — so this only does what the command says.
+ * The slash commands that skip the agent loop: `/start`, `/tasks`, `/clear` and `/stop`. The runner hands
+ * over a message already accepted (allowlisted, addressed, claimed), so this only does what the command says.
  *
- * This is the source of truth for which commands exist: the menu [publishCommandMenu] writes and the
- * `Telegram commands` section of the system prompt follow it.
+ * The source of truth for which commands exist: the menu [publishCommandMenu] writes and the system prompt's
+ * `Telegram commands` section follow it.
  */
 internal class TelegramCommands(
     private val delivery: TelegramDelivery,
@@ -37,14 +36,14 @@ internal class TelegramCommands(
     private val taskMenu: TaskMenuHandler,
 ) {
 
-    /** Whether [command] is one of these and meant for this bot: `/stop@other_bot` in a group is not. */
+    /** Whether [command] is one of these and for this bot: `/stop@other_bot` in a group is not. */
     fun recognizes(command: BotCommand, profile: BotProfile): Boolean =
         command.command in NAMES &&
                 (command.targetUsername == null || normalizeUsername(command.targetUsername) in profile.usernames.normalizedUsernames())
 
     suspend fun handle(command: BotCommand, message: Message) {
-        // an ephemeral command must be answered within 15 seconds of being sent, so how late it arrived is
-        // what tells a refused answer apart from a broken one
+        // an ephemeral command must be answered within 15 seconds, so its lateness tells a refused answer
+        // from a broken one
         log.info {
             "command: name=[${command.command}] chat=[${message.chatIdLong}] user=[${message.senderIdOrNull()}] " +
                     "ephemeral=[${message.isEphemeral}] age=[${message.date?.let { Instant.now().epochSecond - it }}s]"
@@ -67,14 +66,13 @@ internal class TelegramCommands(
 
         val messages = Messages.of(message.language)
 
-        // in a group the menu is one person's business, so it is shown to them alone. a client that knows
-        // the command is ephemeral sends it so, typed or picked; one that does not (an old app, a stale
-        // command list) sends a plain message, which only an administrator may answer for one person's
-        // eyes, so the open menu is what it was before
+        // in a group the menu is one person's business, so it is shown to them alone. a client that knows the
+        // command is ephemeral sends it so; an older one sends a plain message, which only an administrator
+        // may answer privately, so the menu goes out in the open as before
         val forSenderOnly = !message.isPrivateChat
 
-        // the menu is sent straight to the bot api, so unlike an agent reply it has no delivery
-        // fallback chain — without this the user would see nothing at all when the send is rejected.
+        // the menu goes straight to the bot api with no delivery fallback chain; without this a rejected send
+        // would show the user nothing.
         runCatching {
             if (forSenderOnly) {
                 sendEphemeralWithAnchorFallback(message.ephemeralMessageId?.let(::ephemeralReplyParameters)) { anchor ->
@@ -111,8 +109,8 @@ internal class TelegramCommands(
         }.onFailure { error ->
             error.rethrowIfCancellation()
 
-            // nobody else saw an ephemeral command, so an apology in the open would answer nothing they
-            // know of, and the one person who did is out of reach
+            // nobody else saw an ephemeral command, so an apology in the open would answer nothing they know
+            // of, and its sender is out of reach
             if (message.isEphemeral) {
                 log.warn { "no task menu for an ephemeral /tasks in chat=${message.chatIdLong} user=$userId: ${error.message}" }
                 return
@@ -123,8 +121,8 @@ internal class TelegramCommands(
         }
     }
 
-    // it arrives on its own coroutine, so the turn it stops holding the conversation lock is no obstacle:
-    // that is the whole point — every other path into the agent would answer `busyReply` and wait.
+    // it arrives on its own coroutine, so the turn it stops holding the conversation lock is no obstacle; any
+    // other path into the agent would answer `busyReply`.
     private suspend fun stop(message: Message) {
         val userId =
             message.senderIdOrNull() ?: run {
@@ -132,7 +130,7 @@ internal class TelegramCommands(
                 return
             }
 
-        // the stopped turn reports where it was working; this only answers when there was nothing to stop.
+        // the stopped turn reports where it was; this answers only when there was nothing to stop.
         if (agent.stop(message.conversationScopeOf(userId))) {
             log.info { "stopped the running turn: chat=${message.chatIdLong} user=$userId" }
             return
@@ -158,7 +156,7 @@ internal class TelegramCommands(
             return
         }
 
-        // the history is gone either way; a confirmation Telegram refuses is only logged
+        // the history is gone either way; a refused confirmation is only logged
         runCatching { delivery.sendForSenderOnly(message, reply) }
             .onFailure { error ->
                 error.rethrowIfCancellation()

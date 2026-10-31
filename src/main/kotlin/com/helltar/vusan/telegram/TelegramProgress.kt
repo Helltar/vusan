@@ -25,17 +25,16 @@ import org.telegram.telegrambots.meta.api.methods.ActionType
 import org.telegram.telegrambots.meta.api.methods.send.SendChatAction
 import org.telegram.telegrambots.meta.generics.TelegramClient
 
-// Telegram clears a chat action after ~5s, so re-assert it just under that.
+// telegram clears a chat action after ~5s, so re-assert it just under that.
 private val ACTION_REFRESH = 4.seconds
 
-// how long a job the user waits on runs before it is worth a message of its own. a bubble that appears
-// and is deleted a second later is worse than none, so nothing opens one inside this.
+// how long a job the user waits on runs before it earns a message; a bubble deleted a second after it appears
+// is worse than none.
 private val JOB_GRACE = 2.seconds
 
-// and how long everything else waits. looking at a photo somebody just sent, writing the reply, saving
-// a memory are turns in a conversation rather than work to watch: a status bubble with a stop button on
-// it answers them as a progress UI, and the chat action already says the same thing the way a person
-// typing does. A turn that genuinely drags on still earns its message.
+// and everything else. looking at a photo, writing the reply, saving a memory are conversation, not work to
+// watch: a status bubble with a stop button reads as a progress UI, and the chat action already says it as
+// typing does. a turn that really drags still earns its message.
 private val CONVERSATION_GRACE = 30.seconds
 
 internal fun statusGraceFor(activity: ToolActivity): Duration =
@@ -63,20 +62,16 @@ internal fun statusGraceFor(activity: ToolActivity): Duration =
     }
 
 /**
- * Show what the turn is doing for as long as [block] runs. [block] receives a setter it hands to the
- * agent, so the indicator follows the tool that is currently executing, and the turn's [TurnStatus],
- * which the tools narrate a plan into.
+ * Shows what the turn is doing while [block] runs. [block] gets a setter for the agent, so the indicator
+ * follows the running tool, and the turn's [TurnStatus], which tools narrate a plan into.
  *
- * Two surfaces, in this order: a chat action from the first moment, since it costs nothing and needs no
- * decision, and then the status message once the turn has earned one — at which point the action stands
- * down, because leaving both up announces the same turn twice. What it takes to earn it is
- * [statusGraceFor]: a job the user waits on opens the message in seconds, an activity that is part of
- * the exchange only if the turn drags on well past it. Either way a plan the model announces opens it
- * at once, being a deliberate act rather than a side effect of some tool being slow, and an open
- * message then follows every activity, heavy or not. The status is closed here rather than by the
- * caller so that a stopped turn, which leaves through the cancellation, still takes its bubble off the
- * screen. A turn that [acknowledge]s marks its message as received first, for the while in which neither
- * surface will show anything: see [TurnStatus.acknowledge].
+ * Two surfaces: a chat action from the start, which costs nothing, then the status message once the turn
+ * earns one, when the action stands down so the turn is not announced twice. [statusGraceFor] decides: a job
+ * the user waits on opens it in seconds, a conversational activity only if the turn drags well past it. An
+ * announced plan opens it at once, being deliberate rather than a side effect of a slow tool, and an open
+ * message then follows every activity. The status is closed here, not by the caller, so a turn stopped by
+ * cancellation still removes its bubble. A turn that [acknowledge]s marks its message received first, for the
+ * while neither surface shows anything: see [TurnStatus.acknowledge].
  */
 internal suspend fun <T> TelegramClient.withLiveProgress(
     request: AgentRequest,
@@ -94,8 +89,8 @@ internal suspend fun <T> TelegramClient.withLiveProgress(
         val actionTicker =
             launch {
                 activity.collectLatest { current ->
-                    // collectLatest cancels this block's own child job on a new activity, which the
-                    // outer launch's isActive would not reflect.
+                    // collectLatest cancels this block's own child job on a new activity, which the outer
+                    // isActive would not reflect.
                     while (currentCoroutineContext().isActive) {
                         runCatching {
                             indicateChatAction(
@@ -112,17 +107,15 @@ internal suspend fun <T> TelegramClient.withLiveProgress(
 
         val statusTicker =
             launch {
-                // a null activity means nothing worth naming is running; it never takes a live status
-                // back down, since the turn is still going and the last thing named is still the truth.
+                // a null activity means nothing worth naming runs; it never takes a live status down, since
+                // the last thing named is still true.
                 activity.filterNotNull().collectLatest { current ->
-                    // whatever the turn is doing fills a bubble that is already up: once a message has
-                    // been earned, naming the next step is the edit it would make anyway.
+                    // once a bubble is up, naming the next step is the edit it would make anyway.
                     if (status.showActivity(current, mayOpen = false)) actionTicker.cancel()
 
-                    // the grace is measured from the start of the turn rather than of this activity: a
-                    // run of quick searches is a long turn even though no single one of them lasts.
-                    // collectLatest drops this wait when the activity changes, so what opens the message
-                    // is always the thing still running.
+                    // the grace counts from the turn's start, not this activity's: a run of quick searches is
+                    // a long turn though none lasts. collectLatest drops the wait when the activity changes,
+                    // so what opens the message is always what is still running.
                     val wait = statusGraceFor(current) - started.elapsedNow()
 
                     if (wait.isPositive()) delay(wait)
@@ -136,12 +129,12 @@ internal suspend fun <T> TelegramClient.withLiveProgress(
         } finally {
             actionTicker.cancel()
             statusTicker.cancel()
-            // the turn may be on its way out through `/stop`, and the bubble has to close either way.
+            // the turn may be leaving through `/stop`, and the bubble must close either way.
             withContext(NonCancellable) { status.finish() }
         }
     }
 
-// where the live status bubble and the typing indicator go: the turn's own chat and topic.
+// the live status and typing indicator go to the turn's own chat and topic.
 private val RequestContext.chatTarget: ChatTarget
     get() = ChatTarget(chatRef.telegramChatId, telegramThreadId(chat.threadId))
 

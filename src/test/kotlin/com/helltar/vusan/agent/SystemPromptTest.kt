@@ -17,8 +17,8 @@ class SystemPromptTest {
         assertContains(prompt, "no assumed family name, release date, or training cutoff")
     }
 
-    // inbound sanitizing removes the mention before the prompt is built, so the handle has to be
-    // stated outright or the model never learns the name it is called by.
+    // inbound sanitizing removes the mention, so the handle must be stated or the model never learns its
+    // name.
     @Test
     fun `system prompt names the telegram account when one is known`() {
         val prompt = systemPromptFor("Custom personality", MODEL_ID, listOf("VusanBot"), "Vusan")
@@ -42,8 +42,8 @@ class SystemPromptTest {
         assertFalse("Vusan" in prompt.substringAfter("</personality>"))
     }
 
-    // the rule is fixed, the menu it points at is not: `<tool_groups>` changes with what the
-    // conversation already loaded, and this block is the one prefix every request shares.
+    // the rule is fixed, the menu is not: `<tool_groups>` changes with what was loaded, and this block is the
+    // prefix every request shares.
     @Test
     fun `system prompt states the loading rule without carrying the menu itself`() {
         val prompt = systemPromptFor("Custom personality", MODEL_ID)
@@ -54,7 +54,7 @@ class SystemPromptTest {
         assertFalse("</tool_groups>" in prompt)
     }
 
-    // a deployment without a sandbox would only be offered references that fail
+    // without a sandbox the references would only fail
     @Test
     fun `the sandbox is named only to a deployment that has one`() {
         val with = systemPromptFor("Custom personality", MODEL_ID, sandbox = true)
@@ -68,7 +68,7 @@ class SystemPromptTest {
         assertFalse("turns/" in without)
     }
 
-    // without it a model asked again answers from the history of when it was on, with a made-up refusal
+    // otherwise a model asked again answers from the history of when it was on, with a made-up refusal
     @Test
     fun `media generation switched off is named, and nothing is said where it is on`() {
         val off = systemPromptFor("Custom personality", MODEL_ID, images = false, videos = true)
@@ -81,7 +81,7 @@ class SystemPromptTest {
         assertFalse("Switched off" in on)
     }
 
-    // told only that pictures are off, a weak model turned down a crop or a caption it could write in python
+    // told only that pictures are off, a weak model refused a crop or caption it could do in python
     @Test
     fun `media generation switched off leaves editing with code to the sandbox`() {
         val withSandbox = systemPromptFor("Custom personality", MODEL_ID, sandbox = true)
@@ -113,8 +113,8 @@ class SystemPromptTest {
         assertContains(prompt, "These commands bypass you")
     }
 
-    // said outright, since a model told only to format in html answered in markdown fences with a bare
-    // `<` inside, which the parse mode refuses
+    // said outright: a model told only to format in html answered in markdown fences with a bare `<`, which
+    // the parse mode refuses
     @Test
     fun `system prompt keeps code out of markdown`() {
         val prompt = systemPromptFor("Custom personality", MODEL_ID)

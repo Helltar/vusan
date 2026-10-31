@@ -59,7 +59,7 @@ class TaskSchedulerTest {
     fun `a fired task runs in the topic it was created in`() {
         val request = scheduledAgentRequest(task.copy(creatorThreadId = "42"), attempt = 1, ChatProfile.NONE)
 
-        // a follow-up the turn schedules is anchored from here, so losing the topic sends it to General.
+        // a follow-up the turn schedules anchors from here, so losing the topic sends it to General.
         assertEquals("42", request.context.chat.threadId)
         assertEquals("-200", request.context.chat.id)
         // nothing sent the turn, so there is no message to answer and none is invented.
@@ -72,8 +72,8 @@ class TaskSchedulerTest {
         assertNull(scheduledAgentRequest(task, attempt = 1, ChatProfile.NONE).context.chat.threadId)
     }
 
-    // the mention itself is the messenger's syntax and is written where that is known; what leaves
-    // `tasks/` is who the person is and why the chat is hearing from the bot at all.
+    // the mention is the messenger's syntax, written where that is known; `tasks/` passes on who the person
+    // is and why the bot is writing.
     @Test
     fun `a fire in a group carries who it belongs to, not how to write them`() {
         val attribution = task.copy(creatorUsername = "helltar", creatorMessageId = "12").attribution
@@ -93,7 +93,7 @@ class TaskSchedulerTest {
         )
     }
 
-    // a follow-up is the bot writing unasked; a task the person asked for is theirs and fires anyway
+    // a follow-up is the bot writing unasked; a task the person asked for fires anyway
     @Test
     fun `only a follow-up is held by a request to be left alone, in a private chat too`() = withDatabase {
         val requests = LeaveAloneRepository()
@@ -111,7 +111,7 @@ class TaskSchedulerTest {
         assertFalse(followUp.isHeldBy(requests, now.plusSeconds(3600)))
     }
 
-    // in a private chat the only other member is the person the task belongs to.
+    // in a private chat the only other member is the task's owner.
     @Test
     fun `a private task is attributed to nobody`() {
         assertNull(task.copy(chatIsPrivate = true).attribution)

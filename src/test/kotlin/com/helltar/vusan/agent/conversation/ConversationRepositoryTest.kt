@@ -157,7 +157,7 @@ class ConversationRepositoryTest {
         assertEquals(1, history.load(GROUP).stats.storedInteractions)
     }
 
-    // a turn prunes its own conversation, so what is left over is the person who stopped writing.
+    // a turn prunes its own conversation, so what is left is the person who stopped writing.
     @Test
     fun `the retention pass reaches conversations nobody came back to`() = runBlocking {
         val history = ConversationRepository()
@@ -176,7 +176,7 @@ class ConversationRepositoryTest {
             )
 
         assertEquals(1, pruned)
-        // only what the recap already covers goes; the group conversation has no recap and keeps everything
+        // only what the recap covers goes; the group conversation has no recap and keeps everything
         assertEquals(listOf("second", "two"), history.load(DM).interactions.single().turns.map { it.content })
         assertEquals(1, history.load(GROUP).stats.storedInteractions)
     }
@@ -217,7 +217,7 @@ class ConversationRepositoryTest {
         assertTrue(cleared.interactions.isEmpty())
         assertEquals(null, cleared.summary)
 
-        // the same person in another chat, and another person in the same chat, both untouched.
+        // the same person in another chat and another person in this chat stay untouched.
         assertEquals(
             listOf("in the group", "answered"),
             history.load(GROUP).interactions.single().turns.map { it.content },
@@ -233,7 +233,7 @@ class ConversationRepositoryTest {
         assertEquals(2L, history.revision(DM))
     }
 
-    // the recap and the count of wipes share one row now, so storing one must not disturb the other.
+    // the recap and the wipe count share a row, so storing one must not disturb the other.
     @Test
     fun `a recap stored after a clear keeps the revision`() = runBlocking {
         val history = ConversationRepository()
@@ -261,8 +261,8 @@ class ConversationRepositoryTest {
         assertEquals(null, history.lastInteractionAt(OTHER_USER_IN_GROUP))
     }
 
-    // telegram and discord both issue plain numbers, so the same pair of ids names two different people
-    // in two different chats. sharing a history between them would replay one person's words as another's.
+    // telegram and discord both issue plain numbers, so one id pair names different people in different
+    // chats; a shared history would replay one person's words as another's.
     @Test
     fun `the same ids on two platforms are two conversations`() = runBlocking {
         val history = ConversationRepository()
@@ -296,7 +296,7 @@ class ConversationRepositoryTest {
         val DM_ON_DISCORD = testScope(userId = 42, chatId = 42, platform = Platform.DISCORD)
         val OTHER_USER_IN_GROUP = testScope(userId = 99, chatId = -100)
 
-        // in telegram a private chat carries the user's own id, so the DM conversation is (42, 42).
+        // a telegram private chat carries the user's id, so the DM is (42, 42).
         val DM = testScope(userId = 42, chatId = 42)
         val GROUP = testScope(userId = 42, chatId = -100)
     }

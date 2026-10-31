@@ -11,7 +11,7 @@ import kotlin.test.assertContains
 import kotlin.test.assertFalse
 import kotlin.test.assertTrue
 
-// a literal address keeps the private-address guard on its real code path without a DNS lookup
+// a literal address keeps the private-address guard on its real path without DNS
 private const val PAGE_URL = "http://93.184.216.34/article"
 
 class PageToolsTest {
@@ -46,7 +46,7 @@ class PageToolsTest {
         assertFalse("© Example" in result, "the footer leaked into the text")
     }
 
-    // an instruction meant for a model is planted where no reader sees it
+    // an instruction for a model planted where no reader sees it
     @Test
     fun `text the page hides from a reader is not read`() = runBlocking {
         val html = """

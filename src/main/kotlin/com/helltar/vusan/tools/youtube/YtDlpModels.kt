@@ -16,7 +16,7 @@ internal data class YtDlpInfo(
     val width: Int? = null,
     val height: Int? = null,
     @SerialName("webpage_url") val webpageUrl: String? = null,
-    // author-provided tracks; the ASR original and its machine translations live in the other map
+    // author-provided tracks; the ASR original and its translations are in the other map
     val subtitles: Map<String, JsonElement>? = null,
     @SerialName("automatic_captions") val automaticCaptions: Map<String, JsonElement>? = null,
 )

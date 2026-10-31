@@ -39,9 +39,8 @@ internal data class PendingSticker(
 )
 
 /**
- * The rows behind the sticker catalog: the sets pulled in, their stickers with the descriptions vision
- * gave them, and which chat used which. Telegram-owned like its tables, so a chat is its Telegram id here
- * and nothing takes a qualified reference.
+ * The rows behind the sticker catalog: learned sets, their stickers with vision's descriptions, and which
+ * chat used which. Telegram-owned like its tables, so a chat is its telegram id here.
  */
 internal class StickerRepository {
 
@@ -68,7 +67,7 @@ internal class StickerRepository {
         }
     }
 
-    /** Records this sighting and answers how many times the chat has now used the set. */
+    /** Records this sighting and returns how many times the chat has now used the set. */
     suspend fun recordChatUsage(chatId: Long, setName: String): Int = dbTransaction {
         val now = Instant.now()
 
@@ -125,10 +124,10 @@ internal class StickerRepository {
     }
 
     /**
-     * Brings the stored set in line with [live], the set as Telegram has it now: stickers gone from it are
-     * dropped, handles that moved are updated, and of the stickers not held yet the first [maxStickers] of
-     * the set are added. [live] is uncapped on purpose — what is stored has to be judged against the whole
-     * set, or a sticker pushed past the cap by a reorder would look deleted and lose its description.
+     * Brings the stored set in line with [live], the set as telegram has it now: gone stickers are dropped,
+     * moved handles updated, and the first [maxStickers] not yet held are added. [live] is uncapped on
+     * purpose: judged against a capped list, a sticker pushed past the cap by a reorder would look deleted
+     * and lose its description.
      */
     suspend fun syncSet(setName: String, live: List<Sticker>, maxStickers: Int) {
         dbTransaction {
@@ -202,7 +201,9 @@ internal class StickerRepository {
         dbTransaction { markSetRefreshed(setName) }
     }
 
-    /** Queues the set of [stickerId] for an early re-read and answers its name, `null` for an unknown sticker. */
+    /**
+     * Queues the set of [stickerId] for an early re-read and returns its name; `null` for an unknown sticker.
+     */
     suspend fun queueRecheck(stickerId: Long): String? = dbTransaction {
         val setName =
             TelegramStickersTable
@@ -229,7 +230,7 @@ internal class StickerRepository {
             .map { it[TelegramStickerSetsTable.name] }
     }
 
-    /** The handle to send sticker [id] by, when it is described and from a set [chatId] has used. */
+    /** The handle to send sticker [id] by, when described and from a set [chatId] used. */
     suspend fun fileIdFor(chatId: Long, id: Long): String? = dbTransaction {
         val setNames = chatSetNames(chatId)
         if (setNames.isEmpty()) return@dbTransaction null
@@ -245,7 +246,7 @@ internal class StickerRepository {
             ?.get(TelegramStickersTable.fileId)
     }
 
-    /** Every described sticker of the sets [chatId] has used, in the order they were learned. */
+    /** Every described sticker of the sets [chatId] used, in learning order. */
     suspend fun describedStickersFor(chatId: Long): List<KnownSticker> = dbTransaction {
         val setNames = chatSetNames(chatId)
         if (setNames.isEmpty()) return@dbTransaction emptyList()
@@ -278,7 +279,7 @@ internal class StickerRepository {
             }
     }
 
-    /** The next [limit] stickers without a description that have not been given up on, oldest first. */
+    /** The next [limit] undescribed stickers not given up on, oldest first. */
     suspend fun pendingDescriptions(limit: Int): List<PendingSticker> = dbTransaction {
         TelegramStickersTable
             .selectAll()
@@ -306,7 +307,7 @@ internal class StickerRepository {
         }
     }
 
-    /** Counts one more failed attempt on top of [attempts] and answers the new count. */
+    /** Counts one more failed attempt on top of [attempts] and returns the new count. */
     suspend fun countDescribeAttempt(id: Long, attempts: Int): Int = dbTransaction {
         TelegramStickersTable.update({ TelegramStickersTable.id eq id }) {
             it[describeAttempts] = attempts + 1
@@ -364,9 +365,8 @@ internal class StickerRepository {
     private data class StoredHandles(val fileId: String, val thumbnailFileId: String?)
 
     companion object {
-        // people send stickers vision will not describe — explicit ones it refuses, and ones whose
-        // download or call simply fails. one that failed this often leaves the queue, or it would stay at
-        // the head forever and starve every sticker behind it.
+        // vision refuses explicit stickers, and downloads or calls fail; one failing this often leaves the
+        // queue, or it would sit at the head and starve the rest.
         const val MAX_DESCRIBE_ATTEMPTS = 5
 
         private val log = KotlinLogging.logger {}

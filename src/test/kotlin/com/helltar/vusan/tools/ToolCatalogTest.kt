@@ -47,8 +47,8 @@ class ToolCatalogTest {
         assertContains(catalog.tools.map { it.name }, "drawTestPicture")
     }
 
-    // the list a provider caches ahead of everything else: loading a group names its tools as loaded and
-    // leaves the list as it was, the groups' tools deferred in it from the start
+    // the list a provider caches first: loading a group marks its tools loaded and leaves the list as it was,
+    // with the groups' tools deferred in it from the start
     @Test
     fun `a request declares the same tools whatever is loaded, the groups' tools deferred`() {
         val catalog = catalog()
@@ -90,13 +90,13 @@ class ToolCatalogTest {
         assertEquals(revision, catalog.revision)
     }
 
-    // the tool array is part of the cached prefix, so it may not depend on the order groups were loaded
+    // the tool array is part of the cached prefix, so it may not depend on load order
     @Test
     fun `the visible order follows registration, not the order the groups were loaded`() {
         val loadedInMenuOrder = catalog().apply { load(listOf("gifs", "voice_replies")) }
         val loadedInReverse = catalog().apply { load(listOf("voice_replies", "gifs")) }
 
-        // every group is loaded, so the loader has nothing left to offer and is not sent either
+        // every group is loaded, so the loader has nothing to offer and is not sent
         assertEquals(
             listOf("sendTestMessage", "drawTestPicture", "speakTestText"),
             loadedInMenuOrder.visibleNames(),
@@ -125,8 +125,8 @@ class ToolCatalogTest {
         assertFalse("youtube" in menu)
     }
 
-    // a chat can lose every optional group with the service behind it; the loader would then only cost
-    // schema space and offer a menu of nothing.
+    // a chat can lose every optional group with its service; the loader would then cost schema space for an
+    // empty menu.
     @Test
     fun `a catalog with nothing deferred has no menu and no loader`() {
         val catalog = toolCatalog { tools(CoreTestTools()) }
@@ -136,8 +136,8 @@ class ToolCatalogTest {
         assertEquals(listOf("sendTestMessage"), catalog.tools.map { it.name })
     }
 
-    // what the conversation loaded last time is offered again from the first request: a tool array
-    // that changes mid-turn rebuilds the whole cached prompt prefix.
+    // what the conversation loaded last time is offered from the first request: a tool array changing
+    // mid-turn rebuilds the cached prefix.
     @Test
     fun `a preloaded group is offered from the start and drops out of the menu`() {
         val catalog =
@@ -152,7 +152,7 @@ class ToolCatalogTest {
         assertFalse("gifs" in catalog.menu().orEmpty())
     }
 
-    // a group the chat no longer has must not be resurrected by what an earlier turn remembered
+    // a group the chat no longer has must not come back from an earlier turn's memory
     @Test
     fun `a preloaded group that is not registered this turn is ignored`() {
         val catalog =

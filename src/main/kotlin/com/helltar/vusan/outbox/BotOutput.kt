@@ -7,9 +7,9 @@ sealed class BotOutput {
 
     data class Text(val text: String) : BotOutput()
 
-    // [originMessageId] is the user message this exchange started from. the selection comes back as a
-    // callback with no message of its own, so without it the follow-up turn would answer the bot's own
-    // question and anything it schedules would lose the message that asked for it.
+    // [originMessageId] is the user message the exchange started from. the selection returns as a callback
+    // with no message of its own, so without it the follow-up would answer the bot's own question and
+    // anything it schedules would lose the asking message.
     data class InlineChoice(
         val question: String,
         val options: List<String>,
@@ -28,10 +28,10 @@ sealed class BotOutput {
         }
     }
 
-    // an opt-in Bot API 10.1 rich message for large, genuinely structured replies (long comparisons,
-    // tables, multi-section documents). [markdown] is github-flavored markdown; delivery falls back to a
-    // .md document if Telegram rejects it. some third-party clients (e.g. Telegram X) render rich messages
-    // as unsupported, so the normal HTML [Text] path stays the default for everyday replies.
+    // an opt-in Bot API 10.1 rich message for large, structured replies (long comparisons, tables,
+    // multi-section documents). [markdown] is github-flavored; delivery falls back to a .md document on
+    // rejection. some third-party clients (e.g. Telegram X) show rich messages as unsupported, so HTML [Text]
+    // stays the default.
     data class RichMessage(val markdown: String) : BotOutput() {
         init {
             require(markdown.isNotBlank()) { "RichMessage markdown must not be blank" }
@@ -76,9 +76,8 @@ sealed class BotOutput {
         }
     }
 
-    // sent by file_id from the learned sticker catalog. the Bot API takes no caption on a sticker, so
-    // it is always a message of its own. [catalogId] travels with it so a rejected file_id can be
-    // reported back to the catalog.
+    // sent by file_id from the sticker catalog, always alone since the Bot API takes no sticker caption.
+    // [catalogId] lets a rejected file_id be reported back.
     data class Sticker(val fileId: String, val catalogId: Long) : BotOutput() {
         init {
             require(fileId.isNotBlank()) { "Sticker file id must not be blank" }

@@ -61,9 +61,9 @@ class MemoryTools(private val memory: MemoryRepository, private val context: Req
         "Cleared your personal memory ($removed item(s) removed). Chat history and group memory are untouched."
     }
 
-    // a wrong id still saves the detail: losing what the user asked to keep is worse than a stale
-    // entry left beside it, and the reply says which of the two happened. a detail over the limit is
-    // refused rather than cut: an item that grows is appended to, so a cut would drop the newest part.
+    // a wrong id still saves the detail: losing what the user asked to keep is worse than a stale entry
+    // beside it, and the reply says which happened. an over-limit detail is refused, not cut: growing items
+    // are appended to, so a cut would drop the newest part.
     private suspend fun save(owner: MemoryOwner, where: String, detail: String, replacesId: Long): String {
         val clean =
             detail.collapseWhitespaceAndCap(Int.MAX_VALUE)

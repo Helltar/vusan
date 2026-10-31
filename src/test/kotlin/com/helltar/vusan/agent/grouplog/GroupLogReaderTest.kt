@@ -29,7 +29,7 @@ class GroupLogReaderTest {
 
     private val zone = ZoneId.of("Europe/Kyiv")
 
-    // 2026-08-04 15:00 in Kyiv, so "today" and the days before it are unambiguous.
+    // 2026-08-04 15:00 in Kyiv, so "today" and earlier days are unambiguous.
     private val now: Instant = Instant.parse("2026-08-04T12:00:00Z")
 
     @BeforeTest
@@ -241,8 +241,8 @@ class GroupLogReaderTest {
 
     @Test
     fun `the count covers the snapped window rather than the narrower one asked for`() = runBlocking {
-        // 15:00 minus 24h lands mid-day on the 3rd, and the diary path then widens the window to that
-        // whole day. the count has to follow, or the header contradicts the window it prints.
+        // 15:00 minus 24h lands mid-day on the 3rd, and the diary path widens to that whole day; the count
+        // must follow, or the header contradicts its window.
         repeat(60) { record(1_000L + it, "early on the 3rd $it", instantAt(2026, 8, 3, 9)) }
         repeat(60) { record(2_000L + it, "late on the 3rd $it", instantAt(2026, 8, 3, 20)) }
         repeat(60) { record(3_000L + it, "today $it", instantAt(2026, 8, 4, 11)) }

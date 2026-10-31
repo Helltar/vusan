@@ -11,13 +11,12 @@ import org.telegram.telegrambots.meta.api.objects.richblock.RichBlockParagraph
 import org.telegram.telegrambots.meta.api.objects.richtext.RichTextConcat
 import org.telegram.telegrambots.meta.api.objects.richtext.RichTextPlain
 
-// rich messages travel both ways: vusan sends `sendRichMessage`, and Telegram returns the sent
-// message — and can deliver an inbound one — as `Message.rich_message`. telegrambots 10.1.0 could
-// not deserialize the receiving side at all, and an unparsable update stalls getUpdates forever,
-// so both directions are pinned here.
+// rich messages go both ways: vusan sends `sendRichMessage`, and telegram returns the sent message, and may
+// deliver an inbound one, as `Message.rich_message`. telegrambots 10.1.0 could not deserialize the receiving
+// side, and an unparsable update stalls getUpdates forever, so both directions are pinned here.
 class RichMessageTest {
 
-    // the okhttp client serializes api methods and parses responses with a default ObjectMapper.
+    // the okhttp client serializes methods and parses responses with a default ObjectMapper.
     private val mapper = ObjectMapper()
 
     @Test
@@ -32,8 +31,8 @@ class RichMessageTest {
         assertEquals(7, json["reply_parameters"]["message_id"].asInt())
     }
 
-    // InputRichMessage must carry exactly one of html/markdown, and absent optional fields must be
-    // omitted rather than serialized as null.
+    // InputRichMessage must carry exactly one of html/markdown, and absent optional fields must be omitted,
+    // not null.
     @Test
     fun `sends only the markdown field and omits absent optionals`() {
         val json = mapper.readTree(mapper.writeValueAsString(richMessageRequest(ChatTarget(42), "hi", null)))
@@ -42,7 +41,7 @@ class RichMessageTest {
         assertFalse(json.has("reply_parameters"))
     }
 
-    // a failure here makes every sent rich message look rejected, duplicating it as a fallback file.
+    // a failure here makes every sent rich message look rejected and duplicates it as a fallback file.
     @Test
     fun `parses the sent message returned by sendRichMessage`() {
         val response =
@@ -57,8 +56,8 @@ class RichMessageTest {
         assertEquals("hello", (paragraph.text as RichTextPlain).text)
     }
 
-    // an inbound rich message must never stall getUpdates: unknown block and text types have to
-    // degrade to null instead of failing the whole update.
+    // an inbound rich message must never stall getUpdates: unknown block and text types degrade to null
+    // instead of failing the update.
     @Test
     fun `parses an inbound rich message with plain, nested and unknown parts`() {
         val response =

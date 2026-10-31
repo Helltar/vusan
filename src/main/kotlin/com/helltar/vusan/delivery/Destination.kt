@@ -6,12 +6,12 @@ import com.helltar.vusan.request.UserRef
 /**
  * Where an answer belongs.
  *
- * A destination and the sub-conversation inside it are two different things, and the message an answer
- * hangs under is a third that lives on [Attribution] instead: a turn nothing sent — a scheduled task
- * firing — has a place to write to but no anchor, and never invents one.
+ * A destination and its sub-conversation are separate things, and the message an answer hangs under is a
+ * third, on [Attribution]: a turn nothing sent, such as a scheduled task, has a place to write but no anchor,
+ * and never invents one.
  *
- * [threadId] is opaque to everything but the adapter that issued it. A Telegram forum topic and a
- * Discord thread are not the same kind of object, and neither is the conversation: the chat is.
+ * [threadId] is opaque to all but the adapter that issued it: a telegram forum topic and a discord thread are
+ * different objects, and neither is the conversation; the chat is.
  */
 data class Destination(
     val chat: ChatRef,
@@ -19,12 +19,10 @@ data class Destination(
 )
 
 /**
- * The line naming who a scheduled answer belongs to, and where it hangs.
- *
- * Why a chat is being written to unprompted is task policy — a standing order somebody set up reads
- * differently from the bot returning to a conversation — but how the person is named is not: a
- * mention is the platform's own syntax, so the adapter is told who it is talking about and writes
- * the line itself. Whether the anchor still exists is likewise the adapter's to find out.
+ * The line naming whose scheduled answer this is, and where it hangs. Why the bot writes unprompted is task
+ * policy (a standing order reads differently from a follow-up), but naming the person is the platform's own
+ * syntax, so the adapter is told who and writes the line. Whether the anchor still exists is also the
+ * adapter's to find out.
  */
 data class Attribution(
     val anchorMessageId: String?,

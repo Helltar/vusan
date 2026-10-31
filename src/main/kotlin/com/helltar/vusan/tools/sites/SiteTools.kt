@@ -14,13 +14,11 @@ import kotlin.time.Instant
 private const val MAX_PATH_CHARS = 400
 
 /**
- * Putting what someone built in their sandbox on the public internet.
- *
- * Publishing is a snapshot the Regolith server takes of one directory: the files leave the sandbox
- * at that moment and the site stays as it was, whatever happens in the sandbox afterward.
+ * Puts what someone built in their sandbox on the public internet. Publishing is a snapshot the Regolith
+ * server takes of one directory; the site stays as it was whatever the sandbox does afterward.
  */
 class SiteTools(
-    // the turn's own handle: the files come from the sandbox its commands ran in
+    // the turn's own handle: files come from the sandbox its commands ran in
     private val sandbox: SandboxClient.PersonSandbox,
 ) : ToolSet {
 
@@ -61,8 +59,8 @@ class SiteTools(
     }
 
     /**
-     * The one mistake the numbers cannot show: a directory with no `index.html` at its top publishes
-     * fine and its link then opens nothing. The server saw the snapshot, so it is the one that says.
+     * The one mistake the numbers cannot show: a directory without a top-level `index.html` publishes fine
+     * and its link opens nothing. The server saw the snapshot, so it says.
      */
     private fun missingIndex(site: PublishedSite, path: String): String? =
         if (site.hasIndex) {
@@ -77,7 +75,7 @@ private fun describePublished(site: PublishedSite): String =
     "Published at ${site.url} — ${site.files} file(s), ${site.bytes.asMegabytes()}, online until ${site.until.asDate()}. " +
         "Give the user that link."
 
-// a day is what a person reads a term in; the hour of it is the server's business
+// a person reads a term as a day; the hour is the server's business
 private fun Instant.asDate(): String = toString().substringBefore('T')
 
 private fun Long.asMegabytes(): String =

@@ -11,13 +11,10 @@ import io.github.oshai.kotlinlogging.KotlinLogging
 private val log = KotlinLogging.logger("CompleteWithin")
 
 /**
- * Completes [request] with a text answer of at most [maxChars] characters, for text the bot keeps and
- * reads again later. An answer that runs past it is handed back to the model to write again in
- * [askedChars] rather than cut: a cut drops whatever was written last, mid-sentence, and nothing that
- * reads the text later can tell. Only a rewrite that still runs past [maxChars] is cut, as a last
- * resort and with a warning, and an empty rewrite falls back to the first answer, cut.
- *
- * The reply returned is the last one made, its text replaced only when it had to be cut.
+ * Completes [request] with a text of at most [maxChars], for text the bot keeps and rereads. An over-long
+ * answer is handed back to be rewritten in [askedChars] rather than cut, since a cut silently drops the end
+ * mid-sentence. Only a rewrite still over [maxChars] is cut, with a warning, and an empty rewrite falls back
+ * to the first answer, cut. Returns the last reply, its text replaced only when cut.
  */
 internal suspend fun LlmClient.completeWithin(
     model: LlmModel,

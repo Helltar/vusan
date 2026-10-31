@@ -27,7 +27,7 @@ class ConversationPlanTest {
 
         assertEquals(listOf("i-1", "i-2", "i-3"), result.compactablePrefix.map { it.id })
         assertEquals(listOf("user-3", "assistant-3", "user-4", "assistant-4", "user-5", "assistant-5"), result.prompt.turns.map { it.content })
-        // every interaction the count keeps fit, so the recap it asks for can wait for the turn to end
+        // every interaction the count keeps fits, so the recap it asks for can wait for the turn's end
         assertFalse(result.overBudget)
     }
 
@@ -43,7 +43,7 @@ class ConversationPlanTest {
         assertTrue(result.compactablePrefix.isEmpty())
     }
 
-    // the oldest of the three is the only one the next turn is sure to replay the way this one does
+    // the oldest of the three is the only one the next turn surely replays the same way
     @Test
     fun `the turns replayed as text are the stable ones`() {
         val interactions = (1L..3L).map { toolExchange(it) }
@@ -73,7 +73,7 @@ class ConversationPlanTest {
         assertTrue(result.overBudget)
     }
 
-    // a request continued from this one must not keep a stored turn longer than storage does
+    // a continuation must not keep a stored turn longer than storage does
     @Test
     fun `the plan says when the oldest interaction it replays was stored`() {
         val interactions = (1L..3L).map { exchange(it, "u".repeat(120), "a".repeat(120)).copy(createdAt = Instant.ofEpochSecond(it * 100)) }

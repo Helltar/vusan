@@ -10,27 +10,25 @@ import kotlin.time.toKotlinDuration
 import java.time.Duration as JavaDuration
 
 /**
- * The fallback [model] answering while the primary is out, and how long until the primary is due back
- * — known only when the primary named that deadline itself.
+ * The fallback [model] answering while the primary is out, and how long until the primary is back, known only
+ * when the primary named that deadline.
  */
 data class FallbackInUse(val model: String, val primaryBackIn: Duration?)
 
 /**
- * A provider that is out [until] a deadline. [deadlineNamed] is true only when the provider stated that
- * deadline itself; otherwise it is merely when the next probe is due, and no promise to anybody.
+ * A provider out [until] a deadline. [deadlineNamed] is true only when the provider stated it; otherwise it
+ * is just when the next probe is due.
  */
 class ProviderOutage(val until: Instant, val deadlineNamed: Boolean)
 
 /**
- * The primary provider with a second one behind it for when the first is out: a spent subscription, a
- * sign-in that expired. A call the primary refuses that way is repeated on the fallback with the
- * fallback's own model and options, and the primary is left alone until the deadline its refusal named,
- * after which one call probes it again.
+ * The primary provider with a second behind it for when the first is out (a spent subscription, an expired
+ * sign-in). A call refused that way is repeated on the fallback with its own model and options, and the
+ * primary is left alone until the named deadline, then probed with one call.
  *
- * It wraps the client rather than the agent so that one place covers every call the bot makes — a
- * turn, a history recap, a diary entry, vision on the chat model — and so the turn that ran into
- * the limit finishes on the fallback instead of ending in "come back later". [outageOf] reads a failure
- * into the outage it means, or `null` when the failure is not the provider's and reaches the caller.
+ * It wraps the client rather than the agent so every call is covered (turns, recaps, diary entries, vision on
+ * the chat model) and a turn that hits the limit finishes on the fallback. [outageOf] reads a failure into
+ * its outage, or `null` when the failure is not the provider's and reaches the caller.
  */
 class FallbackLlmClient(
     private val primary: LlmClient,
@@ -46,17 +44,17 @@ class FallbackLlmClient(
     @Volatile
     private var primaryOutage: ProviderOutage? = null
 
-    // past the deadline one call tries the primary; the rest stay on the fallback until it has answered
+    // past the deadline one call probes the primary; the rest stay on the fallback until it answers
     private val probing = AtomicBoolean(false)
 
-    /** What is answering right now while the primary is out, or `null` when it is the primary's turn. */
+    /** What answers while the primary is out, or `null` when it is the primary's turn. */
     val fallbackInUse: FallbackInUse?
         get() {
             val now = clock.instant()
             val outage = primaryOutage?.takeIf { it.until.isAfter(now) } ?: return null
 
-            // only a deadline the provider named is worth repeating to people: the others are when the
-            // next probe is due, and a sign-in that expired stays expired however many of them pass.
+            // only a provider-named deadline is worth telling people: others are just probe times, and an
+            // expired sign-in stays expired however many pass.
             val primaryBackIn =
                 outage.takeIf { it.deadlineNamed }?.let { JavaDuration.between(now, it.until).toKotlinDuration() }
 
@@ -91,7 +89,7 @@ class FallbackLlmClient(
                 if (known != null) probing.set(false)
             }
 
-        // a refusal says nothing about the primary being out, so the next call goes to it again as usual
+        // a refusal says nothing about the primary being out, so the next call goes to it as usual
         if (reply.stopReason == StopReason.REFUSAL && request.options.fallBackOnRefusal) {
             log.warn { "$primaryLabel declined a call: ${reply.refusal ?: "no reason given"}; asking $fallbackLabel instead" }
 
@@ -106,9 +104,8 @@ class FallbackLlmClient(
         fallback.close()
     }
 
-    // the fallback speaks with its own options, but what the caller asked of this one call stays: the
-    // conversation's cache key, which lets the fallback build a warm prefix per conversation the same way,
-    // whether the prompt is worth caching at all, and an output ceiling of the call's own.
+    // the fallback uses its own options but keeps what the caller asked of this call: the cache key (so it
+    // builds a warm prefix per conversation too), whether to cache at all, and the call's own output ceiling.
     private suspend fun onFallback(request: ChatRequest): Reply {
         val asked = request.options
 

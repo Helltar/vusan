@@ -16,7 +16,7 @@ import kotlin.test.assertEquals
 import kotlin.test.assertIs
 import kotlin.test.assertTrue
 
-// a literal address keeps the private-address guard on its real code path without a DNS lookup
+// a literal address keeps the private-address guard on its real path without DNS
 private const val PUBLIC_HOST = "93.184.216.34"
 
 class FileToolsTest {
@@ -39,7 +39,7 @@ class FileToolsTest {
         assertEquals(content, doc.bytes.toString(Charsets.UTF_8))
     }
 
-    // a chat that refuses documents still gets a written file on the shelf, and a download for it is not started
+    // a chat refusing documents still gets a written file on the shelf, and no download starts for it
     @Test
     fun `a chat that refuses documents keeps a written file for later and downloads nothing to send`() = runBlocking {
         val outbox = BotOutbox(ChatCapabilities(documents = false))

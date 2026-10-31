@@ -17,11 +17,11 @@ private const val ARGS_PREVIEW_CHARS = 200
 
 private val log = KotlinLogging.logger {}
 
-/** The bearer header for [apiKey], none when the HTTP client signs its requests itself, as the Codex one does. */
+/** The bearer header for [apiKey]; none when the HTTP client signs requests itself, as Codex's does. */
 internal fun bearerHeaders(apiKey: String?): Map<String, String> = apiKey?.let { mapOf("Authorization" to "Bearer $it") }.orEmpty()
 
-// the arguments arrive as a json string; a model that garbles it still gets its call answered, with the
-// empty-args guard in the agent telling it what was missing.
+// arguments arrive as a json string; a garbled one still gets its call answered, the agent's empty-args guard
+// telling the model what was missing.
 internal fun parseToolArguments(raw: String?, label: String): JsonObject {
     if (raw.isNullOrBlank()) return JsonObject(emptyMap())
 

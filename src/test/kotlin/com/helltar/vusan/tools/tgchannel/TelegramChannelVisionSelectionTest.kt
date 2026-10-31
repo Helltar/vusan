@@ -47,7 +47,7 @@ class TelegramChannelVisionSelectionTest {
                 post("caption", text = "Short one", reactions = 10),
             )
 
-        // "wordy" wins on reactions by far, but its own text already says what the post is about
+        // "wordy" wins on reactions by far, but its text already says what the post is about
         assertEquals(listOf("bare", "caption"), selectPostsForVision(posts, allowance = 2).map { it.id })
     }
 
@@ -62,7 +62,7 @@ class TelegramChannelVisionSelectionTest {
     fun `an album is taken whole or skipped, never half`() {
         val posts = listOf(post("album", images = 3, reactions = 900), post("single", reactions = 1))
 
-        // two permits cannot hold the three-image album, so the single-image post takes them instead
+        // two permits cannot hold the three-image album, so the single-image post takes them
         assertEquals(listOf("single"), selectPostsForVision(posts, allowance = 2).map { it.id })
     }
 

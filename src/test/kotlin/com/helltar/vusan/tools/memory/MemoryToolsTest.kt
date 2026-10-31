@@ -43,7 +43,7 @@ class MemoryToolsTest {
         assertEquals(listOf(detail), memory.load(testChat(-100).memoryOwner).map { it.content })
     }
 
-    // an item that grows is appended to, so cutting it would drop the newest part without anyone noticing
+    // a growing item is appended to, so cutting it would silently drop the newest part
     @Test
     fun `a detail over the limit is refused and the item it would replace is kept`() = runBlocking {
         val id = memory.add(testChat(-100).memoryOwner, "likes dark themes")

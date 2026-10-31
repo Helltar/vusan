@@ -9,43 +9,39 @@ import kotlinx.serialization.json.contentOrNull
 import kotlinx.serialization.json.put
 
 /**
- * What a request on the GPT-5.6 generation says about its prompt cache, the generation where the
+ * What a request on the GPT-5.6 generation says about its prompt cache, the first generation where the
  * platform stopped deciding alone.
  *
- * Implicit mode is the one an agent's loop wants: the platform puts a breakpoint after the latest
- * eligible message — a user message, or the last of a run of tool results — and looks back from there
- * over the twenty message endings before it and the end of the opening developer block. So every
- * iteration reads the tool results the one before it appended, and the next turn, whose history is
- * replayed from storage in another shape, still reads the system prefix. An explicit breakpoint stays
- * on that developer block all the same: the first two explicit breakpoints are looked up whatever a long
- * turn pushed out of the lookback window. Measured live on 2026-10-08 (gpt-5.6-luna, a three-call turn):
- * reads of 0 → 2512 → 2561, against 0 → 2512 → 2512 with explicit breakpoints alone.
+ * Implicit mode suits an agent loop: the platform places a breakpoint after the latest eligible message (a
+ * user message, or the last of a run of tool results) and looks back over the twenty message endings before
+ * it and the end of the opening developer block. Every iteration reads what the previous one appended, and
+ * the next turn, replayed from storage in another shape, still reads the system prefix. An explicit
+ * breakpoint stays on the developer block anyway: the first two explicit breakpoints are looked up whatever a
+ * long turn pushed out of the window. Measured 2026-10-08 (gpt-5.6-luna, a three-call turn): reads of 0 →
+ * 2512 → 2561, against 0 → 2512 → 2512 with explicit breakpoints alone.
  *
- * On the Responses API that breakpoint asks for the twelve-hour lifetime, while the implicit tail keeps the
- * thirty-minute default: the developer block is written at two and a half times the input price instead of
- * one and a quarter, which pays once a conversation would otherwise rewrite it twice — two gaps longer than
- * half an hour within the day. Chat Completions is not documented to take the lifetime and keeps the default.
+ * On the Responses API that breakpoint asks for the twelve-hour lifetime while the implicit tail keeps the
+ * thirty-minute default: the developer block costs 2.5× input instead of 1.25× to write, which pays once a
+ * conversation would otherwise rewrite it twice (two gaps over half an hour in a day). Chat Completions is
+ * not documented to take the lifetime.
  *
- * A prompt that never repeats — the history recap, a look at a picture — gets explicit mode with nothing
- * marked, which the API documents as no caching at all; left to the implicit mode, the platform writes
- * the whole prompt at a quarter over the input price for a read nobody makes. Older models know neither
- * field and keep their own automatic caching, and a body with no developer block has nothing to mark and
- * is left to the platform's default, which is the implicit mode.
+ * A prompt that never repeats (the history recap, a look at a picture) gets explicit mode with nothing
+ * marked, documented as no caching; implicit mode would write the whole prompt at 1.25× for a read nobody
+ * makes. Older models know neither field and keep their own automatic caching; a body with no developer block
+ * is left to the platform's default, implicit.
  *
- * A gateway ([viaGateway]) passes the fields on to whichever upstream serves the request, so it gets only
- * what every one of them takes, as OpenRouter's did on 2026-10-23 (gpt-5.6-luna): the breakpoint with no
- * mode named, since OpenRouter refuses `implicit` as a value and serves the unnamed one as it — the tail
- * was read back as it is here, where explicit mode kept the reads at the developer block — and without the
- * twelve-hour lifetime, an unknown parameter to Azure behind it.
+ * A gateway ([viaGateway]) forwards the fields to whichever upstream serves, so it gets only what all of them
+ * take, as on OpenRouter 2026-10-23 (gpt-5.6-luna): the breakpoint without a mode, since OpenRouter refuses
+ * `implicit` but serves the unnamed one as it, and without the twelve-hour lifetime, which Azure behind it
+ * does not know.
  *
- * [stablePrefixes] are the item counts at which the replayed history ends, as far as the next turn will
- * replay it the same way. Each gets a breakpoint of the default lifetime on the last user message before
- * it: the implicit lookback finds a prefix only where an earlier request wrote one, and the history's end
- * moves into the middle of the next turn's prompt, where nothing was. A breakpoint on an assistant message
- * is taken and ignored. Measured live on 2026-10-24 (gpt-6-luna, and openai/gpt-5.6-luna through
- * OpenRouter): the second of two turns over a 2.5k-token history read 2610 tokens with the developer
- * block marked alone, 4627 with the history marked too. The implicit breakpoint, the developer block's and
- * two of these are the four cache writes a request may make.
+ * [stablePrefixes] are the item counts where replayed history ends, as far as the next turn replays it the
+ * same way. Each gets a default-lifetime breakpoint on the last user message before it: implicit lookback
+ * finds a prefix only where an earlier request wrote one, and the history's end lands mid-prompt next turn. A
+ * breakpoint on an assistant message is accepted and ignored. Measured 2026-10-24 (gpt-6-luna, and
+ * openai/gpt-5.6-luna via OpenRouter): the second of two turns over a 2.5k-token history read 2610 tokens
+ * with the developer block marked alone, 4627 with history marked too. The implicit breakpoint, the developer
+ * block's and two of these are the four cache writes a request may make.
  */
 internal fun withPromptCacheOptions(
     body: JsonObject,
@@ -71,8 +67,8 @@ internal fun withPromptCacheOptions(
 }
 
 /**
- * The cache options arrived with the GPT-5.6 generation; a generation's first models carry no minor version.
- * A gateway names the model under its vendor (`openai/gpt-5.6-luna`).
+ * The cache options arrived with GPT-5.6; a generation's first models carry no minor version. A gateway names
+ * the model under its vendor (`openai/gpt-5.6-luna`).
  */
 internal fun takesOpenAiPromptCacheOptions(model: String): Boolean {
     val version = GPT_MODEL_VERSION.find(model.trim().lowercase()) ?: return false
@@ -82,16 +78,15 @@ internal fun takesOpenAiPromptCacheOptions(model: String): Boolean {
     return major > CACHE_OPTIONS_MAJOR || (major == CACHE_OPTIONS_MAJOR && minor >= CACHE_OPTIONS_MINOR)
 }
 
-// the breakpoint goes on the last text block of the first developer or system message: the prefix every
-// request of the deployment shares, and the one the lookup is sure to reach. an `additional_tools` item
-// carries the developer role too, and takes no breakpoint
+// the last text block of the first developer or system message: shared by every request and sure to be
+// reached by the lookup. an `additional_tools` item also has the developer role and takes no breakpoint
 private fun markSystemBlock(messages: JsonArray, textBlockType: String, breakpoint: JsonObject): JsonArray? {
     val index = messages.indexOfFirst { it.isMessage && (it.role == "developer" || it.role == "system") }.takeIf { it >= 0 } ?: return null
 
     return markMessage(messages, index, textBlockType, breakpoint)
 }
 
-// a history that ends without a user message before [end] — the system prompt alone — has nothing to mark
+// a history with no user message before [end] (the system prompt alone) has nothing to mark
 private fun markHistoryEnd(messages: JsonArray, end: Int, textBlockType: String): JsonArray {
     val index = (0 until minOf(end, messages.size)).lastOrNull { messages[it].isMessage && messages[it].role == "user" } ?: return messages
 
@@ -108,11 +103,11 @@ private fun markMessage(messages: JsonArray, index: Int, textBlockType: String, 
 private val JsonElement.role: String?
     get() = ((this as? JsonObject)?.get("role") as? JsonPrimitive)?.contentOrNull
 
-// a responses input item names its type, a chat completions message has none
+// a responses input item names its type, a chat completions message does not
 private val JsonElement.isMessage: Boolean
     get() = (((this as? JsonObject)?.get("type") as? JsonPrimitive)?.contentOrNull ?: "message") == "message"
 
-// a chat completions message may carry its text as a bare string; a breakpoint needs a block to sit on
+// a chat completions message may carry bare-string text; a breakpoint needs a block
 private fun markLastTextBlock(content: JsonElement?, textBlockType: String, breakpoint: JsonObject): JsonArray? {
     if (content is JsonPrimitive && content.isString) {
         return JsonArray(listOf(markedTextBlock(buildJsonObject { put("type", textBlockType); put("text", content.content) }, breakpoint)))

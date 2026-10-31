@@ -3,10 +3,8 @@ package com.helltar.vusan.request
 import com.helltar.vusan.i18n.Language
 
 /**
- * An ordinary turn, for tests that need a context but are not about how one is built.
- *
- * Tests that *are* about identity or capabilities construct the record themselves, so that what they
- * assert stays visible in the test rather than in a default here.
+ * An ordinary turn, for tests that need a context but are not about building one. Tests about identity or
+ * capabilities build the record themselves, so what they assert stays visible.
  */
 internal fun requestContext(
     chatId: Long = 1L,

@@ -9,11 +9,11 @@ import java.nio.file.Files
 import kotlin.time.Duration
 import kotlin.time.Duration.Companion.seconds
 
-// telegram plays a video note as the circle inscribed in the square and crops everything outside it,
-// so the diameter is also the frame size. 384 is what its own clients record at.
+// telegram plays a video note as the circle inscribed in the square and crops the rest, so the diameter is
+// the frame size. 384 is what its clients record at.
 internal const val VIDEO_NOTE_SIZE = 384
 
-/** Builds the square mp4 Telegram plays as a round video message out of a portrait and spoken audio. */
+/** Builds the square mp4 telegram plays as a round video message from a portrait and spoken audio. */
 fun interface VideoNoteRenderer {
 
     /** The mp4 bytes, or null when ffmpeg is missing or the render failed. */
@@ -66,9 +66,8 @@ class FfmpegVideoNoteRenderer(
         }
     }
 
-    // the bars are drawn twice, a dark copy a pixel below the white one: a portrait can be light or dark
-    // anywhere along the band, and a shadow follows the bars where a flat scrim behind them would cut the
-    // picture in half.
+    // the bars are drawn twice, a dark copy a pixel below the white one: the portrait may be light or dark
+    // anywhere, and a shadow follows the bars where a flat scrim would cut the picture in half.
     private fun filterGraph(): String {
         val bars =
             "showwaves=s=${BAR_COUNT}x$SOURCE_WAVE_HEIGHT:mode=cline:rate=$FRAME_RATE:scale=sqrt:colors=white," +
@@ -89,21 +88,21 @@ class FfmpegVideoNoteRenderer(
     }
 
     private companion object {
-        // the portrait is cropped square at this size and only zoomed down to the frame afterward, so the
-        // moving crop has pixels left to move into instead of upscaling what it already showed.
+        // the portrait is cropped square at this size and only scaled down to the frame later, so the moving
+        // crop has pixels to move into instead of upscaling.
         const val SOURCE_SIZE = 640
         const val FRAME_RATE = 25
 
-        // the waveform has to stay inside the circle, which this far down the frame is a good deal
-        // narrower than the square — hence a band that neither touches the sides nor the bottom edge.
+        // the waveform must stay inside the circle, which this far down is much narrower than the square, so
+        // the band touches neither the sides nor the bottom.
         const val WAVE_WIDTH = 264
         const val WAVE_HEIGHT = 88
         const val WAVE_X = (VIDEO_NOTE_SIZE - WAVE_WIDTH) / 2
         const val WAVE_Y = 240
 
-        // the band is Telegram's own voice-message shape: separate bars mirrored around a thin rail.
-        // showwaves draws one column per bar into a tiny frame, the nearest-neighbor upscale turns each
-        // column into a solid block, and the comb in `geq` cuts the gaps between the blocks back out.
+        // telegram's voice-message shape: separate bars mirrored around a thin rail. showwaves draws one
+        // column per bar into a tiny frame, nearest-neighbor upscaling makes each a block, and the comb in
+        // `geq` cuts the gaps back out.
         const val BAR_COUNT = 24
         const val BAR_PITCH = WAVE_WIDTH / BAR_COUNT
         const val BAR_WIDTH = 8
@@ -111,17 +110,16 @@ class FfmpegVideoNoteRenderer(
         const val RAIL_HEIGHT = 3
         const val RAIL_Y = (WAVE_HEIGHT - RAIL_HEIGHT) / 2
 
-        // blowing one drawn column up into a block blows its anti-aliased ends up with it, which is what
-        // made the earlier line look scratched on. anything fainter than this is dropped, so a bar either
-        // reaches a row or does not.
+        // upscaling a drawn column also upscales its anti-aliased ends, which made the old line look
+        // scratched; anything fainter is dropped, so a bar either reaches a row or does not.
         const val ALPHA_FLOOR = 80
 
-        // a still picture reads as a video that failed to play. breathing in and out is the cheapest
-        // motion that does not have to know how long the speech turned out to be.
+        // a still picture reads as a video that failed to play; breathing in and out is the cheapest motion
+        // that need not know the speech's length.
         const val ZOOM = "1.03+0.03*sin(on/40)"
 
-        // telegram rejects a video note over a minute, and a theatrical read can outrun the character
-        // limit the text was measured against.
+        // telegram rejects a video note over a minute, and a theatrical read can outrun the character limit
+        // the text was measured against.
         const val MAX_SECONDS = "59"
 
         val log = KotlinLogging.logger {}

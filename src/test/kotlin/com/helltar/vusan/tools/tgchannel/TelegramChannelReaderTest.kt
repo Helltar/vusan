@@ -231,7 +231,7 @@ class TelegramChannelReaderTest {
 
     @Test
     fun `posts past the output limit are dropped and announced`() {
-        // 2500 chars of text per post, so a couple of dozen posts already pass the tool's ceiling
+        // 2500 chars per post, so a couple of dozen posts pass the tool's ceiling
         val body = "A sentence of filler that makes this post long enough to matter. ".repeat(40)
 
         val reader =
@@ -252,7 +252,7 @@ class TelegramChannelReaderTest {
         assertContains(result, "Posts in it: 40")
         assertContains(result, "fit this tool's size limit")
         assertContains(result, "<channel_posts>")
-        // every post that did make it is whole, not shortened to squeeze more in
+        // every post that made it is whole, not shortened to fit more
         assertTrue(result.length < 60_000)
     }
 }

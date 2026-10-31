@@ -11,10 +11,11 @@ data class OpenAiSttConfig(
     }
 
     companion object {
-        // the model the vendor recommends for recorded speech; the gpt-4o family is kept for existing integrations
+        // the vendor's recommended model for recorded speech; the gpt-4o family remains for existing
+        // integrations
         const val DEFAULT_MODEL = "gpt-transcribe"
 
-        // the longest voice message or video sound that is transcribed at all
+        // the longest voice message or video sound transcribed at all
         const val MAX_DURATION_SECONDS = 300L
     }
 }

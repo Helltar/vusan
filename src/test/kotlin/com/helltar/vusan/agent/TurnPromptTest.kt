@@ -38,8 +38,8 @@ class TurnPromptTest {
         assertFalse("<diary>" in without, "a turn with no diary paid for the block")
     }
 
-    // the system prompt names the primary model and is cached whole, so the truth about a turn the
-    // fallback answered can only ride here.
+    // the system prompt names the primary and is cached whole, so the truth about a fallback turn can only
+    // ride here.
     @Test
     fun `the answering model is named only while it is not the one the system prompt names`() {
         val withFallback =
@@ -112,9 +112,8 @@ class TurnPromptTest {
         assertTrue(prompt.endsWith("hello"))
     }
 
-    // both used to be a second system message. that reads as a higher-priority instruction, and the
-    // anthropic api takes every system message into its top-level system field, so neither would have
-    // stayed where it was put.
+    // both used to be a second system message, which reads as a higher-priority instruction and which the
+    // anthropic api lifts into its top-level system field.
     @Test
     fun `the clock and the sticker index ride in the turn, ahead of the request`() {
         val prompt =

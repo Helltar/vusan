@@ -10,15 +10,15 @@ import java.nio.file.Path
 import kotlin.time.Duration
 import kotlin.time.Duration.Companion.seconds
 
-/** Pulls out of a video the parts a language model can actually read: still frames and speech. */
+/** Pulls out of a video what a language model can read: still frames and speech. */
 interface VideoSampler {
 
-    /** Up to [maxFrames] frames as JPEG bytes, in chronological order; empty when nothing could be read. */
+    /** Up to [maxFrames] JPEG frames in chronological order; empty when nothing could be read. */
     suspend fun sampleFrames(video: ByteArray, durationSeconds: Int?, maxFrames: Int): List<ByteArray>
 
     /**
-     * The audio track as mono 16 kHz m4a, at most its first [maxSeconds] when given, or null when the
-     * media is silent or ffmpeg failed. An audio file goes through the same way as a video.
+     * The audio track as mono 16 kHz m4a, at most its first [maxSeconds], or null when silent or ffmpeg
+     * failed. An audio file goes through the same way.
      */
     suspend fun extractAudio(video: ByteArray, maxSeconds: Int? = null): ByteArray?
 }
@@ -61,16 +61,16 @@ class FfmpegVideoSampler(
                     addAll(listOf("-hide_banner", "-nostdin", "-y", "-i", input.toString()))
                     maxSeconds?.let { addAll(listOf("-t", it.toString())) }
                     addAll(listOf("-vn", "-ac", AUDIO_CHANNELS, "-ar", AUDIO_SAMPLE_RATE))
-                    // aac is ffmpeg's own encoder, so this works on builds without any external codec
+                    // aac is ffmpeg's own encoder, so this works without external codecs
                     addAll(listOf("-c:a", "aac", "-b:a", AUDIO_BITRATE, output.toString()))
                 }
 
-            // a video with no audio stream fails the run, which is the same "no transcript" answer
+            // a video without audio fails the run, which is the same "no transcript" answer
             if (!runFfmpeg(command, ffmpegPath, timeout)) null else output.readBytesOrNull()
         }
 
-    // frames are spread evenly across the whole video: eight frames of a 40-second clip means one
-    // every five seconds, expressed as the rational ffmpeg's fps filter expects.
+    // frames spread evenly over the video (eight frames of 40 seconds is one per five), as the rational
+    // ffmpeg's fps filter takes.
     private fun frameRate(durationSeconds: Int?, maxFrames: Int): String =
         durationSeconds
             ?.takeIf { it > 0 }
@@ -102,12 +102,12 @@ class FfmpegVideoSampler(
             ?.takeIf { it.isNotEmpty() }
 
     private companion object {
-        // frames are read for content, not detail, and eight of them at this width stay cheap to send.
+        // frames are read for content, not detail, and eight at this width stay cheap.
         const val FRAME_MAX_WIDTH = 768
         const val FRAME_QUALITY = "6"
 
-        // without a duration there is nothing to spread frames across, so they are taken at a fixed
-        // interval from the start instead. only video documents arrive without one.
+        // without a duration frames are taken at a fixed interval from the start; only video documents lack
+        // one.
         const val FALLBACK_FRAME_INTERVAL_SECONDS = 3
 
         const val AUDIO_CHANNELS = "1"

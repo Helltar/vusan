@@ -4,10 +4,8 @@ import com.helltar.vusan.outbox.OutboxItem
 import com.helltar.vusan.request.RequestContext
 
 /**
- * One turn to run: where it came from, and the two texts it is made of.
- *
- * [prompt] is what the model is shown and [conversationEntry] what history keeps, which are not the
- * same string — a turn's prompt carries context the stored exchange has no reason to repeat.
+ * One turn to run: its origin and its two texts. [prompt] is what the model sees, [conversationEntry] what
+ * history keeps: the prompt carries context the stored exchange need not repeat.
  */
 data class AgentRequest(
     val context: RequestContext,
@@ -19,8 +17,7 @@ data class AgentResult(
     val outputs: List<OutboxItem>,
     val comment: String?,
     val commentToPrivate: Boolean = false,
-    // the run ended in an error and produced no answer: `comment` is the canned failure reply. `outputs`
-    // may still hold what the turn put in the chat before it broke, which delivery records without
-    // sending again.
+    // the run failed without an answer: `comment` is the canned failure reply, and `outputs` may hold what
+    // the turn posted before breaking, which delivery records without resending.
     val failed: Boolean = false,
 )

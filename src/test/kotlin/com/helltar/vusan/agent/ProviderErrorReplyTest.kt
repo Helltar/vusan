@@ -17,8 +17,8 @@ class ProviderErrorReplyTest {
 
     private val now = Instant.ofEpochSecond(1_000_000)
 
-    // the shape a spent ChatGPT subscription comes back in: a 429 whose body, not its status, says
-    // this is a limit to wait out rather than a rate limit to retry.
+    // a spent ChatGPT subscription: a 429 whose body, not status, says it is a limit to wait out rather than
+    // a rate limit to retry.
     private val usageLimitBody =
         """
         error.message=The usage limit has been reached
@@ -80,7 +80,7 @@ class ProviderErrorReplyTest {
         assertEquals(EnglishMessages.signInRequiredReply, EnglishMessages.providerErrorReply(error(401, ""), now))
     }
 
-    // a region the provider does not serve or a model the key may not use is not a dead sign-in
+    // an unserved region or a model the key may not use is not a dead sign-in
     @Test
     fun `a forbidden request is not taken for a dead sign-in`() {
         val forbidden = error(403, """{"error":{"type":"permission_error"}}""")
@@ -89,8 +89,8 @@ class ProviderErrorReplyTest {
         assertNull(forbidden.providerOutage(now))
     }
 
-    // a refused request is not an outage: the streaming endpoint answers 200 and puts the refusal in
-    // the body, so nothing but the code in it says the turn is over.
+    // a refusal is no outage: the streaming endpoint answers 200 with the refusal in the body, and only its
+    // code says the turn is over.
     @Test
     fun `a request the provider refused on policy says so`() {
         val body =
@@ -133,7 +133,7 @@ class ProviderErrorReplyTest {
         assertEquals(now.plusSeconds(600), spent.until)
         assertTrue(spent.deadlineNamed)
 
-        // what xai answered on 2026-10-22 once the account's credits ran out
+        // xai's answer on 2026-10-22 once the account's credits ran out
         val paymentRequired = error(402, """{"code":"personal-team-blocked:spending-limit","error":"You have run out of credits or need a Grok subscription."}""")
         assertEquals(now.plusSeconds(1800), assertNotNull(paymentRequired.providerOutage(now)).until)
         assertEquals(EnglishMessages.subscriptionLimitReply(null), EnglishMessages.providerErrorReply(paymentRequired, now))
@@ -146,7 +146,7 @@ class ProviderErrorReplyTest {
         val unanswered = assertNotNull(error(null, "connection reset").providerOutage(now))
         assertEquals(now.plusSeconds(120), unanswered.until)
 
-        // the client has already made it again by now, so every attempt failed
+        // the client already retried, so every attempt failed
         for (status in listOf(500, 502, 504)) {
             assertEquals(now.plusSeconds(120), assertNotNull(error(status, "server_error").providerOutage(now)).until)
         }
@@ -161,7 +161,7 @@ class ProviderErrorReplyTest {
         assertTrue(!outOfPlan.deadlineNamed)
     }
 
-    // the shape openrouter documents for a key's own limit and for a budget over it, an ISO deadline in both places
+    // openrouter's documented shape for a key's limit and a budget over it, an ISO deadline in both places
     @Test
     fun `an openrouter key or budget limit is a spent allowance until the deadline it names`() {
         val keyLimit =

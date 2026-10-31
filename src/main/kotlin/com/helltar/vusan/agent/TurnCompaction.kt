@@ -8,25 +8,23 @@ import kotlinx.serialization.json.put
 
 internal const val FOLDED_RESULT = "[result dropped to make room in the context; its label still holds the whole of it for any argument that takes a label, or call the tool again]"
 
-// what a message costs beyond its text: the role, the ids, the framing the provider adds
+// what a message costs beyond its text: role, ids, the provider's framing
 internal const val MESSAGE_OVERHEAD_TOKENS = 12
 
 // what a tool schema costs beyond its text: the JSON framing of its parameters
 internal const val TOOL_SCHEMA_OVERHEAD_TOKENS = 32
 
-// arguments shorter than this say what the call was — a path, a query — and are kept whole
+// shorter arguments say what the call was (a path, a query) and are kept whole
 private const val KEPT_ARGUMENTS_CHARS = 200
 
 /**
- * The turn's own messages folded until the request fits [ceilingTokens]: the oldest batch of tool
- * results after [turnStart] is replaced by a stub, together with the long arguments of the calls it
- * answered, then the next, and so on. The latest batch is never touched, nor anything before the turn —
- * the stored history was already planned to fit. Returns `null` when nothing had to change, and the
- * best it could do when even that is not enough: the request then fails as it would have, and the
- * runner answers for it.
+ * The turn's messages folded until the request fits [ceilingTokens]: the oldest batch of tool results after
+ * [turnStart] becomes a stub, with the long arguments of the calls it answered, then the next. The latest
+ * batch and everything before the turn are never touched. Returns `null` when nothing changed, and the best
+ * effort when even that is not enough; the request then fails as it would have.
  *
- * An edited message costs the provider's cache from there on and, on Anthropic, the thinking bound to
- * what came after it — the price of a turn that would otherwise die with its work undelivered.
+ * An edited message costs the cache from there on and, on Anthropic, the thinking bound to what followed: the
+ * price of not losing the turn's work.
  */
 internal fun List<Message>.foldedToFit(ceilingTokens: Int, turnStart: Int): List<Message>? {
     var tokens = sumOf(::estimateTokens)
@@ -52,7 +50,7 @@ internal fun List<Message>.foldedToFit(ceilingTokens: Int, turnStart: Int): List
     return folded
 }
 
-/** What a message costs in the estimate the budget is counted in; an image is a size, not a text. */
+/** A message's cost in the budget's estimate; an image is a size, not a text. */
 internal fun estimateTokens(message: Message): Int =
     MESSAGE_OVERHEAD_TOKENS +
             when (message) {
@@ -60,7 +58,7 @@ internal fun estimateTokens(message: Message): Int =
                 is Message.User -> message.parts.sumOf(::estimateTokens)
                 is Message.Assistant -> message.parts.sumOf(::estimateTokens)
                 is Message.ToolResults -> message.results.sumOf { estimateTokens(it.output) + MESSAGE_OVERHEAD_TOKENS }
-                // the schemas it brings in are counted with the tools the model is shown
+                // its schemas count with the tools the model is shown
                 is Message.ToolsOffered -> message.names.sumOf(::estimateTokens)
             }
 
@@ -77,12 +75,12 @@ private fun estimateTokens(part: Part): Int =
 
 internal fun Message.ToolResults.isFolded(): Boolean = results.all { it.output.endsWith(FOLDED_RESULT) }
 
-// the stub keeps the result's label: the shelf still holds the whole of it there, so a later call can take
-// it without the tool running again
+// the stub keeps the label: the shelf still holds the whole result, so a later call can take it without
+// rerunning the tool
 private fun Message.ToolResults.folded(): Message.ToolResults =
     Message.ToolResults(results.map { result -> result.copy(output = result.output.resultLabelOrNull()?.let { "[$it] $FOLDED_RESULT" } ?: FOLDED_RESULT) })
 
-// the call stays answered under its id; only what it carried goes, and the stub says it ran as issued
+// the call stays answered under its id; only its payload goes, and the stub says it ran as issued
 private fun Message.Assistant.withFoldedArguments(): Message.Assistant =
     Message.Assistant(
         parts.map { part ->

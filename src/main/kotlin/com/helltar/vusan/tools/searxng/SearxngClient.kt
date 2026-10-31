@@ -12,9 +12,9 @@ class SearxngClient(private val http: HttpClient, baseUrl: String) {
     private val searchUrl = baseUrl.trimEnd('/') + "/search"
 
     /**
-     * Every optional parameter is nullable rather than blank on purpose: SearXNG answers an empty
-     * `language` with `400 Empty language parameter`, and an unknown `time_range` with a 400 too.
-     * Callers must map "not set" to `null` and validate [timeRange] before calling.
+     * Optional parameters are nullable rather than blank on purpose: SearXNG answers an empty `language` with
+     * `400 Empty language parameter` and an unknown `time_range` with a 400 too. Callers map "not set" to
+     * `null` and validate [timeRange] first.
      */
     suspend fun search(
         query: String,
@@ -45,8 +45,8 @@ class SearxngClient(private val http: HttpClient, baseUrl: String) {
     }
 
     private companion object {
-        // returned when the SearXNG instance can't be reached at all (container down, wrong URL).
-        // framed so the model reports it instead of retrying the same lookup.
+        // the instance cannot be reached at all (container down, wrong URL); worded so the model reports it
+        // instead of retrying.
         const val UNREACHABLE_MESSAGE =
             "The search service is not reachable right now, so the search did not run. " +
                     "Tell the user web search is temporarily unavailable; do not retry."

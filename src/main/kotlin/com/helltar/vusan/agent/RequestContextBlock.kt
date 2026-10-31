@@ -11,13 +11,11 @@ import kotlin.time.Duration.Companion.hours
 import kotlin.time.Duration.Companion.milliseconds
 
 /**
- * The turn's origin, rendered for the model: where it is answering and who it is answering.
+ * The turn's origin rendered for the model: where it answers and whom.
  *
- * [previousExchangeAt] is not part of the request — the runner reads it from history — so it is passed
- * in rather than carried around on a record that ingress fills in; [lastAnswerOfStretch] is the
- * [ChatFloor]'s verdict on this turn, decided when it was admitted, for the same reason, and
- * [leftAloneUntil] is the end of the sender's standing request not to be written to, read from the store
- * that keeps it.
+ * [previousExchangeAt] comes from history, not the request, so it is passed in rather than carried on the
+ * ingress record; the same goes for [lastAnswerOfStretch], the [ChatFloor]'s verdict at admission, and
+ * [leftAloneUntil], the end of the sender's leave-alone request.
  */
 internal fun RequestContext.toPromptBlock(
     previousExchangeAt: Instant? = null,
@@ -49,7 +47,7 @@ internal fun RequestContext.toPromptBlock(
             sender.languageCode?.asMetadataValue()?.let { add("- client_language: $it") }
             previousExchangeAt?.let(::elapsedSinceOrNull)?.let { add("- last_exchange: $it") }
 
-            // history alone puts the message after that reply, which is the one order it was not written in.
+            // history alone puts the message after that reply, the one order it was not written in.
             if (writtenBefore(previousExchangeAt)) {
                 add("")
                 add("Timing:")
@@ -60,8 +58,9 @@ internal fun RequestContext.toPromptBlock(
                 )
             }
 
-            // said as the guess it is: told the message "was judged to be meant for you", claude and deepseek
-            // answered a plain reply to somebody else every time (2026-10-27), and this wording let them leave it
+            // worded as the guess it is: told the message "was judged to be meant for you", claude and
+            // deepseek answered a plain reply to someone else every time (2026-10-27); this wording let them
+            // leave it
             if (ambient) {
                 add("")
                 add("Addressing:")
@@ -99,11 +98,10 @@ internal fun RequestContext.toPromptBlock(
     return xmlBlock("message_context", lines.joinToString("\n"))
 }
 
-// short gaps are ordinary back-and-forth and saying anything about them would be noise, so the line
-// only appears once the pause is long enough to be worth noticing.
+// short gaps are ordinary back-and-forth; the line appears only once a pause is worth noticing.
 private val MIN_REPORTED_GAP = 6.hours
 
-// on the clock `<current_time>` shows, so the model can tell how far off the end is
+// on `<current_time>`'s clock, so the model can tell how far off the end is
 private val LEFT_ALONE_END = DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm")
 
 private fun leftAloneEnd(until: Instant): String {
@@ -125,16 +123,15 @@ private fun elapsedSinceOrNull(previous: Instant): String? {
 }
 
 // the previous exchange is stored when its turn ends, so a message written before that waited behind it.
-// a messenger's dates may be whole seconds: a message written within a second after the reply counts as
-// well, and its author could not have read that reply either.
+// dates may be whole seconds, so a message within a second after the reply counts too: its author could not
+// have read it either.
 private fun RequestContext.writtenBefore(previousExchangeAt: Instant?): Boolean =
     writtenAt != null && previousExchangeAt != null && previousExchangeAt.isAfter(writtenAt)
 
 private fun Long.agoIn(unit: String): String =
     "$this $unit${if (this == 1L) "" else "s"} ago"
 
-// every value here is something a person typed — a display name, a group title, its description —
-// and each lands on a line of its own inside the block, so both the line and the block have to
-// survive whatever they named themselves.
+// every value is user text (a display name, a group title, a description) on its own line inside the block,
+// so both must survive whatever people named themselves.
 private fun String.asMetadataValue(maxLength: Int = 160): String? =
     collapseWhitespaceAndCap(maxLength)?.neutralizePromptBlocks()

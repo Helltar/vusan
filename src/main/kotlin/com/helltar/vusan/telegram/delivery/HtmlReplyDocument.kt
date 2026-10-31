@@ -1,13 +1,11 @@
 package com.helltar.vusan.telegram.delivery
 
-// the formatting fallback wraps the agent's reply (already Telegram-subset HTML) in a standalone,
-// responsive HTML page, so the user still sees the intended structure when Telegram rejects the
-// message. it adapts to phone and desktop widths and to the light/dark system theme.
-//
-// a strict Content-Security-Policy (no scripts, no remote loads) neutralizes any markup the model
-// might emit under prompt injection: the file is opened locally by the recipient, so a stray
-// `<script>` would otherwise run with a file:// origin. the body is embedded verbatim because the
-// CSP — not escaping — is what makes it safe, and the surviving tags are exactly what should render.
+// the formatting fallback wraps the agent's reply (telegram-subset HTML) in a standalone responsive page, so
+// the structure survives a rejected message; it adapts to phone and desktop widths and light/dark themes.
+// a strict Content-Security-Policy (no scripts, no remote loads) neutralizes markup injected into the model:
+// the file is opened locally, where a stray `<script>` would run with a file:// origin. the body is embedded
+// verbatim because the CSP, not escaping, makes it safe, and the surviving tags are exactly what should
+// render.
 
 private const val REPLY_DOCUMENT_TITLE = "Message"
 

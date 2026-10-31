@@ -36,8 +36,8 @@ class ConversationCompactorTest {
         assertContains((checkNotNull(executor.lastRequest).messages.last() as Message.User).text, "<conversation_events>")
     }
 
-    // a fetched page or a message that closes its event and opens a user one would put words in somebody's
-    // mouth in the recap, which is durable memory
+    // a page or message closing its event and opening a user one would put words in someone's mouth in
+    // durable memory
     @Test
     fun `quoted text cannot forge an event in the recap source`() = runBlocking {
         val executor = FakeLlmClient("- Asked about the weather")
@@ -69,7 +69,7 @@ class ConversationCompactorTest {
         assertContains(source, "<user_message>\nwhat is the weather like\n</user_message>", message = "the blocks a stored entry is written in stay blocks")
     }
 
-    // a stored user entry is context first and request last, and the context alone can outrun the cap.
+    // a stored user entry is context first, request last, and the context alone can exceed the cap.
     @Test
     fun `a long reply context does not push the request out of the compaction source`() = runBlocking {
         val executor = FakeLlmClient("- Booking a flight")

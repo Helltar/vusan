@@ -3,15 +3,15 @@ package com.helltar.vusan.llm.codex
 import io.github.oshai.kotlinlogging.KotlinLogging
 import java.time.Instant
 
-/** One of the subscription's usage windows, as the backend last reported it. */
+/** One of the subscription's usage windows, as last reported. */
 data class CodexWindow(val usedPercent: Double, val windowMinutes: Long?, val resetAt: Instant?)
 
-/** The short window (five hours on Plus) and the long one (a week), either of which may be missing. */
+/** The short window (five hours on Plus) and the long one (a week), either possibly missing. */
 data class CodexWindows(val primary: CodexWindow?, val secondary: CodexWindow?)
 
 /**
- * The windows the Codex backend states in the headers of every response, the same `x-codex-*` family its
- * CLI reads; `null` when a response carries none.
+ * The windows the Codex backend states in every response's `x-codex-*` headers, as its CLI reads them; `null`
+ * when a response has none.
  */
 internal fun codexWindows(header: (String) -> String?): CodexWindows? {
     fun window(name: String): CodexWindow? {
@@ -31,10 +31,9 @@ internal fun codexWindows(header: (String) -> String?): CodexWindows? {
 }
 
 /**
- * How much of the signed-in account's subscription the bot has drawn, measured against the tokens it
- * spent. OpenAI publishes no size for a window, only the share of it used, and that share moves in steps:
- * so every step is logged with the calls and tokens spent since the step before, and those pairs are
- * what says how much a window holds.
+ * How much of the subscription the bot has drawn, against the tokens it spent. OpenAI publishes no window
+ * sizes, only the share used, which moves in steps, so each step is logged with the calls and tokens since
+ * the last; those pairs tell how much a window holds.
  */
 class CodexLimits {
 
@@ -79,7 +78,7 @@ class CodexLimits {
         }
     }
 
-    /** Counts one picture drawn or edited through the subscription toward the next step. */
+    /** Counts one picture drawn or edited on the subscription toward the next step. */
     fun countImage() {
         synchronized(this) { spent = spent.copy(images = spent.images + 1) }
     }

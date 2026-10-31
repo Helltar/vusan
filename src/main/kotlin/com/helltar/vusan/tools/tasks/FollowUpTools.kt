@@ -14,9 +14,9 @@ import com.helltar.vusan.tools.suspendToolGuard
 import java.time.Instant
 
 /**
- * The one scheduling tool the model reaches for on its own, so it stays visible while the rest of
- * the scheduler waits behind its group: nobody asks to be checked on, and a tool the model has to
- * load first for something nobody asked for is a tool it never calls.
+ * The one scheduling tool the model reaches for on its own, so it stays visible while the rest of the
+ * scheduler sits behind its group: nobody asks to be checked on, and a tool that must be loaded first for
+ * something unasked is never called.
  */
 class FollowUpTools(
     private val repo: TasksRepository,
@@ -49,8 +49,8 @@ class FollowUpTools(
             parseTimezone(timezone)
                 ?: return@suspendToolGuard "Unknown timezone=`$timezone`. Use IANA names like `Europe/Kyiv` or omit."
 
-        // a follow-up is by definition a single moment, so the recurring schedule forms are not offered
-        // at all — the model only picks the datetime and the shared parser validates it.
+        // a follow-up is a single moment, so recurring forms are not offered: the model picks a datetime and
+        // the shared parser validates it.
         val plan =
             when (val parsed = parseSchedule("once ${at.trim()}", Instant.now(), tz)) {
                 is ScheduleParse.Err -> return@suspendToolGuard parsed.message

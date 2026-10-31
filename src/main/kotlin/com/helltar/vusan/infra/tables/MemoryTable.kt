@@ -5,7 +5,7 @@ import org.jetbrains.exposed.v1.core.dao.id.LongIdTable
 object MemoryTable : LongIdTable("memories") {
 
     val platform = platformColumn()
-    // the name of a `MemoryScope`, which the repository that owns the enum maps; the table knows only the text
+    // a `MemoryScope` name, mapped by the repository that owns the enum
     val scope = varchar("scope", 16)
     val ownerId = externalId("owner_id")
     val content = text("content")

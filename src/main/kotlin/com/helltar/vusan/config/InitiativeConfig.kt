@@ -1,15 +1,15 @@
 package com.helltar.vusan.config
 
 /**
- * Initiative: the bot looking over a group nobody called it into, and now and then reacting to a
- * message or saying something of its own.
+ * Initiative: the bot looking over a group nobody called it into, now and then reacting to a message or
+ * saying something.
  *
- * [intervalMinutes] is the middle of the pause between two looks at one chat, each pause drawn at
- * random around it so the bot does not speak on a clock. [maxMessagesPerDay] bounds what it writes
- * into one chat unprompted; a reaction is not a message and has a ceiling of its own.
+ * [intervalMinutes] is the middle of the pause between looks at one chat, each drawn at random around it so
+ * the bot does not speak on a clock. [maxMessagesPerDay] bounds what it writes into one chat unprompted;
+ * reactions have their own ceiling.
  *
- * None of the three is a setting. A deployment switches initiative on or off and nothing else: the
- * defaults here are the ones it runs on.
+ * None of these is a setting: a deployment only switches initiative on or off, and these defaults are what it
+ * runs on.
  */
 data class InitiativeConfig(
     val intervalMinutes: Int = DEFAULT_INTERVAL_MINUTES,
@@ -29,15 +29,15 @@ data class InitiativeConfig(
         const val DEFAULT_INTERVAL_MINUTES = 30
         const val DEFAULT_MAX_MESSAGES_PER_DAY = 4
 
-        // a look is a model call over the chat's recent lines, so the floor is what keeps a typo from
-        // turning the bot into a participant of every exchange.
+        // a look is a model call over the recent lines; the floor keeps a typo from making the bot join every
+        // exchange.
         const val MIN_INTERVAL_MINUTES = 5
     }
 }
 
 /**
- * The local hours the bot keeps to itself, from [from] up to but not including [until]. A range may run
- * over midnight (`23-7`), and one that starts where it ends is empty.
+ * The local hours the bot keeps to itself, [from] inclusive to [until] exclusive. A range may wrap midnight
+ * (`23-7`); one starting where it ends is empty.
  */
 data class QuietHours(val from: Int, val until: Int) {
 
@@ -49,7 +49,7 @@ data class QuietHours(val from: Int, val until: Int) {
         if (from <= until) hour in from until until else hour !in until..<from
 
     companion object {
-        // the constructor reads this, so it has to exist before the default below is built
+        // read by the constructor, so it must exist before the default below is built
         private val HOURS = 0..23
 
         val DEFAULT = QuietHours(from = 1, until = 8)

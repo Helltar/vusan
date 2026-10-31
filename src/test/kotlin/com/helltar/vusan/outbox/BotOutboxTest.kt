@@ -9,8 +9,8 @@ import kotlin.test.assertTrue
 
 class BotOutboxTest {
 
-    // registry gating keeps a refused tool out of the turn, but a text-first search queues photos and
-    // the sandbox sends whatever it was asked for, both through paths no capability gates.
+    // registry gating keeps refused tools out of the turn, but a text-first search queues photos and the
+    // sandbox sends whatever it is asked to, both ungated.
     @Test
     fun `a chat that refuses a kind never queues one`() {
         val outbox = BotOutbox(ChatCapabilities(photos = false, documents = false))
@@ -29,7 +29,7 @@ class BotOutboxTest {
         assertEquals(2, outbox.pending.size)
     }
 
-    // an announcement is a promise of an answer, and a promise followed by nothing is not silence
+    // an announcement is a promise, and a promise followed by nothing is not silence
     @Test
     fun `silence is refused after an announcement as after any output`() {
         val announced = BotOutbox().also { it.recordDelivered("building it now") }
@@ -40,7 +40,7 @@ class BotOutboxTest {
         assertTrue(BotOutbox().staySilent("asked to be quiet"))
     }
 
-    // telegram grants animations, games and stickers under one permission, so both go with it.
+    // telegram grants animations, games and stickers under one permission.
     @Test
     fun `stickers and animations follow the one permission telegram grants them under`() {
         val outbox = BotOutbox(ChatCapabilities(stickersAndAnimations = false))
@@ -60,8 +60,8 @@ class BotOutboxTest {
         assertEquals("first\n\nsecond", text.text)
     }
 
-    // an announcement is already in the chat: coalescing into it would rewrite a message the user has
-    // read, and delivery would have no way to tell what still has to be sent.
+    // an announcement is already in the chat: coalescing into it would rewrite a read message, and delivery
+    // could not tell what is left to send.
     @Test
     fun `text never merges into what was already delivered`() {
         val outbox = BotOutbox()
@@ -78,8 +78,8 @@ class BotOutboxTest {
         assertEquals(listOf(true, false), outbox.pending.map { it.delivered })
     }
 
-    // the nudge that saves a silent turn reads this, and so does the failure path: a turn that only
-    // announced still owes an answer, and if it broke instead it owes the reason.
+    // the nudge for a silent turn reads this, and so does the failure path: a turn that only announced still
+    // owes an answer, or the reason it broke.
     @Test
     fun `an announcement alone leaves nothing queued`() {
         val outbox = BotOutbox()
@@ -91,8 +91,8 @@ class BotOutboxTest {
         assertTrue(outbox.hasQueuedOutput)
     }
 
-    // a scheduled run has no live chat to announce into, so the promise waits in the queue instead of
-    // being delivered mid-turn. It is still a promise, and still not an answer.
+    // a scheduled run has no live chat to announce into, so the promise waits in the queue; still a promise,
+    // still not an answer.
     @Test
     fun `a queued announcement is not an answer either`() {
         val outbox = BotOutbox()
@@ -101,7 +101,7 @@ class BotOutboxTest {
         assertFalse(outbox.hasQueuedOutput)
         assertEquals(1, outbox.pending.size)
 
-        // the same bubble stops being a promise once the answer is merged into it
+        // the bubble stops being a promise once the answer merges into it
         assertTrue(outbox.enqueueText("here it is"))
         assertTrue(outbox.hasQueuedOutput)
         assertEquals(1, outbox.pending.size)

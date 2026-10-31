@@ -1,27 +1,23 @@
 package com.helltar.vusan.request
 
 /**
- * A messenger vusan is reachable on.
- *
- * The name is stored as-is in every table that holds owned state, so it is part of the schema:
- * renaming one orphans every row written under the old name.
+ * A messenger vusan is reachable on. The name is stored as-is in every table holding owned state, so it is
+ * schema: renaming one orphans every row written under the old name.
  */
 enum class Platform {
     TELEGRAM,
 
-    // named before it has an adapter: the schema, the policy lists and every owner key already carry a
-    // platform, and this is what proves they keep two of them apart.
+    // named before it has an adapter: the schema, policy lists and owner keys already carry a platform, and
+    // this proves they keep two apart.
     DISCORD
 }
 
 private fun qualified(platform: Platform, id: String): String = "${platform.name.lowercase()}:$id"
 
 /**
- * A person on one platform.
- *
- * Two platforms never share one, and equal ids do not make one identity: an id is opaque text the
- * platform issued, never a number to compare across messengers. Linking somebody's accounts would be
- * a deliberate product feature, not something that happens because two numbers matched.
+ * A person on one platform. Equal ids on two platforms are not one identity: an id is opaque text the
+ * platform issued, never a number to compare across messengers. Linking accounts would be a deliberate
+ * feature, not a coincidence of numbers.
  */
 data class UserRef(val platform: Platform, val id: String) {
 
@@ -42,10 +38,9 @@ data class ChatRef(val platform: Platform, val id: String) {
 }
 
 /**
- * What history, the turn lock and a turn's own cancellation belong to: one person in one conversation.
- *
- * The same person writing in two chats is two scopes, and is served in both rather than being told the
- * bot is busy; two people in one chat likewise never read each other's history.
+ * What history, the turn lock and a turn's cancellation belong to: one person in one conversation. The same
+ * person in two chats is two scopes and is served in both; two people in one chat never read each other's
+ * history.
  */
 data class ConversationScope(val user: UserRef, val chat: ChatRef) {
 

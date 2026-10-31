@@ -17,27 +17,24 @@ import com.helltar.vusan.infra.tables.TelegramStickersTable
 import org.jetbrains.exposed.v1.core.Table
 
 /**
- * The shape the code expects, and the number the database carries in its own `PRAGMA user_version` to
- * say it has that shape.
+ * The shape the code expects, and the number the database carries in `PRAGMA user_version` to say it has it.
  *
- * Nothing is reconciled by comparing declarations: that could add a column but never rebuild a key, so
- * two installations running the same code could hold different schemas. A deployed database moves
- * forward through [steps] instead, written once as plain SQL; a database older than the first of them,
- * or newer than this build, is not opened at all.
+ * Nothing is reconciled from declarations, which could add a column but never rebuild a key, so two
+ * installations could diverge. A deployed database moves forward through [steps], plain SQL written once; one
+ * older than the first step or newer than this build is not opened.
  */
 internal object Schema {
 
-    /** Raise this by one for every schema change, together with the step that reaches it. */
+    /** Raise by one for every schema change, together with the step that reaches it. */
     const val VERSION = 8
 
     /**
-     * What moves a database from one version to the next: the statements under `N` take a database at
-     * `N - 1` to `N`. Every step a start needs runs in one transaction, together with the stamps.
+     * The steps between versions: the statements under `N` take a database from `N - 1` to `N`. Every step a
+     * start needs runs in one transaction with the stamps.
      *
-     * A step is frozen once released — a database already moved by it is never moved again, so editing
-     * one leaves deployments apart. It is SQL rather than the declarations in [tables], which describe
-     * only the newest shape. `DatabaseMigrationTest` proves the steps land on what a fresh database
-     * gets.
+     * A released step is frozen: a database it already moved is never moved again, so editing one splits
+     * deployments. SQL rather than [tables], which describe only the newest shape. `DatabaseMigrationTest`
+     * proves the steps land on what a fresh database gets.
      */
     val steps: Map<Int, List<String>> =
         mapOf(
@@ -60,7 +57,7 @@ internal object Schema {
             ),
         )
 
-    /** The oldest version [steps] can move forward; anything before it was moved by hand. */
+    /** The oldest version [steps] can move forward; anything older was moved by hand. */
     val oldestStepped: Int = steps.keys.min() - 1
 
     val tables: List<Table> =

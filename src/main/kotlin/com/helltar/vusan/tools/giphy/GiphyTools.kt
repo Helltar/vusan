@@ -12,11 +12,9 @@ import com.helltar.vusan.tools.suspendToolGuard
 import java.util.concurrent.ConcurrentHashMap
 
 /**
- * Finding a GIF and sending one are two calls, so the model reads what a search brought back before
- * anything is queued and can turn all of it down.
- *
- * A tool set lives for one turn, and so do the candidates: [sendGif] takes only an id a search of
- * this turn returned, and takes each of them once.
+ * Finding a GIF and sending one are two calls, so the model reads the results before anything is queued and
+ * can reject them all. Candidates live for one turn, like the tool set: [sendGif] takes only an id this
+ * turn's search returned, each once.
  */
 class GiphyTools(private val client: GiphyClient, private val outbox: BotOutbox) : ToolSet {
 

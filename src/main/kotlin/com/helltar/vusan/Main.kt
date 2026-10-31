@@ -63,12 +63,12 @@ import kotlin.time.Duration.Companion.seconds
 
 private val log = KotlinLogging.logger {}
 
-// how much one maintenance pass takes on: enough that a neglected database catches up over a few
-// rounds, small enough that a pass never holds the write lock against the turns being served.
+// enough that a neglected database catches up in a few rounds, small enough never to hold the write lock
+// against live turns.
 private const val MAINTENANCE_BATCH = 100
 
-// okhttp's default of ten seconds is shorter than telegram takes to process an uploaded video, and a
-// timeout after the upload says nothing about whether the message arrived — it usually has.
+// okhttp's ten-second default is shorter than telegram takes to process an uploaded video, and a timeout
+// after the upload says nothing about whether the message arrived, which it usually has.
 private val TELEGRAM_IO_TIMEOUT = 60.seconds
 
 suspend fun main() = coroutineScope {
@@ -92,29 +92,26 @@ suspend fun main() = coroutineScope {
         val tasks = TasksRepository()
         val groupLog = GroupLogRepository(config.groupLog).takeIf { config.groupLog.enabled }
 
-        // signing in is the codex CLI's job, so the only thing left at startup is to fail loudly when
-        // nobody has run `codex login` here, then validate the selected model and its capabilities
-        // before the first user turn hits an opaque backend error. the claimed client version goes in
-        // first, because it decides how much of the model catalog that validation is shown.
-        // the subscription may be the primary, the fallback, a role's or only the pictures'; whichever it is,
-        // it is the one signed-in account.
+        // signing in is the CLI's job, so startup only fails loudly when nobody ran `codex login`, then
+        // validates the model before a first turn hits an opaque backend error. the claimed client version
+        // goes first, since it decides how much of the catalog that validation sees. whatever role the
+        // subscription plays, it is one signed-in account.
         val codexAuth =
             config.codexSignIn()?.let { signIn ->
                 claimCodexClientVersion(http, signIn.clientVersion)
                 CodexAuthStore(http, signIn.authFile)
             }
 
-        // a plan that only draws has no model to preflight, so its sign-in is proven here instead, and the
-        // plan is named beside the pictures in the startup summary rather than on a line of its own
+        // a plan that only draws has no model to preflight, so its sign-in is proven here, and it is named
+        // beside the pictures in the startup summary
         val imagePlan = codexAuth?.takeIf { config.codexRoles().isEmpty() }?.planType()
 
-        // every configured model is asked about at the vendor before the first turn, so a typo fails here
+        // every configured model is checked at the vendor before the first turn, so a typo fails here
         val llm = resolveLlmRuntime(config.llmProvider.preflighted(http, codexAuth), codexAuth)
 
-        // a second provider stands behind the first for when it is out — a spent subscription, above all,
-        // or a key whose credit ran dry with the subscription behind it. it wraps the client so that
-        // every call the bot makes is covered, and so a turn that runs into the limit finishes on the
-        // fallback instead of ending in "come back later".
+        // a second provider for when the first is out (a spent subscription, a key out of credit). it wraps
+        // the client so every call is covered and a turn that hits the limit finishes on the fallback instead
+        // of "come back later".
         val fallback = config.llmFallback?.let { resolveLlmRuntime(it.preflighted(http, codexAuth), codexAuth) }
         val fallbackClient =
             fallback?.let {
@@ -129,13 +126,13 @@ suspend fun main() = coroutineScope {
                 )
             }
 
-        // what the turn and its status ask to find out whether the primary is answering right now.
+        // whether the primary is answering right now, for the turn and its status.
         val fallbackInUse: () -> FallbackInUse? = { fallbackClient?.fallbackInUse }
         val client: LlmClient = fallbackClient ?: llm.client
         chatClient = client
         val vision = resolveVisionRuntime(config.vision?.preflighted(http, codexAuth), llm.copy(client = client), codexAuth)
 
-        // a vision model of its own comes with a second client to close; otherwise vision rides on the chat one
+        // a separate vision model brings a second client to close; otherwise vision rides on the chat one
         visionClient = vision?.takeIf { it.ownClient }?.client
 
         val telegramClient =
@@ -147,15 +144,15 @@ suspend fun main() = coroutineScope {
                 config.telegramBotToken,
             )
 
-        // read once and shared: the runner matches mentions against it, the agent is told its own handles.
+        // read once: the runner matches mentions against it, and the agent is told its own handles.
         val botProfile = telegramClient.botProfile()
 
         // who asked not to be written to: read by the turn, the ambient gate and the initiative, written by
-        // the turn that hears the request
+        // the turn that hears it
         val leaveAlone = LeaveAloneRepository()
 
-        // the classifier's context and the bot's own recent lines both come from the group transcript, which
-        // the config guarantees whenever the feature is on.
+        // the classifier's context and the bot's recent lines come from the group transcript, which the
+        // config guarantees when the feature is on.
         val ambient =
             config.addressing?.let { addressing ->
                 val transcript = checkNotNull(groupLog) { "answering without a mention needs the group log" }
@@ -170,9 +167,8 @@ suspend fun main() = coroutineScope {
                 )
             }
 
-        // a picture of the bot itself has to show the same face every time, which text-to-image cannot
-        // hold on its own — so the reference is read once, here, and only where it can be used at all:
-        // the self-portrait it edits, the round video message it puts in the circle, and a video it is in.
+        // text-to-image cannot hold one face across pictures, so the reference is read once, and only where
+        // it is used: the self-portrait, the round video message and a video the bot is in.
         val selfImage =
             if (config.image != null || config.xaiVideo != null || config.elevenLabsApiKey != null)
                 resolveSelfImage(config.selfImageFile, config.appearance) {
@@ -180,24 +176,23 @@ suspend fun main() = coroutineScope {
                 }
             else null
 
-        // the catalog only ever holds stickers vision has looked at, so without vision there is nothing
-        // to learn and nothing to offer the model. with vision it learns on its own, and every set it
-        // learns is paid for in vision calls, which is what the switch is for.
+        // the catalog holds only stickers vision described, so without vision there is nothing to learn or
+        // offer. every learned set costs vision calls, which is what the switch is for.
         val stickerCatalog =
             vision
                 ?.takeIf { config.stickersEnabled }
                 ?.let { StickerCatalog(telegramClient, ImageVisionClient(it.client, it.model, it.options)) }
 
-        // the history is planned against the smaller of the chat model's window and its fallback's, since a
-        // fallback taking over mid-turn is sent the same prompt
+        // history is planned against the smaller window of the chat model and its fallback, since a mid-turn
+        // fallback gets the same prompt
         val contextWindowTokens =
             listOfNotNull(llm.statedWindow(config.llmProvider), config.llmFallback?.let { fallback?.statedWindow(it) }).min()
         val contextWindowPolicy = ContextWindowPolicy(llm.model.copy(contextWindowTokens = contextWindowTokens))
-        // a diary entry retells what a group said, and one vendor's content filter declining that text is
-        // no reason to leave a day unwritten while another model stands behind it
+        // a diary entry retells a group's talk, and one vendor's filter declining it is no reason to skip a
+        // day while a fallback stands by
         val summaryOptions = llm.compactionOptions.copy(fallBackOnRefusal = true)
 
-        // the diary reads the group log, so it is kept only where there is one
+        // the diary reads the group log, so it exists only with one
         val diaryRepository = groupLog?.let { DiaryRepository() }
 
         val toolCatalogFactory =
@@ -221,8 +216,8 @@ suspend fun main() = coroutineScope {
         val conversationCompactor =
             LlmConversationCompactor(client, llm.model, llm.compactionOptions, contextWindowPolicy)
 
-        // both read whole stretches of a group's transcript with nobody having asked, so each is a
-        // switch of its own, and neither looks into a chat the allowlist no longer names.
+        // both read a group's transcript unasked, so each has its own switch, and neither looks into a chat
+        // the allowlist dropped.
         val personality = config.personality ?: DEFAULT_PERSONALITY
         val isAllowedChat = { chat: ChatRef -> config.accessPolicy.allows(chat, user = null) }
 
@@ -233,8 +228,8 @@ suspend fun main() = coroutineScope {
                 null
             }
 
-        // one instance for the runner, which counts the answers, and the adapter, which reports the
-        // chat's other lines to it
+        // shared by the runner, which counts the answers, and the adapter, which reports the chat's other
+        // lines
         val floor = ChatFloor(exempt = config.accessPolicy::isOwner)
 
         val agentRunner =
@@ -245,8 +240,8 @@ suspend fun main() = coroutineScope {
                 { fallbackInUse()?.model }, config.maxConcurrentTurns, floor,
             )
 
-        // answers to a poll are read back through the group transcript, so without one there is
-        // nothing to record them into and no reason to remember the polls either.
+        // poll answers are read back through the group transcript; without one there is nothing to record
+        // them into.
         val polls = groupLog?.let { PollRegistry() }
 
         val delivery =
@@ -285,9 +280,8 @@ suspend fun main() = coroutineScope {
                 groupLog, polls, fallbackInUse, ambient, sandbox = config.regolithUrl != null, floor = floor,
             )
 
-        // retention runs on a clock of its own rather than on whoever happens to write next: what needs
-        // clearing out most is exactly what nobody is writing to any more. the steps are wired here
-        // because one of them belongs to a messenger, and nothing under `infra/` may know that.
+        // retention runs on its own clock, since what most needs clearing is what nobody writes to. the steps
+        // are wired here because one belongs to a messenger, which `infra/` may not know.
         val maintenance =
             Maintenance(
                 listOfNotNull(
@@ -338,25 +332,22 @@ suspend fun main() = coroutineScope {
     }
 }
 
-// stamped into the jar manifest at build time and read back off any class from it. a classpath run
-// (`./gradlew run`) has no manifest, so it says so instead of inventing a number.
+// stamped into the jar manifest at build time; a classpath run (`./gradlew run`) has none and says so.
 private fun appVersion(): String = AppConfig::class.java.`package`?.implementationVersion ?: "dev"
 
 private fun createVoiceTranscriber(http: HttpClient, config: AppConfig): VoiceTranscriber? =
     config.openAiStt?.let { VoiceTranscriber(OpenAiWhisperClient(http, it), it) }
 
-// one line per capability, in the order an operator reads it: who it is, which model, how much room it has,
-// what it can see, what it draws and speaks with, what it reaches on the web, where it runs commands, what it keeps
-// of a group and does there unasked, where it writes, and what it can call. a capability that is simply
-// not configured is `off (VAR not set)` at info, in the same shape as the ones that are on; a warning is
-// kept for what is configured and still cannot work.
-// a guessed window either starves the history or overruns the server, so one nobody stated stops the startup
+// a guessed window either starves the history or overruns the server, so an unstated one stops the startup
 private fun LlmRuntime.statedWindow(config: LlmProviderConfig): Long =
     checkNotNull(model.contextWindowTokens) {
         "${config.envPrefix}_CONTEXT_WINDOW_TOKENS is required for ${model.id}: its server's model list states no " +
                 "context window. Set it to the context the server runs the model with"
     }
 
+// one line per capability, in the order an operator reads it. an unconfigured capability is
+// `off (VAR not set)` at info, in the same shape as the ones that are on; warnings are for what is
+// configured and still cannot work.
 private fun logStartup(
     config: AppConfig,
     llm: LlmRuntime,
@@ -364,9 +355,9 @@ private fun logStartup(
     vision: VisionRuntime?,
     ambientNames: List<String>?,
     toolNames: List<String>,
-    // the subscription plan behind the pictures, when the plan serves nothing else
+    // the subscription plan behind the pictures, when it serves nothing else
     imagePlan: String?,
-    // what a picture of the bot itself is built from, resolved only where something can use it
+    // the self-image source, resolved only where something uses it
     selfImage: SelfImage?,
     groupLogOn: Boolean,
     contextWindowTokens: Long,
@@ -435,7 +426,7 @@ private fun logStartup(
         } ?: "Voice: off (ELEVENLABS_API_KEY not set)"
     }
 
-    // the face a picture of the bot is held still with: the operator's file, else the platform avatar
+    // the face a picture of the bot is held to: the operator's file, else the platform avatar
     val reference = selfImage?.reference
 
     when {
@@ -460,7 +451,7 @@ private fun logStartup(
         buildList {
             if (config.tavilyApiKey != null) add("tavily")
             if (config.searxngUrl != null) add("searxng")
-            // the plan answers a search when it is the chat or the one behind it, the rule the catalog follows
+            // the plan answers searches when it is the chat provider or its fallback, as the catalog rules
             if (listOfNotNull(config.llmProvider, config.llmFallback).filterIsInstance<LlmProviderConfig.Codex>().any { it.webSearch }) add("codex")
         }
 

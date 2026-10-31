@@ -20,10 +20,10 @@ data class CodexModel(
     val contextWindowTokens: Long?,
     val supportsVision: Boolean,
     val supportedReasoningEfforts: Set<ReasoningEffort>?,
-    // the serving tiers this model offers beyond the standard one, by their request value. an empty set
-    // means the catalog says none; `null` means it did not say.
+    // serving tiers beyond standard, by request value. empty means the catalog says none; `null` means it did
+    // not say.
     val supportedServiceTiers: Set<String>?,
-    // `null` when the model takes no verbosity or the catalog names no default for it.
+    // `null` when the model takes no verbosity or the catalog names no default.
     val defaultVerbosity: String?,
 )
 
@@ -48,11 +48,9 @@ private data class CodexModelInfo(
 private data class CodexServiceTierInfo(val id: String = "")
 
 /**
- * The model catalog the signed-in subscription is entitled to.
- *
- * This is deliberately not the OpenAI Platform model list: the two overlap but are not the same set,
- * and picking a Platform-only model here fails at the first turn with an opaque backend error. Asking
- * the account what it can run is the only way to reject that at startup instead.
+ * The model catalog the subscription is entitled to. Not the Platform model list: the two overlap but differ,
+ * and a Platform-only model fails on the first turn with an opaque error. Asking the account is the only way
+ * to reject that at startup.
  */
 suspend fun fetchCodexModels(http: HttpClient, auth: CodexAuthStore): List<CodexModel> {
     val credentials = auth.credentials()
@@ -71,7 +69,7 @@ suspend fun fetchCodexModels(http: HttpClient, auth: CodexAuthStore): List<Codex
                 id = it.slug,
                 displayName = it.displayName.ifBlank { it.slug },
                 contextWindowTokens = it.contextWindow ?: it.maxContextWindow,
-                // older catalogs omit modalities; those models predate this metadata and accepted images.
+                // older catalogs omit modalities; those models predate the field and accepted images.
                 supportsVision = it.inputModalities?.any { modality -> modality.equals("image", true) } ?: true,
                 supportedReasoningEfforts =
                     (it.supportedReasoningEfforts ?: it.supportedReasoningLevels).reasoningEfforts(),
@@ -98,7 +96,7 @@ private fun JsonElement?.reasoningEfforts(): Set<ReasoningEffort>? {
             raw?.let { runCatching { ReasoningEffort.valueOf(it.trim().uppercase()) }.getOrNull() }
         }.toSet()
 
-    // an unfamiliar non-empty shape is metadata drift, so skip validation instead of rejecting a
-    // working model. an explicit empty array still means that no selectable effort is supported.
+    // an unfamiliar non-empty shape is metadata drift, so skip validation rather than reject a working model;
+    // an explicit empty array still means no selectable effort.
     return efforts.takeIf { it.isNotEmpty() || values.isEmpty() }
 }

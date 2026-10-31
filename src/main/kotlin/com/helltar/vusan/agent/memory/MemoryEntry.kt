@@ -5,15 +5,14 @@ import com.helltar.vusan.request.Platform
 import com.helltar.vusan.request.UserRef
 
 /**
- * Scope of a durable [MemoryEntry], separate from the rolling conversation history:
- * - [USER] entries belong to the sender and follow that person across DMs and groups.
- * - [CHAT] entries belong to the group and are shared by everyone in it.
+ * Scope of a durable [MemoryEntry], apart from the rolling history: [USER] entries follow the sender across
+ * DMs and groups, [CHAT] entries are shared by everyone in the group.
  */
 enum class MemoryScope { USER, CHAT }
 
 /**
- * Whose memory a row is. Scope and owner id travel together so neither can be paired with the other's
- * value: a chat id read as a person would hand a whole group somebody's personal memory.
+ * Whose memory a row is. Scope and owner id travel together so neither pairs with the other's value: a chat
+ * id read as a person would hand a whole group someone's personal memory.
  */
 data class MemoryOwner(val platform: Platform, val scope: MemoryScope, val id: String)
 

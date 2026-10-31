@@ -5,26 +5,23 @@ import org.jetbrains.exposed.v1.javatime.timestamp
 import java.time.Instant
 
 /**
- * The polls and quizzes the bot has put in a group, kept so that an answer to one can be read back.
+ * The polls and quizzes the bot sent to groups, kept so answers can be read back. A `poll_answer` names only
+ * the poll and option numbers; without this row an answer is an integer nobody can place.
  *
- * A `poll_answer` update names the poll and the option numbers and nothing else — not the question,
- * not what the options said, not the chat. Without this row an answer is an integer nobody can place.
- *
- * Telegram-owned, so [chatId] carries no `platform` beside it: only `telegram/` reads or writes this
- * table, a poll id is Telegram's own, and another messenger reporting answers at all would need its own
- * mechanism rather than a share of this one.
+ * Telegram-owned, so [chatId] has no `platform` beside it: only `telegram/` uses this table, and another
+ * messenger would need its own mechanism.
  */
 object TelegramPollsTable : Table("telegram_polls") {
 
-    /** Telegram's poll id, which is what a `poll_answer` update arrives carrying. */
+    /** Telegram's poll id, which a `poll_answer` carries. */
     val pollId = varchar("poll_id", 64)
 
     val chatId = long("chat_id")
 
-    /** The option texts in the order Telegram numbers them, one per line. */
+    /** The option texts in telegram's numbering order, one per line. */
     val optionList = text("options")
 
-    /** The answer that counts as right, for a quiz; `null` for an ordinary poll. */
+    /** The right answer of a quiz; `null` for an ordinary poll. */
     val correctOptionIndex = integer("correct_option_index").nullable()
 
     val createdAt = timestamp("created_at").clientDefault { Instant.now() }

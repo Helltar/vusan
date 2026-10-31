@@ -4,15 +4,14 @@ import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 
 /**
- * One turn per conversation at a time, and a short line behind it.
+ * One turn per conversation at a time, with a short queue behind it.
  *
- * A turn reads the history when it starts and appends to it when it ends, so two running side by side
- * would each answer without the other's exchange. Waiting costs a little time and keeps "now add logging
- * to it" pointed at something: the turn behind starts with the one ahead already in its history. The
- * mutex is fair, so the line is served in the order it formed.
+ * A turn reads history at start and appends at the end, so two in parallel would each miss the other's
+ * exchange. Waiting keeps "now add logging to it" pointed at something: the next turn starts with the
+ * previous one in its history. The mutex is fair, so the queue is served in order.
  *
- * The line is bounded because a person can write faster than a turn runs, and an answer to the tenth
- * message in a row is an answer nobody is waiting for any more.
+ * The queue is bounded: a person can write faster than a turn runs, and an answer to the tenth message in a
+ * row is one nobody waits for.
  */
 internal class ConversationLocks<K : Any>(private val maxWaiting: Int) {
 
@@ -22,7 +21,7 @@ internal class ConversationLocks<K : Any>(private val maxWaiting: Int) {
         require(maxWaiting >= 0) { "A conversation cannot have a negative line" }
     }
 
-    /** Runs [block] once the conversation is free, or answers `null` when its line is already full. */
+    /** Runs [block] once the conversation is free, or returns `null` when its queue is full. */
     suspend fun <T : Any> withLockIfRoom(key: K, block: suspend () -> T): T? {
         val mutex = retain(key, bounded = true) ?: return null
 
@@ -34,8 +33,8 @@ internal class ConversationLocks<K : Any>(private val maxWaiting: Int) {
     }
 
     /**
-     * Runs [block] once the conversation is free, however long its line is: a scheduled fire or a pressed
-     * button that was refused would be work dropped, and a clear that was refused would not clear.
+     * Runs [block] once the conversation is free, however long the queue: a refused scheduled fire or button
+     * press would be dropped work, and a refused clear would not clear.
      */
     suspend fun <T> withLock(key: K, block: suspend () -> T): T {
         val mutex = checkNotNull(retain(key, bounded = false))
@@ -47,9 +46,8 @@ internal class ConversationLocks<K : Any>(private val maxWaiting: Int) {
         }
     }
 
-    // everyone in the line is counted, whatever brought them: the one holding the mutex and all who wait
-    // for it. a bounded arrival is turned away when those ahead already fill the line, and the count is
-    // taken under one monitor, so two arrivals can never both take the last place.
+    // everyone counts, the mutex holder and all waiters. a bounded arrival is refused when the queue is full,
+    // and the count is taken under one monitor so two arrivals never both take the last place.
     private fun retain(key: K, bounded: Boolean): Mutex? =
         synchronized(locks) {
             val entry = locks.getOrPut(key) { Entry() }

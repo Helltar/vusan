@@ -37,9 +37,8 @@ import kotlin.time.TimeSource
 import kotlin.time.toJavaDuration
 
 /**
- * The stickers a chat has, as a look is shown them and as delivery sends them. The messenger's catalog
- * answers both: a look reads an id out of the block it was shown and hands that id back here, so
- * nothing in this package holds a sticker's own identity.
+ * A chat's stickers, as a look shows them and delivery sends them. The messenger's catalog answers both: a
+ * look hands back the id it read from the block it was shown, so nothing here holds a sticker's own identity.
  */
 interface StickerShortlist {
     suspend fun indexBlockFor(chat: ChatRef): String?
@@ -47,23 +46,20 @@ interface StickerShortlist {
 }
 
 /**
- * The bot looking over a group nobody called it into, and now and then doing something about it: an
- * emoji on a message, a line or a sticker of its own, or — most of the time — nothing.
+ * The bot looking over a group nobody called it into and now and then acting on it: an emoji on a message, a
+ * line or a sticker of its own, or, most often, nothing.
  *
- * Code decides whether to look, a model decides what comes of it. A chat is looked at only while people
- * are writing in it, after a pause drawn at random around the configured interval, outside the quiet
- * hours, when there is something new since the last look and the bot is not already in the
- * conversation — neither answering somebody there right now nor just done with it. What the model then
- * sees is the chat's recent lines, so unlike everything else the bot
- * does, a look sends a group's conversation to the model with nobody having asked — which is why it is
- * switched on deliberately, and only for chats [isAllowed] still admits.
+ * Code decides whether to look, a model decides what comes of it. A chat is looked at only while people are
+ * writing, after a random pause around the configured interval, outside quiet hours, when there is something
+ * new and the bot is not already in the conversation. A look sends the group's recent lines to the model
+ * unasked, which is why it is opt-in and limited to chats [isAllowed] still admits.
  *
- * It may only ever add something. A failure, a timeout or an unreadable answer is a look that ended in
- * silence, and what it writes in a day is bounded whatever the model would like. Somebody who asked to be
- * left alone is out of its reach by code: their lines carry no number to point at, count as nothing new,
- * and the look is told so, since a line of its own must not be meant for them either.
+ * It can only add something: a failure, timeout or unreadable answer is silence, and the daily output is
+ * bounded whatever the model wants. A person who asked to be left alone is out of reach by code: their lines
+ * carry no number, count as nothing new, and the look is told so, since its own line must not be meant for
+ * them either.
  *
- * The state is process memory: a restart forgets what was looked at and what today's count stood at.
+ * State is process memory; a restart forgets what was looked at and today's count.
  */
 class Initiative(
     private val mind: InitiativeMind,
@@ -98,8 +94,8 @@ class Initiative(
     private val startedAt = clock()
     private val states = HashMap<ChatRef, ChatState>()
 
-    // a chat that refused the bot outright stays refused until a restart: every later line would fail
-    // the same way, and each look before it is a model call spent on nothing
+    // a chat that refused the bot stays refused until a restart: every later line would fail the same way,
+    // each look a wasted model call
     private val unreachable = HashSet<ChatRef>()
 
     fun launchIn(scope: CoroutineScope): Job =
@@ -138,8 +134,7 @@ class Initiative(
     }
 
     private suspend fun glanceAt(chat: ChatRef, now: Instant) {
-        // a chat seen for the first time waits out a pause like any other, so a restart is never
-        // followed by the bot speaking up everywhere at once
+        // a new chat waits out a pause too, so a restart never has the bot speak up everywhere at once
         val state = states.getOrPut(chat) { ChatState(lastLookAt = startedAt, nextLookAt = now + nextPause()) }
 
         if (now < state.nextLookAt) return
@@ -150,19 +145,18 @@ class Initiative(
         val entries = groupLog.recent(chat, CONTEXT_LINES, since = now - CONTEXT_MAX_AGE)
         val leftAlone = leaveAlone?.activeInChat(chat, now).orEmpty()
 
-        // a line of its own is proof it was here, whoever that line was for: what stands above it has
-        // been read, and reacting to it afterward looks like noticing a message it already answered past
+        // its own line proves it was here: what stands above has been read, and reacting to it afterward
+        // looks like noticing a message it already answered past
         val seenUntil =
             entries.filterNot { it.isFromPerson }.maxOfOrNull { it.sentAt }
                 ?.takeIf { it.isAfter(state.lastLookAt) }
                 ?: state.lastLookAt
 
-        // what somebody who asked to be left alone wrote is not a reason to look: a chat where only they
-        // are writing has nothing a look may touch
+        // lines from someone who asked to be left alone are no reason to look
         val fresh = entries.count { it.isFromPerson && it.sentAt.isAfter(seenUntil) && it.senderId !in leftAlone }
 
-        // the day's count bounds how much it writes, the gap how often: without it a lively hour could
-        // take the whole day's lines one look after another
+        // the day's count bounds how much it writes, the gap how often; otherwise a lively hour could take
+        // the whole day's lines
         val maySpeak =
             state.said < config.maxMessagesPerDay &&
                     state.lastSaidAt?.let { !now.isBefore(it + MIN_GAP_BETWEEN_LINES) } != false
@@ -171,10 +165,9 @@ class Initiative(
         val skip =
             when {
                 fresh < MIN_FRESH_MESSAGES -> "quiet"
-                // a turn under way is the bot answering somebody here and its line not written yet: to a look
-                // the request stands unanswered, and a line of its own now would arrive beside the answer.
-                // its own line this recently means somebody called it in, or it just spoke up: either way
-                // the conversation already has it, and a second voice of its own would be talking over itself
+                // a turn under way means the bot is answering somebody here: a line now would arrive beside
+                // the answer. its own recent line means it was called in or just spoke up, and a second line
+                // would talk over itself
                 isAnswering(chat) ||
                         entries.any { !it.isFromPerson && it.sentAt.isAfter(now - OWN_LINE_COOLDOWN) } -> "already talking"
                 !maySpeak && !mayReact -> BUDGET_SPENT
@@ -182,10 +175,9 @@ class Initiative(
             }
 
         if (skip != null) {
-            // the last look is left where it was, so what was said meanwhile is still new next time.
-            // a skipped look cost no model call, so it comes back soon instead of waiting out a whole
-            // pause: in a chat that keeps calling the bot in, a full pause after every skip left it
-            // hardly any look at all
+            // the last look stays where it was, so what was said meanwhile is still new. a skip cost no model
+            // call, so it retries soon instead of waiting a full pause, which left a chat that keeps calling
+            // the bot hardly any looks
             if (skip != BUDGET_SPENT) state.nextLookAt = now + retryPause()
 
             log.info { "initiative skip: chat=[$chat] reason=[$skip] fresh=[$fresh]" }
@@ -203,7 +195,7 @@ class Initiative(
                 maySpeak = maySpeak,
                 diary = diary?.invoke(chat),
                 leftAlone = leftAloneLines(entries, leftAlone),
-                // both are only for a line of its own, so a spent day pays for neither
+                // both serve only a line of its own, so a spent day pays for neither
                 quietLately = if (maySpeak) quietLately(chat, now, leftAlone.keys) else emptyList(),
                 stickerCatalog = if (maySpeak) stickers?.indexBlockFor(chat) else null,
             )
@@ -228,7 +220,7 @@ class Initiative(
                 null
             }
 
-    // answers the part of the log line that says what came of the look
+    // returns the part of the log line saying what came of the look
     private suspend fun act(
         chat: ChatRef,
         state: ChatState,
@@ -261,7 +253,7 @@ class Initiative(
 
             is InitiativeDecision.Say -> {
                 val text = decision.text.limitTo(MAX_SAY_CHARS)
-                // an anchor the look never offered is dropped rather than refused: the line still stands
+                // an anchor the look never offered is dropped, not refused: the line still stands
                 val anchor = decision.replyTo?.let(glance::messageIdOf)
 
                 if (!maySpeak) {
@@ -269,7 +261,7 @@ class Initiative(
                 } else {
                     state.said++
                     state.lastSaidAt = clock()
-                    // the mind writes plain text, and delivery reads text as telegram html
+                    // the mind writes plain text; delivery reads telegram html
                     send(chat, BotOutput.Text(text.escapeHtml()), anchor)
 
                     "action=[${if (anchor == null) "say" else "reply"}]" +
@@ -281,7 +273,7 @@ class Initiative(
             is InitiativeDecision.Sticker -> sticker(chat, state, glance, decision, maySpeak)
         }
 
-    // a sticker is a message in the chat, so it is a line of the day, gap and count included
+    // a sticker is a message, so it counts as a line: gap and count included
     private suspend fun sticker(
         chat: ChatRef,
         state: ChatState,
@@ -291,7 +283,7 @@ class Initiative(
     ): String {
         if (!maySpeak) return "action=[sticker] result=[over budget]"
 
-        // an id the shortlist never listed, or a chat with no shortlist at all, sends nothing
+        // an id the shortlist never listed, or no shortlist at all, sends nothing
         val fileId =
             stickers?.fileIdFor(chat, decision.id)
                 ?: return "action=[sticker] result=[no such sticker] id=[${decision.id}]"
@@ -311,9 +303,8 @@ class Initiative(
         }
     }
 
-    // people who used to write here and stopped: enough of a share that their silence is noticeable,
-    // gone long enough that it is not just a weekend. asking after somebody is writing to them, so a
-    // person who asked to be left alone is not missed out loud
+    // people who wrote a noticeable share here and have been gone longer than a weekend. asking after
+    // somebody is addressing them, so a person who asked to be left alone is not missed out loud
     private suspend fun quietLately(chat: ChatRef, now: Instant, leftAlone: Set<String>): List<String> =
         groupLog.authorActivity(chat, since = now - ABSENCE_LOOKBACK)
             .filter { it.messages >= ABSENCE_MIN_MESSAGES && it.lastSeenAt.isBefore(now - ABSENCE_AFTER) }
@@ -322,8 +313,8 @@ class Initiative(
             .take(MAX_QUIET_PEOPLE)
             .map { "${it.name} — last wrote ${JavaDuration.between(it.lastSeenAt, now).toDays()} days ago" }
 
-    // the people in the window who asked to be left alone, under the name the glance shows them by. one
-    // with no line in the window is left out: there is nothing of theirs to point at or to answer
+    // the left-alone people in the window, under the names the glance uses; someone with no line in it is
+    // omitted
     private fun leftAloneLines(entries: List<GroupLogEntry>, leftAlone: Map<String, Instant>): List<String> =
         entries
             .filter { it.isFromPerson && it.senderId in leftAlone }
@@ -340,17 +331,16 @@ class Initiative(
     private companion object {
         val TICK = 1.minutes
 
-        // a chat is worth a look only while people are in it: a line dropped into a room everyone has
-        // left is the bot talking to itself
+        // a chat is worth a look only while people are in it; otherwise the bot talks to itself
         val ACTIVE_WITHIN = 15.minutes
         const val MIN_FRESH_MESSAGES = 3
         val OWN_LINE_COOLDOWN = 5.minutes
 
-        // a skipped look is tried again after this much to twice this much
+        // a skipped look retries after this to twice this
         val RETRY_AFTER_SKIP = 5.minutes
 
-        // between two lines of its own in one chat, whatever is left of the day's count; a reaction is
-        // not a line and is not held back by it
+        // between two lines of its own in one chat, whatever is left of the day's count; reactions are not
+        // held back
         val MIN_GAP_BETWEEN_LINES = 90.minutes
 
         const val BUDGET_SPENT = "budget spent"
@@ -358,12 +348,12 @@ class Initiative(
         // a pause runs from half the interval to one and a half of it
         const val PAUSE_MIN_SHARE = 0.5
 
-        // a lively half hour between two looks runs past thirty lines, and someone who opens a chat
-        // after a slow afternoon reads back further than an hour and a half
+        // a lively half hour runs past thirty lines, and someone back after a slow afternoon reads further
+        // than ninety minutes
         const val CONTEXT_LINES = 60
         val CONTEXT_MAX_AGE = 6.hours
 
-        // the chat model answers this, reasoning and all, and nothing is waiting on it
+        // the chat model answers this, reasoning included, and nothing waits on it
         val MIND_TIMEOUT = 90.seconds
 
         const val MAX_REACTIONS_PER_DAY = 20
@@ -382,11 +372,10 @@ class Initiative(
 }
 
 /**
- * The recent chat as one look shows it, and the way back from a number the model points at to the
- * message it stands for. Message ids themselves are never shown: a number can only name a line a person
- * wrote after [seenUntil] — the last look, or the bot's own last line when that came later — so a
- * decision cannot reach past what this look put in front of it. A line by somebody in [leftAlone] gets
- * none either, whenever it was written: with nothing to point at, no reaction and no reply can reach them.
+ * The recent chat as one look shows it, and the way back from a number the model points at to its message.
+ * Message ids are never shown: only lines a person wrote after [seenUntil] (the last look, or the bot's own
+ * later line) get a number, so a decision cannot reach past what the look showed. A line by somebody in
+ * [leftAlone] never gets one, so no reaction or reply can reach them.
  */
 private class Glance(entries: List<GroupLogEntry>, seenUntil: Instant, zone: ZoneId, leftAlone: Set<String>) {
 
@@ -425,8 +414,8 @@ private const val UNKNOWN_AUTHOR = "someone"
 private val GroupLogEntry.isFromPerson: Boolean
     get() = kind != GroupLogEntry.BOT_KIND
 
-// the name, the forwarded channel and the words are all somebody's own text, and the glance goes into
-// a prompt of its own: defused like the transcript a turn is shown, so nobody opens a block in it
+// names, channel titles and words are user text going into a prompt: defused like a turn's transcript, so
+// nobody opens a block in it
 private fun GroupLogEntry.glanceAuthor(): String =
     (if (isFromPerson) senderUsername ?: senderName ?: UNKNOWN_AUTHOR else OWN_AUTHOR).neutralizePromptBlocks()
 

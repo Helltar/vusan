@@ -200,7 +200,7 @@ class AmbientAddressingTest {
 
     private fun minutesAgo(minutes: Long): Instant = now.minusSeconds(minutes * 60)
 
-    // the follow-up door is the bot's own guess, and a person who asked to be left alone is not guessed about
+    // the follow-up door is the bot's own guess, never made about someone who asked to be left alone
     @Test
     fun `a person who asked to be left alone is not taken for a follow-up`() = runBlocking {
         val classifier = FakeClassifier(answer = true)

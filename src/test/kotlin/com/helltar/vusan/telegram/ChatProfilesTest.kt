@@ -48,7 +48,7 @@ class ChatProfilesTest {
 
     @Test
     fun `a restriction on the bot itself replaces the chat's defaults`() {
-        // the chat lets everyone post pictures; this bot alone was silenced on them.
+        // everyone may post pictures; only this bot was silenced on them.
         val member =
             ChatMemberRestricted.builder()
                 .user(botUser)
@@ -74,7 +74,7 @@ class ChatProfilesTest {
 
     @Test
     fun `a lookup that answered nothing leaves the chat unrestricted`() {
-        // guessing "forbidden" from a failed call would strip the agent of tools it actually has.
+        // guessing "forbidden" from a failed call would strip tools the agent has.
         assertEquals(ChatCapabilities.UNRESTRICTED, capabilitiesOf(membership = null, chat = null))
         assertEquals(ChatCapabilities.UNRESTRICTED, capabilitiesOf(member(), chat(permissions = null)))
     }

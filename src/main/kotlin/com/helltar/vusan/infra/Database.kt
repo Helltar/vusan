@@ -60,10 +60,9 @@ object Db {
                 url = requestedSpec.url,
                 setupConnection = { connection ->
                     connection.createStatement().use { stmt ->
-                        // database WAL mode lets readers and writers proceed concurrently and is sticky once set
-                        // (stored in the DB file header). busy_timeout makes writers wait instead of
-                        // failing fast on contention. synchronous=NORMAL trims redundant fsyncs in WAL
-                        // mode without losing durability for committed transactions.
+                        // WAL lets readers and writers proceed concurrently and sticks once set (it lives in
+                        // the file header). busy_timeout makes writers wait instead of failing on contention.
+                        // synchronous=NORMAL trims fsyncs without losing committed transactions in WAL mode.
                         stmt.execute("PRAGMA journal_mode=WAL")
                         stmt.execute("PRAGMA busy_timeout=5000")
                         stmt.execute("PRAGMA synchronous=NORMAL")
@@ -79,15 +78,13 @@ object Db {
     }
 
     /**
-     * Creates an empty database at [Schema.VERSION], accepts one already at it, moves an older one
-     * forward through [Schema.steps], and refuses the rest.
+     * Creates an empty database at [Schema.VERSION], accepts one already there, moves an older one through
+     * [Schema.steps], and refuses the rest.
      *
-     * A database says what shape it has in `PRAGMA user_version`, which SQLite keeps in the file header
-     * and hands back as `0` until something stamps it. Every step runs in this one transaction together
-     * with its stamp, so a failure leaves the database exactly as it was found; a copy of it is kept
-     * beside it first all the same. A version older than the first step, `0` with tables in it, or one
-     * newer than this build is a shape nothing here knows how to move: it is left untouched and named in
-     * the error, because a schema half made of one version and half of another is how rows go missing
+     * The shape lives in `PRAGMA user_version` in the file header, `0` until stamped. Every step runs in this
+     * one transaction with its stamp, so a failure leaves the database as found; a copy is kept beside it
+     * first anyway. A version older than the first step, `0` with tables, or newer than this build is left
+     * untouched and named in the error: a schema half one version and half another is how rows go missing
      * quietly.
      */
     private fun JdbcTransaction.prepareSchema(path: Path) {
@@ -123,9 +120,8 @@ object Db {
         log.info { "moved the database from schema version $found to ${Schema.VERSION}, the old one kept at $copy" }
     }
 
-    // VACUUM INTO cannot run inside a transaction, so the copy goes through a connection of its own. it
-    // folds the WAL in, which a copy of the file alone would miss. a copy left by an earlier start that
-    // failed is the same database, since nothing has run on it since.
+    // VACUUM INTO cannot run in a transaction, so the copy uses its own connection; it folds the WAL in,
+    // which copying the file would miss. a copy left by an earlier failed start is the same database.
     private fun keepCopy(path: Path, version: Int): Path {
         val copy = path.resolveSibling("${path.fileName}.schema-$version")
 
@@ -140,16 +136,16 @@ object Db {
         return copy
     }
 
-    // the version pragmas go through the transaction's own connection rather than `exec`: sqlite takes a
-    // pragma write only from a plain statement, and silently does nothing with the prepared one Exposed
-    // sends — which would leave every start believing the database had never been stamped.
+    // through the transaction's own connection rather than `exec`: sqlite takes a pragma write only from a
+    // plain statement and silently ignores Exposed's prepared one, which would leave every start thinking the
+    // database was never stamped.
     private fun JdbcTransaction.userVersion(): Int =
         rawStatement { statement ->
             statement.executeQuery("PRAGMA user_version").use { if (it.next()) it.getInt(1) else 0 }
         }
 
     private fun JdbcTransaction.stampUserVersion(version: Int) {
-        // the value is this build's own constant, never anything read in
+        // the value is this build's own constant, never input
         rawStatement { it.execute("PRAGMA user_version = $version") }
     }
 
@@ -172,9 +168,8 @@ object Db {
         }
     }
 
-    // exposed's JDBC suspendTransaction runs the blocking driver calls on the caller's dispatcher;
-    // hop to Dispatchers.IO so a contended SQLite write (busy_timeout up to 5s) never stalls the
-    // long-polling or agent coroutines.
+    // exposed's JDBC suspendTransaction runs blocking driver calls on the caller's dispatcher; IO keeps a
+    // contended write (busy_timeout up to 5s) from stalling the polling or agent coroutines.
     suspend fun <T> dbTransaction(block: suspend JdbcTransaction.() -> T): T {
         val currentDatabase = checkNotNull(database) { "Database is not connected" }
 

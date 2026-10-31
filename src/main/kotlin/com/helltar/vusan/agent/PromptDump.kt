@@ -4,8 +4,8 @@ import com.helltar.vusan.llm.Message
 import com.helltar.vusan.llm.Part
 import io.github.oshai.kotlinlogging.KotlinLogging
 
-// every message of the request, uncut, in the order the provider receives it. raw user content and
-// tool output ride along, so this stays off until PROMPT_DUMP_LEVEL=DEBUG asks for it.
+// every request message, uncut, in the order the provider receives it. raw user content and tool output ride
+// along, so this stays off unless PROMPT_DUMP_LEVEL=DEBUG.
 private val log = KotlinLogging.logger("PromptDump")
 
 internal fun logPromptDump(messages: List<Message>, model: String, tools: List<String>) {
@@ -32,8 +32,8 @@ internal fun renderPromptDump(messages: List<Message>, model: String, tools: Lis
         }
     }
 
-// an image is sent base64-encoded; the bytes are megabytes of noise, so only their size is logged, and a
-// reasoning block is the provider's to read, so only its presence is.
+// an image's base64 is megabytes of noise and a reasoning block is the provider's to read, so only size and
+// presence are logged.
 private fun renderPart(part: Part): String =
     when (part) {
         is Part.Text -> part.text

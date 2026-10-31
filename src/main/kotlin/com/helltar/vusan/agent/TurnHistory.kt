@@ -10,17 +10,16 @@ import com.helltar.vusan.outbox.OutboxItem
 import com.helltar.vusan.tools.choice.InlineChoiceTools
 import com.helltar.vusan.tools.message.MessageTools
 
-// what a finished turn leaves behind for the next one to read. history is not a transcript of the run:
-// a delivery tool's payload is already the assistant text stored beside it, and a long tail of tool
-// results would crowd out the words that matter. what survives is the user's entry, a bounded slice of
-// the tools, and one assistant row.
+// what a finished turn leaves for the next one. not a transcript: a delivery tool's payload is already the
+// stored assistant text, and a long tail of tool results would crowd out what matters. kept: the user's
+// entry, a bounded slice of the tools, one assistant row.
 
 private const val TOOL_OUTPUT_MAX_CHARS = 4_000
 private const val TOOL_EVENTS_MAX_COUNT = 8
 private const val TOOL_EVENTS_MAX_CHARS = 12_000
 
-// trailing assistant text after a delivery tool is duplicate chatter and is dropped — but an
-// announcement is not the answer, so it must not silence the closing text that is.
+// assistant text after a delivery tool is duplicate chatter and is dropped, but an announcement is not the
+// answer, so it must not silence the closing text.
 internal fun extractFinalComment(answer: String, outputs: List<OutboxItem>): String? =
     answer.trim()
         .takeUnless { it.isEffectivelyBlank() }
@@ -55,10 +54,8 @@ internal fun assistantTextForHistory(outputs: List<OutboxItem>, comment: String?
     return parts.takeIf { it.isNotEmpty() }?.joinToString("\n\n")
 }
 
-// tools whose payload is fully duplicated by the assistant text row. skipping their
-// matching TOOL_CALL/TOOL_RESULT pair avoids storing (and replaying) the same content twice.
-// a tool is registered under its function name (`tools/ToolSet.kt` knows no other),
-// so a function reference stays in sync with the registered name across renames.
+// tools whose payload the assistant text row fully duplicates; their TOOL_CALL/TOOL_RESULT pair is not
+// stored. function references keep the names in sync with registration.
 private val TEXT_DUPLICATING_TOOLS =
     setOf(
         MessageTools::sendMessage.name,

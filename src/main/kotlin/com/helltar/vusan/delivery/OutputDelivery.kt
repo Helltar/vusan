@@ -5,19 +5,15 @@ import com.helltar.vusan.i18n.Language
 import com.helltar.vusan.outbox.BotOutput
 import com.helltar.vusan.request.UserRef
 
-/**
- * What a turn's answer is sent with, and everything the application knows about sending: an
- * adapter implements it, and nothing outside one needs a messenger client to deliver a turn.
- */
+/** How a turn's answer is sent: an adapter implements it, so nothing outside one needs a messenger client. */
 interface OutputDelivery {
 
     /** Sends everything a finished turn produced. */
     suspend fun deliver(delivery: TurnDelivery): DeliveryOutcome
 
     /**
-     * Sends what the bot says of its own accord. Nobody asked, so there is no person to route anything
-     * to and no line saying whose answer it is; [anchorMessageId] is the message it picks up, when it
-     * picks one up, and the outputs stand on their own when that message is gone.
+     * Sends what the bot says on its own: no person to route to and no attribution line. [anchorMessageId] is
+     * the message it picks up, if any; the outputs stand alone when that message is gone.
      */
     suspend fun deliverUnprompted(
         destination: Destination,
@@ -25,15 +21,13 @@ interface OutputDelivery {
         anchorMessageId: String? = null,
     ): DeliveryOutcome
 
-    /** Sends one line of plain text from the bot itself — no anchor, no formatting fallbacks. */
+    /** Sends one line of plain text from the bot: no anchor, no formatting fallbacks. */
     suspend fun notify(destination: Destination, text: String): DeliveryOutcome
 }
 
 /**
- * One finished turn, addressed.
- *
- * [recipient] is the person, not a private destination: which chat that resolves to — if the platform
- * even has one — is the adapter's to work out, and an item is only routed there when the turn asked.
+ * One finished turn, addressed. [recipient] is the person, not a private destination: the adapter works out
+ * which chat that is, if any, and routes an item there only when the turn asked.
  */
 data class TurnDelivery(
     val result: AgentResult,
@@ -46,20 +40,17 @@ data class TurnDelivery(
 /**
  * What became of a send.
  *
- * There is deliberately no `Partial`: an adapter cannot honestly report one today, because an item
- * refused for its own content is retried through a fallback chain and can still land in some other
- * shape. What the caller genuinely needs to tell apart is a destination that is *gone* — every later
- * send there fails too, so a scheduler must stop firing into it — from everything else, which says
- * nothing about whether the next message would arrive.
- *
- * Do not add a state an adapter cannot actually distinguish; the caller would branch on a lie.
+ * No `Partial` on purpose: an item refused for its content goes through a fallback chain and may still land
+ * in another shape, so no adapter can honestly report one. What the caller needs is a destination that is
+ * *gone* (every later send fails, so a scheduler must stop) versus everything else. Do not add a state an
+ * adapter cannot actually distinguish.
  */
 sealed interface DeliveryOutcome {
 
-    /** Delivery ran. Individual items may still have been refused for their own content. */
+    /** Delivery ran; individual items may still have been refused for their content. */
     data object Handled : DeliveryOutcome
 
-    /** The destination is gone — the bot was removed, blocked, or lost its right to post. */
+    /** The destination is gone: the bot was removed, blocked or lost its right to post. */
     data object Unreachable : DeliveryOutcome
 
     val isUnreachable: Boolean

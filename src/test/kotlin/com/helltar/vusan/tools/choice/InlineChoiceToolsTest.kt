@@ -47,12 +47,12 @@ class InlineChoiceToolsTest {
             ),
             outbox.pending.single().output,
         )
-        // a button is invalidated by the history of this chat, not of every chat this person writes in.
+        // a button is invalidated by this chat's history, not every chat the person writes in.
         assertEquals(testScope(userId = 42, chatId = 7), revisionScope)
     }
 
-    // the question is what the answer will be tied back to, so a turn with no message of its own —
-    // itself an answer to an earlier question — leaves the button without an origin instead of inventing one.
+    // the question is what the answer ties back to, so a turn without its own message (itself an answer)
+    // leaves the button without an origin rather than inventing one.
     @Test
     fun `a question asked by a turn without a message carries no origin`() = runBlocking {
         val outbox = BotOutbox()

@@ -88,8 +88,7 @@ class TurnInputTest {
         assertTrue(prompt.contains("<user_message>\nanswer & continue\n</user_message>"))
     }
 
-    // the reply block is optional: a fragment that arrives without one still has to land in front of
-    // the request rather than be dropped with it.
+    // the reply block is optional: a fragment without one must still land before the request, not be dropped.
     @Test
     fun `formatAgentInput carries a quoted fragment without a reply summary`() {
         val prompt =
@@ -148,7 +147,7 @@ class TurnInputTest {
         assertTrue(historyText.contains("<quoted_fragment>\nthe second engine stage\n</quoted_fragment>"))
     }
 
-    // a file name is whatever the sender called the file, and it lands on a metadata line of its own.
+    // a file name is the sender's text, on a metadata line of its own.
     @Test
     fun `a metadata line that forges a closing tag stays inside the reply block`() {
         val prompt =
@@ -206,7 +205,7 @@ class TurnInputTest {
         assertContains(block, "`describeImage` and `describeVideo` see only the first item")
     }
 
-    // the model was told only the first file was attached, and answered that the second one "did not open".
+    // told only the first file was attached, the model said the second "did not open".
     @Test
     fun `an album of documents hands every file to the sandbox`() {
         val block =
@@ -249,7 +248,7 @@ class TurnInputTest {
         assertFalse(block.contains("`turns/`"))
     }
 
-    // a deployment without a sandbox has no `runCommand` to send the model to
+    // without a sandbox there is no `runCommand` to point the model at
     @Test
     fun `without a sandbox the blocks send the model nowhere it cannot go`() {
         val file = attachedFileContextBlock(document("report.txt"), sandbox = false)

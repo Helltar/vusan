@@ -21,23 +21,20 @@ internal const val CLEAR_COMMAND = "clear"
 internal const val STOP_COMMAND = "stop"
 
 /**
- * Publish the command menu Telegram offers next to the input field, one list per [Language].
+ * Publishes the command menu telegram shows beside the input field, one list per [Language].
  *
- * This is the very list BotFather's `/setcommands` writes — there is no second store behind it — so the
- * menu is republished on every start and an edit made in BotFather lasts only until the next one. It
- * lives here so that adding a command to `TelegramCommands` is all it takes to offer it.
+ * It is the same list BotFather's `/setcommands` writes, so it is republished on every start and a BotFather
+ * edit lasts only until the next one. Adding a command to `TelegramCommands` is all it takes to offer it.
  *
- * `/start` is deliberately absent: Telegram opens a fresh chat with it anyway, and it does not belong in
- * a menu of things to reach for later.
+ * `/start` is left out on purpose: telegram opens a fresh chat with it anyway.
  */
 internal suspend fun TelegramClient.publishCommandMenu() {
     Language.entries.forEach { language ->
         val messages = Messages.of(language)
 
-        // the task menu and a clear are one person's business, so they are ephemeral in a group, where
-        // the command and its answer are then seen by that person and the bot alone; a client hides an
-        // ephemeral command in a private chat, where nothing is ephemeral, so the private list has the
-        // same commands plain. a stop stays in the open on purpose: the chat sees why the bot fell silent.
+        // the task menu and a clear are personal, so in a group they are ephemeral, seen by that person and
+        // the bot alone; clients hide ephemeral commands in private chats, so the private list has them
+        // plain. a stop stays in the open on purpose: the chat sees why the bot fell silent.
         fun commands(personal: (String, String) -> BotCommand): List<BotCommand> =
             listOf(
                 personal(TASKS_COMMAND, messages.tasksCommandDescription),
@@ -45,13 +42,13 @@ internal suspend fun TelegramClient.publishCommandMenu() {
                 BotCommand(STOP_COMMAND, messages.stopCommandDescription),
             )
 
-        // the list without a language answers everyone whose own language has no dedicated one
+        // the list without a language serves everyone whose language has no list of its own
         val languageCode = language.code.takeUnless { language == Language.DEFAULT }
         val plain = commands(::BotCommand)
         val ephemeral = commands(::ephemeralCommand)
 
-        // a private chat reads its own scope before the default, a group its own; the default is what
-        // is left for anywhere else, the plain list
+        // a private chat reads its own scope before the default, a group its own; the default covers
+        // everything else
         listOf(
             BotCommandScopeAllPrivateChats() to plain,
             BotCommandScopeAllGroupChats() to ephemeral,

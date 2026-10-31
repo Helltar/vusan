@@ -34,23 +34,26 @@ import java.time.Instant
 import java.time.ZoneId
 
 /**
- * The running transcript of a group chat: every message, not only the ones addressed to the bot.
- * Separate from [com.helltar.vusan.agent.conversation], which is keyed by user **and** chat and only ever
- * holds turns the bot took part in.
+ * The running transcript of a group chat: every message, not only those addressed to the bot. Unlike
+ * [com.helltar.vusan.agent.conversation], which is keyed by user **and** chat and holds only turns the bot
+ * took part in.
  */
 class GroupLogRepository(
     private val config: GroupLogConfig,
-    /** The zone a transcript day is cut on. A diary entry is keyed by day, so every reader takes its zone from here. */
+    /**
+     * The zone a transcript day is cut on; diary entries are keyed by day, so every reader takes it from
+     * here.
+     */
     val zone: ZoneId = ZoneId.systemDefault(),
 ) {
 
-    /** How far back the log reaches at all, so a reader can refuse a window it could never fill. */
+    /** How far back the log reaches, so a reader can refuse a window it could never fill. */
     val retentionDays: Int
         get() = config.retentionDays
 
     suspend fun record(entry: GroupLogEntry) {
-        // exposed rejects a value longer than the column instead of truncating it, and every field
-        // here comes from outside the process, so the fit is enforced at the one place that writes.
+        // exposed rejects an over-long value instead of truncating, and every field comes from outside, so
+        // the fit is enforced at the one writer.
         dbTransaction {
             GroupLogTable.insertIgnore {
                 it[platform] = entry.chat.platform
@@ -70,9 +73,9 @@ class GroupLogRepository(
     }
 
     /**
-     * Applies an edit to a message already in the transcript, changing only what Telegram lets an edit
-     * change. A message the log never saw is deliberately not inserted: the stretch around it is missing
-     * too, and one backfilled row would read as if nothing else had been said there.
+     * Applies an edit to a message already in the transcript, changing only what telegram lets an edit
+     * change. A message the log never saw is not inserted: its surroundings are missing too, and one
+     * backfilled row would read as if nothing else was said.
      */
     suspend fun recordEdit(entry: GroupLogEntry): Boolean {
         val editedMessageId = entry.messageId ?: return false
@@ -89,9 +92,8 @@ class GroupLogRepository(
     }
 
     /**
-     * The newest [limit] entries of the window, returned oldest-first so they read as a transcript.
-     * The limit is what keeps a month-wide window from being pulled into memory whole; ask
-     * [countInWindow] for the real size.
+     * The newest [limit] entries of the window, oldest first. The limit keeps a month-wide window out of
+     * memory; [countInWindow] gives the real size.
      */
     suspend fun readWindow(
         chat: ChatRef,
@@ -118,11 +120,10 @@ class GroupLogRepository(
         }
 
     /**
-     * Every entry of the window that mentions [needle] in its text, its media label or the channel it was
-     * forwarded from, whatever the case, oldest first. The match is made here rather than in SQL: SQLite
-     * folds case for ASCII alone, so `LIKE` would miss a capitalized Cyrillic name. Retention and
-     * [GroupLogConfig.maxMessagesPerChat] bound the rows a window can hold, which is what makes walking
-     * all of them affordable.
+     * Every entry of the window mentioning [needle] in its text, media label or forwarded channel,
+     * case-insensitively, oldest first. Matched here rather than in SQL, since SQLite folds case for ASCII
+     * only and `LIKE` would miss a capitalized cyrillic name. Retention and
+     * [GroupLogConfig.maxMessagesPerChat] keep walking every row affordable.
      */
     suspend fun searchWindow(
         chat: ChatRef,
@@ -139,8 +140,8 @@ class GroupLogRepository(
     }
 
     /**
-     * The tail of the conversation for the `<recent_chat>` prompt block. [excludeMessageId] drops the message
-     * that triggered the current turn, which the model is already being shown as the request itself.
+     * The tail of the conversation for `<recent_chat>`. [excludeMessageId] drops the message that triggered
+     * the turn, which the model already sees as the request.
      */
     suspend fun recent(
         chat: ChatRef,
@@ -154,8 +155,8 @@ class GroupLogRepository(
                 var condition = inChat(chat) and (GroupLogTable.sentAt greaterEq since)
 
                 excludeMessageId?.let {
-                    // the bot's own rows carry no message id, and `!=` is null in SQL rather than true:
-                    // without the null arm every reply the bot made would leave with the excluded message.
+                    // the bot's rows have no message id, and `!=` against null is null in SQL: without the
+                    // null arm every bot reply would be excluded too.
                     condition = condition and ((GroupLogTable.messageId neq it) or GroupLogTable.messageId.isNull())
                 }
 
@@ -167,10 +168,7 @@ class GroupLogRepository(
             .reversed()
     }
 
-    /**
-     * The chats people wrote in between [from] and [to]. The bot's own lines do not count: a chat only
-     * the bot has spoken in is not one anybody is in.
-     */
+    /** The chats people wrote in between [from] and [to]; the bot's own lines do not count. */
     suspend fun activeChats(from: Instant, to: Instant): List<ChatRef> = dbTransaction {
         GroupLogTable
             .select(GroupLogTable.platform, GroupLogTable.chatId)
@@ -184,8 +182,8 @@ class GroupLogRepository(
     }
 
     /**
-     * Who wrote in [chat] since [since], how much, and when last. Senders with no id of their own — an
-     * anonymous admin, a linked channel — are left out, since such a row is not one person.
+     * Who wrote in [chat] since [since], how much and when last. Senders without an id of their own (an
+     * anonymous admin, a linked channel) are left out, as they are not one person.
      */
     suspend fun authorActivity(chat: ChatRef, since: Instant): List<AuthorActivity> = dbTransaction {
         val messages = GroupLogTable.id.count()
@@ -212,7 +210,7 @@ class GroupLogRepository(
             }
     }
 
-    /** Drops everything recorded for [chat]: the transcript, and the diary written from it. */
+    /** Drops everything recorded for [chat]: the transcript and the diary written from it. */
     suspend fun clear(chat: ChatRef): Int = dbTransaction {
         ChatDiaryTable.deleteWhere {
             (ChatDiaryTable.platform eq chat.platform) and (ChatDiaryTable.chatId eq chat.id)
@@ -226,11 +224,11 @@ class GroupLogRepository(
     }
 
     /**
-     * Retention for the chats that have one: everything past [GroupLogConfig.retentionDays], and the
-     * oldest rows of a chat that holds more than [GroupLogConfig.maxMessagesPerChat].
+     * Retention for chats that have one: everything past [GroupLogConfig.retentionDays], and the oldest rows
+     * of a chat over [GroupLogConfig.maxMessagesPerChat].
      *
-     * At most [maxChats] chats per pass, oldest row first, so a quiet chat is not left behind a busy
-     * one. The row cap is a ceiling rather than a precise limit: overshooting it between passes is fine.
+     * At most [maxChats] chats per pass, oldest row first, so a quiet chat is not left behind a busy one. The
+     * row cap may be overshot between passes.
      */
     suspend fun pruneExpired(maxChats: Int): Int {
         val cutoff = retentionCutoff()
@@ -245,8 +243,7 @@ class GroupLogRepository(
                         .limit(maxChats)
                         .map { ChatRef(it[GroupLogTable.platform], it[GroupLogTable.chatId]) }
 
-                // a chat can also be over the row cap without holding anything old enough to expire,
-                // which is the busy one rather than the abandoned one.
+                // a busy chat can be over the row cap without anything old enough to expire.
                 val overCap =
                     GroupLogTable
                         .select(GroupLogTable.platform, GroupLogTable.chatId)
@@ -290,7 +287,7 @@ class GroupLogRepository(
 private const val SECONDS_PER_DAY = 24L * 60L * 60L
 private const val ESCAPE_CHAR = '\\'
 
-// mirror the varchar widths declared in GroupLogTable.
+// mirror the varchar widths in GroupLogTable.
 private const val USERNAME_COLUMN_CHARS = 64
 private const val NAME_COLUMN_CHARS = 200
 private const val KIND_COLUMN_CHARS = 24
@@ -311,8 +308,8 @@ private fun windowCondition(chat: ChatRef, from: Instant, to: Instant, author: S
     return author?.let { window and authorCondition(it) } ?: window
 }
 
-// the model passes whatever the user called the person, so a username matches exactly (with or
-// without the `@`) while a display name matches on substring — "olena" has to find "Olena Petrenko".
+// the model passes whatever the user called the person: a username matches exactly (with or without `@`), a
+// display name by substring, so "olena" finds "Olena Petrenko".
 private fun authorCondition(author: String): Op<Boolean> {
     val needle = author.trim().removePrefix("@").lowercase()
     val contains = LikePattern("%", escapeChar = ESCAPE_CHAR) + LikePattern.ofLiteral(needle, ESCAPE_CHAR) + "%"

@@ -45,9 +45,9 @@ class SearxngTools(
         if (results.isEmpty() && response.answers.isEmpty() && response.infoboxes.isEmpty()) {
             val down = response.unresponsiveEngines.mapNotNull { it.firstOrNull() }
 
-            // engines suspend themselves on rate limits and CAPTCHAs, and when every one of them is out
-            // the empty result set says nothing about the query. reporting it as "nothing found" would
-            // have the model tell the user the topic has no coverage.
+            // engines suspend themselves on rate limits and CAPTCHAs, and with all of them out the empty
+            // result says nothing about the query; "nothing found" would have the model tell the user the
+            // topic has no coverage.
             if (down.isNotEmpty()) {
                 log.warn { "metaSearch: every engine failed query=[$query] unresponsiveEngines=[${down.joinToString()}]" }
 
@@ -137,13 +137,12 @@ class SearxngTools(
         val allowedCategories =
             setOf("general", "news", "it", "science", "videos", "music", "files", "social media", "map")
 
-        // an unknown time_range is a 400, unlike an unknown category, so this set is a hard guard
+        // an unknown time_range is a 400, unlike an unknown category, so this is a hard guard
         val allowedTimeRanges = setOf("day", "week", "month", "year")
 
-        // SearXNG mixes stock-photo and icon engines into every image query — unsplash, pexels, artic,
-        // devicons and lucide answer anything with something, so `blackpink` comes back with an 1878
-        // self-portrait. pinning the engine list is the only filter that works: `engines` combined with
-        // `categories=images` is ignored, because the category adds its own engines back on top.
+        // SearXNG mixes stock-photo and icon engines (unsplash, pexels, artic, devicons, lucide) into every
+        // image query, so `blackpink` returns an 1878 self-portrait. pinning the engines is the only filter
+        // that works: `engines` with `categories=images` is ignored, the category re-adding its own.
         const val IMAGE_ENGINES = "duckduckgo images,bing images,google cse images,wikicommons.images,flickr"
 
         val log = KotlinLogging.logger {}

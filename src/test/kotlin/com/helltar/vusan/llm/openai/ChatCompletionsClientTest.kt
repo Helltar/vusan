@@ -97,7 +97,7 @@ class ChatCompletionsClientTest {
         assertEquals(40, reply.usage?.cacheReadTokens)
         sent.clear()
 
-        // the thinking a server returned goes back with the call, and the results go back as tool messages
+        // the server's thinking goes back with the call, and results go back as tool messages
         client.complete(OLD_MODEL, request(*basic, reply.message, Message.ToolResults(listOf(ToolResult("call-9", "lookUp", "found")))))
 
         val messages = sent.single().getValue("messages").jsonArray.map { it.jsonObject }
@@ -107,7 +107,7 @@ class ChatCompletionsClientTest {
         assertEquals("call-9", messages[3].getValue("tool_call_id").jsonPrimitive.content)
     }
 
-    // the same protocol is not the same reader: a fallback taking over mid-turn replays the other's reasoning
+    // same protocol, different reader: a mid-turn fallback replays the other's reasoning
     @Test
     fun `reasoning another endpoint wrote is not replayed`() = runBlocking {
         val codex = Part.Reasoning("https://chatgpt.com/backend-api/codex/responses", buildJsonObject { put("type", "reasoning"); put("encrypted_content", "theirs") })
@@ -118,8 +118,8 @@ class ChatCompletionsClientTest {
         assertFalse(sent.last().getValue("messages").jsonArray.any { "reasoning_content" in it.jsonObject })
     }
 
-    // deepseek refuses a tool call of the turn that carries no `reasoning_content`, and one written by the
-    // provider a fallback took over from has none of its own
+    // deepseek refuses a turn's tool call without `reasoning_content`, and one written by the provider a
+    // fallback replaced has none
     @Test
     fun `a call another endpoint wrote carries an empty reasoning to a server that echoes it`() = runBlocking {
         val foreign = Message.Assistant(listOf(Part.ToolCall("call-1", "lookUp", buildJsonObject { put("query", "cats") })))
@@ -132,7 +132,7 @@ class ChatCompletionsClientTest {
         assertFalse("reasoning_content" in sent.last().getValue("messages").jsonArray[2].jsonObject)
     }
 
-    // both are refused in a request that defines no tools, and the choice keeps the replayed calls valid
+    // both are refused without tools, and the choice keeps the replayed calls valid
     @Test
     fun `the tool choice and parallel calls travel only beside the tools`() = runBlocking {
         val options = RequestOptions(parallelToolCalls = false)
@@ -146,7 +146,8 @@ class ChatCompletionsClientTest {
         assertEquals("none", sent.last().getValue("tool_choice").jsonPrimitive.content)
     }
 
-    // openai renamed the ceiling and refuses the old name on a reasoning model; deepseek reads only the old one
+    // openai renamed the ceiling and refuses the old name on reasoning models; deepseek reads only the old
+    // one
     @Test
     fun `a completions ceiling takes the name its server reads`() = runBlocking {
         val options = RequestOptions(maxOutputTokens = 40)
@@ -187,7 +188,7 @@ class ChatCompletionsClientTest {
         assertNull(sent.last()["prompt_cache_options"])
     }
 
-    // deepseek cuts an answer short when its servers run out of capacity: an overload to repeat, not a reply
+    // deepseek cuts an answer short when out of capacity: an overload to repeat, not a reply
     @Test
     fun `an answer cut for want of capacity is an overload`() = runBlocking {
         val cut = COMPLETION_REPLY.replace("\"finish_reason\":\"tool_calls\"", "\"finish_reason\":\"insufficient_system_resource\"")

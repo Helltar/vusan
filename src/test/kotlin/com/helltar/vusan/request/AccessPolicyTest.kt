@@ -78,8 +78,8 @@ class AccessPolicyTest {
         assertEquals(setOf(user.key), policy.contradictory)
     }
 
-    // both platforms issue plain numbers, so an unqualified list would ban or admit a stranger on the
-    // other one by coincidence.
+    // both platforms issue plain numbers, so an unqualified list would ban or admit a stranger on the other
+    // by coincidence.
     @Test
     fun `a list entry only reaches the platform it names`() {
         val allowed = AccessPolicy(allowed = setOf(testUser(1, Platform.TELEGRAM).key))

@@ -9,11 +9,9 @@ import com.helltar.vusan.tools.PlatformToolSets
 import org.telegram.telegrambots.meta.generics.TelegramClient
 
 /**
- * What Telegram adds to a turn's tools: its own `file_id`, and the sticker sets this chat uses.
- *
- * [stickers] is absent where the deployment has no vision model, since the catalog only ever holds
- * stickers something has looked at — offering the model a sticker nobody described would be offering
- * it a random one.
+ * What telegram adds to a turn's tools: its own `file_id`, and the sticker sets this chat uses. [stickers] is
+ * absent without a vision model, since the catalog only holds described stickers and an undescribed one would
+ * be a random pick.
  */
 class TelegramToolSets(
     private val client: TelegramClient,
@@ -25,7 +23,7 @@ class TelegramToolSets(
 
         return buildList {
             // whatever the chat accepts: `send=false` fetches a file for another tool, and a send into a chat
-            // that refuses documents is answered by the tool before it fetches anything
+            // refusing documents is answered before anything is fetched
             add(ChatFileTools(client, outbox))
             if (chat.stickersAndAnimations) stickers?.let { add(StickerTools(it, context, outbox)) }
         }

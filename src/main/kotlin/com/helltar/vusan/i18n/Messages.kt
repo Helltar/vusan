@@ -32,19 +32,24 @@ interface Messages {
     val taskMenuBackButton: String
     val taskMenuDeleteButton: String
 
-    /** Command menu entries, as Telegram lists them next to the input field. */
+    /** Command menu entries, as telegram lists them beside the input field. */
     val tasksCommandDescription: String
     val clearCommandDescription: String
     val stopCommandDescription: String
 
-    /** A reply to one of the bot's ephemeral answers, which only the two of them can see: the bot answers in the open. */
+    /**
+     * A reply to one of the bot's ephemeral answers, visible to the two of them only: the bot answers in the
+     * open.
+     */
     val ephemeralChatReply: String
 
     val taskRecurrenceOnce: String
 
     fun voiceTooLongReply(durationSeconds: Long, maxSeconds: Long): String
 
-    /** The provider's usage limit is spent; [untilReset] is `null` when the error body did not say when it lifts. */
+    /**
+     * The provider's usage limit is spent; [untilReset] is `null` when the body did not say when it lifts.
+     */
     fun subscriptionLimitReply(untilReset: Duration?): String
 
     fun inlineChoiceSelected(option: String): String
@@ -86,22 +91,19 @@ interface Messages {
     fun taskFollowUpNotice(mention: String): String
 
     /**
-     * What the turn's live status says while [activity] runs. Present tense and no trailing punctuation:
-     * the status line is rendered with an ellipsis of its own.
+     * The live status line while [activity] runs: present tense, no trailing punctuation, since the line adds
+     * its own ellipsis.
      */
     fun progressLabel(activity: ToolActivity): String
 
     /**
-     * Shown in the status while the usual provider is out and [model] is answering instead, with how
-     * long until the usual one is due back when the provider itself said so — on a line of its own,
-     * because a model id is long enough that one line wraps in a phone-width bubble.
-     * The status goes out as HTML, so the id is escaped and set in `<code>`, which Telegram also copies
-     * on a tap, and the wait is bold: the two facts of the line, apart from the words around them.
+     * The status note while [model] stands in for the usual provider, with how long until it is back when the
+     * provider said so. On its own line, since a model id wraps a phone-width bubble. HTML: the id is escaped
+     * in `<code>` (telegram copies it on tap) and the wait is bold.
      *
-     * It opens with `↳` rather than an emoji of its own: it sits directly under the line naming the
-     * running tool, which has one, and Telegram draws real emoji in its own larger font, so two of them
-     * on consecutive lines crowd each other. An arrow is an ordinary character in the text font, and it
-     * reads as what this line is — a continuation of the one above.
+     * It opens with `↳` rather than an emoji: it sits under the running-tool line, which has one, and
+     * telegram draws emoji larger, so two on consecutive lines crowd each other. An arrow is plain text and
+     * reads as a continuation.
      */
     fun fallbackModelNote(model: String, primaryBackIn: Duration?): String
 

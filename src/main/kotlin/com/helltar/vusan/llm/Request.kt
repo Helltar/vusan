@@ -3,11 +3,9 @@ package com.helltar.vusan.llm
 import kotlinx.serialization.json.JsonObject
 
 /**
- * How hard a reasoning model thinks before it answers, named the way the APIs spell it.
- *
- * Which of these a model accepts is up to the model: OpenAI takes `none` to `max`, Anthropic `low` to
- * `max`, Google `none` to `high`, and each refuses the rest with a 400 — so the resolvers check what they
- * can at startup.
+ * How hard a reasoning model thinks before answering, spelled as the APIs spell it. Models accept different
+ * ranges (OpenAI `none` to `max`, Anthropic `low` to `max`, Google `none` to `high`) and answer the rest with
+ * a 400, so the resolvers check what they can at startup.
  */
 enum class ReasoningEffort {
     NONE,
@@ -17,24 +15,22 @@ enum class ReasoningEffort {
     XHIGH,
     MAX;
 
-    /** The value a request carries, which is also how the Codex model catalog lists it. */
+    /** The value a request carries, also how the Codex model catalog lists it. */
     val requestValue: String
         get() = name.lowercase()
 }
 
 /**
- * What a request asks of the model beyond its messages. One shape for every provider: a client reads
- * the fields its API has and leaves the rest alone.
+ * What a request asks of the model beyond its messages, one shape for every provider: a client reads the
+ * fields its API has.
  *
- * [cachePrompt] asks the provider to keep the prompt's prefix for the next call — Anthropic's
- * `cache_control` and OpenAI's explicit breakpoints; off for a prompt whose body never repeats, since
- * the write would buy a read nobody makes. [promptCacheKey] is OpenAI's: it routes a conversation's
- * requests to the machine holding its prefix, and travels only to servers that know it — OpenRouter takes
- * it as `session_id` besides, to keep a conversation on one upstream.
+ * [cachePrompt] asks the provider to keep the prompt's prefix (Anthropic's `cache_control`, OpenAI's explicit
+ * breakpoints); off for a prompt that never repeats, since the write would buy no read. [promptCacheKey] is
+ * OpenAI's routing key to the machine holding the prefix, sent only to servers that know it; OpenRouter also
+ * takes it as `session_id` to keep a conversation on one upstream.
  *
- * [fallBackOnRefusal] has a call the primary declines asked again of the fallback provider, where one stands
- * behind it: for a call whose refusal is one vendor's filter rather than a verdict that would hold anywhere.
- * No provider reads it.
+ * [fallBackOnRefusal] asks the fallback provider again when the primary declines, for calls whose refusal is
+ * one vendor's filter rather than a verdict that would hold anywhere. No provider reads it.
  */
 data class RequestOptions(
     val reasoningEffort: ReasoningEffort? = null,
@@ -48,13 +44,10 @@ data class RequestOptions(
 ) {
 
     /**
-     * The same options with a cache key of this conversation's own.
-     *
-     * Reads match the most recently written prefixes under a key, so one key for the whole deployment
-     * means busy chats evict each other; a key per conversation gives each its own window. The
-     * conversation is hashed rather than named: the key only routes a request, a collision costs
-     * nothing because a read still needs an exact prefix match, and a messenger's user id has no
-     * business traveling to a provider. Options without a key keep none.
+     * The same options keyed to this conversation. Reads match the latest prefixes written under a key, so
+     * one key per deployment lets busy chats evict each other. The conversation is hashed: the key only
+     * routes, a collision costs nothing since a read needs an exact prefix match, and a messenger's user id
+     * has no business at a provider. Options without a key keep none.
      */
     fun forConversation(conversation: String): RequestOptions =
         promptCacheKey?.let { copy(promptCacheKey = "$it-${conversation.hashCode().toUInt().toString(HEX_RADIX)}") } ?: this
@@ -65,11 +58,10 @@ data class RequestOptions(
 }
 
 /**
- * A tool as the model is told about it: its name, what it is for, and the JSON schema of its arguments.
+ * A tool as the model is told about it: name, purpose and the JSON schema of its arguments.
  *
- * A [deferred] tool is declared without being offered: the model gets it from the [Message.ToolsOffered]
- * that names it, and until then it is not in front of the model at all. Declaring it from the first
- * request on is what lets offering it later leave the start of the prompt as it was.
+ * A [deferred] tool is declared but not offered until a [Message.ToolsOffered] names it. Declaring it from
+ * the first request on keeps the start of the prompt unchanged when it is offered later.
  */
 data class ToolDefinition(
     val name: String,
@@ -79,15 +71,14 @@ data class ToolDefinition(
 )
 
 /**
- * [mayCallTools] `false` keeps [tools] in the request while the model may call none of them: a request
- * replaying tool calls has to define the tools on Anthropic, and the tool list is part of the cached
- * prefix on both APIs, so dropping it to forbid a call would cost a 400 or a cache miss.
+ * [mayCallTools] `false` keeps [tools] in the request while forbidding calls: Anthropic requires tool
+ * definitions to replay tool calls, and the tool list is part of the cached prefix on both APIs, so dropping
+ * it would cost a 400 or a cache miss.
  *
- * [stablePrefixes] are counts of [messages], from the start, after which the next turn's request will
- * still send what came before unchanged: the replayed history, as far as the next turn replays it the
- * same way. A client that places cache breakpoints marks the end of each when [RequestOptions.cachePrompt]
- * asks for caching, so that turn reads its history back instead of paying for all of it again; the
- * turn's own calls read one another through the breakpoint the request itself carries.
+ * [stablePrefixes] are counts of [messages] after which the next turn's request still repeats everything
+ * before unchanged. A client placing cache breakpoints marks each when [RequestOptions.cachePrompt] is set,
+ * so the next turn reads its history from cache; the turn's own calls read each other through the request's
+ * own breakpoint.
  */
 data class ChatRequest(
     val messages: List<Message>,
@@ -103,8 +94,8 @@ data class ChatRequest(
     }
 
     /**
-     * The tools an endpoint that cannot take them partway through lists up front: every one not deferred,
-     * and every deferred one this request has offered by now.
+     * What an endpoint that cannot take tools mid-conversation lists up front: every tool not deferred, plus
+     * the deferred ones offered by now.
      */
     fun toolsListedUpFront(): List<ToolDefinition> {
         val offered = messages.filterIsInstance<Message.ToolsOffered>().flatMapTo(mutableSetOf()) { it.names }
@@ -120,10 +111,10 @@ enum class StopReason {
     /** The model wants its tool calls answered. */
     TOOL_CALLS,
 
-    /** The output ceiling cut the answer short, a tool call's arguments as much as its text. */
+    /** The output ceiling cut the answer short, tool call arguments included. */
     MAX_TOKENS,
 
-    /** The model or a safety classifier declined the request; a retry of the same prompt is declined again. */
+    /** The model or a safety classifier declined; the same prompt is declined again. */
     REFUSAL,
 
     OTHER
@@ -132,10 +123,10 @@ enum class StopReason {
 data class TokenUsage(
     val inputTokens: Int? = null,
     val outputTokens: Int? = null,
-    // what the provider served from its prompt cache and what it wrote to it, where it says so
+    // what the provider read from and wrote to its prompt cache, where it says
     val cacheReadTokens: Int? = null,
     val cacheWriteTokens: Int? = null,
-    // the part of those writes kept for the provider's longer lifetime, where it splits them
+    // the part of those writes kept for the longer lifetime, where the provider splits them
     val cacheWriteLongTokens: Int? = null,
 ) {
 
@@ -147,13 +138,13 @@ data class Reply(
     val message: Message.Assistant,
     val stopReason: StopReason,
     val usage: TokenUsage? = null,
-    /** The model the provider says answered, when it says. */
+    /** The model the provider says answered, if it says. */
     val model: String? = null,
-    /** Why the request was declined, when the provider says: a policy category, or the model's own words. */
+    /** Why the request was declined, if the provider says: a policy category or the model's own words. */
     val refusal: String? = null,
 )
 
-/** One model behind one API. Every call the bot makes goes through this. */
+/** One model behind one API; every call the bot makes goes through this. */
 interface LlmClient : AutoCloseable {
 
     suspend fun complete(model: LlmModel, request: ChatRequest): Reply
@@ -162,15 +153,15 @@ interface LlmClient : AutoCloseable {
 }
 
 /**
- * A provider refused or failed a call: the status it answered with, and its body, capped, for the
- * rules in `agent/ProviderErrors` to read. [status] is `null` when nothing came back at all.
+ * A provider refused or failed a call: its status and capped body, for `agent/ProviderErrors` to read.
+ * [status] is `null` when nothing came back.
  */
 class LlmException(
     val provider: String,
     val status: Int?,
     val body: String?,
     cause: Throwable? = null,
-    // a stream the provider ended before its completion event: the one failure a folder raises itself
+    // a stream that ended before its completion event: the one failure a folder raises itself
     val cutShort: Boolean = false,
 ) : RuntimeException(describe(provider, status, body), cause) {
 

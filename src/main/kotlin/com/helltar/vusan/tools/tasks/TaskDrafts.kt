@@ -10,8 +10,8 @@ import java.time.ZoneId
 internal const val MAX_TASK_PROMPT_CHARS = 1000
 internal const val MAX_TASK_TITLE_CHARS = 120
 
-// a task remembers the turn that created it — the message to anchor to, the topic, who asked — so
-// the two tools that create one draft it from the same context the same way.
+// a task remembers its creating turn (anchor message, topic, who asked), so both creating tools draft it from
+// the context the same way.
 internal fun RequestContext.newScheduledTask(
     scope: ConversationScope,
     prompt: String,

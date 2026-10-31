@@ -23,16 +23,14 @@ import org.telegram.telegrambots.meta.api.objects.replykeyboard.InlineKeyboardMa
 import org.telegram.telegrambots.meta.api.objects.richtext.InputRichMessage
 import org.telegram.telegrambots.meta.generics.TelegramClient
 
-// the raw Bot API calls shared by the send policy in TelegramOutputSender and the rejection
-// handling in TelegramSendFallbacks. nothing here decides what to try or what to do on failure.
+// the raw Bot API calls shared by TelegramOutputSender's send policy and TelegramSendFallbacks' rejection
+// handling. nothing here decides what to try or what to do on failure.
 
 /**
- * Where a message goes: the chat, and the forum topic inside it when the chat has topics.
- *
- * The two travel together because naming only the chat is not a smaller instruction, it is a
- * different one — the message lands in the group's General topic instead of the conversation it
- * belongs to. [messageThreadId] is a topic id only, never the thread id Telegram also puts on
- * replies in ordinary supergroups; see `Message.forumTopicIdOrNull`.
+ * Where a message goes: the chat, and the forum topic in it when it has topics. They travel together because
+ * naming only the chat lands the message in General instead of its conversation. [messageThreadId] is a topic
+ * id only, never the reply-thread id telegram also sets in ordinary supergroups; see
+ * `Message.forumTopicIdOrNull`.
  */
 data class ChatTarget(val chatId: Long, val messageThreadId: Int? = null)
 
@@ -43,7 +41,7 @@ internal suspend fun sendTextMessage(
     parseMode: String?,
     replyParameters: ReplyParameters?,
     replyMarkup: InlineKeyboardMarkup? = null,
-    // set, the message is shown to that one person alone, as telegram's ephemeral messages are
+    // when set, only that one person sees the message, as with telegram's ephemeral messages
     ephemeral: EphemeralMessageParameters? = null,
 ) {
     client.api {
@@ -62,9 +60,8 @@ internal suspend fun sendTextMessage(
 }
 
 /**
- * A message of the bot's that a callback may edit: an ordinary one by its id, or an ephemeral one by
- * the person it was shown to and its own id, since an ephemeral message has no message id and is
- * edited through methods of its own.
+ * A bot message a callback may edit: an ordinary one by id, or an ephemeral one by its recipient and its own
+ * id, since ephemeral messages have no message id and their own edit methods.
  */
 internal sealed interface EditableMessage {
 
@@ -99,8 +96,7 @@ internal suspend fun editTextMessage(
     }
 }
 
-// a null [replyMarkup] does not keep the buttons the message has — it takes them off, which is what
-// ends a live status bubble.
+// a null [replyMarkup] removes the buttons rather than keeping them, which is what ends a live status bubble.
 internal suspend fun editTextMessage(
     client: TelegramClient,
     chatId: Long,
@@ -122,8 +118,8 @@ internal suspend fun editTextMessage(
     }
 }
 
-// the live status bubble: sent silently because it is not news, and returning its id because every
-// later edit and its removal address it.
+// the live status bubble: silent because it is not news, and its id returned for every later edit and its
+// removal.
 internal suspend fun sendStatusMessage(
     client: TelegramClient,
     target: ChatTarget,
@@ -157,7 +153,7 @@ internal suspend fun deleteChatMessage(client: TelegramClient, chatId: Long, mes
     }
 }
 
-/** Sets the bot's one reaction on a message, or takes it off when [emoji] is `null`. */
+/** Sets the bot's one reaction on a message, or removes it when [emoji] is `null`. */
 internal suspend fun setMessageReaction(client: TelegramClient, chatId: Long, messageId: Int, emoji: String?) {
     client.api {
         executeAsync(
@@ -232,7 +228,7 @@ internal suspend fun sendAnimationFile(
     }
 }
 
-// stickers are always resent by file_id from the catalog, and the Bot API takes no caption on one.
+// stickers are always resent by file_id, and the Bot API takes no caption on one.
 internal suspend fun sendStickerFile(
     client: TelegramClient,
     target: ChatTarget,
@@ -281,6 +277,6 @@ internal fun richMessageRequest(
         .replyParameters(replyParameters)
         .build()
 
-// a fresh input stream per attempt: the previous attempt may have consumed the old one.
+// a fresh stream per attempt: the previous attempt may have consumed the old one.
 internal fun ByteArray.asInputFile(filename: String): InputFile =
     InputFile(ByteArrayInputStream(this), filename)

@@ -6,8 +6,8 @@ import kotlin.test.assertNull
 
 class ToolActivityTest {
 
-    // literal names mirror the name each @Tool method is called by; if a tool is renamed, the map's
-    // method reference follows automatically but this test fails, flagging the runtime-name change.
+    // literal names mirror each @Tool method's name: on a rename the map's method reference follows but this
+    // test fails, flagging the runtime-name change.
     @Test
     fun `maps a tool to what it is busy with`() {
         assertEquals(ToolActivity.WRITING, toolActivityFor("sendMessage"))
@@ -30,7 +30,7 @@ class ToolActivityTest {
         assertEquals(ToolActivity.MANAGING_TASKS, toolActivityFor("scheduleTask"))
     }
 
-    // an instant tool is left unmapped on purpose: its caption would flash by unread.
+    // instant tools are unmapped on purpose: the caption would flash by unread.
     @Test
     fun `instant and unknown tools name no activity`() {
         assertNull(toolActivityFor("setReaction"))

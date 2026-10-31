@@ -26,11 +26,10 @@ import kotlinx.serialization.json.jsonObject
 private val log = KotlinLogging.logger("ModelPreflight")
 
 /**
- * Any server that speaks the OpenAI API under `LLM_BASE_URL`, either endpoint. Parallel tool calls are
- * left to the server's default: DeepSeek ignores the field, and one that honors it, such as xAI, would
- * only be slowed by `false`. The cache key is an OpenAI extension, so it travels only to OpenAI itself and
- * not to a server that may reject unknown fields; the same goes for `store` and the encrypted reasoning
- * the Responses API hands back on request. A model here sees only when its server's list said so.
+ * Any server speaking the OpenAI API under `LLM_BASE_URL`, either endpoint. Parallel tool calls stay at the
+ * server's default: DeepSeek ignores the field, and one honoring it (xAI) would only be slowed by `false`.
+ * The cache key, `store` and encrypted reasoning are OpenAI extensions sent only to OpenAI, not to servers
+ * that may reject unknown fields. A model sees only when its server's list says so.
  */
 internal fun compatibleRuntime(config: LlmProviderConfig.OpenAiCompatible, http: HttpClient?): LlmRuntime {
     val baseUrl = config.baseUrl.trim().trimEnd('/')
@@ -86,16 +85,13 @@ internal fun compatibleRuntime(config: LlmProviderConfig.OpenAiCompatible, http:
 }
 
 /**
- * What a compatible server's model list says of the model, where it says anything: whether it takes
- * images (`input_modalities`) and its window (`context_window` or `context_length`). A vendor with a
- * provider of its own — DeepSeek, xAI — is read in that provider, so nothing here follows one vendor's
- * shape; Ollama, which has none, names its models and nothing more, and its own API is asked last (see
- * [ollamaFacts]).
+ * What a compatible server's model list says of the model: images (`input_modalities`) and window
+ * (`context_window` or `context_length`). Vendors with their own provider (DeepSeek, xAI) are read there;
+ * Ollama names its models only, so its own API is asked last ([ollamaFacts]).
  *
- * Nothing about a compatible server is promised — it may serve no list, list a model without any of
- * these, or answer to an alias it never lists — so each fact it leaves out keeps the runtime's
- * assumption, and a model missing from the list is a warning rather than a failed startup. Which efforts
- * a model takes is left to its first turn.
+ * Nothing is promised: the server may serve no list, omit these fields or answer to an unlisted alias. So
+ * each missing fact keeps the runtime's assumption, a missing model is a warning rather than a failed
+ * startup, and efforts are left to the first turn.
  */
 internal suspend fun compatiblePreflight(http: HttpClient, config: LlmProviderConfig.OpenAiCompatible): LlmProviderConfig.OpenAiCompatible {
     val baseUrl = config.baseUrl.trim().trimEnd('/')
@@ -128,17 +124,16 @@ internal suspend fun compatiblePreflight(http: HttpClient, config: LlmProviderCo
     )
 }
 
-/** What Ollama's own API says of a model: whether it sees, and the window it actually runs with, where that is certain. */
+/** What Ollama's API says of a model: vision, and the window it actually runs with where certain. */
 private data class OllamaFacts(val seesImages: Boolean, val window: Long?)
 
 /**
  * The model as Ollama's own API describes it, or `null` on a server that is not Ollama.
  *
- * `/api/show` names what the model can do, `vision` among it. The window it reports there is the one the
- * model was trained on, not the one Ollama runs it with — that is the Modelfile's `num_ctx`, else the
- * server's `OLLAMA_CONTEXT_LENGTH` — so only those two are taken: `num_ctx` when the Modelfile sets one,
- * and what `/api/ps` reports for the model while it is loaded. A window planned past the real one is cut
- * by Ollama from the front of the prompt, the system prompt first, without a word.
+ * `/api/show` lists capabilities, `vision` among them. Its window is the trained one, not the running one
+ * (the Modelfile's `num_ctx`, else the server's `OLLAMA_CONTEXT_LENGTH`), so only `num_ctx` and what
+ * `/api/ps` reports for a loaded model are taken. Ollama silently cuts a prompt over the real window from the
+ * front, system prompt first.
  */
 private suspend fun ollamaFacts(http: HttpClient, baseUrl: String, model: String): OllamaFacts? {
     val shown =
@@ -162,7 +157,7 @@ private suspend fun ollamaFacts(http: HttpClient, baseUrl: String, model: String
     return OllamaFacts(seesImages = "vision" in capabilities, window = numCtx ?: loadedWindow(http, baseUrl, model))
 }
 
-// the window a loaded model runs with, which is exact; `null` while the model is not in memory
+// the window a loaded model runs with, exact; `null` while not in memory
 private suspend fun loadedWindow(http: HttpClient, baseUrl: String, model: String): Long? {
     val response =
         runCatching { http.get("$baseUrl/api/ps") { expectSuccess = false } }

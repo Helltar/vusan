@@ -33,8 +33,8 @@ class CodexSearchToolsTest {
                     assertEquals("chatgpt.com", request.url.host)
                     assertEquals("/backend-api/codex/responses", request.url.encodedPath)
 
-                    // the same cloudflare-whitelisted set the chat traffic uses; a miss here only
-                    // fails once deployed to a non-residential ip.
+                    // the same cloudflare-whitelisted set as chat traffic; a miss fails only once deployed to
+                    // a non-residential ip.
                     assertEquals("codex_cli_rs", request.headers["originator"])
                     assertTrue(request.headers[HttpHeaders.UserAgent].orEmpty().startsWith("codex_cli_rs/"))
                     assertEquals("acct-1", request.headers["ChatGPT-Account-ID"])
@@ -72,7 +72,7 @@ class CodexSearchToolsTest {
     fun `sources are listed once each without the tracking marker`() = runBlocking {
         val text = "Built in 1901 ([example.org](https://example.org/tower?utm_source=openai))."
 
-        // one line: an event is one `data:` line of the stream
+        // one line: an event is one `data:` line
         val annotations =
             listOf(
                 """{"type":"url_citation","title":"The  Tower","url":"https://example.org/tower?utm_source=openai"}""",
@@ -135,7 +135,7 @@ private fun message(text: String, annotations: String = ""): String {
     return """{"type":"message","role":"assistant","content":[{"type":"output_text","text":$quoted,"annotations":[$annotations]}]}"""
 }
 
-// the backend leaves the final event's `output` empty and sends the items one event each
+// the backend leaves the final event's `output` empty and sends items one event each
 private fun MockRequestHandleScope.respondStream(vararg items: String) =
     respond(
         content =

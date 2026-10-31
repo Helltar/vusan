@@ -3,17 +3,13 @@ package com.helltar.vusan.tools
 import com.helltar.vusan.request.ConversationScope
 
 /**
- * What each conversation has already loaded, so its next turn can offer the same tools from its
- * first request.
+ * What each conversation already loaded, so its next turn offers the same tools from the first request.
  *
- * Offering last turn's groups again spares the model a `loadTools` call it would make anyway. On an
- * endpoint that takes no tool partway through it also keeps the tool array stable across turns: there a
- * load rewrites the array mid-turn, and that array is part of the prompt prefix providers cache — so a
- * conversation that asks for a voice reply every day would otherwise rebuild the whole prefix on every
- * turn, which costs far more than the schemas it saved.
+ * That spares the model a `loadTools` call it would make anyway. On an endpoint that takes no tools
+ * mid-conversation it also keeps the cached tool array stable across turns, where each load rewrites it; a
+ * conversation asking for a voice reply daily would otherwise rebuild the whole prefix every turn.
  *
- * Process memory on purpose. Losing it to a restart costs one extra load per conversation, which is
- * not worth a table and a schema version.
+ * In memory on purpose: a restart costs one extra load per conversation, not worth a table.
  */
 class LoadedToolGroups {
 
@@ -33,7 +29,7 @@ class LoadedToolGroups {
         synchronized(byScope) {
             val kept = byScope.getOrPut(scope) { LinkedHashSet() }
 
-            // re-inserted rather than kept in place, so the group used now is the last to fall out
+            // re-inserted, so the group used now is the last to fall out
             groups.forEach {
                 kept.remove(it)
                 kept.add(it)
@@ -44,8 +40,8 @@ class LoadedToolGroups {
     }
 
     private companion object {
-        // room for a conversation that mixes two capabilities, without one old request pinning the
-        // whole menu open for the rest of the day.
+        // room for a conversation mixing two capabilities, without one old request pinning the menu open all
+        // day.
         const val MAX_GROUPS_PER_SCOPE = 3
         const val MAX_SCOPES = 500
     }

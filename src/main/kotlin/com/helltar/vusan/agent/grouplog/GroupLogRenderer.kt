@@ -10,27 +10,24 @@ import java.time.format.DateTimeFormatter
 private const val ANONYMOUS_LABEL = "anon"
 private const val BOT_LABEL = "bot"
 
-// kinds whose whole content is the text itself, so a `[kind]` marker would say nothing.
+// kinds whose whole content is the text, so a `[kind]` marker says nothing.
 private val TEXTUAL_KINDS = setOf("text", "rich message")
 
 private val TIME_ONLY = DateTimeFormatter.ofPattern("HH:mm")
 private val DATE_AND_TIME = DateTimeFormatter.ofPattern("MM-dd HH:mm")
 
-/** [text] holds the [includedCount] newest entries that fit the budget it was rendered under. */
+/** [text] holds the [includedCount] newest entries that fit its budget. */
 internal data class RenderedGroupLog(val text: String, val includedCount: Int)
 
 /**
- * Drops the exchanges [userId] already had with the bot: their messages that the bot answered, and
- * the bot's answers to them.
+ * Drops the exchanges [userId] already had with the bot: their answered messages and the bot's answers.
  *
- * Those turns are replayed to the model as real `user`/`assistant` roles from that user's own
- * history, so leaving them here would show the same exchange twice — once as the conversation, once
- * as something overheard. Everyone else's messages stay, including the bot's replies to them, which
- * are in nobody else's history.
+ * Those turns are replayed as real `user`/`assistant` roles from that user's history, so keeping them would
+ * show the exchange twice. Everyone else's messages stay, with the bot's replies to them, which are in nobody
+ * else's history.
  *
- * The link is the reply anchor: in a group the bot answers by replying, so its row points at the
- * message it answered. An unanchored reply (a scheduled task, or a reply whose anchor Telegram
- * rejected) keeps no link and is left in place, because there is nothing to prove it duplicates.
+ * The link is the reply anchor: in a group the bot answers by replying. An unanchored reply (a scheduled
+ * task, a rejected anchor) has no link and stays, as nothing proves it a duplicate.
  */
 internal fun List<GroupLogEntry>.withoutExchangesWith(userId: String): List<GroupLogEntry> {
     val ownMessageIds = mapNotNullTo(mutableSetOf()) { it.messageId.takeIf { _ -> it.senderId == userId } }
@@ -50,11 +47,10 @@ internal fun List<GroupLogEntry>.withoutExchangesWith(userId: String): List<Grou
 }
 
 /**
- * Renders entries as a transcript, oldest line first. When the whole transcript fits [budgetChars]
- * as written, every message is quoted in full; otherwise each is cut to [maxTextChars], and lines are
- * taken from the newest end until the budget runs out, because a recap is asked about how a
- * conversation ended far more often than about how it started. [RenderedGroupLog.includedCount]
- * tells the caller how much got in.
+ * Renders entries as a transcript, oldest first. If it fits [budgetChars] as written, everything is quoted in
+ * full; otherwise each message is cut to [maxTextChars] and lines are taken from the newest end, since recaps
+ * ask how a conversation ended far more than how it began. [RenderedGroupLog.includedCount] says how much got
+ * in.
  */
 internal fun renderGroupLog(
     entries: List<GroupLogEntry>,
@@ -65,9 +61,9 @@ internal fun renderGroupLog(
     val spansDays = entries.mapTo(mutableSetOf()) { LocalDate.ofInstant(it.sentAt, zone) }.size > 1
     val formatter = if (spansDays) DATE_AND_TIME else TIME_ONLY
 
-    // the cap exists so one long message cannot crowd out the rest of a busy window. a narrow window,
-    // or one person's messages, is asked about for what was said, and cutting it there leaves the
-    // model retelling a story it was only shown the opening of.
+    // the cap keeps one long message from crowding out a busy window; a narrow window or one person's
+    // messages is asked about for what was said, and cutting there leaves the model retelling a story from
+    // its opening only.
     renderWholeOrNull(entries, zone, formatter, budgetChars)?.let { return it }
 
     val lines = ArrayDeque<String>()
@@ -107,10 +103,9 @@ private fun renderWholeOrNull(
     return RenderedGroupLog(lines.joinToString("\n"), lines.size)
 }
 
-// everything on the line but the clock is something a person typed — the name they gave themselves,
-// the channel they forwarded, the message itself — and this transcript is shown inside `<recent_chat>`,
-// ahead of the request. neutralizing the finished line is what stops one group member from opening a
-// block of the prompt's own vocabulary in somebody else's turn.
+// everything but the clock is user text (names, forwarded channels, the message), shown inside
+// `<recent_chat>` ahead of the request; neutralizing the line keeps one member from opening a prompt block in
+// someone else's turn.
 private fun GroupLogEntry.toLine(zone: ZoneId, formatter: DateTimeFormatter, maxTextChars: Int): String =
     buildString {
         append(formatter.format(ZonedDateTime.ofInstant(sentAt, zone)))
@@ -128,7 +123,7 @@ private fun GroupLogEntry.mediaMarker(): String? =
 
     when {
         kind in TEXTUAL_KINDS -> null
-        // a bot row names its own content in the descriptor, so prefixing it with `bot` would stutter.
+        // a bot row names its content in the descriptor; a `bot` prefix would stutter.
         kind == GroupLogEntry.BOT_KIND -> descriptor?.let { "[$it]" }
         else -> "[${listOfNotNull(kind, descriptor).joinToString(" ")}]"
     }

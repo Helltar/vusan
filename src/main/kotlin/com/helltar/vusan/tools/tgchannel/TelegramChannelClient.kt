@@ -17,8 +17,8 @@ class TelegramChannelClient(private val downloader: FileDownloadClient) {
         val response = downloader.download(url, maxBytes = PAGE_LIMIT)
         check(response is FileDownloadResult.Success) { "Telegram preview exceeds the download limit" }
 
-        // a username that is not a channel with a public preview (a bot, a user, a group, a channel
-        // that turned the preview off, or nothing at all) redirects to the plain t.me/<name> page.
+        // a username without a public channel preview (a bot, user, group, a channel with the preview off, or
+        // nothing) redirects to the plain t.me/<name> page.
         val previewAvailable = response.url.encodedPath.startsWith("/s/")
 
         return TelegramChannelParser

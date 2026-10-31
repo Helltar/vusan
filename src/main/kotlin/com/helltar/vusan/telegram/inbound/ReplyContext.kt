@@ -21,13 +21,12 @@ import org.telegram.telegrambots.meta.generics.TelegramClient
 private const val MAX_REPLIED_TEXT_CHARS = 4096
 private const val MAX_QUOTED_FRAGMENT_CHARS = 1024
 
-// a first name, a last name and a username, with room to spare for telegram's own limits.
+// a first name, last name and username, with room for telegram's own limits.
 private const val MAX_AUTHOR_CHARS = 160
 
-// the part of the replied message the sender selected before answering — the whole point of their
-// question ("what is this?" against one term inside a long answer). it also carries its own weight
-// when the reply goes to the bot: that message is already in the history, but which piece of it the
-// user pointed at is not, and without this the turn reads as a question about the whole thing.
+// the part of the replied message the sender selected, often the whole point ("what is this?" about one term
+// in a long answer). it matters for replies to the bot too: the message is in history, but which piece the
+// user pointed at is not.
 internal fun Message.quotedFragmentOrNull(): String? =
     quote?.text?.collapseWhitespaceAndCap(MAX_QUOTED_FRAGMENT_CHARS)?.takeIf { it.isNotBlank() }
 
@@ -60,8 +59,8 @@ private suspend fun Message.transcribeRepliedAudioOrNull(
 internal fun Message.repliedAttachedFileOrNull(client: TelegramClient): AttachedFile? =
     realReplyOrNull?.toAttachedFileOrNull(client)
 
-// gif messages carry both `animation` and `document`, so the animation is matched first and the
-// document copy of the same file never turns into a second attachment.
+// gif messages carry both `animation` and `document`, so the animation is matched first and the document copy
+// never becomes a second attachment.
 internal fun Message.toAttachedFileOrNull(client: TelegramClient): AttachedFile? =
     photo?.biggestOrNull()?.toAttachedFile(client, caption)
         ?: video?.toAttachedFile(client, caption)
@@ -162,8 +161,8 @@ private fun videoAttachedFile(
         kind = AttachedFileKind.VIDEO,
         caption = caption,
         durationSeconds = durationSeconds,
-        // telegram serves bots files of at most 20 MB; the thumbnail is the one frame of an oversize
-        // video that still fits, so vision keeps a way in.
+        // telegram serves bots at most 20 MB; the thumbnail is the one frame of an oversize video that still
+        // fits, so vision keeps a way in.
         loadThumbnailBytes = thumbnailFileId?.let { id -> suspend { client.downloadFileBytes(id) } },
         isAnimation = isAnimation,
         loadBytes = { client.downloadFileBytes(fileId) },
@@ -185,8 +184,8 @@ private fun Message.summarizeInternalReply(botUserId: Long): RepliedMessageSumma
         metadata = mediaMetadataLines(),
     )
 
-// a channel post forwarded into a discussion group and an anonymous admin both arrive without a sender
-// user, and are named by the chat that posted them instead.
+// a channel post forwarded into a discussion group and an anonymous admin arrive without a sender user, and
+// are named by the posting chat instead.
 private fun Message.authorLabel(botUserId: Long): String? {
     val sender = from ?: return senderChat?.titleOrDisplayName().authorValueOrNull()
 
@@ -197,13 +196,12 @@ private fun Message.authorLabel(botUserId: Long): String? {
         .authorValueOrNull()
 }
 
-// a display name is whatever its owner typed, and it lands on a line of its own inside the block,
-// which defuses it; all that is left here is keeping it one short line.
+// a display name is user text; the block defuses it, so this only keeps it one short line.
 private fun String?.authorValueOrNull(): String? =
     this?.collapseWhitespaceAndCap(MAX_AUTHOR_CHARS)?.takeIf { it.isNotBlank() }
 
-// a quoted rich message keeps its layout: collapsing a tree of headings, lists and code into one
-// line leaves the model guessing at the structure it is being asked about.
+// a quoted rich message keeps its layout: collapsing headings, lists and code into one line leaves the model
+// guessing at the structure asked about.
 private fun Message.repliedTextOrNull(): String? =
     richMessage?.toRichMarkdown()?.takeIf { it.isNotBlank() }?.limitTo(MAX_REPLIED_TEXT_CHARS)
         ?: textSnippetOrNull()?.collapseWhitespaceAndCap(MAX_REPLIED_TEXT_CHARS)

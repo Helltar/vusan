@@ -16,13 +16,12 @@ import kotlinx.serialization.json.jsonObject
 private val log = KotlinLogging.logger("ModelPreflight")
 
 /**
- * Asks the vendor about the configured model before the first turn, so a typo fails at startup with
- * the vendor's answer rather than on someone's first message with an opaque error.
+ * Asks the vendor about the configured model before the first turn, so a typo fails at startup with the
+ * vendor's answer rather than on someone's first message.
  *
- * Each provider's file holds its own check, and what it learns — the window, the output ceiling,
- * whether the model sees, which efforts it takes — goes back into the config as facts every role reads
- * without knowing the provider. Anything but a plain "no such model" — the network down, a 5xx — only
- * warns, since the deployment may well be right.
+ * Each provider's file holds its own check, and what it learns (window, output ceiling, vision, efforts) goes
+ * back into the config as facts every role reads without knowing the provider. Anything but a plain "no such
+ * model" (network down, a 5xx) only warns.
  */
 suspend fun LlmProviderConfig.preflighted(http: HttpClient, codexAuth: CodexAuthStore?): LlmProviderConfig =
     when (this) {
@@ -36,7 +35,10 @@ suspend fun LlmProviderConfig.preflighted(http: HttpClient, codexAuth: CodexAuth
         is LlmProviderConfig.Xai -> xaiPreflight(http, this)
     }
 
-/** The vendor's model object when it serves the configured model, `null` when it could not be asked, an error when it does not. */
+/**
+ * The vendor's model object when it serves the model, `null` when it could not be asked, an error when it
+ * does not.
+ */
 internal suspend fun verifyModel(
     http: HttpClient,
     provider: String,
@@ -72,7 +74,7 @@ internal suspend fun verifyModel(
     return runCatching { llmJson.parseToJsonElement(response.bodyAsText()).jsonObject }.getOrNull()
 }
 
-/** The entries of a server's `GET /models`, or `null` when it could not be asked or serves no such list. */
+/** The entries of a server's `GET /models`, or `null` when unreachable or unserved. */
 internal suspend fun listedModels(http: HttpClient, label: String, url: String, authorize: HttpRequestBuilder.() -> Unit): List<JsonObject>? {
     val response =
         runCatching {

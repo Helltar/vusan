@@ -54,7 +54,7 @@ class AnthropicClientTest {
 
     private val basic = arrayOf(Message.System("stable instructions"), Message.User("current request"))
 
-    // a reply is streamed the way the api streams it; a failure is the error body the api sends instead of a stream
+    // replies stream as the api streams them; a failure is the error body sent instead of a stream
     private fun client(reply: String = REPLY, status: HttpStatusCode = HttpStatusCode.OK): AnthropicClient {
         val engine =
             MockEngine { request ->
@@ -101,7 +101,7 @@ class AnthropicClientTest {
         assertEquals(AnthropicClient.API_VERSION, sentHeaders?.get("anthropic-version"))
     }
 
-    // the recap repeats nothing, so a write would buy a read nobody makes
+    // the recap repeats nothing, so a write would buy no read
     @Test
     fun `a request without caching marks nothing`() = runBlocking {
         client().complete(MODEL, request(*basic, options = RequestOptions(cachePrompt = false)))
@@ -136,7 +136,8 @@ class AnthropicClientTest {
         assertEquals(200, reply.usage?.cacheWriteTokens)
     }
 
-    // a tool loop sends the reply back: the thinking block verbatim, the call as tool_use, the results in one user message
+    // a tool loop sends the reply back: thinking verbatim, the call as tool_use, the results in one user
+    // message
     @Test
     fun `an assistant turn and its tool results replay in the shape the api wants`() = runBlocking {
         val client = client()
@@ -197,8 +198,8 @@ class AnthropicClientTest {
         assertEquals(StopReason.MAX_TOKENS, cut.complete(MODEL, request(*basic)).stopReason)
     }
 
-    // tool blocks in the messages are a 400 unless the tools are defined, so a request that forbids a call
-    // keeps them and says so
+    // tool blocks in the messages are a 400 without tool definitions, so a request forbidding calls keeps
+    // them and says so
     @Test
     fun `a request that may call no tool keeps the tools and sets the choice to none`() = runBlocking {
         client().complete(MODEL, ChatRequest(basic.toList(), listOf(TOOL), mayCallTools = false))
@@ -230,8 +231,8 @@ class AnthropicClientTest {
         assertEquals("thinking-binding-controls-2026-08-01,mid-conversation-tool-changes-2026-07-01", sentHeaders?.get("anthropic-beta"))
     }
 
-    // a system message has to be followed by the assistant's turn: a nudge sent once the reply after the offer
-    // was dropped as empty goes in front of it
+    // a system message must be followed by the assistant's turn: a nudge after the dropped empty reply goes
+    // in front of it
     @Test
     fun `an offer a user message came after moves behind that message`() = runBlocking {
         client().complete(OFFERING_MODEL, request(*basic, Message.ToolsOffered(listOf("draw")), Message.User("deliver your answer"), tools = listOf(TOOL, DRAW)))

@@ -94,8 +94,8 @@ class YouTubeTranscriptClient(private val runner: YtDlpRunner) {
         }
 
         languages.forEachIndexed { index, language ->
-            // the language comes from yt-dlp's own json, but it still ends up in a path, so the
-            // attempt directory is numbered rather than named after it.
+            // the language comes from yt-dlp's json but ends up in a path, so the directory is numbered
+            // instead.
             val attemptDir = Files.createDirectory(workDir.resolve("lang-$index"))
             val subtitle = downloadSubtitle(attemptDir, url, language)
 
@@ -169,16 +169,12 @@ class YouTubeTranscriptClient(private val runner: YtDlpRunner) {
     }
 
     /**
-     * Picks which subtitle tracks are worth downloading, best first.
+     * Picks the subtitle tracks worth downloading, best first.
      *
-     * The video's own language wins: YouTube's other tracks are machine translations of it, and a
-     * translated transcript is strictly worse input than the original — the model reading it
-     * understands every language here and translates for the user at the end anyway.
-     * [SUBTITLE_LANGS] only decides which translation to settle for when the original is missing.
-     *
-     * Selecting up front matters because each language is a separate caption request that YouTube
-     * rate-limits: asking for a list would download a translation per entry, since auto-captions
-     * are offered in ~900 languages for every video.
+     * The video's own language wins: other tracks are machine translations, and the model understands every
+     * language here and translates for the user anyway. [SUBTITLE_LANGS] only picks the translation to settle
+     * for when the original is missing. Selecting up front matters because each language is a separate,
+     * rate-limited caption request, and auto-captions are offered in ~900 languages.
      */
     private fun subtitleLanguageCandidates(info: YtDlpInfo): List<String> {
         val offered = info.subtitles.orEmpty().keys + info.automaticCaptions.orEmpty().keys
@@ -208,8 +204,8 @@ class YouTubeTranscriptClient(private val runner: YtDlpRunner) {
 
         val commandResult = runner.runCommand(command)
 
-        // a rate-limited caption request makes yt-dlp exit non-zero, so the file on disk decides
-        // and the exit code only explains an empty directory.
+        // a rate-limited caption request makes yt-dlp exit non-zero, so the file on disk decides and the exit
+        // code only explains an empty directory.
         val subtitle = findSubtitleFile(workDir)
 
         if (subtitle == null && commandResult.exitCode != 0) {
@@ -241,17 +237,16 @@ class YouTubeTranscriptClient(private val runner: YtDlpRunner) {
         const val SUBTITLE_FILE_PREFIX = "subs"
         const val MAX_SUBTITLE_LANGUAGE_ATTEMPTS = 3
 
-        // fallback only, for videos that declare no language of their own: the widest-spoken
-        // languages on youtube, so the most likely original track is tried before a translation.
+        // fallback for videos declaring no language: the most widely spoken languages on youtube, so the
+        // likeliest original is tried before a translation.
         val SUBTITLE_LANGS = listOf("en", "es", "pt", "hi", "ru", "ja", "de", "fr", "ko", "uk")
         val log = KotlinLogging.logger {}
     }
 }
 
 /**
- * Resolves [language] against track names as yt-dlp reports them, returning the actual key.
- * YouTube tags tracks with regional and origin suffixes (`en-US`, `en-orig`), so an exact hit
- * is preferred and a base-language hit is accepted.
+ * Resolves [language] against yt-dlp's track names and returns the actual key. Tracks carry regional and
+ * origin suffixes (`en-US`, `en-orig`), so an exact hit wins and a base-language hit is accepted.
  */
 private fun Collection<String>.matchLanguage(language: String): String? =
     firstOrNull { it.equals(language, ignoreCase = true) }

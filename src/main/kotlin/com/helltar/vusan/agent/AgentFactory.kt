@@ -20,25 +20,25 @@ data class AgentPromptPreparation(
 )
 
 /**
- * Builds the turns of this deployment: the system prompt, the budget the history has to fit, and an
- * [AgentTurn] over the model client with a conversation's history and tools.
+ * Builds this deployment's turns: the system prompt, the history's budget, and an [AgentTurn] over the model
+ * client with a conversation's history and tools.
  */
 class AgentFactory(
     private val client: LlmClient,
     private val model: LlmModel,
     private val options: RequestOptions = RequestOptions(),
     private val personality: String? = null,
-    // the bot's own Telegram handles: inbound sanitizing strips the mention before the prompt is
-    // built, so without this the model never sees the names people call it by.
+    // the bot's own handles: inbound sanitizing strips the mention, so without this the model never sees the
+    // names people call it by.
     private val botUsernames: List<String> = emptyList(),
     private val botDisplayName: String? = null,
-    // whether this deployment has a sandbox at all; the prompt says nothing about one where it does not
+    // whether there is a sandbox; the prompt says nothing about one where there is not
     private val sandbox: Boolean = false,
-    // whether pictures and videos can be made here; the prompt names what is off, or the history of
-    // when it was on reads as a capability the model still has
+    // whether pictures and videos can be made; the prompt names what is off, or the history from when it was
+    // on reads as a live capability
     private val images: Boolean = false,
     private val videos: Boolean = false,
-    // model calls one turn may make, the last of them reserved for landing a turn that runs long
+    // model calls per turn, the last reserved for landing a long turn
     private val maxModelCalls: Int,
     private val contextWindowPolicy: ContextWindowPolicy = ContextWindowPolicy(model),
 ) {
@@ -51,12 +51,15 @@ class AgentFactory(
     val liveToolResultMaxTokens: Int
         get() = contextWindowPolicy.liveToolResultMaxTokens
 
-    /** Whether a turn continues its conversation's last request rather than replaying the stored history ([LlmModel.cachesOnlyRepeatedPrefix]). */
+    /**
+     * Whether a turn continues the last request instead of replaying stored history
+     * ([LlmModel.cachesOnlyRepeatedPrefix]).
+     */
     val continuesLastRequest: Boolean
         get() = model.cachesOnlyRepeatedPrefix
 
-    // the catalog is built before the turn text, not here: what it defers goes into that text as
-    // `<tool_groups>`, and the budget below has to weigh the finished prompt.
+    // the catalog is built before the turn text: its deferred groups go into that text as `<tool_groups>`,
+    // and the budget must weigh the finished prompt.
     fun prepare(toolCatalog: ToolCatalog, currentTurn: String): AgentPromptPreparation {
         val systemPrompt =
             systemPromptFor(personality ?: DEFAULT_PERSONALITY, model.id, botUsernames, botDisplayName, sandbox, images, videos)
@@ -73,12 +76,15 @@ class AgentFactory(
         )
     }
 
-    /** The cache key this conversation's model calls travel under, when the provider takes one: what ties a call in the log to a chat. */
+    /**
+     * The cache key of this conversation's model calls, when the provider takes one: what ties a logged call
+     * to a chat.
+     */
     fun conversationCacheKey(scope: ConversationScope): String? = options.forConversation(scope.toString()).promptCacheKey
 
     /**
-     * An [AgentTurn] over [conversation], or over [continued] — the last request of the conversation with
-     * what it returned, system prompt first — when the turn continues that instead.
+     * An [AgentTurn] over [conversation], or over [continued] (the conversation's last request with its
+     * reply, system prompt first) when the turn continues that.
      */
     fun build(
         scope: ConversationScope,
@@ -90,16 +96,16 @@ class AgentFactory(
         toolEvents: (ToolEvent) -> Unit,
         tokenUsage: (TokenUsage) -> Unit,
         onToolStarting: (activity: ToolActivity?) -> Unit = {},
-        // a turn nobody called the bot into outright may end without a word; see `owesDelivery`.
+        // an unaddressed turn may end without a word; see `owesDelivery`.
         mayStaySilent: Boolean = false,
         shelf: TurnShelf,
     ): AgentTurn {
-        // a continued request repeats itself whole, so the next turn's stops repeating this one's at its end
+        // a continued request repeats whole, so the next turn's stable prefix ends at its end
         val (fullHistory, stablePrefixes) =
             if (continued != null) continued to listOf(continued.size) else replayed(conversation, preparation)
 
-        // what the request may measure before the turn's own results are folded: the window less what the
-        // answer and the estimate's own error are reserved
+        // what the request may measure before the turn's results are folded: the window less the reserves for
+        // the answer and the estimate's error
         val budget = preparation.tokenBudget
 
         return AgentTurn(
@@ -122,9 +128,9 @@ class AgentFactory(
         )
     }
 
-    // the history as storage replays it, and the counts of it after which the next turn's request stops
-    // repeating this one's: after the part replayed as text for sure, and after all of it when the newest
-    // interactions replay the same way next time. the system prompt alone is marked by the client already
+    // the history as storage replays it, plus the counts after which the next turn stops repeating this one:
+    // after the part surely replayed as text, and after all of it when the newest interactions replay the
+    // same way. the client already marks the system prompt
     private fun replayed(conversation: PromptConversation, preparation: AgentPromptPreparation): Pair<List<Message>, List<Int>> {
         val history =
             buildList {
@@ -138,9 +144,5 @@ class AgentFactory(
         val fullHistory = history + conversation.turns.drop(conversation.stableTurns).toMessages()
 
         return fullHistory to listOf(stableEnd, fullHistory.size).distinct().filter { it > 1 }
-    }
-
-    companion object {
-        // a request, a wrap-up and the nudge in between
     }
 }

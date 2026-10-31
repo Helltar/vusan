@@ -32,7 +32,7 @@ class InitiativeTest {
     private lateinit var tempDir: Path
     private lateinit var groupLog: GroupLogRepository
 
-    // midday, so the default quiet hours are far away
+    // midday, far from the default quiet hours
     private var now: Instant = Instant.parse("2026-10-04T12:00:00Z")
     private var nextMessageId = 1
 
@@ -103,7 +103,7 @@ class InitiativeTest {
     fun `a reaction lands on the pointed message in telegram's own spelling`() = runBlocking {
         val delivery = FakeDelivery()
 
-        // the heart arrives with a variation selector, which telegram's reaction set does not carry
+        // the heart arrives with a variation selector, which telegram's reaction set lacks
         val ids = lookWith(initiative(FakeMind(InitiativeDecision.React(target = 3, emoji = "❤️")), delivery))
 
         assertEquals(listOf(Sent(CHAT, BotOutput.Reaction(ids[2], "❤"), anchor = null)), delivery.sent)
@@ -150,7 +150,7 @@ class InitiativeTest {
         assertTrue(delivery.sent.isEmpty())
     }
 
-    // a sticker is a message in the chat, so it spends the day's lines, and a spent day is not even shown the catalog
+    // a sticker spends the day's lines, and a spent day is not even shown the catalog
     @Test
     fun `a sticker is a line of the day, and a spent day is shown no shortlist`() = runBlocking {
         val delivery = FakeDelivery()
@@ -186,7 +186,7 @@ class InitiativeTest {
         initiative.tick()
         now = now.plusSeconds(LONGEST_PAUSE_SECONDS)
 
-        // an ordinary answer, long enough ago that it no longer holds the look back
+        // an ordinary answer, old enough no longer to hold the look back
         groupLog.record(person("early", "the pier is closed today", now.minusSeconds(900)))
         groupLog.record(bot("the ferry still runs", now.minusSeconds(600)))
         chatter()
@@ -342,7 +342,7 @@ class InitiativeTest {
         assertTrue(input.leftAlone.single().startsWith("Carol — asked you not to write to them"), input.leftAlone.single())
     }
 
-    // what somebody who asked to be left alone wrote is not a reason to look at all
+    // lines from someone who asked to be left alone are no reason to look
     @Test
     fun `a chat where only a person who asked to be left alone writes is not looked at`() = runBlocking {
         val mind = FakeMind(InitiativeDecision.Silent())
@@ -373,7 +373,7 @@ class InitiativeTest {
         assertTrue(input.leftAlone.isEmpty(), input.leftAlone.toString())
     }
 
-    // the first pass only notes the chat and draws its pause; the look comes with the pass after it
+    // the first pass only notes the chat and draws its pause; the look comes the pass after
     private suspend fun lookWith(
         initiative: Initiative,
         messages: Int = 3,
@@ -482,7 +482,7 @@ class InitiativeTest {
         // a pause is at most one and a half intervals
         const val LONGEST_PAUSE_SECONDS = INTERVAL_MINUTES * 90L + 1
 
-        // a skipped look is retried within ten minutes
+        // a skipped look retries within ten minutes
         const val RETRY_SECONDS = 10 * 60L + 1
     }
 }

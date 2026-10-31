@@ -75,8 +75,8 @@ class SiteToolsTest {
         assertContains(result, "online until 2026-10-13")
     }
 
-    // a directory with no index.html publishes fine and its link then opens nothing; the server saw the
-    // snapshot and says so, and nothing here lists the directory to find out
+    // a directory without index.html publishes fine and its link opens nothing; the server saw the snapshot
+    // and says so, nothing here lists the directory
     @Test
     fun `a directory with no index page is published with a warning`() = runBlocking {
         val result = tools(publish = HttpStatusCode.OK to PUBLISHED_WITHOUT_INDEX).publishSite("dist")
@@ -108,7 +108,7 @@ class SiteToolsTest {
         assertContains(tools(site = null).siteStatus(), "Nothing is published")
     }
 
-    // retention may take the home a site was built from and leave the site up; editing it then starts over
+    // retention may take a site's home and leave the site up; editing it then starts over
     @Test
     fun `status says when the files a site was built from are gone`() = runBlocking {
         assertContains(tools(homeReleasedAt = "2026-09-20T12:00:00Z").siteStatus(), "build it again first")

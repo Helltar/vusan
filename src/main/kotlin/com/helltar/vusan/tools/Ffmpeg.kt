@@ -12,10 +12,8 @@ private const val FFMPEG_LOG_TAIL_CHARS = 500
 private val log = KotlinLogging.logger("Ffmpeg")
 
 /**
- * Runs `ffmpeg` with [args] (the binary itself excluded) and reports whether it exited cleanly.
- *
- * Never throws for a failed run: a missing binary, a non-zero exit, and a timeout all come back as
- * `false`, so every caller can fall back instead of failing the turn.
+ * Runs `ffmpeg` with [args] (binary excluded) and reports whether it exited cleanly. Never throws: a missing
+ * binary, a non-zero exit and a timeout all return `false`, so callers can fall back.
  */
 internal suspend fun runFfmpeg(args: List<String>, ffmpegPath: String, timeout: Duration): Boolean =
     withContext(Dispatchers.IO) {
@@ -28,8 +26,8 @@ internal suspend fun runFfmpeg(args: List<String>, ffmpegPath: String, timeout: 
                 }
 
         try {
-            // read concurrently so the merged stdout/stderr pipe cannot fill and deadlock the
-            // process; swallow read errors so a destroyed stream never fails this coroutine.
+            // read concurrently so the merged pipe cannot fill and deadlock the process; read errors are
+            // swallowed so a destroyed stream never fails this coroutine.
             val output =
                 async {
                     runCatching { process.inputStream.bufferedReader().use { it.readText() } }.getOrDefault("")

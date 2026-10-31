@@ -8,38 +8,34 @@ import org.telegram.telegrambots.meta.api.methods.ParseMode
 import org.telegram.telegrambots.meta.api.objects.ReplyParameters
 import org.telegram.telegrambots.meta.generics.TelegramClient
 
-// what to do when Telegram rejects a send: retry without formatting, degrade media to a document,
-// or deliver the text as a file. these combinators know nothing about individual output kinds —
-// TelegramOutputSender picks which one wraps each send and supplies the last-resort lambda.
+// what to do when telegram rejects a send: retry without formatting, degrade media to a document, or send the
+// text as a file. these know nothing of output kinds; TelegramOutputSender picks the wrapper per send and
+// supplies the last resort.
 
 internal const val FALLBACK_DOCUMENT_FILENAME = "message.html"
 internal const val MARKDOWN_DOCUMENT_FILENAME = "message.md"
 
 private val log = KotlinLogging.logger("TelegramSendFallbacks")
 
-// models keep emitting `<br>` for line breaks despite the prompt, and telegram rejects the whole
-// message over any unsupported tag. the replacement is lossless, so fix it here instead of failing
-// the send and degrading to the document fallback.
+// models keep emitting `<br>` despite the prompt, and telegram rejects the whole message over an unsupported
+// tag. the fix is lossless, so it is applied here.
 private val brTagRegex = Regex("""</?br\s*/?>""", RegexOption.IGNORE_CASE)
 
-// cheaper models also keep answering in markdown, and a fenced block or a backticked span lands in
-// the chat as literal backticks: telegram's html mode accepts the send and shows them as typed. both
-// map onto html one to one, so they are repaired the same way. one pass handles the fence before the
-// span, so a backtick inside converted code is never read as markup again; a run of backticks that is
-// not a fence stays as typed rather than being half-converted.
+// cheaper models also answer in markdown, and telegram's html mode shows fences and backticked spans as
+// typed. both map onto html one to one, so they are repaired too. the fence goes first in one pass, so a
+// backtick inside converted code is never reparsed; a backtick run that is not a fence stays as typed.
 private val markdownCodeRegex =
     Regex(
         """```([\w+#.-]*)[^\S\n]*\n(.*?)\n?```|(?<!`)`([^`\n]+)`(?!`)""",
         RegexOption.DOT_MATCHES_ALL,
     )
 
-// a backtick inside html the model already wrote as code is code, not markup. these regions are
-// skipped whole, which also keeps canned texts and repaired fences from being touched twice.
+// backticks inside html code the model wrote are code, not markup; these regions are skipped whole, which
+// also keeps canned texts and repaired fences from being touched twice.
 private val htmlCodeRegex = Regex("""<(pre|code)\b.*?</\1>""", RegexOption.DOT_MATCHES_ALL)
 
-// markdown code is raw text, but the prompt asks for entities inside `<pre>` too, so a model mixing
-// the two conventions has already written `&lt;` here and there. an entity survives as it is and only
-// a bare character is escaped, which reads right in html mode either way.
+// the prompt asks for entities inside `<pre>`, so a model mixing conventions has already written `&lt;` in
+// places. existing entities survive and only bare characters are escaped.
 private val bareAmpersandRegex = Regex("""&(?!(?:[a-zA-Z]+|#\d+|#x[0-9a-fA-F]+);)""")
 
 internal fun String.withModelMarkupRepaired(): String =
@@ -80,37 +76,33 @@ internal fun rethrowIfReplyNotFound(error: Throwable, replyParameters: ReplyPara
     if (replyParameters != null && error.isReplyMessageNotFound()) throw error
 }
 
-// every fallback here degrades the payload, which cannot help when the chat refuses the bot rather
-// than the content: the document retry and the text retry would each buy one more rejection. stop the
-// cascade and let the caller act on it — delivery reports the chat, the scheduler parks its tasks.
+// every fallback degrades the payload, which cannot help when the chat refuses the bot itself: each retry
+// would buy one more rejection. stop the cascade and let the caller act: delivery reports the chat, the
+// scheduler parks its tasks.
 internal fun rethrowIfChatUnreachable(error: Throwable) {
     if (error.isChatUnreachable()) throw error
 }
 
-// same reasoning as an unreachable chat: flood control says nothing about the payload, so degrading a
-// photo to a document only spends a second rejected request on it. the send is worth repeating whole,
-// which [withFloodWaitRetry] does once the cascade has let the error back out.
+// flood control says nothing about the payload either, so degrading only spends another rejected request. the
+// whole send is worth repeating, which [withFloodWaitRetry] does once the error is out.
 internal fun rethrowIfRateLimited(error: Throwable) {
     if (error.retryAfterOrNull() != null) throw error
 }
 
-// a send nobody answered may have arrived all the same, and every fallback here sends the payload
-// again in another shape — a video timed out while telegram processed it shows up twice, once as a
-// video and once as the document telegram turns back into one.
+// an unanswered send may have arrived, and every fallback resends in another shape: a video that timed out
+// while telegram processed it would show up twice.
 internal fun rethrowIfUnanswered(error: Throwable) {
     if (error.isUnanswered()) throw error
 }
 
-// what a turn will still stand still for. telegram can ask for minutes at a time, and a wait that long
-// is worse than an unsent message: the user is left with a silent chat and the turn holds its lock.
+// the longest wait a turn stands for. telegram can ask for minutes, which is worse than an unsent message: a
+// silent chat and a turn holding its lock.
 private val MAX_FLOOD_WAIT = 30.seconds
 
 /**
- * Wait out Telegram's flood control once, then send again.
- *
- * The whole [send] is repeated rather than the single request under it, because every payload is
- * rebuilt from the [com.helltar.vusan.outbox.BotOutput] on each attempt — the byte streams a first
- * attempt consumed are not reusable, and rebuilding is what makes a retry safe at all.
+ * Waits out telegram's flood control once, then sends again. The whole [send] is repeated, since each attempt
+ * rebuilds the payload from the [com.helltar.vusan.outbox.BotOutput]: byte streams a first attempt consumed
+ * are not reusable.
  */
 internal suspend fun withFloodWaitRetry(chatId: Long, send: suspend () -> Unit) {
     runCatching { send() }
@@ -125,10 +117,9 @@ internal suspend fun withFloodWaitRetry(chatId: Long, send: suspend () -> Unit) 
 }
 
 /**
- * Send a message for one person's eyes anchored by [replyParameters], and once more without the anchor
- * when Telegram refuses it — the ephemeral command it answers came in past its 15 seconds. Unanchored,
- * only an administrator may reach that person, so the second attempt can fail too, and the caller says
- * what then.
+ * Sends a message for one person's eyes anchored by [replyParameters], and again unanchored when telegram
+ * refuses the anchor (the ephemeral command came in over 15 seconds ago). Unanchored, only an administrator
+ * may reach that person, so this can fail too, and the caller says what then.
  */
 internal suspend fun sendEphemeralWithAnchorFallback(
     replyParameters: ReplyParameters?,
@@ -156,9 +147,8 @@ internal suspend fun sendWithHtmlFallback(send: suspend (parseMode: String?) -> 
         .getOrThrow()
 }
 
-// captions share the reply-text formatting policy: a rejected caption would otherwise degrade to
-// literal HTML tags, so the media is resent captionless and the caption arrives as a document,
-// same as [TelegramOutputSender.sendReplyText].
+// a rejected caption would otherwise degrade to literal HTML tags, so the media is resent without it and the
+// caption arrives as a document, as in [TelegramOutputSender.sendReplyText].
 internal suspend fun sendWithCaptionHtmlFallback(
     client: TelegramClient,
     target: ChatTarget,

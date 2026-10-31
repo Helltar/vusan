@@ -145,7 +145,7 @@ class ResponsesClientTest {
         assertEquals(4, reply.usage?.cacheWriteLongTokens)
     }
 
-    // the call a cut response ends in may be cut too, so the ceiling is reported over the calls
+    // a call a truncated response ends in may be truncated too, so the ceiling is reported over the calls
     @Test
     fun `a responses reply cut short or filtered says so even when it carries calls`() = runBlocking {
         val incomplete =
@@ -166,7 +166,7 @@ class ResponsesClientTest {
         assertEquals("I can't help with that.", declined.refusal)
     }
 
-    // a tool loop sends the reply back: reasoning items verbatim, function calls as items, results as outputs
+    // a tool loop sends the reply back: reasoning verbatim, function calls as items, results as outputs
     @Test
     fun `an assistant turn and its tool results replay in the shape the api returned them`() = runBlocking {
         val client = client()
@@ -197,7 +197,7 @@ class ResponsesClientTest {
         assertEquals(listOf("message", "message", "message", "message"), types)
     }
 
-    // the same protocol is not the same reader: a fallback taking over mid-turn replays the other's reasoning
+    // same protocol, different reader: a mid-turn fallback replays the other's reasoning
     @Test
     fun `reasoning another endpoint of the same protocol wrote is not replayed either`() = runBlocking {
         val codex = Part.Reasoning("https://chatgpt.com/backend-api/codex/responses", buildJsonObject { put("type", "reasoning"); put("encrypted_content", "theirs") })
@@ -208,7 +208,7 @@ class ResponsesClientTest {
         assertFalse(sent.last().getValue("input").jsonArray.any { it.jsonObject["type"]?.jsonPrimitive?.content == "reasoning" })
     }
 
-    // both are refused in a request that defines no tools, and the choice keeps the replayed calls valid
+    // both are refused without tools, and the choice keeps the replayed calls valid
     @Test
     fun `the tool choice and parallel calls travel only beside the tools`() = runBlocking {
         val options = RequestOptions(parallelToolCalls = false)
@@ -231,9 +231,8 @@ class ResponsesClientTest {
         assertTrue(content[1].getValue("image_url").jsonPrimitive.content.startsWith("data:image/png;base64,AQID"))
     }
 
-    // the implicit mode caches each iteration's tool results for the next; the system block is marked so that
-    // a turn longer than the lookback window still reads the one prefix every request shares, and kept for
-    // twelve hours while the tail keeps the request's default
+    // implicit mode caches each iteration's results for the next; the system block is marked so a turn past
+    // the lookback window still reads the shared prefix, for twelve hours while the tail keeps the default
     @Test
     fun `a gpt-5_6 request asks for implicit caching and marks the system block alone for twelve hours`() = runBlocking {
         client().complete(MODEL, request(*basic))
@@ -250,8 +249,8 @@ class ResponsesClientTest {
         assertFalse(input[1].getValue("content").jsonArray.single().jsonObject.containsKey("prompt_cache_breakpoint"))
     }
 
-    // explicit mode with nothing marked is how the api spells "cache nothing"; the implicit default would write
-    // the whole prompt for a read nobody makes
+    // explicit mode with nothing marked is the api's "cache nothing"; implicit would write the whole prompt
+    // for no read
     @Test
     fun `a prompt that never repeats asks for explicit caching with nothing marked`() = runBlocking {
         client().complete(MODEL, request(*basic, options = RequestOptions(cachePrompt = false)))
@@ -292,7 +291,7 @@ class ResponsesClientTest {
         assertFalse(takesOpenAiPromptCacheOptions("x-ai/gpt-5.6-luna"))
     }
 
-    // without it the platform can read the preamble back as the answer the model already gave
+    // without it the platform may read the preamble back as an answer already given
     @Test
     fun `a preamble comes back with its phase`() = runBlocking {
         val client = client(reply = PHASED_REPLY)
@@ -353,8 +352,8 @@ class ResponsesClientTest {
         assertEquals(listOf("message", "message"), body.getValue("input").jsonArray.map { it.jsonObject.getValue("type").jsonPrimitive.content })
     }
 
-    // a breakpoint on an assistant message is taken and ignored, so the history's end is marked on the last
-    // user message before it
+    // a breakpoint on an assistant message is accepted and ignored, so the history's end is marked on the
+    // last user message before it
     @Test
     fun `the end of each stable part of the history is marked on its last user message`() = runBlocking {
         val messages =

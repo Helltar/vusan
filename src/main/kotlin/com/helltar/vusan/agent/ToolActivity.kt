@@ -23,12 +23,10 @@ import com.helltar.vusan.tools.youtube.YouTubeTranscriptTools
 import com.helltar.vusan.tools.youtube.YouTubeVideoTools
 
 /**
- * What the agent is busy with, surfaced while a tool runs so the chat can show it — as a chat action,
- * and as the words of the turn's live status. Deliberately neutral: the Telegram layer owns both
- * renderings, so no Telegram type leaks into [com.helltar.vusan.tools].
- *
- * `null` means nothing worth naming is running: the model is thinking, or the tool is over before a
- * caption for it could be read.
+ * What the agent is busy with while a tool runs, so the chat can show it as a chat action and in the live
+ * status. Neutral on purpose: the telegram layer owns both renderings, so no telegram type leaks into
+ * [com.helltar.vusan.tools]. `null` means nothing worth naming runs: the model is thinking, or the tool is
+ * too quick to caption.
  */
 enum class ToolActivity {
     WRITING,
@@ -52,9 +50,8 @@ enum class ToolActivity {
     MANAGING_TASKS
 }
 
-// tool names arrive from the agent loop as the @Tool method name. method references keep
-// this map in sync with renames. tools left out are the instant ones — a poll, a reaction, a sticker —
-// where a caption would flash by before it could be read.
+// keyed by @Tool method name via method references, so renames stay in sync. instant tools (a poll, a
+// reaction, a sticker) are left out: a caption would flash by unread.
 private val TOOL_ACTIVITIES: Map<String, ToolActivity> = buildMap {
     put(MessageTools::sendMessage.name, ToolActivity.WRITING)
     put(MessageTools::sendMessageNow.name, ToolActivity.WRITING)

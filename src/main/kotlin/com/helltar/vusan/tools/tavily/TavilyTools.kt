@@ -89,8 +89,8 @@ class TavilyTools(
                 excludeDomains = imageExcludedDomains,
             )
 
-        // `exclude_domains` filters Tavily's source pages, not the image CDN host, so a lookaside
-        // image URL can still arrive from another source page. drop them here before they consume a slot.
+        // `exclude_domains` filters source pages, not image CDN hosts, so a lookaside image URL can still
+        // arrive via another page; drop it before it takes a slot.
         val candidates =
             response.images
                 .filterNot { isExcludedImageHost(it.url) }
@@ -124,7 +124,7 @@ class TavilyTools(
             error("Page at $url returned empty content. `readPage` reads the same address directly.")
         }
 
-        // the same shape `readPage` answers in: the page is evidence inside its own block, never bare text
+        // shaped as `readPage` answers: the page is evidence inside its own block, never bare text
         buildString {
             appendLine("Use this page as evidence for the answer.")
             append(xmlBlock("page", "url: $url\n\n$content"))
@@ -145,17 +145,15 @@ class TavilyTools(
     private companion object {
         const val MAX_SNIPPET_CHARS = 300
         const val MAX_SEARCH_OUTPUT_CHARS = 3_000
-        // a long-form article runs well past a few thousand characters and this tool has no way to
-        // page through the rest, so the cut has to leave the body of a real page readable. what is
-        // past it is left to readPage, which continues by offset.
+        // a long article runs past a few thousand characters and this tool cannot page, so the cut must leave
+        // a real page's body readable; readPage continues by offset.
         const val MAX_EXTRACT_CHARS = 16_000
         val allowedTopics = setOf("general", "news", "finance")
         val allowedTimeRanges = setOf("day", "week", "month", "year")
 
-        // the Instagram source pages expose images only through crawler/SEO endpoints
-        // (lookaside.instagram.com, lookaside.fbsbx.com) that serve HTML, not the
-        // actual file, so every download attempt fails. exclude these sources from
-        // image search so the provider returns directly downloadable candidates.
+        // instagram pages expose images only through crawler endpoints (lookaside.instagram.com,
+        // lookaside.fbsbx.com) that serve HTML, not the file, so every download fails; excluding them makes
+        // the provider return downloadable candidates.
         val imageExcludedDomains = listOf("instagram.com", "lookaside.instagram.com", "lookaside.fbsbx.com")
     }
 }

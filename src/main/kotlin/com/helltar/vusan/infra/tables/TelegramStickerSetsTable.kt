@@ -4,14 +4,13 @@ import org.jetbrains.exposed.v1.core.Table
 import org.jetbrains.exposed.v1.javatime.timestamp
 import java.time.Instant
 
-// the sticker sets pulled in so far, with the last time their contents were checked against Telegram.
-// a `file_id` is only a handle and a set can be edited or deleted by its owner, so what was learned
-// has to be re-read now and then rather than trusted forever.
+// the learned sticker sets, with when each was last checked against telegram: a `file_id` is only a handle
+// and owners edit or delete sets, so what was learned is re-read now and then.
 object TelegramStickerSetsTable : Table("telegram_sticker_sets") {
 
     val name = varchar("name", 64)
     val refreshedAt = timestamp("refreshed_at").clientDefault { Instant.now() }
 
-    // the name Telegram issued is the set: nothing here ever refers to a set by anything else.
+    // the telegram-issued name is the set's only identity.
     override val primaryKey = PrimaryKey(name)
 }

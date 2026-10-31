@@ -39,7 +39,7 @@ class BotProfileTest {
         assertEquals(listOf("Robin", "robbie"), profile().addressingNames(listOf("ROBIN", "robbie", "Robbie")))
     }
 
-    // a start that meets a telegram outage waits for it to pass instead of ending the process
+    // a start meeting a telegram outage waits it out instead of ending the process
     @Test
     fun `getMe is asked again while telegram answers with a server error`() = runBlocking {
         val client = GetMeClient(apiError(502, "Bad Gateway"))
@@ -48,7 +48,7 @@ class BotProfileTest {
         assertEquals(3, client.calls)
     }
 
-    // getMe answers with one handle only, so the rest come from getChat in the order the profile shows them
+    // getMe names one handle, so the rest come from getChat in profile order
     @Test
     fun `every active handle is read, the one the profile shows first`() = runBlocking {
         val client = GetMeClient(firstError = null, activeUsernames = listOf("RobinAgent", "robinbot"))
@@ -67,8 +67,8 @@ class BotProfileTest {
         assertEquals(1, client.calls)
     }
 
-    // fails the first call with [firstError] when there is one and answers every later one: getMe with
-    // the bot itself, getChat with [activeUsernames]
+    // fails the first call with [firstError] if given, then answers: getMe with the bot, getChat with
+    // [activeUsernames]
     private class GetMeClient(
         private val firstError: Throwable?,
         private val activeUsernames: List<String>? = null,

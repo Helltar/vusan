@@ -6,9 +6,8 @@ private const val ELLIPSIS = "..."
 private const val MAX_FILENAME_CHARS = 120
 
 /**
- * Collapses all runs of whitespace to single spaces, trims, and caps the result at [maxLength]
- * (appending an ellipsis when truncated). Returns `null` when nothing is left after normalization.
- * Use for metadata and history snippets where layout whitespace is noise.
+ * Collapses whitespace runs to single spaces, trims, and caps at [maxLength] with an ellipsis; `null` when
+ * nothing is left. For metadata and snippets where layout whitespace is noise.
  */
 internal fun String.collapseWhitespaceAndCap(maxLength: Int): String? {
     val normalized = trim().replace(Regex("\\s+"), " ")
@@ -19,7 +18,7 @@ internal fun String.collapseWhitespaceAndCap(maxLength: Int): String? {
     return normalized.limitTo(maxLength)
 }
 
-/** Truncates to [maxChars] (appending an ellipsis when truncated) while preserving inner whitespace. */
+/** Truncates to [maxChars] with an ellipsis, keeping inner whitespace. */
 fun String.limitTo(maxChars: Int): String =
 
     when {
@@ -30,21 +29,18 @@ fun String.limitTo(maxChars: Int): String =
     }
 
 /**
- * True when the string carries no renderable content: only whitespace plus invisible format/control
- * characters (zero-width spaces, joiners, BOM, etc.). Kotlin's [isBlank] treats those zero-width chars
- * as non-blank, so a model reply consisting solely of them slips through and Telegram rejects it with
- * `text must be non-empty` — leaving the bot silent. Use this to detect such replies up front.
+ * True when only whitespace and invisible format/control characters (zero-width spaces, joiners, BOM) remain.
+ * [isBlank] counts those as content, so such a model reply would reach telegram and be rejected with `text
+ * must be non-empty`, leaving the bot silent.
  */
 internal fun String.isEffectivelyBlank(): Boolean =
     all { it.isWhitespace() || it.category == CharCategory.FORMAT || it.category == CharCategory.CONTROL }
 
 /**
- * Wraps [content] in an XML-style `<tag>…</tag>` block, trimming surrounding whitespace. A closing tag
- * of the same name inside [content] is escaped: command output, a transcript or a fetched page would
- * otherwise be able to end the block early and have the rest read as the prompt's own text. Blocks of
- * other names are left alone, so nesting still works — one whose name merely starts with [tag] too, as
- * `<user_message>` inside `<user>` — and inbound message text is separately defused by
- * `neutralizePromptBlocks`.
+ * Wraps [content] in a `<tag>…</tag>` block, trimmed. A closing tag of the same name inside is escaped, so
+ * command output, a transcript or a page cannot end the block early. Other blocks are left alone so nesting
+ * works, including names that merely start with [tag] (`<user_message>` inside `<user>`); inbound text is
+ * defused separately by `neutralizePromptBlocks`.
  */
 internal fun xmlBlock(tag: String, content: String): String {
     val closing = Regex("</\\s*${Regex.escape(tag)}(?![\\w-])", RegexOption.IGNORE_CASE)
@@ -61,11 +57,8 @@ fun String.sanitizeFilename(): String =
         .takeWholeChars(MAX_FILENAME_CHARS)
 
 /**
- * Like [take], but never cuts through the middle of a UTF-16 surrogate pair. Slicing an emoji
- * (or any astral-plane character) in half leaves a dangling surrogate; the resulting string is
- * malformed UTF-16 and throws [java.nio.charset.MalformedInputException] when later encoded to
- * UTF-8 — e.g. when the prompt is serialized into an HTTP request body. Dropping the trailing
- * high surrogate keeps every truncation result valid.
+ * Like [take], but never splits a UTF-16 surrogate pair: half an emoji is malformed UTF-16 and throws
+ * [java.nio.charset.MalformedInputException] when encoded to UTF-8, e.g. into a request body.
  */
 private fun String.takeWholeChars(n: Int): String {
     val end = n.coerceIn(0, length)
@@ -79,7 +72,7 @@ private fun String.takeWholeChars(n: Int): String {
     return substring(0, safeEnd)
 }
 
-/** A size people read: bytes under a kilobyte, whole kilobytes, then megabytes to one decimal. */
+/** A readable size: bytes under a kilobyte, whole kilobytes, then megabytes to one decimal. */
 fun Long.asFileSize(): String =
     when {
         this >= BYTES_PER_MB -> String.format(Locale.ROOT, "%.1f MB", this / BYTES_PER_MB)
@@ -90,7 +83,7 @@ fun Long.asFileSize(): String =
 private const val BYTES_PER_KB = 1024.0
 private const val BYTES_PER_MB = BYTES_PER_KB * 1024
 
-/** Escapes the four characters Telegram's `HTML` parse mode reads as markup. */
+/** Escapes the four characters telegram's `HTML` parse mode reads as markup. */
 fun String.escapeHtml(): String =
     replace("&", "&amp;")
         .replace("<", "&lt;")

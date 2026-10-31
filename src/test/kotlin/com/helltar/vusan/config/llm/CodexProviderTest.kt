@@ -79,7 +79,7 @@ class CodexProviderTest {
         assertTrue("low" in error.message.orEmpty(), error.message.orEmpty())
     }
 
-    // the backend takes none on models whose catalog lists low as the lowest
+    // the backend takes `none` on models whose catalog lists low as lowest
     @Test
     fun `none passes a catalog that names only thinking levels`() {
         val config = LlmProviderConfig.Codex(model = "text-model", reasoningEffort = ReasoningEffort.NONE, requestTimeout = 120.seconds)
@@ -177,7 +177,7 @@ class CodexProviderTest {
         assertTrue("codex login" in error.message.orEmpty(), error.message.orEmpty())
     }
 
-    // a role runs a model of its own on the same plan: what the catalog said of the chat model is not its
+    // a role runs its own model on the same plan: the catalog's facts about the chat model are not its own
     @Test
     fun `a role on the codex chat provider keeps neither the tier nor what the catalog said of the chat model`() {
         val chat =

@@ -13,13 +13,12 @@ import io.ktor.client.*
 import kotlin.time.Duration.Companion.seconds
 
 /**
- * Ambient addressing: answering a group message that calls the bot by name, or follows up on its answer,
- * without a mention, a reply or a command. `ADDRESSING_ENABLED` is the switch, and it needs
- * `ADDRESSING_MODEL`.
+ * Ambient addressing: answering a group message that names the bot or follows up on its answer without a
+ * mention, reply or command. `ADDRESSING_ENABLED` is the switch and needs `ADDRESSING_MODEL`.
  *
- * [names] are the spellings the chat uses besides the bot's own display name; empty means the ones
- * derived from its profile. [provider] waits [VERDICT_TIMEOUT] at most on a call, whatever its role's
- * settings would have said: a verdict is worth nothing later.
+ * [names] are the chat's spellings besides the bot's display name; empty means derived from its profile.
+ * [provider] waits at most [VERDICT_TIMEOUT] per call whatever its role's settings say: a late verdict is
+ * worthless.
  */
 data class AddressingConfig(
     val provider: LlmProviderConfig,
@@ -32,15 +31,14 @@ data class AddressingConfig(
 
     companion object {
         /**
-         * How long a verdict may take before the message is taken as not for the bot. The model answered
-         * in about a second, with a tail to almost three; a verdict later than this lands after the
-         * conversation has moved on.
+         * How long a verdict may take before the message counts as not for the bot. The model answered in
+         * about a second, with a tail near three; a later verdict lands after the conversation moved on.
          */
         val VERDICT_TIMEOUT = 5.seconds
     }
 }
 
-/** The small model that tells whether a group message nobody tagged the bot in is meant for it. */
+/** The small model judging whether an untagged group message is meant for the bot. */
 data class AddressingRuntime(
     val client: LlmClient,
     val model: LlmModel,
@@ -48,11 +46,10 @@ data class AddressingRuntime(
 )
 
 /**
- * Always a model of its own, never the chat model: the chat provider is whatever the deployment runs,
- * and a verdict that has to arrive in about a second was measured on small OpenAI models only — a large
- * reasoning model would be slow here, and DeepSeek got one message in twelve wrong. A yes-or-no over a
- * few lines of chat needs no reasoning, and every token of it is latency, so unless the deployment asks
- * for an effort the model gets the least it takes. [http] is for tests, as in [resolveLlmRuntime].
+ * Always its own model, never the chat model: the verdict must arrive in about a second and was measured on
+ * small OpenAI models only; a large reasoning model would be slow, and DeepSeek got one message in twelve
+ * wrong. A yes-or-no over a few lines needs no reasoning and every token is latency, so the model gets its
+ * least effort unless one is configured. [http] is for tests, as in [resolveLlmRuntime].
  */
 suspend fun resolveAddressingRuntime(config: AddressingConfig, codexAuth: CodexAuthStore? = null, http: HttpClient? = null): AddressingRuntime {
     val runtime = resolveLlmRuntime(config.provider, codexAuth, http)
@@ -65,9 +62,8 @@ suspend fun resolveAddressingRuntime(config: AddressingConfig, codexAuth: CodexA
     )
 }
 
-// the least the model takes: none where it takes it, which only asking tells, since no vendor's list
-// names it; otherwise the least its vendor listed at startup, or low where nobody listed any. a list with
-// nothing to choose from leaves the effort out.
+// `none` where the model takes it, which only asking tells; otherwise the least effort its vendor listed, or
+// low with no list. a list with nothing to choose from leaves the effort out.
 private suspend fun LlmRuntime.leastEffort(options: RequestOptions): ReasoningEffort? {
     val refusal = refusalOfNone(options) ?: return ReasoningEffort.NONE
     val least = if (model.efforts != null) model.efforts.minOrNull() else ReasoningEffort.LOW
@@ -78,14 +74,13 @@ private suspend fun LlmRuntime.leastEffort(options: RequestOptions): ReasoningEf
 }
 
 /**
- * Why the model refuses `none`, or `null` when it takes it, found by asking it once at startup.
+ * Why the model refuses `none`, or `null` when it takes it, found by asking once at startup.
  *
- * Models disagree on it and nothing lists it: on 2026-10-08 gpt-5.5, every gpt-5.6, gpt-6-luna and
- * gpt-6-sol took `none`, while gpt-6.1-sol, gpt-6-astra and gpt-5-mini refused it with a 400; the Codex
- * backend takes it on luna and terra though its catalog lists `low` as the lowest, DeepSeek turns its
- * thinking off with it though its list names only `low`, `high` and `max`, and Anthropic has no such
- * effort at all, which its client refuses before any request. A check that could not be made at all
- * counts as a refusal, since a refused effort would fail every verdict while a needless one only slows
+ * Nothing lists it and models disagree: on 2026-10-08 gpt-5.5, every gpt-5.6, gpt-6-luna and gpt-6-sol took
+ * `none`, while gpt-6.1-sol, gpt-6-astra and gpt-5-mini gave a 400. The Codex backend takes it on luna and
+ * terra though its catalog lists `low` as lowest, DeepSeek turns thinking off with it though it lists only
+ * `low`, `high` and `max`, and Anthropic has no such effort at all, refused by its client before any request.
+ * A failed check counts as a refusal: a refused effort would fail every verdict, a needless one only slows
  * them.
  */
 private suspend fun LlmRuntime.refusalOfNone(options: RequestOptions): String? {

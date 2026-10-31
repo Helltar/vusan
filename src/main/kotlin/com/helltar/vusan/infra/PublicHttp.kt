@@ -19,7 +19,7 @@ fun createPublicHttpClient(): HttpClient =
                 dns(PublicDns())
                 followRedirects(false)
                 followSslRedirects(false)
-                // okhttp bypasses Dns for literal IPs, so check those before it opens a socket.
+                // okhttp bypasses Dns for literal IPs, so check those before a socket opens.
                 addInterceptor { chain ->
                     val host = chain.request().url.host
                     if (host.contains(':') || host.all { it.isDigit() || it == '.' }) {
@@ -36,7 +36,7 @@ fun createPublicHttpClient(): HttpClient =
         }
     }
 
-/** The validated addresses are the ones handed to the connection, not a separate DNS preflight. */
+/** The validated addresses are the ones handed to the connection, with no separate DNS preflight. */
 internal class PublicDns(private val delegate: Dns = Dns.SYSTEM) : Dns {
     override fun lookup(hostname: String): List<InetAddress> =
         delegate.lookup(hostname).also { requirePublicDestination(hostname, it) }
@@ -62,7 +62,7 @@ internal val InetAddress.isPublicDestination: Boolean
                 !(first == 198 && (second in 18..19 || (second == 51 && bytes[2] == 100))) &&
                 !(first == 203 && second == 0 && bytes[2] == 113)
         }
-        // permit native global unicast only; exclude transition/tunnel and special-purpose ranges.
+        // native global unicast only; transition, tunnel and special-purpose ranges excluded.
         return bytes.size == 16 && bytes[0] in 0x20..0x3f &&
             !(bytes[0] == 0x20 && bytes[1] == 0x02) &&
             !(bytes[0] == 0x20 && bytes[1] == 0x01 &&

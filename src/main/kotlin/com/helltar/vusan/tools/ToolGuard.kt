@@ -6,15 +6,13 @@ import io.github.oshai.kotlinlogging.KotlinLogging
 private val log = KotlinLogging.logger("ToolGuard")
 
 /**
- * A tool that did not do what it was asked, with the message the model reads as the call's result.
- *
- * Thrown rather than returned so the agent records the call as failed: text returned normally is a
- * success, and the run's events and the stored history would then say `ok` for a tool that did not work,
- * and a recap built from that history would read the failure as an accomplished step.
+ * A tool that did not do what was asked, with the message the model reads as the result. Thrown rather than
+ * returned so the call is recorded as failed: otherwise events and history would say `ok`, and a recap would
+ * read the failure as a step done.
  */
 class ToolFailure(message: String) : RuntimeException(message)
 
-/** Turns whatever a tool throws into the [ToolFailure] the agent reports for that call. */
+/** Turns whatever a tool throws into the [ToolFailure] reported for that call. */
 suspend fun suspendToolGuard(block: suspend () -> String): String =
     try {
         block()

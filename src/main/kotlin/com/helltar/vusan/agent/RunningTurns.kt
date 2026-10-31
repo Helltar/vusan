@@ -6,14 +6,12 @@ import kotlinx.coroutines.currentCoroutineContext
 import kotlinx.coroutines.job
 
 /**
- * The turns each conversation has under way, so that something outside them can stop them. Nothing else
- * can: every other path into the agent takes the conversation lock and would wait behind the very turn
- * it is meant to interrupt.
+ * The turns each conversation has under way, so something outside them can stop them; every other path into
+ * the agent takes the conversation lock and would wait behind the turn it means to interrupt.
  *
- * A person's own messages are held from the moment they join the line, not only while they run: a stop
- * that lets the next message in the line start reads as a stop that did not work. A scheduled fire is
- * held only while it runs — it has taken nothing until then, and stopping something the person never
- * saw start reads as a bug from either side of the chat.
+ * A person's own messages are held from the moment they queue: a stop that lets the next queued message start
+ * reads as a stop that failed. A scheduled fire is held only while it runs: stopping something nobody saw
+ * start reads as a bug.
  */
 internal class RunningTurns<K : Any> {
 
@@ -26,7 +24,7 @@ internal class RunningTurns<K : Any> {
         try {
             return block()
         } finally {
-            // by identity: a turn that already finished must not take along one that came after it.
+            // by identity: a finished turn must not take a later one along.
             synchronized(turns) {
                 turns[key]?.let { held ->
                     held.remove(turn)
@@ -36,7 +34,7 @@ internal class RunningTurns<K : Any> {
         }
     }
 
-    /** Whether that conversation has anything under way, running or waiting in its line. */
+    /** Whether that conversation has anything running or queued. */
     fun holds(key: K): Boolean =
         synchronized(turns) { turns.containsKey(key) }
 

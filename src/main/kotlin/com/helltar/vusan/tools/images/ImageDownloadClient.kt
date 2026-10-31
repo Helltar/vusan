@@ -9,12 +9,12 @@ import kotlin.math.max
 import kotlin.math.min
 
 /**
- * Fetches an image a search provider pointed at and rejects anything Telegram would refuse as a
- * photo. Shared by every image search tool, whichever provider produced the URL.
+ * Fetches an image a search provider pointed at and rejects anything telegram would refuse as a photo; shared
+ * by every image search tool.
  */
 class ImageDownloadClient(private val downloader: FileDownloadClient) {
 
-    /** Returns the bytes, or `null` when the response is not an image Telegram would show. */
+    /** The bytes, or `null` when the response is not an image telegram would show. */
     suspend fun download(url: String): ByteArray? {
         val result = downloader.download(url.withScheme(), maxBytes = MAX_PHOTO_BYTES.toLong())
         if (result !is FileDownloadResult.Success) return null
@@ -52,7 +52,7 @@ class ImageDownloadClient(private val downloader: FileDownloadClient) {
     }
 }
 
-// SearXNG's flickr engine reports protocol-relative image URLs (`//live.staticflickr.com/...`),
-// which ktor cannot resolve without a scheme.
+// SearXNG's flickr engine returns protocol-relative URLs (`//live.staticflickr.com/...`), which ktor cannot
+// resolve without a scheme.
 private fun String.withScheme(): String =
     if (startsWith("//")) "https:$this" else this

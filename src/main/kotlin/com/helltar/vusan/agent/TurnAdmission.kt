@@ -7,13 +7,12 @@ import java.util.concurrent.atomic.AtomicInteger
 /**
  * How many turns run at once, and how many may wait for a place.
  *
- * A conversation's own lock stops one person from starting two turns and nothing more: a hundred people
- * meant a hundred turns, each an LLM call with its tools, the files it loads and a share of the write
- * lock. What gives way first is the provider's rate limit, and the answer everyone gets is an error.
+ * A conversation's lock only stops one person starting two turns: a hundred people meant a hundred turns,
+ * each an LLM call with tools, loaded files and a share of the write lock. The provider's rate limit gives
+ * first, and everyone gets an error.
  *
- * Waiting is the normal answer — a turn holds its typing indicator while it waits, so the chat looks
- * the same as a slow reply. Refusing is for a queue already so long that the answer would arrive after
- * the question stopped mattering.
+ * Waiting is the normal answer: a waiting turn holds its typing indicator, so it looks like a slow reply.
+ * Refusing is for a queue so long the answer would come after the question stopped mattering.
  */
 internal class TurnAdmission(
     private val maxConcurrent: Int,
@@ -28,7 +27,7 @@ internal class TurnAdmission(
     private val places = Semaphore(maxConcurrent)
     private val waiting = AtomicInteger()
 
-    /** Runs [turn] when there is room for it, or answers `null` when too many are already waiting. */
+    /** Runs [turn] when there is room, or returns `null` when too many are already waiting. */
     suspend fun <T> admit(turn: suspend () -> T): T? {
         if (places.tryAcquire()) {
             try {
@@ -51,14 +50,14 @@ internal class TurnAdmission(
     }
 
     /**
-     * Runs [turn] once there is room, however long that takes. Nobody is watching a queued turn arrive —
-     * a scheduled fire, a spooled message — so refusing it would drop work rather than answer late.
+     * Runs [turn] once there is room, however long. Nobody watches a queued turn arrive (a scheduled fire, a
+     * spooled message), so refusing would drop work rather than answer late.
      */
     suspend fun <T> admitQueued(turn: suspend () -> T): T = places.withPermit { turn() }
 
     private companion object {
-        // the ceiling on the queue, as a multiple of what runs at once: a turn is tens of seconds, so
-        // this is already minutes of waiting, and past it saying so beats answering too late.
+        // the queue's ceiling as a multiple of what runs at once: a turn takes tens of seconds, so this is
+        // already minutes, and past it saying so beats answering too late.
         const val WAITING_PER_TURN = 4
     }
 }

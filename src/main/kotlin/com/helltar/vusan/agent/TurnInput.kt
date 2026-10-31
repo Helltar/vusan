@@ -6,35 +6,30 @@ import com.helltar.vusan.common.xmlBlock
 import com.helltar.vusan.request.AttachedFile
 import com.helltar.vusan.request.AttachedFileKind
 
-// the blocks the current request is wrapped in. an adapter reads what it received and fills them in,
-// but the tags and their wording are written here once, beside the contract that says what each of
-// them means: a messenger that spelled its own would drift from what the system prompt promises.
+// the blocks the current request is wrapped in. adapters fill them, but the tags and wording live here,
+// beside the contract that defines them, so no messenger drifts from what the system prompt promises.
 
 private const val MAX_REPLIED_STORED_TEXT_CHARS = 600
 
 /**
- * The message a request replies to, as far as the adapter could read it.
- *
- * Anything in it may be somebody else's text — a display name, a file name, a caption — and all of it
- * is defused where the block is written, so the adapter only has to cap what it reads.
+ * The message a request replies to, as far as the adapter could read it. Any of it may be someone else's text
+ * (a display name, a file name, a caption) and is defused where the block is written, so the adapter only
+ * caps it.
  */
 internal data class RepliedMessageSummary(
     val type: String,
     val textOrCaption: String?,
-    // who wrote the message being replied to, `you` when it is the bot's own. in a group the person
-    // replying is often not the one that message was written for, so their history carries nothing
-    // about it — this block is then all the model gets.
+    // the replied message's author, `you` for the bot. in a group the replier is often not who that message
+    // was for, so this block is all the model gets about it.
     val author: String? = null,
     val metadata: List<String> = emptyList(),
     val transcript: String? = null,
 )
 
 /**
- * The request as the model is shown it, with what it replies to and the part of it the sender quoted.
- *
- * [currentMessageText] is the request the adapter assembled: text anybody typed in it is already
- * defused with [neutralizePromptBlocks], while the blocks the adapter wrapped around it — a transcript,
- * an album — are meant to stay blocks, which is why nothing here defuses it a second time.
+ * The request as the model sees it, with what it replies to and the part the sender quoted.
+ * [currentMessageText] is already defused by the adapter, while the blocks it wrapped around it (a
+ * transcript, an album) are meant to stay blocks, so nothing here defuses it again.
  */
 internal fun formatAgentInput(
     currentMessageText: String,
@@ -61,8 +56,7 @@ private fun buildReplyContextPrompt(
 ): String {
     if (repliedMessage == null && quotedFragment == null) return currentMessageText
 
-    // quoting the whole message says nothing beyond the reply itself, and repeating it would read as
-    // two different pieces of context.
+    // a quote of the whole message adds nothing and would read as a second piece of context.
     val fragment = quotedFragment?.takeUnless { it.trim() == repliedMessage?.textOrCaption?.trim() }
 
     return buildString {
@@ -76,7 +70,7 @@ private fun buildReplyContextPrompt(
                 repliedMessage.metadata.forEach { appendLine("  - ${it.neutralizePromptBlocks()}") }
             }
 
-            // the replied message is somebody else's, and none of it passed through inbound sanitizing.
+            // the replied message is someone else's and never went through inbound sanitizing.
             repliedMessage.textOrCaption?.let {
                 appendLine(xmlBlock("text_caption", transformText(it).neutralizePromptBlocks()))
             }
@@ -99,8 +93,8 @@ private fun buildReplyContextPrompt(
     }
 }
 
-// a deployment without a sandbox has no `runCommand`, so a block that sent the model there would have
-// it promise the user a look inside a file it cannot open
+// without a sandbox there is no `runCommand`, and pointing the model there would have it promise a look it
+// cannot take
 private const val SANDBOX_COPY_NOTE =
     "The sandbox command or file-writing tool copies this file into the turn's own directory under `turns/` and returns its exact path. "
 
@@ -120,8 +114,8 @@ internal fun attachedFileContextBlock(file: AttachedFile, sandbox: Boolean): Str
                     append('.')
                 }
 
-                // the GIF line has to live here rather than in the no-caption prompt: a caption replaces
-                // that prompt, and the reaction still is not something to review.
+                // the GIF line lives here, not in the no-caption prompt: a caption replaces that prompt, and
+                // a reaction still is not something to review.
                 AttachedFileKind.VIDEO ->
                     if (file.isAnimation)
                         append("It is a GIF: a short soundless loop, usually thrown into a chat as a reaction rather than as something to review. Call `describeVideo` only when the user asks what is in it, and never narrate it unasked.")
@@ -141,7 +135,7 @@ internal fun attachedFileContextBlock(file: AttachedFile, sandbox: Boolean): Str
         },
     )
 
-/** Several items sent as one message, and which tools get to see which of them. */
+/** Several items sent as one message, and which tools see which. */
 internal fun albumContextBlock(
     itemCount: Int,
     photoCount: Int,
@@ -164,7 +158,7 @@ internal fun albumContextBlock(
                 return@buildString
             }
 
-            // the sender picked every one of these names, and they all land inside the block.
+            // the sender picked every one of these names.
             val names = attachedFiles.joinToString(", ") { "`${it.name.neutralizePromptBlocks()}`" }
 
             if (attachedFiles.size < itemCount)
@@ -186,10 +180,9 @@ internal fun albumContextBlock(
     )
 }
 
-// a structured message flattened back into markdown never passes the sanitizing ordinary text does.
 /**
- * The turn a scheduled task runs, which has no message behind it: what the task is called, how it
- * recurs, and [body] — the words it was set up with, somebody's text and defused like any other.
+ * The turn a scheduled task runs, with no message behind it: the task's title, recurrence and [body], the
+ * words it was set up with, defused like any user text.
  */
 internal fun scheduledTaskBlock(title: String?, recurrence: String, body: String): String =
     xmlBlock(
@@ -202,13 +195,14 @@ internal fun scheduledTaskBlock(title: String?, recurrence: String, body: String
         },
     )
 
+// a rich message flattened to markdown never went through the sanitizing ordinary text gets.
 internal fun wrapRichMessage(markdown: String): String =
     xmlBlock("rich_message", markdown.neutralizePromptBlocks())
 
 internal fun wrapAudioTranscript(text: String): String =
     xmlBlock("audio_transcript", text.neutralizePromptBlocks())
 
-/** A button the model offered, pressed: the question it asked and the option chosen. */
+/** A pressed button the model offered: its question and the chosen option. */
 internal fun inlineChoiceInput(question: String, option: String): String =
     xmlBlock(
         "inline_choice",
@@ -218,25 +212,25 @@ internal fun inlineChoiceInput(question: String, option: String): String =
         },
     )
 
-// what the model is told when the message itself carries no words: media alone, a bare mention. the
-// wording names the tools, so it is prompt text and lives with the other prompt text, not in an adapter
+// for a message with no words: media alone, a bare mention. it names tools, so it is prompt text and lives
+// here, not in an adapter
     internal const val MENTION_ONLY_PROMPT = "User mentioned the bot with no text. Respond naturally and briefly."
 
-    // media without a caption is the whole message, and answering it is a conversation move rather
-    // than a report; the describe tools exist for when the answer actually depends on the content.
+    // an uncaptioned media message is a conversation move, not a request for a report; the describe tools are
+    // for when the answer depends on the content.
     internal const val MEDIA_ONLY_PROMPT =
         "User sent this with no caption, so the media itself is their whole message. " +
                 "Reply the way a person would at this point in the conversation. " +
                 "Look at it (`describeImage`, `describeVideo`) or process it (`runCommand`) only when your answer depends on what is inside, " +
                 "and do not narrate what you saw unless the user asked what is in it."
 
-    // a gif is thrown into a chat the way a sticker is — as a reaction, not as a thing to review.
+    // a gif is a reaction, like a sticker, not something to review.
     internal const val ANIMATION_ONLY_PROMPT =
         "User answered with a GIF and no caption, the way one reacts with a sticker instead of typing. " +
                 "Treat it as their reaction, match its mood, and keep the conversation going in your own voice. " +
                 "Call `describeVideo` only if they ask what is in it; never describe or narrate it unasked."
 
-    // a round video message is the user talking, so the speech in it is the message, not the picture.
+    // a round video message is the user talking: the speech is the message, not the picture.
     internal const val VIDEO_NOTE_ONLY_PROMPT =
         "User sent a video note (a round video message) with no caption — it is them speaking to you. " +
                 "Call `describeVideo` to get what they said, then answer that. " +

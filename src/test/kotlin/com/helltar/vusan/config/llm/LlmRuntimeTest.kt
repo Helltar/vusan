@@ -47,8 +47,8 @@ private const val CODEX_STREAM =
             "data: {\"type\":\"response.completed\",\"response\":{\"id\":\"r\",\"status\":\"completed\",\"model\":\"gpt-5.6-terra\",\"output\":[],\"usage\":{\"input_tokens\":1,\"output_tokens\":1}}}\n\n"
 
 /**
- * What each provider's runtime puts on the wire, read off a mock engine: the resolver's choices — endpoint,
- * options, model shape — matter only as the request they produce.
+ * What each provider's runtime puts on the wire, read off a mock engine: the resolver's choices matter only
+ * as the request they produce.
  */
 class LlmRuntimeTest {
 
@@ -190,7 +190,7 @@ class LlmRuntimeTest {
 
     // --- openrouter ---
 
-    // claude on openrouter's messages api is the anthropic client as it is, plus the conversation's routing key
+    // claude on openrouter's messages api is the anthropic client as is, plus the routing key
     @Test
     fun `a claude model on openrouter speaks messages with the key, adaptive thinking, the breakpoints and a session`() = runBlocking {
         val runtime = resolveLlmRuntime(openRouter("anthropic/claude-opus-5.5", ReasoningEffort.HIGH), http = http(messageEventStream(ANTHROPIC_REPLY), contentType = "text/event-stream"))
@@ -219,8 +219,8 @@ class LlmRuntimeTest {
         assertFailsWith<IllegalArgumentException> { resolveLlmRuntime(openRouter("anthropic/claude-opus-5.5", ReasoningEffort.NONE)) }
     }
 
-    // every other model streams openrouter's responses api; its gpt-5.6 breakpoint goes without the implicit mode,
-    // which openrouter refuses as a value, and without the lifetime, which azure behind it refuses
+    // other models stream openrouter's responses api; the gpt-5.6 breakpoint goes without the implicit mode
+    // (refused by openrouter) and the lifetime (refused by azure)
     @Test
     fun `any other model on openrouter streams responses with stateless reasoning, the breakpoint and a session`() = runBlocking {
         val runtime = resolveLlmRuntime(openRouter("openai/gpt-5.6-luna", ReasoningEffort.LOW), http = http(CODEX_STREAM, contentType = "text/event-stream"))
@@ -272,8 +272,8 @@ class LlmRuntimeTest {
         assertNull(wire.body["prompt_cache_options"])
     }
 
-    // the responses api as xai reads it: the conversation's key routes to the server holding the prefix, and
-    // caching is automatic, so none of openai's cache options go along
+    // xai's responses api: the key routes to the server holding the prefix, and caching is automatic, so no
+    // openai cache options
     @Test
     fun `an xai runtime speaks responses with the key, stateless reasoning and no cache options`() = runBlocking {
         val runtime = resolveLlmRuntime(xai(effort = ReasoningEffort.LOW), http = http(RESPONSES_REPLY))
@@ -306,7 +306,8 @@ class LlmRuntimeTest {
         assertEquals("vusan-recap", sent.single().body.getValue("prompt_cache_key").jsonPrimitive.content)
     }
 
-    // deepseek reads `max_tokens` and ignores `max_completion_tokens`, and refuses a call of the turn without its thinking
+    // deepseek reads `max_tokens`, ignores `max_completion_tokens`, and refuses a turn's call without its
+    // thinking
     @Test
     fun `a deepseek runtime speaks completions at its documented base url, its thinking echoed and the old ceiling`() = runBlocking {
         val runtime = resolveLlmRuntime(deepSeek(effort = ReasoningEffort.NONE), http = http(COMPLETION_REPLY))
@@ -390,8 +391,8 @@ class LlmRuntimeTest {
         assertEquals(272_000, resolveLlmRuntime(codex(), codexAuth = codexAuth()).model.contextWindowTokens)
     }
 
-    // the models measured on 2026-10-24: a tool offered partway through is taken where this says so, and
-    // listed up front everywhere else
+    // the models measured 2026-10-24: a mid-conversation tool offer where this says so, listed up front
+    // elsewhere
     @Test
     fun `which models take a tool offered partway through`() {
         assertTrue(resolveLlmRuntime(openAi()).model.offersToolsMidConversation)
@@ -406,7 +407,7 @@ class LlmRuntimeTest {
         assertTrue(resolveLlmRuntime(codex(), codexAuth = codexAuth()).model.offersToolsMidConversation)
     }
 
-    // the routes measured on 2026-10-27: where this says so, a turn continues the last request
+    // the routes measured 2026-10-27: where this says so, a turn continues the last request
     @Test
     fun `which routes read back only what a request repeats`() {
         assertTrue(resolveLlmRuntime(codex(), codexAuth = codexAuth()).model.cachesOnlyRepeatedPrefix)

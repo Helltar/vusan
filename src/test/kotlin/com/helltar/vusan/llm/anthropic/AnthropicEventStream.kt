@@ -13,8 +13,8 @@ import kotlinx.serialization.json.put
 private val FINAL_USAGE_FIELDS = setOf("input_tokens", "cache_read_input_tokens", "cache_creation_input_tokens", "output_tokens")
 
 /**
- * Renders a Messages API reply the way the API streams it — the envelope first, each block opened and
- * grown by deltas, the stop reason and usage last — so a test over a mock engine hands the client a stream.
+ * Renders a Messages API reply as the API streams it (envelope first, blocks opened and grown by deltas, stop
+ * reason and usage last), so a mock engine hands the client a stream.
  */
 internal fun messageEventStream(reply: String): String {
     val message = Json.parseToJsonElement(reply).jsonObject
@@ -54,7 +54,7 @@ internal fun messageEventStream(reply: String): String {
     return events.joinToString("") { "event: ${it.getValue("type").jsonPrimitive.content}\ndata: $it\n\n" }
 }
 
-// the block as it opens, and the deltas that grow it into the one given
+// the block as it opens, and the deltas growing it into the given one
 private fun JsonObject.streamed(): Pair<JsonObject, List<JsonObject>> =
     when (this["type"]?.jsonPrimitive?.content) {
         "text" ->

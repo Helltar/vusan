@@ -9,8 +9,8 @@ data class SearxngResponse(
     val answers: List<SearxngAnswer> = emptyList(),
     val infoboxes: List<SearxngInfobox> = emptyList(),
 
-    // pairs of engine name and the reason it dropped out; engines suspend themselves on rate limits
-    // and CAPTCHAs, so this is the only way to tell an empty result set from a silently degraded one.
+    // engine name and dropout reason pairs; engines suspend themselves on rate limits and CAPTCHAs, so this
+    // is the only way to tell an empty result from a silently degraded one.
     @SerialName("unresponsive_engines") val unresponsiveEngines: List<List<String>> = emptyList(),
 )
 

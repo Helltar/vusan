@@ -7,19 +7,18 @@ import com.helltar.vusan.telegram.telegramUser
 import org.telegram.telegrambots.meta.api.objects.message.Message
 
 /**
- * The message as ambient addressing reads it, or `null` when it is not one to ask about at all.
+ * The message as ambient addressing reads it, or `null` when it is not one to ask about.
  *
- * Only what a person typed into a group qualifies: a text, or the caption on what they sent, edited or
- * not. A forward, a command, and anything posted by another bot or under a chat's own account (a channel, an
- * anonymous admin) never does — and nor does a voice message, since finding out whether it is meant for
- * the bot would cost a transcription of every one. [captionSource] is the album part carrying the caption
- * when the message anchors a media group.
+ * Only what a person typed into a group: a text or a caption, edited or not. Never a forward, a command,
+ * anything from another bot or a chat's own account (a channel, an anonymous admin), nor a voice message,
+ * which would cost a transcription of every one. [captionSource] is the album part carrying the caption when
+ * the message anchors a media group.
  */
 internal fun Message.ambientCandidateOrNull(captionSource: Message, authorWaiting: Boolean): AmbientCandidate? {
     // a private chat is always answered, and a forward is not something said to the chat just now
     if (isPrivateChat || forwardOrigin != null) return null
 
-    // posted under a chat's own account or through an inline bot rather than typed by a person
+    // posted under a chat's account or through an inline bot, not typed by a person
     if (senderChat != null || viaBot != null) return null
 
     val sender = from?.takeUnless { it.isBot == true } ?: return null
@@ -27,8 +26,8 @@ internal fun Message.ambientCandidateOrNull(captionSource: Message, authorWaitin
 
     return AmbientCandidate(
         chat = telegramChat(chatIdLong),
-        // the part the words are on: every part of an album has its own line in the group log, and the
-        // classifier must not be shown the caption twice, once as the message and once as the chat before it
+        // the part carrying the words: every album part has its own group log line, and the classifier must
+        // not see the caption twice
         messageId = captionSource.messageIdLong.toString(),
         author = senderDisplayNameOrNull() ?: sender.userName ?: sender.id.toString(),
         sender = telegramUser(sender.id),

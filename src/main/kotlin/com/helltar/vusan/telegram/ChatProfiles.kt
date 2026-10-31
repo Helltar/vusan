@@ -23,15 +23,13 @@ import org.telegram.telegrambots.meta.generics.TelegramClient
 private val log = KotlinLogging.logger("ChatProfiles")
 
 /**
- * Reads and caches the chat facts a turn cannot get from the message itself. Both callers need them
- * before the agent runs, not after: [TelegramBotRunner] for a live turn and `TaskScheduler` for a
- * scheduled one, which otherwise pays for a whole agent run before finding out the chat refuses what
- * it produced.
+ * Reads and caches the chat facts a turn cannot get from the message. [TelegramBotRunner] and `TaskScheduler`
+ * both need them before the agent runs; otherwise a task pays for a whole run before learning the chat
+ * refuses its output.
  *
- * The cache is what makes that affordable — the description used to cost a `getChat` on every single
- * turn — and [forget] keeps it honest, since a membership change is announced and must not be waited
- * out. Callers skip this entirely for chats that cannot restrict anything, so a private chat costs no
- * call at all.
+ * The cache makes that affordable (the description used to cost a `getChat` every turn), and [forget] keeps
+ * it honest, since membership changes are announced. Chats that cannot restrict anything skip this, so a
+ * private chat costs no call.
  */
 class ChatProfiles(
     private val client: TelegramClient,
@@ -56,7 +54,7 @@ class ChatProfiles(
         return profile
     }
 
-    /** Drops what was read about a chat, e.g. after Telegram announced the bot's rights there changed. */
+    /** Drops what was read about a chat, e.g. after telegram announced the bot's rights changed. */
     fun forget(chatId: Long) {
         cached.remove(chatId)
     }
@@ -75,8 +73,8 @@ class ChatProfiles(
         )
     }
 
-    // a lookup that fails leaves the chat looking unrestricted on purpose: guessing "forbidden" from a
-    // network blip would strip the agent of tools it actually has, and the send fallbacks still cover
+    // a failed lookup leaves the chat looking unrestricted on purpose: guessing "forbidden" from a blip would
+    // strip tools the agent has, and the send fallbacks still cover a real refusal.
     // a refusal that turns out to be real.
     private suspend fun <T> call(chatId: Long, label: String, block: TelegramClient.() -> java.util.concurrent.CompletableFuture<T>): T? =
         runCatching { client.api(block) }
@@ -95,11 +93,11 @@ internal fun capabilitiesOf(membership: ChatMember?, chat: ChatFullInfo?): ChatC
     val slowModeSeconds = chat?.slowModeDelay ?: 0
 
     return when {
-        // any administrator privilege implies `can_manage_chat`, which the Bot API documents as
-        // covering "ignore slow mode" — and chat-wide permissions never applied to admins to begin with.
+        // any admin privilege implies `can_manage_chat`, documented as covering "ignore slow mode", and
+        // chat-wide permissions never applied to admins.
         membership is ChatMemberAdministrator || membership is ChatMemberOwner -> ChatCapabilities.UNRESTRICTED
 
-        // a restriction aimed at the bot itself replaces the chat's defaults rather than adding to them.
+        // a restriction on the bot itself replaces the chat's defaults rather than adding to them.
         membership is ChatMemberRestricted -> membership.asPermissions().toCapabilities(slowModeSeconds)
 
         else -> chat?.permissions.toCapabilities(slowModeSeconds)
@@ -124,8 +122,8 @@ private fun ChatPermissions?.toCapabilities(slowModeSeconds: Int): ChatCapabilit
     )
 }
 
-// the chat's defaults and a restricted member's own overrides carry the same permission set under the
-// same names, so the member's version is normalized onto the chat's type and read once.
+// the chat's defaults and a member's overrides share one permission set, so the member's is normalized onto
+// the chat's type.
 private fun ChatMemberRestricted.asPermissions(): ChatPermissions =
     ChatPermissions.builder()
         .canSendMessages(canSendMessages)

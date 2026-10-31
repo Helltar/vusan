@@ -23,54 +23,53 @@ import kotlin.time.TimeSource
 
 private const val XAI_VIDEOS_URL = "https://api.x.ai/v1/videos"
 
-// the one model that edits a video or extends one; the newer ones answer both with a 400
+// the only model that edits or extends a video; newer ones answer both with a 400
 private const val EDIT_MODEL = "grok-imagine-video"
 
-// a first and a last frame, reference images or a voice make a reference-to-video request, which renders at
-// most 720p: asked for 1080p it is a 400 rather than a smaller video
+// frames, reference images or a voice make a reference-to-video request, capped at 720p: 1080p is a 400, not
+// a smaller video
 private const val REFERENCE_MAX_RESOLUTION = "720p"
 private const val FULL_HD = "1080p"
 
-// the clips measured on 2026-10-21 took 20 to 50 seconds; the docs allow several minutes for a long one
+// clips measured 2026-10-21 took 20 to 50 seconds; the docs allow several minutes for a long one
 private val POLL_INTERVAL = 5.seconds
 private val RENDER_DEADLINE = 10.minutes
 
-// a request carries its images and its video inline, so it is given longer to upload than a plain call
+// images and video travel inline, so uploads get longer than a plain call
 private val UPLOAD_TIMEOUT = 2.minutes
 
-// a job that failed on xAI's own side: the first one measured failed so, and the same request went through
-// on the next try. what was wrong with the request itself fails the same way again, so it is not repeated.
+// failures on xAI's own side; the first one measured passed on the next try. a fault in the request itself
+// would fail again, so those are not repeated.
 private val PASSING_FAILURES = setOf("internal_error", "service_unavailable")
 private const val ATTEMPTS = 2
 
-// xai documents pending, done, failed and expired; a status it may add, such as queued, is waited out rather
-// than read as the end of the job
+// xai documents pending, done, failed and expired; an added status such as queued is waited out, not read as
+// the end
 private val FINAL_STATUSES = setOf("done", "failed", "error", "expired", "cancelled")
 
-// the finished address lives four hours and the render behind it is paid for, so a failed download is made
-// again: the download client reports a status as plain text, and a few more tries at one address cost nothing
+// the finished address lives four hours and the render is paid for, so a failed download is retried a few
+// times
 private const val DOWNLOAD_ATTEMPTS = 3
 
-// what xAI reads as a picture: JPEG, PNG and WebP, judged by the bytes rather than a name
+// JPEG, PNG and WebP, judged by the bytes rather than the name
 private val PICTURE_TYPES = setOf("image/jpeg", "image/png", "image/webp")
 
-// how the bot is named in a video where it has no photo, only the notes on how it looks
+// how the bot is named in a video without its photo, only the notes on its looks
 private const val SELF_WITHOUT_PHOTO = "the main character"
 
 /**
- * xAI made the video and its moderation withheld it, which it says two ways: a finished job whose address
- * is empty, or a 400 coded as moderated. Nothing in the request turns the filter off.
+ * xAI's moderation withheld the video, signaled as a finished job with an empty address or a 400 coded as
+ * moderated. Nothing in the request turns the filter off.
  */
 class VideoModerationBlocked : IllegalStateException("xAI's moderation withheld the video")
 
-/** A finished video, with its length where it is known. */
+/** A finished video, with its length where known. */
 class RenderedVideo(val bytes: ByteArray, val durationSeconds: Int?)
 
 /**
- * xAI's Imagine video API. A request starts a job, the job is asked about until it is done, and the
- * finished video is downloaded from the temporary address it answers with.
- *
- * Every image and video travels inline as a data URL, so nothing has to be hosted for xAI to fetch.
+ * xAI's Imagine video API: a request starts a job, the job is polled until done, and the video is downloaded
+ * from the temporary address it returns. Images and videos travel inline as data URLs, so nothing has to be
+ * hosted.
  */
 class XaiVideoClient(
     private val http: HttpClient,
@@ -80,9 +79,9 @@ class XaiVideoClient(
 ) {
 
     /**
-     * A new video from [prompt]: from nothing, from a [startFrame] it opens on, toward an [endFrame] it
-     * closes on, and featuring [references] the prompt names from `<IMAGE_0>`, and [self], the bot, as
-     * `<SELF>`. [aspectRatio] is left out where a start frame decides it.
+     * A new video from [prompt]: from nothing, opening on [startFrame], closing toward [endFrame], featuring
+     * [references] named from `<IMAGE_0>` and [self], the bot, as `<SELF>`. [aspectRatio] is omitted where a
+     * start frame decides it.
      */
     suspend fun generate(
         prompt: String,
@@ -94,9 +93,9 @@ class XaiVideoClient(
         references: List<SourceImage> = emptyList(),
         self: SelfImage? = null,
     ): RenderedVideo {
-        // xai numbers the images of the prompt across `image` and `reference_images`: a start frame is
-        // <IMAGE_0> and moves the references up by one, and the bot's photo goes after them. a last frame
-        // is a field of its own, which the reference-to-video docs leave out of the count.
+        // xai numbers images across `image` and `reference_images`: a start frame is <IMAGE_0> and shifts the
+        // references by one, the bot's photo goes after them. a last frame is a separate field outside the
+        // count.
         val photo = self?.reference
         val offset = if (startFrame != null) 1 else 0
         val selfName = self?.let { if (photo != null) "<IMAGE_${references.size + offset}>" else SELF_WITHOUT_PHOTO }
@@ -128,7 +127,7 @@ class XaiVideoClient(
         return render("generations", { setBody(request) }) { it.video?.duration }
     }
 
-    /** [video], an MP4 called [filename], with the change [prompt] describes, as long as it was. */
+    /** [video], an MP4 called [filename], with the change [prompt] describes, at its original length. */
     suspend fun edit(prompt: String, video: ByteArray, filename: String): RenderedVideo {
         val request = XaiVideoEditRequest(EDIT_MODEL, prompt, mp4Media(video, filename))
 
@@ -136,9 +135,8 @@ class XaiVideoClient(
     }
 
     /**
-     * [video], an MP4 called [filename] that runs [sourceSeconds], carried on for [seconds] more as one
-     * video. The answer states the added seconds alone while the file holds both parts, so the length is
-     * the source's plus the request's.
+     * [video], an MP4 called [filename] running [sourceSeconds], extended by [seconds] as one video. The
+     * answer states only the added seconds while the file holds both, so the length is the sum.
      */
     suspend fun extend(prompt: String, video: ByteArray, filename: String, seconds: Int, sourceSeconds: Int?): RenderedVideo {
         val request = XaiVideoExtensionRequest(EDIT_MODEL, prompt, mp4Media(video, filename), seconds)
@@ -185,8 +183,8 @@ class XaiVideoClient(
         }
     }
 
-    // the job renders, and is billed, whether or not anyone asks about it, so a look that failed in passing
-    // is made again until the deadline rather than throwing the paid video away
+    // the job renders and is billed whether or not it is polled, so a passing poll failure is retried until
+    // the deadline rather than throwing the paid video away
     private suspend fun await(requestId: String): XaiVideoStatus {
         val deadline = TimeSource.Monotonic.markNow() + RENDER_DEADLINE
 
@@ -240,9 +238,9 @@ class XaiVideoClient(
 }
 
 /**
- * The prompt as xAI reads it: the references the model names from `<IMAGE_0>` moved up by [offset], and
- * `<SELF>` turned into [selfName], the bot as xAI knows it — `null` when the bot is not in the video, which
- * the tool has already made sure the prompt does not ask for.
+ * The prompt as xAI reads it: references named from `<IMAGE_0>` shifted by [offset], and `<SELF>` replaced by
+ * [selfName], or `null` when the bot is not in the video, which the tool already checked the prompt does not
+ * ask for.
  */
 internal fun xaiVideoPrompt(prompt: String, offset: Int, selfName: String?): String {
     val numbered = IMAGE_TAG.replace(prompt) { "<IMAGE_${it.groupValues[1].toInt() + offset}>" }
@@ -250,7 +248,7 @@ internal fun xaiVideoPrompt(prompt: String, offset: Int, selfName: String?): Str
     return selfName?.let { numbered.replace(SELF_TAG, it) } ?: numbered
 }
 
-// a status that says nothing about the job: xai's side out for a moment, or the answer lost on the way
+// a status that says nothing about the job: xai briefly out, or the answer lost on the way
 private fun Throwable.isPassing(): Boolean =
     this is IOException ||
             (this is HttpStatusException && (status == HttpStatusCode.TooManyRequests.value || status >= HttpStatusCode.InternalServerError.value))

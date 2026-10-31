@@ -3,15 +3,15 @@ package com.helltar.vusan.telegram.inbound
 import org.telegram.telegrambots.meta.api.objects.EntityType
 import org.telegram.telegrambots.meta.api.objects.message.Message
 
-// [captionSource] is the album part carrying the caption when [message] anchors a media group;
-// for single messages it is the message itself.
+// [captionSource] is the album part carrying the caption when [message] anchors a media group, otherwise the
+// message itself.
 internal fun shouldHandle(
     message: Message,
     botUserId: Long,
     botUsernames: Collection<String>,
     captionSource: Message = message,
 ): Boolean {
-    // an ephemeral command reaches this bot and nobody else, so it is addressed to it however it is spelled
+    // an ephemeral command reaches this bot alone, so it is addressed however spelled
     if (message.isPrivateChat || message.isEphemeral) return true
 
     val isReplyToBot = message.replyAuthorIdOrNull() == botUserId
@@ -25,8 +25,7 @@ internal fun shouldHandle(
         hasTargetedBotCommand(content, botUsernames)
 }
 
-// an album (media group) carries its caption on whichever part the sender attached it to — not
-// necessarily the first — so scan the parts.
+// an album carries its caption on whichever part the sender chose, not necessarily the first.
 internal fun List<Message>.captionedPartOrNull(): Message? =
     firstOrNull { !it.caption.isNullOrBlank() }
 
@@ -37,7 +36,7 @@ internal fun Message.messageTextOrNull(): MessageText? =
 internal fun isBotCommand(content: MessageText): Boolean =
     content.leadingBotCommandOrNull() != null
 
-// leading bot command of a message, e.g. `/start@VusanBot arg` -> command "start" targeting "VusanBot".
+// a message's leading bot command, e.g. `/start@VusanBot arg` -> command "start" targeting "VusanBot".
 internal data class BotCommand(val command: String, val targetUsername: String?)
 
 internal fun MessageText.leadingBotCommandOrNull(): BotCommand? {
@@ -60,8 +59,8 @@ internal fun normalizeUsername(value: String?): String? =
 internal fun Collection<String>.normalizedUsernames(): Set<String> =
     mapNotNull(::normalizeUsername).toSet()
 
-// a rich message carries no entities, so the mention is matched on the flattened markdown: a
-// `mention` node renders as `@name`, a `text_mention` as a `tg://user?id=` link.
+// a rich message has no entities, so the mention is matched on the flattened markdown: `mention` renders as
+// `@name`, `text_mention` as a `tg://user?id=` link.
 private fun Message.richMessageMentionsBot(botUserId: Long, botUsernames: Collection<String>): Boolean {
     val markdown = richMessage?.toRichMarkdown() ?: return false
 

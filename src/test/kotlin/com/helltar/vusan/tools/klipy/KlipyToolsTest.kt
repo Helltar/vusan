@@ -78,7 +78,7 @@ class KlipyToolsTest {
         assertTrue(requests.any { it.url.encodedPath == "/api/v1/test-key/clips/share/slow-clap--v1" })
     }
 
-    // kept for a later call, nothing reaches the chat and nothing counts as shared yet
+    // kept for a later call, nothing reaches the chat and nothing counts as shared
     @Test
     fun `a clip fetched with send off is kept for the turn, queued nowhere and not reported`() = runBlocking {
         val outbox = BotOutbox()
@@ -121,7 +121,7 @@ class KlipyToolsTest {
         assertTrue(outbox.pending.isEmpty())
     }
 
-    // a meme the chat refuses is still an input for another tool, so the search goes ahead and only a send is refused
+    // a refused meme is still input for another tool, so the search goes ahead and only a send is refused
     @Test
 fun `a kind the chat does not take is still searched, and refused only at the send`() = runBlocking {
         val tools = tools(BotOutbox(ChatCapabilities(photos = false)))

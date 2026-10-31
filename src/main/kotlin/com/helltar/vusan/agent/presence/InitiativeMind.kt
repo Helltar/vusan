@@ -19,9 +19,8 @@ import java.time.format.DateTimeFormatter
 import java.util.Locale
 
 /**
- * One line of the chat as the bot is shown it. [number] is what a decision points at: only a line a
- * person wrote since the last look has one, so the bot can neither react to its own line nor dig up
- * something the chat has long moved past.
+ * One chat line as the bot sees it. [number] is what a decision points at: only lines people wrote since the
+ * last look have one, so the bot can neither react to its own line nor dig up something long past.
  */
 data class ChatGlanceLine(
     val number: Int?,
@@ -31,21 +30,21 @@ data class ChatGlanceLine(
     val fresh: Boolean,
 )
 
-/** What the bot has in front of it when it looks at a chat nobody called it into. */
+/** What the bot sees when it looks at a chat nobody called it into. */
 data class InitiativeInput(
     val now: ZonedDateTime,
     val lines: List<ChatGlanceLine>,
     val saidToday: Int,
     val maySpeak: Boolean,
     val diary: String? = null,
-    // the people in the chat who asked not to be written to, one line each, as the look is told them
+    // the people who asked not to be written to, one line each, as the look is told them
     val leftAlone: List<String> = emptyList(),
     val quietLately: List<String> = emptyList(),
-    // the chat's `<sticker_catalog>` block, when it has one and a line of the bot's own is still open today
+    // the chat's `<sticker_catalog>` block, when it has one and the bot may still post a line today
     val stickerCatalog: String? = null,
 )
 
-/** What it decided to do about it. [why] is a phrase for the operator's log, never shown to the chat. */
+/** What it decided. [why] is a phrase for the log, never shown to the chat. */
 sealed interface InitiativeDecision {
 
     val why: String?
@@ -56,11 +55,11 @@ sealed interface InitiativeDecision {
 
     data class Say(val text: String, val replyTo: Int? = null, override val why: String? = null) : InitiativeDecision
 
-    /** One sticker out of the shortlist the look was shown, by the id written beside it. */
+    /** One sticker from the shortlist the look was shown, by the id written beside it. */
     data class Sticker(val id: Long, val replyTo: Int? = null, override val why: String? = null) : InitiativeDecision
 }
 
-/** Decides what the bot does about a chat it is only looking at; `null` when the answer cannot be read. */
+/** Decides what the bot does about a chat it is only looking at; `null` when the answer is unreadable. */
 interface InitiativeMind {
     suspend fun decide(input: InitiativeInput): InitiativeDecision?
 }
@@ -103,7 +102,7 @@ internal fun initiativeState(input: InitiativeInput): String =
 
         input.diary?.takeIf { it.isNotBlank() }?.let { add(xmlBlock("diary", it)) }
         input.leftAlone.takeIf { it.isNotEmpty() }?.let { add(xmlBlock("left_alone", it.joinToString("\n"))) }
-        // already an xml block of its own, written by the catalog that owns the stickers
+        // already an xml block, written by the catalog that owns the stickers
         input.stickerCatalog?.takeIf { it.isNotBlank() }?.let(::add)
         input.quietLately.takeIf { it.isNotEmpty() }?.let { add(xmlBlock("quiet_lately", it.joinToString("\n"))) }
         add(xmlBlock("chat", renderGlance(input.lines)))
@@ -122,9 +121,8 @@ internal fun renderGlance(lines: List<ChatGlanceLine>): String {
 }
 
 /**
- * Reads the decision out of the model's answer. Anything that is not one of the actions with what
- * that action needs comes out as `null`, which the caller treats as staying silent: a look may only
- * ever add something to the chat when the answer says so in full.
+ * Reads the decision out of the model's answer. Anything but a complete action comes out as `null`, read as
+ * silence: a look only adds to the chat when the answer says so in full.
  */
 internal fun parseInitiativeDecision(answer: String): InitiativeDecision? {
     val start = answer.indexOf('{')

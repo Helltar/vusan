@@ -24,15 +24,12 @@ import org.telegram.telegrambots.meta.generics.TelegramClient
 private const val MAX_FILE_ID_CHARS = 200
 private const val DEFAULT_CHAT_FILE_NAME = "file"
 
-/** Telegram serves bots the files it stores only up to this size, whatever the chat could upload. */
+/** Telegram serves bots stored files only up to this size, whatever the chat could upload. */
 internal const val MAX_TELEGRAM_FILE_MB = PlatformLimits.DOWNLOAD_MB
 
 /**
- * Resending a file the platform already holds, by the id it holds it under.
- *
- * A `file_id` is Telegram's own model — it names a file inside one bot's view of one chat, and no
- * other messenger has the concept — so this is separate from [FileTools], whose sending and public
- * downloading work anywhere.
+ * Resends a file the platform already holds, by its id. A `file_id` names a file within one bot's view of one
+ * chat, a concept no other messenger has, so this is apart from [FileTools], which works anywhere.
  */
 class ChatFileTools(
     private val telegram: TelegramClient,
@@ -82,8 +79,8 @@ class ChatFileTools(
     }
 }
 
-// the model rarely has a name to pass — a sticker and a photo carry none — so telegram's own path
-// (`stickers/file_15.webp`) names the file, and at minimum lends its extension to a bare name.
+// the model rarely has a name (stickers and photos carry none), so telegram's path (`stickers/file_15.webp`)
+// names the file, or at least lends its extension.
 private fun chatFilename(requested: String, telegramPath: String?): String {
     val served = telegramPath?.substringAfterLast('/').orEmpty().sanitizeFilename()
     val name = requested.sanitizeFilename().ifBlank { served }.ifBlank { DEFAULT_CHAT_FILE_NAME }

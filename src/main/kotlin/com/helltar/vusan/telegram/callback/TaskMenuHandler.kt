@@ -38,8 +38,8 @@ internal class TaskMenuHandler(
         callbackData?.startsWith(CALLBACK_PREFIX) == true
 
     /**
-     * Sends [userId]'s menu, anchored by [replyParameters]; with [ephemeral] set it is shown to that
-     * person alone, the way `/tasks` from the menu of a group is answered.
+     * Sends [userId]'s menu anchored by [replyParameters]; with [ephemeral] it is shown to that person alone,
+     * as `/tasks` from a group's menu is answered.
      */
     suspend fun sendMenu(
         target: ChatTarget,
@@ -232,8 +232,8 @@ internal class TaskMenuHandler(
     ): TaskMenu {
         val currentChatOnly = !chatIsPrivate
         val listedTasks = tasks.listForUser(telegramUser(userId), chatId.takeIf { currentChatOnly }?.let(::telegramChat))
-        // the capacity line is paired with the per-user task cap, so it counts what that limit governs. the
-        // bot's own follow-ups are listed below it but have their own separate limit.
+        // the capacity line pairs with the per-user cap, so it counts what that cap governs; the bot's
+        // follow-ups are listed below with their own limit.
         val totalTasks = tasks.countForUser(telegramUser(userId), selfInitiated = false)
 
         val shownTasks = listedTasks.fittingInMenu(messages)
@@ -307,8 +307,8 @@ internal class TaskMenuHandler(
         }.getOrThrow()
     }
 
-    // renders items while they fit the text budget, always keeping at least one so a single oversized
-    // task cannot make the menu look empty. what does not fit stays reachable through the task tools.
+    // renders items while they fit, always at least one, so an oversized task cannot make the menu look
+    // empty; the rest stays reachable through the task tools.
     private fun List<ScheduledTask>.fittingInMenu(messages: Messages): List<MenuItem> {
         val fitting = mutableListOf<MenuItem>()
         var used = 0
@@ -376,8 +376,8 @@ internal class TaskMenuHandler(
 
         val MENU_FIRE: DateTimeFormatter = DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm")
 
-        // the per-user task cap is a constructor argument, so the rendered list has to stay under
-        // Telegram's 4096-character message limit however high it is set. the slack covers the header and notice.
+        // the per-user cap is configurable, so the list must stay under telegram's 4096-character limit
+        // however high it is; the slack covers the header and notice.
         const val MAX_MENU_ITEMS_CHARS = 3600
 
         const val ITEM_SEPARATOR = "\n\n"

@@ -25,9 +25,9 @@ import org.telegram.telegrambots.meta.api.objects.polls.input.InputPollOption
 import org.telegram.telegrambots.meta.generics.TelegramClient
 
 /**
- * Send mechanics for one [BotOutput]: which Bot API call each output kind maps to, and which
- * fallback wraps it. The fallbacks themselves live in `TelegramSendFallbacks.kt` and the raw API
- * calls in `TelegramRequests.kt`; routing and reply anchoring stay in [TelegramDelivery].
+ * Send mechanics for one [BotOutput]: the Bot API call per output kind and the fallback wrapping it.
+ * Fallbacks are in `TelegramSendFallbacks.kt`, raw calls in `TelegramRequests.kt`; routing and anchoring stay
+ * in [TelegramDelivery].
  */
 internal object TelegramOutputSender {
 
@@ -44,8 +44,7 @@ internal object TelegramOutputSender {
         replyParameters: ReplyParameters?,
         caption: String?,
         formattingFileNotice: String,
-        // told the id of a poll Telegram actually created. only a sent poll has one, and only then is
-        // there anything for a later `poll_answer` update to be matched against.
+        // the id of a poll telegram actually created, which a later `poll_answer` can be matched against.
         onPollSent: (suspend (String) -> Unit)? = null,
     ) {
         when (item) {
@@ -98,9 +97,8 @@ internal object TelegramOutputSender {
         }
     }
 
-    // agent reply text can carry malformed HTML the model produced. when Telegram rejects it, deliver the raw
-    // text as a document (with a short note explaining why) instead of re-sending it unformatted, so the user
-    // still gets the intended structure. a bot-authored notice goes through plain [sendText] instead.
+    // model text may carry malformed HTML. when telegram rejects it, send the raw text as a document with a
+    // short note rather than unformatted, so the structure survives. bot notices go through plain [sendText].
     suspend fun sendReplyText(
         client: TelegramClient,
         target: ChatTarget,
@@ -120,9 +118,9 @@ internal object TelegramOutputSender {
         }.getOrThrow()
     }
 
-    // opt-in rich messages carry github-flavored markdown. if Telegram rejects the send, deliver the same
-    // source as a .md document — clients render markdown inline and a document is not bound by the 4096-char
-    // text limit. reply-not-found propagates so the caller can retry without the anchor.
+    // rich messages carry github-flavored markdown; if rejected, the same source goes as a .md document,
+    // which clients render inline and which escapes the 4096-char limit. reply-not-found propagates so the
+    // caller can retry unanchored.
     private suspend fun sendRichMessage(
         client: TelegramClient,
         target: ChatTarget,
@@ -153,8 +151,8 @@ internal object TelegramOutputSender {
             setMessageReaction(client, target.chatId, reaction.messageId.telegramMessageId.toInt(), reaction.emoji)
         }.onFailure { e ->
             e.rethrowIfCancellation()
-            // a failed reaction never breaks a turn — except when it failed because the chat is gone or
-            // because flood control asked for a wait, both of which the caller has to hear about.
+            // a failed reaction never breaks a turn, unless the chat is gone or flood control asked for a
+            // wait, which the caller must hear.
             rethrowIfRateLimited(e)
             rethrowIfChatUnreachable(e)
             log.warn(e) {
@@ -196,7 +194,7 @@ internal object TelegramOutputSender {
         caption: String?,
         formattingFileNotice: String,
     ) {
-        // generated GIF (bytes): fall back to document so the animation still arrives.
+        // a generated GIF: fall back to a document so the animation still arrives.
         val bytes = animation.bytes
 
         if (bytes != null) {
@@ -220,7 +218,7 @@ internal object TelegramOutputSender {
             return
         }
 
-        // remote URL-based animation (e.g. Giphy).
+        // a remote animation by URL (e.g. Giphy).
         val url = requireNotNull(animation.url)
 
         sendOrFallback(
@@ -341,8 +339,8 @@ internal object TelegramOutputSender {
         replyParameters = replyParameters,
         failureMessage = "sendAudioGroup failed, falling back to individual tracks",
         send = {
-            // the album carries what a single sendAudio would: player metadata per track, and the
-            // source link as that track's own caption rather than one caption for the whole batch.
+            // each track keeps what a single sendAudio would: player metadata and its own source link as
+            // caption.
             val media = group.audios.map { audio ->
                 InputMediaAudio.builder()
                     .media(ByteArrayInputStream(audio.bytes), audio.filename)
@@ -513,9 +511,8 @@ internal object TelegramOutputSender {
             rethrowIfChatUnreachable(e)
             rethrowIfUnanswered(e)
 
-            // a recipient can refuse voice and video messages from anyone outside their contacts, which
-            // comes back as `VOICE_MESSAGES_FORBIDDEN`. the same mp4 is still allowed as an ordinary
-            // video, and one that plays in the chat beats the document the generic fallback would attach.
+            // recipients can refuse voice and video messages from non-contacts (`VOICE_MESSAGES_FORBIDDEN`);
+            // the same mp4 is still allowed as a video, which beats the generic document fallback.
             log.warn(e) { "sendVideoNote rejected for chat=${target.chatId}, sending the same mp4 as a video" }
             sendVideo(client, target, replyParameters, videoNote.asVideo(), caption = null, formattingFileNotice)
         }.getOrThrow()
@@ -537,7 +534,7 @@ internal object TelegramOutputSender {
         quiz: BotOutput.Quiz,
         onPollSent: (suspend (String) -> Unit)?,
     ) {
-        // a poll has no shape to fall back to: a refusal is the item's own failure, which the delivery reports
+        // a poll has no fallback shape: a refusal is the item's own failure
         client.api<Message> {
             executeAsync(
                 SendPoll.builder()
@@ -578,14 +575,14 @@ internal object TelegramOutputSender {
         }.reportPoll(onPollSent)
     }
 
-    // the id lives on the poll inside the sent message, and only a send that really produced one has
-    // it: a fallback that turned the poll into text leaves nothing to match an answer against.
+    // only a send that really produced a poll has its id; a fallback to text leaves nothing to match answers
+    // against.
     private suspend fun Message.reportPoll(onPollSent: (suspend (String) -> Unit)?) {
         val id = poll?.id ?: return
         onPollSent?.invoke(id)
     }
 
-    // deliver the caption as a plain message when the media itself could not be sent at all.
+    // the caption as a plain message when the media could not be sent at all.
     private fun captionTextFallback(
         client: TelegramClient,
         target: ChatTarget,
@@ -595,7 +592,9 @@ internal object TelegramOutputSender {
         { caption?.let { sendText(client, target, it, replyParameters) } }
 }
 
-/** Appends an HTML source link (e.g. `<a href="url">YouTube</a>`) to the caption; `null` when both are empty. */
+/**
+ * Appends an HTML source link (e.g. `<a href="url">YouTube</a>`) to the caption; `null` when both are empty.
+ */
 private fun captionWithSourceLink(caption: String?, sourceUrl: String?): String? {
     val link = sourceUrl?.let { """<a href="${it.escapeHtml()}">${trackLinkLabel(it)}</a>""" }
 
@@ -611,7 +610,7 @@ private fun trackLinkLabel(url: String): String {
         "soundcloud.com" in host -> "SoundCloud"
         "spotify.com" in host -> "Spotify"
         "bandcamp.com" in host -> "Bandcamp"
-        // the site's own name, which every language reads, rather than a word of one
+        // the site's own name, readable in any language
         else -> host.removePrefix("www.").ifBlank { url }.escapeHtml()
     }
 }

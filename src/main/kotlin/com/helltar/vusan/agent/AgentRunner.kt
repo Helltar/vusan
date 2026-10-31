@@ -36,28 +36,27 @@ class AgentRunner(
     private val memory: MemoryRepository,
     conversationCompactor: ConversationCompactor,
     private val conversationConfig: ConversationConfig = ConversationConfig(),
-    // what the chat around a turn adds to its prompt: the diary, the recent chat, the sticker shortlist
+    // what the chat adds to a turn's prompt: the diary, the recent chat, the sticker shortlist
     private val surroundings: TurnSurroundings = TurnSurroundings(),
-    // which model is answering when it is not the one the system prompt names, so a turn served by the
-    // fallback provider does not claim to be the primary.
+    // the answering model when it is not the one the system prompt names, so a fallback turn does not claim
+    // to be the primary.
     private val fallbackModelInUse: () -> String? = { null },
-    // the ceiling every conversation shares: one person's lock says nothing about how many people may
-    // be served at once, and each turn is an LLM call with its tools behind it. no default — a runner
-    // quietly serving one turn at a time is not something to discover under load.
+    // the ceiling all conversations share; each turn is an LLM call plus tools. no default, so serving one
+    // turn at a time is never discovered under load.
     maxConcurrentTurns: Int,
-    // how long one person may keep a group to themselves; shared with the adapter, which reports the
-    // chat's other lines to it
+    // how long one person may keep a group to themselves; shared with the adapter, which reports the chat's
+    // other lines
     private val floor: ChatFloor = ChatFloor(),
 ) {
 
     private val planner = ConversationPlanner(conversation, conversationCompactor)
     private val admission = TurnAdmission(maxConcurrentTurns)
 
-    // the last request of each conversation, where the provider reads back only what a request repeats
+    // the last request of each conversation, for providers that read back only what a request repeats
     private val sentConversations = SentConversations().takeIf { agentFactory.continuesLastRequest }
 
-    // the lock is taken before a place, in every path: a turn that holds a place is running and waits
-    // for nothing, so nothing can wait in a circle — and a person's line costs the others no places.
+    // the lock is always taken before a place: a turn holding a place is running and waits for nothing, so no
+    // cycle, and one person's lines cost others no places.
     private val conversationLocks = ConversationLocks<ConversationScope>(MAX_QUEUED_TURNS_PER_CONVERSATION)
     private val running = RunningTurns<ConversationScope>()
 
@@ -69,8 +68,8 @@ class AgentRunner(
         val key = request.context.scope
         val messages = Messages.of(request.context.language)
 
-        // a message nobody tagged the bot in may not have been meant for it at all, so it is turned away
-        // in silence: "hold on" dropped into someone else's conversation is the one reply worse than none.
+        // an untagged message may not have been for the bot, so it is turned away silently: "hold on" in
+        // someone else's conversation is worse than nothing.
         fun refusal(reply: String): AgentResult {
             if (!request.context.ambient) return AgentResult(outputs = emptyList(), comment = reply)
 
@@ -81,8 +80,8 @@ class AgentRunner(
             return AgentResult(outputs = emptyList(), comment = null)
         }
 
-        // decided ahead of the line: a message that will not be answered should not hold a place in it.
-        // silence, not a notice, whoever sent it — the one line that said so was the stretch's last answer.
+        // decided before queuing, so an unanswered message holds no place. silent whoever sent it: the
+        // stretch's last answer already said so.
         val verdict = floor.admit(request.context)
         val lastAnswerOfStretch = verdict == ChatFloor.Verdict.LAST_ANSWER
 
@@ -95,12 +94,12 @@ class AgentRunner(
             return AgentResult(outputs = emptyList(), comment = null)
         }
 
-        // counted ahead of the line as well, so a turn that ends without answering — turned away, silent,
-        // failed or stopped — gives its count back, and a stretch never closes on a last answer nobody got
+        // counted before queuing too, so a turn that ends without answering (refused, silent, failed,
+        // stopped) gives its count back, and a stretch never closes on an answer nobody got
         var answered = false
 
-        // tracked from the line on, so a stop takes the person's waiting messages along with the one
-        // that is running instead of letting the next of them start.
+        // tracked from the queue on, so a stop also cancels the person's waiting messages instead of letting
+        // the next start.
         val result =
             try {
                 running.track(key) {
@@ -118,24 +117,22 @@ class AgentRunner(
         return result ?: refusal(messages.busyReply)
     }
 
-    /** Starts the worker that recaps a conversation's history once a turn has left it longer than it keeps raw. */
+    /** Starts the worker that recaps a conversation once a turn left it longer than it keeps raw. */
     fun launchRecapsIn(scope: CoroutineScope): Job =
         planner.launchIn(scope)
 
-    /** Whether this conversation has a turn running or waiting in its line. */
+    /** Whether this conversation has a turn running or queued. */
     fun hasTurnUnderWay(scope: ConversationScope): Boolean =
         running.holds(scope)
 
-    /** Whether anyone in this chat has a turn running or waiting in their line. */
+    /** Whether anyone in this chat has a turn running or queued. */
     fun hasTurnUnderWayIn(chat: ChatRef): Boolean =
         running.holdsAny { it.chat == chat }
 
     /**
-     * Cancels what this conversation has under way — the turn it is running and the person's messages
-     * waiting behind it — and reports whether there was anything. What the turn happened to be doing does
-     * not matter: the model call, the tool it is inside and everything that tool started are children of
-     * the same job. A sandbox command outlives it on its own machine, bounded by its own timeout, and the
-     * model can list and cancel those separately.
+     * Cancels the running turn and the person's queued messages, and reports whether there was anything. The
+     * model call, the tool and whatever it started are children of one job. A sandbox command outlives it on
+     * its machine, bounded by its own timeout, and the model can list and cancel those.
      */
     fun stop(scope: ConversationScope): Boolean =
         running.cancel(scope)
@@ -147,17 +144,15 @@ class AgentRunner(
     ): AgentResult {
         val key = request.context.scope
 
-        // a queued turn waits for its place rather than being turned away, and takes it after the
-        // conversation lock for the same reason `handle` does.
+        // a queued turn waits for its place instead of being refused, and takes it after the lock as in
+        // `handle`.
         return conversationLocks.withLock(key) {
             admission.admitQueued { running.track(key) { runAgent(request, onToolStarting, narrator) } }
         }
     }
 
-    // a turn persists its own history under this lock, so an outside clear (the `/clear` command) has to
-    // take the same lock or a turn already in flight would append itself back into the wiped history.
-    // the lock is keyed by what it guards, one conversation, so the same person writing in two chats is
-    // served in both instead of being told the bot is busy.
+    // a turn persists its history under this lock, so `/clear` must take it too or an in-flight turn would
+    // append itself back. keyed per conversation, so the same person in two chats is served in both.
     suspend fun clearConversation(scope: ConversationScope) {
         conversationLocks.withLock(scope) {
             conversation.clear(scope)
@@ -175,10 +170,11 @@ class AgentRunner(
         val userMemory = if (context.sender.isPerson) memory.load(context.user.memoryOwner) else emptyList()
         val chatMemory = if (context.chat.isPrivate) emptyList() else memory.load(context.chatRef.memoryOwner)
 
-        // what a continued request has to have been sent with, since each of its messages carries its own turn's
+        // what a continued request must have been sent with, since each of its messages carries its own
+        // turn's
         val memoryFingerprint = (userMemory to chatMemory).hashCode()
 
-        // read before anything is built, so a log erased while this turn runs keeps its request from being kept
+        // read before building, so a log erased during this turn keeps its request from being kept
         val erasuresSeen = sentConversations?.erasuresOf(context.chatRef) ?: 0
 
         val outbox = BotOutbox(context.chat.capabilities)
@@ -190,7 +186,7 @@ class AgentRunner(
             currentTurnPrompt(
                 userInput = request.prompt,
                 context = context,
-                // the turn is stored only after the run, so this still points at the previous exchange.
+                // the turn is stored after the run, so this still points at the previous exchange.
                 previousExchangeAt = conversation.lastInteractionAt(context.scope),
                 lastAnswerOfStretch = lastAnswerOfStretch,
                 userMemory = userMemory,
@@ -218,7 +214,7 @@ class AgentRunner(
                 rawRetentionCutoff = rawRetentionCutoff(),
             )
 
-        // the labels of the request it continues are in it, so this turn's go on from where they stopped
+        // the labels of the continued request are in it, so this turn's numbering carries on
         continued?.let { shelf.numberFrom(it.nextCall) }
 
         val historyTokens = continued?.historyTokens ?: conversationPlan.estimatedTokens
@@ -253,13 +249,12 @@ class AgentRunner(
         val toolEvents = mutableListOf<ToolEvent>()
         val tokenUsages = mutableListOf<TokenUsage>()
 
-        // every request kept for the chat carries what it was saying, so a cleared log drops them the moment it
-        // is cleared, whatever the rest of the turn does
+        // every request kept for the chat carries what it said, so a cleared log drops them at once
         fun recordToolEvent(event: ToolEvent) {
             toolEvents += event
             if (event.toolName == GroupLogTools::clearGroupLog.name && !event.isError) sentConversations?.forgetChat(context.chatRef)
         }
-        // what the turn's last request held, once the run came back with it
+        // what the turn's last request held, once the run returned
         var sent: List<Message> = emptyList()
 
         val answer =
@@ -282,20 +277,18 @@ class AgentRunner(
                 )
             } catch (e: Throwable) {
                 e.rethrowIfCancellation()
-                // logs the cause either way; the reply itself is only used when nothing was delivered.
+                // logs the cause either way; the reply is used only when nothing was delivered.
                 val failureReply = replyForAgentFailure(context, e)
 
-                // an announced plan is a promise, not an answer, so a turn holding nothing else owes the
-                // user the reason it stopped. Without this the chat sees "building it now…" and then
-                // silence forever, which is the worst reading of a failure there is.
+                // an announced plan is a promise, not an answer, so a turn with nothing else owes the reason
+                // it stopped; otherwise the chat sees "building it now…" followed by silence.
                 if (!outbox.hasAnswered) {
                     return AgentResult(outputs = outbox.pending, comment = failureReply, failed = true)
                 }
 
-                // the run died with an answer already queued, or already in the chat. keep that instead of
-                // replacing it with the canned failure, and let the turn finish normally so the work reaches
-                // the history — a scheduled task then counts the attempt as delivered rather than paying for
-                // it all again.
+                // an answer is already queued or in the chat: keep it instead of the canned failure, and
+                // finish normally so the work reaches history and a scheduled task counts the attempt as
+                // delivered.
                 log.warn {
                     "agent.run failed after partial delivery for chat=${context.chat.id} user=${context.sender.id}; " +
                             "finishing with what it already answered, ${outbox.pending.size} output(s) still queued"
@@ -318,9 +311,8 @@ class AgentRunner(
                         outbox.silence?.let { " why=[${it.collapseWhitespaceAndCap(LOG_REPLY_MAX_CHARS)}]" }.orEmpty()
             }
 
-            // a silence the turn declared is an answer it gave, and the message it answered is kept with it:
-            // the next turn has to see that it was asked to be quiet, not meet the same request as new. a
-            // turn that merely delivered nothing — a message that was not for it — leaves no trace
+            // a declared silence is an answer, kept with its message so the next turn sees it was asked to be
+            // quiet. a turn that merely delivered nothing (a message not for it) leaves no trace
             if (outbox.silence == null) return AgentResult(outputs = emptyList(), comment = null)
         }
 
@@ -343,7 +335,7 @@ class AgentRunner(
             val stored = conversation.appendInteraction(context.scope, turns)
             planner.recapLater(context.scope, preparation.tokenBudget.conversationTokens)
 
-            // a run that threw left no request to continue, and the history it stored is not in the one kept
+            // a run that threw left nothing to continue, and its stored history is not in the kept request
             sentConversations?.let { kept ->
                 if (stored != null && sent.isNotEmpty()) {
                     val oldestTurnAt = continued?.oldestTurnAt ?: conversationPlan.oldestIncludedAt ?: Instant.now()
@@ -428,21 +420,20 @@ class AgentRunner(
 
     private fun rawRetentionCutoff(): Instant = Instant.now().minus(conversationConfig.retentionDays.toLong(), ChronoUnit.DAYS)
 
-    // pick the user-facing reply and log accordingly. LLM provider errors arrive as a large JSON body, so
-    // they get a single capped WARN line; a transient overload (429/503) gets a friendly "try again" reply,
-    // any other provider error and genuine unexpected failures get the generic fallback (the latter with a
-    // full stack trace, since it points at a real bug).
+    // picks the user-facing reply and logs. provider errors arrive as large JSON, so one capped WARN line; a
+    // transient overload (429/503) gets "try again", anything else the generic fallback, with a full trace
+    // for unexpected failures since they point at bugs.
     private fun replyForAgentFailure(context: RequestContext, e: Throwable): String {
         val messages = Messages.of(context.language)
 
-        // the ChatGPT session died mid-turn (expired, revoked, or reused refresh token). nothing the
-        // user can do, and nothing to retry — say so plainly instead of the generic failure reply.
+        // the ChatGPT session died mid-turn (expired, revoked, reused refresh token): nothing to retry, so
+        // say so plainly.
         generateSequence(e) { it.cause }.filterIsInstance<CodexAuthException>().firstOrNull()?.let { authError ->
             log.error { "codex auth failed for chat=${context.chat.id} user=${context.sender.id}: ${authError.message}" }
             return messages.signInRequiredReply
         }
 
-        // a refusal comes back as an answer, not an error, so it carries no provider error to read
+        // a refusal is an answer, not an error, so there is no provider error to read
         generateSequence(e) { it.cause }.filterIsInstance<ModelRefusal>().firstOrNull()?.let { refusal ->
             log.warn { "model declined the request for chat=${context.chat.id} user=${context.sender.id}: reason=[${refusal.reason.orEmpty()}]" }
             return messages.contentPolicyReply
@@ -466,14 +457,13 @@ class AgentRunner(
     private companion object {
         val log = KotlinLogging.logger {}
 
-        // how many turns may wait behind the one a conversation is running before the next is told to
-        // hold on.
+        // how many turns may wait behind a running one before the next is told to hold on.
         const val MAX_QUEUED_TURNS_PER_CONVERSATION = 3
     }
 }
 
-// whether a turn gave the person a line of its own in the chat: a reaction adds none, and the canned reply of
-// a failed run is no answer
+// whether the turn put a line of its own in the chat: a reaction adds none, and a failed run's canned reply
+// is no answer
 private val AgentResult.answeredInChat: Boolean
     get() = !failed && (!comment.isNullOrBlank() || outputs.any { it.output !is BotOutput.Reaction })
 

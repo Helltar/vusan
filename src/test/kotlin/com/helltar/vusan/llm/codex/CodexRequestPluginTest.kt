@@ -57,8 +57,7 @@ class CodexRequestPluginTest {
         assertTrue(headers["User-Agent"].orEmpty().startsWith("$CODEX_ORIGINATOR/"))
     }
 
-    // through the same call a model makes, which is where the cache key becomes the request's attribute
-    // the plugin reads
+    // through the same call a model makes, where the cache key becomes the request attribute the plugin reads
     private suspend fun sentHeaders(body: String): Headers {
         var sent: Headers? = null
 

@@ -123,7 +123,7 @@ class SandboxClientTest {
         assertEquals("hello", first.output)
         assertEquals(CommandStatus.COMPLETED, first.status)
         assertEquals(0, first.exitCode)
-        // opening asks the server for the person's sandbox; the id it answers with addresses the rest.
+        // opening asks the server for the person's sandbox; the returned id addresses the rest.
         assertEquals("POST /v1/sandboxes", paths.first())
         assertEquals(1, paths.count { it == "POST /v1/sandboxes" })
         assertTrue("POST /v1/sandboxes/$SANDBOX_ID/execs" in paths)
@@ -195,7 +195,7 @@ class SandboxClientTest {
         val error = assertFailsWith<IllegalStateException> { client.sandboxOf("telegram:42").exec("ls", null) }
 
         assertContains(error.message.orEmpty(), "at capacity")
-        // the wait the server asked for, not one this side made up
+        // the wait the server asked for, not one made up here
         assertContains(error.message.orEmpty(), "in about 5 seconds")
     }
 

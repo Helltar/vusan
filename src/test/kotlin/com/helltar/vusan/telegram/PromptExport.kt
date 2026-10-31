@@ -52,9 +52,8 @@ import kotlinx.serialization.json.putJsonObject
 import org.telegram.telegrambots.meta.generics.TelegramClient
 
 /**
- * The deployment a prompt is exported for. Everything optional is on unless switched off, since a study
- * of the prompt wants the tools there are; [sandbox], [images] and [videos] are what the prompt itself
- * says differently about.
+ * The deployment a prompt is exported for. Everything optional is on unless switched off, since a study of
+ * the prompt wants the tools there are; [sandbox], [images] and [videos] change what the prompt itself says.
  */
 internal data class PromptExportOptions(
     val model: String = "gpt-6.1-sol",
@@ -64,19 +63,18 @@ internal data class PromptExportOptions(
     val sandbox: Boolean = true,
     val images: Boolean = true,
     val videos: Boolean = true,
-    // the plan's researched answer, `answerFromWeb`, is there only where the chat runs on the ChatGPT plan
+    // the plan's researched answer, `answerFromWeb`, exists only where chat runs on the ChatGPT plan
     val codexSearch: Boolean = true,
     val privateChat: Boolean = false,
 )
 
 /**
- * What a model is sent before any conversation — the system prompt and every tool definition, in request
- * order — as the production code builds them for one deployment. Nothing is called: every client behind
- * the tools is built over an engine that refuses to be used.
+ * What a model is sent before any conversation (the system prompt and every tool definition, in request
+ * order) as production builds them for one deployment. Nothing is called: every client is built over an
+ * engine that refuses to be used.
  *
- * `operational` is the content of the `<operational_contract>` block on its own, so a study can swap the
- * fixed contract at its head (everything before `# Passing results between tools`) and keep the generated
- * sections after it.
+ * `operational` is the `<operational_contract>` block's content alone, so a study can swap the fixed contract
+ * at its head (everything before `# Passing results between tools`) and keep the generated sections.
  */
 internal fun exportPrompt(options: PromptExportOptions): JsonObject {
     val system =
@@ -125,10 +123,10 @@ internal fun exportPrompt(options: PromptExportOptions): JsonObject {
 }
 
 /**
- * `./gradlew -q exportPrompt --args="--out /tmp/prompt.json"` — see [PromptExportOptions] for what the
- * flags switch: `--model <id>`, `--personality <file>`, `--username <handle>` (repeatable),
- * `--display-name <name>`, `--no-sandbox`, `--no-images`, `--no-videos`, `--no-codex-search`, `--private`.
- * Without `--out` the JSON goes to stdout, after whatever the log printed there.
+ * `./gradlew -q exportPrompt --args="--out /tmp/prompt.json"`. Flags (see [PromptExportOptions]): `--model
+ * <id>`, `--personality <file>`, `--username <handle>` (repeatable), `--display-name <name>`, `--no-sandbox`,
+ * `--no-images`, `--no-videos`, `--no-codex-search`, `--private`. Without `--out` the JSON goes to stdout,
+ * after whatever the log printed.
  */
 fun main(args: Array<String>) {
     val (options, out) = parseExportArgs(args.toList())

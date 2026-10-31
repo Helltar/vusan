@@ -17,8 +17,8 @@ class TurnToolBudgetTest {
         assertEquals(75, budget.percentLeft)
     }
 
-    // the last result is bounded to what is left, but it is charged at its real estimate, which can
-    // overshoot — the budget floors instead of going negative and reading as a fresh one.
+    // the last result is bounded to what is left but charged at its real estimate, which may overshoot; the
+    // budget floors instead of going negative and reading as fresh.
     @Test
     fun `an overspend stops at zero`() {
         val budget = TurnToolBudget(1_000)
@@ -29,7 +29,7 @@ class TurnToolBudgetTest {
         assertEquals(0, budget.percentLeft)
     }
 
-    // one threshold serves both surfaces: what the tool answers and when the run volunteers its notice
+    // one threshold serves both the tool's answer and the run's own notice
     @Test
     fun `the reserve reads as low from a quarter down`() {
         val budget = TurnToolBudget(1_000)

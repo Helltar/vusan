@@ -25,8 +25,8 @@ class MessageToolsTest {
         assertEquals("Hello, world!", text.text)
     }
 
-    // the whole point of an announcement: it reaches the chat now, and is recorded so the history and
-    // the group transcript still carry what the bot said.
+    // an announcement reaches the chat now and is recorded, so history and the group transcript still carry
+    // it.
     @Test
     fun `announcePlan goes out through the live status and is recorded as delivered`() = runBlocking {
         val outbox = BotOutbox()
@@ -43,8 +43,7 @@ class MessageToolsTest {
         assertEquals("I will build the game", assertIs<BotOutput.Text>(item.output).text)
     }
 
-    // a scheduled run has nobody watching it go by, so the words travel with the answer instead of
-    // being dropped.
+    // nobody watches a scheduled run, so the words travel with the answer instead of being dropped.
     @Test
     fun `announcePlan falls back to the queue when no one is watching`() = runBlocking {
         val outbox = BotOutbox()
@@ -59,8 +58,8 @@ class MessageToolsTest {
         assertEquals("I will build the game", assertIs<BotOutput.Text>(item.output).text)
     }
 
-    // the first announcement is what the user read; a second would rewrite it under them, and the
-    // history would then claim two messages where the chat shows one.
+    // the first announcement is what the user read; a second would rewrite it, and history would claim two
+    // messages where the chat shows one.
     @Test
     fun `announcePlan refuses to announce twice`() = runBlocking {
         val outbox = BotOutbox()
@@ -91,8 +90,8 @@ class MessageToolsTest {
         assertTrue(outbox.pending.isEmpty())
     }
 
-    // silence is an answer only where there is no other: once something is on its way, the turn finishes
-    // with that, and the history records the call as the mistake it was
+    // silence is an answer only where there is no other: once something is on its way the turn finishes with
+    // that, and history records the call as a mistake
     @Test
     fun `staySilent is refused once a message is queued`() = runBlocking {
         val outbox = BotOutbox()
@@ -129,7 +128,7 @@ class MessageToolsTest {
         val outbox = BotOutbox()
         val tools = MessageTools(outbox)
 
-        // full-size messages cannot coalesce, so each one occupies its own bubble up to the cap.
+        // full-size messages cannot coalesce, so each takes its own bubble up to the cap.
         val fullSize = "a".repeat(BotOutbox.MAX_TEXT_MESSAGE_CHARS)
         repeat(BotOutbox.MAX_TEXT_MESSAGES) {
             assertTrue(tools.sendMessage(fullSize).startsWith("Delivered"))
@@ -206,8 +205,8 @@ class MessageToolsTest {
         assertTrue(outbox.redirectToPrivate)
     }
 
-    // an interim message is an answer the turn already gave: in the chat now, recorded for the history, and
-    // not a promise that leaves the turn owing a delivery
+    // an interim message is an answer already given: in the chat now, recorded in history, not a promise
+    // leaving the turn owing a delivery
     @Test
     fun `sendMessageNow goes out through the live chat and counts as delivered`() = runBlocking {
         val outbox = BotOutbox()
@@ -242,8 +241,8 @@ class MessageToolsTest {
         assertEquals(3, outbox.pending.size)
     }
 
-    // the live status sits in the chat the turn runs in; a reply the user asked to have in private
-    // goes there with the rest instead of surfacing in the group
+    // the live status is in the turn's chat; a reply the user wants in private goes there with the rest
+    // instead of surfacing in the group
     @Test
     fun `a reply routed to private messages keeps the plan and interim messages out of the chat`() = runBlocking {
         val outbox = BotOutbox()
@@ -263,7 +262,7 @@ class MessageToolsTest {
         assertTrue("compiling your report" in queued && "the first page" in queued)
     }
 
-    // a full queue must refuse the words, never let them fall through to the chat
+    // a full queue must refuse the words, never leak them into the chat
     @Test
     fun `a private reply whose queue is full refuses the plan and the interim message outright`() = runBlocking {
         val outbox = BotOutbox()

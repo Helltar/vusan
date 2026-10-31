@@ -6,12 +6,14 @@ import com.helltar.vusan.stt.OpenAiWhisperClient
 import io.github.oshai.kotlinlogging.KotlinLogging
 
 /**
- * Turns the audio track of a video into text. Every failure — a silent video, a provider error — is a
- * `null`, because the sampled frames alone still answer the request.
+ * Turns a video's audio track into text. Every failure (a silent video, a provider error) is `null`, since
+ * the frames alone still answer.
  */
 interface VideoAudioTranscriber {
 
-    /** The most of a track that is heard, in seconds: the rest is cut away before the provider sees it, so it is never paid for. */
+    /**
+     * The most of a track that is heard, in seconds; the rest is cut before the provider, so never paid for.
+     */
     val maxSeconds: Int
 
     suspend fun transcribeOrNull(audio: ByteArray): String?

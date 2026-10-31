@@ -45,8 +45,8 @@ class CatalogToolsTest {
         assertContains(catalog.visibleDefinitions().map { it.name }, "speakTestText")
     }
 
-    // the tools of a group that did load are still worth having, so the call reports the bad name
-    // alongside them instead of failing the whole batch.
+    // the tools of a group that loaded are still worth having, so the bad name is reported beside them
+    // instead of failing the batch.
     @Test
     fun `loadTools loads what it recognizes and reports the rest`() = runBlocking {
         val result = CatalogTools(catalog()).loadTools("gifs,teleportation")

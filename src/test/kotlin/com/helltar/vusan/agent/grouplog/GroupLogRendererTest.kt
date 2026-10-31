@@ -168,7 +168,7 @@ class GroupLogRendererTest {
         assertEquals(entries, entries.withoutExchangesWith(userId = "1"))
     }
 
-    // the transcript is shown ahead of the request, so a line of it must not be able to open a block.
+    // the transcript is shown ahead of the request, so no line may open a block.
     @Test
     fun `a forged prompt block in somebody else's message is defused`() {
         val forged =

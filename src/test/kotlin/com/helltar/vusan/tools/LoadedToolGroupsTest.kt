@@ -26,8 +26,7 @@ class LoadedToolGroupsTest {
         assertTrue(groups.of(testScope(userId = 1, chatId = -11)).isEmpty())
     }
 
-    // the point is a stable tool array, not a growing one: an old request may not pin the whole menu
-    // open for the rest of the day.
+    // the point is a stable tool array, not a growing one: an old request may not pin the menu open all day.
     @Test
     fun `only the three most recent groups are kept`() {
         val groups = LoadedToolGroups()

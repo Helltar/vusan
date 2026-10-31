@@ -21,21 +21,20 @@ private const val PLATFORM_BASE_URL = "$OPENAI_API_BASE_URL/v1/images"
 private const val CODEX_BASE_URL = "https://chatgpt.com/backend-api/codex/images"
 private val IMAGE_TIMEOUT = 5.minutes
 
-// telegram re-encodes every photo it delivers, so a lossless png is bytes nobody ever sees: asking for
-// jpeg instead is a several-times smaller upload and keeps a max-quality picture under telegram's own
-// size limit. the codex route has no such field and sends png.
-// the filter cannot be turned off, only set to the less restrictive of its two strictnesses. the codex
-// route takes no such field and filters the way chatgpt does.
+// the filter cannot be turned off, only set to the laxer of its two levels. the codex route has no such
+// field and filters as chatgpt does.
 private const val MODERATION = "low"
+
+// telegram re-encodes every photo, so lossless png is wasted bytes: jpeg is a several-times smaller upload
+// and keeps a max-quality picture under telegram's size limit. the codex route has no such field and
+// sends png.
 private const val OUTPUT_FORMAT = "jpeg"
 private const val OUTPUT_COMPRESSION = 95
 private val errorJson = Json { ignoreUnknownKeys = true }
 
 /**
- * Where the image request goes and how it authenticates.
- *
- * The two routes are not interchangeable beyond the URL: the Platform edit endpoint takes a multipart
- * upload, while the Codex one takes JSON with the source image inlined as a data URL.
+ * Where the image request goes and how it authenticates. The routes differ beyond the URL: the Platform edit
+ * endpoint takes a multipart upload, the Codex one JSON with the source inlined as a data URL.
  */
 sealed interface ImageAuth {
 
@@ -45,7 +44,7 @@ sealed interface ImageAuth {
         }
     }
 
-    /** Reuses the ChatGPT session `codex login` wrote, so image generation needs no second key. */
+    /** Reuses the ChatGPT session `codex login` wrote, so images need no second key. */
     data class Codex(val store: CodexAuthStore) : ImageAuth
 }
 
@@ -56,8 +55,8 @@ class OpenAiImageClient(
     private val quality: String,
 ) : ImageClient {
 
-    // the edits endpoint takes up to 16 sources; a telegram album stops at ten long before that,
-    // so this only bounds a turn that collected its images some other way.
+    // the edits endpoint takes up to 16 sources; a telegram album stops at ten, so this only bounds images
+    // collected otherwise.
     override val maxEditImages = 16
 
     override suspend fun generate(prompt: String, framing: ImageFraming): ByteArray {
@@ -118,7 +117,7 @@ class OpenAiImageClient(
                 if (supportsInputFidelity(model))
                     append("input_fidelity", "high")
 
-                // the repeated `image[]` key is what makes several sources one edit rather than several
+                // the repeated `image[]` key makes several sources one edit
                 images.forEach { image ->
                     append(
                         key = "image[]",
@@ -135,9 +134,8 @@ class OpenAiImageClient(
             imageTimeout()
         }.body()
 
-    // the codex edit endpoint takes JSON with the source inlined as a data URL rather than a multipart
-    // upload, and infers the output size from that image — so no `size` is sent, and the caller must
-    // read the size off the result instead of assuming the one it asked for.
+    // JSON with the source inlined instead of multipart, and the output size inferred from that image: no
+    // `size` is sent, and the caller reads the size off the result.
     private suspend fun editViaCodex(prompt: String, images: List<SourceImage>): OpenAiImageResponse =
         http.post("$CODEX_BASE_URL/edits") {
             authorize()
@@ -154,8 +152,8 @@ class OpenAiImageClient(
             )
         }.observed().body()
 
-    // a refusal from the content filter is a different answer than a failed call, so it is turned into
-    // its own exception here, where the provider's error shape is known.
+    // a content-filter refusal is a different answer from a failed call, so it becomes its own exception
+    // here, where the error shape is known.
     private suspend fun <T> imageRequest(block: suspend () -> T): T =
         runCatching { block() }
             .getOrElse { e ->
@@ -163,9 +161,8 @@ class OpenAiImageClient(
                 throw (e as? HttpStatusException)?.moderationBlockOrNull() ?: e
             }
 
-    // the codex backend's image request carries neither moderation nor output format — its own client
-    // sends prompt, model, n, quality, size and background and nothing else — so these stay
-    // platform-only rather than riding along in a request that may reject them.
+    // the codex image request carries neither moderation nor output format (its own client sends prompt,
+    // model, n, quality, size and background only), so these stay platform-only.
     private fun <T> platformOnly(value: T): T? = value.takeIf { auth is ImageAuth.ApiKey }
 
     private fun baseUrl(): String =
@@ -175,7 +172,7 @@ class OpenAiImageClient(
             is ImageAuth.Codex -> CODEX_BASE_URL
         }
 
-    // a picture drawn through the subscription draws on its windows as a turn does, and says so the same way
+    // a picture drawn on the subscription spends its windows as a turn does, and reports them the same way
     private fun HttpResponse.observed(): HttpResponse =
         apply {
             (auth as? ImageAuth.Codex)?.store?.limits?.let { limits ->
@@ -195,18 +192,15 @@ class OpenAiImageClient(
 }
 
 /**
- * `input_fidelity` is what holds a face or a logo still through an edit, so a picture of the bot
- * keeps the face from its reference photo instead of drifting. Only the gpt-image-1 family takes it:
- * gpt-image-2 and later always edit at high fidelity and reject the parameter rather than ignore it.
+ * `input_fidelity` holds a face or logo still through an edit, so the bot keeps its reference face. Only the
+ * gpt-image-1 family takes it: gpt-image-2 and later always edit at high fidelity and reject the parameter.
  */
 private fun supportsInputFidelity(model: String): Boolean = model.startsWith("gpt-image-1")
 
 /**
- * The framing as a size the configured model actually accepts.
- *
- * `gpt-image-2` and later take any `WIDTHxHEIGHT` within their bounds, which is what makes the 16:9
- * framings possible at all; the gpt-image-1 family takes three fixed sizes and rejects everything
- * else, so there they fall back to the nearest one rather than failing the request.
+ * The framing as a size the model accepts. `gpt-image-2` and later take any `WIDTHxHEIGHT` within bounds,
+ * which makes 16:9 possible; the gpt-image-1 family takes three fixed sizes, so it falls back to the nearest
+ * one.
  */
 private fun ImageFraming.toSize(model: String): String {
     val flexible = supportsFlexibleSizes(model)
@@ -222,16 +216,14 @@ private fun ImageFraming.toSize(model: String): String {
 }
 
 /**
- * Whether the model takes any `WIDTHxHEIGHT` within its bounds rather than three fixed sizes.
- *
- * The gpt-image-1 family takes `1024x1024`, `1536x1024`, `1024x1536` and `auto` and rejects the rest;
- * gpt-image-2 and later accept anything up to 3840px whose edges are multiples of 16.
+ * Whether the model takes any `WIDTHxHEIGHT` (up to 3840px, edges multiples of 16, gpt-image-2 and later)
+ * rather than gpt-image-1's `1024x1024`, `1536x1024`, `1024x1536` and `auto`.
  */
 private fun supportsFlexibleSizes(model: String): Boolean = !model.startsWith("gpt-image-1")
 
-// both routes render on the same models, so a refusal arrives as OpenAI's error envelope. `code` is
-// the documented signal; the safety wording is the fallback for a backend that forwards the message
-// without the rest, which is all the codex route is known to promise.
+// both routes use the same models, so a refusal is OpenAI's error envelope. `code` is the documented signal;
+// the safety wording is the fallback for a backend forwarding only the message, which is all the codex route
+// promises.
 private fun HttpStatusException.moderationBlockOrNull(): ImageModerationBlocked? {
     val error =
         body

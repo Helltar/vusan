@@ -4,11 +4,9 @@ import com.helltar.vusan.request.ChatCapabilities
 import io.github.oshai.kotlinlogging.KotlinLogging
 
 /**
- * A queued [output] together with the routing decision ([toPrivate]) captured when it was enqueued.
- * [delivered] marks one that already reached the chat while the turn was still running: delivery must
- * record it and move on rather than sending it a second time. [announcement] marks the plan a turn
- * promised before starting work — it is sent like anything else, but it is not an answer, so a turn
- * holding nothing but this has produced nothing.
+ * A queued [output] with the routing decision ([toPrivate]) made at enqueue. [delivered] marks one already in
+ * the chat mid-turn: delivery records it without sending it again. [announcement] marks the plan a turn
+ * promised before working: sent like anything else, but not an answer.
  */
 data class OutboxItem(
     val output: BotOutput,
@@ -20,13 +18,13 @@ data class OutboxItem(
 /**
  * The queue a turn writes its answer into.
  *
- * [capabilities] is what the destination will actually accept. An output it refuses is dropped here
- * rather than after the download, generation or speech synthesis that produced it has been paid for
- * and the send rejected — and [enqueue] says so, because a tool that reports "sent" for something
- * nobody will see is worse than one that says it could not.
+ * [capabilities] is what the destination accepts. A refused output is dropped here, before its download,
+ * generation or synthesis is paid for, and [enqueue] says so: a tool reporting "sent" for something nobody
+ * will see is worse than one saying it could not.
+ *
+ * Read-only calls of a batch run in parallel and may still read the queue, so every method synchronizes on
+ * one monitor.
  */
-// read-only tool calls of one batch run side by side, and a tool set that is read-only by contract may
-// still read the queue, so every door is on the one monitor: cheap, and a race here loses an answer
 class BotOutbox(val capabilities: ChatCapabilities = ChatCapabilities.UNRESTRICTED) {
 
     private val items = mutableListOf<OutboxItem>()
@@ -34,7 +32,7 @@ class BotOutbox(val capabilities: ChatCapabilities = ChatCapabilities.UNRESTRICT
     var redirectToPrivate: Boolean = false
         private set
 
-    /** Why the turn answers with nothing, once it has said so through [staySilent]; `null` until then. */
+    /** Why the turn answers with nothing, once [staySilent] said so; `null` until then. */
     @get:Synchronized
     var silence: String? = null
         private set
@@ -48,25 +46,25 @@ class BotOutbox(val capabilities: ChatCapabilities = ChatCapabilities.UNRESTRICT
     val hasDelivered: Boolean
         get() = items.any { it.delivered }
 
-    /** Whether the turn already announced its plan; a second announcement would rewrite what the user read. */
+    /** Whether the plan was announced; a second announcement would rewrite what the user read. */
     @get:Synchronized
     val hasAnnounced: Boolean
         get() = items.any { it.delivered && it.announcement }
 
     /**
-     * Whether anything is waiting to be sent. An announcement is not: it was a promise of an answer, so
-     * a turn that made one and queued nothing else still owes the user everything it announced.
+     * Whether anything is waiting to be sent. An announcement does not count: a turn that made one and queued
+     * nothing else still owes everything it promised.
      */
     @get:Synchronized
     val hasQueuedOutput: Boolean
         get() = items.any { !it.delivered && !it.announcement }
 
-    /** Whether the turn has an answer for the user at all, waiting to be sent or already in the chat. */
+    /** Whether the turn has an answer at all, queued or already in the chat. */
     @get:Synchronized
     val hasAnswered: Boolean
         get() = items.any { !it.announcement }
 
-    /** Queues [item], or answers `false` when this chat does not accept that kind of output at all. */
+    /** Queues [item], or answers `false` when this chat does not accept that kind of output. */
     @Synchronized
     fun enqueue(item: BotOutput): Boolean {
         if (!capabilities.allows(item)) {
@@ -74,8 +72,7 @@ class BotOutbox(val capabilities: ChatCapabilities = ChatCapabilities.UNRESTRICT
             return false
         }
 
-        // reactions always target a specific message in the current chat —
-        // they must never be routed to the sender's DMs by `useDirectMessages`.
+        // reactions target a message in the current chat and are never redirected to DMs.
         val toPrivate = redirectToPrivate && item !is BotOutput.Reaction
 
         if (item is BotOutput.Audio && mergeIntoTrailingAlbum(item, toPrivate)) return true
@@ -85,9 +82,8 @@ class BotOutbox(val capabilities: ChatCapabilities = ChatCapabilities.UNRESTRICT
         return true
     }
 
-    // a track is fetched one tool call at a time, so seven of them would otherwise arrive as seven
-    // messages, each repeating the reply quote. consecutive ones become one album instead — the
-    // moment anything else is queued between them, the run of tracks is over and a new album starts.
+    // tracks arrive one tool call at a time, so consecutive ones become one album instead of separate
+    // messages each repeating the reply quote; anything queued between them starts a new album.
     private fun mergeIntoTrailingAlbum(audio: BotOutput.Audio, toPrivate: Boolean): Boolean {
         val last = items.lastOrNull()?.takeIf { it.toPrivate == toPrivate && !it.delivered } ?: return false
 
@@ -103,10 +99,9 @@ class BotOutbox(val capabilities: ChatCapabilities = ChatCapabilities.UNRESTRICT
         return true
     }
 
-    // enqueues a standalone text message, coalescing it into the trailing text bubble while the result
-    // fits [MAX_TEXT_MESSAGE_CHARS] so splitting one answer into many small messages stays cheap. a message
-    // that cannot merge starts a new bubble; returns false once [MAX_TEXT_MESSAGES] bubbles are queued so
-    // the caller can tell the model to stop instead of flooding the chat.
+    // coalesces into the trailing text bubble while it fits [MAX_TEXT_MESSAGE_CHARS], so an answer split into
+    // small messages costs few sends; returns false once [MAX_TEXT_MESSAGES] bubbles are queued, so the model
+    // can be told to stop.
     @Synchronized
     fun enqueueText(text: String, announcement: Boolean = false): Boolean {
         val last = items.lastOrNull()?.takeIf { it.toPrivate == redirectToPrivate && !it.delivered }
@@ -115,7 +110,7 @@ class BotOutbox(val capabilities: ChatCapabilities = ChatCapabilities.UNRESTRICT
             val merged = last.output.text + TEXT_SEPARATOR + text
 
             if (merged.length <= MAX_TEXT_MESSAGE_CHARS) {
-                // a bubble stops being a mere promise the moment a real message joins it.
+                // a bubble stops being a mere promise once a real message joins it.
                 items[items.lastIndex] =
                     last.copy(output = BotOutput.Text(merged), announcement = last.announcement && announcement)
                 return true
@@ -130,17 +125,16 @@ class BotOutbox(val capabilities: ChatCapabilities = ChatCapabilities.UNRESTRICT
         return true
     }
 
-    // records text the turn already put in the chat itself, so it reaches the history and the group
-    // transcript the same way a queued message does. never refused and never routed to a private chat:
-    // it is already sent, and refusing it here would only lose it from the history. an announcement is a
-    // promise of an answer still to come; anything else delivered this way is an answer in its own right.
+    // records text the turn already sent, so it reaches history and the transcript like a queued message.
+    // never refused or redirected: it is already out, and refusing would only lose it from history. an
+    // announcement is a promise; anything else is an answer.
     @Synchronized
     fun recordDelivered(text: String, announcement: Boolean = true) {
         items += OutboxItem(BotOutput.Text(text), toPrivate = false, delivered = true, announcement = announcement)
     }
 
-    // opt-in rich messages never coalesce — each is a deliberate structured send — but they share the
-    // standalone bubble budget with plain text so a runaway turn cannot flood the chat.
+    // rich messages never coalesce, but share the bubble budget with plain text so a runaway turn cannot
+    // flood the chat.
     @Synchronized
     fun enqueueRichMessage(markdown: String): Boolean {
         if (standaloneBubbleCount() >= MAX_TEXT_MESSAGES)
@@ -174,10 +168,9 @@ class BotOutbox(val capabilities: ChatCapabilities = ChatCapabilities.UNRESTRICT
     }
 
     /**
-     * Declares that this turn answers with nothing, on purpose, for [reason] — a phrase for the operator's
-     * log that the chat never sees. Refused once anything is queued or already in the chat, an announcement
-     * included: silence is an answer only where there is no other, and a promise followed by nothing is
-     * not silence but a promise broken.
+     * Declares that this turn answers with nothing on purpose, for [reason], a phrase for the log only.
+     * Refused once anything is queued or in the chat, an announcement included: silence is an answer only
+     * where there is no other, and a promise followed by nothing is a promise broken.
      */
     @Synchronized
     fun staySilent(reason: String): Boolean {
@@ -191,19 +184,16 @@ class BotOutbox(val capabilities: ChatCapabilities = ChatCapabilities.UNRESTRICT
     companion object {
         private val log = KotlinLogging.logger {}
 
-        // upper bound on standalone text bubbles per turn. consecutive sendMessage calls are coalesced
-        // into the trailing bubble (see [enqueueText]), so a model that splits one answer into many small
-        // messages produces few real sends. this cap still bounds a runaway loop that keeps emitting
-        // full-size bubbles, whose blast radius would otherwise flood the chat past Telegram's rate limit.
+        // bubbles per turn. coalescing keeps a split answer to few sends; this cap bounds a runaway loop
+        // emitting full-size bubbles past telegram's rate limit.
         const val MAX_TEXT_MESSAGES = 5
 
-        // keep a coalesced bubble within Telegram's 4096-char text limit, with headroom for HTML the model
-        // may add. a message that would overflow the trailing bubble starts a new one instead of merging.
+        // under telegram's 4096-char limit, with headroom for HTML.
         const val MAX_TEXT_MESSAGE_CHARS = 4000
 
         private const val TEXT_SEPARATOR = "\n\n"
 
-        // telegram's album size. an eleventh track starts a second album rather than being dropped.
+        // telegram's album size; an eleventh track starts a second album.
         private const val MAX_MEDIA_GROUP = 10
     }
 }

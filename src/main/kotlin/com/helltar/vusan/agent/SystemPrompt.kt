@@ -3,11 +3,9 @@ package com.helltar.vusan.agent
 import com.helltar.vusan.common.xmlBlock
 
 /**
- * Personality (identity, tone, and interaction style) used when the deployment does not override
- * it via `PERSONALITY` / `PERSONALITY_FILE`. Kept generic on purpose — each deployment gives its
- * bot its own character.
- * Self-hosters customize this part; the [OPERATIONAL_CONTRACT] below is always appended by
- * [systemPromptFor] and must not be user-editable — it names real tools and keeps output delivery
+ * The personality (identity, tone, style) when the deployment sets no `PERSONALITY` / `PERSONALITY_FILE`.
+ * Generic on purpose: each deployment gives its bot its own character. [OPERATIONAL_CONTRACT] is always
+ * appended by [systemPromptFor] and is not user-editable, since it names real tools and keeps delivery
  * working.
  */
 internal const val DEFAULT_PERSONALITY = """You are Vusan — a friendly and concise Telegram assistant.
@@ -16,9 +14,8 @@ Reply in the language the user writes to you.
 If the user asks about your source code or where to find your repo, point them to https://github.com/Helltar/vusan"""
 
 /**
- * Fixed operational rules coupled to the bot's tools and delivery model. Appended after the
- * personality on every request; not configurable, because editing tool names or the output
- * contract here would silently break message delivery.
+ * Fixed rules coupled to the tools and delivery, appended after the personality on every request. Not
+ * configurable: editing tool names or the output contract would silently break delivery.
  */
 private const val OPERATIONAL_CONTRACT = """# Instruction scope
 
@@ -87,16 +84,14 @@ private const val OPERATIONAL_CONTRACT = """# Instruction scope
 - Telegram IDs are operational metadata. Do not mention them unless the user asks."""
 
 /**
- * A model cannot tell which model it is. Asked directly it guesses, and the guess is usually a
- * family it was trained to name rather than what this deployment actually runs — so the id is
- * stated instead. It belongs in the system block: the deployment never changes it mid-run, so it
- * costs nothing beyond the first cached prefix.
+ * A model cannot tell which model it is: asked, it guesses a family it was trained to name, so the id is
+ * stated. It sits in the system block, which never changes mid-run and costs nothing past the first cached
+ * prefix.
  *
- * The same holds for media generation switched off: the history may still show pictures made, or
- * refused, while it was on, and a model asked again without the tool answers from that pattern
- * with an invented result or refusal unless it is told the capability is gone. Told only that, a
- * weak model stretches "pictures" to cover the sandbox too and turns down a crop or a caption it
- * could make with code, so the line names a model as what is gone and the sandbox as what is not.
+ * The same goes for media generation switched off: the history may show pictures made or refused while it was
+ * on, and without being told, a model invents a result or a refusal. Told only that, a weak model also
+ * refuses crops or captions it could make with code, so the line names a model as what is gone and the
+ * sandbox as what is not.
  */
 private fun runtimeSection(
     modelId: String,
@@ -145,9 +140,9 @@ private fun runtimeSection(
     }
 
 /**
- * How one call's result becomes another's input. It says the mechanism and never what to build with it:
- * a model that knows labels, references and `send` composes the rest on its own. A deployment without
- * a sandbox is told nothing about one, rather than offered paths that would only fail.
+ * How one call's result becomes another's input: the mechanism, never what to build, since a model that knows
+ * labels, references and `send` composes the rest. Without a sandbox nothing is said of one, rather than
+ * offering paths that would fail.
  */
 private fun passingResultsSection(sandbox: Boolean): String =
     buildString {
@@ -173,7 +168,7 @@ private fun passingResultsSection(sandbox: Boolean): String =
         append("- A call can only take what came before it. Labels last for this turn alone.")
     }
 
-/** Compose the full system prompt from separately delimited personality and operational blocks. */
+/** Composes the system prompt from separately delimited personality and operational blocks. */
 internal fun systemPromptFor(
     personality: String,
     modelId: String,
@@ -190,11 +185,10 @@ internal fun systemPromptFor(
                         runtimeSection(modelId, botUsernames, botDisplayName, sandbox, images, videos),
             )
 
-// the block names the contract above enumerates, kept next to it so the two cannot drift apart.
-// only these exact names are neutralized in quoted text: escaping every `<` instead would mangle
-// the ordinary case of someone asking about `<div>` or `List<String>`. Names generic enough to
-// appear in pasted markup on their own — `user`, `question`, `caption` — are deliberately left out.
-// an opening tag is matched with attributes too, so a forged one cannot survive by carrying some.
+// the block names the contract uses, kept beside it so the two cannot drift. only these names are neutralized
+// in quoted text: escaping every `<` would mangle someone asking about `<div>` or `List<String>`. names
+// generic enough to appear in pasted markup (`user`, `question`, `caption`) are left out on purpose. opening
+// tags match with attributes too, so a forged one cannot survive by carrying some.
 private val PROMPT_BLOCK_TAG =
     Regex(
         "</?(?:album|attached_file|audio_transcript|conversation_recap|current_model|current_time|diary|group_memory|" +
@@ -205,9 +199,8 @@ private val PROMPT_BLOCK_TAG =
     )
 
 /**
- * Defuse this prompt's own delimiters inside text quoted from outside — a message, a transcript, a
- * replied-to post. Without it a block can be closed early and the boundaries the contract describes
- * stop matching what the model is actually shown.
+ * Defuses this prompt's own delimiters inside quoted outside text (a message, a transcript, a replied-to
+ * post), so no block can be closed early.
  */
 internal fun String.neutralizePromptBlocks(): String =
     replace(PROMPT_BLOCK_TAG) { "&lt;${it.value.removePrefix("<")}" }

@@ -43,7 +43,7 @@ internal data class OpenAiImageData(
     val b64Json: String? = null,
 )
 
-/** The error body a refused image request carries, cut down to what decides the answer. */
+/** A refused image request's error body, cut to what decides the answer. */
 @Serializable
 internal data class OpenAiImageErrorResponse(
     val error: OpenAiImageError? = null,

@@ -13,41 +13,35 @@ val ANTHROPIC_EFFORTS: Set<ReasoningEffort> =
     setOf(ReasoningEffort.LOW, ReasoningEffort.MEDIUM, ReasoningEffort.HIGH, ReasoningEffort.XHIGH, ReasoningEffort.MAX)
 
 /**
- * The Anthropic Messages API.
- *
- * What a request carries, and why, was measured live against Haiku 5.5, Opus 5.5 and Fable 5.1
+ * The Anthropic Messages API. What a request carries was measured live on Haiku 5.5, Opus 5.5 and Fable 5.1
  * (2026-10-08):
  *
- * - `max_tokens` is the model's whole output ceiling. The API requires the field, a model that thinks
- *   before every answer spends part of it on thinking, and output is billed on what is generated, not
- *   on what was allowed. Every call is streamed and folded back into one message, as the vendor's SDKs
- *   do at a ceiling this size: a stream's socket timeout trips on a stall, where a connection that idles
- *   through a long think is dropped at the API's edge.
- * - `thinking: adaptive` for every model that takes an effort (that generation also stopped thinking
- *   without it on Opus 4.7 and 4.8), with `block_binding: drop_block` under its beta header: a thinking
- *   block is bound to the system prompt, the tools and every message before it, and on a model that
- *   takes no tool partway through the agent moves the tool list mid-turn — `loadTools` widens it — so an
- *   account the API holds to that check would otherwise get a 400 where it now gets the stale block dropped.
- * - On a model that takes them ([LlmModel.offersToolsMidConversation]) a deferred tool is declared with
- *   `defer_loading` from the first request and offered by a `tool_addition` reference where the agent
- *   offered it, so the tool list never changes. Measured on 2026-10-24 through OpenRouter: the reference
- *   works on Opus 4.8, Opus 5, Opus 5.5, Sonnet 5.5, Haiku 5.5, Fable 5 and Fable 5.1, and is a 400 on
- *   Opus 4.6, Sonnet 4.6, Opus 4.7 and Sonnet 5; the prefix before the offer was read back whole.
- * - A request whose model may call no tool keeps them defined, with `tool_choice: none`: tool blocks in
- *   the messages are a 400 without them.
- * - Up to four cache breakpoints when the caller asks for caching: the request-level one, which the API
- *   places on the last block and which every iteration of a tool loop reads back; one on the last system
- *   block, the prefix every request of the deployment shares; and one on the end of each stable prefix of
- *   the replayed history, which the next turn reads back — the live turn is replayed in a shorter shape
- *   then, so the automatic one alone would leave it nothing past the system block. The system and history
- *   ones are kept an hour, which outlives the quiet stretches between a chat's messages at twice the write
- *   price instead of 1.25×; the tail stays on the five-minute default, and that order — the longer TTL
- *   first — is the one the API allows.
- * - Unknown content block types are skipped with a warning rather than failing the call.
+ * - `max_tokens` is the model's whole output ceiling: the field is required, thinking spends part of it, and
+ *   billing counts what is generated. Every call is streamed and folded into one message, as the SDKs do at
+ *   this size: a stream's socket timeout trips on a stall, while an idle connection through a long think is
+ *   dropped at the API's edge.
+ * - `thinking: adaptive` for every model taking an effort (that generation stopped thinking without it on
+ *   Opus 4.7 and 4.8), with `block_binding: drop_block` under its beta: a thinking block is bound to the
+ *   system prompt, tools and earlier messages, and `loadTools` widens the tool list mid-turn on models
+ *   without mid-conversation tools, so an account held to that check gets the stale block dropped instead of
+ *   a 400.
+ * - Where [LlmModel.offersToolsMidConversation], a deferred tool is declared with `defer_loading` from the
+ *   first request and offered by a `tool_addition` reference, so the tool list never changes. Measured
+ *   2026-10-24 via OpenRouter: works on Opus 4.8, 5, 5.5, Sonnet 5.5, Haiku 5.5, Fable 5 and 5.1; a 400 on
+ *   Opus 4.6, 4.7, Sonnet 4.6 and 5; the prefix before the offer was read back whole.
+ * - A request that may call no tool keeps them defined with `tool_choice: none`: tool blocks in the messages
+ *   are a 400 without them.
+ * - Up to four cache breakpoints when caching is asked: the request-level one on the last block, read back by
+ *   every tool-loop iteration; the last system block, shared by the whole deployment; and the end of each
+ *   stable history prefix, read back by the next turn, since the live turn is replayed shorter and the
+ *   automatic one alone would leave nothing past the system block. System and history are kept an hour (twice
+ *   the write price instead of 1.25×) to outlive the quiet between a chat's messages; the tail stays on five
+ *   minutes, and the API requires the longer TTL first.
+ * - Unknown content block types are skipped with a warning.
  *
- * [baseUrl] is another server that speaks this API, OpenRouter's among them. [routesBySession] is for a
- * gateway that picks the upstream per request, as OpenRouter does: the conversation's cache key goes along
- * as `session_id`, which keeps the conversation on the upstream holding its cached prefix.
+ * [baseUrl] may be another server speaking this API, such as OpenRouter. [routesBySession] is for a gateway
+ * that picks the upstream per request: the cache key goes along as `session_id` to keep the conversation on
+ * the upstream holding its prefix.
  */
 class AnthropicClient(
     private val http: HttpClient,
@@ -57,7 +51,7 @@ class AnthropicClient(
     private val routesBySession: Boolean = false,
 ) : LlmClient {
 
-    // what the reasoning blocks this client returns are tagged with, and the only ones it replays
+    // the source tag on reasoning blocks this client returns, and the only ones it replays
     private val reasoningSource = "$baseUrl/v1/messages"
 
     private val headers =
@@ -70,7 +64,7 @@ class AnthropicClient(
     override suspend fun complete(model: LlmModel, request: ChatRequest): Reply {
         val folder = MessagesStreamFolder(label)
 
-        // a tool offered partway through travels under a beta of its own, which a request without one does without
+        // mid-conversation tools travel under a beta of their own, sent only when needed
         val betas =
             if (model.offersToolsMidConversation && request.tools.any { it.deferred }) "$THINKING_BINDING_CONTROLS_BETA,$MID_CONVERSATION_TOOLS_BETA"
             else THINKING_BINDING_CONTROLS_BETA
@@ -121,8 +115,8 @@ class AnthropicClient(
                                 put("name", tool.name)
                                 put("description", tool.description)
                                 put("input_schema", tool.parameters)
-                                // withheld from the model until an offer names it, and out of the rendered prompt
-                                // until then: what the deferred tools cost together was 93 tokens on 2026-10-24
+                                // withheld from the model and the rendered prompt until offered; all deferred
+                                // tools together cost 93 tokens (2026-10-24)
                                 if (tool.deferred) put("defer_loading", true)
                             },
                         )
@@ -146,15 +140,13 @@ class AnthropicClient(
 
     /**
      * The conversation as the Messages API takes it: system messages lifted into the system field, a tool
-     * offer as a system message of `tool_addition` references where the model takes one, and the ends of
-     * the replayed history marked for the cache.
+     * offer as a system message of `tool_addition` references, and the ends of replayed history marked for
+     * the cache.
      *
-     * A system message has to follow a user turn and be followed by the assistant's, so an offer that a
-     * user message came after — a nudge sent once the reply to the offer was dropped as empty — moves
-     * behind that message. The history is marked on its last block, at the lifetime the system prompt
-     * has: measured on 2026-10-24 (Haiku 5.5 through OpenRouter, a 3.2k-token history), the next turn read
-     * 7636 tokens instead of 4428 and wrote 555 instead of 3763. With the system block's and the request's
-     * own, these are the four breakpoints a request may carry.
+     * A system message must follow a user turn and precede the assistant's, so an offer followed by a user
+     * message (a nudge after an empty reply was dropped) moves behind it. History is marked on its last block
+     * at the system prompt's lifetime: measured 2026-10-24 (Haiku 5.5 via OpenRouter, a 3.2k-token history),
+     * the next turn read 7636 tokens instead of 4428 and wrote 555 instead of 3763.
      */
     private fun conversationMessages(request: ChatRequest, offersLater: Boolean): JsonArray {
         val rendered = mutableListOf<JsonObject>()
@@ -255,7 +247,8 @@ class AnthropicClient(
                     putJsonArray("content") {
                         message.parts.forEach { part ->
                             when (part) {
-                                // a blank text block is a 400, and a model that answered through a tool often left one
+                                // a blank text block is a 400, and a model answering through a tool often
+                                // leaves one
                                 is Part.Text -> if (part.text.isNotBlank()) add(textBlock(part.text))
                                 is Part.Reasoning -> if (part.source == reasoningSource) add(part.raw)
 
@@ -329,7 +322,7 @@ class AnthropicClient(
                 else -> if (message.toolCalls.isNotEmpty()) StopReason.TOOL_CALLS else StopReason.OTHER
             }
 
-        // set only on a refusal, and either field may be missing from it
+        // set only on a refusal, and either field may be missing
         val refusal =
             (response["stop_details"] as? JsonObject)
                 ?.let { listOfNotNull(it.string("category"), it.string("explanation")).joinToString(": ") }
@@ -358,21 +351,21 @@ class AnthropicClient(
         const val DEFAULT_BASE_URL = "https://api.anthropic.com"
         const val API_VERSION = "2026-10-21"
 
-        // lets a request say what to do with a thinking block whose conversation changed under it; harmless
-        // on a model that never binds one, which answers with an empty `input_transformations`.
+        // lets a request say what to do with a thinking block whose conversation changed; harmless on models
+        // that never bind one.
         const val THINKING_BINDING_CONTROLS_BETA = "thinking-binding-controls-2026-08-01"
 
-        // a tool declared `defer_loading` and offered later by a `tool_addition` reference. an inline definition
-        // has a newer beta, `inline-tools-2026-09-15`, which OpenRouter's validator refuses (2026-10-24)
+        // `defer_loading` plus a later `tool_addition` reference. the newer inline-definition beta,
+        // `inline-tools-2026-09-15`, is refused by OpenRouter's validator (2026-10-24)
         const val MID_CONVERSATION_TOOLS_BETA = "mid-conversation-tool-changes-2026-07-01"
 
-        // for a model whose ceiling nobody declared: what a thinking model needs to answer at all
+        // for a model with no declared ceiling: what a thinking model needs to answer at all
         private const val DEFAULT_MAX_TOKENS = 16_000
 
         private val EPHEMERAL = buildJsonObject { put("type", "ephemeral") }
         private val SYSTEM_PREFIX_CACHE = buildJsonObject { put("type", "ephemeral"); put("ttl", "1h") }
 
-        // the history outlives the quiet stretches between a chat's messages for the same reason the system prompt does
+        // the history outlives the quiet between a chat's messages, like the system prompt
         private val HISTORY_CACHE = SYSTEM_PREFIX_CACHE
         private val log = KotlinLogging.logger {}
     }

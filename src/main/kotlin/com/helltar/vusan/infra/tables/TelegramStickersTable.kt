@@ -2,8 +2,8 @@ package com.helltar.vusan.infra.tables
 
 import org.jetbrains.exposed.v1.core.dao.id.LongIdTable
 
-// one row per known sticker, shared by every chat. `file_unique_id` is stable across bots and time,
-// so it is the identity; `file_id` is only a handle for this bot and is refreshed with the set.
+// one row per known sticker, shared by every chat. `file_unique_id` is stable across bots and time, so it is
+// the identity; `file_id` is a per-bot handle refreshed with the set.
 object TelegramStickersTable : LongIdTable("telegram_stickers") {
 
     val fileUniqueId = varchar("file_unique_id", 128).uniqueIndex()
@@ -11,15 +11,14 @@ object TelegramStickersTable : LongIdTable("telegram_stickers") {
     val setName = varchar("set_name", 64).index()
     val emoji = varchar("emoji", 32).nullable()
 
-    // animated and video stickers cannot be handed to vision directly, so the still thumbnail is what
-    // gets described. it is absent on some stickers, and then the sticker file itself is used.
+    // animated and video stickers cannot go to vision directly, so the still thumbnail is described, or the
+    // sticker file when there is none.
     val thumbnailFileId = text("thumbnail_file_id").nullable()
 
-    // null until vision has looked at the sticker; an undescribed sticker never enters the index.
+    // null until vision described the sticker; undescribed stickers never enter the index.
     val description = text("description").nullable()
 
-    // people send stickers vision will not describe — explicit ones it refuses, and ones whose
-    // download or call simply fails. without this counter those rows stay at the head of the
-    // description queue forever and starve every sticker behind them.
+    // vision refuses explicit stickers and downloads or calls fail; without this counter those rows would sit
+    // at the head of the queue and starve the rest.
     val describeAttempts = integer("describe_attempts").default(0)
 }

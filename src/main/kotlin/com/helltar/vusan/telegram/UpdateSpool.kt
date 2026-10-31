@@ -16,28 +16,24 @@ import kotlin.time.Duration
 import org.telegram.telegrambots.meta.api.objects.Update
 
 /**
- * The gap between Telegram handing an update over and the bot starting to handle it.
+ * The gap between telegram handing an update over and the bot starting on it.
  *
- * The polling session confirms updates by asking for a higher offset on its *next* request, so by the
- * time a turn is running the update is already gone upstream and a restart loses it. Every update is
- * written here before the poll callback returns — which is what keeps it out of that next request
- * until it is safe — and removed the moment the dispatch loop picks it up.
+ * The polling session confirms updates by asking for a higher offset on its *next* request, so a running
+ * turn's update is already gone upstream and a restart loses it. Every update is written here before the poll
+ * callback returns, keeping it out of that next request until safe, and removed when the dispatch loop picks
+ * it up.
  *
- * That boundary is deliberate. What survives a restart is work that was never begun; a turn that had
- * already started may have put messages in the chat, spent tokens, or written history, and replaying
- * it would repeat all three. Those are dropped, and the person sees a turn that went quiet rather
- * than one that happened twice.
+ * Deliberately so: only work never begun survives a restart. A started turn may have posted, spent tokens or
+ * written history, and a replay would repeat all three, so the person sees a turn that went quiet rather than
+ * one that happened twice.
  */
 internal class UpdateSpool(private val retention: Duration) {
 
-    // the library's own mapper settings are on the classes themselves (`@Jacksonized`, NON_NULL,
-    // unknown properties ignored), so a default mapper reproduces the Bot API wire format exactly.
+    // the library's mapper settings live on the classes (`@Jacksonized`, NON_NULL, unknown properties
+    // ignored), so a default mapper reproduces the Bot API wire format.
     private val mapper = ObjectMapper()
 
-    /**
-     * Persist a polled batch. Best-effort by design: a spool that cannot be written must not stop the
-     * bot from answering, since losing durability is strictly better than dropping the update now.
-     */
+    /** Persists a polled batch, best-effort: losing durability beats not answering now. */
     suspend fun record(updates: List<Update>) {
         if (updates.isEmpty()) return
 
@@ -45,8 +41,8 @@ internal class UpdateSpool(private val retention: Duration) {
             val rows = updates.map { it.updateId.toLong() to mapper.writeValueAsString(it) }
 
             dbTransaction {
-                // a replay racing Telegram's own redelivery of the same update would collide here, and
-                // the row already on disk is the same update either way.
+                // a replay racing telegram's own redelivery would collide here, and the row on disk is the
+                // same update.
                 TelegramPendingUpdatesTable.batchInsert(rows, ignore = true) { (id, json) ->
                     this[TelegramPendingUpdatesTable.updateId] = id
                     this[TelegramPendingUpdatesTable.payload] = json
@@ -58,7 +54,7 @@ internal class UpdateSpool(private val retention: Duration) {
         }
     }
 
-    /** The dispatch loop has taken this update; it is no longer work that a restart owes anyone. */
+    /** The dispatch loop took this update; a restart no longer owes it. */
     suspend fun settle(updateId: Int) {
         runCatching {
             dbTransaction {
@@ -71,10 +67,8 @@ internal class UpdateSpool(private val retention: Duration) {
     }
 
     /**
-     * Everything still owed at startup, oldest first, with the rest of the table cleared.
-     *
-     * Anything past [retention] is dropped unanswered: replaying a message from hours ago answers a
-     * conversation that has moved on, which reads worse than never having answered it.
+     * Everything still owed at startup, oldest first, with the rest of the table cleared. Anything past
+     * [retention] is dropped: answering a message from hours ago reads worse than never answering.
      */
     suspend fun drain(now: Instant = Instant.now()): List<Update> =
         runCatching {
@@ -98,8 +92,8 @@ internal class UpdateSpool(private val retention: Duration) {
             pending.mapNotNull { (id, json) ->
                 runCatching { mapper.readValue(json, Update::class.java) }
                     .getOrElse { error ->
-                        // a payload this build can no longer read is not worth blocking startup over,
-                        // and `settle` below takes it out of the way for good.
+                        // a payload this build cannot read is no reason to block startup; `settle` below
+                        // removes it for good.
                         log.warn(error) { "spooled update=$id could not be read back; dropping it" }
                         settle(id.toInt())
                         null

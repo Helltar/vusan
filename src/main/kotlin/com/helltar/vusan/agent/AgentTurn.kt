@@ -35,42 +35,29 @@ data class ToolEvent(
 )
 
 /**
- * The model, or a safety classifier in front of it, declined the turn's request; [reason] is the
- * provider's when it gave one. Asking again with the same prompt is declined again.
+ * The model, or a safety classifier in front of it, declined the request; [reason] is the provider's, if
+ * given. The same prompt would be declined again.
  */
 class ModelRefusal(val reason: String?) : RuntimeException("the model declined the request" + reason?.let { ": $it" }.orEmpty())
 
 /**
- * One turn of the agent: the model is asked, its tool calls are run and answered, and so on until it
- * replies without one — or until the turn runs out of model calls and is landed instead.
+ * One turn of the agent: ask the model, run its tool calls, answer them, and repeat until it replies without
+ * one or runs out of model calls and is landed.
  *
- * The calls of one batch run in order, except that read-only ones standing next to each other run side
- * by side: a search changes nothing, so three of them need not wait for one another, while anything that
- * writes keeps its place in the batch. Results are recorded in batch order either way.
+ * Adjacent read-only calls in a batch run side by side; anything that writes keeps its place. Results are
+ * recorded in batch order either way.
  *
- * Guards against flaky models in four places, the four `docs/architecture/turn.md` lists under Act:
- * - a tool call that arrives with no arguments at all for a tool that takes them (flaky models emit
- *   empty-arg siblings when they try to call tools in parallel) is answered with a validation error
- *   instead of being executed, so the follow-up request stays well-formed and the model reissues it;
- * - a reply the output ceiling cut short runs none of its tool calls, since the last of them may have
- *   been cut with it, and a reply the model or a provider's classifier declined ends the turn;
- * - a turn that ends having delivered nothing — no `sendMessage`, media or reaction, and empty assistant
- *   text (flaky providers return an empty completion after a batch of tool results) — gets one nudge to
- *   actually deliver before finishing, so a full turn of research does not collapse into silence. Silence
- *   chosen on purpose is declared through `staySilent` instead, and ends the turn with the batch that
- *   declared it, so an empty reply is never mistaken for a decision;
- * - a turn that announced its plan and then ended without doing the work is sent back to it once: the
- *   announcement reached the chat, so the user is waiting on exactly what it promised.
+ * The guards against flaky models are listed in `docs/architecture/turn.md` under Act: empty-argument calls
+ * answered with a validation error, a reply cut by the output ceiling runs none of its calls, a turn that
+ * delivered nothing gets one nudge (deliberate silence goes through `staySilent`), and an announced plan left
+ * undone is sent back once.
  *
- * A turn whose own pile of tool results would no longer fit the window has its oldest results folded
- * away before the next request (`foldedToFit`), so a long build keeps going instead of dying on the
- * context limit with its work undelivered.
+ * When the turn's own tool results outgrow the window, the oldest are folded away (`foldedToFit`) so long
+ * work does not die on the context limit.
  *
- * Landing: the last model call of the turn is reserved for a wrap-up request in which no tool may be
- * called, so the model cannot spend it on one more search, and its answer — written from what it gathered,
- * saying what it could not finish — is queued into the outbox like any other message, so it survives even
- * a turn that already reacted or sent something (trailing agent text is otherwise dropped as duplicate
- * chatter). Without that, a research turn would die with every search it paid for still unanswered.
+ * Landing: the last model call is a wrap-up in which no tool may be called. Its answer, written from what was
+ * gathered, is queued into the outbox like any message, so it survives a turn that already sent something,
+ * where trailing agent text is dropped as duplicate chatter.
  */
 class AgentTurn internal constructor(
     private val client: LlmClient,
@@ -83,32 +70,31 @@ class AgentTurn internal constructor(
     private val outbox: BotOutbox,
     private val toolBudget: TurnToolBudget,
     private val maxModelCalls: Int,
-    // what the whole request may measure, in the estimate the budget is counted in, before the turn's own
-    // results are folded away
+    // the size the whole request may reach, in the budget's estimate, before the turn's results are folded
     private val promptTokenCeiling: Int,
     private val scope: ConversationScope,
     private val mayStaySilent: Boolean,
     private val toolEvents: (ToolEvent) -> Unit,
     private val tokenUsage: (TokenUsage) -> Unit,
     private val onToolStarting: (activity: ToolActivity?) -> Unit,
-    // what the turn's calls produced, under the labels a later call takes them by
+    // what the turn's calls produced, under the labels later calls use
     private val shelf: TurnShelf,
 ) {
 
     private var calls = 0
     private var eventSeq = 0
 
-    // how often each (tool, arguments) pair ran this turn, for the note under a repeated call
+    // runs per (tool, arguments) pair, for the note under a repeated call
     private val callCounts = HashMap<String, Int>()
 
-    // whether the model told the user what it was about to do, and whether it then did anything at all
+    // whether the model announced what it would do, and whether it then did anything
     private var announced = false
     private var workedSinceAnnouncement = false
 
     /**
-     * The conversation as the turn's last request held it, with what that request returned, once [run] has
-     * returned: what the next turn sends ahead of its own message when it continues this one. Empty until
-     * then, and after a run that threw.
+     * The conversation as the last request held it, plus its reply, once [run] returns: what the next turn
+     * sends ahead of its own message when it continues this one. Empty before that and after a run that
+     * threw.
      */
     var sent: List<Message> = emptyList()
         private set
@@ -119,7 +105,7 @@ class AgentTurn internal constructor(
         messages += Message.User(currentTurn)
 
         return converse(messages).also {
-            // a reply that said nothing goes, as it does before a nudge: no endpoint takes it back
+            // drop an empty reply, as before a nudge: no endpoint accepts it back
             messages.dropTrailingSilentAssistant()
             sent = messages.toList()
         }
@@ -142,8 +128,7 @@ class AgentTurn internal constructor(
             messages += message
 
             if (message.toolCalls.isEmpty()) {
-                // a turn nobody called the bot into may end in silence, but only on its first reply: a
-                // model that sees the message was not for it says nothing before it calls anything.
+                // an unaddressed turn may stay silent, but only on its first reply, before calling anything.
                 val silenceAllowed = mayStaySilent && calls == 1
                 val promised = announced && !workedSinceAnnouncement
 
@@ -152,7 +137,7 @@ class AgentTurn internal constructor(
 
                 messages.dropTrailingSilentAssistant()
 
-                // the nudge is a model call like any other, and the last one is the wrap-up's
+                // the nudge is a model call too, and the last one belongs to the wrap-up
                 if (outOfModelCalls(calls, maxModelCalls)) return wrapUp(messages, turnStart)
 
                 nudged = true
@@ -163,10 +148,10 @@ class AgentTurn internal constructor(
                 continue
             }
 
-            // this batch still runs — it is already paid for, and it may carry the delivery call — but once
-            // the budget is this thin the results go to the wrap-up instead of buying another tool round.
-            // a batch the output ceiling cut short does not: its last call may have been cut with it, and
-            // reads like a whole one, so the model is told why none ran and reissues what it needs.
+            // this batch still runs (it is paid for and may carry the delivery), but with the budget this
+            // thin its results go to the wrap-up instead of another round. a batch cut by the output ceiling
+            // does not run: its last call may be truncated yet look whole, so the model is told why and
+            // reissues.
             val results =
                 if (reply.stopReason == StopReason.MAX_TOKENS) {
                     message.toolCalls.map(::cutOffResult)
@@ -176,15 +161,14 @@ class AgentTurn internal constructor(
 
             messages += Message.ToolResults(results)
 
-            // the turn chose to answer with nothing: asking the model again would only invite a closing
-            // line into a reply it decided not to give, and the request it would cost buys nothing
+            // the turn chose silence: asking again would only invite a closing line into a reply it decided
+            // not to give
             if (outbox.silence != null) return ""
 
             if (outOfModelCalls(calls, maxModelCalls)) return wrapUp(messages, turnStart)
 
-            // the model has to hear that the reserve is running out without being asked, or it spends the rest
-            // of the turn on reads that come back cut in half. once per run, and after the results rather than
-            // before them: nothing may come between an assistant's tool call and that call's result.
+            // the model must hear the reserve is running low, or it spends the rest on reads that come back
+            // cut. once per run, after the results: nothing may come between a tool call and its result.
             if (!lowBudgetWarned && toolBudget.isLow) {
                 lowBudgetWarned = true
                 log.info { "tool result budget low for $scope: ${toolBudget.remainingTokens} of ${toolBudget.totalTokens} tokens left" }
@@ -197,13 +181,13 @@ class AgentTurn internal constructor(
         logPromptDump(messages, model.id, tools.filterNot { it.deferred }.map { it.name })
         calls++
 
-        // a copy: the list grows as the turn goes on, and a client may keep the request it was handed
+        // a copy: the list keeps growing, and a client may keep the request it was handed
         val reply = client.complete(model, ChatRequest(messages.toList(), tools, options, mayCallTools, stablePrefixes))
 
         reply.usage?.let(tokenUsage)
 
-        // what a declined reply holds is not an answer — a classifier may have stopped it mid-call — and the
-        // same prompt is declined again, so the turn ends here and the runner says why.
+        // a declined reply is not an answer (a classifier may have stopped it mid-call) and would be declined
+        // again, so the turn ends and the runner says why.
         if (reply.stopReason == StopReason.REFUSAL) throw ModelRefusal(reply.refusal)
 
         if (reply.stopReason == StopReason.MAX_TOKENS) {
@@ -213,8 +197,8 @@ class AgentTurn internal constructor(
         return reply
     }
 
-    // the tools of every group loaded by now that the turn has not offered yet, offered at the end of the
-    // conversation: after whatever the turn appended since, before the request that may call them first
+    // tools of groups loaded since, not yet offered, appended at the end: after whatever the turn added,
+    // before the request that may call them
     private fun offerLoadedTools(messages: MutableList<Message>) {
         val offered = messages.filterIsInstance<Message.ToolsOffered>().flatMapTo(mutableSetOf()) { it.names }
         val fresh = catalog.loadedToolNames().filterNot { it in offered }
@@ -222,10 +206,9 @@ class AgentTurn internal constructor(
         if (fresh.isNotEmpty()) messages += Message.ToolsOffered(fresh)
     }
 
-    // the turn's own pile is folded when the whole request would not fit: the oldest results first, with
-    // the long arguments they answered, never the latest batch. the stored history before the turn was
-    // planned to fit and is left alone. the tools weighed are the ones the model is shown, wherever an
-    // endpoint puts them.
+    // fold when the whole request would not fit: oldest results first, with the long arguments they answered,
+    // never the latest batch. the history before the turn was planned to fit and stays. the tools are weighed
+    // as the model sees them, wherever an endpoint puts them.
     private fun foldToFit(messages: MutableList<Message>, turnStart: Int) {
         val folded = messages.foldedToFit(promptTokenCeiling - estimateTokens(catalog.visibleDefinitions()), turnStart) ?: return
         val foldedResults = folded.count { it is Message.ToolResults && it.isFolded() } - messages.count { it is Message.ToolResults && it.isFolded() }
@@ -241,17 +224,17 @@ class AgentTurn internal constructor(
 
         messages += Message.User(TOOL_BUDGET_WRAP_UP)
 
-        // the pile is at its largest here, and this is the request the whole turn's work rides on
+        // the pile is largest here, and the whole turn's work rides on this request
         offerLoadedTools(messages)
         foldToFit(messages, turnStart)
 
-        // the tools stay defined, since the calls the turn made are replayed with them, but none may be called
+        // the tools stay defined, since the turn's calls are replayed with them, but none may be called
         val reply = request(messages, catalog.requestDefinitions(), mayCallTools = false).message
         messages += reply
         val answer = reply.text
 
-        // queue it rather than leave it as the run's trailing text: a turn that already reacted or sent a
-        // message has that text dropped as duplicate chatter, and here it is the whole answer.
+        // queued rather than left as trailing text, which is dropped as duplicate chatter after a reaction or
+        // message; here it is the whole answer.
         if (answer.isNotBlank() && !outbox.enqueueText(answer)) {
             log.warn { "no room left in the outbox for the wrap-up answer for $scope" }
         }
@@ -259,9 +242,9 @@ class AgentTurn internal constructor(
         return answer
     }
 
-    // read-only calls standing next to each other run side by side, everything else in order; the results
-    // are recorded in batch order either way, so the budget and the events read as if it ran one by one.
-    // every call takes its label before any of its run starts, so the numbers follow the batch too.
+    // adjacent read-only calls run side by side, the rest in order; results are recorded in batch order, so
+    // the budget and events read as sequential. every call takes its label before any run starts, so the
+    // numbers follow the batch.
     private suspend fun executeBatch(batch: List<Part.ToolCall>): List<ToolResult> {
         val outcomes = mutableListOf<Triple<Part.ToolCall, TurnShelf.Call, Outcome>>()
 
@@ -296,9 +279,8 @@ class AgentTurn internal constructor(
         return runs
     }
 
-    // the tool runs inside its slot on the shelf: that is what its arguments' references resolve against
-    // and where the files it keeps land. the slot is closed whatever happened, since a later call of the
-    // same run may be waiting on it.
+    // the tool runs inside its shelf slot, which its references resolve against and where its files land. the
+    // slot is closed whatever happens, since a later call of the same run may wait on it.
     private suspend fun perform(call: Part.ToolCall, slot: TurnShelf.Call): Outcome {
         val tool = catalog.find(call.name)
 
@@ -335,8 +317,8 @@ class AgentTurn internal constructor(
             ),
         )
 
-        // the model sees a result bounded to what is left of the run's reserve, under the label a later call
-        // takes it by; history keeps it whole and unlabeled, since the label means nothing to the next turn
+        // the model sees the result bounded to the remaining reserve, under its label; history keeps it whole
+        // and unlabeled, since the label means nothing to the next turn
         val bounded = outcome.output.boundedToolText(toolBudget.remainingTokens)
         val labeled = slot.labeled(bounded, cut = bounded != outcome.output)
         val result = repeatedCallNote(call)?.let { "$labeled\n\n$it" } ?: labeled
@@ -345,10 +327,9 @@ class AgentTurn internal constructor(
         return ToolResult(call.id, call.name, result, outcome.isError)
     }
 
-    // a model stuck on one call repeats it with the same arguments and reads the same answer until the
-    // budget ends the turn; from the third time on the result says so. a note rather than a refusal, since
-    // a command may be polled on purpose: the model decides, having been told. keys are sorted, so the
-    // order the model wrote the arguments in cannot hide a repeat
+    // a stuck model repeats the same call and reads the same answer until the budget runs out; from the third
+    // time on the result says so. a note, not a refusal, since a command may be polled on purpose. keys are
+    // sorted, so argument order cannot hide a repeat
     private fun repeatedCallNote(call: Part.ToolCall): String? {
         val key = call.name + call.arguments.entries.sortedBy { it.key }.joinToString { "${it.key}=${it.value}" }
         val times = (callCounts[key] ?: 0) + 1
@@ -357,14 +338,14 @@ class AgentTurn internal constructor(
         return repeatedCallMessage(call.name, times).takeIf { times >= REPEATED_CALL_NOTE_FROM }
     }
 
-    // every failure becomes the result the model reads: the guard's own message, a decoding complaint about
-    // the arguments, or the bare fact for anything else — which also goes to the log with its trace, since
-    // a tool that throws past its guard points at a bug.
+    // every failure becomes the result the model reads: the guard's message, a decoding complaint, or the
+    // bare fact for anything else, which is also logged with its trace since it points at a bug.
     private suspend fun runTool(name: String, block: suspend () -> String): Pair<String, Boolean> =
         try {
             block() to false
         } catch (e: TimeoutCancellationException) {
-            // a tool's own deadline, not the turn's cancellation, which `rethrowIfCancellation` would take it for
+            // the tool's own deadline, not the turn's cancellation, which `rethrowIfCancellation` would take
+            // it for
             "Tool `$name` timed out: ${e.message}" to true
         } catch (e: ToolFailure) {
             e.message.orEmpty() to true
@@ -389,11 +370,10 @@ private const val TRUNCATION_NOTICE = "\n[tool result truncated for the model co
 private const val OMITTED_NOTICE = "[tool result omitted: model context budget exhausted]"
 
 /**
- * Caps a tool result to what is left of the run's reserve, in estimated tokens.
+ * Caps a tool result to the remaining reserve, in estimated tokens.
  *
- * How many characters a token budget buys depends on the text, because the estimator reads bytes: a
- * cyrillic character spends two where a latin one spends one. Measuring the text being cut keeps both
- * honest, and whatever the cut still overshoots the caller charges back at the real estimate.
+ * The estimator reads bytes, so a cyrillic character costs two where a latin one costs one; measuring the
+ * text being cut keeps both honest, and the caller charges back any overshoot at the real estimate.
  */
 internal fun String.boundedToolText(maxTokens: Int): String {
     if (estimateTokens(this) <= maxTokens) return this
@@ -406,8 +386,8 @@ internal fun String.boundedToolText(maxTokens: Int): String {
     return limitTo(maxChars - TRUNCATION_NOTICE.length) + TRUNCATION_NOTICE
 }
 
-// the last call is the wrap-up's, so a batch of tool results after the one before it goes to the wrap-up
-// rather than buying another round the turn could not answer.
+// the last call is the wrap-up's, so results after the one before it go to the wrap-up instead of buying
+// another round.
 private const val WRAP_UP_MODEL_CALLS = 1
 
 internal fun outOfModelCalls(callsMade: Int, maxModelCalls: Int): Boolean = maxModelCalls - callsMade <= WRAP_UP_MODEL_CALLS
@@ -443,10 +423,9 @@ internal const val PROMISE_NUDGE =
             "They are waiting for exactly that: carry the work out now with the tools, then deliver the result. " +
             "If it cannot be done, say so through `sendMessage` instead of ending in silence."
 
-// the model ended its turn without putting anything in front of the user: it delivered nothing (no tool
-// call to execute, no caption text) and the outbox holds nothing to send. an announced plan does not count
-// as delivering — that is the promise, not the answer. nudged at most once, to avoid looping on a
-// stubbornly empty model.
+// the model ended the turn with nothing in front of the user: no tool call, no caption text, an empty outbox.
+// an announced plan is the promise, not the answer. nudged at most once, so a stubbornly empty model does not
+// loop.
 internal fun owesDelivery(
     reply: Message.Assistant,
     nudged: Boolean,
@@ -455,13 +434,11 @@ internal fun owesDelivery(
 ): Boolean =
     !silenceAllowed && !nudged && reply.deliveredNothing() && !outboxHasOutput
 
-// true when the assistant ended its turn with nothing for the user: no tool call left to execute
-// (so nothing more is coming this turn) and no plain text to fall back on as a caption.
+// no tool call left to run and no text to use as a caption.
 internal fun Message.Assistant.deliveredNothing(): Boolean = toolCalls.isEmpty() && text.isBlank()
 
-// a reply that delivered nothing is dropped before the nudge re-requests: openai refuses an assistant
-// message with neither content nor tool calls, and anthropic one whose content is left empty — which is
-// what a blank text block becomes there — or ends in a thinking block.
+// dropped before the nudge re-requests: openai refuses an assistant message with neither content nor tool
+// calls, anthropic one with empty content (a blank text block) or ending in a thinking block.
 internal fun MutableList<Message>.dropTrailingSilentAssistant() {
     while ((lastOrNull() as? Message.Assistant)?.deliveredNothing() == true) removeAt(lastIndex)
 }

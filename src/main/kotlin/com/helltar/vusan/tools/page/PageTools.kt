@@ -37,8 +37,8 @@ class PageTools(private val reader: PageReader) : ToolSet {
 
         require(offset < total) { "offset=$offset is past the end of the page, which has $total characters" }
 
-        // the page is fetched again for every part: cheap, and it keeps the tool free of state to lose
-        // between turns. the cut is by character rather than by word so the offsets line up exactly.
+        // the page is refetched for every part: cheap, and the tool keeps no state to lose between turns. the
+        // cut is by character so offsets line up exactly.
         val end = minOf(offset + MAX_PAGE_TEXT_CHARS, total)
         val text = page.text.substring(offset, end)
 

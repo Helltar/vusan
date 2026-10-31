@@ -23,7 +23,7 @@ data class AppConfig(
     val addressing: AddressingConfig? = null,
     val agentMaxModelCalls: Int,
     val appearance: String?,
-    // the files the two above were read from, for the startup summary to name
+    // the files the two above were read from, for the startup summary
     val appearanceFile: String? = null,
     val chatHistory: ConversationConfig = ConversationConfig(),
     val databasePath: String,
@@ -56,12 +56,15 @@ data class AppConfig(
         require(agentMaxModelCalls >= MIN_MODEL_CALLS) { "AGENT_MAX_MODEL_CALLS must be at least $MIN_MODEL_CALLS" }
         require(maxConcurrentTurns > 0) { "MAX_CONCURRENT_TURNS must be positive" }
         require(regolithUrl == null || !regolithToken.isNullOrBlank()) { "Sandbox API authentication is required" }
-        // the classifier reads the lines around a message, and the bot's own recent ones, from the transcript
+        // the classifier reads the surrounding lines and the bot's recent ones from the transcript
         require(addressing == null || groupLog.enabled) { "ADDRESSING_ENABLED needs the group log, which GROUP_LOG_ENABLED=false turns off" }
     }
 
     companion object {
-        /** The fewest model calls a turn can be given: one to call tools, one to read them, one reserved for landing it. */
+        /**
+         * The fewest model calls a turn can have: one to call tools, one to read them, one reserved for
+         * landing.
+         */
         const val MIN_MODEL_CALLS = 3
 
         private const val DEFAULT_AGENT_MAX_MODEL_CALLS = 100
@@ -144,7 +147,7 @@ data class AppConfig(
             )
         }
 
-        // a blank file reads as no personality, which the startup summary names; an unreadable one stops startup
+        // a blank file is no personality, named in the startup summary; an unreadable one stops startup
         private fun readPersonality(path: String): String? {
             val file = Path(path)
 
@@ -153,8 +156,8 @@ data class AppConfig(
             return file.readText().trim().ifBlank { null }
         }
 
-        // what the bot looks like, kept out of the personality block on purpose: it is written for the
-        // image model, and a chat model handed a physical description tends to recite it.
+        // kept out of the personality on purpose: it is written for the image model, and a chat model given a
+        // physical description tends to recite it.
         private fun readAppearance(path: String): String? {
             val file = Path(path)
 
@@ -172,9 +175,9 @@ data class AppConfig(
             )
         }
 
-        // answering without a mention changes how the bot behaves in a group and was measured on small openai
-        // models only, so it waits for the operator's switch; it never runs on the chat model, so the switch
-        // needs a model, and a model set without the switch is named rather than silently ignored.
+        // answering without a mention changes group behavior and was measured on small openai models only, so
+        // it needs the operator's switch and a model of its own; a model set without the switch is named, not
+        // silently ignored.
         private fun resolveAddressing(chat: LlmProviderConfig): AddressingConfig? {
             if (readBooleanEnv("ADDRESSING_ENABLED") != true) {
                 if (readEnv("ADDRESSING_MODEL") != null) {
@@ -195,9 +198,9 @@ data class AppConfig(
             )
         }
 
-        // a model for one job — looking at pictures, judging whether a message was for the bot — named under
-        // its own prefix. `<ROLE>_MODEL` is the switch; without `<ROLE>_PROVIDER` the model runs on the chat
-        // provider with its key, and with it the role is a provider of its own, read like the chat one.
+        // a model for one job (vision, addressing) under its own prefix. `<ROLE>_MODEL` is the switch;
+        // without `<ROLE>_PROVIDER` it runs on the chat provider and key, with it the role is a provider of
+        // its own.
         private fun resolveRole(prefix: String, chat: LlmProviderConfig): LlmProviderConfig? {
             val model = readEnv("${prefix}_MODEL") ?: return null
 
@@ -210,14 +213,12 @@ data class AppConfig(
             )
         }
 
-        // the switch is the only setting, and it is on unless turned off: how often it looks and how much
-        // it says are the feature's own numbers, and live with it.
+        // on unless turned off; how often it looks and how much it says are the feature's own numbers.
         private fun resolveInitiative(): InitiativeConfig? =
             InitiativeConfig().takeIf { readBooleanEnv("INITIATIVE_ENABLED") != false }
 
-        // the same settings again under LLM_FALLBACK_, a second provider that answers while the first is
-        // out. a subscription may stand on either side, but not both: the CODEX_* settings and the signed-in
-        // account are one set, and two subscriptions would need two.
+        // the same settings under LLM_FALLBACK_, a provider answering while the first is out. a subscription
+        // may stand on either side but not both: the CODEX_* settings and the signed-in account are one set.
         private fun resolveLlmFallback(primary: LlmProviderConfig): LlmProviderConfig? {
             readEnv("${LLM_FALLBACK_PREFIX}_PROVIDER") ?: return null
 
@@ -233,11 +234,11 @@ data class AppConfig(
         private fun resolveLlmProvider(prefix: String, fallbackTimeout: Duration?): LlmProviderConfig {
             val raw = requireEnv("${prefix}_PROVIDER")
 
-            // the history is planned against the chat model's window and its fallback's; a role plans none
+            // history is planned against the chat model's and its fallback's windows; a role plans none
             val contextWindowTokens =
                 if (prefix == LLM_PREFIX || prefix == LLM_FALLBACK_PREFIX) readPositiveLongEnv("${prefix}_CONTEXT_WINDOW_TOKENS") else null
 
-            // a verdict waits as long as AddressingConfig says, so its role has no timeout of its own to read
+            // a verdict waits as long as AddressingConfig says, so its role reads no timeout of its own
             val requestTimeout =
                 (if (prefix == ADDRESSING_PREFIX) null else readPositiveLongEnv("${prefix}_REQUEST_TIMEOUT_SECONDS"))?.seconds
                     ?: fallbackTimeout
@@ -249,7 +250,8 @@ data class AppConfig(
                 return LlmProviderConfig.Codex(
                     model = requireEnv("${prefix}_MODEL"),
                     reasoningEffort = resolveReasoningEffort(prefix),
-                    // the tier is the chat's: a role spends the same allowance, and its model may not be served at it
+                    // the tier is the chat's: a role spends the same allowance, and its model may not be
+                    // served at it
                     serviceTier = resolveCodexServiceTier().takeIf { prefix == LLM_PREFIX || prefix == LLM_FALLBACK_PREFIX },
                     webSearch = readBooleanEnv("CODEX_WEB_SEARCH_ENABLED") ?: true,
                     clientVersion = resolveCodexClientVersion(),
@@ -353,8 +355,8 @@ data class AppConfig(
                 ?: error("Unsupported ${prefix}_REASONING_EFFORT=[$raw]. Supported values: ${supportedValues<ReasoningEffort>()}")
         }
 
-        // `default` is Codex's own sentinel for "no tier chosen" rather than a tier the catalog offers, so
-        // it reads as off here too instead of failing the catalog check with a value that means nothing.
+        // `default` is Codex's sentinel for no tier, not a catalog tier, so it reads as off instead of
+        // failing the catalog check.
         private fun resolveCodexServiceTier(): ServiceTier? {
             val raw = readEnv("CODEX_SERVICE_TIER") ?: return null
 
@@ -365,8 +367,8 @@ data class AppConfig(
             return tier.takeUnless { it == ServiceTier.DEFAULT }
         }
 
-        // pictures have a provider of their own: a key for openai's api, or the subscription signed
-        // in through CODEX_HOME whether or not the chat runs there. nothing switches on without one.
+        // pictures have their own provider: an openai api key, or the subscription signed in through
+        // CODEX_HOME whether or not chat runs there. nothing switches on without one.
         private fun resolveImageProvider(): ImageProviderConfig? {
             val provider = readEnv("IMAGE_PROVIDER")?.trim()?.lowercase() ?: return null
             val model = readEnv("IMAGE_MODEL")
@@ -402,8 +404,8 @@ data class AppConfig(
                 )
             }
 
-        // the catalog Codex answers with is filtered by the claimed client version, and this pins it: for
-        // a host that cannot ask github for the latest release, or when the automatic choice is wrong.
+        // codex filters its catalog by the claimed client version; this pins it, for hosts that cannot ask
+        // github for the latest release or when the automatic choice is wrong.
         private fun resolveCodexClientVersion(): String? {
             val raw = readEnv("CODEX_CLIENT_VERSION")?.trim() ?: return null
 
@@ -433,8 +435,8 @@ data class AppConfig(
     }
 }
 
-// a value that is set but unreadable must not fall back to the default: writing the variable down at all
-// says the default was not wanted, so a typo stops the startup instead of silently restoring it.
+// a set but unreadable value must not fall back to the default: setting it says the default was not wanted,
+// so a typo stops startup.
 internal fun parseIntEnv(env: String, raw: String?): Int? =
     raw?.let { it.trim().toIntOrNull() ?: error("$env=[$it] is not a whole number") }
 
@@ -444,8 +446,8 @@ internal fun parseLongEnv(env: String, raw: String?): Long? =
 internal fun parsePositiveLongEnv(env: String, raw: String?): Long? =
     parseLongEnv(env, raw)?.also { require(it > 0L) { "$env=[$it] must be positive" } }
 
-// case-insensitive on purpose: `toBooleanStrictOrNull` on its own rejects `False` and `TRUE`, and reading
-// those as "unset" would leave the feature running in whichever state the default happens to be.
+// case-insensitive on purpose: `toBooleanStrictOrNull` rejects `False` and `TRUE`, and treating those as
+// unset would leave the feature in its default state.
 internal fun parseBooleanEnv(env: String, raw: String?): Boolean? =
     raw?.let {
         it.trim().lowercase().toBooleanStrictOrNull()
@@ -453,11 +455,9 @@ internal fun parseBooleanEnv(env: String, raw: String?): Boolean? =
     }
 
 /**
- * Parses an allow/ban list into platform-qualified keys.
- *
- * A bare number is read as a Telegram id, which is what every existing deployment has written; a
- * `platform:id` entry names its own. A dropped id fails open on `BANNED_IDS` — the person stays
- * unbanned — so an entry that cannot be read is an error rather than something to skip.
+ * Parses an allow/ban list into platform-qualified keys. A bare number is a telegram id, as every existing
+ * deployment wrote; `platform:id` names its own. A dropped id fails open on `BANNED_IDS`, so an unreadable
+ * entry is an error rather than skipped.
  */
 internal fun parseIdSetEnv(env: String, raw: String?): Set<String> =
     raw

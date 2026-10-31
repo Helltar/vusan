@@ -21,21 +21,19 @@ import java.time.temporal.TemporalAdjusters
 import kotlin.time.Duration.Companion.minutes
 
 /**
- * The bot's memory of the days a group has had: after a day closes, one entry about it, written in the
- * bot's own voice from that day's transcript, and shown back to it on the turns that follow.
+ * The bot's memory of a group's days: after a day closes, one entry about it in the bot's own voice from that
+ * day's transcript, shown back on later turns.
  *
- * It is what lets a conversation pick up where yesterday left off. History is one person's exchanges
- * with the bot, and durable memory is facts somebody asked to be kept; neither holds what the chat was
- * like the day before.
+ * It lets a conversation pick up where yesterday left off: history is one person's exchanges with the bot and
+ * memory is facts someone asked to keep; neither holds what the chat was like yesterday.
  *
- * Only a closed day is written: today is still being added to. An entry is written without anyone
- * asking, so a whole day of a chat goes to the model unprompted — which is why this only reads chats
- * that [isAllowed] still admits. It is also what `readGroupLog` gives for the closed days of a window
- * too wide to quote.
+ * Only a closed day is written. An entry is written unasked, sending a whole day of a chat to the model, so
+ * only chats [isAllowed] still admits are read. It is also what `readGroupLog` gives for the closed days of a
+ * window too wide to quote.
  *
- * Once a week or a month is over, its daily entries are read again into one look-back over it, so what
- * mattered weeks ago still reaches a turn that is shown only the last few days. Entries and look-backs
- * are kept for as long as the chat's transcript is not cleared, outliving the transcript's own retention.
+ * Once a week or month is over, its entries are read again into one look-back, so what mattered weeks ago
+ * still reaches a turn shown only the last few days. Entries and look-backs last until the chat's transcript
+ * is cleared, outliving its retention.
  */
 class Diary(
     private val writer: DiaryWriter,
@@ -46,7 +44,7 @@ class Diary(
     private val clock: () -> Instant = Instant::now,
 ) {
 
-    // a day that keeps failing is given up on rather than asked about every pass until midnight
+    // a day that keeps failing is given up on rather than retried every pass until midnight
     private val attempts = HashMap<Pair<ChatRef, LocalDate>, Int>()
     private val lookBackAttempts = HashMap<Pair<ChatRef, DiarySpan>, Int>()
 
@@ -66,8 +64,8 @@ class Diary(
         }
 
     /**
-     * Writes yesterday's entry for every chat that had a day worth one and has no entry yet, then the
-     * look-back over the last settled week and month.
+     * Writes yesterday's entry for every chat with a day worth one and no entry yet, then the look-backs over
+     * the last settled week and month.
      */
     suspend fun catchUp() {
         val today = LocalDate.ofInstant(clock(), zone)
@@ -84,14 +82,14 @@ class Diary(
                 }
         }
 
-        // a day's entry is written only while the next day lasts, so the day before yesterday is the
-        // last one whose entry can no longer appear, and a span ending there is read whole
+        // a day's entry is written only during the next day, so the day before yesterday is the last whose
+        // entry can no longer appear, and a span ending there is complete
         writeLookBacks(settled = day.minusDays(1))
     }
 
     /**
-     * The text of a `<diary>` block for [chat], or `null` when there is nothing in it: the newest month and
-     * week look-backs, then the last few entries of the past week, oldest first.
+     * The text of a `<diary>` block for [chat], or `null` when empty: the newest month and week look-backs,
+     * then the last few entries of the past week, oldest first.
      */
     suspend fun blockFor(chat: ChatRef): String? {
         val today = LocalDate.ofInstant(clock(), zone)
@@ -113,7 +111,7 @@ class Diary(
         val entries = groupLog.dayEntries(chat, day, zone)
         val written = entries.count { it.kind != GroupLogEntry.BOT_KIND }
 
-        // a closed day gains no messages, so one that was too thin is not read again on the next pass
+        // a closed day gains no messages, so one too thin is not read again
         attempts[key] = if (written < MIN_DAY_MESSAGES) MAX_ATTEMPTS else (attempts[key] ?: 0) + 1
 
         if (written < MIN_DAY_MESSAGES) return
@@ -150,7 +148,7 @@ class Diary(
 
         val entries = repository.between(chat, span.firstDay, span.lastDay)
 
-        // with a single day in it a look-back would only retell that day's entry
+        // with a single day a look-back would only retell that day's entry
         lookBackAttempts[key] = if (entries.size < MIN_LOOK_BACK_ENTRIES) MAX_ATTEMPTS else (lookBackAttempts[key] ?: 0) + 1
 
         if (entries.size < MIN_LOOK_BACK_ENTRIES) return
@@ -171,14 +169,14 @@ class Diary(
     private companion object {
         val PASS_INTERVAL = 15.minutes
 
-        // a day of a few stray lines is not one to remember, and an entry about it would be padding
+        // a day of a few stray lines is not worth remembering, and an entry would be padding
         const val MIN_DAY_MESSAGES = 15
 
         const val MAX_ATTEMPTS = 3
         const val MIN_LOOK_BACK_ENTRIES = 2
 
-        // every group turn carries the shown entries, so they are few, and drawn from the last week only:
-        // a chat that went quiet for a few days still comes back to them, one silent longer only to its look-backs
+        // every group turn carries these, so few, from the last week only: a chat quiet for a few days still
+        // gets them, one quiet longer only its look-backs
         const val SHOWN_ENTRIES = 3
         const val EARLIER_ENTRIES = 2
         const val KEPT_DAYS = 7L
@@ -187,7 +185,7 @@ class Diary(
     }
 }
 
-/** The newest span of this period that ends on or before [day]. */
+/** The newest span of this period ending on or before [day]. */
 internal fun DiaryPeriod.lastEndingBy(day: LocalDate): DiarySpan {
     val next = day.plusDays(1)
 
@@ -203,8 +201,7 @@ internal fun DiarySpan.label(): String =
         DiaryPeriod.MONTH -> "month ${YearMonth.from(firstDay)}"
     }
 
-// an entry was written from what people said in the chat, so it is quoted text like the transcript
-// it came from, and gets the same defusing before it is shown inside a prompt block.
+// an entry retells what people said, so it is defused like the transcript it came from.
 internal fun renderDiary(entries: List<DiaryEntry>, lookBacks: List<DiaryLookBack> = emptyList()): String =
     (lookBacks.map { it.span.label() to it.content } + entries.map { it.day.toString() to it.content })
         .joinToString("\n\n") { (label, content) -> "$label: ${content.neutralizePromptBlocks()}" }

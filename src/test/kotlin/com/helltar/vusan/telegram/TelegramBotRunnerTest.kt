@@ -14,7 +14,7 @@ class TelegramBotRunnerTest {
 
     private val now: Instant = Instant.parse("2026-08-28T12:00:00Z")
 
-    // a plain text a person sent on its own joins their run of lines; everything handled in a way of its own does not
+    // a plain standalone text joins the person's run of lines; anything handled in its own way does not
     @Test
     fun `a plain text joins its sender's lines and anything handled on its own does not`() {
         assertTrue(message(""""text": "first line"""").joinsTextBatch())
@@ -43,13 +43,13 @@ class TelegramBotRunnerTest {
         assertFalse(message(""""text": "fixed", "edit_date": 1774000100""").joinsTextBatch())
         assertFalse(message(""""caption": "look", "photo": [{"file_id": "p", "file_unique_id": "u", "width": 1, "height": 1}]""").joinsTextBatch())
         assertFalse(message(""""text": "no sender"""", sender = "").joinsTextBatch())
-        // anonymous admins all post as GroupAnonymousBot: two of them must not be read as one
+        // anonymous admins all post as GroupAnonymousBot: two must not be read as one
         assertFalse(
             message(""""text": "as an admin"""", sender = """"from": {"id": 1087968824, "is_bot": true, "first_name": "Group"},""").joinsTextBatch(),
         )
     }
 
-    // `date` must stay non-zero: the bot api models a zero date as an InaccessibleMessage subtype.
+    // `date` must stay non-zero: the bot api models a zero date as InaccessibleMessage.
     private fun message(fields: String, sender: String = """"from": {"id": 5, "is_bot": false, "first_name": "Ada"},"""): Message =
         mapper.readValue(
             """{"message_id": 1, "date": 1774000000, "chat": {"id": 10, "type": "private"}, $sender ${fields.trim()}}""",
@@ -63,8 +63,8 @@ class TelegramBotRunnerTest {
 
     @Test
     fun `an edit of a message the chat has left behind is not answered`() {
-        // however fresh the edit, the reply would land under a message half an hour of conversation
-        // above the current one — and telegram redelivering that message reads exactly the same way
+        // however fresh the edit, the reply would land under a message half an hour up, and a telegram
+        // redelivery reads the same
         assertFalse(edit(sentAt = now.minusSeconds(301)))
         assertTrue(edit(sentAt = now.minusSeconds(299)))
     }
@@ -76,7 +76,7 @@ class TelegramBotRunnerTest {
 
     @Test
     fun `editing a message into a command does not invoke it`() {
-        // commands are invoked by sending them; `/clear` would wipe a history nobody asked it to
+        // commands are invoked by sending; an edited-in `/clear` would wipe a history nobody asked to
         assertFalse(edit(isCommand = true))
     }
 

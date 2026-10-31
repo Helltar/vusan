@@ -3,8 +3,8 @@ package com.helltar.vusan.llm
 internal val TEST_MODEL = LlmModel("test", contextWindowTokens = 16_384)
 
 /**
- * A client that answers every call with the same text and remembers what it was asked, for the callers
- * that build one prompt and read one answer: vision, the recap, the addressing verdict.
+ * Answers every call with the same text and remembers what it was asked, for callers that build one prompt
+ * and read one answer: vision, the recap, the addressing verdict.
  */
 internal class FakeLlmClient(private val response: String = "description") : LlmClient {
 
@@ -38,8 +38,8 @@ internal class FakeLlmClient(private val response: String = "description") : Llm
 }
 
 /**
- * A client that answers calls from a script, one reply per call, and remembers every request — for the
- * agent loop, whose tool rounds are what the script shapes.
+ * Answers calls from a script, one reply each, and remembers every request: for the agent loop, whose tool
+ * rounds the script shapes.
  */
 internal class ScriptedLlmClient(private vararg val replies: Reply) : LlmClient {
 

@@ -30,11 +30,11 @@ private const val SEND_AS_DOCUMENT = "document"
 private const val SEND_AS_ANIMATION = "animation"
 
 class SandboxTools(
-    // shared with every other tool of the turn, so a reset here is a reset for them too
+    // shared with the turn's other tools, so a reset here resets them too
     private val sandbox: SandboxClient.PersonSandbox,
     private val outbox: BotOutbox,
-    // the request's attachments and what the turn's other calls made, which reach the turn's own
-    // directory here before the next piece of work
+    // the attachments and what other calls made, which reach the turn's directory here before the next piece
+    // of work
     private val shelf: TurnShelf,
 ) : ToolSet {
 
@@ -216,9 +216,8 @@ class SandboxTools(
             }
             sent += name
         }
-        // a chat can forbid a whole kind of content, and the file the model picked may be one of them.
-        // the queue refuses those, and saying so is the point: reporting a photo as sent into a chat
-        // that drops it leaves the model believing the user can see something nobody sent.
+        // a chat can forbid a whole kind of content, which the file may be; the queue refuses it, and saying
+        // so matters: a photo reported as sent into a chat that drops it misleads the model.
         val refused = mutableListOf<String>()
 
         when {
@@ -240,14 +239,14 @@ class SandboxTools(
         }.trim()
     }
 
-    // before any work here, so a command finds the turn's files where the result of this call says they are
+    // before any work, so a command finds the turn's files where this call's result says they are
     private suspend fun prepare(): String? =
         shelf.copyToSandbox()
             .takeIf { it.isNotEmpty() }
             ?.let { "This turn's files are in the sandbox: ${it.joinToString(", ")}." }
 }
 
-// a file the model reads or edits is text, decoded whole; a NUL byte says it is not, and the shell is the tool for it
+// read or edited files are text decoded whole; a NUL byte says otherwise, and the shell is the tool for it
 private suspend fun SandboxClient.PersonSandbox.readText(path: String): String {
     val bytes = readFile(path, MAX_TEXT_FILE_BYTES)
     require(bytes.none { it == 0.toByte() }) { "`$path` is not a text file; inspect it with `runCommand`" }
@@ -271,9 +270,8 @@ private fun sandboxFilename(path: String): String = path.substringAfterLast('/')
 
 private val String.extension: String get() = substringAfterLast('.', "").lowercase()
 
-// the name decides unless the model asked for a kind: a GIF from a chat is a soundless mp4, and only
-// the model knows that the mp4 it made from one is meant to loop rather than play as a video. a video
-// the chat cannot play as one comes back as a document through the sender's own fallback.
+// the name decides unless the model asked for a kind: a chat GIF is a soundless mp4, and only the model knows
+// its mp4 is meant to loop. a video the chat cannot play comes back as a document via the sender's fallback.
 private fun sandboxOutput(name: String, bytes: ByteArray, kind: String): BotOutput =
     when {
         kind == SEND_AS_DOCUMENT -> BotOutput.Document(bytes = bytes, filename = name)
@@ -283,7 +281,7 @@ private fun sandboxOutput(name: String, bytes: ByteArray, kind: String): BotOutp
         else -> BotOutput.Document(bytes = bytes, filename = name)
     }
 
-// the server's id shape is the sdk's to check; this only keeps model text short before it is echoed back.
+// the sdk checks the id shape; this only keeps model text short before it is echoed back.
 private fun checkedJobId(value: String): String = value.requireToolText("Job ID", MAX_JOB_ID_CHARS)
 
 private fun describeCommand(result: CommandResult): String = buildString {

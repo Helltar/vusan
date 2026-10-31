@@ -62,11 +62,11 @@ class VoiceTools(
     }
 
     companion object {
-        // about two minutes of speech at the thousand characters a minute the provider itself reckons with,
-        // and well under what it takes in one request
+        // about two minutes of speech at the provider's thousand characters a minute, well under its
+        // per-request limit
         const val VOICE_TOOLS_MAX_CHARS = 2000
 
-        // the API's default output, which Telegram takes as a voice message as it is
+        // the API's default output, which telegram takes as a voice message as is
         const val SPEECH_FILE_NAME = "speech.mp3"
 
         private val log = KotlinLogging.logger {}

@@ -15,13 +15,12 @@ import kotlin.time.Duration.Companion.minutes
 import kotlin.time.TimeSource
 
 /**
- * A group message nobody tagged the bot in, as the adapter hands it over: only text a person typed,
- * never a forward or a command, both of which the adapter has already turned away.
+ * An untagged group message as the adapter hands it over: only text a person typed, never a forward or a
+ * command, which the adapter already turned away.
  *
- * [author] is the name the classifier is shown and [sender] who it is, qualified, for what is keyed on
- * the person. [authorWaiting] is true while the author has a turn of their own running or queued in this
- * chat. [edited] marks an edit of a message sent a moment ago, which is asked about only when it names
- * the bot.
+ * [author] is the name the classifier sees, [sender] the qualified identity for what is keyed on the person.
+ * [authorWaiting] is true while the author has a turn running or queued in this chat. [edited] marks an edit
+ * of a just-sent message, asked about only when it names the bot.
  */
 data class AmbientCandidate(
     val chat: ChatRef,
@@ -35,21 +34,19 @@ data class AmbientCandidate(
 )
 
 /**
- * Whether a group message with no mention, reply or command is still meant for the bot — its name said
- * out loud, or a follow-up to what it just answered.
+ * Whether a group message with no mention, reply or command is still meant for the bot: its name said aloud,
+ * or a follow-up to what it just answered.
  *
- * It may only ever add answers. Every mention, reply and command is decided before this is asked, and
- * a failure, a timeout or a chat over its rate all come out as "not addressed", which is exactly how the
- * bot behaved before this existed.
+ * It can only add answers. Mentions, replies and commands are decided first, and a failure, timeout or a chat
+ * over its rate all mean "not addressed", which is how the bot behaved without this.
  *
- * Code decides whether to ask, a model decides the answer. A message reaches the model only when it
- * names the bot, when its author is still waiting on the bot, or when the bot spoke within
- * [FOLLOW_UP_WINDOW] and that line is among the few the model is shown; an edit gets only the first of
- * those, and everything else in the chat never leaves the machine. The gate is about privacy before cost.
+ * Code decides whether to ask, a model decides the answer. A message reaches the model only when it names the
+ * bot, its author is still waiting on the bot, or the bot spoke within [FOLLOW_UP_WINDOW] and that line is in
+ * the context shown; an edit gets only the first. Nothing else in the chat leaves the machine: the gate is
+ * about privacy before cost.
  *
- * The follow-up door is the one the bot opens on its own guess, so it stays shut for somebody who asked
- * to be left alone: a line they wrote near the bot's is not taken for an answer to it. Naming the bot
- * is speaking to it, and that door is theirs as much as anybody's.
+ * The follow-up door opens on the bot's own guess, so it stays shut for someone who asked to be left alone.
+ * Naming the bot is speaking to it, and that door stays open to them.
  */
 class AmbientAddressing(
     private val classifier: AddressingClassifier,
@@ -59,7 +56,7 @@ class AmbientAddressing(
     private val clock: () -> Instant = Instant::now,
 ) {
 
-    /** The names a message is checked for, the one the bot's own lines go under first. */
+    /** The names a message is checked for, the bot's own display name first. */
     val botNames: List<String> = botNames.map(String::trim).filter(String::isNotEmpty).distinctBy(String::lowercase)
 
     private val namePattern = namePattern(this.botNames)
@@ -88,7 +85,7 @@ class AmbientAddressing(
         val started = TimeSource.Monotonic.markNow()
         val verdict = classify(candidate, recent)
 
-        // no text, ever: the message id finds it in the group log when a verdict needs a second look
+        // no text: the message id finds it in the group log when a verdict needs a second look
         log.info {
             "ambient verdict: chat=[${candidate.chat}] msg=[${candidate.messageId}] gate=[${gate.label}] " +
                     "verdict=[${verdict.label}] ms=[${started.elapsedNow().inWholeMilliseconds}]"
@@ -110,7 +107,7 @@ class AmbientAddressing(
             log.warn(it) { "ambient check skipped, the group log could not be read: chat=[${candidate.chat}]" }
         }.getOrNull()
 
-    // a store that cannot be read keeps the bot out, like every other failure here
+    // an unreadable store keeps the bot out, like every other failure here
     private suspend fun leftAlone(candidate: AmbientCandidate, now: Instant): Boolean =
         runCatching { leaveAlone?.activeUntil(candidate.chat, candidate.sender, now) != null }
             .onFailure {
@@ -124,8 +121,8 @@ class AmbientAddressing(
 
         return when {
             namePattern.containsMatchIn(candidate.text) -> Gate.NAME
-            // an edit is someone adding the name they forgot; through the other doors every typo fixed near
-            // the bot's answer would be sent out to be judged
+            // an edit is someone adding the forgotten name; through the other doors every typo fixed near the
+            // bot's answer would be judged
             candidate.edited -> null
             candidate.authorWaiting -> Gate.WAITING
             // a bot line outside the context is one the model could not connect the message to anyway
@@ -169,7 +166,7 @@ class AmbientAddressing(
         FOLLOW_UP("follow-up"),
     }
 
-    // everything but a plain yes keeps the bot out, as it was before; they are told apart for the log
+    // everything but a plain yes keeps the bot out; the kinds are told apart for the log
     private enum class Verdict(val label: String) {
         ADDRESSED("addressed"),
         NOT_ADDRESSED("not addressed"),
@@ -188,14 +185,14 @@ class AmbientAddressing(
     }
 
     private companion object {
-        // how long after the bot's own line a message with no name in it may still be a follow-up to it
+        // how long after the bot's line an unnamed message may still be a follow-up
         val FOLLOW_UP_WINDOW = 5.minutes
 
-        // what the classifier is shown, the way it was measured: a few lines, none of them old
+        // what the classifier is shown, as measured: a few recent lines
         const val CONTEXT_LINES = 6
         val CONTEXT_MAX_AGE = 10.minutes
 
-        // a chat that runs hot right after the bot speaks would otherwise send the model every line of it
+        // otherwise a chat running hot right after the bot speaks would send the model every line
         const val MAX_CALLS_PER_CHAT = 20
         val RATE_WINDOW = 1.minutes
 
@@ -205,16 +202,15 @@ class AmbientAddressing(
     }
 }
 
-// anchored at the start of a word only, so an ending the language adds to the name still matches while
-// the same letters inside a longer word do not. an `@` in front makes it a username, and a mention of the
-// bot's own was answered before this was ever asked.
+// anchored at a word start only, so an inflected ending still matches while the letters inside a longer word
+// do not. `@` makes it a username, and a mention of the bot's was answered before this is asked.
 internal fun namePattern(names: List<String>): Regex =
     Regex(
         "(?<![\\p{L}\\p{N}_@])(?:" + names.joinToString("|") { Regex.escape(it) } + ")",
         RegexOption.IGNORE_CASE,
     )
 
-/** At most [max] calls per chat in any [window]; a call over it is refused rather than queued. */
+/** At most [max] calls per chat in any [window]; one over it is refused, not queued. */
 internal class ChatRateLimit(private val max: Int, private val window: Duration) {
 
     private val calls = HashMap<ChatRef, ArrayDeque<Instant>>()

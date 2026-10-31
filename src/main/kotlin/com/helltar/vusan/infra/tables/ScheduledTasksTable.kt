@@ -14,8 +14,8 @@ object ScheduledTasksTable : LongIdTable("scheduled_tasks") {
     val timezone = varchar("timezone", 64)
     val nextFireAt = timestamp("next_fire_at")
 
-    // a task is paused by its owner, or by the bot losing the right to post where it fires. one that
-    // has fired for the last time is deleted instead: nothing reads a task that will never run again.
+    // paused by the owner, or by the bot losing the right to post where it fires. a task past its last fire
+    // is deleted instead, since nothing reads it.
     val paused = bool("paused").default(false)
 
     val selfInitiated = bool("self_initiated").default(false)

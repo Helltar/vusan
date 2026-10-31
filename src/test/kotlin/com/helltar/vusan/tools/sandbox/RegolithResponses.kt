@@ -1,11 +1,11 @@
 package com.helltar.vusan.tools.sandbox
 
 /*
- * whole documents as a regolith server sends them. the sdk decodes every field the protocol requires
- * and fails on a missing one, so a fake that answers with a fragment tests nothing.
+ * whole documents as a regolith server sends them: the sdk fails on any missing required field, so a
+ * fake answering with a fragment tests nothing.
  */
 
-/** The id a fake server gives every sandbox it is asked for; the alias is what the bot sends. */
+/** The id a fake server gives every sandbox; the alias is what the bot sends. */
 internal const val SANDBOX_ID = "5f2b9c7d1e3a4f6b8c0d2e4f6a8b0c1d"
 
 internal fun sandboxInfo(alias: String, id: String = SANDBOX_ID, homeReleasedAt: String? = null): String =
@@ -22,6 +22,6 @@ internal fun fileEntry(name: String, size: Long, type: String = "file"): String 
 internal fun problemDocument(code: String, status: Int, title: String, detail: String): String =
     """{"type":"urn:regolith:error:$code","title":"$title","status":$status,"detail":"$detail","code":"$code"}"""
 
-/** One page of output as the server sends it, with the exec it came from. */
+/** One page of output as the server sends it, with its exec. */
 internal fun outputPage(frames: String, nextOffset: Long, complete: Boolean, exec: String): String =
     """{"frames":$frames,"nextOffset":$nextOffset,"complete":$complete,"exec":$exec}"""

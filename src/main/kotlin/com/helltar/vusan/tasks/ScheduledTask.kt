@@ -16,8 +16,8 @@ import java.time.format.DateTimeFormatter
 
 data class ScheduledTask(
     val id: Long,
-    // whose task it is and where it fires, qualified: two platforms may issue the same ids, and a task
-    // is both an owner's quota and somebody else's chat.
+    // whose task and where it fires, qualified: two platforms may issue the same ids, and a task is both an
+    // owner's quota and someone's chat.
     val scope: ConversationScope,
     val prompt: String,
     val title: String?,
@@ -26,14 +26,14 @@ data class ScheduledTask(
     val nextFireAt: Instant,
     val paused: Boolean,
     val creatorMessageId: String?,
-    // the forum topic the task was set up in. the creator message anchors a fire into the right topic
-    // on its own, but the notices around it, and every fire after that message is gone, need this.
+    // the forum topic the task was set up in. the creator message anchors a fire into its topic, but the
+    // notices around it, and fires after that message is gone, need this.
     val creatorThreadId: String?,
     val creatorUsername: String?,
     val creatorDisplayName: String?,
     val chatIsPrivate: Boolean,
     val language: Language,
-    // the bot set this one up for itself as a follow-up, instead of the user asking for it.
+    // a follow-up the bot set up itself, not one the user asked for.
     val selfInitiated: Boolean = false,
 )
 
@@ -60,12 +60,9 @@ internal fun formatFire(instant: Instant, tz: ZoneId): String =
     "${FIRE_DISPLAY.format(ZonedDateTime.ofInstant(instant, tz))} ${tz.id}"
 
 /**
- * Where a fired task runs, rebuilt from what was stored when it was created.
- *
- * A task has no incoming message behind it, so there is no live chat flavor to read and no message to
- * answer. What survives is who set it up and where, which is what the turn needs to address the person
- * by name instead of nobody. The chat's description and what it lets the bot post are read fresh,
- * since neither was worth storing at the time.
+ * Where a fired task runs, rebuilt from what was stored at creation. With no incoming message there is no
+ * live chat kind and nothing to answer; what survives is who set it up and where, so the turn can address the
+ * person by name. The chat's description and permissions are read fresh.
  */
 internal fun ScheduledTask.toRequestContext(profile: ChatProfile = ChatProfile.NONE): RequestContext =
     RequestContext(
@@ -74,8 +71,8 @@ internal fun ScheduledTask.toRequestContext(profile: ChatProfile = ChatProfile.N
             ChatContext(
                 id = scope.chat.id,
                 isPrivate = chatIsPrivate,
-                // the turn runs in the topic the task was created in, so a follow-up it schedules is
-                // anchored there too rather than in the forum's General.
+                // the turn runs in the task's topic, so a follow-up it schedules is anchored there too, not
+                // in the forum's General.
                 threadId = creatorThreadId,
                 description = profile.description,
                 capabilities = profile.capabilities,
@@ -95,11 +92,9 @@ internal val ScheduledTask.destination: Destination
     get() = Destination(scope.chat, threadId = creatorThreadId)
 
 /**
- * Whose fire this is, for the line the chat sees above it.
- *
- * A private chat gets none: its only other member is the person the task belongs to, and naming them
- * to themselves says nothing. What is passed on is who they are, not how to write them — the mention
- * is the messenger's own syntax.
+ * Whose fire this is, for the line above it in the chat. A private chat gets none: naming the owner to
+ * themselves says nothing. Who they are is passed on, not how to write them; the mention is the messenger's
+ * syntax.
  */
 internal val ScheduledTask.attribution: Attribution?
     get() =

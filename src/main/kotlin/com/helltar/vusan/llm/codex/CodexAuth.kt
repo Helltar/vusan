@@ -31,27 +31,25 @@ import kotlin.time.Duration.Companion.minutes
 import kotlin.time.Duration.Companion.seconds
 
 /**
- * The OAuth client the Codex CLI itself registers with. It is a public identifier baked into the
- * released binary, not a secret, and the refresh endpoint only accepts refresh tokens minted for it —
- * so a token written by `codex login` can only be refreshed under this id.
+ * The OAuth client the Codex CLI registers with: a public id baked into the binary, not a secret. The refresh
+ * endpoint only accepts refresh tokens minted for it.
  */
 private const val CODEX_OAUTH_CLIENT_ID = "app_EMoamEEZ73f0CkXaXp7hrann"
 private const val CODEX_TOKEN_URL = "https://auth.openai.com/oauth/token"
 
-// the access token lives ten days, so the refresh is attempted a full day out: a refusal then still
-// leaves dozens of turns to succeed on, instead of being the single shot that takes the bot down.
+// the access token lives ten days, so refreshing a day out leaves dozens of turns to retry a refusal instead
+// of one shot that takes the bot down.
 private val REFRESH_WINDOW = 24.hours
 
-// inside this last stretch the token is gone for practical purposes, and a failed refresh becomes the
-// operator's problem rather than something to sit out.
+// within this last stretch the token is as good as gone, and a failed refresh is the operator's problem.
 private val EXPIRY_GRACE = 5.minutes
 
-// the endpoint answers a successful refresh with `earliest_refresh_at` and refuses anything sooner, so
-// a failure waits rather than repeating on every message for the rest of the window.
+// the endpoint refuses a refresh before `earliest_refresh_at`, so a failure waits instead of repeating on
+// every message.
 private val REFRESH_RETRY_INTERVAL = 1.hours
 
-// a file rewritten within the clock tick of the write just read keeps its stamp and, as often as not, its
-// size, so a read that fresh is not remembered: the next request reads the file again
+// a file rewritten within the clock tick of the last read may keep its stamp and size, so a read that fresh
+// is not remembered
 private val STAMP_SETTLE_TIME = 2.seconds
 
 private const val REFRESH_ERROR_MAX_CHARS = 500
@@ -67,16 +65,15 @@ private val authJson =
     }
 
 /**
- * A signed-in ChatGPT session, as far as the LLM client is concerned: the bearer token and the
- * sandbox it belongs to. Both go on every request; the account id is what routes a sandbox
- * subscription to the right entitlement.
+ * A signed-in ChatGPT session as the LLM client needs it: the bearer token and the workspace account it
+ * belongs to, which routes the request to the right subscription. Both go on every request.
  */
 data class CodexCredentials(
     val accessToken: String,
     val accountId: String?,
 )
 
-/** Every failure that means "the operator has to do something", as opposed to a transient error. */
+/** A failure the operator has to act on, as opposed to a transient error. */
 class CodexAuthException(message: String, cause: Throwable? = null) : IllegalStateException(message, cause)
 
 private fun codexAuthError(message: String, cause: Throwable? = null): Nothing =
@@ -108,9 +105,9 @@ private data class AuthFileStamp(val modifiedAt: Instant, val size: Long) {
 private data class ReadAuthFile(val stamp: AuthFileStamp, val snapshot: CodexAuthSnapshot)
 
 /**
- * Deliberately without default values. The shared client encodes with kotlinx-serialization's
- * `encodeDefaults = false`, so a defaulted `grant_type` is dropped from the body and the endpoint
- * answers `missing_required_parameter` — a 400 that reads like a dead session and is not one.
+ * No defaults on purpose: the shared client encodes with `encodeDefaults = false`, so a defaulted
+ * `grant_type` would be dropped and the endpoint would answer `missing_required_parameter`, a 400 that looks
+ * like a dead session.
  */
 @Serializable
 private data class CodexRefreshRequest(
@@ -124,25 +121,24 @@ private data class CodexRefreshResponse(
     @SerialName("id_token") val idToken: String? = null,
     @SerialName("access_token") val accessToken: String? = null,
     @SerialName("refresh_token") val refreshToken: String? = null,
-    // the endpoint reports when it will accept the next refresh and refuses anything sooner. logged
-    // rather than honored until a real value shows what shape it arrives in.
+    // when the endpoint will accept the next refresh; logged rather than honored until a real value shows its
+    // shape.
     @SerialName("earliest_refresh_at") val earliestRefreshAt: JsonElement? = null,
 )
 
 /**
  * Owns the ChatGPT credentials written by `codex login`.
  *
- * The CLI is the only thing that mints tokens here — this store reads file-backed `auth.json`, hands
- * out the access token, and refreshes it against the same endpoint the CLI uses once it is close to
- * expiry. Login, logout and device-code stay the CLI's job; keyring-backed credentials are not
- * readable outside the CLI and therefore are not supported by this direct HTTP bridge.
+ * Reads file-backed `auth.json`, hands out the access token and refreshes it near expiry against the CLI's
+ * endpoint. Login, logout and device-code stay with the CLI; keyring-backed credentials are unreadable
+ * outside it and unsupported.
  */
 class CodexAuthStore(
     private val http: HttpClient,
     private val authFile: Path = defaultCodexAuthFile(),
 ) {
 
-    /** How much of this account's subscription the bot has drawn, chat and pictures alike. */
+    /** How much of the subscription the bot has drawn, chat and pictures alike. */
     val limits = CodexLimits()
 
     private val mutex = Mutex()
@@ -151,10 +147,8 @@ class CodexAuthStore(
     private var lastRefreshFailure: Instant? = null
 
     /**
-     * The current access token, refreshed first when it is within [REFRESH_WINDOW] of expiring.
-     *
-     * Serialized on a mutex so a burst of concurrent turns fires one refresh rather than one each: the
-     * endpoint rate-limits them, and the write back to `auth.json` has a single writer this way.
+     * The current access token, refreshed first within [REFRESH_WINDOW] of expiry. Behind a mutex so
+     * concurrent turns fire one refresh: the endpoint rate-limits them, and `auth.json` gets a single writer.
      */
     suspend fun credentials(): CodexCredentials =
         mutex.withLock {
@@ -167,12 +161,10 @@ class CodexAuthStore(
         }
 
     /**
-     * The tokens to use for this request, refreshed first when the access token is inside
-     * [REFRESH_WINDOW].
+     * The tokens for this request, refreshed first inside [REFRESH_WINDOW].
      *
-     * A refresh that fails while the token still has days on it is a warning, not an error. The
-     * endpoint refuses a refresh that comes too soon after the previous one, and answering that with
-     * "sign in again" sends the operator to re-authenticate a session that is working fine.
+     * A failed refresh while the token still has days left is a warning: the endpoint refuses refreshes too
+     * soon after the previous one, and "sign in again" would send the operator to fix a working session.
      */
     private suspend fun refreshedIfDue(snapshot: CodexAuthSnapshot): CodexTokens {
         val tokens = snapshot.tokens
@@ -213,14 +205,13 @@ class CodexAuthStore(
     private fun retryDue(): Boolean =
         lastRefreshFailure?.let { Instant.now().isAfter(it.plusSeconds(REFRESH_RETRY_INTERVAL.inWholeSeconds)) } ?: true
 
-    /** Plan on the signed-in account, for the startup log. Absent when the claim is missing. */
+    /** The account's plan for the startup log; absent without the claim. */
     suspend fun planType(): String? =
         mutex.withLock { currentTokens().tokens.idToken.claimString("chatgpt_plan_type") }
 
-    // the file is read again whenever its stamp moves, so `codex login`, `codex logout`, sandbox changes
-    // and a CLI refresh become visible without restarting vusan, and not otherwise. the cached entry only
-    // carries a token we refreshed in memory when writing it back failed; it remains usable while the
-    // on-disk source is unchanged.
+    // re-read whenever the file's stamp moves, so login, logout, workspace changes and CLI refreshes show up
+    // without a restart. the cache only carries a token refreshed in memory whose write-back failed, usable
+    // while the file is unchanged.
     private fun currentTokens(): CodexAuthSnapshot {
         val snapshot = snapshotIfChanged()
         val remembered = cached?.takeIf { it.sourceFingerprint == snapshot.fingerprint }
@@ -233,7 +224,7 @@ class CodexAuthStore(
     }
 
     private fun snapshotIfChanged(): CodexAuthSnapshot {
-        // taken before the read, so a write landing between the two is read again on the next request
+        // taken before the read, so a write landing in between is read again next time
         val stamp = authFileStampOrNull()
         lastRead?.takeIf { stamp != null && it.stamp == stamp }?.let { return it.snapshot }
 
@@ -291,8 +282,8 @@ class CodexAuthStore(
         val response =
             runCatching {
                 http.post(CODEX_TOKEN_URL) {
-                    // the body carries the classification we need on failure, so keep the raw response
-                    // instead of letting the shared validator collapse it into a status-only error.
+                    // the failure body carries the classification, so keep it instead of letting the shared
+                    // validator reduce it to a status.
                     expectSuccess = false
                     contentType(ContentType.Application.Json)
                     headers { codexCloudflareHeaders().forEach { (name, value) -> set(name, value) } }
@@ -325,7 +316,7 @@ class CodexAuthStore(
             snapshot.tokens.copy(
                 idToken = body.idToken?.takeIf { it.isNotBlank() } ?: snapshot.tokens.idToken,
                 accessToken = accessToken,
-                // the endpoint rotates the refresh token; dropping the new one strands the next refresh
+                // the endpoint rotates the refresh token; losing the new one strands the next refresh
                 refreshToken = body.refreshToken?.takeIf { it.isNotBlank() } ?: refreshToken,
             )
 
@@ -335,8 +326,8 @@ class CodexAuthStore(
         return refreshed
     }
 
-    // preserve every top-level field the CLI owns and replace the file only if it is still the version
-    // we refreshed. this prevents an overlapping `codex login`, logout or CLI refresh from being lost.
+    // keep every top-level field the CLI owns, and replace the file only if it is still the version
+    // refreshed, so an overlapping login, logout or CLI refresh is not lost.
     private fun persist(tokens: CodexTokens, expectedFingerprint: String): String? {
         var temp: Path? = null
 
@@ -374,7 +365,7 @@ class CodexAuthStore(
 
             content.fingerprint()
         }.onFailure {
-            // the in-memory token is still good, so the turn can proceed; only the next restart pays for it.
+            // the token in memory still works; only the next restart pays for it.
             log.warn { "Codex: refreshed token could not be written back to [$authFile]: ${it.message}" }
         }.getOrNull().also {
             temp?.let { path -> runCatching { Files.deleteIfExists(path) } }
@@ -417,8 +408,8 @@ private fun refreshFailureMessage(status: HttpStatusCode, body: String?): String
         "refresh_token_invalidated" -> "The ChatGPT session was revoked. $reLogin"
         "refresh_token_account_mismatch" -> "The ChatGPT session belongs to another sandbox. $reLogin"
         "invalid_grant", "invalid_refresh_token" -> "The ChatGPT refresh token was rejected as invalid. $reLogin"
-        // a rejected credential comes back as 401. anything else means the request itself was refused —
-        // too soon after the previous refresh, most likely — and signing in again would not help.
+        // a rejected credential is a 401. anything else is the request refused, most likely too soon after
+        // the last refresh, and signing in again would not help.
         else ->
             buildString {
                 append(
@@ -432,9 +423,8 @@ private fun refreshFailureMessage(status: HttpStatusCode, body: String?): String
     }
 }
 
-// the endpoint answers in more than one shape: `error` as a bare string, `error` as an object carrying
-// `code` and `message`, or the code at the top level. reading only the first is how a dead session gets
-// logged as a bare "HTTP 400", so all three are read.
+// `error` arrives as a bare string, as an object with `code` and `message`, or as a top-level code; reading
+// only one logs a dead session as a bare "HTTP 400".
 private fun refreshErrorCode(body: String): String? =
     runCatching {
         val root = authJson.parseToJsonElement(body).jsonObject
@@ -451,15 +441,15 @@ private fun JsonElement?.stringOrNull(): String? = (this as? JsonPrimitive)?.con
 private fun JsonPrimitive.contentOrNullSafe(): String? =
     runCatching { content }.getOrNull()
 
-/** Resolves `auth.json` from the configured `CODEX_HOME`, with the CLI default as fallback. */
+/** Resolves `auth.json` from `CODEX_HOME`, defaulting as the CLI does. */
 internal fun defaultCodexAuthFile(codexHome: String? = null): Path {
     val home = codexHome?.trim()?.takeIf { it.isNotBlank() }
 
     return if (home != null) Path(home, "auth.json") else Path(System.getProperty("user.home"), ".codex", "auth.json")
 }
 
-// the access token is a JWT; `exp` is the only thing worth reading off it locally, and reading it is
-// what lets us refresh ahead of a 401 instead of failing a user's turn to discover the token died.
+// `exp` is all that is read off the JWT locally, so the refresh happens ahead of a 401 instead of a user's
+// turn finding the token dead.
 internal fun String.expiresWithin(window: kotlin.time.Duration): Boolean {
     val exp = jwtClaims()?.get("exp")?.jsonPrimitive?.longOrNull ?: return true
 

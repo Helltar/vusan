@@ -147,7 +147,7 @@ class GroupLogRepositoryTest {
 
         val found = repository.searchWindow(CHAT, now.minusSeconds(60), now, needle = "élodie").map { it.messageId }
 
-        // the accented capital is folded too, which sqlite's own LIKE would not do
+        // the accented capital is folded too, which sqlite's LIKE would not do
         assertEquals(listOf("1", "4"), found)
         assertEquals(listOf("3"), repository.searchWindow(CHAT, now.minusSeconds(60), now, needle = "NOTES.pdf").map { it.messageId })
     }
@@ -190,8 +190,8 @@ class GroupLogRepositoryTest {
         assertEquals(listOf("earlier"), entries.map { it.text })
     }
 
-    // the bot's own rows carry no message id at all, and `!=` is null rather than true for those in
-    // SQL: without the null arm, dropping the triggering message dropped every reply the bot had made.
+    // the bot's rows have no message id, and `!=` against null is null in SQL: without the null arm,
+    // excluding the triggering message dropped every bot reply.
     @Test
     fun `recent keeps the bot's own messages while dropping the triggering one`() = runBlocking {
         val repository = GroupLogRepository(GroupLogConfig())
@@ -203,7 +203,7 @@ class GroupLogRepositoryTest {
         val entries = repository.recent(CHAT, limit = 10, since = now.minusSeconds(600), excludeMessageId = "2")
 
         assertEquals(listOf("earlier", "that one is a keeper"), entries.map { it.text })
-        // the anchor is what tells the renderer this exchange is already in that user's own history
+        // the anchor tells the renderer this exchange is already in that user's history
         assertEquals(listOf(null, "1"), entries.map { it.replyToMessageId })
     }
 
@@ -232,8 +232,8 @@ class GroupLogRepositoryTest {
         val fresh = Instant.now()
         repeat(5) { repository.record(entry(messageId = "${1_000 + it}", text = "new$it", at = fresh)) }
 
-        // retention is a pass of its own: nothing a chat writes prunes it any more, which is what left
-        // a chat that went quiet holding everything it had.
+        // retention is its own pass: nothing a chat writes prunes it, which left a quiet chat holding
+        // everything.
         assertEquals(1, repository.pruneExpired(maxChats = 10))
 
         assertEquals(0L, repository.countInWindow(CHAT, stale.minusSeconds(60), stale.plusSeconds(60)))
@@ -253,7 +253,7 @@ class GroupLogRepositoryTest {
 
     @Test
     fun `the per-chat row cap trims the oldest rows`() = runBlocking {
-        // nothing here is old enough to expire: a busy chat is held to the cap on its own.
+        // nothing is old enough to expire: a busy chat is held to the cap on its own.
         val repository = GroupLogRepository(GroupLogConfig(maxMessagesPerChat = 100, retentionDays = 365))
         val base = Instant.now().minusSeconds(1_000)
 
@@ -283,8 +283,8 @@ class GroupLogRepositoryTest {
         assertEquals(listOf("weather in kyiv"), entries.map { it.text })
     }
 
-    // the reference a messenger issues is opaque text, and a chat log has to hold whatever shape that
-    // is: it is part of the row's uniqueness and it is what an edit is looked up by.
+    // a messenger's reference is opaque text, part of the row's uniqueness and the key an edit is looked up
+    // by.
     @Test
     fun `a message reference that is not a number survives storage and lookup`() = runBlocking {
         val repository = GroupLogRepository(GroupLogConfig())
@@ -310,7 +310,7 @@ class GroupLogRepositoryTest {
 
     @Test
     fun `an edit leaves the original send time alone`() = runBlocking {
-        // sent_at drives the day a message is filed under; an edit must not move it to the edit's own day
+        // sent_at decides the day; an edit must not move a message to the edit's day
         val repository = GroupLogRepository(GroupLogConfig())
         val sentAt = now.minusSeconds(500)
 
@@ -341,7 +341,7 @@ class GroupLogRepositoryTest {
     private fun botEntry(text: String, at: Instant, answering: String? = null) =
         GroupLogEntry(
             chat = CHAT,
-            // delivery does not carry the id of what it sent back, so the bot's own rows have none
+            // delivery does not return the sent id, so the bot's rows have none
             messageId = null,
             kind = GroupLogEntry.BOT_KIND,
             sentAt = at,

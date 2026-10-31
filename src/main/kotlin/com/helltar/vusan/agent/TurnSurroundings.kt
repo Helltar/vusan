@@ -13,33 +13,30 @@ import java.time.Instant
 import java.time.ZoneId
 import java.time.temporal.ChronoUnit
 
-// the slice of what the group was just saying that a turn carries: enough to follow a question with no
-// subject, bounded so it stays a glance rather than a transcript.
+// enough to follow a question without a subject, bounded so it stays a glance rather than a transcript.
 private const val RECENT_CHAT_MESSAGES = 15
 
 /**
- * What a turn is shown of the chat it happens in, beyond the request and the conversation's own
- * history: the group's diary, what the group was just saying, and the chat's sticker shortlist. Each is
- * read fresh for the turn, and each only where it applies — a private chat has its history instead of a
- * diary or a recent chat, and a shortlist is offered only where a sticker can be sent.
+ * What a turn sees of its chat beyond the request and its own history: the group's diary, what the group was
+ * just saying, and the sticker shortlist. Each is read fresh and only where it applies: a private chat has
+ * its history instead of a diary or recent chat, and a shortlist only where a sticker can be sent.
  *
- * The diary and the shortlist come as functions rather than as their sources: the sticker catalog
- * resends by `file_id`, which is one messenger's own model, and nothing on this side has business
- * holding something that needs a client to exist. The sender's request to be left alone, where one
- * holds, is read here too, since it changes what the turn is told about the person it answers.
+ * The diary and shortlist come as functions: the sticker catalog resends by `file_id`, one messenger's model,
+ * and nothing here should need a client. The sender's leave-alone request is read here too, since it changes
+ * what the turn is told about the person.
  */
 class TurnSurroundings(
     private val groupLog: GroupLogRepository? = null,
-    // what the bot wrote down about this chat's last few days, if this deployment keeps a diary.
+    // what the bot wrote about this chat's last few days, if the deployment keeps a diary.
     private val diary: (suspend (ChatRef) -> String?)? = null,
-    // what the chat's sticker shortlist looks like, if this deployment has one.
+    // the chat's sticker shortlist, if the deployment has one.
     private val stickerCatalog: (suspend (ChatRef) -> String?)? = null,
     // who asked not to be written to, and until when
     private val leaveAlone: LeaveAloneRepository? = null,
 ) {
 
-    // a private chat has its unasked lines too, the follow-ups; a shared account is nobody in particular
-    // to leave alone
+    // a private chat has unasked lines too, the follow-ups; a shared account is nobody in particular to leave
+    // alone
     suspend fun leftAloneUntil(context: RequestContext): Instant? {
         val requests = leaveAlone?.takeIf { context.sender.isPerson } ?: return null
 
@@ -52,7 +49,7 @@ class TurnSurroundings(
         }
     }
 
-    // a group's days belong to the group: a private chat has its history instead, and no diary.
+    // a private chat has its history instead of a diary.
     suspend fun diaryFor(context: RequestContext): String? {
         val entries = diary?.takeIf { !context.chat.isPrivate } ?: return null
 
@@ -65,9 +62,8 @@ class TurnSurroundings(
         }
     }
 
-    // what the group was saying just before this turn. in a group the bot only ever sees the messages
-    // addressed to it, so without this a question like "and what do you think?" arrives with no subject.
-    // the triggering message is left out — the model is already being shown it as the request itself.
+    // in a group the bot sees only messages addressed to it, so without this "and what do you think?" arrives
+    // without a subject. the triggering message is left out, since the model sees it as the request.
     suspend fun recentChatFor(context: RequestContext): String? {
         val repository = groupLog?.takeIf { !context.chat.isPrivate } ?: return null
 
@@ -75,10 +71,10 @@ class TurnSurroundings(
             try {
                 repository.recent(
                     chat = context.chatRef,
-                    // over-fetch: dropping this user's own exchanges below must not thin the slice out.
+                    // over-fetch, so dropping this user's own exchanges below does not thin the slice.
                     limit = RECENT_CHAT_MESSAGES * RECENT_CHAT_OVERFETCH,
                     since = Instant.now().minus(RECENT_CHAT_MINUTES, ChronoUnit.MINUTES),
-                    // an ambient slice is cut at the message instead, so it has to be there to cut at.
+                    // an ambient slice is cut at the message instead, so it has to be there.
                     excludeMessageId = context.messageId.takeUnless { context.ambient },
                 )
             } catch (e: Throwable) {
@@ -94,9 +90,8 @@ class TurnSurroundings(
             .takeIf { it.isNotBlank() }
     }
 
-    // the catalog is worth its tokens only where the reply can actually carry a sticker: a group that
-    // forbids them keeps StickerTools out of the catalog, so an index here would offer the model a
-    // shortlist it has no tool to send.
+    // only where the reply can carry a sticker: a group forbidding them keeps StickerTools out, so the
+    // shortlist would have no tool to send it.
     suspend fun stickerCatalogFor(context: RequestContext): String? {
         val catalog = stickerCatalog?.takeIf { context.chat.capabilities.stickersAndAnimations } ?: return null
 
@@ -112,9 +107,8 @@ class TurnSurroundings(
     private companion object {
         val log = KotlinLogging.logger {}
 
-        // `<recent_chat>` rides along on every group turn, so it is budgeted for cheapness, not for
-        // detail: enough to know what is being talked about, never enough to answer a recap question on
-        // its own.
+        // `<recent_chat>` rides on every group turn, so it is sized for cheapness: enough to know the topic,
+        // never enough to answer a recap on its own.
         const val RECENT_CHAT_MAX_CHARS = 1_000
         const val RECENT_CHAT_LINE_CHARS = 120
         const val RECENT_CHAT_OVERFETCH = 3
@@ -125,11 +119,10 @@ class TurnSurroundings(
 /**
  * What `<recent_chat>` shows of [entries], oldest first.
  *
- * An ordinary turn leaves out the person's own exchanges with the bot, which it replays as history, and
- * [entries] already lack the message itself. A turn nobody called the bot into keeps those exchanges and
- * ends right before the message: nothing but the order of the lines says whether a bare "which one?"
- * follows the bot's last reply or somebody else's line in between, and history carries no such order.
- * A message the log has not recorded yet leaves the slice uncut.
+ * An ordinary turn leaves out the person's own exchanges with the bot, which it replays as history; [entries]
+ * already lack the message itself. An ambient turn keeps those exchanges and ends right before the message:
+ * only line order tells whether a bare "which one?" follows the bot's reply or someone else's line, and
+ * history has no such order. A message the log has not recorded yet leaves the slice uncut.
  */
 internal fun recentChatSlice(
     entries: List<GroupLogEntry>,

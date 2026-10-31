@@ -13,10 +13,9 @@ import org.telegram.telegrambots.meta.api.objects.message.Message
 import org.telegram.telegrambots.meta.generics.TelegramClient
 
 /**
- * Where a pressed button goes. Every flow validates the same three things — the query carries a message,
- * the presser is allowed here, and the button is one this build still knows — before its own handler gets
- * it; what differs afterward is that a task-menu action and a stop are answered on the spot, while an
- * inline choice becomes the user's next agent turn.
+ * Where a pressed button goes. Every flow first checks that the query carries a message, the presser is
+ * allowed, and the button is one this build knows; then a task-menu action or a stop is answered on the spot,
+ * while an inline choice becomes the user's next agent turn.
  */
 internal class CallbackRouter(
     private val client: TelegramClient,
@@ -32,8 +31,8 @@ internal class CallbackRouter(
             taskMenu.handles(callback.data) -> routeTaskMenu(callback)
             inlineChoices.handles(callback.data) -> routeInlineChoice(callback)
             turnStop.handles(callback.data) -> routeTurnStop(callback)
-            // callback data from a scheme this build no longer knows. telegram keeps the client's button
-            // spinning until the query is answered, so answer it anyway.
+            // callback data from a scheme this build no longer knows. telegram keeps the button spinning
+            // until the query is answered, so answer anyway.
             else -> answerUnrecognized(callback)
         }
     }
@@ -55,7 +54,7 @@ internal class CallbackRouter(
             return
         }
 
-        // a menu shown to one person alone has no message id, only an ephemeral one, and is edited as such
+        // a menu shown to one person has only an ephemeral id and is edited as such
         val editable =
             (message as? Message)?.ephemeralMessageId
                 ?.let { EditableMessage.Ephemeral(receiverUserId = message.receiverUser?.id ?: userId, ephemeralMessageId = it) }

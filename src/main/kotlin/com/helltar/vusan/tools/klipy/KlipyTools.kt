@@ -21,12 +21,11 @@ import io.github.oshai.kotlinlogging.KotlinLogging
 import java.util.concurrent.ConcurrentHashMap
 
 /**
- * GIFs, meme pictures and short clips from KLIPY, found in one call and sent in another, so the model
- * reads what a search brought back before anything is queued and can turn all of it down.
+ * GIFs, meme pictures and short clips from KLIPY, found in one call and sent in another, so the model reads
+ * the results before anything is queued and can reject all of them.
  *
- * A tool set lives for one turn, and so do the candidates: [sendGif] takes only an id a search of
- * this turn returned, and takes each of them once. Candidates are listed in the order the provider
- * ranked them, and a file goes out under the address the provider gave for it.
+ * Candidates live for one turn, like the tool set: [sendGif] takes only an id this turn's search returned,
+ * each once. They are listed in the provider's ranking, and a file goes out under the provider's address.
  */
 class KlipyTools(
     private val client: KlipyClient,
@@ -107,8 +106,8 @@ class KlipyTools(
             "unknown kind [$value]: use ${KlipyKind.entries.joinToString(", ") { "`${it.value}`" }}"
         }
 
-    // a GIF goes out by its address; a picture and a video are kinds the outbox takes only as bytes, and
-    // what was fetched anyway is kept for the calls after this one.
+    // a GIF goes out by address; pictures and videos the outbox takes only as bytes, and what was fetched is
+    // kept for later calls.
     private suspend fun Candidate.output(): BotOutput =
         when (kind) {
             KlipyKind.GIF -> BotOutput.Animation(url)
@@ -132,7 +131,7 @@ class KlipyTools(
             is FileDownloadResult.TooLarge -> error("this ${kind.value} is too large to send, pick another")
         }
 
-    // the send is already queued, so a report that fails costs the provider a count and nobody a reply.
+    // the send is already queued, so a failed report costs the provider a count and nobody a reply.
     private suspend fun reportShare(slug: String, candidate: Candidate) {
         runCatching { client.reportShare(candidate.kind, slug, candidate.query) }
             .onFailure {

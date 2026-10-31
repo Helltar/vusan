@@ -178,8 +178,8 @@ class CodexAuthTest {
         assertEquals("acct-2", credentials.accountId)
     }
 
-    // the file is read again only when its stamp moved; a rewrite that keeps the stamp is seen only while
-    // the stamp is too fresh to have been remembered, which is when such a rewrite can happen at all
+    // the file is reread only when its stamp moved; a stamp-keeping rewrite is seen only while the stamp is
+    // too fresh to remember, the only time such a rewrite can happen
     @Test
     fun `a settled auth file with the same stamp is not read again`() = runBlocking {
         val firstToken = jwt(expiresInMinutes = FRESH_MINUTES)
@@ -378,8 +378,8 @@ class CodexAuthTest {
 
         CodexAuthStore(http, file).credentials()
 
-        // a default value on the request class is dropped by `encodeDefaults = false`, and the endpoint
-        // answers `missing_required_parameter` — which looks exactly like a session that has died.
+        // a default on the request class is dropped by `encodeDefaults = false`, and the endpoint answers
+        // `missing_required_parameter`, which looks exactly like a dead session.
         assertEquals("refresh_token", body?.get("grant_type")?.jsonPrimitive?.content)
         assertEquals("refresh-old", body?.get("refresh_token")?.jsonPrimitive?.content)
         assertTrue(body?.get("client_id")?.jsonPrimitive?.content.orEmpty().startsWith("app_"))
@@ -480,7 +480,7 @@ private fun authJson(
     return """{"tokens":{"id_token":"$idToken","access_token":"$accessToken"$refresh$account}}"""
 }
 
-// a JWT only has to survive our own payload decoding, so the header and signature are placeholders.
+// a JWT need only survive our own payload decoding, so header and signature are placeholders.
 private fun jwt(expiresInMinutes: Long, accountId: String? = null): String {
     val exp = Instant.now().plusSeconds(expiresInMinutes * 60).epochSecond
     val auth = accountId?.let { ""","https://api.openai.com/auth":{"chatgpt_account_id":"$it"}""" }.orEmpty()

@@ -9,10 +9,9 @@ import java.time.Instant
 private const val EXACT_TOOL_INTERACTIONS = 2
 
 /**
- * The history a turn replays. The first [stableTurns] of [turns] are replayed as text, and the next turn
- * replays them the same way; the newest interactions after them carry their tool calls, which the next
- * turn may already show as text, so a cache breakpoint at the end of the stable part is the one sure to
- * be read back.
+ * The history a turn replays. The first [stableTurns] of [turns] replay as text, the same way next turn; the
+ * newest interactions after them carry tool calls, which the next turn may show as text, so a breakpoint at
+ * the end of the stable part is the one sure to be read back.
  */
 data class PromptConversation(
     val summary: String?,
@@ -34,9 +33,9 @@ data class ConversationPlan(
     val includedInteractions: Int,
     val exactToolInteractions: Int,
     val stats: ConversationStats,
-    /** The id of the newest interaction stored and not yet recapped, which a continued request has to end on. */
+    /** The newest stored interaction not yet recapped, which a continued request must end on. */
     val newestInteractionId: String? = null,
-    /** When the oldest interaction [prompt] replays was stored, `null` when it replays none. */
+    /** When the oldest replayed interaction was stored; `null` when none is replayed. */
     val oldestIncludedAt: Instant? = null,
 )
 
@@ -87,7 +86,7 @@ fun planConversation(
     }
 
     val includedCount = selected.size
-    // the interactions replayed with their tool calls are the newest, so the rest are the ones replayed as text
+    // the interactions replayed with tool calls are the newest, so the rest replay as text
     val stableTurns = selected.toList().dropLast(EXACT_TOOL_INTERACTIONS).sumOf { it.size }
     val omittedByBudget = snapshot.interactions.size - includedCount
     val retainedAfterCountCompaction = (maxRecentInteractions * 2 / 3).coerceAtLeast(1)
@@ -151,8 +150,8 @@ private fun List<ChatTurn>.fitToTokenBudget(tokenBudget: Int): List<ChatTurn> {
 private fun List<ChatTurn>.withoutToolEvents(): List<ChatTurn> =
     filter { it.role == ChatRole.USER || it.role == ChatRole.ASSISTANT }
 
-// providers require a matching result for every replayed tool call. legacy history may contain a
-// row-level trim boundary, so discard only broken tool fragments while preserving human turns.
+// providers require a result for every replayed tool call. legacy history may hold a row-level trim boundary,
+// so only broken tool fragments are dropped, human turns kept.
 private fun List<ChatTurn>.validForReplay(): List<ChatTurn> =
     buildList {
         var index = 0

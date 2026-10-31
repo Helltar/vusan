@@ -5,13 +5,12 @@ import org.telegram.telegrambots.meta.api.objects.richtext.*
 
 private const val MAX_HEADING_SIZE = 6
 
-// a rich message never arrives as `text`: telegram delivers it as a block tree. it is flattened
-// back into the rich Markdown dialect the agent itself writes for `sendRichMessage`, so a quoted
-// or incoming rich message reads to the model exactly like one it would have produced.
+// a rich message arrives as a block tree, never as `text`. it is flattened back into the rich markdown the
+// agent writes for `sendRichMessage`, so it reads to the model like one it would produce.
 internal fun RichMessage.toRichMarkdown(): String = blocks.renderBlocks()
 
-// unknown block and rich text types deserialize to null (the bot api keeps adding them), and empty
-// blocks would only add blank lines.
+// unknown block and rich text types deserialize to null (the bot api keeps adding them), and empty blocks
+// would only add blank lines.
 private fun List<RichBlock?>?.renderBlocks(): String =
     orEmpty().mapNotNull { it?.render()?.takeIf(String::isNotBlank) }.joinToString("\n\n")
 
@@ -32,13 +31,12 @@ private fun RichBlock.render(): String =
         is RichBlockSlideshow -> listOf(blocks.renderBlocks(), caption.render()).joinNonBlank("\n\n")
         is RichBlockTable -> renderTable()
 
-        // a button is an affordance the bot cannot use, but its label is text the sender chose to
-        // show, so the words are kept and the affordance is dropped — the same trade the media
-        // blocks make with their captions.
+        // the bot cannot use a button, but its label is text the sender chose, so the words stay and the
+        // affordance goes, as media blocks keep their captions.
         is RichBlockButtons -> buttons.renderButtons()
 
-        // media carries no text of its own, so only its caption reaches the model; a bare marker
-        // such as `[photo]` would just get parroted back into replies.
+        // media has no text of its own, so only its caption reaches the model; a bare `[photo]` would get
+        // parroted back.
         is RichBlockAnimation -> caption.render()
         is RichBlockAudio -> caption.render()
         is RichBlockPhoto -> caption.render()
@@ -101,8 +99,8 @@ private fun RichText?.render(): String =
         is RichTextCustomEmoji -> alternativeText
         is RichTextMathematicalExpression -> "$$expression$"
 
-        // entity-like spans already read as themselves (`@name`, `#tag`, `/cmd`, the number), and
-        // date-time, buttons, anchor links and references only wrap their own text.
+        // entity-like spans read as themselves (`@name`, `#tag`, `/cmd`, numbers), and date-time, buttons,
+        // anchor links and references only wrap their text.
         is RichTextDateTime -> text.render()
         is RichTextMention -> text.render()
         is RichTextHashtag -> text.render()

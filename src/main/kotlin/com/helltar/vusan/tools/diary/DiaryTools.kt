@@ -24,8 +24,8 @@ private const val MAX_CONTAINS_CHARS = 100
 private const val SEPARATOR_CHARS = 2
 
 /**
- * The bot's diary about a group, read on demand: what a turn's `<diary>` block leaves out, the days
- * past its last week and the weeks and months before the newest ones, outliving the transcript itself.
+ * The bot's diary of a group, read on demand: what the turn's `<diary>` block leaves out (days before its
+ * last week, earlier weeks and months), outliving the transcript.
  */
 class DiaryTools(
     private val diary: DiaryRepository,
@@ -106,8 +106,8 @@ private fun daysNamedBy(value: String, label: String): ClosedRange<LocalDate> {
 
 internal data class FittedDiary(val entries: List<DiaryEntry>, val lookBacks: List<DiaryLookBack>)
 
-// what a read too wide for its budget keeps: the months first and then the weeks, as they hold the most
-// per character, then the days, and within each the newest
+// what an over-budget read keeps: months, then weeks (most per character), then days, newest first within
+// each
 internal fun fitDiary(entries: List<DiaryEntry>, lookBacks: List<DiaryLookBack>, budgetChars: Int): FittedDiary {
     var left = budgetChars
 

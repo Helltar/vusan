@@ -8,18 +8,14 @@ import kotlinx.serialization.json.JsonArray
 import kotlinx.serialization.json.JsonElement
 import kotlinx.serialization.json.JsonObject
 
-// a stream that ends in an error event answered 200 before it said anything went wrong
-
 /**
- * Folds a Responses API event stream back into the single response object the non-streaming API would
- * have returned.
+ * Folds a Responses API event stream back into the single response object the non-streaming API returns.
  *
- * The final `response.completed` event carries the envelope — status, model, usage — but the Codex
- * backend leaves its `output` array empty, so the items are collected from `response.output_item.done`
- * as they arrive and spliced back in. Everything the agent depends on rides in those items: assistant
- * text, tool calls, and the reasoning items a tool loop has to echo back. An incomplete stream is a
- * response cut short — by the output ceiling or a content filter — and folds like a completed one, its
- * `incomplete_details` saying why; a failed or canceled stream is an error rather than an empty reply.
+ * The final `response.completed` carries the envelope (status, model, usage), but the Codex backend leaves
+ * its `output` empty, so items are collected from `response.output_item.done` and spliced back in: assistant
+ * text, tool calls and the reasoning a tool loop must echo. An incomplete stream (output ceiling, content
+ * filter) folds like a completed one with `incomplete_details` saying why; a failed or canceled stream is an
+ * error, not an empty reply.
  */
 class ResponsesStreamFolder(private val label: String) {
 

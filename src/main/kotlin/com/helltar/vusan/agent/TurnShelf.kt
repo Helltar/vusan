@@ -20,20 +20,18 @@ import java.time.ZoneId
 import java.time.format.DateTimeFormatter
 
 /**
- * Everything one turn's tools produced, under the labels the model reads, so that what one call made
- * another can take: `#3` is the text the third call answered with, `#5/1` the first file the fifth
- * made, `#0/1` the request's own attachment, and `sandbox:<path>` a file in the person's sandbox.
+ * Everything one turn's tools produced, under the labels the model reads, so one call can take what another
+ * made: `#3` is the third call's text, `#5/1` the fifth call's first file, `#0/1` the request's own
+ * attachment, `sandbox:<path>` a file in the person's sandbox.
  *
- * The loop opens a [Call] for every tool call in batch order and runs the tool inside it; the call is
- * the [CallShelf] the argument decoder resolves against, and what a tool keeps lands under it. A
- * call may only take what came before it, so calls that run side by side never wait on each other in a
- * circle: a reference to an earlier call of the same batch waits for that call to finish.
+ * The loop opens a [Call] per tool call in batch order and runs the tool inside it; the call is the
+ * [CallShelf] the argument decoder resolves against. A call may only take what came before it, so parallel
+ * calls never wait in a circle.
  *
- * It lives for one turn and in memory only. Stored history carries the results without their labels,
- * so the next turn has nothing to point at that is no longer here; a turn that continues the last
- * request, labels and all, numbers its calls on from where that one stopped ([numberFrom]), so an
- * earlier turn's label is refused rather than taken for one of this turn's. What reaches the sandbox
- * stays there a little longer, in a directory of the turn's own under `turns/`.
+ * One turn, in memory only. Stored history keeps results without labels, so the next turn has nothing stale
+ * to point at; a turn continuing the last request numbers on from where it stopped ([numberFrom]), so an
+ * earlier label is refused rather than mistaken for this turn's. What reaches the sandbox stays a little
+ * longer, under `turns/`.
  */
 class TurnShelf(
     private val attachments: List<AttachedFile> = emptyList(),
@@ -43,14 +41,13 @@ class TurnShelf(
     private val calls = mutableListOf<Call>()
     private var keptBytes = 0L
 
-    // the number of the turn's first call
     private var firstCall = 1
 
-    // named by when the turn started, so the directories sort in the order the turns came; settled at the
-    // first copy, when the sandbox says whether the name is free
+    // named by the turn's start so directories sort in order; settled at the first copy, when the sandbox
+    // says whether the name is free
     private var directory = "$TURNS_DIRECTORY/" + STAMP.format(startedAt.atZone(ZoneId.systemDefault()))
 
-    // copies run from whichever sandbox call comes next, and two of a batch must not write the same thing
+    // copies run from whichever sandbox call comes next, and two in a batch must not write the same thing
     private val copying = Mutex()
     private var started = false
 
@@ -58,16 +55,15 @@ class TurnShelf(
     @Volatile
     private var sandbox: ShelfSandbox? = null
 
-    /** The number the next call of the turn takes. */
     val nextNumber: Int
         get() = synchronized(calls) { firstCall + calls.size }
 
-    /** Lets `sandbox:` references read from the turn's sandbox, and the turn's files reach it. */
+    /** Lets `sandbox:` references read from the turn's sandbox and the turn's files reach it. */
     fun connectSandbox(sandbox: ShelfSandbox) {
         this.sandbox = sandbox
     }
 
-    /** Numbers the turn's calls from [first] on, where the request it continues left its labels. */
+    /** Numbers the calls from [first] on, where the continued request left its labels. */
     fun numberFrom(first: Int) {
         require(first > 0) { "calls are numbered from one" }
 
@@ -77,16 +73,15 @@ class TurnShelf(
         }
     }
 
-    /** Opens the next call of the turn; the loop runs the tool inside it and closes it with what it answered. */
+    /** Opens the next call; the loop runs the tool inside it and closes it with the answer. */
     fun open(): Call =
         synchronized(calls) { Call(firstCall + calls.size).also { calls += it } }
 
     /**
-     * Writes into the turn's own directory in the sandbox, `turns/<when>/`, what has not reached it yet:
-     * the request's attachments as `00-1-name` on the first copy, every file a finished call kept as
-     * `05-1-name`, and the text of every answer its tool marks as material as `03-webSearch.txt`. The first
-     * copy of a turn also removes all but the last few turns' directories. One line per thing written, or
-     * why it was not; nothing without a sandbox.
+     * Writes what has not reached `turns/<when>/` in the sandbox yet: the attachments as `00-1-name` on the
+     * first copy, files of finished calls as `05-1-name`, and material answers as `03-webSearch.txt`. The
+     * first copy also prunes all but the last few turns. One line per thing written or skipped; nothing
+     * without a sandbox.
      */
     suspend fun copyToSandbox(): List<String> {
         val sandbox = sandbox ?: return emptyList()
@@ -106,10 +101,9 @@ class TurnShelf(
         }
     }
 
-    // a turn often picks up what the one before it was given or made, so a few stay; the rest would only
-    // fill a home of a fixed size with downloads nobody will open again. the same listing says whether
-    // the turn's name is taken: one person starting two turns within a second, in two chats, gets the
-    // next free name rather than a directory shared with the other turn
+    // a turn often picks up what the previous one got or made, so a few stay; the rest would fill a
+    // fixed-size home. the same listing says whether the name is taken: one person starting two turns within
+    // a second in two chats gets the next free name
     private suspend fun claimDirectory(sandbox: ShelfSandbox): String {
         val existing =
             runCatching { sandbox.directories(TURNS_DIRECTORY) }
@@ -142,7 +136,7 @@ class TurnShelf(
         }
     }
 
-    // the turn's whole holding, across calls: downloads are the large ones
+    // the turn's whole holding across calls
     private fun reserve(name: String, size: Int): Boolean =
         synchronized(calls) {
             if (keptBytes + size > MAX_KEPT_BYTES) {
@@ -219,7 +213,7 @@ class TurnShelf(
 
         require(!RESULT.matches(reference)) { "`$reference` is the text of a result; a file is named like `$reference/1`" }
 
-        // the attachment block shows a file by its name, and a model that copies the name back means that file
+        // the attachment block shows a file by name, and a model copying the name back means that file
         val named = attachments.filter { it.name == reference }
 
         if (named.size == 1) return named.single()
@@ -234,7 +228,7 @@ class TurnShelf(
         )
     }
 
-    // the sandbox a `sandbox:<path>` reference reads from and the path it names, checked once for a file and for text
+    // the sandbox and path a `sandbox:<path>` reference names, checked once for file and text use
     private fun sandboxReference(reference: String): Pair<ShelfSandbox, String> {
         val path = reference.removePrefix(SANDBOX_REFERENCE_PREFIX).trim()
         val sandbox = requireNotNull(sandbox) { "there is no sandbox in this chat to read `$path` from" }
@@ -243,7 +237,7 @@ class TurnShelf(
         return sandbox to path
     }
 
-    /** One tool call of the turn: what it answered and the files it made, under its number. */
+    /** One tool call of the turn: its answer and files, under its number. */
     inner class Call internal constructor(val number: Int) : CallShelf {
 
         private val answered = CompletableDeferred<String>()
@@ -259,8 +253,8 @@ class TurnShelf(
             private set
 
         /**
-         * Records what [toolName] answered; every call is closed, failed or not, since later calls may wait on
-         * it. [copiesText] puts the answer itself in the turn's directory in the sandbox along with the files.
+         * Records what [toolName] answered. Every call is closed, failed or not, since later calls may wait
+         * on it. [copiesText] also puts the answer in the turn's sandbox directory.
          */
         fun close(output: String, toolName: String = "", copiesText: Boolean = false) {
             tool = toolName
@@ -269,9 +263,8 @@ class TurnShelf(
         }
 
         /**
-         * [output] as the model reads it: under the call's label, with the files it made listed after it, and
-         * — when the turn's budget [cut] it short — where the whole of it still is. [resultLabelOrNull] reads
-         * the label back off such a text.
+         * [output] as the model reads it: under the call's label, with its files listed after, and where the
+         * whole of it is when the budget [cut] it. [resultLabelOrNull] reads the label back.
          */
         fun labeled(output: String, cut: Boolean = false): String =
             buildString {
@@ -330,7 +323,7 @@ class TurnShelf(
         // the current turn and the two before it
         const val KEPT_TURNS = 3
 
-        // an attachment never came in larger than the platform serves
+        // an attachment is never larger than the platform serves
         const val MAX_ATTACHMENT_MB = PlatformLimits.DOWNLOAD_MB
         const val MAX_ATTACHMENT_BYTES = MAX_ATTACHMENT_MB * 1024 * 1024
 
@@ -338,7 +331,7 @@ class TurnShelf(
         val FILE = Regex("""#(\d+)/(\d+)""")
         const val REFERENCE_PREVIEW_CHARS = 80
 
-        // what one turn may hold besides what the outbox already does: downloads are the large ones
+        // what one turn may hold besides the outbox; downloads are the large ones
         const val MAX_KEPT_BYTES = 200L * 1024 * 1024
         const val MAX_FILE_BYTES = 50 * 1024 * 1024
         const val MAX_TEXT_BYTES = 1024 * 1024
@@ -346,22 +339,21 @@ class TurnShelf(
 }
 
 /**
- * What the shelf needs of the person's sandbox: to read a file a reference names, and to keep the turn's
- * own directory there.
+ * What the shelf needs of the person's sandbox: reading a referenced file and keeping the turn's directory.
  */
 interface ShelfSandbox {
 
-    /** The file at [path], whole; one larger than [maxBytes] fails with [FileTooLarge] before any of it moves. */
+    /** The whole file at [path]; one over [maxBytes] fails with [FileTooLarge] before any of it moves. */
     suspend fun read(path: String, maxBytes: Int): ByteArray
 
     suspend fun write(path: String, bytes: ByteArray)
 
-    /** The names of the directories directly in [path]; none when it does not exist. */
+    /** Directory names directly in [path]; none when it does not exist. */
     suspend fun directories(path: String): List<String>
 
     suspend fun deleteDirectory(path: String)
 
-    /** What a read answers for a file over its cap: the decoder hands the message to the model as it is. */
+    /** The over-cap read failure; the decoder hands its message to the model as is. */
     class FileTooLarge(path: String, maxBytes: Int) :
         IllegalArgumentException("`$path` is larger than the ${maxBytes / (1024 * 1024)} MB a file may hold here")
 }
@@ -375,7 +367,7 @@ private suspend fun copy(sandbox: ShelfSandbox, path: String, bytes: suspend () 
         "`$path` could not be copied: ${it.message}"
     }
 
-// the label `labeled` opens every result with, read back where a folded result keeps only its label
+// reads back the label `labeled` opens every result with, where a folded result keeps only that
 internal fun String.resultLabelOrNull(): String? = RESULT_LABEL.find(this)?.groupValues?.get(1)
 
 private val RESULT_LABEL = Regex("""^\[(#\d+)] """)

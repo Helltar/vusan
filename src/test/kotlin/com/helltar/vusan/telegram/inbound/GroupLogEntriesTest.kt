@@ -176,7 +176,7 @@ class GroupLogEntriesTest {
         assertNull(message(""""group_chat_created": true""").toGroupLogEntry())
     }
 
-    // `date` must stay non-zero: the bot api models a zero date as an InaccessibleMessage subtype.
+    // `date` must stay non-zero: the bot api models a zero date as InaccessibleMessage.
     @Test
     fun `a vote on a quiz says who answered what, and whether it was right`() {
         val entry =
@@ -190,7 +190,7 @@ class GroupLogEntriesTest {
         assertEquals("7", entry.senderId)
         assertEquals("olena", entry.senderUsername)
         assertEquals("Olena Petrenko", entry.senderName)
-        // a vote is not a message, so nothing can reply to it and it has no id of its own.
+        // a vote is not a message: nothing replies to it and it has no id.
         assertNull(entry.messageId)
     }
 
@@ -217,8 +217,8 @@ class GroupLogEntriesTest {
         assertEquals("answered: Tea, Water", entry.text)
     }
 
-    // telegram sends the retraction as an answer with nothing chosen; the transcript would otherwise
-    // read as if the person had answered with silence.
+    // telegram sends a retraction as an answer with nothing chosen; otherwise the transcript would show an
+    // answer of silence.
     @Test
     fun `a retracted vote is not an answer`() {
         assertNull(pollAnswer(""""option_ids": []""").toGroupLogEntry(quiz))

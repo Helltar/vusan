@@ -102,7 +102,7 @@ class StickerCatalogTest {
         val row = assertNotNull(storedStickers().singleOrNull())
         assertNull(row.description)
 
-        // a refusal is final: the row must leave the queue instead of being asked about forever
+        // a refusal is final: the row leaves the queue instead of being asked about forever
         assertTrue(row.describeAttempts > 0, "refused sticker was left pending")
     }
 
@@ -199,7 +199,7 @@ class StickerCatalogTest {
         assertEquals(packs.toSet(), shown.map { setNameOf(it) }.toSet())
     }
 
-    // the block rides in the user turn, outside the cached prefix, so a fresh draw per turn costs nothing
+    // the block rides in the user turn, outside the cached prefix, so a fresh draw per turn is free
     @Test
     fun `the index is drawn afresh, so two turns see different stickers`() = runBlocking {
         val stickers = (1..60).map { sticker("a$it") }
@@ -266,7 +266,7 @@ class StickerCatalogTest {
         catalog.learn(stickers.first())
         describeStored { "penguin waving" }
 
-        // whatever this draw left out is what search has to reach
+        // what this draw left out is what search must reach
         val shown = shownIds(assertNotNull(catalog.indexBlockFor(testChat(CHAT))))
         val hidden = stickers.first { stickerId(it.fileUniqueId) !in shown }
         val hiddenId = stickerId(hidden.fileUniqueId)
@@ -303,7 +303,7 @@ class StickerCatalogTest {
 
         catalog.observe(CHAT, sticker("a1"))
 
-        // a passing sticker from a set nobody reaches for again must not cost 60 vision calls
+        // a stray sticker from a set nobody uses again must not cost 60 vision calls
         assertTrue(storedStickers().isEmpty())
         assertNull(catalog.indexBlockFor(testChat(CHAT)))
     }
@@ -333,7 +333,7 @@ class StickerCatalogTest {
         val client = FakeStickerClient(setOf = emptyList())
         val catalog = catalog(client, visionAnswer = "penguin waving")
 
-        // three chats, two new sets each: within every chat's own budget, six across the bot
+        // three chats, two new sets each: within every chat's budget, six in total
         val chats = listOf(CHAT, OTHER_CHAT, THIRD_CHAT)
 
         chats.forEachIndexed { chatIndex, chat ->
@@ -363,7 +363,7 @@ class StickerCatalogTest {
         client.setGone = true
         catalog.observe(OTHER_CHAT, sticker("a"))
 
-        // no fetch happens at all, so the set being unreachable now cannot matter
+        // no fetch happens, so the set being unreachable now cannot matter
         assertContains(assertNotNull(catalog.indexBlockFor(testChat(OTHER_CHAT))), "penguin waving")
     }
 
@@ -383,14 +383,14 @@ class StickerCatalogTest {
         val id = storedStickerIds().single()
         client.setGone = true
 
-        // no backdating: the rejection itself is what has to make the set due
+        // no backdating: the rejection alone must make the set due
         catalog.recheckSetOf(id)
         awaitWorker(catalog) { storedStickers().isEmpty() }
 
         assertNull(catalog.indexBlockFor(testChat(CHAT)))
     }
 
-    // a set is only pulled in once the chat has reached for it more than once
+    // a set is learned only once the chat used it more than once
     private suspend fun StickerCatalog.learn(sticker: Sticker, chatId: Long = CHAT) {
         repeat(MIN_USES_IN_TEST) { observe(chatId, sticker) }
     }
@@ -398,7 +398,7 @@ class StickerCatalogTest {
     private fun catalog(client: FakeStickerClient, visionAnswer: String) =
         StickerCatalog(client.proxy, ImageVisionClient(FakeLlmClient(visionAnswer), TEST_MODEL, RequestOptions()), Random(1))
 
-    // the worker is the production entry point; one pass is done once no sticker is waiting on vision.
+    // the worker is the production entry point; a pass is done once no sticker waits on vision.
     private suspend fun awaitDescriptionPass(catalog: StickerCatalog) =
         awaitWorker(catalog) { storedStickers().none { it.description == null && it.describeAttempts == 0 } }
 

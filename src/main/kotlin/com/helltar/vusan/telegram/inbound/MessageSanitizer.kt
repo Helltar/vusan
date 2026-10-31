@@ -4,11 +4,11 @@ import com.helltar.vusan.agent.neutralizePromptBlocks
 import org.telegram.telegrambots.meta.api.objects.EntityType
 import org.telegram.telegrambots.meta.api.objects.MessageEntity
 
-// text or caption of an incoming message together with its formatting entities.
+// an incoming message's text or caption with its formatting entities.
 internal data class MessageText(val text: String, val entities: List<MessageEntity>)
 
-// entity offsets and lengths are utf-16 code units, which is exactly how kotlin indexes strings;
-// bounds are still clamped because entities arrive from outside the process.
+// entity offsets and lengths are utf-16 code units, as kotlin indexes strings; bounds are still clamped since
+// entities come from outside.
 internal fun MessageText.entitySpan(entity: MessageEntity): String {
     val start = entity.offset.coerceIn(0, text.length)
     val end = (entity.offset + entity.length).coerceIn(start, text.length)

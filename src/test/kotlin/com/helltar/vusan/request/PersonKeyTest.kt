@@ -34,8 +34,8 @@ class PersonKeyTest {
         assertNull(key(1_087_968_824, -1002, private = false, isPerson = false))
     }
 
-    // a number from another messenger says nothing about a telegram account: a key without the platform
-    // in it would hand one person's home to whoever elsewhere happens to have the same number.
+    // another messenger's number says nothing about a telegram account: a key without the platform would hand
+    // one person's home to whoever has the same number elsewhere.
     @Test
     fun `only telegram has a person key until another platform names itself in one`() {
         val onDiscord =

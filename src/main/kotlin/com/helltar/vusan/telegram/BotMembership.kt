@@ -11,9 +11,8 @@ import org.telegram.telegrambots.meta.api.objects.chatmember.ChatMemberUpdated
 
 private val log = KotlinLogging.logger("BotMembership")
 
-// whether this membership still lets the bot write into the chat at all. `restricted` is the one that
-// has to be read rather than matched: it covers everything from "cannot send photos" to "cannot send
-// anything", and only the latter makes a scheduled task there pointless.
+// whether the bot can still write here at all. `restricted` must be read, not matched: it ranges from "cannot
+// send photos" to "cannot send anything", and only the latter makes a task here pointless.
 internal fun ChatMember.allowsPosting(): Boolean = when (this) {
     is ChatMemberLeft, is ChatMemberBanned -> false
     is ChatMemberRestricted -> canSendMessages == true
@@ -21,14 +20,12 @@ internal fun ChatMember.allowsPosting(): Boolean = when (this) {
 }
 
 /**
- * Telegram announces every change to the bot's own membership, in groups and private chats alike, so
- * losing the right to post is known the moment it happens instead of at the next scheduled fire — which
- * would run a whole agent turn first and only then fail at delivery. Tasks are paused rather than
- * deleted, so their owners can resume them from `/tasks` if the bot gets back in.
+ * Telegram announces every change to the bot's own membership, so losing the right to post is known at once
+ * instead of at the next fire, which would run a whole turn before failing at delivery. Tasks are paused, not
+ * deleted, so owners can resume them from `/tasks` if the bot gets back in.
  *
- * A removal that happens while the bot is down past Telegram's update retention is never announced, so
- * this is the cheap path and not the only one: `TaskScheduler` parks the same chat when a fire turns out
- * to be undeliverable.
+ * A removal while the bot was down past telegram's update retention is never announced, so this is the cheap
+ * path, not the only one: `TaskScheduler` parks a chat when a fire proves undeliverable.
  */
 internal suspend fun parkTasksOnLostAccess(tasks: TasksRepository, membership: ChatMemberUpdated) {
     val status = membership.newChatMember

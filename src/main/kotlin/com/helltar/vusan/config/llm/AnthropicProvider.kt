@@ -18,13 +18,13 @@ import kotlinx.serialization.json.longOrNull
 private const val ANTHROPIC_MODELS_URL = "${AnthropicClient.DEFAULT_BASE_URL}/v1/models"
 private const val ANTHROPIC_MODELS_PAGE = "https://platform.claude.com/docs/en/about-claude/models/overview"
 
-// what every claude model since opus 4.7 lists, and what the vendor's model list confirms at startup
+// what every claude model since opus 4.7 lists, confirmed by the model list at startup
 private const val ANTHROPIC_CONTEXT_WINDOW = 1_000_000L
 internal const val ANTHROPIC_MAX_OUTPUT = 128_000
 
 /**
- * Anthropic's Messages API, on a model that thinks adaptively and takes an effort: every Claude model
- * from 4.6 on. Which efforts it takes is what its model list said at startup.
+ * Anthropic's Messages API on a model with adaptive thinking and efforts: every Claude from 4.6 on. Its
+ * efforts come from the model list at startup.
  */
 internal fun anthropicRuntime(config: LlmProviderConfig.Anthropic, http: HttpClient?): LlmRuntime {
     val effort = config.reasoningEffort
@@ -53,10 +53,9 @@ internal fun anthropicRuntime(config: LlmProviderConfig.Anthropic, http: HttpCli
 }
 
 /**
- * Anthropic's model list states the window, the output ceiling and what the model takes — adaptive
- * thinking, which efforts, whether it sees — and those replace what the runtime would otherwise assume.
- * A model without adaptive thinking, and a configured effort the list does not offer, stop the startup
- * here rather than failing every turn.
+ * Anthropic's model list states the window, output ceiling, adaptive thinking, efforts and vision, replacing
+ * the runtime's assumptions. A model without adaptive thinking, or a configured effort the list does not
+ * offer, stops startup instead of failing every turn.
  */
 internal suspend fun anthropicPreflight(http: HttpClient, config: LlmProviderConfig.Anthropic): LlmProviderConfig.Anthropic {
     val facts =
@@ -96,15 +95,14 @@ internal suspend fun anthropicPreflight(http: HttpClient, config: LlmProviderCon
 private val JsonObject.supported: Boolean?
     get() = (this["supported"] as? JsonPrimitive)?.booleanOrNull
 
-// the claude models vusan runs on that came before tools could be offered partway through: each answers a
-// `tool_addition` with a 400 naming the feature (measured through OpenRouter on 2026-10-24), and every later
-// model takes it
+// the claude models from before mid-conversation tool offers: each answers a `tool_addition` with a 400
+// naming the feature (via OpenRouter, 2026-10-24); every later model takes it
 private val CLAUDE_WITHOUT_TOOL_OFFERS = setOf("claude-opus-4-6", "claude-sonnet-4-6", "claude-opus-4-7", "claude-sonnet-5")
 private val CLAUDE_SNAPSHOT_DATE = Regex("""-\d{8}$""")
 
 /**
- * Whether [model] takes tools offered partway through a conversation, under Anthropic's id or a gateway's
- * (`anthropic/claude-opus-4.7:nitro`); a dated snapshot is its model.
+ * Whether [model] takes tools offered mid-conversation, under Anthropic's id or a gateway's
+ * (`anthropic/claude-opus-4.7:nitro`); a dated snapshot counts as its model.
  */
 internal fun claudeOffersToolsMidConversation(model: String): Boolean {
     val id =

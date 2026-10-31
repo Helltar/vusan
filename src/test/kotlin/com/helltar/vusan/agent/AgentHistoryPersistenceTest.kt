@@ -56,8 +56,7 @@ class AgentHistoryPersistenceTest {
         assertNull(extractFinalComment("here it is", outputs))
     }
 
-    // a sticker is the whole reply; the model still tends to close with a line saying what it sent,
-    // and that line must not follow the sticker into the chat.
+    // a sticker is the whole reply; the closing line saying what was sent must not follow it into the chat.
     @Test
     fun `a queued sticker silences the closing assistant text`() {
         val outputs = listOf(OutboxItem(BotOutput.Sticker("file", catalogId = 7), toPrivate = false))
@@ -65,8 +64,8 @@ class AgentHistoryPersistenceTest {
         assertNull(extractFinalComment("I sent a sticker of a cat and nothing else.", outputs))
     }
 
-    // an announcement is the promise, not the answer: the text that closes the turn is what the user
-    // was actually waiting for, and dropping it would end the turn on "I will build the game".
+    // an announcement is the promise: the closing text is what the user waited for, and dropping it would end
+    // the turn on "I will build the game".
     @Test
     fun `an announcement does not silence the closing assistant text`() {
         val outputs = listOf(OutboxItem(BotOutput.Text("I will build the game"), toPrivate = false, delivered = true))

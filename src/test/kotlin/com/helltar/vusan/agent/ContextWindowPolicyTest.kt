@@ -41,8 +41,8 @@ class ContextWindowPolicyTest {
         assertTrue(medium > small, "budget did not grow: small=$small medium=$medium")
         assertTrue(large > medium, "budget stopped growing: medium=$medium large=$large")
 
-        // a research turn reads several sources, so a large window has to absorb more than a couple
-        // of full-length tool results before later ones start coming back truncated.
+        // a research turn reads several sources, so a large window must absorb more than a couple of
+        // full-length results before later ones are truncated.
         val transcript = estimateTokens("x".repeat(MAX_TRANSCRIPT_CHARS))
         assertTrue(large > 6 * transcript, "a few transcripts exhaust the run budget: $large")
     }
@@ -71,5 +71,5 @@ class ContextWindowPolicyTest {
         LlmModel(id = "test", contextWindowTokens = contextLength)
 }
 
-// the tool caps its own output at this size, so it is the worst single result the run budget must absorb.
+// the tool caps its output here, so this is the worst single result the run budget must absorb.
 private const val MAX_TRANSCRIPT_CHARS = 24_000

@@ -4,13 +4,12 @@ import com.helltar.vusan.llm.LlmModel
 import com.helltar.vusan.llm.ToolDefinition
 import kotlin.math.ceil
 
-// bytes/3 deliberately overestimates typical latin text while staying useful for cyrillic, CJK,
-// emoji, JSON, and code. exact provider tokenizers differ, so [ContextWindowPolicy] also keeps a
-// separate safety reserve.
+// bytes/3 overestimates typical latin text while staying usable for cyrillic, CJK, emoji, JSON and code. real
+// tokenizers differ, so [ContextWindowPolicy] keeps a separate safety reserve.
 internal const val ESTIMATED_BYTES_PER_TOKEN = 3
 
-// the widest a character gets in the text this bot handles: cyrillic is two bytes in UTF-8, latin one.
-// used to turn a token budget into a character cap without the cap quietly doubling on cyrillic.
+// the widest character this bot handles: cyrillic is two bytes in UTF-8, latin one. turns a token budget into
+// a character cap that does not double on cyrillic.
 private const val ESTIMATED_BYTES_PER_CHAR = 2
 
 internal fun estimateTokens(text: String): Int {
@@ -28,7 +27,7 @@ data class ContextTokenBudget(
     val conversationTokens: Int,
 ) {
 
-    /** Share of the window a turn occupies once its history actually costs [conversationTokens]. */
+    /** Share of the window a turn occupies once its history costs [conversationTokens]. */
     fun contextPercentFor(conversationTokens: Int): Int =
         (((fixedPromptTokens + conversationTokens).toLong() * 100L) / contextWindowTokens).toInt().coerceIn(0, 100)
 }
@@ -40,31 +39,26 @@ class ContextWindowPolicy(model: LlmModel) {
             .coerceIn(1L, Int.MAX_VALUE.toLong())
             .toInt()
 
-    // room the agent may grow into during a run: tool results, retries, and the nudge exchange.
-    // the ceiling bounds what one run may pile up, not what the window can hold — every later
-    // iteration re-sends the whole pile — so it is set to absorb several full-length tool results
-    // rather than to a share of a million-token window.
+    // room a run may grow into: tool results, retries and the nudge exchange. it bounds what one run piles up
+    // (every iteration re-sends the pile), not what the window holds, so it absorbs several full-length tool
+    // results rather than a share of a million-token window.
     private val agentReserveTokens: Int = (contextWindowTokens / 4).coerceIn(1_024, 64_000)
 
-    // everything the tools return during one run has to fit the agent reserve, and the run spends it
-    // in the same estimated tokens the rest of the budget is counted in. Spending characters instead
-    // made one cap mean two things: a cyrillic character is two bytes, so a cyrillic result cost the
-    // run half of what it cost the prompt. A fixed ceiling here would instead silently starve a
-    // large-window model: one full-length YouTube transcript would consume the whole run and leave
-    // later tool results with nothing.
+    // all tool results of one run must fit the agent reserve, counted in the same estimated tokens as the
+    // rest of the budget. counting characters made a cyrillic result cost the run half what it cost the
+    // prompt; a fixed ceiling would starve a large-window model, where one YouTube transcript would take the
+    // whole run.
     val liveToolResultMaxTokens: Int = agentReserveTokens
 
-    // the same reserve as a character count, for tools that must render text to a size before anything
-    // can estimate it. Assumes the widest character this bot handles, so the figure holds for cyrillic
-    // as well as latin.
+    // the same reserve in characters, for tools that render to a size before anything can estimate it;
+    // assumes the widest character, so it holds for cyrillic too.
     val liveToolResultMaxChars: Int = agentReserveTokens * ESTIMATED_BYTES_PER_TOKEN / ESTIMATED_BYTES_PER_CHAR
 
-    // [tools] is what the request actually carries, which on a `ToolCatalog` is less than the catalog
-    // holds: a group loaded mid-run widens it, and that widening is spent from the agent reserve like any
-    // other thing a run piles up. Counting every deferred schema here instead would give the history a
-    // budget it never gets back.
+    // [tools] is what the request carries, which on a `ToolCatalog` is less than the catalog holds: a group
+    // loaded mid-run is spent from the agent reserve, and counting every deferred schema here would give the
+    // history a budget it never gets back.
     fun budget(systemPrompt: String, currentTurn: String, tools: List<ToolDefinition>): ContextTokenBudget {
-        // the same estimate the fold measures the request by, so the two never disagree on the ceiling
+        // the same estimate the fold uses, so the two never disagree on the ceiling
         val fixedPromptTokens =
             estimateTokens(systemPrompt) +
                     estimateTokens(currentTurn) +

@@ -92,7 +92,7 @@ class CodexClientVersionTest {
             claimCodexClientVersion(gitHub("0.170.0"), null) { "0.199.1" }
             assertEquals("0.199.1", codexClientVersion())
 
-            // neither source beats the floor this build ships, so the floor is what is claimed
+            // neither source beats the shipped floor, so the floor is claimed
             claimCodexClientVersion(gitHub("0.100.0"), null) { "0.99.0" }
             assertTrue(codexClientVersion() isNewerThan "0.100.0", codexClientVersion())
         } finally {
@@ -103,7 +103,7 @@ class CodexClientVersionTest {
 
 private fun gitHub(version: String) = Http.createClient(MockEngine { respondJson("""{"tag_name":"rust-v$version"}""") })
 
-/** Back to what an unclaimed process reports, so the tests after this one read the floor again. */
+/** Back to an unclaimed process's report, so later tests read the floor again. */
 private suspend fun claimFloor() =
     claimCodexClientVersion(Http.createClient(MockEngine { respondJson("{}", HttpStatusCode.NotFound) }), null) { null }
 

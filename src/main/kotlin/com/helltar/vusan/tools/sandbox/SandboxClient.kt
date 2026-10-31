@@ -25,13 +25,12 @@ internal const val SANDBOX_FILE_LIMIT = 50 * 1024 * 1024
 /**
  * The bot's side of a Regolith server: one sandbox per person, holding their home.
  *
- * This is the only file that uses Regolith's Kotlin SDK. It turns the SDK's calls into what the tools
- * describe to the model — a command's output so far and where to read on — and its refusals into text
- * the model can act on.
+ * The only user of Regolith's Kotlin SDK. It turns the SDK's calls into what the tools describe (output so
+ * far and where to read on) and its refusals into text the model can act on.
  *
- * A person is an alias on that server. [sandboxOf] hands back a [PersonSandbox] for one turn, which
- * asks the server for the sandbox behind the alias on first use and keeps it for the rest of the turn;
- * nothing here remembers it between turns, so a home deleted by retention is simply made again.
+ * A person is an alias on the server. [sandboxOf] returns a [PersonSandbox] for one turn, which looks up the
+ * sandbox on first use and keeps it for the turn; nothing is remembered between turns, so a home deleted by
+ * retention is simply made again.
  */
 class SandboxClient(
     http: HttpClient,
@@ -39,19 +38,19 @@ class SandboxClient(
     token: String,
 ) {
 
-    // the sdk never follows a redirect, so the bearer secret cannot be relayed to another origin.
+    // the sdk never follows redirects, so the bearer secret cannot reach another origin.
     private val regolith = RegolithClient(baseUrl, token, http)
 
     /**
-     * The person's sandbox for one turn's work. Nothing is sent until a tool uses it, and every tool of
-     * the turn should share this one, so the site is published from the sandbox the commands ran in.
+     * The person's sandbox for one turn. Nothing is sent until a tool uses it; every tool of the turn should
+     * share it, so a site is published from the sandbox the commands ran in.
      */
     fun sandboxOf(person: String): PersonSandbox = PersonSandbox(person)
 
     /** One person's sandbox, for as long as the work that asked for it lasts. */
     inner class PersonSandbox internal constructor(private val person: String) : ShelfSandbox {
 
-        // created or found by the alias on first use; a reset forgets it, so the next use makes a new one.
+        // created or found by alias on first use; a reset forgets it.
         @Volatile
         private var opened: Sandbox? = null
 
@@ -82,14 +81,14 @@ class SandboxClient(
                 try {
                     sandbox().files.read(path, maxBytes.toLong())
                 } catch (e: RegolithException) {
-                    // only here, where the bound is this call's budget, does the code mean the file does not fit
-                    // in it: elsewhere it is a site too large, which the server's own words explain.
+                    // only here, bounded by this call's budget, does the code mean the file does not fit;
+                    // elsewhere it is a site too large, which the server explains.
                     if (e.code == ErrorCodes.PAYLOAD_TOO_LARGE) error("`$path` is larger than the ${maxBytes.toLong().asFileSize()} this read may take") else throw e
                 }
             }
         }
 
-        // the shelf names a cap of its own, so a file over it is its complaint, not the transfer budget's
+        // the shelf names its own cap, so a file over it is the shelf's complaint, not the transfer budget's
         override suspend fun read(path: String, maxBytes: Int): ByteArray =
             call {
                 try {
@@ -116,33 +115,33 @@ class SandboxClient(
             call { sandbox().files.delete(path, recursive = true) }
         }
 
-        /** Deletes the sandbox with its home; the next use creates an empty one for this person. */
+        /** Deletes the sandbox with its home; the next use creates an empty one. */
         suspend fun reset() {
             call { sandbox().delete() }
             opened = null
         }
 
         /**
-         * Publishes a directory of the sandbox to the web and returns the address it is served at. No term
-         * is sent: a first publish gets the server's default and a later one keeps the term the site has.
+         * Publishes a sandbox directory and returns its address. No term is sent: a first publish gets the
+         * server's default, a later one keeps the site's term.
          */
         suspend fun publishSite(path: String): PublishedSite = call { sandbox().publish(path) }.published()
 
-        /** Whether retention took the home a site of this person's was built from, since it was last used. */
+        /** Whether retention took the home this person's site was built from since it was last used. */
         suspend fun homeReleased(): Boolean = call { sandbox().get() }.homeReleasedAt != null
 
-        /** What is published for this person, or null when nothing is. */
+        /** What is published for this person, or null. */
         suspend fun publishedSite(): PublishedSite? = call { sandbox().siteOrNull() }?.published()
 
-        /** Takes the site down; false when there was nothing to take down. The sandbox keeps its files. */
+        /** Takes the site down; false when there was none. The sandbox keeps its files. */
         suspend fun unpublishSite(): Boolean = call { sandbox().unpublish() }
 
         private suspend fun sandbox(): Sandbox = opened ?: call { regolith.getOrCreate(person) }.also { opened = it }
 
         /**
-         * Reads recorded output from [offset] until the command ends, this call's budget runs out or the
-         * output limit is reached, and reports the command as it now stands. Output is kept on the server,
-         * so what does not fit is read by the next call from [CommandResult.nextOffset].
+         * Reads output from [offset] until the command ends, this call's budget runs out or the output limit
+         * is hit, and reports the command's state. Output stays on the server; the next call reads on from
+         * [CommandResult.nextOffset].
          */
         private suspend fun read(jobId: String, offset: Long, waitSeconds: Int): CommandResult {
             val exec = sandbox().exec(jobId)
@@ -152,7 +151,7 @@ class SandboxClient(
         }
     }
 
-    /** The server owns its limits; a timeout above the ceiling would be refused instead of trimmed. */
+    /** The server owns its limits; a timeout above the ceiling would be refused, not trimmed. */
     private suspend fun clamped(timeoutSeconds: Int?): Int? {
         if (timeoutSeconds == null) return null
         val ceiling = limitOrNull()?.takeIf { it > 0 } ?: return timeoutSeconds
@@ -166,7 +165,7 @@ class SandboxClient(
             .onFailure { it.rethrowIfCancellation() }
             .getOrNull()
 
-    /** Runs one SDK call, turning a refusal or an unanswering server into text the model can act on. */
+    /** Runs one SDK call, turning a refusal or a silent server into text the model can act on. */
     private suspend fun <T> call(block: suspend () -> T): T =
         try {
             block()
@@ -185,8 +184,8 @@ class SandboxClient(
 
 private fun RegolithException.explain(): String = when (code) {
     ErrorCodes.CAPACITY_EXHAUSTED -> "The sandbox host is at capacity right now. Tell the user and try again ${retryHint()}."
-    // not capacity: the server says why it cannot serve, such as a failing health check, and the model
-    // should read that rather than a wait that will not change it.
+    // not capacity: the server says why it cannot serve (a failing health check, say), which the model should
+    // read instead of waiting.
     ErrorCodes.UNAVAILABLE -> {
         val reason = detail.ifBlank { "the server is not serving requests" }
         "The sandbox is unavailable: $reason. Tell the user and try again ${retryHint()}."

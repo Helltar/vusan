@@ -53,8 +53,8 @@ class VideoNoteTools(
                     error("Video note synthesis failed: ${e.message ?: e::class.simpleName}")
                 }
 
-        // the speech is synthesized and paid for before ffmpeg is asked for anything, so a host without a
-        // working ffmpeg still answers out loud instead of losing the turn's reply to a render failure.
+        // speech is synthesized and paid for before ffmpeg runs, so a host without working ffmpeg still
+        // answers aloud instead of losing the reply.
         val video =
             renderer.render(portrait, speech)
                 ?: run {
@@ -81,8 +81,8 @@ class VideoNoteTools(
     }
 
     companion object {
-        // a round video lasts a minute at most and the renderer cuts it at 59 seconds, so the words have to
-        // fit in that at the thousand characters a minute speech runs at, with room for a slower read
+        // a round video lasts a minute at most, cut at 59 seconds, so the words must fit at about a thousand
+        // characters a minute, with room for a slower read
         const val VIDEO_NOTE_MAX_CHARS = 900
 
         private const val VIDEO_NOTE_FILE_NAME = "video-note.mp4"

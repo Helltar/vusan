@@ -29,47 +29,45 @@ import kotlin.reflect.full.valueParameters
 import kotlin.reflect.jvm.isAccessible
 
 /**
- * Marks a method of a [ToolSet] as a tool the model may call, with the [description] the model reads
- * about it — the tool's whole interface, besides its arguments. The method has to return a `String`.
+ * Marks a [ToolSet] method as a tool the model may call, with the [description] the model reads. The method
+ * must return a `String`.
  *
- * [readOnly] says the tool changes nothing — no output queued, no file written, no state the next
- * call reads — so the loop may run it alongside the other read-only calls of the same batch instead of
- * one after another. A tool that only looks something up qualifies; a tool whose result lands in the
- * chat or in the sandbox does not, however harmless, because its order against the batch is its meaning.
+ * [readOnly]: the tool changes nothing (no output queued, no file written, no state a later call reads), so
+ * it may run alongside the batch's other read-only calls. A lookup qualifies; a tool whose result lands in
+ * the chat or sandbox does not, however harmless, because its order in the batch is its meaning.
  *
- * [copiedToSandbox] says the tool's answer is material to work on — what a search found, a page, a
- * transcript, what vision saw — so the sandbox gets its text in the turn's directory along with the files the turn
- * made. It is opt-in: an answer about other people or the bot's own records, or a mere confirmation,
- * stays out of a home that outlives the turn and can be published.
+ * [copiedToSandbox]: the answer is material to work on (search results, a page, a transcript, what vision
+ * saw), so its text goes into the turn's sandbox directory with the files. Opt-in: answers about other people
+ * or the bot's own records, and mere confirmations, stay out of a home that outlives the turn and can be
+ * published.
  */
 @Target(AnnotationTarget.FUNCTION)
 @Retention(AnnotationRetention.RUNTIME)
 annotation class Tool(val description: String, val readOnly: Boolean = false, val copiedToSandbox: Boolean = false)
 
 /**
- * What the model reads about one argument of a tool.
+ * What the model reads about one tool argument.
  *
- * [takesReference] lets a text argument be given as a label (`#4`) or `sandbox:<path>` instead, and the
- * decoder hands the tool the whole text it names. It is opt-in, for the arguments that carry a body of
- * text worth not retyping — a message, a script to voice, a file's contents — so a value that merely
- * reads like a reference anywhere else arrives as written. The description says so to the model.
+ * [takesReference] lets a text argument be given as a label (`#4`) or `sandbox:<path>`, and the decoder
+ * passes the whole text it names. Opt-in, for bodies of text worth not retyping (a message, a script to
+ * voice, file contents), so a value that merely looks like a reference elsewhere arrives as written. The
+ * description tells the model so.
  */
 @Target(AnnotationTarget.VALUE_PARAMETER)
 @Retention(AnnotationRetention.RUNTIME)
 annotation class Arg(val description: String, val takesReference: Boolean = false)
 
-/** A class whose [Tool]-annotated methods are offered to the model. */
+/** A class whose [Tool] methods are offered to the model. */
 interface ToolSet
 
 /**
- * One tool as the agent runs it: its definition for the model, and the call that runs the method behind
- * it with the arguments the model sent.
+ * One tool as the agent runs it: its definition for the model, and the call that runs the method with the
+ * model's arguments.
  *
- * Arguments are decoded from the JSON the model wrote by the method's own parameter types: text, whole
- * and decimal numbers, booleans and lists of text, each tolerant of a number spelled as text, and files,
- * which the model names by reference. A text value that is a reference is replaced by what it points at,
- * through the [CallShelf] of the call, where the parameter [Arg.takesReference]. A parameter with a default value or a nullable type is
- * optional for the model; a missing required one, or a value of the wrong shape, is an
+ * Arguments are decoded by the method's parameter types: text, whole and decimal numbers, booleans and lists
+ * of text (numbers spelled as text accepted), and files named by reference. Where a parameter
+ * [Arg.takesReference], a reference is replaced by what it points at through the call's [CallShelf]. A
+ * parameter with a default or a nullable type is optional; a missing required one or a wrong shape is an
  * [IllegalArgumentException] the agent answers the call with.
  */
 class ToolFunction internal constructor(
@@ -77,9 +75,9 @@ class ToolFunction internal constructor(
     val description: String,
     val parameters: JsonObject,
     val requiredParameters: List<String>,
-    /** Whether the loop may run this call alongside the other read-only calls of its batch. */
+    /** Whether the loop may run this alongside the batch's other read-only calls. */
     val readOnly: Boolean,
-    /** Whether the text it answers with is copied into the turn's directory in the sandbox for the work there. */
+    /** Whether its answer is copied into the turn's sandbox directory. */
     val copiedToSandbox: Boolean,
     private val invoke: suspend (JsonObject) -> String,
 ) {
@@ -93,11 +91,8 @@ class ToolFunction internal constructor(
 }
 
 /**
- * The tools this set offers, read off its [Tool] methods by reflection, in a fixed order.
- *
- * Sorted by name rather than left in the order reflection happens to list them, because the tool array
- * is part of the prompt prefix every provider caches and two runs of the same deployment must send it
- * the same way.
+ * The set's tools, read off its [Tool] methods by reflection and sorted by name: the tool array is part of
+ * the cached prompt prefix, so every run must send it in the same order.
  */
 fun ToolSet.toolFunctions(): List<ToolFunction> =
     this::class.memberFunctions
@@ -112,7 +107,7 @@ private fun toolFunction(instance: ToolSet, function: KFunction<*>): ToolFunctio
 
     require(function.returnType.classifier == String::class) { "tool $name must return a String" }
 
-    // a tool set may be a private class of its file; the method is still the model's to call
+    // a tool set may be a private class; the method is still the model's to call
     function.isAccessible = true
 
     val parameters = function.valueParameters
@@ -134,7 +129,7 @@ private fun toolFunction(instance: ToolSet, function: KFunction<*>): ToolFunctio
 
                                 // a nullable parameter may be sent as null, and the schema says so
                                 if (parameter.type.isMarkedNullable) putJsonArray("type") { add(type); add("null") } else put("type", type)
-                                // a list of files is a list of references, which are text like any other
+                                // a list of files is a list of references, which are text
                                 if (parameter.type.classifier == List::class) put("items", buildJsonObject { put("type", "string") })
                                 parameter.findAnnotation<Arg>()?.let { put("description", it.description) }
                             },

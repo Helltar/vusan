@@ -92,8 +92,8 @@ fun toolCallArgsForStorage(rawArgs: String): String {
 }
 
 /**
- * Stored turns as the messages a request carries. Tool calls of one batch share the assistant message
- * that made them, and their results share the one message that answers them, the way both APIs want it.
+ * Stored turns as request messages: one batch's calls share the assistant message that made them, and their
+ * results share one answering message, as both APIs want.
  */
 internal fun List<ChatTurn>.toMessages(): List<Message> =
     buildList {
@@ -148,6 +148,6 @@ internal fun List<ChatTurn>.toMessages(): List<Message> =
         flushResults()
     }
 
-// the stored arguments are the json the model sent, bounded; whatever does not read as an object replays as none
+// stored arguments are the model's bounded json; anything not an object replays as none
 private fun storedToolArgs(content: String): JsonObject =
     runCatching { llmJson.parseToJsonElement(toolCallArgsForStorage(content)).jsonObject }.getOrDefault(JsonObject(emptyMap()))

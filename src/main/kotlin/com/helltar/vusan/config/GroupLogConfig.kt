@@ -3,8 +3,8 @@ package com.helltar.vusan.config
 data class GroupLogConfig(
     val enabled: Boolean = true,
     val retentionDays: Int = DEFAULT_RETENTION_DAYS,
-    // a ceiling for the chat that outruns retention, not a setting: a thousand messages a day still
-    // keeps the whole month, and only a chat well past that is trimmed by count instead of by age.
+    // a ceiling for a chat that outruns retention, not a setting: a thousand messages a day still keeps the
+    // whole month.
     val maxMessagesPerChat: Int = DEFAULT_MAX_MESSAGES_PER_CHAT,
 ) {
 

@@ -7,8 +7,8 @@ import kotlin.test.assertTrue
 
 class TelegramProgressTest {
 
-    // a few seconds of work was all it took to earn a status bubble with a stop button on it, which is
-    // how looking at a photo somebody had just sent came to be answered as a progress UI.
+    // a few seconds of work once earned a status bubble with a stop button, so looking at a just-sent photo
+    // was answered as a progress UI.
     @Test
     fun `an activity that is part of the exchange waits far longer than a job`() {
         val job = statusGraceFor(ToolActivity.RUNNING_CODE)
@@ -20,8 +20,8 @@ class TelegramProgressTest {
         }
     }
 
-    // describeImage and describeVideo are one tool family and land on opposite sides: what earns a
-    // message is the work the user is waiting through, not which tool happens to be doing it.
+    // describeImage and describeVideo, one family, land on opposite sides: what earns a message is work the
+    // user waits through, not the tool.
     @Test
     fun `the grace follows the work rather than the tool`() {
         assertTrue(statusGraceFor(ToolActivity.WATCHING_VIDEO) < statusGraceFor(ToolActivity.LOOKING_AT_IMAGE))

@@ -1,17 +1,16 @@
 package com.helltar.vusan.request
 
 /**
- * Who may use this deployment. Both lists name people and conversations alike, qualified by platform,
- * so an id issued by one messenger can never allow or ban somebody on another.
+ * Who may use this deployment. Both lists name people and conversations, qualified by platform, so one
+ * messenger's id never allows or bans someone on another.
  *
- * An allowlisted chat admits every message in it, including the rare ones with no personal sender —
- * an anonymous admin, a linked-channel forward — so the chat check never depends on having a user.
- * The ban list wins over the allowlist, which is the only way to shut one person out without closing
- * the chat for everyone.
+ * An allowlisted chat admits every message in it, including ones without a personal sender (an anonymous
+ * admin, a linked-channel forward), so the chat check never needs a user. The ban list wins over the
+ * allowlist, the only way to shut one person out without closing the chat.
  *
- * The [owner] is the one person the deployment belongs to: allowed everywhere without being listed,
- * and exempt from what limits everybody else in a group. Every deployment names one (`OWNER_ID`); the
- * type allows none so a policy can be built without a person behind it, in a test or a second adapter.
+ * The [owner] is the person the deployment belongs to: allowed everywhere unlisted and exempt from group
+ * limits. Every deployment names one (`OWNER_ID`); the type allows none so a policy can be built without a
+ * person, in a test or a second adapter.
  */
 data class AccessPolicy(
     val allowed: Set<String> = emptySet(),
@@ -19,7 +18,10 @@ data class AccessPolicy(
     val owner: String? = null,
 ) {
 
-    /** Ids both allowed and banned, the owner included. A config mistake worth naming, since the ban wins silently. */
+    /**
+     * Ids both allowed and banned, the owner included: a config mistake worth naming, since the ban wins
+     * silently.
+     */
     val contradictory: Set<String>
         get() = (allowed + listOfNotNull(owner)) intersect banned
 

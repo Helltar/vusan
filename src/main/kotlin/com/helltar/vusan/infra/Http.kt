@@ -33,16 +33,16 @@ object Http {
     private fun HttpClientConfig<*>.configure() {
         expectSuccess = true
 
-        // expectSuccess already turns every non-2xx into a ResponseException; remap it here into a
-        // single host + capped-body message that never echoes the request URL (which may carry keys).
+        // expectSuccess already turns every non-2xx into a ResponseException; remap it to one
+        // host-plus-capped-body message that never echoes the URL, which may carry keys.
         HttpResponseValidator {
             handleResponseExceptionWithRequest { cause, request ->
                 when (cause) {
                     is ResponseException ->
                         throw HttpStatusException(cause.response.status.value, request.url.host, cause.response.bodyAsTextSafe())
 
-                    // ktor names the whole URL in these, query and keys included, and a tool's guard hands the
-                    // message to the model
+                    // ktor puts the whole URL, query and keys included, in these, and a tool's guard hands
+                    // the message to the model
                     is HttpRequestTimeoutException, is ConnectTimeoutException, is SocketTimeoutException ->
                         throw HttpTimedOutException(request.url.host, cause)
                 }
@@ -65,10 +65,8 @@ private const val ERROR_BODY_PREVIEW_LIMIT = 1_000
 internal class HttpTimedOutException(host: String, cause: Throwable) : IOException("request to $host timed out", cause)
 
 /**
- * A non-2xx response from a configured service.
- *
- * The raw [body] is kept next to the capped message so a caller that knows the provider's error shape
- * can read it structurally instead of matching on the text of a log line.
+ * A non-2xx response from a configured service. The raw [body] is kept beside the capped message, so a caller
+ * knowing the provider's error shape can read it structurally.
  */
 internal class HttpStatusException(val status: Int, host: String, val body: String?) :
     IllegalStateException(buildMessage(status, host, body)) {

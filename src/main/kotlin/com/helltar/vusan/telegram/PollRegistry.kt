@@ -14,7 +14,7 @@ import java.time.Instant
 import kotlin.time.Duration
 import kotlin.time.Duration.Companion.days
 
-/** A poll the bot put in a chat, in the form an answer to it needs to be read back. */
+/** A poll the bot sent, in the form needed to read an answer back. */
 data class SentPoll(
     val chatId: Long,
     val options: List<String>,
@@ -22,14 +22,11 @@ data class SentPoll(
 )
 
 /**
- * What the bot's own polls said, so that answers to them mean something.
+ * What the bot's own polls said, so answers mean something. A `poll_answer` carries a poll id and option
+ * numbers; the chat, the option texts and the right answer were known only at sending, so they are written
+ * down then.
  *
- * A `poll_answer` update carries a poll id and option numbers. Everything that makes those numbers
- * readable — which chat, what the options said, which one was right — was known only at the moment
- * the poll was sent, so it is written down there.
- *
- * Only polls put in a group are kept: the transcript this feeds does not cover private chats, and a
- * poll nobody but the sender can answer has nothing to report.
+ * Only group polls are kept: the transcript does not cover private chats.
  */
 class PollRegistry(private val retention: Duration = DEFAULT_RETENTION) {
 
@@ -57,8 +54,8 @@ class PollRegistry(private val retention: Duration = DEFAULT_RETENTION) {
     }
 
     /**
-     * Drops the polls past [retention] at [now], and answers how many. Nothing waits for a poll that old:
-     * an answer to one arrives while people are still looking at it, and the row only feeds the transcript.
+     * Drops polls past [retention] at [now] and returns how many. Answers arrive while people still look at a
+     * poll, and the row only feeds the transcript.
      */
     suspend fun pruneExpired(now: Instant): Int = dbTransaction {
         TelegramPollsTable.deleteWhere {
@@ -88,12 +85,12 @@ class PollRegistry(private val retention: Duration = DEFAULT_RETENTION) {
         }
 
     private companion object {
-        // telegram caps a poll option at 100 characters and a poll at 12 of them; the joined form has
-        // room to spare, and an option cannot contain the newline that separates them.
+        // telegram caps an option at 100 characters and a poll at 12 options, and an option cannot contain a
+        // newline.
         const val OPTION_SEPARATOR = "\n"
 
-        // long enough that a poll left open over a holiday still resolves its answers, short enough
-        // that the table is not a permanent record of every question the bot ever asked.
+        // long enough for a poll left open over a holiday, short enough not to keep every question ever
+        // asked.
         val DEFAULT_RETENTION = 30.days
 
         val log = KotlinLogging.logger {}

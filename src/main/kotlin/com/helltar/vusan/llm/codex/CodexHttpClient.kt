@@ -14,11 +14,10 @@ import java.util.concurrent.atomic.AtomicReference
 
 internal const val CODEX_BACKEND_BASE_URL = "https://chatgpt.com/backend-api/codex"
 
-// Cloudflare fronts this endpoint and only lets a small set of first-party originators through
-// (`codex_cli_rs`, `codex_vscode`, `codex_sdk_ts`, `Codex*`). A request from a non-residential IP — which
-// is every VPS the bot would realistically run on — is answered with 403 and `cf-mitigated: challenge`
-// when the originator is not one of them, no matter how good the token is. So claim the whitelisted
-// value, and keep the honest name in the User-Agent comment rather than pretending outright.
+// cloudflare in front of this endpoint lets only first-party originators (`codex_cli_rs`, `codex_vscode`,
+// `codex_sdk_ts`, `Codex*`) through from non-residential IPs, which means every VPS: anything else gets a 403
+// with `cf-mitigated: challenge` whatever the token. so claim the whitelisted value and name the real caller
+// in the User-Agent comment.
 internal const val CODEX_ORIGINATOR = "codex_cli_rs"
 
 private const val CODEX_ROUTING_HINT_HEADER = "x-codex-routing-hint"
@@ -27,13 +26,12 @@ private const val PERCENT = 100
 
 private val log = KotlinLogging.logger {}
 
-/** Whitelisted `codex_cli_rs/<version>` shape, with the real caller named in the trailing comment. */
+/** The whitelisted `codex_cli_rs/<version>` shape, the real caller named in the trailing comment. */
 internal fun codexUserAgent(): String = "$CODEX_ORIGINATOR/${codexClientVersion()} (Vusan)"
 
 /**
- * The two headers Cloudflare checks on every host Codex talks to, `auth.openai.com` included — the CLI
- * puts them on its auth route as well. Shared so a second caller cannot quietly omit one and fail only
- * once deployed to a VPS.
+ * The two headers cloudflare checks on every Codex host, `auth.openai.com` included. Shared so no caller can
+ * omit one and fail only once deployed to a VPS.
  */
 internal fun codexCloudflareHeaders(): Map<String, String> =
     mapOf(
@@ -41,7 +39,7 @@ internal fun codexCloudflareHeaders(): Map<String, String> =
         "User-Agent" to codexUserAgent(),
     )
 
-/** Everything a plain HTTP call to the Codex backend needs: the token plus the Cloudflare headers. */
+/** Everything a plain HTTP call to the Codex backend needs: the token plus the cloudflare headers. */
 fun codexRequestHeaders(credentials: CodexCredentials): Map<String, String> =
     buildMap {
         put("Authorization", "Bearer ${credentials.accessToken}")
@@ -50,26 +48,22 @@ fun codexRequestHeaders(credentials: CodexCredentials): Map<String, String> =
     }
 
 /**
- * What the CLI tells the backend to route a turn on: the model, plus the serving tier when one is asked
- * for. The tier is honored without it today — it travels in the request body — but this is how Codex
- * itself asks, and on this endpoint matching the CLI is what keeps working.
+ * What the CLI routes a turn on: the model, plus the serving tier when asked. The tier works without it today
+ * (it is in the body), but matching the CLI is what keeps working on this endpoint.
  */
 internal fun codexRoutingHint(model: String, serviceTier: String?): String =
     "model=$model" + serviceTier?.let { ";tier=$it" }.orEmpty()
 
 /**
- * Signs every request to the Codex backend with a currently valid ChatGPT token and the headers
- * Cloudflare checks, and reads the subscription's usage windows off every response.
- *
- * A token expires and is rotated behind our back, so it is read per request rather than fixed when the
- * client is built.
+ * Signs every Codex request with a valid ChatGPT token and the cloudflare headers, and reads the usage
+ * windows off every response. The token rotates behind our back, so it is read per request.
  */
 internal fun codexRequestPlugin(auth: CodexAuthStore, routingHint: String): ClientPlugin<Unit> =
     createClientPlugin("CodexAuth") {
         onRequest { request, _ ->
             val credentials = auth.credentials()
 
-            // the client's own defaults for these two are replaced, not joined
+            // replace the client's defaults for these two rather than adding to them
             request.headers.remove(HttpHeaders.Authorization)
             request.headers.remove(HttpHeaders.UserAgent)
             codexRequestHeaders(credentials).forEach { (name, value) -> request.headers.append(name, value) }
@@ -81,22 +75,20 @@ internal fun codexRequestPlugin(auth: CodexAuthStore, routingHint: String): Clie
     }
 
 /**
- * The session a request is filed under, derived from the conversation's `prompt_cache_key`, which the
- * request carries as an attribute so nothing here reads the body back.
+ * The session a request is filed under, derived from the `prompt_cache_key` the request carries as an
+ * attribute, so nothing here reads the body back.
  *
- * On this backend the key alone reads almost nothing back: requests are spread over machines, and the
- * `session-id` header is what keeps a conversation on the one that holds its prefix. Probed live on
- * 2026-10-06 with a 6k-token prefix: five follow-up requests read 5888 cached tokens on four or five of
- * them with the header, and on none or one without it, whatever else was sent — `thread-id`,
- * `x-client-request-id` and a replayed `x-codex-turn-state` changed nothing on their own. The CLI sends a
- * UUID here, so the key is folded into one rather than sent as it is.
+ * The key alone reads almost nothing back here: requests are spread over machines, and `session-id` keeps a
+ * conversation on the one holding its prefix. Probed 2026-10-06 with a 6k-token prefix: five follow-ups read
+ * 5888 cached tokens on four or five of them with the header, on none or one without; `thread-id`,
+ * `x-client-request-id` and a replayed `x-codex-turn-state` changed nothing alone. The CLI sends a UUID, so
+ * the key is folded into one.
  */
 internal fun sessionIdOf(cacheKey: String): String = UUID.nameUUIDFromBytes(cacheKey.toByteArray()).toString()
 
 /**
- * What is done with every completed Codex call: its tokens are counted toward the subscription's next
- * step, the call is logged with its cache share and where its prefix drifted, and a reply from another
- * model than the one asked for is noticed — once per model, since it is a fact about the deployment.
+ * Per completed call: counts its tokens toward the subscription's next step, logs it with its cache share and
+ * prefix drift, and notices a reply from another model than requested, once per model.
  */
 internal fun codexCallObserver(limits: CodexLimits): (request: JsonObject, response: JsonObject) -> Unit {
     val drift = CodexPrefixDrift()
@@ -119,9 +111,8 @@ internal fun codexCallObserver(limits: CodexLimits): (request: JsonObject, respo
 }
 
 /**
- * The model a completed response says it came from, when that is not the one the request named.
- *
- * A dated or suffixed name of the requested model is the same model, so only a different family counts.
+ * The model a response says it came from, when that differs from the requested one. A dated or suffixed name
+ * is the same model; only a different family counts.
  */
 internal fun servedModelMismatch(request: JsonObject, response: JsonObject): String? {
     val requested = (request["model"] as? JsonPrimitive)?.contentOrNull ?: return null
@@ -131,14 +122,12 @@ internal fun servedModelMismatch(request: JsonObject, response: JsonObject): Str
 }
 
 /**
- * One model call as a log line: whose conversation it was, how much of its input was read from cache,
- * and how many tools rode along.
+ * One model call as a log line: the conversation, the cached share of its input, and the tool count.
  *
- * The limits line next to it adds calls up between two changes of the allowance, which hides exactly
- * what a cache question asks: which call of which conversation missed. The conversation is named by its
- * cache key, a hash the turn logs as well, so its calls can be followed without naming anybody; the
- * tool count is there because a group loaded mid-turn changes the front of the request and takes the
- * cached prefix with it.
+ * The limits line sums calls between allowance changes, which hides which call missed the cache. The
+ * conversation is named by its cache key, a hash the turn logs too, so its calls can be followed anonymously;
+ * the tool count matters because a group loaded mid-turn changes the front of the request and loses the
+ * cached prefix.
  */
 internal fun codexCallSummary(request: JsonObject, response: JsonObject): String {
     val usage = response["usage"] as? JsonObject
@@ -154,7 +143,7 @@ internal fun codexCallSummary(request: JsonObject, response: JsonObject): String
             "output=[${usage?.long("output_tokens") ?: 0L}] tools=[${(request["tools"] as? JsonArray)?.size ?: 0}]"
 }
 
-/** Counts a completed response's tokens toward the subscription's next step, see [CodexLimits]. */
+/** Counts a response's tokens toward the subscription's next step; see [CodexLimits]. */
 internal fun countUsage(response: JsonObject, limits: CodexLimits) {
     val usage = response["usage"] as? JsonObject ?: return
 

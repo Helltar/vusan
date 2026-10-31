@@ -27,7 +27,7 @@ class ContextToolsTest {
         assertContains(result, "Narrow what you read")
     }
 
-    // past this point every further call comes back empty, so the only useful move is to answer
+    // past this every call comes back empty, so the only useful move is to answer
     @Test
     fun `a spent turn is told to answer from what it has`() = runBlocking {
         val budget = TurnToolBudget(16_000)

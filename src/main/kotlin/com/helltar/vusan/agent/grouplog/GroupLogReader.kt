@@ -14,14 +14,13 @@ import kotlin.time.Duration
 /**
  * Answers "what happened in this chat" under a fixed character budget.
  *
- * A window that fits is quoted verbatim and costs nothing beyond the query. A window that does not
- * and reaches back into a closed day is split by local day: every **closed** day is given as the
- * diary entry the bot already wrote about it, and the current day stays verbatim. Nothing is made
- * for the read, so it costs no model call however wide the window. A window with no closed day in it
- * has no entry to give, and is truncated to the newest messages instead.
+ * A window that fits is quoted verbatim. One that does not and reaches into a closed day is split by local
+ * day: each **closed** day is given as the diary entry already written about it, today stays verbatim.
+ * Nothing is generated for the read, so it costs no model call. A window with no closed day is truncated to
+ * the newest messages instead.
  *
- * A search for a text never takes the diary path: an entry keeps what a day was about, and the one
- * message that named something is exactly what it drops.
+ * A text search never takes the diary path: an entry keeps what a day was about and drops exactly the one
+ * message that named something.
  */
 class GroupLogReader(
     private val repository: GroupLogRepository,
@@ -53,9 +52,9 @@ class GroupLogReader(
             return header(from, now, total, author) + "\n\n" + block("transcript", rendered.text)
         }
 
-        // a diary entry is about the whole chat, so it cannot answer "what did this one person say".
-        // a window lying inside today has no closed day to give an entry for either, and the day split
-        // would only widen it to the whole day to announce that: truncating is the honest answer there.
+        // a diary entry is about the whole chat, so it cannot answer "what did this person say". a window
+        // inside today has no closed day, and the day split would only widen it: truncating is the honest
+        // answer.
         if (author != null || diary == null || !reachesAClosedDay(from, now)) {
             return truncatedResult(rendered, from, now, total, author)
         }
@@ -92,14 +91,14 @@ class GroupLogReader(
     private suspend fun rememberedResult(chat: ChatRef, from: Instant, now: Instant, diary: RememberedDays): String {
         val today = LocalDate.ofInstant(now, zone)
 
-        // snapping to a day boundary makes every past day in the window whole, so each one is told by the
-        // entry about that whole day rather than by an entry and a stray part of its transcript.
+        // snapping to a day boundary makes every past day whole, so each is told by its entry rather than an
+        // entry plus a stray part of its transcript.
         val firstDay = LocalDate.ofInstant(from, zone)
         val windowStart = firstDay.startOfDay()
         val closedDays = generateSequence(firstDay) { it.plusDays(1) }.takeWhile { it < today }.toList()
 
-        // snapping widened the window, so the caller's count over the narrower one would contradict
-        // the window this header prints.
+        // snapping widened the window, so a count over the caller's narrower one would contradict this
+        // header.
         val total = repository.countInWindow(chat, windowStart, now, author = null)
 
         val todayStart = today.startOfDay()
@@ -111,7 +110,7 @@ class GroupLogReader(
 
         val written = diaryBetween(chat, diary, firstDay, today.minusDays(1))
         val entries = fitEntries(written, budgetChars - todayRendered.text.length)
-        // a day nobody wrote in has nothing to remember, so only a day with messages is missing its entry
+        // a day nobody wrote in has nothing to remember
         val unwritten = closedDays.filter { it !in written && hasMessages(chat, it) }
 
         return buildString {
@@ -152,8 +151,8 @@ class GroupLogReader(
         }
     }
 
-    // a diary that cannot be read leaves the closed days without an entry rather than failing the read:
-    // today is still quoted, and the result says which days have nothing to show.
+    // an unreadable diary leaves closed days without entries rather than failing: today is still quoted, and
+    // the result says which days have nothing.
     private suspend fun diaryBetween(chat: ChatRef, diary: RememberedDays, from: LocalDate, to: LocalDate): Map<LocalDate, String> =
         runCatching { diary.between(chat, from, to) }
             .getOrElse {
@@ -165,8 +164,7 @@ class GroupLogReader(
     private suspend fun hasMessages(chat: ChatRef, day: LocalDate): Boolean =
         repository.countInWindow(chat, day.startOfDay(), day.plusDays(1).startOfDay().minusMillis(1), author = null) > 0
 
-    // newest days first so the ones that survive a tight budget are the recent ones, then flipped
-    // back into reading order.
+    // newest first so the recent days survive a tight budget, then back into reading order.
     private fun fitEntries(written: Map<LocalDate, String>, budget: Int): List<String> {
         val blocks = ArrayDeque<String>()
         var used = 0
@@ -210,8 +208,8 @@ class GroupLogReader(
             append(" between ${stamp(from)} and ${stamp(now)}.")
         }
 
-    // the count spans the whole window while the transcript under it may be a subset, so the number
-    // is labeled as the exact one. without that a "how many" answer becomes a tally of visible lines.
+    // the count spans the whole window while the transcript may be a subset, so it is labeled exact;
+    // otherwise "how many" becomes a tally of visible lines.
     private fun header(from: Instant, now: Instant, total: Long, author: String? = null, contains: String? = null): String =
         buildString {
             append("Chat log for this group.")
@@ -230,12 +228,12 @@ class GroupLogReader(
     private fun LocalDate.startOfDay(): Instant = atStartOfDay(zone).toInstant()
 
     private companion object {
-        // a plausible floor for one rendered line, used to turn the character budget into a row
-        // limit so a month-wide window is never pulled out of SQLite whole.
+        // a floor for one rendered line, turning the character budget into a row limit so a month-wide window
+        // never leaves SQLite whole.
         const val MIN_LINE_COST = 40
         const val MAX_ROWS = 1_000
 
-        // share of the budget kept for quoting today, the part most questions are actually about.
+        // share of the budget for quoting today, which most questions are about.
         const val TODAY_BUDGET_SHARE = 0.4
 
         const val COUNT_FROM_HEADER = "Answer how many and how often from the count above, never by counting what is quoted."
@@ -248,13 +246,12 @@ class GroupLogReader(
 private fun block(openTag: String, content: String, closingTag: String = openTag): String =
     "<$openTag>\n${content.trim()}\n</$closingTag>"
 
-// one line of a rendered transcript, wherever one is quoted
+// one line of a rendered transcript, wherever quoted
 internal const val LOG_LINE_CHARS = 300
 
-// what one local day's transcript is for a model that reads it whole, the diary's writer: the rows read
-// for it, and what their rendering may cost that prompt. a busy group fills tens of thousands of characters
-// a day, and an overflow is cut from the morning, so the budget is sized to hold such a day whole: it is
-// paid once per closed day, never per turn.
+// one local day's transcript for the diary writer, which reads it whole: the rows read and the rendering
+// budget. a busy group writes tens of thousands of characters a day and overflow is cut from the morning, so
+// it holds such a day whole; it is paid once per closed day, never per turn.
 internal const val DAY_SOURCE_ROWS = 3_000
 internal const val DAY_SOURCE_CHARS = 100_000
 

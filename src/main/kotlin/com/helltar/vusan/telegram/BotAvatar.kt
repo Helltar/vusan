@@ -8,15 +8,14 @@ import org.telegram.telegrambots.meta.generics.TelegramClient
 
 private val log = KotlinLogging.logger("BotAvatar")
 
-// telegram stores a profile photo as jpeg and caps it at 640x640, which is small for a reference but
-// still fixes the face; SELF_IMAGE_FILE exists for deployments that have the original.
+// telegram stores profile photos as jpeg capped at 640x640, small for a reference but enough to fix the face;
+// SELF_IMAGE_FILE is for deployments with the original.
 private const val TELEGRAM_PHOTO_NAME = "avatar.jpg"
 
 /**
- * The bot's own profile photo, as a reference the self-portrait tools can edit.
- *
- * A bot reads its own avatar the way it reads anyone's; nothing else in the Bot API exposes it. A
- * failure here is not fatal — the character then rests on `APPEARANCE_FILE` alone.
+ * The bot's own profile photo as a reference for the self-portrait tools, read as anyone's avatar would be;
+ * nothing else in the Bot API exposes it. A failure is not fatal: the character then rests on
+ * `APPEARANCE_FILE` alone.
  */
 internal suspend fun TelegramClient.profilePhotoReference(botId: Long): SourceImage? =
     runCatching {

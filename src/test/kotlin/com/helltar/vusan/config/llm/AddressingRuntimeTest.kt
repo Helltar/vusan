@@ -22,7 +22,7 @@ class AddressingRuntimeTest {
 
     private val asked = mutableListOf<String>()
 
-    // a platform that refuses `none` to the models named, as gpt-6.1-sol and gpt-6-astra do
+    // a platform refusing `none` for the named models, as gpt-6.1-sol and gpt-6-astra do
     private fun platform(refusingNone: Set<String>) =
         Http.createClient(
             MockEngine { request ->
@@ -34,7 +34,7 @@ class AddressingRuntimeTest {
                     model in refusingNone && ("\"effort\":\"none\"" in body || "\"reasoning_effort\":\"none\"" in body) ->
                         respond("""{"error":{"message":"Unsupported value: 'none'","param":"reasoning.effort","code":"unsupported_value"}}""", HttpStatusCode.BadRequest, JSON)
 
-                    // a backend that streams, as codex does, answers with events
+                    // a streaming backend, as codex is, answers with events
                     "\"stream\":true" in body -> respond(OK_STREAM, HttpStatusCode.OK, headersOf(HttpHeaders.ContentType, ContentType.Text.EventStream.toString()))
                     else -> respond(OK_REPLY, HttpStatusCode.OK, JSON)
                 }
@@ -56,8 +56,8 @@ class AddressingRuntimeTest {
         assertEquals(ReasoningEffort.LOW, effortOf(openAi("gpt-6.1-sol"), refusingNone = setOf("gpt-6.1-sol")))
     }
 
-    // no list names none — deepseek's and the plan's catalog name thinking levels, and anthropic has no such
-    // effort — so every model is asked, and one that refuses gets the least its vendor listed
+    // no list names `none` (deepseek's and the plan's catalogs list levels, anthropic has no such effort), so
+    // every model is asked, and one refusing gets its vendor's least listed effort
     @Test
     fun `none is asked of every model, and a refusal falls back to the least listed`() {
         val listed = setOf(ReasoningEffort.LOW, ReasoningEffort.MEDIUM, ReasoningEffort.HIGH)

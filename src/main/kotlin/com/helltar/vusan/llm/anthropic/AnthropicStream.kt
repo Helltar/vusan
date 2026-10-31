@@ -15,15 +15,14 @@ import kotlinx.serialization.json.jsonObject
 import java.util.TreeMap
 
 /**
- * Folds a Messages API event stream back into the message object the non-streaming API would have
- * returned, so a reply is read the same way whichever way it arrives.
+ * Folds a Messages API event stream back into the message object the non-streaming API returns, so a reply
+ * reads the same either way.
  *
- * `message_start` carries the envelope with an empty `content`; each content block opens with
- * `content_block_start`, grows by deltas — text, thinking and then its signature, a tool call's input as
- * fragments of JSON — and closes with `content_block_stop`; `message_delta` brings the stop reason and the
- * final usage, which replace the envelope's field by field; `message_stop` ends it. An `error` event is
- * the API failing after it answered 200, and a stream that ends before `message_stop` was cut short,
- * which the retry reads as a reason to call again.
+ * `message_start` carries the envelope with empty `content`; each block opens with `content_block_start`,
+ * grows by deltas (text, thinking then its signature, a tool call's input as JSON fragments) and closes with
+ * `content_block_stop`; `message_delta` brings the stop reason and final usage, replacing the envelope's
+ * fields; `message_stop` ends it. An `error` event is the API failing after answering 200, and a stream
+ * ending before `message_stop` was cut short, which the retry reads as a reason to call again.
  */
 class MessagesStreamFolder(private val label: String) {
 
@@ -62,8 +61,8 @@ class MessagesStreamFolder(private val label: String) {
         }
     }
 
-    // a tool call's input arrives as fragments of json; nothing at all is the empty object the block opened
-    // with, and a garbled one becomes that too, with the agent's guard telling the model what was missing
+    // a tool call's input arrives as json fragments; none at all is the empty object the block opened with,
+    // and a garbled one becomes that too, the agent's guard telling the model what was missing
     private fun closeInput(index: Int) {
         val raw = partialInputs.remove(index)?.toString()?.takeIf { it.isNotBlank() } ?: return
         val block = blocks[index] ?: return
@@ -76,8 +75,8 @@ class MessagesStreamFolder(private val label: String) {
                 }
     }
 
-    // the stop reason and the final usage arrive last and replace what the envelope opened with, field by
-    // field, so the cache figures only the envelope states survive
+    // the stop reason and final usage arrive last and replace the envelope's fields one by one, so only the
+    // cache figures the envelope alone states survive
     private fun merge(envelope: JsonObject, event: JsonObject): JsonObject {
         val delta = (event["delta"] as? JsonObject).orEmpty()
         val usage = (envelope["usage"] as? JsonObject).orEmpty() + (event["usage"] as? JsonObject).orEmpty()
@@ -86,7 +85,6 @@ class MessagesStreamFolder(private val label: String) {
     }
 
     private companion object {
-        // a stream that ends in an error event answered 200 before it said anything went wrong
         const val INPUT_PREVIEW_CHARS = 200
 
         val log = KotlinLogging.logger {}

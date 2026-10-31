@@ -167,7 +167,7 @@ class YtDlpClient(private val runner: YtDlpRunner) {
             ?: return DownloadAttempt(YtDlpResult.Failure("yt-dlp produced no metadata"))
 
         if (!Files.exists(outputFile)) {
-            // with --max-filesize yt-dlp skips the oversized download and still exits 0
+            // with --max-filesize yt-dlp skips an oversized download and still exits 0
             if (commandResult.stdout.saysTooLarge()) {
                 log.warn { "yt-dlp download rejected by max-filesize url=[$url] maxFileSizeMb=$maxFileSizeMb" }
                 return DownloadAttempt(YtDlpResult.TooLarge(sizeBytes = maxFileSizeMb.toLong() * 1024 * 1024))
@@ -200,9 +200,8 @@ class YtDlpClient(private val runner: YtDlpRunner) {
                 add(YT_DLP_BINARY)
                 add("--ignore-config")
                 addAll(listOf("-x", "--audio-format", "m4a"))
-                // datacenter IPs 403 on DASH googlevideo audio, and the tv-downgraded HLS
-                // manifest has no audio-only rendition, so fall back to a low-res muxed HLS
-                // (capped and sorted toward 360p) and extract its audio to bound the download.
+                // datacenter IPs get 403 on DASH googlevideo audio and the tv-downgraded HLS manifest has no
+                // audio-only rendition, so take a low-res muxed HLS (toward 360p) and extract its audio.
                 addAll(
                     listOf(
                         "--format",
@@ -263,7 +262,7 @@ class YtDlpClient(private val runner: YtDlpRunner) {
                             "stepping resolution down"
                 }
             } else {
-                // success, or a non-size error (auth/extract/format) that a lower resolution would not fix.
+                // success, or a non-size error (auth, extract, format) a lower resolution would not fix.
                 return attempt
             }
         }
@@ -282,8 +281,8 @@ class YtDlpClient(private val runner: YtDlpRunner) {
             buildList {
                 add(YT_DLP_BINARY)
                 add("--ignore-config")
-                // prefer HLS (proto:m3u8): from datacenter IPs the tv-downgraded player's DASH
-                // googlevideo streams 403 on download, while its HLS streams still work.
+                // prefer HLS (proto:m3u8): from datacenter IPs the tv-downgraded player's DASH streams 403,
+                // its HLS streams work.
                 addAll(listOf("--format", "b[height<=$heightCap]/bv*[height<=$heightCap]+ba/b"))
                 addAll(listOf("--format-sort", "proto:m3u8,res:$heightCap,vcodec:h264"))
                 addAll(listOf("--merge-output-format", "mp4", "--remux-video", "mp4"))
@@ -312,7 +311,8 @@ class YtDlpClient(private val runner: YtDlpRunner) {
         }
     }
 
-    // telegram falls back to a black placeholder when a bot upload has no preview, so a missing thumbnail is not fatal
+    // telegram shows a black placeholder for a bot upload without a preview, so a missing thumbnail is not
+    // fatal
     private fun loadThumbnail(path: Path, url: String): ByteArray? =
         runCatching { Files.readAllBytes(path).asTelegramVideoThumbnail() }
             .getOrNull()
@@ -404,12 +404,12 @@ class YtDlpClient(private val runner: YtDlpRunner) {
         private const val FORMAT_UNAVAILABLE_MARKER = "Requested format is not available"
         const val VIDEO_MAX_FILE_SIZE_MB = PlatformLimits.UPLOAD_MB
 
-        // yt-dlp sizes a track before the container is written, so a little headroom keeps it under the cap
+        // yt-dlp sizes a track before the container is written, so leave headroom under the cap
         const val AUDIO_MAX_FILE_SIZE_MB = PlatformLimits.UPLOAD_MB - 5
         private val VIDEO_HEIGHT_CAPS = listOf(720, 480, 360)
 
-        // --print-json implies --quiet, which swallows the max-filesize rejection that
-        // runMediaDownload reads to return TooLarge; without it the height ladder never steps down.
+        // --print-json implies --quiet, which hides the max-filesize rejection runMediaDownload reads for
+        // TooLarge; without --no-quiet the height ladder never steps down.
         private val PRINT_JSON_ARGS = listOf("--print-json", "--no-quiet")
         private val log = KotlinLogging.logger {}
     }
@@ -419,9 +419,8 @@ private const val THUMBNAIL_MAX_SIDE = 320
 private const val THUMBNAIL_MAX_BYTES = 200 * 1024
 
 /**
- * Converts image bytes into a Telegram-compliant video thumbnail: JPEG, at most
- * [THUMBNAIL_MAX_SIDE] px per side, under [THUMBNAIL_MAX_BYTES]. Returns null for
- * undecodable input.
+ * Converts image bytes into a telegram-compliant video thumbnail: JPEG, at most [THUMBNAIL_MAX_SIDE] px per
+ * side, under [THUMBNAIL_MAX_BYTES]. Null for undecodable input.
  */
 internal fun ByteArray.asTelegramVideoThumbnail(): ByteArray? {
     val source = runCatching { ImageIO.read(inputStream()) }.getOrNull() ?: return null
@@ -429,7 +428,7 @@ internal fun ByteArray.asTelegramVideoThumbnail(): ByteArray? {
     val width = (source.width * scale).roundToInt().coerceAtLeast(1)
     val height = (source.height * scale).roundToInt().coerceAtLeast(1)
 
-    // redraw onto an alpha-free canvas so the jpeg writer accepts any source color model
+    // redraw onto an alpha-free canvas so the jpeg writer accepts any color model
     val canvas = BufferedImage(width, height, BufferedImage.TYPE_INT_RGB)
 
     canvas.createGraphics().apply {
@@ -445,5 +444,5 @@ internal fun ByteArray.asTelegramVideoThumbnail(): ByteArray? {
     return output.toByteArray().takeIf { it.size <= THUMBNAIL_MAX_BYTES }
 }
 
-// with --max-filesize yt-dlp skips the oversized download, says so, and still exits 0
+// with --max-filesize yt-dlp skips an oversized download, says so, and still exits 0
 private fun String.saysTooLarge(): Boolean = containsAny("File is larger than max-filesize")

@@ -13,8 +13,8 @@ import kotlin.test.assertFailsWith
 
 class LlmHttpTest {
 
-    // the event stream spec ends a line with LF, CRLF or a bare CR, and a stream cut off mid-way still
-    // hands over the line it was in the middle of
+    // event streams end lines with LF, CRLF or a bare CR, and a stream cut mid-line still hands over that
+    // line
     @Test
     fun `every data payload arrives whatever ends its line`() = runBlocking {
         val body = "data: {\"n\":1}\n\ndata: {\"n\":2}\r\n\r\nevent: ping\rdata: {\"n\":3}\r\rdata: [DONE]\n\ndata: {\"n\":4}"

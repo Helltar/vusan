@@ -11,11 +11,9 @@ import com.helltar.vusan.tools.suspendToolGuard
 import com.helltar.vusan.tools.vision.VideoSampler
 
 /**
- * Speech-to-text on any recording the turn can name, not only the voice message a request arrives as.
- *
- * Everything goes through the [sampler] first — the ffmpeg pass the video tool uses, cut at the speech
- * budget — so a video, a voice note and an mp3 reach the provider as the same small m4a, and nothing longer
- * than a voice message may be is ever paid for.
+ * Speech-to-text on any recording the turn can name, not only an incoming voice message. Everything goes
+ * through the [sampler] first (the video tool's ffmpeg pass, cut at the speech budget), so video, voice notes
+ * and mp3s reach the provider as the same small m4a and nothing longer than a voice message is paid for.
  */
 class SpeechTools(
     private val whisper: OpenAiWhisperClient,

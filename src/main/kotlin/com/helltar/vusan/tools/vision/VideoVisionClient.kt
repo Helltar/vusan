@@ -10,8 +10,8 @@ import com.helltar.vusan.common.xmlBlock
 import com.helltar.vusan.request.AttachedFile
 
 /**
- * Answers about a video the only way a chat model can: from still frames sampled out of it, plus its
- * speech when speech-to-text is configured.
+ * Answers about a video the only way a chat model can: from sampled still frames, plus speech when
+ * speech-to-text is configured.
  */
 class VideoVisionClient(
     private val client: LlmClient,
@@ -29,9 +29,8 @@ class VideoVisionClient(
                     "so it is either broken or in a format that cannot be opened."
         }
 
-        // telegram serves a GIF as a video with no audio stream at all, so extraction there can only
-        // fail — skip the ffmpeg pass instead of paying for it once per GIF. the track is cut to the
-        // transcriber's budget on the way out, so a video of any length, known or not, costs the same.
+        // telegram serves a GIF as a video without audio, so extraction can only fail; skip the ffmpeg pass.
+        // the track is cut to the transcriber's budget, so any length costs the same.
         val transcript =
             transcriber
                 ?.takeUnless { video.isAnimation }
@@ -39,12 +38,12 @@ class VideoVisionClient(
 
         val description = execute(video, frames, samplingNote(video.durationSeconds, frames.size), transcript, focus)
 
-        // the agent gets the speech verbatim as well, so it can quote what was said instead of
-        // paraphrasing it out of the description.
+        // the speech goes along verbatim too, so the agent can quote it instead of paraphrasing the
+        // description.
         return transcript?.let { "$description\n\n${xmlBlock("audio_transcript", it)}" } ?: description
     }
 
-    /** Describes the single preview frame Telegram ships with a video, used when the video itself is unreachable. */
+    /** Describes the preview frame telegram ships with a video, for when the video itself is unreachable. */
     suspend fun describePreviewFrame(video: AttachedFile, frame: ByteArray, focus: String): String =
         execute(
             video = video,

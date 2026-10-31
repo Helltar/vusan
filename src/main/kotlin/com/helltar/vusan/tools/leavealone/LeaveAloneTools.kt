@@ -16,9 +16,9 @@ import kotlin.time.Duration.Companion.days
 import kotlin.time.Duration.Companion.hours
 import kotlin.time.toJavaDuration
 
-// a request with no length holds for the day it was made on, and for half a day at the least: said late in
-// the evening, the end of the day would let it lapse before the person is even asleep. longer than a week
-// is somebody who means "never", and never is a mute for a person to lift, not a row to keep
+// a request without a length holds for the rest of its day, at least half a day: said late in the evening,
+// the day's end would lapse before the person is asleep. longer than a week means "never", which is a mute
+// for the person to lift, not a row to keep
 private val MIN_DEFAULT_LENGTH = 12.hours
 private val MAX_LENGTH = 7.days
 
@@ -27,11 +27,10 @@ private val END = DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm")
 private const val MAX_NAME_CHARS = 60
 
 /**
- * What a person says when they want the bot to stop writing to them, recorded so that code keeps the
- * promise: no look reacts to them or answers them, no follow-up of the bot's is guessed to be for them,
- * until the request ends or they lift it. In a private chat that stops its follow-ups, the one thing the bot
- * sends there unasked. Registered only for a sender who is one person: a shared account is nobody to leave
- * alone.
+ * What a person says to stop the bot writing to them, recorded so code keeps the promise: no look reacts to
+ * or answers them, no follow-up is guessed to be for them, until the request ends or they lift it. In a
+ * private chat it stops follow-ups, the one thing sent there unasked. Registered only for a sender who is one
+ * person.
  */
 class LeaveAloneTools(
     private val requests: LeaveAloneRepository,
@@ -73,6 +72,6 @@ class LeaveAloneTools(
     }
 }
 
-// the name is the person's own text, bounded like everything else of theirs that lands in a prompt
+// the name is user text, bounded like everything else of theirs in a prompt
 private val SenderContext.shownAs: String
     get() = (displayName ?: username)?.collapseWhitespaceAndCap(MAX_NAME_CHARS) ?: "this person"

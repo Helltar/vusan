@@ -16,9 +16,9 @@ import kotlin.test.assertEquals
 import org.telegram.telegrambots.meta.generics.TelegramClient
 
 /**
- * The registry stopped gating Telegram's own tools when it stopped knowing about them, so the gate on the
- * sticker catalog has to hold here instead. The file tool is offered whatever the chat accepts: `send=false`
- * fetches a file for another tool, and the tool itself refuses a send the chat would drop.
+ * The registry no longer knows telegram's own tools, so the sticker catalog's gate must hold here. The file
+ * tool is offered whatever the chat accepts: `send=false` fetches for another tool, and the tool refuses a
+ * send the chat would drop.
  */
 class TelegramToolSetsTest {
 
@@ -54,7 +54,7 @@ class TelegramToolSetsTest {
         )
     }
 
-    // without a vision model nothing ever described a sticker, so there is no catalog to search.
+    // without a vision model nothing described a sticker, so there is no catalog to search.
     @Test
     fun `a deployment without a catalog offers no sticker tools`() {
         val sets = TelegramToolSets(client).of(requestContext(), BotOutbox())

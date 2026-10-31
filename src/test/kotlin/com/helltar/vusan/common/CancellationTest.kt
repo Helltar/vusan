@@ -15,12 +15,10 @@ import kotlin.test.assertNull
 import kotlin.test.assertTrue
 
 /**
- * Rethrowing what must not be swallowed, and running a block where being canceled is somebody's
- * decision rather than the end of the caller.
- *
- * [runInOwnJob] is written for the shape the task scheduler fires in: a loop that has more to do, and
- * inside it a turn something outside may stop by naming its conversation. [RunningTurns] is what
- * `/stop` reaches, and it can only cancel the coroutine the turn is running in.
+ * Rethrowing what must not be swallowed, and running a block whose cancellation is someone's decision rather
+ * than the caller's end. [runInOwnJob] fits the scheduler's shape: a loop with more to do, holding a turn
+ * something outside may stop by naming its conversation; [RunningTurns], which `/stop` reaches, can only
+ * cancel the turn's coroutine.
  */
 class CancellationTest {
 

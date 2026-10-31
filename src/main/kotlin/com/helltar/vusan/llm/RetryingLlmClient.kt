@@ -9,13 +9,12 @@ import java.io.IOException
 import kotlin.time.Duration
 import kotlin.time.Duration.Companion.seconds
 
-// a server that tripped over this one request, or a stream that was cut before it finished: the same
-// call a second later usually goes through.
+// a server that tripped over this request, or a stream cut short: the same call a second later usually works.
 private val REPEATABLE_STATUSES = setOf(500, 502, 503, 504)
 private val REPEATABLE_BODY_REGEX = Regex("server_error|overloaded", RegexOption.IGNORE_CASE)
 
-// what a repeat cannot fix, whatever status it came with: a spent allowance names its own deadline and
-// belongs to the fallback at once, and a refused request is refused again.
+// what a repeat cannot fix under any status: a spent allowance names its deadline and goes to the fallback at
+// once, and a refused request is refused again.
 private val FINAL_BODY_REGEX =
     Regex(
         "usage_limit_reached|usage limit reached|usage_not_included|quota|" +
@@ -24,11 +23,10 @@ private val FINAL_BODY_REGEX =
     )
 
 /**
- * Whether a call that failed with [failure] is worth making again as it is.
- *
- * A rate limit is left out on purpose: on the subscription a `429` is the allowance running out, and
- * elsewhere the fallback provider is the faster way round it. So is a timeout — the call already waited
- * the whole request timeout once; a connection that dropped or was refused is another matter.
+ * Whether a call that failed with [failure] is worth repeating as is. Rate limits are left out on purpose: on
+ * the subscription a `429` is the allowance running out, and elsewhere the fallback is faster. So are
+ * timeouts, which already waited the whole request timeout; a dropped or refused connection is another
+ * matter.
  */
 internal fun isRepeatableFailure(failure: Throwable): Boolean {
     if (failure !is LlmException) return false
@@ -47,10 +45,9 @@ private fun Throwable?.isDroppedConnection(): Boolean =
     }
 
 /**
- * The same client, making a call up to [maxAttempts] times when the provider's failure is a passing one.
- *
- * A model call changes nothing on the provider's side until it answers, so a repeat is safe wherever in
- * a turn it happens. Only what survives the repeats reaches the fallback provider or the person.
+ * The same client, making a call up to [maxAttempts] times on a passing provider failure. A model call
+ * changes nothing on the provider until it answers, so a repeat is safe anywhere in a turn; only what
+ * survives the repeats reaches the fallback or the person.
  */
 class RetryingLlmClient(
     private val delegate: LlmClient,

@@ -16,17 +16,17 @@ import org.jetbrains.exposed.v1.jdbc.selectAll
 import org.jetbrains.exposed.v1.jdbc.upsert
 import java.time.LocalDate
 
-/** What the bot wrote down about one day of one group. */
+/** What the bot wrote about one day of one group. */
 data class DiaryEntry(val day: LocalDate, val content: String)
 
-/** How long a span of days a look-back covers. */
+/** How long a span a look-back covers. */
 enum class DiaryPeriod {
     /** Monday to Sunday. */
     WEEK,
     MONTH,
 }
 
-/** One closed week or month, named by its period and its first local day. */
+/** One closed week or month, named by its period and first local day. */
 data class DiarySpan(val period: DiaryPeriod, val firstDay: LocalDate) {
 
     val lastDay: LocalDate
@@ -37,13 +37,13 @@ data class DiarySpan(val period: DiaryPeriod, val firstDay: LocalDate) {
             }
 }
 
-/** What the bot wrote looking back over one week or month of one group, from that span's daily entries. */
+/** What the bot wrote looking back over one week or month of a group, from its daily entries. */
 data class DiaryLookBack(val span: DiarySpan, val content: String)
 
 /**
- * The bot's diary: one entry per chat per closed local day, and one look-back per closed week and month.
- * A chat's diary is dropped together with its transcript, by
- * [com.helltar.vusan.agent.grouplog.GroupLogRepository.clear], since it was written from it.
+ * The bot's diary: one entry per chat per closed local day, one look-back per closed week and month. Dropped
+ * with the chat's transcript by [com.helltar.vusan.agent.grouplog.GroupLogRepository.clear], since it was
+ * written from it.
  */
 class DiaryRepository {
 
@@ -54,17 +54,17 @@ class DiaryRepository {
             .any()
     }
 
-    /** The entries for [since] and later, oldest first. */
+    /** The entries from [since] on, oldest first. */
     suspend fun since(chat: ChatRef, since: LocalDate): List<DiaryEntry> = dbTransaction {
         ChatDiaryTable
             .selectAll()
-            // `yyyy-MM-dd` sorts the way the dates do, which is what lets a text column be compared
+            // `yyyy-MM-dd` sorts as the dates do, so a text column compares correctly
             .where { inChat(chat) and (ChatDiaryTable.day greaterEq since.toString()) }
             .orderBy(ChatDiaryTable.day to SortOrder.ASC)
             .map { DiaryEntry(LocalDate.parse(it[ChatDiaryTable.day]), it[ChatDiaryTable.content]) }
     }
 
-    /** The entries from [from] to [to], both included, oldest first. */
+    /** The entries from [from] to [to] inclusive, oldest first. */
     suspend fun between(chat: ChatRef, from: LocalDate, to: LocalDate): List<DiaryEntry> = dbTransaction {
         ChatDiaryTable
             .selectAll()
@@ -75,7 +75,7 @@ class DiaryRepository {
             .map { DiaryEntry(LocalDate.parse(it[ChatDiaryTable.day]), it[ChatDiaryTable.content]) }
     }
 
-    /** The day of the oldest entry [chat] has, or `null` when it has none. */
+    /** The day of [chat]'s oldest entry, or `null` when it has none. */
     suspend fun firstDay(chat: ChatRef): LocalDate? = dbTransaction {
         ChatDiaryTable
             .select(ChatDiaryTable.day)
@@ -86,7 +86,7 @@ class DiaryRepository {
             .firstOrNull()
     }
 
-    /** The chats with at least one entry from [from] to [to], both included. */
+    /** The chats with an entry from [from] to [to] inclusive. */
     suspend fun chatsWithEntries(from: LocalDate, to: LocalDate): List<ChatRef> = dbTransaction {
         ChatDiaryTable
             .select(ChatDiaryTable.platform, ChatDiaryTable.chatId)
@@ -117,7 +117,7 @@ class DiaryRepository {
             .any()
     }
 
-    /** The newest look-back over a [period] that starts before [before]. */
+    /** The newest look-back over a [period] starting before [before]. */
     suspend fun latestLookBack(chat: ChatRef, period: DiaryPeriod, before: LocalDate): DiaryLookBack? = dbTransaction {
         ChatDiaryLookBackTable
             .selectAll()
@@ -133,12 +133,12 @@ class DiaryRepository {
             .firstOrNull()
     }
 
-    /** The look-backs of either period over a span that reaches into [from]..[to], oldest first. */
+    /** The look-backs of either period whose span reaches into [from]..[to], oldest first. */
     suspend fun lookBacksBetween(chat: ChatRef, from: LocalDate, to: LocalDate): List<DiaryLookBack> = dbTransaction {
         ChatDiaryLookBackTable
             .selectAll()
             .where {
-                // no span is longer than a month, so one starting earlier than that cannot reach [from]
+                // no span exceeds a month, so one starting earlier cannot reach [from]
                 (ChatDiaryLookBackTable.platform eq chat.platform) and (ChatDiaryLookBackTable.chatId eq chat.id) and
                         (ChatDiaryLookBackTable.firstDay greaterEq from.minusMonths(1).toString()) and
                         (ChatDiaryLookBackTable.firstDay lessEq to.toString())

@@ -79,7 +79,7 @@ import io.ktor.client.*
 class ToolCatalogFactory(
     http: HttpClient,
     publicHttp: HttpClient,
-    // whatever the messenger this turn came from adds to the shared tools, built per turn
+    // the tools the turn's messenger adds, built per turn
     private val platformTools: PlatformToolSets,
     private val config: AppConfig,
     private val conversation: ConversationRepository,
@@ -88,29 +88,27 @@ class ToolCatalogFactory(
     private val leaveAlone: LeaveAloneRepository,
     vision: VisionRuntime?,
     private val groupLog: GroupLogRepository?,
-    // present only where the deployment keeps a diary
+    // only where the deployment keeps a diary
     private val diary: DiaryRepository?,
     toolResultMaxChars: Int,
-    // present only on LLM_PROVIDER=codex; lets image generation and a web search ride the ChatGPT
-    // session instead of needing a second paid key.
+    // only on LLM_PROVIDER=codex: image generation and web search ride the ChatGPT session instead of a
+    // second paid key.
     codexAuth: CodexAuthStore? = null,
     private val selfImage: SelfImage? = null,
 ) {
 
-    // what each conversation already loaded, so its next turn offers the same tools from the start: the
-    // model need not load them again, and an endpoint that lists offered tools up front keeps the same
-    // tool array, which is part of the cached prompt prefix.
+    // what each conversation already loaded, offered from the start of its next turn: no reload needed, and
+    // an endpoint listing tools up front keeps the same cached tool array.
     private val loadedGroups = LoadedToolGroups()
 
     val availableToolNames: List<String> by lazy {
         buildCatalog(TOOL_NAME_PROBE_CONTEXT, BotOutbox(), TurnToolBudget(0), TurnShelf()).tools.map { it.name }.sorted()
     }
 
-    // one chat log or diary read may not eat the whole run's tool budget: the model still has to fit its
-    // own answer, and a recap turn often calls other tools alongside it.
+    // one chat log or diary read must leave room in the tool budget for the answer and other tools alongside.
     private val chatReadBudgetChars = (toolResultMaxChars / 2).coerceIn(4_000, 24_000)
 
-    // a window too wide to quote gives its closed days as the diary entries already written about them
+    // a window too wide to quote gives its closed days as their diary entries
     private val groupLogReader =
         groupLog?.let { log ->
             val remembered =
@@ -151,8 +149,8 @@ class ToolCatalogFactory(
             SearxngClient(http, it)
         }
 
-    // the subscription is the chat provider or the one behind it; either way the search runs on the
-    // model that side was configured with, which the signed-in plan is known to offer.
+    // the subscription is the chat provider or its fallback; the search runs on the model configured there,
+    // which the plan is known to offer.
     private val codexSearchClient =
         listOfNotNull(config.llmProvider, config.llmFallback)
             .firstNotNullOfOrNull { it as? LlmProviderConfig.Codex }
@@ -174,8 +172,8 @@ class ToolCatalogFactory(
             ElevenLabsTtsClient(http, it)
         }
 
-    // the round video message is the portrait plus the voice, so without a reference photo there is
-    // nothing to put in the circle and the tool is left out rather than sending an empty one.
+    // the round video message is the portrait plus the voice, so without a reference photo the tool is left
+    // out.
     private val selfPortrait = selfImage?.reference?.bytes
 
     private val imageClient: ImageClient? =
@@ -198,8 +196,8 @@ class ToolCatalogFactory(
             SandboxClient(http, it, requireNotNull(config.regolithToken))
         }
 
-    // the key that enables voice transcription also transcribes any recording a turn can name, and hands
-    // a video's sound to the vision tool; one ffmpeg pass serves both
+    // the speech-to-text key also transcribes any recording a turn can name and gives a video's sound to
+    // vision; one ffmpeg pass serves both
     private val whisper = config.openAiStt?.let { OpenAiWhisperClient(http, it) }
     private val videoSampler = FfmpegVideoSampler()
 
@@ -217,20 +215,18 @@ class ToolCatalogFactory(
 
     /**
      * A tool that makes something is registered whatever the chat accepts: with `send` it is a producer
-     * first, and a picture or a voice the chat refuses is still what the next call or the sandbox works on.
-     * What the chat refuses is checked at the send instead, by the tool and before anything is downloaded,
-     * drawn or synthesized for it, since the model would pay for that and then see it dropped. Only what
-     * does nothing but post — reactions, polls, GIFs by address — is left out here.
+     * first, and a refused picture or voice is still what the next call or the sandbox works on. What the
+     * chat refuses is checked at the send, before anything is downloaded, drawn or synthesized. Only tools
+     * that do nothing but post (reactions, polls, GIFs by address) are left out here.
      *
-     * A set registered with a [ToolGroup] is registered all the same; the group only decides whether its
-     * schemas ride along in every request or wait for `loadTools`. Group what a turn rarely needs, and
-     * leave visible what one may need without being asked for it by name.
+     * A [ToolGroup] only decides whether a set's schemas ride along in every request or wait for `loadTools`.
+     * Group what a turn rarely needs, and leave visible what one may need without being asked for it by name.
      */
     fun buildCatalog(
         context: RequestContext,
         outbox: BotOutbox,
         toolBudget: TurnToolBudget,
-        // the one the turn runs its tools in, so a reference resolves against what the tools here kept
+        // the shelf the turn runs its tools in, so references resolve against what they kept
         shelf: TurnShelf,
         narrator: TurnNarrator? = null,
     ): ToolCatalog {
@@ -245,7 +241,7 @@ class ToolCatalogFactory(
             tools(InlineChoiceTools(context, outbox, conversation::revision))
             tools(MemoryTools(memory, context))
             tools(FollowUpTools(tasks, context, TasksRepository.MAX_FOLLOW_UPS_PER_USER))
-            // a request to be left alone names one person, which a shared account is not
+            // a leave-alone request names one person, which a shared account is not
             if (context.sender.isPerson) tools(LeaveAloneTools(leaveAlone, context))
             tools(ToolGroup.TELEGRAM_CHANNELS, telegramChannel)
             tools(ToolGroup.YOUTUBE, youTubeTranscript)
@@ -268,19 +264,19 @@ class ToolCatalogFactory(
             tools(PageTools(pageReader))
             sandboxClient?.let { client ->
                 context.personKeyOrNull?.let { person ->
-                    // one handle for the turn: a site is published from the sandbox the commands ran in,
-                    // and a reset by either set is seen by the other.
+                    // one handle per turn: a site is published from the sandbox the commands ran in, and a
+                    // reset by either set is seen by the other.
                     val sandbox = client.sandboxOf(person)
                     shelf.connectSandbox(sandbox)
                     tools(SandboxTools(sandbox, outbox, shelf))
-                    // publishing belongs to the same server: it answers `not_implemented` when it has
-                    // no pages role, and says so to the model rather than the tool being missing.
+                    // publishing is the same server's: without a pages role it answers `not_implemented`,
+                    // which the model is told instead of the tool going missing.
                     tools(ToolGroup.WEB_PUBLISHING, SiteTools(sandbox))
                 }
             }
 
-            // both answer to the same tool names, so one of them is registered: KLIPY where it is
-            // configured, because it also finds memes and clips, which are inputs for other tools too.
+            // both answer to the same tool names, so only one is registered: KLIPY where configured, since it
+            // also finds memes and clips other tools can use.
             when {
                 klipyClient != null -> tools(ToolGroup.GIFS, KlipyTools(klipyClient, fileDownloadClient, outbox))
                 chat.stickersAndAnimations -> giphyClient?.let { tools(ToolGroup.GIFS, GiphyTools(it, outbox)) }
@@ -303,9 +299,9 @@ class ToolCatalogFactory(
                 selfPortrait?.let { tools(ToolGroup.VOICE_REPLIES, VideoNoteTools(elevenLabsTtsClient, elevenLabsTts, it, outbox)) }
             }
 
-            // visible rather than grouped: pictures are drawn and edited daily on the live deployment, and
-            // a group used that often is loaded again after every restart and in every new conversation,
-            // which rebuilds the cached prefix far more often than its two schemas cost to carry.
+            // visible rather than grouped: pictures are used daily, and a group that common gets reloaded
+            // after every restart and in every new conversation, rebuilding the cached prefix more often than
+            // its two schemas cost to carry.
             if (imageClient != null && image != null) {
                 tools(ImageGenTools(imageClient, image, outbox, context.attachedFiles, selfImage))
             }
@@ -317,9 +313,9 @@ class ToolCatalogFactory(
     }
 
     private companion object {
-        // an ordinary person in an ordinary chat, because that is what the startup list is read as: what
-        // this deployment can do. A sender that is not one person withholds exactly the tools whose
-        // configuration an operator most wants confirmed.
+        // an ordinary person in an ordinary chat, since the startup list is read as what the deployment can
+        // do; a shared sender would withhold exactly the tools whose configuration an operator wants
+        // confirmed.
         val TOOL_NAME_PROBE_CONTEXT =
             RequestContext(
                 platform = Platform.TELEGRAM,

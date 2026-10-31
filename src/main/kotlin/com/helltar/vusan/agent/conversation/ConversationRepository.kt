@@ -51,11 +51,11 @@ data class ConversationStats(
 )
 
 /**
- * The stored conversation between one person and the bot **in one chat**. Every method is keyed by a
- * whole [ConversationScope]: history is replayed to the model as that user's own `user`/`assistant`
- * turns, so a single global thread per user would let a private exchange resurface inside a group —
- * and, across messengers, would let two people who happen to share an id read each other's. What
- * should travel between chats is durable memory ([com.helltar.vusan.agent.memory]), not raw turns.
+ * The stored conversation between one person and the bot **in one chat**. Every method takes a whole
+ * [ConversationScope]: history replays as that user's own `user`/`assistant` turns, so one thread per user
+ * would let a private exchange resurface in a group and, across messengers, let two people sharing an id read
+ * each other's. What travels between chats is durable memory ([com.helltar.vusan.agent.memory]), not raw
+ * turns.
  */
 class ConversationRepository {
 
@@ -127,8 +127,8 @@ class ConversationRepository {
 
         if (!checkpointExists) return@dbTransaction false
 
-        // the row may not exist yet: a conversation that has never been cleared has nothing to say
-        // until its first recap, and the revision it starts at is the one a clear counts up from.
+        // the row may not exist yet: a never-cleared conversation has nothing to say until its first recap,
+        // and its starting revision is what a clear counts up from.
         ConversationsTable.upsert(
             onUpdate = {
                 it[ConversationsTable.summary] = content
@@ -183,11 +183,9 @@ class ConversationRepository {
     }
 
     /**
-     * The retention pass of [pruneCompacted] for conversations nobody has come back to. A turn prunes
-     * its own conversation on the way out, so what is left for this is people who stopped writing —
-     * their rows would otherwise sit past retention for as long as they stayed away.
-     *
-     * At most [maxConversations] of them per pass; whatever is still expired is taken by the next one.
+     * [pruneCompacted]'s retention for conversations nobody returned to. A turn prunes its own conversation
+     * on the way out, so this covers people who stopped writing, whose rows would otherwise outlive
+     * retention. At most [maxConversations] per pass; the next pass takes the rest.
      */
     suspend fun pruneExpired(
         maxStoredInteractions: Int,
@@ -218,9 +216,8 @@ class ConversationRepository {
         return expired.sumOf { pruneCompacted(it, maxStoredInteractions, rawRetentionCutoff) }
     }
 
-    // when this user last exchanged anything with the bot in this chat. rows are inserted in turn
-    // order, so the newest id carries the newest timestamp and no aggregate is needed. the current
-    // turn is stored only after the run, so during a turn this is the previous exchange.
+    // the last exchange with this user in this chat. rows are inserted in order, so the newest id has the
+    // newest time. the current turn is stored after the run, so during a turn this is the previous exchange.
     suspend fun lastInteractionAt(scope: ConversationScope): Instant? = dbTransaction {
         ConversationMessagesTable
             .select(ConversationMessagesTable.createdAt)
@@ -244,8 +241,8 @@ class ConversationRepository {
         dbTransaction {
             ConversationMessagesTable.deleteWhere { conversationIs(scope) }
 
-            // the recap goes with the turns it recapped, and the revision counts the wipe: both in one
-            // write, so nothing can come back to a summary of messages that are no longer there.
+            // the recap goes with the turns it covered and the revision counts the wipe, in one write, so
+            // nothing can return to a summary of deleted messages.
             ConversationsTable.upsert(
                 onUpdate = {
                     it[ConversationsTable.revision] = ConversationsTable.revision + 1L
@@ -297,8 +294,8 @@ class ConversationRepository {
             ?: StoredSummary(content = null, throughMessageId = 0L)
 
     companion object {
-        // raw interactions kept per conversation once their recap covers them. the model never reads
-        // them again; they are the material a recap can be rebuilt from, and a hundred is plenty for that.
+        // raw interactions kept per conversation once recapped. the model never reads them again; they are
+        // the material to rebuild a recap from, and a hundred is plenty.
         const val MAX_STORED_INTERACTIONS = 100
     }
 }

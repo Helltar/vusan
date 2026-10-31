@@ -39,7 +39,7 @@ internal fun channelPost(
             appendLine("""<div class="tgme_widget_message_forwarded_from"><a class="tgme_widget_message_forwarded_from_name">$it</a></div>""")
         }
 
-        // the quote of the replied-to post carries the same _text class and comes first in the DOM
+        // the replied-to post's quote has the same _text class and comes first in the DOM
         replyQuote?.let {
             appendLine(
                 """<a class="tgme_widget_message_reply" href="https://t.me/$username/${id - 1}">""" +

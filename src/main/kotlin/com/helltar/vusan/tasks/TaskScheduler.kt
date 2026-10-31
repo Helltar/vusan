@@ -27,10 +27,10 @@ class TaskScheduler(
     private val agentRunner: AgentRunner,
     private val delivery: OutputDelivery,
     private val chatProfiles: ChatProfileLookup,
-    // no default: an empty policy allows nobody, and a scheduler that silently fires nothing is worse
-    // than one that will not be built without being told who may use it.
+    // no default: an empty policy allows nobody, and a scheduler silently firing nothing is worse than one
+    // that refuses to build.
     private val accessPolicy: AccessPolicy,
-    // who asked not to be written to: a follow-up of the bot's own is the one fire that would break that
+    // who asked not to be written to: a follow-up of the bot's own would break that
     private val leaveAlone: LeaveAloneRepository? = null,
     private val clock: () -> Instant = Instant::now,
 ) {
@@ -68,9 +68,8 @@ class TaskScheduler(
         }
     }
 
-    // the whole tick was read before the first fire, and a fire is a whole agent turn: what this one
-    // does is decided by the row as it stands now, and by the clock as it stands now — a task behind a
-    // long fire would otherwise be judged late by the tick's time and moved to a slot already past.
+    // a fire is a whole agent turn, so each task is judged by its row and the clock as they stand now;
+    // otherwise a task behind a long fire would be judged late by the tick's time and moved to a past slot.
     private suspend fun processOne(id: Long) {
         val now = clock()
 
@@ -80,15 +79,14 @@ class TaskScheduler(
                 return
             }
 
-        // the allowlist is what may use this deployment, and a task fires on nobody's behalf but its
-        // owner's: losing access has to stop the work that goes on without them, not only their messages.
+        // a task fires on its owner's behalf, so losing access must stop the work that runs without them too.
         if (!accessPolicy.allows(task.scope.chat, task.scope.user)) {
             skipDenied(task, now)
             return
         }
 
-        // a follow-up is the bot writing unasked, which somebody who asked to be left alone was promised not
-        // to get. it is dropped rather than held: asking how the exam went a week later is not checking back
+        // a follow-up is the bot writing unasked, which a left-alone person was promised not to get. dropped
+        // rather than held: asking how the exam went a week later is not checking back
         if (task.isHeldBy(leaveAlone, now)) {
             log.info { "task id=${task.id} skipped: a follow-up for ${task.scope}, who asked to be left alone" }
             rescheduleAfterFire(task, now)
@@ -102,8 +100,8 @@ class TaskScheduler(
             return
         }
 
-        // reschedule even when every attempt fails: a task left due would be picked up again on every
-        // poll tick, re-running the full agent indefinitely on a persistent error.
+        // reschedule even when every attempt fails, or a persistent error would re-run the agent on every
+        // tick.
         val chatUnreachable =
             runCatching { fire(task) }
                 .getOrElse {
@@ -120,9 +118,8 @@ class TaskScheduler(
         rescheduleAfterFire(task, now)
     }
 
-    // the schedule is kept and never reports itself as missed, so being allowed back resumes the task
-    // instead of resurrecting a backlog of skipped fires: a recurring one moves on past the fire nobody
-    // may have, and a one-time one has nowhere to move, so it waits in place for the tick that may.
+    // the schedule is kept and never reports a miss, so regaining access resumes the task without a backlog:
+    // a recurring one moves past the denied fire, a one-time one waits in place.
     private suspend fun skipDenied(task: ScheduledTask, now: Instant) {
         val reason = accessPolicy.denialReason(task.scope.chat, task.scope.user)
 
@@ -149,8 +146,8 @@ class TaskScheduler(
                 Messages.of(task.language).taskMissedNotice(task.id, task.title, scheduledLabel),
             )
 
-        // the notice costs one API call and the run costs a whole agent turn, so a chat that refuses
-        // even the notice is caught here rather than on the next on-time fire.
+        // the notice costs one API call and the run a whole agent turn, so a chat refusing even the notice is
+        // caught here.
         if (outcome.isUnreachable) {
             parkTasksOfUnreachableChat(task.scope.chat)
             return
@@ -188,17 +185,16 @@ class TaskScheduler(
             .isUnreachable
     }
 
-    // the bot cannot post into this chat any more: it was removed from the group, the user blocked it,
-    // or an admin took its right to write away. every task scheduled there would run the whole agent and
-    // only then fail at the send, so the whole chat is parked at once instead of once per task per fire.
+    // the bot can no longer post here (removed, blocked or muted). each task would run the whole agent only
+    // to fail at the send, so the whole chat is parked at once.
     private suspend fun parkTasksOfUnreachableChat(chat: ChatRef) {
         val paused = repo.pauseAllInChat(chat)
 
         log.warn { "chat=[$chat] is unreachable; paused $paused scheduled task(s) there" }
     }
 
-    // one full run of the task. `RunFailed` means the run itself failed with nothing delivered, so it is
-    // safe to repeat; a failed delivery is not retried, since part of the answer may already be in the chat.
+    // one full run. `RunFailed` means nothing was delivered, so it is safe to repeat; a failed delivery is
+    // not retried, since part of the answer may be in the chat.
     private suspend fun runAttempt(task: ScheduledTask, attempt: Int): FireOutcome {
         log.info {
             "firing task id=${task.id} ${task.scope} " +
@@ -207,15 +203,14 @@ class TaskScheduler(
 
         val request = scheduledAgentRequest(task, attempt, chatProfileFor(task))
 
-        // `/stop` ends a turn by naming its conversation, and a fire runs under the same name as the
-        // user's own turns there. without a job of its own to be canceled, the coroutine the stop
-        // reaches is the scheduler's loop, and every later task with it.
+        // `/stop` cancels by conversation, and a fire shares the name with the user's own turns there;
+        // without its own job the stop would reach the scheduler's loop and every later task.
         return runInOwnJob { deliverTurn(task, request) } ?: FireOutcome.Stopped
     }
 
     private suspend fun deliverTurn(task: ScheduledTask, request: AgentRequest): FireOutcome {
-        // the agent answers its own failures with a canned reply instead of throwing, so the flag is the
-        // only thing separating "the task did not run" from a real answer.
+        // the agent answers its own failures with a canned reply, so the flag alone tells "did not run" from
+        // a real answer.
         val result =
             runCatching { agentRunner.handleQueued(request) }
                 .onFailure {
@@ -248,14 +243,13 @@ class TaskScheduler(
         return if (chatUnreachable) FireOutcome.ChatUnreachable else FireOutcome.Delivered
     }
 
-    // a task is the case this matters most for: nobody is waiting to be told the chat refused the
-    // answer, and the whole agent run is spent before the first send would say so.
+    // matters most for a task: nobody waits to hear the chat refused, and the whole run is spent before the
+    // first send would say so.
     private suspend fun chatProfileFor(task: ScheduledTask): ChatProfile =
         if (task.chatIsPrivate) ChatProfile.NONE else chatProfiles.of(task.scope.chat)
 
-    // a fire the user ended themselves is not a failure and is not retried: the recurrence moves on as
-    // it would after a delivered one. `/stop` says nothing when it stops a turn — the turn does — so the
-    // notice is left to the fire it stopped.
+    // a fire the user stopped is not a failure and is not retried: the recurrence moves on as after a
+    // delivery. `/stop` itself says nothing, so the notice is left to the stopped fire.
     private suspend fun reportStopped(task: ScheduledTask): Boolean {
         log.info { "task id=${task.id} was stopped by its owner" }
 
@@ -281,26 +275,24 @@ class TaskScheduler(
     private companion object {
         val log = KotlinLogging.logger {}
 
-        // implementation detail, not policy: a 30s tick is cheap (one SQLite query per tick)
-        // and fine-grained enough for the 5-minute minimum task interval
+        // a 30s tick is one cheap query and fine-grained enough for the 5-minute minimum interval
         val POLL_INTERVAL = 30.seconds
 
-        // how late a due task may still run before it counts as missed. an hour covers a restart or a
-        // short outage; a task found later than that is announced as missed rather than run out of place.
+        // how late a due task may still run. an hour covers a restart or short outage; later ones are
+        // announced as missed rather than run out of place.
         val MAX_LATENESS = 60.minutes
 
-        // a failed run delivers nothing, so running it again cannot duplicate output. attempts stay few
-        // and the backoff short (30s, then 60s): a tick processes its due tasks one after another, so a
-        // task that keeps failing holds up everything due behind it.
+        // a failed run delivered nothing, so a retry cannot duplicate output. few attempts and a short
+        // backoff (30s, 60s), since a tick runs its due tasks in sequence and a failing one holds up the
+        // rest.
         const val MAX_ATTEMPTS = 3
         val RETRY_BACKOFF = 30.seconds
     }
 }
 
 /**
- * Whether [requests] hold this task back: it is a follow-up the bot set itself for a person whose request
- * to be left alone in its chat holds at [now], a private chat as much as a group. A task the person asked
- * for is theirs and fires.
+ * Whether [requests] hold this task back: a follow-up the bot set itself for a person whose leave-alone
+ * request in its chat holds at [now], private or group. A task the person asked for fires.
  */
 internal suspend fun ScheduledTask.isHeldBy(requests: LeaveAloneRepository?, now: Instant): Boolean {
     if (!selfInitiated || requests == null) return false
@@ -308,8 +300,8 @@ internal suspend fun ScheduledTask.isHeldBy(requests: LeaveAloneRepository?, now
     return requests.activeUntil(scope.chat, scope.user, now) != null
 }
 
-// a failed run left no history behind, so the retry has to say in the prompt what went wrong. the usual
-// failure is a run that spends its whole step budget researching and never delivers.
+// a failed run left no history, so the retry says in the prompt what went wrong; usually a run that spent its
+// whole budget researching and never delivered.
 private const val RETRY_HINT =
     "An earlier attempt at this task ended without delivering anything. " +
             "Get to the result faster this time: gather only what the task needs, then send it."
@@ -322,7 +314,7 @@ internal fun scheduledAgentRequest(task: ScheduledTask, attempt: Int, chatProfil
         conversationEntry = conversationEntry(task),
     )
 
-// the retry is not stored: history keeps the task as the user wrote it, without the retry hint.
+// history keeps the task as the user wrote it, without the retry hint.
 private fun conversationEntry(task: ScheduledTask): String =
     scheduledTaskBlock(task.title, task.recurrence.display, task.prompt)
 

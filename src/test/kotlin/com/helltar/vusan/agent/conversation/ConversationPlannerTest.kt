@@ -36,7 +36,7 @@ class ConversationPlannerTest {
         tempDir.toFile().deleteRecursively()
     }
 
-    // the count alone is no reason to keep the person waiting on an extra model call before the reply
+    // the count alone is no reason to make the person wait on an extra model call
     @Test
     fun `a history that only outgrew the count is not recapped in front of the reply`() = runBlocking {
         repeat(45) { repository.appendInteraction(SCOPE, exchange(it)) }

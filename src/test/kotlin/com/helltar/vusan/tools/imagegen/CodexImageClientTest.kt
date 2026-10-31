@@ -40,8 +40,8 @@ class CodexImageClientTest {
                     assertEquals("chatgpt.com", request.url.host)
                     assertEquals("/backend-api/codex/images/generations", request.url.encodedPath)
 
-                    // the same cloudflare-whitelisted set the chat traffic uses; a miss here only
-                    // fails once deployed to a non-residential ip.
+                    // the same cloudflare-whitelisted set as chat traffic; a miss fails only once deployed to
+                    // a non-residential ip.
                     assertEquals("codex_cli_rs", request.headers["originator"])
                     assertTrue(request.headers[HttpHeaders.UserAgent].orEmpty().startsWith("codex_cli_rs/"))
                     assertEquals("acct-1", request.headers["ChatGPT-Account-ID"])
@@ -86,10 +86,10 @@ class CodexImageClientTest {
                     assertEquals("make it blue", payload["prompt"]?.jsonPrimitive?.content)
                     assertEquals("gpt-image-2", payload["model"]?.jsonPrimitive?.content)
 
-                    // gpt-image-2 infers the output size from the source, so asking for one is meaningless
+                    // gpt-image-2 infers the output size from the source
                     assertFalse(payload.containsKey("size"))
 
-                    // gpt-image-2 always edits at high input fidelity and takes no such parameter
+                    // gpt-image-2 always edits at high fidelity and takes no such parameter
                     assertFalse(payload.containsKey("input_fidelity"))
                     assertFalse(payload.containsKey("moderation"))
 

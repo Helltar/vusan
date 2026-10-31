@@ -12,16 +12,14 @@ import kotlin.time.toKotlinDuration
 /**
  * Who holds the floor in a group, and for how long one person may keep it.
  *
- * One person and the bot alone, answer after answer with nobody else writing, is what the rest of the
- * chat scrolls past in the morning, and the bot's lines are the bulk of it. So the bot is what stops:
- * once it has answered one person [ANSWERS_PER_STRETCH] times while nobody else wrote in that chat and
- * topic, that person's messages are left unanswered until somebody else writes there or
- * [COOLING_PERIOD] passes without an answer. The last answer of a stretch is marked as such, so the
- * model can round the exchange off itself rather than fall silent mid-sentence.
+ * One person and the bot alone, answer after answer, is what the rest of the chat scrolls past in the
+ * morning, mostly the bot's lines. So the bot stops: after [ANSWERS_PER_STRETCH] answers to one person with
+ * nobody else writing in that chat and topic, that person is left unanswered until someone else writes there
+ * or [COOLING_PERIOD] passes without an answer. The last answer is marked so the model can round the exchange
+ * off instead of falling silent mid-sentence.
  *
- * A line from anybody else hands the floor back to the chat whether or not it was for the bot: while
- * others are writing, the chat is awake and a long exchange is one thread among theirs. A private chat
- * has nobody else to read it and is never limited; the owner named in the configuration never is either.
+ * Anyone else's line hands the floor back, addressed to the bot or not: while others write, a long exchange
+ * is one thread among theirs. A private chat is never limited, nor is the configured owner.
  */
 class ChatFloor(
     private val exempt: (UserRef) -> Boolean = { false },
@@ -39,12 +37,12 @@ class ChatFloor(
     private val RequestContext.floor: Floor
         get() = Floor(chatRef, chat.threadId)
 
-    /** A person's line reached the chat. Anybody but the one holding the floor takes it back for the chat. */
+    /** A person's line reached the chat; anyone but the floor's holder takes it back. */
     fun lineFrom(chat: ChatRef, threadId: String?, speaker: UserRef) {
         stretches.computeIfPresent(Floor(chat, threadId)) { _, stretch -> stretch.takeIf { it.holder == speaker } }
     }
 
-    /** Whether a turn for [context] is answered, counted as one of its sender's stretch when it is. */
+    /** Whether a turn for [context] is answered, counted toward its sender's stretch if so. */
     fun admit(context: RequestContext): Verdict {
         if (context.chat.isPrivate || exempt(context.user)) return Verdict.OPEN
 
@@ -57,8 +55,8 @@ class ChatFloor(
             when {
                 stretch == null -> Stretch(context.user, answered = 1, lastAnsweredAt = now)
 
-                // an unanswered message does not extend the stretch: the hour is counted from the bot's
-                // last line, since that is what the chat has to be free of
+                // an unanswered message does not extend the stretch: the hour runs from the bot's last line,
+                // which is what the chat must be free of
                 stretch.answered >= ANSWERS_PER_STRETCH -> stretch.also { verdict = Verdict.CLOSED }
 
                 else -> {
@@ -73,14 +71,14 @@ class ChatFloor(
     }
 
     /**
-     * A turn [admit] counted ended without an answer — turned away, silent, failed or stopped — so it is
-     * not one of the stretch's answers. Were it the last, the next message is the last answer instead, so
-     * the stretch never closes without the model having rounded it off.
+     * A turn [admit] counted ended without an answer (turned away, silent, failed, stopped), so it does not
+     * count. If it was the last, the next message becomes the last answer, so the stretch never closes
+     * without the model rounding it off.
      */
     fun unanswered(context: RequestContext) {
         if (context.chat.isPrivate || exempt(context.user)) return
 
-        // the time of the bot's last line stays: a turn's place is given back, the hour is not wound back
+        // the bot's last line keeps its time: the place is given back, the hour is not wound back
         stretches.computeIfPresent(context.floor) { _, stretch ->
             if (stretch.holder != context.user) stretch
             else stretch.copy(answered = stretch.answered - 1).takeIf { it.answered > 0 }
@@ -88,8 +86,8 @@ class ChatFloor(
     }
 
     /**
-     * Whether [admit] would turn this person's turn away, without counting anything: for an adapter asking
-     * before it pays for the turn. A private chat never holds a stretch.
+     * Whether [admit] would turn this person away, counting nothing: for an adapter asking before it pays for
+     * the turn. A private chat never holds a stretch.
      */
     fun isClosed(chat: ChatRef, threadId: String?, user: UserRef): Boolean {
         if (exempt(user)) return false
@@ -103,12 +101,12 @@ class ChatFloor(
         Duration.between(lastAnsweredAt, now).toKotlinDuration() >= COOLING_PERIOD
 
     companion object {
-        // a little above the 99th percentile of one person's exchanges with the bot measured over a month
-        // of a live group, where nothing else was written in between; the longer ones were the nights in question
+        // a little above the 99th percentile of one person's uninterrupted exchanges with the bot over a
+        // month of a live group; the longer ones were the nights in question
         const val ANSWERS_PER_STRETCH = 10
 
-        // long enough for the person to have moved on from the conversation, short enough that a quiet
-        // afternoon does not keep someone shut out until the evening
+        // long enough for the person to have moved on, short enough that a quiet afternoon does not shut
+        // someone out until evening
         val COOLING_PERIOD = 1.hours
     }
 }

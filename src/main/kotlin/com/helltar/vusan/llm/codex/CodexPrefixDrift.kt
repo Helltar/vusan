@@ -6,14 +6,12 @@ import kotlinx.serialization.json.JsonElement
 import kotlinx.serialization.json.JsonObject
 
 /**
- * Where a conversation's request stops repeating the one before it.
+ * Where a conversation's request stops repeating the previous one.
  *
- * The provider caches a prefix, so what a call can read back is decided by the first place its request
- * differs from the last one: a request that only appends reads nearly everything, one that changed an
- * early item reads up to that item and pays for the rest. The cached share in the log says how much was
- * lost and nothing about where; this says where, by position and kind, without logging what was said.
- *
- * Only fingerprints are kept, for the conversations seen most recently.
+ * The provider caches a prefix, so a call reads back up to the first difference from the last request: one
+ * that only appends reads nearly everything, one that changed an early item pays for the rest. The log's
+ * cached share says how much was lost, not where; this says where, by position and kind, without logging
+ * content. Only fingerprints are kept, for the most recent conversations.
  */
 internal class CodexPrefixDrift {
 
@@ -23,7 +21,7 @@ internal class CodexPrefixDrift {
                 size > TRACKED_SESSIONS
         }
 
-    /** The part of a call's log line that places [request] against the previous one of [session]. */
+    /** The part of a call's log line placing [request] against [session]'s previous one. */
     fun describe(session: String, request: JsonObject): String {
         val items = request.prefixItems()
         // the element's own hash, not its serialization's: an input image is megabytes of base64
@@ -35,7 +33,7 @@ internal class CodexPrefixDrift {
 
         val same = previous.zip(current).takeWhile { (before, now) -> before == now }.size
 
-        // everything the last request held is still there, so this one only added to it.
+        // everything the last request held is still there, so this one only appended.
         if (same == previous.size) return "$summary drift=[none]"
 
         return "$summary drift=[$same of ${previous.size}: ${items.getOrNull(same)?.kindLabel(same) ?: "shorter"}]"
@@ -47,12 +45,11 @@ internal class CodexPrefixDrift {
     }
 }
 
-// the order the provider reads a request in: the tool list first, then the input, item by item.
+// the provider's reading order: the tool list, then the input item by item.
 private fun JsonObject.prefixItems(): List<JsonElement> =
     listOf(this["tools"] ?: JsonArray(emptyList())) + (this["input"] as? JsonArray).orEmpty()
 
-// what kind of item it is, and for a message the block it opens with — a tag of the prompt's own, never
-// its content.
+// the item's kind and, for a message, the block it opens with: a prompt tag, never content.
 private fun JsonElement.kindLabel(index: Int): String {
     if (index == 0) return "tools"
 

@@ -17,7 +17,7 @@ class RichMessageTextTest {
 
     private val mapper = ObjectMapper()
 
-    // the replied message carries no audio, so the summary must never reach for the api.
+    // the replied message has no audio, so the summary must never call the api.
     private val unusedClient =
         Proxy.newProxyInstance(
             TelegramClient::class.java.classLoader,
@@ -152,7 +152,7 @@ class RichMessageTextTest {
                 extra = """"reply_to_message":{"message_id":9,"date":1,"chat":{"id":42,"type":"private"},"text":"x"},""",
             )
 
-        // the rich message is the replied-to one, so it is nested under `reply_to_message`.
+        // the rich message is the replied-to one, nested under `reply_to_message`.
         val message =
             message(
                 """

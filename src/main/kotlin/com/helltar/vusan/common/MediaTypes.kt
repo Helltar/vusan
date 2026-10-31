@@ -3,23 +3,23 @@ package com.helltar.vusan.common
 import java.net.URLConnection
 import java.util.*
 
-/** The extension of a file name, lowercased and without the dot; empty when it has none. */
+/** A file name's extension, lowercased, without the dot; empty when it has none. */
 val String.fileExtension: String
     get() = substringAfterLast('.', "").lowercase()
 
 /**
- * The media type a file's name says it has, for a file that arrives without one. The platform's own
- * guess misses some, webp among them, and vision would then label the bytes as a jpeg.
+ * The media type a file's name implies, for a file arriving without one. The platform's guess misses some,
+ * webp among them, and vision would then label the bytes jpeg.
  */
 fun mimeTypeOfName(name: String): String? = MIME_BY_EXTENSION[name.fileExtension] ?: URLConnection.guessContentTypeFromName(name)
 
-/** [bytes] inline as a `data:` URL, for an API that takes media in the request instead of fetching it. */
+/** [bytes] as an inline `data:` URL, for APIs taking media in the request. */
 fun dataUrl(contentType: String, bytes: ByteArray): String = "data:$contentType;base64,${Base64.getEncoder().encodeToString(bytes)}"
 
-/** The extension a media type is usually written with, or `null` for one nothing here names. */
+/** The usual extension of a media type, or `null` for one not named here. */
 fun extensionOfMime(mimeType: String): String? = EXTENSION_BY_MIME[mimeType.lowercase()]
 
-/** The image type the first bytes say they are — jpeg, png, gif, webp or bmp — or `null` for anything else. */
+/** The image type the first bytes say (jpeg, png, gif, webp or bmp), or `null`. */
 fun sniffedImageMimeType(bytes: ByteArray): String? {
     if (bytes.size < 12) return null
 
@@ -43,8 +43,8 @@ private val MIME_BY_EXTENSION =
         "wav" to "audio/wav", "flac" to "audio/flac", "aac" to "audio/aac",
     )
 
-// ktor's ContentType.fileExtensions() walks a reverse mime map and answers text/html with "acgi", so the
-// common types are named by hand; a type missing here falls back to whatever the caller does without one
+// ktor's ContentType.fileExtensions() walks a reverse mime map and answers text/html with "acgi", so common
+// types are named by hand
 private val EXTENSION_BY_MIME =
     mapOf(
         "image/jpeg" to "jpg", "image/png" to "png", "image/webp" to "webp", "image/gif" to "gif", "image/bmp" to "bmp",

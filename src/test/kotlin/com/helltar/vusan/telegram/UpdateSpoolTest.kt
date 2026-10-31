@@ -63,8 +63,8 @@ class UpdateSpoolTest {
         assertEquals(listOf(29, 30, 31), spool.drain().map { it.updateId })
     }
 
-    // telegram redelivers what it could not confirm, so the same update can arrive again while its
-    // spooled row is still there. the row is the same update either way.
+    // telegram redelivers what it could not confirm, so an update can arrive again while its row is still
+    // spooled; it is the same update either way.
     @Test
     fun `a redelivered update does not collide with its own spooled row`() = runBlocking {
         spool.record(listOf(update(id = 7, text = "first write")))

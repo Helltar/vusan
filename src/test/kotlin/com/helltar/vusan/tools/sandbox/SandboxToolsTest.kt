@@ -34,7 +34,7 @@ private fun execInfo(status: String = "finished", outcome: String? = EXITED, tru
         (outcome?.let { ""","outcome":$it""" } ?: "") +
         ""","startedAt":"2026-09-13T12:00:00Z","outputEnd":0,"outputTruncated":$truncated,"stdinOpen":false}"""
 
-/** The recorded output from [offset]: everything on the first read, nothing to add on the next. */
+/** The recorded output from [offset]: everything on the first read, nothing new on the next. */
 private fun recordedOutput(text: String, complete: Boolean, offset: Long, exec: String): String {
     val fresh = if (offset == 0L) text else ""
     val end = offset + fresh.length
@@ -45,7 +45,7 @@ private fun recordedOutput(text: String, complete: Boolean, offset: Long, exec: 
 
 private val TURN_START: Instant = Instant.parse("2026-10-10T09:30:00Z")
 
-// named the way the shelf names it, in whatever zone the tests run in
+// named as the shelf names it, in the tests' zone
 private val TURN_DIRECTORY = "turns/" + DateTimeFormatter.ofPattern("yyMMdd-HHmmss").format(TURN_START.atZone(ZoneId.systemDefault()))
 
 private fun directoryListing(names: List<String>): String =
@@ -76,7 +76,7 @@ class SandboxToolsTest {
         files: Map<String, ByteArray> = emptyMap(),
         attached: List<AttachedFile> = emptyList(),
         outbox: BotOutbox = BotOutbox(),
-        // the directories already under `turns/`; none at all is a home that never had one
+        // the directories already under `turns/`; null is a home that never had one
         turnDirectories: List<String>? = null,
         shelf: TurnShelf = TurnShelf(attached, startedAt = TURN_START),
     ): SandboxTools {
@@ -102,7 +102,7 @@ class SandboxToolsTest {
 
                 path.endsWith("/execs") && request.method == HttpMethod.Post -> json(info)
                 path.endsWith("/execs") -> json(execs)
-                // the page carries the exec, so reading a command asks for nothing else
+                // the page carries the exec, so reading a command needs nothing else
                 path.endsWith("/output") ->
                     json(recordedOutput(output, complete, request.url.parameters["offset"]?.toLong() ?: 0, info))
 
@@ -136,7 +136,7 @@ class SandboxToolsTest {
         return SandboxTools(sandbox, outbox, shelf)
     }
 
-    // what another call made this turn is in the sandbox before the command that may want it runs
+    // what another call made this turn is in the sandbox before the command that may need it runs
     @Test
     fun `a command finds what the turn made in the turn's own directory, written once`() = runBlocking {
         val shelf = TurnShelf(startedAt = TURN_START)
@@ -155,7 +155,7 @@ class SandboxToolsTest {
         assertEquals(1, writes.size, "a file already copied is not written again")
     }
 
-    // a turn often picks up the one before it, so the last few stay; the rest would fill a fixed-size home
+    // a turn often picks up the previous one, so the last few stay; the rest would fill a fixed-size home
     @Test
     fun `the first copy of a turn keeps the two turns before it and removes the older ones`() = runBlocking {
         tools(turnDirectories = listOf("260101-090000", "260102-090000", "260103-090000", "260104-090000")).runCommand("ls")
@@ -188,7 +188,7 @@ class SandboxToolsTest {
         assertContains(result, "files were kept")
     }
 
-    // an exit code alone leaves the model guessing; the session limit that caused it is something it can act on
+    // an exit code alone leaves the model guessing; the session limit behind it is actionable
     @Test
     fun `a command killed by a session limit says which limit`() = runBlocking {
         val memory = tools(info = execInfo(outcome = """{"type":"exited","exitCode":137,"reason":"oom_killed"}"""))
@@ -240,7 +240,7 @@ class SandboxToolsTest {
         assertNotEquals(firstPath, writes[1].first)
     }
 
-    // two items of one album may carry the same name, so each gets a number of its own.
+    // two album items may share a name, so each gets its own number.
     @Test
     fun `every attachment of an album is copied, each to its own path`() = runBlocking {
         val album = listOf("photo.jpg", "photo.jpg", "notes.txt").map { name ->
@@ -258,7 +258,7 @@ class SandboxToolsTest {
         assertEquals(4, writes.size)
     }
 
-    // one file over the limit costs the model that file, not the rest of the album.
+    // one oversize file costs the model that file, not the rest of the album.
     @Test
     fun `an oversized attachment is named while the others still arrive`() = runBlocking {
         val album = listOf(
@@ -378,8 +378,8 @@ class SandboxToolsTest {
         assertTrue(outbox.pending.isEmpty())
     }
 
-    // reporting a photo as sent into a chat that drops it leaves the model believing the user can see
-    // something nobody sent, so the refusal has to reach it by name.
+    // reporting a photo as sent into a chat that drops it misleads the model, so the refusal must reach it by
+    // name.
     @Test
     fun `a file kind the chat refuses is named rather than reported as sent`() = runBlocking {
         val outbox = BotOutbox(ChatCapabilities(photos = false))
@@ -411,8 +411,8 @@ class SandboxToolsTest {
         assertContains(result, "$JOB: interrupted")
     }
 
-    // the tools hold one sandbox for the turn they were built for, and ask the server for it once:
-    // nothing is remembered between turns, so a home deleted by retention is simply made again
+    // the tools hold one sandbox per turn and ask the server once; nothing carries over between turns, so a
+    // home deleted by retention is made again
     @Test
     fun `the sandbox is opened once for a whole turn, and again after a reset`() = runBlocking {
         val sandbox = tools()
@@ -426,7 +426,7 @@ class SandboxToolsTest {
         assertEquals(2, creations)
     }
 
-    // the sdk knows the shape of a server-made id, so a made-up one never reaches a request path
+    // the sdk knows a server id's shape, so a made-up one never reaches a request path
     @Test
     fun `a job id the model made up is refused in words it can act on`() = runBlocking {
         assertContains(toolFailure { tools().readSandboxCommand(jobId = "build-1") }, "not an exec id")

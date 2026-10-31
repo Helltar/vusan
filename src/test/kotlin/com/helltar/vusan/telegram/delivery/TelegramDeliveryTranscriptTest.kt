@@ -53,8 +53,8 @@ class TelegramDeliveryTranscriptTest {
         tempDir.toFile().deleteRecursively()
     }
 
-    // a turn queued behind this one reads the transcript as soon as this one ends, before its delivery
-    // has recorded anything — so the plan has to be there already, under the time it appeared.
+    // a queued turn reads the transcript as soon as this one ends, before delivery recorded anything, so the
+    // plan must already be there under its own time.
     @Test
     fun `a plan announced mid-turn is in the transcript from the moment it appeared, and only once`() = runBlocking {
         val groupLog = GroupLogRepository(GroupLogConfig())
@@ -91,8 +91,8 @@ class TelegramDeliveryTranscriptTest {
         assertTrue(groupLog.recent(testChat(2), limit = 10, since = Instant.EPOCH).isEmpty())
     }
 
-    // a send refused after every fallback never reached the chat, so the transcript must not say it did,
-    // and the words that were to ride on it as a caption are sent on their own
+    // a send refused after every fallback never reached the chat, so the transcript must not claim it, and
+    // its caption goes out alone
     @Test
     fun `a send that fails after every fallback leaves no transcript row and sends its caption as text`() = runBlocking {
         val groupLog = GroupLogRepository(GroupLogConfig())
@@ -103,7 +103,7 @@ class TelegramDeliveryTranscriptTest {
             .send(groupMessage(), AgentResult(outputs = outbox.pending, comment = "Here is the chart"))
 
         assertTrue(transcript(groupLog).isEmpty())
-        // the caption's own text fallback inside the photo chain, then the comment sent on its own
+        // the caption's text fallback inside the photo chain, then the comment on its own
         assertEquals(2, client.requests.count { it == "SendMessage" })
     }
 

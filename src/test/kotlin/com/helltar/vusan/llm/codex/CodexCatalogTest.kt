@@ -56,8 +56,8 @@ class CodexCatalogTest {
         assertNull(models.single().supportedServiceTiers)
     }
 
-    // the CLI never sends `ultra` as spelled: it swaps in another effort before building the request, so
-    // a catalog listing it does not make it a value the backend is known to take.
+    // the CLI never sends `ultra` as spelled, swapping in another effort first, so a catalog listing it does
+    // not make it a known backend value.
     @Test
     fun `the catalog keeps efforts above high but not the ultra alias`() = runBlocking {
         val models = fetchCodexModels(
@@ -93,7 +93,7 @@ class CodexCatalogTest {
         )
 
         assertEquals(setOf("priority"), models.first().supportedServiceTiers)
-        // an explicit empty array is the catalog saying this model has no tier beyond the standard one
+        // an explicit empty array means no tier beyond standard
         assertEquals(emptySet(), models.last().supportedServiceTiers)
     }
 
@@ -129,8 +129,8 @@ class CodexCatalogTest {
 
         fetchCodexModels(http, store())
 
-        // `/models` omits every model whose `minimal_client_version` is newer than what we claim, and a
-        // missing model reads as one the plan does not offer. `0.153.0` is what gpt-6-astra requires.
+        // `/models` omits models whose `minimal_client_version` is newer than claimed, which reads as not in
+        // the plan. `0.153.0` is what gpt-6-astra requires.
         assertEquals(codexClientVersion(), version)
         assertTrue(comparable(version.orEmpty()) >= comparable("0.153.0"), version.orEmpty())
     }
@@ -176,15 +176,15 @@ class CodexCatalogTest {
 
         fetchCodexModels(http, store())
 
-        // Cloudflare answers a non-whitelisted originator with 403 from any non-residential IP, so this
-        // has to stay one of the first-party values however tempting a truthful name is.
+        // cloudflare answers a non-whitelisted originator with 403 from any non-residential IP, so this must
+        // stay a first-party value.
         assertEquals("codex_cli_rs", originator)
         assertTrue(userAgent.orEmpty().startsWith("codex_cli_rs/"), userAgent.orEmpty())
         assertTrue(userAgent.orEmpty().endsWith("(Vusan)"), userAgent.orEmpty())
     }
 }
 
-/** Zero-padded so plain string ordering matches version ordering, independently of production code. */
+/** Zero-padded so string order matches version order, independently of production code. */
 private fun comparable(version: String): String = version.split('.').joinToString(".") { it.padStart(5, '0') }
 
 private fun catalogClient(body: String) = Http.createClient(MockEngine { respondJson(body) })

@@ -16,7 +16,7 @@ class ElevenLabsTtsClient(private val http: HttpClient, private val apiKey: Stri
         require(text.isNotBlank()) { "Text must not be blank" }
 
         val response: HttpResponse =
-            // no output_format param: the API default (mp3_44100_128) is a format Telegram voice accepts
+            // no output_format: the default (mp3_44100_128) is one telegram voice accepts
             http.post("https://api.elevenlabs.io/v1/text-to-speech/${config.voiceId}") {
                 header(API_KEY_HEADER, apiKey)
                 contentType(ContentType.Application.Json)

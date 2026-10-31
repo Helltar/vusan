@@ -16,42 +16,43 @@ enum class ServiceTier {
     FAST,
     ULTRAFAST;
 
-    /** The value a request carries, which is also the id the Codex model catalog lists it under. */
+    /** The value a request carries, also the id the Codex model catalog uses. */
     val requestValue: String
         get() = name.lowercase()
 }
 
 /**
- * One model and how to reach it, as a deployment configured it. The chat model, its fallback, the
- * vision model and the addressing model are each one of these, read from their own variable prefix.
+ * One model and how to reach it, as configured. The chat model, its fallback, the vision model and the
+ * addressing model are each one, read from their own variable prefix.
  *
- * [seesImages] and [efforts] are what the vendor said of the model at startup, where it said anything:
- * whether it takes images, and which efforts it takes. A role reads them here instead of asking which
- * provider it is on — `null` is "nobody said", and each provider's runtime fills in its own assumption.
+ * [seesImages] and [efforts] are what the vendor said of the model at startup, so a role reads facts instead
+ * of asking which provider it is on. `null` means nobody said, and each provider's runtime fills in its own
+ * assumption.
  */
 sealed interface LlmProviderConfig {
 
     val model: String
     val reasoningEffort: ReasoningEffort?
 
-    // caps how long a single LLM HTTP call may hang before it fails and the agent surfaces an error
-    // reply, instead of waiting out the engine's quarter-hour default while the bot stays silent.
+    // caps how long one call may hang before the agent replies with an error, instead of the engine's
+    // quarter-hour default.
     val requestTimeout: Duration
     val contextWindowTokens: Long?
     val seesImages: Boolean?
     val efforts: Set<ReasoningEffort>?
 
-    /** The prefix of the variables this was read from, `LLM` or a role's, which a startup error names. */
+    /** The variable prefix this was read from, `LLM` or a role's, for startup errors. */
     val envPrefix: String
 
     /**
-     * This configuration pointed at [model], for a role that runs on the chat provider with a model of
-     * its own. What the vendor said of the chat model is left behind: the role's is another model. A role
-     * plans no history, so it has no window of its own.
+     * This configuration pointed at [model], for a role on the chat provider with its own model. The chat
+     * model's vendor facts are dropped, and a role plans no history, so it has no window.
      */
     fun withModel(model: String, reasoningEffort: ReasoningEffort?, envPrefix: String): LlmProviderConfig
 
-    /** This configuration with calls cut off at [requestTimeout], for a role whose answer is worthless later. */
+    /**
+     * This configuration with calls cut off at [requestTimeout], for a role whose late answer is worthless.
+     */
     fun withRequestTimeout(requestTimeout: Duration): LlmProviderConfig
 
     data class OpenAi(
@@ -85,8 +86,8 @@ sealed interface LlmProviderConfig {
     }
 
     /**
-     * [maxOutputTokens] is what the vendor's model list said at startup, when it answered; a
-     * configuration built without asking leaves it to the runtime's default.
+     * [maxOutputTokens] is what the vendor's model list said at startup; a configuration built without asking
+     * uses the runtime's default.
      */
     data class Anthropic(
         val apiKey: String,
@@ -121,10 +122,9 @@ sealed interface LlmProviderConfig {
     }
 
     /**
-     * Any server that speaks the OpenAI API: a local one, or a vendor without a provider of its own. The
-     * server behind [baseUrl] may serve anything, so [seesImages] is what the server's own model list said
-     * at startup — `true`, `false`, or `null` when it said nothing — and a chat model sees only on a `true`;
-     * without one a chat model here needs a vision model of its own.
+     * Any server speaking the OpenAI API: a local one, or a vendor without its own provider. It may serve
+     * anything, so [seesImages] is what its model list said at startup (`true`, `false` or `null`), and a
+     * chat model sees only on `true`; otherwise it needs a vision model.
      */
     data class OpenAiCompatible(
         val baseUrl: String,
@@ -160,26 +160,24 @@ sealed interface LlmProviderConfig {
     }
 
     /**
-     * A ChatGPT subscription reached through the credentials `codex login` writes, instead of an
-     * API key. There is no `apiKey` here on purpose: the bearer token is resolved per request from
-     * `~/.codex/auth.json`, because it expires and is rotated behind our back. [seesImages] and [efforts]
-     * are the plan's catalog entry for the model, filled in by the preflight.
+     * A ChatGPT subscription through the credentials `codex login` writes. No `apiKey` on purpose: the bearer
+     * token is resolved per request from `~/.codex/auth.json`, since it expires and rotates behind our back.
+     * [seesImages] and [efforts] come from the plan's catalog entry, filled in by the preflight.
      */
     data class Codex(
         override val model: String,
         override val reasoningEffort: ReasoningEffort? = null,
-        // the plan's faster serving tier. it is not free: the same allowance is spent quicker, so it stays
-        // off unless the operator asks for it.
+        // the plan's faster serving tier, which spends the same allowance quicker, so it is opt-in.
         val serviceTier: ServiceTier? = null,
-        // how wordy the catalog says this model should be by default. the backend's own default is a step
-        // wordier than what the CLI asks for, so the catalog's value is sent the way the CLI sends it.
+        // the catalog's default verbosity, sent as the CLI sends it; the backend's own default is a step
+        // wordier.
         val verbosity: String? = null,
-        // whether the plan may also answer a web search, which draws on the same allowance as the turns
+        // whether the plan may also answer web searches, from the same allowance as turns
         val webSearch: Boolean = true,
         override val seesImages: Boolean? = null,
         override val efforts: Set<ReasoningEffort>? = null,
-        // the Codex CLI version reported to the backend, which decides how much of the model catalog it
-        // answers with. `null` claims the newest of this build's floor, the installed CLI and the latest release.
+        // the Codex CLI version reported to the backend, which decides how much of the catalog it returns.
+        // `null` claims the newest of this build's floor, the installed CLI and the latest release.
         val clientVersion: String? = null,
         val authFile: Path = defaultCodexAuthFile(),
         override val requestTimeout: Duration,
@@ -192,7 +190,8 @@ sealed interface LlmProviderConfig {
             requireSane(requestTimeout, contextWindowTokens)
         }
 
-        // the serving tier is the chat's: a role spends the same allowance, and its model may not be served at it
+        // the serving tier is the chat's: a role spends the same allowance, and its model may not be served
+        // at that tier
         override fun withModel(model: String, reasoningEffort: ReasoningEffort?, envPrefix: String): Codex =
             copy(
                 model = model,
@@ -209,8 +208,7 @@ sealed interface LlmProviderConfig {
     }
 
     /**
-     * xAI's API with an xAI key. The window, whether the model sees and which efforts it takes are what its
-     * two model lists said at startup.
+     * xAI's API with an xAI key. The window, vision and efforts are what its two model lists said at startup.
      */
     data class Xai(
         val apiKey: String,
@@ -243,8 +241,8 @@ sealed interface LlmProviderConfig {
     }
 
     /**
-     * DeepSeek's own API with a DeepSeek key. The window, [maxOutputTokens], whether the model sees and
-     * which efforts it takes are what its model list said at startup.
+     * DeepSeek's API with a DeepSeek key. The window, [maxOutputTokens], vision and efforts are what its
+     * model list said at startup.
      */
     data class DeepSeek(
         val apiKey: String,
@@ -279,9 +277,9 @@ sealed interface LlmProviderConfig {
     }
 
     /**
-     * Google's Gemini API with an AI Studio key, the model named as the API lists it (`gemini-3.5-flash-lite`).
-     * The window and [maxOutputTokens] are what its model list said at startup; it says nothing of images,
-     * and of efforts only whether the model thinks.
+     * Google's Gemini API with an AI Studio key, the model named as the API lists it
+     * (`gemini-3.5-flash-lite`). The window and [maxOutputTokens] come from its model list at startup, which
+     * says nothing of images and of efforts only whether the model thinks.
      */
     data class Google(
         val apiKey: String,
@@ -316,8 +314,9 @@ sealed interface LlmProviderConfig {
     }
 
     /**
-     * OpenRouter with an OpenRouter key, the model named as OpenRouter lists it (`anthropic/claude-opus-5.5`).
-     * [maxOutputTokens], like the window, the eyes and the efforts, is what its model list said at startup.
+     * OpenRouter with an OpenRouter key, the model named as OpenRouter lists it
+     * (`anthropic/claude-opus-5.5`). [maxOutputTokens], the window, vision and efforts are what its model
+     * list said at startup.
      */
     data class OpenRouter(
         val apiKey: String,

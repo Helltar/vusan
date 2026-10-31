@@ -20,8 +20,8 @@ import kotlinx.serialization.json.longOrNull
 
 internal const val OPENROUTER_API_BASE_URL = "https://openrouter.ai/api"
 
-// the models listed for this key; not every privacy setting narrows it: a free model the account's
-// privacy settings exclude is still listed, and refused with a 404 on its first request
+// the models listed for this key; a free model the account's privacy settings exclude is still listed, and
+// gets a 404 on its first request
 private const val OPENROUTER_MODELS_URL = "$OPENROUTER_API_BASE_URL/v1/models/user"
 private const val OPENROUTER_MODELS_PAGE = "https://openrouter.ai/models"
 private const val CLAUDE_PREFIX = "anthropic/"
@@ -31,22 +31,20 @@ private const val XAI_PREFIX = "x-ai/"
 private val log = KotlinLogging.logger("ModelPreflight")
 
 /**
- * OpenRouter, one key for every vendor's models, reached through the two protocols the clients here
- * already speak, chosen by the model:
+ * OpenRouter: one key for every vendor's models, over the two protocols the clients here already speak,
+ * chosen by the model:
  *
- * - A Claude model (`anthropic/…`) goes to OpenRouter's Messages API, through the Anthropic client as it
- *   is: adaptive thinking with its signed blocks replayed through the tool loop, the effort as
- *   `output_config.effort`, and the two cache breakpoints, the system one kept an hour. On Chat
- *   Completions Claude loses its thinking after a tool call and the effort goes unread.
- * - Every other model goes to its Responses API: stateless, with the encrypted reasoning replayed, and on
- *   the GPT-5.6 generation the developer block's breakpoint as every upstream takes it: no implicit mode
- *   named, which OpenRouter refuses as a value, and no twelve-hour lifetime, which Azure refuses. It streams, since OpenRouter answers 200 as soon as an upstream takes
- *   the request: a failure after that is an error event in a stream, where a plain call would get a body
- *   holding nothing but the error.
+ * - A Claude model (`anthropic/…`) goes to the Messages API through the Anthropic client as is: adaptive
+ *   thinking with signed blocks replayed through the tool loop, the effort as `output_config.effort`, and two
+ *   cache breakpoints, the system one kept an hour. On Chat Completions Claude loses its thinking after a
+ *   tool call and the effort goes unread.
+ * - Every other model goes to the Responses API: stateless, with encrypted reasoning replayed, and on GPT-5.6
+ *   the developer block's breakpoint as every upstream takes it (no `implicit` mode, which OpenRouter
+ *   refuses, and no twelve-hour lifetime, which Azure refuses). It streams, since OpenRouter answers 200 as
+ *   soon as an upstream takes the request, and a later failure is an error event in the stream.
  *
- * Either way the conversation's cache key goes as `session_id` too, which keeps the conversation on the
- * upstream holding its cached prefix; without it OpenRouter routes by a hash of the opening messages,
- * which the history window moves.
+ * Either way the cache key also goes as `session_id`, keeping the conversation on the upstream holding its
+ * prefix; otherwise OpenRouter routes by a hash of the opening messages, which the history window moves.
  */
 internal fun openRouterRuntime(config: LlmProviderConfig.OpenRouter, http: HttpClient?): LlmRuntime {
     val id = config.model.trim()
@@ -65,13 +63,13 @@ internal fun openRouterRuntime(config: LlmProviderConfig.OpenRouter, http: HttpC
             maxOutputTokens = config.maxOutputTokens ?: ANTHROPIC_MAX_OUTPUT.takeIf { claude },
             seesImages = config.seesImages == true,
             efforts = config.efforts,
-            // another vendor's model takes `additional_tools` too, but openrouter folds the item into its tool list,
-            // which costs the cache a widened list does (gemini, grok and deepseek on 2026-10-24), so the rest list
-            // what was offered up front
+            // other vendors take `additional_tools` too, but openrouter folds the item into the tool list,
+            // costing the cache what a widened list does (gemini, grok, deepseek on 2026-10-24), so they list
+            // offered tools up front
             offersToolsMidConversation = if (claude) claudeOffersToolsMidConversation(id) else id.startsWith(OPENAI_PREFIX),
-            // grok, which only xai serves there, reads back only what a request repeats: measured on 2026-10-27 on
-            // grok-4.7, a rebuilt turn read xai's own 1152-token prefix and an appended one the whole last request.
-            // the other vendors measured either cache the longest prefix or are served by upstreams that differ
+            // grok, served only by xai there, reads back only what a request repeats: measured 2026-10-27 on
+            // grok-4.7, a rebuilt turn read xai's own 1152-token prefix, an appended one the whole last
+            // request. the other vendors measured cache the longest prefix or have differing upstreams
             cachesOnlyRepeatedPrefix = id.startsWith(XAI_PREFIX),
         )
 
@@ -106,11 +104,10 @@ internal fun openRouterRuntime(config: LlmProviderConfig.OpenRouter, http: HttpC
 }
 
 /**
- * OpenRouter's list of the models this key may use states all a model holds and takes: its window and
- * output ceiling, whether it sees, whether it calls tools and which efforts it takes, `none` among them
- * where thinking can be turned off. A model it leaves out would be refused on every turn, so it stops the
- * startup, as does a model that calls no tools or an effort it does not list. A routing variant
- * (`:nitro`) the list may not carry is read as its model.
+ * OpenRouter's list of the models this key may use states the window, output ceiling, vision, tool calling
+ * and efforts (`none` where thinking can be turned off). A model it omits would be refused every turn, so it
+ * stops startup, as does a model without tool calls or an unlisted effort. A routing variant (`:nitro`) the
+ * list may lack is read as its model.
  */
 internal suspend fun openRouterPreflight(http: HttpClient, config: LlmProviderConfig.OpenRouter): LlmProviderConfig.OpenRouter {
     val model = config.model.trim()
@@ -130,7 +127,7 @@ internal suspend fun openRouterPreflight(http: HttpClient, config: LlmProviderCo
 
     val claude = model.startsWith(CLAUDE_PREFIX)
 
-    // claude turns thinking off by an effort the messages api does not have, so none is left to openai's protocol
+    // claude turns thinking off by an effort the messages api lacks, so `none` stays with openai's protocol
     val efforts =
         (((facts["reasoning"] as? JsonObject)?.get("supported_efforts")) as? JsonArray).orEmpty()
             .mapNotNull { level -> ReasoningEffort.entries.firstOrNull { it.requestValue == (level as? JsonPrimitive)?.contentOrNull } }

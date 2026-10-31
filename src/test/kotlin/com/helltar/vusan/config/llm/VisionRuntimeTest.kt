@@ -42,8 +42,8 @@ class VisionRuntimeTest {
         assertNull(resolveVisionRuntime(config = null, chat = codexChat(seesImages = false)))
     }
 
-    // the server behind LLM_BASE_URL can serve anything, so a compatible chat model sees only when its
-    // server's own model list said so at startup, as deepseek's does of flash
+    // LLM_BASE_URL may serve anything, so a compatible chat model sees only when its server's list said so at
+    // startup, as deepseek's does of flash
     @Test
     fun `an openai-compatible chat model sees only on its server's word`() {
         assertNull(resolveVisionRuntime(config = null, chat = compatibleChat()))
@@ -74,7 +74,7 @@ class VisionRuntimeTest {
         assertEquals(true, vision?.ownClient)
     }
 
-    // a vision model the vendor itself says is blind would fail every look, so the startup says so instead
+    // a vision model its vendor calls blind would fail every look, so startup says so instead
     @Test
     fun `a vision model its vendor says takes no images stops the startup`() {
         val textOnly =
@@ -94,7 +94,7 @@ class VisionRuntimeTest {
         assertFailsWith<IllegalArgumentException> { resolveVisionRuntime(config = codexTextOnly, chat = compatibleChat()) }
     }
 
-    // a model named for the role is taken at its word about seeing when nothing says otherwise
+    // a model named for the role is trusted to see when nothing says otherwise
     @Test
     fun `a compatible model named for vision is assumed to see`() {
         val vision =
@@ -112,8 +112,7 @@ class VisionRuntimeTest {
         assertTrue(vision?.model?.seesImages == true)
     }
 
-    // the chat runtime handed in carries whatever wraps the chat client — the fallback, say — and that
-    // wrapper is what vision rides on, not the bare client
+    // vision rides on the chat runtime's wrapper (the fallback, say), not the bare client
     @Test
     fun `vision on the chat model uses the client it was handed`() {
         val wrapped = FakeLlmClient()
@@ -125,8 +124,8 @@ class VisionRuntimeTest {
         assertFalse(vision?.ownClient == true)
     }
 
-    // a picture is looked at once, so it is worth no cache write; on the chat model a look keeps the model's
-    // own effort rather than the one tuned for turns, and a vision model of its own gets the one set for it
+    // a picture is looked at once, so no cache write; on the chat model a look keeps the model's own effort,
+    // and a dedicated vision model gets its configured one
     @Test
     fun `a look is cached nowhere and carries the effort set for vision`() {
         val chat = resolveLlmRuntime(LlmProviderConfig.OpenAi(apiKey = "key", model = "gpt-5.6-sol", reasoningEffort = ReasoningEffort.XHIGH, requestTimeout = TIMEOUT))

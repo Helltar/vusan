@@ -57,7 +57,7 @@ class ChatFloorTest {
     fun `the floor reopens once the bot has been quiet for the cooling period`() {
         exhaust(talker)
 
-        // unanswered messages do not count as the bot speaking, so they do not push the hour back
+        // unanswered messages are not the bot speaking, so they do not push the hour back
         now += (ChatFloor.COOLING_PERIOD - 1.minutes).toJavaDuration()
         assertEquals(Verdict.CLOSED, floor.admit(talker))
 
@@ -108,7 +108,7 @@ class ChatFloorTest {
         assertFalse(floor.isClosed(talker))
         assertEquals(Verdict.OPEN, floor.admit(talker))
 
-        // and a line in the other topic reopens nothing here
+        // a line in the other topic reopens nothing here
         floor.lineFrom(testChat(GROUP), threadId = null, speaker = testUser(OTHER))
         assertTrue(floor.isClosed(inTopic))
     }

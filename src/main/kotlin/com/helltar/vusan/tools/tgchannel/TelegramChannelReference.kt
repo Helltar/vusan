@@ -6,8 +6,8 @@ import java.net.URI
 internal data class TelegramChannelReference(val username: String) {
 
     /**
-     * The public web preview, optionally one batch further back ([before], the id Telegram's own
-     * "load more" link points at) and optionally restricted to an in-channel search ([query]).
+     * The public web preview, optionally one batch further back ([before], the id of telegram's "load more"
+     * link) and restricted to an in-channel search ([query]).
      */
     fun webPreviewUrl(before: Long? = null, query: String = ""): String =
         buildString {

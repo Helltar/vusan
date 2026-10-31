@@ -11,10 +11,10 @@ import java.time.format.DateTimeFormatter
 /**
  * Everything the model is shown for this turn, request last.
  *
- * All of it rides in one user-role message, including the clock and the sticker index. A second
- * system message would read as a higher-priority instruction — wrong for context assembled out of
- * what people sent — and OpenRouter hands the text of one inside the conversation to Claude as the
- * assistant's own words, so the Anthropic client lifts every system message into its system field.
+ * All in one user-role message, clock and sticker index included. A second system message would read as a
+ * higher-priority instruction, wrong for context built from what people sent, and OpenRouter hands one inside
+ * the conversation to Claude as the assistant's own words, so the Anthropic client lifts every system message
+ * into its system field.
  */
 internal fun currentTurnPrompt(
     userInput: String,
@@ -36,11 +36,11 @@ internal fun currentTurnPrompt(
         memoryBlock("user_memory", userMemory)?.let(::add)
         memoryBlock("group_memory", chatMemory)?.let(::add)
         diary?.takeIf { it.isNotBlank() }?.let { add(xmlBlock("diary", it)) }
-        // it changes with what this conversation has already loaded, so it cannot live in the system
-        // block: that block is the one prefix every request of the deployment shares.
+        // it changes with what the conversation loaded, so it cannot live in the system block, the prefix
+        // every request shares.
         toolGroups?.takeIf { it.isNotBlank() }?.let { add(xmlBlock("tool_groups", it)) }
-        // only while the primary provider is out, so the block costs nothing on an ordinary turn and the
-        // system prompt's own model id stays the answer whenever it is the true one.
+        // only while the primary is out, so it costs nothing on ordinary turns and the system prompt's model
+        // id stays the answer when true.
         fallbackModel?.takeIf { it.isNotBlank() }?.let { add(xmlBlock("current_model", it)) }
         stickerCatalog?.takeIf { it.isNotBlank() }?.let(::add)
         recentChat?.takeIf { it.isNotBlank() }?.let { add(xmlBlock("recent_chat", it)) }
@@ -57,9 +57,8 @@ private fun currentTimeBlock(): String {
     return xmlBlock("current_time", "${LOCAL_DATE_TIME.format(now)} ${timezone.id} (${DAY_OF_WEEK.format(now)})")
 }
 
-// renders memory as `#id content` lines so the model can reference an id when calling `forgetMemory`.
-// an entry is written from what somebody said, and `group_memory` is editable by every member of the
-// chat, so it is quoted text and gets the same defusing.
+// memory as `#id content` lines, so the model can reference an id in `forgetMemory`. entries come from what
+// people said, and any member can edit `group_memory`, so it is defused as quoted text.
 private fun memoryBlock(
     tag: String,
     entries: List<MemoryEntry>,

@@ -16,15 +16,15 @@ import java.time.format.DateTimeFormatter
 import kotlin.time.Duration
 
 /**
- * Reads a public channel's posts, optionally only those inside a time window or matching a search.
+ * Reads a public channel's posts, optionally within a time window or matching a search.
  *
- * One preview page carries twenty posts, so anything wider walks `?before=` backward: with a window
- * until a page ends older than the cutoff, otherwise until enough posts are in hand or Telegram stops
- * offering an earlier batch. A day of a very busy channel is about five requests.
+ * A preview page holds twenty posts, so wider reads walk `?before=` backward: with a window until a page ends
+ * before the cutoff, otherwise until enough posts are in or telegram offers no earlier batch. A day of a very
+ * busy channel is about five requests.
  *
- * Vision is spent per **post**, never per image: a post is described whole or not at all, because half
- * an album says less than none of it. A meme channel where the picture *is* the post costs a handful
- * of calls a day, while a news channel whose text already carries the story is left alone.
+ * Vision is spent per **post**, never per image: half an album says less than none. A meme channel where the
+ * picture *is* the post costs a handful of calls a day; a news channel whose text carries the story is left
+ * alone.
  */
 class TelegramChannelReader(
     private val client: TelegramChannelClient,
@@ -77,7 +77,7 @@ class TelegramChannelReader(
         val posts: List<TelegramChannelPost>,
         val newestSeen: Instant?,
         val previewAvailable: Boolean,
-        /** True when the walk stopped on a cap with the window not yet fully covered. */
+        /** True when the walk stopped on a cap before covering the window. */
         val truncated: Boolean,
     )
 
@@ -133,8 +133,8 @@ class TelegramChannelReader(
             posts = collected.take(limit),
             newestSeen = newestSeen,
             previewAvailable = true,
-            // the window is only fully covered once the walk saw a post older than it, or ran out of
-            // channel; stopping on the page or post cap leaves an unread earlier part.
+            // covered only once the walk saw a post older than the window or reached the channel's start;
+            // stopping on a cap leaves an earlier part unread.
             truncated = cutoff != null && !passedCutoff && !reachedStart,
         )
     }
@@ -236,8 +236,8 @@ class TelegramChannelReader(
             appendLine()
         }
 
-    // the count above the block covers every post the walk kept, while the block under it may hold
-    // fewer; labeling it keeps "how many did they post" off a tally of visible entries.
+    // the count covers every post kept while the block may hold fewer; labeling it keeps "how many did they
+    // post" off a tally of visible entries.
     private fun header(
         reference: TelegramChannelReference,
         walk: Walk,
@@ -317,13 +317,13 @@ class TelegramChannelReader(
         const val DEFAULT_POSTS = 12
         const val MAX_POSTS = 200
 
-        // Telegram caps message text at 4096, and the longest posts measured on real channels sit
-        // near 2000, so this leaves ordinary posts whole and trims only a rare longread.
+        // telegram caps text at 4096, and the longest posts measured sit near 2000, so this trims only a rare
+        // longread.
         const val MAX_POST_TEXT_CHARS = 2_500
 
-        // a day of the busiest channels measured renders at ~32k with metadata, so a full day always
-        // comes back whole and only a multi-day window starts dropping its oldest posts. The run's
-        // own tool budget in `AgentFactory` is what bounds this against the model's context.
+        // a day of the busiest channels measured renders at ~32k with metadata, so a full day comes back
+        // whole; only multi-day windows drop their oldest posts. the run's tool budget in `AgentFactory`
+        // bounds this against the context.
         const val MAX_OUTPUT_CHARS = 48_000
 
         const val MAX_IMAGES_TO_DESCRIBE = 24
@@ -339,15 +339,13 @@ class TelegramChannelReader(
     }
 }
 
-// below this a caption cannot be carrying the post on its own, so the image is the content and
-// describing it buys the most.
+// a shorter caption cannot carry the post alone, so the image is the content and describing it pays most.
 private const val TEXT_CARRIES_POST_CHARS = 120
 
 /**
- * Whole posts, in reading order, until [allowance] images are spoken for. A post is taken with all of
- * its images or not at all, so an album is never described half way. When everything fits, that is
- * everything; when it does not, posts whose text is too short to be carrying them come first, then
- * the ones the channel's own readers reacted to most.
+ * Whole posts in reading order until [allowance] images are spoken for; a post comes with all its images or
+ * not at all. When not everything fits, posts with text too short to carry them come first, then the
+ * most-reacted ones.
  */
 internal fun selectPostsForVision(
     posts: List<TelegramChannelPost>,

@@ -131,7 +131,7 @@ class VisionToolsTest {
         assertTrue("<audio_transcript>" !in result, "expected no transcript block without transcription")
     }
 
-    // a telegram gif carries no audio stream, so extraction there can only ever fail.
+    // a telegram gif has no audio stream, so extraction can only fail.
     @Test
     fun `describeVideo skips the audio pass for a gif`() = runBlocking {
         val executor = FakeLlmClient()
@@ -237,7 +237,7 @@ class VisionToolsTest {
         assertContains(executor.promptText, "only the preview frame")
     }
 
-    // a video of any length, known or not, pays for the same first minutes of speech
+    // a video of any length pays for the same first minutes of speech
     @Test
     fun `describeVideo cuts the sound to the transcriber's budget before it is transcribed`() = runBlocking {
         val sampler = FakeVideoSampler()

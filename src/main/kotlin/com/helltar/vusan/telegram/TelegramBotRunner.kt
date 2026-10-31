@@ -96,7 +96,7 @@ internal class TelegramBotRunner(
     private val groupLog: GroupLogRepository? = null,
     private val polls: PollRegistry? = null,
     fallbackInUse: () -> FallbackInUse? = { null },
-    // answers a group message nobody tagged the bot in when it is meant for it all the same; `null` is off.
+    // answers untagged group messages that are meant for the bot anyway; `null` is off.
     private val ambient: AmbientAddressing? = null,
     private val sandbox: Boolean = false,
     private val floor: ChatFloor = ChatFloor(),
@@ -123,20 +123,19 @@ internal class TelegramBotRunner(
         if (accessPolicy.banned.isNotEmpty()) {
             log.info { "Banned: ids=[${accessPolicy.banned.sorted().joinToString(", ")}]" }
 
-            // an id on both lists is a config mistake worth naming: the ban wins, silently.
+            // an id on both lists is a config mistake: the ban wins, so name it.
             accessPolicy.contradictory.takeIf { it.isNotEmpty() }?.let {
                 log.warn { "ids in both ALLOWED_IDS and BANNED_IDS stay banned: ${it.sorted()}" }
             }
         }
 
-        // the long polling app runs on its own okhttp threads; updates are funneled into a channel so
-        // dispatch (and album aggregation) happens inside the coroutine world.
+        // long polling runs on okhttp threads; a channel moves updates into coroutines for dispatch and album
+        // aggregation.
         val updates = Channel<Update>(Channel.UNLIMITED)
 
-        // the library's own defaults, but for the backoff: its default, fifteen minutes into an outage, waits
-        // fifteen minutes between attempts, so the bot stays deaf up to that long after telegram comes back.
-        // this one never gives up and caps the wait low enough that a timed-out poll plus the wait still beats
-        // the heartbeat before it goes stale.
+        // library defaults except the backoff, whose default reaches fifteen minutes between attempts and
+        // keeps the bot deaf that long after telegram is back. this one never gives up and stays short enough
+        // that a timed-out poll plus the wait beats the heartbeat's staleness limit.
         val longPolling =
             TelegramBotsLongPollingApplication(
                 ::ObjectMapper,
@@ -149,12 +148,11 @@ internal class TelegramBotRunner(
                     .build()
             }
 
-        // the generator is where the heartbeat hooks in, because the session calls it once per poll
-        // cycle before every request. the consumer below would not do: the session skips it entirely
-        // on an empty batch, so a bot nobody writes to would look dead within minutes.
-        // registering sends deleteWebhook, the second request of a start. getMe has just proved the token,
-        // so a failure here is telegram's state whatever the session wrapped it in, and is waited out. a
-        // session whose start failed stays registered, and registering it again would be refused.
+        // the heartbeat hooks into the generator, which the session calls before every poll: the consumer is
+        // skipped on an empty batch, so a quiet bot would look dead.
+        // getMe has already proved the token, so a deleteWebhook failure here is telegram's and is waited
+        // out. a session whose start failed stays registered and would be refused a second time, hence the
+        // unregister.
         waitingOutTelegram("deleteWebhook", isOutage = { it.isTelegramUnavailable() || it is TelegramApiErrorResponseException }) {
             runInterruptible(Dispatchers.IO) {
                 runCatching {
@@ -163,10 +161,9 @@ internal class TelegramBotRunner(
                         { TelegramUrl.DEFAULT_URL },
                         heartbeat.beatOn(DefaultGetUpdatesGenerator()),
                     ) { batch ->
-                        // blocking on purpose, on the session's own poller thread: the batch has to be on
-                        // disk before this returns, because returning is what lets the next request confirm
-                        // it to Telegram. the session polls again only after the callback finishes, so
-                        // nothing else waits.
+                        // blocking on purpose: the batch must be on disk before returning, because returning
+                        // lets the next request confirm it to telegram. the session polls again only after
+                        // this, so nothing else waits.
                         runBlocking { spool.record(batch) }
 
                         batch.forEach { updates.trySend(it) }
@@ -175,16 +172,15 @@ internal class TelegramBotRunner(
             }
         }
 
-        // handlers inherit this dispatcher; without it, they would run on the single-threaded
-        // event loop of `suspend main` instead of parallelizing across cores.
+        // handlers inherit this dispatcher instead of the single-threaded event loop of `suspend main`.
         return scope.launch(Dispatchers.Default) {
             heartbeat.start()
 
             client.publishCommandMenu()
 
-            // whatever the last run was handed and never got to. these go in behind anything the first
-            // poll already delivered, which only decides the order two answers arrive in — a message
-            // answered from both paths is still claimed once, by `AnsweredMessages`.
+            // what the last run received and never handled. it queues behind the first poll, which only
+            // affects answer order: a message seen on both paths is still claimed once, by
+            // `AnsweredMessages`.
             spool.drain().forEach { updates.trySend(it) }
 
             try {
@@ -198,16 +194,15 @@ internal class TelegramBotRunner(
         }
     }
 
-    // opt-in only for select's onTimeout clause, experimental but long-stable.
+    // for select's onTimeout, experimental but long-stable.
     @OptIn(ExperimentalCoroutinesApi::class)
     private suspend fun processUpdates(updates: ReceiveChannel<Update>, profile: BotProfile) = supervisorScope {
-        // each album, and each person's run of lines, waits for a quiet period of its own: a deployment with
-        // a few busy chats never has the whole stream go quiet, and a batch judged by that would wait on
-        // everybody else's messages
+        // every album and every person's run of lines waits for its own quiet period: in a deployment with a
+        // few busy chats the whole stream never goes quiet.
         val pending = linkedMapOf<String, PendingBatch>()
 
-        // lines one person sent in a row are one message to the agent when any of them calls the bot. a run
-        // nobody addressed is handled line by line, as it was, so ambient addressing judges what it always did
+        // a run of lines is one message to the agent when any of them calls the bot. an unaddressed run is
+        // handled line by line, so ambient addressing judges single lines as before.
         fun flushLines(parts: List<Message>) {
             if (parts.size > 1 && parts.any { shouldHandle(it, profile.userId, profile.usernames) })
                 launchHandling(parts.last()) { handleTextBatch(parts, profile) }
@@ -235,9 +230,8 @@ internal class TelegramBotRunner(
                 if (pending.isEmpty()) {
                     updates.receiveCatching().getOrNull() ?: break
                 } else {
-                    // select resolves receive vs timeout atomically; canceling a suspended receive
-                    // (as withTimeout would) can drop an element already taken from the channel.
-                    // null on both the earliest deadline and channel close.
+                    // select resolves receive vs timeout atomically; canceling a suspended receive (as
+                    // withTimeout would) can drop an element already taken. null on both timeout and close.
                     val wait = (pending.values.minOf { it.dueAtNanos } - System.nanoTime()).nanoseconds
 
                     select {
@@ -251,9 +245,8 @@ internal class TelegramBotRunner(
                     }
                 }
 
-            // out of the queue and into this run's hands. an album part is settled here too, while it
-            // still waits for its siblings: a turn interrupted mid-flight is not replayed either way,
-            // and the spool only ever promises to carry work nobody has started.
+            // settled here, album parts included: an interrupted turn is never replayed, and the spool only
+            // carries work nobody started.
             spool.settle(update.updateId)
 
             val pollAnswer = update.pollAnswer
@@ -293,8 +286,7 @@ internal class TelegramBotRunner(
 
             val message = update.message ?: continue
 
-            // ahead of the allowlist: in a group the bot answers only some people in, the others' lines are
-            // still what shows the chat is awake
+            // ahead of the allowlist: lines from people the bot does not answer still show the chat is awake.
             message.reportToFloor()
 
             if (!message.passesAllowlist(profile)) continue
@@ -302,7 +294,7 @@ internal class TelegramBotRunner(
             recordGroupLog(message)
             learnSticker(message)
 
-            // whatever else one person sends comes after the lines of theirs still waiting
+            // anything else from this person comes after their pending lines.
             val linesKey = message.linesKeyOrNull()
             val joinsLines = linesKey != null && message.joinsTextBatch()
 
@@ -340,8 +332,7 @@ internal class TelegramBotRunner(
         flush(pending.values)
     }
 
-    // the parts of one gallery, or one person's run of lines, seen so far, and when the batch counts as
-    // complete unless another part arrives
+    // the parts of one album or one run of lines so far, and when the batch counts as complete.
     private class PendingBatch(val kind: Kind) {
         val parts = mutableListOf<Message>()
         var dueAtNanos = 0L
@@ -349,31 +340,28 @@ internal class TelegramBotRunner(
         enum class Kind { ALBUM, LINES }
     }
 
-    // one person's lines in one chat and topic; a message without a sender of its own has no run to join
+    // one person's lines in one chat and topic; a message without a sender of its own joins no run.
     private fun Message.linesKeyOrNull(): String? =
         senderIdOrNull()?.let { "lines:$chatIdLong:${forumTopicIdOrNull ?: 0}:$it" }
 
-    // the group transcript has to be recorded before [shouldHandle] gets a say, because the messages
-    // worth recapping later are exactly the ones nobody addressed to the bot. this also sits ahead of
-    // album buffering so each part of a gallery is logged in its own right.
+    // recorded before [shouldHandle], because the messages worth recapping are the ones nobody addressed to
+    // the bot, and before album buffering so each part is logged.
     private fun CoroutineScope.recordGroupLog(message: Message, edited: Boolean = false) {
         val repository = groupLog ?: return
-        // an ephemeral command was said to the bot alone, so it is nothing the chat heard
+        // an ephemeral command was said to the bot alone, not to the chat.
         if (message.isPrivateChat || message.isEphemeral) return
 
         val entry = message.toGroupLogEntry() ?: return
 
-        // an edit rewrites what the chat says: left alone, a later recap keeps quoting text that is no
-        // longer there. the guards and the mapping above are the same either way, so only the sink differs.
+        // an edit changes what the chat said; otherwise a later recap keeps quoting text that is gone.
         launchHandling(message) {
             if (edited) repository.recordEdit(entry) else repository.record(entry)
         }
     }
 
-    // every person's line in a group, to the bot or not and allowed or not: a line from anybody but the one
-    // the bot has been answering hands the floor back to the chat. the shared accounts — an anonymous admin,
-    // a linked channel, another bot — are not a person who woke up, so they hand nothing back. a chat with
-    // no stretch in it costs one map lookup.
+    // every person's group line, addressed or not, allowed or not: anyone but the one the bot has been
+    // answering hands the floor back. shared accounts (an anonymous admin, a linked channel, another bot)
+    // hand nothing back.
     private fun Message.reportToFloor() {
         if (isPrivateChat || senderChat != null) return
         val sender = from?.takeUnless { it.isBot } ?: return
@@ -381,9 +369,8 @@ internal class TelegramBotRunner(
         floor.lineFrom(telegramChat(chatIdLong), forumTopicIdOrNull?.toString(), telegramUser(sender.id))
     }
 
-    // a vote is not a message: it reaches no dispatch path, appears in no chat, and is answered by
-    // nobody. without this the bot asks a question in a group and never learns what anyone said back,
-    // so it goes into the transcript the same way a person's message does.
+    // a vote reaches no dispatch path, so without this the bot would ask a question in a group and never
+    // learn the answers. it goes into the transcript like a message.
     private fun CoroutineScope.recordPollAnswer(answer: PollAnswer) {
         val repository = groupLog ?: return
         val registry = polls ?: return
@@ -400,9 +387,8 @@ internal class TelegramBotRunner(
         }
     }
 
-    // a sticker teaches the bot the set it came from even when the message is not addressed to the bot:
-    // in a group, stickers people throw at each other are the only view it gets of what they actually use.
-    // only the set is recorded, never who sent it or what else the message said.
+    // learned even from messages not addressed to the bot: in a group, the stickers people send each other
+    // are the only view of what they use. only the set is recorded, never who sent it.
     private fun CoroutineScope.learnSticker(message: Message) {
         val catalog = stickerCatalog ?: return
         val sticker = message.sticker ?: return
@@ -437,9 +423,8 @@ internal class TelegramBotRunner(
     private suspend fun dispatch(message: Message, profile: BotProfile) {
         message.logIncoming()
 
-        // a reply to one of the bot's ephemeral answers is ephemeral itself, and the agent answers in the
-        // open: only the task menu is shown for one person's eyes, anything else is asked to be said
-        // aloud. an ephemeral message is always a person's own, so the note has somebody to reach.
+        // a reply to an ephemeral answer is ephemeral too, but the agent answers in the open: only the task
+        // menu is private, anything else is asked to be said aloud.
         if (message.isEphemeral && message.messageTextOrNull()?.leadingBotCommandOrNull() == null) {
             runCatching { delivery.sendForSenderOnly(message, Messages.of(message.language).ephemeralChatReply) }
                 .onFailure { error ->
@@ -456,7 +441,7 @@ internal class TelegramBotRunner(
             message.sticker != null -> handleStickerUpdate(message, profile)
             message.voice != null -> handleTranscribableUpdate(message, message.voice.toAudioInput(), profile, "voice")
             message.audio != null -> handleTranscribableUpdate(message, message.audio.toAudioInput(), profile, "audio")
-            // GIFs carry both `animation` and `document`, so animation has to win over document here.
+            // GIFs carry both `animation` and `document`, so animation wins.
             message.animation != null ->
                 handleMediaUpdate(message, profile, inputKind = "animation", noCaptionPrompt = ANIMATION_ONLY_PROMPT)
 
@@ -481,10 +466,9 @@ internal class TelegramBotRunner(
         }
     }
 
-    // several plain texts one person sent in a row — a message the client split at its length cap, a thought
-    // typed as several messages — answered as one, under the last of them. the first part that calls the
-    // bot is what addressing reads, and the parts before the anchor are claimed with it, so a redelivery of
-    // any of them starts nothing
+    // plain texts one person sent in a row (a message split at the length cap, a thought typed in pieces) are
+    // answered as one, under the last. addressing reads the first part that calls the bot, and the parts
+    // before the anchor are claimed with it, so a redelivery of any starts nothing.
     private suspend fun handleTextBatch(parts: List<Message>, botProfile: BotProfile) {
         val anchor = parts.last()
         val addressedPart = parts.first { shouldHandle(it, botProfile.userId, botProfile.usernames) }
@@ -544,7 +528,7 @@ internal class TelegramBotRunner(
     ) {
         val transcriber = voiceTranscriber
 
-        // the message is already claimed, so the person who addressed the bot gets told, not silence
+        // the message is already claimed, so tell the person instead of staying silent.
         if (transcriber == null) {
             log.info { "$inputKind message cannot be heard: STT not configured (chat=${message.chatIdLong} user=${message.senderIdOrNull()})" }
             delivery.sendReply(message, Messages.of(message.language).voiceUnsupportedReply)
@@ -587,7 +571,7 @@ internal class TelegramBotRunner(
         return if (trimmedCaption.isEmpty()) wrapped else "$trimmedCaption\n\n$wrapped"
     }
 
-    // a rich message has no `text`, so the agent gets its flattened markdown instead.
+    // a rich message has no `text`; the agent gets its flattened markdown.
     private suspend fun handleRichMessageUpdate(message: Message, botProfile: BotProfile) {
         if (!message.isAcceptedForTurn(botProfile)) return
 
@@ -632,8 +616,8 @@ internal class TelegramBotRunner(
         )
     }
 
-    // every inspectable item travels with the turn, but only image editing takes them all; the model is
-    // told which tools see the rest so it does not claim to have looked at every item.
+    // every inspectable item travels with the turn, but only image editing takes them all; the model is told
+    // which tools see the rest so it does not claim to have looked at every item.
     private suspend fun handleGalleryUpdate(parts: List<Message>, botProfile: BotProfile) {
         val anchor = parts.first()
         val captionedPart = parts.captionedPartOrNull()
@@ -662,32 +646,31 @@ internal class TelegramBotRunner(
         )
     }
 
-    // nothing outside the allowlist is worth a single cycle: a chat the bot merely sits in must not cost a
-    // transcript row, a sticker set lookup, an album buffer or a dispatch coroutine. so this runs on the
-    // polling loop, ahead of all of them, and every path into [isAccepted] is behind it.
+    // runs on the polling loop ahead of everything else: a chat outside the allowlist must not cost a
+    // transcript row, a sticker lookup, an album buffer or a coroutine. every path into [isAccepted] is
+    // behind it.
     private fun Message.passesAllowlist(botProfile: BotProfile): Boolean {
         if (accessPolicy.allows(telegramChat(chatIdLong), senderRefOrNull())) return true
 
-        // only a message aimed at the bot is worth a line — the rest is chat traffic it happens to see.
+        // log only messages aimed at the bot, not all the chat traffic it sees.
         if (shouldHandle(this, botProfile.userId, botProfile.usernames))
             logDenied(accessPolicy.denialReason(telegramChat(chatIdLong), senderRefOrNull()))
 
         return false
     }
 
-    // the single gate every dispatched message goes through, so it is also where a message is claimed for
-    // its one turn: the alternative is remembering to do that at each of the callers.
+    // the single gate for every dispatched message, so it also claims the message for its one turn.
     private fun Message.isAccepted(botProfile: BotProfile, captionSource: Message = this): Boolean =
         shouldHandle(this, botProfile.userId, botProfile.usernames, captionSource) && claimForTurn()
 
-    // the same gate for a message that becomes an agent turn rather than a command: a person the floor has
-    // closed on gets silence, and nothing is transcribed or downloaded for an answer that is not coming
+    // the gate for an agent turn: a person the floor has closed on gets silence, before anything is
+    // transcribed or downloaded.
     private fun Message.isAcceptedForTurn(botProfile: BotProfile): Boolean =
         shouldHandle(this, botProfile.userId, botProfile.usernames) && !isFloorClosed() && claimForTurn()
 
-    // the same gate for the paths a message nobody tagged the bot in may take too. `null` means the bot stays
-    // out. ambient addressing is asked only once everything that calls the bot outright has said no, so it
-    // can add answers but never take one away, and nothing it costs falls on a message the bot answers today.
+    // the gate for paths an untagged message may also take; `null` means stay out. ambient addressing runs
+    // only after everything that calls the bot outright has said no, so it can add answers but never remove
+    // one, and costs nothing on messages answered today.
     private suspend fun Message.acceptance(botProfile: BotProfile, captionSource: Message = this): Acceptance? {
         val acceptance =
             when {
@@ -702,7 +685,7 @@ internal class TelegramBotRunner(
     private suspend fun Message.isAmbientlyAddressed(captionSource: Message): Boolean {
         val addressing = ambient ?: return false
         val sender = senderIdOrNull() ?: return false
-        // a person the floor has closed on gets silence either way, so the classifier is not paid for
+        // the floor is closed either way, so the classifier is not paid for.
         if (floor.isClosed(telegramChat(chatIdLong), forumTopicIdOrNull?.toString(), telegramUser(sender))) return false
 
         val waiting = agent.hasTurnUnderWay(conversationScopeOf(sender))
@@ -711,9 +694,8 @@ internal class TelegramBotRunner(
         return addressing.isAddressed(candidate)
     }
 
-    // asked once a message is the bot's to answer, before it is claimed: the runner would turn such a turn
-    // away unanswered anyway, and asked here nothing is transcribed or downloaded for it and no typing
-    // indicator opens. the sender is the one the turn would be keyed on.
+    // asked before the claim: the runner would refuse the turn anyway, and here nothing is transcribed or
+    // downloaded and no typing indicator opens. keyed on the sender, as the turn would be.
     private fun Message.isFloorClosed(): Boolean {
         val sender = senderIdOrNull() ?: return false
         val closed = floor.isClosed(telegramChat(chatIdLong), forumTopicIdOrNull?.toString(), telegramUser(sender))
@@ -724,15 +706,13 @@ internal class TelegramBotRunner(
     }
 
     private fun Message.claimForTurn(): Boolean {
-        // an edit reaches the agent through the same path as a new message, so without this the two are
-        // indistinguishable in the log. it sits behind the addressing check because an edit of a message
-        // nobody aimed at the bot starts nothing, and ahead of the claim so a refused duplicate is labeled.
+        // otherwise an edit looks like a new message in the log. after the addressing check (an edit nobody
+        // aimed at the bot starts nothing) and before the claim, so a refused duplicate is labeled.
         if (editDate != null) log.info { "edit reaches the agent: chat=$chatIdLong msg=$messageIdLong" }
 
-        // telegram hands the same message over more than once — as an edit of it, and as a plain
-        // redelivery under a fresh update id, which the polling session's own duplicate filter misses. the
-        // second turn would repeat an answer into a conversation that has moved on since.
-        // an ephemeral command has no message id to claim, and its own id is reused once it expires
+        // telegram delivers one message more than once, as an edit and as a redelivery under a fresh update
+        // id that the session's duplicate filter misses; a second turn would repeat an answer. an ephemeral
+        // command has no message id to claim, and its own id is reused once it expires.
         if (isEphemeral) return true
 
         if (!answeredMessages.markAnswered(chatIdLong, messageIdLong, Instant.now())) {
@@ -743,8 +723,7 @@ internal class TelegramBotRunner(
         return true
     }
 
-    // how a message came to be the bot's to answer: somebody called it outright, or ambient addressing
-    // judged a message nobody tagged it in to be meant for it.
+    // how a message became the bot's to answer: called outright, or judged by ambient addressing.
     private enum class Acceptance(val ambient: Boolean) {
         ADDRESSED(ambient = false),
         AMBIENT(ambient = true),
@@ -761,39 +740,36 @@ internal class TelegramBotRunner(
         )
 
     private companion object {
-        // a rich message may carry 32768 characters where plain text tops out at 4096, and
-        // flattening adds markup on top of that. this is the only inbound content without a
-        // telegram-side ceiling, so it gets one here.
+        // a rich message may carry 32768 characters (plain text: 4096), plus markup from flattening, and is
+        // the only inbound content without a telegram-side cap.
         const val MAX_RICH_MESSAGE_CHARS = 8_192
 
-        // telegram caps an album at ten items, so a group with that many parts is complete.
+        // telegram caps an album at ten items.
         const val MAX_ALBUM_PARTS = 10
 
-        // how long a message stays open to being answered by an edit of it. the reply anchors to that
-        // message, so past this the exchange it belongs to has moved on and there is nothing to answer.
+        // how long an edit may still start a turn. the reply anchors to the original message, so past this
+        // the exchange has moved on.
         val EDIT_TURN_WINDOW = 5.minutes
 
-        // how long a message stays known as answered. telegram delivers the same one more than once, and
-        // keeps an update it could not hand over for 24 hours, so the memory has to outlive that window.
+        // telegram redelivers messages and holds an undelivered update for 24 hours, so the memory outlives
+        // that.
         val ANSWERED_MEMORY = 24.hours
 
-        // album parts arrive as separate updates with a shared media_group_id and no terminator;
-        // a group is treated as complete once the update stream stays quiet this long.
+        // album parts share a media_group_id but have no terminator; the album is complete once the stream
+        // stays quiet this long.
         val ALBUM_QUIET_PERIOD = 1.seconds
 
-        // lines one person sends in a row — a message the client split at its length cap, a thought typed as
-        // several messages — are one message to the agent once they have been quiet this long. every text
-        // reply waits this much, so it is as short as a split message's parts need and no longer
+        // a person's run of lines is one message once quiet this long. every text reply waits this much, so
+        // it is no longer than split parts need.
         val LINES_QUIET_PERIOD = 1.seconds
         const val MAX_LINES_PARTS = 10
 
-        // how late a message left over from the previous run may still be answered. past it the
-        // conversation has moved on, and an answer to what someone said hours ago reads worse than
-        // the silence they already got. shorter than telegram's own 24-hour hold on purpose.
+        // the oldest leftover message from the previous run still answered; an answer hours late reads worse
+        // than the silence already given. shorter than telegram's 24-hour hold on purpose.
         val SPOOL_RETENTION = 30.minutes
 
-        // the longest wait between failed polls before randomization, which adds up to half of it. with the
-        // client's 100-second read timeout on top, a cycle stays under the heartbeat's three minutes.
+        // the longest wait between failed polls before jitter, which adds up to half. with the 100-second
+        // read timeout, a cycle stays under the heartbeat's three minutes.
         val POLL_BACKOFF_CAP = 30.seconds
 
         val log = KotlinLogging.logger {}
@@ -801,11 +777,11 @@ internal class TelegramBotRunner(
 }
 
 /**
- * Whether an edited message should start a turn of its own. It may only do so when the edit is what made
- * the message addressed to the bot — someone adding the mention they forgot.
+ * Whether an edited message should start a turn: only when the edit is what addressed the message to the bot,
+ * someone adding a forgotten mention.
  *
- * The edited message is already past the allowlist by the time this is asked, and the caller still runs it
- * through `shouldHandle` and the one-turn-per-message claim, so this only decides what an edit itself changes.
+ * The caller still applies `shouldHandle` and the one-turn-per-message claim, so this decides only what the
+ * edit itself changes.
  */
 internal fun startsTurnOnEdit(
     sentAt: Instant,
@@ -815,28 +791,25 @@ internal fun startsTurnOnEdit(
     isCommand: Boolean,
     inAlbum: Boolean,
 ): Boolean {
-    // without an edit_date telegram is not describing an edit at all, whatever else the update carries.
+    // without an edit_date this is not an edit at all.
     if (editedAt == null) return false
 
-    // the reply lands under the message, so the message's own age decides: one the chat has left behind
-    // gets no new answer however fresh the edit is, and a redelivered old message reads exactly the same
-    // way. an edit_date is never earlier than the message, so this bounds the edit itself too.
+    // the reply lands under the message, so the message's own age decides; a redelivered old message reads
+    // the same. edit_date is never earlier, so this bounds the edit too.
     if (now.isAfter(sentAt.plusMillis(window.inWholeMilliseconds))) return false
 
-    // a command is invoked by sending it, not by editing a message into one — `/clear` would wipe a
-    // history nobody asked it to.
+    // a command is invoked by sending it: an edited-in `/clear` would wipe a history nobody asked to.
     if (isCommand) return false
 
-    // an album is answered as a whole, off whichever part carries the caption; one edited part is not one.
+    // an album is answered as a whole, off the captioned part.
     return !inAlbum
 }
 
 /**
- * Whether this message is one of a person's run of lines: a plain text they sent on its own, so not a
- * command, a reply, a forward, an edit, media or an ephemeral message, each of which is handled in a way of
- * its own. The lines of one person in one chat and topic that arrive within `LINES_QUIET_PERIOD` of each
- * other are then one message to the agent. A sender that is not one person — anonymous admins and channels
- * post under one shared account — never joins: two of them would be read as one.
+ * Whether this message joins a person's run of lines: a plain text on its own, so not a command, reply,
+ * forward, edit, media or ephemeral message. Lines from one person in one chat and topic within
+ * `LINES_QUIET_PERIOD` of each other are one message to the agent. A shared sender (anonymous admins,
+ * channels) never joins: two people would be read as one.
  */
 internal fun Message.joinsTextBatch(): Boolean =
     text != null &&

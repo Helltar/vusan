@@ -7,11 +7,14 @@ import kotlinx.serialization.json.JsonPrimitive
 import kotlinx.serialization.json.contentOrNull
 import kotlinx.serialization.json.jsonObject
 
-// what a 400 from xai's imagine api says when moderation rejected the result: measured live on a video on
-// 2026-10-21, billed in full
+// what xai's imagine api 400 says when moderation rejected the result: measured on a video on 2026-10-21,
+// billed in full
 private const val MODERATED_CODE = "imagine:content-moderated"
 
-/** Whether an Imagine request failed because xAI's moderation rejected what it made, rather than for a reason to report. */
+/**
+ * Whether an Imagine request failed because xAI's moderation rejected the result, rather than for a reason to
+ * report.
+ */
 internal fun HttpStatusException.isImagineModerated(): Boolean =
     status == HttpStatusCode.BadRequest.value &&
             runCatching { (Json.parseToJsonElement(body.orEmpty()).jsonObject["code"] as? JsonPrimitive)?.contentOrNull }.getOrNull() == MODERATED_CODE

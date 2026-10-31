@@ -4,8 +4,8 @@ import java.io.ByteArrayInputStream
 import javax.imageio.ImageIO
 
 /**
- * The pixel size of an encoded image, or `null` when nothing here can read it. Only the header is
- * decoded, so this stays cheap on large files.
+ * An encoded image's pixel size, or `null` when unreadable. Only the header is decoded, so large files stay
+ * cheap.
  */
 internal fun imageDimensions(bytes: ByteArray): Pair<Int, Int>? =
     runCatching {

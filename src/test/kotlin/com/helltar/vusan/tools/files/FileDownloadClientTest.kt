@@ -13,7 +13,7 @@ import kotlin.test.assertFailsWith
 import kotlin.test.assertIs
 import kotlin.test.assertNull
 
-// literal addresses keep the private-address guard on its real code path without a DNS lookup
+// literal addresses keep the private-address guard on its real path without DNS
 private const val PUBLIC_HOST = "93.184.216.34"
 
 class FileDownloadClientTest {

@@ -26,23 +26,19 @@ import kotlinx.serialization.json.putJsonArray
 import kotlinx.serialization.json.putJsonObject
 
 /**
- * OpenAI's Responses API, and every server that speaks it: the platform itself, the Codex backend,
- * OpenRouter, xAI and any compatible server behind `LLM_BASE_URL`.
+ * OpenAI's Responses API, and every server speaking it: the platform, the Codex backend, OpenRouter, xAI and
+ * any compatible `LLM_BASE_URL`.
  *
- * [baseUrl] is where `/responses` hangs (`https://api.openai.com/v1`); [apiKey] is `null` when the [http]
- * client signs its requests itself, as the Codex one does. [streamed] is for a backend that takes
- * streaming requests only: the call streams and the events are folded back into the one response object
- * the plain API would have returned, so nothing above notices. [statelessReasoning] asks the API not to
- * store the conversation and to hand reasoning back encrypted, which is what lets a tool loop echo it; a
- * third-party server may know neither field. [explicitPromptCaching] states the GPT-5.6 generation's cache
- * options — the platform's own fields, which a third-party server may not know: the implicit mode with a
- * breakpoint on the system prefix, or no caching for a prompt that never repeats. [gatewayPromptCaching]
- * narrows those options to what every upstream behind a gateway takes, for OpenRouter: the breakpoint
- * without a lifetime, and the implicit mode left unnamed. [routesBySession] is for a gateway that picks the
- * upstream per request, as OpenRouter does: the conversation's cache key goes along as `session_id` too,
- * which keeps the conversation on the upstream holding its cached prefix.
+ * [baseUrl] is where `/responses` hangs (`https://api.openai.com/v1`); [apiKey] is `null` when [http] signs
+ * requests itself, as Codex does. [streamed] is for a streaming-only backend: events are folded into the
+ * response object the plain API returns. [statelessReasoning] asks the API not to store the conversation and
+ * to return reasoning encrypted, so a tool loop can echo it; third-party servers may know neither.
+ * [explicitPromptCaching] sends GPT-5.6's cache options (implicit mode with a breakpoint on the system
+ * prefix, or no caching for a one-off prompt). [gatewayPromptCaching] narrows them to what every upstream
+ * behind OpenRouter takes: no lifetime, implicit mode unnamed. [routesBySession] sends the cache key as
+ * `session_id` too, for a gateway picking the upstream per request.
  *
- * [onResponse] sees every request and the response it got, for a caller that keeps books on them.
+ * [onResponse] sees every request and its response, for a caller keeping books.
  */
 class ResponsesClient(
     private val http: HttpClient,
@@ -61,8 +57,8 @@ class ResponsesClient(
 
     private val url = "$baseUrl/responses"
 
-    // what the reasoning this client returns is tagged with, and the only reasoning it replays: the platform,
-    // the codex backend and a compatible server all speak this protocol, and none reads another's
+    // the source tag on returned reasoning, and the only reasoning replayed: the platform, the codex backend
+    // and compatible servers all speak this protocol, and none reads another's
     private val reasoningSource = url
 
     override suspend fun complete(model: LlmModel, request: ChatRequest): Reply {
@@ -77,8 +73,8 @@ class ResponsesClient(
 
     internal fun responsesRequest(model: LlmModel, request: ChatRequest): JsonObject {
         val options = request.options
-        // a deferred tool reaches a model that takes it partway through as an `additional_tools` item where it
-        // was offered, and the tool list, which the cache reads first, stays as it was
+        // a model taking tools mid-conversation gets a deferred tool as an `additional_tools` item where
+        // offered, so the cached tool list stays as it was
         val offersLater = model.offersToolsMidConversation
         val tools = if (offersLater) request.tools.filterNot { it.deferred } else request.toolsListedUpFront()
         val items = request.messages.map { responsesItems(it, request, offersLater) }
@@ -91,7 +87,7 @@ class ResponsesClient(
                 if (tools.isNotEmpty()) {
                     putJsonArray("tools") { tools.forEach { add(responsesTool(it)) } }
 
-                    // both are refused in a request that defines no tools
+                    // both are refused in a request without tools
                     if (!request.mayCallTools) put("tool_choice", "none")
                     options.parallelToolCalls?.let { put("parallel_tool_calls", it) }
                 }
@@ -175,10 +171,9 @@ class ResponsesClient(
                 }
         }
 
-    // text parts become one assistant message item; a reasoning item and a function call each stand alone,
-    // in the order the model produced them, which is the order the api wants them back in. texts the
-    // platform marked differently — a preamble's phase against the answer's — stay separate items, each
-    // with its own fields back on it.
+    // text parts become one assistant message item; reasoning items and function calls stand alone, in the
+    // model's order, which the api wants back. texts with different phases (preamble vs answer) stay separate
+    // items, each with its own fields.
     private fun assistantItems(message: Message.Assistant): List<JsonObject> =
         buildList {
             val texts = mutableListOf<JsonObject>()
@@ -236,7 +231,7 @@ class ResponsesClient(
 
     private fun inputText(text: String): JsonObject = buildJsonObject { put("type", "input_text"); put("text", text) }
 
-    // streams the call and folds the events back into the response object the plain api returns
+    // streams the call and folds the events back into the plain api's response object
     private suspend fun streamResponses(body: JsonObject): JsonObject {
         val folder = ResponsesStreamFolder(label)
 
@@ -258,7 +253,7 @@ class ResponsesClient(
         val message = Message.Assistant(parts)
         val incompleteReason = (response["incomplete_details"] as? JsonObject)?.string("reason")
 
-        // a response cut short says so whatever it holds: a call it ends in may be cut too
+        // a truncated response says so whatever it holds: a call it ends in may be truncated too
         val stopReason =
             when {
                 incompleteReason == "max_output_tokens" -> StopReason.MAX_TOKENS
@@ -313,14 +308,14 @@ class ResponsesClient(
             }
         }
 
-    // what the platform says of an output message beside its text, kept for the replay: `phase`, a preamble's
-    // `commentary` against the answer's `final_answer`, which the platform asks to have back unchanged
+    // the output message's fields beside its text, kept for replay: `phase` (a preamble's `commentary` vs the
+    // answer's `final_answer`), which the platform wants back unchanged
     private fun JsonObject.messageFields(): EndpointFields? =
         this["phase"]
             ?.takeUnless { it is JsonNull }
             ?.let { EndpointFields(reasoningSource, JsonObject(mapOf("phase" to it))) }
 
-    // the text blocks of an output message, each flagged when it is the model declining rather than answering
+    // an output message's text blocks, each flagged when the model declined rather than answered
     private fun messageTexts(item: JsonObject): List<Pair<String, Boolean>> =
         (item["content"] as? JsonArray).orEmpty().mapNotNull { block ->
             val content = block as? JsonObject ?: return@mapNotNull null

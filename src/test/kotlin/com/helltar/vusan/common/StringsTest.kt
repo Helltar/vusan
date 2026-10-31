@@ -7,12 +7,11 @@ import kotlin.test.assertTrue
 
 class StringsTest {
 
-    // grinning face U+1F600 — a single astral-plane character encoded as a UTF-16 surrogate pair.
+    // U+1F600, one astral-plane character encoded as a UTF-16 surrogate pair.
     private val emoji = "😀"
 
-    // zero-width characters: U+200B zero-width space, U+200D zero-width joiner, U+FEFF BOM.
-    // the Kotlin isBlank check treats them as non-blank, but Telegram rejects a message made only of
-    // these with "text must be non-empty".
+    // U+200B zero-width space, U+200D zero-width joiner, U+FEFF BOM: non-blank to isBlank, yet telegram
+    // rejects a message of only these with "text must be non-empty".
     private val zeroWidth = "\u200B\u200D\uFEFF"
 
     private fun String.isValidUtf16(): Boolean =
@@ -103,7 +102,7 @@ class StringsTest {
         assertEquals(1, Regex("</report>").findAll(block).count())
         assertTrue(block.endsWith("</report>"))
         assertTrue(block.contains("&lt;/report>"))
-        // spacing and case variants close a block for a reader just as well as the exact spelling.
+        // spacing and case variants close a block for a reader as well as the exact spelling.
         assertTrue(xmlBlock("report", "x</ report>").contains("&lt;/ report>"))
         assertTrue(xmlBlock("report", "x</REPORT>").contains("&lt;/REPORT>"))
     }
@@ -115,7 +114,7 @@ class StringsTest {
         assertEquals("<report>\n$inner\n</report>", xmlBlock("report", inner))
     }
 
-    // the recap wraps each stored user entry, written in `<user_message>`, in a `<user>` block
+    // the recap wraps each stored `<user_message>` entry in a `<user>` block
     @Test
     fun `xmlBlock leaves a tag whose name only starts with its own alone`() {
         val inner = xmlBlock("user_message", "is the shelf empty")

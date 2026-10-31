@@ -14,12 +14,10 @@ import com.helltar.vusan.common.rethrowIfCancellation
 
 private val log = KotlinLogging.logger {}
 
-// the Codex client version we claim to the backend. `/models` is filtered by it: a model whose
-// `minimal_client_version` is newer is simply absent from the catalog, so an understated value makes
-// the newest model look like one the plan does not offer. startup claims the newest version it can
-// find — this floor, the installed CLI, the latest release on github — so a host that upgrades codex
-// and a container with no binary at all both see new models without a vusan release; the constant
-// decides only where github is out of reach.
+// the Codex client version claimed to the backend. `/models` hides models whose `minimal_client_version` is
+// newer, so an understated value makes the newest model look unavailable. startup claims the newest it finds
+// (this floor, the installed CLI, the latest github release), so an upgraded host and a binary-less container
+// both see new models without a vusan release; this constant only matters when github is out of reach.
 private const val CODEX_CLIENT_VERSION_FLOOR = "0.162.0"
 // where the CLI's own update check looks: the latest non-prerelease, tagged `rust-v<version>`
 private const val CODEX_LATEST_RELEASE_URL = "https://api.github.com/repos/openai/codex/releases/latest"
@@ -30,13 +28,11 @@ internal val CODEX_VERSION = Regex("""\d+\.\d+\.\d+""")
 private var claimedClientVersion: String? = null
 
 /**
- * Decide the client version this process claims, once at startup, and log where it came from.
+ * Decides the client version this process claims, once at startup, and logs its source.
  *
- * [pinned] is `CODEX_CLIENT_VERSION` and wins outright: the lever for a host that cannot reach GitHub,
- * or for when the automatic choice is wrong. Otherwise the newest of the built-in floor, the installed
- * CLI and the latest GitHub release wins, and a source that did not answer is skipped. Installed once
- * rather than passed per call, because the process has a single Codex identity and a parameter would
- * only let one caller claim a different one.
+ * [pinned] is `CODEX_CLIENT_VERSION` and wins outright, for a host that cannot reach github or a wrong
+ * automatic choice. Otherwise the newest of the floor, the installed CLI and the latest release wins; a
+ * silent source is skipped. Installed once rather than passed per call: the process has one Codex identity.
  */
 suspend fun claimCodexClientVersion(
     http: HttpClient,
@@ -56,7 +52,7 @@ suspend fun claimCodexClientVersion(
             "latest GitHub release" to fetchLatestCodexRelease(http),
         )
 
-    // on a tie the earlier source keeps the credit, so the floor is named whenever it is already current
+    // on a tie the earlier source keeps the credit, so the floor is named whenever it is current
     val (source, version) =
         candidates
             .mapNotNull { (name, found) -> found?.let { name to it } }
@@ -76,10 +72,7 @@ suspend fun claimCodexClientVersion(
 @Serializable
 private data class GitHubRelease(@SerialName("tag_name") val tagName: String = "")
 
-/**
- * The version of the latest Codex release on GitHub, or `null` when it could not be read: the fetch is
- * best effort, and the other sources stand in for it.
- */
+/** The latest Codex release on github, or `null` when unreadable: best effort, the other sources stand in. */
 internal suspend fun fetchLatestCodexRelease(http: HttpClient): String? =
     runCatching {
         val release: GitHubRelease =
@@ -117,7 +110,7 @@ internal fun detectCodexClientVersion(
 
 internal fun codexClientVersion(): String = claimedClientVersion ?: CODEX_CLIENT_VERSION_FLOOR
 
-/** Numeric `major.minor.patch` ordering, so `0.99.0` does not outrank `0.146.1` the way strings do. */
+/** Numeric `major.minor.patch` ordering, so `0.99.0` does not outrank `0.146.1` as strings would. */
 internal infix fun String.isNewerThan(other: String): Boolean {
     val mine = versionParts()
     val theirs = other.versionParts()

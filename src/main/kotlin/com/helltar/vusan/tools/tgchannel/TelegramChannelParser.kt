@@ -7,9 +7,9 @@ import java.net.URI
 import java.time.Instant
 import java.time.OffsetDateTime
 
-// the widget renders the post's own body and the preview of the post it replies to with the same
-// `tgme_widget_message_text` class, and the reply preview comes first. only `js-message_text` tells
-// them apart, so dropping it makes every reply post report the quoted text as its own.
+// the widget renders a post's own body and the preview of the post it replies to with the same
+// `tgme_widget_message_text` class, preview first. only `js-message_text` tells them apart, so without it
+// every reply reports the quoted text as its own.
 private const val OWN_TEXT = ".tgme_widget_message_text.js-message_text"
 
 private const val MAX_SHOWN_REACTIONS = 3
@@ -58,7 +58,7 @@ internal object TelegramChannelParser {
         )
     }
 
-    // Telegram computes its own offset, which for a search page is not simply the oldest id on it.
+    // telegram computes its own offset, which on a search page is not just the oldest id on it.
     private fun Element.olderThanCursor(): Long? =
         selectFirst(".js-messages_more[data-before]")
             ?.attr("data-before")
@@ -105,9 +105,8 @@ internal object TelegramChannelParser {
         mediaSelectors.mapNotNull { (label, selector) -> label.takeIf { select(selector).isNotEmpty() } }
 
     /**
-     * The count is always the span's own text; the glyph beside it may be a plain emoji, a paid
-     * star reaction, or a `<tg-emoji>` custom one that carries an id and no readable character at
-     * all. The last kind still counts toward the total, it just has nothing to show.
+     * The count is always the span's own text; the glyph may be a plain emoji, a paid star, or a `<tg-emoji>`
+     * custom one with an id and no readable character, which still counts toward the total.
      */
     private fun Element.parseReaction(): Pair<String?, Int>? {
         val count = ownText().trim().parseCompactCount() ?: return null

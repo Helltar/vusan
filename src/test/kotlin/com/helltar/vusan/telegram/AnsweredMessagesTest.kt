@@ -48,7 +48,7 @@ class AnsweredMessagesTest {
 
     @Test
     fun `a later write drops what has aged out`() {
-        // retention is what bounds the map, so eviction has to happen on write or it grows forever
+        // retention bounds the map, so eviction must happen on write or it grows forever
         val answered = AnsweredMessages(5.minutes)
 
         answered.markAnswered(chat, messageId = 1L, now = now)

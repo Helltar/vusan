@@ -78,8 +78,8 @@ class VideoNoteToolsTest {
         assertTrue(outbox.pending.isEmpty())
     }
 
-    // producing for a chat that refuses the kind would be paid for and then dropped, so it is answered first;
-    // kept for a later call, the same words are synthesized and queued nowhere
+    // producing for a chat refusing the kind would be paid for and dropped, so it is answered first; kept for
+    // a later call, the words are synthesized and queued nowhere
     @Test
     fun `a chat that refuses round videos is answered before synthesizing, unless the video is kept instead`() = runBlocking {
         val outbox = BotOutbox(ChatCapabilities(videoNotes = false))

@@ -117,7 +117,7 @@ class VideoGenToolsTest {
         assertContains(result, "queued")
     }
 
-    // xai numbers every image a request carries: the start frame first, then the references, then the bot
+    // xai numbers every image in a request: the start frame, then the references, then the bot
     @Test
     fun `the pictures are numbered the way xai counts them, and the bot speaks with its voice`() = runBlocking {
         val xai = Xai()
@@ -144,7 +144,8 @@ class VideoGenToolsTest {
         assertEquals(false, body.getValue("generate_audio").jsonPrimitive.content.toBoolean())
     }
 
-    // the reference-to-video docs number `image` and `reference_images` alone; a last frame is a field of its own
+    // the reference-to-video docs count `image` and `reference_images` only; a last frame is a field of its
+    // own
     @Test
     fun `a last frame leaves the numbering of the references alone`() = runBlocking {
         val xai = Xai()
@@ -251,7 +252,7 @@ class VideoGenToolsTest {
         assertTrue(xai.started.isEmpty())
     }
 
-    // the first job measured failed on xai's side, and the same request went through on the next try
+    // the first job measured failed on xai's side and went through on the next try
     @Test
     fun `a job xai failed on its own side is started once more`() = runBlocking {
         val xai = Xai().apply { outcomes += failed("internal_error") }
@@ -284,7 +285,7 @@ class VideoGenToolsTest {
         assertTrue(outbox.pending.isEmpty())
     }
 
-    // what xai answered on 2026-10-21 for a rendered video its moderation rejected
+    // xai's answer on 2026-10-21 for a rendered video its moderation rejected
     @Test
     fun `a moderation refusal sent as a 400 is reported, not failed`() = runBlocking {
         val xai = Xai()
@@ -336,7 +337,7 @@ class VideoGenToolsTest {
         assertTrue(xai.started.isEmpty())
     }
 
-    // the answer states the added seconds alone, so the length is the source's plus what was asked for
+    // the answer states only the added seconds, so the length is the source's plus the request's
     @Test
     fun `an extension kept for later is on the shelf, queued nowhere, and as long as both parts`() = runBlocking {
         val xai = Xai().apply { outcomes += done(duration = 2) }

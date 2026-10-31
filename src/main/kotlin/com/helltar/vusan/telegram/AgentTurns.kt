@@ -42,10 +42,9 @@ import org.telegram.telegrambots.meta.api.objects.message.Message
 import org.telegram.telegrambots.meta.generics.TelegramClient
 
 /**
- * One agent turn, from a normalized Telegram input to the answer in the chat. `TelegramBotRunner` decides
- * what an update means and produces the prompt; everything after that — the reply context, the
- * `AgentRequest`, the progress indicator, the parked choice attachment, the delivery and its fallback —
- * happens here, the same way whether the turn was started by a message or by a button selection.
+ * One agent turn from a normalized telegram input to the answer in the chat. `TelegramBotRunner` decides what
+ * an update means and builds the prompt; the reply context, `AgentRequest`, progress, parked choice
+ * attachment, delivery and fallback happen here, whether the turn came from a message or a button.
  */
 internal class AgentTurns(
     private val client: TelegramClient,
@@ -54,7 +53,7 @@ internal class AgentTurns(
     private val inlineChoices: InlineChoiceHandler,
     private val chatProfiles: ChatProfiles,
     private val voiceTranscriber: VoiceTranscriber?,
-    // whether this deployment has a sandbox: the attachment block sends the model there only where it can go
+    // whether there is a sandbox: the attachment block points the model there only where it can go
     private val sandbox: Boolean,
     private val fallbackInUse: () -> FallbackInUse? = { null },
 ) {
@@ -68,14 +67,14 @@ internal class AgentTurns(
         attachedFiles: List<AttachedFile> = emptyList(),
         ambient: Boolean = false,
     ) {
-        // every reply describes what it answers, the bot's own messages included: the history that would
-        // otherwise carry them belongs to one person and one chat, so in a group the message is missing
-        // from the replier's history whenever it was written for somebody else.
+        // every reply describes what it answers, the bot's own messages included: history is per person and
+        // chat, so in a group the message is missing from the replier's history whenever it was written for
+        // someone else.
         val replySummary = message.replySummaryOrNull(client, voiceTranscriber, botProfile.userId)
         val quotedFragment = message.quotedFragmentOrNull()
 
-        // the file travels with it for the same reason, and because no history carries bytes: without this
-        // "edit this" against a picture the bot itself drew has nothing to work on.
+        // the file travels too, since no history carries bytes: otherwise "edit this" on a picture the bot
+        // drew has nothing to work on.
         val effectiveAttachedFiles =
             attachedFiles.ifEmpty {
                 listOfNotNull(if (loadRepliedAttachment) message.repliedAttachedFileOrNull(client) else null)
@@ -91,7 +90,7 @@ internal class AgentTurns(
                     ?: baseAgentInput,
             conversationInput = formatConversationInput(prompt, replySummary, quotedFragment),
             attachedFiles = effectiveAttachedFiles,
-            // a reaction may only land on somebody else's message, so this stays narrower than the context above.
+            // a reaction may only land on someone else's message, so this is narrower than the context above.
             replyToMessageId =
                 message.replyToMessageIdOrNull()
                     ?.takeIf { message.replyAuthorIdOrNull() != botProfile.userId }
@@ -138,8 +137,8 @@ internal class AgentTurns(
             request = request,
             inputKind = inputKind,
             waitForTurn = false,
-            // a message that joins the person's line, or starts in a slow-mode chat where no bubble opens for
-            // an activity, has nothing else to show for a while that it was heard
+            // a message joining the person's queue, or in a slow-mode chat where activities open no bubble,
+            // has nothing else to show it was heard
             acknowledge =
                 agent.hasTurnUnderWay(request.context.scope) || request.context.chat.capabilities.slowModeSeconds > 0,
             deliver = { result -> delivery.send(message, result) },
@@ -156,8 +155,8 @@ internal class AgentTurns(
         val input = inlineChoiceInput(selection.question, selection.option)
         val attachedFile = inlineChoices.parkedAttachment(message.chatIdLong, user.id)
 
-        // the selection continues the exchange the user started, so the turn runs as if it came from that
-        // message: it is what a reaction lands on, and what a task scheduled here is anchored to later.
+        // the selection continues the user's exchange, so the turn runs as if from that message: reactions
+        // land on it and tasks scheduled here anchor to it.
         val request =
             AgentRequest(
                 context =
@@ -214,9 +213,8 @@ internal class AgentTurns(
         }
 
         try {
-            // the agent gets the setter so the indicator follows the tool it is running, and the status
-            // so a tool can say what the turn is about to do while it still matters; delivery then shows
-            // its own per-item action.
+            // the setter lets the indicator follow the running tool, the status lets a tool say what the turn
+            // is about to do; delivery then shows its own per-item action.
             val result =
                 client.withLiveProgress(
                     request = request,
@@ -230,8 +228,8 @@ internal class AgentTurns(
                         agent.handle(request, setActivity, status)
                 }
 
-            // a question with buttons ends the turn without answering, so whatever it was asked about has
-            // to outlive it; any other turn clears the slot instead of leaving a stale file behind.
+            // a question with buttons ends the turn unanswered, so its subject must outlive it; any other
+            // turn clears the slot.
             inlineChoices.parkAttachment(
                 chatId = context.chatRef.telegramChatId,
                 userId = context.user.telegramUserId,
@@ -240,9 +238,8 @@ internal class AgentTurns(
 
             deliver(result)
         } catch (error: Throwable) {
-            // `/stop` cancels this job wherever it happens to be. The live status closes itself on the way
-            // out, so all that is left is to say so in the chat — under NonCancellable, because the
-            // coroutine is already leaving.
+            // `/stop` cancels this job wherever it is. the live status closes itself, so only the chat notice
+            // is left, under NonCancellable since the coroutine is already leaving.
             if (error is CancellationException) {
                 val messages = Messages.of(context.language)
 
@@ -273,8 +270,8 @@ internal class AgentTurns(
         }
     }
 
-    // only a group-flavored chat has a description or restrictions to read; anywhere else the lookup
-    // would spend two API calls to learn nothing.
+    // only a group-kind chat has a description or restrictions; elsewhere the lookup would spend two API
+    // calls on nothing.
     private suspend fun chatProfile(message: Message): ChatProfile =
         if (message.canLoadChatDescription) chatProfiles.of(message.chatIdLong) else ChatProfile.NONE
 

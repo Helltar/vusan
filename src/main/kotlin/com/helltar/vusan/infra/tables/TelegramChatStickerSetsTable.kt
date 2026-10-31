@@ -4,10 +4,9 @@ import org.jetbrains.exposed.v1.core.Table
 import org.jetbrains.exposed.v1.javatime.timestamp
 import java.time.Instant
 
-// which sticker sets a chat actually uses, and how recently. the catalog is global but the index
-// offered to the model is per chat, so a group is only shown the stickers its own people throw around.
-//
-// Telegram-owned; `chat_id` carries no `platform` for the reason given in TelegramChatStickersTable.
+// which sticker sets a chat uses, and how recently. the catalog is global but the index is per chat, so a
+// group sees only the stickers its own people use.
+// telegram-owned; `chat_id` has no `platform`, as in TelegramChatStickersTable.
 object TelegramChatStickerSetsTable : Table("telegram_chat_sticker_sets") {
 
     val chatId = long("chat_id")
@@ -15,8 +14,8 @@ object TelegramChatStickerSetsTable : Table("telegram_chat_sticker_sets") {
     val seenCount = integer("seen_count").default(0)
     val lastSeenAt = timestamp("last_seen_at").clientDefault { Instant.now() }
 
-    // when this chat caused a set to be pulled in, which is the only moment a set costs anything.
-    // null for a set that was already known from elsewhere, or that has not earned its keep yet.
+    // when this chat caused the set to be learned, the only moment it costs anything; null for a set known
+    // from elsewhere or not yet earned.
     val learnedAt = timestamp("learned_at").nullable()
 
     override val primaryKey = PrimaryKey(chatId, setName)

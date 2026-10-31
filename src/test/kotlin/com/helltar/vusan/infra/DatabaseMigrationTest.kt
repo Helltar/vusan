@@ -34,7 +34,7 @@ class DatabaseMigrationTest {
         assertTrue("summarized_through_message_id" in tableColumns(dbPath, "conversations"))
     }
 
-    // the shape that has no version of its own: everything this project wrote before there were any.
+    // the unversioned shape: everything written before schema versions existed.
     @Test
     fun `a database from before versioned schemas is refused, not reshaped`() = withTempDb { dbPath ->
         createLegacyScheduledTasksTable(dbPath)
@@ -43,7 +43,7 @@ class DatabaseMigrationTest {
 
         assertContains(failure.message.orEmpty(), "by hand")
         assertEquals(0, userVersion(dbPath))
-        // nothing was created beside it, so the database is still exactly what the operator has to move
+        // nothing was created beside it, so the database is still exactly what the operator must move
         assertEquals(setOf("scheduled_tasks"), tableNames(dbPath).filterNot { it.startsWith("sqlite_") }.toSet())
     }
 
@@ -80,8 +80,8 @@ class DatabaseMigrationTest {
         assertEquals((Schema.oldestStepped + 1..Schema.VERSION).toList(), Schema.steps.keys.sorted())
     }
 
-    // the guarantee the hand moves had by construction: a database moved forward ends in exactly the
-    // shape a fresh one is created in. the oldest snapshot walks through every step there is.
+    // a database moved forward ends in exactly the shape a fresh one gets; the oldest snapshot walks every
+    // step.
     @Test
     fun `an older database moved forward has the shape of a fresh one and keeps its rows`() = withTempDb { dbPath ->
         val freshPath = dbPath.replace("vusan.db", "fresh.db")
@@ -145,7 +145,7 @@ class DatabaseMigrationTest {
     @Test
     fun `a step that fails leaves the database as it was found`() = withTempDb { dbPath ->
         createSnapshot(dbPath, Schema.oldestStepped)
-        // the table the first step creates is already there, so that step cannot run
+        // the first step's table already exists, so that step cannot run
         val firstCreated = Schema.steps.getValue(Schema.oldestStepped + 1).firstNotNullOf(::createdTable)
         withStatement(dbPath) { it.execute("CREATE TABLE $firstCreated (x TEXT)") }
         stampUserVersion(dbPath, Schema.oldestStepped)
@@ -212,9 +212,9 @@ class DatabaseMigrationTest {
     private fun createdTable(sql: String): String? =
         Regex("""^CREATE TABLE (\w+)""").find(sql)?.groupValues?.get(1)
 
-    // what a table is for the code reading and writing it: its columns, indices and foreign keys. not the
-    // stored CREATE text, which SQLite keeps as it was typed — a table rebuilt by hand and renamed into
-    // place reads `CREATE TABLE IF NOT EXISTS "name"` with the very same shape.
+    // a table as the code sees it: columns, indices and foreign keys, not the stored CREATE text, which
+    // SQLite keeps as typed (a table rebuilt and renamed reads `CREATE TABLE IF NOT EXISTS "name"` with the
+    // same shape).
     private fun shape(dbPath: String): Map<String, List<String>> =
         DriverManager.getConnection("jdbc:sqlite:$dbPath").use { connection ->
             fun rows(sql: String, vararg columns: String): List<String> =
@@ -254,9 +254,7 @@ class DatabaseMigrationTest {
             connection.createStatement().use(block)
         }
 
-    // an older database of the current identity shape: the columns and indices added since are what
-    // `connect` still reconciles. A schema change that has to rewrite a key is not reconciled at all —
-    // the database is moved by hand — so nothing here stands in for one.
+    // a database from before schema versions: real tables, `user_version` still 0.
     private fun createLegacyScheduledTasksTable(dbPath: String) {
         DriverManager.getConnection("jdbc:sqlite:$dbPath").use { connection ->
             connection.createStatement().use { statement ->

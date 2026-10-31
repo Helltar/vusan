@@ -15,13 +15,12 @@ import kotlinx.serialization.json.putJsonArray
 import kotlinx.serialization.json.putJsonObject
 
 /**
- * Asks a chat model for the verdict with the wording that was measured.
+ * Asks a chat model for the verdict with the measured wording.
  *
- * The wording matters more than the model: with a short criterion the same model was wrong on one message
- * in six, with this one on about one in a hundred. What it spells out are the failures the short one made —
- * a generic "bot" as the address, the name appearing without being spoken to, humans answering each other
- * right after the bot, and text in the message telling a classifier what to answer. Change it only
- * against a measurement.
+ * Wording matters more than the model: with a short criterion the same model was wrong on one message in six,
+ * with this one about one in a hundred. It spells out the short one's failures: a generic "bot" as address,
+ * the name appearing without being spoken to, people answering each other right after the bot, and message
+ * text telling a classifier what to answer. Change it only against a measurement.
  */
 class LlmAddressingClassifier(
     private val client: LlmClient,
@@ -49,8 +48,7 @@ class LlmAddressingClassifier(
 internal fun addressingSystemPrompt(botNames: List<String>, busy: Boolean): String {
     val name = botNames.first()
 
-    // the chat may spell the name in another script than the bot's own, and the model has to be told
-    // that both mean the bot
+    // the chat may spell the name in another script, and the model must know both mean the bot
     val spellings =
         botNames.drop(1)
             .filterNot { it.equals(name, ignoreCase = true) }
@@ -66,16 +64,16 @@ internal fun addressingSystemPrompt(botNames: List<String>, busy: Boolean): Stri
         append(NOT_ADDRESSED_WHEN)
         append("\n\n")
 
-        // never measured: added so a person who keeps chatting while the bot works on their request is
-        // not read as ending the conversation with it
+        // never measured: added so a person chatting on while the bot works on their request is not read as
+        // ending the conversation
         if (busy) append("$BUSY_NOTE\n\n")
 
         append(ANSWER_FORMAT)
     }
 }
 
-// the state names no times: the model reads numbers as text, and everything old enough to be irrelevant
-// has already been left out of it
+// the state names no times: the model reads numbers as text, and anything old enough to be irrelevant was
+// already left out
 internal fun addressingState(input: AddressingInput): JsonObject =
     buildJsonObject {
         putJsonArray("bot_names") { input.botNames.forEach { add(it) } }
@@ -98,8 +96,8 @@ internal fun addressingState(input: AddressingInput): JsonObject =
         input.botBusyFor?.let { put("bot_is_working_on_request_from", it) }
     }
 
-// a probability is deliberately not asked for: models answered `false` with 0.95, meaning confidence in
-// their own answer, and gave too few distinct values to set any cut-off on
+// no probability on purpose: models answered `false` with 0.95, meaning confidence in their answer, and gave
+// too few distinct values for a cut-off
 internal fun parseAddressingVerdict(answer: String): Boolean? =
     VERDICT.find(answer)?.groupValues?.get(1)?.let { it == "true" }
 
