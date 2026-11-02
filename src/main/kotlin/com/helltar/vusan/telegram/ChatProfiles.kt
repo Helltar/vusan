@@ -95,7 +95,13 @@ internal fun capabilitiesOf(membership: ChatMember?, chat: ChatFullInfo?): ChatC
     return when {
         // any admin privilege implies `can_manage_chat`, documented as covering "ignore slow mode", and
         // chat-wide permissions never applied to admins.
-        membership is ChatMemberAdministrator || membership is ChatMemberOwner -> ChatCapabilities.UNRESTRICTED
+        membership is ChatMemberOwner -> ChatCapabilities(chatInfo = true, topics = chat?.isForum == true)
+
+        membership is ChatMemberAdministrator ->
+            ChatCapabilities(
+                chatInfo = membership.canChangeInfo == true,
+                topics = chat?.isForum == true && membership.canManageTopics == true,
+            )
 
         // a restriction on the bot itself replaces the chat's defaults rather than adding to them.
         membership is ChatMemberRestricted -> membership.asPermissions().toCapabilities(slowModeSeconds)

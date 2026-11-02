@@ -87,15 +87,39 @@ class ChatProfilesTest {
         assertTrue(capabilitiesOf(member(), chat(permissions = allowing(reactions = null))).reactions)
     }
 
+    @Test
+    fun `an administrator's rights decide which settings it may change`() {
+        val admin = ChatMemberAdministrator.builder().user(botUser).canChangeInfo(true).canManageTopics(true).build()
+
+        assertEquals(ChatCapabilities(chatInfo = true, topics = true), capabilitiesOf(admin, chat(permissions = null, forum = true)))
+    }
+
+    // the right to manage topics outlives a chat turning topics off, and means nothing there
+    @Test
+    fun `topics need a forum as well as the right`() {
+        val admin = ChatMemberAdministrator.builder().user(botUser).canManageTopics(true).build()
+
+        assertFalse(capabilitiesOf(admin, chat(permissions = null)).topics)
+    }
+
+    @Test
+    fun `a plain member gets no admin rights whatever the chat lets members do`() {
+        val capabilities = capabilitiesOf(member(), chat(ChatPermissions.builder().canChangeInfo(true).canManageTopics(true).build(), forum = true))
+
+        assertFalse(capabilities.chatInfo)
+        assertFalse(capabilities.topics)
+    }
+
     private fun member() = ChatMemberMember.builder().user(botUser).build()
 
-    private fun chat(permissions: ChatPermissions?, slowModeDelay: Int? = null): ChatFullInfo =
+    private fun chat(permissions: ChatPermissions?, slowModeDelay: Int? = null, forum: Boolean = false): ChatFullInfo =
         ChatFullInfo.builder()
             .id(-100L)
             .type("supergroup")
             .accentColorId(0)
             .permissions(permissions)
             .slowModeDelay(slowModeDelay)
+            .isForum(forum)
             .build()
 
     private fun allowing(

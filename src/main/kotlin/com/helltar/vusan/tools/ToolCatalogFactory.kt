@@ -308,7 +308,9 @@ class ToolCatalogFactory(
 
             videoClient?.let { tools(ToolGroup.VIDEOS, VideoGenTools(it, outbox, context.attachedFiles, selfImage)) }
 
-            platformTools.of(context, outbox).forEach { tools(it) }
+            platformTools.of(context, outbox).forEach { (set, group) ->
+                if (group == null) tools(set) else tools(group, set)
+            }
         }
     }
 

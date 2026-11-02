@@ -14,7 +14,8 @@ A new agent tool typically touches these, in order:
    set (`config.fooApiKey?.let { … }`). Register it under a `ToolGroup` when a turn rarely needs it, and
    leave it visible when the model may need it without being asked for it by name; a new group also needs its one-line
    summary in `tools/ToolCatalog.kt`, since that line is all the model reads before loading it. A tool only one messenger can implement goes to that adapter's
-   `PlatformToolSets` instead (`telegram/tools/TelegramToolSets.kt`), gated there on the same chat capability.
+   `PlatformToolSets` instead (`telegram/tools/TelegramToolSets.kt`), gated there on the same chat capability and put
+   behind a group by returning it as `PlatformToolSet(set, group)`.
 5. **Files and results between tools** — a parameter that takes a file is an `AttachedFile` (or a list of them),
    which the model names by label or `sandbox:` path, and which falls back to the request's attachment when omitted; a
    tool that makes a file calls `keepOnShelf` whether or not it sends it, and takes `send` when a file made without

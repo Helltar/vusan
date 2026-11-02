@@ -195,10 +195,21 @@ suspend fun main() = coroutineScope {
         // the diary reads the group log, so it exists only with one
         val diaryRepository = groupLog?.let { DiaryRepository() }
 
+        // poll answers are read back through the group transcript; without one there is nothing to record
+        // them into.
+        val polls = groupLog?.let { PollRegistry() }
+
+        val delivery =
+            TelegramDelivery(
+                telegramClient, stickerCatalog?.let { it::recheckSetOf }, groupLog, polls,
+                onStickerSent = stickerCatalog?.let { it::recordSent },
+            )
+        val chatProfiles = ChatProfiles(telegramClient, botProfile.userId)
+
         val toolCatalogFactory =
             ToolCatalogFactory(
-                http, publicHttp, TelegramToolSets(telegramClient, stickerCatalog), config, conversation, memory,
-                tasks, leaveAlone, vision, groupLog, diaryRepository,
+                http, publicHttp, TelegramToolSets(telegramClient, delivery, chatProfiles, stickerCatalog), config,
+                conversation, memory, tasks, leaveAlone, vision, groupLog, diaryRepository,
                 contextWindowPolicy.liveToolResultMaxChars, codexAuth, selfImage,
             )
 
@@ -240,17 +251,7 @@ suspend fun main() = coroutineScope {
                 { fallbackInUse()?.model }, config.maxConcurrentTurns, floor,
             )
 
-        // poll answers are read back through the group transcript; without one there is nothing to record
-        // them into.
-        val polls = groupLog?.let { PollRegistry() }
-
-        val delivery =
-            TelegramDelivery(
-                telegramClient, stickerCatalog?.let { it::recheckSetOf }, groupLog, polls,
-                onStickerSent = stickerCatalog?.let { it::recordSent },
-            )
         val voiceTranscriber = createVoiceTranscriber(http, config)
-        val chatProfiles = ChatProfiles(telegramClient, botProfile.userId)
         val taskMenu = TaskMenuHandler(telegramClient, tasks, TasksRepository.MAX_TASKS_PER_USER)
         val inlineChoices = InlineChoiceHandler(telegramClient, conversation::revision)
 

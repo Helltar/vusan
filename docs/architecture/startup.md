@@ -18,8 +18,8 @@ generation or `ELEVENLABS_API_KEY` is configured, the two things that use it) `r
 (`tools/imagegen/SelfImage.kt`), which reads the reference photo self-portraits and round video messages are drawn from:
 `SELF_IMAGE_FILE` when set, otherwise whatever avatar loader startup hands it — for Telegram, one
 `getUserProfilePhotos` on the bot's own id (`telegram/BotAvatar.kt`), and a failure there is a warning rather than a
-failed startup → (only with a vision runtime) the `StickerCatalog`, then `TelegramToolSets` over it and the client,
-`ToolCatalogFactory`, `AgentFactory`, `AgentRunner` → create `TaskMenuHandler` and `InlineChoiceHandler`, and
+failed startup → (only with a vision runtime) the `StickerCatalog` → `TelegramDelivery` and `ChatProfiles`, then
+`TelegramToolSets` over them, the catalog and the client, `ToolCatalogFactory`, `AgentFactory`, `AgentRunner` → create `TaskMenuHandler` and `InlineChoiceHandler`, and
 optionally enable voice transcription → start `TelegramBotRunner`, which builds its own `AgentTurns` and
 `CallbackRouter` over those, and launch `TaskScheduler`, the sticker description worker and — where switched on — the
 `Diary` and `Initiative` loops, then block on the runner job

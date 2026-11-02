@@ -426,6 +426,10 @@ change what it can do:
   included.
 - **Losing the right to write pauses that chat's tasks** — they stay in `/tasks`; resume them after
   adding Vusan back.
+- **Admin rights unlock group settings and topics** — with *Change group info* Vusan can change the
+  group's photo, title and description, and with *Manage topics* in a forum it can open, rename,
+  close and reopen topics. Telegram lets a bot do neither as a plain member, even where every member
+  may. Vusan picks up new rights within ten minutes, or at once when Telegram announces the change.
 
 ## Command menu
 

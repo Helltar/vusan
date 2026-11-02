@@ -1,6 +1,5 @@
 package com.helltar.vusan.tools
 
-import com.helltar.vusan.tools.ToolSet
 import com.helltar.vusan.outbox.BotOutbox
 import com.helltar.vusan.request.RequestContext
 
@@ -14,5 +13,8 @@ import com.helltar.vusan.request.RequestContext
  */
 fun interface PlatformToolSets {
 
-    fun of(context: RequestContext, outbox: BotOutbox): List<ToolSet>
+    fun of(context: RequestContext, outbox: BotOutbox): List<PlatformToolSet>
 }
+
+/** One of a messenger's tool sets, and the group it is behind; `null` offers it in every request. */
+data class PlatformToolSet(val set: ToolSet, val group: ToolGroup? = null)

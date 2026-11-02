@@ -1,11 +1,13 @@
 package com.helltar.vusan.request
 
 /**
- * What the bot may post in one chat, and how fast. Groups can forbid whole content kinds, and a plain-member
- * bot finds out only when a send is rejected, after the turn is paid for. Resolving this up front keeps
- * refused tools out of the catalog and explains the rest to the agent.
+ * What the bot may post in one chat, how fast, and which of the chat's settings it may change. Groups can
+ * forbid whole content kinds, and a plain-member bot finds out only when a send is rejected, after the turn is
+ * paid for. Resolving this up front keeps refused tools out of the catalog and explains the rest to the agent.
  *
- * Every field defaults to allowed: a failed lookup or an unrestricted chat must never read as a lost ability.
+ * Every posting kind defaults to allowed: a failed lookup or an unrestricted chat must never read as a lost
+ * ability. The admin rights default to absent instead: most chats never grant them, and a tool offered
+ * without one could only fail.
  */
 data class ChatCapabilities(
     val photos: Boolean = true,
@@ -20,6 +22,10 @@ data class ChatCapabilities(
     val reactions: Boolean = true,
     /** Seconds a non-privileged member waits between messages; `0` without slow mode. */
     val slowModeSeconds: Int = 0,
+    /** The bot is an admin who may change the chat's photo, title and description. */
+    val chatInfo: Boolean = false,
+    /** The chat has forum topics and the bot is an admin who may open, rename, close and reopen them. */
+    val topics: Boolean = false,
 ) {
 
     /** The refused content kinds, named as the prompt and the logs want them. */

@@ -26,8 +26,9 @@ that is who owns writing them, not because only `agent/` reads them. No other ar
   list, and works out what each one says; `AgentTurns`, also at the root, takes it from there — the reply context, the
   `AgentRequest`, the progress indicator, the delivery and its fallback — so a turn started by a message and one started
   by a button follow the same path; `telegram/tools/` holds the tools only Telegram can implement — resending by
-  `file_id`, and the sticker catalog — which reach the catalog through the shared `PlatformToolSets` port rather than
-  being registered centrally; `telegram/inbound/` normalizes an update into agent input; `telegram/delivery/`
+  `file_id`, the sticker catalog, and a group's settings and forum topics where the bot is an admin — which reach the
+  catalog through the shared `PlatformToolSets` port, each set visible or behind a `ToolGroup`, rather than being
+  registered centrally; `telegram/inbound/` normalizes an update into agent input; `telegram/delivery/`
   sends agent results back, including HTML-formatting, opt-in rich-message, reply-anchor, media/document, media-group,
   and private-message fallbacks; `telegram/callback/` owns the inline-button flows — `CallbackRouter` validates a
   pressed button and picks its flow, `TaskMenuHandler` runs the deterministic `/tasks` UI, and `InlineChoiceHandler` the
@@ -100,7 +101,8 @@ that is who owns writing them, not because only `agent/` reads them. No other ar
   text, a message and a topic as much as a person or a chat: `telegram/TelegramIds.kt` is the only place that reads one
   back as a number. Beside it: `ChatProfile` (what an
   adapter has to look the chat up for), `ChatCapabilities` (what the chat lets the bot post, and its slow mode —
-  defaulting to unrestricted so a failed lookup never removes an ability), and `AttachedFile` (photo, video, or document, from the
+  defaulting to unrestricted so a failed lookup never removes an ability — plus the admin rights to change the chat's
+  info and manage its topics, which default to absent), and `AttachedFile` (photo, video, or document, from the
   current message or a replied-to message, that vision (`describeImage`, `describeVideo`) and the sandbox
   (which copies it into the turn's own directory under `turns/`) can lazily download; the same type
   carries a file a tool names by reference — one another call made, or one in the sandbox, read only when its bytes

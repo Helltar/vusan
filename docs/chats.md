@@ -119,6 +119,17 @@ message instead of several Telegram would drop. A lookup that fails counts as un
 Telegram hiccup never strips tools. What a group admin can change is in
 [Rights in a group](configuration.md#rights-in-a-group).
 
+### Group settings and topics
+
+Where Vusan is an admin with the right to, it changes the group's photo, title or description, and
+opens, renames, closes or reopens forum topics, but only when someone asks and only for someone who
+could do it themselves. A member may ask to change the group's info where every member may (never in
+a public group, where Telegram leaves that to admins) and to open a topic where every member may
+open one; renaming, closing and reopening a topic take an admin who may manage topics. An anonymous
+admin or a channel gets a refusal, since nobody's rights stand behind the request. A new topic can start with a message from Vusan in it, while the answer
+to the request stays where it was asked. It never deletes a topic, as that takes every message in it
+along.
+
 ## Leaving someone alone
 
 Anyone can tell Vusan not to write to them — «leave me alone», «stop writing to me» — and it keeps to

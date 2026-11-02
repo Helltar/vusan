@@ -17,6 +17,7 @@ import com.helltar.vusan.config.OpenAiSttConfig
 import com.helltar.vusan.config.XaiVideoConfig
 import com.helltar.vusan.config.llm.LlmProviderConfig
 import com.helltar.vusan.config.llm.VisionRuntime
+import com.helltar.vusan.delivery.OutputDelivery
 import com.helltar.vusan.llm.FakeLlmClient
 import com.helltar.vusan.llm.LlmModel
 import com.helltar.vusan.llm.RequestOptions
@@ -179,7 +180,11 @@ private fun catalogFactory(options: PromptExportOptions): ToolCatalogFactory {
     return ToolCatalogFactory(
         http = http,
         publicHttp = http,
-        platformTools = TelegramToolSets(telegram, StickerCatalog(telegram, ImageVisionClient(vision.client, vision.model, vision.options))),
+        platformTools =
+            TelegramToolSets(
+                telegram, refusingDelivery(), ChatProfiles(telegram, botId = 1),
+                StickerCatalog(telegram, ImageVisionClient(vision.client, vision.model, vision.options)),
+            ),
         config = exportConfig(options),
         conversation = ConversationRepository(),
         memory = MemoryRepository(),
@@ -225,6 +230,11 @@ private fun refusingTelegramClient(): TelegramClient =
     Proxy.newProxyInstance(TelegramClient::class.java.classLoader, arrayOf(TelegramClient::class.java)) { _, method, _ ->
         error("the prompt export makes no calls: ${method.name}")
     } as TelegramClient
+
+private fun refusingDelivery(): OutputDelivery =
+    Proxy.newProxyInstance(OutputDelivery::class.java.classLoader, arrayOf(OutputDelivery::class.java)) { _, method, _ ->
+        error("the prompt export delivers nothing: ${method.name}")
+    } as OutputDelivery
 
 private const val KEY = "export"
 

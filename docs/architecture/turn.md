@@ -46,8 +46,8 @@ finished turn leaves behind. Before it: [receiving a message](inbound.md); after
    to Claude as the assistant's own words (measured 2026-10-24), so `llm/anthropic/AnthropicClient` moves every system
    message into the top-level system field regardless of where it sat — the only one it sends inside is a tool offer. In a group the turn also carries what that chat lets the bot post, read through
    `telegram/ChatProfiles.kt`: one cached `getChat` + `getChatMember` pair yields the chat description, the permissions
-   binding a bot that is a plain member (an administrator is bound by none of them, slow mode included), and the
-   slow-mode delay. `ChatCapabilities` travels in `RequestContext.chat` and reaches three places — a tool that makes
+   binding a bot that is a plain member (an administrator is bound by none of them, slow mode included), the
+   slow-mode delay, and an administrator's rights to change the chat's info and, in a forum, to manage topics. `ChatCapabilities` travels in `RequestContext.chat` and reaches three places — a tool that makes
    something is registered whatever the chat accepts, since with `send` it is a producer first, and checks the chat
    itself before producing for a send the chat would drop (`refusedByChat` in `tools/CallShelf.kt`), so the model
    cannot spend an image generation or a download on something undeliverable and can still make it for a later call,
