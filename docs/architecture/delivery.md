@@ -45,8 +45,10 @@ Before it: [running a turn](turn.md).
       rewrite what the user has already read. A turn with no live status — a scheduled run — queues the words with the
       rest of the reply instead.
     - **A result worth reading early** — `sendMessageNow` (`MessageTools`) posts a message of its own through
-      `TurnNarrator.send`, which stays in the chat, and takes the status bubble down and up again so it sits under the
-      newest message. It is recorded as a delivered item that is an answer rather than an announcement
+      `TurnNarrator.send`, which stays in the chat. The old bubble keeps only the plan, closed the way `finish` closes
+      it (or is deleted when it held no plan), and a new one under the newest message carries the running line and the
+      button, so the chat reads plan, progress, status in that order; in slow mode the running line alone opens no new
+      one. It is recorded as a delivered item that is an answer rather than an announcement
       (`BotOutbox.hasAnswered`), so the turn owes no further delivery, and reaches the transcript the same way the plan
       does; a few per turn, and queued like any text when
       nobody is watching.

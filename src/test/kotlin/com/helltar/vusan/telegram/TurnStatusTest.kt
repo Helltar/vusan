@@ -14,6 +14,8 @@ import kotlin.test.assertTrue
 import kotlin.time.Duration.Companion.minutes
 import kotlinx.coroutines.runBlocking
 import org.telegram.telegrambots.meta.api.methods.reactions.SetMessageReaction
+import org.telegram.telegrambots.meta.api.methods.updatingmessages.DeleteMessage
+import org.telegram.telegrambots.meta.api.methods.updatingmessages.EditMessageText
 import org.telegram.telegrambots.meta.api.methods.send.SendMessage
 import org.telegram.telegrambots.meta.api.objects.message.Message
 import org.telegram.telegrambots.meta.api.objects.reactions.ReactionTypeEmoji
@@ -86,6 +88,56 @@ class TurnStatusTest {
         assertTrue(posted.isEmpty())
     }
 
+    // raised again with the plan in it, the bubble would read "I will build the game" under "halfway there",
+    // a plan after its own progress.
+    @Test
+    fun `a message sent mid-turn leaves the plan above it and moves only the running line under it`() = runBlocking {
+        val calls = mutableListOf<String>()
+
+        statusOver(recordingChat(calls), posted = mutableListOf()).apply {
+            say("I will build the game")
+            showActivity(ToolActivity.RUNNING_CODE, mayOpen = true)
+            send("halfway there")
+            finish()
+        }
+
+        assertEquals(
+            listOf(
+                "send #1 [I will build the game] button=true",
+                "edit #1 [I will build the game\n\n💻 Running code…] button=true",
+                "send #2 [halfway there] button=false",
+                "edit #1 [I will build the game] button=false",
+                "send #3 [💻 Running code…] button=true",
+                "delete #3",
+            ),
+            calls,
+        )
+    }
+
+    // slow mode rations the bot's messages, and a running line alone never earns one
+    @Test
+    fun `in slow mode a message sent mid-turn raises no bubble for the running line`() = runBlocking {
+        val calls = mutableListOf<String>()
+
+        statusOver(recordingChat(calls), posted = mutableListOf(), activityOpensIt = false).apply {
+            say("I will build the game")
+            showActivity(ToolActivity.RUNNING_CODE, mayOpen = true)
+            send("halfway there")
+            showActivity(ToolActivity.SEARCHING_WEB, mayOpen = true)
+            finish()
+        }
+
+        assertEquals(
+            listOf(
+                "send #1 [I will build the game] button=true",
+                "edit #1 [I will build the game\n\n💻 Running code…] button=true",
+                "send #2 [halfway there] button=false",
+                "edit #1 [I will build the game] button=false",
+            ),
+            calls,
+        )
+    }
+
     // a queued turn, or one in a slow-mode chat, has nothing else to show the message was heard
     @Test
     fun `an acknowledged turn marks its message as received and takes the mark off when it ends`() = runBlocking {
@@ -121,14 +173,50 @@ class TurnStatusTest {
             CompletableFuture.completedFuture(true)
         } as TelegramClient
 
-    private fun statusOver(client: TelegramClient, posted: MutableList<String>, acknowledges: Boolean = false) =
+    private fun recordingChat(calls: MutableList<String>): TelegramClient {
+        var nextId = 0
+
+        return Proxy.newProxyInstance(
+            TelegramClient::class.java.classLoader,
+            arrayOf(TelegramClient::class.java),
+        ) { _, method, args ->
+            check(method.name == "executeAsync") { "unexpected client call: ${method.name}" }
+
+            when (val request = args.single()) {
+                is SendMessage -> {
+                    nextId += 1
+                    calls += "send #$nextId [${request.text}] button=${request.replyMarkup != null}"
+                    CompletableFuture.completedFuture(Message().apply { messageId = nextId })
+                }
+
+                is EditMessageText -> {
+                    calls += "edit #${request.messageId} [${request.text}] button=${request.replyMarkup != null}"
+                    CompletableFuture.completedFuture(true)
+                }
+
+                is DeleteMessage -> {
+                    calls += "delete #${request.messageId}"
+                    CompletableFuture.completedFuture(true)
+                }
+
+                else -> error("unexpected request: $request")
+            }
+        } as TelegramClient
+    }
+
+    private fun statusOver(
+        client: TelegramClient,
+        posted: MutableList<String>,
+        acknowledges: Boolean = false,
+        activityOpensIt: Boolean = true,
+    ) =
         TurnStatus(
             client = client,
             target = ChatTarget(-7),
             ownerId = 2,
             replyToMessageId = 77,
             messages = Messages.of(Language.ENGLISH),
-            activityOpensIt = true,
+            activityOpensIt = activityOpensIt,
             acknowledges = acknowledges,
             onPosted = { posted += it },
         )

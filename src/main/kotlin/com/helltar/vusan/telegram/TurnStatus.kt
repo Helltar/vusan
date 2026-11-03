@@ -81,8 +81,8 @@ internal fun activityStatusLabel(activity: ToolActivity, messages: Messages): St
  *
  * It opens lazily on the first named activity or the model's first words, and does not expire, so it is
  * written only on change. [finish] removes it unless the model put words in it: those stay as a message,
- * without the status line and button. A message sent mid-turn ([send]) stands on its own, and the status
- * moves under it.
+ * without the status line and button. A message sent mid-turn ([send]) stands on its own: the plan stays
+ * above it as such a message, and the running line and button move under it.
  *
  * A turn with nothing to show for a while (queued behind another, or in a slow-mode chat where activities
  * open no bubble) marks the message received with a reaction ([acknowledge]) and removes it at the end; a
@@ -193,14 +193,27 @@ internal class TurnStatus(
 
             if (!posted) return false
 
-            // the bubble belongs under the newest message: taken down and raised again at once, plan and
-            // running line included
+            // the running line belongs under the newest message, the plan above what it planned: the old
+            // bubble keeps only the plan, as [finish] would leave it, and a new one under this message carries
+            // the running line and the button.
             messageId?.let { id ->
+                val plan = announcement
+
                 messageId = null
                 shown = null
-                runCatching { withContext(NonCancellable) { deleteChatMessage(client, target.chatId, id) } }
-                    .onFailure { error -> error.rethrowIfCancellation() }
-                render()
+                announcement = null
+
+                runCatching {
+                    withContext(NonCancellable) {
+                        if (plan == null)
+                            deleteChatMessage(client, target.chatId, id)
+                        else
+                            editTextMessage(client, target.chatId, id, plan, replyMarkup = null, parseMode = parseMode)
+                    }
+                }.onFailure { error -> error.rethrowIfCancellation() }
+
+                // in slow mode a running line alone never earns a message.
+                if (activityOpensIt) render()
             }
 
             true
