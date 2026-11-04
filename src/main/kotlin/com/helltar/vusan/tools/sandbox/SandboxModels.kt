@@ -42,6 +42,33 @@ data class PublishedSite(
     val hasIndex: Boolean,
 )
 
+/** A copy of a person's home kept on the server, and what the model said it keeps. */
+data class SandboxSnapshot(
+    val id: String,
+    val takenAt: Instant,
+    val bytes: Long,
+    val note: String?,
+)
+
+/**
+ * A person's sandbox as the server reports it: whether it runs now, what it was given, how its last session
+ * ended, when retention takes its files unless it is used first, and the snapshots it keeps.
+ */
+data class SandboxStatus(
+    val running: Boolean,
+    val cpus: Double,
+    val memoryMb: Int,
+    val homeMb: Int,
+    val lastUsedAt: Instant,
+    val deleteAfter: Instant,
+    // retention took the files while a site kept the sandbox; the next use starts an empty home
+    val homeReleasedAt: Instant?,
+    val lastSessionEnd: String?,
+    val snapshots: List<SandboxSnapshot>,
+    // how many the server keeps, or null when it did not say
+    val maxSnapshots: Int?,
+)
+
 // other tools take a sandbox file as `sandbox:<path>`, and the model may write it so here too, where every
 // path already is one.
 internal fun String.sandboxPath(): String = removePrefix(SANDBOX_REFERENCE_PREFIX)

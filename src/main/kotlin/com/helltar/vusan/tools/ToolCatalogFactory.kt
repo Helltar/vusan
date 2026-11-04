@@ -50,6 +50,7 @@ import com.helltar.vusan.tools.poll.PollTools
 import com.helltar.vusan.tools.quiz.QuizTools
 import com.helltar.vusan.tools.reaction.ReactionTools
 import com.helltar.vusan.tools.sandbox.SandboxClient
+import com.helltar.vusan.tools.sandbox.SandboxManagementTools
 import com.helltar.vusan.tools.sandbox.SandboxTools
 import com.helltar.vusan.tools.searxng.SearxngClient
 import com.helltar.vusan.tools.searxng.SearxngTools
@@ -269,6 +270,7 @@ class ToolCatalogFactory(
                     val sandbox = client.sandboxOf(person)
                     shelf.connectSandbox(sandbox)
                     tools(SandboxTools(sandbox, outbox, shelf))
+                    tools(ToolGroup.SANDBOX_MANAGEMENT, SandboxManagementTools(sandbox))
                     // publishing is the same server's: without a pages role it answers `not_implemented`,
                     // which the model is told instead of the tool going missing.
                     tools(ToolGroup.WEB_PUBLISHING, SiteTools(sandbox))

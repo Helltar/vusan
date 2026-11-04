@@ -16,6 +16,7 @@ import kotlin.test.assertTrue
 import kotlinx.coroutines.runBlocking
 
 private const val JOB = "9b7f0d2c4e6a418d93f5c0b1a2d3e4f5"
+private const val SNAPSHOT = "9a0c4e1b7d2f4a6c8e0b1d3f5a7c9e2b"
 
 private const val FINISHED =
     """{"id":"$JOB","status":"finished","outcome":{"type":"exited","exitCode":0},""" +
@@ -171,11 +172,44 @@ class SandboxClientTest {
         val sandbox = SandboxClient(http, "http://sandbox", "test-token").sandboxOf("telegram:42")
 
         assertTrue(sandbox.listCommands().isEmpty())
+        assertNull(sandbox.status())
         assertNull(sandbox.publishedSite())
         assertFalse(sandbox.unpublishSite())
         assertFalse(sandbox.reset())
+        assertFalse(sandbox.restart())
 
         assertTrue(requests.all { it.startsWith("GET /v1/sandboxes?alias=telegram") }, requests.toString())
+    }
+
+    @Test
+    fun `a snapshot carries its note, and a restore finds the id among the person's own first`() = runBlocking {
+        val requests = mutableListOf<String>()
+        var sentNote: String? = null
+        val http = Http.createClient(MockEngine { request ->
+            val path = request.url.encodedPath
+            requests += "${request.method.value} $path"
+            when {
+                path == "/v1/sandboxes" && request.method == HttpMethod.Post -> json(sandboxInfo("telegram:42"))
+                path == "/v1/sandboxes" -> json(sandboxPage(sandboxInfo("telegram:42")))
+                path.endsWith("/snapshots") && request.method == HttpMethod.Post -> {
+                    sentNote = request.body.toByteArray().decodeToString()
+                    json(snapshotInfo(SNAPSHOT, note = "before the upgrade"))
+                }
+                path.endsWith("/snapshots") -> json("""{"snapshots":[${snapshotInfo(SNAPSHOT, note = "before the upgrade")}]}""")
+                path.endsWith("/restore") -> json(sandboxInfo("telegram:42"))
+                else -> error("Unexpected request ${request.method.value} $path")
+            }
+        })
+        val sandbox = SandboxClient(http, "http://sandbox", "test-token").sandboxOf("telegram:42")
+
+        val taken = sandbox.takeSnapshot("before the upgrade")
+        assertEquals("before the upgrade", taken.note)
+        assertEquals("""{"note":"before the upgrade"}""", sentNote)
+
+        assertNull(sandbox.restoreSnapshot("../../stop"))
+        assertFalse(requests.any { it.endsWith("/restore") }, "an unknown id reached a request path")
+        assertEquals(SNAPSHOT, sandbox.restoreSnapshot(SNAPSHOT)?.id)
+        assertTrue("POST /v1/sandboxes/$SANDBOX_ID/snapshots/$SNAPSHOT/restore" in requests)
     }
 
     @Test

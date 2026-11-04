@@ -16,8 +16,8 @@ history still uses `(userId, chatId)`; only the files and the commands running i
 
 - **`SandboxClient`** — `sandboxOf` gives a turn one handle for the person's sandbox, which asks the server for
   it on first use, created if it has none; the sandbox and site tools of that turn share it, so a reset by one is
-  seen by the other. A call that only asks — the command list, the site, or a reset — looks the sandbox up by
-  alias instead, so asking never creates one. A command is an exec: it is started, then its output is read from a byte offset until the
+  seen by the other. A call that only asks — the command list, the status, the site, a reset or a restart — looks
+  the sandbox up by alias instead, so asking never creates one. A command is an exec: it is started, then its output is read from a byte offset until the
   command ends, a page comes back empty or the call's ten seconds are up — each page carrying the exec as it
   stands, so no second request asks for its status — and the model continues from `nextOffset`. A file is read within the call's remaining transfer budget, which the
   server refuses to exceed before sending any of it. Refusals carry the server's error `code`, which decides
@@ -26,7 +26,9 @@ history still uses `(userId, chatId)`; only the files and the commands running i
   as temporarily unavailable. Why a session ended under a command, or ended last, is turned into a sentence here as
   well, from the reasons the protocol names.
 - **`SandboxTools`** — the model-facing surface: run a command and read its output, cancel it, write, read and edit
-  a file, reset the sandbox, send files out. It copies each of
+  a file, reset the sandbox, send files out. **`SandboxManagementTools`**, behind the `sandbox_management` group,
+  takes, restores and deletes snapshots of the home, reports the sandbox's status and restarts it; a snapshot is
+  refused while a command runs, and an id is looked up among the person's own snapshots before it reaches a path. It copies each of
   the turn's files into a directory of the turn's own before the first command that might want them, and renders a
   command as text the model can act on — the exit code, and the session limit that explains it
   when the memory or process cap is what killed it. Before every call that writes or runs, `TurnShelf.copyToSandbox`
@@ -39,9 +41,9 @@ history still uses `(userId, chatId)`; only the files and the commands running i
 - **What the bot does not decide** — the sandbox image, memory, home size, idle stop, retention and network
   policy all belong to the server. The bot reads `GET /v1/info` for the limits it must respect, and trims a
   requested timeout to that ceiling instead of keeping a copy of the number.
-- **What a person keeps** — their home, until the server's retention window passes or `resetSandbox` deletes
-  the sandbox; while their site is up, retention leaves both alone. Processes do not outlive an idle stop;
-  files do.
+- **What a person keeps** — their home and its snapshots, until the server's retention window passes or
+  `resetSandbox` deletes the sandbox; while their site is up, retention takes the home and snapshots but not the
+  site. Processes do not outlive an idle stop; files do.
 
 See [the sandbox guide](../sandbox.md) for behavior, setup and limits.
 

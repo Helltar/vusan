@@ -12,6 +12,9 @@ import io.reified.regolith.protocol.ExecStatus
 import io.reified.regolith.protocol.OutcomeType
 import io.reified.regolith.protocol.PublishedSite as RegolithSite
 import io.reified.regolith.protocol.Reasons
+import io.reified.regolith.protocol.SandboxState
+import io.reified.regolith.protocol.ServerLimits
+import io.reified.regolith.protocol.SnapshotInfo
 import io.reified.regolith.sdk.OutputSoFar
 import io.reified.regolith.sdk.RegolithClient
 import io.reified.regolith.sdk.RegolithConnectionException
@@ -118,11 +121,68 @@ class SandboxClient(
             call { sandbox().files.delete(path, recursive = true) }
         }
 
-        /** Deletes the sandbox with its home; the next use creates an empty one, and false says there was none. */
+        /**
+         * Deletes the sandbox with its home and snapshots; the next use creates an empty one. False when the
+         * person had none.
+         */
         suspend fun reset(): Boolean {
             val sandbox = existing() ?: return false
             call { sandbox.delete() }
             opened = null
+
+            return true
+        }
+
+        /** The sandbox as the server reports it, or null when the person has none. */
+        suspend fun status(): SandboxStatus? {
+            val sandbox = existing() ?: return null
+            val info = call { sandbox.get() }
+            val snapshots = call { sandbox.snapshots() }
+
+            return SandboxStatus(
+                running = info.state == SandboxState.RUNNING,
+                cpus = info.resources.cpus,
+                memoryMb = info.resources.memoryMb,
+                homeMb = info.resources.homeMb,
+                lastUsedAt = info.lastUsedAt,
+                deleteAfter = info.deleteAfter,
+                homeReleasedAt = info.homeReleasedAt,
+                lastSessionEnd = info.lastSessionEnd?.reason?.let(::sessionEnd),
+                snapshots = snapshots.map { it.snapshot() },
+                maxSnapshots = limitsOrNull()?.maxSnapshots,
+            )
+        }
+
+        /**
+         * Copies the home into a snapshot kept with [note]. The server stops the session to copy it, so whatever
+         * still runs ends interrupted; the caller decides whether that is acceptable.
+         */
+        suspend fun takeSnapshot(note: String): SandboxSnapshot = call { sandbox().snapshot(note) }.snapshot()
+
+        /** Puts the home back as the snapshot [id] kept it; null when the person has no such snapshot. */
+        suspend fun restoreSnapshot(id: String): SandboxSnapshot? {
+            val sandbox = existing() ?: return null
+            // looked up first, so an id the model made up never reaches a request path
+            val snapshot = call { sandbox.snapshots() }.firstOrNull { it.id == id } ?: return null
+            call { sandbox.restore(snapshot.id) }
+
+            return snapshot.snapshot()
+        }
+
+        /** Deletes the snapshot [id], leaving the home alone; null when the person has no such snapshot. */
+        suspend fun deleteSnapshot(id: String): SandboxSnapshot? {
+            val sandbox = existing() ?: return null
+            val snapshot = call { sandbox.snapshots() }.firstOrNull { it.id == id } ?: return null
+            call { sandbox.deleteSnapshot(snapshot.id) }
+
+            return snapshot.snapshot()
+        }
+
+        /** Ends the session and every process in it, keeping the files; false when nothing was running. */
+        suspend fun restart(): Boolean {
+            val sandbox = existing() ?: return false
+            if (call { sandbox.get() }.state != SandboxState.RUNNING) return false
+            call { sandbox.stop() }
 
             return true
         }
@@ -163,14 +223,14 @@ class SandboxClient(
     /** The server owns its limits; a timeout above the ceiling would be refused, not trimmed. */
     private suspend fun clamped(timeoutSeconds: Int?): Int? {
         if (timeoutSeconds == null) return null
-        val ceiling = limitOrNull()?.takeIf { it > 0 } ?: return timeoutSeconds
+        val ceiling = limitsOrNull()?.maxExecTimeoutSeconds?.takeIf { it > 0 } ?: return timeoutSeconds
 
         return minOf(timeoutSeconds, ceiling)
     }
 
-    /** The server's exec timeout ceiling; the sdk keeps what the server said, so this asks once. */
-    private suspend fun limitOrNull(): Int? =
-        runCatching { call { regolith.info() }.limits.maxExecTimeoutSeconds }
+    /** The server's limits; the sdk keeps what the server said, so this asks once. */
+    private suspend fun limitsOrNull(): ServerLimits? =
+        runCatching { call { regolith.info() }.limits }
             .onFailure { it.rethrowIfCancellation() }
             .getOrNull()
 
@@ -218,7 +278,7 @@ private fun RegolithException.retryHint(): String =
  */
 private fun sessionEnd(reason: String): String = when (reason) {
     Reasons.IDLE -> "It stopped after sitting idle, which is normal; the next command starts it again."
-    Reasons.STOPPED -> "It was stopped on purpose, through the API."
+    Reasons.STOPPED -> "It was stopped on purpose, by a snapshot, a restore or a restart."
     Reasons.SESSION_EXPIRED -> "It ran as long as a session may; the next command starts a new one."
     Reasons.CAPACITY -> "It was stopped while idle to make room for another sandbox."
     Reasons.CPU_LIMIT ->
@@ -234,6 +294,8 @@ private fun sessionEnd(reason: String): String = when (reason) {
 }
 
 private fun RegolithSite.published(): PublishedSite = PublishedSite(url, files, bytes, publishedAt, until, hasIndex)
+
+private fun SnapshotInfo.snapshot(): SandboxSnapshot = SandboxSnapshot(id, createdAt, bytes, note)
 
 private fun ExecInfo.result(read: OutputSoFar): CommandResult =
     result(read.text, read.nextOffset, hasMore = !read.complete, dropped = read.gapped)

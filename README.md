@@ -88,7 +88,7 @@ answer to its name. More in [Rights in a group](docs/configuration.md#rights-in-
 
 ### Creates
 
-- **Its own sandbox** — a private Linux home per person for code, projects, media and data.
+- **Its own sandbox** — a private Linux home per person for code, projects, media and data, with snapshots to roll back to.
 - **One job, many tools** — chains its tools, like putting itself into your video and voicing it.
 - **Web pages** — publishes a page, game or small app it built at your own address.
 - **Images** — draws from descriptions, edits your pictures, and merges several into one.

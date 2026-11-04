@@ -168,7 +168,7 @@ class SandboxTools(
     @Tool(SandboxToolDescriptions.RESET_SANDBOX)
     suspend fun resetSandbox(): String = suspendToolGuard {
         if (sandbox.reset()) {
-            "The sandbox is empty again. Every file and installed dependency is gone, and so is any site published from it; the next command starts in a new home."
+            "The sandbox is empty again. Every file, installed dependency and snapshot is gone, and so is any site published from it; the next command starts in a new home."
         } else {
             "There was no sandbox to reset; the next command starts in an empty home."
         }

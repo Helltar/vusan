@@ -94,7 +94,7 @@ internal object SandboxToolDescriptions {
         "Empties this person's sandbox completely and starts it over as a new, empty home. " +
                 "Use when the user asks to wipe or reset their sandbox, or when its home is beyond saving. " +
                 "Anything still running in it is stopped. " +
-                "Every file, project and installed dependency is removed permanently and cannot be recovered afterward. " +
+                "Every file, project and installed dependency is removed permanently and cannot be recovered afterward, and its snapshots go with it. " +
                 "A site published from it is taken down with it and its address is never served again, so say so before resetting while a site is up. " +
                 "Use `rm` through `runCommand` instead when only some files should go."
 

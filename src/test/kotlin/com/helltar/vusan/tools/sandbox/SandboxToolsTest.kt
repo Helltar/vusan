@@ -417,6 +417,7 @@ class SandboxToolsTest {
         assertEquals(0, creations, "a reset made a sandbox in order to delete it")
         assertTrue(writes.isEmpty())
         assertContains(result, "empty again")
+        assertContains(result, "snapshot")
     }
 
     @Test
